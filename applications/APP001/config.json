@@ -1,0 +1,23 @@
+{
+  "id": "APP001",
+  "name": "ehg",
+  "description": "This is the EHG main application",
+  "github": {
+    "owner": "rickfelix",
+    "repo": "ehg.git",
+    "branch": "main",
+    "full_repo": "rickfelix/ehg.git"
+  },
+  "supabase": {
+    "project_id": "https://dedlbzhpgkmetvhbkyzq.supabase.co",
+    "url": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlZGxiemhwZ2ttZXR2aGJreXpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MTE5MzcsImV4cCI6MjA3MjA4NzkzN30.o-AUQPUXAobkhMfdxa5g3oDkcneXNnmwK80KfAER16g"
+  },
+  "environment": "development",
+  "settings": {
+    "auto_sync": false,
+    "ci_cd_enabled": true,
+    "test_on_push": true
+  },
+  "created_at": "2025-08-30T15:20:08.901Z",
+  "created_by": "HUMAN"
+}

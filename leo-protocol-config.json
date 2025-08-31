@@ -1,0 +1,27 @@
+{
+  "leo_protocol": {
+    "name": "EHG_Engineer LEO Protocol System",
+    "version": "3.1.5.9",
+    "database": {
+      "name": "ehg_engineer",
+      "supabase_project_id": "dedlbzhpgkmetvhbkyzq",
+      "supabase_url": "https://dedlbzhpgkmetvhbkyzq.supabase.co",
+      "purpose": "Stores LEO Protocol data: Strategic Directives, Agent States, Handoffs, Evidence, etc."
+    },
+    "description": "This database powers the LEO Protocol tool itself"
+  },
+  "managed_projects": {
+    "ehg": {
+      "name": "EHG Application",
+      "database": {
+        "name": "ehg",
+        "supabase_project_id": "liapbndqlqxdcgpwntbv",
+        "supabase_url": "https://liapbndqlqxdcgpwntbv.supabase.co",
+        "purpose": "The actual EHG application database with user data, ventures, portfolio, etc."
+      },
+      "github_repo": "rickfelix/ehg",
+      "description": "The portfolio application being built using LEO Protocol"
+    }
+  },
+  "important_note": "NEVER confuse ehg_engineer (the tool) with ehg (the project)"
+}

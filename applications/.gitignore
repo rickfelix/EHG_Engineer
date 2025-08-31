@@ -1,0 +1,35 @@
+# Multi-Application Management - Git Ignore Rules
+
+# Ignore all application codebases (they have their own git repos)
+*/codebase/
+
+# Ignore encrypted credentials
+*/.env.encrypted
+*/credentials.enc
+
+# Ignore decrypted credentials (should never exist in plain text)
+*/.env.decrypted
+*/credentials.json
+
+# Ignore sync status files
+*/.leo-sync
+*/.sync-status
+
+# Ignore temporary files
+*.tmp
+*.bak
+*.swp
+*.log
+
+# Ignore node_modules if any app-specific scripts
+*/node_modules/
+
+# Keep registry and configs
+!registry.json
+!*/config.json
+!*/directives/
+
+# Ignore workspace files
+*.code-workspace
+.DS_Store
+Thumbs.db

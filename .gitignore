@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.local
+*.log
+verification-packages/
+
+# Multi-Application Management
+.leo-keys
+.leo-keys.backup*
+.leo-context
+applications/*/codebase/
+applications/*/.env.encrypted
+applications/*/.env.decrypted
+applications/*/.leo-sync/

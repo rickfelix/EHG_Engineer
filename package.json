@@ -1,0 +1,37 @@
+{
+  "name": "ehg-engineer",
+  "version": "1.0.0",
+  "description": "LEO Protocol development environment with Claude Code multi-agent workflow support",
+  "scripts": {
+    "check-db": "node scripts/verify-connection.js",
+    "setup-db": "node scripts/setup-database.js",
+    "setup-db-supabase": "node scripts/setup-database-supabase.js",
+    "check-directives": "node scripts/check-directives-data.js",
+    "update-status": "node scripts/update-directive-status.js",
+    "audit-compliance": "bash scripts/leo_compliance_audit.sh",
+    "test-database": "node scripts/test-database.js",
+    "new-sd": "node scripts/new-strategic-directive.js",
+    "add-sd": "node scripts/add-sd-to-database.js",
+    "register-app": "node scripts/register-app.js",
+    "switch-context": "node scripts/switch-context.js",
+    "show-context": "node scripts/switch-context.js show",
+    "list-apps": "node scripts/switch-context.js list",
+    "encrypt-test": "node lib/security/encryption.js validate",
+    "sync-github": "node scripts/sync-github.js",
+    "sync-supabase": "node scripts/sync-supabase.js",
+    "sync-app": "node scripts/sync-manager.js",
+    "create-app-sd": "node scripts/create-app-sd.js",
+    "deploy-sd": "node scripts/deploy-sd-to-app.js",
+    "leo": "node scripts/leo.js",
+    "leo-status": "node scripts/leo-status-line.js show"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "axios": "^1.11.0",
+    "dotenv": "^16.3.0",
+    "playwright": "^1.40.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0"
+  }
+}
