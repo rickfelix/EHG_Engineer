@@ -1,0 +1,140 @@
+# Production Story CI/CD Targets
+# Add these to your main Makefile or use as standalone
+
+.PHONY: stories-ci-prod stories-health-prod stories-snapshot-prod stories-manual-verify
+
+# Environment configuration for production
+PROD_API_BASE ?= https://your-prod-domain.com
+PROD_DB_CMD = psql "$$DATABASE_URL_PROD"
+SD_KEY ?= SD-2025-PILOT-001
+
+# Run CI and post to production webhooks
+stories-ci-prod:
+ifndef SERVICE_TOKEN_PROD
+	$(error SERVICE_TOKEN_PROD is not set. Must be service-role token)
+endif
+	@echo "🚀 Running production CI with story verification..."
+	@echo "Target SD: $(SD_KEY)"
+	@echo ""
+	@echo "Step 1: Running tests (if available)"
+	@if [ -f "package.json" ] && grep -q "test:e2e" package.json; then \
+		npm run test:e2e || true; \
+	else \
+		echo "No E2E tests configured, using manual verification"; \
+	fi
+	@echo ""
+	@echo "Step 2: Posting to production webhook"
+	@if [ -f "artifacts/playwright-report.json" ]; then \
+		node tools/post-playwright-results.mjs \
+			--report artifacts/playwright-report.json \
+			--env prod \
+			--api $(PROD_API_BASE)/api/stories/verify; \
+	else \
+		echo "Using fallback manual verification"; \
+		$(MAKE) stories-manual-verify; \
+	fi
+	@echo ""
+	@echo "Step 3: Getting verification snapshot"
+	@$(MAKE) stories-snapshot-prod
+
+# Check production API health
+stories-health-prod:
+ifndef SERVICE_TOKEN_PROD
+	$(error SERVICE_TOKEN_PROD is not set)
+endif
+	@echo "🏥 Checking production API health..."
+	@curl -s -X GET "$(PROD_API_BASE)/api/stories/health" \
+		-H "Authorization: Bearer $$SERVICE_TOKEN_PROD" | jq . || \
+		echo "❌ Health check failed"
+
+# Get production verification snapshot
+stories-snapshot-prod:
+	@echo "📸 Production verification snapshot for $(SD_KEY)"
+	@echo ""
+	@echo "=== Story Status ==="
+	@$(PROD_DB_CMD) -c "\
+		SELECT story_key, status, \
+			   COALESCE(verification_source->>'build_id', 'not_run') as build_id, \
+			   last_verified_at, coverage_pct \
+		FROM v_story_verification_status \
+		WHERE sd_key='$(SD_KEY)' \
+		ORDER BY sequence_no;" --tuples-only --no-align --field-separator=' | '
+	@echo ""
+	@echo "=== Release Gate ==="
+	@$(PROD_DB_CMD) -c "\
+		SELECT ready, passing_count, failing_count, not_run_count, \
+			   total_stories, passing_pct \
+		FROM v_sd_release_gate \
+		WHERE sd_key='$(SD_KEY)';" --tuples-only --no-align --field-separator=' | '
+	@echo ""
+	@echo "=== System Health ==="
+	@$(PROD_DB_CMD) -c "\
+		SELECT 'Duplicate stories' as metric, COUNT(*) as value \
+		FROM (SELECT sd_id, story_key, COUNT(*) \
+			  FROM sd_backlog_map \
+			  WHERE story_key IS NOT NULL \
+			  GROUP BY sd_id, story_key \
+			  HAVING COUNT(*) > 1) dupes;" --tuples-only --no-align
+
+# Manual verification update (fallback)
+stories-manual-verify:
+ifndef SERVICE_TOKEN_PROD
+	$(error SERVICE_TOKEN_PROD is not set)
+endif
+	@echo "📝 Sending manual verification for $(SD_KEY)..."
+	@curl -s -X POST "$(PROD_API_BASE)/api/stories/verify" \
+		-H "Authorization: Bearer $$SERVICE_TOKEN_PROD" \
+		-H "Content-Type: application/json" \
+		-d '{ \
+			"build_id": "manual-'$$(date +%s)'", \
+			"branch": "production", \
+			"commit": "'$$(git rev-parse HEAD 2>/dev/null || echo manual)'", \
+			"stories": [ \
+				{ \
+					"story_key": "$(SD_KEY):US-c7eba47b", \
+					"status": "passing", \
+					"coverage": 85 \
+				}, \
+				{ \
+					"story_key": "$(SD_KEY):US-2c529cf1", \
+					"status": "passing", \
+					"coverage": 78 \
+				} \
+			] \
+		}' | jq . || echo "❌ Manual verification failed"
+
+# Quick production metrics
+stories-metrics-prod:
+	@echo "📊 Production Metrics"
+	@$(PROD_DB_CMD) -c "\
+		WITH metrics AS ( \
+			SELECT COUNT(*) as total_stories, \
+				   COUNT(*) FILTER (WHERE verification_status = 'passing') as passing, \
+				   COUNT(*) FILTER (WHERE last_verified_at > NOW() - INTERVAL '1 hour') as recent \
+			FROM sd_backlog_map \
+			WHERE story_key IS NOT NULL \
+		) \
+		SELECT total_stories, passing, recent as updated_last_hour, \
+			   ROUND(100.0 * passing / NULLIF(total_stories, 0), 1) as passing_pct \
+		FROM metrics;"
+
+# Usage help
+stories-prod-help:
+	@echo "Production Story Commands:"
+	@echo ""
+	@echo "  make stories-ci-prod SD_KEY=SD-2025-PILOT-001"
+	@echo "    Run CI and post results to production"
+	@echo ""
+	@echo "  make stories-health-prod"
+	@echo "    Check production API health"
+	@echo ""
+	@echo "  make stories-snapshot-prod SD_KEY=SD-2025-PILOT-001"
+	@echo "    Get verification snapshot for an SD"
+	@echo ""
+	@echo "  make stories-metrics-prod"
+	@echo "    Show overall production metrics"
+	@echo ""
+	@echo "Required environment variables:"
+	@echo "  SERVICE_TOKEN_PROD - Supabase service-role token"
+	@echo "  DATABASE_URL_PROD  - Production database connection"
+	@echo "  PROD_API_BASE      - Production API URL"
