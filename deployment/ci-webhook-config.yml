@@ -1,0 +1,111 @@
+# CI/CD Webhook Configuration for Production
+# GitHub Actions example - adapt for your CI system
+
+name: Story Verification Webhook
+
+on:
+  workflow_run:
+    workflows: ["Test Suite"]
+    types:
+      - completed
+
+jobs:
+  notify-story-system:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion != 'cancelled' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Parse test results
+        id: parse-tests
+        run: |
+          # Example: Parse Jest/Vitest results
+          # Adapt this for your test framework
+          node -e "
+          const fs = require('fs');
+          const results = JSON.parse(fs.readFileSync('test-results.json', 'utf8'));
+
+          // Map test results to story keys
+          const storyResults = results.testResults.map(test => ({
+            story_key: test.ancestorTitles[0], // Adjust based on your naming
+            status: test.status === 'passed' ? 'passing' : 'failing',
+            test_file: test.testFilePath
+          }));
+
+          console.log(JSON.stringify(storyResults));
+          " > story-results.json
+
+      - name: Send to Story Verification API
+        env:
+          SERVICE_TOKEN: ${{ secrets.SERVICE_TOKEN_PROD }}
+          API_ENDPOINT: ${{ vars.STORY_WEBHOOK_URL }}
+        run: |
+          # Read story results
+          STORY_RESULTS=$(cat story-results.json)
+
+          # Prepare webhook payload
+          PAYLOAD=$(jq -n \
+            --arg build_id "${{ github.run_id }}" \
+            --arg branch "${{ github.ref_name }}" \
+            --arg commit "${{ github.sha }}" \
+            --arg status "${{ github.event.workflow_run.conclusion }}" \
+            --argjson stories "$STORY_RESULTS" \
+            '{
+              build_id: $build_id,
+              branch: $branch,
+              commit: $commit,
+              overall_status: $status,
+              timestamp: now | todate,
+              stories: $stories
+            }')
+
+          # Send to webhook
+          curl -X POST "$API_ENDPOINT" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $SERVICE_TOKEN" \
+            -d "$PAYLOAD" \
+            --fail \
+            --show-error \
+            --retry 3 \
+            --retry-delay 5
+
+      - name: Verify webhook success
+        run: |
+          # Check API health
+          curl -X GET "${API_ENDPOINT/verify/health}" \
+            -H "Authorization: Bearer $SERVICE_TOKEN" \
+            --fail
+
+# Alternative: Direct test framework integration
+# For Jest/Vitest custom reporter:
+
+# // jest.config.js or vitest.config.js
+# module.exports = {
+#   reporters: [
+#     'default',
+#     ['./story-reporter.js', {
+#       webhookUrl: process.env.STORY_WEBHOOK_URL,
+#       token: process.env.SERVICE_TOKEN_PROD
+#     }]
+#   ]
+# };
+
+# Webhook payload schema:
+# {
+#   "build_id": "12345",
+#   "branch": "main",
+#   "commit": "abc123",
+#   "overall_status": "success|failure",
+#   "timestamp": "2025-01-17T12:00:00Z",
+#   "stories": [
+#     {
+#       "story_key": "SD-2025-PILOT-001:US-abc123",
+#       "status": "passing|failing",
+#       "test_file": "tests/stories/pilot.test.js",
+#       "coverage": 85,
+#       "duration_ms": 234
+#     }
+#   ]
+# }
