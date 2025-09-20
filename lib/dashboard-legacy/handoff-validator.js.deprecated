@@ -1,0 +1,391 @@
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+/**
+ * Handoff Validation Module
+ * Enforces LEO Protocol v4.1.2 handoff requirements
+ * Enhanced with PRD Quality Checking Integration
+ */
+
+import path from 'path';
+import fs from 'fs';
+import { createClient } from '@supabase/supabase-js';
+
+class HandoffValidator {
+  constructor() {
+    this.requiredElements = [
+      'executiveSummary',
+      'completenessReport',
+      'deliverablesManifest',
+      'keyDecisions',
+      'knownIssues',
+      'resourceUtilization',
+      'actionItems'
+    ];
+    
+    this.maxTokens = {
+      executiveSummary: 200
+    };
+    
+    // Initialize Supabase client for PRD validation
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      this.supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      );
+    }
+    
+    // PRD Quality Requirements for PLAN→EXEC handoffs
+    this.prdQualityRequirements = {
+      minimumScore: 80,
+      requiredFields: [
+        'executive_summary',
+        'functional_requirements',
+        'technical_requirements',
+        'acceptance_criteria',
+        'success_metrics'
+      ]
+    };
+  }
+
+  /**
+   * Validate a handoff document
+   */
+  validateHandoff(handoff) {
+    const validation = {
+      valid: true,
+      errors: [],
+      warnings: [],
+      score: 0
+    };
+    
+    // Check for required elements
+    this.requiredElements.forEach(element => {
+      if (!handoff[element]) {
+        validation.valid = false;
+        validation.errors.push(`Missing required element: ${element}`);
+      } else {
+        validation.score += 1;
+      }
+    });
+    
+    // Validate executive summary token count
+    if (handoff.executiveSummary) {
+      const tokenCount = this.estimateTokens(handoff.executiveSummary);
+      if (tokenCount > this.maxTokens.executiveSummary) {
+        validation.warnings.push(`Executive summary exceeds ${this.maxTokens.executiveSummary} tokens (${tokenCount} tokens)`);
+      }
+    }
+    
+    // Validate completeness report
+    if (handoff.completenessReport) {
+      if (!handoff.completenessReport.total || !handoff.completenessReport.completed) {
+        validation.errors.push('Completeness report must include total and completed counts');
+        validation.valid = false;
+      } else {
+        const completionRate = (handoff.completenessReport.completed / handoff.completenessReport.total) * 100;
+        if (completionRate < 100) {
+          validation.warnings.push(`Incomplete work: ${completionRate.toFixed(1)}% complete`);
+        }
+      }
+    }
+    
+    // Validate deliverables
+    if (handoff.deliverablesManifest) {
+      if (!handoff.deliverablesManifest.primary || handoff.deliverablesManifest.primary.length === 0) {
+        validation.errors.push('At least one primary deliverable required');
+        validation.valid = false;
+      }
+    }
+    
+    // Calculate validation score
+    validation.score = Math.round((validation.score / this.requiredElements.length) * 100);
+    
+    return validation;
+  }
+  
+  /**
+   * Estimate token count (rough approximation)
+   */
+  estimateTokens(text) {
+    // Rough estimate: 1 token per 4 characters
+    return Math.ceil(text.length / 4);
+  }
+  
+  /**
+   * Format validation report
+   */
+  formatReport(validation) {
+    let report = '# Handoff Validation Report\n\n';
+    
+    report += `**Status**: ${validation.valid ? '✅ VALID' : '❌ INVALID'}\n`;
+    report += `**Score**: ${validation.score}%\n\n`;
+    
+    if (validation.errors.length > 0) {
+      report += '## ❌ Errors\n';
+      validation.errors.forEach(error => {
+        report += `- ${error}\n`;
+      });
+      report += '\n';
+    }
+    
+    if (validation.warnings.length > 0) {
+      report += '## ⚠️ Warnings\n';
+      validation.warnings.forEach(warning => {
+        report += `- ${warning}\n`;
+      });
+      report += '\n';
+    }
+    
+    if (validation.valid) {
+      report += '## ✅ All Requirements Met\n';
+      report += 'This handoff meets LEO Protocol v4.1 standards.\n';
+    } else {
+      report += '## 🔧 Required Actions\n';
+      report += '1. Address all errors listed above\n';
+      report += '2. Resubmit handoff for validation\n';
+    }
+    
+    return report;
+  }
+  
+  /**
+   * Enhanced handoff validation with PRD quality checking
+   */
+  async validateHandoffWithPRD(handoff, sdId, handoffType) {
+    // Standard handoff validation
+    const standardValidation = this.validateHandoff(handoff);
+    
+    // Enhanced validation for PLAN→EXEC handoffs
+    if (handoffType === 'PLAN-to-EXEC' && this.supabase) {
+      const prdValidation = await this.validatePRDQuality(sdId);
+      
+      return {
+        ...standardValidation,
+        prdQuality: prdValidation,
+        enhanced: true,
+        overallValid: standardValidation.valid && prdValidation.valid
+      };
+    }
+    
+    return {
+      ...standardValidation,
+      enhanced: false
+    };
+  }
+  
+  /**
+   * Validate PRD quality for PLAN→EXEC handoffs
+   */
+  async validatePRDQuality(sdId) {
+    if (!this.supabase) {
+      return {
+        valid: true,
+        warning: 'PRD validation skipped - no database connection',
+        score: 0
+      };
+    }
+    
+    try {
+      // Load PRD validation script
+      const validatorPath = path.join(__dirname, '../../scripts/prd-validation-checklist.js');
+      
+      if (fs.existsSync(validatorPath)) {
+        const { validatePRD } = require(validatorPath);
+        
+        // Find PRD for this SD
+        const { data: prds } = await this.supabase
+          .from('product_requirements_v2')
+          .select('id')
+          .eq('directive_id', sdId)
+          .limit(1);
+          
+        if (prds && prds.length > 0) {
+          return await validatePRD(prds[0].id);
+        } else {
+          return {
+            valid: false,
+            error: 'No PRD found for Strategic Directive',
+            score: 0
+          };
+        }
+      } else {
+        // Fallback PRD validation
+        return await this.basicPRDValidation(sdId);
+      }
+      
+    } catch (error) {
+      return {
+        valid: false,
+        error: `PRD validation failed: ${error.message}`,
+        score: 0
+      };
+    }
+  }
+  
+  /**
+   * Basic PRD validation fallback
+   */
+  async basicPRDValidation(sdId) {
+    try {
+      const { data: prds } = await this.supabase
+        .from('product_requirements_v2')
+        .select('*')
+        .eq('directive_id', sdId)
+        .limit(1);
+        
+      if (!prds || prds.length === 0) {
+        return {
+          valid: false,
+          error: 'No PRD found for Strategic Directive',
+          score: 0
+        };
+      }
+      
+      const prd = prds[0];
+      let score = 0;
+      const errors = [];
+      
+      // Check required fields
+      this.prdQualityRequirements.requiredFields.forEach(field => {
+        if (prd[field] && prd[field].toString().trim()) {
+          score += 20;
+        } else {
+          errors.push(`Missing or empty PRD field: ${field}`);
+        }
+      });
+      
+      const percentage = Math.round((score / 100) * 100);
+      
+      return {
+        valid: percentage >= this.prdQualityRequirements.minimumScore,
+        score: percentage,
+        errors: errors,
+        message: percentage >= this.prdQualityRequirements.minimumScore 
+          ? 'PRD meets basic quality requirements'
+          : `PRD quality too low: ${percentage}% (minimum: ${this.prdQualityRequirements.minimumScore}%)`
+      };
+      
+    } catch (error) {
+      return {
+        valid: false,
+        error: `Database error: ${error.message}`,
+        score: 0
+      };
+    }
+  }
+  
+  /**
+   * Generate comprehensive handoff report including PRD quality
+   */
+  formatEnhancedReport(validation) {
+    let report = this.formatReport(validation);
+    
+    if (validation.enhanced && validation.prdQuality) {
+      report += '\n## 📊 PRD Quality Assessment\n\n';
+      
+      if (validation.prdQuality.valid) {
+        report += `**PRD Quality**: ✅ PASSED (${validation.prdQuality.score}%)\n`;
+        if (validation.prdQuality.message) {
+          report += `**Status**: ${validation.prdQuality.message}\n`;
+        }
+      } else {
+        report += `**PRD Quality**: ❌ FAILED`;
+        if (validation.prdQuality.score) {
+          report += ` (${validation.prdQuality.score}%)`;
+        }
+        report += '\n';
+        
+        if (validation.prdQuality.error) {
+          report += `**Error**: ${validation.prdQuality.error}\n`;
+        }
+        
+        if (validation.prdQuality.errors && validation.prdQuality.errors.length > 0) {
+          report += '**Issues**:\n';
+          validation.prdQuality.errors.forEach(error => {
+            report += `- ${error}\n`;
+          });
+        }
+      }
+      
+      report += '\n';
+      
+      if (!validation.overallValid) {
+        report += '## ❌ HANDOFF BLOCKED\n';
+        report += 'Both handoff document AND PRD must meet standards for PLAN→EXEC transition.\n';
+      }
+    }
+    
+    return report;
+  }
+
+  /**
+   * Parse markdown handoff document
+   */
+  parseHandoffDocument(markdown) {
+    const handoff = {};
+    
+    // Extract executive summary
+    const summaryMatch = markdown.match(/## (?:HANDOFF )?SUMMARY\n+([\s\S]*?)(?=\n##|\n---)/i);
+    if (summaryMatch) {
+      handoff.executiveSummary = summaryMatch[1].trim();
+    }
+    
+    // Extract completion status
+    const completionMatch = markdown.match(/\*\*Total Requirements\*\*:\s*(\d+)[\s\S]*?\*\*Completed\*\*:\s*(\d+)/i);
+    if (completionMatch) {
+      handoff.completenessReport = {
+        total: parseInt(completionMatch[1]),
+        completed: parseInt(completionMatch[2])
+      };
+    }
+    
+    // Extract deliverables
+    const deliverablesMatch = markdown.match(/## DELIVERABLES\n+([\s\S]*?)(?=\n##|\n---)/i);
+    if (deliverablesMatch) {
+      handoff.deliverablesManifest = {
+        primary: [],
+        supporting: []
+      };
+      
+      const lines = deliverablesMatch[1].split('\n');
+      let currentSection = null;
+      
+      lines.forEach(line => {
+        if (line.includes('Primary:')) {
+          currentSection = 'primary';
+        } else if (line.includes('Supporting')) {
+          currentSection = 'supporting';
+        } else if (line.startsWith('-') && currentSection) {
+          const item = line.replace(/^-\s*/, '').trim();
+          if (item) {
+            handoff.deliverablesManifest[currentSection].push(item);
+          }
+        }
+      });
+    }
+    
+    // Extract key decisions
+    const decisionsMatch = markdown.match(/## KEY DECISIONS/i);
+    handoff.keyDecisions = !!decisionsMatch;
+    
+    // Extract known issues
+    const issuesMatch = markdown.match(/## KNOWN ISSUES/i);
+    handoff.knownIssues = !!issuesMatch;
+    
+    // Extract resource usage
+    const resourceMatch = markdown.match(/## RESOURCE/i);
+    handoff.resourceUtilization = !!resourceMatch;
+    
+    // Extract action items
+    const actionMatch = markdown.match(/## ACTION/i);
+    handoff.actionItems = !!actionMatch;
+    
+    return handoff;
+  }
+}
+
+export default HandoffValidator;

@@ -1,0 +1,90 @@
+{
+  "stage_id": 31,
+  "stage_title": "MVP Launch",
+  "objective": "Optimize Stage 31 (MVP Launch) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 31,
+      "title": "MVP Launch",
+      "description": "Orchestrate MVP launch with coordinated marketing and support.",
+      "owner": "LEAD",
+      "depends_on": [
+        30
+      ],
+      "inputs": [
+        "Launch plan",
+        "Marketing materials",
+        "Support resources"
+      ],
+      "outputs": [
+        "Live product",
+        "Launch metrics",
+        "User feedback"
+      ],
+      "metrics": [
+        "Launch success rate",
+        "User acquisition",
+        "Engagement metrics"
+      ],
+      "gates": {
+        "entry": [
+          "Production stable",
+          "Marketing ready",
+          "Support trained"
+        ],
+        "exit": [
+          "Launch executed",
+          "Users onboarded",
+          "Metrics flowing"
+        ]
+      },
+      "substages": [
+        {
+          "id": "31.1",
+          "title": "Launch Preparation",
+          "done_when": [
+            "Communications ready",
+            "Teams briefed",
+            "Contingencies planned"
+          ]
+        },
+        {
+          "id": "31.2",
+          "title": "Launch Execution",
+          "done_when": [
+            "Product live",
+            "Marketing activated",
+            "PR released"
+          ]
+        },
+        {
+          "id": "31.3",
+          "title": "Initial Monitoring",
+          "done_when": [
+            "Metrics tracked",
+            "Issues addressed",
+            "Feedback collected"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/31-*.md",
+    "critique_path": "/docs/workflow/critique/stage-31.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_31_findings.md",
+    "/docs/research/outputs/stage_31_recommendations.md"
+  ],
+  "gemini_specific": {
+    "focus": "practical_implementation",
+    "include_code_samples": true,
+    "suggest_tools": true
+  }
+}

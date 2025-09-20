@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dark Mode Verification Test</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {}
+      }
+    }
+  </script>
+</head>
+<body class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+  <div class="max-w-4xl mx-auto p-6">
+    <div class="mb-8 text-center">
+      <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+        Dark Mode Verification Test
+      </h1>
+      
+      <button 
+        onclick="toggleDarkMode()" 
+        class="bg-blue-600 dark:bg-blue-600 text-white dark:text-white hover:bg-blue-700 dark:hover:bg-blue-700 active:bg-blue-800 dark:active:bg-blue-800 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 px-6 py-3 rounded-lg font-medium transition-all duration-200"
+      >
+        Toggle Dark Mode
+      </button>
+    </div>
+
+    <!-- Test our UI components -->
+    <div class="space-y-6">
+      <!-- Button variants test -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Button Variants</h2>
+        <div class="flex gap-3 flex-wrap">
+          <button class="bg-blue-600 dark:bg-blue-600 text-white dark:text-white hover:bg-blue-700 dark:hover:bg-blue-700 px-4 py-2 rounded-lg">Primary</button>
+          <button class="bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-600 px-4 py-2 rounded-lg">Secondary</button>
+          <button class="bg-transparent dark:bg-transparent text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600">Ghost</button>
+          <button class="bg-green-600 dark:bg-green-600 text-white dark:text-white hover:bg-green-700 dark:hover:bg-green-700 px-4 py-2 rounded-lg">Success</button>
+          <button class="bg-red-600 dark:bg-red-600 text-white dark:text-white hover:bg-red-700 dark:hover:bg-red-700 px-4 py-2 rounded-lg">Danger</button>
+        </div>
+      </div>
+
+      <!-- Input fields test -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Form Inputs</h2>
+        <div class="space-y-4">
+          <div>
+            <label class="block mb-2 font-medium text-gray-700 dark:text-gray-300">Default Input</label>
+            <input 
+              type="text" 
+              placeholder="Enter text here..." 
+              class="w-full px-4 py-3 border rounded-lg transition-all duration-200 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20 focus:outline-none"
+            >
+          </div>
+          
+          <div>
+            <label class="block mb-2 font-medium text-gray-700 dark:text-gray-300">Success State</label>
+            <input 
+              type="text" 
+              value="Valid input" 
+              class="w-full px-4 py-3 border rounded-lg transition-all duration-200 text-gray-900 dark:text-gray-100 bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-600 focus:border-green-500 dark:focus:border-green-400 focus:outline-none"
+            >
+          </div>
+          
+          <div>
+            <label class="block mb-2 font-medium text-gray-700 dark:text-gray-300">Error State</label>
+            <input 
+              type="text" 
+              value="Invalid input" 
+              class="w-full px-4 py-3 border rounded-lg transition-all duration-200 text-gray-900 dark:text-gray-100 bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-600 focus:border-red-500 dark:focus:border-red-400 focus:outline-none"
+            >
+            <div class="mt-2 flex items-start text-sm text-red-600 dark:text-red-400">
+              This is an error message
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress bar test -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Progress Indicators</h2>
+        <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Overall Progress</span>
+            <span class="text-sm font-semibold text-blue-600 dark:text-blue-400">75%</span>
+          </div>
+          <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+            <div class="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300" style="width: 75%"></div>
+          </div>
+          <div class="flex justify-between items-center mt-2 text-xs text-gray-600 dark:text-gray-400">
+            <span>12 min completed</span>
+            <span>4 min remaining</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Classification display test -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Strategic vs Tactical</h2>
+        <div class="p-6 bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div class="flex justify-around mb-6">
+            <div class="text-center">
+              <div class="text-3xl font-bold text-blue-600 dark:text-blue-400">65%</div>
+              <div class="text-sm text-gray-600 dark:text-gray-400 mt-1">Strategic</div>
+            </div>
+            <div class="w-px bg-gray-300 dark:bg-gray-600"></div>
+            <div class="text-center">
+              <div class="text-3xl font-bold text-green-600 dark:text-green-400">35%</div>
+              <div class="text-sm text-gray-600 dark:text-gray-400 mt-1">Tactical</div>
+            </div>
+          </div>
+          <div class="bg-white dark:bg-gray-700 p-4 rounded-lg">
+            <p class="font-medium text-gray-700 dark:text-gray-300 mb-2">Classification Rationale:</p>
+            <p class="text-gray-600 dark:text-gray-400">This directive focuses primarily on strategic planning with some tactical implementation details.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function toggleDarkMode() {
+      document.documentElement.classList.toggle('dark');
+      localStorage.setItem('darkMode', document.documentElement.classList.contains('dark'));
+    }
+    
+    // Initialize dark mode based on system preference or stored preference
+    if (localStorage.getItem('darkMode') === 'true' || 
+        (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    }
+  </script>
+</body>
+</html>

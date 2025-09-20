@@ -1,0 +1,11 @@
+flowchart TB
+%% Stage 7 Detail
+subgraph S7["7. Comprehensive Planning Suite"]
+  S7_root["Purpose: Develop comprehensive business and technical plans for venture execution."]
+  S7_A["7.1 Business Planning"]
+  S7_B["7.2 Technical Planning"]
+  S7_C["7.3 Resource Planning"]
+  S7_root --> S7_A --> S7_B --> S7_C
+end
+classDef dep stroke-dasharray: 5 5;
+D7["Depends on: 6"]:::dep -.-> S7_root

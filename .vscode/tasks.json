@@ -1,0 +1,80 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "LEO: Auto-Initialize",
+      "type": "shell",
+      "command": "node",
+      "args": ["scripts/leo-auto-init.js", "--force"],
+      "group": "none",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "dedicated",
+        "showReuseMessage": false
+      },
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "LEO: Start Watcher",
+      "type": "shell",
+      "command": "node",
+      "args": ["scripts/leo-watcher.js"],
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "showReuseMessage": false
+      },
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^([^\\s].*)$",
+          "message": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^🔍 LEO Protocol Watcher Started",
+          "endsPattern": "^📡 Real-time subscriptions active"
+        }
+      }
+    },
+    {
+      "label": "LEO: Bootstrap",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "leo:auto"],
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "LEO: Force Sync",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "leo:sync"],
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "LEO: Check Status",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "leo-status"],
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

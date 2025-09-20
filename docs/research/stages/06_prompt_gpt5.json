@@ -1,0 +1,84 @@
+{
+  "stage_id": 6,
+  "stage_title": "Risk Evaluation",
+  "objective": "Optimize Stage 6 (Risk Evaluation) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 6,
+      "title": "Risk Evaluation",
+      "description": "Comprehensive risk assessment and mitigation strategy development.",
+      "owner": "EXEC",
+      "depends_on": [
+        5
+      ],
+      "inputs": [
+        "Financial model",
+        "Technical assessment",
+        "Market analysis"
+      ],
+      "outputs": [
+        "Risk matrix",
+        "Mitigation plans",
+        "Contingency strategies"
+      ],
+      "metrics": [
+        "Risk coverage",
+        "Mitigation effectiveness",
+        "Risk score"
+      ],
+      "gates": {
+        "entry": [
+          "Financial model complete",
+          "Technical review done"
+        ],
+        "exit": [
+          "All risks identified",
+          "Mitigation plans approved",
+          "Risk tolerance defined"
+        ]
+      },
+      "substages": [
+        {
+          "id": "6.1",
+          "title": "Risk Identification",
+          "done_when": [
+            "Technical risks listed",
+            "Market risks assessed",
+            "Operational risks mapped"
+          ]
+        },
+        {
+          "id": "6.2",
+          "title": "Risk Scoring",
+          "done_when": [
+            "Probability assigned",
+            "Impact assessed",
+            "Risk matrix created"
+          ]
+        },
+        {
+          "id": "6.3",
+          "title": "Mitigation Planning",
+          "done_when": [
+            "Mitigation strategies defined",
+            "Contingencies planned",
+            "Triggers identified"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/06-*.md",
+    "critique_path": "/docs/workflow/critique/stage-06.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_06_findings.md",
+    "/docs/research/outputs/stage_06_recommendations.md"
+  ]
+}

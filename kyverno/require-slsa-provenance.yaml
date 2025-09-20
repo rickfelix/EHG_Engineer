@@ -1,0 +1,57 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-slsa-provenance
+  annotations:
+    policies.kyverno.io/title: Require SLSA Provenance
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/minversion: 1.9.0
+    policies.kyverno.io/description: >-
+      Requires all container images to have valid SLSA Level 3 provenance
+      attestations. This ensures images were built in a secure, isolated
+      environment with non-falsifiable provenance.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  webhookTimeoutSeconds: 30
+  failurePolicy: Fail
+  rules:
+    - name: check-slsa-provenance
+      match:
+        any:
+        - resources:
+            kinds:
+            - Pod
+            - Deployment
+            - StatefulSet
+            - DaemonSet
+            - Job
+            - CronJob
+      verifyImages:
+      - imageReferences:
+        - "*"
+        attestations:
+        - predicateType: https://slsa.dev/provenance/v0.2
+          attestors:
+          - count: 1
+            entries:
+            - keyless:
+                subject: "*@*"
+                issuer: "https://accounts.google.com"
+                rekor:
+                  url: https://rekor.sigstore.dev
+          conditions:
+          - all:
+            - key: "{{ buildType }}"
+              operator: Equals
+              value: "https://github.com/slsa-framework/slsa-github-generator/generic@v1"
+            - key: "{{ builder.id }}"
+              operator: AnyIn
+              value:
+              - "https://github.com/{{ github.repository }}/actions/runs/*"
+            - key: "{{ invocation.configSource.uri }}"
+              operator: AnyIn
+              value:
+              - "git+https://github.com/{{ github.repository }}@*"

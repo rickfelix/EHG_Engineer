@@ -1,0 +1,84 @@
+{
+  "stage_id": 40,
+  "stage_title": "Venture Active",
+  "objective": "Optimize Stage 40 (Venture Active) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 40,
+      "title": "Venture Active",
+      "description": "Active venture management with growth optimization and exit readiness.",
+      "owner": "Chairman",
+      "depends_on": [
+        39
+      ],
+      "inputs": [
+        "Venture performance",
+        "Market conditions",
+        "Exit opportunities"
+      ],
+      "outputs": [
+        "Growth decisions",
+        "Exit timing",
+        "Value realization"
+      ],
+      "metrics": [
+        "Growth rate",
+        "Valuation",
+        "Exit readiness score"
+      ],
+      "gates": {
+        "entry": [
+          "Venture mature",
+          "Metrics positive"
+        ],
+        "exit": [
+          "Growth optimized",
+          "Exit executed",
+          "Value captured"
+        ]
+      },
+      "substages": [
+        {
+          "id": "40.1",
+          "title": "Growth Management",
+          "done_when": [
+            "Growth levers identified",
+            "Strategies executed",
+            "Metrics improved"
+          ]
+        },
+        {
+          "id": "40.2",
+          "title": "Exit Preparation",
+          "done_when": [
+            "Buyers identified",
+            "Due diligence ready",
+            "Valuation maximized"
+          ]
+        },
+        {
+          "id": "40.3",
+          "title": "Value Realization",
+          "done_when": [
+            "Deal negotiated",
+            "Transaction closed",
+            "Value distributed"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/40-*.md",
+    "critique_path": "/docs/workflow/critique/stage-40.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_40_findings.md",
+    "/docs/research/outputs/stage_40_recommendations.md"
+  ]
+}

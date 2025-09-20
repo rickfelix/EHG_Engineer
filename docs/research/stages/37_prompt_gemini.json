@@ -1,0 +1,89 @@
+{
+  "stage_id": 37,
+  "stage_title": "Strategic Risk Forecasting",
+  "objective": "Optimize Stage 37 (Strategic Risk Forecasting) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 37,
+      "title": "Strategic Risk Forecasting",
+      "description": "Forecast and prepare for strategic risks and market changes.",
+      "owner": "Chairman",
+      "depends_on": [
+        36
+      ],
+      "inputs": [
+        "Market intelligence",
+        "Risk indicators",
+        "Scenario models"
+      ],
+      "outputs": [
+        "Risk forecasts",
+        "Mitigation strategies",
+        "Contingency plans"
+      ],
+      "metrics": [
+        "Forecast accuracy",
+        "Risk preparedness",
+        "Response time"
+      ],
+      "gates": {
+        "entry": [
+          "Data sources connected",
+          "Models calibrated"
+        ],
+        "exit": [
+          "Risks forecasted",
+          "Strategies defined",
+          "Plans activated"
+        ]
+      },
+      "substages": [
+        {
+          "id": "37.1",
+          "title": "Risk Modeling",
+          "done_when": [
+            "Models built",
+            "Scenarios defined",
+            "Probabilities calculated"
+          ]
+        },
+        {
+          "id": "37.2",
+          "title": "Impact Assessment",
+          "done_when": [
+            "Impacts quantified",
+            "Dependencies mapped",
+            "Thresholds set"
+          ]
+        },
+        {
+          "id": "37.3",
+          "title": "Contingency Planning",
+          "done_when": [
+            "Plans created",
+            "Triggers defined",
+            "Resources reserved"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/37-*.md",
+    "critique_path": "/docs/workflow/critique/stage-37.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_37_findings.md",
+    "/docs/research/outputs/stage_37_recommendations.md"
+  ],
+  "gemini_specific": {
+    "focus": "practical_implementation",
+    "include_code_samples": true,
+    "suggest_tools": true
+  }
+}

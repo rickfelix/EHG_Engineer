@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 13 Detail
+subgraph S13["13. Exit-Oriented Design"]
+  S13_root["Purpose: Design venture with exit strategy and value maximization in mind.
+Owner: Chairman"]
+  S13_A["13.1 Exit Strategy Definition"]
+  S13_B["13.2 Value Driver Identification"]
+  S13_C["13.3 Buyer Landscape"]
+  S13_root --> S13_A --> S13_B --> S13_C
+end
+classDef dep stroke-dasharray: 5 5;
+D13["Depends on: 12"]:::dep -.-> S13_root

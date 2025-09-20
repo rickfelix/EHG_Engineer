@@ -1,0 +1,78 @@
+# Configuration for auto-labeler action
+# Used by .github/workflows/auto-labels.yml
+
+# Dual-lane workflow state labels
+codex-building:
+  - staging/codex-*
+
+claude-enforcing:
+  - feature/*
+
+# Component labels based on file changes
+frontend:
+  - src/client/**/*
+  - src/components/**/*
+  - '*.jsx'
+  - '*.tsx'
+
+backend:
+  - server.js
+  - lib/**/*
+  - scripts/**/*
+  - '*.js'
+  - '*.mjs'
+  - '*.cjs'
+
+database:
+  - database/**/*
+  - migrations/**/*
+  - '*.sql'
+
+documentation:
+  - docs/**/*
+  - '*.md'
+  - README*
+
+testing:
+  - tests/**/*
+  - test/**/*
+  - '*.test.js'
+  - '*.spec.js'
+  - playwright.config.js
+  - jest.config.js
+
+ci-cd:
+  - .github/**/*
+  - .gitlab-ci.yml
+  - Dockerfile
+  - docker-compose.yml
+
+security:
+  - policies/**/*
+  - kyverno/**/*
+  - opa/**/*
+  - admission/**/*
+  - .env*
+
+leo-protocol:
+  - CLAUDE.md
+  - CLAUDE-LEO.md
+  - AGENTS.md
+  - templates/claude-md/**/*
+  - scripts/generate-claude-md-from-db.js
+
+# Size labels based on changed lines
+size/XS:
+  - changed-lines: 0-10
+
+size/S:
+  - changed-lines: 11-50
+
+size/M:
+  - changed-lines: 51-200
+
+size/L:
+  - changed-lines: 201-500
+
+size/XL:
+  - changed-lines: 501+

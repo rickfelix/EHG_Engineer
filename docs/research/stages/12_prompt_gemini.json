@@ -1,0 +1,88 @@
+{
+  "stage_id": 12,
+  "stage_title": "Adaptive Naming Module",
+  "objective": "Optimize Stage 12 (Adaptive Naming Module) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 12,
+      "title": "Adaptive Naming Module",
+      "description": "Optimize naming for different markets and contexts.",
+      "owner": "PLAN",
+      "depends_on": [
+        11
+      ],
+      "inputs": [
+        "Primary brand name",
+        "Market segments",
+        "Cultural factors"
+      ],
+      "outputs": [
+        "Name variations",
+        "Market adaptations",
+        "Localization guide"
+      ],
+      "metrics": [
+        "Adaptation coverage",
+        "Cultural fit score",
+        "Market acceptance"
+      ],
+      "gates": {
+        "entry": [
+          "Primary name selected",
+          "Markets identified"
+        ],
+        "exit": [
+          "Variations approved",
+          "Localizations complete",
+          "Guidelines updated"
+        ]
+      },
+      "substages": [
+        {
+          "id": "12.1",
+          "title": "Market Analysis",
+          "done_when": [
+            "Target markets mapped",
+            "Cultural factors assessed"
+          ]
+        },
+        {
+          "id": "12.2",
+          "title": "Name Adaptation",
+          "done_when": [
+            "Variations created",
+            "Translations verified",
+            "Phonetics validated"
+          ]
+        },
+        {
+          "id": "12.3",
+          "title": "Testing & Validation",
+          "done_when": [
+            "Market testing complete",
+            "Feedback incorporated",
+            "Final selections made"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/12-*.md",
+    "critique_path": "/docs/workflow/critique/stage-12.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_12_findings.md",
+    "/docs/research/outputs/stage_12_recommendations.md"
+  ],
+  "gemini_specific": {
+    "focus": "practical_implementation",
+    "include_code_samples": true,
+    "suggest_tools": true
+  }
+}

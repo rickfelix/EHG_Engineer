@@ -1,0 +1,89 @@
+{
+  "stage_id": 32,
+  "stage_title": "Customer Success & Retention Engineering",
+  "objective": "Optimize Stage 32 (Customer Success & Retention Engineering) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 32,
+      "title": "Customer Success & Retention Engineering",
+      "description": "Establish customer success systems and retention mechanisms.",
+      "owner": "EVA",
+      "depends_on": [
+        31
+      ],
+      "inputs": [
+        "Customer data",
+        "Usage metrics",
+        "Support tickets"
+      ],
+      "outputs": [
+        "Success playbooks",
+        "Retention programs",
+        "Health scores"
+      ],
+      "metrics": [
+        "Customer health score",
+        "Retention rate",
+        "NPS score"
+      ],
+      "gates": {
+        "entry": [
+          "Customers onboarded",
+          "Data flowing"
+        ],
+        "exit": [
+          "Success system active",
+          "Retention improving",
+          "NPS positive"
+        ]
+      },
+      "substages": [
+        {
+          "id": "32.1",
+          "title": "Success Infrastructure",
+          "done_when": [
+            "CRM configured",
+            "Playbooks created",
+            "Team trained"
+          ]
+        },
+        {
+          "id": "32.2",
+          "title": "Health Monitoring",
+          "done_when": [
+            "Metrics defined",
+            "Scoring implemented",
+            "Alerts configured"
+          ]
+        },
+        {
+          "id": "32.3",
+          "title": "Retention Programs",
+          "done_when": [
+            "Programs designed",
+            "Automation built",
+            "Engagement tracked"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/32-*.md",
+    "critique_path": "/docs/workflow/critique/stage-32.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_32_findings.md",
+    "/docs/research/outputs/stage_32_recommendations.md"
+  ],
+  "gemini_specific": {
+    "focus": "practical_implementation",
+    "include_code_samples": true,
+    "suggest_tools": true
+  }
+}

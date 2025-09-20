@@ -1,0 +1,84 @@
+{
+  "stage_id": 34,
+  "stage_title": "Creative Media Automation",
+  "objective": "Optimize Stage 34 (Creative Media Automation) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 34,
+      "title": "Creative Media Automation",
+      "description": "Automate content creation and creative asset generation.",
+      "owner": "EVA",
+      "depends_on": [
+        33
+      ],
+      "inputs": [
+        "Brand guidelines",
+        "Content strategy",
+        "Campaign requirements"
+      ],
+      "outputs": [
+        "Automated content",
+        "Creative assets",
+        "Campaign materials"
+      ],
+      "metrics": [
+        "Content velocity",
+        "Asset quality",
+        "Campaign performance"
+      ],
+      "gates": {
+        "entry": [
+          "Strategy defined",
+          "Templates created"
+        ],
+        "exit": [
+          "Automation running",
+          "Quality verified",
+          "Campaigns active"
+        ]
+      },
+      "substages": [
+        {
+          "id": "34.1",
+          "title": "Content Automation",
+          "done_when": [
+            "Templates built",
+            "Workflows configured",
+            "Quality controls set"
+          ]
+        },
+        {
+          "id": "34.2",
+          "title": "Asset Generation",
+          "done_when": [
+            "AI models trained",
+            "Assets generated",
+            "Brand compliance verified"
+          ]
+        },
+        {
+          "id": "34.3",
+          "title": "Campaign Execution",
+          "done_when": [
+            "Campaigns launched",
+            "Performance tracked",
+            "Optimization running"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/34-*.md",
+    "critique_path": "/docs/workflow/critique/stage-34.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_34_findings.md",
+    "/docs/research/outputs/stage_34_recommendations.md"
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "stage_id": 24,
+  "stage_title": "MVP Engine: Automated Feedback Iteration",
+  "objective": "Optimize Stage 24 (MVP Engine: Automated Feedback Iteration) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 24,
+      "title": "MVP Engine: Automated Feedback Iteration",
+      "description": "Automated iteration engine for rapid MVP improvements.",
+      "owner": "EVA",
+      "depends_on": [
+        23
+      ],
+      "inputs": [
+        "Feedback data",
+        "Performance metrics",
+        "User behavior"
+      ],
+      "outputs": [
+        "Iteration plan",
+        "Automated improvements",
+        "A/B test results"
+      ],
+      "metrics": [
+        "Iteration velocity",
+        "Improvement rate",
+        "User satisfaction"
+      ],
+      "gates": {
+        "entry": [
+          "MVP deployed",
+          "Metrics baseline set"
+        ],
+        "exit": [
+          "Iterations complete",
+          "Metrics improved",
+          "Users satisfied"
+        ]
+      },
+      "substages": [
+        {
+          "id": "24.1",
+          "title": "Automated Analysis",
+          "done_when": [
+            "Data analyzed",
+            "Patterns detected",
+            "Opportunities identified"
+          ]
+        },
+        {
+          "id": "24.2",
+          "title": "Iteration Planning",
+          "done_when": [
+            "Changes prioritized",
+            "Tests designed",
+            "Resources allocated"
+          ]
+        },
+        {
+          "id": "24.3",
+          "title": "Execution & Measurement",
+          "done_when": [
+            "Changes deployed",
+            "Tests run",
+            "Results measured"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/24-*.md",
+    "critique_path": "/docs/workflow/critique/stage-24.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_24_findings.md",
+    "/docs/research/outputs/stage_24_recommendations.md"
+  ]
+}

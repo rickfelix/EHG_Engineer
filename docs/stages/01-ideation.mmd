@@ -1,0 +1,63 @@
+flowchart TB
+%% Phase 1: IDEATION (Stages 1-10)
+%% Focus: Idea validation and feasibility assessment
+
+subgraph IDEATION["🎯 Phase 1: IDEATION"]
+  S1["1. Draft Idea<br/>Owner: EVA<br/>Voice + Text Input"]
+  S2["2. AI Review<br/>Owner: LEAD<br/>Multi-Agent Analysis"]
+  S3["3. Comprehensive Validation<br/>Owner: PLAN<br/>Problem-Solution Fit"]
+  S4["4. Competitive Intelligence<br/>Owner: LEAD<br/>Market Defense"]
+  S5["5. Profitability Forecasting<br/>Owner: PLAN<br/>Financial Modeling"]
+  S6["6. Risk Evaluation<br/>Owner: EXEC<br/>Risk Mitigation"]
+  S7["7. Comprehensive Planning<br/>Owner: PLAN<br/>Business & Tech Plans"]
+  S8["8. Problem Decomposition<br/>Owner: EXEC<br/>Work Breakdown"]
+  S9["9. Gap Analysis<br/>Owner: LEAD<br/>Capability Assessment"]
+  S10["10. Technical Review<br/>Owner: EXEC<br/>Architecture Validation"]
+end
+
+%% Sequential flow
+S1 --> S2
+S2 --> S3
+S3 --> |"Proceed"| S4
+S3 --> |"Kill"| STOP1(("Stop"))
+S3 --> |"Revise"| S1
+S4 --> S5
+S5 --> S6
+S6 --> S7
+S7 --> S8
+S8 --> S9
+S9 --> S10
+S10 --> NEXT(("To Planning"))
+
+%% Key decision gates
+S3 ==> GATE1{"Kill/Revise/Proceed<br/>Decision Gate"}
+GATE1 --> |"Kill"| STOP1
+GATE1 --> |"Revise"| S1
+GATE1 --> |"Proceed"| S4
+
+%% Feedback loops
+S6 -.-> S5
+S9 -.-> S7
+S10 -.-> S8
+
+%% Critical data flows
+S1 --> DATA1[("Idea Document")]
+DATA1 --> S2
+S5 --> DATA2[("Financial Model")]
+DATA2 --> S6
+S10 --> DATA3[("Tech Architecture")]
+DATA3 --> NEXT
+
+classDef eva fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+classDef lead fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px
+classDef plan fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+classDef exec fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+classDef gate fill:#ffebee,stroke:#c62828,stroke-width:3px
+classDef data fill:#f5f5f5,stroke:#424242,stroke-width:1px,stroke-dasharray: 5 5
+
+class S1 eva
+class S2,S4,S9 lead
+class S3,S5,S7 plan
+class S6,S8,S10 exec
+class GATE1 gate
+class DATA1,DATA2,DATA3 data

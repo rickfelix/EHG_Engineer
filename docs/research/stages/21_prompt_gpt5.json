@@ -1,0 +1,84 @@
+{
+  "stage_id": 21,
+  "stage_title": "Final Pre-Flight Check",
+  "objective": "Optimize Stage 21 (Final Pre-Flight Check) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 21,
+      "title": "Final Pre-Flight Check",
+      "description": "Comprehensive validation before development phase begins.",
+      "owner": "PLAN",
+      "depends_on": [
+        20
+      ],
+      "inputs": [
+        "All previous outputs",
+        "Checklist",
+        "Success criteria"
+      ],
+      "outputs": [
+        "Pre-flight report",
+        "Go/No-go decision",
+        "Risk assessment"
+      ],
+      "metrics": [
+        "Checklist completion",
+        "Risk score",
+        "Readiness rating"
+      ],
+      "gates": {
+        "entry": [
+          "All preparations complete",
+          "Resources ready"
+        ],
+        "exit": [
+          "All checks passed",
+          "Go decision made",
+          "Risks accepted"
+        ]
+      },
+      "substages": [
+        {
+          "id": "21.1",
+          "title": "Technical Validation",
+          "done_when": [
+            "Architecture verified",
+            "Dependencies resolved",
+            "Environment stable"
+          ]
+        },
+        {
+          "id": "21.2",
+          "title": "Business Validation",
+          "done_when": [
+            "Strategy confirmed",
+            "Resources committed",
+            "Stakeholders aligned"
+          ]
+        },
+        {
+          "id": "21.3",
+          "title": "Go/No-Go Decision",
+          "done_when": [
+            "Criteria evaluated",
+            "Decision made",
+            "Communication sent"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/21-*.md",
+    "critique_path": "/docs/workflow/critique/stage-21.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_21_findings.md",
+    "/docs/research/outputs/stage_21_recommendations.md"
+  ]
+}

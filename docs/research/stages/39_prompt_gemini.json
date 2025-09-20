@@ -1,0 +1,89 @@
+{
+  "stage_id": 39,
+  "stage_title": "Multi-Venture Coordination",
+  "objective": "Optimize Stage 39 (Multi-Venture Coordination) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 39,
+      "title": "Multi-Venture Coordination",
+      "description": "Coordinate multiple ventures within the portfolio for synergies.",
+      "owner": "Chairman",
+      "depends_on": [
+        38
+      ],
+      "inputs": [
+        "Portfolio data",
+        "Venture metrics",
+        "Synergy opportunities"
+      ],
+      "outputs": [
+        "Coordination plan",
+        "Synergy realization",
+        "Portfolio optimization"
+      ],
+      "metrics": [
+        "Portfolio performance",
+        "Synergy value",
+        "Resource efficiency"
+      ],
+      "gates": {
+        "entry": [
+          "Multiple ventures active",
+          "Data integrated"
+        ],
+        "exit": [
+          "Coordination established",
+          "Synergies captured",
+          "Portfolio optimized"
+        ]
+      },
+      "substages": [
+        {
+          "id": "39.1",
+          "title": "Portfolio Analysis",
+          "done_when": [
+            "Ventures assessed",
+            "Synergies identified",
+            "Conflicts resolved"
+          ]
+        },
+        {
+          "id": "39.2",
+          "title": "Coordination Planning",
+          "done_when": [
+            "Plans created",
+            "Resources shared",
+            "Governance established"
+          ]
+        },
+        {
+          "id": "39.3",
+          "title": "Synergy Execution",
+          "done_when": [
+            "Initiatives launched",
+            "Value captured",
+            "Benefits measured"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/39-*.md",
+    "critique_path": "/docs/workflow/critique/stage-39.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_39_findings.md",
+    "/docs/research/outputs/stage_39_recommendations.md"
+  ],
+  "gemini_specific": {
+    "focus": "practical_implementation",
+    "include_code_samples": true,
+    "suggest_tools": true
+  }
+}

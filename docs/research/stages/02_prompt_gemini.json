@@ -1,0 +1,87 @@
+{
+  "stage_id": 2,
+  "stage_title": "AI Review",
+  "objective": "Optimize Stage 2 (AI Review) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 2,
+      "title": "AI Review",
+      "description": "Multi-agent AI system reviews and critiques the idea from multiple perspectives.",
+      "owner": "LEAD",
+      "depends_on": [
+        1
+      ],
+      "inputs": [
+        "Structured idea",
+        "Historical data",
+        "Market signals"
+      ],
+      "outputs": [
+        "AI critique report",
+        "Contrarian analysis",
+        "Risk assessment"
+      ],
+      "metrics": [
+        "Review thoroughness",
+        "Risk identification rate",
+        "Processing time"
+      ],
+      "gates": {
+        "entry": [
+          "Idea document complete",
+          "Validation passed"
+        ],
+        "exit": [
+          "Multi-model pass complete",
+          "Contrarian review done",
+          "Top-5 risks identified"
+        ]
+      },
+      "substages": [
+        {
+          "id": "2.1",
+          "title": "Multi-Model Analysis",
+          "done_when": [
+            "LEAD agent review",
+            "PLAN agent review",
+            "EXEC agent review"
+          ]
+        },
+        {
+          "id": "2.2",
+          "title": "Contrarian Red Team",
+          "done_when": [
+            "Devil's advocate analysis",
+            "Failure mode assessment"
+          ]
+        },
+        {
+          "id": "2.3",
+          "title": "Risk Prioritization",
+          "done_when": [
+            "Top-5 risks ranked",
+            "Mitigation strategies proposed"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/02-*.md",
+    "critique_path": "/docs/workflow/critique/stage-02.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_02_findings.md",
+    "/docs/research/outputs/stage_02_recommendations.md"
+  ],
+  "gemini_specific": {
+    "focus": "practical_implementation",
+    "include_code_samples": true,
+    "suggest_tools": true
+  }
+}

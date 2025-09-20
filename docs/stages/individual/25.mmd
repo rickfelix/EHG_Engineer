@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 25 Detail
+subgraph S25["25. Quality Assurance"]
+  S25_root["Purpose: Comprehensive quality assurance and testing processes.
+Owner: EXEC"]
+  S25_A["25.1 Test Execution"]
+  S25_B["25.2 Bug Management"]
+  S25_C["25.3 Quality Certification"]
+  S25_root --> S25_A --> S25_B --> S25_C
+end
+classDef dep stroke-dasharray: 5 5;
+D25["Depends on: 24"]:::dep -.-> S25_root

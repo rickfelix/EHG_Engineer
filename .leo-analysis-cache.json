@@ -1,0 +1,6144 @@
+{
+  "version": "1.0.0",
+  "timestamp": 1756906182446,
+  "fileCache": [
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/(onboarding)/getting-started/page.tsx",
+      {
+        "hash": "3943a502a4bbf256a5c84bfa85d0ee23",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/(onboarding)/layout.tsx",
+      {
+        "hash": "8e0f333f3d3a9436b0dddfd56db43f1a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/(onboarding)/quickstart/QuickstartChecklist.tsx",
+      {
+        "hash": "fa9a75430e5fae56dd4c39043d106337",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/(onboarding)/quickstart/page.tsx",
+      {
+        "hash": "2d210b1ff52f5a69658eaf33aa1bbfe1",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/(onboarding)/tour/OnboardingTour.tsx",
+      {
+        "hash": "7164934763101861d52b7284d8b92bb0",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/(onboarding)/tour/page.tsx",
+      {
+        "hash": "a965c2c890f7ab3fe2f2547f748ee76c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/ai-agents/start/route.ts",
+      {
+        "hash": "e52190bab2c77c96319c3edc3d4f03ff",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/ai-agents/status/route.ts",
+      {
+        "hash": "d775b4b18a70a79722c88da119c94cf8",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/ai-agents/stop/route.ts",
+      {
+        "hash": "fa2e6201669c8a6e11202bdb0aeaefa4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/analytics/events/route.ts",
+      {
+        "hash": "555529033cdb18ce2bd83c15f3a4e6a8",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/companies/route.ts",
+      {
+        "hash": "1e339a9e7d4ec3dc658b9119b2fa54b3",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/data-management/quality/route.ts",
+      {
+        "hash": "f44668a3f8c880e5a799ee3c025321c8",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/data-management/storage/route.ts",
+      {
+        "hash": "da45e68e9d5050d9ec3ecd980bc1ec76",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/eva-nlp/route.ts",
+      {
+        "hash": "5be32260b1f31310aa39545e5053c7d5",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/eva-orchestration/route.ts",
+      {
+        "hash": "c0729203c360fbefc028ec4e3ff5217a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/governance/compliance/status/route.ts",
+      {
+        "hash": "b8eb028c7cf94f078de0f33e01932d45",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/governance/metrics/route.ts",
+      {
+        "hash": "57ddafd79d33dc9b081239033c6c4011",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/governance/reviews/upcoming/route.ts",
+      {
+        "hash": "f35021ef45cbd21c7bb2cc0f772a7fdd",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/governance/violations/recent/route.ts",
+      {
+        "hash": "a31e71ee2177b38c41a44948c6ff195c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/integration/health-alerts/route.ts",
+      {
+        "hash": "fccae679859f61c71415baae5668340c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/integration/health-check/route.ts",
+      {
+        "hash": "220fc3227f5bd7d60df91e5d8c318162",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/integration/health-metrics/route.ts",
+      {
+        "hash": "a5644354436b024223179564b55ecf5c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/integration/services/route.ts",
+      {
+        "hash": "6f1555556adaf274b64fa75d3c2d66f0",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/integration/status/route.ts",
+      {
+        "hash": "965cb1b6f9efb9ab61c7290e825d5b5d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/integration/webhooks/route.ts",
+      {
+        "hash": "f4b2de5dc112af74cbb7a75d9e82bcc9",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/monitoring/overview/route.ts",
+      {
+        "hash": "e16bb578722f4d65a32c6d1b1d5ea24d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/onboarding/complete/route.ts",
+      {
+        "hash": "134f3c730ea0834f430fae009115cbab",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/performance/overview/route.ts",
+      {
+        "hash": "4874640e160d0d413274892b5cb7ff0d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/security/overview/route.ts",
+      {
+        "hash": "13254eee18999fe1e83e3535657d2569",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/settings/route.ts",
+      {
+        "hash": "c5e9fe4b2e1cf71102bc6f89e0f30469",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/ventures/create/route.ts",
+      {
+        "hash": "8991bff6983690487779fdc66a73b432",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/api/ventures/list/route.ts",
+      {
+        "hash": "800bb718242ab256ffd23be9b3e56681",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/data-management/page.tsx",
+      {
+        "hash": "65dcc0bfdb3b1ad082fdff93d417e3b9",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/governance/page.tsx",
+      {
+        "hash": "248befc78f3fc99d6d8ce8761787dc8b",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/integration/page.tsx",
+      {
+        "hash": "1730b0a5deb24b3ed00020cbc750ac88",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/monitoring/page.tsx",
+      {
+        "hash": "128b0c7ab93facb0c07104cf9d0ddba0",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/performance/page.tsx",
+      {
+        "hash": "1a208811b3059b78bafa3a6531b9a6a1",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/security/page.tsx",
+      {
+        "hash": "053a6f41e88460024c025c36a04791bf",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/settings/EVASettingsCard.tsx",
+      {
+        "hash": "00d1d2698427682a0f372eff0490177c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/settings/PreferencesForm.tsx",
+      {
+        "hash": "b05c49fee371329b53ba175c5d5f56b1",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/app/settings/page.tsx",
+      {
+        "hash": "8e1d4d111fd11a45be769450bec5f5db",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/eslint.config.js",
+      {
+        "hash": "289d6b79f2956f20f833b7b2fe6c3e9b",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/lib/analytics/onboarding.ts",
+      {
+        "hash": "85f334e295f377c988f8b954b56b149d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/lib/auth/useCurrentUser.ts",
+      {
+        "hash": "829d701d7b219f88f7f553a606a0a4fa",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/postcss.config.js",
+      {
+        "hash": "ef3ba2a81ba19f8ea5ddf625521e96f0",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/scripts/add-sd-2025-001-simple.js",
+      {
+        "hash": "202c3119cae5ddd4c93046e216128922",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/scripts/add-sd-2025-001-to-database.js",
+      {
+        "hash": "fb48a98412fb95825f7eef08297902f7",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/scripts/add-test-data.js",
+      {
+        "hash": "000a1bfe2c398cd22a9731d2cd44c25a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/scripts/seed/governance.seed.ts",
+      {
+        "hash": "7ec68f69809125ec3159a5ee1c169001",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/scripts/seed/onboarding.seed.ts",
+      {
+        "hash": "ee39bd266c1538bc5774532385606e87",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/scripts/verify-database-before-exec.js",
+      {
+        "hash": "d14adbc344b65276539c3b15349a4510",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/server/api/onboarding/progress.ts",
+      {
+        "hash": "75605eeaafca921854216d7556629714",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/server/contracts/feedback.ts",
+      {
+        "hash": "f34030bb18109a0d0e2f9aaeb39c0647",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/server/contracts/index.ts",
+      {
+        "hash": "6a52043bc10bd64890c048e83dddef8b",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/server/contracts/ventures.ts",
+      {
+        "hash": "8b19ead0566a6a33f4894c5845330c9f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/server/tests/contracts/feedback.spec.ts",
+      {
+        "hash": "818699682df2c7e5b58ca5d70ba03bcd",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/server/tests/contracts/ventures.spec.ts",
+      {
+        "hash": "3edc9d9ce54b8188cf397d500a043eb6",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/App.tsx",
+      {
+        "hash": "067fff83ca3a240c2cff723d9ad3ba80",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/accessibility/AccessibilityProvider.tsx",
+      {
+        "hash": "a65e36243a6b88798dd140493763fa0a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/accessibility/AccessibilitySettings.tsx",
+      {
+        "hash": "b3e7d9c158f648fe1edd21daf3569016",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/accessibility/AccessibleNavigationAnnouncer.tsx",
+      {
+        "hash": "4908bc23404eea5bb35e6edefd93e7e3",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/accessibility/SkipNavigation.tsx",
+      {
+        "hash": "a843d61c1246f1b2846453aaf2c8e95a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/accessibility/VoiceInput.tsx",
+      {
+        "hash": "0411f260998736bf40a047d164db0d1c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/agents/AgentCoordinationTab.tsx",
+      {
+        "hash": "1583168b26dbc33ae17bea2a29031846",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/agents/AgentDeployDialog.tsx",
+      {
+        "hash": "60433d5989fd6f08357c966e9d4bae61",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/agents/AgentPerformanceChart.tsx",
+      {
+        "hash": "ca4b6c30e1b30f66bdf1efcb69ee80b6",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/agents/AgentPerformanceTab.tsx",
+      {
+        "hash": "f10469899d85f89921e702225b5e7a56",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/agents/AgentSettingsTab.tsx",
+      {
+        "hash": "103dd6f9b4a3f3423ff15e2c8aa3bdf0",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/agents/AgentStatusCard.tsx",
+      {
+        "hash": "4e77d1152535b7839a265c543d67b3b5",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/agents/AgentTaskQueue.tsx",
+      {
+        "hash": "ff9d9c702c04fc6fd4ce2b4656ae4cc8",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ai/AIHealthMonitor.tsx",
+      {
+        "hash": "e97657dc4f4bb8fb1a94bfa53fad9763",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ai-agents/AgentStatusCard.tsx",
+      {
+        "hash": "4760cc9ce1e7377217afa3e573c29bd4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/analytics/AIInsightsAlert.tsx",
+      {
+        "hash": "c4117eea30b696f933411ff9b9955d35",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/analytics/AIInsightsView.tsx",
+      {
+        "hash": "21be8d716277645e6823d60aa31c0b68",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/analytics/AdvancedAnalyticsEngine.tsx",
+      {
+        "hash": "80bfacfbff21e34f3ad899047744d534",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/analytics/CustomReportsView.tsx",
+      {
+        "hash": "4fa4271eb813aa3a52c9c64a9deea759",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/analytics/EnhancedCharts.tsx",
+      {
+        "hash": "072c40b15072b00e853248625e4b6ad6",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/analytics/EnhancedKeyMetricsOverview.tsx",
+      {
+        "hash": "890fd99ba1f860367e29c39567b9f8f7",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/analytics/ExecutiveDashboard.tsx",
+      {
+        "hash": "a53559dae393ba33dcf7a9cc6c8d8752",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/analytics/KeyMetricsOverview.tsx",
+      {
+        "hash": "742ad522b93c7be6ebcb61b0b33e5585",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/analytics/PortfolioAnalyticsView.tsx",
+      {
+        "hash": "01e93874a696d670494768ee50dbb929",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/analytics/UserJourneyAnalytics.tsx",
+      {
+        "hash": "c6847578a079acc32c0f79113f34e111",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/analytics/VentureAnalyticsView.tsx",
+      {
+        "hash": "f5e4c4100b60b927b245ddc04604f5d5",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/auth/AISecurityMonitor.tsx",
+      {
+        "hash": "8c2755b42b8b63e7ebabd79a23178377",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/auth/AuthenticationDashboard.tsx",
+      {
+        "hash": "2f2a4b72d99727110ec95c65d345bc30",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/auth/EnhancedAuthenticationSystem.tsx",
+      {
+        "hash": "8b6f02b6ffd8b661619fe0de50bf1006",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/auth/ProtectedRoute.tsx",
+      {
+        "hash": "80748987d8f0e3dd0b6d55e09a77b920",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/auth/RoleBasedAccess.tsx",
+      {
+        "hash": "6a53a5f90fb824d636a9517c30f6fd24",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/chairman/AIInsightsEngine.tsx",
+      {
+        "hash": "ccd69219adaa9175d7eeec5b778da41d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/chairman/ChairmanFeedbackPanel.tsx",
+      {
+        "hash": "903764afb8c99e91cfdea84975268278",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/chairman/ChairmanOverridePanel.tsx",
+      {
+        "hash": "40d5d987559f9b838dfca4f1a1bfe280",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/chairman/CompanySelector.tsx",
+      {
+        "hash": "64a1b98ebbd82dddd48f2d93d47bdcc9",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/chairman/ExecutiveAlerts.tsx",
+      {
+        "hash": "3caf3bc51e78e73e4c6f40cfd462728f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/chairman/PerformanceDriveCycle.tsx",
+      {
+        "hash": "6aacb23ada32bc9b3ecac087b810ae7a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/chairman/SynergyOpportunities.tsx",
+      {
+        "hash": "6225d0c2edb4a4299815b341bb9b9ed6",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/chairman/feedback/AgentInstructions.tsx",
+      {
+        "hash": "7741780cbc2fea353279d21a967a02f2",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/chairman/feedback/FeedbackForm.tsx",
+      {
+        "hash": "99020c218ea84a39d82ee5f4d0fd729c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/chairman/feedback/FeedbackHistory.tsx",
+      {
+        "hash": "fae9da4ebcf503fe3ea1be3b077b08c7",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/chairman/feedback/ProcessingStatus.tsx",
+      {
+        "hash": "a7f1f61c451f4c516956778a80880029",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/chairman/feedback/VoiceRecorder.tsx",
+      {
+        "hash": "e39d7c9b62fefc760434a2318e1c2d8d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/collaboration/AdvancedCollaboration.tsx",
+      {
+        "hash": "030124a7019dbbedb044cf874d21aefc",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/collaboration/CollaborationHub.tsx",
+      {
+        "hash": "e8b3d6280948ba49f6c0fd3ec0c02617",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/collaboration/CreateThreadDialog.tsx",
+      {
+        "hash": "142bf7190961d1ff44a76303f2895026",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/collaboration/ThreadDetails.tsx",
+      {
+        "hash": "58e578c7c91d3c664181adec8c25a961",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/completion/PlatformCompletionSummary.tsx",
+      {
+        "hash": "a9952a809f5159afcb433ffab3b06819",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/data/KnowledgeBaseSystem.tsx",
+      {
+        "hash": "3add6b0581c6d465f3d0e42fb3c92aea",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/data-management/DataGovernanceDashboard.tsx",
+      {
+        "hash": "f5673a058e69c4e5e7fb88bdadae28ad",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/data-management/DataLifecycleDashboard.tsx",
+      {
+        "hash": "3713136d845a988598e4a2cffd23ab19",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/development/TestingAutomationDashboard.tsx",
+      {
+        "hash": "7084e6d70c03b6c42540a1de9dc93620",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/eva/ChatInput.tsx",
+      {
+        "hash": "12b2a6713706115fff0ccce8a51ec181",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/eva/EVAOrchestrationDashboard.tsx",
+      {
+        "hash": "31698549dd888c9b9f7d46bb27cb50bc",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/eva/EVARealtimeVoice.tsx",
+      {
+        "hash": "bb41dcfc9d731adf7a04dbac997b9e67",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/eva/EVASetup.tsx",
+      {
+        "hash": "230f4d2766ce5ce2ca6a3ccf3e362288",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/eva/EVATextToSpeechChat.tsx",
+      {
+        "hash": "1d73800533fd3d6488da310046b5aa45",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/eva/EVAVoiceInterface.tsx",
+      {
+        "hash": "557475055399c7a4ca21e3f8298d3972",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/eva/ElevenLabsVoice.tsx",
+      {
+        "hash": "4f9f6328f1caba354dc6b2f7704a7f93",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/eva/FloatingEVAAssistant.tsx",
+      {
+        "hash": "33bce38c5fc82f6b50bc66c3ecdbd535",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/execution/ExecutionProgressChart.tsx",
+      {
+        "hash": "ed0684b77a592b0463b905726a5b0d71",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/execution/StageExecutionDetails.tsx",
+      {
+        "hash": "d7a84a3f4d043924035849b2903cbcf8",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/execution/WorkflowExecutionDashboard.tsx",
+      {
+        "hash": "3c6e2d60461c9dde1cd585355022fad5",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/exit/ExitDecisionWorkflow.tsx",
+      {
+        "hash": "4edc80246dc9c6106a2a296160b6ab8a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/governance/AccessReviewDashboard.tsx",
+      {
+        "hash": "96b9315e3d4c1cabed06b362ddf8d768",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/governance/AuditTrailViewer.tsx",
+      {
+        "hash": "d2cf5192c4e80a51e750fe285130a119",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/governance/ComplianceMonitoring.tsx",
+      {
+        "hash": "485b3fdb5b884581ecf0a7f74fc599cd",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/governance/GovernanceDashboard.tsx",
+      {
+        "hash": "b785650a22fbfd07233a78a8bad4cd7c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/governance/PolicyManagement.tsx",
+      {
+        "hash": "e402f3f5ab8b005cecd34f2812b3e1aa",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/governance/ReportGenerator.tsx",
+      {
+        "hash": "23ed3a6085191ca6a329f9825e554abb",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/integration/ExternalIntegrationHub.tsx",
+      {
+        "hash": "8daa8ed925045aa3b098c66a80c0926d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/integration/IntegrationConfigModal.tsx",
+      {
+        "hash": "939e587eb3b495996ed2822c3959a2d4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/integration/IntegrationHealthMonitor.tsx",
+      {
+        "hash": "0fdd40117652968da703163a53730987",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/integration/IntegrationHubDashboard.tsx",
+      {
+        "hash": "10bb545cfddf3a319431f21da0e02aad",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/integration/IntegrationStatusDashboard.tsx",
+      {
+        "hash": "227d00c5decccb9a56f170b7980eba8d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/integration/ProductionReadiness.tsx",
+      {
+        "hash": "39c8baa611a0b4299ab93d201fa9e8ef",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/integration/SystemOrchestration.tsx",
+      {
+        "hash": "04b57fe2755a7ce5c6c8f212fec3a552",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/knowledge-management/KnowledgeManagementDashboard.tsx",
+      {
+        "hash": "56d522d39d0516be3c48e7da39477683",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/layout/AppLayout.tsx",
+      {
+        "hash": "4aaf166ba3519504cae59e6d3cd88e6e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/layout/AuthenticatedLayout.tsx",
+      {
+        "hash": "1b4722b64363e529456ea5e807d55d4e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/layout/Header.tsx",
+      {
+        "hash": "8092737a2a83621ecac90c376d2b1b93",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/layout/Navigation.tsx",
+      {
+        "hash": "8a1015761bbcbcf0909cc92409466423",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/live-progress/LiveActivityFeed.tsx",
+      {
+        "hash": "e2a8237b984c86f2047dfe95f34d9b48",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/live-progress/LivePerformanceDashboard.tsx",
+      {
+        "hash": "5442b8dcefe3b9287e6e9a7d0f8ed828",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/live-progress/LiveWorkflowMap.tsx",
+      {
+        "hash": "a1b5bb7c922ae5fa0ca7eafca33b9f9c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/live-progress/PortfolioOverview.tsx",
+      {
+        "hash": "61e3003098a7acdf985008616dd5e86c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/monitoring/AIMonitoringAnalytics.tsx",
+      {
+        "hash": "6e6f31cebeadc87aef174217e4fe1e94",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/monitoring/CreateIncidentDialog.tsx",
+      {
+        "hash": "0d4dacf81a24cfe1b932762da5d1073a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/monitoring/IncidentManagement.tsx",
+      {
+        "hash": "b808bd3c67ca91b9c9f58442dde11fdc",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/navigation/AINavigationAssistant.tsx",
+      {
+        "hash": "24fdd1002e878f6625eed62439c5cc74",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/navigation/AccessibilityEnhancements.tsx",
+      {
+        "hash": "d3ae310dbd8916b5ceda8e0fa1cff537",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/navigation/AccessibleNavigationSidebar.tsx",
+      {
+        "hash": "f918e218491986c8b978a2ffd16ed443",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/navigation/BreadcrumbNavigation.tsx",
+      {
+        "hash": "8e73a373e5669b7921d4907adcbe6758",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/navigation/GlobalSearch.tsx",
+      {
+        "hash": "36b7672c30d20a7ea2024ca7b99eb17b",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/navigation/KeyboardShortcuts.tsx",
+      {
+        "hash": "7332c7fab53098e0eefd82fe89bfc659",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/navigation/MobileNavigationEnhancements.tsx",
+      {
+        "hash": "530f933dfbcb5a26137554d258d5018a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/navigation/ModernNavigationSidebar.tsx",
+      {
+        "hash": "7b014412405c53cef0e598abd3692c77",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/navigation/NavigationAssistant.tsx",
+      {
+        "hash": "01f9430fd873c58c06387b70e60799a4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/navigation/NavigationSidebar.tsx",
+      {
+        "hash": "0ecb31a42292df9e7054e86cc216cacd",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/notifications/NotificationCenter.tsx",
+      {
+        "hash": "844461d60a8f23e1ee7e5df9bb85a969",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/notifications/NotificationPreferencesDialog.tsx",
+      {
+        "hash": "8bee34cafddf985ccc378243d16d4a01",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/notifications/NotificationSettings.tsx",
+      {
+        "hash": "f5bf5b7f3066bb77c8fd0842dfb23492",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/orchestration/ActiveWorkflowsView.tsx",
+      {
+        "hash": "e8888787582769ee7651dfe69eca509a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/orchestration/AgentCoordinationView.tsx",
+      {
+        "hash": "23b870d57609b8c0104e14bddebe71d2",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/orchestration/EVAOrchestrationEngine.tsx",
+      {
+        "hash": "b9727f8cded6f3c320178a811a403851",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/orchestration/OrchestrationAnalytics.tsx",
+      {
+        "hash": "9c08d12d57de33cab6a827aedc99dcfa",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/orchestration/PerformanceDriveCycleCard.tsx",
+      {
+        "hash": "15a63d37616d7b0c631becd70d0ed7b7",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/orchestration/SystemHealthOverview.tsx",
+      {
+        "hash": "a217ff648ad9ba851ac0b42046f0b10f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/parallel-exploration/ParallelExplorationDashboard.tsx",
+      {
+        "hash": "ed2e7e610469ee39ca8247c3305c9e39",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/performance/AIPerformanceAnalytics.tsx",
+      {
+        "hash": "2f30bec339607ed1ae6ee7868b61cf2e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/performance/AdvancedCacheOptimization.tsx",
+      {
+        "hash": "212881fec39c2fc712f1cf6a6a4129fc",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/performance/ScalingAutomation.tsx",
+      {
+        "hash": "6461f6561f18c7c5a590401f2ce2c20e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/risk-forecasting/RiskForecastingEngine.tsx",
+      {
+        "hash": "86b81361057a3d624972fc8424f94536",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/search/AccessibleGlobalSearch.tsx",
+      {
+        "hash": "563ef6106fbfdca49f459dc7e9d7c5df",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/security/ComprehensiveSecurityDashboard.tsx",
+      {
+        "hash": "591c51b31476eae088178ba476342e0f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/security/SecurityDashboard.tsx",
+      {
+        "hash": "3a73b16c986cabfcbe7574f702735488",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/security/SecurityIncidentManager.tsx",
+      {
+        "hash": "9d54f749227d742d9a0cb5140a019355",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/CompleteWorkflowOrchestrator.tsx",
+      {
+        "hash": "b1a411a7d24ce946971178f66f433713",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/FoundationChunkWorkflow.tsx",
+      {
+        "hash": "a3978950f5c4ac6d42f8275ee15948c5",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/LaunchGrowthChunkWorkflow.tsx",
+      {
+        "hash": "eb280caa6801ac966e77c142ecdf33e8",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/OperationsOptimizationChunkWorkflow.tsx",
+      {
+        "hash": "faf8a6a30d826e4c2ebb8540cbddb809",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/PlanningChunkWorkflow.tsx",
+      {
+        "hash": "9b6e9f9288f06cabe78d55a6a09e6c18",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage10TechnicalReview.tsx",
+      {
+        "hash": "636f6dbd8c35e39bd25acf63564be2d4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage11MVPDevelopment.tsx",
+      {
+        "hash": "6278db9d9c22ea1441a64885096dce7b",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage11StrategicNaming.tsx",
+      {
+        "hash": "e5a87b3c890af25ec0bc2b7a21272aa4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage12AdaptiveNaming.tsx",
+      {
+        "hash": "5cd384b60ed2c473fc1b659836816a4e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage12TechnicalImplementation.tsx",
+      {
+        "hash": "c7a47c8570892431b89fd7ccd15235fc",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage13ExitOrientedDesign.tsx",
+      {
+        "hash": "7d323f89446b819fd5ebecbde51aed3f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage13IntegrationTesting.tsx",
+      {
+        "hash": "30dc5d01f44e793c0c64c684106a4008",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage14DevelopmentPreparation.tsx",
+      {
+        "hash": "39af8f86d915aadb661ef485d2f2f2f8",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage14QualityAssurance.tsx",
+      {
+        "hash": "a77755c3627d9e7bf5162a84c062f751",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage15DeploymentPreparation.tsx",
+      {
+        "hash": "96c1e0f704aa456984ff662bde3dbce3",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage15PricingStrategy.tsx",
+      {
+        "hash": "9d3a55d7bf3551ba84e90c9e36d1be62",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage16AICEOAgent.tsx",
+      {
+        "hash": "8f2695060f2909b12abd2dfcde8a2beb",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage17GTMStrategy.tsx",
+      {
+        "hash": "4fe1a128cde314f2503f5d8ac998489e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage18DocumentationSync.tsx",
+      {
+        "hash": "9f984bc5fb75c963ff6e245a3279e03c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage19IntegrationVerification.tsx",
+      {
+        "hash": "aca76928664be3ca583edf7ae3113116",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage1DraftIdea.tsx",
+      {
+        "hash": "a6d62663333f5aa75254ae9df5bd15d6",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage20ContextLoading.tsx",
+      {
+        "hash": "c3f3dff301b69bf202bbc14a37686ef7",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage21LaunchPreparation.tsx",
+      {
+        "hash": "6b957af223765641fbafd52e567e5e6c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage21PreFlightCheck.tsx",
+      {
+        "hash": "8fea1f222c59cb13cfd7161f4e5dd0f3",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage22GoToMarketExecution.tsx",
+      {
+        "hash": "000a837488fa7582795a476f0d6643b2",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage22IterativeDevelopmentLoop.tsx",
+      {
+        "hash": "7dca468957c268e220ff2e1e79660305",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage23ContinuousFeedbackLoops.tsx",
+      {
+        "hash": "a72639be61025f135ba82879a128d65d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage23CustomerAcquisition.tsx",
+      {
+        "hash": "118977ee727b642c2348a7f1bb2c23f7",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage24GrowthMetricsOptimization.tsx",
+      {
+        "hash": "8b5ad6d31b85421540befbb96a4ecae1",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage24MVPEngineIteration.tsx",
+      {
+        "hash": "6934ad7533f3abb3a83d8fcccaa861c7",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage25QualityAssurance.tsx",
+      {
+        "hash": "636c4fc22aa05788d99157a43ba81e84",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage25ScalePlanning.tsx",
+      {
+        "hash": "4a6e13f52b8fb5a78272b9c7c25ef82f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage26OperationalExcellence.tsx",
+      {
+        "hash": "6a5a89414c77c0a8bf1108bdf04ec5b6",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage27PerformanceOptimization.tsx",
+      {
+        "hash": "a574e42d5b24daa347809a901d0896c6",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage28CustomerSuccess.tsx",
+      {
+        "hash": "ca7556e7d34650ef570374e31190e6af",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage29RevenueOptimization.tsx",
+      {
+        "hash": "87d46f28066b4b8cccb62399c578d278",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage2AIReview.tsx",
+      {
+        "hash": "28fe6f57b09f561e44b20b5074bc189b",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage30TeamScaling.tsx",
+      {
+        "hash": "e97cc0ab250f89281cbf8c9873ee7227",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage31AdvancedAnalytics.tsx",
+      {
+        "hash": "f1b79e88c953a08a5c08e22031d9f17a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage31MVPLaunch.tsx",
+      {
+        "hash": "332f9a073d570ec2cc39a9d5bd343790",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage32AIMLIntegration.tsx",
+      {
+        "hash": "805d3d8fb48e5653753179797335a7da",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage32CustomerSuccess.tsx",
+      {
+        "hash": "dd3292f438502f0c89de498d182ba741",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage33CapabilityExpansion.tsx",
+      {
+        "hash": "7cfbe33f0735057f4535cb9162db6534",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage33InternationalExpansion.tsx",
+      {
+        "hash": "ac75a9f5bc4553df6ea30ca5e9dbd424",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage34CreativeMediaAutomation.tsx",
+      {
+        "hash": "6e0afd9f2461ec73fc24d66fad00f6c9",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage34StrategicPartnerships.tsx",
+      {
+        "hash": "ce06aae1a06d5887eaf43a54ea9e08a1",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage35GTMTimingIntelligence.tsx",
+      {
+        "hash": "fe4a893e6d23f1d0e588e28a61e4ce63",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage35InnovationPipeline.tsx",
+      {
+        "hash": "7fcb4a5a2661b09be310c6d766cc21a1",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage36ParallelExploration.tsx",
+      {
+        "hash": "7dd4fb6c0ddc0f05f0ec5215323f3fe8",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage37StrategicRiskForecasting.tsx",
+      {
+        "hash": "7696302d4239e8858b8542ee1607e22d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage38TimingOptimization.tsx",
+      {
+        "hash": "287a6a8bf194f0ac33fe371da774be38",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage39MultiVentureCoordination.tsx",
+      {
+        "hash": "78b17b195d42244f4962967672621488",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage3ComprehensiveValidation.tsx",
+      {
+        "hash": "658199f865e79033def32222140b8927",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage40VentureActive.tsx",
+      {
+        "hash": "9ac704708d6bb119774c371e0912ebf0",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage4CompetitiveIntelligence.tsx",
+      {
+        "hash": "f4600457b1f63ffa1910b2ec0aa02085",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage52DataManagementKB.tsx",
+      {
+        "hash": "8d62f08313096523af1622d8392b35fc",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage5ProfitabilityForecasting.tsx",
+      {
+        "hash": "ec5c13cd0df933dc67ef1a07b16849cc",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage6RiskEvaluation.tsx",
+      {
+        "hash": "b89dee810f851256358058e2f1d13b58",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage7ComprehensivePlanning.tsx",
+      {
+        "hash": "78d713cde2300545480509206cef0c30",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage8ProblemDecomposition.tsx",
+      {
+        "hash": "8f400bb9f78f84de4d9f73608c1e8011",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/Stage9GapAnalysis.tsx",
+      {
+        "hash": "edb70d5440b86cca228162ae450643c3",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/StageProgressIndicator.tsx",
+      {
+        "hash": "79abc1b162b3f507dd856dfea9e9d6c4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/stages/ValidationChunkWorkflow.tsx",
+      {
+        "hash": "6ba435ff394a9bf02b04d59cd7b632a7",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/team/TeamManagementInterface.tsx",
+      {
+        "hash": "bafbbc9fa6fb5413087efec007c0369b",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/test-runner/DirectOpenAITest.tsx",
+      {
+        "hash": "aa90c412a28ecffe891c36fc29d5974e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/test-runner/OpenAIValidator.tsx",
+      {
+        "hash": "604e83ec90b23c652ed5ceca2feac5b1",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/test-runner/TestExecutor.tsx",
+      {
+        "hash": "eafc3efa8add33317399f55f6362e621",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/test-runner/TestRunner.tsx",
+      {
+        "hash": "94e07e85b93374b840e7c790590d15e9",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/testing/AITestGenerator.tsx",
+      {
+        "hash": "bed1557f8fbaa9d5eca672ac26aab62e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/testing/ComprehensiveTestSuite.tsx",
+      {
+        "hash": "06b146841a8f3b4ba47c9d3d05e78313",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/testing/Phase3VerificationTests.tsx",
+      {
+        "hash": "6bdf1c77b9df754217e67c58dd52e2df",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/testing/QualityGatesManager.tsx",
+      {
+        "hash": "baaad32e4914b667ec684e4715847566",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/testing/TestingDashboard.tsx",
+      {
+        "hash": "b169afff5d96081aba2f3ec6da89a114",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/timing-optimization/TimingOptimizationDashboard.tsx",
+      {
+        "hash": "5509b4a9565f8eed8b66c2507cffc602",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/accessibility-helpers.tsx",
+      {
+        "hash": "0ed247a782e851cda7594bfabfcd38a5",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/accordion.tsx",
+      {
+        "hash": "1543fc386d0aba4654f3199bf017eaab",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/alert-dialog.tsx",
+      {
+        "hash": "aca8996e4020285a789d58348abce552",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/alert.tsx",
+      {
+        "hash": "48dac79c18e0c3ff687c320c6fcf1590",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/aspect-ratio.tsx",
+      {
+        "hash": "ea9c6ff6c2931b5089972bfba3fa5c1f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/avatar.tsx",
+      {
+        "hash": "ce4fe60f4c48c01a5a601d9835648b40",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/badge.tsx",
+      {
+        "hash": "f9c097d427c421f83eb92772a4b8ec06",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/breadcrumb.tsx",
+      {
+        "hash": "377763c80b5d08aa7748a2d532bb290e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/button.tsx",
+      {
+        "hash": "e131bbca837410a8359bdd52219ca4ae",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/calendar.tsx",
+      {
+        "hash": "577b2299d7782fffe974b558233dba3a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/card.tsx",
+      {
+        "hash": "a8c37b8b2cb24a44f46cbae530c075af",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/carousel.tsx",
+      {
+        "hash": "005a47594c5c8f09e27f0ed1f02197cd",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/chart.tsx",
+      {
+        "hash": "7904a2ecd36486761a0d08143321e97f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/checkbox.tsx",
+      {
+        "hash": "ca06e9d95214f6c4b90a760098d21830",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/collapsible.tsx",
+      {
+        "hash": "8bcc61ee503a05663fb77ad9b7ec064a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/command.tsx",
+      {
+        "hash": "f7bf707fa618dc27429ec5f1c19028c6",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/context-menu.tsx",
+      {
+        "hash": "d4964b3b39ddf550f9b30c104e0080d8",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/dialog.tsx",
+      {
+        "hash": "3ca438e8db79dc5fa9fb4662372afadd",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/drawer.tsx",
+      {
+        "hash": "1caf6dac62a50b2558dd36d6d7644891",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/dropdown-menu.tsx",
+      {
+        "hash": "cf7fe61c5c91eae0bdb3b3864508d48d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/enhanced-card.tsx",
+      {
+        "hash": "3b776fa7e10cbf161d1cf00e85ef2c80",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/form.tsx",
+      {
+        "hash": "0ed732617aace88aa93d42fe438dd281",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/hover-card.tsx",
+      {
+        "hash": "004259115672f57e95da0b72ea2c613e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/input-otp.tsx",
+      {
+        "hash": "084089343296a7ebcb40fff14c62cb30",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/input.tsx",
+      {
+        "hash": "c7cbc8cd45d01649277bd7107581cb36",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/label.tsx",
+      {
+        "hash": "7ea839d3fa873fb063a9709a79e47561",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/loading-states.tsx",
+      {
+        "hash": "53b05f73ffb307a0a7de1d4db70c472f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/menubar.tsx",
+      {
+        "hash": "a3a53eadb4e2d52cb841ebd2a910d33d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/mobile-optimized.tsx",
+      {
+        "hash": "a302bfa4e32a64593b28dff5bc739aea",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/navigation-menu.tsx",
+      {
+        "hash": "630417e56e3f5f9a5f323565ed86d430",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/pagination.tsx",
+      {
+        "hash": "de159ac89490951ee82b4991f604e394",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/performance-optimized.tsx",
+      {
+        "hash": "36a5ca1a54ed2e394449fdc0eaccc14e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/popover.tsx",
+      {
+        "hash": "b177b8aa44e03c0a5d2a9f00b11d55be",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/progress.tsx",
+      {
+        "hash": "9202867eacff0cb1b253a05d5d65bfc0",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/radio-group.tsx",
+      {
+        "hash": "3ace644678cd101153deee82d72048d9",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/resizable.tsx",
+      {
+        "hash": "cf5896bc9f1524c3f3fb2d4f24eb54bf",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/scroll-area.tsx",
+      {
+        "hash": "c4d63c56a99feb600ed0e9bbcfd70829",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/select.tsx",
+      {
+        "hash": "22886e4c5f841c13755088e26c7387e3",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/separator.tsx",
+      {
+        "hash": "e970901b62fe8b73d2b9254fad77f583",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/sheet.tsx",
+      {
+        "hash": "daa150998b6073011abdfc39df425359",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/sidebar.tsx",
+      {
+        "hash": "27c8db4816b123901768861c586f1cdb",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/skeleton.tsx",
+      {
+        "hash": "a5a4d6d5551d4c7feb8176a23e7eb07c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/slider.tsx",
+      {
+        "hash": "ccbb4f4470af296eafa94f9972e8a4f9",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/sonner.tsx",
+      {
+        "hash": "5cc4d43770ff3cffb5ba65d5ea3ee26d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/switch.tsx",
+      {
+        "hash": "1210b13831d433e8a9488bab91432dd4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/table.tsx",
+      {
+        "hash": "efdbaeb9710b2f60de7c0e18bd4e3528",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/tabs.tsx",
+      {
+        "hash": "edad06f905be7a7e3634fdbe1b6ad61a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/textarea.tsx",
+      {
+        "hash": "fb19dce4f1d33ed093b75db5cefed562",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/toast.tsx",
+      {
+        "hash": "6b9ed7f669208f6631d1c44bbd556877",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/toaster.tsx",
+      {
+        "hash": "d0e062810c47a46b9bb4e8ea19875a02",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/toggle-group.tsx",
+      {
+        "hash": "6338f2936a2474998e1e546c6a1664a6",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/toggle.tsx",
+      {
+        "hash": "5840a6d0f51ab73d9f40592fd0db4899",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/tooltip.tsx",
+      {
+        "hash": "336ca01a98037c9a1dfe936bde3ee549",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ui/use-toast.ts",
+      {
+        "hash": "4f094014a1315ca1081cbdc7f78d55cc",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/venture/ChairmanDashboard.tsx",
+      {
+        "hash": "3402d10d47efa07df963aeb61a85c3bb",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/venture/VentureGrid.tsx",
+      {
+        "hash": "fd7e335fec5f6a6ea5071d7f4acec347",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/venture-coordination/MultiVentureCoordinationEngine.tsx",
+      {
+        "hash": "a0ef0f8fa0752602ba82d0ad685f8c4f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ventures/CreateVentureDialog.tsx",
+      {
+        "hash": "d87476d6d559b89cc13394935eb6a123",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ventures/StartWorkflowButton.tsx",
+      {
+        "hash": "e875d8228489b2abbeb72274398b925b",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ventures/UpdateFinancialsDialog.tsx",
+      {
+        "hash": "cd0388543b1ee4969407550843e0bbc4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ventures/VentureCard.tsx",
+      {
+        "hash": "6aa28a52773a509af603fe94be9e1819",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ventures/VentureDataTable.tsx",
+      {
+        "hash": "13b81b1422dc302066c86890c50f3df0",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ventures/VentureOverviewTab.tsx",
+      {
+        "hash": "04f3e259bb0b4b02766963a1d5e9c1c8",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ventures/VentureStageNavigation.tsx",
+      {
+        "hash": "c6675418cf2e6f8707335e24afe15599",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/ventures/VenturesKanbanView.tsx",
+      {
+        "hash": "41d4d954be4dd44939657aef0f70058a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/workflow/DynamicStageRenderer.tsx",
+      {
+        "hash": "8dd1a179139d887cfbd4563f83f12b08",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/workflow/StageConfigurationForm.tsx",
+      {
+        "hash": "a05d1c1891f8f7b6cd8a3b1be93fe661",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/workflow/StageDetailsPanel.tsx",
+      {
+        "hash": "1af4db6c78d496d882c285aaae6b428d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/workflow/WorkflowProgress.tsx",
+      {
+        "hash": "25dee0ca1fa8599fbae87f1a242a5712",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/components/workflow/WorkflowStageMap.tsx",
+      {
+        "hash": "c1a7e5483f96d91e78f0b8f292c40248",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/constants/workflows.ts",
+      {
+        "hash": "147c3f19a7d5e4cbad61ee0ecc58b864",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/contexts/AccessibilityContext.tsx",
+      {
+        "hash": "526dfdec5932e8f68f1ffc634d986af0",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/features/comprehensive_validation/ChairmanOverrideControls.tsx",
+      {
+        "hash": "600226645c9e66374467a1c61de7386e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/features/comprehensive_validation/ValidationDashboard.tsx",
+      {
+        "hash": "00a54af73b04f783e8fa935cdc01fbec",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/features/comprehensive_validation/rules.ts",
+      {
+        "hash": "6cca07a027533e832007efed4bc1e5d0",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/features/comprehensive_validation/schemas.ts",
+      {
+        "hash": "598137050b352797481bc89d9326b61f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/features/comprehensive_validation/service.ts",
+      {
+        "hash": "daca2c8e6320c0e27bee0371f646ec26",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/use-mobile.tsx",
+      {
+        "hash": "209b5193af16624cdd89d3591480dd48",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/use-toast.ts",
+      {
+        "hash": "bc4be55df07bc8727d5df9ed7799ad64",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useAICEOAgent.ts",
+      {
+        "hash": "7484044fa9153dd6453ad5eb658ebb9d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useAIReviewService.ts",
+      {
+        "hash": "00521d10bfbe9066ee6eccc48a0c9a5d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useActorModelSaga.ts",
+      {
+        "hash": "f5c8cb00db19c278c956776d31ad683a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useAdaptiveNaming.ts",
+      {
+        "hash": "c5342e73fbaa753b04ca917550366b99",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useAdvancedKeyboardNavigation.ts",
+      {
+        "hash": "0863f17dd7d07097886fe8ba48b8d4b6",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useAgentData.ts",
+      {
+        "hash": "c2ee69d3edd001d2277bdc0bacd96d09",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useAgents.ts",
+      {
+        "hash": "19c9d7b6c6c5439d76be50896968b63f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useAnalyticsData.ts",
+      {
+        "hash": "400709848dca74c5a5f1d9062f21004b",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useAuthenticationData.tsx",
+      {
+        "hash": "aab45bfad6d17dcf5a6d39f8450fab9c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useChairmanData.ts",
+      {
+        "hash": "c5b39d25c78dcd10fb1a6d12cd132205",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useChairmanFeedbackService.ts",
+      {
+        "hash": "551c2525bdcf92cd78c8e3b2a1498694",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useCollaboration.ts",
+      {
+        "hash": "33fddd242e485a19d660c7cce3546cc4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useCompetitiveIntelligence.ts",
+      {
+        "hash": "34d363d84abe9c1b78724cb1c52d0517",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useComprehensivePlanning.ts",
+      {
+        "hash": "c702718822dcb222a3b2978d673282fd",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useContextLoading.ts",
+      {
+        "hash": "f6c39fe639b83e729e38ae9d268446d1",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useContinuousFeedbackLoops.ts",
+      {
+        "hash": "553c4ece25dec25f5ffe28ed736f4455",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useCreativeMediaAutomation.ts",
+      {
+        "hash": "d6fb1793001305652fd59ab6d8efc1d7",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useDevelopmentExcellence.ts",
+      {
+        "hash": "e4467717756897b988cf7e8c9ac9c1a7",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useDevelopmentPreparation.ts",
+      {
+        "hash": "f5c4f57d4cb463bf2b995f7368d13820",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useDocumentationSync.ts",
+      {
+        "hash": "f071d4dabd3121331ce076ba53bd5e9c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useExecutiveData.tsx",
+      {
+        "hash": "ae43687b11ca880d162e259ad927e59c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useExitReadiness.ts",
+      {
+        "hash": "cd4ac5877780ce3f9bfc1d6fe8e15592",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useFinalPolish.ts",
+      {
+        "hash": "5e71eec0713745b7ead2dfc10404b3e4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useFocusManagement.ts",
+      {
+        "hash": "f2bb16399a6edb3289e8ba0ee0b86315",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useGTMStrategy.ts",
+      {
+        "hash": "734ef17c5124b3c1c2335bd14709812e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useGlobalSearch.tsx",
+      {
+        "hash": "b0f7bb21df67f8a4a2055a5aac7bd9a0",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useGovernanceData.ts",
+      {
+        "hash": "cee492c3913796a7f7d560b719e838c5",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useIdeasService.ts",
+      {
+        "hash": "7a5c16ece9545686f946828104b146cd",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useIntegrationVerification.ts",
+      {
+        "hash": "ba6c4f18eeb5b102677b5c32bdf6075b",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useIterativeDevelopmentLoop.ts",
+      {
+        "hash": "9e178dd0e25d9fea1a37176b6d512ad3",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useKeyboardNavigation.ts",
+      {
+        "hash": "f94afab1e9f50e83721c40e7585ef875",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useKnowledgeManagement.ts",
+      {
+        "hash": "6db9f53c3ea3000664386a69da40fc4f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useLiveWorkflowProgress.ts",
+      {
+        "hash": "8a2f3615f6b739407abf2ec13d1fb2b6",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useMVPEngineIteration.ts",
+      {
+        "hash": "de8feb1344e5146eb291b13b3e01c75f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useMVPLaunch.ts",
+      {
+        "hash": "debe8e047e0c416cd2e460eac2cee670",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useMonitoringData.ts",
+      {
+        "hash": "4b4f45890da14f1e975aedc7bd49b18e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useMultiVentureCoordination.ts",
+      {
+        "hash": "56f0f418edabb7b9c4088981eace4049",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useNavigationCounts.tsx",
+      {
+        "hash": "7b8ae8699432944504828e698160c676",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useNotificationActions.ts",
+      {
+        "hash": "269e4a07e0b7cbfb610ac6aa4b289499",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useNotifications.ts",
+      {
+        "hash": "2960f1fa7531ffb388f35ebfd6f22de1",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useOrchestrationData.ts",
+      {
+        "hash": "80e8ea500ee550b4fd9e8e484305a39f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useParallelExploration.ts",
+      {
+        "hash": "2f540075cd5fb4c1bbc97981841533bb",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/usePerformanceData.ts",
+      {
+        "hash": "effecc9c0f48d4c67e7fb5b8e51de2b9",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/usePersonalization.ts",
+      {
+        "hash": "96220103d205829ae03725aa8f0cb579",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/usePreFlightCheck.ts",
+      {
+        "hash": "bcd60202148101f55918aa722a961c05",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/usePricingStrategy.ts",
+      {
+        "hash": "daff394043a2c38ac50c8a2a204f7fb1",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useProblemDecomposition.ts",
+      {
+        "hash": "8c83d12de31a6de7c569b4f552b53769",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useProductionDeployment.ts",
+      {
+        "hash": "99df7464ea83da2c219a5bac03342056",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useProfitabilityForecasting.ts",
+      {
+        "hash": "cf4ec6bad776890758a775b82cd1a3fb",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useQualityAssuranceStage.ts",
+      {
+        "hash": "b316230cd29f6862886d16f487d11add",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useRiskEvaluation.ts",
+      {
+        "hash": "fa7177f948a1bdc455a8723d6c68ecf6",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useScreenReader.ts",
+      {
+        "hash": "f069d2ac2d8d0a4db9576bc0e26bd5f9",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useSecurityCompliance.ts",
+      {
+        "hash": "2aa51566070883f7c6e6c01009a6c1b4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useSecurityData.ts",
+      {
+        "hash": "4e23343c1995f025bf24fb8f2e903503",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useStrategicNaming.ts",
+      {
+        "hash": "d08168aa52256cd3bb1ddfb4170b2c6f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useTechnicalReview.ts",
+      {
+        "hash": "3c0c53fcd0958623081b88703b60ea8d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useTimingOptimization.ts",
+      {
+        "hash": "a843c02ea94a315ae919d9bc88f1ee1f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useUnifiedNotifications.ts",
+      {
+        "hash": "ef985e35fb779c4ea2927297cbb3d7ae",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useUserJourneyData.tsx",
+      {
+        "hash": "0b07633c262cea997406a327c7ee984d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useVentureData.ts",
+      {
+        "hash": "339bf83b6b6a58170d3ce5f8b37160fc",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useVentures.ts",
+      {
+        "hash": "75543272b26cc82fd36d69efc98c071c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useWorkflowData.ts",
+      {
+        "hash": "8d0241e852c218f3c9224e2d431f1e77",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useWorkflowExecution.ts",
+      {
+        "hash": "7563061f257e64b6337d7d5983d4c543",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useWorkflowPersistence.ts",
+      {
+        "hash": "f273a687e4e7fcf9a77fed79cb54486d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/integrations/supabase/client.ts",
+      {
+        "hash": "bd6669c134465cca8b18c6a979deb75f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/integrations/supabase/types.ts",
+      {
+        "hash": "b404fe255b45d542cfaca5598a920b5d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/ai/ai-analytics-engine.ts",
+      {
+        "hash": "1c60463be0a0527a14b4df06a9b50654",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/ai/ai-database-service.ts",
+      {
+        "hash": "3063bd819b636039ddb39ecc6ae41598",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/ai/ai-integration-service.ts",
+      {
+        "hash": "69227fff513a168fc5f447f47849acd0",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/ai/ai-service-manager.ts",
+      {
+        "hash": "19c75075cfb4bef29504d6e318690fb3",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/analytics/export-engine.ts",
+      {
+        "hash": "5c0ff020e7d35b066e969279832c8fc7",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/analytics/predictive-engine.ts",
+      {
+        "hash": "b5bb2d5150a82bf95571e19239d76554",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/api/rate-limiter-client.ts",
+      {
+        "hash": "2ce5b67566ee9595394185e1e573dfcf",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/i18n/voice-internationalization.ts",
+      {
+        "hash": "5871507f55b7be1e007698fc782440b6",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/integration/api-gateway.ts",
+      {
+        "hash": "45e3496b89d84a74c2d0cbed48b47a41",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/integration/generic-rest-connector.ts",
+      {
+        "hash": "6d0d2c12abdb88e15f5874768024faf1",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/integration/integration-service.ts",
+      {
+        "hash": "52066550ff55cfa4cf4a24ed1062850f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/security/ai-security-monitor.ts",
+      {
+        "hash": "fcb48f41c46c3741ef1b41520080faae",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/security/behavioral-auth.ts",
+      {
+        "hash": "ecdaeac3bdc75f878e3f60640b2c6f45",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/services/knowledgeManagementService.ts",
+      {
+        "hash": "e5ece82b637cb7197bd2302af99bbe6a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/services/multiVentureCoordinationService.ts",
+      {
+        "hash": "9e9910e2d189214b414c285253aa5123",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/services/parallelExplorationService.ts",
+      {
+        "hash": "e7013348f4f3ba1f3cff2c96dd2b3a94",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/services/timingOptimizationService.ts",
+      {
+        "hash": "15610283f9a41d5c2f3544e2c31db97e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/utils.ts",
+      {
+        "hash": "5a6fd53fdcf2be529e9cc0b718fde352",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/voice/function-definitions.ts",
+      {
+        "hash": "ff249fd55af4bfb01f36e44cd79dd32d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/voice/real-time-voice-service.ts",
+      {
+        "hash": "bd7079de1769cfef299296f6377c0bb5",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/workflow/prd-mapper.ts",
+      {
+        "hash": "10d40675c7443abb05226779da91838b",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/workflow/workflow-configuration.ts",
+      {
+        "hash": "5d097ffb21ab80e5fb76ab586550721e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/lib/workflow/workflow-loader.ts",
+      {
+        "hash": "e8eeffe4645c9fdb4ca861dd64f9983b",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/main.tsx",
+      {
+        "hash": "2d05b48b29b4673821c376c1d45fa47c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/middleware/api-rate-limiter.ts",
+      {
+        "hash": "acdb5fb27e5c84e13a0c9ed728b28bce",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/AIAgentsPage.tsx",
+      {
+        "hash": "819c20033af4b563d1eed2be845d0af4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/Agents.tsx",
+      {
+        "hash": "59a82ac52672c3e9bec6db186dca783f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/AnalyticsDashboard.tsx",
+      {
+        "hash": "82e5443b309be6665fdc9d046f3fb35e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/DevelopmentWorkflow.tsx",
+      {
+        "hash": "873da6528d1850c6aeaf951bb5b4e84b",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/EVAAssistantPage.tsx",
+      {
+        "hash": "3afd05f9ab086422fbfb0620158bfe10",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/EvaOrchestrationDashboard.tsx",
+      {
+        "hash": "d70d48d62636a05c1606939d0d24b75f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/Governance.tsx",
+      {
+        "hash": "76c764e8c20197a65f9aa84face38fe3",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/Index.tsx",
+      {
+        "hash": "4274404c086f28a01c7f70cfc38f7085",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/Insights.tsx",
+      {
+        "hash": "909ff745cab7eeabb5f13a8ace96aca5",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/LandingPage.tsx",
+      {
+        "hash": "67e403c281794cba25b885f908941d15",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/LiveWorkflowProgress.tsx",
+      {
+        "hash": "62d1086bdfba372265383891599ed0ea",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/LoginPage.tsx",
+      {
+        "hash": "0f0fef490ed7ef6aac7a2ace15e4c7a6",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/NotFound.tsx",
+      {
+        "hash": "7f6f4e93331684fdf5a149fdf712cb80",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/Notifications.tsx",
+      {
+        "hash": "6215a7ffe1ac4dbba1270b21052cf4d0",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/NotificationsAndCollaboration.tsx",
+      {
+        "hash": "247bfdb99cf10df69d41af077cb53d13",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/Phase2TestExecution.tsx",
+      {
+        "hash": "bbe3b25f82426568b003aa6831f55da1",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/Phase2Testing.tsx",
+      {
+        "hash": "850116ebc86098c4c726a10579a64b8d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/Phase2TestingDashboard.tsx",
+      {
+        "hash": "f351734cba94e6456be49cfdefc8272f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/Portfolios.tsx",
+      {
+        "hash": "9cc693ef6d2dd4dfe29d392ec214abf4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/PortfoliosPage.tsx",
+      {
+        "hash": "92daff6ec2b3106362f65479c0703c31",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/Reports.tsx",
+      {
+        "hash": "e442cafa64b272cb6c1511b33f036e27",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/RiskForecastingDashboard.tsx",
+      {
+        "hash": "b0467f1701ffcb7235a14e07097e2237",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/TeamPage.tsx",
+      {
+        "hash": "8dd493bc7f0fce2e5014dd11aabc4e3a",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/TestingQA.tsx",
+      {
+        "hash": "b77b748611cae43ee74bf4db0f247e79",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/VentureDetail.tsx",
+      {
+        "hash": "7cbea7ab27db0691f8c80e1dd276a06e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/VentureDetailEnhanced.tsx",
+      {
+        "hash": "1fcbe7b462b97bfb6abe605f3101a580",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/Ventures.tsx",
+      {
+        "hash": "605e5e2dc613eff684c37248364978b7",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/VenturesPage.tsx",
+      {
+        "hash": "ecbffd73223a0d402aab0a50b4c431e4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/pages/Workflows.tsx",
+      {
+        "hash": "8acc6c5c8b5ded920e7a852291e0be1c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/services/competitiveIntelligenceService.ts",
+      {
+        "hash": "96331e88691989f322be03ee942178e9",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/services/workflowExecutionService.ts",
+      {
+        "hash": "ef0fce5dcd88c00b7fb0d5871c7825ae",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/types/agents.ts",
+      {
+        "hash": "8288cff501f25aa2ad309cce2b2da67c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/types/analytics.ts",
+      {
+        "hash": "3ccd8e8bdae11a1b733d486ea71d1ab8",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/types/chairman.ts",
+      {
+        "hash": "0858b935854650836d5dea2465a5e8df",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/types/governance.ts",
+      {
+        "hash": "15b8f8f910bbb04242a662606e9e82da",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/types/ideas.ts",
+      {
+        "hash": "61d0750ec6f84e3a850ec2d8bd81b308",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/types/liveProgress.ts",
+      {
+        "hash": "98e07acff669e59fa1718ca89d9e0341",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/types/notifications.ts",
+      {
+        "hash": "671dcd6a1d510c0f969a4073b38e8b3d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/types/orchestration.ts",
+      {
+        "hash": "609121545ab39d453ec9fbc5cc3d3dd3",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/types/testing.ts",
+      {
+        "hash": "abc76f278141596007aa941fbcaa737c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/types/venture.ts",
+      {
+        "hash": "957df56bc56542c342a6bedec604eb82",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/types/workflow.ts",
+      {
+        "hash": "e1124eec7ee45f2298274438f93dfb8e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/types/workflowExecution.ts",
+      {
+        "hash": "d4ceb864fb7c4b4e863e4ef9de42f318",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/types/workflowStages.ts",
+      {
+        "hash": "5835bc1ba2b078fcaf3e984d8787e61c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/utils/immediate-openai-test.ts",
+      {
+        "hash": "506bdfe534b3064df86642aa4f1808f1",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/utils/openai-validation-test.ts",
+      {
+        "hash": "abe75b1cbfbd49c6043cde5dda20327c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/utils/phase2-test-runner.ts",
+      {
+        "hash": "8f6d07dbcd1fde648ac60ed33ccc468d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/utils/run-openai-test.ts",
+      {
+        "hash": "a36d4fe2e3a53d7bbd847b134331f43d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/vite-env.d.ts",
+      {
+        "hash": "0352474ba2918efe13895edbc3780d94",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/adaptive-naming/index.ts",
+      {
+        "hash": "1d0ad78027759ba73098507550f6aeb2",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/ai-ceo-agent/index.ts",
+      {
+        "hash": "0b1016bdb287ce810dff7b1758f0c8a9",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/ai-exit-decision-engine/index.ts",
+      {
+        "hash": "1bf45a254c047ae693dcfb4be94a8f4c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/ai-generate/index.ts",
+      {
+        "hash": "af60c0447ddbded06724af8fcbce0fc4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/ai-knowledge-discovery/index.ts",
+      {
+        "hash": "6fb49383becb0c2f01b4142e93100fb7",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/ai-monitoring-engine/index.ts",
+      {
+        "hash": "3b6991742f7998f0a60de768578a47e4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/ai-orchestration-coordinator/index.ts",
+      {
+        "hash": "2076809d304f3a5f83256e32735d3083",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/ai-performance-engine/index.ts",
+      {
+        "hash": "e62c3494e684440fa85de2400e341a2d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/ai-review/index.ts",
+      {
+        "hash": "c8239d4b9da7249ceafaa382acf180d4",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/ai-security-engine/index.ts",
+      {
+        "hash": "d38997ee27bf6d41532af6392f81fc3c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/ai-testing-automation-engine/index.ts",
+      {
+        "hash": "4440d18b6a7b4aca5478fc504252d856",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/competitive-intelligence/index.ts",
+      {
+        "hash": "470721ad9171af6c04782756edee3975",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/comprehensive-planning/index.ts",
+      {
+        "hash": "f3107097adfbca114974b85e89ab3721",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/comprehensive-validation/index.ts",
+      {
+        "hash": "8388720ebee7b61392063932a6489186",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/context-loading/index.ts",
+      {
+        "hash": "9a7f5f12f72a29e1d3ec564ade93df5d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/data-lifecycle-manager/index.ts",
+      {
+        "hash": "91706ec2bc0101a5a2a89225b4fe6707",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/development-preparation/index.ts",
+      {
+        "hash": "a27c4e65a4191739dfd6bb899eb7ab17",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/documentation-sync/index.ts",
+      {
+        "hash": "5fe7e95f2603d03c5d0e51f6ef70e1ed",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/eleven-sign-url/index.ts",
+      {
+        "hash": "a20eb794df73fced3593c5b635db1458",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/eva-chat/index.ts",
+      {
+        "hash": "3c0c7a82bd8efc92bd0e30d0e9580605",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/eva-database-query/index.ts",
+      {
+        "hash": "5787d40c009767aeaa5d902f7c157306",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/eva-nlp-processor/index.ts",
+      {
+        "hash": "450bccf203746a30a3db73d9e7dec7a6",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/eva-orchestrator/index.ts",
+      {
+        "hash": "24fae5283b621495efccec10ffb76f22",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/eva-realtime-session/index.ts",
+      {
+        "hash": "e9cf70d44a48387dd534dcbcb0c4ef07",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/eva-tts-chat/index.ts",
+      {
+        "hash": "0bfdbbf3d348202453ee52b38e434bc8",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/exit-readiness/index.ts",
+      {
+        "hash": "d456e1b1d2ca099925e3e1024e2fe405",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/gtm-strategy/index.ts",
+      {
+        "hash": "bac5f0a60278aa69d50fcd84be0ac2cf",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/health-monitor/index.ts",
+      {
+        "hash": "282b6701ba118b94c6f1ebff508cf0f3",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/integration-hub/index.ts",
+      {
+        "hash": "968e77e6f9882aa418d49d22329e46ab",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/integration-verification/index.ts",
+      {
+        "hash": "d36cafacc9d8f547aca84f33613ad175",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/openai-function-executor/index.ts",
+      {
+        "hash": "d7af128557d6bb464e4252ab2aacdd21",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/openai-realtime-relay/index.ts",
+      {
+        "hash": "09e520a890ae609864f8e5fcf267305d",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/openai-realtime-token/index.ts",
+      {
+        "hash": "acdd178335e16825920cfac2b3079dde",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/parallel-exploration-ai/index.ts",
+      {
+        "hash": "9b66d6d985d3286b6bf5c59679f1f73f",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/pricing-strategy/index.ts",
+      {
+        "hash": "aab697fb8ffdfa0eb401422390394fba",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/problem-decomposition/index.ts",
+      {
+        "hash": "96f27aa9f6020cdf6c8c2c9ba77de447",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/profitability-forecasting/index.ts",
+      {
+        "hash": "60d7b9916acea8168cea03f9a9d4aa1c",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/realtime-voice/index.ts",
+      {
+        "hash": "7080e08809b152d90da2a27b81165960",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/risk-evaluation/index.ts",
+      {
+        "hash": "475847bb0a8003e1e111fe57f8272519",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/risk-forecasting-engine/index.ts",
+      {
+        "hash": "9ee61caab47abb5f40073f565cdb0dec",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/strategic-naming/index.ts",
+      {
+        "hash": "606754749775fe34e361acff8b285688",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/technical-review/index.ts",
+      {
+        "hash": "093d06577960d996ddba85267917c8ac",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/testing-orchestrator/index.ts",
+      {
+        "hash": "745bb640a61e180377bf660c001884b5",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/timing-optimization/index.ts",
+      {
+        "hash": "8e7a8a37b5253e02632def3b43a2fd82",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/voice-transcription/index.ts",
+      {
+        "hash": "0daad2b975cb20b48168e83323fce3f9",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/functions/workflow-execution/index.ts",
+      {
+        "hash": "780e84e71fb3156be55b993a73bc8b86",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/tailwind.config.ts",
+      {
+        "hash": "f83d1982ecff335afd7eb5c7895d19f7",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/tests/a11y/governance.a11y.spec.ts",
+      {
+        "hash": "f7fd309ce5adae38f29487ca2fb0ebac",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/tests/a11y/onboarding.a11y.spec.ts",
+      {
+        "hash": "4832e9044b430dc140257b3a556abaf7",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/tests/a11y/settings.a11y.spec.ts",
+      {
+        "hash": "2c05bc386fee670de4ece2280b524e2e",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/tests/e2e/governance.spec.ts",
+      {
+        "hash": "94d9cd0513fe2d7586b9618b983d3baa",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/tests/e2e/onboarding.spec.ts",
+      {
+        "hash": "6056db6256d3e2211756af25b6b057b7",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/tests/e2e/settings.spec.ts",
+      {
+        "hash": "bc8b818948306fc824148ae5dac675f6",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/tests/integration/api/governance.test.ts",
+      {
+        "hash": "ff62a963d1783672b47f80a0aee87846",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/tests/performance/load-testing.test.ts",
+      {
+        "hash": "5f81245870b17f225416f05f0c97b900",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/tests/security/security-validation.test.ts",
+      {
+        "hash": "eb02767d46180710366d55eef6e5d165",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/tests/setup.ts",
+      {
+        "hash": "692c0797fcdf2ad47a7f9a009e702b55",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/tests/unit/components/button.test.tsx",
+      {
+        "hash": "640ee00452cf8675fc9d6a80a5bf0a17",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/tests/unit/components/card.test.tsx",
+      {
+        "hash": "12a746dfa152a3b4b2c394dbe8500ec9",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/tests/unit/hooks/use-toast.test.ts",
+      {
+        "hash": "7e8e670794ebdbbfcbdd10334990a524",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/tests/utils/test-helpers.tsx",
+      {
+        "hash": "b06d3585c6da307524f01c662e09b455",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/tests/visual/shimmer-verification.spec.ts",
+      {
+        "hash": "cbde339cd3a06dba35e218fa17e6c5dc",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/vite.config.ts",
+      {
+        "hash": "f8861384f420982162988fce48a8692b",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/vitest.config.ts",
+      {
+        "hash": "401195231ad471f0f6e82d927ea293ca",
+        "lastModified": 1756904821529,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/coverage/lcov-report/block-navigation.js",
+      {
+        "hash": "13c8dd65c9b9571b0b4960aeaf3fab0a",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/coverage/lcov-report/prettify.js",
+      {
+        "hash": "6051903a2f7363ee232a01bd32f60b6a",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/coverage/lcov-report/sorter.js",
+      {
+        "hash": "e2f5129270684bf835820ca4433b4abb",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/examples/vision-qa-scenarios.js",
+      {
+        "hash": "bfc9d9122a2bf947b820eadc82db9da2",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/jest.config.js",
+      {
+        "hash": "053ee192a38cfaf2f00c75f2aa599d4c",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/auto-fix-engine.js",
+      {
+        "hash": "6b0302a9fde44383248cfd7375342a7f",
+        "lastModified": 1756906180685,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/base-sub-agent.js",
+      {
+        "hash": "9ffb9ced5dd93f3df16c8cc6cf20ec79",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/cost-sub-agent.js",
+      {
+        "hash": "bf2caba4793ebabe66ea001e44b49171",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/database-sub-agent.js",
+      {
+        "hash": "aba6cb3595ba3a46466966478497c9c8",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/design-sub-agent-intelligent.js",
+      {
+        "hash": "8d90e4ed39ecf269e461bd86d238ea38",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/design-sub-agent.js",
+      {
+        "hash": "5d14a81fdaa38e198dbf7c9342c424c6",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/documentation-sub-agent.js",
+      {
+        "hash": "c40ff7cfca474603c1977354b23afb0b",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/enhancements/agent-behavior-system.js",
+      {
+        "hash": "4d5bf09c31f740dc684a47ebd50b1cee",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/enhancements/collaboration-engine.js",
+      {
+        "hash": "17735c684dd613bd67a20377c1227f25",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/exec-coordination-tool.js",
+      {
+        "hash": "3233d5343ea5229deef8683c12592cb4",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/incremental-analyzer.js",
+      {
+        "hash": "8b074ac7eb0dd5ccf67d07235e0e851f",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/intelligent-base-sub-agent.js",
+      {
+        "hash": "8025d7afec937fefa2cdf2018a637ef8",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/learning-database.js",
+      {
+        "hash": "a7a9e122f3457b677f54eb9464c62bc7",
+        "lastModified": 1756905407654,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/performance-sub-agent-v2.js",
+      {
+        "hash": "41f345bdee72385897d43a529d3fac60",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/performance-sub-agent.js",
+      {
+        "hash": "b4ecb47813f65f79fb216b25a6529ae6",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/priority-engine.js",
+      {
+        "hash": "2449d4ea8f8d2a220e7cdd6d5194a328",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/security-sub-agent-v2.js",
+      {
+        "hash": "54ee70cd87bcb27150b834a678385bd8",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/security-sub-agent-v3.js",
+      {
+        "hash": "670275c046a6e915f4ae66e3369aed62",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/security-sub-agent.js",
+      {
+        "hash": "c16e905f5f384f0ff3b10bc06357d061",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/shared-intelligence-hub.js",
+      {
+        "hash": "1ddef2847e0bc24f7e9138b3a998a06d",
+        "lastModified": 1756906180685,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/ai/multimodal-client.js",
+      {
+        "hash": "078670a1dbda065da0d5d1173e065659",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/dashboard/client/dist/assets/index-B3cTPU9q.js",
+      {
+        "hash": "3c9c1ea01cfba2bbaa0da4ed1a5e8ce0",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/dashboard/server.js",
+      {
+        "hash": "85283e7b8423a54a9d7dae41c293d68a",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/security/encryption.js",
+      {
+        "hash": "59f5f1eb9a705371e95756d7976df2c8",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/sync/sync-manager.js",
+      {
+        "hash": "5217dbab0999464b6f3ac0e98f0c4056",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/testing/fix-recommendation-engine.js",
+      {
+        "hash": "a8af86b7c72e9696e339974b6880784d",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/testing/playwright-bridge.js",
+      {
+        "hash": "a1bc76da0cc742b05292ef384299e566",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/testing/test-reporter.js",
+      {
+        "hash": "1454860611f71316b81670b5d30b1db4",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/testing/testing-sub-agent.js",
+      {
+        "hash": "e0d1e5bbc54cd92c178bbdca769b6a58",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/testing/vision-analyzer.js",
+      {
+        "hash": "19bb673d838b7cb859a679d7d7fb62f2",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/testing/vision-qa-agent.js",
+      {
+        "hash": "29b656fbc13f763392196a429bedf6fb",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/playwright.config.js",
+      {
+        "hash": "7cc3c611eb138f259f9b04ae81e7bad1",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/activate-sub-agents.js",
+      {
+        "hash": "320d437ad0d95bff25e1ec79d68f5196",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/add-ees-2025-001.js",
+      {
+        "hash": "581605316a664c6683f7fdd71fa5a79c",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/add-ees-to-database.js",
+      {
+        "hash": "daa6025a688061170c7fb917c766703c",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/add-prd-to-database.js",
+      {
+        "hash": "2d950041bf085fde17e6e3022c3e9e6d",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/add-sd-2025-001-complete.js",
+      {
+        "hash": "fa7b78f564e815633bd4935910db3f33",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/add-sd-2025-001-simple.js",
+      {
+        "hash": "3f28c6d580b84b8b04b875b1ab15146f",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/add-sd-to-database.js",
+      {
+        "hash": "bc996908cbb15a020090dce517d2183a",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/auto-supersede-protocols.js",
+      {
+        "hash": "5eb3791fd51142a94db2af724c3f2df4",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/auto-sync-sd-to-database.js",
+      {
+        "hash": "85b6a4ce33c9228a45df0dd79d14361d",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/boundary-check.js",
+      {
+        "hash": "88495d7aa1140a8c035826dc570795ef",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/check-database-constraints.js",
+      {
+        "hash": "93920d8ca54d43687535949d1e26b5e9",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/check-directives-data.js",
+      {
+        "hash": "54703c6f5821a164e34e6db75726c0c2",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/check-exec-detailed.js",
+      {
+        "hash": "9a3adc4a4cbcbd58a9f112aeec9b94e8",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/check-exec-status.js",
+      {
+        "hash": "9044c787a0121d72d605229246420d33",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/claude-code-estimation-framework.js",
+      {
+        "hash": "7d5da66fa7858f0efaf3624990c585c0",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/close-foundation-sd.js",
+      {
+        "hash": "8405ada26b2ec1a3906b2836d00a1e6a",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/complete-audit-sd.js",
+      {
+        "hash": "bff0a95c6b0717443feb37d01aa4efde",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/complete-audit-verification.js",
+      {
+        "hash": "d3d3918f072a33ca4ea7df45f18e5041",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/complete-exec-checklist.js",
+      {
+        "hash": "7bd7063a72e5dfd3bb4b1ac0a94b668e",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/complete-exec-phase.js",
+      {
+        "hash": "41c259e339801754447cfe421864cbf7",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/complete-lead-phase.js",
+      {
+        "hash": "b1403aacda78b9f9bd0adad840686a70",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/complete-plan-phase.js",
+      {
+        "hash": "8f812798ed690a62fd5c06065f45f9b4",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/complete-plan-verification.js",
+      {
+        "hash": "a9d1aa8559862d82ea483c8b5ec0c219",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/complete-prd-validation.js",
+      {
+        "hash": "06618c00e70db9a667d7f0a507500100",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/complete-sd-2025-001-correct.js",
+      {
+        "hash": "52fab641b782329c5475ac9c63b4fcca",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/complete-sd-2025-001-final.js",
+      {
+        "hash": "9a77aeaf59171390a62bc6bce98391f4",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/complete-sd-2025-001-simple.js",
+      {
+        "hash": "c049a73973a351abd73caa5cb0a91b04",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/complete-sd-2025-001.js",
+      {
+        "hash": "6712589aec4061c31e4eb83e06d7a3a3",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/complete-sd-template.js",
+      {
+        "hash": "6cb03a293b03e5bb78376311e7cc95c8",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/complete-strategic-directive.js",
+      {
+        "hash": "58da42a592bd2780691ef37a6501fdcd",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/complete-validation-ees.js",
+      {
+        "hash": "c80162b414cdca20bb391bd9d4e4a53f",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/conduct-lead-approval-assessment.js",
+      {
+        "hash": "11e8c3f1f0938186327ea7b99f6f3554",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/context-monitor.js",
+      {
+        "hash": "2e04a9967901a5183792e0367ae88c27",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/create-exec-to-plan-handoff.js",
+      {
+        "hash": "fae51e4c5ed4ee7f267c4538333754d5",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/create-prd-dashboard-ui.js",
+      {
+        "hash": "fbc4403865e8ab7b434fba7b8514f886",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/create-progress-table.js",
+      {
+        "hash": "48a3f599e27f02140e478d6347549642",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/create-tables-direct.js",
+      {
+        "hash": "74addbe73ce4bf55d26eeafdbe9acf4b",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/debug-dashboard-progress.js",
+      {
+        "hash": "c910062f136f357d0b8c9e75e36e5e9e",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/debug-progress-calculator.js",
+      {
+        "hash": "71b2b4c201c08b1a4fb39871ef89bc4a",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/debug-subagent-detection.js",
+      {
+        "hash": "8a5199fc087d99eecbb0ac27cba9ae9d",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/define-small-enhancement.js",
+      {
+        "hash": "79211860c5ec04b207ed5b81bdaab4c7",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/dynamic-checklist-generator.js",
+      {
+        "hash": "a9bbaab612b56c1fcf31a9cb32360586",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/exec-coordinate-subagents.js",
+      {
+        "hash": "9de60892e7e6f83b1dada35692633d0e",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/execute-prd-sql.js",
+      {
+        "hash": "2dda90a40d543f88a0beeb623fe443c0",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/execute-verification-tests.js",
+      {
+        "hash": "ca1c4e19650ac3a9a90483cbb974f6c3",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/fix-audit-metadata.js",
+      {
+        "hash": "64bf79c4cca673fdeed1fe142ad26dc7",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/fix-navigation-issues.js",
+      {
+        "hash": "720a17934a66b0f7fdc68a94c9208416",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/fix-prd-and-add-ees.js",
+      {
+        "hash": "1b2e8a2146e140afe0d354beff09356b",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/generate-fix-request.js",
+      {
+        "hash": "67a557c0426957419eec0d5e38cf726e",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/get-latest-leo-protocol-version.js",
+      {
+        "hash": "93ad134c1cd96c32d18266d366563948",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/github-deployment-subagent.js",
+      {
+        "hash": "c74874a13209e3ce9b329dacf6734880",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/handoff-controller.js",
+      {
+        "hash": "fff0f0cac0ef11f2599c619ceaa79012",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/handoff-validator.js",
+      {
+        "hash": "df24e4b0f311cc8f18d4f9d9b9296da4",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/initialize-sd-003-dashboard.js",
+      {
+        "hash": "733f85a244a9ae108304b0425e1652e9",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/intelligent-checklist-system.js",
+      {
+        "hash": "acb497c6d69152ad21bb6c67d885d5aa",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/leo-checklist.js",
+      {
+        "hash": "d7b06b0b66bab174454d73b1354b8643",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/leo-ci-monitor.js",
+      {
+        "hash": "8d87e700fa289a3c8e14b561f01b7277",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/leo-dashboard.js",
+      {
+        "hash": "27155995084ebeb7798ddd231b8c7c22",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/leo-evidence-capture.js",
+      {
+        "hash": "8f029aee5b7b1ce19588d18e77c813b7",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/leo-prd-validator.js",
+      {
+        "hash": "6ea45a6903fc832c5820bc1fcf8954d4",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/leo-protocol-smart-qa.js",
+      {
+        "hash": "4cf0cf2fd4f84fe2cdce1ddcbfb91f34",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/leo-register-from-env.js",
+      {
+        "hash": "20c69108b73fa84f4f920bb093018d4b",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/leo-registration-wizard.js",
+      {
+        "hash": "37995e92a958c80b5adf047f25250a10",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/leo-sd-validator.js",
+      {
+        "hash": "7bb48aba18764cfedb95a42e7ff0c4d7",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/leo-status-line.js",
+      {
+        "hash": "eea673704db1c02bd4f2d24f1bf23138",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/leo.js",
+      {
+        "hash": "40da98d060ef2d73744ea15b6afe1ad1",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/mark-sds-complete-v2.js",
+      {
+        "hash": "638f8e2a8db74fcd2d6cac7c61fb671b",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/mark-sds-complete.js",
+      {
+        "hash": "030ab417bb6442e1a42a894502ffb0ad",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/migrate-statuses.js",
+      {
+        "hash": "cbfa1bf92b987e254d227dce1ea4e434",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/new-strategic-directive.js",
+      {
+        "hash": "47af5989f6a0929cfd31bf2936609ca6",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/pareto-exec-completion.js",
+      {
+        "hash": "03a92b56af3386f212d68f62ef42e8e7",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/performance-benchmark-sd-2025-001.js",
+      {
+        "hash": "e7f7c7b7a5ce60fc4439f59fb324a92e",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/plan-verification-sd-2025-001.js",
+      {
+        "hash": "a25755e4de3b06836fdbc4bba17eee8d",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/quick-leo-protocol-execution.js",
+      {
+        "hash": "0e06d6ea8a638b7482ebed2314a464cb",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/quick-verify-improvements.js",
+      {
+        "hash": "118d24c1cfbade01cccf632ee3a5bbb2",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/register-app.js",
+      {
+        "hash": "faa5071ad502cdafc05063684a2843a3",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/review-sds.js",
+      {
+        "hash": "2b1b1b4c25437b18d43e99cdd260f947",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/setup-database-supabase.js",
+      {
+        "hash": "c53ac98ed8c96cc01f4f9be9c5fd68de",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/setup-database.js",
+      {
+        "hash": "e3fc84c0095585db22ebc99c9cf15bab",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/setup-prd-database.js",
+      {
+        "hash": "e264d67e82c63f13830c400b2f48a712",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/simulate-websocket-client.js",
+      {
+        "hash": "6ad39d22f7b892d6ab9f99604966d06f",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/start-lead-approval.js",
+      {
+        "hash": "b39113820bdeafc79e6e6e080efb585c",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/start-plan-verification.js",
+      {
+        "hash": "3781e2adea1d5a7962f00cc87bb7ad23",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/subagent-enforcement-system.js",
+      {
+        "hash": "3c7dacc950beaa390ae215c467478453",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/switch-context.js",
+      {
+        "hash": "a85427deedd642a035025869ae7b6382",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/sync-github.js",
+      {
+        "hash": "a829f4ba616103d523c9fa31746a4c25",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/sync-manager.js",
+      {
+        "hash": "3e0cf8f92a87453074eae8556d2793e7",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/sync-supabase.js",
+      {
+        "hash": "5700d339d002fb1e1b314523cb295ada",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-all-improvements.js",
+      {
+        "hash": "064c0ce7574863b2dc643806a842e676",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-all-subagents.js",
+      {
+        "hash": "6da4ad3a0aa1dc13364b0b8dc504d439",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-connections.js",
+      {
+        "hash": "50d70cb8044b008f398dba9eff7373e4",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-cost-subagent.js",
+      {
+        "hash": "629fe720fbd7d4306f68368ffa15f905",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-dashboard-ui.js",
+      {
+        "hash": "2dde5314f8de44815bfc0304146ff566",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-database-subagent.js",
+      {
+        "hash": "0344a17652d35073e97a2ff73be71102",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-database.js",
+      {
+        "hash": "b43ec8e3874eb34ab720265009e22797",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-design-subagent.js",
+      {
+        "hash": "50e3e86cc24a8a406ec18f268e2df1a3",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-documentation-subagent.js",
+      {
+        "hash": "30c295f1278740cedc0fd5d64f98e1f6",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-ehg-connection.js",
+      {
+        "hash": "c7f559605178380d83f1a64abe9045ca",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-ehg-with-all-improvements.js",
+      {
+        "hash": "5002970ac006905852de1360004ede4a",
+        "lastModified": 1756905867438,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-exec-coordination-improved.js",
+      {
+        "hash": "552bd7404966845ad0cc8cdbd0cbe86a",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-improved-subagents-on-ehg.js",
+      {
+        "hash": "a9dea51e58328fee61908b0f776e09e9",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-performance-subagent.js",
+      {
+        "hash": "15d959377728f899422bbd98813e59d2",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-progress-calculation.js",
+      {
+        "hash": "fe710e6dab60399176194843e3266f89",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-realtime-refresh.js",
+      {
+        "hash": "09b8fad1b1178bdf267de6df355098f2",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-realtime-sync.js",
+      {
+        "hash": "738997038941e3252483304dd27d008a",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-realtime-update.js",
+      {
+        "hash": "2389484f83c562b885fe69e29df2c73c",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-realtime-updates.js",
+      {
+        "hash": "0416a88e380b6dfb10ee0f523a3b89b4",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-sd-api.js",
+      {
+        "hash": "59b1b35ad08c87f263c92d41545a6126",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-sd-navigation.js",
+      {
+        "hash": "86d822bc0210434181d3d84ca2ff176d",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-security-subagent.js",
+      {
+        "hash": "9468f348e9781c5db96f535c862f3c1c",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-status-validation.js",
+      {
+        "hash": "6ed6e5017ed9c439fb7f8b1233396268",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-supabase-db.js",
+      {
+        "hash": "ecb3d994e208cafc9789818520433e67",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-ui-rendering.js",
+      {
+        "hash": "2a523ba7eac058d8466189c7b299421b",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-vision-qa-setup.js",
+      {
+        "hash": "168949ab2e1d723fa5828426ce692bb5",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/update-audit-prd.js",
+      {
+        "hash": "00e9f022b6790fdb5a6f70501b5e2f2b",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/update-claude-md-version.js",
+      {
+        "hash": "09a6d51d369c5152de9d9e2d0b7014e0",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/update-dashboard-ui-sd.js",
+      {
+        "hash": "c6b6a02da6ee4f041ee1165d0aaa7337",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/update-directive-status.js",
+      {
+        "hash": "15e65bb28dbb50b69d099b920ad5257b",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/update-draft-sd-titles.js",
+      {
+        "hash": "f79a33e63c7cfb2b712916cebfa0b2c7",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/update-exec-checklist-proper.js",
+      {
+        "hash": "2f327c787869e0473efd3c800e5788b1",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/update-exec-checklist.js",
+      {
+        "hash": "d985a81f799fb16763dc85d7700403a6",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/update-exec-complete.js",
+      {
+        "hash": "67591af0b8e6263aab3a13c8d34528c5",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/update-exec-progress.js",
+      {
+        "hash": "cceaec151ea76a3ce1139b2539bedc30",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/update-plan-verification.js",
+      {
+        "hash": "4bc24d2024155243db73b1939edf2954",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/update-prd-checklist.js",
+      {
+        "hash": "a30cd36951cac857648fe9bf13f268a4",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/update-prd-status.js",
+      {
+        "hash": "d48519032169e9e7a354d517f736de70",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/update-sd-completion-metadata.js",
+      {
+        "hash": "d265979779af700d8a7bc449123d7402",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/update-sd-content.js",
+      {
+        "hash": "1f12bd49436f1a0623993ecff98ef4b4",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/update-sd-details.js",
+      {
+        "hash": "0db6142729c0f8b2b710b27ac9e05300",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/update-sd-metadata-only.js",
+      {
+        "hash": "4c0e0b0eaf2a29a2dfc19a161c9b5dfd",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/validate-fixes.js",
+      {
+        "hash": "79d1a820e073808589972d2bdbc653ca",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/validate-performance-sd-2025-001.js",
+      {
+        "hash": "013326eb22ae7e14abd8aef11f2a18df",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/validate-sd-completion.js",
+      {
+        "hash": "820ce0c69645c78da9a53b8b923fe5e0",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/validate-sub-agent-handoff.js",
+      {
+        "hash": "b266a5295ddc10daa107c64c5efaef8a",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/verify-connection.js",
+      {
+        "hash": "be1b1bab594c89d56465796f13622654",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/verify-database-state.js",
+      {
+        "hash": "39ae3fa5b2bbe3649ac64ccffa372e23",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/verify-navigation-fixes.js",
+      {
+        "hash": "231afe9a990bd297d05a09d661be5208",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/vision-model-selector.js",
+      {
+        "hash": "5ccef420a49f826bd0e7242c8449aec7",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/vision-qa-decision.js",
+      {
+        "hash": "e51a2e572169f61d8fd3b03992ccbe5b",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/server.js",
+      {
+        "hash": "ed2475e0105a68c508537dc2d4c42c4d",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/dist/assets/index-B3cTPU9q.js",
+      {
+        "hash": "3c9c1ea01cfba2bbaa0da4ed1a5e8ce0",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/postcss.config.js",
+      {
+        "hash": "c76714d5754a5c3fbcc87b2bba27efcc",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/App.jsx",
+      {
+        "hash": "8073d2d535abb25aeebba4299c2aa05c",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/animations/components/AnimatedButton.jsx",
+      {
+        "hash": "8f92d2dd2f587973e1ac48575e2b4933",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/animations/components/AnimatedCard.jsx",
+      {
+        "hash": "80c9a154de4f4492f8100b92bf0acb1c",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/animations/components/AnimatedList.jsx",
+      {
+        "hash": "5c205bde13d006100a2061ecb3bc342b",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/animations/components/AnimatedModal.jsx",
+      {
+        "hash": "ce1aa96bdc2ccc8721933d73b23c0bc5",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/animations/constants.js",
+      {
+        "hash": "aa434f6f6e48fbf99c0b5d26a1dfdac9",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/animations/hooks/useReducedMotion.js",
+      {
+        "hash": "fa92e2f21dcb128eea0d22248a33fd6a",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/animations/index.js",
+      {
+        "hash": "fa233e506ca44253eae80547ca0ffed8",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/animations/utils/performance.js",
+      {
+        "hash": "7a71e289fb2d46d1179d96ae1f51a632",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/ActiveSDProgress.jsx",
+      {
+        "hash": "e2120406ec6bd3c7a0b15a4e5b5a58b8",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/AnimatedAppLayout.jsx",
+      {
+        "hash": "96dcbc899189457b27aa14de28b2008f",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/AnimatedCard.jsx",
+      {
+        "hash": "7a749a215d3e9b6294bbff96544e669d",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/AnimatedOverview.jsx",
+      {
+        "hash": "7a393c07be26946a2194c23618431c87",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/AppLayout.jsx",
+      {
+        "hash": "7eb551a6bd8f98b0eb8a599497b93bdd",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/Breadcrumbs.jsx",
+      {
+        "hash": "b6d2c7c60108a98c1af76837871d6169",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/CardGrid.jsx",
+      {
+        "hash": "72c53fd81af292a9a6f87e08379aa66f",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/ContextMonitor.jsx",
+      {
+        "hash": "02dd8bc3b106abe69a902b9ac1e6d0fa",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/EnhancedOverview.jsx",
+      {
+        "hash": "20a434eb2e23754ac1253e5a1006ab16",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/HandoffCenter.jsx",
+      {
+        "hash": "0a6875f5796911570f89901232545682",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/LoadingSkeleton.jsx",
+      {
+        "hash": "8e2080136d1bd98a68472bda2b4b251e",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/Overview.jsx",
+      {
+        "hash": "06dd912b7bf81032872a016522deb252",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/PRDManager.jsx",
+      {
+        "hash": "907b9748d08a10ad2c8b4ca9d13a284f",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/ProgressAudit.jsx",
+      {
+        "hash": "fc9a9d34de84edd911e7cbe1a68502a6",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/SDAssistant.jsx",
+      {
+        "hash": "36d2c062f5728b14b03dada7b6fd3264",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/SDManager.jsx",
+      {
+        "hash": "5857937c7045a69d31f9f0c5e6b05bed",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/SmartRefreshButton.jsx",
+      {
+        "hash": "4e3bdf6125ba6f9dbaebf4803d16090a",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/voice/EVAVoiceAssistant.tsx",
+      {
+        "hash": "7fb62e0c4d25e78ab940c30f09b06565",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/voice/RealtimeClient.ts",
+      {
+        "hash": "42754f07d27522bcf1695e1c114ea59f",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/components/voice/types.ts",
+      {
+        "hash": "dd8db3c78f47ced227268cfa94aa5bbd",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/hooks/useLocalStorage.js",
+      {
+        "hash": "a6c56d8726ed89e4c3f3e60e1cecc1bd",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/hooks/useWebSocket.js",
+      {
+        "hash": "b80d031f9f57253c47535b0310652c26",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/lib/supabase.ts",
+      {
+        "hash": "c9c4a2a4e671898e4c444447427639ac",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/main.jsx",
+      {
+        "hash": "7dc8ac10503191de947a4e66638941d7",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/src/utils/animations.js",
+      {
+        "hash": "de5b6acd0b879a42eb7385dbdd2aa5b4",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/tailwind.config.js",
+      {
+        "hash": "b72a1054dbba032d02495f9a351f4956",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/client/vite.config.js",
+      {
+        "hash": "2b1f632307e65cf19836db6b21b9fb1a",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/services/database-loader.js",
+      {
+        "hash": "a23d29e4284119f8712d8a820e04f0e9",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/services/handoff-validator.js",
+      {
+        "hash": "dfddd40be2fcebb995e78156c58dc2a5",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/services/progress-calculator.js",
+      {
+        "hash": "5a0ba020a99259fe2ac68dc817785b55",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/services/realtime-dashboard.js",
+      {
+        "hash": "3192926fbd7492eec87dc935b8b7b88f",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/services/realtime-manager.js",
+      {
+        "hash": "000b258fe3e3bbc2b03c0988f50647c7",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/services/refresh-api.js",
+      {
+        "hash": "286d05ae97c51f6e732dacaa025923fd",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/services/status-validator.js",
+      {
+        "hash": "0d8f0314045cbbb9b800809b47df072c",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/src/services/version-detector.js",
+      {
+        "hash": "e9dc2d80cb98a59bec705ed1d15df66d",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/supabase/functions/openai-realtime-token/index.ts",
+      {
+        "hash": "f2cdf40cd59b8a92584d0a62ae381b70",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/supabase/functions/realtime-relay/index.ts",
+      {
+        "hash": "fc6daf059207d45ad9d610c90fcf0a46",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/tests/e2e/leo-protocol-journey.test.js",
+      {
+        "hash": "836805f12ba41ee7660ebe978120affa",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/tests/e2e/visual-inspection.spec.js",
+      {
+        "hash": "85703fe6c692c7b888adb252e24a98c5",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/tests/integration/database-operations.test.js",
+      {
+        "hash": "9f321756e863e2f5439bb1a50c583770",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/tests/integration.test.js",
+      {
+        "hash": "fab78cd1d8bcb5b081d031cba392a6a1",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/tests/setup/global-setup.js",
+      {
+        "hash": "3946639d882b945143cef9e7eaab2228",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/tests/setup/global-teardown.js",
+      {
+        "hash": "4bbe12e49e304f1f13265bfc271cc5ad",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/tests/setup.js",
+      {
+        "hash": "3c537851e35a65efe4014ea5d26fb9a1",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/tests/unit/progress-calculation.test.js",
+      {
+        "hash": "86b0d8b7cd8d29451ca219a0aac61b1e",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/tests/voice-components.test.js",
+      {
+        "hash": "5a46a997bf6003ea2e85c9dfe66f375b",
+        "lastModified": 1756905354224,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/lib/agents/type-mapping.js",
+      {
+        "hash": "5ddb60645296d115e303e1ff3fb6f6fa",
+        "lastModified": 1756906180685,
+        "dependencies": []
+      }
+    ],
+    [
+      "/mnt/c/_EHG/EHG_Engineer/scripts/test-ehg-integrated-properly.js",
+      {
+        "hash": "9cb78dffb287bf7d6edaa3f15410be4a",
+        "lastModified": 1756906180685,
+        "dependencies": []
+      }
+    ]
+  ],
+  "resultCache": [],
+  "dependencies": []
+}

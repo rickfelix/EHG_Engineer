@@ -1,0 +1,11 @@
+flowchart TB
+%% Stage 2 Detail
+subgraph S2["2. AI Review"]
+  S2_root["Purpose: Multi-agent AI system reviews and critiques the idea from multiple perspectives."]
+  S2_A["2.1 Multi-Model Analysis"]
+  S2_B["2.2 Contrarian Red Team"]
+  S2_C["2.3 Risk Prioritization"]
+  S2_root --> S2_A --> S2_B --> S2_C
+end
+classDef dep stroke-dasharray: 5 5;
+D2["Depends on: 1"]:::dep -.-> S2_root

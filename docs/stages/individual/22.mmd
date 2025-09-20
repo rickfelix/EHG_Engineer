@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 22 Detail
+subgraph S22["22. Iterative Development Loop"]
+  S22_root["Purpose: Execute agile development cycles with continuous feedback.
+Owner: EXEC"]
+  S22_A["22.1 Sprint Execution"]
+  S22_B["22.2 Daily Standups"]
+  S22_C["22.3 Sprint Review"]
+  S22_root --> S22_A --> S22_B --> S22_C
+end
+classDef dep stroke-dasharray: 5 5;
+D22["Depends on: 21"]:::dep -.-> S22_root

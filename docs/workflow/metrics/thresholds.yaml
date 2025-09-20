@@ -1,0 +1,49 @@
+stage1:
+  idea_completeness_min: TBD
+  validation_score_min: TBD
+  
+stage2:
+  risk_count_max: TBD
+  critical_risks_max: TBD
+  consensus_score_min: TBD
+  
+stage3:
+  problem_validation_min: TBD
+  user_interest_min: TBD
+  technical_feasibility_min: TBD
+  
+stage4:
+  competitor_count_max: TBD
+  market_share_opportunity_min: TBD
+  differentiation_score_min: TBD
+  
+stage5:
+  gross_margin_min: TBD
+  breakeven_months_max: TBD
+  roi_min: TBD
+  
+stage6:
+  risk_score_max: TBD
+  unresolved_critical_risks_max: TBD
+  mitigation_coverage_min: TBD
+  
+stage7:
+  readiness_min: TBD
+  dependency_clarity_min: TBD
+  resource_allocation_min: TBD
+  
+stage8:
+  decomposition_depth_min: TBD
+  orphan_tasks_max: TBD
+  complexity_score_max: TBD
+  
+stage9:
+  gap_impact_max: TBD
+  opportunity_score_min: TBD
+  capability_coverage_min: TBD
+  
+stage10:
+  tech_feasibility_min: TBD
+  integration_risk_max: TBD
+  architecture_score_min: TBD
+  security_readiness_min: TBD

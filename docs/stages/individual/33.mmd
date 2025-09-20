@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 33 Detail
+subgraph S33["33. Post-MVP Expansion"]
+  S33_root["Purpose: Expand features and capabilities based on market feedback.
+Owner: PLAN"]
+  S33_A["33.1 Feature Planning"]
+  S33_B["33.2 Market Expansion"]
+  S33_C["33.3 Capability Development"]
+  S33_root --> S33_A --> S33_B --> S33_C
+end
+classDef dep stroke-dasharray: 5 5;
+D33["Depends on: 32"]:::dep -.-> S33_root

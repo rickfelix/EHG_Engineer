@@ -1,0 +1,18 @@
+{
+  "name": "ehg-press-kit-generator",
+  "version": "1.0.0",
+  "description": "EHG Digital Press Kit Generator for 2030 Vision",
+  "type": "module",
+  "scripts": {
+    "generate": "node make_deck.js",
+    "convert": "bash convert.sh",
+    "install-deps": "npm install",
+    "all": "npm run generate && npm run convert"
+  },
+  "dependencies": {
+    "docx": "^9.5.1",
+    "pptxgenjs": "^3.12.0"
+  },
+  "author": "ExecHoldings Global",
+  "license": "MIT"
+}

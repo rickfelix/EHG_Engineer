@@ -1,0 +1,11 @@
+flowchart TB
+%% Stage 8 Detail
+subgraph S8["8. Problem Decomposition Engine"]
+  S8_root["Purpose: Break down complex problems into manageable, actionable components."]
+  S8_A["8.1 Problem Analysis"]
+  S8_B["8.2 Task Breakdown"]
+  S8_C["8.3 Dependency Mapping"]
+  S8_root --> S8_A --> S8_B --> S8_C
+end
+classDef dep stroke-dasharray: 5 5;
+D8["Depends on: 7"]:::dep -.-> S8_root

@@ -1,0 +1,3902 @@
+{
+  "timestamp": "2025-09-04T01:33:08.062Z",
+  "usage": {
+    "database": {
+      "tables": [
+        {
+          "name": "strategic_directives_v2",
+          "rowCount": 6,
+          "estimatedSize": 6144
+        },
+        {
+          "name": "product_requirements_v2",
+          "rowCount": 5,
+          "estimatedSize": 5120
+        },
+        {
+          "name": "execution_sequences",
+          "rowCount": 0,
+          "estimatedSize": 0
+        },
+        {
+          "name": "leo_audit_log",
+          "rowCount": 0,
+          "estimatedSize": 0
+        }
+      ],
+      "totalRows": 11,
+      "estimatedSize": 0,
+      "largestTables": [
+        {
+          "name": "strategic_directives_v2",
+          "rowCount": 6,
+          "estimatedSize": 6144
+        },
+        {
+          "name": "product_requirements_v2",
+          "rowCount": 5,
+          "estimatedSize": 5120
+        },
+        {
+          "name": "execution_sequences",
+          "rowCount": 0,
+          "estimatedSize": 0
+        },
+        {
+          "name": "leo_audit_log",
+          "rowCount": 0,
+          "estimatedSize": 0
+        }
+      ],
+      "growthRate": 0,
+      "issues": [],
+      "status": "GOOD"
+    },
+    "api": {
+      "endpoints": [
+        {
+          "endpoint": "/api/system-status",
+          "count": 1,
+          "operations": [
+            "fetch"
+          ],
+          "files": [
+            "src/client/dist/assets/index-B3cTPU9q.js"
+          ]
+        },
+        {
+          "endpoint": "/api/state",
+          "count": 3,
+          "operations": [
+            "fetch",
+            "fetch",
+            "fetch"
+          ],
+          "files": [
+            "src/client/dist/assets/index-B3cTPU9q.js",
+            "src/client/dist/assets/index-B3cTPU9q.js",
+            "src/client/src/App.jsx"
+          ]
+        },
+        {
+          "endpoint": "/api/refresh",
+          "count": 2,
+          "operations": [
+            "fetch",
+            "fetch"
+          ],
+          "files": [
+            "src/client/dist/assets/index-B3cTPU9q.js",
+            "src/client/src/components/SmartRefreshButton.jsx"
+          ]
+        },
+        {
+          "endpoint": "/api/restart",
+          "count": 1,
+          "operations": [
+            "fetch"
+          ],
+          "files": [
+            "src/client/dist/assets/index-B3cTPU9q.js"
+          ]
+        },
+        {
+          "endpoint": "/api/force-refresh",
+          "count": 1,
+          "operations": [
+            "fetch"
+          ],
+          "files": [
+            "src/client/dist/assets/index-B3cTPU9q.js"
+          ]
+        },
+        {
+          "endpoint": "/api/health",
+          "count": 1,
+          "operations": [
+            "fetch"
+          ],
+          "files": [
+            "src/client/dist/assets/index-B3cTPU9q.js"
+          ]
+        },
+        {
+          "endpoint": "/api/sd-assistant/analyze",
+          "count": 2,
+          "operations": [
+            "fetch",
+            "fetch"
+          ],
+          "files": [
+            "src/client/dist/assets/index-B3cTPU9q.js",
+            "src/client/src/components/SDAssistant.jsx"
+          ]
+        },
+        {
+          "endpoint": "/api/metrics",
+          "count": 4,
+          "operations": [
+            "fetch",
+            "fetch",
+            "fetch",
+            "fetch"
+          ],
+          "files": [
+            "src/client/dist/assets/index-B3cTPU9q.js",
+            "src/client/src/components/AnimatedOverview.jsx",
+            "src/client/src/components/EnhancedOverview.jsx",
+            "src/client/src/components/Overview.jsx"
+          ]
+        },
+        {
+          "endpoint": "voice_function_calls",
+          "count": 1,
+          "operations": [
+            "insert"
+          ],
+          "files": [
+            "src/client/src/components/voice/EVAVoiceAssistant.tsx"
+          ]
+        },
+        {
+          "endpoint": "strategic_directives_v2",
+          "count": 3,
+          "operations": [
+            "select",
+            "select",
+            "select"
+          ],
+          "files": [
+            "src/services/database-loader.js",
+            "src/services/database-loader.js",
+            "src/services/realtime-manager.js"
+          ]
+        },
+        {
+          "endpoint": "product_requirements_v2",
+          "count": 3,
+          "operations": [
+            "select",
+            "select",
+            "select"
+          ],
+          "files": [
+            "src/services/database-loader.js",
+            "src/services/database-loader.js",
+            "src/services/realtime-manager.js"
+          ]
+        },
+        {
+          "endpoint": "execution_sequences_v2",
+          "count": 3,
+          "operations": [
+            "select",
+            "select",
+            "select"
+          ],
+          "files": [
+            "src/services/database-loader.js",
+            "src/services/database-loader.js",
+            "src/services/realtime-manager.js"
+          ]
+        }
+      ],
+      "totalCalls": 25,
+      "callsPerHour": 0,
+      "peakHour": 0,
+      "costlyEndpoints": [
+        {
+          "endpoint": "strategic_directives_v2",
+          "issue": "Unbounded query",
+          "recommendation": "Add pagination with limit/offset"
+        },
+        {
+          "endpoint": "product_requirements_v2",
+          "issue": "Unbounded query",
+          "recommendation": "Add pagination with limit/offset"
+        },
+        {
+          "endpoint": "execution_sequences_v2",
+          "issue": "Unbounded query",
+          "recommendation": "Add pagination with limit/offset"
+        }
+      ],
+      "patterns": [],
+      "status": "WARNING"
+    },
+    "expensive": [
+      {
+        "file": "applications/APP001/codebase/app/api/ai-agents/status/route.ts",
+        "line": 36,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/data-management/quality/route.ts",
+        "line": 33,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/data-management/storage/route.ts",
+        "line": 33,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/eva-nlp/route.ts",
+        "line": 71,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/integration/services/route.ts",
+        "line": 24,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/monitoring/overview/route.ts",
+        "line": 119,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/monitoring/overview/route.ts",
+        "line": 125,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/monitoring/overview/route.ts",
+        "line": 133,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/monitoring/overview/route.ts",
+        "line": 140,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/monitoring/overview/route.ts",
+        "line": 147,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/monitoring/overview/route.ts",
+        "line": 154,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/performance/overview/route.ts",
+        "line": 18,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/performance/overview/route.ts",
+        "line": 25,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/performance/overview/route.ts",
+        "line": 32,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/performance/overview/route.ts",
+        "line": 39,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/performance/overview/route.ts",
+        "line": 46,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/performance/overview/route.ts",
+        "line": 52,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/security/overview/route.ts",
+        "line": 19,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/security/overview/route.ts",
+        "line": 27,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/security/overview/route.ts",
+        "line": 35,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/security/overview/route.ts",
+        "line": 43,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/app/api/settings/route.ts",
+        "line": 17,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/server/api/onboarding/progress.ts",
+        "line": 89,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": "//   .select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/ai/AIHealthMonitor.tsx",
+        "line": 24,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "const interval = setInterval(checkServicesHealth, 30000);..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/analytics/AdvancedAnalyticsEngine.tsx",
+        "line": 156,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "const interval = setInterval(() => {..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/auth/RoleBasedAccess.tsx",
+        "line": 143,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 500));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/collaboration/AdvancedCollaboration.tsx",
+        "line": 81,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "const interval = setInterval(() => {..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/development/TestingAutomationDashboard.tsx",
+        "line": 49,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/eva/EVAVoiceInterface.tsx",
+        "line": 91,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "recordingTimerRef.current = setInterval(() => {..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/exit/ExitDecisionWorkflow.tsx",
+        "line": 62,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/integration/ExternalIntegrationHub.tsx",
+        "line": 79,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "const interval = setInterval(() => {..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/integration/IntegrationConfigModal.tsx",
+        "line": 95,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/integration/IntegrationHealthMonitor.tsx",
+        "line": 51,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "const interval = setInterval(loadHealthMetrics, 30000);..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/integration/IntegrationHubDashboard.tsx",
+        "line": 64,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/integration/IntegrationHubDashboard.tsx",
+        "line": 100,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/monitoring/CreateIncidentDialog.tsx",
+        "line": 89,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 1500));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/orchestration/EVAOrchestrationEngine.tsx",
+        "line": 79,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "const interval = setInterval(() => {..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/performance/AdvancedCacheOptimization.tsx",
+        "line": 66,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "const interval = setInterval(loadPerformanceData, 30000);..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/risk-forecasting/RiskForecastingEngine.tsx",
+        "line": 78,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/risk-forecasting/RiskForecastingEngine.tsx",
+        "line": 87,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/stages/CompleteWorkflowOrchestrator.tsx",
+        "line": 274,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "interval = setInterval(() => {..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/stages/OperationsOptimizationChunkWorkflow.tsx",
+        "line": 231,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "interval = setInterval(() => {..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/components/testing/ComprehensiveTestSuite.tsx",
+        "line": 54,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 500));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/features/comprehensive_validation/service.ts",
+        "line": 98,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useAICEOAgent.ts",
+        "line": 182,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useAICEOAgent.ts",
+        "line": 205,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useAIReviewService.ts",
+        "line": 138,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useAIReviewService.ts",
+        "line": 251,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useActorModelSaga.ts",
+        "line": 42,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useActorModelSaga.ts",
+        "line": 63,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useAdaptiveNaming.ts",
+        "line": 86,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useAdaptiveNaming.ts",
+        "line": 105,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useAdaptiveNaming.ts",
+        "line": 125,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useAgentData.ts",
+        "line": 276,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 500));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useAgentData.ts",
+        "line": 286,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 300));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useAgentData.ts",
+        "line": 297,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 400));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useAgentData.ts",
+        "line": 312,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 200));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useAgentData.ts",
+        "line": 324,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 300));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useAgentData.ts",
+        "line": 351,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 400));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useAgents.ts",
+        "line": 58,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useAgents.ts",
+        "line": 95,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useAgents.ts",
+        "line": 111,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useAuthenticationData.tsx",
+        "line": 47,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*');..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useChairmanFeedbackService.ts",
+        "line": 109,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useChairmanFeedbackService.ts",
+        "line": 138,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useComprehensivePlanning.ts",
+        "line": 161,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useComprehensivePlanning.ts",
+        "line": 186,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useComprehensivePlanning.ts",
+        "line": 210,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useComprehensivePlanning.ts",
+        "line": 286,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useContextLoading.ts",
+        "line": 189,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useContextLoading.ts",
+        "line": 212,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useCreativeMediaAutomation.ts",
+        "line": 104,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "const progressInterval = setInterval(() => {..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useDevelopmentExcellence.ts",
+        "line": 40,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useDevelopmentExcellence.ts",
+        "line": 61,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useDevelopmentExcellence.ts",
+        "line": 82,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useDevelopmentPreparation.ts",
+        "line": 56,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useDevelopmentPreparation.ts",
+        "line": 77,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useDocumentationSync.ts",
+        "line": 185,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useDocumentationSync.ts",
+        "line": 208,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useExecutiveData.tsx",
+        "line": 42,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*');..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useExecutiveData.tsx",
+        "line": 53,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*');..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useExitReadiness.ts",
+        "line": 129,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useExitReadiness.ts",
+        "line": 150,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useExitReadiness.ts",
+        "line": 169,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useExitReadiness.ts",
+        "line": 190,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useFinalPolish.ts",
+        "line": 43,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useFinalPolish.ts",
+        "line": 71,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useFinalPolish.ts",
+        "line": 100,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useGTMStrategy.ts",
+        "line": 184,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useGTMStrategy.ts",
+        "line": 207,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useGlobalSearch.tsx",
+        "line": 41,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useGlobalSearch.tsx",
+        "line": 48,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useGlobalSearch.tsx",
+        "line": 141,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useGlobalSearch.tsx",
+        "line": 168,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useIdeasService.ts",
+        "line": 91,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useIntegrationVerification.ts",
+        "line": 241,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useIntegrationVerification.ts",
+        "line": 264,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useLiveWorkflowProgress.ts",
+        "line": 103,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "const updateInterval = setInterval(() => {..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useNotificationActions.ts",
+        "line": 17,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 500));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useNotificationActions.ts",
+        "line": 52,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 500));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useNotifications.ts",
+        "line": 24,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useNotifications.ts",
+        "line": 85,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/usePricingStrategy.ts",
+        "line": 84,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/usePricingStrategy.ts",
+        "line": 105,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useProblemDecomposition.ts",
+        "line": 296,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useProductionDeployment.ts",
+        "line": 44,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useProductionDeployment.ts",
+        "line": 65,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useRiskEvaluation.ts",
+        "line": 235,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useScreenReader.ts",
+        "line": 53,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "setTimeout(processQueue, 1500); // Wait between announcement..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useScreenReader.ts",
+        "line": 57,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "setTimeout(processQueue, 100);..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useSecurityCompliance.ts",
+        "line": 39,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useSecurityCompliance.ts",
+        "line": 60,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useStrategicNaming.ts",
+        "line": 134,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useStrategicNaming.ts",
+        "line": 152,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useStrategicNaming.ts",
+        "line": 170,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useTechnicalReview.ts",
+        "line": 104,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useUserJourneyData.tsx",
+        "line": 64,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*');..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useVentures.ts",
+        "line": 21,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useWorkflowData.ts",
+        "line": 146,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 500));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useWorkflowData.ts",
+        "line": 156,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 300));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useWorkflowData.ts",
+        "line": 166,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 400));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useWorkflowData.ts",
+        "line": 183,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 300));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useWorkflowData.ts",
+        "line": 194,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 300));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useWorkflowExecution.ts",
+        "line": 29,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 300));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/hooks/useWorkflowExecution.ts",
+        "line": 44,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 300));..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/ai/ai-analytics-engine.ts",
+        "line": 124,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/ai/ai-analytics-engine.ts",
+        "line": 130,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/ai/ai-analytics-engine.ts",
+        "line": 136,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*');..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/ai/ai-analytics-engine.ts",
+        "line": 154,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/ai/ai-analytics-engine.ts",
+        "line": 160,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/ai/ai-analytics-engine.ts",
+        "line": 179,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/ai/ai-analytics-engine.ts",
+        "line": 185,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/ai/ai-analytics-engine.ts",
+        "line": 204,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/ai/ai-integration-service.ts",
+        "line": 160,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/ai/ai-integration-service.ts",
+        "line": 167,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/ai/ai-integration-service.ts",
+        "line": 369,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/ai/ai-integration-service.ts",
+        "line": 394,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/analytics/export-engine.ts",
+        "line": 159,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/analytics/export-engine.ts",
+        "line": 512,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/analytics/predictive-engine.ts",
+        "line": 152,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/api/rate-limiter-client.ts",
+        "line": 32,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "setInterval(() => this.cleanup(), 60 * 1000);..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/integration/api-gateway.ts",
+        "line": 257,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/integration/api-gateway.ts",
+        "line": 402,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "setInterval(async () => {..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/integration/generic-rest-connector.ts",
+        "line": 268,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, Math.pow(2,..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/integration/integration-service.ts",
+        "line": 117,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/integration/integration-service.ts",
+        "line": 341,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/security/ai-security-monitor.ts",
+        "line": 205,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/security/ai-security-monitor.ts",
+        "line": 233,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/security/behavioral-auth.ts",
+        "line": 165,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/security/behavioral-auth.ts",
+        "line": 250,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/knowledgeManagementService.ts",
+        "line": 187,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/knowledgeManagementService.ts",
+        "line": 245,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/knowledgeManagementService.ts",
+        "line": 315,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/knowledgeManagementService.ts",
+        "line": 364,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/knowledgeManagementService.ts",
+        "line": 429,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/knowledgeManagementService.ts",
+        "line": 499,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/knowledgeManagementService.ts",
+        "line": 548,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/multiVentureCoordinationService.ts",
+        "line": 54,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/multiVentureCoordinationService.ts",
+        "line": 100,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/multiVentureCoordinationService.ts",
+        "line": 148,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/multiVentureCoordinationService.ts",
+        "line": 194,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/multiVentureCoordinationService.ts",
+        "line": 230,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/parallelExplorationService.ts",
+        "line": 74,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/parallelExplorationService.ts",
+        "line": 132,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/parallelExplorationService.ts",
+        "line": 162,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/timingOptimizationService.ts",
+        "line": 87,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/timingOptimizationService.ts",
+        "line": 133,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/services/timingOptimizationService.ts",
+        "line": 163,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/workflow/workflow-loader.ts",
+        "line": 18,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/workflow/workflow-loader.ts",
+        "line": 46,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/workflow/workflow-loader.ts",
+        "line": 71,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/lib/workflow/workflow-loader.ts",
+        "line": 103,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/middleware/api-rate-limiter.ts",
+        "line": 32,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "setInterval(() => this.cleanup(), 60 * 1000);..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/services/competitiveIntelligenceService.ts",
+        "line": 199,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/services/competitiveIntelligenceService.ts",
+        "line": 211,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/src/services/workflowExecutionService.ts",
+        "line": 44,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/adaptive-naming/index.ts",
+        "line": 70,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/adaptive-naming/index.ts",
+        "line": 81,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/adaptive-naming/index.ts",
+        "line": 192,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/adaptive-naming/index.ts",
+        "line": 269,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/adaptive-naming/index.ts",
+        "line": 331,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/adaptive-naming/index.ts",
+        "line": 336,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/ai-ceo-agent/index.ts",
+        "line": 212,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/ai-exit-decision-engine/index.ts",
+        "line": 28,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/ai-exit-decision-engine/index.ts",
+        "line": 38,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": "supabase.from('financial_forecasts').select('*').eq('venture..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/ai-exit-decision-engine/index.ts",
+        "line": 40,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": "supabase.from('market_intelligence').select('*').eq('venture..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/ai-knowledge-discovery/index.ts",
+        "line": 124,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/ai-knowledge-discovery/index.ts",
+        "line": 358,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/ai-knowledge-discovery/index.ts",
+        "line": 490,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/ai-testing-automation-engine/index.ts",
+        "line": 28,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/ai-testing-automation-engine/index.ts",
+        "line": 34,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/data-lifecycle-manager/index.ts",
+        "line": 69,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/data-lifecycle-manager/index.ts",
+        "line": 76,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/data-lifecycle-manager/index.ts",
+        "line": 83,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/data-lifecycle-manager/index.ts",
+        "line": 89,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/data-lifecycle-manager/index.ts",
+        "line": 95,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/data-lifecycle-manager/index.ts",
+        "line": 140,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/data-lifecycle-manager/index.ts",
+        "line": 217,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/data-lifecycle-manager/index.ts",
+        "line": 275,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/development-preparation/index.ts",
+        "line": 51,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/development-preparation/index.ts",
+        "line": 58,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/development-preparation/index.ts",
+        "line": 64,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/development-preparation/index.ts",
+        "line": 72,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/development-preparation/index.ts",
+        "line": 88,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/development-preparation/index.ts",
+        "line": 383,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/development-preparation/index.ts",
+        "line": 475,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/development-preparation/index.ts",
+        "line": 481,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/eva-database-query/index.ts",
+        "line": 30,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/eva-database-query/index.ts",
+        "line": 43,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/eva-database-query/index.ts",
+        "line": 57,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/eva-database-query/index.ts",
+        "line": 70,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": "supabase.from('companies').select('*'),..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/eva-database-query/index.ts",
+        "line": 72,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": "supabase.from('ideas').select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/eva-database-query/index.ts",
+        "line": 96,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": "supabase.from('ventures').select('*').ilike('name', `%${sear..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/exit-readiness/index.ts",
+        "line": 63,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/exit-readiness/index.ts",
+        "line": 75,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/exit-readiness/index.ts",
+        "line": 249,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/exit-readiness/index.ts",
+        "line": 348,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/exit-readiness/index.ts",
+        "line": 403,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/exit-readiness/index.ts",
+        "line": 409,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/health-monitor/index.ts",
+        "line": 64,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/health-monitor/index.ts",
+        "line": 123,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/integration-hub/index.ts",
+        "line": 197,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/integration-hub/index.ts",
+        "line": 253,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/integration-hub/index.ts",
+        "line": 293,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/integration-hub/index.ts",
+        "line": 332,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/integration-hub/index.ts",
+        "line": 467,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, retryDelays..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/openai-function-executor/index.ts",
+        "line": 131,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": "supabaseAdmin.from('companies').select('*').eq('user_id', us..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/openai-function-executor/index.ts",
+        "line": 133,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": "supabaseAdmin.from('ideas').select('*').eq('user_id', userId..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/openai-function-executor/index.ts",
+        "line": 164,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/openai-function-executor/index.ts",
+        "line": 197,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/openai-function-executor/index.ts",
+        "line": 234,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/openai-function-executor/index.ts",
+        "line": 266,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/openai-function-executor/index.ts",
+        "line": 331,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/openai-function-executor/index.ts",
+        "line": 341,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/openai-function-executor/index.ts",
+        "line": 351,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/openai-function-executor/index.ts",
+        "line": 361,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/openai-function-executor/index.ts",
+        "line": 597,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/parallel-exploration-ai/index.ts",
+        "line": 53,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/parallel-exploration-ai/index.ts",
+        "line": 64,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/parallel-exploration-ai/index.ts",
+        "line": 74,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/pricing-strategy/index.ts",
+        "line": 53,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/pricing-strategy/index.ts",
+        "line": 59,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/pricing-strategy/index.ts",
+        "line": 64,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/pricing-strategy/index.ts",
+        "line": 75,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/pricing-strategy/index.ts",
+        "line": 630,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/pricing-strategy/index.ts",
+        "line": 685,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/pricing-strategy/index.ts",
+        "line": 749,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/pricing-strategy/index.ts",
+        "line": 755,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/problem-decomposition/index.ts",
+        "line": 204,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/risk-evaluation/index.ts",
+        "line": 311,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/strategic-naming/index.ts",
+        "line": 59,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/technical-review/index.ts",
+        "line": 61,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/testing-orchestrator/index.ts",
+        "line": 416,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/testing-orchestrator/index.ts",
+        "line": 894,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/testing-orchestrator/index.ts",
+        "line": 899,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/testing-orchestrator/index.ts",
+        "line": 962,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/timing-optimization/index.ts",
+        "line": 62,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/timing-optimization/index.ts",
+        "line": 73,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/timing-optimization/index.ts",
+        "line": 85,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/workflow-execution/index.ts",
+        "line": 171,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/supabase/functions/workflow-execution/index.ts",
+        "line": 265,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/tests/integration/api/governance.test.ts",
+        "line": 96,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/tests/security/security-validation.test.ts",
+        "line": 44,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/tests/security/security-validation.test.ts",
+        "line": 133,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/tests/security/security-validation.test.ts",
+        "line": 151,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/tests/security/security-validation.test.ts",
+        "line": 164,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "applications/APP001/codebase/tests/unit/hooks/use-toast.test.ts",
+        "line": 164,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 150));..."
+      },
+      {
+        "file": "coverage/lcov-report/prettify.js",
+        "line": 2,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "window.PR_SHOULD_USE_CONTINUATION=true;(function(){var h=[\"b..."
+      },
+      {
+        "file": "lib/agents/cost-sub-agent.js",
+        "line": 331,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "pattern: /setInterval|setTimeout.*[1-9]\\d{0,2}(?!\\d)/gi,..."
+      },
+      {
+        "file": "lib/agents/cost-sub-agent.js",
+        "line": 345,
+        "type": "LOOP_QUERIES",
+        "cost": "CRITICAL",
+        "message": "Queries in loops are extremely expensive",
+        "fix": "Refactor to use single query with conditions",
+        "code": "pattern: /while.*await.*supabase/gi,..."
+      },
+      {
+        "file": "lib/agents/cost-sub-agent.js",
+        "line": 607,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "lib/agents/cost-sub-agent.js",
+        "line": 631,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": "const { data } = await supabase.from('users').select('*');..."
+      },
+      {
+        "file": "lib/agents/database-sub-agent.js",
+        "line": 404,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "lib/agents/learning-database.js",
+        "line": 385,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "setInterval(() => {..."
+      },
+      {
+        "file": "lib/agents/learning-database.js",
+        "line": 390,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "setInterval(() => {..."
+      },
+      {
+        "file": "lib/agents/performance-sub-agent.js",
+        "line": 132,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "regex: /setInterval\\s*\\([^)]+\\)\\s*(?!.*clearInterval)/g,..."
+      },
+      {
+        "file": "lib/dashboard/client/dist/assets/index-B3cTPU9q.js",
+        "line": 25,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "*/(function(e){function t(I,$){var w=I.length;I.push($);e:fo..."
+      },
+      {
+        "file": "lib/dashboard/client/dist/assets/index-B3cTPU9q.js",
+        "line": 38,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "`).replace(sk,\"\")}function no(e,t,n){if(t=Eh(t),Eh(e)!==t&&n..."
+      },
+      {
+        "file": "lib/dashboard/client/dist/assets/index-B3cTPU9q.js",
+        "line": 40,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "`+s.stack}return{value:e,source:t,stack:i,digest:null}}funct..."
+      },
+      {
+        "file": "lib/dashboard/client/dist/assets/index-B3cTPU9q.js",
+        "line": 67,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "*/function oa(){return oa=Object.assign?Object.assign.bind()..."
+      },
+      {
+        "file": "lib/dashboard/client/dist/assets/index-B3cTPU9q.js",
+        "line": 75,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "`),()=>{v.contains(x)&&v.removeChild(x)}},[t]),f.jsx(Q2,{isP..."
+      },
+      {
+        "file": "lib/dashboard/client/dist/assets/index-B3cTPU9q.js",
+        "line": 89,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "`,initial:!1,animate:n?\"collapsed\":\"expanded\",variants:E,chi..."
+      },
+      {
+        "file": "lib/dashboard/client/dist/assets/index-B3cTPU9q.js",
+        "line": 125,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "`,H.stakeholders===\"all\"&&(W+=\"Regular stakeholder updates a..."
+      },
+      {
+        "file": "lib/dashboard/client/dist/assets/index-B3cTPU9q.js",
+        "line": 216,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "Please proceed with the implementation.`},Z=n?e.find(T=>T.id..."
+      },
+      {
+        "file": "lib/dashboard/database-loader.js",
+        "line": 56,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "lib/dashboard/database-loader.js",
+        "line": 67,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*');..."
+      },
+      {
+        "file": "lib/dashboard/database-loader.js",
+        "line": 72,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*');..."
+      },
+      {
+        "file": "lib/dashboard/database-loader.js",
+        "line": 187,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "lib/dashboard/database-loader.js",
+        "line": 276,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "lib/dashboard/database-loader.js",
+        "line": 766,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "lib/dashboard/database-loader.js",
+        "line": 877,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "return setInterval(async () => {..."
+      },
+      {
+        "file": "lib/dashboard/handoff-validator.js",
+        "line": 230,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "lib/dashboard/realtime-manager.js",
+        "line": 170,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "lib/dashboard/realtime-manager.js",
+        "line": 195,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "lib/dashboard/realtime-manager.js",
+        "line": 221,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "lib/dashboard/sdip/api/sdip-handler.js",
+        "line": 151,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "lib/dashboard/sdip/api/sdip-handler.js",
+        "line": 192,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "lib/dashboard/sdip/api/sdip-handler.js",
+        "line": 253,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "lib/dashboard/sdip/api/sdip-handler.js",
+        "line": 393,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "lib/dashboard/sdip/sdip-server.js",
+        "line": 193,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "lib/testing/playwright-bridge.js",
+        "line": 359,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "await new Promise(resolve => setTimeout(resolve, 1000 * (i +..."
+      },
+      {
+        "file": "lib/testing/prd-ui-validator.js",
+        "line": 54,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "lib/testing/prd-ui-validator.js",
+        "line": 78,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/check-database-constraints.js",
+        "line": 25,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*');..."
+      },
+      {
+        "file": "scripts/check-exec-detailed.js",
+        "line": 22,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/check-exec-detailed.js",
+        "line": 49,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/check-exec-status.js",
+        "line": 23,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/check-exec-status.js",
+        "line": 62,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/check-sdip-tables.js",
+        "line": 42,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/check-sdip-tables.js",
+        "line": 86,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/check-sdip-tables.js",
+        "line": 123,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/check-sdip-tables.js",
+        "line": 134,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/close-foundation-sd.js",
+        "line": 19,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/complete-audit-verification.js",
+        "line": 25,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/complete-audit-verification.js",
+        "line": 99,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/complete-lead-phase.js",
+        "line": 17,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/complete-prd-validation.js",
+        "line": 25,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/conduct-lead-approval-assessment.js",
+        "line": 23,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/conduct-lead-approval-assessment.js",
+        "line": 29,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/create-exec-to-plan-handoff.js",
+        "line": 23,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/create-exec-to-plan-handoff.js",
+        "line": 30,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/create-handoff-tracking-tables.js",
+        "line": 174,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": "const { data, error } = await supabase.from(table).select('*..."
+      },
+      {
+        "file": "scripts/create-leo-tables-via-supabase.js",
+        "line": 36,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/create-tables-via-api.js",
+        "line": 66,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/debug-dashboard-progress.js",
+        "line": 29,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/debug-dashboard-progress.js",
+        "line": 34,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*');..."
+      },
+      {
+        "file": "scripts/debug-progress-calculator.js",
+        "line": 18,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/debug-progress-calculator.js",
+        "line": 24,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/dynamic-checklist-generator.js",
+        "line": 55,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/dynamic-checklist-generator.js",
+        "line": 66,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/fix-audit-metadata.js",
+        "line": 25,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/generate-claude-md-from-db.js",
+        "line": 66,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/generate-claude-md-from-db.js",
+        "line": 77,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/generate-claude-md-from-db.js",
+        "line": 88,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/generate-claude-md-from-db.js",
+        "line": 110,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/generate-claude-md-from-db.js",
+        "line": 119,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/get-latest-leo-protocol-from-db.js",
+        "line": 28,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/github-deployment-subagent.js",
+        "line": 87,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/github-deployment-subagent.js",
+        "line": 124,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/handoff-validator.js",
+        "line": 132,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/initialize-sd-003-dashboard.js",
+        "line": 23,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/intelligent-checklist-system.js",
+        "line": 30,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/intelligent-checklist-system.js",
+        "line": 37,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/lead-approve-sdip.js",
+        "line": 21,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/lead-approve-sdip.js",
+        "line": 28,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/leo-auto-init.js",
+        "line": 128,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/leo-auto-init.js",
+        "line": 148,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/leo-auto-init.js",
+        "line": 154,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/leo-protocol-to-existing-db.js",
+        "line": 129,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/leo-status-line.js",
+        "line": 407,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "const timer = setInterval(async () => {..."
+      },
+      {
+        "file": "scripts/leo-watcher.js",
+        "line": 48,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "this.intervalId = setInterval(() => {..."
+      },
+      {
+        "file": "scripts/plan-verification-sd-2025-001.js",
+        "line": 147,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/plan-verify-sdip.js",
+        "line": 23,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/prd-validation-checklist.js",
+        "line": 51,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/query-sdip-status.js",
+        "line": 27,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/query-sdip-status.js",
+        "line": 56,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/query-sdip-status.js",
+        "line": 87,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/query-sdip-status.js",
+        "line": 115,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/review-sds.js",
+        "line": 15,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/simulate-websocket-client.js",
+        "line": 40,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "setInterval(() => {..."
+      },
+      {
+        "file": "scripts/start-lead-approval.js",
+        "line": 24,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/start-lead-approval.js",
+        "line": 30,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/subagent-enforcement-system.js",
+        "line": 211,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/subagent-enforcement-system.js",
+        "line": 222,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/test-progress-calculation.js",
+        "line": 17,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/test-progress-calculation.js",
+        "line": 23,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/unified-handoff-system.js",
+        "line": 118,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/unified-handoff-system.js",
+        "line": 143,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/unified-handoff-system.js",
+        "line": 153,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/unified-handoff-system.js",
+        "line": 465,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/update-exec-checklist.js",
+        "line": 23,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/update-prd-checklist.js",
+        "line": 23,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/validate-new-prd.js",
+        "line": 12,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/validate-sd-completion.js",
+        "line": 38,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/validate-sd-completion.js",
+        "line": 78,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/verify-handoff-lead-to-plan.js",
+        "line": 57,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/verify-handoff-lead-to-plan.js",
+        "line": 71,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/verify-handoff-lead-to-plan.js",
+        "line": 350,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": "const { error } = await this.supabase.from(table).select('*'..."
+      },
+      {
+        "file": "scripts/verify-handoff-plan-to-exec.js",
+        "line": 109,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "scripts/verify-handoff-plan-to-exec.js",
+        "line": 119,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": "? this.supabase.from('product_requirements_v2').select('*')...."
+      },
+      {
+        "file": "scripts/verify-handoff-plan-to-exec.js",
+        "line": 134,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "src/client/dist/assets/index-B3cTPU9q.js",
+        "line": 25,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "*/(function(e){function t(I,$){var w=I.length;I.push($);e:fo..."
+      },
+      {
+        "file": "src/client/dist/assets/index-B3cTPU9q.js",
+        "line": 38,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "`).replace(sk,\"\")}function no(e,t,n){if(t=Eh(t),Eh(e)!==t&&n..."
+      },
+      {
+        "file": "src/client/dist/assets/index-B3cTPU9q.js",
+        "line": 40,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "`+s.stack}return{value:e,source:t,stack:i,digest:null}}funct..."
+      },
+      {
+        "file": "src/client/dist/assets/index-B3cTPU9q.js",
+        "line": 67,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "*/function oa(){return oa=Object.assign?Object.assign.bind()..."
+      },
+      {
+        "file": "src/client/dist/assets/index-B3cTPU9q.js",
+        "line": 75,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "`),()=>{v.contains(x)&&v.removeChild(x)}},[t]),f.jsx(Q2,{isP..."
+      },
+      {
+        "file": "src/client/dist/assets/index-B3cTPU9q.js",
+        "line": 89,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "`,initial:!1,animate:n?\"collapsed\":\"expanded\",variants:E,chi..."
+      },
+      {
+        "file": "src/client/dist/assets/index-B3cTPU9q.js",
+        "line": 125,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "`,H.stakeholders===\"all\"&&(W+=\"Regular stakeholder updates a..."
+      },
+      {
+        "file": "src/client/dist/assets/index-B3cTPU9q.js",
+        "line": 216,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "Please proceed with the implementation.`},Z=n?e.find(T=>T.id..."
+      },
+      {
+        "file": "src/client/src/components/voice/EVAVoiceAssistant.tsx",
+        "line": 152,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "setTimeout(() => connectWithRetry(attempt + 1), delay);..."
+      },
+      {
+        "file": "src/services/database-loader.js",
+        "line": 56,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "src/services/database-loader.js",
+        "line": 67,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*');..."
+      },
+      {
+        "file": "src/services/database-loader.js",
+        "line": 72,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*');..."
+      },
+      {
+        "file": "src/services/database-loader.js",
+        "line": 187,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "src/services/database-loader.js",
+        "line": 276,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "src/services/database-loader.js",
+        "line": 766,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "src/services/database-loader.js",
+        "line": 877,
+        "type": "FREQUENT_POLLING",
+        "cost": "HIGH",
+        "message": "Frequent polling increases API calls",
+        "fix": "Use realtime subscriptions or increase interval",
+        "code": "return setInterval(async () => {..."
+      },
+      {
+        "file": "src/services/realtime-manager.js",
+        "line": 170,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "src/services/realtime-manager.js",
+        "line": 195,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "src/services/realtime-manager.js",
+        "line": 221,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      },
+      {
+        "file": "tests/e2e/leo-protocol-journey.test.js",
+        "line": 383,
+        "type": "SELECT_ALL",
+        "cost": "HIGH",
+        "message": "Selecting all columns is expensive",
+        "fix": "Select only needed columns",
+        "code": ".select('*')..."
+      }
+    ]
+  },
+  "costs": {
+    "current": "FREE_TIER",
+    "breakdown": {
+      "database": {
+        "usage": "0MB",
+        "limit": "500MB",
+        "percent": 0,
+        "status": "GOOD"
+      },
+      "api": {
+        "estimatedCalls": 18000,
+        "status": "GOOD"
+      }
+    },
+    "totalMonthly": 0
+  },
+  "warnings": [],
+  "critical": [
+    {
+      "type": "EXPENSIVE_OPERATIONS",
+      "message": "1 critical cost operations found",
+      "action": "Refactor immediately to prevent cost overruns"
+    }
+  ],
+  "optimizations": [
+    {
+      "area": "Caching",
+      "priority": "MEDIUM",
+      "file": "applications/APP001/codebase/supabase/functions/ai-exit-decision-engine/index.ts",
+      "recommendation": "Cache paginated results",
+      "impact": "Reduce repeated list queries",
+      "implementation": "\n// Simple in-memory cache\nconst cache = new Map();\nconst CACHE_TTL = 5 * 60 * 1000; // 5 minutes\n\nasync function getCached(key, fetcher) {\n  const cached = cache.get(key);\n  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {\n    return cached.data;\n  }\n  \n  const data = await fetcher();\n  cache.set(key, { data, timestamp: Date.now() });\n  return data;\n}"
+    },
+    {
+      "area": "API Queries",
+      "priority": "MEDIUM",
+      "recommendation": "Replace SELECT * with specific columns",
+      "impact": "Reduce bandwidth by 50-70%",
+      "implementation": "\n// Instead of:\nconst { data } = await supabase.from('users').select('*');\n\n// Use:\nconst { data } = await supabase.from('users').select('id, name, email');"
+    },
+    {
+      "area": "Caching",
+      "priority": "HIGH",
+      "recommendation": "Implement Redis caching layer",
+      "impact": "Reduce API calls by 60-80%",
+      "implementation": "Consider using Upstash Redis (free tier: 10k commands/day)"
+    }
+  ],
+  "projections": {
+    "30_days": {
+      "databaseSize": "0MB",
+      "estimatedCost": "$0"
+    },
+    "90_days": {
+      "databaseSize": "0MB",
+      "estimatedCost": "$0"
+    },
+    "365_days": {
+      "databaseSize": "0MB",
+      "estimatedCost": "$25-$599"
+    }
+  },
+  "score": 0
+}

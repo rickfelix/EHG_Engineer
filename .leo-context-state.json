@@ -1,0 +1,13 @@
+{
+  "currentUsage": {
+    "systemPrompt": 5000,
+    "claudeMdFiles": 0,
+    "currentSd": 0,
+    "currentPrd": 0,
+    "codeContext": 0,
+    "conversation": 0
+  },
+  "lastCheck": "2025-08-31T14:41:40.597Z",
+  "warnings": [],
+  "status": "NORMAL"
+}

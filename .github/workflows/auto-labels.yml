@@ -1,0 +1,219 @@
+name: Auto Label PR State
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_run:
+    workflows: ["LEO Gate Validation", "Story Release Gate Check", "SLSA Verification", "Policy Verification"]
+    types: [completed]
+  issue_comment:
+    types: [created]
+
+jobs:
+  label:
+    name: Apply State Labels
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get PR context
+        id: pr_context
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Determine PR number based on event type
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
+            # Extract PR from workflow run
+            PR_NUMBER=$(gh api "/repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}" \
+              --jq '.pull_requests[0].number // empty' || echo "")
+          elif [ "${{ github.event_name }}" = "issue_comment" ]; then
+            if [ "${{ github.event.issue.pull_request }}" != "" ]; then
+              PR_NUMBER="${{ github.event.issue.number }}"
+            fi
+          fi
+
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No PR number found"
+            echo "has_pr=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "has_pr=true" >> $GITHUB_OUTPUT
+
+          # Get current labels
+          CURRENT_LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' | tr '\n' ',' || echo "")
+          echo "current_labels=$CURRENT_LABELS" >> $GITHUB_OUTPUT
+
+          # Get PR branch
+          PR_BRANCH=$(gh pr view "$PR_NUMBER" --json headRefName --jq '.headRefName')
+          echo "pr_branch=$PR_BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Detect workflow stage
+        if: steps.pr_context.outputs.has_pr == 'true'
+        id: detect_stage
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUMBER="${{ steps.pr_context.outputs.pr_number }}"
+          PR_BRANCH="${{ steps.pr_context.outputs.pr_branch }}"
+          CURRENT_LABELS="${{ steps.pr_context.outputs.current_labels }}"
+
+          # Initialize state
+          NEW_LABEL=""
+          REMOVE_LABELS=""
+
+          # Check if this is a Codex staging branch
+          if [[ "$PR_BRANCH" == staging/codex-* ]]; then
+            echo "Detected Codex staging branch"
+            NEW_LABEL="codex-building"
+            REMOVE_LABELS="claude-enforcing,gates-passing,ready-to-merge"
+
+            # Check for [CODEX-READY] marker in recent commits
+            if gh pr view "$PR_NUMBER" --json commits --jq '.commits[-1].commit.message' | grep -q '\[CODEX-READY\]'; then
+              echo "Found [CODEX-READY] marker"
+              NEW_LABEL="claude-enforcing"
+              REMOVE_LABELS="codex-building,gates-passing,ready-to-merge"
+            fi
+
+          # Check if this is a Claude feature branch
+          elif [[ "$PR_BRANCH" == feature/* ]]; then
+            echo "Detected Claude feature branch"
+
+            # Check for [CLAUDE-APPLIED] marker
+            if gh pr view "$PR_NUMBER" --json commits --jq '.commits[-1].commit.message' | grep -q '\[CLAUDE-APPLIED\]'; then
+              echo "Found [CLAUDE-APPLIED] marker"
+              NEW_LABEL="claude-enforcing"
+              REMOVE_LABELS="codex-building"
+
+              # Check if gates are running or completed
+              if [ "${{ github.event_name }}" = "workflow_run" ]; then
+                WORKFLOW_NAME="${{ github.event.workflow_run.name }}"
+                WORKFLOW_CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+
+                if [[ "$WORKFLOW_NAME" == "LEO Gate Validation" ]] || \
+                   [[ "$WORKFLOW_NAME" == "Story Release Gate Check" ]] || \
+                   [[ "$WORKFLOW_NAME" == "SLSA Verification" ]] || \
+                   [[ "$WORKFLOW_NAME" == "Policy Verification" ]]; then
+
+                  if [ "$WORKFLOW_CONCLUSION" = "success" ]; then
+                    # Check if ALL required workflows have passed
+                    ALL_PASSED=true
+
+                    # Check LEO Gate Validation
+                    LEO_STATUS=$(gh api "/repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" \
+                      --jq '.check_runs[] | select(.name | contains("Run Gate 3")) | .conclusion' || echo "")
+                    if [ "$LEO_STATUS" != "success" ]; then
+                      ALL_PASSED=false
+                    fi
+
+                    # Check Story Gate
+                    STORY_STATUS=$(gh api "/repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" \
+                      --jq '.check_runs[] | select(.name | contains("Check Story Release Gate")) | .conclusion' || echo "")
+                    if [ "$STORY_STATUS" != "success" ] && [ "$STORY_STATUS" != "skipped" ]; then
+                      ALL_PASSED=false
+                    fi
+
+                    # Check SLSA Verification
+                    SLSA_STATUS=$(gh api "/repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" \
+                      --jq '.check_runs[] | select(.name | contains("Verify SLSA Provenance")) | .conclusion' || echo "")
+                    if [ "$SLSA_STATUS" != "success" ] && [ "$SLSA_STATUS" != "skipped" ]; then
+                      ALL_PASSED=false
+                    fi
+
+                    # Check Policy Verification
+                    POLICY_STATUS=$(gh api "/repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" \
+                      --jq '.check_runs[] | select(.name | contains("Validate Policy Bundle")) | .conclusion' || echo "")
+                    if [ "$POLICY_STATUS" != "success" ] && [ "$POLICY_STATUS" != "skipped" ]; then
+                      ALL_PASSED=false
+                    fi
+
+                    if [ "$ALL_PASSED" = "true" ]; then
+                      echo "All required checks passed"
+                      NEW_LABEL="ready-to-merge"
+                      REMOVE_LABELS="codex-building,claude-enforcing,gates-passing"
+                    else
+                      echo "Some checks still pending or failed"
+                      NEW_LABEL="gates-passing"
+                      REMOVE_LABELS="codex-building,ready-to-merge"
+                    fi
+                  elif [ "$WORKFLOW_CONCLUSION" = "failure" ]; then
+                    echo "Workflow failed, staying in claude-enforcing"
+                    NEW_LABEL="claude-enforcing"
+                    REMOVE_LABELS="gates-passing,ready-to-merge"
+                  fi
+                fi
+              fi
+            else
+              # Feature branch without [CLAUDE-APPLIED] marker
+              NEW_LABEL="claude-enforcing"
+              REMOVE_LABELS="codex-building,gates-passing,ready-to-merge"
+            fi
+          fi
+
+          echo "new_label=$NEW_LABEL" >> $GITHUB_OUTPUT
+          echo "remove_labels=$REMOVE_LABELS" >> $GITHUB_OUTPUT
+
+      - name: Apply labels
+        if: steps.pr_context.outputs.has_pr == 'true' && steps.detect_stage.outputs.new_label != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUMBER="${{ steps.pr_context.outputs.pr_number }}"
+          NEW_LABEL="${{ steps.detect_stage.outputs.new_label }}"
+          REMOVE_LABELS="${{ steps.detect_stage.outputs.remove_labels }}"
+
+          echo "📏 Updating labels for PR #$PR_NUMBER"
+          echo "→ Adding: $NEW_LABEL"
+          echo "→ Removing: $REMOVE_LABELS"
+
+          # Remove old labels
+          if [ -n "$REMOVE_LABELS" ]; then
+            IFS=',' read -ra LABELS <<< "$REMOVE_LABELS"
+            for label in "${LABELS[@]}"; do
+              gh pr edit "$PR_NUMBER" --remove-label "$label" 2>/dev/null || true
+            done
+          fi
+
+          # Add new label
+          gh pr edit "$PR_NUMBER" --add-label "$NEW_LABEL"
+
+          echo "✅ Labels updated successfully"
+
+      - name: Add comment for state transitions
+        if: steps.pr_context.outputs.has_pr == 'true' && steps.detect_stage.outputs.new_label != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUMBER="${{ steps.pr_context.outputs.pr_number }}"
+          NEW_LABEL="${{ steps.detect_stage.outputs.new_label }}"
+
+          # Create appropriate comment based on new state
+          case "$NEW_LABEL" in
+            "codex-building")
+              COMMENT="🔨 **Codex Building**: Generating implementation diffs and tests..."
+              ;;
+            "claude-enforcing")
+              COMMENT="🔍 **Claude Enforcing**: Applying changes and running verification gates..."
+              ;;
+            "gates-passing")
+              COMMENT="⏳ **Gates Running**: Security and compliance checks in progress..."
+              ;;
+            "ready-to-merge")
+              COMMENT="✅ **Ready to Merge**: All gates passed! PLAN Supervisor confidence ≥85%"
+              ;;
+            *)
+              COMMENT=""
+              ;;
+          esac
+
+          if [ -n "$COMMENT" ]; then
+            gh pr comment "$PR_NUMBER" --body "$COMMENT"
+          fi

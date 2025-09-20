@@ -1,0 +1,84 @@
+{
+  "stage_id": 25,
+  "stage_title": "Quality Assurance",
+  "objective": "Optimize Stage 25 (Quality Assurance) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 25,
+      "title": "Quality Assurance",
+      "description": "Comprehensive quality assurance and testing processes.",
+      "owner": "EXEC",
+      "depends_on": [
+        24
+      ],
+      "inputs": [
+        "Test plans",
+        "Quality criteria",
+        "Test data"
+      ],
+      "outputs": [
+        "Test results",
+        "Bug reports",
+        "Quality certification"
+      ],
+      "metrics": [
+        "Test coverage",
+        "Defect density",
+        "Quality score"
+      ],
+      "gates": {
+        "entry": [
+          "Test plans approved",
+          "Environment ready"
+        ],
+        "exit": [
+          "Tests passed",
+          "Quality certified",
+          "Release approved"
+        ]
+      },
+      "substages": [
+        {
+          "id": "25.1",
+          "title": "Test Execution",
+          "done_when": [
+            "Unit tests passed",
+            "Integration tests complete",
+            "E2E tests successful"
+          ]
+        },
+        {
+          "id": "25.2",
+          "title": "Bug Management",
+          "done_when": [
+            "Bugs logged",
+            "Fixes verified",
+            "Regression tested"
+          ]
+        },
+        {
+          "id": "25.3",
+          "title": "Quality Certification",
+          "done_when": [
+            "Criteria met",
+            "Documentation complete",
+            "Sign-off received"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/25-*.md",
+    "critique_path": "/docs/workflow/critique/stage-25.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_25_findings.md",
+    "/docs/research/outputs/stage_25_recommendations.md"
+  ]
+}

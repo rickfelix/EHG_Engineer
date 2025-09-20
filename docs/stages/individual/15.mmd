@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 15 Detail
+subgraph S15["15. Pricing Strategy & Revenue Architecture"]
+  S15_root["Purpose: Develop comprehensive pricing strategy and revenue model.
+Owner: LEAD"]
+  S15_A["15.1 Pricing Research"]
+  S15_B["15.2 Model Development"]
+  S15_C["15.3 Revenue Projection"]
+  S15_root --> S15_A --> S15_B --> S15_C
+end
+classDef dep stroke-dasharray: 5 5;
+D15["Depends on: 14"]:::dep -.-> S15_root

@@ -1,0 +1,275 @@
+name: LEO Protocol Drift Check
+
+on:
+  push:
+    branches: [main, develop, 'feat/*']
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run daily at 2 AM UTC to catch any drift
+    - cron: '0 2 * * *'
+
+jobs:
+  drift-check:
+    name: Check for Filesystem Drift
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Full history for better analysis
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          # Install TypeScript and required packages for drift checker
+          npm install -D typescript @types/node globby @supabase/supabase-js
+
+      - name: Compile drift checker
+        run: |
+          npx tsc tools/gates/drift-check.ts --outDir dist/tools/gates --module commonjs --esModuleInterop
+
+      - name: Run drift detection
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          node dist/tools/gates/drift-check.js
+        continue-on-error: false  # Fail the workflow on critical drift
+
+      - name: Upload drift report
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: drift-report
+          path: |
+            compliance-alerts.json
+            drift-summary.txt
+
+  boundary-check:
+    name: Check Module Boundaries
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm install -D eslint eslint-plugin-boundaries
+
+      - name: Run ESLint boundary checks
+        run: |
+          npx eslint . --ext .js,.jsx,.ts,.tsx --config .eslintrc.json --max-warnings 0
+        continue-on-error: false  # Fail on boundary violations
+
+      - name: Report boundary violations
+        if: failure()
+        run: |
+          echo "❌ Module boundary violations detected!"
+          echo "LEO Engineering and EHG App modules must remain separate."
+          echo "Check the ESLint output above for specific violations."
+
+  pre-commit-setup:
+    name: Setup Pre-commit Hooks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Create pre-commit config
+        run: |
+          cat > .pre-commit-config.yaml << 'EOF'
+          repos:
+            - repo: local
+              hooks:
+                - id: drift-check
+                  name: LEO Drift Check
+                  entry: node dist/tools/gates/drift-check.js
+                  language: system
+                  pass_filenames: false
+                  always_run: true
+                  
+                - id: boundary-check
+                  name: Module Boundary Check
+                  entry: npx eslint
+                  language: system
+                  types: [javascript, typescript]
+                  args: ['--max-warnings', '0']
+          EOF
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const comment = `
+            ### 🔍 LEO Protocol Compliance Check
+            
+            This PR is being checked for:
+            - **Filesystem Drift**: PRDs, handoffs, and gate reviews must be in database only
+            - **Module Boundaries**: LEO Engineering and EHG App must remain separate
+            - **Artifact Compliance**: All LEO artifacts must follow database-first architecture
+            
+            Status: ⏳ Running checks...
+            `;
+            
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+
+  gate-weight-check:
+    name: Validate Gate Weight Integrity
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Check gate validation weights
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          echo "🔢 Validating gate weight integrity..."
+
+          # Run the check_gate_weights() function
+          psql "$DATABASE_URL" -t -c "SELECT check_gate_weights();" || {
+            echo "❌ Gate weight validation failed!"
+            echo "Each gate's rules must sum to exactly 1.000"
+            exit 1
+          }
+
+          echo "✅ All gate weights valid (sum to 1.000)"
+
+      - name: Display weight summary
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          psql "$DATABASE_URL" -c "SELECT * FROM v_gate_rule_integrity;"
+
+  rls-permission-check:
+    name: Verify RLS Permissions
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Test RLS is restrictive
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          echo "🔐 Testing RLS permissions..."
+
+          # Test that anonymous users cannot write
+          psql "$DATABASE_URL" << 'EOF'
+          -- Set role to anonymous
+          SET ROLE anon;
+
+          -- This should fail with insufficient privilege
+          DO $$
+          BEGIN
+            INSERT INTO leo_gate_reviews (prd_id, gate, score, evidence)
+            VALUES ('test-prd', '2A', 50, '{}');
+            RAISE EXCEPTION 'ERROR: Anonymous insert was allowed!';
+          EXCEPTION
+            WHEN insufficient_privilege THEN
+              RAISE NOTICE '✅ Anonymous insert correctly blocked';
+          END $$;
+
+          -- Reset role
+          RESET ROLE;
+          EOF
+
+          echo "✅ RLS permissions are properly restrictive"
+
+  summary:
+    name: Compliance Summary
+    needs: [drift-check, boundary-check, gate-weight-check, rls-permission-check]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Check results
+        run: |
+          if [ "${{ needs.drift-check.result }}" == "failure" ] || \
+             [ "${{ needs.boundary-check.result }}" == "failure" ] || \
+             [ "${{ needs.gate-weight-check.result }}" == "failure" ] || \
+             [ "${{ needs.rls-permission-check.result }}" == "failure" ]; then
+            echo "❌ LEO Protocol compliance check failed!"
+            echo ""
+            echo "Failed checks:"
+            [ "${{ needs.drift-check.result }}" == "failure" ] && echo "  - Filesystem drift detected"
+            [ "${{ needs.boundary-check.result }}" == "failure" ] && echo "  - Module boundary violations"
+            [ "${{ needs.gate-weight-check.result }}" == "failure" ] && echo "  - Gate weights invalid"
+            [ "${{ needs.rls-permission-check.result }}" == "failure" ] && echo "  - RLS permissions too permissive"
+            echo ""
+            echo "Common fixes:"
+            echo "1. Move PRDs to database: node scripts/add-prd-to-database.js"
+            echo "2. Remove filesystem PRDs: rm prds/*.md"
+            echo "3. Fix boundary violations: Check ESLint output"
+            echo "4. Store handoffs in database: Use leo_handoff_tracking table"
+            echo "5. Fix gate weights: Ensure each gate's rules sum to 1.000"
+            exit 1
+          else
+            echo "✅ LEO Protocol compliance check passed!"
+            echo "System is compliant with LEO v4.1.2 requirements."
+            echo ""
+            echo "✓ No filesystem drift"
+            echo "✓ Module boundaries respected"
+            echo "✓ Gate weights valid"
+            echo "✓ RLS permissions secure"
+          fi
+
+      - name: Update PR status
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const driftPassed = '${{ needs.drift-check.result }}' !== 'failure';
+            const boundaryPassed = '${{ needs.boundary-check.result }}' !== 'failure';
+            
+            const status = driftPassed && boundaryPassed ? '✅ Passed' : '❌ Failed';
+            const comment = `
+            ### 🔍 LEO Protocol Compliance Check - ${status}
+            
+            | Check | Result |
+            |-------|--------|
+            | Filesystem Drift | ${driftPassed ? '✅ Passed' : '❌ Failed'} |
+            | Module Boundaries | ${boundaryPassed ? '✅ Passed' : '❌ Failed'} |
+            
+            ${!driftPassed || !boundaryPassed ? `
+            #### Required Actions:
+            ${!driftPassed ? '- Fix filesystem drift (see drift-check output)\n' : ''}
+            ${!boundaryPassed ? '- Fix module boundary violations (see ESLint output)' : ''}
+            ` : 'All compliance checks passed! Ready for review.'}
+            `;
+            
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });

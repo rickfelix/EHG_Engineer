@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 35 Detail
+subgraph S35["35. GTM Timing Intelligence"]
+  S35_root["Purpose: Optimize go-to-market timing using market intelligence.
+Owner: LEAD"]
+  S35_A["35.1 Market Signal Analysis"]
+  S35_B["35.2 Timing Optimization"]
+  S35_C["35.3 Strategy Adjustment"]
+  S35_root --> S35_A --> S35_B --> S35_C
+end
+classDef dep stroke-dasharray: 5 5;
+D35["Depends on: 34"]:::dep -.-> S35_root

@@ -1,0 +1,48 @@
+{
+  "timestamp": "2025-09-03T16:05:02.953Z",
+  "testPath": "/mnt/c/_EHG/EHG_Engineer",
+  "results": [
+    {
+      "agent": "API",
+      "status": "success",
+      "score": 90,
+      "findings": 1,
+      "duration": 1665
+    },
+    {
+      "agent": "Documentation",
+      "status": "success",
+      "score": 18,
+      "findings": 43,
+      "duration": 4204
+    },
+    {
+      "agent": "Testing",
+      "status": "success",
+      "score": 23,
+      "findings": 13,
+      "duration": 5044
+    },
+    {
+      "agent": "Security",
+      "status": "success",
+      "score": 0,
+      "findings": 73,
+      "duration": 6953
+    },
+    {
+      "agent": "Performance",
+      "status": "success",
+      "score": 75,
+      "findings": 5,
+      "duration": 7516
+    }
+  ],
+  "summary": {
+    "totalAgents": 5,
+    "successful": 5,
+    "failed": 0,
+    "averageScore": 41.2,
+    "totalDuration": 25382
+  }
+}

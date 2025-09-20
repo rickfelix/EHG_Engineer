@@ -1,0 +1,61 @@
+{
+  "mediaType": "application/vnd.dev.sigstore.bundle+json;version=0.2",
+  "verificationMaterial": {
+    "certificate": {
+      "rawBytes": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUR6VENDQXJXZ0F3SUJBZ0lVQUxaTmFQRmR1SEdDdTVLOHV5cUorUFo0YTNNd0RRWUpLb1pJaHZjTkFRRUwKQlFBd0ZqRVVNQklHQTFVRUF3d0xjMmxuYzNSdmNtVXRZMkV3SGhjTk1qVXdNVEU1TWpBd01EQXdXaGNOTWpVdwpNVEU1TWpBeE1EQXdXakFBTUZrd0V3WUhLb1pJemowQ0FRWUlLb1pJemowREFRY0RRZ0FFN01ReE5yL1N6Zm0vCnhiOUlyN2VDbVJscFhac2tCN1lpQU5YMEowQlBxcElaOGlzc1RLZ3Q5bHZrU0ZWRTdJRFRqNm9uMGxwTXJPMnoKdTRaRE1CSUhQYU9DQVhJd2dnRnVNQTRHQTFVZER3RUIvd1FFQXdJSGdEQVRCZ05WSFNVRUREQUtCZ2dyQmdFRgpCUWNEQXpBZEJnTlZIUTRFRmdRVW5QbnpuRDVCd1JHQlN6WDJzcnZCRi9aRmxqa3dId1lEVlIwakJCZ3dGb0FVCjM5UHBaMUlzS0k2VXFkZUtObDJMZXF2OENac3dJUVlEVlIwUkFRSC9CQmN3RllFVGNtbGphMlpsYkdsNFFHZHQKWVdsc0xtTnZiVEF1QmdvcnJnRUVBWU8vTUFFR0JDQXdJQVllYUhSMGNITTZMeTluYVhSb2RXSXVZMjl0TDJ4dgpaMmx1TDI5aGRYUm9NRGdHQ2lzR0FRUUJnNzh3QVFFRUtubG9kSFJ3Y3pvdkwyZHBkR2gxWWk1amIyMHZjbWxqCmEyWmxiR2w0TDBRM0xrVklSMTlGYm1kcGJtVmxjakE3QmdvcnJnRUVBWU8vTUFGSUJDMHdLd3dwWmpVMk1qQTAKT0dJMU1XTXhNekppTnpZMU5UUXlaakkwTjJRMFpqSTBOVGcyTmpKaVpUVTBOMlUyWkRBcEJnb3JyZ0VFQVlPLwpNQUZNQkJzd0dRWVRhSFIwY0hNNkx5OW5hWFJvZFdJdVkyOXRMeUJBY0hWemFEQXlCZ29ycmdFRUFZTy9NQUZVKEJDUV1JaVpBV0ZKRGFWWk15R0pJUUxzQUI5THhITFZhY1M0N2pJT0lJT01SSWhwZz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0="
+    },
+    "tlogEntries": [
+      {
+        "logIndex": "123456789",
+        "logId": {
+          "keyId": "wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0="
+        },
+        "kindVersion": {
+          "kind": "hashedrekord",
+          "version": "0.0.1"
+        },
+        "integratedTime": "1737314400",
+        "inclusionPromise": {
+          "signedEntryTimestamp": "MEUCIQDVyPALPokTHC0Z+yS0p4B2N9WRLW0KiPDNHXPqVq4D8gIgX8Y0x5yV6F8pPV2m3kZvJpL2nXg5dVH0KqB7HQz5x+U="
+        },
+        "inclusionProof": {
+          "logIndex": "123456789",
+          "rootHash": "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+          "treeSize": "987654321",
+          "hashes": [
+            "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+            "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          ],
+          "checkpoint": {
+            "envelope": "rekor.sigstore.dev - 1234567890\n987654321\nabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890\n"
+          }
+        },
+        "canonicalizedBody": {
+          "apiVersion": "0.0.1",
+          "kind": "hashedrekord",
+          "spec": {
+            "data": {
+              "hash": {
+                "algorithm": "sha256",
+                "value": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+              }
+            },
+            "signature": {
+              "content": "MEUCIQCxV3KhKlpmrjbou2c6VQhYHr8VvLwVvj8nPnE5qF5AJwIgX8mFD2Gr3zKkXjdB8hZ5xHwT+5fQxKZaHh4GV5aQZnU=",
+              "publicKey": {
+                "content": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUZrd0V3WUhLb1pJemowQ0FRWUlLb1pJemowREFRY0RRZ0FFN01ReE5yL1N6Zm0veGI5SXI3ZUNtUmxwWFpzawpCN1lpQU5YMEowQlBxcElaOGlzc1RLZ3Q5bHZrU0ZWRTdJRFRqNm9uMGxwTXJPMnp1NFpETUJJSFBRPT0KLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0t"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "messageSignature": {
+    "messageDigest": {
+      "algorithm": "SHA256",
+      "value": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "signature": "MEUCIQCxV3KhKlpmrjbou2c6VQhYHr8VvLwVvj8nPnE5qF5AJwIgX8mFD2Gr3zKkXjdB8hZ5xHwT+5fQxKZaHh4GV5aQZnU="
+  }
+}

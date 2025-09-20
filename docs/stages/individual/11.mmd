@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 11 Detail
+subgraph S11["11. Strategic Naming & Brand Foundation"]
+  S11_root["Purpose: Develop strategic brand identity and naming conventions.
+Owner: LEAD"]
+  S11_A["11.1 Name Generation"]
+  S11_B["11.2 Trademark Search"]
+  S11_C["11.3 Brand Foundation"]
+  S11_root --> S11_A --> S11_B --> S11_C
+end
+classDef dep stroke-dasharray: 5 5;
+D11["Depends on: 10"]:::dep -.-> S11_root

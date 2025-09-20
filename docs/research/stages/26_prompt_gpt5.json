@@ -1,0 +1,84 @@
+{
+  "stage_id": 26,
+  "stage_title": "Security & Compliance Certification",
+  "objective": "Optimize Stage 26 (Security & Compliance Certification) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 26,
+      "title": "Security & Compliance Certification",
+      "description": "Security validation and compliance certification processes.",
+      "owner": "EXEC",
+      "depends_on": [
+        25
+      ],
+      "inputs": [
+        "Security requirements",
+        "Compliance standards",
+        "Audit criteria"
+      ],
+      "outputs": [
+        "Security report",
+        "Compliance certificates",
+        "Audit trail"
+      ],
+      "metrics": [
+        "Security score",
+        "Compliance rate",
+        "Vulnerability count"
+      ],
+      "gates": {
+        "entry": [
+          "Security requirements defined",
+          "Standards identified"
+        ],
+        "exit": [
+          "Security verified",
+          "Compliance achieved",
+          "Certificates issued"
+        ]
+      },
+      "substages": [
+        {
+          "id": "26.1",
+          "title": "Security Testing",
+          "done_when": [
+            "Penetration testing complete",
+            "Vulnerabilities patched",
+            "OWASP compliance verified"
+          ]
+        },
+        {
+          "id": "26.2",
+          "title": "Compliance Validation",
+          "done_when": [
+            "Standards reviewed",
+            "Evidence collected",
+            "Audits passed"
+          ]
+        },
+        {
+          "id": "26.3",
+          "title": "Certification Process",
+          "done_when": [
+            "Documentation prepared",
+            "Certificates obtained",
+            "Records archived"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/26-*.md",
+    "critique_path": "/docs/workflow/critique/stage-26.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_26_findings.md",
+    "/docs/research/outputs/stage_26_recommendations.md"
+  ]
+}

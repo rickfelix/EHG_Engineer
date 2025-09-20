@@ -18,6 +18,11 @@
   - No network or external writes.
   - Do not modify CI/CD secrets or workflow protections.
 
+### Dual-Lane SOP Reference
+- Codex MUST follow `docs/dual-lane-SOP.md` alongside `CLAUDE.md`; these are the authoritative sources for dual-lane execution.
+- Builder lane work **stops** at `[CODEX-READY]` handoffs; enforcement, PR creation, and any database interactions remain Claude/EXEC-only responsibilities.
+- PLAN Supervisor retains sole authority to issue the ≥85% PASS verdict required for merge; Codex cannot bypass, duplicate, or interpret that gate.
+
 ## Required Pre-Work Before Any Edit
 1. **Load rules**: read `CLAUDE.md` (+ `CLAUDE-LEO.md` if present).
 2. **Identify target**: PRD requirement or issue link; list files to touch.

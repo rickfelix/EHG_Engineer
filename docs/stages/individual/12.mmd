@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 12 Detail
+subgraph S12["12. Adaptive Naming Module"]
+  S12_root["Purpose: Optimize naming for different markets and contexts.
+Owner: PLAN"]
+  S12_A["12.1 Market Analysis"]
+  S12_B["12.2 Name Adaptation"]
+  S12_C["12.3 Testing & Validation"]
+  S12_root --> S12_A --> S12_B --> S12_C
+end
+classDef dep stroke-dasharray: 5 5;
+D12["Depends on: 11"]:::dep -.-> S12_root

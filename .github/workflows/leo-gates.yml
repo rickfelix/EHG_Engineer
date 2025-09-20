@@ -1,0 +1,245 @@
+name: LEO Gate Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      prd_id:
+        description: 'PRD ID to validate'
+        required: true
+        type: string
+  pull_request:
+    paths:
+      - 'tools/gates/**'
+      - 'database/**'
+      - 'lib/**'
+      - 'src/**'
+      - 'docs/**'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'tools/gates/**'
+      - 'database/**'
+
+jobs:
+  detect-prds:
+    name: Detect PRDs to Validate
+    runs-on: ubuntu-latest
+    outputs:
+      prds: ${{ steps.detect.outputs.prds }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect affected PRDs
+        id: detect
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          MANUAL_PRD: ${{ github.event.inputs.prd_id }}
+        run: |
+          if [ -n "$MANUAL_PRD" ]; then
+            # Manual workflow dispatch
+            echo "prds=[\"$MANUAL_PRD\"]" >> $GITHUB_OUTPUT
+          else
+            # Auto-detect from PR labels or recent changes
+            # For now, validate a test PRD if it exists
+            # In production, this would query the database for active PRDs
+            echo 'prds=["PRD-SD-001"]' >> $GITHUB_OUTPUT
+          fi
+
+  run-gates:
+    name: Run Gate ${{ matrix.gate }} for ${{ matrix.prd }}
+    needs: detect-prds
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        prd: ${{ fromJson(needs.detect-prds.outputs.prds) }}
+        gate: ['2A', '2B', '2C', '2D', '3']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm install -D typescript tsx @types/node @supabase/supabase-js
+
+      - name: Run Gate ${{ matrix.gate }}
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PRD_ID: ${{ matrix.prd }}
+        run: |
+          echo "🔍 Validating Gate ${{ matrix.gate }} for PRD ${{ matrix.prd }}"
+          echo "═".repeat(50)
+          
+          case "${{ matrix.gate }}" in
+            2A) npx tsx tools/gates/gate2a.ts ;;
+            2B) npx tsx tools/gates/gate2b.ts ;;
+            2C) npx tsx tools/gates/gate2c.ts ;;
+            2D) npx tsx tools/gates/gate2d.ts ;;
+            3)  npx tsx tools/gates/gate3.ts ;;
+          esac
+
+      - name: Upload gate results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: gate-results-${{ matrix.prd }}-${{ matrix.gate }}
+          path: |
+            gate-results.json
+            gate-evidence.json
+
+  gate-summary:
+    name: Gate Validation Summary
+    needs: run-gates
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install @supabase/supabase-js
+
+      - name: Generate summary report
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cat > generate-summary.js << 'EOF'
+          const { createClient } = require('@supabase/supabase-js');
+          
+          const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY
+          );
+          
+          async function generateSummary() {
+            // Get recent gate reviews
+            const { data: reviews } = await supabase
+              .from('leo_gate_reviews')
+              .select('prd_id, gate, score, created_at')
+              .order('created_at', { ascending: false })
+              .limit(15);
+            
+            if (!reviews || reviews.length === 0) {
+              console.log('No gate reviews found');
+              return;
+            }
+            
+            // Group by PRD
+            const prdResults = {};
+            for (const review of reviews) {
+              if (!prdResults[review.prd_id]) {
+                prdResults[review.prd_id] = {};
+              }
+              // Keep only the latest review for each gate
+              if (!prdResults[review.prd_id][review.gate]) {
+                prdResults[review.prd_id][review.gate] = review;
+              }
+            }
+            
+            console.log('\n📊 LEO Gate Validation Summary');
+            console.log('='.repeat(60));
+            
+            for (const [prd, gates] of Object.entries(prdResults)) {
+              console.log(`\nPRD: ${prd}`);
+              console.log('-'.repeat(40));
+              
+              const gateOrder = ['2A', '2B', '2C', '2D', '3'];
+              let allPass = true;
+              
+              for (const gate of gateOrder) {
+                if (gates[gate]) {
+                  const passed = gates[gate].score >= 85;
+                  const icon = passed ? '✅' : '❌';
+                  console.log(`  Gate ${gate}: ${gates[gate].score}% ${icon}`);
+                  if (!passed) allPass = false;
+                } else {
+                  console.log(`  Gate ${gate}: Not executed ⏳`);
+                  allPass = false;
+                }
+              }
+              
+              if (allPass) {
+                console.log('\n  🎆 PRD READY FOR IMPLEMENTATION!');
+              } else {
+                console.log('\n  ⚠️  PRD not ready - gates must pass ≥85%');
+              }
+            }
+            
+            console.log('\n' + '='.repeat(60));
+          }
+          
+          generateSummary().catch(console.error);
+          EOF
+          
+          node generate-summary.js
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const comment = `
+            ### 📊 LEO Gate Validation Results
+            
+            Gates have been validated for the affected PRDs.
+            
+            | Gate | Description | Pass Threshold |
+            |------|-------------|----------------|
+            | 2A | Architecture/Interfaces | ≥85% |
+            | 2B | Design & DB | ≥85% |
+            | 2C | Security & Risk | ≥85% |
+            | 2D | NFR & Testing | ≥85% |
+            | 3 | Final Verification | ≥85% |
+            
+            View the workflow run for detailed results.
+            `;
+            
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+
+  enforce-gates:
+    name: Enforce Gate Requirements
+    needs: run-gates
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Check gate results
+        run: |
+          # This job enforces that all gates passed
+          # It will fail if any gate scored <85%
+          
+          if [ "${{ needs.run-gates.result }}" != "success" ]; then
+            echo "❌ One or more gates failed to meet the 85% threshold"
+            echo "PRDs cannot proceed to implementation until all gates pass"
+            exit 1
+          else
+            echo "✅ All gates passed successfully"
+            echo "PRDs are ready for implementation"
+          fi

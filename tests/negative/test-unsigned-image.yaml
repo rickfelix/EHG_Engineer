@@ -1,0 +1,51 @@
+# Negative Test: Unsigned Image
+# This deployment should FAIL validation as it uses an unsigned image
+# Expected: Blocked by require-signed-images policy
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-unsigned-image
+  namespace: test-negative
+  labels:
+    test: unsigned-image
+    expected: fail
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unsigned-test
+  template:
+    metadata:
+      labels:
+        app: unsigned-test
+    spec:
+      containers:
+      - name: nginx
+        # Using a public image without signature
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+---
+# Test verification script
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-unsigned-verification
+  namespace: test-negative
+data:
+  verify.sh: |
+    #!/bin/bash
+    echo "Testing: Unsigned image should be blocked"
+
+    # Attempt to create the deployment
+    kubectl apply -f test-unsigned-image.yaml 2>&1 | tee /tmp/result.log
+
+    # Check if it was blocked
+    if grep -q "denied" /tmp/result.log || grep -q "failed" /tmp/result.log; then
+      echo "✅ PASS: Unsigned image was correctly blocked"
+      exit 0
+    else
+      echo "❌ FAIL: Unsigned image was not blocked!"
+      exit 1
+    fi

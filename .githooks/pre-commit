@@ -1,0 +1,90 @@
+#!/bin/bash
+
+# LEO Protocol Pre-commit Hook
+# Ensures compliance with LEO v4.1.2 requirements before commit
+# Also checks for duplicate service files
+
+echo "🔍 Running LEO Protocol compliance checks..."
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# LEO PROTOCOL DRIFT CHECKS
+echo -n "Checking for filesystem drift... "
+
+# Check for PRD files
+if ls prds/*.md 2>/dev/null | grep -q .; then
+    echo -e "${RED}❌${NC}"
+    echo -e "${RED}ERROR: PRD markdown files detected!${NC}"
+    echo "PRDs must be stored in database only (LEO v4.1.2)"
+    echo "Fix: node scripts/add-prd-to-database.js && rm prds/*.md"
+    exit 1
+fi
+
+# Check for handoff files
+if ls handoffs/*.md docs/**/handoff-*.md 2>/dev/null | grep -q .; then
+    echo -e "${RED}❌${NC}"
+    echo -e "${RED}ERROR: Handoff files detected!${NC}"
+    echo "Handoffs must be stored in database only"
+    echo "Fix: Migrate to leo_handoff_tracking table"
+    exit 1
+fi
+
+echo -e "${GREEN}✅${NC}"
+
+# EXISTING DUPLICATE CHECK
+echo "🔍 Checking for duplicate service files..."
+
+# Get list of files in src/services
+SRC_SERVICES_DIR="src/services"
+LIB_DASHBOARD_DIR="lib/dashboard-legacy"
+
+# Check if directories exist
+if [ ! -d "$SRC_SERVICES_DIR" ] || [ ! -d "$LIB_DASHBOARD_DIR" ]; then
+  # Directories don't exist, no duplicates possible
+  exit 0
+fi
+
+# Find duplicates
+DUPLICATES=""
+for file in "$LIB_DASHBOARD_DIR"/*.js; do
+  if [ -f "$file" ]; then
+    basename_file=$(basename "$file")
+    # Skip deprecated files
+    if [[ "$basename_file" == *.deprecated ]]; then
+      continue
+    fi
+    
+    if [ -f "$SRC_SERVICES_DIR/$basename_file" ]; then
+      DUPLICATES="$DUPLICATES\n  - $basename_file"
+    fi
+  fi
+done
+
+# If duplicates found, prevent commit
+if [ -n "$DUPLICATES" ]; then
+  echo "❌ Commit blocked: Duplicate service files detected!"
+  echo -e "\nThe following files exist in both $SRC_SERVICES_DIR/ and $LIB_DASHBOARD_DIR/:$DUPLICATES"
+  echo -e "\n📝 Please follow the architectural guidelines:"
+  echo "   - Production services should be in: $SRC_SERVICES_DIR/"
+  echo "   - Remove duplicates from: $LIB_DASHBOARD_DIR/"
+  echo "   - See: docs/ARCHITECTURAL_GUIDELINES.md"
+  exit 1
+fi
+
+echo "✅ No duplicate service files detected"
+
+# Additional check: Warn about imports from lib/dashboard
+DEPRECATED_IMPORTS=$(git diff --cached --name-only -z | xargs -0 grep -l "from.*lib/dashboard\|require.*lib/dashboard" 2>/dev/null | grep -v ".deprecated" | grep -v "test")
+
+if [ -n "$DEPRECATED_IMPORTS" ]; then
+  echo "⚠️  Warning: Found imports from deprecated lib/dashboard directory:"
+  echo "$DEPRECATED_IMPORTS"
+  echo "   Consider updating imports to use src/services/ instead"
+  # This is a warning, not blocking the commit
+fi
+
+exit 0

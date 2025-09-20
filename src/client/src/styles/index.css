@@ -1,0 +1,407 @@
+/* Import Design Tokens for Enhanced UI Components */
+@import '../components/ui/design-tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 217 91% 60%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 217 91% 60%;
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100 dark:bg-gray-800;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-400 dark:bg-gray-600 rounded;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-500 dark:bg-gray-500;
+}
+
+/* Animations */
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Dashboard specific styles */
+.dashboard-container {
+  min-height: 100vh;
+  @apply bg-gray-50 dark:bg-gray-900;
+}
+
+.dashboard-card {
+  @apply bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6;
+}
+
+.dashboard-header {
+  @apply text-3xl font-bold text-gray-900 dark:text-white mb-6;
+}
+
+/* Progress bars */
+.progress-bar {
+  @apply w-full bg-gray-200 rounded-full h-2;
+}
+
+.progress-bar-fill {
+  @apply h-2 rounded-full transition-all duration-300 ease-in-out;
+}
+
+/* Status indicators */
+.status-indicator {
+  @apply w-2 h-2 rounded-full;
+}
+
+.status-indicator.online {
+  @apply bg-green-500 animate-pulse;
+}
+
+.status-indicator.offline {
+  @apply bg-red-500;
+}
+
+.status-indicator.warning {
+  @apply bg-yellow-500 animate-pulse;
+}
+
+/* Interactive elements */
+.interactive-checkbox {
+  @apply w-5 h-5 text-primary-600 rounded focus:ring-primary-500 focus:ring-2 transition-all;
+}
+
+.interactive-button {
+  @apply px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500;
+}
+
+/* Markdown content */
+.prose {
+  @apply text-gray-900 dark:text-gray-100;
+}
+
+.prose h1 {
+  @apply text-3xl font-bold mb-4;
+}
+
+.prose h2 {
+  @apply text-2xl font-semibold mb-3;
+}
+
+.prose h3 {
+  @apply text-xl font-semibold mb-2;
+}
+
+.prose p {
+  @apply mb-4 leading-relaxed;
+}
+
+.prose ul {
+  @apply list-disc list-inside mb-4;
+}
+
+.prose ol {
+  @apply list-decimal list-inside mb-4;
+}
+
+.prose code {
+  @apply bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded text-sm;
+}
+
+.prose pre {
+  @apply bg-gray-100 dark:bg-gray-800 p-4 rounded-lg overflow-x-auto mb-4;
+}
+
+.prose pre code {
+  @apply bg-transparent p-0;
+}
+
+/* Sidebar navigation */
+.sidebar-nav {
+  @apply bg-white dark:bg-gray-800 shadow-lg;
+}
+
+.sidebar-nav-item {
+  @apply flex items-center p-2 rounded-lg transition-colors;
+}
+
+.sidebar-nav-item:hover {
+  @apply bg-gray-100 dark:bg-gray-700;
+}
+
+.sidebar-nav-item.active {
+  @apply bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200;
+}
+
+/* Navigation animations */
+.active-nav-item {
+  position: relative;
+}
+
+.active-nav-item::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 70%;
+  background: linear-gradient(180deg, 
+    transparent 0%, 
+    rgb(59 130 246) 50%, 
+    transparent 100%);
+  border-radius: 2px;
+  animation: slide-indicator 0.3s ease-out;
+}
+
+@keyframes slide-indicator {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
+/* Glow effect for active navigation items */
+@keyframes glow-pulse {
+  0%, 100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.nav-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 0.5rem;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(59, 130, 246, 0.3) 0%,
+    transparent 70%
+  );
+  filter: blur(20px);
+  animation: glow-pulse 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Page transition animations */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes page-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+
+.page-transition-enter {
+  animation: page-enter 0.3s ease-out forwards;
+}
+
+.page-transition-exit {
+  animation: page-exit 0.3s ease-in forwards;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Cards and panels */
+.card {
+  @apply bg-white dark:bg-gray-800 rounded-lg shadow;
+}
+
+.card-header {
+  @apply p-4 border-b border-gray-200 dark:border-gray-700;
+}
+
+.card-body {
+  @apply p-4;
+}
+
+/* Tooltips */
+.tooltip {
+  @apply absolute z-10 px-2 py-1 text-xs text-white bg-gray-900 rounded shadow-lg;
+}
+
+/* Loading states */
+.loading-spinner {
+  @apply animate-spin h-5 w-5 text-primary-600;
+}
+
+.skeleton {
+  @apply animate-pulse bg-gray-200 dark:bg-gray-700 rounded;
+}
+
+/* Responsive utilities */
+@media (max-width: 768px) {
+  .sidebar-nav {
+    @apply fixed left-0 top-0 h-full w-64 transform -translate-x-full transition-transform z-50;
+  }
+  
+  .sidebar-nav.open {
+    @apply translate-x-0;
+  }
+  
+  .dashboard-header {
+    @apply text-2xl;
+  }
+  
+  .dashboard-card {
+    @apply p-4;
+  }
+  
+  .grid-responsive {
+    @apply grid-cols-1;
+  }
+  
+  .hide-mobile {
+    @apply hidden;
+  }
+  
+  .mobile-menu-button {
+    @apply block;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-menu-button {
+    @apply hidden;
+  }
+  
+  .grid-responsive {
+    @apply grid-cols-2;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid-responsive {
+    @apply grid-cols-3;
+  }
+}
+
+/* Mobile-first responsive text */
+.text-responsive {
+  @apply text-sm sm:text-base lg:text-lg;
+}
+
+/* Responsive spacing */
+.p-responsive {
+  @apply p-2 sm:p-4 lg:p-6;
+}
+
+.m-responsive {
+  @apply m-2 sm:m-4 lg:m-6;
+}
+
+/* Responsive grid */
+.grid-dashboard {
+  @apply grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .dashboard-card {
+    @apply shadow-none border border-gray-300;
+  }
+}

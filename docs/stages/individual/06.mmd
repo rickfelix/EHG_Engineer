@@ -1,0 +1,11 @@
+flowchart TB
+%% Stage 6 Detail
+subgraph S6["6. Risk Evaluation"]
+  S6_root["Purpose: Comprehensive risk assessment and mitigation strategy development."]
+  S6_A["6.1 Risk Identification"]
+  S6_B["6.2 Risk Scoring"]
+  S6_C["6.3 Mitigation Planning"]
+  S6_root --> S6_A --> S6_B --> S6_C
+end
+classDef dep stroke-dasharray: 5 5;
+D6["Depends on: 5"]:::dep -.-> S6_root

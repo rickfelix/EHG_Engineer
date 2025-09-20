@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Directive Lab UI Analysis</title>
+  <style>
+    body { font-family: system-ui; margin: 40px; line-height: 1.6; }
+    .header { border-bottom: 3px solid #0066cc; padding-bottom: 20px; }
+    .section { margin: 40px 0; }
+    .priority-high { color: #d32f2f; }
+    .priority-medium { color: #f57c00; }
+    .priority-low { color: #388e3c; }
+    .recommendation { background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 8px; }
+    .actions { margin-left: 20px; }
+    .metric { display: inline-block; margin: 10px 20px 10px 0; }
+    .issue { background: #fff3cd; padding: 10px; margin: 10px 0; border-left: 4px solid #ffc107; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Directive Lab UI Analysis Report</h1>
+    <p>Generated: 2025-09-04T12:30:23.648Z</p>
+    <p>URL: http://localhost:3000/directive-lab</p>
+  </div>
+  
+  <div class="section">
+    <h2>Key Metrics</h2>
+    <div class="metric"><strong>Load Time:</strong> 614ms</div>
+    <div class="metric"><strong>Accessibility Violations:</strong> 5</div>
+    <div class="metric"><strong>Color Variants:</strong> 20</div>
+    <div class="metric"><strong>Button Variants:</strong> 8</div>
+    <div class="metric"><strong>Typography Variants:</strong> 9</div>
+  </div>
+  
+  <div class="section">
+    <h2>Priority Recommendations</h2>
+    
+      <div class="recommendation">
+        <h3 class="priority-high">[HIGH] Improve User Journey Guidance</h3>
+        <p>The multi-step process needs better visual guidance</p>
+        <ul class="actions">
+          <li>Add a persistent progress indicator showing current step and total steps</li><li>Implement breadcrumb navigation for context</li><li>Add "Save and Continue Later" functionality</li><li>Include time estimates for each step</li><li>Add contextual help tooltips for complex fields</li>
+        </ul>
+      </div>
+    
+      <div class="recommendation">
+        <h3 class="priority-high">[HIGH] Standardize Button System</h3>
+        <p>Multiple button styles create confusion</p>
+        <ul class="actions">
+          <li>Create 3 button variants: primary (main CTA), secondary (alternate actions), ghost (tertiary)</li><li>Ensure consistent padding: 12px vertical, 24px horizontal</li><li>Standardize border-radius to 8px across all buttons</li><li>Implement consistent hover/active states</li><li>Use consistent disabled state styling</li>
+        </ul>
+      </div>
+    
+      <div class="recommendation">
+        <h3 class="priority-high">[HIGH] Fix Mobile Navigation</h3>
+        <p>Mobile users face navigation and interaction issues</p>
+        <ul class="actions">
+          <li>Implement stack-based navigation for mobile (no side panels)</li><li>Increase touch targets to minimum 44x44px</li><li>Add swipe gestures for step navigation</li><li>Implement sticky action buttons at bottom</li><li>Ensure forms are single-column on mobile</li>
+        </ul>
+      </div>
+    
+      <div class="recommendation">
+        <h3 class="priority-medium">[MEDIUM] Enhance Form Validation</h3>
+        <p>Forms lack real-time validation and feedback</p>
+        <ul class="actions">
+          <li>Add inline validation with immediate feedback</li><li>Show success checkmarks for valid fields</li><li>Display helpful error messages with correction hints</li><li>Implement auto-save for form progress</li><li>Add field format hints (e.g., date format)</li>
+        </ul>
+      </div>
+    
+      <div class="recommendation">
+        <h3 class="priority-high">[HIGH] Fix Critical Accessibility Issues</h3>
+        <p>2 critical WCAG violations found</p>
+        <ul class="actions">
+          <li>Ensures buttons have discernible text</li><li>Ensures the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds</li>
+        </ul>
+      </div>
+    
+  </div>
+  
+  <div class="section">
+    <h2>Responsive Design Issues</h2>
+    
+      <div class="issue">
+        <strong>mobile:</strong> SMALL_TOUCH_TARGETS - Increase touch target size to minimum 44x44px at mobile
+      </div>
+    
+      <div class="issue">
+        <strong>tablet:</strong> SMALL_TOUCH_TARGETS - Increase touch target size to minimum 44x44px at tablet
+      </div>
+    
+  </div>
+</body>
+</html>

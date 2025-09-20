@@ -1,0 +1,43 @@
+{
+  "objective": "Critique and optimize the EHG 40-stage venture workflow for maximum efficiency and success rate",
+  "inputs": {
+    "stages_yaml_path": "/docs/workflow/stages.yaml",
+    "sop_index": "/docs/workflow/SOP_INDEX.md",
+    "overview_diagram": "/docs/stages/overview.mmd",
+    "prd_crosswalk": "/docs/workflow/prd_crosswalk.csv"
+  },
+  "tasks": [
+    "Identify missing gates and circular dependencies",
+    "Benchmark against industry best practices for venture studios",
+    "Propose 80/20 improvements with expected impact",
+    "Design optimal automation strategy",
+    "Create success prediction model",
+    "Define parallel execution opportunities"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/overall_findings.md",
+    "/docs/research/outputs/overall_recommendations.md",
+    "/docs/research/outputs/overall_automation_blueprint.md",
+    "/docs/research/outputs/overall_risk_matrix.md"
+  ],
+  "constraints": {
+    "maintain_quality": true,
+    "preserve_gates": [
+      "Stage 3 Kill/Revise/Proceed",
+      "Stage 30 Production",
+      "Stage 40 Exit"
+    ],
+    "respect_dependencies": true,
+    "consider_resources": [
+      "4 AI agents",
+      "Chairman oversight",
+      "Limited budget"
+    ]
+  },
+  "evaluation_criteria": {
+    "cycle_time_reduction": "Target 40%+ reduction",
+    "automation_coverage": "Target 80%+ automation",
+    "success_prediction": "Target 75%+ accuracy by stage 10",
+    "risk_mitigation": "Address top 10 failure modes"
+  }
+}

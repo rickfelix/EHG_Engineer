@@ -1,0 +1,13 @@
+{
+  "ehg_engineer": {
+    "appName": "EHG Engineer Internal DB",
+    "purpose": "LEO Protocol, validation rules, system state",
+    "projectUrl": "https://dedlbzhpgkmetvhbkyzq.supabase.co",
+    "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlZGxiemhwZ2ttZXR2aGJreXpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MTE5MzcsImV4cCI6MjA3MjA4NzkzN30.o-AUQPUXAobkhMfdxa5g3oDkcneXNnmwK80KfAER16g",
+    "dbHost": "aws-1-us-east-1.pooler.supabase.com",
+    "dbUser": "postgres.dedlbzhpgkmetvhbkyzq",
+    "dbPassword": "*** SET IN ENVIRONMENT ***",
+    "dbPort": 5432,
+    "dbName": "postgres"
+  }
+}

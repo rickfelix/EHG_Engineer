@@ -1,0 +1,160 @@
+name: Security Review
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Create Check Run
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const check = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Security Review',
+              head_sha: context.payload.pull_request.head.sha,
+              status: 'in_progress',
+              started_at: new Date().toISOString()
+            });
+            core.setOutput('check_id', check.data.id);
+
+      - name: Claude Security Review
+        id: claude_review
+        uses: anthropics/claude-code-security-review@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          config-path: .github/claude-review-config.yml
+        continue-on-error: true
+
+      - name: Enhanced Security Analysis
+        id: enhanced_analysis
+        run: |
+          node lib/agents/security-sub-agent.js --pr-mode \
+            --base-ref ${{ github.base_ref }} \
+            --head-ref ${{ github.head_ref }} \
+            --pr-number ${{ github.event.pull_request.number }} \
+            > security-findings.json
+        continue-on-error: true
+
+      - name: Post Security Review
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let findings = { inline: [], summary: [] };
+
+            try {
+              findings = JSON.parse(fs.readFileSync('security-findings.json', 'utf8'));
+            } catch (e) {
+              console.log('No security findings file found, using empty findings');
+            }
+
+            // Get the PR diff to anchor comments properly
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+
+            // Build review comments with proper anchoring
+            const comments = [];
+            for (const finding of findings.inline || []) {
+              const file = files.find(f => f.filename === finding.path);
+              if (file && finding.line) {
+                comments.push({
+                  path: finding.path,
+                  line: finding.line,
+                  side: 'RIGHT',
+                  body: `🔒 **${finding.severity || 'MEDIUM'}**: ${finding.message}\n\n` +
+                        `**CWE**: ${finding.cwe || 'N/A'}\n` +
+                        `**Recommendation**: ${finding.recommendation || 'Review and remediate'}`
+                });
+              }
+            }
+
+            // Create a batch review with all comments
+            if (comments.length > 0 || findings.summary?.length > 0) {
+              try {
+                await github.rest.pulls.createReview({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.issue.number,
+                  commit_id: context.payload.pull_request.head.sha,
+                  event: 'COMMENT',
+                  body: findings.summary?.length > 0
+                    ? `## 🔒 Security Review Summary\n\n${findings.summary.join('\n\n')}`
+                    : '## 🔒 Security Review\n\nNo critical security issues found.',
+                  comments: comments.slice(0, 20) // Limit to prevent spam
+                });
+              } catch (reviewError) {
+                // Fallback to single comment if review creation fails
+                console.log('Review creation failed, posting as comment:', reviewError.message);
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body: `## 🔒 Security Review\n\n` +
+                        `Found ${findings.inline?.length || 0} security findings.\n\n` +
+                        (findings.summary?.join('\n\n') || 'Review the PR diff for details.')
+                });
+              }
+            }
+
+      - name: Update Check Run
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let conclusion = 'success';
+            let summary = 'Security review completed successfully';
+
+            try {
+              const findings = JSON.parse(fs.readFileSync('security-findings.json', 'utf8'));
+              const criticalCount = findings.inline?.filter(f => f.severity === 'CRITICAL').length || 0;
+              const highCount = findings.inline?.filter(f => f.severity === 'HIGH').length || 0;
+
+              if (criticalCount > 0) {
+                conclusion = 'failure';
+                summary = `Found ${criticalCount} critical security issues`;
+              } else if (highCount > 2) {
+                conclusion = 'failure';
+                summary = `Found ${highCount} high severity issues`;
+              } else if (findings.inline?.length > 0) {
+                conclusion = 'neutral';
+                summary = `Found ${findings.inline.length} security findings to review`;
+              }
+            } catch (e) {
+              console.log('Could not parse findings for check status');
+            }
+
+            await github.rest.checks.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              check_run_id: ${{ steps.check.outputs.check_id }},
+              status: 'completed',
+              conclusion: conclusion,
+              completed_at: new Date().toISOString(),
+              output: {
+                title: 'Security Review Results',
+                summary: summary
+              }
+            });

@@ -1,0 +1,88 @@
+{
+  "stage_id": 5,
+  "stage_title": "Profitability Forecasting",
+  "objective": "Optimize Stage 5 (Profitability Forecasting) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 5,
+      "title": "Profitability Forecasting",
+      "description": "Create financial models and profitability projections for the venture.",
+      "owner": "PLAN",
+      "depends_on": [
+        4
+      ],
+      "inputs": [
+        "Market size data",
+        "Pricing strategy",
+        "Cost estimates"
+      ],
+      "outputs": [
+        "Financial model",
+        "P&L projections",
+        "Break-even analysis"
+      ],
+      "metrics": [
+        "Model accuracy",
+        "Revenue projections",
+        "Margin forecasts"
+      ],
+      "gates": {
+        "entry": [
+          "Market positioning defined",
+          "Pricing signals captured"
+        ],
+        "exit": [
+          "Financial model complete",
+          "Profitability validated",
+          "Investment requirements defined"
+        ]
+      },
+      "substages": [
+        {
+          "id": "5.1",
+          "title": "Revenue Modeling",
+          "done_when": [
+            "Revenue streams defined",
+            "Growth projections created"
+          ]
+        },
+        {
+          "id": "5.2",
+          "title": "Cost Structure",
+          "done_when": [
+            "COGS estimated",
+            "OpEx projected",
+            "CapEx planned"
+          ]
+        },
+        {
+          "id": "5.3",
+          "title": "Profitability Analysis",
+          "done_when": [
+            "Break-even calculated",
+            "Margins projected",
+            "ROI estimated"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/05-*.md",
+    "critique_path": "/docs/workflow/critique/stage-05.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_05_findings.md",
+    "/docs/research/outputs/stage_05_recommendations.md"
+  ],
+  "gemini_specific": {
+    "focus": "practical_implementation",
+    "include_code_samples": true,
+    "suggest_tools": true
+  }
+}

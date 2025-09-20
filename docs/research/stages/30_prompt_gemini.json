@@ -1,0 +1,89 @@
+{
+  "stage_id": 30,
+  "stage_title": "Production Deployment",
+  "objective": "Optimize Stage 30 (Production Deployment) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 30,
+      "title": "Production Deployment",
+      "description": "Deploy to production with zero-downtime and rollback capabilities.",
+      "owner": "EXEC",
+      "depends_on": [
+        29
+      ],
+      "inputs": [
+        "Release candidate",
+        "Deployment plan",
+        "Rollback strategy"
+      ],
+      "outputs": [
+        "Production deployment",
+        "Monitoring setup",
+        "Documentation"
+      ],
+      "metrics": [
+        "Deployment success rate",
+        "Downtime",
+        "Rollback time"
+      ],
+      "gates": {
+        "entry": [
+          "Release approved",
+          "Chairman approval received"
+        ],
+        "exit": [
+          "Deployment successful",
+          "Monitoring active",
+          "Rollback tested"
+        ]
+      },
+      "substages": [
+        {
+          "id": "30.1",
+          "title": "Pre-Deployment Validation",
+          "done_when": [
+            "Health checks passed",
+            "Dependencies verified",
+            "Backups created"
+          ]
+        },
+        {
+          "id": "30.2",
+          "title": "Blue-Green Deployment",
+          "done_when": [
+            "Green environment ready",
+            "Traffic switched",
+            "Validation complete"
+          ]
+        },
+        {
+          "id": "30.3",
+          "title": "Post-Deployment Verification",
+          "done_when": [
+            "Smoke tests passed",
+            "Monitoring confirmed",
+            "Rollback tested"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/30-*.md",
+    "critique_path": "/docs/workflow/critique/stage-30.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_30_findings.md",
+    "/docs/research/outputs/stage_30_recommendations.md"
+  ],
+  "gemini_specific": {
+    "focus": "practical_implementation",
+    "include_code_samples": true,
+    "suggest_tools": true
+  }
+}

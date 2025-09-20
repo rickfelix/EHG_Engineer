@@ -1,0 +1,84 @@
+{
+  "stage_id": 18,
+  "stage_title": "Documentation Sync to GitHub",
+  "objective": "Optimize Stage 18 (Documentation Sync to GitHub) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 18,
+      "title": "Documentation Sync to GitHub",
+      "description": "Synchronize all documentation and code to version control.",
+      "owner": "EXEC",
+      "depends_on": [
+        17
+      ],
+      "inputs": [
+        "Documentation",
+        "Code repositories",
+        "Configuration files"
+      ],
+      "outputs": [
+        "GitHub repos",
+        "Documentation site",
+        "Version history"
+      ],
+      "metrics": [
+        "Sync completeness",
+        "Documentation coverage",
+        "Version control compliance"
+      ],
+      "gates": {
+        "entry": [
+          "Documentation complete",
+          "Code ready"
+        ],
+        "exit": [
+          "Repos synchronized",
+          "CI/CD connected",
+          "Access configured"
+        ]
+      },
+      "substages": [
+        {
+          "id": "18.1",
+          "title": "Repository Setup",
+          "done_when": [
+            "Repos created",
+            "Structure defined",
+            "Permissions set"
+          ]
+        },
+        {
+          "id": "18.2",
+          "title": "Content Migration",
+          "done_when": [
+            "Code pushed",
+            "Docs uploaded",
+            "Assets stored"
+          ]
+        },
+        {
+          "id": "18.3",
+          "title": "Automation Configuration",
+          "done_when": [
+            "Webhooks set",
+            "CI/CD configured",
+            "Sync automated"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/18-*.md",
+    "critique_path": "/docs/workflow/critique/stage-18.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_18_findings.md",
+    "/docs/research/outputs/stage_18_recommendations.md"
+  ]
+}

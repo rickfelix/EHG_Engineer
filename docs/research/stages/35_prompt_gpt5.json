@@ -1,0 +1,84 @@
+{
+  "stage_id": 35,
+  "stage_title": "GTM Timing Intelligence",
+  "objective": "Optimize Stage 35 (GTM Timing Intelligence) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 35,
+      "title": "GTM Timing Intelligence",
+      "description": "Optimize go-to-market timing using market intelligence.",
+      "owner": "LEAD",
+      "depends_on": [
+        34
+      ],
+      "inputs": [
+        "Market signals",
+        "Competitive data",
+        "Seasonal patterns"
+      ],
+      "outputs": [
+        "Timing recommendations",
+        "Launch windows",
+        "Market readiness"
+      ],
+      "metrics": [
+        "Timing accuracy",
+        "Market reception",
+        "Competitive advantage"
+      ],
+      "gates": {
+        "entry": [
+          "Market data available",
+          "Patterns analyzed"
+        ],
+        "exit": [
+          "Timing optimized",
+          "Windows identified",
+          "Strategy adjusted"
+        ]
+      },
+      "substages": [
+        {
+          "id": "35.1",
+          "title": "Market Signal Analysis",
+          "done_when": [
+            "Signals collected",
+            "Patterns identified",
+            "Trends analyzed"
+          ]
+        },
+        {
+          "id": "35.2",
+          "title": "Timing Optimization",
+          "done_when": [
+            "Models run",
+            "Windows calculated",
+            "Risks assessed"
+          ]
+        },
+        {
+          "id": "35.3",
+          "title": "Strategy Adjustment",
+          "done_when": [
+            "Plans updated",
+            "Resources reallocated",
+            "Teams aligned"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/35-*.md",
+    "critique_path": "/docs/workflow/critique/stage-35.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_35_findings.md",
+    "/docs/research/outputs/stage_35_recommendations.md"
+  ]
+}

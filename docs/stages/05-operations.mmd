@@ -1,0 +1,22 @@
+flowchart TB
+%% Phase OPERATIONS (Stages 35-40)
+
+subgraph OPERATIONS["📈 Phase: OPERATIONS"]
+  S35["35. GTM Timing Intelligence<br/>Owner: LEAD"]
+  S36["36. Parallel Exploration<br/>Owner: PLAN"]
+  S37["37. Strategic Risk Forecasting<br/>Owner: Chairman"]
+  S38["38. Timing Optimization<br/>Owner: LEAD"]
+  S39["39. Multi-Venture Coordination<br/>Owner: Chairman"]
+  S40["40. Venture Active<br/>Owner: Chairman"]
+end
+
+%% Sequential flow
+S35 --> S36
+S36 --> S37
+S37 --> S38
+S38 --> S39
+S39 --> S40
+
+
+%% Cross-dependencies
+S34 -.-> S35

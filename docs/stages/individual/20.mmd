@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 20 Detail
+subgraph S20["20. Enhanced Context Loading"]
+  S20_root["Purpose: Load and optimize all context for AI agents and system components.
+Owner: EVA"]
+  S20_A["20.1 Context Preparation"]
+  S20_B["20.2 Loading Optimization"]
+  S20_C["20.3 Validation & Testing"]
+  S20_root --> S20_A --> S20_B --> S20_C
+end
+classDef dep stroke-dasharray: 5 5;
+D20["Depends on: 19"]:::dep -.-> S20_root

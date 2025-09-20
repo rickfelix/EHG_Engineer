@@ -1,0 +1,50 @@
+# Negative Test: Image Without Digest
+# This deployment should FAIL validation as it uses a tag instead of digest
+# Expected: Blocked by require-image-digests policy
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-no-digest
+  namespace: test-negative
+  labels:
+    test: no-digest
+    expected: fail
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: no-digest-test
+  template:
+    metadata:
+      labels:
+        app: no-digest-test
+    spec:
+      containers:
+      - name: app
+        # Using tag instead of SHA256 digest
+        image: busybox:1.35
+        command: ["sleep", "3600"]
+---
+# Test verification script
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-no-digest-verification
+  namespace: test-negative
+data:
+  verify.sh: |
+    #!/bin/bash
+    echo "Testing: Image without digest should be blocked"
+
+    # Attempt to create the deployment
+    kubectl apply -f test-no-digest.yaml 2>&1 | tee /tmp/result.log
+
+    # Check if it was blocked
+    if grep -q "must use SHA256 digests" /tmp/result.log || grep -q "denied" /tmp/result.log; then
+      echo "✅ PASS: Non-digest image was correctly blocked"
+      exit 0
+    else
+      echo "❌ FAIL: Non-digest image was not blocked!"
+      exit 1
+    fi

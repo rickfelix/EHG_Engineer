@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SDIP Dashboard - Strategic Directive Initiation Protocol</title>
+    <style>
+        /* Design Sub-Agent Color Palette */
+        :root {
+            --pending: #FFC107;
+            --validated: #4CAF50;
+            --failed: #F44336;
+            --backend-only: #9C27B0;
+            --primary: #2196F3;
+            --secondary: #607D8B;
+            --background: #F5F5F5;
+            --surface: #FFFFFF;
+            --text: #212121;
+            --text-secondary: #757575;
+            --border: #E0E0E0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 14px;
+            color: var(--text);
+            background-color: var(--background);
+            line-height: 1.5;
+        }
+
+        /* Typography per Design Sub-Agent */
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 24px;
+            color: var(--text);
+        }
+
+        h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text);
+        }
+
+        h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+
+        /* Layout */
+        .app-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background-color: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .header-badge {
+            background-color: var(--primary);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-secondary);
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            padding: 24px;
+            gap: 24px;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background-color: var(--surface);
+            border-radius: 4px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .sidebar-section {
+            margin-bottom: 24px;
+        }
+
+        .stats-card {
+            padding: 12px;
+            background-color: var(--background);
+            border-radius: 4px;
+            margin-bottom: 12px;
+        }
+
+        .stats-card-title {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .stats-card-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        /* Content Area */
+        .content-area {
+            flex: 1;
+            background-color: var(--surface);
+            border-radius: 4px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        /* Submission Form */
+        .submission-form {
+            margin-bottom: 32px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+        }
+
+        input[type="url"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #1976D2;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(33, 150, 243, 0.3);
+        }
+
+        .btn-secondary {
+            background-color: var(--secondary);
+            color: white;
+        }
+
+        .btn-success {
+            background-color: var(--validated);
+            color: white;
+        }
+
+        .btn-warning {
+            background-color: var(--pending);
+            color: #212121;
+        }
+
+        .btn-danger {
+            background-color: var(--failed);
+            color: white;
+        }
+
+        /* Submission List */
+        .submissions-list {
+            margin-top: 32px;
+        }
+
+        .submission-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .submission-table th {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 2px solid var(--border);
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        .submission-table td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .submission-table tr:hover {
+            background-color: var(--background);
+        }
+
+        /* Status Badge */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-pending {
+            background-color: rgba(255, 193, 7, 0.1);
+            color: #F57C00;
+        }
+
+        .status-validated {
+            background-color: rgba(76, 175, 80, 0.1);
+            color: #388E3C;
+        }
+
+        .status-failed {
+            background-color: rgba(244, 67, 54, 0.1);
+            color: #C62828;
+        }
+
+        /* Gate Progress */
+        .gate-progress {
+            display: flex;
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .gate-indicator {
+            width: 40px;
+            height: 6px;
+            border-radius: 3px;
+            background-color: var(--border);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .gate-indicator.complete {
+            background-color: var(--validated);
+        }
+
+        .gate-indicator.current {
+            background-color: var(--pending);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: var(--surface);
+            border-radius: 8px;
+            padding: 32px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-header {
+            margin-bottom: 24px;
+        }
+
+        .modal-body {
+            margin-bottom: 24px;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        /* Gate Validation Steps */
+        .validation-step {
+            padding: 20px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 16px;
+            background-color: var(--background);
+        }
+
+        .validation-step.complete {
+            border-color: var(--validated);
+            background-color: rgba(76, 175, 80, 0.05);
+        }
+
+        .validation-step.current {
+            border-color: var(--pending);
+            background-color: rgba(255, 193, 7, 0.05);
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: var(--border);
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        .step-number.complete {
+            background-color: var(--validated);
+            color: white;
+        }
+
+        .step-number.current {
+            background-color: var(--pending);
+            color: #212121;
+        }
+
+        /* Loading State */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* PACER Badge (Backend Only) */
+        .pacer-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            background-color: var(--backend-only);
+            color: white;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-left: 8px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-title">
+                <h1>SDIP Dashboard</h1>
+                <span class="header-badge">MVP+</span>
+                <span class="header-badge" style="background-color: var(--validated);">CRITICAL MODE</span>
+            </div>
+            <div class="user-info">
+                <span id="userRole">Role: Chairman</span>
+                <span>|</span>
+                <span id="userName">User: Anonymous</span>
+                <button class="btn btn-secondary" onclick="logout()">Logout</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="sidebar-section">
+                    <h3>Statistics</h3>
+                    <div class="stats-card">
+                        <div class="stats-card-title">Total Submissions</div>
+                        <div class="stats-card-value" id="totalSubmissions">0</div>
+                    </div>
+                    <div class="stats-card">
+                        <div class="stats-card-title">Pending Validation</div>
+                        <div class="stats-card-value" id="pendingValidations">0</div>
+                    </div>
+                    <div class="stats-card">
+                        <div class="stats-card-title">Completed</div>
+                        <div class="stats-card-value" id="completedSubmissions">0</div>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <h3>Gate Completion Rates</h3>
+                    <div id="gateCompletionRates"></div>
+                </div>
+            </aside>
+
+            <!-- Content Area -->
+            <main class="content-area">
+                <!-- New Submission Form -->
+                <section class="submission-form" id="submissionForm">
+                    <h2>Submit Chairman Feedback</h2>
+                    <form onsubmit="submitFeedback(event)">
+                        <div class="form-group">
+                            <label for="feedbackInput">
+                                Feedback Text <span style="color: var(--failed);">*</span>
+                            </label>
+                            <textarea 
+                                id="feedbackInput" 
+                                name="feedback"
+                                placeholder="Enter your feedback about the application..."
+                                required
+                                maxlength="10000"
+                            ></textarea>
+                            <small style="color: var(--text-secondary);">
+                                Maximum 10,000 characters
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="screenshotUrl">
+                                Screenshot URL (Optional)
+                            </label>
+                            <input 
+                                type="url" 
+                                id="screenshotUrl"
+                                name="screenshot_url"
+                                placeholder="https://example.com/screenshot.png"
+                            />
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <span>Submit for Analysis</span>
+                            <span id="submitLoader" class="loading" style="display: none;"></span>
+                        </button>
+                    </form>
+                </section>
+
+                <!-- Submissions List -->
+                <section class="submissions-list">
+                    <h2>Recent Submissions</h2>
+                    <table class="submission-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Title</th>
+                                <th>Status</th>
+                                <th>Current Gate</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="submissionsTableBody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- Gate Validation Modal -->
+    <div id="validationModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Validation Gates</h2>
+                <div class="gate-progress" id="modalGateProgress"></div>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Gate validation content -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-success" onclick="validateCurrentGate()">Validate Gate</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="sdip-client.js"></script>
+</body>
+</html>

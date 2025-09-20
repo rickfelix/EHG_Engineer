@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 17 Detail
+subgraph S17["17. GTM Strategist Agent Development"]
+  S17_root["Purpose: Deploy go-to-market strategist agent for marketing automation.
+Owner: LEAD"]
+  S17_A["17.1 Strategy Configuration"]
+  S17_B["17.2 Campaign Development"]
+  S17_C["17.3 Automation Setup"]
+  S17_root --> S17_A --> S17_B --> S17_C
+end
+classDef dep stroke-dasharray: 5 5;
+D17["Depends on: 16"]:::dep -.-> S17_root

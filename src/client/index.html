@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LEO Protocol Dashboard</title>
+    <meta name="description" content="Interactive dashboard for managing LEO Protocol workflows, Strategic Directives, and handoffs" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script>
+      // Apply dark mode immediately to prevent flash
+      (function() {
+        const savedTheme = localStorage.getItem('theme');
+        // Default to dark mode if no preference is saved
+        const shouldBeDark = savedTheme !== 'light'; // Only light mode if explicitly set to 'light'
+        
+        if (shouldBeDark) {
+          document.documentElement.classList.add('dark');
+          if (!savedTheme) {
+            localStorage.setItem('theme', 'dark');
+          }
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

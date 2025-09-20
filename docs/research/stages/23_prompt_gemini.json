@@ -1,0 +1,89 @@
+{
+  "stage_id": 23,
+  "stage_title": "Continuous Feedback Loops",
+  "objective": "Optimize Stage 23 (Continuous Feedback Loops) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 23,
+      "title": "Continuous Feedback Loops",
+      "description": "Establish and maintain continuous feedback mechanisms.",
+      "owner": "PLAN",
+      "depends_on": [
+        22
+      ],
+      "inputs": [
+        "User feedback",
+        "System metrics",
+        "Performance data"
+      ],
+      "outputs": [
+        "Feedback reports",
+        "Improvement backlog",
+        "Priority adjustments"
+      ],
+      "metrics": [
+        "Feedback volume",
+        "Response time",
+        "Implementation rate"
+      ],
+      "gates": {
+        "entry": [
+          "Feedback channels open",
+          "Metrics flowing"
+        ],
+        "exit": [
+          "Feedback processed",
+          "Actions prioritized",
+          "Loop closed"
+        ]
+      },
+      "substages": [
+        {
+          "id": "23.1",
+          "title": "Feedback Collection",
+          "done_when": [
+            "Channels monitored",
+            "Feedback captured",
+            "Data aggregated"
+          ]
+        },
+        {
+          "id": "23.2",
+          "title": "Analysis & Prioritization",
+          "done_when": [
+            "Patterns identified",
+            "Issues prioritized",
+            "Actions defined"
+          ]
+        },
+        {
+          "id": "23.3",
+          "title": "Implementation & Closure",
+          "done_when": [
+            "Changes implemented",
+            "Users notified",
+            "Loop documented"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/23-*.md",
+    "critique_path": "/docs/workflow/critique/stage-23.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_23_findings.md",
+    "/docs/research/outputs/stage_23_recommendations.md"
+  ],
+  "gemini_specific": {
+    "focus": "practical_implementation",
+    "include_code_samples": true,
+    "suggest_tools": true
+  }
+}
