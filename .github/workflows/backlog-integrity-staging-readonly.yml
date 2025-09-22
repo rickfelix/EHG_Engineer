@@ -141,6 +141,28 @@ jobs:
             mv *.csv reports/ 2>/dev/null || true
           fi
 
+      - name: Apply orphan link mappings (staging, guarded)
+        if: ${{ vars.APPLY_ORPHAN_LINKS == '1' && vars.STAGING_WRITE_OK == '1' }}
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+        run: |
+          set -euo pipefail
+          if [ ! -f ops/inbox/orphan_links.csv ]; then
+            echo "No ops/inbox/orphan_links.csv found; skipping apply."
+            exit 0
+          fi
+          DRY_RUN="${{ vars.DRY_RUN || '1' }}"
+          psql "$DATABASE_URL" \
+               -v ON_ERROR_STOP=1 \
+               -v DRY_RUN="${DRY_RUN}" \
+               -f ops/jobs/orphan_apply_links_staging.sql
+          # If committed, refresh exports so counts reflect the change
+          if [ "$DRY_RUN" = "0" ]; then
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/checks/backlog_integrity_staging.sql
+            # Move regenerated CSVs to reports/
+            mv *.csv reports/ 2>/dev/null || true
+          fi
+
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4

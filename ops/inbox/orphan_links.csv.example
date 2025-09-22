@@ -1,0 +1,5 @@
+backlog_id,chosen_prd_id,action,comment
+# Example mappings - copy to orphan_links.csv and fill with real UUIDs
+# 123e4567-e89b-12d3-a456-426614174000,987fcdeb-51a2-43f1-b89a-3c1f7e8d9e2f,link,"Maps to PRD for authentication feature"
+# 234e5678-f89c-23d4-b567-537725285111,,archive,"Obsolete item - no longer needed"
+# 345e6789-g89d-34e5-c678-648836396222,,ignore,"Will handle in next sprint"
