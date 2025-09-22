@@ -1,0 +1,89 @@
+name: Schema Compatibility Check (Read-Only)
+
+on:
+  workflow_dispatch: {}
+  workflow_call: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: schema-compat-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Run schema compatibility check
+        env:
+          PGHOST: ${{ secrets.PGHOST_PROD }}
+          PGPORT: ${{ secrets.PGPORT_PROD }}
+          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
+          PGUSER: ${{ secrets.PGUSER_PROD }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
+          PGSSLMODE: require
+        run: |
+          mkdir -p ops/checks/out
+          psql -v ON_ERROR_STOP=1 -f ops/checks/schema_compatibility_check.sql
+
+      - name: Display compatibility results
+        run: |
+          echo "## 🔍 Schema Compatibility Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "ops/checks/out/schema_compatibility_summary.csv" ]; then
+            echo "### Compatibility Summary" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Check Type | Component | Status | Details |" >> $GITHUB_STEP_SUMMARY
+            echo "|------------|-----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+
+            # Skip header and format as markdown table
+            tail -n +2 ops/checks/out/schema_compatibility_summary.csv | while IFS=, read -r check_type check_name passed details status_icon; do
+              # Remove quotes if present
+              check_type=$(echo "$check_type" | tr -d '"')
+              check_name=$(echo "$check_name" | tr -d '"')
+              passed=$(echo "$passed" | tr -d '"')
+              details=$(echo "$details" | tr -d '"')
+              status_icon=$(echo "$status_icon" | tr -d '"')
+
+              echo "| $check_type | $check_name | $status_icon | $details |" >> $GITHUB_STEP_SUMMARY
+            done
+          else
+            echo "_No compatibility summary generated_" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check if any migrations are needed
+          if grep -q "false" ops/checks/out/schema_compatibility_summary.csv 2>/dev/null; then
+            echo "❌ **Schema migrations required before Vision Alignment Pipeline can be used**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Required migrations:**" >> $GITHUB_STEP_SUMMARY
+            echo "1. Run \`database/migrations/2025-09-22-add-sd-key.sql\`" >> $GITHUB_STEP_SUMMARY
+            echo "2. Run \`database/migrations/2025-09-22-vh-bridge-tables.sql\`" >> $GITHUB_STEP_SUMMARY
+            echo "3. Re-run this compatibility check to verify" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **All schema requirements met - Vision Alignment Pipeline ready!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**You can now run:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Vision Alignment (Prod, Read-Only) workflow" >> $GITHUB_STEP_SUMMARY
+            echo "- WSJF Recommendations (Prod, Read-Only) workflow" >> $GITHUB_STEP_SUMMARY
+            echo "- Phase B and Phase C pipeline workflows" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload compatibility artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: schema-compatibility-${{ github.run_id }}
+          path: ops/checks/out/schema_*.csv
+          retention-days: 30
