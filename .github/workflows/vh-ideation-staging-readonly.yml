@@ -1,0 +1,65 @@
+name: EHG Ideation - Staging Read-Only
+
+on:
+  schedule:
+    - cron: '10 4 * * *'   # daily @ 04:10 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vh-ideation-staging-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run:
+    name: Venture Ideation Checks (Staging)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: ${{ vars.ENABLE_VH_CHECKS == '1' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Prepare env & out dir
+        run: |
+          mkdir -p ops/checks/out
+          echo "PGHOST=${{ secrets.PGHOST_STAGING }}" >> $GITHUB_ENV
+          echo "PGPORT=${{ secrets.PGPORT_STAGING }}" >> $GITHUB_ENV
+          echo "PGDATABASE=${{ secrets.PGDATABASE_STAGING }}" >> $GITHUB_ENV
+          echo "PGUSER=${{ secrets.PGUSER_STAGING }}" >> $GITHUB_ENV
+          echo "PGPASSWORD=${{ secrets.PGPASSWORD_STAGING }}" >> $GITHUB_ENV
+          echo "PGSSLMODE=require" >> $GITHUB_ENV
+
+      - name: Export ideation reports (read-only)
+        env: { PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }} }
+        run: psql -v ON_ERROR_STOP=1 -f ops/checks/vh_ideation_integrity_staging.sql
+
+      - name: Summarize counts
+        run: |
+          count() { [ -f "$1" ] && echo $(( $(wc -l < "$1") - 1 )) || echo 0; }
+          STAGES=$(count ops/checks/out/vh_stage_catalog_check.csv) # 1 row summary
+          MISSING_SD=$(count ops/checks/out/vh_stage_coverage_gaps.csv)
+          MISSING_PRD=$MISSING_SD  # same file includes both; UI will show both fields
+          NOT_READY=$(count ops/checks/out/vh_stage_readiness.csv)
+          VENTURE_NO_GOV=$(count ops/checks/out/vh_ventures_without_governance.csv)
+
+          {
+            echo "### EHG Ideation — Staging Overview"
+            echo "- Stage catalog summary rows: ${STAGES}"
+            echo "- Stage coverage gaps (rows with missing SD/PRD): ${MISSING_SD}"
+            echo "- Stages not ready (gate not met): ${NOT_READY}"
+            echo "- Ventures without any SD/PRD governance linkage: ${VENTURE_NO_GOV}"
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vh-ideation-staging-${{ github.run_id }}
+          path: ops/checks/out/*.csv
+          retention-days: 30
