@@ -61,29 +61,34 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Gap Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           if [ -f reports/sd_metadata_gaps.csv ]; then
             count=$(tail -n +2 reports/sd_metadata_gaps.csv | wc -l)
             echo "- **SD Metadata Gaps**: $count issues" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           if [ -f reports/prd_contract_gaps.csv ]; then
             count=$(tail -n +2 reports/prd_contract_gaps.csv | wc -l)
             echo "- **PRD Contract Gaps**: $count issues" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           if [ -f reports/backlog_shape_issues.csv ]; then
             count=$(tail -n +2 reports/backlog_shape_issues.csv | wc -l)
             echo "- **Backlog Shape Issues**: $count items" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           if [ -f reports/traceability_gaps.csv ]; then
             count=$(tail -n +2 reports/traceability_gaps.csv | wc -l)
             echo "- **Traceability Gaps**: $count orphans" >> $GITHUB_STEP_SUMMARY
           else
             echo "- **Traceability**: ⚠️ View not available (expected)" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
+          if [ -f reports/gap_dependencies.csv ]; then
+            count=$(tail -n +2 reports/gap_dependencies.csv | wc -l)
+            echo "- **Dependency Issues**: $count problems" >> $GITHUB_STEP_SUMMARY
+          fi
+
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📊 Reports available as workflow artifacts" >> $GITHUB_STEP_SUMMARY
 
