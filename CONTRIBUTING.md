@@ -19,6 +19,19 @@ Welcome to the EHG Engineering project! This guide will help you set up your dev
 - Git 2.30+
 - Optional: Docker for local database
 
+## Database & CI Governance (Must Read)
+
+- **Execution path:** **CI-only**. No engineer or LLM connects directly to databases.
+- **Separation of apps:** `eng_*` = governance (writes allowed via CI). `vh_*` = venture (read-only via views). **No cross-app writes.**
+- **Change order:** migrations → views → RLS/policies → docs → app code.
+- **Promotion:** Production changes only via `housekeeping-prod-promotion.yml` with `confirm=PROMOTE` and schema-only backup.
+- **Guardrails required on every PR:**
+  - Boundary tripwire green (no venture → governance writes).
+  - RLS verify green (fail-closed).
+  - File-size/length checks: code ≤ 900 lines; docs ≤ 2,000 lines (warn).
+  - Concurrency controls prevent parallel runs.
+- **LLM usage:** **Claude Code = EXEC** via CI; **Codex = auditor/reporting only**; **no DB creds to any LLM**.
+
 ## Database-First Workflow
 
 1. Author migrations in `db/migrations/eng/` (governance) or `db/migrations/vh/` (venture) using timestamped, reversible files.
