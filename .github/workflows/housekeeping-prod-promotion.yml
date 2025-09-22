@@ -1,0 +1,239 @@
+name: Housekeeping Prod Promotion
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type EXACTLY 'PROMOTE' to proceed"
+        required: true
+        default: "CANCEL"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote:
+    if: ${{ github.event.inputs.confirm == 'PROMOTE' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Write .env.prod
+        run: |
+          cat > .env.prod <<'EOF'
+          PGHOST=${{ secrets.PGHOST_PROD }}
+          PGPORT=${{ secrets.PGPORT_PROD }}
+          PGDATABASE=${{ secrets.PGDATABASE_PROD }}
+          PGUSER=${{ secrets.PGUSER_PROD }}
+          PGPASSWORD=${{ secrets.PGPASSWORD_PROD }}
+          EOF
+
+          # Export for direct psql use
+          echo "PGHOST=${{ secrets.PGHOST_PROD }}" >> $GITHUB_ENV
+          echo "PGPORT=${{ secrets.PGPORT_PROD }}" >> $GITHUB_ENV
+          echo "PGDATABASE=${{ secrets.PGDATABASE_PROD }}" >> $GITHUB_ENV
+          echo "PGUSER=${{ secrets.PGUSER_PROD }}" >> $GITHUB_ENV
+          echo "PGPASSWORD=${{ secrets.PGPASSWORD_PROD }}" >> $GITHUB_ENV
+
+      - name: Boundary tripwire (forbidden cross-app writes in app code)
+        run: |
+          set -e
+          echo "Checking for cross-app boundary violations..."
+          if [ -d "applications/" ]; then
+            if grep -R "insert into strategic_directives_v2" -n applications/ 2>/dev/null | grep -v "/eng/" ; then
+              echo "❌ FORBIDDEN: venture code writing to governance tables"
+              exit 1
+            fi
+            if grep -R "insert into eng\." -n applications/ 2>/dev/null | grep -v "/eng/" ; then
+              echo "❌ FORBIDDEN: venture code writing to eng schema"
+              exit 1
+            fi
+          fi
+          echo "✅ Boundary checks passed: no cross-app writes detected"
+
+      - name: Precheck connectivity
+        run: |
+          set -e
+          echo "Testing production database connectivity..."
+          echo "SELECT version(), current_user, now();" | PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE -v ON_ERROR_STOP=1
+
+      - name: Backup schema (schema-only, no data)
+        run: |
+          set -e
+          echo "Creating schema-only backup..."
+          PGPASSWORD=$PGPASSWORD pg_dump -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
+            --schema-only --no-owner --no-privileges \
+            -f ops/audit/prod_schema_before_$(date +%Y%m%d_%H%M%S).sql
+          echo "Schema backup completed"
+
+      - name: Build apply list (ordered)
+        shell: bash
+        run: |
+          {
+            echo "# EHG_Engineering migrations"
+            ls -1 db/migrations/eng/*.sql 2>/dev/null || true
+            echo "# EHG_Engineering views & policies"
+            echo db/views/eng/v_eng_trace.sql
+            echo db/views/eng/v_eng_prd_payload_v1.sql
+            echo db/views/eng/v_eng_backlog_rollup.sql
+            echo db/policies/eng/rls.sql
+            echo "# EHG (venture) migrations"
+            ls -1 db/migrations/vh/*.sql 2>/dev/null || true
+            echo "# EHG (venture) views & policies"
+            echo db/views/vh/v_vh_governance_snapshot.sql
+            echo db/views/vh/v_vh_stage_progress.sql
+            echo db/policies/vh/rls.sql
+          } | sed '/^#/d' | sed '/^$/d' > ops/scripts/_apply_list.prod.txt
+          echo "Apply list generated:"
+          cat ops/scripts/_apply_list.prod.txt
+
+      - name: APPLY (prod; transactional batches)
+        run: |
+          set -e
+          echo "Applying production database objects..."
+
+          # Transaction wrapper for safety
+          {
+            echo "BEGIN;"
+            while read -r file; do
+              if [ -f "$file" ]; then
+                echo "\\echo Applying: $file"
+                cat "$file"
+                echo ";"
+              fi
+            done < ops/scripts/_apply_list.prod.txt
+            echo "COMMIT;"
+          } | PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE -v ON_ERROR_STOP=1
+
+          echo "✅ All database objects applied successfully"
+
+      - name: VERIFY (objects)
+        run: |
+          echo "Verifying database objects..."
+          if [ ! -f "ops/checks/verify_objects.sql" ]; then
+            cat > ops/checks/verify_objects.sql <<'EOF'
+          -- Verify expected schemas and tables exist
+          SELECT
+            table_schema,
+            table_name,
+            table_type
+          FROM information_schema.tables
+          WHERE table_schema IN ('eng', 'vh', 'audit', 'views')
+          ORDER BY table_schema, table_name;
+          EOF
+          fi
+          PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE -v ON_ERROR_STOP=1 -f ops/checks/verify_objects.sql
+
+      - name: VERIFY (RLS)
+        run: |
+          echo "Verifying Row Level Security..."
+          if [ ! -f "ops/checks/verify_rls.sql" ]; then
+            cat > ops/checks/verify_rls.sql <<'EOF'
+          -- Verify RLS is enabled on sensitive tables
+          SELECT
+            schemaname,
+            tablename,
+            rowsecurity,
+            CASE
+              WHEN rowsecurity THEN '✅ RLS Enabled'
+              ELSE '⚠️ RLS DISABLED'
+            END as status
+          FROM pg_tables
+          WHERE schemaname IN ('eng', 'vh')
+            AND tablename NOT LIKE '%_log'
+            AND tablename NOT LIKE '%_audit%'
+          ORDER BY schemaname, tablename;
+
+          -- Fail if any non-audit table lacks RLS
+          DO $$
+          BEGIN
+            IF EXISTS (
+              SELECT 1 FROM pg_tables
+              WHERE schemaname IN ('eng', 'vh')
+                AND NOT rowsecurity
+                AND tablename NOT LIKE '%_log'
+                AND tablename NOT LIKE '%_audit%'
+            ) THEN
+              RAISE EXCEPTION 'CRITICAL: Tables without RLS detected in production';
+            END IF;
+          END $$;
+          EOF
+          fi
+          PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE -v ON_ERROR_STOP=1 -f ops/checks/verify_rls.sql
+
+      - name: Ingest ramp (optional, no-op if not applicable)
+        run: |
+          echo "Skipping ingest ramp - controlled externally or manual"
+          # Future: Could add DB-backed feature flag ramping here
+          # UPDATE feature_flags SET percentage = 10 WHERE key = 'vh_ingest_enabled';
+
+      - name: Append prod audit footer
+        run: |
+          TS=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          AUDIT_FILE="ops/audit/$(date +%Y-%m-%d)-prod.md"
+
+          # Create audit file if it doesn't exist
+          if [ ! -f "$AUDIT_FILE" ]; then
+            cat > "$AUDIT_FILE" <<'EOF'
+          # Production Promotion Audit Log
+
+          This file tracks all production database promotions.
+
+          EOF
+          fi
+
+          {
+            echo ""
+            echo "## Prod Promotion Close-Out (${TS})"
+            echo "- Applied eng->vh migrations/views/policies"
+            echo "- Verified views/RLS (all tables have RLS enabled)"
+            echo "- Backup saved at ops/audit/prod_schema_before_*.sql"
+            echo "- Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- Triggered by: ${GITHUB_ACTOR}"
+            echo "- Status: ✅ SUCCESS"
+          } >> "$AUDIT_FILE"
+
+      - name: Create audit PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "prod: housekeeping promotion audit update"
+          title: "Prod: Housekeeping promotion audit - $(date +%Y-%m-%d)"
+          body: |
+            ## Production Promotion Audit Update
+
+            This PR contains the audit trail for the production database promotion.
+
+            ### Changes Applied:
+            - ✅ Engineering migrations/views/policies
+            - ✅ Venture hub views/policies
+            - ✅ RLS verification passed
+            - ✅ Boundary checks passed
+
+            ### Safety Measures:
+            - Schema-only backup created
+            - Transactional application (all-or-nothing)
+            - RLS fail-closed verification
+            - Cross-app boundary enforcement
+
+            ### Workflow Run:
+            [View run details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          branch: ci/prod-audit-update-$(date +%Y%m%d-%H%M%S)
+          add-paths: |
+            ops/audit/*-prod.md
+            ops/audit/prod_schema_before_*.sql
+
+  safety-check:
+    if: ${{ github.event.inputs.confirm != 'PROMOTE' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Promotion cancelled
+        run: |
+          echo "⚠️ Production promotion CANCELLED"
+          echo "Input was: '${{ github.event.inputs.confirm }}'"
+          echo "To proceed, type exactly: PROMOTE"
+          exit 1
