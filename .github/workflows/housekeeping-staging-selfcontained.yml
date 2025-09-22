@@ -218,6 +218,11 @@ jobs:
           fi
           echo "✅ Boundary checks passed: no cross-app writes detected"
 
+      - name: Inject sample gaps (ephemeral only; guarded)
+        if: ${{ vars.INJECT_GAP_FIXTURES == '1' }}
+        run: |
+          PSQL_ENV=.env.staging bash ops/scripts/psql_exec.sh -v ON_ERROR_STOP=1 -f db/seeds/integrity_gaps_seed.sql
+
       - name: Backlog integrity – export CSVs (read-only)
         run: |
           mkdir -p ops/checks/out
