@@ -1,0 +1,6 @@
+sd_key,title,description,priority,status,owner,decision_log_ref,evidence_ref
+SD-VISION-001,Vision Alignment Pipeline,End-to-end pipeline for vision-driven governance,90,active,platform-team@example.com,DL-2025-09-001,github.com/org/repo/issues/100
+SD-WSJF-001,WSJF Sequencing Optimization,Implement weighted shortest job first for execution order,85,active,devops-lead@example.com,DL-2025-09-002,github.com/org/repo/pulls/150
+SD-GOVERNANCE-001,Governance Data Model,Unified data model for SDs PRDs and stories,80,active,data-architect@example.com,DL-2025-09-003,confluence.com/governance-model
+SD-PIPELINE-001,CI/CD Pipeline Hardening,Production-grade deployment pipelines with safety gates,75,active,platform-team@example.com,DL-2025-09-004,github.com/org/repo/wiki/cicd
+SD-MONITORING-001,Observability Framework,Comprehensive monitoring and alerting system,70,draft,sre-team@example.com,DL-2025-09-005,datadog.com/dashboards/abc123
