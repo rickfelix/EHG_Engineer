@@ -353,6 +353,14 @@ jobs:
           commit_message: "CI: self-contained housekeeping staging run (audit update)"
           file_pattern: ops/audit/2025-09-22.md
 
+      - name: Summarize telemetry
+        if: always()
+        run: |
+          echo "### Housekeeping Timings" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          grep -h "\[telemetry\]" /tmp/staging_*.log 2>/dev/null || echo "No telemetry data captured" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
       - name: Send notification
         if: always()
         uses: actions/github-script@v7
