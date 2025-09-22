@@ -1,0 +1,47 @@
+# CODEOWNERS - Automatic review assignment
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything
+* @rickfelix
+
+# Database schemas and migrations require review
+/db/ @rickfelix
+/database/ @rickfelix
+*.sql @rickfelix
+
+# Operations and infrastructure
+/ops/ @rickfelix
+/.github/workflows/ @rickfelix
+
+# Core application boundaries (two-app separation)
+/applications/APP001/ @rickfelix
+/applications/APP002/ @rickfelix
+
+# Engineering governance tables
+/db/migrations/eng/ @rickfelix
+/db/views/eng/ @rickfelix
+/db/policies/eng/ @rickfelix
+
+# Venture hub tables
+/db/migrations/vh/ @rickfelix
+/db/views/vh/ @rickfelix
+/db/policies/vh/ @rickfelix
+
+# Critical configuration files
+.env* @rickfelix
+**/config.* @rickfelix
+**/database-loader.* @rickfelix
+
+# Documentation maintainers
+/docs/ @rickfelix
+README.md @rickfelix
+CONTRIBUTING.md @rickfelix
+
+# CI/CD configuration
+.github/ @rickfelix
+/ops/ci/ @rickfelix
+
+# Security-sensitive files
+**/auth* @rickfelix
+**/security* @rickfelix
+**/credentials* @rickfelix

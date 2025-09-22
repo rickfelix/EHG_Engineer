@@ -1,0 +1,41 @@
+# Ignored by size/length checks
+# Source maps and build artifacts
+**/*.map
+**/*.min.js
+**/dist/**
+**/build/**
+coverage/**
+
+# Vendor dependencies
+node_modules/**
+**/node_modules/**
+lib/dashboard-legacy/client/node_modules/**
+
+# Archives and backups
+ops/archives/**
+backup*.json
+*.backup
+
+# Generated files
+design-report-*.json
+package-lock.json
+
+# Binary and media files
+**/*.png
+**/*.jpg
+**/*.gif
+**/*.ico
+**/*.svg
+**/*.woff
+**/*.woff2
+**/*.ttf
+**/*.eot
+
+# Test fixtures and large test data
+**/fixtures/**
+**/test-data/**
+
+# Temporary and cache files
+.cache/**
+tmp/**
+temp/**

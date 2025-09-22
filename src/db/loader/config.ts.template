@@ -1,0 +1,94 @@
+/**
+ * Database Configuration Module
+ * Handles environment variables, validation, and pool settings
+ * Target: <300 lines
+ */
+
+export interface DatabaseConfig {
+  // Connection
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+
+  // Pool settings
+  poolMin: number;
+  poolMax: number;
+  poolIdleTimeout: number;
+  connectionTimeout: number;
+
+  // Features
+  ssl: boolean;
+  statementTimeout: number;
+  lockTimeout: number;
+
+  // Application
+  schema: string;
+  migrationsPath: string;
+  seedsPath: string;
+  environment: 'development' | 'staging' | 'production';
+}
+
+/**
+ * Load configuration from environment
+ */
+export function load(): DatabaseConfig {
+  const env = process.env;
+
+  return {
+    // Connection
+    host: env.PGHOST || 'localhost',
+    port: parseInt(env.PGPORT || '5432', 10),
+    database: env.PGDATABASE || 'ehg_dev',
+    user: env.PGUSER || 'postgres',
+    password: env.PGPASSWORD || '',
+
+    // Pool settings
+    poolMin: parseInt(env.PG_POOL_MIN || '2', 10),
+    poolMax: parseInt(env.PG_POOL_MAX || '10', 10),
+    poolIdleTimeout: parseInt(env.PG_IDLE_TIMEOUT || '30000', 10),
+    connectionTimeout: parseInt(env.PG_CONNECT_TIMEOUT || '5000', 10),
+
+    // Features
+    ssl: env.PG_SSL === 'true',
+    statementTimeout: parseInt(env.PG_STATEMENT_TIMEOUT || '30000', 10),
+    lockTimeout: parseInt(env.PG_LOCK_TIMEOUT || '10000', 10),
+
+    // Application
+    schema: env.PG_SCHEMA || 'eng',
+    migrationsPath: env.MIGRATIONS_PATH || 'db/migrations',
+    seedsPath: env.SEEDS_PATH || 'db/seeds',
+    environment: (env.NODE_ENV as any) || 'development',
+  };
+}
+
+/**
+ * Validate configuration
+ */
+export function validate(config: DatabaseConfig): string[] {
+  const errors: string[] = [];
+
+  if (!config.host) errors.push('Missing PGHOST');
+  if (!config.database) errors.push('Missing PGDATABASE');
+  if (!config.user) errors.push('Missing PGUSER');
+
+  if (config.poolMin < 0) errors.push('PG_POOL_MIN must be >= 0');
+  if (config.poolMax < config.poolMin) errors.push('PG_POOL_MAX must be >= PG_POOL_MIN');
+
+  if (config.environment === 'production' && !config.password) {
+    errors.push('PGPASSWORD required in production');
+  }
+
+  return errors;
+}
+
+/**
+ * Get connection string
+ */
+export function getConnectionString(config: DatabaseConfig): string {
+  const { host, port, database, user, password, ssl } = config;
+  const auth = password ? `${user}:${password}` : user;
+  const sslParam = ssl ? '?ssl=true' : '';
+  return `postgresql://${auth}@${host}:${port}/${database}${sslParam}`;
+}

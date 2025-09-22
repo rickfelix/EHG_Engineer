@@ -206,55 +206,102 @@ jobs:
           fi
           echo "✅ Boundary checks passed: no cross-app writes detected"
 
-      - name: File bloat check (>512KB)
+      - name: File bloat check (path-aware)
         run: |
           set -e
-          echo "Checking for large files..."
-          BYTES=524288  # 512KB
-          BLOAT=""
+          echo "Checking for large files (path-aware)..."
+          BYTES_CODE=314572   # 307KB for code
+          BYTES_DOCS=1048576  # 1MB for docs
+          ALLOWLIST="ops/ci/bloat-allowlist.txt"
 
-          # Find files larger than threshold
-          for file in $(git ls-files); do
-            if [ -f "$file" ]; then
-              SIZE=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo 0)
-              if [ "$SIZE" -gt "$BYTES" ]; then
-                SIZE_KB=$((SIZE / 1024))
-                echo "  📦 ${SIZE_KB}KB - $file"
-                BLOAT="${BLOAT}${file}\n"
-              fi
+          # Create allowlist file if it doesn't exist
+          if [ ! -f "$ALLOWLIST" ]; then
+            echo "# Default allowlist" > "$ALLOWLIST"
+            echo "node_modules/**" >> "$ALLOWLIST"
+          fi
+
+          # Build candidate list, excluding allowlist patterns
+          CANDIDATES=$(git ls-files | grep -v -f "$ALLOWLIST" 2>/dev/null || git ls-files)
+
+          BLOAT=""
+          for f in $CANDIDATES; do
+            if [ -f "$f" ]; then
+              sz=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null || echo 0)
+              case "$f" in
+                docs/*)
+                  if [ "$sz" -gt "$BYTES_DOCS" ]; then
+                    sz_kb=$((sz / 1024))
+                    echo "  📚 ${sz_kb}KB - $f (doc, threshold: 1MB)"
+                    BLOAT="${BLOAT}\n$sz $f"
+                  fi
+                  ;;
+                *)
+                  if [ "$sz" -gt "$BYTES_CODE" ]; then
+                    sz_kb=$((sz / 1024))
+                    echo "  📦 ${sz_kb}KB - $f (code, threshold: 307KB)"
+                    BLOAT="${BLOAT}\n$sz $f"
+                  fi
+                  ;;
+              esac
             fi
           done
 
           if [ -n "$BLOAT" ]; then
-            echo "::warning::Large files detected (>512KB). Consider refactoring or moving to artifacts."
-            echo "⚠️ Files exceeding size limit found - review recommended"
-            # Change to 'exit 1' to enforce strict mode
+            echo "::warning::Large files detected. Code: >307KB, Docs: >1MB"
+            # Uncomment next line to enforce strict mode for code
+            # case "$BLOAT" in *docs/*) true ;; *) exit 1 ;; esac
           else
             echo "✅ No large files detected"
           fi
 
-      - name: Monolith check (>1200 lines)
+      - name: Monolith check (path-aware)
         run: |
           set -e
-          echo "Checking for monolithic files..."
-          MAX_LINES=1200
-          MONOLITHS=""
+          echo "Checking for monolithic files (path-aware)..."
+          MAX_CODE=900    # Stricter for code files
+          MAX_DOCS=2000   # Looser for documentation
+          ALLOWLIST="ops/ci/bloat-allowlist.txt"
 
-          # Check specific file types for line count
-          for file in $(git ls-files '*.js' '*.ts' '*.jsx' '*.tsx' '*.sql' '*.md' 2>/dev/null); do
-            if [ -f "$file" ]; then
-              LINES=$(wc -l < "$file")
-              if [ "$LINES" -gt "$MAX_LINES" ]; then
-                echo "  📜 ${LINES} lines - $file"
-                MONOLITHS="${MONOLITHS}${file}\n"
-              fi
+          # Create allowlist file if it doesn't exist
+          if [ ! -f "$ALLOWLIST" ]; then
+            echo "# Default allowlist" > "$ALLOWLIST"
+            echo "node_modules/**" >> "$ALLOWLIST"
+          fi
+
+          # Build candidate list
+          CANDIDATES=$(git ls-files '*.js' '*.ts' '*.jsx' '*.tsx' '*.sql' '*.md' | grep -v -f "$ALLOWLIST" 2>/dev/null || git ls-files '*.js' '*.ts' '*.jsx' '*.tsx' '*.sql' '*.md')
+
+          LONG=""
+          for f in $CANDIDATES; do
+            if [ -f "$f" ]; then
+              lines=$(wc -l < "$f" 2>/dev/null || echo 0)
+              case "$f" in
+                docs/*.md)
+                  if [ "$lines" -gt "$MAX_DOCS" ]; then
+                    echo "  📚 ${lines} lines - $f (doc, threshold: 2000)"
+                    LONG="${LONG}\n$lines $f"
+                  fi
+                  ;;
+                *.md)
+                  if [ "$lines" -gt "$MAX_DOCS" ]; then
+                    echo "  📄 ${lines} lines - $f (markdown, threshold: 2000)"
+                    LONG="${LONG}\n$lines $f"
+                  fi
+                  ;;
+                *)
+                  if [ "$lines" -gt "$MAX_CODE" ]; then
+                    echo "  📜 ${lines} lines - $f (code, threshold: 900)"
+                    LONG="${LONG}\n$lines $f"
+                  fi
+                  ;;
+              esac
             fi
           done
 
-          if [ -n "$MONOLITHS" ]; then
-            echo "::warning::Monolithic files detected (>${MAX_LINES} lines). Consider refactoring."
-            echo "⚠️ Long files found - refactoring recommended"
-            # Change to 'exit 1' to enforce strict mode
+          if [ -n "$LONG" ]; then
+            echo "::warning::Long files detected. Code: >900 lines, Docs: >2000 lines"
+            # Uncomment next line to enforce strict mode for code
+            # case "$LONG" in *docs/*) true ;; *.md) true ;; *) exit 1 ;; esac
           else
             echo "✅ No monolithic files detected"
           fi
