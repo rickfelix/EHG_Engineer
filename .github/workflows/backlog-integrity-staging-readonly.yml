@@ -47,6 +47,15 @@ jobs:
           
           echo "✅ Staging checks complete"
 
+      - name: Export backlog sequencing candidates (staging, read-only)
+        if: ${{ !inputs.dry_run }}
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/checks/backlog_sequence_staging.sql
+          # Move sequencing CSV to reports/
+          mv sequence_candidates.csv reports/ 2>/dev/null || true
+
       - name: Generate dry-run placeholder
         if: ${{ inputs.dry_run }}
         run: |
