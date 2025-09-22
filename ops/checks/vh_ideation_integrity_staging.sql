@@ -121,3 +121,129 @@ END $$;
   SELECT sp.venture_id, sp.stage, sp.qa_gate_min, sp.gate_met
   FROM stage_progress sp
 ) TO 'ops/checks/out/vh_stage_readiness.csv' WITH CSV HEADER;
+
+-- 7) Recommendations for missing governance (read-only)
+-- Produces vh_ideation_recommendations.csv suggesting SD/PRD additions per venture-stage.
+-- Attempts to include venture_name if available.
+
+DO $$
+DECLARE has_name boolean := false; has_title boolean := false;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='vh_ventures' AND column_name='name'
+  ) INTO has_name;
+
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='vh_ventures' AND column_name='title'
+  ) INTO has_title;
+
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='vh_ventures') THEN
+    IF has_name THEN
+      EXECUTE $q$CREATE TEMP TABLE venture_label AS
+        SELECT venture_id, NULLIF(trim(name::text),'') AS venture_name
+        FROM vh_ventures$q$;
+    ELSIF has_title THEN
+      EXECUTE $q$CREATE TEMP TABLE venture_label AS
+        SELECT venture_id, NULLIF(trim(title::text),'') AS venture_name
+        FROM vh_ventures$q$;
+    ELSE
+      EXECUTE $q$CREATE TEMP TABLE venture_label AS
+        SELECT venture_id, NULL::text AS venture_name
+        FROM vh_ventures$q$;
+    END IF;
+  ELSE
+    -- fallback: use discovered ventures
+    EXECUTE $q$CREATE TEMP TABLE venture_label AS
+      SELECT venture_id, NULL::text AS venture_name
+      FROM ventures$q$;
+  END IF;
+
+  -- Backfill label if null
+  EXECUTE $q$UPDATE venture_label
+          SET venture_name = COALESCE(venture_name, 'Venture ' || LEFT(venture_id::text, 8))$q$;
+END $$;
+
+-- Coverage universe (same logic as stage_coverage_gaps)
+WITH universe AS (
+  SELECT sp.venture_id, c.stage
+  FROM stage_progress sp
+  JOIN stage_catalog c ON TRUE
+  WHERE sp.venture_id IS NOT NULL
+),
+g AS (
+  SELECT venture_id,
+         COALESCE(has_sd,false)  AS has_sd,
+         COALESCE(has_prd,false) AS has_prd
+  FROM gov_agg
+),
+needs AS (
+  SELECT u.venture_id, u.stage,
+         (NOT g.has_sd)  AS missing_sd,
+         (NOT g.has_prd) AS missing_prd
+  FROM universe u
+  LEFT JOIN g ON g.venture_id = u.venture_id
+  WHERE (NOT g.has_sd) OR (NOT g.has_prd)
+),
+readiness AS (
+  SELECT venture_id, stage, gate_met, qa_gate_min
+  FROM stage_progress
+),
+recos AS (
+  SELECT
+    n.venture_id,
+    vl.venture_name,
+    n.stage,
+    CASE
+      WHEN (NOT COALESCE(r.gate_met,false)) THEN 'high'
+      WHEN n.missing_sd AND n.missing_prd         THEN 'high'
+      WHEN n.missing_sd OR  n.missing_prd         THEN 'medium'
+      ELSE 'low'
+    END AS urgency,
+    CASE WHEN n.missing_sd  THEN 'SD'  END AS rec_type_sd,
+    CASE WHEN n.missing_prd THEN 'PRD' END AS rec_type_prd
+  FROM needs n
+  LEFT JOIN readiness r  ON r.venture_id = n.venture_id AND r.stage = n.stage
+  LEFT JOIN venture_label vl ON vl.venture_id = n.venture_id
+),
+expanded AS (
+  -- one row per missing artifact
+  SELECT venture_id, venture_name, stage, urgency, 'SD' AS rec_type FROM recos WHERE rec_type_sd  = 'SD'
+  UNION ALL
+  SELECT venture_id, venture_name, stage, urgency, 'PRD' AS rec_type FROM recos WHERE rec_type_prd = 'PRD'
+),
+suggest AS (
+  SELECT
+    venture_id,
+    venture_name,
+    stage,
+    rec_type,
+    urgency,
+    CASE rec_type
+      WHEN 'SD'  THEN format('Stage %s: Draft Strategic Directive for %s', stage, venture_name)
+      WHEN 'PRD' THEN format('Stage %s: Author PRD for %s',               stage, venture_name)
+    END AS suggested_title,
+    CASE rec_type
+      WHEN 'SD'  THEN 'No SD linked for this venture; create directive to formalize scope and constraints'
+      WHEN 'PRD' THEN 'No PRD linked for this venture; author PRD with acceptance criteria to enable backlog'
+    END AS reason,
+    CASE rec_type
+      WHEN 'SD'  THEN 'governance'
+      WHEN 'PRD' THEN 'product'
+    END AS suggested_type
+  FROM expanded
+)
+\copy (
+  SELECT
+    venture_id,
+    venture_name,
+    stage,
+    rec_type,
+    urgency,
+    suggested_type,
+    suggested_title,
+    reason
+  FROM suggest
+  ORDER BY urgency DESC, venture_name, stage, rec_type
+) TO 'ops/checks/out/vh_ideation_recommendations.csv' WITH CSV HEADER;

@@ -47,6 +47,7 @@ jobs:
           MISSING_PRD=$MISSING_SD  # same file includes both; UI will show both fields
           NOT_READY=$(count ops/checks/out/vh_stage_readiness.csv)
           VENTURE_NO_GOV=$(count ops/checks/out/vh_ventures_without_governance.csv)
+          RECO=$(count ops/checks/out/vh_ideation_recommendations.csv)
 
           {
             echo "### EHG Ideation — Staging Overview"
@@ -54,6 +55,7 @@ jobs:
             echo "- Stage coverage gaps (rows with missing SD/PRD): ${MISSING_SD}"
             echo "- Stages not ready (gate not met): ${NOT_READY}"
             echo "- Ventures without any SD/PRD governance linkage: ${VENTURE_NO_GOV}"
+            echo "- Recommendation rows (SD/PRD suggestions): ${RECO}"
           } >> $GITHUB_STEP_SUMMARY
 
       - name: Upload artifacts
