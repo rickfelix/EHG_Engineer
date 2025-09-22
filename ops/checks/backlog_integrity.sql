@@ -1,14 +1,14 @@
 -- SD governance metadata gaps
 SELECT sd.sd_key, sd.owner, sd.decision_log_ref, sd.evidence_ref
-FROM strategic_directives_v2 sd
+FROM eng.strategic_directives_v2 sd
 WHERE (sd.owner IS NULL OR sd.owner = '')
    OR (sd.decision_log_ref IS NULL OR sd.decision_log_ref = '')
    OR (sd.evidence_ref IS NULL OR sd.evidence_ref = '');
 
 -- PRD contract issues
 SELECT p.id AS prd_id, p.sd_id, p.completeness_score, p.risk_rating, p.acceptance_criteria_json
-FROM product_requirements_v2 p
-LEFT JOIN strategic_directives_v2 sd ON sd.id = p.sd_id
+FROM eng.product_requirements_v2 p
+LEFT JOIN eng.strategic_directives_v2 sd ON sd.id = p.sd_id
 WHERE sd.id IS NULL
    OR p.completeness_score NOT BETWEEN 0 AND 100
    OR p.risk_rating NOT IN ('low','medium','high')
@@ -17,8 +17,8 @@ WHERE sd.id IS NULL
 
 -- Backlog shape problems (orphans/enums/qa floor)
 SELECT b.id AS backlog_id, b.prd_id, b.type, b.state, b.priority, b.qa_gate_min
-FROM eng_backlog b
-LEFT JOIN product_requirements_v2 p ON p.id = b.prd_id
+FROM eng.eng_backlog b
+LEFT JOIN eng.product_requirements_v2 p ON p.id = b.prd_id
 WHERE p.id IS NULL
    OR b.type IS NULL
    OR b.state IS NULL
