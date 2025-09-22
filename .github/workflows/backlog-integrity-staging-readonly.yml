@@ -46,14 +46,33 @@ jobs:
           mv *.csv reports/ 2>/dev/null || true
           
           echo "✅ Staging checks complete"
-      
+
       - name: Generate dry-run placeholder
         if: ${{ inputs.dry_run }}
         run: |
           mkdir -p reports
           echo "timestamp,check,status" > reports/dry_run_placeholder.csv
           echo "$(date -u +%Y-%m-%dT%H:%M:%SZ),dry_run,skipped" >> reports/dry_run_placeholder.csv
-      
+
+      - name: Record baseline counts
+        if: ${{ !inputs.dry_run }}
+        run: |
+          count() { [ -f "$1" ] && echo $(( $(wc -l < "$1") - 1 )) || echo 0; }
+          SD=$(count reports/sd_metadata_gaps.csv)
+          PRD=$(count reports/prd_contract_gaps.csv)
+          BL=$(count reports/backlog_shape_issues.csv)
+          TR=$(count reports/traceability_gaps.csv)
+          DEP=$(count reports/gap_dependencies.csv)
+          ORPH=$(count reports/orphans.csv)
+          {
+            echo "BASE_SD=${SD}"
+            echo "BASE_PRD=${PRD}"
+            echo "BASE_BL=${BL}"
+            echo "BASE_TR=${TR}"
+            echo "BASE_DEP=${DEP}"
+            echo "BASE_ORPH=${ORPH}"
+          } > reports/_baseline.env
+
       - name: Generate summary
         if: always()
         run: |
@@ -162,6 +181,46 @@ jobs:
             # Move regenerated CSVs to reports/
             mv *.csv reports/ 2>/dev/null || true
           fi
+
+      - name: Summarize deltas (post-apply)
+        if: ${{ (vars.APPLY_BACKLOG_FIXES == '1' || vars.APPLY_ORPHAN_LINKS == '1') && vars.STAGING_WRITE_OK == '1' && vars.DRY_RUN == '0' }}
+        run: |
+          count() { [ -f "$1" ] && echo $(( $(wc -l < "$1") - 1 )) || echo 0; }
+          . reports/_baseline.env 2>/dev/null || true
+
+          SD=$(count reports/sd_metadata_gaps.csv)
+          PRD=$(count reports/prd_contract_gaps.csv)
+          BL=$(count reports/backlog_shape_issues.csv)
+          TR=$(count reports/traceability_gaps.csv)
+          DEP=$(count reports/gap_dependencies.csv)
+          ORPH=$(count reports/orphans.csv)
+
+          d() {
+            local delta=$(( $2 - $1 ))
+            if [ $delta -lt 0 ]; then
+              echo "$delta"
+            elif [ $delta -gt 0 ]; then
+              echo "+$delta"
+            else
+              echo "0"
+            fi
+          }
+
+          {
+            echo ""
+            echo "### 📊 Backlog Integrity — Deltas (Applied)"
+            echo ""
+            echo "| Category | Before | After | Change |"
+            echo "|----------|--------|-------|--------|"
+            echo "| SD Metadata | ${BASE_SD:-0} | ${SD} | $(d ${BASE_SD:-0} ${SD}) |"
+            echo "| PRD Contract | ${BASE_PRD:-0} | ${PRD} | $(d ${BASE_PRD:-0} ${PRD}) |"
+            echo "| Backlog Shape | ${BASE_BL:-0} | ${BL} | $(d ${BASE_BL:-0} ${BL}) |"
+            echo "| Traceability | ${BASE_TR:-0} | ${TR} | $(d ${BASE_TR:-0} ${TR}) |"
+            echo "| Dependencies | ${BASE_DEP:-0} | ${DEP} | $(d ${BASE_DEP:-0} ${DEP}) |"
+            echo "| Orphans | ${BASE_ORPH:-0} | ${ORPH} | $(d ${BASE_ORPH:-0} ${ORPH}) |"
+            echo ""
+            echo "✅ Fixes applied successfully"
+          } >> $GITHUB_STEP_SUMMARY
 
       - name: Upload reports
         if: always()
