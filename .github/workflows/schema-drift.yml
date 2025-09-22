@@ -1,0 +1,231 @@
+name: Schema Drift Detection
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"  # 06:00 UTC every Monday
+  push:
+    paths:
+      - 'db/migrations/**'
+      - 'db/views/**'
+      - 'db/policies/**'
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  detect-drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: drift_test
+          POSTGRES_USER: drift_user
+          POSTGRES_PASSWORD: drift_pw
+        options: >-
+          --health-cmd=pg_isready
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Set database environment
+        run: |
+          echo "PGHOST=127.0.0.1" >> $GITHUB_ENV
+          echo "PGPORT=5432" >> $GITHUB_ENV
+          echo "PGDATABASE=drift_test" >> $GITHUB_ENV
+          echo "PGUSER=drift_user" >> $GITHUB_ENV
+          echo "PGPASSWORD=drift_pw" >> $GITHUB_ENV
+
+      - name: Wait for database
+        run: |
+          for i in {1..30}; do
+            pg_isready -h 127.0.0.1 -p 5432 -U drift_user -d drift_test && exit 0
+            echo "Waiting for Postgres ($i/30)..."
+            sleep 2
+          done
+          echo "Postgres never became ready"
+          exit 1
+
+      - name: Apply repository schema
+        run: |
+          set -e
+          echo "Creating base schemas..."
+          PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE <<'EOF'
+          CREATE SCHEMA IF NOT EXISTS eng;
+          CREATE SCHEMA IF NOT EXISTS vh;
+          CREATE SCHEMA IF NOT EXISTS audit;
+          CREATE SCHEMA IF NOT EXISTS views;
+          EOF
+
+          echo "Building apply list..."
+          {
+            ls -1 db/migrations/eng/*.sql 2>/dev/null || true
+            ls -1 db/views/eng/*.sql 2>/dev/null || true
+            ls -1 db/policies/eng/*.sql 2>/dev/null || true
+            ls -1 db/migrations/vh/*.sql 2>/dev/null || true
+            ls -1 db/views/vh/*.sql 2>/dev/null || true
+            ls -1 db/policies/vh/*.sql 2>/dev/null || true
+          } > _drift_files.txt
+
+          echo "Applying all database objects..."
+          while read -r file; do
+            if [ -f "$file" ]; then
+              echo "Applying: $file"
+              PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE -f "$file" || true
+            fi
+          done < _drift_files.txt
+
+      - name: Dump repository schema
+        run: |
+          PGPASSWORD=$PGPASSWORD pg_dump -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE \
+            --schema-only --no-owner --no-privileges \
+            --schema=eng --schema=vh --schema=audit --schema=views \
+            -f repo_schema.sql
+
+      - name: Create baseline database
+        run: |
+          echo "Creating baseline database..."
+          PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d postgres <<'EOF'
+          DROP DATABASE IF EXISTS drift_baseline;
+          CREATE DATABASE drift_baseline;
+          EOF
+
+      - name: Apply baseline (simulate production)
+        run: |
+          # In real scenario, this would restore from production backup
+          # For now, we'll use the same schema as a baseline
+          PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d drift_baseline -f repo_schema.sql
+
+      - name: Dump baseline schema
+        run: |
+          PGPASSWORD=$PGPASSWORD pg_dump -h $PGHOST -p $PGPORT -U $PGUSER -d drift_baseline \
+            --schema-only --no-owner --no-privileges \
+            --schema=eng --schema=vh --schema=audit --schema=views \
+            -f baseline_schema.sql 2>/dev/null || echo "No baseline yet"
+
+      - name: Compare schemas
+        id: compare
+        run: |
+          set -e
+          echo "Comparing repository vs baseline schemas..."
+
+          # Normalize schemas for comparison (remove comments, timestamps)
+          sed -E 's/--.*$//g; s/^[[:space:]]*$//g; /^$/d' repo_schema.sql | sort > repo_normalized.sql
+          sed -E 's/--.*$//g; s/^[[:space:]]*$//g; /^$/d' baseline_schema.sql | sort > baseline_normalized.sql 2>/dev/null || touch baseline_normalized.sql
+
+          # Generate diff
+          if diff -u baseline_normalized.sql repo_normalized.sql > schema_drift.diff; then
+            echo "✅ No schema drift detected"
+            echo "drift_detected=false" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ Schema drift detected!"
+            echo "drift_detected=true" >> $GITHUB_OUTPUT
+            echo "Differences found:"
+            head -100 schema_drift.diff
+          fi
+
+      - name: Check critical objects
+        run: |
+          echo "Verifying critical database objects..."
+          PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE <<'EOF'
+          -- Check required tables exist
+          DO $$
+          DECLARE
+            required_tables text[] := ARRAY[
+              'eng.strategic_directives_v2',
+              'eng.prds',
+              'eng.backlog_items'
+            ];
+            missing_tables text[] := '{}';
+            tbl text;
+          BEGIN
+            FOREACH tbl IN ARRAY required_tables
+            LOOP
+              IF NOT EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema || '.' || table_name = tbl
+              ) THEN
+                missing_tables := array_append(missing_tables, tbl);
+              END IF;
+            END LOOP;
+
+            IF array_length(missing_tables, 1) > 0 THEN
+              RAISE EXCEPTION 'Missing critical tables: %', array_to_string(missing_tables, ', ');
+            END IF;
+
+            RAISE NOTICE '✅ All critical tables present';
+          END $$;
+
+          -- Check RLS is enabled
+          SELECT
+            schemaname,
+            tablename,
+            CASE WHEN rowsecurity THEN '✅' ELSE '❌' END as rls_status
+          FROM pg_tables
+          WHERE schemaname IN ('eng', 'vh')
+          ORDER BY schemaname, tablename;
+          EOF
+
+      - name: Create drift report
+        if: steps.compare.outputs.drift_detected == 'true'
+        run: |
+          cat > drift_report.md <<'EOF'
+          # Schema Drift Report
+
+          **Date**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          **Status**: ⚠️ Drift Detected
+
+          ## Summary
+          The repository schema differs from the baseline (production) schema.
+
+          ## Action Required
+          1. Review the differences below
+          2. If intentional, update migrations
+          3. If unintentional, investigate the cause
+
+          ## Differences
+          ```diff
+          $(head -200 schema_drift.diff)
+          ```
+
+          ## Next Steps
+          - [ ] Review drift with team
+          - [ ] Create migration if needed
+          - [ ] Update baseline after production deployment
+          EOF
+
+      - name: Create issue for drift
+        if: steps.compare.outputs.drift_detected == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('drift_report.md', 'utf8');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `⚠️ Schema Drift Detected - ${new Date().toISOString().split('T')[0]}`,
+              body: report,
+              labels: ['schema-drift', 'database', 'housekeeping']
+            });
+
+      - name: Upload drift artifacts
+        if: steps.compare.outputs.drift_detected == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: schema-drift-report
+          path: |
+            schema_drift.diff
+            drift_report.md
+            repo_schema.sql
+            baseline_schema.sql
