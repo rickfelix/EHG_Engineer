@@ -21,23 +21,18 @@ LEFT JOIN v_vh_governance_snapshot gs ON gs.sd_id = s.id;
 CREATE TEMP TABLE _prd_metrics AS
 WITH prd_unified AS (
   SELECT p.*,
-         -- Unify both column names for compatibility
-         COALESCE(
-           CASE
-             WHEN EXISTS (SELECT 1 FROM information_schema.columns
-                         WHERE table_name='product_requirements_v2'
-                         AND column_name='sd_id')
-             THEN p.sd_id::text
-             ELSE NULL
-           END,
-           CASE
-             WHEN EXISTS (SELECT 1 FROM information_schema.columns
-                         WHERE table_name='product_requirements_v2'
-                         AND column_name='directive_id')
-             THEN p.directive_id::text
-             ELSE NULL
-           END
-         ) AS sd_id_unified
+         -- Dynamically determine which column exists and use it
+         CASE
+           WHEN EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name='product_requirements_v2'
+                       AND column_name='sd_id')
+           THEN (SELECT p2.sd_id::text FROM product_requirements_v2 p2 WHERE p2.id = p.id)
+           WHEN EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name='product_requirements_v2'
+                       AND column_name='directive_id')
+           THEN p.directive_id::text
+           ELSE NULL
+         END AS sd_id_unified
   FROM product_requirements_v2 p
 )
 SELECT prd.sd_id_unified AS sd_id,
@@ -76,22 +71,17 @@ END $;
 CREATE TEMP TABLE _ac_by_sd AS
 WITH prd_unified AS (
   SELECT p.id,
-         COALESCE(
-           CASE
-             WHEN EXISTS (SELECT 1 FROM information_schema.columns
-                         WHERE table_name='product_requirements_v2'
-                         AND column_name='sd_id')
-             THEN p.sd_id::text
-             ELSE NULL
-           END,
-           CASE
-             WHEN EXISTS (SELECT 1 FROM information_schema.columns
-                         WHERE table_name='product_requirements_v2'
-                         AND column_name='directive_id')
-             THEN p.directive_id::text
-             ELSE NULL
-           END
-         ) AS sd_id_unified
+         CASE
+           WHEN EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name='product_requirements_v2'
+                       AND column_name='sd_id')
+           THEN (SELECT p2.sd_id::text FROM product_requirements_v2 p2 WHERE p2.id = p.id)
+           WHEN EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name='product_requirements_v2'
+                       AND column_name='directive_id')
+           THEN p.directive_id::text
+           ELSE NULL
+         END AS sd_id_unified
   FROM product_requirements_v2 p
 )
 SELECT COALESCE(sn.sd_id::text, prd.sd_id_unified) AS sd_id,
