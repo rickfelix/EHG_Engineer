@@ -12,7 +12,7 @@ BEGIN;
 CREATE SCHEMA IF NOT EXISTS vh;
 
 -- 2. Core vh_ventures table (foundation for governance tracking)
-CREATE TABLE IF NOT EXISTS vh_ventures (
+CREATE TABLE IF NOT EXISTS vh.vh_ventures (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     name text NOT NULL,
     description text,
@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS vh_ventures (
     updated_at timestamptz DEFAULT now(),
 
     -- Governance trace columns (from existing migration 202509221335)
-    sd_id uuid,
+    -- Note: sd_id should match strategic_directives_v2.id type (VARCHAR(50))
+    sd_id varchar(50),
     prd_id uuid,
     backlog_id uuid,
     gate_status text,
@@ -33,10 +34,10 @@ CREATE TABLE IF NOT EXISTS vh_ventures (
 );
 
 -- 3. Indexes for performance
-CREATE INDEX IF NOT EXISTS idx_vh_ventures_sd_id ON vh_ventures(sd_id);
-CREATE INDEX IF NOT EXISTS idx_vh_ventures_prd_id ON vh_ventures(prd_id);
-CREATE INDEX IF NOT EXISTS idx_vh_ventures_status ON vh_ventures(status);
-CREATE INDEX IF NOT EXISTS idx_vh_ventures_created_at ON vh_ventures(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_vh_ventures_sd_id ON vh.vh_ventures(sd_id);
+CREATE INDEX IF NOT EXISTS idx_vh_ventures_prd_id ON vh.vh_ventures(prd_id);
+CREATE INDEX IF NOT EXISTS idx_vh_ventures_status ON vh.vh_ventures(status);
+CREATE INDEX IF NOT EXISTS idx_vh_ventures_created_at ON vh.vh_ventures(created_at DESC);
 
 -- 4. Update trigger for vh_ventures
 CREATE OR REPLACE FUNCTION vh_update_updated_at()
@@ -48,12 +49,12 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trigger_vh_ventures_updated_at
-    BEFORE UPDATE ON vh_ventures
+    BEFORE UPDATE ON vh.vh_ventures
     FOR EACH ROW
     EXECUTE FUNCTION vh_update_updated_at();
 
 -- 5. Optional: Create vh_stage_catalog for stage tracking
-CREATE TABLE IF NOT EXISTS vh_stage_catalog (
+CREATE TABLE IF NOT EXISTS vh.vh_stage_catalog (
     stage text PRIMARY KEY,
     description text,
     qa_gate_min integer DEFAULT 0,
@@ -62,7 +63,7 @@ CREATE TABLE IF NOT EXISTS vh_stage_catalog (
 );
 
 -- 6. Insert default stage catalog entries if table is empty
-INSERT INTO vh_stage_catalog (stage, description, qa_gate_min, sort_order)
+INSERT INTO vh.vh_stage_catalog (stage, description, qa_gate_min, sort_order)
 SELECT * FROM (VALUES
     ('ideation', 'Initial concept and idea formation', 0, 1),
     ('validation', 'Market and technical validation', 1, 2),
@@ -71,7 +72,7 @@ SELECT * FROM (VALUES
     ('deployment', 'Production deployment', 4, 5),
     ('monitoring', 'Post-deployment monitoring', 5, 6)
 ) AS default_stages(stage, description, qa_gate_min, sort_order)
-WHERE NOT EXISTS (SELECT 1 FROM vh_stage_catalog);
+WHERE NOT EXISTS (SELECT 1 FROM vh.vh_stage_catalog);
 
 -- 7. Create v_vh_governance_snapshot view (required by WSJF workflows)
 CREATE OR REPLACE VIEW v_vh_governance_snapshot AS
@@ -100,7 +101,7 @@ SELECT
         ELSE 'missing'
     END AS governance_readiness
 
-FROM vh_ventures v
+FROM vh.vh_ventures v
 LEFT JOIN strategic_directives_v2 sd ON sd.id = v.sd_id;
 
 -- 8. Grant appropriate permissions (adjust as needed for your security model)
@@ -111,7 +112,7 @@ GRANT SELECT ON v_vh_governance_snapshot TO public;
 
 -- 9. Comments for documentation
 COMMENT ON SCHEMA vh IS 'VH (Venture Hub) namespace for venture governance tracking and Vision Alignment Pipeline compatibility';
-COMMENT ON TABLE vh_ventures IS 'Core ventures table with governance trace columns for Vision/WSJF workflow compatibility';
+COMMENT ON TABLE vh.vh_ventures IS 'Core ventures table with governance trace columns for Vision/WSJF workflow compatibility';
 COMMENT ON VIEW v_vh_governance_snapshot IS 'Governance snapshot view required by Vision Alignment and WSJF workflows';
 
 -- 10. Verification and reporting
@@ -120,13 +121,13 @@ DECLARE
     venture_count integer;
     snapshot_count integer;
 BEGIN
-    SELECT count(*) INTO venture_count FROM vh_ventures;
+    SELECT count(*) INTO venture_count FROM vh.vh_ventures;
     SELECT count(*) INTO snapshot_count FROM v_vh_governance_snapshot;
 
     RAISE NOTICE 'VH Bridge Infrastructure created successfully:';
     RAISE NOTICE '  - vh_ventures table: % records', venture_count;
     RAISE NOTICE '  - v_vh_governance_snapshot view: % records', snapshot_count;
-    RAISE NOTICE '  - Stage catalog: % stages', (SELECT count(*) FROM vh_stage_catalog);
+    RAISE NOTICE '  - Stage catalog: % stages', (SELECT count(*) FROM vh.vh_stage_catalog);
 END $$;
 
 COMMIT;
