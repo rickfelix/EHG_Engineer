@@ -17,17 +17,39 @@ SELECT DISTINCT s.id AS sd_id, gs.venture_id
 FROM strategic_directives_v2 s
 LEFT JOIN v_vh_governance_snapshot gs ON gs.sd_id = s.id;
 
--- PRD metrics per SD
+-- PRD metrics per SD (handle both sd_id and directive_id columns)
 CREATE TEMP TABLE _prd_metrics AS
-SELECT p.sd_id,
-       AVG(NULLIF(p.completeness_score,0))                 AS prd_completeness_avg,  -- 0..100
-       AVG(CASE lower(p.risk_rating)
+WITH prd_unified AS (
+  SELECT p.*,
+         -- Unify both column names for compatibility
+         COALESCE(
+           CASE
+             WHEN EXISTS (SELECT 1 FROM information_schema.columns
+                         WHERE table_name='product_requirements_v2'
+                         AND column_name='sd_id')
+             THEN p.sd_id::text
+             ELSE NULL
+           END,
+           CASE
+             WHEN EXISTS (SELECT 1 FROM information_schema.columns
+                         WHERE table_name='product_requirements_v2'
+                         AND column_name='directive_id')
+             THEN p.directive_id::text
+             ELSE NULL
+           END
+         ) AS sd_id_unified
+  FROM product_requirements_v2 p
+)
+SELECT prd.sd_id_unified AS sd_id,
+       AVG(NULLIF(prd.completeness_score,0))                 AS prd_completeness_avg,  -- 0..100
+       AVG(CASE lower(prd.risk_rating)
              WHEN 'low' THEN 0
              WHEN 'medium' THEN 0.5
              WHEN 'high' THEN 1
-             ELSE 0.5 END)                                 AS prd_risk_avg           -- 0..1
-FROM product_requirements_v2 p
-GROUP BY p.sd_id;
+             ELSE 0.5 END)                                       AS prd_risk_avg           -- 0..1
+FROM prd_unified prd
+WHERE prd.sd_id_unified IS NOT NULL
+GROUP BY prd.sd_id_unified;
 
 -- Story AC coverage per SD (if a stories table exists). We try vh_user_stories first.
 DO $
@@ -52,12 +74,32 @@ BEGIN
 END $;
 
 CREATE TEMP TABLE _ac_by_sd AS
-SELECT COALESCE(sn.sd_id, p.sd_id) AS sd_id,
+WITH prd_unified AS (
+  SELECT p.id,
+         COALESCE(
+           CASE
+             WHEN EXISTS (SELECT 1 FROM information_schema.columns
+                         WHERE table_name='product_requirements_v2'
+                         AND column_name='sd_id')
+             THEN p.sd_id::text
+             ELSE NULL
+           END,
+           CASE
+             WHEN EXISTS (SELECT 1 FROM information_schema.columns
+                         WHERE table_name='product_requirements_v2'
+                         AND column_name='directive_id')
+             THEN p.directive_id::text
+             ELSE NULL
+           END
+         ) AS sd_id_unified
+  FROM product_requirements_v2 p
+)
+SELECT COALESCE(sn.sd_id::text, prd.sd_id_unified) AS sd_id,
        COUNT(*)::int AS stories_total,
        COUNT(*) FILTER (WHERE ac_json IS NOT NULL AND ac_json <> '[]')::int AS stories_with_ac
 FROM _stories_norm sn
-LEFT JOIN product_requirements_v2 p ON p.id = sn.prd_id
-GROUP BY COALESCE(sn.sd_id, p.sd_id);
+LEFT JOIN prd_unified prd ON prd.id = sn.prd_id
+GROUP BY COALESCE(sn.sd_id::text, prd.sd_id_unified);
 
 -- Gate pass rate per venture (optional view)
 CREATE TEMP TABLE _gate_by_v AS
