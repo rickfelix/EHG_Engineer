@@ -152,5 +152,26 @@ END $$;
   ORDER BY dep_column, backlog_id
 ) TO 'gap_dependencies.csv' WITH CSV HEADER;
 
+-- 6) Orphan backlog export (report-only)
+-- Backlog items whose prd_id does not resolve to a product_requirements_v2 row.
+-- Includes editable columns for future intake (chosen_prd_id/action/comment).
+\copy (
+  SELECT
+    b.backlog_id,
+    b.sd_key,
+    b.prd_id                  AS existing_prd_id,
+    COALESCE(b.title, b.description) AS title,
+    b.item_type,
+    b.status,
+    b.priority,
+    /* Intake columns (for a future mapping CSV; remain NULL/defaults here) */
+    NULL::uuid               AS chosen_prd_id,
+    'link'::text             AS action,   -- candidates: 'link' | 'archive' | 'ignore'
+    ''::text                 AS comment
+  FROM sd_backlog_map b
+  LEFT JOIN product_requirements_v2 p ON p.id = b.prd_id
+  WHERE p.id IS NULL
+) TO 'orphans.csv' WITH CSV HEADER;
+
 -- Summary output
 \echo 'Backlog integrity checks complete. CSV reports generated.'

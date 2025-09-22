@@ -89,6 +89,11 @@ jobs:
             echo "- **Dependency Issues**: $count problems" >> $GITHUB_STEP_SUMMARY
           fi
 
+          if [ -f reports/orphans.csv ]; then
+            count=$(tail -n +2 reports/orphans.csv | wc -l)
+            echo "- **Orphan Backlog Items**: $count items" >> $GITHUB_STEP_SUMMARY
+          fi
+
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📊 Reports available as workflow artifacts" >> $GITHUB_STEP_SUMMARY
 
