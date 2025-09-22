@@ -5,6 +5,7 @@
  * The actual implementation has been refactored into modular components.
  *
  * REFACTOR PR #1: Split monolithic file into focused modules
+ * REFACTOR PR #3: TypeScript support added (build with npm run build:loader)
  * - connections.js: Supabase client management
  * - strategic-loaders.js: SD/PRD/EES loading
  * - submissions.js: SDIP submission handling
