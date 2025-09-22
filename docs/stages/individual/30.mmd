@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 30 Detail
+subgraph S30["30. Production Deployment"]
+  S30_root["Purpose: Deploy to production with zero-downtime and rollback capabilities.
+Owner: EXEC"]
+  S30_A["30.1 Pre-Deployment Validation"]
+  S30_B["30.2 Blue-Green Deployment"]
+  S30_C["30.3 Post-Deployment Verification"]
+  S30_root --> S30_A --> S30_B --> S30_C
+end
+classDef dep stroke-dasharray: 5 5;
+D30["Depends on: 29"]:::dep -.-> S30_root

@@ -1,0 +1,146 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: ehg-development-policies
+  annotations:
+    security.ehg.io/environment: development
+    security.ehg.io/enforcement: audit
+
+# Reference to base configuration
+resources:
+  - ../../base
+
+# Development namespace
+namespace: kyverno-dev
+
+# Development name prefix
+namePrefix: dev-
+
+# Development-specific labels
+commonLabels:
+  environment: development
+  security.ehg.io/enforcement-level: audit
+  gitops.ehg.io/auto-sync: "true"
+  testing.ehg.io/enabled: "true"
+
+# Development annotations
+commonAnnotations:
+  security.ehg.io/approval: not-required
+  gitops.ehg.io/sync-wave: "1"
+  testing.ehg.io/allow-unsigned: "true"
+
+# Development patches
+patches:
+  # Set policies to audit mode in dev
+  - target:
+      group: kyverno.io
+      version: v1
+      kind: ClusterPolicy
+    patch: |-
+      - op: replace
+        path: /spec/validationFailureAction
+        value: audit
+      - op: replace
+        path: /spec/background
+        value: true
+      - op: replace
+        path: /spec/failurePolicy
+        value: Ignore
+
+  # Lower resource limits for development
+  - target:
+      kind: Deployment
+      name: ".*"
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "256Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "250m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "128Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "50m"
+
+  # Relaxed security for development
+  - target:
+      kind: Deployment
+      name: ".*"
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/securityContext/runAsNonRoot
+        value: false
+      - op: remove
+        path: /spec/template/spec/securityContext/readOnlyRootFilesystem
+
+# Development-specific config
+configMapGenerator:
+  - name: cluster-config
+    behavior: merge
+    literals:
+      - cluster_name=ehg-development
+      - environment=development
+      - region=us-west-2
+      - slsa_level=1
+      - policy_version=v1.0.0-dev
+      - enforcement_mode=audit
+      - auto_remediation=disabled
+      - audit_logging=verbose
+      - debug_mode=enabled
+
+# Development replicas (single instance)
+replicas:
+  - name: kyverno
+    count: 1
+
+# Additional development resources
+patchesStrategicMerge:
+  - |-
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: dev-testing-config
+      namespace: kyverno-dev
+    data:
+      allow_unsigned_images: "true"
+      allow_latest_tag: "true"
+      skip_slsa_verification: "true"
+      enable_debug_logging: "true"
+
+# Development-specific test policies
+  - |-
+    apiVersion: kyverno.io/v1
+    kind: ClusterPolicy
+    metadata:
+      name: dev-testing-exceptions
+      namespace: kyverno-dev
+    spec:
+      validationFailureAction: audit
+      background: false
+      rules:
+        - name: allow-dev-namespaces
+          match:
+            any:
+            - resources:
+                kinds:
+                - Pod
+                namespaces:
+                - "dev-*"
+                - "test-*"
+                - "sandbox-*"
+          exclude:
+            any:
+            - resources:
+                namespaces:
+                - "dev-*"
+                - "test-*"
+                - "sandbox-*"
+
+# Development components
+components:
+  - ../../components/debug-tools
+  - ../../components/test-fixtures

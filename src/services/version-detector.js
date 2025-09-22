@@ -1,0 +1,75 @@
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import path from 'path';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+/**
+ * LEO Protocol Version Detector
+ * DATABASE-ONLY: Gets version from database
+ */
+
+dotenv.config({ path: path.join(__dirname, '../../.env') });
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+class LEOVersionDetector {
+  constructor() {
+    
+    // Initialize Supabase if credentials available
+    if (supabaseUrl && supabaseKey) {
+      this.supabase = createClient(supabaseUrl, supabaseKey);
+      this.hasDatabase = true;
+    } else {
+      this.hasDatabase = false;
+    }
+  }
+
+  /**
+   * Get LEO Protocol version - DATABASE ONLY
+   * @returns {string} Active version from database
+   */
+  async detectLatestVersion() {
+    if (!this.hasDatabase) {
+      throw new Error('❌ Database connection required. File-based detection removed.');
+    }
+    
+    try {
+      const { data, error } = await this.supabase
+        .from('leo_protocols')
+        .select('version, status')
+        .eq('status', 'active')
+        .single();
+      
+      if (error) {
+        console.error('❌ Database query error:', error);
+        throw new Error(`Database query failed: ${error.message}`);
+      }
+      
+      if (!data) {
+        throw new Error('❌ No active protocol found in database');
+      }
+      
+      console.log(`🎯 Active Protocol from DATABASE: v${data.version}`);
+      return data.version;
+      
+    } catch (dbError) {
+      console.error('❌ Database version detection failed:', dbError.message);
+      throw dbError;
+    }
+  }
+  
+  /**
+   * Get cached version (SYNC for compatibility)
+   * @returns {Promise<string>} Active version from database
+   */
+  async getVersion() {
+    return await this.detectLatestVersion();
+  }
+}
+
+export default LEOVersionDetector;

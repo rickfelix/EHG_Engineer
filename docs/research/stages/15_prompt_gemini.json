@@ -1,0 +1,89 @@
+{
+  "stage_id": 15,
+  "stage_title": "Pricing Strategy & Revenue Architecture",
+  "objective": "Optimize Stage 15 (Pricing Strategy & Revenue Architecture) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 15,
+      "title": "Pricing Strategy & Revenue Architecture",
+      "description": "Develop comprehensive pricing strategy and revenue model.",
+      "owner": "LEAD",
+      "depends_on": [
+        14
+      ],
+      "inputs": [
+        "Cost structure",
+        "Market research",
+        "Competitor pricing"
+      ],
+      "outputs": [
+        "Pricing model",
+        "Revenue projections",
+        "Pricing tiers"
+      ],
+      "metrics": [
+        "Price optimization",
+        "Revenue potential",
+        "Market acceptance"
+      ],
+      "gates": {
+        "entry": [
+          "Costs calculated",
+          "Market research complete"
+        ],
+        "exit": [
+          "Pricing approved",
+          "Tiers defined",
+          "Projections validated"
+        ]
+      },
+      "substages": [
+        {
+          "id": "15.1",
+          "title": "Pricing Research",
+          "done_when": [
+            "Competitor prices analyzed",
+            "Customer willingness assessed",
+            "Value metrics defined"
+          ]
+        },
+        {
+          "id": "15.2",
+          "title": "Model Development",
+          "done_when": [
+            "Pricing model created",
+            "Tiers structured",
+            "Discounts planned"
+          ]
+        },
+        {
+          "id": "15.3",
+          "title": "Revenue Projection",
+          "done_when": [
+            "Projections calculated",
+            "Scenarios modeled",
+            "Targets set"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/15-*.md",
+    "critique_path": "/docs/workflow/critique/stage-15.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_15_findings.md",
+    "/docs/research/outputs/stage_15_recommendations.md"
+  ],
+  "gemini_specific": {
+    "focus": "practical_implementation",
+    "include_code_samples": true,
+    "suggest_tools": true
+  }
+}

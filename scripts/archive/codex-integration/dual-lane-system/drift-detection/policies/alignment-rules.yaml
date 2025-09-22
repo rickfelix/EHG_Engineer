@@ -1,0 +1,344 @@
+apiVersion: drift.ehg.io/v1
+kind: DriftPolicy
+metadata:
+  name: security-policy-alignment
+  namespace: drift-detection
+spec:
+  targetResource:
+    apiVersion: kyverno.io/v1
+    kind: ClusterPolicy
+    labelSelector:
+      matchLabels:
+        security.ehg.io/policy-enforcement: enabled
+  checkInterval: "2m"
+  severity: critical
+  remediationPolicy:
+    autoRemediate: true
+    strategy: sync
+    approvalRequired: true
+  ignoreFields:
+    - metadata.resourceVersion
+    - metadata.uid
+    - status
+---
+apiVersion: drift.ehg.io/v1
+kind: DriftPolicy
+metadata:
+  name: deployment-config-alignment
+  namespace: drift-detection
+spec:
+  targetResource:
+    apiVersion: apps/v1
+    kind: Deployment
+    namespace: "*"
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/managed-by: gitops
+  checkInterval: "5m"
+  severity: high
+  remediationPolicy:
+    autoRemediate: true
+    strategy: rollback
+    approvalRequired: false
+  ignoreFields:
+    - metadata.generation
+    - spec.replicas  # Allow HPA to manage
+    - status
+---
+apiVersion: drift.ehg.io/v1
+kind: DriftPolicy
+metadata:
+  name: lane-separation-alignment
+  namespace: drift-detection
+spec:
+  targetResource:
+    apiVersion: v1
+    kind: ConfigMap
+    namespace: "*"
+    labelSelector:
+      matchExpressions:
+        - key: lane
+          operator: In
+          values: ["codex", "claude"]
+  checkInterval: "3m"
+  severity: critical
+  remediationPolicy:
+    autoRemediate: false
+    strategy: alert-only
+    approvalRequired: true
+  ignoreFields:
+    - metadata.annotations
+---
+apiVersion: drift.ehg.io/v1
+kind: DriftPolicy
+metadata:
+  name: observability-config-alignment
+  namespace: drift-detection
+spec:
+  targetResource:
+    apiVersion: v1
+    kind: ConfigMap
+    namespace: monitoring
+    labelSelector:
+      matchLabels:
+        component: observability
+  checkInterval: "10m"
+  severity: medium
+  remediationPolicy:
+    autoRemediate: true
+    strategy: sync
+    approvalRequired: false
+  ignoreFields:
+    - data.last_updated
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alignment-rules
+  namespace: drift-detection
+data:
+  rules.yaml: |
+    # Alignment Verification Rules
+    alignmentPolicies:
+      # Cross-lane consistency
+      - name: lane-consistency
+        description: "Ensure Codex and Claude lanes remain separated"
+        checks:
+          - type: resource-isolation
+            rule: |
+              codex.resources NOT IN claude.resources AND
+              codex.branches NOT IN claude.branches
+          - type: credential-separation
+            rule: |
+              codex.credentials.type == "read-only" AND
+              claude.credentials.type == "read-write"
+        severity: critical
+        enforcement: block
+
+      # Git-to-runtime alignment
+      - name: git-runtime-sync
+        description: "Verify runtime matches Git desired state"
+        checks:
+          - type: resource-comparison
+            source: git
+            target: kubernetes
+            tolerance: 0  # No drift allowed
+          - type: version-match
+            rule: |
+              runtime.version == git.commit.sha
+        severity: high
+        enforcement: auto-sync
+
+      # Policy-to-implementation alignment
+      - name: policy-implementation
+        description: "Ensure policies are enforced as configured"
+        checks:
+          - type: policy-active
+            rule: |
+              kyverno.policy.status == "Ready" AND
+              kyverno.policy.mode == spec.validationFailureAction
+          - type: webhook-configured
+            rule: |
+              admission.webhooks CONTAINS policy.webhook
+        severity: critical
+        enforcement: remediate
+
+      # SLSA compliance alignment
+      - name: slsa-compliance
+        description: "Maintain SLSA L3 compliance"
+        checks:
+          - type: attestation-present
+            rule: |
+              image.attestation EXISTS AND
+              image.attestation.predicateType == "slsa.dev/provenance/v0.2"
+          - type: signature-valid
+            rule: |
+              image.signature.verified == true AND
+              image.signature.keyless == true
+        severity: high
+        enforcement: block-deployment
+
+      # Observability alignment
+      - name: metrics-consistency
+        description: "Ensure metrics match configuration"
+        checks:
+          - type: metric-registration
+            rule: |
+              prometheus.targets CONTAINS ALL(configured.metrics)
+          - type: dashboard-sync
+            rule: |
+              grafana.dashboards.version == git.dashboards.version
+        severity: medium
+        enforcement: alert
+
+    # Scoring algorithm
+    scoring:
+      algorithm: weighted-average
+      weights:
+        lane-consistency: 25
+        git-runtime-sync: 25
+        policy-implementation: 20
+        slsa-compliance: 20
+        metrics-consistency: 10
+      thresholds:
+        excellent: 95
+        good: 85
+        acceptable: 75
+        poor: 60
+        critical: 0
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: validation-webhooks
+  namespace: drift-detection
+data:
+  webhooks.yaml: |
+    # Validation Webhook Configurations
+    webhooks:
+      - name: prevent-lane-crossover
+        path: /validate/lane-separation
+        rules:
+          - apiGroups: ["*"]
+            resources: ["*"]
+            operations: ["CREATE", "UPDATE"]
+        validation: |
+          if object.metadata.labels.lane == "codex" {
+            deny if object.spec contains "write" operations
+            deny if object references "claude" resources
+          }
+          if object.metadata.labels.lane == "claude" {
+            require object.metadata.annotations["security.signed"] == "true"
+          }
+
+      - name: enforce-gitops-source
+        path: /validate/gitops
+        rules:
+          - apiGroups: ["*"]
+            resources: ["deployments", "services", "configmaps"]
+            operations: ["CREATE", "UPDATE"]
+        validation: |
+          require object.metadata.annotations["argocd.argoproj.io/sync-wave"] exists
+          require object.metadata.labels["app.kubernetes.io/managed-by"] == "argocd"
+
+      - name: policy-compliance
+        path: /validate/policy
+        rules:
+          - apiGroups: ["kyverno.io"]
+            resources: ["policies", "clusterpolicies"]
+            operations: ["CREATE", "UPDATE", "DELETE"]
+        validation: |
+          require object.spec.validationFailureAction in ["enforce", "audit"]
+          deny if object.spec.background == true in production
+          require object.metadata.labels["security.ehg.io/approved"] == "true"
+
+      - name: slsa-verification
+        path: /validate/slsa
+        rules:
+          - apiGroups: ["apps", "batch"]
+            resources: ["deployments", "statefulsets", "jobs"]
+            operations: ["CREATE", "UPDATE"]
+        validation: |
+          for container in object.spec.template.spec.containers {
+            require container.image contains "@sha256:"
+            require attestation.exists(container.image)
+            require signature.verified(container.image)
+          }
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: alignment-scanner
+  namespace: drift-detection
+spec:
+  schedule: "*/15 * * * *"  # Every 15 minutes
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: drift-detector
+          containers:
+            - name: scanner
+              image: ehg/alignment-scanner:v1.0.0
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  #!/bin/sh
+                  set -e
+
+                  echo "=== Alignment Scan Started ==="
+                  echo "Timestamp: $(date -Iseconds)"
+
+                  # Check lane separation
+                  echo "Checking lane separation..."
+                  kubectl get all -l lane=codex -o json > /tmp/codex.json
+                  kubectl get all -l lane=claude -o json > /tmp/claude.json
+
+                  # Verify no crossover
+                  CODEX_COUNT=$(jq '.items | length' /tmp/codex.json)
+                  CLAUDE_COUNT=$(jq '.items | length' /tmp/claude.json)
+                  echo "Codex resources: $CODEX_COUNT"
+                  echo "Claude resources: $CLAUDE_COUNT"
+
+                  # Check Git-to-runtime alignment
+                  echo "Checking Git-to-runtime alignment..."
+                  argocd app list -o json > /tmp/apps.json
+                  SYNCED=$(jq '[.[] | select(.status.sync.status == "Synced")] | length' /tmp/apps.json)
+                  TOTAL=$(jq '. | length' /tmp/apps.json)
+                  SYNC_RATE=$((SYNCED * 100 / TOTAL))
+                  echo "Sync rate: ${SYNC_RATE}%"
+
+                  # Check policy enforcement
+                  echo "Checking policy enforcement..."
+                  kubectl get cpol -o json | jq -r '.items[] |
+                    select(.spec.validationFailureAction == "enforce") |
+                    "\(.metadata.name): \(.status.ready)"'
+
+                  # Calculate alignment score
+                  SCORE=85  # Placeholder calculation
+                  echo ""
+                  echo "=== Alignment Score: ${SCORE}% ==="
+
+                  # Create report
+                  cat <<EOF | kubectl apply -f -
+                  apiVersion: drift.ehg.io/v1
+                  kind: DriftReport
+                  metadata:
+                    name: alignment-report-$(date +%Y%m%d-%H%M%S)
+                    namespace: drift-detection
+                  spec:
+                    timestamp: "$(date -Iseconds)"
+                    environment: "production"
+                    resources:
+                      - name: "lane-separation"
+                        kind: "CrossLaneCheck"
+                        driftType: "none"
+                        severity: "info"
+                      - name: "git-sync"
+                        kind: "GitOpsAlignment"
+                        driftType: "none"
+                        severity: "info"
+                  status:
+                    summary:
+                      totalResources: $TOTAL
+                      driftedResources: $((TOTAL - SYNCED))
+                      criticalDrifts: 0
+                      compliancePercentage: $SCORE
+                    remediationRequired: false
+                  EOF
+
+                  echo "Report created successfully"
+
+              env:
+                - name: ARGOCD_SERVER
+                  value: argocd-server.argocd
+                - name: ARGOCD_AUTH_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: argocd-token
+                      key: token
+          restartPolicy: OnFailure

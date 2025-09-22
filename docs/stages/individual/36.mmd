@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 36 Detail
+subgraph S36["36. Parallel Exploration"]
+  S36_root["Purpose: Explore multiple growth opportunities in parallel.
+Owner: PLAN"]
+  S36_A["36.1 Opportunity Portfolio"]
+  S36_B["36.2 Parallel Execution"]
+  S36_C["36.3 Selection & Focus"]
+  S36_root --> S36_A --> S36_B --> S36_C
+end
+classDef dep stroke-dasharray: 5 5;
+D36["Depends on: 35"]:::dep -.-> S36_root

@@ -1,0 +1,41 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [
+    {
+      "name": "artifact-1758336633758.tar.gz",
+      "digest": {
+        "sha256": "db0c0b3d8c2f02da8da2d949ad6a656248ecb17800c52ae13a94d4a39e767633"
+      }
+    }
+  ],
+  "predicateType": "https://slsa.dev/provenance/v0.2",
+  "predicate": {
+    "builder": {
+      "id": "codex-lane"
+    },
+    "buildType": "https://ehg.example/codex/v1",
+    "invocation": {
+      "configSource": {
+        "uri": "git+https://github.com/repo.git",
+        "digest": {}
+      },
+      "parameters": {
+        "task": "Add a function called processData_1758336631667"
+      }
+    },
+    "materials": [
+      {
+        "uri": "/tmp/codex-artifacts/changes-1758336633758.patch",
+        "digest": {
+          "sha256": "b61d2594a7af28ac5d3c9b5169456b9600889b46197a68a1aeef7643546e928f"
+        }
+      },
+      {
+        "uri": "/tmp/codex-artifacts/sbom-1758336633758.cdx.json",
+        "digest": {
+          "sha256": ""
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 16 Detail
+subgraph S16["16. AI CEO Agent Development"]
+  S16_root["Purpose: Configure and deploy AI CEO agent for autonomous venture management.
+Owner: EVA"]
+  S16_A["16.1 Agent Configuration"]
+  S16_B["16.2 Model Training"]
+  S16_C["16.3 Integration & Testing"]
+  S16_root --> S16_A --> S16_B --> S16_C
+end
+classDef dep stroke-dasharray: 5 5;
+D16["Depends on: 15"]:::dep -.-> S16_root

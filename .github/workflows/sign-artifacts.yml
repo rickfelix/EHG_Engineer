@@ -1,0 +1,304 @@
+name: Sign Artifacts
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      artifact_path:
+        description: 'Path to artifact bundle to sign'
+        required: false
+        default: 'artifact.tar.gz'
+
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+  attestations: write
+
+jobs:
+  sign-and-attest:
+    name: Sign and Generate Provenance
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.0'
+
+      - name: Install SLSA tools
+        run: |
+          # Install slsa-provenance CLI
+          curl -sSL https://github.com/philips-labs/slsa-provenance/releases/latest/download/slsa-provenance-linux-amd64 -o slsa-provenance
+          chmod +x slsa-provenance
+          sudo mv slsa-provenance /usr/local/bin/
+
+          # Install syft for SBOM generation
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Determine artifact source
+        id: source
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.artifact_path }}" ]; then
+            ARTIFACT_PATH="${{ github.event.inputs.artifact_path }}"
+          else
+            # Build artifact bundle from current changes
+            ARTIFACT_PATH="artifact.tar.gz"
+
+            # Get changes since last tag or initial commit
+            if git describe --tags --abbrev=0 2>/dev/null; then
+              BASE_REF=$(git describe --tags --abbrev=0)
+            else
+              BASE_REF=$(git rev-list --max-parents=0 HEAD)
+            fi
+
+            # Create changes patch
+            git diff $BASE_REF..HEAD > changes.patch
+
+            # Record merge base
+            echo "$BASE_REF" > merge-base.sha
+
+            # Generate SBOM in CycloneDX format
+            syft dir:. -o cyclonedx-json=sbom.cdx.json
+
+            # Create rollback instructions
+            cat > rollback.sql <<EOF
+          -- Rollback instructions for database changes
+          -- Generated: $(date -Iseconds)
+          -- From: $BASE_REF
+          -- To: ${{ github.sha }}
+
+          -- Add specific rollback commands here if needed
+          -- Example: DROP TABLE IF EXISTS new_table;
+          -- Example: ALTER TABLE existing_table DROP COLUMN new_column;
+          EOF
+
+            # Bundle everything
+            tar czf artifact.tar.gz \
+              changes.patch \
+              merge-base.sha \
+              sbom.cdx.json \
+              rollback.sql
+          fi
+
+          echo "artifact_path=$ARTIFACT_PATH" >> $GITHUB_OUTPUT
+          echo "artifact_digest=$(sha256sum $ARTIFACT_PATH | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "artifact_size=$(stat -c%s $ARTIFACT_PATH)" >> $GITHUB_OUTPUT
+
+      - name: Create in-toto attestation
+        id: attestation
+        run: |
+          # Generate attestation in in-toto v1.0 format
+          cat > attestation.intoto.json <<EOF
+          {
+            "_type": "https://in-toto.io/Statement/v1",
+            "subject": [
+              {
+                "name": "${{ steps.source.outputs.artifact_path }}",
+                "digest": {
+                  "sha256": "${{ steps.source.outputs.artifact_digest }}"
+                }
+              }
+            ],
+            "predicateType": "https://slsa.dev/provenance/v0.2",
+            "predicate": {
+              "builder": {
+                "id": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              },
+              "buildType": "https://github.com/slsa-framework/slsa-github-generator/container@v1",
+              "invocation": {
+                "configSource": {
+                  "uri": "git+https://github.com/${{ github.repository }}@${{ github.ref }}",
+                  "digest": {
+                    "sha1": "${{ github.sha }}"
+                  },
+                  "entryPoint": ".github/workflows/sign-artifacts.yml"
+                },
+                "parameters": {
+                  "artifact_path": "${{ steps.source.outputs.artifact_path }}"
+                },
+                "environment": {
+                  "github_actor": "${{ github.actor }}",
+                  "github_event_name": "${{ github.event_name }}",
+                  "github_ref": "${{ github.ref }}",
+                  "github_repository": "${{ github.repository }}",
+                  "github_run_id": "${{ github.run_id }}",
+                  "github_sha": "${{ github.sha }}"
+                }
+              },
+              "metadata": {
+                "buildStartedOn": "$(date -Iseconds)",
+                "buildFinishedOn": "$(date -Iseconds)",
+                "completeness": {
+                  "parameters": true,
+                  "environment": true,
+                  "materials": true
+                },
+                "reproducible": false
+              },
+              "materials": [
+                {
+                  "uri": "git+https://github.com/${{ github.repository }}",
+                  "digest": {
+                    "sha1": "${{ github.sha }}"
+                  }
+                }
+              ]
+            }
+          }
+          EOF
+
+          echo "attestation_file=attestation.intoto.json" >> $GITHUB_OUTPUT
+
+      - name: Sign artifact with Sigstore
+        id: sign
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run: |
+          echo "🔏 Signing artifact with Sigstore keyless..."
+
+          # Sign the artifact bundle
+          cosign sign-blob \
+            --yes \
+            --bundle ${{ steps.source.outputs.artifact_path }}.bundle \
+            --output-signature ${{ steps.source.outputs.artifact_path }}.sig \
+            --output-certificate ${{ steps.source.outputs.artifact_path }}.crt \
+            ${{ steps.source.outputs.artifact_path }}
+
+          # Sign the attestation
+          cosign sign-blob \
+            --yes \
+            --bundle attestation.intoto.bundle \
+            attestation.intoto.json
+
+          echo "✅ Artifact signed successfully"
+
+          # Generate signing evidence
+          cat > signing-evidence.json <<EOF
+          {
+            "artifact": {
+              "path": "${{ steps.source.outputs.artifact_path }}",
+              "digest": "${{ steps.source.outputs.artifact_digest }}",
+              "size": ${{ steps.source.outputs.artifact_size }}
+            },
+            "signature": {
+              "type": "sigstore-keyless",
+              "timestamp": "$(date -Iseconds)",
+              "bundle": "${{ steps.source.outputs.artifact_path }}.bundle",
+              "certificate": "${{ steps.source.outputs.artifact_path }}.crt"
+            },
+            "attestation": {
+              "format": "in-toto-v1.0",
+              "predicate": "slsa-provenance-v0.2",
+              "file": "attestation.intoto.json"
+            },
+            "verification_command": "cosign verify-blob --bundle ${{ steps.source.outputs.artifact_path }}.bundle --certificate-identity-regexp '.*' --certificate-oidc-issuer-regexp '.*' ${{ steps.source.outputs.artifact_path }}"
+          }
+          EOF
+
+      - name: Verify signature (self-check)
+        run: |
+          echo "🔍 Verifying our own signature..."
+
+          cosign verify-blob \
+            --bundle ${{ steps.source.outputs.artifact_path }}.bundle \
+            --certificate ${{ steps.source.outputs.artifact_path }}.crt \
+            --certificate-identity-regexp ".*" \
+            --certificate-oidc-issuer-regexp ".*" \
+            ${{ steps.source.outputs.artifact_path }}
+
+          echo "✅ Self-verification passed"
+
+      - name: Upload attestation to GitHub
+        uses: actions/attest-build-provenance@v1
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+        with:
+          subject-path: ${{ steps.source.outputs.artifact_path }}
+
+      - name: Create release (if tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+
+          # Create release with signed artifacts
+          gh release create "$TAG_NAME" \
+            --title "Release $TAG_NAME" \
+            --generate-notes \
+            ${{ steps.source.outputs.artifact_path }} \
+            ${{ steps.source.outputs.artifact_path }}.sig \
+            ${{ steps.source.outputs.artifact_path }}.crt \
+            ${{ steps.source.outputs.artifact_path }}.bundle \
+            attestation.intoto.json \
+            attestation.intoto.bundle \
+            sbom.cdx.json \
+            signing-evidence.json
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-artifacts-${{ github.run_id }}
+          path: |
+            ${{ steps.source.outputs.artifact_path }}
+            ${{ steps.source.outputs.artifact_path }}.sig
+            ${{ steps.source.outputs.artifact_path }}.crt
+            ${{ steps.source.outputs.artifact_path }}.bundle
+            attestation.intoto.json
+            attestation.intoto.bundle
+            sbom.cdx.json
+            signing-evidence.json
+
+      - name: Generate verification instructions
+        run: |
+          cat > VERIFICATION.md <<EOF
+          # Artifact Verification Instructions
+
+          ## Prerequisites
+          \`\`\`bash
+          # Install cosign
+          curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 -o cosign
+          chmod +x cosign
+          sudo mv cosign /usr/local/bin/
+          \`\`\`
+
+          ## Verify Artifact Signature
+          \`\`\`bash
+          cosign verify-blob \\
+            --bundle ${{ steps.source.outputs.artifact_path }}.bundle \\
+            --certificate-identity-regexp ".*" \\
+            --certificate-oidc-issuer-regexp ".*" \\
+            ${{ steps.source.outputs.artifact_path }}
+          \`\`\`
+
+          ## Verify Attestation
+          \`\`\`bash
+          cosign verify-blob \\
+            --bundle attestation.intoto.bundle \\
+            --certificate-identity-regexp ".*" \\
+            --certificate-oidc-issuer-regexp ".*" \\
+            attestation.intoto.json
+          \`\`\`
+
+          ## Check Artifact Digest
+          \`\`\`bash
+          echo "${{ steps.source.outputs.artifact_digest }}  ${{ steps.source.outputs.artifact_path }}" | sha256sum -c
+          \`\`\`
+
+          ## Extract and Inspect Certificate
+          \`\`\`bash
+          cat ${{ steps.source.outputs.artifact_path }}.crt | base64 -d | openssl x509 -text -noout
+          \`\`\`
+          EOF
+
+          echo "📝 Verification instructions written to VERIFICATION.md"

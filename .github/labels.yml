@@ -1,0 +1,226 @@
+# GitHub Labels Configuration
+# Managed by github/super-linter label-sync action
+# Last Updated: 2025-01-19
+
+# Lane Identification
+- name: "lane:claude"
+  color: "5319E7"
+  description: "Claude enforcer lane (write-enabled)"
+
+# Security Controls
+- name: "security:signed"
+  color: "1D76DB"
+  description: "Artifact has valid Sigstore signature"
+
+- name: "security:slsa-l3"
+  color: "006B75"
+  description: "SLSA Level 3 provenance verified"
+
+- name: "security:unsigned"
+  color: "D93F0B"
+  description: "WARNING: Unsigned artifact"
+
+- name: "security:policy-enforced"
+  color: "0E8A16"
+  description: "Admission control policies active"
+
+# Policy Status
+- name: "policy:enforced"
+  color: "0E8A16"
+  description: "Policy actively enforced"
+
+- name: "policy:exception"
+  color: "FEF2C0"
+  description: "Policy exception granted"
+
+- name: "policy:violation"
+  color: "B60205"
+  description: "Policy violation detected"
+
+- name: "policy:signed"
+  color: "168F16"
+  description: "Policy bundle signed with Sigstore"
+
+# Workflow Stages
+- name: "stage:building"
+  color: "C5DEF5"
+  description: "Building artifacts"
+
+- name: "stage:verifying"
+  color: "BFD4F2"
+  description: "Verification in progress"
+
+- name: "stage:handoff"
+  color: "D4C5F9"
+  description: "Lane handoff in progress"
+
+- name: "stage:complete"
+  color: "2EA44F"
+  description: "Workflow stage complete"
+
+# Gate Results
+- name: "gate:pass"
+  color: "0E8A16"
+  description: "Gate validation passed"
+
+- name: "gate:fail"
+  color: "D93F0B"
+  description: "Gate validation failed"
+
+- name: "gate:pending"
+  color: "FBCA04"
+  description: "Gate validation pending"
+
+- name: "gate:skip"
+  color: "BFD8D2"
+  description: "Gate skipped (exception)"
+
+# LEO Protocol Agents
+- name: "agent:exec"
+  color: "F9D0C4"
+  description: "EXEC agent implementation"
+
+- name: "agent:plan"
+  color: "C2E0C6"
+  description: "PLAN agent verification"
+
+- name: "agent:lead"
+  color: "FEF2C0"
+  description: "LEAD agent approval"
+
+# Sub-Agent Activation
+- name: "subagent:security"
+  color: "B60205"
+  description: "Security sub-agent activated"
+
+- name: "subagent:database"
+  color: "5319E7"
+  description: "Database sub-agent activated"
+
+- name: "subagent:testing"
+  color: "0E8A16"
+  description: "Testing sub-agent activated"
+
+- name: "subagent:performance"
+  color: "FBCA04"
+  description: "Performance sub-agent activated"
+
+- name: "subagent:design"
+  color: "D876E3"
+  description: "Design sub-agent activated"
+
+# Workstream Tracking
+- name: "ws1:signing"
+  color: "1D76DB"
+  description: "WS1: Signing & Provenance"
+
+- name: "ws2:policy"
+  color: "0052CC"
+  description: "WS2: Policy Supply Chain"
+
+- name: "ws3:gitops"
+  color: "006B75"
+  description: "WS3: GitOps Enforcement"
+
+- name: "ws4:credentials"
+  color: "5319E7"
+  description: "WS4: Credential Separation"
+
+- name: "ws5:drift"
+  color: "C5DEF5"
+  description: "WS5: Drift & Alignment"
+
+- name: "ws6:observability"
+  color: "FBCA04"
+  description: "WS6: Observability & Labels"
+
+# Priority Levels
+- name: "priority:critical"
+  color: "B60205"
+  description: "Critical priority (P0)"
+
+- name: "priority:high"
+  color: "D93F0B"
+  description: "High priority (P1)"
+
+- name: "priority:medium"
+  color: "FBCA04"
+  description: "Medium priority (P2)"
+
+- name: "priority:low"
+  color: "C2E0C6"
+  description: "Low priority (P3)"
+
+# Compliance & Audit
+- name: "compliance:slsa"
+  color: "168F16"
+  description: "SLSA compliance requirement"
+
+- name: "compliance:cis"
+  color: "006B75"
+  description: "CIS benchmark compliance"
+
+- name: "compliance:audit"
+  color: "5319E7"
+  description: "Requires audit trail"
+
+# Handoff Markers
+- name: "handoff:claude-applied"
+  color: "5319E7"
+  description: "Claude applied changes"
+
+- name: "handoff:plan-verified"
+  color: "0E8A16"
+  description: "PLAN verification complete"
+
+- name: "handoff:lead-approved"
+  color: "FEF2C0"
+  description: "LEAD approval granted"
+
+# Environment Tags
+- name: "env:production"
+  color: "B60205"
+  description: "Production environment"
+
+- name: "env:staging"
+  color: "FBCA04"
+  description: "Staging environment"
+
+- name: "env:development"
+  color: "C2E0C6"
+  description: "Development environment"
+
+# Special States
+- name: "blocked"
+  color: "D93F0B"
+  description: "Blocked by dependency or policy"
+
+- name: "needs-review"
+  color: "FBCA04"
+  description: "Requires code review"
+
+- name: "ready-to-merge"
+  color: "0E8A16"
+  description: "All gates passed, ready to merge"
+
+- name: "do-not-merge"
+  color: "B60205"
+  description: "Do not merge - critical issue"
+
+# Automation
+- name: "automated"
+  color: "BFD8D2"
+  description: "Automated by GitHub Actions"
+
+- name: "manual-override"
+  color: "FEF2C0"
+  description: "Manual override applied"
+
+# Documentation
+- name: "docs"
+  color: "0052CC"
+  description: "Documentation update"
+
+- name: "breaking-change"
+  color: "D93F0B"
+  description: "Breaking change - requires migration"

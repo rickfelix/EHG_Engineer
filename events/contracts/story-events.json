@@ -1,0 +1,150 @@
+{
+  "version": "1.0.0",
+  "description": "Story sub-agent event contracts",
+  "events": {
+    "story.create": {
+      "routing_key": "story.create",
+      "description": "Generate stories from PRD acceptance criteria",
+      "schema": {
+        "type": "object",
+        "required": ["event", "timestamp", "payload"],
+        "properties": {
+          "event": {
+            "type": "string",
+            "const": "story.create"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "description": "Unique event ID for idempotency"
+          },
+          "correlationId": {
+            "type": "string",
+            "description": "Trace correlation ID"
+          },
+          "payload": {
+            "type": "object",
+            "required": ["sd_key", "prd_id"],
+            "properties": {
+              "sd_key": {
+                "type": "string",
+                "pattern": "^SD-\\d{4}-\\d{2}-[A-Z]+$"
+              },
+              "prd_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "mode": {
+                "type": "string",
+                "enum": ["dry_run", "create", "upsert"],
+                "default": "create"
+              },
+              "stories": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "story_key": { "type": "string" },
+                    "title": { "type": "string" },
+                    "acceptance": {
+                      "type": "object",
+                      "properties": {
+                        "given": { "type": "string" },
+                        "when": { "type": "string" },
+                        "then": { "type": "string" }
+                      }
+                    },
+                    "priority": {
+                      "type": "string",
+                      "enum": ["critical", "high", "medium", "low"]
+                    },
+                    "sequence_no": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "story.verify": {
+      "routing_key": "story.verify",
+      "description": "Update story verification status from test results",
+      "schema": {
+        "type": "object",
+        "required": ["event", "timestamp", "payload"],
+        "properties": {
+          "event": {
+            "type": "string",
+            "const": "story.verify"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "required": ["story_keys", "test_run_id", "status"],
+            "properties": {
+              "story_keys": {
+                "type": "array",
+                "items": { "type": "string" },
+                "minItems": 1
+              },
+              "test_run_id": { "type": "string" },
+              "build_id": { "type": "string" },
+              "status": {
+                "type": "string",
+                "enum": ["passing", "failing", "not_run"]
+              },
+              "coverage_pct": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "artifacts": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "gate.story.release": {
+      "routing_key": "gate.story.release",
+      "description": "Release gate status for SD stories",
+      "schema": {
+        "type": "object",
+        "required": ["event", "timestamp", "sd_key", "ready"],
+        "properties": {
+          "event": {
+            "type": "string",
+            "const": "gate.story.release"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sd_key": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "True if all stories passing"
+          },
+          "total_stories": { "type": "integer" },
+          "passing": { "type": "integer" },
+          "failing": { "type": "integer" },
+          "not_run": { "type": "integer" }
+        }
+      }
+    }
+  }
+}

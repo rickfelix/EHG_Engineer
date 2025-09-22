@@ -1,0 +1,82 @@
+{
+  "stage_id": 1,
+  "stage_title": "Draft Idea",
+  "objective": "Optimize Stage 1 (Draft Idea) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 1,
+      "title": "Draft Idea",
+      "description": "Capture and validate initial venture ideas with AI assistance and Chairman feedback.",
+      "owner": "EVA",
+      "depends_on": [],
+      "inputs": [
+        "Voice recording",
+        "Text input",
+        "Chairman feedback"
+      ],
+      "outputs": [
+        "Structured idea document",
+        "Initial validation",
+        "Risk assessment"
+      ],
+      "metrics": [
+        "Idea quality score",
+        "Validation completeness",
+        "Time to capture"
+      ],
+      "gates": {
+        "entry": [],
+        "exit": [
+          "Title validated (3-120 chars)",
+          "Description validated (20-2000 chars)",
+          "Category assigned"
+        ]
+      },
+      "substages": [
+        {
+          "id": "1.1",
+          "title": "Idea Brief Creation",
+          "done_when": [
+            "Title captured",
+            "Description written",
+            "Category selected"
+          ]
+        },
+        {
+          "id": "1.2",
+          "title": "Assumption Listing",
+          "done_when": [
+            "Key assumptions documented",
+            "Risk factors identified"
+          ]
+        },
+        {
+          "id": "1.3",
+          "title": "Initial Success Criteria",
+          "done_when": [
+            "Success metrics defined",
+            "Validation rules applied"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/01-*.md",
+    "critique_path": "/docs/workflow/critique/stage-01.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_01_findings.md",
+    "/docs/research/outputs/stage_01_recommendations.md"
+  ],
+  "gemini_specific": {
+    "focus": "practical_implementation",
+    "include_code_samples": true,
+    "suggest_tools": true
+  }
+}

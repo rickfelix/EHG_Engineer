@@ -1,0 +1,433 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: drift-analytics-queries
+  namespace: drift-detection
+data:
+  prometheus-rules.yaml: |
+    # Drift Analytics Prometheus Rules
+    groups:
+      - name: drift_metrics
+        interval: 30s
+        rules:
+          # Drift detection metrics
+          - record: ehg:drift:detection_rate
+            expr: |
+              rate(drift_events_total[5m])
+
+          - record: ehg:drift:mttr
+            expr: |
+              histogram_quantile(0.95,
+                rate(drift_remediation_duration_seconds_bucket[1h])
+              )
+
+          - record: ehg:drift:mttd
+            expr: |
+              histogram_quantile(0.95,
+                rate(drift_detection_duration_seconds_bucket[1h])
+              )
+
+          # Compliance scoring
+          - record: ehg:compliance:score
+            expr: |
+              (
+                1 - (
+                  sum(drift_resources_total{severity="critical"} * 10) +
+                  sum(drift_resources_total{severity="high"} * 5) +
+                  sum(drift_resources_total{severity="medium"} * 2) +
+                  sum(drift_resources_total{severity="low"})
+                ) / sum(monitored_resources_total) / 10
+              ) * 100
+
+          # Lane alignment metrics
+          - record: ehg:lanes:alignment_score
+            expr: |
+              (
+                (count(resources_total{lane="codex", compliant="true"}) / count(resources_total{lane="codex"})) * 0.5 +
+                (count(resources_total{lane="claude", compliant="true"}) / count(resources_total{lane="claude"})) * 0.5
+              ) * 100
+
+          # Remediation success rate
+          - record: ehg:remediation:success_rate
+            expr: |
+              sum(rate(remediation_success_total[1h])) /
+              sum(rate(remediation_attempts_total[1h])) * 100
+
+          # Drift patterns
+          - record: ehg:drift:by_resource_type
+            expr: |
+              sum by (resource_type) (
+                increase(drift_events_total[1h])
+              )
+
+          - record: ehg:drift:by_namespace
+            expr: |
+              sum by (namespace) (
+                increase(drift_events_total[1h])
+              )
+
+          - record: ehg:drift:by_time_of_day
+            expr: |
+              sum by (hour) (
+                increase(drift_events_total[1h])
+                * on() group_left(hour)
+                (hour(timestamp(drift_events_total)))
+              )
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: drift-detector-metrics
+  namespace: drift-detection
+spec:
+  selector:
+    matchLabels:
+      app: drift-detector
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: 'drift_.*'
+          action: keep
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: drift-metrics-exporter
+  namespace: drift-detection
+data:
+  metrics.go: |
+    package main
+
+    import (
+        "github.com/prometheus/client_golang/prometheus"
+        "github.com/prometheus/client_golang/prometheus/promhttp"
+    )
+
+    var (
+        // Drift detection metrics
+        driftEventsTotal = prometheus.NewCounterVec(
+            prometheus.CounterOpts{
+                Name: "drift_events_total",
+                Help: "Total number of drift events detected",
+            },
+            []string{"resource_type", "namespace", "severity"},
+        )
+
+        driftDetectionDuration = prometheus.NewHistogramVec(
+            prometheus.HistogramOpts{
+                Name: "drift_detection_duration_seconds",
+                Help: "Time taken to detect drift",
+                Buckets: []float64{1, 5, 10, 30, 60, 120, 300, 600},
+            },
+            []string{"resource_type"},
+        )
+
+        driftRemediationDuration = prometheus.NewHistogramVec(
+            prometheus.HistogramOpts{
+                Name: "drift_remediation_duration_seconds",
+                Help: "Time taken to remediate drift",
+                Buckets: []float64{5, 10, 30, 60, 120, 300, 600, 900},
+            },
+            []string{"resource_type", "strategy"},
+        )
+
+        driftResourcesGauge = prometheus.NewGaugeVec(
+            prometheus.GaugeOpts{
+                Name: "drift_resources_total",
+                Help: "Current number of drifted resources",
+            },
+            []string{"severity", "resource_type"},
+        )
+
+        monitoredResourcesTotal = prometheus.NewGauge(
+            prometheus.GaugeOpts{
+                Name: "monitored_resources_total",
+                Help: "Total number of monitored resources",
+            },
+        )
+
+        remediationAttemptsTotal = prometheus.NewCounterVec(
+            prometheus.CounterOpts{
+                Name: "remediation_attempts_total",
+                Help: "Total remediation attempts",
+            },
+            []string{"strategy", "resource_type"},
+        )
+
+        remediationSuccessTotal = prometheus.NewCounterVec(
+            prometheus.CounterOpts{
+                Name: "remediation_success_total",
+                Help: "Successful remediations",
+            },
+            []string{"strategy", "resource_type"},
+        )
+
+        complianceScore = prometheus.NewGauge(
+            prometheus.GaugeOpts{
+                Name: "compliance_score",
+                Help: "Current compliance score (0-100)",
+            },
+        )
+
+        alignmentScore = prometheus.NewGaugeVec(
+            prometheus.GaugeOpts{
+                Name: "alignment_score",
+                Help: "Alignment score by category",
+            },
+            []string{"category"},
+        )
+    )
+
+    func init() {
+        // Register metrics
+        prometheus.MustRegister(driftEventsTotal)
+        prometheus.MustRegister(driftDetectionDuration)
+        prometheus.MustRegister(driftRemediationDuration)
+        prometheus.MustRegister(driftResourcesGauge)
+        prometheus.MustRegister(monitoredResourcesTotal)
+        prometheus.MustRegister(remediationAttemptsTotal)
+        prometheus.MustRegister(remediationSuccessTotal)
+        prometheus.MustRegister(complianceScore)
+        prometheus.MustRegister(alignmentScore)
+    }
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: drift-report-generator
+  namespace: drift-detection
+spec:
+  schedule: "0 */6 * * *"  # Every 6 hours
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: drift-detector
+          containers:
+            - name: reporter
+              image: ehg/drift-reporter:v1.0.0
+              env:
+                - name: PROMETHEUS_URL
+                  value: "http://prometheus:9090"
+                - name: OUTPUT_FORMAT
+                  value: "json,html"
+                - name: S3_BUCKET
+                  value: "ehg-drift-reports"
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  #!/bin/sh
+                  set -e
+
+                  TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+                  REPORT_NAME="drift-report-${TIMESTAMP}"
+
+                  echo "=== Drift Analytics Report ==="
+                  echo "Generated: $(date -Iseconds)"
+                  echo ""
+
+                  # Query Prometheus for metrics
+                  echo "Fetching metrics from Prometheus..."
+
+                  # Get compliance score
+                  COMPLIANCE=$(curl -s "${PROMETHEUS_URL}/api/v1/query?query=ehg:compliance:score" | \
+                    jq -r '.data.result[0].value[1]')
+                  echo "Compliance Score: ${COMPLIANCE}%"
+
+                  # Get MTTR
+                  MTTR=$(curl -s "${PROMETHEUS_URL}/api/v1/query?query=ehg:drift:mttr" | \
+                    jq -r '.data.result[0].value[1]')
+                  echo "Mean Time to Remediation: ${MTTR} seconds"
+
+                  # Get MTTD
+                  MTTD=$(curl -s "${PROMETHEUS_URL}/api/v1/query?query=ehg:drift:mttd" | \
+                    jq -r '.data.result[0].value[1]')
+                  echo "Mean Time to Detection: ${MTTD} seconds"
+
+                  # Get remediation success rate
+                  SUCCESS_RATE=$(curl -s "${PROMETHEUS_URL}/api/v1/query?query=ehg:remediation:success_rate" | \
+                    jq -r '.data.result[0].value[1]')
+                  echo "Remediation Success Rate: ${SUCCESS_RATE}%"
+
+                  # Get drift by resource type
+                  echo ""
+                  echo "Drift by Resource Type (last hour):"
+                  curl -s "${PROMETHEUS_URL}/api/v1/query?query=ehg:drift:by_resource_type" | \
+                    jq -r '.data.result[] | "\(.metric.resource_type): \(.value[1])"'
+
+                  # Generate JSON report
+                  cat > /tmp/${REPORT_NAME}.json <<EOF
+                  {
+                    "timestamp": "$(date -Iseconds)",
+                    "metrics": {
+                      "compliance_score": $COMPLIANCE,
+                      "mttr_seconds": $MTTR,
+                      "mttd_seconds": $MTTD,
+                      "remediation_success_rate": $SUCCESS_RATE
+                    },
+                    "trends": {
+                      "drift_rate_trend": "$(calculate_trend drift_rate)",
+                      "compliance_trend": "$(calculate_trend compliance)",
+                      "remediation_trend": "$(calculate_trend remediation)"
+                    },
+                    "recommendations": [
+                      $(generate_recommendations)
+                    ]
+                  }
+                  EOF
+
+                  # Generate HTML report
+                  cat > /tmp/${REPORT_NAME}.html <<EOF
+                  <!DOCTYPE html>
+                  <html>
+                  <head>
+                    <title>Drift Analytics Report</title>
+                    <style>
+                      body { font-family: Arial, sans-serif; margin: 20px; }
+                      .metric { display: inline-block; margin: 10px; padding: 15px; border: 1px solid #ddd; }
+                      .good { background-color: #d4edda; }
+                      .warning { background-color: #fff3cd; }
+                      .critical { background-color: #f8d7da; }
+                      table { border-collapse: collapse; width: 100%; }
+                      th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                      th { background-color: #f2f2f2; }
+                    </style>
+                  </head>
+                  <body>
+                    <h1>Drift Analytics Report</h1>
+                    <p>Generated: $(date)</p>
+
+                    <div class="metrics">
+                      <div class="metric $(score_class $COMPLIANCE)">
+                        <h3>Compliance Score</h3>
+                        <p>${COMPLIANCE}%</p>
+                      </div>
+                      <div class="metric">
+                        <h3>MTTR</h3>
+                        <p>${MTTR}s</p>
+                      </div>
+                      <div class="metric">
+                        <h3>MTTD</h3>
+                        <p>${MTTD}s</p>
+                      </div>
+                      <div class="metric $(score_class $SUCCESS_RATE)">
+                        <h3>Success Rate</h3>
+                        <p>${SUCCESS_RATE}%</p>
+                      </div>
+                    </div>
+
+                    <h2>Drift Patterns</h2>
+                    <table>
+                      <tr><th>Resource Type</th><th>Count</th><th>Trend</th></tr>
+                      $(generate_drift_table)
+                    </table>
+
+                    <h2>Recommendations</h2>
+                    <ul>
+                      $(generate_html_recommendations)
+                    </ul>
+                  </body>
+                  </html>
+                  EOF
+
+                  # Upload reports to S3
+                  aws s3 cp /tmp/${REPORT_NAME}.json s3://${S3_BUCKET}/reports/json/
+                  aws s3 cp /tmp/${REPORT_NAME}.html s3://${S3_BUCKET}/reports/html/
+
+                  # Create Kubernetes ConfigMap with latest report
+                  kubectl create configmap drift-report-latest \
+                    --from-file=/tmp/${REPORT_NAME}.json \
+                    --dry-run=client -o yaml | kubectl apply -f -
+
+                  echo ""
+                  echo "Report generated and uploaded successfully"
+                  echo "S3 Location: s3://${S3_BUCKET}/reports/"
+
+          restartPolicy: OnFailure
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: drift-dashboards
+  namespace: drift-detection
+data:
+  drift-overview.json: |
+    {
+      "dashboard": {
+        "title": "Drift Detection & Alignment",
+        "panels": [
+          {
+            "title": "Compliance Score",
+            "type": "gauge",
+            "targets": [{
+              "expr": "ehg:compliance:score"
+            }],
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 75, "color": "yellow"},
+                {"value": 90, "color": "green"}
+              ]
+            }
+          },
+          {
+            "title": "Drift Events (24h)",
+            "type": "graph",
+            "targets": [{
+              "expr": "sum(increase(drift_events_total[24h])) by (severity)"
+            }]
+          },
+          {
+            "title": "MTTR vs MTTD",
+            "type": "graph",
+            "targets": [
+              {"expr": "ehg:drift:mttr", "legendFormat": "MTTR"},
+              {"expr": "ehg:drift:mttd", "legendFormat": "MTTD"}
+            ]
+          },
+          {
+            "title": "Remediation Success Rate",
+            "type": "stat",
+            "targets": [{
+              "expr": "ehg:remediation:success_rate"
+            }]
+          },
+          {
+            "title": "Lane Alignment",
+            "type": "bargauge",
+            "targets": [{
+              "expr": "ehg:lanes:alignment_score"
+            }]
+          },
+          {
+            "title": "Drift by Resource Type",
+            "type": "piechart",
+            "targets": [{
+              "expr": "sum by (resource_type) (drift_resources_total)"
+            }]
+          },
+          {
+            "title": "Drift Heatmap",
+            "type": "heatmap",
+            "targets": [{
+              "expr": "sum by (hour) (increase(drift_events_total[1h]))"
+            }]
+          },
+          {
+            "title": "Top Drifting Resources",
+            "type": "table",
+            "targets": [{
+              "expr": "topk(10, drift_resources_total)"
+            }]
+          }
+        ]
+      }
+    }

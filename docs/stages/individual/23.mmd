@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 23 Detail
+subgraph S23["23. Continuous Feedback Loops"]
+  S23_root["Purpose: Establish and maintain continuous feedback mechanisms.
+Owner: PLAN"]
+  S23_A["23.1 Feedback Collection"]
+  S23_B["23.2 Analysis & Prioritization"]
+  S23_C["23.3 Implementation & Closure"]
+  S23_root --> S23_A --> S23_B --> S23_C
+end
+classDef dep stroke-dasharray: 5 5;
+D23["Depends on: 22"]:::dep -.-> S23_root

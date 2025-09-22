@@ -1,0 +1,197 @@
+name: Sync Labels
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/labels.yml'
+  workflow_dispatch:
+  schedule:
+    # Run weekly on Sundays at 00:00 UTC
+    - cron: '0 0 * * 0'
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  label-sync:
+    name: Sync Labels with Repository
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Sync labels
+        uses: EndBug/label-sync@v2
+        with:
+          config-file: '.github/labels.yml'
+          delete-other-labels: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Label this workflow run
+        if: success()
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          labels: |
+            automated
+            ws6:observability
+
+  apply-security-labels:
+    name: Apply Security Labels to PRs
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for signed artifacts
+        id: signature_check
+        run: |
+          # Check if PR has signed artifacts
+          if ls *.sig *.bundle 2>/dev/null; then
+            echo "signed=true" >> $GITHUB_OUTPUT
+          else
+            echo "signed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for SLSA attestations
+        id: slsa_check
+        run: |
+          # Check for SLSA attestations
+          if ls *-attestation.json 2>/dev/null | grep -q .; then
+            if jq -r '.predicateType' *-attestation.json | grep -q "slsa.dev/provenance"; then
+              echo "slsa=true" >> $GITHUB_OUTPUT
+            else
+              echo "slsa=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "slsa=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Apply security labels
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          labels: |
+            ${{ steps.signature_check.outputs.signed == 'true' && 'security:signed' || 'security:unsigned' }}
+            ${{ steps.slsa_check.outputs.slsa == 'true' && 'security:slsa-l3' || '' }}
+
+  label-by-lane:
+    name: Label PRs by Lane
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Check PR title for lane markers
+        id: lane_check
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if echo "$PR_TITLE" | grep -q "CLAUDE-APPLIED"; then
+            echo "lane=claude" >> $GITHUB_OUTPUT
+          else
+            echo "lane=unknown" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Apply lane labels
+        if: steps.lane_check.outputs.lane != 'unknown'
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          labels: |
+            lane:${{ steps.lane_check.outputs.lane }}
+
+  label-by-files:
+    name: Label PRs by Changed Files
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Get changed files
+        id: changed_files
+        uses: tj-actions/changed-files@v44
+        with:
+          files_yaml: |
+            policies:
+              - 'policies/**'
+            workflows:
+              - '.github/workflows/**'
+            docs:
+              - 'docs/**'
+              - '*.md'
+            kyverno:
+              - 'policies/kyverno/**'
+
+      - name: Apply file-based labels
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          labels: |
+            ${{ steps.changed_files.outputs.policies_any_changed == 'true' && 'ws2:policy' || '' }}
+            ${{ steps.changed_files.outputs.workflows_any_changed == 'true' && 'automated' || '' }}
+            ${{ steps.changed_files.outputs.docs_any_changed == 'true' && 'docs' || '' }}
+            ${{ steps.changed_files.outputs.kyverno_any_changed == 'true' && 'policy:enforced' || '' }}
+
+  label-workstream:
+    name: Detect and Label Workstream
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Check branch name
+        id: branch_check
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          # Extract workstream from branch name
+          if echo "$BRANCH" | grep -q "ws1"; then
+            echo "workstream=ws1:signing" >> $GITHUB_OUTPUT
+          elif echo "$BRANCH" | grep -q "ws2"; then
+            echo "workstream=ws2:policy" >> $GITHUB_OUTPUT
+          elif echo "$BRANCH" | grep -q "ws3"; then
+            echo "workstream=ws3:gitops" >> $GITHUB_OUTPUT
+          elif echo "$BRANCH" | grep -q "ws4"; then
+            echo "workstream=ws4:credentials" >> $GITHUB_OUTPUT
+          elif echo "$BRANCH" | grep -q "ws5"; then
+            echo "workstream=ws5:drift" >> $GITHUB_OUTPUT
+          elif echo "$BRANCH" | grep -q "ws6"; then
+            echo "workstream=ws6:observability" >> $GITHUB_OUTPUT
+          else
+            echo "workstream=none" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Apply workstream label
+        if: steps.branch_check.outputs.workstream != 'none'
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          labels: |
+            ${{ steps.branch_check.outputs.workstream }}
+
+  report-labels:
+    name: Report Applied Labels
+    runs-on: ubuntu-latest
+    needs: [label-sync, apply-security-labels, label-by-lane, label-by-files, label-workstream]
+    if: always()
+
+    steps:
+      - name: Generate label report
+        run: |
+          echo "## 🏷️ Label Sync Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Applied Labels:" >> $GITHUB_STEP_SUMMARY
+          echo "- Sync completed at: $(date -Iseconds)" >> $GITHUB_STEP_SUMMARY
+          echo "- Workflow: ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Trigger: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Label Categories Processed:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Lane identification" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Security controls" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Policy status" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Workflow stages" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Gate results" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Workstream tracking" >> $GITHUB_STEP_SUMMARY

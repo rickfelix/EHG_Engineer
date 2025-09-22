@@ -1,0 +1,88 @@
+{
+  "stage_id": 8,
+  "stage_title": "Problem Decomposition Engine",
+  "objective": "Optimize Stage 8 (Problem Decomposition Engine) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 8,
+      "title": "Problem Decomposition Engine",
+      "description": "Break down complex problems into manageable, actionable components.",
+      "owner": "EXEC",
+      "depends_on": [
+        7
+      ],
+      "inputs": [
+        "Business plan",
+        "Technical requirements",
+        "Complexity assessment"
+      ],
+      "outputs": [
+        "Decomposed tasks",
+        "Work breakdown structure",
+        "Dependencies map"
+      ],
+      "metrics": [
+        "Decomposition depth",
+        "Task clarity",
+        "Dependency resolution"
+      ],
+      "gates": {
+        "entry": [
+          "Plans approved",
+          "Scope defined"
+        ],
+        "exit": [
+          "Problems decomposed",
+          "Tasks prioritized",
+          "Dependencies mapped"
+        ]
+      },
+      "substages": [
+        {
+          "id": "8.1",
+          "title": "Problem Analysis",
+          "done_when": [
+            "Core problems identified",
+            "Complexity assessed"
+          ]
+        },
+        {
+          "id": "8.2",
+          "title": "Task Breakdown",
+          "done_when": [
+            "Tasks decomposed",
+            "Subtasks defined",
+            "WBS created"
+          ]
+        },
+        {
+          "id": "8.3",
+          "title": "Dependency Mapping",
+          "done_when": [
+            "Dependencies identified",
+            "Critical path defined",
+            "Blockers resolved"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/08-*.md",
+    "critique_path": "/docs/workflow/critique/stage-08.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_08_findings.md",
+    "/docs/research/outputs/stage_08_recommendations.md"
+  ],
+  "gemini_specific": {
+    "focus": "practical_implementation",
+    "include_code_samples": true,
+    "suggest_tools": true
+  }
+}

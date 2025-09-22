@@ -1,0 +1,266 @@
+{
+  "version": "1.0.0",
+  "timestamp": 1756906194930,
+  "patterns": {
+    "falsePositives": [
+      [
+        "finding-2",
+        {
+          "timestamp": 1756904837123,
+          "penaltyFactor": 0.5
+        }
+      ],
+      [
+        "67056b4d",
+        {
+          "timestamp": 1756905877670,
+          "penaltyFactor": 0.5
+        }
+      ]
+    ],
+    "truePositives": [
+      [
+        "finding-1",
+        {
+          "timestamp": 1756904837117,
+          "boostFactor": 1.2
+        }
+      ],
+      [
+        null,
+        {
+          "timestamp": 1756905391709,
+          "boostFactor": 1.2
+        }
+      ],
+      [
+        "f75112db",
+        {
+          "timestamp": 1756905877664,
+          "boostFactor": 1.2
+        }
+      ],
+      [
+        "b523b69a",
+        {
+          "timestamp": 1756906194917,
+          "boostFactor": 1.2
+        }
+      ],
+      [
+        "7cb76675",
+        {
+          "timestamp": 1756906194922,
+          "boostFactor": 1.2
+        }
+      ],
+      [
+        "6fd30185",
+        {
+          "timestamp": 1756906194926,
+          "boostFactor": 1.2
+        }
+      ],
+      [
+        "2d5a7f7d",
+        {
+          "timestamp": 1756906194930,
+          "boostFactor": 1.2
+        }
+      ]
+    ],
+    "fixPatterns": [
+      [
+        "finding-3",
+        {
+          "timestamp": 1756904837127,
+          "success": true
+        }
+      ]
+    ],
+    "correlations": [
+      [
+        "XSS-security",
+        {
+          "coOccurrences": {},
+          "frequency": 2
+        }
+      ],
+      [
+        "SLOW_QUERY-database",
+        {
+          "coOccurrences": {},
+          "frequency": 2
+        }
+      ],
+      [
+        "MISSING_INDEX-database",
+        {
+          "coOccurrences": {},
+          "frequency": 2
+        }
+      ],
+      [
+        "SQL_INJECTION-undefined",
+        {
+          "coOccurrences": {},
+          "frequency": 1
+        }
+      ],
+      [
+        "N_PLUS_ONE_QUERY-undefined",
+        {
+          "coOccurrences": {},
+          "frequency": 1
+        }
+      ],
+      [
+        "DOM_QUERY_IN_LOOP-performance",
+        {
+          "coOccurrences": {},
+          "frequency": 2
+        }
+      ],
+      [
+        "SENSITIVE_DATA_LOGGING-Security",
+        {
+          "coOccurrences": {},
+          "frequency": 320
+        }
+      ],
+      [
+        "HARDCODED_SECRET-Security",
+        {
+          "coOccurrences": {},
+          "frequency": 30
+        }
+      ],
+      [
+        "MISSING_AUTH_CHECK-Security",
+        {
+          "coOccurrences": {},
+          "frequency": 20
+        }
+      ],
+      [
+        "EVENT_LISTENER_LEAK-Performance",
+        {
+          "coOccurrences": {},
+          "frequency": 5
+        }
+      ],
+      [
+        "DOM_PERFORMANCE_ISSUES-Performance",
+        {
+          "coOccurrences": {},
+          "frequency": 5
+        }
+      ],
+      [
+        "PARALLELIZABLE_PROMISES-Performance",
+        {
+          "coOccurrences": {},
+          "frequency": 5
+        }
+      ],
+      [
+        "SEQUENTIAL_AWAIT-Performance",
+        {
+          "coOccurrences": {},
+          "frequency": 5
+        }
+      ],
+      [
+        "RENDERING_PERFORMANCE-Performance",
+        {
+          "coOccurrences": {},
+          "frequency": 5
+        }
+      ]
+    ]
+  },
+  "metrics": {
+    "analysisRuns": 11,
+    "totalFindings": 405,
+    "confirmedIssues": 11,
+    "falsePositiveRate": 0.2222222222222222,
+    "averageFixTime": 0,
+    "commonIssues": [
+      [
+        "XSS-security",
+        2
+      ],
+      [
+        "SLOW_QUERY-database",
+        2
+      ],
+      [
+        "MISSING_INDEX-database",
+        2
+      ],
+      [
+        "SQL_INJECTION-undefined",
+        1
+      ],
+      [
+        "N_PLUS_ONE_QUERY-undefined",
+        1
+      ],
+      [
+        "DOM_QUERY_IN_LOOP-performance",
+        2
+      ],
+      [
+        "SENSITIVE_DATA_LOGGING-Security",
+        320
+      ],
+      [
+        "HARDCODED_SECRET-Security",
+        30
+      ],
+      [
+        "MISSING_AUTH_CHECK-Security",
+        20
+      ],
+      [
+        "EVENT_LISTENER_LEAK-Performance",
+        5
+      ],
+      [
+        "DOM_PERFORMANCE_ISSUES-Performance",
+        5
+      ],
+      [
+        "PARALLELIZABLE_PROMISES-Performance",
+        5
+      ],
+      [
+        "SEQUENTIAL_AWAIT-Performance",
+        5
+      ],
+      [
+        "RENDERING_PERFORMANCE-Performance",
+        5
+      ]
+    ]
+  },
+  "feedback": {
+    "userConfirmed": [
+      "finding-1",
+      null,
+      "f75112db",
+      "b523b69a",
+      "7cb76675",
+      "6fd30185",
+      "2d5a7f7d"
+    ],
+    "userRejected": [
+      "finding-2",
+      "67056b4d"
+    ],
+    "autoFixed": [
+      "finding-3"
+    ],
+    "manuallyFixed": []
+  }
+}

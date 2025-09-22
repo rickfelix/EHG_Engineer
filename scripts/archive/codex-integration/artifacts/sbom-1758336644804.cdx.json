@@ -1,0 +1,17 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:1758336644804",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2025-09-20T02:50:44.804Z",
+    "tools": [
+      {
+        "vendor": "EHG",
+        "name": "Codex",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "components": []
+}

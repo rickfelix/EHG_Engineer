@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dark Mode Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class'
+        }
+    </script>
+</head>
+<body class="bg-white dark:bg-gray-900 text-black dark:text-white h-screen flex items-center justify-center">
+    <div class="text-center p-8 border-2 border-gray-300 dark:border-gray-700 rounded-lg">
+        <h1 class="text-3xl font-bold mb-4">Dark Mode Test</h1>
+        <p class="mb-4">This page tests if dark mode is applied correctly.</p>
+        
+        <div class="mb-6">
+            <button onclick="testDarkMode()" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                Test Dark Mode
+            </button>
+        </div>
+        
+        <div id="status" class="p-4 rounded"></div>
+    </div>
+    
+    <script>
+        function testDarkMode() {
+            const statusDiv = document.getElementById('status');
+            const isDarkClass = document.documentElement.classList.contains('dark');
+            const theme = localStorage.getItem('theme');
+            
+            let status = `<strong>Test Results:</strong><br>`;
+            status += `Dark class on html: ${isDarkClass ? '✅ YES' : '❌ NO'}<br>`;
+            status += `Theme in localStorage: ${theme || 'NOT SET'}<br>`;
+            
+            if (isDarkClass) {
+                status += `<br><strong class="text-green-500">✅ Dark mode is ACTIVE</strong>`;
+                statusDiv.className = 'p-4 rounded bg-green-900 text-green-100';
+            } else {
+                status += `<br><strong class="text-red-500">❌ Dark mode is NOT active</strong>`;
+                statusDiv.className = 'p-4 rounded bg-red-900 text-red-100';
+            }
+            
+            statusDiv.innerHTML = status;
+        }
+        
+        // Apply saved theme on load
+        (function() {
+            const savedTheme = localStorage.getItem('theme');
+            const shouldBeDark = savedTheme === 'dark' || (!savedTheme && true);
+            if (shouldBeDark) {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        })();
+        
+        // Auto-test on load
+        window.onload = function() {
+            setTimeout(testDarkMode, 500);
+        }
+    </script>
+</body>
+</html>

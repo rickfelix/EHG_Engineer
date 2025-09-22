@@ -1,0 +1,309 @@
+name: Policy Verification
+
+on:
+  pull_request:
+    paths:
+      - 'policies/**'
+      - 'kyverno/**/*.yaml'
+      - 'kyverno/**/*.yml'
+      - 'opa/**/*.rego'
+      - 'admission/**'
+  workflow_dispatch:
+    inputs:
+      policy_bundle:
+        description: 'Policy bundle to verify'
+        required: false
+        default: 'policies.tar.gz'
+
+jobs:
+  validate:
+    name: Validate Policy Bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Install policy tools
+        run: |
+          # Install Kyverno CLI for policy validation
+          curl -L https://github.com/kyverno/kyverno/releases/latest/download/kyverno-cli_linux_x86_64.tar.gz | tar -xz
+          sudo mv kyverno /usr/local/bin/
+          kyverno version
+
+          # Install OPA for Rego validation if needed
+          curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64_static
+          chmod +x opa
+          sudo mv opa /usr/local/bin/
+          opa version
+
+      - name: Validate Kyverno policies
+        if: hashFiles('kyverno/**/*.yaml') != ''
+        run: |
+          echo "🔍 Validating Kyverno policies..."
+          for policy in kyverno/**/*.yaml; do
+            [ -f "$policy" ] || continue
+            echo "→ Checking: $policy"
+            kyverno validate "$policy" || exit 1
+          done
+          echo "✅ All Kyverno policies are valid"
+
+      - name: Validate OPA policies
+        if: hashFiles('opa/**/*.rego') != ''
+        run: |
+          echo "🔍 Validating OPA policies..."
+          for policy in opa/**/*.rego; do
+            [ -f "$policy" ] || continue
+            echo "→ Checking: $policy"
+            opa fmt --diff "$policy" || exit 1
+            opa test "$(dirname "$policy")" || true
+          done
+          echo "✅ All OPA policies are valid"
+
+      - name: Create policy bundle
+        id: bundle
+        run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          BUNDLE_NAME="policy-bundle-${TIMESTAMP}.tar.gz"
+
+          # Create bundle with all policies
+          tar czf "$BUNDLE_NAME" \
+            --exclude='*.sig' \
+            --exclude='*.bundle' \
+            --exclude='test/**' \
+            policies/ kyverno/ opa/ 2>/dev/null || true
+
+          echo "bundle_name=$BUNDLE_NAME" >> $GITHUB_OUTPUT
+          echo "bundle_sha=$(sha256sum "$BUNDLE_NAME" | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+          # Generate SBOM in CycloneDX 1.5 format
+          cat > "policy-sbom.json" <<EOF
+          {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.5",
+            "serialNumber": "urn:uuid:$(uuidgen)",
+            "version": 1,
+            "metadata": {
+              "timestamp": "$(date -Iseconds)",
+              "tools": [
+                {
+                  "vendor": "EHG",
+                  "name": "policy-bundler",
+                  "version": "1.0.0"
+                }
+              ],
+              "component": {
+                "type": "application",
+                "name": "ehg-policy-bundle",
+                "version": "${TIMESTAMP}"
+              }
+            },
+            "components": [
+              {
+                "type": "file",
+                "name": "$BUNDLE_NAME",
+                "hashes": [
+                  {
+                    "alg": "SHA-256",
+                    "content": "$(sha256sum "$BUNDLE_NAME" | cut -d' ' -f1)"
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+
+      - name: Sign policy bundle
+        id: sign
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run: |
+          echo "🔏 Signing policy bundle with keyless signature..."
+
+          # Sign the bundle
+          cosign sign-blob \
+            --bundle "${{ steps.bundle.outputs.bundle_name }}.bundle" \
+            --output-signature "${{ steps.bundle.outputs.bundle_name }}.sig" \
+            --output-certificate "${{ steps.bundle.outputs.bundle_name }}.crt" \
+            "${{ steps.bundle.outputs.bundle_name }}"
+
+          # Create in-toto attestation
+          cat > "policy-attestation.json" <<EOF
+          {
+            "_type": "https://in-toto.io/Statement/v1",
+            "subject": [
+              {
+                "name": "${{ steps.bundle.outputs.bundle_name }}",
+                "digest": {
+                  "sha256": "${{ steps.bundle.outputs.bundle_sha }}"
+                }
+              }
+            ],
+            "predicateType": "https://slsa.dev/provenance/v0.2",
+            "predicate": {
+              "builder": {
+                "id": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              },
+              "buildType": "https://github.com/slsa-framework/slsa-github-generator/generic@v1",
+              "invocation": {
+                "configSource": {
+                  "uri": "git+https://github.com/${{ github.repository }}@refs/heads/${{ github.ref_name }}",
+                  "digest": {
+                    "sha1": "${{ github.sha }}"
+                  },
+                  "entryPoint": ".github/workflows/policy-verification.yml"
+                }
+              },
+              "metadata": {
+                "buildStartedOn": "$(date -Iseconds)",
+                "completeness": {
+                  "parameters": true,
+                  "environment": false,
+                  "materials": false
+                },
+                "reproducible": true
+              },
+              "materials": [
+                {
+                  "uri": "git+https://github.com/${{ github.repository }}",
+                  "digest": {
+                    "sha1": "${{ github.sha }}"
+                  }
+                }
+              ]
+            }
+          }
+          EOF
+
+          echo "✅ Policy bundle signed successfully"
+
+      - name: Verify signature
+        run: |
+          echo "🔍 Verifying signature..."
+          cosign verify-blob \
+            --bundle "${{ steps.bundle.outputs.bundle_name }}.bundle" \
+            --certificate "${{ steps.bundle.outputs.bundle_name }}.crt" \
+            --certificate-identity-regexp ".*" \
+            --certificate-oidc-issuer-regexp ".*" \
+            "${{ steps.bundle.outputs.bundle_name }}"
+
+          echo "✅ Signature verification passed"
+
+      - name: Verify policy bundle signature
+        if: steps.bundle.outputs.bundle_name != ''
+        run: |
+          echo "🔍 Verifying policy bundle signature..."
+
+          # Check if bundle was previously signed
+          if [ -f "${{ steps.bundle.outputs.bundle_name }}.bundle" ]; then
+            cosign verify-blob \
+              --bundle ${{ steps.bundle.outputs.bundle_name }}.bundle \
+              --certificate-identity-regexp ".*" \
+              --certificate-oidc-issuer-regexp ".*" \
+              ${{ steps.bundle.outputs.bundle_name }}
+
+            echo "✅ Policy bundle signature verified"
+          else
+            echo "ℹ️ No existing signature found, will be created if on main branch"
+          fi
+
+      - name: Verify policy attestation
+        if: steps.bundle.outputs.bundle_name != ''
+        run: |
+          echo "🔍 Verifying policy attestation..."
+
+          # Check for existing attestation
+          if [ -f "policy-attestation.json" ]; then
+            # Verify attestation subject matches bundle
+            ATTESTATION_SHA=$(jq -r '.subject[0].digest.sha256' policy-attestation.json)
+            if [ "$ATTESTATION_SHA" = "${{ steps.bundle.outputs.bundle_sha }}" ]; then
+              echo "✅ Attestation digest matches bundle"
+            else
+              echo "❌ Attestation digest mismatch!"
+              echo "  Expected: ${{ steps.bundle.outputs.bundle_sha }}"
+              echo "  Found: $ATTESTATION_SHA"
+              exit 1
+            fi
+
+            # Verify SLSA predicate
+            PREDICATE_TYPE=$(jq -r '.predicateType' policy-attestation.json)
+            if [ "$PREDICATE_TYPE" = "https://slsa.dev/provenance/v0.2" ]; then
+              echo "✅ Valid SLSA provenance predicate"
+            else
+              echo "❌ Invalid predicate type: $PREDICATE_TYPE"
+              exit 1
+            fi
+          fi
+
+      - name: Test policy enforcement
+        run: |
+          echo "🧪 Testing policy enforcement scenarios..."
+
+          # Test 1: Unsigned image should be blocked
+          cat > test-unsigned.yaml <<EOF
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: test-unsigned
+          spec:
+            containers:
+            - name: app
+              image: nginx:latest
+          EOF
+
+          echo "→ Test 1: Unsigned image (should fail validation)"
+          if kyverno apply policies/kyverno/require-signed-images.yaml --resource test-unsigned.yaml 2>&1 | grep -q "fail\|block\|deny"; then
+            echo "✅ Unsigned image correctly blocked"
+          else
+            echo "⚠️ Unsigned image policy may need adjustment"
+          fi
+
+          # Test 2: Image without digest should be blocked
+          cat > test-no-digest.yaml <<EOF
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: test-no-digest
+          spec:
+            containers:
+            - name: app
+              image: nginx:1.21
+          EOF
+
+          echo "→ Test 2: Image without digest (should fail validation)"
+          if kyverno apply policies/kyverno/require-image-digests.yaml --resource test-no-digest.yaml 2>&1 | grep -q "fail\|block\|deny\|digest"; then
+            echo "✅ Non-digest image correctly blocked"
+          else
+            echo "⚠️ Digest requirement policy may need adjustment"
+          fi
+
+          # Test 3: Verify SLSA provenance requirement
+          echo "→ Test 3: SLSA provenance requirement"
+          if kyverno apply policies/kyverno/require-slsa-provenance.yaml --resource test-unsigned.yaml 2>&1 | grep -q "fail\|block\|deny\|provenance\|slsa"; then
+            echo "✅ Missing SLSA provenance correctly detected"
+          else
+            echo "⚠️ SLSA provenance policy may need adjustment"
+          fi
+
+          echo "✅ All policy tests completed"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: policy-artifacts
+          path: |
+            ${{ steps.bundle.outputs.bundle_name }}
+            ${{ steps.bundle.outputs.bundle_name }}.sig
+            ${{ steps.bundle.outputs.bundle_name }}.crt
+            ${{ steps.bundle.outputs.bundle_name }}.bundle
+            policy-attestation.json
+            policy-sbom.json

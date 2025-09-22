@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 32 Detail
+subgraph S32["32. Customer Success & Retention Engineering"]
+  S32_root["Purpose: Establish customer success systems and retention mechanisms.
+Owner: EVA"]
+  S32_A["32.1 Success Infrastructure"]
+  S32_B["32.2 Health Monitoring"]
+  S32_C["32.3 Retention Programs"]
+  S32_root --> S32_A --> S32_B --> S32_C
+end
+classDef dep stroke-dasharray: 5 5;
+D32["Depends on: 31"]:::dep -.-> S32_root

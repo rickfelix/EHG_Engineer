@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "timestamp": "2025-09-20T02:50:44.804Z",
+  "generator": "codex",
+  "task": "Create function number_1758336643784_0",
+  "artifacts": [
+    {
+      "name": "changes-1758336644804.patch",
+      "type": "patch",
+      "sha256": "b61d2594a7af28ac5d3c9b5169456b9600889b46197a68a1aeef7643546e928f"
+    },
+    {
+      "name": "sbom-1758336644804.cdx.json",
+      "type": "sbom",
+      "sha256": "60b1b64347c91e3ea40d565eecdd66c508fe758a8168d0be587d855f8dfdc93d"
+    },
+    {
+      "name": "attestation-1758336644804.intoto",
+      "type": "attestation",
+      "sha256": "ef4fe47602dc6a76818f0b55062928f12a4555cbbca4f6b738321d9c90454944"
+    }
+  ]
+}

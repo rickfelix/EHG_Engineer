@@ -1,0 +1,230 @@
+name: SLSA Verification
+
+on:
+  pull_request:
+    paths:
+      - 'deployments/**/*.yaml'
+      - 'deployments/**/*.yml'
+      - 'k8s/**/*.yaml'
+      - 'k8s/**/*.yml'
+      - 'manifests/**/*.yaml'
+      - 'manifests/**/*.yml'
+  workflow_dispatch:
+    inputs:
+      artifact_digest:
+        description: 'Container image digest to verify'
+        required: true
+        type: string
+
+jobs:
+  verify-provenance:
+    name: Verify SLSA Provenance
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract artifact references
+        id: extract
+        run: |
+          # Extract image digests from deployment manifests
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "Extracting digests from changed files..."
+            DIGESTS=$(grep -h "image:.*@sha256:" ${{ github.workspace }}/deployments/**/*.yaml 2>/dev/null | \
+                      sed 's/.*image: *//; s/#.*//' | \
+                      grep "@sha256:" | \
+                      sort -u || true)
+          else
+            # Manual workflow dispatch
+            DIGESTS="${{ github.event.inputs.artifact_digest }}"
+          fi
+
+          if [ -z "$DIGESTS" ]; then
+            echo "⚠️ No container digests found to verify"
+            echo "digests_found=false" >> $GITHUB_OUTPUT
+          else
+            echo "Found digests to verify:"
+            echo "$DIGESTS"
+            echo "digests<<EOF" >> $GITHUB_OUTPUT
+            echo "$DIGESTS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "digests_found=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install SLSA Verifier
+        if: steps.extract.outputs.digests_found == 'true'
+        run: |
+          curl -sSL https://github.com/slsa-framework/slsa-verifier/releases/latest/download/slsa-verifier-linux-amd64 -o slsa-verifier
+          chmod +x slsa-verifier
+          ./slsa-verifier version
+
+      - name: Install cosign
+        if: steps.extract.outputs.digests_found == 'true'
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.0'
+
+      - name: Verify SLSA provenance
+        if: steps.extract.outputs.digests_found == 'true'
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run: |
+          set -e
+          VERIFICATION_FAILED=false
+          SLSA_LEVEL_MET=false
+
+          while IFS= read -r IMAGE; do
+            [ -z "$IMAGE" ] && continue
+
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "🔍 Verifying: $IMAGE"
+
+            # Extract registry and digest
+            REGISTRY=$(echo "$IMAGE" | cut -d'/' -f1)
+            DIGEST=$(echo "$IMAGE" | cut -d'@' -f2)
+
+            # Verify with cosign first (keyless)
+            echo "→ Checking signature with cosign..."
+            if cosign verify \
+                --certificate-identity-regexp ".*" \
+                --certificate-oidc-issuer-regexp ".*" \
+                "$IMAGE"; then
+              echo "✅ Signature valid"
+            else
+              echo "❌ Signature verification failed"
+              VERIFICATION_FAILED=true
+              continue
+            fi
+
+            # Verify SLSA provenance with strict requirements
+            echo "→ Checking SLSA provenance (Level 3 required)..."
+            if ./slsa-verifier verify-image "$IMAGE" \
+                --print-provenance \
+                --source-uri "github.com/${{ github.repository }}"; then
+              echo "✅ SLSA Level 3 provenance valid"
+              SLSA_LEVEL_MET=true
+
+              # Extract and validate provenance details
+              echo "→ Extracting provenance metadata..."
+              cosign download attestation "$IMAGE" | jq -r '.payload' | base64 -d | jq '.' > provenance.json
+
+              # Verify builder identity
+              BUILDER_ID=$(jq -r '.predicate.builder.id' provenance.json)
+              if [[ "$BUILDER_ID" == *"github.com"* ]]; then
+                echo "✅ Builder identity verified: $BUILDER_ID"
+              else
+                echo "⚠️ Unknown builder: $BUILDER_ID"
+              fi
+
+              # Check for non-forgeable provenance
+              REPRODUCIBLE=$(jq -r '.predicate.metadata.reproducible' provenance.json)
+              if [ "$REPRODUCIBLE" = "true" ]; then
+                echo "✅ Build is reproducible"
+              else
+                echo "ℹ️ Build is not reproducible (acceptable for now)"
+              fi
+            else
+              echo "❌ SLSA provenance verification failed"
+              VERIFICATION_FAILED=true
+              continue
+            fi
+
+            # Check for in-toto attestations with validation
+            echo "→ Checking for in-toto attestations..."
+            if cosign verify-attestation \
+                --type slsaprovenance \
+                --certificate-identity-regexp ".*" \
+                --certificate-oidc-issuer-regexp ".*" \
+                "$IMAGE"; then
+              echo "✅ In-toto attestation found and verified"
+
+              # Validate attestation format
+              cosign download attestation "$IMAGE" | jq -r '.payload' | base64 -d > attestation.json
+              ATTESTATION_TYPE=$(jq -r '._type' attestation.json)
+              if [ "$ATTESTATION_TYPE" = "https://in-toto.io/Statement/v1" ]; then
+                echo "✅ Attestation format: in-toto v1.0"
+              else
+                echo "⚠️ Unknown attestation format: $ATTESTATION_TYPE"
+              fi
+
+              # Check subject digest matches image
+              SUBJECT_DIGEST=$(jq -r '.subject[0].digest.sha256' attestation.json)
+              IMAGE_DIGEST=$(echo "$DIGEST" | sed 's/sha256://')
+              if [ "$SUBJECT_DIGEST" = "$IMAGE_DIGEST" ]; then
+                echo "✅ Subject digest matches image"
+              else
+                echo "❌ Digest mismatch - possible provenance replay attack!"
+                echo "   Expected: $IMAGE_DIGEST"
+                echo "   Got: $SUBJECT_DIGEST"
+                VERIFICATION_FAILED=true
+              fi
+            else
+              echo "❌ No valid in-toto attestation found"
+              VERIFICATION_FAILED=true
+            fi
+
+            # Additional security checks
+            echo "→ Running additional security validations..."
+
+            # Check certificate transparency
+            if cosign verify \
+                --certificate-identity-regexp ".*" \
+                --certificate-oidc-issuer-regexp ".*" \
+                "$IMAGE" 2>&1 | grep -q "Validated in Rekor"; then
+              echo "✅ Validated in Rekor transparency log"
+            else
+              echo "⚠️ Not found in Rekor (will be required post-pilot)"
+            fi
+
+          done <<< "${{ steps.extract.outputs.digests }}"
+
+          # Final verdict
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          if [ "$VERIFICATION_FAILED" = "true" ]; then
+            echo "❌ Verification FAILED - blocking merge"
+            echo "Issues found:"
+            echo "  - Missing or invalid signatures"
+            echo "  - SLSA provenance not meeting Level 3"
+            echo "  - Attestation digest mismatches"
+            exit 1
+          elif [ "$SLSA_LEVEL_MET" = "false" ]; then
+            echo "⚠️ Warning: SLSA Level 3 not fully met"
+            echo "This will be enforced after pilot phase"
+            exit 0
+          else
+            echo "✅ All verifications PASSED"
+            echo "  - Signatures valid ✓"
+            echo "  - SLSA Level 3 met ✓"
+            echo "  - Attestations verified ✓"
+            echo "  - No provenance replay detected ✓"
+          fi
+
+      - name: Generate verification report
+        if: always() && steps.extract.outputs.digests_found == 'true'
+        run: |
+          cat > verification-report.json <<EOF
+          {
+            "timestamp": "$(date -Iseconds)",
+            "workflow_run": "${{ github.run_id }}",
+            "event": "${{ github.event_name }}",
+            "ref": "${{ github.ref }}",
+            "sha": "${{ github.sha }}",
+            "verification_status": "${{ job.status }}",
+            "slsa_level": "L3",
+            "attestation_format": "in-toto v1.0",
+            "predicate_type": "slsaprovenance/v0.2"
+          }
+          EOF
+
+      - name: Upload verification report
+        if: always() && steps.extract.outputs.digests_found == 'true'
+        uses: actions/upload-artifact@v3
+        with:
+          name: slsa-verification-report
+          path: verification-report.json

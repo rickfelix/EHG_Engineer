@@ -1,0 +1,155 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: ehg-base-policies
+  annotations:
+    config.kubernetes.io/managed-by: kustomize
+    security.ehg.io/policy-version: v1.0.0
+
+# Base resources for all environments
+resources:
+  # Kyverno policies
+  - ../../../policies/kyverno/require-signed-images.yaml
+  - ../../../policies/kyverno/require-slsa-provenance.yaml
+  - ../../../policies/kyverno/require-image-digests.yaml
+
+  # Observability configurations
+  - ../../../observability/prometheus/metrics.yaml
+
+  # Namespaces
+  - namespaces.yaml
+
+  # RBAC
+  - rbac.yaml
+
+  # Network policies
+  - network-policies.yaml
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/part-of: ehg-engineer
+  app.kubernetes.io/managed-by: gitops
+  security.ehg.io/lane: claude
+  gitops.ehg.io/managed: "true"
+
+# Common annotations
+commonAnnotations:
+  security.ehg.io/signed: "true"
+  security.ehg.io/slsa-level: "3"
+  gitops.ehg.io/sync-wave: "1"
+
+# Namespace for all resources
+namespace: kyverno
+
+# Name prefix for all resources
+namePrefix: ehg-
+
+# Configure how to handle existing resources
+buildMetadata:
+  - managedByLabel
+  - originAnnotations
+
+# Patches for security hardening
+patches:
+  # Enforce security context for all pods
+  - target:
+      kind: Deployment
+      name: ".*"
+    patch: |-
+      - op: add
+        path: /spec/template/spec/securityContext
+        value:
+          runAsNonRoot: true
+          runAsUser: 1000
+          fsGroup: 1000
+          seccompProfile:
+            type: RuntimeDefault
+
+  # Add resource limits to all containers
+  - target:
+      kind: Deployment
+      name: ".*"
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+
+# Variable substitutions
+vars:
+  - name: CLUSTER_NAME
+    objref:
+      kind: ConfigMap
+      name: cluster-config
+      apiVersion: v1
+    fieldref:
+      fieldpath: data.cluster_name
+
+  - name: ENVIRONMENT
+    objref:
+      kind: ConfigMap
+      name: cluster-config
+      apiVersion: v1
+    fieldref:
+      fieldpath: data.environment
+
+# Config map generator for dynamic values
+configMapGenerator:
+  - name: cluster-config
+    literals:
+      - cluster_name=ehg-base
+      - environment=base
+      - region=us-east-1
+      - slsa_level=3
+      - policy_version=v1.0.0
+
+# Secret generator (will be encrypted with Sealed Secrets)
+secretGenerator:
+  - name: signing-keys
+    files:
+      - tls.crt=certs/signing.crt
+      - tls.key=certs/signing.key
+    type: kubernetes.io/tls
+
+# Replacements for dynamic values
+replacements:
+  - source:
+      kind: ConfigMap
+      name: cluster-config
+      fieldPath: data.environment
+    targets:
+      - select:
+          kind: ClusterPolicy
+        fieldPaths:
+          - metadata.labels.[security.ehg.io/environment]
+        options:
+          create: true
+
+# Helm chart inflator for external dependencies
+helmCharts:
+  - name: sealed-secrets
+    repo: https://bitnami-labs.github.io/sealed-secrets
+    version: 2.13.0
+    releaseName: sealed-secrets
+    namespace: kube-system
+    valuesInline:
+      fullnameOverride: sealed-secrets
+      controller:
+        create: true
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "250m"
+
+# Image transformations for security
+images:
+  - name: ghcr.io/kyverno/kyverno
+    newTag: v1.11.0
+  - name: ghcr.io/kyverno/kyvernopre
+    newTag: v1.11.0

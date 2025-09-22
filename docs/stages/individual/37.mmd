@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 37 Detail
+subgraph S37["37. Strategic Risk Forecasting"]
+  S37_root["Purpose: Forecast and prepare for strategic risks and market changes.
+Owner: Chairman"]
+  S37_A["37.1 Risk Modeling"]
+  S37_B["37.2 Impact Assessment"]
+  S37_C["37.3 Contingency Planning"]
+  S37_root --> S37_A --> S37_B --> S37_C
+end
+classDef dep stroke-dasharray: 5 5;
+D37["Depends on: 36"]:::dep -.-> S37_root

@@ -1,0 +1,89 @@
+{
+  "stage_id": 3,
+  "stage_title": "Comprehensive Validation",
+  "objective": "Optimize Stage 3 (Comprehensive Validation) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 3,
+      "title": "Comprehensive Validation",
+      "description": "Validate problem-solution fit, user willingness to pay, and technical feasibility.",
+      "owner": "PLAN",
+      "depends_on": [
+        2
+      ],
+      "inputs": [
+        "AI review report",
+        "Market research",
+        "User interviews"
+      ],
+      "outputs": [
+        "Validation report",
+        "User feedback",
+        "Feasibility assessment"
+      ],
+      "metrics": [
+        "Validation score",
+        "User interest level",
+        "Technical feasibility score"
+      ],
+      "gates": {
+        "entry": [
+          "AI review complete",
+          "Risk assessment done"
+        ],
+        "exit": [
+          "Problem validated",
+          "Solution validated",
+          "Kill/Revise/Proceed decision"
+        ]
+      },
+      "substages": [
+        {
+          "id": "3.1",
+          "title": "Problem Validation",
+          "done_when": [
+            "User interviews conducted",
+            "Pain points documented"
+          ]
+        },
+        {
+          "id": "3.2",
+          "title": "Solution Validation",
+          "done_when": [
+            "Solution-fit confirmed",
+            "MVP scope defined"
+          ]
+        },
+        {
+          "id": "3.3",
+          "title": "Willingness to Pay",
+          "done_when": [
+            "Pricing signals captured",
+            "Revenue model validated"
+          ]
+        },
+        {
+          "id": "3.4",
+          "title": "Kill/Revise/Proceed Gate",
+          "done_when": [
+            "Decision documented",
+            "Next steps defined"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/03-*.md",
+    "critique_path": "/docs/workflow/critique/stage-03.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_03_findings.md",
+    "/docs/research/outputs/stage_03_recommendations.md"
+  ]
+}

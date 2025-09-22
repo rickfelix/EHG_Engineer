@@ -1,0 +1,46 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-image-digests
+  annotations:
+    policies.kyverno.io/title: Require Image Digests
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/minversion: 1.9.0
+    policies.kyverno.io/description: >-
+      Requires all container images to use immutable SHA256 digests
+      instead of mutable tags. This prevents image substitution attacks
+      and ensures deployment reproducibility.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  webhookTimeoutSeconds: 10
+  failurePolicy: Fail
+  rules:
+    - name: require-digest-not-tag
+      match:
+        any:
+        - resources:
+            kinds:
+            - Pod
+            - Deployment
+            - StatefulSet
+            - DaemonSet
+            - Job
+            - CronJob
+      validate:
+        message: "Images must use SHA256 digests, not tags. Use image@sha256:... format"
+        pattern:
+          spec:
+            =(securityContext):
+              =(runAsNonRoot): true
+            containers:
+            - name: "*"
+              image: "*@sha256:*"
+            =(initContainers):
+            - name: "*"
+              image: "*@sha256:*"
+            =(ephemeralContainers):
+            - name: "*"
+              image: "*@sha256:*"

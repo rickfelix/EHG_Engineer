@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 34 Detail
+subgraph S34["34. Creative Media Automation"]
+  S34_root["Purpose: Automate content creation and creative asset generation.
+Owner: EVA"]
+  S34_A["34.1 Content Automation"]
+  S34_B["34.2 Asset Generation"]
+  S34_C["34.3 Campaign Execution"]
+  S34_root --> S34_A --> S34_B --> S34_C
+end
+classDef dep stroke-dasharray: 5 5;
+D34["Depends on: 33"]:::dep -.-> S34_root

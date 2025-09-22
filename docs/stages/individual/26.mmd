@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 26 Detail
+subgraph S26["26. Security & Compliance Certification"]
+  S26_root["Purpose: Security validation and compliance certification processes.
+Owner: EXEC"]
+  S26_A["26.1 Security Testing"]
+  S26_B["26.2 Compliance Validation"]
+  S26_C["26.3 Certification Process"]
+  S26_root --> S26_A --> S26_B --> S26_C
+end
+classDef dep stroke-dasharray: 5 5;
+D26["Depends on: 25"]:::dep -.-> S26_root

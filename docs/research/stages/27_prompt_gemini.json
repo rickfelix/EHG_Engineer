@@ -1,0 +1,89 @@
+{
+  "stage_id": 27,
+  "stage_title": "Actor Model & Saga Transaction Integration",
+  "objective": "Optimize Stage 27 (Actor Model & Saga Transaction Integration) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 27,
+      "title": "Actor Model & Saga Transaction Integration",
+      "description": "Implement distributed transaction patterns and actor model architecture.",
+      "owner": "EXEC",
+      "depends_on": [
+        26
+      ],
+      "inputs": [
+        "Architecture design",
+        "Transaction requirements",
+        "State management needs"
+      ],
+      "outputs": [
+        "Actor system",
+        "Saga orchestration",
+        "Event sourcing"
+      ],
+      "metrics": [
+        "Transaction success rate",
+        "Latency metrics",
+        "Consistency score"
+      ],
+      "gates": {
+        "entry": [
+          "Architecture approved",
+          "Patterns selected"
+        ],
+        "exit": [
+          "Actors implemented",
+          "Sagas tested",
+          "Consistency verified"
+        ]
+      },
+      "substages": [
+        {
+          "id": "27.1",
+          "title": "Actor Implementation",
+          "done_when": [
+            "Actors defined",
+            "Messages designed",
+            "Supervision configured"
+          ]
+        },
+        {
+          "id": "27.2",
+          "title": "Saga Orchestration",
+          "done_when": [
+            "Sagas designed",
+            "Compensations defined",
+            "Orchestrator built"
+          ]
+        },
+        {
+          "id": "27.3",
+          "title": "Testing & Validation",
+          "done_when": [
+            "Failure scenarios tested",
+            "Recovery verified",
+            "Performance validated"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/27-*.md",
+    "critique_path": "/docs/workflow/critique/stage-27.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_27_findings.md",
+    "/docs/research/outputs/stage_27_recommendations.md"
+  ],
+  "gemini_specific": {
+    "focus": "practical_implementation",
+    "include_code_samples": true,
+    "suggest_tools": true
+  }
+}

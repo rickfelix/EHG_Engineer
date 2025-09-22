@@ -1,0 +1,286 @@
+diff --git a/src/utils/timestamp.js b/src/utils/timestamp.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b19b3d702d015edb19e767cc78ed8ff3237ace81
+--- /dev/null
++++ b/src/utils/timestamp.js
+@@ -0,0 +1,175 @@
++/**
++ * Timestamp utility functions built on the Node.js Date API.
++ * Provides ISO, locale-aware formatting, timezone conversion, and parsing helpers.
++ */
++'use strict';
++
++const DEFAULT_LOCALE = 'en-US';
++const DEFAULT_FORMAT_OPTIONS = Object.freeze({
++  year: 'numeric',
++  month: '2-digit',
++  day: '2-digit',
++  hour: '2-digit',
++  minute: '2-digit',
++  second: '2-digit',
++  hour12: false,
++  timeZone: 'UTC'
++});
++
++/**
++ * Ensure the provided value can be treated as a valid Date instance.
++ * @param {Date|string|number} value - Candidate date value
++ * @param {string} functionName - Name of the calling function for error context
++ * @returns {Date}
++ */
++function ensureDateInstance(value, functionName) {
++  if (value instanceof Date) {
++    if (Number.isNaN(value.getTime())) {
++      throw new RangeError(`${functionName} received an invalid Date instance.`);
++    }
++    return new Date(value.getTime());
++  }
++
++  if (typeof value === 'string' || typeof value === 'number') {
++    const parsed = new Date(value);
++    if (Number.isNaN(parsed.getTime())) {
++      throw new RangeError(`${functionName} could not parse the provided value into a valid Date.`);
++    }
++    return parsed;
++  }
++
++  throw new TypeError(`${functionName} expects a Date, string, or number value.`);
++}
++
++/**
++ * Resolve requested formatting configuration.
++ * @param {object|string} [format] - Format descriptor or the literal string "iso"
++ * @returns {{ mode: 'iso' } | { mode: 'formatter', locale: string, options: Intl.DateTimeFormatOptions }}
++ */
++function resolveFormatConfig(format) {
++  if (typeof format === 'string') {
++    if (format.toLowerCase() === 'iso') {
++      return { mode: 'iso' };
++    }
++    throw new TypeError('formatTimestamp string format must be "iso".');
++  }
++
++  if (format == null) {
++    return {
++      mode: 'formatter',
++      locale: DEFAULT_LOCALE,
++      options: { ...DEFAULT_FORMAT_OPTIONS }
++    };
++  }
++
++  if (typeof format !== 'object' || Array.isArray(format)) {
++    throw new TypeError('formatTimestamp expects a format object with optional locale/options.');
++  }
++
++  const locale = typeof format.locale === 'string' && format.locale.trim().length > 0
++    ? format.locale
++    : DEFAULT_LOCALE;
++
++  const options = format.options && typeof format.options === 'object'
++    ? { ...format.options }
++    : { ...DEFAULT_FORMAT_OPTIONS };
++
++  return {
++    mode: 'formatter',
++    locale,
++    options
++  };
++}
++
++/**
++ * Ensure the provided timezone string is a valid IANA identifier.
++ * @param {string} timezone
++ */
++function assertValidTimezone(timezone) {
++  if (typeof timezone !== 'string' || timezone.trim().length === 0) {
++    throw new TypeError('Timezone must be a non-empty string.');
++  }
++
++  try {
++    new Intl.DateTimeFormat(DEFAULT_LOCALE, { timeZone: timezone });
++  } catch (error) {
++    throw new RangeError(`Invalid IANA timezone provided: ${timezone}`);
++  }
++}
++
++/**
++ * Convert an Intl shortOffset timezone name (e.g. "GMT+9") to "+09:00".
++ * @param {string} timeZoneName
++ * @returns {string}
++ */
++function buildOffsetFromTimezoneName(timeZoneName) {
++  if (typeof timeZoneName !== 'string' || timeZoneName.length === 0 || timeZoneName === 'GMT') {
++    return '+00:00';
++  }
++
++  const normalized = timeZoneName.replace('GMT', '').replace('\u2212', '-');
++
++  if (normalized.length === 0) {
++    return '+00:00';
++  }
++
++  const sign = normalized.startsWith('-') ? '-' : '+';
++  const offsetBody = normalized.replace(/^[-+]/, '');
++  const [hoursPart, minutesPart = '00'] = offsetBody.split(':');
++  const hours = hoursPart.padStart(2, '0');
++  const minutes = minutesPart.padStart(2, '0');
++
++  return `${sign}${hours}:${minutes}`;
++}
++
++/**
++ * Return the current timestamp as an ISO 8601 string.
++ * @returns {string}
++ */
++function getTimestamp() {
++  return new Date().toISOString();
++}
++
++/**
++ * Format a provided date using Intl.DateTimeFormat or ISO output.
++ * @param {Date|string|number} dateInput - Value convertible to Date
++ * @param {object|string} [format] - Format configuration or the string "iso"
++ * @returns {string}
++ */
++function formatTimestamp(dateInput, format = undefined) {
++  const date = ensureDateInstance(dateInput, 'formatTimestamp');
++  const config = resolveFormatConfig(format);
++
++  if (config.mode === 'iso') {
++    return date.toISOString();
++  }
++
++  const { locale, options } = config;
++  const formatter = new Intl.DateTimeFormat(locale, options);
++  return formatter.format(date);
++}
++
++/**
++ * Produce a timestamp string that reflects the supplied timezone and offset.
++ * @param {string} timezone - An IANA timezone name (e.g. "Asia/Tokyo")
++ * @returns {string}
++ */
++function getTimestampWithTimezone(timezone) {
++  assertValidTimezone(timezone);
++
++  const formatter = new Intl.DateTimeFormat(DEFAULT_LOCALE, {
++    ...DEFAULT_FORMAT_OPTIONS,
++    timeZone: timezone,
++    timeZoneName: 'shortOffset'
++  });
++
++  const parts = formatter.formatToParts(new Date());
++  const componentMap = Object.create(null);
++  let timeZoneName = 'GMT';
++
++  for (const part of parts) {
++    if (part.type === 'timeZoneName') {
++      timeZoneName = part.value;
++    } else if (part.type !== 'literal') {
++      componentMap[part.type] = part.value;
++    }
++  }
++
++  const timestamp = `${componentMap.year}-${componentMap.month}-${componentMap.day}` +
++    `T${componentMap.hour}:${componentMap.minute}:${componentMap.second}`;
++  const offset = buildOffsetFromTimezoneName(timeZoneName);
++
++  return `${timestamp}${offset}`;
++}
++
++/**
++ * Parse an input into a Date, ensuring the result is valid.
++ * @param {Date|string|number} timestamp
++ * @returns {Date}
++ */
++function parseTimestamp(timestamp) {
++  return ensureDateInstance(timestamp, 'parseTimestamp');
++}
++
++const timestampUtils = {
++  getTimestamp,
++  formatTimestamp,
++  getTimestampWithTimezone,
++  parseTimestamp
++};
++
++module.exports = timestampUtils;
++module.exports.default = timestampUtils;
++Object.defineProperty(module.exports, '__esModule', { value: true });
++
+diff --git a/src/utils/timestamp.test.js b/src/utils/timestamp.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..d50716827986a7da36d5ec3ca771a3742eb0fbda
+--- /dev/null
++++ b/src/utils/timestamp.test.js
+@@ -0,0 +1,80 @@
++import assert from 'assert';
++
++import timestampUtils, {
++  getTimestamp,
++  formatTimestamp,
++  getTimestampWithTimezone,
++  parseTimestamp
++} from './timestamp.js';
++
++describe('timestamp utils', () => {
++  it('returns an ISO 8601 string for getTimestamp', () => {
++    const value = getTimestamp();
++    assert.match(
++      value,
++      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
++    );
++  });
++
++  it('supports locale-aware formatting through formatTimestamp', () => {
++    const sampleDate = new Date('2024-01-01T12:34:56Z');
++    const formatted = formatTimestamp(sampleDate, {
++      locale: 'en-GB',
++      options: {
++        timeZone: 'UTC',
++        year: 'numeric',
++        month: '2-digit',
++        day: '2-digit',
++        hour: '2-digit',
++        minute: '2-digit'
++      }
++    });
++
++    assert.strictEqual(formatted, '01/01/2024, 12:34');
++  });
++
++  it('provides ISO-like timezone output for getTimestampWithTimezone', () => {
++    const value = getTimestampWithTimezone('Asia/Tokyo');
++    assert.match(
++      value,
++      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/
++    );
++  });
++
++  it('safely parses timestamp strings into Date objects', () => {
++    const parsed = parseTimestamp('2024-01-01T12:34:56Z');
++    assert.strictEqual(parsed.toISOString(), '2024-01-01T12:34:56.000Z');
++  });
++
++  it('returns ISO when formatTimestamp receives "iso"', () => {
++    const sampleDate = new Date('2024-01-01T00:00:00Z');
++    const formatted = formatTimestamp(sampleDate, 'iso');
++    assert.strictEqual(formatted, '2024-01-01T00:00:00.000Z');
++  });
++
++  it('exposes utilities on the default export', () => {
++    assert.strictEqual(typeof timestampUtils.getTimestamp, 'function');
++    assert.strictEqual(typeof timestampUtils.formatTimestamp, 'function');
++    assert.strictEqual(typeof timestampUtils.getTimestampWithTimezone, 'function');
++    assert.strictEqual(typeof timestampUtils.parseTimestamp, 'function');
++  });
++
++  it('throws for invalid timezone input', () => {
++    assert.throws(() => getTimestampWithTimezone('invalid/timezone'), RangeError);
++  });
++
++  it('throws when parseTimestamp receives an unsupported type', () => {
++    assert.throws(() => parseTimestamp({}), TypeError);
++  });
++});
++

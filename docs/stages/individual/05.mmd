@@ -1,0 +1,11 @@
+flowchart TB
+%% Stage 5 Detail
+subgraph S5["5. Profitability Forecasting"]
+  S5_root["Purpose: Create financial models and profitability projections for the venture."]
+  S5_A["5.1 Revenue Modeling"]
+  S5_B["5.2 Cost Structure"]
+  S5_C["5.3 Profitability Analysis"]
+  S5_root --> S5_A --> S5_B --> S5_C
+end
+classDef dep stroke-dasharray: 5 5;
+D5["Depends on: 4"]:::dep -.-> S5_root

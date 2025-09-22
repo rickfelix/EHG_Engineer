@@ -1,0 +1,83 @@
+{
+  "stage_id": 11,
+  "stage_title": "Strategic Naming & Brand Foundation",
+  "objective": "Optimize Stage 11 (Strategic Naming & Brand Foundation) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 11,
+      "title": "Strategic Naming & Brand Foundation",
+      "description": "Develop strategic brand identity and naming conventions.",
+      "owner": "LEAD",
+      "depends_on": [
+        10
+      ],
+      "inputs": [
+        "Market positioning",
+        "Brand strategy",
+        "Legal requirements"
+      ],
+      "outputs": [
+        "Brand name",
+        "Brand guidelines",
+        "Trademark search"
+      ],
+      "metrics": [
+        "Brand strength score",
+        "Trademark availability",
+        "Market resonance"
+      ],
+      "gates": {
+        "entry": [
+          "Positioning defined",
+          "Market validated"
+        ],
+        "exit": [
+          "Name selected",
+          "Trademark cleared",
+          "Brand guidelines set"
+        ]
+      },
+      "substages": [
+        {
+          "id": "11.1",
+          "title": "Name Generation",
+          "done_when": [
+            "Name candidates created",
+            "Linguistic analysis done"
+          ]
+        },
+        {
+          "id": "11.2",
+          "title": "Trademark Search",
+          "done_when": [
+            "Availability checked",
+            "Domain secured",
+            "Legal clearance obtained"
+          ]
+        },
+        {
+          "id": "11.3",
+          "title": "Brand Foundation",
+          "done_when": [
+            "Brand values defined",
+            "Visual identity created",
+            "Guidelines documented"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/11-*.md",
+    "critique_path": "/docs/workflow/critique/stage-11.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_11_findings.md",
+    "/docs/research/outputs/stage_11_recommendations.md"
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [
+    {
+      "name": "artifact.tar.gz",
+      "digest": {
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "predicateType": "https://slsa.dev/provenance/v0.2",
+  "predicate": {
+    "builder": {
+      "id": "https://github.com/rickfelix/EHG_Engineer/actions/runs/7580520957"
+    },
+    "buildType": "https://github.com/slsa-framework/slsa-github-generator/container@v1",
+    "invocation": {
+      "configSource": {
+        "uri": "git+https://github.com/rickfelix/EHG_Engineer@refs/heads/main",
+        "digest": {
+          "sha1": "7b587d5abc123def456789012345678901234567"
+        },
+        "entryPoint": ".github/workflows/sign-artifacts.yml"
+      },
+      "parameters": {
+        "artifact_path": "artifact.tar.gz",
+        "build_level": "L3"
+      },
+      "environment": {
+        "github_actor": "rickfelix",
+        "github_event_name": "push",
+        "github_ref": "refs/heads/main",
+        "github_repository": "rickfelix/EHG_Engineer",
+        "github_run_id": "7580520957",
+        "github_sha": "7b587d5abc123def456789012345678901234567"
+      }
+    },
+    "metadata": {
+      "buildStartedOn": "2025-01-19T20:00:00Z",
+      "buildFinishedOn": "2025-01-19T20:05:00Z",
+      "completeness": {
+        "parameters": true,
+        "environment": true,
+        "materials": true
+      },
+      "reproducible": false
+    },
+    "materials": [
+      {
+        "uri": "git+https://github.com/rickfelix/EHG_Engineer",
+        "digest": {
+          "sha1": "7b587d5abc123def456789012345678901234567"
+        }
+      },
+      {
+        "uri": "https://github.com/sigstore/cosign",
+        "digest": {
+          "sha256": "abc123def456789012345678901234567890abcdef12345678901234567890ab"
+        }
+      }
+    ]
+  }
+}

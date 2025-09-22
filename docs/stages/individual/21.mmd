@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 21 Detail
+subgraph S21["21. Final Pre-Flight Check"]
+  S21_root["Purpose: Comprehensive validation before development phase begins.
+Owner: PLAN"]
+  S21_A["21.1 Technical Validation"]
+  S21_B["21.2 Business Validation"]
+  S21_C["21.3 Go/No-Go Decision"]
+  S21_root --> S21_A --> S21_B --> S21_C
+end
+classDef dep stroke-dasharray: 5 5;
+D21["Depends on: 20"]:::dep -.-> S21_root

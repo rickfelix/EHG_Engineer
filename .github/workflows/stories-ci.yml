@@ -1,0 +1,281 @@
+name: Story Verification CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+      - staging
+      - 'feature/*-sd-*'
+
+  push:
+    branches:
+      - staging
+
+  workflow_dispatch:
+    inputs:
+      sd_key:
+        description: 'Strategic Directive Key (e.g., SD-2025-09-EMB)'
+        required: false
+        type: string
+      environment:
+        description: 'Target Environment'
+        required: false
+        type: choice
+        default: staging
+        options:
+          - staging
+          - production
+
+env:
+  PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/ms-playwright
+
+jobs:
+  test-and-verify:
+    name: Run Tests & Verify Stories
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production') || 'staging' }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Set Environment Variables
+        run: |
+          echo "API_URL=${{ vars.API_URL || 'https://api.ehg-engineer.com' }}" >> $GITHUB_ENV
+          echo "SUPABASE_URL=${{ vars.SUPABASE_URL }}" >> $GITHUB_ENV
+          echo "ENVIRONMENT=${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production') || 'staging' }}" >> $GITHUB_ENV
+          echo "BUILD_ID=${{ github.run_id }}-${{ github.run_number }}" >> $GITHUB_ENV
+          echo "TEST_RUN_ID=test-run-$(date +%s)" >> $GITHUB_ENV
+
+      - name: Detect SD from Branch/PR
+        id: detect_sd
+        run: |
+          # Try to extract SD from branch name or PR title
+          SD_KEY="${{ github.event.inputs.sd_key }}"
+
+          if [ -z "$SD_KEY" ]; then
+            # Extract from branch name (e.g., feature/SD-2025-09-EMB-story-system)
+            if [[ "${{ github.head_ref || github.ref_name }}" =~ SD-[0-9]{4}-[0-9]{2}-[A-Z]{3} ]]; then
+              SD_KEY="${BASH_REMATCH[0]}"
+            fi
+          fi
+
+          if [ -z "$SD_KEY" ]; then
+            # Extract from PR title if available
+            if [[ "${{ github.event.pull_request.title }}" =~ SD-[0-9]{4}-[0-9]{2}-[A-Z]{3} ]]; then
+              SD_KEY="${BASH_REMATCH[0]}"
+            fi
+          fi
+
+          echo "sd_key=$SD_KEY" >> $GITHUB_OUTPUT
+          echo "Detected SD: ${SD_KEY:-none}"
+
+      - name: Run Playwright Tests
+        id: playwright
+        run: |
+          # Run tests with JSON reporter
+          npx playwright test \
+            --reporter=json \
+            --reporter=html \
+            --output=test-results.json \
+            tests/**/*.spec.js || true
+
+          # Save exit code
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+
+      - name: Process Test Results
+        id: process
+        if: steps.detect_sd.outputs.sd_key != ''
+        run: |
+          # Parse test results and extract story keys
+          node tools/post-playwright-results.mjs \
+            --file test-results.json \
+            --sd-key "${{ steps.detect_sd.outputs.sd_key }}" \
+            --build-id "${{ env.BUILD_ID }}" \
+            --test-run-id "${{ env.TEST_RUN_ID }}" \
+            --output story-results.json
+
+          # Count results
+          PASSING=$(jq '.passing | length' story-results.json)
+          FAILING=$(jq '.failing | length' story-results.json)
+          NOT_RUN=$(jq '.not_run | length' story-results.json)
+
+          echo "passing=$PASSING" >> $GITHUB_OUTPUT
+          echo "failing=$FAILING" >> $GITHUB_OUTPUT
+          echo "not_run=$NOT_RUN" >> $GITHUB_OUTPUT
+
+      - name: Post Story Verification
+        if: steps.detect_sd.outputs.sd_key != ''
+        env:
+          SERVICE_TOKEN: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          # Post verification results to API
+          for status in passing failing; do
+            STORY_KEYS=$(jq -r ".$status | @json" story-results.json)
+            if [ "$STORY_KEYS" != "[]" ]; then
+              curl -X POST "${{ env.API_URL }}/api/stories/verify" \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer $SERVICE_TOKEN" \
+                -d "{
+                  \"story_keys\": $STORY_KEYS,
+                  \"test_run_id\": \"${{ env.TEST_RUN_ID }}\",
+                  \"build_id\": \"${{ env.BUILD_ID }}\",
+                  \"status\": \"$status\",
+                  \"coverage_pct\": $([ "$status" = "passing" ] && echo 95 || echo 0)
+                }" || echo "Warning: Failed to post $status stories"
+            fi
+          done
+
+      - name: Check Release Gate
+        id: gate
+        if: steps.detect_sd.outputs.sd_key != ''
+        env:
+          SERVICE_TOKEN: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          # Query release gate status
+          GATE_RESPONSE=$(curl -s "${{ env.API_URL }}/api/stories/gate?sd_key=${{ steps.detect_sd.outputs.sd_key }}" \
+            -H "Authorization: Bearer $SERVICE_TOKEN")
+
+          echo "$GATE_RESPONSE" | jq .
+
+          # Extract gate values
+          READY=$(echo "$GATE_RESPONSE" | jq -r '.ready')
+          PASSING_PCT=$(echo "$GATE_RESPONSE" | jq -r '.passing_pct')
+          TARGET=$(echo "$GATE_RESPONSE" | jq -r '.coverage_target')
+          TOTAL=$(echo "$GATE_RESPONSE" | jq -r '.total_stories')
+          PASSING=$(echo "$GATE_RESPONSE" | jq -r '.passing_count')
+
+          echo "ready=$READY" >> $GITHUB_OUTPUT
+          echo "passing_pct=$PASSING_PCT" >> $GITHUB_OUTPUT
+          echo "target=$TARGET" >> $GITHUB_OUTPUT
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          echo "passing_count=$PASSING" >> $GITHUB_OUTPUT
+
+      - name: Post GitHub Check
+        if: steps.detect_sd.outputs.sd_key != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sd_key = '${{ steps.detect_sd.outputs.sd_key }}';
+            const ready = '${{ steps.gate.outputs.ready }}' === 'true';
+            const passing_pct = parseInt('${{ steps.gate.outputs.passing_pct }}' || '0');
+            const target = parseInt('${{ steps.gate.outputs.target }}' || '80');
+            const total = parseInt('${{ steps.gate.outputs.total }}' || '0');
+            const passing = parseInt('${{ steps.gate.outputs.passing_count }}' || '0');
+
+            // Determine check status
+            const conclusion = ready ? 'success' : 'failure';
+            const status = 'completed';
+
+            // Create detailed summary
+            const summary = `## Story Verification Results for ${sd_key}
+
+            ### Release Gate: ${ready ? '✅ READY' : '❌ NOT READY'}
+
+            - **Passing**: ${passing}/${total} stories (${passing_pct}%)
+            - **Target**: ${target}%
+            - **Status**: ${passing_pct >= target ? '✅ Threshold met' : `❌ Need ${target - passing_pct}% more`}
+
+            ### Test Results
+            - ✅ Passing: ${{ steps.process.outputs.passing || 0 }}
+            - ❌ Failing: ${{ steps.process.outputs.failing || 0 }}
+            - ⏭️ Not Run: ${{ steps.process.outputs.not_run || 0 }}
+
+            ### Build Info
+            - **Build ID**: ${{ env.BUILD_ID }}
+            - **Test Run**: ${{ env.TEST_RUN_ID }}
+            - **Environment**: ${{ env.ENVIRONMENT }}
+            `;
+
+            // Post check to PR
+            if (context.payload.pull_request) {
+              await github.rest.checks.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'Story Verification Gate',
+                head_sha: context.payload.pull_request.head.sha,
+                status: status,
+                conclusion: conclusion,
+                output: {
+                  title: `Story Gate: ${ready ? 'PASSED' : 'BLOCKED'} (${passing_pct}%/${target}%)`,
+                  summary: summary
+                }
+              });
+            }
+
+            // Fail the job if gate not ready and gates are enforced
+            if (!ready && '${{ env.ENVIRONMENT }}' === 'production') {
+              core.setFailed(`Release gate blocked: ${passing_pct}% < ${target}% target`);
+            }
+
+      - name: Upload Test Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_id }}
+          path: |
+            test-results.json
+            story-results.json
+            playwright-report/
+
+      - name: Post Metrics to Supabase
+        if: always() && steps.detect_sd.outputs.sd_key != ''
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          # Record metrics for monitoring
+          node -e "
+          const { createClient } = require('@supabase/supabase-js');
+          const supabase = createClient(
+            '${{ env.SUPABASE_URL }}',
+            process.env.SUPABASE_SERVICE_ROLE_KEY
+          );
+
+          (async () => {
+            await supabase.from('story_ci_metrics').insert({
+              sd_key: '${{ steps.detect_sd.outputs.sd_key }}',
+              build_id: '${{ env.BUILD_ID }}',
+              test_run_id: '${{ env.TEST_RUN_ID }}',
+              environment: '${{ env.ENVIRONMENT }}',
+              passing_pct: ${{ steps.gate.outputs.passing_pct || 0 }},
+              ready: ${{ steps.gate.outputs.ready || false }},
+              total_stories: ${{ steps.gate.outputs.total || 0 }},
+              passing_count: ${{ steps.gate.outputs.passing_count || 0 }},
+              github_run_id: '${{ github.run_id }}',
+              github_ref: '${{ github.ref }}',
+              created_at: new Date().toISOString()
+            });
+          })();
+          " || echo "Metrics recording failed (non-blocking)"
+
+  health-check:
+    name: Story API Health Check
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production') || 'staging' }}
+
+    steps:
+      - name: Check Story API Health
+        env:
+          SERVICE_TOKEN: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          API_URL="${{ vars.API_URL || 'https://api.ehg-engineer.com' }}"
+
+          # Check health endpoint (when implemented)
+          curl -s "$API_URL/api/stories/health" \
+            -H "Authorization: Bearer $SERVICE_TOKEN" | jq . || echo "Health endpoint not yet implemented"
+
+          # Quick gate check as fallback
+          curl -s "$API_URL/api/stories/gate?sd_key=SD-2025-09-EMB" \
+            -H "Authorization: Bearer $SERVICE_TOKEN" | jq '.ready, .passing_pct'

@@ -1,0 +1,94 @@
+{
+  "stage_id": 4,
+  "stage_title": "Competitive Intelligence & Market Defense",
+  "objective": "Optimize Stage 4 (Competitive Intelligence & Market Defense) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 4,
+      "title": "Competitive Intelligence & Market Defense",
+      "description": "Analyze competitive landscape and establish market positioning strategy.",
+      "owner": "LEAD",
+      "depends_on": [
+        3
+      ],
+      "inputs": [
+        "Market research",
+        "Competitor data",
+        "Industry reports"
+      ],
+      "outputs": [
+        "Competitive analysis",
+        "Market positioning",
+        "Defense strategy"
+      ],
+      "metrics": [
+        "Market coverage",
+        "Competitor identification",
+        "Differentiation score"
+      ],
+      "gates": {
+        "entry": [
+          "Validation complete",
+          "Market defined"
+        ],
+        "exit": [
+          "Competitors analyzed",
+          "Positioning defined",
+          "Moat identified"
+        ]
+      },
+      "substages": [
+        {
+          "id": "4.1",
+          "title": "Competitor Identification",
+          "done_when": [
+            "Direct competitors listed",
+            "Indirect competitors mapped"
+          ]
+        },
+        {
+          "id": "4.2",
+          "title": "Feature Comparison",
+          "done_when": [
+            "Feature matrix complete",
+            "Gaps identified"
+          ]
+        },
+        {
+          "id": "4.3",
+          "title": "Market Positioning",
+          "done_when": [
+            "USP defined",
+            "Differentiation strategy set"
+          ]
+        },
+        {
+          "id": "4.4",
+          "title": "Defense Strategy",
+          "done_when": [
+            "Competitive moat defined",
+            "IP strategy outlined"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/04-*.md",
+    "critique_path": "/docs/workflow/critique/stage-04.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_04_findings.md",
+    "/docs/research/outputs/stage_04_recommendations.md"
+  ],
+  "gemini_specific": {
+    "focus": "practical_implementation",
+    "include_code_samples": true,
+    "suggest_tools": true
+  }
+}

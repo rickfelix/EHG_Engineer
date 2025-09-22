@@ -1,0 +1,116 @@
+# Negative Test: Provenance Replay Attack
+# This tests attempting to use valid provenance from a different image
+# Expected: Blocked by SLSA verification
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-provenance-replay
+  namespace: test-negative
+data:
+  test.sh: |
+    #!/bin/bash
+    echo "Testing: Provenance replay attack should be blocked"
+
+    # This test simulates an attack where:
+    # 1. Attacker has valid provenance from image A
+    # 2. Attacker tries to apply it to malicious image B
+    # 3. System should detect digest mismatch
+
+    # Create a deployment with mismatched provenance
+    cat <<EOF | kubectl apply -f - 2>&1 | tee /tmp/result.log
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: test-provenance-replay
+      namespace: test-negative
+      annotations:
+        # Provenance for different image digest
+        kyverno.io/provenance: |
+          {
+            "_type": "https://in-toto.io/Statement/v1",
+            "subject": [
+              {
+                "name": "malicious-image",
+                "digest": {
+                  "sha256": "differentdigest123456789"
+                }
+              }
+            ],
+            "predicateType": "https://slsa.dev/provenance/v0.2",
+            "predicate": {
+              "builder": {
+                "id": "https://github.com/example/repo/actions/runs/123"
+              }
+            }
+          }
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: provenance-test
+      template:
+        metadata:
+          labels:
+            app: provenance-test
+        spec:
+          containers:
+          - name: app
+            # Image digest doesn't match provenance
+            image: busybox@sha256:actualdigest987654321
+            command: ["sleep", "3600"]
+    EOF
+
+    # Check if it was blocked
+    if grep -q "provenance" /tmp/result.log && grep -q "denied\|failed" /tmp/result.log; then
+      echo "✅ PASS: Provenance replay was correctly blocked"
+      exit 0
+    else
+      echo "❌ FAIL: Provenance replay was not blocked!"
+      exit 1
+    fi
+
+---
+# Additional test for invalid provenance signature
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-invalid-provenance
+  namespace: test-negative
+data:
+  test.sh: |
+    #!/bin/bash
+    echo "Testing: Invalid provenance signature should be blocked"
+
+    # Create deployment with tampered provenance
+    kubectl apply -f - <<EOF 2>&1 | tee /tmp/result.log
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: test-invalid-provenance
+      namespace: test-negative
+      annotations:
+        kyverno.io/attestation: "INVALID_SIGNATURE_DATA"
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: invalid-prov
+      template:
+        metadata:
+          labels:
+            app: invalid-prov
+        spec:
+          containers:
+          - name: app
+            image: busybox@sha256:abc123
+            command: ["sleep", "3600"]
+    EOF
+
+    if grep -q "signature\|verification\|denied" /tmp/result.log; then
+      echo "✅ PASS: Invalid provenance was blocked"
+      exit 0
+    else
+      echo "❌ FAIL: Invalid provenance was not blocked!"
+      exit 1
+    fi

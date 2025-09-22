@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 10 Detail
+subgraph S10["10. Comprehensive Technical Review"]
+  S10_root["Purpose: Validate technical architecture and implementation feasibility."]
+  S10_A["10.1 Architecture Review"]
+  S10_B["10.2 Scalability Assessment"]
+  S10_C["10.3 Security Review"]
+  S10_D["10.4 Implementation Planning"]
+  S10_root --> S10_A --> S10_B --> S10_C --> S10_D
+end
+classDef dep stroke-dasharray: 5 5;
+D10["Depends on: 9"]:::dep -.-> S10_root

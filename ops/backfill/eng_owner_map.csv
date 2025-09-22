@@ -1,0 +1,2 @@
+sd_key,owner,decision_log_ref,evidence_ref
+# Add rows like: SD-2025-09-10-new-goal,Jane Doe,https://decision.log/123,https://evidence.repo/456

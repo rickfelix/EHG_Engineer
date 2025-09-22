@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  postgres_staging:
+    image: postgres:16
+    container_name: ehg_staging_db
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_DB: ehg_stage
+      POSTGRES_USER: ehg_admin
+      POSTGRES_PASSWORD: stg_2025_09_22_7hN9kL4mP8vQ3xR6
+    volumes:
+      - ehg_staging_data:/var/lib/postgresql/data
+      - ./bootstrap.sh:/docker-entrypoint-initdb.d/01-bootstrap.sh
+      - ./create_codex_user.sql:/docker-entrypoint-initdb.d/02-create-codex-user.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ehg_admin -d ehg_stage"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - ehg_staging_net
+
+volumes:
+  ehg_staging_data:
+    name: ehg_staging_data
+
+networks:
+  ehg_staging_net:
+    name: ehg_staging_network

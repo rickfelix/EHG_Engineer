@@ -1,0 +1,13 @@
+{
+  "agents": {},
+  "integration": {},
+  "fixes": {},
+  "priorities": {},
+  "errors": [
+    "Documentation Agent: docFindings.map is not a function",
+    "Testing Agent: testFindings.map is not a function",
+    "API Agent: apiFindings.map is not a function",
+    "Dependency Agent: depFindings.map is not a function",
+    "System Error: hub.getAllFindings is not a function"
+  ]
+}

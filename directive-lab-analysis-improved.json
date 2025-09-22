@@ -1,0 +1,59 @@
+{
+  "timestamp": "2025-09-04T13:07:43.342Z",
+  "url": "http://localhost:3000/directive-lab",
+  "success": true,
+  "darkModeCompatibility": {
+    "lightModeClasses": 185,
+    "darkModeClasses": 88,
+    "missingDarkClasses": [
+      "text-gray-",
+      "bg-gray-",
+      "bg-red-",
+      "bg-green-",
+      "bg-blue-",
+      "border-blue-",
+      "text-blue-",
+      "text-red-"
+    ],
+    "compatible": false,
+    "issues": [
+      {
+        "type": "INSUFFICIENT_DARK_MODE_COVERAGE",
+        "severity": "HIGH",
+        "message": "Only 48% of light mode classes have dark mode equivalents"
+      }
+    ],
+    "compatibilityScore": 48,
+    "darkModeActive": {
+      "backgroundColor": "rgb(17, 24, 39)",
+      "color": "rgb(243, 244, 246)"
+    }
+  },
+  "basicAnalysis": {
+    "pageLoad": true,
+    "hasContent": true,
+    "responsive": true,
+    "accessibility": {
+      "totalIssues": 0,
+      "issues": [],
+      "focusableElementCount": 20
+    },
+    "performance": {
+      "loadTime": 164
+    },
+    "interactiveElements": {
+      "buttons": true,
+      "forms": true
+    }
+  },
+  "issues": [],
+  "recommendations": [
+    {
+      "priority": "HIGH",
+      "category": "Dark Mode",
+      "issue": "Insufficient dark mode coverage",
+      "solution": "Add dark mode variants for 8 missing classes",
+      "example": "bg-gray-50 → bg-gray-50 dark:bg-gray-900"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 31 Detail
+subgraph S31["31. MVP Launch"]
+  S31_root["Purpose: Orchestrate MVP launch with coordinated marketing and support.
+Owner: LEAD"]
+  S31_A["31.1 Launch Preparation"]
+  S31_B["31.2 Launch Execution"]
+  S31_C["31.3 Initial Monitoring"]
+  S31_root --> S31_A --> S31_B --> S31_C
+end
+classDef dep stroke-dasharray: 5 5;
+D31["Depends on: 30"]:::dep -.-> S31_root

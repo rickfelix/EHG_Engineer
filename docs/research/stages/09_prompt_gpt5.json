@@ -1,0 +1,83 @@
+{
+  "stage_id": 9,
+  "stage_title": "Gap Analysis & Market Opportunity Modeling",
+  "objective": "Optimize Stage 9 (Gap Analysis & Market Opportunity Modeling) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 9,
+      "title": "Gap Analysis & Market Opportunity Modeling",
+      "description": "Identify capability gaps and model market opportunities.",
+      "owner": "LEAD",
+      "depends_on": [
+        8
+      ],
+      "inputs": [
+        "Current capabilities",
+        "Market requirements",
+        "Competitor analysis"
+      ],
+      "outputs": [
+        "Gap analysis report",
+        "Opportunity matrix",
+        "Capability roadmap"
+      ],
+      "metrics": [
+        "Gap coverage",
+        "Opportunity size",
+        "Capability score"
+      ],
+      "gates": {
+        "entry": [
+          "Decomposition complete",
+          "Market analyzed"
+        ],
+        "exit": [
+          "Gaps identified",
+          "Opportunities prioritized",
+          "Roadmap defined"
+        ]
+      },
+      "substages": [
+        {
+          "id": "9.1",
+          "title": "Capability Assessment",
+          "done_when": [
+            "Current state documented",
+            "Required capabilities listed"
+          ]
+        },
+        {
+          "id": "9.2",
+          "title": "Gap Identification",
+          "done_when": [
+            "Gaps catalogued",
+            "Severity assessed",
+            "Priority assigned"
+          ]
+        },
+        {
+          "id": "9.3",
+          "title": "Opportunity Modeling",
+          "done_when": [
+            "Opportunities mapped",
+            "Market size estimated",
+            "ROI projected"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/09-*.md",
+    "critique_path": "/docs/workflow/critique/stage-09.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_09_findings.md",
+    "/docs/research/outputs/stage_09_recommendations.md"
+  ]
+}

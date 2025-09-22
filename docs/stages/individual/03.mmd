@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 3 Detail
+subgraph S3["3. Comprehensive Validation"]
+  S3_root["Purpose: Validate problem-solution fit, user willingness to pay, and technical feasibility."]
+  S3_A["3.1 Problem Validation"]
+  S3_B["3.2 Solution Validation"]
+  S3_C["3.3 Willingness to Pay"]
+  S3_D["3.4 Kill/Revise/Proceed Gate"]
+  S3_root --> S3_A --> S3_B --> S3_C --> S3_D
+end
+classDef dep stroke-dasharray: 5 5;
+D3["Depends on: 2"]:::dep -.-> S3_root

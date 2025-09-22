@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 40 Detail
+subgraph S40["40. Venture Active"]
+  S40_root["Purpose: Active venture management with growth optimization and exit readiness.
+Owner: Chairman"]
+  S40_A["40.1 Growth Management"]
+  S40_B["40.2 Exit Preparation"]
+  S40_C["40.3 Value Realization"]
+  S40_root --> S40_A --> S40_B --> S40_C
+end
+classDef dep stroke-dasharray: 5 5;
+D40["Depends on: 39"]:::dep -.-> S40_root

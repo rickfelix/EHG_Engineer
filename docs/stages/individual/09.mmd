@@ -1,0 +1,11 @@
+flowchart TB
+%% Stage 9 Detail
+subgraph S9["9. Gap Analysis & Market Opportunity Modeling"]
+  S9_root["Purpose: Identify capability gaps and model market opportunities."]
+  S9_A["9.1 Capability Assessment"]
+  S9_B["9.2 Gap Identification"]
+  S9_C["9.3 Opportunity Modeling"]
+  S9_root --> S9_A --> S9_B --> S9_C
+end
+classDef dep stroke-dasharray: 5 5;
+D9["Depends on: 8"]:::dep -.-> S9_root

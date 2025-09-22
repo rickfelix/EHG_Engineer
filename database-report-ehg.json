@@ -1,0 +1,972 @@
+{
+  "timestamp": "2025-09-03T12:12:25.530Z",
+  "schema": {
+    "tables": [],
+    "columns": {},
+    "constraints": {},
+    "issues": [],
+    "status": "ERROR",
+    "error": "this.supabase.rpc(...).catch is not a function",
+    "indexes": {
+      "indexes": [],
+      "missing": [
+        {
+          "table": "strategic_directives_v2",
+          "column": "status",
+          "reason": "Frequently filtered column"
+        },
+        {
+          "table": "product_requirements_v2",
+          "column": "directive_id",
+          "reason": "Foreign key column"
+        }
+      ],
+      "unused": [],
+      "duplicate": [],
+      "status": "PASS"
+    },
+    "relationships": {
+      "foreignKeys": [],
+      "missingRelationships": [
+        {
+          "from": "product_requirements_v2",
+          "to": "strategic_directives_v2"
+        },
+        {
+          "from": "execution_sequences",
+          "to": "product_requirements_v2"
+        }
+      ],
+      "circularDependencies": [],
+      "status": "WARNING"
+    }
+  },
+  "migrations": {
+    "migrations": [
+      {
+        "file": "004_voice_conversations.sql",
+        "path": "supabase/migrations/004_voice_conversations.sql"
+      }
+    ],
+    "issues": [
+      {
+        "type": "NON_REVERSIBLE_MIGRATION",
+        "file": "004_voice_conversations.sql",
+        "severity": "LOW",
+        "fix": "Add rollback/down migration"
+      }
+    ],
+    "status": "PASS"
+  },
+  "queries": {
+    "queries": [
+      {
+        "table": "companies",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/scripts/add-test-data.js"
+      },
+      {
+        "table": "ventures",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/scripts/add-test-data.js"
+      },
+      {
+        "table": "ideas",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/scripts/add-test-data.js"
+      },
+      {
+        "table": "project_tasks",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/scripts/add-test-data.js"
+      },
+      {
+        "table": "users",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/scripts/seed/onboarding.seed.ts"
+      },
+      {
+        "table": "companies",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/scripts/seed/onboarding.seed.ts"
+      },
+      {
+        "table": "ventures",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/scripts/seed/onboarding.seed.ts"
+      },
+      {
+        "table": "onboarding_progress",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/scripts/seed/onboarding.seed.ts"
+      },
+      {
+        "table": "analytics_events",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/scripts/seed/onboarding.seed.ts"
+      },
+      {
+        "table": "integration_events",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/src/lib/i18n/voice-internationalization.ts"
+      },
+      {
+        "table": "integration_events",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/src/lib/i18n/voice-internationalization.ts"
+      },
+      {
+        "table": "integration_events",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/src/lib/integration/generic-rest-connector.ts"
+      },
+      {
+        "table": "integration_events",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/src/lib/voice/real-time-voice-service.ts"
+      },
+      {
+        "table": "integration_events",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/src/lib/voice/real-time-voice-service.ts"
+      },
+      {
+        "table": "financial_forecasts",
+        "operation": "select",
+        "file": "applications/APP001/codebase/supabase/functions/ai-exit-decision-engine/index.ts"
+      },
+      {
+        "table": "buyer_candidates",
+        "operation": "select",
+        "file": "applications/APP001/codebase/supabase/functions/ai-exit-decision-engine/index.ts"
+      },
+      {
+        "table": "market_intelligence",
+        "operation": "select",
+        "file": "applications/APP001/codebase/supabase/functions/ai-exit-decision-engine/index.ts"
+      },
+      {
+        "table": "companies",
+        "operation": "select",
+        "file": "applications/APP001/codebase/supabase/functions/eva-database-query/index.ts"
+      },
+      {
+        "table": "ventures",
+        "operation": "select",
+        "file": "applications/APP001/codebase/supabase/functions/eva-database-query/index.ts"
+      },
+      {
+        "table": "ideas",
+        "operation": "select",
+        "file": "applications/APP001/codebase/supabase/functions/eva-database-query/index.ts"
+      },
+      {
+        "table": "ventures",
+        "operation": "select",
+        "file": "applications/APP001/codebase/supabase/functions/eva-database-query/index.ts"
+      },
+      {
+        "table": "ideas",
+        "operation": "select",
+        "file": "applications/APP001/codebase/supabase/functions/eva-database-query/index.ts"
+      },
+      {
+        "table": "eva_nlp_interactions",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/supabase/functions/eva-nlp-processor/index.ts"
+      },
+      {
+        "table": "eva_nlp_interactions",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/supabase/functions/eva-nlp-processor/index.ts"
+      },
+      {
+        "table": "eva_orchestration_sessions",
+        "operation": "select",
+        "file": "applications/APP001/codebase/supabase/functions/eva-orchestrator/index.ts"
+      },
+      {
+        "table": "eva_agent_communications",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/supabase/functions/eva-orchestrator/index.ts"
+      },
+      {
+        "table": "eva_orchestration_events",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/supabase/functions/eva-orchestrator/index.ts"
+      },
+      {
+        "table": "execution_tasks",
+        "operation": "insert",
+        "file": "applications/APP001/codebase/supabase/functions/workflow-execution/index.ts"
+      },
+      {
+        "table": "governance_policies",
+        "operation": "delete",
+        "file": "applications/APP001/codebase/tests/integration/api/governance.test.ts"
+      },
+      {
+        "table": "compliance_violations",
+        "operation": "delete",
+        "file": "applications/APP001/codebase/tests/integration/api/governance.test.ts"
+      },
+      {
+        "table": "access_review_workflows",
+        "operation": "delete",
+        "file": "applications/APP001/codebase/tests/integration/api/governance.test.ts"
+      },
+      {
+        "table": "companies",
+        "operation": "delete",
+        "file": "applications/APP001/codebase/tests/integration/api/governance.test.ts"
+      },
+      {
+        "table": "companies",
+        "operation": "delete",
+        "file": "applications/APP001/codebase/tests/performance/load-testing.test.ts"
+      },
+      {
+        "table": "companies",
+        "operation": "delete",
+        "file": "applications/APP001/codebase/tests/security/security-validation.test.ts"
+      }
+    ],
+    "issues": [
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/app/api/ai-agents/status/route.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/app/api/data-management/quality/route.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/app/api/data-management/storage/route.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/app/api/eva-nlp/route.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/app/api/integration/services/route.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/app/api/monitoring/overview/route.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/app/api/performance/overview/route.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/app/api/security/overview/route.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/app/api/settings/route.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/server/api/onboarding/progress.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/components/development/TestingAutomationDashboard.tsx",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/components/exit/ExitDecisionWorkflow.tsx",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/components/integration/IntegrationConfigModal.tsx",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/components/integration/IntegrationHubDashboard.tsx",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "N_PLUS_ONE_QUERY",
+        "file": "applications/APP001/codebase/src/components/risk-forecasting/RiskForecastingEngine.tsx",
+        "severity": "HIGH",
+        "fix": "Use JOIN or batch loading instead of queries in loops"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/components/risk-forecasting/RiskForecastingEngine.tsx",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/features/comprehensive_validation/service.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useAICEOAgent.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useAIReviewService.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useActorModelSaga.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useAdaptiveNaming.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useAgents.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useAuthenticationData.tsx",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useChairmanFeedbackService.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "UNSAFE_DELETE",
+        "file": "applications/APP001/codebase/src/hooks/useCompetitiveIntelligence.ts",
+        "severity": "CRITICAL",
+        "fix": "Always use WHERE clause with DELETE"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useComprehensivePlanning.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useContextLoading.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useDevelopmentExcellence.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useDevelopmentPreparation.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useDocumentationSync.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useExecutiveData.tsx",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useExitReadiness.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useFinalPolish.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useGTMStrategy.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useGlobalSearch.tsx",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SQL_INJECTION_RISK",
+        "file": "applications/APP001/codebase/src/hooks/useGlobalSearch.tsx",
+        "severity": "CRITICAL",
+        "fix": "Use parameterized queries"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useIdeasService.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useIntegrationVerification.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useNotifications.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/usePricingStrategy.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useProblemDecomposition.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useProductionDeployment.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useRiskEvaluation.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useSecurityCompliance.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useStrategicNaming.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useTechnicalReview.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useUserJourneyData.tsx",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/hooks/useVentures.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "N_PLUS_ONE_QUERY",
+        "file": "applications/APP001/codebase/src/lib/ai/ai-analytics-engine.ts",
+        "severity": "HIGH",
+        "fix": "Use JOIN or batch loading instead of queries in loops"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/lib/ai/ai-analytics-engine.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/lib/ai/ai-integration-service.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SQL_INJECTION_RISK",
+        "file": "applications/APP001/codebase/src/lib/ai/ai-service-manager.ts",
+        "severity": "CRITICAL",
+        "fix": "Use parameterized queries"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/lib/analytics/export-engine.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "N_PLUS_ONE_QUERY",
+        "file": "applications/APP001/codebase/src/lib/analytics/predictive-engine.ts",
+        "severity": "HIGH",
+        "fix": "Use JOIN or batch loading instead of queries in loops"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/lib/analytics/predictive-engine.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/lib/integration/api-gateway.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/lib/integration/integration-service.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/lib/security/ai-security-monitor.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/lib/security/behavioral-auth.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/lib/services/knowledgeManagementService.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SQL_INJECTION_RISK",
+        "file": "applications/APP001/codebase/src/lib/services/knowledgeManagementService.ts",
+        "severity": "CRITICAL",
+        "fix": "Use parameterized queries"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/lib/services/multiVentureCoordinationService.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/lib/services/parallelExplorationService.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/lib/services/timingOptimizationService.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/lib/workflow/workflow-loader.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/services/competitiveIntelligenceService.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/src/services/workflowExecutionService.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SQL_INJECTION_RISK",
+        "file": "applications/APP001/codebase/src/utils/phase2-test-runner.ts",
+        "severity": "CRITICAL",
+        "fix": "Use parameterized queries"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/adaptive-naming/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/ai-ceo-agent/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/ai-exit-decision-engine/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/ai-knowledge-discovery/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/ai-testing-automation-engine/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/data-lifecycle-manager/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/development-preparation/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/eva-database-query/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/exit-readiness/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/health-monitor/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/integration-hub/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/openai-function-executor/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SQL_INJECTION_RISK",
+        "file": "applications/APP001/codebase/supabase/functions/openai-function-executor/index.ts",
+        "severity": "CRITICAL",
+        "fix": "Use parameterized queries"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/parallel-exploration-ai/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "N_PLUS_ONE_QUERY",
+        "file": "applications/APP001/codebase/supabase/functions/pricing-strategy/index.ts",
+        "severity": "HIGH",
+        "fix": "Use JOIN or batch loading instead of queries in loops"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/pricing-strategy/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/problem-decomposition/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "N_PLUS_ONE_QUERY",
+        "file": "applications/APP001/codebase/supabase/functions/profitability-forecasting/index.ts",
+        "severity": "HIGH",
+        "fix": "Use JOIN or batch loading instead of queries in loops"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/risk-evaluation/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "N_PLUS_ONE_QUERY",
+        "file": "applications/APP001/codebase/supabase/functions/risk-forecasting-engine/index.ts",
+        "severity": "HIGH",
+        "fix": "Use JOIN or batch loading instead of queries in loops"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/strategic-naming/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/technical-review/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/testing-orchestrator/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/timing-optimization/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/supabase/functions/workflow-execution/index.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/tests/integration/api/governance.test.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "SELECT_STAR",
+        "file": "applications/APP001/codebase/tests/security/security-validation.test.ts",
+        "severity": "MEDIUM",
+        "fix": "Select only required columns"
+      },
+      {
+        "type": "UNSAFE_DELETE",
+        "file": "applications/APP001/codebase/tests/security/security-validation.test.ts",
+        "severity": "CRITICAL",
+        "fix": "Always use WHERE clause with DELETE"
+      },
+      {
+        "type": "SQL_INJECTION_RISK",
+        "file": "applications/APP001/codebase/tests/utils/test-helpers.tsx",
+        "severity": "CRITICAL",
+        "fix": "Use parameterized queries"
+      }
+    ],
+    "patterns": {
+      "usesTransactions": true,
+      "usesPreparedStatements": true
+    },
+    "status": "FAIL"
+  },
+  "integrity": {
+    "constraints": [],
+    "orphanedRecords": [],
+    "duplicates": [],
+    "issues": [],
+    "status": "ERROR",
+    "error": "this.supabase.from(...).select(...).not(...).catch is not a function",
+    "rls": {
+      "enabled": false,
+      "policies": [],
+      "issues": [
+        {
+          "type": "RLS_NOT_VERIFIED",
+          "table": "strategic_directives_v2",
+          "severity": "MEDIUM",
+          "fix": "Enable RLS: ALTER TABLE strategic_directives_v2 ENABLE ROW LEVEL SECURITY;"
+        },
+        {
+          "type": "RLS_NOT_VERIFIED",
+          "table": "product_requirements_v2",
+          "severity": "MEDIUM",
+          "fix": "Enable RLS: ALTER TABLE product_requirements_v2 ENABLE ROW LEVEL SECURITY;"
+        }
+      ],
+      "status": "WARNING"
+    }
+  },
+  "performance": {
+    "slowQueries": [],
+    "missingIndexes": [
+      {
+        "column": "status",
+        "usage": "WHERE",
+        "recommendation": "CREATE INDEX idx_status ON table_name(status);"
+      },
+      {
+        "column": "user_id",
+        "usage": "WHERE",
+        "recommendation": "CREATE INDEX idx_user_id ON table_name(user_id);"
+      }
+    ],
+    "recommendations": [
+      {
+        "type": "OPTIMIZE_JOINS",
+        "message": "Large JOINs detected",
+        "fix": "Consider denormalization or materialized views for frequently joined data"
+      },
+      {
+        "type": "OPTIMIZE_AGGREGATIONS",
+        "message": "Complex aggregations detected",
+        "fix": "Consider using materialized views or caching aggregated results"
+      }
+    ],
+    "status": "PASS"
+  },
+  "recommendations": [
+    {
+      "area": "Queries",
+      "priority": "CRITICAL",
+      "issue": "N_PLUS_ONE_QUERY",
+      "fix": "Use JOIN or batch loading instead of queries in loops"
+    },
+    {
+      "area": "Queries",
+      "priority": "CRITICAL",
+      "issue": "UNSAFE_DELETE",
+      "fix": "Always use WHERE clause with DELETE"
+    },
+    {
+      "area": "Queries",
+      "priority": "CRITICAL",
+      "issue": "SQL_INJECTION_RISK",
+      "fix": "Use parameterized queries"
+    },
+    {
+      "area": "Queries",
+      "priority": "CRITICAL",
+      "issue": "N_PLUS_ONE_QUERY",
+      "fix": "Use JOIN or batch loading instead of queries in loops"
+    },
+    {
+      "area": "Queries",
+      "priority": "CRITICAL",
+      "issue": "SQL_INJECTION_RISK",
+      "fix": "Use parameterized queries"
+    },
+    {
+      "area": "Queries",
+      "priority": "CRITICAL",
+      "issue": "N_PLUS_ONE_QUERY",
+      "fix": "Use JOIN or batch loading instead of queries in loops"
+    },
+    {
+      "area": "Queries",
+      "priority": "CRITICAL",
+      "issue": "SQL_INJECTION_RISK",
+      "fix": "Use parameterized queries"
+    },
+    {
+      "area": "Queries",
+      "priority": "CRITICAL",
+      "issue": "SQL_INJECTION_RISK",
+      "fix": "Use parameterized queries"
+    },
+    {
+      "area": "Queries",
+      "priority": "CRITICAL",
+      "issue": "SQL_INJECTION_RISK",
+      "fix": "Use parameterized queries"
+    },
+    {
+      "area": "Queries",
+      "priority": "CRITICAL",
+      "issue": "N_PLUS_ONE_QUERY",
+      "fix": "Use JOIN or batch loading instead of queries in loops"
+    },
+    {
+      "area": "Queries",
+      "priority": "CRITICAL",
+      "issue": "N_PLUS_ONE_QUERY",
+      "fix": "Use JOIN or batch loading instead of queries in loops"
+    },
+    {
+      "area": "Queries",
+      "priority": "CRITICAL",
+      "issue": "N_PLUS_ONE_QUERY",
+      "fix": "Use JOIN or batch loading instead of queries in loops"
+    },
+    {
+      "area": "Queries",
+      "priority": "CRITICAL",
+      "issue": "UNSAFE_DELETE",
+      "fix": "Always use WHERE clause with DELETE"
+    },
+    {
+      "area": "Queries",
+      "priority": "CRITICAL",
+      "issue": "SQL_INJECTION_RISK",
+      "fix": "Use parameterized queries"
+    },
+    {
+      "area": "Performance",
+      "priority": "HIGH",
+      "issue": "Missing indexes",
+      "fix": "Create indexes on frequently queried columns"
+    }
+  ],
+  "score": 0
+}

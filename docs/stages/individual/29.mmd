@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 29 Detail
+subgraph S29["29. Final Polish"]
+  S29_root["Purpose: Final UI/UX refinements and production readiness preparations.
+Owner: PLAN"]
+  S29_A["29.1 UI Refinement"]
+  S29_B["29.2 UX Optimization"]
+  S29_C["29.3 Asset Preparation"]
+  S29_root --> S29_A --> S29_B --> S29_C
+end
+classDef dep stroke-dasharray: 5 5;
+D29["Depends on: 28"]:::dep -.-> S29_root

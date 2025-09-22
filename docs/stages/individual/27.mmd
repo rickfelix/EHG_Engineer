@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 27 Detail
+subgraph S27["27. Actor Model & Saga Transaction Integration"]
+  S27_root["Purpose: Implement distributed transaction patterns and actor model architecture.
+Owner: EXEC"]
+  S27_A["27.1 Actor Implementation"]
+  S27_B["27.2 Saga Orchestration"]
+  S27_C["27.3 Testing & Validation"]
+  S27_root --> S27_A --> S27_B --> S27_C
+end
+classDef dep stroke-dasharray: 5 5;
+D27["Depends on: 26"]:::dep -.-> S27_root

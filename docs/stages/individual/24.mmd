@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 24 Detail
+subgraph S24["24. MVP Engine: Automated Feedback Iteration"]
+  S24_root["Purpose: Automated iteration engine for rapid MVP improvements.
+Owner: EVA"]
+  S24_A["24.1 Automated Analysis"]
+  S24_B["24.2 Iteration Planning"]
+  S24_C["24.3 Execution & Measurement"]
+  S24_root --> S24_A --> S24_B --> S24_C
+end
+classDef dep stroke-dasharray: 5 5;
+D24["Depends on: 23"]:::dep -.-> S24_root

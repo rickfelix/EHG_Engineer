@@ -1,0 +1,89 @@
+{
+  "stage_id": 7,
+  "stage_title": "Comprehensive Planning Suite",
+  "objective": "Optimize Stage 7 (Comprehensive Planning Suite) for efficiency and effectiveness",
+  "inputs": {
+    "stage_definition": {
+      "id": 7,
+      "title": "Comprehensive Planning Suite",
+      "description": "Develop comprehensive business and technical plans for venture execution.",
+      "owner": "PLAN",
+      "depends_on": [
+        6
+      ],
+      "inputs": [
+        "Risk assessment",
+        "Resource requirements",
+        "Timeline constraints"
+      ],
+      "outputs": [
+        "Business plan",
+        "Technical roadmap",
+        "Resource plan"
+      ],
+      "metrics": [
+        "Plan completeness",
+        "Timeline feasibility",
+        "Resource efficiency"
+      ],
+      "gates": {
+        "entry": [
+          "Risks evaluated",
+          "Resources identified"
+        ],
+        "exit": [
+          "Business plan approved",
+          "Technical roadmap set",
+          "Resources allocated"
+        ]
+      },
+      "substages": [
+        {
+          "id": "7.1",
+          "title": "Business Planning",
+          "done_when": [
+            "Business model defined",
+            "Go-to-market planned",
+            "Operations designed"
+          ]
+        },
+        {
+          "id": "7.2",
+          "title": "Technical Planning",
+          "done_when": [
+            "Architecture designed",
+            "Tech stack selected",
+            "Development roadmap created"
+          ]
+        },
+        {
+          "id": "7.3",
+          "title": "Resource Planning",
+          "done_when": [
+            "Team requirements defined",
+            "Budget allocated",
+            "Timeline set"
+          ]
+        }
+      ]
+    },
+    "sop_path": "/docs/workflow/sop/07-*.md",
+    "critique_path": "/docs/workflow/critique/stage-07.md"
+  },
+  "tasks": [
+    "Analyze necessity and potential for combination/elimination",
+    "Identify specific automation opportunities",
+    "Define concrete success metrics with thresholds",
+    "Design comprehensive rollback procedures",
+    "Optimize dependencies and data flow"
+  ],
+  "deliverables": [
+    "/docs/research/outputs/stage_07_findings.md",
+    "/docs/research/outputs/stage_07_recommendations.md"
+  ],
+  "gemini_specific": {
+    "focus": "practical_implementation",
+    "include_code_samples": true,
+    "suggest_tools": true
+  }
+}

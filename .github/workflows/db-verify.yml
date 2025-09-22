@@ -1,0 +1,37 @@
+name: DB Verify
+
+on:
+  pull_request:
+    paths:
+      - 'db/**'
+      - 'ops/**'
+      - 'docs/**'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      PGHOST: ${{ secrets.PGHOST_STAGING }}
+      PGDATABASE: ${{ secrets.PGDATABASE_STAGING }}
+      PGUSER: ${{ secrets.PGUSER_STAGING }}
+      PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Apply migrations
+        run: bash ops/scripts/staging_apply.sh
+      - name: Verify database objects
+        run: bash ops/scripts/run_checks.sh
+      - name: Policy regression scan
+        run: |
+          if grep -R "GRANT ALL" -n db/policies; then
+            echo 'Forbidden pattern detected (GRANT ALL)';
+            exit 1;
+          fi
+          if grep -R "eng_" apps/ingest -n | grep -v "v_eng_"; then
+            echo 'Forbidden direct eng_* usage detected in app code';
+            exit 1;
+          fi

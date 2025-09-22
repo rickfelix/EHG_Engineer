@@ -1,0 +1,177 @@
+name: Claude Agentic PR Review
+on:
+  pull_request:
+    types: [opened, synchronize]
+  issue_comment:
+    types: [created]
+
+jobs:
+  agentic-review:
+    # Only run on PRs or when @claude is mentioned in PR comments
+    if: >
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' &&
+       contains(github.event.comment.body, '@claude') &&
+       github.event.issue.pull_request != null)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      checks: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Create Check Run
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr_number = context.payload.pull_request?.number || context.payload.issue?.number;
+
+            // Get PR details if this is an issue_comment event
+            let head_sha;
+            if (context.eventName === 'issue_comment') {
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr_number
+              });
+              head_sha = pr.head.sha;
+            } else {
+              head_sha = context.payload.pull_request.head.sha;
+            }
+
+            const check = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Agentic Review',
+              head_sha: head_sha,
+              status: 'in_progress',
+              started_at: new Date().toISOString(),
+              output: {
+                title: 'Running Agentic Review',
+                summary: 'Analyzing PR for compliance, boundaries, and quality...'
+              }
+            });
+
+            core.setOutput('check_id', check.data.id);
+            core.setOutput('pr_number', pr_number);
+            core.setOutput('head_sha', head_sha);
+
+      - name: Load Review Config
+        id: config
+        run: |
+          if [ -f .github/claude-review-config.yml ]; then
+            echo "config<<EOF" >> $GITHUB_OUTPUT
+            cat .github/claude-review-config.yml >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "config=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Sub-Agent Coordinator
+        id: review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.check.outputs.pr_number }}
+          CONFIG: ${{ steps.config.outputs.config }}
+        run: |
+          node lib/agents/github-review-coordinator.js > review-output.json 2>&1 || echo "Coordinator failed"
+
+          # Ensure valid JSON output even on failure
+          if [ ! -f review-output.json ] || ! jq empty review-output.json 2>/dev/null; then
+            echo '{"comment": "Review failed to complete", "results": {"summary": {"fail": 1}}}' > review-output.json
+          fi
+
+      - name: Post Review Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let review;
+
+            try {
+              review = JSON.parse(fs.readFileSync('review-output.json', 'utf8'));
+            } catch (e) {
+              review = {
+                comment: '## ⚠️ Agentic Review Error\n\nReview system encountered an error. Please check logs.',
+                results: { summary: { fail: 1, pass: 0, warn: 0 } }
+              };
+            }
+
+            // Post the main review comment
+            if (review.comment) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: ${{ steps.check.outputs.pr_number }},
+                body: review.comment
+              });
+            }
+
+      - name: Update Check Run
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let conclusion = 'success';
+            let title = 'Agentic Review Passed';
+            let summary = 'All checks passed';
+
+            try {
+              const review = JSON.parse(fs.readFileSync('review-output.json', 'utf8'));
+              const results = review.results || {};
+              const summaryData = results.summary || {};
+
+              if (summaryData.fail > 0) {
+                conclusion = 'failure';
+                title = 'Agentic Review Failed';
+                summary = `${summaryData.fail} check(s) failed. See PR comments for details.`;
+              } else if (summaryData.warn > 0) {
+                conclusion = 'neutral';
+                title = 'Agentic Review: Warnings';
+                summary = `${summaryData.warn} warning(s) found. Review recommended.`;
+              } else {
+                title = 'Agentic Review Passed';
+                summary = `All ${summaryData.pass || 0} checks passed successfully.`;
+              }
+
+              // Add details about specific checks
+              if (results.checks && results.checks.length > 0) {
+                const checkDetails = results.checks.map(c =>
+                  `- ${c.status === 'PASS' ? '✅' : c.status === 'WARN' ? '⚠️' : '❌'} ${c.name}`
+                ).join('\n');
+                summary += `\n\n### Check Results:\n${checkDetails}`;
+              }
+            } catch (e) {
+              conclusion = 'failure';
+              title = 'Agentic Review Error';
+              summary = 'Review system encountered an error. Check workflow logs.';
+            }
+
+            await github.rest.checks.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              check_run_id: ${{ steps.check.outputs.check_id }},
+              status: 'completed',
+              conclusion: conclusion,
+              completed_at: new Date().toISOString(),
+              output: {
+                title: title,
+                summary: summary
+              }
+            });

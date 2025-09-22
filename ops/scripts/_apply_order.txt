@@ -1,0 +1,11 @@
+# Migration apply order for staging
+# List SQL files in order of execution
+db/migrations/eng/001_base_tables.sql
+db/migrations/eng/002_governance_tables.sql
+db/migrations/eng/003_rls_policies.sql
+db/migrations/vh/001_base_tables.sql
+db/migrations/vh/002_linkage_tables.sql
+db/views/eng_governance_views.sql
+db/views/vh_readonly_views.sql
+db/policies/eng_rls_policies.sql
+db/policies/vh_rls_policies.sql

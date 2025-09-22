@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 18 Detail
+subgraph S18["18. Documentation Sync to GitHub"]
+  S18_root["Purpose: Synchronize all documentation and code to version control.
+Owner: EXEC"]
+  S18_A["18.1 Repository Setup"]
+  S18_B["18.2 Content Migration"]
+  S18_C["18.3 Automation Configuration"]
+  S18_root --> S18_A --> S18_B --> S18_C
+end
+classDef dep stroke-dasharray: 5 5;
+D18["Depends on: 17"]:::dep -.-> S18_root

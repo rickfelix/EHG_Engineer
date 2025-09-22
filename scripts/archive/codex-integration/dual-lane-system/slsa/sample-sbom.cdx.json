@@ -1,0 +1,120 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:3e4c4b5a-9f3d-4a2e-8b1c-5d6e7f8a9b1c",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2025-01-19T20:00:00Z",
+    "tools": [
+      {
+        "vendor": "anchore",
+        "name": "syft",
+        "version": "0.100.0"
+      }
+    ],
+    "component": {
+      "type": "application",
+      "bom-ref": "ehg-engineer",
+      "name": "EHG_Engineer",
+      "version": "v4.2.0",
+      "description": "Engineering platform with LEO Protocol implementation"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/@supabase/supabase-js@2.39.0",
+      "name": "@supabase/supabase-js",
+      "version": "2.39.0",
+      "purl": "pkg:npm/%40supabase/supabase-js@2.39.0",
+      "properties": [
+        {
+          "name": "syft:package:language",
+          "value": "javascript"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/express@4.18.2",
+      "name": "express",
+      "version": "4.18.2",
+      "purl": "pkg:npm/express@4.18.2",
+      "properties": [
+        {
+          "name": "syft:package:language",
+          "value": "javascript"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/playwright@1.40.1",
+      "name": "playwright",
+      "version": "1.40.1",
+      "purl": "pkg:npm/playwright@1.40.1",
+      "properties": [
+        {
+          "name": "syft:package:language",
+          "value": "javascript"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:artifact.tar.gz",
+      "name": "artifact.tar.gz",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "properties": [
+        {
+          "name": "syft:file:size",
+          "value": "10240"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:.github/workflows/sign-artifacts.yml",
+      "name": ".github/workflows/sign-artifacts.yml",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "def456abc789012345678901234567890abcdef12345678901234567890abcdef"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "file:.github/workflows/slsa-verification.yml",
+      "name": ".github/workflows/slsa-verification.yml",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "fed123cba456789012345678901234567890fedcba45678901234567890fedcba"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "ehg-engineer",
+      "dependsOn": [
+        "pkg:npm/@supabase/supabase-js@2.39.0",
+        "pkg:npm/express@4.18.2",
+        "pkg:npm/playwright@1.40.1"
+      ]
+    }
+  ],
+  "vulnerabilities": [],
+  "properties": [
+    {
+      "name": "cdx:reproducible",
+      "value": "false"
+    }
+  ]
+}

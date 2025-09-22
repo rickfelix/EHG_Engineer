@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 4 Detail
+subgraph S4["4. Competitive Intelligence & Market Defense"]
+  S4_root["Purpose: Analyze competitive landscape and establish market positioning strategy."]
+  S4_A["4.1 Competitor Identification"]
+  S4_B["4.2 Feature Comparison"]
+  S4_C["4.3 Market Positioning"]
+  S4_D["4.4 Defense Strategy"]
+  S4_root --> S4_A --> S4_B --> S4_C --> S4_D
+end
+classDef dep stroke-dasharray: 5 5;
+D4["Depends on: 3"]:::dep -.-> S4_root

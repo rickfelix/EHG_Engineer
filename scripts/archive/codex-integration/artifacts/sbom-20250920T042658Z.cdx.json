@@ -1,0 +1,36 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2025-09-20T04:26:58Z",
+    "tools": [
+      {
+        "vendor": "OpenAI",
+        "name": "Codex Builder",
+        "version": "LEO-Protocol-v4.2.0"
+      }
+    ],
+    "component": {
+      "type": "framework",
+      "name": "ehg-engineer",
+      "version": "1.0.0"
+    }
+  },
+  "components": [
+    {
+      "type": "file",
+      "name": "src/utils/timestamp.js",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "0744d5075aa83d0a414dde7a8e049407af3b0e169185b22d70f8ff5fea9069f6"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "name": "src/utils/timestamp.test.js"
+    }
+  ]
+}

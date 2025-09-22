@@ -1,0 +1,83 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-signed-images
+  annotations:
+    policies.kyverno.io/title: Require Signed Container Images
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/minversion: 1.7.0
+    policies.kyverno.io/description: >-
+      Container images must be signed and verified using Sigstore cosign.
+      This policy enforces that all container images are signed with a valid
+      signature that can be verified against the configured public key or
+      keyless verification. This is critical for supply chain security and
+      SLSA Level 3 compliance.
+spec:
+  validationFailureAction: enforce
+  background: false
+  webhookTimeoutSeconds: 30
+  failurePolicy: Fail
+  rules:
+    - name: check-signature
+      match:
+        any:
+        - resources:
+            kinds:
+            - Pod
+            - Deployment
+            - StatefulSet
+            - DaemonSet
+            - Job
+            - CronJob
+      verifyImages:
+      - imageReferences:
+        - "*"
+        attestations:
+        - predicateType: https://slsa.dev/provenance/v0.2
+          conditions:
+          - all:
+            - key: "{{ builder.id }}"
+              operator: Equals
+              value: "https://github.com/*/*"
+        mutateDigest: true
+        required: true
+        verifyDigest: true
+
+    - name: check-signature-keyless
+      match:
+        any:
+        - resources:
+            kinds:
+            - Pod
+      verifyImages:
+      - imageReferences:
+        - "ghcr.io/*"
+        - "docker.io/*"
+        # Keyless verification for public registries
+        attestors:
+        - entries:
+          - keyless:
+              subject: "https://github.com/*/*"
+              issuer: "https://github.com/login/oauth"
+              rekor:
+                url: https://rekor.sigstore.dev
+
+    - name: exception-system-namespaces
+      match:
+        any:
+        - resources:
+            kinds:
+            - Pod
+            namespaces:
+            - kube-system
+            - kube-public
+            - kube-node-lease
+      exclude:
+        any:
+        - resources:
+            namespaces:
+            - kube-system
+            - kube-public
+            - kube-node-lease

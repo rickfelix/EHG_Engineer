@@ -1,0 +1,189 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability-stack
+  namespace: argocd
+  labels:
+    workstream: ws6-observability
+    lane: claude
+    component: monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: platform-team
+spec:
+  project: observability
+
+  sources:
+    # Prometheus configuration
+    - repoURL: https://github.com/ehg/ehg-engineer
+      targetRevision: main
+      path: observability/prometheus
+      targetNamespace: monitoring
+
+    # Grafana dashboards
+    - repoURL: https://github.com/ehg/ehg-engineer
+      targetRevision: main
+      path: observability/grafana
+      targetNamespace: monitoring
+
+    # OpenTelemetry collector
+    - repoURL: https://github.com/ehg/ehg-engineer
+      targetRevision: main
+      path: observability/opentelemetry
+      targetNamespace: observability
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - Replace=false
+
+    managedNamespaceMetadata:
+      labels:
+        monitoring: enabled
+        security.ehg.io/observability: active
+
+    retry:
+      limit: 3
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+
+  revisionHistoryLimit: 5
+
+  info:
+    - name: "Dashboard URL"
+      value: "https://grafana.example.com/d/ehg-supply-chain"
+    - name: "Metrics Endpoint"
+      value: "http://prometheus:9090"
+    - name: "Traces Endpoint"
+      value: "http://jaeger:16686"
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: observability-environments
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - env: dev
+            namespace: monitoring-dev
+            revision: develop
+            wave: "1"
+          - env: staging
+            namespace: monitoring-staging
+            revision: staging
+            wave: "2"
+          - env: prod
+            namespace: monitoring
+            revision: main
+            wave: "3"
+
+  template:
+    metadata:
+      name: '{{env}}-observability'
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{wave}}'
+    spec:
+      project: observability
+
+      source:
+        repoURL: https://github.com/ehg/ehg-engineer
+        targetRevision: '{{revision}}'
+        path: observability
+
+        kustomize:
+          namePrefix: '{{env}}-'
+          namespace: '{{namespace}}'
+          commonLabels:
+            environment: '{{env}}'
+          patchesStrategicMerge:
+            - |-
+              apiVersion: v1
+              kind: ConfigMap
+              metadata:
+                name: prometheus-config
+                namespace: '{{namespace}}'
+              data:
+                prometheus.yml: |
+                  global:
+                    evaluation_interval: 30s
+                    external_labels:
+                      environment: '{{env}}'
+                      cluster: ehg-'{{env}}'
+
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+
+      syncPolicy:
+        automated:
+          prune: '{{env}}' == 'dev'  # Only auto-prune in dev
+          selfHeal: true
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: observability
+  namespace: argocd
+spec:
+  description: Observability stack for dual-lane workflow
+
+  sourceRepos:
+    - https://github.com/ehg/ehg-engineer
+    - https://prometheus-community.github.io/helm-charts
+    - https://grafana.github.io/helm-charts
+
+  destinations:
+    - namespace: monitoring*
+      server: https://kubernetes.default.svc
+    - namespace: observability
+      server: https://kubernetes.default.svc
+
+  clusterResourceWhitelist:
+    - group: monitoring.coreos.com
+      kind: ServiceMonitor
+    - group: monitoring.coreos.com
+      kind: PrometheusRule
+    - group: monitoring.coreos.com
+      kind: Prometheus
+
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: ConfigMap
+    - group: "*"
+      kind: Secret
+    - group: "*"
+      kind: Service
+    - group: apps
+      kind: Deployment
+    - group: apps
+      kind: StatefulSet
+
+  roles:
+    - name: observability-admin
+      policies:
+        - p, proj:observability:observability-admin, applications, *, observability/*, allow
+      groups:
+        - platform-team
+
+    - name: dashboard-viewer
+      policies:
+        - p, proj:observability:dashboard-viewer, applications, get, observability/*, allow
+      groups:
+        - developers
+        - security-team

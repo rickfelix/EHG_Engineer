@@ -1,0 +1,12 @@
+flowchart TB
+%% Stage 14 Detail
+subgraph S14["14. Comprehensive Development Preparation"]
+  S14_root["Purpose: Prepare all resources and infrastructure for development phase.
+Owner: EXEC"]
+  S14_A["14.1 Environment Setup"]
+  S14_B["14.2 Team Formation"]
+  S14_C["14.3 Sprint Planning"]
+  S14_root --> S14_A --> S14_B --> S14_C
+end
+classDef dep stroke-dasharray: 5 5;
+D14["Depends on: 13"]:::dep -.-> S14_root
