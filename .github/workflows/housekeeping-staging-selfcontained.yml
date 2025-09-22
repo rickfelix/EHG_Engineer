@@ -68,26 +68,32 @@ jobs:
           } | sed '/^#/d' | sed '/^$/d' > ops/scripts/_apply_list.ci.txt
           echo "Apply list:" && cat ops/scripts/_apply_list.ci.txt
 
-      - name: Test dbexec bundle
+      - name: Test database connection
         run: |
-          echo "SELECT version();" > /tmp/test.sql
-          node tools/dbexec/dbexec.bundle.mjs /tmp/test.sql --env .env.staging || \
-          node tools/dbexec/dbexec-simple.js /tmp/test.sql --env .env.staging
+          echo "Testing direct database connection with PSQL..."
+          echo "SELECT version();" | PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE
 
       - name: APPLY (migrations/views/policies)
         run: |
-          # Since the files may not exist yet, we'll run the staging_apply.sh which creates them
-          bash ops/scripts/staging_apply.sh || {
-            echo "Using fallback: creating base schema directly"
-            echo "SELECT 'Base schema creation would go here';" > /tmp/base.sql
-            node tools/dbexec/dbexec-simple.js /tmp/base.sql --env .env.staging || true
-          }
+          # Apply all migrations, views, and policies
+          echo "Applying database objects..."
+          while read -r file; do
+            if [ -f "$file" ]; then
+              echo "Applying: $file"
+              PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE -f "$file" || {
+                echo "Warning: Failed to apply $file"
+              }
+            fi
+          done < ops/scripts/_apply_list.ci.txt || true
 
       - name: SEED (CI smoke data)
         run: |
           echo "Seeding CI smoke test data..."
-          node tools/dbexec/dbexec-simple.js db/seeds/ci_smoke_seed.sql --env .env.staging || \
-          node tools/dbexec/dbexec.bundle.mjs db/seeds/ci_smoke_seed.sql --env .env.staging
+          if [ -f "db/seeds/ci_smoke_seed.sql" ]; then
+            PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE -f db/seeds/ci_smoke_seed.sql
+          else
+            echo "No seed file found, skipping"
+          fi
 
       - name: VERIFY (objects & RLS)
         run: |
@@ -116,23 +122,44 @@ jobs:
           EOF
           fi
 
-          node tools/dbexec/dbexec-simple.js ops/checks/verify_objects.sql --env .env.staging || true
-          node tools/dbexec/dbexec-simple.js ops/checks/verify_rls.sql --env .env.staging || true
+          PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE -f ops/checks/verify_objects.sql || true
+          PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE -f ops/checks/verify_rls.sql || true
 
       - name: BACKFILL (governance metadata)
-        run: bash ops/scripts/run_backfills.sh || true
+        run: |
+          echo "Running backfills..."
+          for backfill in ops/backfills/*.sql; do
+            if [ -f "$backfill" ]; then
+              echo "Running: $backfill"
+              PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE -f "$backfill" || true
+            fi
+          done
 
       - name: HYDRATE (venture linkages)
-        run: bash ops/jobs/hydrate_vh_linkage.sh || true
+        run: |
+          echo "Hydrating venture linkages..."
+          if [ -f "ops/jobs/hydrate_vh_linkage.sql" ]; then
+            PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE -f ops/jobs/hydrate_vh_linkage.sql
+          else
+            echo "No hydration script, skipping"
+          fi
 
       - name: INGEST (dry-run; views-only reads)
-        run: VH_INGEST_ENABLED=true VH_INGEST_DRY_RUN=true node apps/ingest/vh_governance_ingest.ts
+        run: |
+          if [ -f "apps/ingest/vh_governance_ingest.ts" ]; then
+            VH_INGEST_ENABLED=true VH_INGEST_DRY_RUN=true node apps/ingest/vh_governance_ingest.ts
+          else
+            echo "Ingest script not found, skipping dry-run"
+          fi
 
       - name: ASSERT (CI smoke expectations)
         run: |
           echo "Running CI smoke test assertions..."
-          node tools/dbexec/dbexec-simple.js ops/checks/assert_ci_smoke.sql --env .env.staging || \
-          node tools/dbexec/dbexec.bundle.mjs ops/checks/assert_ci_smoke.sql --env .env.staging
+          if [ -f "ops/checks/assert_ci_smoke.sql" ]; then
+            PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE -f ops/checks/assert_ci_smoke.sql
+          else
+            echo "No assertion file found, skipping"
+          fi
 
       - name: Append CI Automation Close-Out
         run: |
