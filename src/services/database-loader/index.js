@@ -16,6 +16,11 @@ import DatabaseUtilities from './utilities.js';
 import StatusValidator from '../status-validator.js';
 import ProgressCalculator from '../progress-calculator.js';
 
+// Import telemetry
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { time } = require('./telemetry');
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '../../..', '.env') });
@@ -49,16 +54,37 @@ class DatabaseLoader {
   }
 
   // Strategic Directives methods
-  async loadStrategicDirectives() {
-    return this.strategicLoaders.loadStrategicDirectives();
+  async loadStrategicDirectives(options = {}) {
+    const { dryRun = false } = options;
+    if (dryRun) {
+      console.log('[dry-run] Would load strategic directives from database');
+      return [];
+    }
+    return time('loadStrategicDirectives', () =>
+      this.strategicLoaders.loadStrategicDirectives()
+    );
   }
 
-  async loadPRDs() {
-    return this.strategicLoaders.loadPRDs();
+  async loadPRDs(options = {}) {
+    const { dryRun = false } = options;
+    if (dryRun) {
+      console.log('[dry-run] Would load PRDs from database');
+      return [];
+    }
+    return time('loadPRDs', () =>
+      this.strategicLoaders.loadPRDs()
+    );
   }
 
-  async loadExecutionSequences() {
-    return this.strategicLoaders.loadExecutionSequences();
+  async loadExecutionSequences(options = {}) {
+    const { dryRun = false } = options;
+    if (dryRun) {
+      console.log('[dry-run] Would load execution sequences from database');
+      return [];
+    }
+    return time('loadExecutionSequences', () =>
+      this.strategicLoaders.loadExecutionSequences()
+    );
   }
 
   extractChecklist(sd) {
@@ -78,8 +104,15 @@ class DatabaseLoader {
   }
 
   // Submission methods
-  async saveSDIPSubmission(submission) {
-    return this.submissionsManager.saveSDIPSubmission(submission);
+  async saveSDIPSubmission(submission, options = {}) {
+    const { dryRun = false } = options;
+    if (dryRun) {
+      console.log('[dry-run] Would save SDIP submission:', submission.id || 'new');
+      return submission;
+    }
+    return time('saveSDIPSubmission', () =>
+      this.submissionsManager.saveSDIPSubmission(submission)
+    );
   }
 
   async getRecentSDIPSubmissions(limit = 20) {
@@ -178,6 +211,11 @@ ${aiChecklist.map(item => `- ${item.text}`).join('\n')}
 ${a11yChecklist.map(item => `- ${item.text}`).join('\n')}
 `;
   }
+}
+
+// Helper to parse CLI flags
+export function parseFlags(argv = process.argv.slice(2)) {
+  return { dryRun: argv.includes('--dry-run') };
 }
 
 export default DatabaseLoader;
