@@ -1,0 +1,100 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-image-digests
+  annotations:
+    policies.kyverno.io/title: Require Image Digests
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/minversion: 1.7.0
+    policies.kyverno.io/description: >-
+      Container images must be referenced by digest (SHA256) rather than
+      tags. Tags are mutable and can be moved to different images, while
+      digests provide immutable references. This policy ensures that all
+      container images use digest references for security and reproducibility.
+      This is a requirement for SLSA Level 2+ compliance.
+spec:
+  validationFailureAction: enforce
+  background: false
+  webhookTimeoutSeconds: 10
+  failurePolicy: Fail
+  rules:
+    - name: check-image-digest
+      match:
+        any:
+        - resources:
+            kinds:
+            - Pod
+            - Deployment
+            - StatefulSet
+            - DaemonSet
+            - Job
+            - CronJob
+      validate:
+        message: "Images must be referenced by digest, not tag. Use image@sha256:... format"
+        pattern:
+          spec:
+            =(securityContext):
+              =(runAsNonRoot): true
+            containers:
+            - name: "*"
+              image: "*@sha256:*"
+            =(initContainers):
+            - name: "*"
+              image: "*@sha256:*"
+            =(ephemeralContainers):
+            - name: "*"
+              image: "*@sha256:*"
+
+    - name: mutate-digest-from-tag
+      match:
+        any:
+        - resources:
+            kinds:
+            - Pod
+      mutate:
+        patchStrategicMerge:
+          spec:
+            containers:
+            - (name): "*"
+              image: "{{ regex_replace('(.*):(.*)', '{{ @ }}', '{{ @ }}@{{ digest }}') }}"
+
+    - name: deny-latest-tag
+      match:
+        any:
+        - resources:
+            kinds:
+            - Pod
+            - Deployment
+            - StatefulSet
+            - DaemonSet
+      validate:
+        message: "Using ':latest' tag is not allowed. Specify explicit version or digest"
+        deny:
+          conditions:
+            any:
+            - key: "{{ request.object.spec.containers[?contains(image, ':latest')].image }}"
+              operator: AnyNotIn
+              value: [""]
+            - key: "{{ request.object.spec.initContainers[?contains(image, ':latest')].image }}"
+              operator: AnyNotIn
+              value: [""]
+
+    - name: exception-dev-namespace
+      match:
+        any:
+        - resources:
+            kinds:
+            - Pod
+            namespaces:
+            - development
+            - dev
+            - sandbox
+      exclude:
+        any:
+        - resources:
+            namespaces:
+            - development
+            - dev
+            - sandbox

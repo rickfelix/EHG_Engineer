@@ -1,0 +1,172 @@
+name: Housekeeping Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run in dry-run mode'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  housekeeping:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Create staging environment file
+        run: |
+          cat > .env.staging <<EOF
+          PGHOST=${{ secrets.PGHOST_STAGING }}
+          PGPORT=${{ secrets.PGPORT_STAGING }}
+          PGDATABASE=${{ secrets.PGDATABASE_STAGING }}
+          PGUSER=${{ secrets.PGUSER_STAGING }}
+          PGPASSWORD=${{ secrets.PGPASSWORD_STAGING }}
+          EOF
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          sudo apt-get update
+          sudo apt-get -y install postgresql-client-16
+
+      - name: Test database connection
+        run: |
+          PSQL_ENV=.env.staging bash ops/scripts/psql_exec.sh -c "SELECT version();"
+
+      - name: Apply staging migrations
+        id: apply
+        run: |
+          echo "::group::Applying migrations"
+          bash ops/scripts/staging_apply.sh
+          echo "::endgroup::"
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: Run verification checks
+        id: checks
+        run: |
+          echo "::group::Running checks"
+          bash ops/scripts/run_checks.sh
+          echo "::endgroup::"
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: Backfill governance data
+        id: backfill
+        run: |
+          echo "::group::Backfilling data"
+          bash ops/scripts/run_backfills.sh
+          echo "::endgroup::"
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: Hydrate venture linkage
+        id: hydrate
+        run: |
+          echo "::group::Hydrating linkages"
+          bash ops/jobs/hydrate_vh_linkage.sh
+          echo "::endgroup::"
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: Test dbexec bundle
+        run: |
+          echo "::group::Testing dbexec"
+          echo "SELECT 'dbexec test successful' as status;" > /tmp/test.sql
+          node tools/dbexec/dbexec.bundle.mjs /tmp/test.sql --env .env.staging
+          echo "::endgroup::"
+
+      - name: Create ingest test script
+        if: false  # Disabled until ingest script exists
+        run: |
+          cat > apps/ingest/vh_governance_ingest.ts <<'EOF'
+          console.log("Ingest dry-run placeholder");
+          console.log("VH_INGEST_ENABLED:", process.env.VH_INGEST_ENABLED);
+          console.log("VH_INGEST_DRY_RUN:", process.env.VH_INGEST_DRY_RUN);
+          process.exit(0);
+          EOF
+
+      - name: Run ingest dry-run
+        if: false  # Disabled until ingest script exists
+        env:
+          VH_INGEST_ENABLED: 'true'
+          VH_INGEST_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          echo "::group::Ingest dry-run"
+          node apps/ingest/vh_governance_ingest.ts
+          echo "::endgroup::"
+
+      - name: Generate audit report
+        run: |
+          TIMESTAMP=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          cat >> ops/audit/2025-09-22.md <<EOF
+
+          ## CI Automation Close-Out ($TIMESTAMP)
+
+          ### Workflow Execution Summary
+          - **Trigger**: workflow_dispatch (manual)
+          - **Dry Run Mode**: ${{ inputs.dry_run }}
+          - **Runner**: GitHub Actions (ubuntu-latest)
+
+          ### Script Execution Results
+          - [x] staging_apply.sh - Status: ${{ steps.apply.outputs.status || 'skipped' }}
+          - [x] run_checks.sh - Status: ${{ steps.checks.outputs.status || 'skipped' }}
+          - [x] run_backfills.sh - Status: ${{ steps.backfill.outputs.status || 'skipped' }}
+          - [x] hydrate_vh_linkage.sh - Status: ${{ steps.hydrate.outputs.status || 'skipped' }}
+          - [x] dbexec bundle test - Status: success
+          - [ ] vh_governance_ingest.ts - Status: not implemented
+
+          ### Database Connection
+          - Host: \${{ secrets.PGHOST_STAGING }} (masked)
+          - Port: \${{ secrets.PGPORT_STAGING }} (masked)
+          - Database: \${{ secrets.PGDATABASE_STAGING }} (masked)
+          - User: \${{ secrets.PGUSER_STAGING }} (masked)
+
+          ### Next Steps
+          - Review staging verification results
+          - Confirm no cross-boundary violations
+          - Proceed with production promotion if all checks pass
+
+          ---
+          *Automated by GitHub Actions workflow: housekeeping-staging.yml*
+          EOF
+
+      - name: Upload audit log
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-log-${{ github.run_id }}
+          path: ops/audit/2025-09-22.md
+
+      - name: Commit audit updates
+        if: success()
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "CI: Housekeeping staging run completed (audit update)"
+          file_pattern: "ops/audit/*.md"
+          commit_user_name: "GitHub Actions"
+          commit_user_email: "actions@github.com"
+
+      - name: Summary
+        run: |
+          echo "## Housekeeping Staging Complete ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Execution Status" >> $GITHUB_STEP_SUMMARY
+          echo "- Migrations: ✅ Applied" >> $GITHUB_STEP_SUMMARY
+          echo "- Checks: ✅ Passed" >> $GITHUB_STEP_SUMMARY
+          echo "- Backfill: ✅ Completed" >> $GITHUB_STEP_SUMMARY
+          echo "- Hydration: ✅ Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- Dry Run: ${{ inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Workflow Run: #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Audit log has been updated and artifacts saved." >> $GITHUB_STEP_SUMMARY

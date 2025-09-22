@@ -1,0 +1,343 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rollback-procedures
+  namespace: argocd
+data:
+  rollback.sh: |
+    #!/bin/bash
+    # ArgoCD Rollback Procedure Script
+    # Usage: ./rollback.sh <app-name> [revision]
+
+    set -euo pipefail
+
+    APP_NAME="${1:-}"
+    TARGET_REVISION="${2:-}"
+
+    if [ -z "$APP_NAME" ]; then
+      echo "Error: Application name required"
+      echo "Usage: $0 <app-name> [revision]"
+      exit 1
+    fi
+
+    echo "=== ArgoCD Rollback Procedure ==="
+    echo "Application: $APP_NAME"
+    echo "Timestamp: $(date -Iseconds)"
+
+    # Get current application status
+    echo "Checking current status..."
+    CURRENT_REVISION=$(argocd app get $APP_NAME -o json | jq -r '.status.sync.revision')
+    SYNC_STATUS=$(argocd app get $APP_NAME -o json | jq -r '.status.sync.status')
+    HEALTH_STATUS=$(argocd app get $APP_NAME -o json | jq -r '.status.health.status')
+
+    echo "Current Revision: $CURRENT_REVISION"
+    echo "Sync Status: $SYNC_STATUS"
+    echo "Health Status: $HEALTH_STATUS"
+
+    # List available revisions
+    echo ""
+    echo "Available revisions:"
+    argocd app history $APP_NAME --output json | \
+      jq -r '.[] | "\(.id)\t\(.revision[0:7])\t\(.deployedAt)\t\(.author)"' | \
+      column -t
+
+    # Determine target revision
+    if [ -z "$TARGET_REVISION" ]; then
+      # Get previous healthy revision
+      TARGET_REVISION=$(argocd app history $APP_NAME --output json | \
+        jq -r '.[] | select(.id != 0) | .revision' | head -1)
+      echo ""
+      echo "No revision specified, rolling back to previous: $TARGET_REVISION"
+    fi
+
+    # Confirm rollback
+    echo ""
+    read -p "Rollback $APP_NAME to revision $TARGET_REVISION? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      echo "Rollback cancelled"
+      exit 0
+    fi
+
+    # Create backup of current state
+    echo "Creating backup..."
+    kubectl get application $APP_NAME -n argocd -o yaml > \
+      "/tmp/backup-$APP_NAME-$(date +%Y%m%d-%H%M%S).yaml"
+
+    # Perform rollback
+    echo "Initiating rollback..."
+    argocd app rollback $APP_NAME --revision $TARGET_REVISION
+
+    # Wait for sync
+    echo "Waiting for sync to complete..."
+    argocd app wait $APP_NAME \
+      --timeout 300 \
+      --health \
+      --sync
+
+    # Verify rollback
+    NEW_REVISION=$(argocd app get $APP_NAME -o json | jq -r '.status.sync.revision')
+    NEW_HEALTH=$(argocd app get $APP_NAME -o json | jq -r '.status.health.status')
+
+    if [ "$NEW_REVISION" = "$TARGET_REVISION" ] && [ "$NEW_HEALTH" = "Healthy" ]; then
+      echo "✅ Rollback successful"
+      echo "New Revision: $NEW_REVISION"
+      echo "Health: $NEW_HEALTH"
+    else
+      echo "❌ Rollback may have issues"
+      echo "Expected Revision: $TARGET_REVISION"
+      echo "Actual Revision: $NEW_REVISION"
+      echo "Health: $NEW_HEALTH"
+      exit 1
+    fi
+
+    # Create rollback event
+    kubectl create event \
+      --namespace argocd \
+      --type Normal \
+      --reason Rollback \
+      --message "Application $APP_NAME rolled back from $CURRENT_REVISION to $TARGET_REVISION" \
+      rollback-$APP_NAME || true
+
+    echo ""
+    echo "Rollback complete. Monitor application health in ArgoCD dashboard."
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: emergency-override
+  namespace: argocd
+data:
+  emergency-override.yaml: |
+    # Emergency Override Procedures
+    # USE ONLY IN CRITICAL SITUATIONS
+
+    procedures:
+      # 1. Disable auto-sync globally
+      disable_auto_sync:
+        description: "Disable all automatic syncing"
+        commands:
+          - |
+            for app in $(argocd app list -o name); do
+              argocd app patch $app --type json \
+                -p '[{"op": "remove", "path": "/spec/syncPolicy/automated"}]'
+            done
+
+      # 2. Force sync with replace
+      force_sync_replace:
+        description: "Force sync with replace strategy (destructive)"
+        warning: "This will DELETE and RECREATE resources"
+        commands:
+          - |
+            argocd app sync $APP_NAME \
+              --force \
+              --replace \
+              --prune
+
+      # 3. Skip schema validation
+      skip_validation:
+        description: "Sync without schema validation"
+        commands:
+          - |
+            argocd app sync $APP_NAME \
+              --validate=false
+
+      # 4. Manual resource deletion
+      manual_deletion:
+        description: "Manually delete problematic resources"
+        commands:
+          - |
+            # Delete specific resource
+            kubectl delete clusterpoliy $POLICY_NAME --cascade=false
+
+            # Remove finalizer if stuck
+            kubectl patch clusterpolicy $POLICY_NAME \
+              -p '{"metadata":{"finalizers":[]}}' \
+              --type=merge
+
+      # 5. Reset application state
+      reset_app_state:
+        description: "Complete reset of application state"
+        danger: "DESTRUCTIVE - Last resort only"
+        commands:
+          - |
+            # Export current state
+            argocd app get $APP_NAME -o yaml > backup.yaml
+
+            # Delete application (preserves resources)
+            argocd app delete $APP_NAME --cascade=false
+
+            # Recreate application
+            kubectl apply -f backup.yaml
+
+            # Force refresh
+            argocd app get $APP_NAME --refresh --hard
+
+    authorization:
+      required_approvers: 2
+      allowed_groups:
+        - platform-admins
+        - security-team-leads
+      audit_log: required
+      notification_channels:
+        - security-oncall
+        - platform-leadership
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: automated-rollback
+  namespace: argocd
+  annotations:
+    description: "Automated rollback on critical failure"
+spec:
+  ttlSecondsAfterFinished: 86400  # Keep for 24 hours
+  template:
+    spec:
+      serviceAccountName: argocd-application-controller
+      containers:
+        - name: rollback
+          image: argoproj/argocd:v2.9.0
+          env:
+            - name: ROLLBACK_CONDITIONS
+              value: |
+                # Rollback if health degrades after sync
+                health.status == "Degraded" && time_since_sync < 5m
+
+                # Rollback if critical pods are failing
+                replicas.ready < replicas.desired * 0.5
+
+                # Rollback if security policies are missing
+                resource_count("ClusterPolicy") < expected_count
+
+          command:
+            - /bin/bash
+            - -c
+            - |
+              #!/bin/bash
+              set -e
+
+              # Monitor applications for rollback conditions
+              while true; do
+                for app in $(argocd app list -o name); do
+                  # Check rollback conditions
+                  HEALTH=$(argocd app get $app -o json | jq -r '.status.health.status')
+                  SYNC_TIME=$(argocd app get $app -o json | jq -r '.status.operationState.finishedAt')
+
+                  if [ "$HEALTH" = "Degraded" ]; then
+                    # Check if degradation happened recently
+                    TIME_SINCE_SYNC=$(( $(date +%s) - $(date -d "$SYNC_TIME" +%s) ))
+
+                    if [ $TIME_SINCE_SYNC -lt 300 ]; then
+                      echo "⚠️ Triggering automatic rollback for $app"
+
+                      # Get previous healthy revision
+                      PREV_REVISION=$(argocd app history $app -o json | \
+                        jq -r '.[] | select(.health == "Healthy") | .revision' | \
+                        head -1)
+
+                      if [ -n "$PREV_REVISION" ]; then
+                        argocd app rollback $app --revision $PREV_REVISION
+
+                        # Send notification
+                        curl -X POST $SLACK_WEBHOOK \
+                          -H 'Content-Type: application/json' \
+                          -d "{\"text\": \"🔄 Auto-rollback triggered for $app to revision $PREV_REVISION\"}"
+                      fi
+                    fi
+                  fi
+                done
+
+                sleep 30
+              done
+      restartPolicy: OnFailure
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rollback-runbook
+  namespace: argocd
+data:
+  runbook.md: |
+    # Rollback Runbook
+
+    ## Quick Rollback Commands
+
+    ```bash
+    # Rollback to previous revision
+    argocd app rollback <app-name>
+
+    # Rollback to specific revision
+    argocd app rollback <app-name> <revision>
+
+    # Rollback with prune
+    argocd app rollback <app-name> --prune
+
+    # List revision history
+    argocd app history <app-name>
+    ```
+
+    ## Decision Tree
+
+    ```
+    Is the application unhealthy?
+    ├─ YES: Is it a security policy?
+    │   ├─ YES: IMMEDIATE ROLLBACK (no questions)
+    │   └─ NO: Can it be fixed forward?
+    │       ├─ YES: Apply hotfix
+    │       └─ NO: Rollback to last healthy
+    └─ NO: Is there configuration drift?
+        ├─ YES: Is auto-remediation working?
+        │   ├─ YES: Monitor for resolution
+        │   └─ NO: Manual sync or rollback
+        └─ NO: No action needed
+    ```
+
+    ## Rollback Scenarios
+
+    ### 1. Security Policy Corruption
+    **Severity**: CRITICAL
+    **Action**: Immediate rollback, no approval needed
+    ```bash
+    ./emergency-rollback.sh policy-sync --no-wait
+    ```
+
+    ### 2. Application Degradation
+    **Severity**: HIGH
+    **Action**: Rollback after 5 minute grace period
+    ```bash
+    argocd app rollback <app> --timeout 300
+    ```
+
+    ### 3. Configuration Drift
+    **Severity**: MEDIUM
+    **Action**: Attempt sync first, then rollback
+    ```bash
+    argocd app sync <app> || argocd app rollback <app>
+    ```
+
+    ### 4. Failed Deployment
+    **Severity**: LOW
+    **Action**: Investigate, fix forward if possible
+    ```bash
+    argocd app get <app> --refresh
+    kubectl describe application <app> -n argocd
+    ```
+
+    ## Post-Rollback Checklist
+
+    - [ ] Verify application health
+    - [ ] Check for data consistency
+    - [ ] Review logs for root cause
+    - [ ] Create incident report
+    - [ ] Update monitoring alerts
+    - [ ] Schedule post-mortem
+
+    ## Emergency Contacts
+
+    - Security On-Call: +1-xxx-xxx-xxxx
+    - Platform On-Call: +1-xxx-xxx-xxxx
+    - Escalation: leadership@example.com

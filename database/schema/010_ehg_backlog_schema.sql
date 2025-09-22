@@ -92,48 +92,7 @@ CREATE TRIGGER update_sd_backlog_updated_at
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- PRD Generation Support View
-CREATE OR REPLACE VIEW v_prd_sd_payload AS
-SELECT
-  sd.sd_id,
-  sd.sequence_rank,
-  sd.sd_title,
-  sd.page_category,
-  sd.page_title,
-  sd.rolled_triage,
-  sd.total_items,
-  sd.h_count, 
-  sd.m_count, 
-  sd.l_count, 
-  sd.future_count,
-  sd.must_have_count, 
-  sd.wish_list_count, 
-  sd.must_have_pct,
-  sd.readiness, 
-  sd.must_have_density, 
-  sd.new_module_pct,
-  sd.extras AS sd_extras,
-  sd.import_run_id,
-  COALESCE(
-    json_agg(
-      jsonb_build_object(
-        'backlog_id',       m.backlog_id,
-        'backlog_title',    m.backlog_title,
-        'description_raw',  m.description_raw,
-        'item_description', m.item_description,
-        'my_comments',      m.my_comments,
-        'priority',         m.priority,
-        'stage_number',     m.stage_number,
-        'phase',            m.phase,
-        'new_module',       m.new_module,
-        'extras',           m.extras
-      )
-      ORDER BY m.stage_number NULLS LAST, m.backlog_id
-    ) FILTER (WHERE m.backlog_id IS NOT NULL),
-    '[]'::json
-  ) AS items
-FROM strategic_directives_backlog sd
-LEFT JOIN sd_backlog_map m USING (sd_id)
-GROUP BY sd.sd_id;
+-- Deprecated: canonical definition lives in db/views/eng/v_eng_prd_payload_v1.sql.
 
 -- PRD Storage Table
 CREATE TABLE IF NOT EXISTS product_requirements_v3 (

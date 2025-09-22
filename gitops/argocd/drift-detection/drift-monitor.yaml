@@ -1,0 +1,315 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-drift-detection
+  namespace: argocd
+data:
+  # Drift detection configuration
+  drift-detection.yaml: |
+    # Drift monitoring settings
+    monitoring:
+      enabled: true
+      interval: 5m  # Check for drift every 5 minutes
+      retryLimit: 3
+      backoffFactor: 2
+
+    # Drift thresholds
+    thresholds:
+      # Maximum allowed drift duration before alert
+      maxDriftDuration: 15m
+      # Maximum number of out-of-sync resources
+      maxOutOfSyncResources: 5
+      # Percentage of resources that can drift
+      maxDriftPercentage: 10
+
+    # Auto-remediation settings
+    autoRemediation:
+      enabled: true
+      dryRun: false
+
+      # Resources to auto-remediate
+      include:
+        - group: kyverno.io
+          kind: ClusterPolicy
+        - group: kyverno.io
+          kind: Policy
+        - group: monitoring.coreos.com
+          kind: ServiceMonitor
+        - group: monitoring.coreos.com
+          kind: PrometheusRule
+
+      # Resources to never auto-remediate
+      exclude:
+        - group: v1
+          kind: Secret
+        - group: v1
+          kind: PersistentVolumeClaim
+        - group: batch
+          kind: Job
+
+      # Remediation strategies
+      strategies:
+        ClusterPolicy:
+          action: sync
+          pruneOrphaned: false
+          respectIgnoreDifferences: true
+
+        ConfigMap:
+          action: sync
+          pruneOrphaned: false
+          forceRecreate: false
+
+        Deployment:
+          action: sync
+          validateReplicas: true
+          restartOnSync: false
+
+    # Notification settings
+    notifications:
+      slack:
+        enabled: true
+        channels:
+          drift-detected: security-alerts
+          auto-remediated: platform-notifications
+          remediation-failed: security-oncall
+
+      email:
+        enabled: false
+        recipients:
+          - security-team@example.com
+
+      webhooks:
+        - url: https://webhook.example.com/drift
+          events:
+            - drift-detected
+            - remediation-failed
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: drift-detection-alerts
+  namespace: argocd
+spec:
+  groups:
+    - name: drift_detection
+      interval: 30s
+      rules:
+        # Alert when application is out of sync
+        - alert: ApplicationDriftDetected
+          expr: |
+            argocd_app_sync_total{sync_status="OutOfSync"} > 0
+          for: 5m
+          labels:
+            severity: warning
+            component: gitops
+          annotations:
+            summary: "Application {{ $labels.name }} has drifted from Git"
+            description: "Application {{ $labels.name }} in namespace {{ $labels.namespace }} is out of sync for more than 5 minutes"
+            runbook_url: "https://docs.example.com/runbooks/drift-detection"
+
+        # Alert when drift exceeds threshold
+        - alert: ExcessiveDriftDetected
+          expr: |
+            count(argocd_app_sync_total{sync_status="OutOfSync"}) > 5
+          for: 2m
+          labels:
+            severity: critical
+            component: gitops
+            page: platform-oncall
+          annotations:
+            summary: "Multiple applications have drifted"
+            description: "{{ $value }} applications are out of sync with Git"
+            action: "Check ArgoCD dashboard for drift details"
+
+        # Alert when auto-remediation fails
+        - alert: AutoRemediationFailed
+          expr: |
+            rate(argocd_app_sync_total{sync_status="Failed"}[5m]) > 0.1
+          for: 5m
+          labels:
+            severity: critical
+            component: gitops
+          annotations:
+            summary: "Auto-remediation failing for {{ $labels.name }}"
+            description: "Application {{ $labels.name }} sync is repeatedly failing"
+            troubleshooting: "Check application logs and events"
+
+        # Alert for security policy drift
+        - alert: SecurityPolicyDrift
+          expr: |
+            argocd_app_sync_total{
+              sync_status="OutOfSync",
+              namespace="kyverno"
+            } > 0
+          for: 1m
+          labels:
+            severity: critical
+            component: security
+            page: security-oncall
+          annotations:
+            summary: "CRITICAL: Security policy drift detected"
+            description: "Kyverno policies are out of sync with Git"
+            action: "Immediate investigation required"
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: drift-monitor
+  namespace: argocd
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: drift-monitor
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: drift-monitor
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: drift-monitor
+subjects:
+  - kind: ServiceAccount
+    name: drift-monitor
+    namespace: argocd
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: drift-compliance-report
+  namespace: argocd
+spec:
+  schedule: "0 */6 * * *"  # Every 6 hours
+  concurrencyPolicy: Replace
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: drift-monitor
+          containers:
+            - name: compliance-reporter
+              image: argoproj/argocd:v2.9.0
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  #!/bin/bash
+                  set -e
+
+                  # Generate drift compliance report
+                  echo "=== Drift Compliance Report ==="
+                  echo "Generated: $(date -Iseconds)"
+                  echo ""
+
+                  # Count applications by sync status
+                  SYNCED=$(argocd app list -o json | jq '[.[] | select(.status.sync.status == "Synced")] | length')
+                  OUT_OF_SYNC=$(argocd app list -o json | jq '[.[] | select(.status.sync.status == "OutOfSync")] | length')
+                  UNKNOWN=$(argocd app list -o json | jq '[.[] | select(.status.sync.status == "Unknown")] | length')
+
+                  echo "Application Sync Status:"
+                  echo "- Synced: $SYNCED"
+                  echo "- Out of Sync: $OUT_OF_SYNC"
+                  echo "- Unknown: $UNKNOWN"
+                  echo ""
+
+                  # Calculate compliance percentage
+                  TOTAL=$((SYNCED + OUT_OF_SYNC + UNKNOWN))
+                  if [ $TOTAL -gt 0 ]; then
+                    COMPLIANCE=$((SYNCED * 100 / TOTAL))
+                    echo "Compliance Rate: ${COMPLIANCE}%"
+                  fi
+
+                  # List out-of-sync applications
+                  if [ $OUT_OF_SYNC -gt 0 ]; then
+                    echo ""
+                    echo "Out of Sync Applications:"
+                    argocd app list -o json | \
+                      jq -r '.[] | select(.status.sync.status == "OutOfSync") | "- \(.metadata.name) (namespace: \(.spec.destination.namespace))"'
+                  fi
+
+                  # Check for security policy drift
+                  POLICY_DRIFT=$(argocd app get policy-sync -o json | jq -r '.status.sync.status')
+                  if [ "$POLICY_DRIFT" != "Synced" ]; then
+                    echo ""
+                    echo "⚠️ WARNING: Security policies are out of sync!"
+                  fi
+
+                  # Save report to ConfigMap
+                  kubectl create configmap drift-report-$(date +%Y%m%d-%H%M%S) \
+                    --from-literal=report="$(cat /tmp/report.txt)" \
+                    --namespace argocd || true
+
+              env:
+                - name: ARGOCD_SERVER
+                  value: argocd-server
+                - name: ARGOCD_AUTH_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: argocd-token
+                      key: token
+          restartPolicy: OnFailure
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: drift-remediation
+  namespace: argocd
+spec:
+  generators:
+    - clusters: {}
+
+  template:
+    metadata:
+      name: '{{name}}-drift-monitor'
+      annotations:
+        argocd.argoproj.io/sync-options: |
+          SyncOptions:
+            - ApplyOutOfSyncOnly=true
+            - RespectIgnoreDifferences=true
+            - PrunePropagationPolicy=background
+    spec:
+      project: default
+
+      source:
+        repoURL: https://github.com/ehg/ehg-engineer
+        targetRevision: main
+        path: gitops/drift-detection
+
+      destination:
+        server: '{{server}}'
+        namespace: argocd
+
+      syncPolicy:
+        automated:
+          prune: false
+          selfHeal: true  # Auto-remediate drift
+          allowEmpty: false
+
+        syncOptions:
+          - CreateNamespace=false
+          - RespectIgnoreDifferences=true
+
+        retry:
+          limit: 3
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m

@@ -1,0 +1,40 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [
+    {
+      "name": "artifact.tar.gz",
+      "digest": {
+        "sha256": "43b9fcc0caf722d0c70846bdb8939124f2da403d188f867020f10e312ed296e8"
+      }
+    }
+  ],
+  "predicateType": "https://slsa.dev/provenance/v0.2",
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://slsa.dev/spec/v0.2/builder-script",
+      "externalParameters": {
+        "task": "Implement timestamp utility functions",
+        "prd_id": "PRD-CODEX-TEST-1758341001565"
+      },
+      "internalParameters": {
+        "files_touched": [
+          "src/utils/timestamp.js",
+          "src/utils/timestamp.test.js"
+        ]
+      }
+    },
+    "builder": {
+      "id": "urn:leo:codex"
+    },
+    "runDetails": {
+      "builderConfig": {
+        "environment": ".env.codex"
+      },
+      "metadata": {
+        "invocationId": "codex-claude-2025-09-20T04:26:58Z",
+        "startedOn": "2025-09-20T04:26:58Z",
+        "finishedOn": "2025-09-20T04:26:58Z"
+      }
+    }
+  }
+}

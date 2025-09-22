@@ -1,0 +1,292 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ehg-metrics-config
+  namespace: monitoring
+data:
+  metrics.yml: |
+    # EHG Engineer Prometheus Metrics Configuration
+    # Dual-Lane Workflow Observability
+
+    # Policy Enforcement Metrics
+    - name: ehg_policy_violations_total
+      type: counter
+      help: Total number of policy violations by type
+      labels:
+        - policy_type  # require-signed-images, require-slsa-provenance, require-image-digests
+        - namespace
+        - action       # blocked, allowed_exception
+        - severity     # high, medium, low
+
+    - name: ehg_policy_enforcement_duration_seconds
+      type: histogram
+      help: Time taken to enforce admission control policies
+      labels:
+        - policy_name
+        - decision    # allow, deny
+      buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
+
+    # Signature Verification Metrics
+    - name: ehg_signature_verifications_total
+      type: counter
+      help: Total number of signature verification attempts
+      labels:
+        - artifact_type  # container, policy, bundle
+        - result        # success, failure, no_signature
+        - signer        # sigstore, gpg, none
+
+    - name: ehg_signature_verification_duration_seconds
+      type: histogram
+      help: Time taken to verify signatures
+      labels:
+        - verification_type  # sigstore, gpg
+      buckets: [0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+
+    # SLSA Attestation Metrics
+    - name: ehg_slsa_attestations_verified
+      type: counter
+      help: SLSA attestation verification results
+      labels:
+        - slsa_level    # L1, L2, L3, L4
+        - predicate     # provenance, vsa, test_result
+        - result        # valid, invalid, expired, missing
+        - builder       # github_actions, jenkins, other
+
+    - name: ehg_slsa_coverage_ratio
+      type: gauge
+      help: Ratio of artifacts with valid SLSA attestations
+      labels:
+        - environment   # production, staging, development
+        - slsa_level    # L1, L2, L3, L4
+
+    # Lane Handoff Metrics
+    - name: ehg_lane_handoffs_total
+      type: counter
+      help: Total number of handoffs between lanes
+      labels:
+        - from_lane     # codex, claude
+        - to_lane       # codex, claude
+        - handoff_type  # artifact, pr, verification
+        - result        # success, failure, timeout
+
+    - name: ehg_lane_handoff_duration_seconds
+      type: histogram
+      help: Duration of lane handoffs
+      labels:
+        - from_lane
+        - to_lane
+      buckets: [10, 30, 60, 120, 300, 600, 1200, 1800, 3600]
+
+    # Gate Execution Metrics
+    - name: ehg_gate_execution_duration_seconds
+      type: histogram
+      help: Time taken for gate validation
+      labels:
+        - gate_name     # leo_gate_3, story_release, slsa_verification, policy_verification
+        - verdict       # pass, fail, skip, timeout
+      buckets: [5, 10, 30, 60, 120, 300, 600, 1200]
+
+    - name: ehg_gate_executions_total
+      type: counter
+      help: Total number of gate executions
+      labels:
+        - gate_name
+        - verdict
+        - triggered_by  # automated, manual_override
+
+    - name: ehg_gate_bypass_attempts_total
+      type: counter
+      help: Attempts to bypass required gates
+      labels:
+        - gate_name
+        - requester
+        - approved      # yes, no
+
+    # LEO Protocol Metrics
+    - name: ehg_leo_agent_activations_total
+      type: counter
+      help: LEO Protocol agent activations
+      labels:
+        - agent         # exec, plan, lead
+        - trigger       # manual, automated, escalation
+
+    - name: ehg_leo_subagent_activations_total
+      type: counter
+      help: Sub-agent activation count
+      labels:
+        - subagent      # security, database, testing, performance, design
+        - trigger_type  # keyword, explicit, cascade
+        - parent_agent  # exec, plan, lead
+
+    - name: ehg_leo_verification_confidence
+      type: gauge
+      help: PLAN Supervisor verification confidence score
+      labels:
+        - verdict       # pass, fail, conditional_pass, escalate
+        - prd_id
+
+    # Workflow Performance Metrics
+    - name: ehg_workflow_stage_duration_seconds
+      type: histogram
+      help: Duration of workflow stages
+      labels:
+        - stage         # building, verifying, handoff, complete
+        - workflow      # pr_creation, artifact_signing, policy_sync
+      buckets: [30, 60, 120, 300, 600, 1200, 1800, 3600, 7200]
+
+    - name: ehg_workflow_success_rate
+      type: gauge
+      help: Success rate of workflows over sliding window
+      labels:
+        - workflow_type
+        - window        # 1h, 24h, 7d
+
+    # Security Posture Metrics
+    - name: ehg_security_score
+      type: gauge
+      help: Overall security posture score (0-100)
+      labels:
+        - component     # supply_chain, admission_control, secrets_management
+        - environment
+
+    - name: ehg_unsigned_artifacts_detected
+      type: counter
+      help: Count of unsigned artifacts detected
+      labels:
+        - artifact_type
+        - source        # registry, ci_pipeline, external
+        - blocked       # yes, no
+
+    - name: ehg_policy_drift_detected
+      type: gauge
+      help: Number of policies out of sync
+      labels:
+        - cluster
+        - policy_type
+
+    # Observability Meta-Metrics
+    - name: ehg_metrics_collection_errors_total
+      type: counter
+      help: Errors collecting metrics
+      labels:
+        - metric_name
+        - error_type
+
+    - name: ehg_dashboard_queries_total
+      type: counter
+      help: Dashboard query executions
+      labels:
+        - dashboard     # supply_chain, policy_enforcement, lane_performance
+        - user
+
+    # Resource Utilization
+    - name: ehg_github_api_calls_total
+      type: counter
+      help: GitHub API calls made
+      labels:
+        - endpoint
+        - status_code
+
+    - name: ehg_github_api_rate_limit_remaining
+      type: gauge
+      help: Remaining GitHub API rate limit
+      labels:
+        - resource      # core, search, graphql
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ehg-metrics
+  namespace: monitoring
+  labels:
+    app: ehg-engineer
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: ehg-engineer
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+      scrapeTimeout: 10s
+      honorLabels: true
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ehg-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus
+spec:
+  groups:
+    - name: supply_chain_security
+      interval: 30s
+      rules:
+        - alert: UnsignedArtifactDetected
+          expr: increase(ehg_unsigned_artifacts_detected{blocked="no"}[5m]) > 0
+          for: 1m
+          labels:
+            severity: critical
+            component: supply_chain
+          annotations:
+            summary: "Unsigned artifact allowed in {{ $labels.environment }}"
+            description: "An unsigned {{ $labels.artifact_type }} artifact was detected and not blocked"
+
+        - alert: SLSAVerificationFailureRate
+          expr: |
+            rate(ehg_slsa_attestations_verified{result!="valid"}[5m])
+            / rate(ehg_slsa_attestations_verified[5m]) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High SLSA verification failure rate"
+            description: "More than 10% of SLSA verifications failing in last 5 minutes"
+
+        - alert: PolicyViolationSpike
+          expr: rate(ehg_policy_violations_total[5m]) > 10
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Policy violation spike detected"
+            description: "Policy {{ $labels.policy_type }} violations exceeding threshold"
+
+        - alert: GateBypassAttempt
+          expr: increase(ehg_gate_bypass_attempts_total{approved="no"}[1m]) > 0
+          for: 1m
+          labels:
+            severity: high
+          annotations:
+            summary: "Unauthorized gate bypass attempt"
+            description: "Attempt to bypass {{ $labels.gate_name }} by {{ $labels.requester }}"
+
+        - alert: LaneHandoffTimeout
+          expr: |
+            histogram_quantile(0.95,
+              rate(ehg_lane_handoff_duration_seconds_bucket[5m])
+            ) > 600
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Lane handoff taking too long"
+            description: "95th percentile handoff time exceeding 10 minutes"
+
+        - alert: LowSecurityScore
+          expr: ehg_security_score < 70
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Security score below threshold"
+            description: "{{ $labels.component }} security score: {{ $value }}/100"

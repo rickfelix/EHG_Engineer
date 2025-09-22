@@ -1,0 +1,478 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: drift-detection
+  labels:
+    security.ehg.io/drift-monitoring: enabled
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: driftpolicies.drift.ehg.io
+spec:
+  group: drift.ehg.io
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                targetResource:
+                  type: object
+                  properties:
+                    apiVersion:
+                      type: string
+                    kind:
+                      type: string
+                    namespace:
+                      type: string
+                    labelSelector:
+                      type: object
+                checkInterval:
+                  type: string
+                  default: "2m"
+                severity:
+                  type: string
+                  enum: ["critical", "high", "medium", "low"]
+                  default: "medium"
+                remediationPolicy:
+                  type: object
+                  properties:
+                    autoRemediate:
+                      type: boolean
+                      default: true
+                    strategy:
+                      type: string
+                      enum: ["sync", "rollback", "alert-only"]
+                      default: "sync"
+                    approvalRequired:
+                      type: boolean
+                      default: false
+                ignoreFields:
+                  type: array
+                  items:
+                    type: string
+            status:
+              type: object
+              properties:
+                lastCheck:
+                  type: string
+                driftDetected:
+                  type: boolean
+                driftDetails:
+                  type: array
+                  items:
+                    type: object
+                remediationStatus:
+                  type: string
+                complianceScore:
+                  type: number
+  scope: Cluster
+  names:
+    plural: driftpolicies
+    singular: driftpolicy
+    kind: DriftPolicy
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: driftreports.drift.ehg.io
+spec:
+  group: drift.ehg.io
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                timestamp:
+                  type: string
+                environment:
+                  type: string
+                resources:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      namespace:
+                        type: string
+                      kind:
+                        type: string
+                      driftType:
+                        type: string
+                      severity:
+                        type: string
+                      details:
+                        type: object
+            status:
+              type: object
+              properties:
+                summary:
+                  type: object
+                  properties:
+                    totalResources:
+                      type: integer
+                    driftedResources:
+                      type: integer
+                    criticalDrifts:
+                      type: integer
+                    compliancePercentage:
+                      type: number
+                remediationRequired:
+                  type: boolean
+  scope: Namespaced
+  names:
+    plural: driftreports
+    singular: driftreport
+    kind: DriftReport
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drift-detector-operator
+  namespace: drift-detection
+  labels:
+    app: drift-detector
+    lane: claude
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: drift-detector
+  template:
+    metadata:
+      labels:
+        app: drift-detector
+        security.ehg.io/drift-detection: active
+    spec:
+      serviceAccountName: drift-detector
+      containers:
+        - name: operator
+          image: ehg/drift-detector:v1.0.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: OPERATOR_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: CHECK_INTERVAL
+              value: "120"  # 2 minutes in seconds
+            - name: ENABLE_WEBHOOKS
+              value: "true"
+            - name: AUTO_REMEDIATE
+              value: "true"
+            - name: METRICS_PORT
+              value: "8080"
+            - name: HEALTH_PORT
+              value: "8081"
+          ports:
+            - name: metrics
+              containerPort: 8080
+            - name: health
+              containerPort: 8081
+            - name: webhook
+              containerPort: 9443
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - name: config
+              mountPath: /etc/drift-detector
+              readOnly: true
+            - name: webhook-certs
+              mountPath: /tmp/k8s-webhook-server/serving-certs
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: drift-detector-config
+        - name: webhook-certs
+          secret:
+            secretName: drift-detector-webhook-certs
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: drift-detector
+  namespace: drift-detection
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: drift-detector
+rules:
+  - apiGroups: [""]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: ["drift.ehg.io"]
+    resources: ["driftpolicies", "driftreports"]
+    verbs: ["*"]
+  - apiGroups: ["kyverno.io"]
+    resources: ["policies", "clusterpolicies"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: drift-detector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: drift-detector
+subjects:
+  - kind: ServiceAccount
+    name: drift-detector
+    namespace: drift-detection
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: drift-detector-metrics
+  namespace: drift-detection
+  labels:
+    app: drift-detector
+spec:
+  ports:
+    - name: metrics
+      port: 8080
+      targetPort: metrics
+  selector:
+    app: drift-detector
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: drift-detector-webhook
+  namespace: drift-detection
+spec:
+  ports:
+    - name: webhook
+      port: 443
+      targetPort: 9443
+  selector:
+    app: drift-detector
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: drift-prevention-webhook
+webhooks:
+  - name: validate.drift.ehg.io
+    clientConfig:
+      service:
+        name: drift-detector-webhook
+        namespace: drift-detection
+        path: /validate
+      caBundle: LS0tLS1CRUdJTi... # Placeholder for CA bundle
+    rules:
+      - operations: ["UPDATE", "DELETE"]
+        apiGroups: ["*"]
+        apiVersions: ["*"]
+        resources: ["*"]
+        scope: "*"
+    namespaceSelector:
+      matchLabels:
+        drift-prevention: enabled
+    failurePolicy: Ignore
+    sideEffects: None
+    admissionReviewVersions: ["v1", "v1beta1"]
+    timeoutSeconds: 10
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: drift-detector-config
+  namespace: drift-detection
+data:
+  config.yaml: |
+    # Drift Detection Configuration
+    detection:
+      # Resources to monitor
+      resources:
+        - apiVersion: v1
+          kind: ConfigMap
+          severity: low
+        - apiVersion: v1
+          kind: Secret
+          severity: critical
+        - apiVersion: apps/v1
+          kind: Deployment
+          severity: high
+        - apiVersion: kyverno.io/v1
+          kind: ClusterPolicy
+          severity: critical
+        - apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          severity: high
+
+      # Fields to ignore during comparison
+      ignoreFields:
+        global:
+          - metadata.resourceVersion
+          - metadata.uid
+          - metadata.generation
+          - metadata.creationTimestamp
+          - metadata.managedFields
+          - status
+        deployment:
+          - spec.template.metadata.annotations["kubectl.kubernetes.io/restartedAt"]
+        configmap:
+          - metadata.annotations["kubectl.kubernetes.io/last-applied-configuration"]
+
+      # Baseline snapshot settings
+      baseline:
+        storage: etcd
+        snapshotInterval: 1h
+        retentionDays: 30
+        comparisonAlgorithm: json-diff
+
+    remediation:
+      # Auto-remediation settings
+      autoRemediate:
+        enabled: true
+        dryRun: false
+        maxRetries: 3
+        backoffSeconds: 30
+
+      # Remediation strategies by resource type
+      strategies:
+        ConfigMap:
+          action: sync
+          requireApproval: false
+        Secret:
+          action: alert-only
+          requireApproval: true
+        Deployment:
+          action: rollback
+          requireApproval: false
+        ClusterPolicy:
+          action: sync
+          requireApproval: true
+          notifyChannels:
+            - security-oncall
+            - platform-team
+
+      # Approval workflow
+      approval:
+        timeout: 5m
+        defaultAction: deny
+        approvers:
+          - group: platform-admins
+          - group: security-team
+
+    monitoring:
+      # Metrics configuration
+      metrics:
+        enabled: true
+        port: 8080
+        path: /metrics
+        interval: 30s
+
+      # Alerting thresholds
+      alerts:
+        criticalDriftCount: 5
+        highDriftPercentage: 10
+        mttrThreshold: 15m
+        complianceThreshold: 90
+
+      # Notification channels
+      notifications:
+        slack:
+          enabled: true
+          webhookUrl: ${SLACK_WEBHOOK_URL}
+          channels:
+            critical: security-alerts
+            high: platform-alerts
+            default: drift-monitoring
+        email:
+          enabled: false
+          smtp: smtp.example.com:587
+          from: drift-detector@example.com
+          recipients:
+            - security-team@example.com
+
+    compliance:
+      # Compliance scoring
+      scoring:
+        algorithm: weighted
+        weights:
+          critical: 10
+          high: 5
+          medium: 2
+          low: 1
+        passingScore: 90
+
+      # Compliance policies
+      policies:
+        - name: no-critical-drift
+          description: "No critical severity drift allowed"
+          rule: "drifts.critical == 0"
+          enforcement: block
+        - name: high-compliance
+          description: "Maintain >90% compliance"
+          rule: "compliance.score >= 90"
+          enforcement: alert
+        - name: quick-remediation
+          description: "Remediate within 15 minutes"
+          rule: "mttr <= 15m"
+          enforcement: alert
+
+    reporting:
+      # Report generation
+      schedule:
+        daily: "0 8 * * *"
+        weekly: "0 8 * * 1"
+        monthly: "0 8 1 * *"
+
+      # Report formats
+      formats:
+        - json
+        - html
+        - pdf
+
+      # Report distribution
+      distribution:
+        s3:
+          bucket: ehg-drift-reports
+          prefix: reports/
+        email:
+          enabled: true
+          recipients:
+            - compliance@example.com

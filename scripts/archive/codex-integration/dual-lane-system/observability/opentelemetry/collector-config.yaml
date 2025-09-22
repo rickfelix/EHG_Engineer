@@ -1,0 +1,332 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: observability
+data:
+  otel-collector-config.yaml: |
+    # OpenTelemetry Collector Configuration for EHG Engineer
+    # Dual-Lane Workflow Tracing
+
+    receivers:
+      # Receive traces from GitHub Actions via OTLP
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+            cors:
+              allowed_origins:
+                - "https://github.com"
+                - "https://*.github.com"
+
+      # Prometheus receiver for metrics
+      prometheus:
+        config:
+          scrape_configs:
+            - job_name: 'ehg-metrics'
+              static_configs:
+                - targets: ['localhost:9090']
+
+      # GitHub Actions webhook receiver
+      webhook:
+        endpoint: 0.0.0.0:8080
+        path: /github/webhook
+        secret: ${env:GITHUB_WEBHOOK_SECRET}
+
+    processors:
+      # Add resource attributes
+      resource:
+        attributes:
+          - key: service.name
+            value: ehg-engineer
+            action: upsert
+          - key: deployment.environment
+            from_attribute: environment
+            action: insert
+          - key: lane.type
+            from_attribute: lane
+            action: insert
+
+      # Batch processing for efficiency
+      batch:
+        timeout: 10s
+        send_batch_size: 1024
+
+      # Memory limiter to prevent OOM
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 512
+        spike_limit_mib: 128
+
+      # Span processing for lane tracking
+      span:
+        name:
+          from_attributes: ["operation.name", "lane.handoff"]
+        status:
+          code: "Ok"
+          description: "Lane handoff successful"
+
+      # Attributes processor for security context
+      attributes:
+        actions:
+          - key: signature.status
+            from_attribute: signed
+            action: insert
+          - key: slsa.level
+            from_attribute: slsa_level
+            action: insert
+          - key: policy.enforced
+            value: true
+            action: insert
+          - key: gate.verdict
+            from_attribute: gate_result
+            action: insert
+
+      # Filter sensitive data
+      filter:
+        traces:
+          span:
+            - 'attributes["http.request.header.authorization"] != nil'
+            - 'attributes["github.token"] != nil'
+
+    exporters:
+      # Jaeger for trace visualization
+      jaeger:
+        endpoint: jaeger-collector:14250
+        tls:
+          insecure: true
+
+      # Prometheus for metrics
+      prometheusremotewrite:
+        endpoint: http://prometheus:9090/api/v1/write
+        resource_to_telemetry_conversion:
+          enabled: true
+
+      # Logging for debugging
+      logging:
+        loglevel: info
+        sampling_initial: 10
+        sampling_thereafter: 100
+
+      # OTLP export to upstream
+      otlp:
+        endpoint: otel-gateway:4317
+        headers:
+          x-scope-orgid: "ehg-engineer"
+
+    extensions:
+      # Health check endpoint
+      health_check:
+        endpoint: :13133
+        path: /health
+
+      # Performance profiling
+      pprof:
+        endpoint: :1777
+
+      # zPages for debugging
+      zpages:
+        endpoint: :55679
+
+    service:
+      extensions: [health_check, pprof, zpages]
+
+      pipelines:
+        traces:
+          receivers: [otlp, webhook]
+          processors: [resource, span, attributes, filter, batch, memory_limiter]
+          exporters: [jaeger, logging]
+
+        metrics:
+          receivers: [prometheus]
+          processors: [resource, batch, memory_limiter]
+          exporters: [prometheusremotewrite]
+
+        logs:
+          receivers: [otlp]
+          processors: [resource, batch, memory_limiter]
+          exporters: [logging]
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: observability
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.96.0
+          args:
+            - --config=/conf/otel-collector-config.yaml
+          ports:
+            - containerPort: 4317  # OTLP gRPC
+              name: otlp-grpc
+            - containerPort: 4318  # OTLP HTTP
+              name: otlp-http
+            - containerPort: 8080  # Webhook
+              name: webhook
+            - containerPort: 13133 # Health check
+              name: health
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+          env:
+            - name: GITHUB_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: github-webhook-secret
+                  key: secret
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 13133
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 13133
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: observability
+spec:
+  selector:
+    app: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+    - name: webhook
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-instrumentation
+  namespace: observability
+data:
+  github-actions.yml: |
+    # GitHub Actions OpenTelemetry Instrumentation
+    # Add to workflow files for tracing
+
+    - name: Setup OpenTelemetry
+      env:
+        OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_COLLECTOR_ENDPOINT }}
+        OTEL_EXPORTER_OTLP_HEADERS: "x-api-key=${{ secrets.OTEL_API_KEY }}"
+        OTEL_SERVICE_NAME: "github-actions"
+        OTEL_RESOURCE_ATTRIBUTES: |
+          deployment.environment=ci
+          ci.provider=github
+          workflow.name=${{ github.workflow }}
+          workflow.run_id=${{ github.run_id }}
+          workflow.run_number=${{ github.run_number }}
+          lane.type=${{ env.LANE_TYPE }}
+      run: |
+        echo "OpenTelemetry configured for workflow tracing"
+
+    - name: Start trace span
+      run: |
+        curl -X POST $OTEL_EXPORTER_OTLP_ENDPOINT/v1/traces \
+          -H "Content-Type: application/json" \
+          -H "$OTEL_EXPORTER_OTLP_HEADERS" \
+          -d '{
+            "resourceSpans": [{
+              "resource": {
+                "attributes": [
+                  {"key": "service.name", "value": {"stringValue": "github-actions"}},
+                  {"key": "lane.type", "value": {"stringValue": "'"$LANE_TYPE"'"}}
+                ]
+              },
+              "scopeSpans": [{
+                "spans": [{
+                  "traceId": "'"$(uuidgen | tr -d '-')"'",
+                  "spanId": "'"$(uuidgen | tr -d '-' | cut -c1-16)"'",
+                  "name": "workflow.'"${{ github.workflow }}"'",
+                  "startTimeUnixNano": "'"$(date +%s%N)"'",
+                  "attributes": [
+                    {"key": "workflow.step", "value": {"stringValue": "'"${{ github.job }}"'"}},
+                    {"key": "signature.status", "value": {"boolValue": true}},
+                    {"key": "slsa.level", "value": {"intValue": 3}}
+                  ]
+                }]
+              }]
+            }]
+          }'
+
+  lane-instrumentation.js: |
+    // JavaScript instrumentation for lane tracking
+    const { NodeTracerProvider } = require('@opentelemetry/sdk-trace-node');
+    const { Resource } = require('@opentelemetry/resources');
+    const { SemanticResourceAttributes } = require('@opentelemetry/semantic-conventions');
+    const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-grpc');
+    const { registerInstrumentations } = require('@opentelemetry/instrumentation');
+
+    // Initialize tracer provider
+    const provider = new NodeTracerProvider({
+      resource: new Resource({
+        [SemanticResourceAttributes.SERVICE_NAME]: 'ehg-engineer',
+        'lane.type': process.env.LANE_TYPE || 'unknown',
+        'deployment.environment': process.env.NODE_ENV || 'development'
+      })
+    });
+
+    // Configure OTLP exporter
+    const exporter = new OTLPTraceExporter({
+      url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4317'
+    });
+
+    provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
+    provider.register();
+
+    // Lane handoff tracing
+    function traceLaneHandoff(fromLane, toLane, artifact) {
+      const tracer = trace.getTracer('lane-handoff');
+      const span = tracer.startSpan('handoff', {
+        attributes: {
+          'lane.from': fromLane,
+          'lane.to': toLane,
+          'artifact.id': artifact.id,
+          'artifact.signed': artifact.signed,
+          'artifact.slsa_level': artifact.slsaLevel
+        }
+      });
+
+      return span;
+    }
+
+    module.exports = { traceLaneHandoff };

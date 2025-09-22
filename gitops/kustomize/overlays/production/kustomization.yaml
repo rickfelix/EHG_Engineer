@@ -1,0 +1,154 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: ehg-production-policies
+  annotations:
+    security.ehg.io/environment: production
+    security.ehg.io/enforcement: strict
+
+# Reference to base configuration
+resources:
+  - ../../base
+
+# Production-specific namespace
+namespace: kyverno
+
+# Production name prefix
+namePrefix: prod-
+
+# Production-specific labels
+commonLabels:
+  environment: production
+  security.ehg.io/enforcement-level: strict
+  gitops.ehg.io/auto-sync: "true"
+
+# Production annotations
+commonAnnotations:
+  security.ehg.io/approval: required
+  security.ehg.io/signed-by: security-team
+  gitops.ehg.io/sync-wave: "3"
+  notifications.ehg.io/channel: security-alerts
+
+# Production patches
+patches:
+  # Enforce strict validation in production
+  - target:
+      group: kyverno.io
+      version: v1
+      kind: ClusterPolicy
+    patch: |-
+      - op: replace
+        path: /spec/validationFailureAction
+        value: enforce
+      - op: replace
+        path: /spec/background
+        value: false
+      - op: replace
+        path: /spec/failurePolicy
+        value: Fail
+
+  # Increase resource limits for production
+  - target:
+      kind: Deployment
+      name: ".*"
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "2Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "2"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "1Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "500m"
+
+  # Add production-specific security context
+  - target:
+      kind: Deployment
+      name: ".*"
+    patch: |-
+      - op: add
+        path: /spec/template/spec/securityContext/capabilities
+        value:
+          drop:
+            - ALL
+      - op: add
+        path: /spec/template/spec/securityContext/readOnlyRootFilesystem
+        value: true
+
+# Production-specific config
+configMapGenerator:
+  - name: cluster-config
+    behavior: merge
+    literals:
+      - cluster_name=ehg-production
+      - environment=production
+      - region=us-east-1
+      - slsa_level=3
+      - policy_version=v1.0.0
+      - enforcement_mode=strict
+      - auto_remediation=enabled
+      - audit_logging=enabled
+
+# Production secrets (encrypted with Sealed Secrets)
+secretGenerator:
+  - name: production-signing-keys
+    files:
+      - tls.crt=../../certs/production/signing.crt
+      - tls.key=../../certs/production/signing.key
+    type: kubernetes.io/tls
+
+# Production-specific replacements
+replacements:
+  - source:
+      kind: ConfigMap
+      name: cluster-config
+      fieldPath: data.enforcement_mode
+    targets:
+      - select:
+          group: kyverno.io
+          kind: ClusterPolicy
+        fieldPaths:
+          - metadata.annotations.[policies.kyverno.io/enforcement]
+        options:
+          create: true
+
+# Production replicas for HA
+replicas:
+  - name: kyverno
+    count: 3
+
+# Production-specific transformations
+patchesStrategicMerge:
+  - |-
+    apiVersion: monitoring.coreos.com/v1
+    kind: PrometheusRule
+    metadata:
+      name: ehg-alerts
+      namespace: monitoring
+    spec:
+      groups:
+        - name: production_alerts
+          interval: 15s  # More frequent in production
+          rules:
+            - alert: PolicyViolationCritical
+              expr: |
+                rate(ehg_policy_violations_total{environment="production"}[1m]) > 5
+              for: 30s
+              labels:
+                severity: critical
+                environment: production
+                page: security-oncall
+              annotations:
+                summary: "Critical policy violations in production"
+                description: "{{ $value }} violations per second detected"
+
+# Production-specific components
+components:
+  - ../../components/audit-logging
+  - ../../components/backup-restore
+  - ../../components/high-availability

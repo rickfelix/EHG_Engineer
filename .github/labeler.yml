@@ -1,10 +1,7 @@
 # Configuration for auto-labeler action
 # Used by .github/workflows/auto-labels.yml
 
-# Dual-lane workflow state labels
-codex-building:
-  - staging/codex-*
-
+# Workflow state labels
 claude-enforcing:
   - feature/*
 

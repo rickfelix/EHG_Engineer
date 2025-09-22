@@ -1112,7 +1112,7 @@ interface BlueprintGeneratorInfrastructure {
   ai: {
     models: {
       text_generation: 'gpt-4';
-      code_generation: 'codex';
+      code_generation: 'claude';
       analysis: 'custom_bert';
     };
     inference: {

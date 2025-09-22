@@ -1,7 +1,7 @@
 # CLAUDE.md - LEO Protocol Workflow Guide for AI Agents
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-09-19 3:44:12 PM
+**Last Generated**: 2025-09-22 8:14:13 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -563,6 +563,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=[your-anon-key]
 
 ---
 
-*Generated from Database: 2025-09-19*
+*Generated from Database: 2025-09-22*
 *Protocol Version: vv4.2.0_story_gates*
 *Database-First Architecture: ACTIVE*

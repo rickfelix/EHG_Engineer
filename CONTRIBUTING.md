@@ -19,6 +19,18 @@ Welcome to the EHG Engineering project! This guide will help you set up your dev
 - Git 2.30+
 - Optional: Docker for local database
 
+## Database-First Workflow
+
+1. Author migrations in `db/migrations/eng/` (governance) or `db/migrations/vh/` (venture) using timestamped, reversible files.
+2. Update or add corresponding view/policy files under `db/views/**` and `db/policies/**` in the same commit.
+3. Document schema contracts in `docs/EHG_Engineering/data-contracts` or `docs/EHG/data-contracts`.
+4. File an audit entry under `ops/audit/` and update `CHANGELOG.md` referencing migration IDs.
+
+**Two-App Boundary**
+- `eng_*` schema objects belong to EHG_Engineering (governance).
+- `vh_*` schema objects belong to the venture app.
+- Venture code may only read governance data via `vh_ingest.eng_*` or `v_eng_*` views.
+- Direct writes to governance tables from the venture app are prohibited; route through governance APIs.
 ## Development Setup
 
 ### 1. Clone and Install

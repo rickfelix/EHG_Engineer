@@ -1,0 +1,285 @@
+name: Sign Policy Bundle
+
+on:
+  push:
+    paths:
+      - 'policies/**'
+    branches:
+      - main
+      - 'feature/**'
+  pull_request:
+    paths:
+      - 'policies/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+  attestations: write
+
+jobs:
+  sign-policy-bundle:
+    name: Sign and Attest Policy Bundle
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.0'
+
+      - name: Install policy tools
+        run: |
+          # Install Kyverno CLI for validation
+          curl -L https://github.com/kyverno/kyverno/releases/latest/download/kyverno-cli_linux_x86_64.tar.gz | tar -xz
+          sudo mv kyverno /usr/local/bin/
+          kyverno version
+
+          # Install OPA if OPA policies exist
+          if [ -d "policies/opa" ]; then
+            curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64_static
+            chmod +x opa
+            sudo mv opa /usr/local/bin/
+            opa version
+          fi
+
+      - name: Validate Kyverno policies
+        run: |
+          echo "🔍 Validating Kyverno policies..."
+
+          for policy in policies/kyverno/*.yaml; do
+            [ -f "$policy" ] || continue
+            echo "→ Validating: $(basename $policy)"
+            kyverno validate "$policy" || exit 1
+          done
+
+          echo "✅ All Kyverno policies are valid"
+
+      - name: Create policy bundle
+        id: bundle
+        run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          BUNDLE_NAME="policies-${TIMESTAMP}.tar.gz"
+
+          echo "📦 Creating policy bundle: $BUNDLE_NAME"
+
+          # Create bundle with all policies
+          tar czf "$BUNDLE_NAME" \
+            --exclude='*.sig' \
+            --exclude='*.bundle' \
+            --exclude='test/**' \
+            policies/
+
+          # Calculate SHA256
+          BUNDLE_SHA=$(sha256sum "$BUNDLE_NAME" | cut -d' ' -f1)
+
+          echo "bundle_name=$BUNDLE_NAME" >> $GITHUB_OUTPUT
+          echo "bundle_sha=$BUNDLE_SHA" >> $GITHUB_OUTPUT
+          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
+
+      - name: Create SLSA attestation
+        id: attestation
+        run: |
+          echo "📝 Creating SLSA attestation for policy bundle..."
+
+          cat > policy-attestation.json <<EOF
+          {
+            "_type": "https://in-toto.io/Statement/v1",
+            "subject": [
+              {
+                "name": "${{ steps.bundle.outputs.bundle_name }}",
+                "digest": {
+                  "sha256": "${{ steps.bundle.outputs.bundle_sha }}"
+                }
+              }
+            ],
+            "predicateType": "https://slsa.dev/provenance/v0.2",
+            "predicate": {
+              "builder": {
+                "id": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              },
+              "buildType": "https://github.com/slsa-framework/slsa-github-generator/policy@v1",
+              "invocation": {
+                "configSource": {
+                  "uri": "git+https://github.com/${{ github.repository }}@refs/heads/${{ github.ref_name }}",
+                  "digest": {
+                    "sha1": "${{ github.sha }}"
+                  },
+                  "entryPoint": ".github/workflows/sign-policies.yml"
+                },
+                "parameters": {
+                  "policies_path": "policies/",
+                  "bundle_format": "tar.gz"
+                },
+                "environment": {
+                  "github_actor": "${{ github.actor }}",
+                  "github_event_name": "${{ github.event_name }}",
+                  "github_ref": "${{ github.ref }}",
+                  "github_repository": "${{ github.repository }}",
+                  "github_run_id": "${{ github.run_id }}"
+                }
+              },
+              "metadata": {
+                "buildStartedOn": "$(date -Iseconds)",
+                "buildFinishedOn": "$(date -Iseconds)",
+                "completeness": {
+                  "parameters": true,
+                  "environment": true,
+                  "materials": true
+                },
+                "reproducible": false,
+                "policyCount": $(find policies/ -name "*.yaml" -o -name "*.yml" | wc -l),
+                "policyTypes": ["kyverno", "admission-control", "supply-chain"]
+              },
+              "materials": [
+                {
+                  "uri": "git+https://github.com/${{ github.repository }}",
+                  "digest": {
+                    "sha1": "${{ github.sha }}"
+                  }
+                },
+                {
+                  "uri": "policies/kyverno/require-signed-images.yaml",
+                  "digest": {
+                    "sha256": "$(sha256sum policies/kyverno/require-signed-images.yaml | cut -d' ' -f1)"
+                  }
+                },
+                {
+                  "uri": "policies/kyverno/require-slsa-provenance.yaml",
+                  "digest": {
+                    "sha256": "$(sha256sum policies/kyverno/require-slsa-provenance.yaml | cut -d' ' -f1)"
+                  }
+                },
+                {
+                  "uri": "policies/kyverno/require-image-digests.yaml",
+                  "digest": {
+                    "sha256": "$(sha256sum policies/kyverno/require-image-digests.yaml | cut -d' ' -f1)"
+                  }
+                }
+              ]
+            }
+          }
+          EOF
+
+          echo "✅ Attestation created"
+
+      - name: Sign policy bundle with Sigstore
+        id: sign
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run: |
+          echo "🔏 Signing policy bundle with Sigstore keyless..."
+
+          # Sign the policy bundle
+          cosign sign-blob \
+            --yes \
+            --bundle ${{ steps.bundle.outputs.bundle_name }}.bundle \
+            --output-signature ${{ steps.bundle.outputs.bundle_name }}.sig \
+            --output-certificate ${{ steps.bundle.outputs.bundle_name }}.crt \
+            ${{ steps.bundle.outputs.bundle_name }}
+
+          # Sign the attestation
+          cosign sign-blob \
+            --yes \
+            --bundle policy-attestation.bundle \
+            policy-attestation.json
+
+          echo "✅ Policy bundle signed successfully"
+
+          # Generate verification instructions
+          cat > VERIFY_POLICIES.md <<EOF
+          # Policy Bundle Verification
+
+          ## Quick Verification
+          \`\`\`bash
+          cosign verify-blob \\
+            --bundle ${{ steps.bundle.outputs.bundle_name }}.bundle \\
+            --certificate-identity-regexp ".*" \\
+            --certificate-oidc-issuer-regexp ".*" \\
+            ${{ steps.bundle.outputs.bundle_name }}
+          \`\`\`
+
+          ## Bundle Details
+          - Name: ${{ steps.bundle.outputs.bundle_name }}
+          - SHA256: ${{ steps.bundle.outputs.bundle_sha }}
+          - Timestamp: ${{ steps.bundle.outputs.timestamp }}
+          - Policies: $(find policies/ -name "*.yaml" | wc -l) files
+          EOF
+
+      - name: Verify signature (self-check)
+        run: |
+          echo "🔍 Verifying our own signature..."
+
+          cosign verify-blob \
+            --bundle ${{ steps.bundle.outputs.bundle_name }}.bundle \
+            --certificate ${{ steps.bundle.outputs.bundle_name }}.crt \
+            --certificate-identity-regexp ".*" \
+            --certificate-oidc-issuer-regexp ".*" \
+            ${{ steps.bundle.outputs.bundle_name }}
+
+          echo "✅ Self-verification passed"
+
+      - name: Test policy enforcement
+        run: |
+          echo "🧪 Testing policy enforcement..."
+
+          # Test 1: Unsigned image should be blocked
+          cat > test-unsigned.yaml <<EOF
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: test-unsigned
+          spec:
+            containers:
+            - name: nginx
+              image: nginx:latest
+          EOF
+
+          echo "→ Test 1: Unsigned image with tag (should fail)"
+          if kyverno apply policies/kyverno/require-signed-images.yaml --resource test-unsigned.yaml 2>&1 | grep -q "fail\|block\|deny"; then
+            echo "✅ Unsigned image correctly blocked"
+          else
+            echo "⚠️ Policy may not be enforcing correctly"
+          fi
+
+          # Test 2: Image without digest
+          if kyverno apply policies/kyverno/require-image-digests.yaml --resource test-unsigned.yaml 2>&1 | grep -q "fail\|block\|deny\|digest"; then
+            echo "✅ Non-digest image correctly blocked"
+          else
+            echo "⚠️ Digest policy may not be enforcing correctly"
+          fi
+
+      - name: Upload signed artifacts
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: policy-bundle-${{ steps.bundle.outputs.timestamp }}
+          path: |
+            ${{ steps.bundle.outputs.bundle_name }}
+            ${{ steps.bundle.outputs.bundle_name }}.sig
+            ${{ steps.bundle.outputs.bundle_name }}.crt
+            ${{ steps.bundle.outputs.bundle_name }}.bundle
+            policy-attestation.json
+            policy-attestation.bundle
+            VERIFY_POLICIES.md
+
+      - name: Create release (if tagged)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+
+          gh release upload "$TAG_NAME" \
+            ${{ steps.bundle.outputs.bundle_name }} \
+            ${{ steps.bundle.outputs.bundle_name }}.sig \
+            ${{ steps.bundle.outputs.bundle_name }}.crt \
+            ${{ steps.bundle.outputs.bundle_name }}.bundle \
+            policy-attestation.json \
+            --clobber

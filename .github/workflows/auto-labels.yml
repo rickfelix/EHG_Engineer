@@ -70,99 +70,84 @@ jobs:
           NEW_LABEL=""
           REMOVE_LABELS=""
 
-          # Check if this is a Codex staging branch
-          if [[ "$PR_BRANCH" == staging/codex-* ]]; then
-            echo "Detected Codex staging branch"
-            NEW_LABEL="codex-building"
-            REMOVE_LABELS="claude-enforcing,gates-passing,ready-to-merge"
-
-            # Check for [CODEX-READY] marker in recent commits
-            if gh pr view "$PR_NUMBER" --json commits --jq '.commits[-1].commit.message' | grep -q '\[CODEX-READY\]'; then
-              echo "Found [CODEX-READY] marker"
-              NEW_LABEL="claude-enforcing"
-              REMOVE_LABELS="codex-building,gates-passing,ready-to-merge"
-            fi
-
-          # Check if this is a Claude feature branch
-          elif [[ "$PR_BRANCH" == feature/* ]]; then
-            echo "Detected Claude feature branch"
+          # Check if this is a feature branch (unified Claude workflow)
+          if [[ "$PR_BRANCH" == feature/* ]]; then
+            echo "Detected feature branch"
 
             # Check for [CLAUDE-APPLIED] marker
             if gh pr view "$PR_NUMBER" --json commits --jq '.commits[-1].commit.message' | grep -q '\[CLAUDE-APPLIED\]'; then
               echo "Found [CLAUDE-APPLIED] marker"
               NEW_LABEL="claude-enforcing"
-              REMOVE_LABELS="codex-building"
 
               # Check if gates are running or completed
               if [ "${{ github.event_name }}" = "workflow_run" ]; then
                 WORKFLOW_NAME="${{ github.event.workflow_run.name }}"
                 WORKFLOW_CONCLUSION="${{ github.event.workflow_run.conclusion }}"
 
-                if [[ "$WORKFLOW_NAME" == "LEO Gate Validation" ]] || \
-                   [[ "$WORKFLOW_NAME" == "Story Release Gate Check" ]] || \
-                   [[ "$WORKFLOW_NAME" == "SLSA Verification" ]] || \
-                   [[ "$WORKFLOW_NAME" == "Policy Verification" ]]; then
+                echo "Workflow: $WORKFLOW_NAME, Conclusion: $WORKFLOW_CONCLUSION"
 
-                  if [ "$WORKFLOW_CONCLUSION" = "success" ]; then
-                    # Check if ALL required workflows have passed
-                    ALL_PASSED=true
+                if [ "$WORKFLOW_CONCLUSION" = "success" ]; then
+                  # Check if all required checks have passed
+                  echo "Checking gate status..."
 
-                    # Check LEO Gate Validation
-                    LEO_STATUS=$(gh api "/repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" \
-                      --jq '.check_runs[] | select(.name | contains("Run Gate 3")) | .conclusion' || echo "")
-                    if [ "$LEO_STATUS" != "success" ]; then
-                      ALL_PASSED=false
+                  # Get all check runs for the latest commit
+                  LATEST_COMMIT=$(gh pr view "$PR_NUMBER" --json commits --jq '.commits[-1].oid')
+                  CHECK_SUITES=$(gh api "/repos/${{ github.repository }}/commits/$LATEST_COMMIT/check-suites" --jq '.check_suites')
+
+                  # Count successful vs total check suites
+                  TOTAL_CHECKS=$(echo "$CHECK_SUITES" | jq length)
+                  SUCCESS_CHECKS=$(echo "$CHECK_SUITES" | jq '[.[] | select(.conclusion == "success")] | length')
+
+                  echo "Checks: $SUCCESS_CHECKS/$TOTAL_CHECKS successful"
+
+                  # Check for gate-related workflows specifically
+                  GATE_WORKFLOWS=("LEO Gate Validation" "Story Release Gate Check" "SLSA Verification" "Policy Verification")
+                  ALL_GATES_PASSED=true
+
+                  for workflow in "${GATE_WORKFLOWS[@]}"; do
+                    GATE_STATUS=$(echo "$CHECK_SUITES" | jq -r --arg workflow "$workflow" '.[] | select(.app.slug == "github-actions" and (.check_runs[0].details_url // "") | contains($workflow)) | .conclusion // "pending"')
+
+                    if [ "$GATE_STATUS" != "success" ]; then
+                      echo "Gate '$workflow' status: $GATE_STATUS"
+                      ALL_GATES_PASSED=false
                     fi
+                  done
 
-                    # Check Story Gate
-                    STORY_STATUS=$(gh api "/repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" \
-                      --jq '.check_runs[] | select(.name | contains("Check Story Release Gate")) | .conclusion' || echo "")
-                    if [ "$STORY_STATUS" != "success" ] && [ "$STORY_STATUS" != "skipped" ]; then
-                      ALL_PASSED=false
-                    fi
-
-                    # Check SLSA Verification
-                    SLSA_STATUS=$(gh api "/repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" \
-                      --jq '.check_runs[] | select(.name | contains("Verify SLSA Provenance")) | .conclusion' || echo "")
-                    if [ "$SLSA_STATUS" != "success" ] && [ "$SLSA_STATUS" != "skipped" ]; then
-                      ALL_PASSED=false
-                    fi
-
-                    # Check Policy Verification
-                    POLICY_STATUS=$(gh api "/repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" \
-                      --jq '.check_runs[] | select(.name | contains("Validate Policy Bundle")) | .conclusion' || echo "")
-                    if [ "$POLICY_STATUS" != "success" ] && [ "$POLICY_STATUS" != "skipped" ]; then
-                      ALL_PASSED=false
-                    fi
-
-                    if [ "$ALL_PASSED" = "true" ]; then
-                      echo "All required checks passed"
-                      NEW_LABEL="ready-to-merge"
-                      REMOVE_LABELS="codex-building,claude-enforcing,gates-passing"
-                    else
-                      echo "Some checks still pending or failed"
-                      NEW_LABEL="gates-passing"
-                      REMOVE_LABELS="codex-building,ready-to-merge"
-                    fi
-                  elif [ "$WORKFLOW_CONCLUSION" = "failure" ]; then
-                    echo "Workflow failed, staying in claude-enforcing"
-                    NEW_LABEL="claude-enforcing"
-                    REMOVE_LABELS="gates-passing,ready-to-merge"
+                  if [ "$ALL_GATES_PASSED" = true ] && [ "$SUCCESS_CHECKS" -eq "$TOTAL_CHECKS" ] && [ "$TOTAL_CHECKS" -gt 0 ]; then
+                    echo "All required checks passed"
+                    NEW_LABEL="ready-to-merge"
+                    REMOVE_LABELS="claude-enforcing,gates-passing"
+                  else
+                    echo "Some checks still pending or failed"
+                    NEW_LABEL="gates-passing"
+                    REMOVE_LABELS="ready-to-merge"
                   fi
+                elif [ "$WORKFLOW_CONCLUSION" = "failure" ]; then
+                  echo "Workflow failed, staying in claude-enforcing"
+                  NEW_LABEL="claude-enforcing"
+                  REMOVE_LABELS="gates-passing,ready-to-merge"
                 fi
+              else
+                # No workflow run event, default to claude-enforcing
+                NEW_LABEL="claude-enforcing"
+                REMOVE_LABELS="gates-passing,ready-to-merge"
               fi
             else
               # Feature branch without [CLAUDE-APPLIED] marker
               NEW_LABEL="claude-enforcing"
-              REMOVE_LABELS="codex-building,gates-passing,ready-to-merge"
+              REMOVE_LABELS="gates-passing,ready-to-merge"
             fi
+          else
+            echo "Branch '$PR_BRANCH' doesn't match feature/* pattern"
+            # Keep existing labels for non-feature branches
+            exit 0
           fi
 
           echo "new_label=$NEW_LABEL" >> $GITHUB_OUTPUT
           echo "remove_labels=$REMOVE_LABELS" >> $GITHUB_OUTPUT
 
-      - name: Apply labels
-        if: steps.pr_context.outputs.has_pr == 'true' && steps.detect_stage.outputs.new_label != ''
+      - name: Update labels
+        if: steps.detect_stage.outputs.new_label != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -170,25 +155,23 @@ jobs:
           NEW_LABEL="${{ steps.detect_stage.outputs.new_label }}"
           REMOVE_LABELS="${{ steps.detect_stage.outputs.remove_labels }}"
 
-          echo "📏 Updating labels for PR #$PR_NUMBER"
-          echo "→ Adding: $NEW_LABEL"
-          echo "→ Removing: $REMOVE_LABELS"
+          echo "Updating PR #$PR_NUMBER with label '$NEW_LABEL'"
 
           # Remove old labels
           if [ -n "$REMOVE_LABELS" ]; then
-            IFS=',' read -ra LABELS <<< "$REMOVE_LABELS"
-            for label in "${LABELS[@]}"; do
-              gh pr edit "$PR_NUMBER" --remove-label "$label" 2>/dev/null || true
+            IFS=',' read -ra LABELS_TO_REMOVE <<< "$REMOVE_LABELS"
+            for label in "${LABELS_TO_REMOVE[@]}"; do
+              echo "Removing label: $label"
+              gh pr edit "$PR_NUMBER" --remove-label "$label" || true
             done
           fi
 
           # Add new label
+          echo "Adding label: $NEW_LABEL"
           gh pr edit "$PR_NUMBER" --add-label "$NEW_LABEL"
 
-          echo "✅ Labels updated successfully"
-
-      - name: Add comment for state transitions
-        if: steps.pr_context.outputs.has_pr == 'true' && steps.detect_stage.outputs.new_label != ''
+      - name: Add status comment
+        if: steps.detect_stage.outputs.new_label != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -197,23 +180,26 @@ jobs:
 
           # Create appropriate comment based on new state
           case "$NEW_LABEL" in
-            "codex-building")
-              COMMENT="🔨 **Codex Building**: Generating implementation diffs and tests..."
-              ;;
             "claude-enforcing")
-              COMMENT="🔍 **Claude Enforcing**: Applying changes and running verification gates..."
+              COMMENT="🔨 **Claude Enforcing**: Validating implementation and running tests..."
               ;;
             "gates-passing")
-              COMMENT="⏳ **Gates Running**: Security and compliance checks in progress..."
+              COMMENT="🚪 **Gates Passing**: LEO Protocol gates are validating the changes..."
               ;;
             "ready-to-merge")
-              COMMENT="✅ **Ready to Merge**: All gates passed! PLAN Supervisor confidence ≥85%"
+              COMMENT="✅ **Ready to Merge**: All gates passed! This PR is ready for merge."
               ;;
             *)
-              COMMENT=""
+              COMMENT="📋 **Status Updated**: PR labeled as '$NEW_LABEL'"
               ;;
           esac
 
-          if [ -n "$COMMENT" ]; then
+          # Check if we already posted a similar comment recently
+          RECENT_COMMENTS=$(gh pr view "$PR_NUMBER" --json comments --jq '.comments[-3:] | .[] | select(.author.login == "github-actions[bot]") | .body' || echo "")
+
+          if ! echo "$RECENT_COMMENTS" | grep -q "$(echo "$COMMENT" | cut -d':' -f1)"; then
+            echo "Adding status comment..."
             gh pr comment "$PR_NUMBER" --body "$COMMENT"
+          else
+            echo "Similar comment already exists, skipping"
           fi

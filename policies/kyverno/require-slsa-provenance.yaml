@@ -1,0 +1,108 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-slsa-provenance
+  annotations:
+    policies.kyverno.io/title: Require SLSA Provenance
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
+    policies.kyverno.io/minversion: 1.9.0
+    policies.kyverno.io/description: >-
+      All container images must have SLSA provenance attestations that
+      meet Level 3 requirements. This ensures non-falsifiable provenance
+      about how the software was built, including the builder identity,
+      source repository, and build parameters. This policy is critical
+      for achieving SLSA Level 3 compliance.
+spec:
+  validationFailureAction: enforce
+  background: false
+  webhookTimeoutSeconds: 30
+  failurePolicy: Fail
+  rules:
+    - name: verify-slsa-provenance
+      match:
+        any:
+        - resources:
+            kinds:
+            - Pod
+            - Deployment
+            - StatefulSet
+            - DaemonSet
+      verifyImages:
+      - imageReferences:
+        - "*"
+        attestations:
+        - predicateType: https://slsa.dev/provenance/v0.2
+          type: https://in-toto.io/Statement/v1
+          conditions:
+          - all:
+            # Verify builder identity (GitHub Actions)
+            - key: "{{ predicate.builder.id }}"
+              operator: Contains
+              value: "github.com"
+            # Verify invocation was from a GitHub repository
+            - key: "{{ predicate.invocation.configSource.uri }}"
+              operator: Contains
+              value: "git+"
+            # Verify materials include source repository
+            - key: "{{ predicate.materials[?uri].uri }}"
+              operator: AnyIn
+              value: ["git+https://github.com/*/*"]
+            # Verify build metadata completeness
+            - key: "{{ predicate.metadata.completeness.parameters }}"
+              operator: Equals
+              value: true
+            # Verify build started timestamp exists
+            - key: "{{ predicate.metadata.buildStartedOn }}"
+              operator: NotEquals
+              value: ""
+
+    - name: verify-provenance-freshness
+      match:
+        any:
+        - resources:
+            kinds:
+            - Pod
+      validate:
+        message: "Container image provenance must be less than 90 days old"
+        deny:
+          conditions:
+            any:
+            - key: "{{ request.object.spec.containers[?name].image }}"
+              operator: AnyIn
+              value: ["*"]
+      verifyImages:
+      - imageReferences:
+        - "*"
+        attestations:
+        - predicateType: https://slsa.dev/provenance/v0.2
+          conditions:
+          - all:
+            # Ensure provenance is not older than 90 days
+            - key: "{{ time_since('', '{{ predicate.metadata.buildFinishedOn }}') }}"
+              operator: LessThanOrEquals
+              value: "90d"
+
+    - name: verify-reproducible-builds
+      match:
+        any:
+        - resources:
+            kinds:
+            - Deployment
+            - StatefulSet
+      verifyImages:
+      - imageReferences:
+        - "*"
+        attestations:
+        - predicateType: https://slsa.dev/provenance/v0.2
+          conditions:
+          - any:
+            # Either marked as reproducible
+            - key: "{{ predicate.metadata.reproducible }}"
+              operator: Equals
+              value: true
+            # Or has hermetic build environment
+            - key: "{{ predicate.buildType }}"
+              operator: Contains
+              value: "hermetic"

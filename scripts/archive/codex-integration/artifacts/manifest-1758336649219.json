@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "timestamp": "2025-09-20T02:50:49.219Z",
+  "generator": "codex",
+  "task": "Generate a TypeScript interface for a User object with id (number), name (string), email (string), and createdAt (Date)",
+  "artifacts": [
+    {
+      "name": "changes-1758336649219.patch",
+      "type": "patch",
+      "sha256": "b61d2594a7af28ac5d3c9b5169456b9600889b46197a68a1aeef7643546e928f"
+    },
+    {
+      "name": "sbom-1758336649219.cdx.json",
+      "type": "sbom",
+      "sha256": "76f0df2128c735c0ba15b6919c2ca1bd4cbf6f18ec7424bab29f0f8c63a7b2fe"
+    },
+    {
+      "name": "attestation-1758336649219.intoto",
+      "type": "attestation",
+      "sha256": "c60ce8fccd1f799dea3a0c4ad1d87d4a9bc3d9e80f4c920c6d53e0aa1ca5c5f0"
+    }
+  ]
+}

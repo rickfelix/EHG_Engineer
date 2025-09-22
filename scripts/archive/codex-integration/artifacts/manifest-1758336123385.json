@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "timestamp": "2025-09-20T02:42:03.397Z",
+  "generator": "codex",
+  "task": "Generate a simple hello world function",
+  "artifacts": [
+    {
+      "name": "changes-1758336123385.patch",
+      "type": "patch",
+      "sha256": "b61d2594a7af28ac5d3c9b5169456b9600889b46197a68a1aeef7643546e928f"
+    },
+    {
+      "name": "sbom-1758336123385.cdx.json",
+      "type": "sbom",
+      "sha256": "5d320a816d7a7026bed2295044372e81c56fe48456ce3f2dddb3ab6ee9cda4ce"
+    },
+    {
+      "name": "attestation-1758336123385.intoto",
+      "type": "attestation",
+      "sha256": "50a68d36f53bf1391faab171e383b44fc51e9628f84c6bfb7c3ff72e041fc26c"
+    }
+  ]
+}

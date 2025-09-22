@@ -1,0 +1,31 @@
+name: Boundary Lint
+
+on:
+  pull_request:
+    paths:
+      - 'applications/**'
+      - 'apps/**'
+      - 'db/**'
+      - 'ops/**'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for governance table writes from venture app
+        run: |
+          if grep -R "strategic_directives_v2" -n applications/APP001 apps/ingest | grep -v "v_eng_"; then
+            echo 'Direct strategic_directives_v2 reference detected in venture scope';
+            exit 1;
+          fi
+          if grep -R "product_requirements_v2" -n applications/APP001 apps/ingest | grep -v "v_eng_"; then
+            echo 'Direct product_requirements_v2 reference detected in venture scope';
+            exit 1;
+          fi
+      - name: Ensure venture migrations stay in vh namespace
+        run: |
+          if grep -R "CREATE TABLE" db/migrations/vh | grep -v "vh_"; then
+            echo 'Venture migration defining non vh_ table';
+            exit 1;
+          fi

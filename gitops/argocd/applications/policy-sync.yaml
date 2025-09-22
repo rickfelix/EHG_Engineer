@@ -1,0 +1,155 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: policy-sync
+  namespace: argocd
+  labels:
+    workstream: ws3-gitops
+    lane: claude
+    security: policy-enforcement
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: security-alerts
+    notifications.argoproj.io/subscribe.on-health-degraded.slack: security-alerts
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: security-policies
+
+  source:
+    repoURL: https://github.com/ehg/ehg-engineer
+    targetRevision: main
+    path: policies/kyverno
+
+    # Kustomize configuration for environment-specific patches
+    kustomize:
+      namePrefix: ehg-
+      namespace: kyverno
+      commonLabels:
+        app.kubernetes.io/managed-by: argocd
+        security.ehg.io/policy-version: v1.0.0
+        security.ehg.io/slsa-level: "3"
+      commonAnnotations:
+        policies.kyverno.io/managed-by: gitops
+        security.ehg.io/signed: "true"
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+
+  syncPolicy:
+    automated:
+      # Auto-sync when drift detected
+      prune: false  # Don't auto-delete resources
+      selfHeal: true  # Auto-correct drift
+      allowEmpty: false
+
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+      - ApplyOutOfSyncOnly=true
+
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  revisionHistoryLimit: 10
+
+  # Health assessment for policies
+  health:
+    progressDeadlineSeconds: 600
+
+  ignoreDifferences:
+    # Ignore webhook configurations managed by Kyverno
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      jsonPointers:
+        - /webhooks/0/clientConfig/caBundle
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: security-policies
+  namespace: argocd
+spec:
+  description: Security policies for dual-lane workflow
+
+  sourceRepos:
+    - https://github.com/ehg/ehg-engineer
+
+  destinations:
+    - namespace: kyverno
+      server: https://kubernetes.default.svc
+    - namespace: kyverno-system
+      server: https://kubernetes.default.svc
+
+  clusterResourceWhitelist:
+    - group: kyverno.io
+      kind: ClusterPolicy
+    - group: kyverno.io
+      kind: Policy
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+
+  roles:
+    - name: security-admin
+      policies:
+        - p, proj:security-policies:security-admin, applications, *, security-policies/*, allow
+        - p, proj:security-policies:security-admin, repositories, *, *, allow
+      groups:
+        - security-team
+
+    - name: policy-viewer
+      policies:
+        - p, proj:security-policies:policy-viewer, applications, get, security-policies/*, allow
+      groups:
+        - developers
+
+  signatureKeys:
+    - keyID: ABCD1234
+      keyData: |
+        -----BEGIN PGP PUBLIC KEY BLOCK-----
+        # GPG public key for policy verification
+        -----END PGP PUBLIC KEY BLOCK-----
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+data:
+  service.slack: |
+    token: $slack-token
+  template.policy-sync-failed: |
+    message: |
+      🚨 Policy Sync Failed
+      Application: {{.app.metadata.name}}
+      Sync Status: {{.app.status.sync.status}}
+      Details: {{.app.status.conditions}}
+      Repository: {{.app.spec.source.repoURL}}
+
+  template.policy-drift-detected: |
+    message: |
+      ⚠️ Policy Drift Detected
+      Application: {{.app.metadata.name}}
+      Drift: {{.app.status.sync.status}}
+      Resources Out of Sync: {{len .app.status.resources}}
+      Action: Auto-remediation in progress
+
+  trigger.on-policy-violation: |
+    - when: app.status.sync.status == 'OutOfSync'
+      send: [policy-drift-detected]
+    - when: app.status.health.status == 'Degraded'
+      send: [policy-sync-failed]
