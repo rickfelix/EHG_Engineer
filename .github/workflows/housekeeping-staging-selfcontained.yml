@@ -239,6 +239,25 @@ jobs:
 
           echo "✅ Created 4 CSV gap report templates (empty in CI, would contain data in production)"
 
+      - name: Backlog integrity – summarize counts (read-only)
+        if: always()
+        run: |
+          set -e
+          count() { [ -f "$1" ] && echo $(( $(wc -l < "$1") - 1 )) || echo 0; }
+          SD=$(count ops/checks/out/gap_sd_metadata.csv)
+          PRD=$(count ops/checks/out/gap_prd_contract.csv)
+          BL=$(count ops/checks/out/gap_backlog_shape.csv)
+          TR=$(count ops/checks/out/gap_traceability.csv)
+
+          echo "### Backlog Integrity — Gap Counts" >> $GITHUB_STEP_SUMMARY
+          echo "- SD metadata gaps: ${SD}" >> $GITHUB_STEP_SUMMARY
+          echo "- PRD contract issues: ${PRD}" >> $GITHUB_STEP_SUMMARY
+          echo "- Backlog shape problems: ${BL}" >> $GITHUB_STEP_SUMMARY
+          echo "- Traceability gaps: ${TR}" >> $GITHUB_STEP_SUMMARY
+
+          # Brief audit note
+          echo "[$(date +'%Y-%m-%d %H:%M')] Backlog gaps: SD=$SD PRD=$PRD BL=$BL TR=$TR" >> ops/audit/2025-09-22.md || true
+
       - name: Upload backlog integrity artifacts
         uses: actions/upload-artifact@v4
         with:
