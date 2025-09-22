@@ -39,6 +39,20 @@ jobs:
           PGPASSWORD=codex_pw
           EOF
 
+          # Also export for direct use
+          export PGHOST=127.0.0.1
+          export PGPORT=5432
+          export PGDATABASE=ehg_stage
+          export PGUSER=codex_staging
+          export PGPASSWORD=codex_pw
+
+          # Add to GitHub env for all subsequent steps
+          echo "PGHOST=127.0.0.1" >> $GITHUB_ENV
+          echo "PGPORT=5432" >> $GITHUB_ENV
+          echo "PGDATABASE=ehg_stage" >> $GITHUB_ENV
+          echo "PGUSER=codex_staging" >> $GITHUB_ENV
+          echo "PGPASSWORD=codex_pw" >> $GITHUB_ENV
+
       - name: Wait for DB health
         run: |
           for i in {1..30}; do
