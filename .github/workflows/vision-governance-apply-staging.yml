@@ -1,0 +1,241 @@
+name: Vision Governance Apply (Staging)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '35 4 * * *'  # opt-in; will no-op unless guards set
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vision-apply-staging-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    if: ${{ vars.STAGING_WRITE_OK == '1' && vars.APPLY_VISION_GOV == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql & ripgrep
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client ripgrep
+
+      # --- PRE SNAPSHOT (read-only) ---
+      - name: Vision pre-snapshot — export CSVs (read-only)
+        env:
+          PGHOST: ${{ secrets.PGHOST_STAGING }}
+          PGPORT: ${{ secrets.PGPORT_STAGING }}
+          PGDATABASE: ${{ secrets.PGDATABASE_STAGING }}
+          PGUSER: ${{ secrets.PGUSER_STAGING }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
+          PGSSLMODE: require
+        run: |
+          mkdir -p ops/checks/out
+          psql -v ON_ERROR_STOP=1 -f ops/checks/vision_alignment_staging.sql
+          bash ops/checks/vision_code_scan.sh || true
+
+      - name: Vision pre-snapshot — build scorecard
+        run: |
+          python - <<'PY'
+          import csv, os, math, collections
+          OUT="ops/checks/out"; os.makedirs(OUT, exist_ok=True)
+          def load(n):
+            p=os.path.join(OUT,n);
+            return list(csv.DictReader(open(p, newline='', encoding='utf-8'))) if os.path.exists(p) else []
+          rd=load("vh_stage_readiness.csv"); gp=load("vh_stage_coverage_gaps.csv"); ng={r.get("venture_id") for r in load("vh_ventures_without_governance.csv")}
+          ac=load("vision_story_coverage.csv")
+          stages, passed, miss = collections.defaultdict(set), collections.defaultdict(int), collections.defaultdict(int)
+          for r in rd:
+            v, st = r.get("venture_id"), r.get("stage")
+            if not v or not st: continue
+            stages[v].add(st); gm=(r.get("gate_met") or "").lower() in ("t","true","1","yes")
+            if gm: passed[v]+=1
+          for r in gp:
+            v, st = r.get("venture_id"), r.get("stage")
+            if not v or not st: continue
+            if (r.get("missing_sd","").lower() in ("t","true","1","yes")) or (r.get("missing_prd","").lower() in ("t","true","1","yes")):
+              miss[v]+=1
+          acmap={}
+          for r in ac:
+            v=r.get("venture_id")
+            try: acv=float(r.get("ac_coverage_pct") or "")/100.0
+            except: acv=None
+            if v: acmap[v]=acv
+          def mean(xs):
+            xs=[x for x in xs if x is not None]
+            return sum(xs)/len(xs) if xs else None
+          rows=[]
+          for v in set(stages)|set(miss)|set(ng)|set(acmap):
+            total=len(stages.get(v,set()))
+            gate=(passed[v]/total) if total else None
+            cov=(1.0 - (miss[v]/total)) if total else None
+            acv=acmap.get(v)
+            score=mean([gate,cov,acv])
+            rows.append({"venture_id":v,"gate":gate,"cov":cov,"ac":acv,"score":score})
+          with open(os.path.join(OUT,"vision_scorecard_pre.csv"),"w",newline="",encoding="utf-8") as f:
+            wr=csv.DictWriter(f,fieldnames=["venture_id","gate","cov","ac","score"]); wr.writeheader()
+            for r in rows: wr.writerow({
+              "venture_id":r["venture_id"],
+              "gate": f"{r['gate']:.3f}" if r["gate"] is not None else "",
+              "cov":  f"{r['cov']:.3f}"  if r["cov"]  is not None else "",
+              "ac":   f"{r['ac']:.3f}"   if r["ac"]   is not None else "",
+              "score":f"{r['score']:.3f}"if r["score"] is not None else ""
+            })
+          PY
+
+      - name: Validate inbox files
+        run: |
+          ls -la ops/inbox || true
+          test -f ops/inbox/vision_sd_manifest.csv || echo "::warning ::SD manifest missing"
+          test -f ops/inbox/vision_prd_manifest.csv || echo "::warning ::PRD manifest missing"
+
+      - name: Run apply (guarded, transactional)
+        env:
+          PGHOST: ${{ secrets.PGHOST_STAGING }}
+          PGPORT: ${{ secrets.PGPORT_STAGING }}
+          PGDATABASE: ${{ secrets.PGDATABASE_STAGING }}
+          PGUSER: ${{ secrets.PGUSER_STAGING }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
+          PGSSLMODE: require
+        run: |
+          mkdir -p ops/checks/out
+          DRY="${{ vars.DRY_RUN || '1' }}"
+          echo "DRY_RUN=${DRY}"
+          psql -v ON_ERROR_STOP=1 -v DRY_RUN="${DRY}" -f ops/jobs/vision_apply_governance_staging.sql
+
+      # --- POST SNAPSHOT + DELTA (read-only) ---
+      - name: Vision post-snapshot — export & score (read-only)
+        if: always()
+        env:
+          PGHOST: ${{ secrets.PGHOST_STAGING }}
+          PGPORT: ${{ secrets.PGPORT_STAGING }}
+          PGDATABASE: ${{ secrets.PGDATABASE_STAGING }}
+          PGUSER: ${{ secrets.PGUSER_STAGING }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
+          PGSSLMODE: require
+        run: |
+          psql -v ON_ERROR_STOP=1 -f ops/checks/vision_alignment_staging.sql
+          python - <<'PY'
+          import csv, os, math, collections
+          OUT="ops/checks/out"
+          def load(n):
+            p=os.path.join(OUT,n);
+            return list(csv.DictReader(open(p, newline='', encoding='utf-8'))) if os.path.exists(p) else []
+          # rebuild current scorecard same way as pre
+          rd=load("vh_stage_readiness.csv"); gp=load("vh_stage_coverage_gaps.csv"); ng={r.get("venture_id") for r in load("vh_ventures_without_governance.csv")}
+          ac=load("vision_story_coverage.csv")
+          stages, passed, miss = collections.defaultdict(set), collections.defaultdict(int), collections.defaultdict(int)
+          for r in rd:
+            v, st = r.get("venture_id"), r.get("stage")
+            if not v or not st: continue
+            stages[v].add(st); gm=(r.get("gate_met") or "").lower() in ("t","true","1","yes")
+            if gm: passed[v]+=1
+          for r in gp:
+            v, st = r.get("venture_id"), r.get("stage")
+            if not v or not st: continue
+            if (r.get("missing_sd","").lower() in ("t","true","1","yes")) or (r.get("missing_prd","").lower() in ("t","true","1","yes")):
+              miss[v]+=1
+          acmap={}
+          for r in ac:
+            v=r.get("venture_id")
+            try: acv=float(r.get("ac_coverage_pct") or "")/100.0
+            except: acv=None
+            if v: acmap[v]=acv
+          def mean(xs):
+            xs=[x for x in xs if x is not None]
+            return sum(xs)/len(xs) if xs else None
+          rows=[]
+          for v in set(stages)|set(miss)|set(ng)|set(acmap):
+            total=len(stages.get(v,set()))
+            gate=(passed[v]/total) if total else None
+            cov=(1.0 - (miss[v]/total)) if total else None
+            acv=acmap.get(v)
+            score=mean([gate,cov,acv])
+            rows.append({"venture_id":v,"gate":gate,"cov":cov,"ac":acv,"score":score})
+          import math
+          def fmt(x):
+            return f"{x:.3f}" if (x is not None and not math.isnan(x)) else ""
+          with open(os.path.join(OUT,"vision_scorecard_post.csv"),"w",newline="",encoding="utf-8") as f:
+            wr=csv.DictWriter(f,fieldnames=["venture_id","gate","cov","ac","score"]); wr.writeheader()
+            for r in rows: wr.writerow({"venture_id":r["venture_id"],"gate":fmt(r["gate"]),"cov":fmt(r["cov"]),"ac":fmt(r["ac"]),"score":fmt(r["score"])})
+          PY
+
+      - name: Vision delta — summarize before/after
+        if: always()
+        run: |
+          python - <<'PY'
+          import csv, os, math
+          OUT="ops/checks/out"
+          pre= list(csv.DictReader(open(os.path.join(OUT,"vision_scorecard_pre.csv"), newline='', encoding='utf-8'))) if os.path.exists(os.path.join(OUT,"vision_scorecard_pre.csv")) else []
+          post=list(csv.DictReader(open(os.path.join(OUT,"vision_scorecard_post.csv"),newline='', encoding='utf-8'))) if os.path.exists(os.path.join(OUT,"vision_scorecard_post.csv")) else []
+          P={r["venture_id"]:r for r in pre if r.get("venture_id")}
+          rows=[]
+          def f(s):
+            try: return float(s)
+            except: return math.nan
+          for r in post:
+            v=r.get("venture_id");
+            pre_r=P.get(v, {})
+            dp=f(r.get("score","")) - f(pre_r.get("score",""))
+            dg=f(r.get("gate",""))  - f(pre_r.get("gate",""))
+            dc=f(r.get("cov",""))   - f(pre_r.get("cov",""))
+            da=f(r.get("ac",""))    - f(pre_r.get("ac",""))
+            rows.append({"venture_id":v,"score_delta":dp,"gate_delta":dg,"cov_delta":dc,"ac_delta":da})
+          rows.sort(key=lambda x: (-(x["score_delta"] if not math.isnan(x["score_delta"]) else -999)))
+          with open(os.path.join(OUT,"vision_delta.csv"),"w",newline="",encoding="utf-8") as f:
+            wr=csv.DictWriter(f, fieldnames=["venture_id","score_delta","gate_delta","cov_delta","ac_delta"]); wr.writeheader()
+            for r in rows:
+              wr.writerow({k:(f"{v:.3f}" if isinstance(v,float) and not math.isnan(v) else "") for k,v in r.items()})
+          summ=os.environ.get("GITHUB_STEP_SUMMARY")
+          if summ:
+            from itertools import islice
+            with open(summ,"a",encoding="utf-8") as s:
+              s.write("\n### Vision — Delta after apply\n")
+              top=list(islice(rows, 5))
+              if not top:
+                s.write("_No delta computed._\n")
+              else:
+                for r in top:
+                  s.write(f"- {r['venture_id'][:8]}: Δscore={r['score_delta']:.3f} (Δgate={r['gate_delta']:.3f}, Δcov={r['cov_delta']:.3f}, ΔAC={r['ac_delta']:.3f})\n")
+          PY
+
+      - name: Show apply summary
+        if: always()
+        run: |
+          file="ops/checks/out/vision_apply_results.csv"
+          echo "### Vision Apply — Results" >> $GITHUB_STEP_SUMMARY
+          if [ -f "$file" ]; then
+            CREATED=$(grep -c ',created,' "$file" || true)
+            EXISTS=$(grep -c ',exists,' "$file" || true)
+            WOULD=$(grep -c ',would_create,' "$file" || true)
+            ERR=$(grep -c ',error,' "$file" || true)
+            echo "- created: ${CREATED}" >> $GITHUB_STEP_SUMMARY
+            echo "- exists: ${EXISTS}" >> $GITHUB_STEP_SUMMARY
+            echo "- would_create (dry-run): ${WOULD}" >> $GITHUB_STEP_SUMMARY
+            echo "- errors: ${ERR}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "_No results produced._" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vision-apply-results-${{ github.run_id }}
+          path: ops/checks/out/vision_apply_results.csv
+          retention-days: 30
+
+      - name: Upload vision delta artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vision-apply-delta-${{ github.run_id }}
+          path: |
+            ops/checks/out/vision_scorecard_pre.csv
+            ops/checks/out/vision_scorecard_post.csv
+            ops/checks/out/vision_delta.csv
+          retention-days: 30

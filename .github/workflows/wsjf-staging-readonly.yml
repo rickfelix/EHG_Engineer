@@ -1,0 +1,50 @@
+name: WSJF Recommendations (Staging, Read-Only)
+
+on:
+  schedule:
+    - cron: '45 4 * * *'        # after other 4:00 jobs
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  wsjf:
+    if: ${{ vars.ENABLE_WSJF_CHECKS == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Generate WSJF recommendations (read-only)
+        env:
+          PGHOST: ${{ secrets.PGHOST_STAGING }}
+          PGPORT: ${{ secrets.PGPORT_STAGING }}
+          PGDATABASE: ${{ secrets.PGDATABASE_STAGING }}
+          PGUSER: ${{ secrets.PGUSER_STAGING }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
+          PGSSLMODE: require
+        run: |
+          mkdir -p ops/checks/out
+          psql -v ON_ERROR_STOP=1 \
+               -v W_BV="${{ vars.W_BV || '1.0' }}" \
+               -v W_TC="${{ vars.W_TC || '1.0' }}" \
+               -v W_RR="${{ vars.W_RR || '1.0' }}" \
+               -v W_JS="${{ vars.W_JS || '1.0' }}" \
+               -v MAX_MOVE="${{ vars.MAX_MOVE || '3' }}" \
+               -f ops/checks/wsjf_recommendations_staging.sql
+      - name: WSJF — top suggestions
+        run: |
+          f=ops/checks/out/wsjf_recommendations.csv
+          echo "### WSJF — Suggested execution_order adjustments" >> $GITHUB_STEP_SUMMARY
+          if [ -f "$f" ]; then
+            head -n 11 "$f" | tail -n +2 | awk -F, '{printf "- venture=%s sd=%s: %s → %s (WSJF=%.2f)\n",$1,$2,$3,$4,$5}' >> $GITHUB_STEP_SUMMARY || true
+          else
+            echo "_No file produced_" >> $GITHUB_STEP_SUMMARY
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wsjf-recommendations-${{ github.run_id }}
+          path: ops/checks/out/wsjf_recommendations.csv
+          retention-days: 30

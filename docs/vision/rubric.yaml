@@ -1,0 +1,111 @@
+# Vision Alignment Rubric (staging read-only)
+# Source: EHG Chairman vision (pillars & guardrails)
+# Generated from: # Vision The EHG Chairman (Only Hum.txt
+
+pillars:
+  quality:
+    quality_gate_min_pct: 85         # Gate pass rate target (from vision doc line 16)
+    backlog_accuracy_target_pct: 80  # % stories with AC + trace links
+    qa_gate_enforcement: true         # No EXEC without Gate 3 validation
+    truth_over_polish: true           # Evidence-based decisions only
+
+  efficiency:
+    rule_of_40_floor: 40             # Growth + margin heuristic (line 79)
+    burn_multiple_cap: 2.0           # Exception trigger threshold (line 39)
+    cac_payback_months_max: 12      # Max acceptable payback period
+    runway_months_min: 12            # Minimum cash runway requirement
+
+  automation:
+    automation_coverage_target_pct: 60  # % work executed by agents vs humans (line 72)
+    agent_alignment_target_pct: 80      # Outputs match strategic rubric (line 74)
+    agent_decision_quality_min: 85      # Min quality for autonomous decisions
+    human_intervention_max_pct: 20      # Max human override rate
+
+  governance:
+    evidence_chain_required: true       # DB-sourced, audit-ready (line 77)
+    sd_prd_required_per_stage: true     # SD/PRD presence at gated stages
+    decision_logging_mandatory: true    # All decisions require rationale + evidence
+    rubric_scoring_required: true       # Arguments must be scored objectively
+
+  growth:
+    arr_growth_yoy_min_pct: 100         # Minimum year-over-year growth
+    nrr_floor_pct: 100                  # Net Revenue Retention minimum (line 39)
+    grr_floor_pct: 90                   # Gross Revenue Retention minimum
+    pipeline_coverage_min: 3.0          # Pipeline to quota ratio
+
+thresholds:
+  critical:  # Immediate chairman attention required
+    quality_gate_pass_rate: 70          # Below this = critical failure
+    nrr_threshold: 90                    # Below this = retention crisis
+    burn_multiple_max: 3.0               # Above this = cash crisis
+    runway_months_critical: 6            # Below this = funding emergency
+
+  warning:   # Proactive intervention needed
+    quality_gate_pass_rate: 80          # Below target but not critical
+    automation_coverage: 50              # Below target, needs improvement
+    agent_alignment: 70                  # Degraded but functional
+    backlog_accuracy: 70                 # Quality concerns emerging
+
+metrics_notes:
+  - "DB-first only; if metric not present, mark 'unknown' (do not fail)."
+  - "Trace from SD -> PRD -> stories -> backlog -> stage readiness."
+  - "Two-app boundary enforced: EHG reads v_eng_* exports only."
+  - "All metrics must have test plans and hypotheses (line 167)."
+  - "Weekly exceptions-only reporting to chairman (line 139)."
+  - "Evidence chain must be provable from database (line 179)."
+
+decision_matrix:
+  # From vision document section 8, line 118-127
+  ai_inform_only:
+    - "Minor plan adjustments within guardrails"
+    - "Feature-level prioritization"
+    - "Comp plans and campaigns"
+    - "In-plan spend"
+    - "Agent updates and role configs"
+    - "Policy enforcement"
+
+  eva_mediated:
+    - "Re-weighting growth vs profit (Rule of 40 tuning)"
+    - "Enter/exit product lines per metric hypothesis"
+    - "Pricing/packaging changes"
+    - "Unbudgeted CAPEX over threshold"
+    - "Executive agent replacements"
+    - "Counsel/auditor selection"
+
+  chairman_approval:
+    - "Annual strategy & capital plan"
+    - "Venture create/kill decisions"
+    - "Major pivots or IP acquisitions"
+    - "New geo/segment commitments"
+    - "Budget, fundraising, debt, M&A"
+    - "Bylaws, litigation over threshold"
+
+operating_principles:
+  # From vision document section 11, line 163-169
+  - "Author constraints, not tasks."
+  - "Decide with numbers, not narratives."
+  - "Default to async; meet only to decide irreversible things."
+  - "Every yes has a metric. Every metric has a test."
+  - "Document once, automate forever."
+
+acceptance_criteria:
+  # From vision document section 12, line 172-179
+  dashboard:
+    - "Growth / Efficiency / Quality pillars online with alerting"
+    - "Live DB views with drill-through evidence"
+
+  decisions:
+    - "Clear approvals with rationale and minority reports"
+    - "Rubric-scored arguments, logged and reproducible"
+
+  automation:
+    - "Rule-of-40 guardrails with auto-reallocation active"
+    - "Funding flywheel: winners get capital within a week"
+
+  governance:
+    - "Product roadmap shows metric hypotheses and test plans"
+    - "Evidence chain provable from database"
+
+version: 1.0
+last_updated: 2025-09-22
+source_document: "# Vision The EHG Chairman (Only Hum.txt"

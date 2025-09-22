@@ -1,0 +1,74 @@
+name: WSJF Proposals Ingest (Staging)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '5 5 * * *'  # optional: after WSJF export
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    if: ${{ vars.ENABLE_WSJF_INGEST == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Generate fresh WSJF CSV (read-only)
+        env:
+          PGHOST: ${{ secrets.PGHOST_STAGING }}
+          PGPORT: ${{ secrets.PGPORT_STAGING }}
+          PGDATABASE: ${{ secrets.PGDATABASE_STAGING }}
+          PGUSER: ${{ secrets.PGUSER_STAGING }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
+          PGSSLMODE: require
+        run: |
+          mkdir -p ops/checks/out
+          psql -v ON_ERROR_STOP=1 \
+               -v W_BV="${{ vars.W_BV || '1.2' }}" \
+               -v W_TC="${{ vars.W_TC || '1.0' }}" \
+               -v W_RR="${{ vars.W_RR || '0.9' }}" \
+               -v W_JS="${{ vars.W_JS || '1.0' }}" \
+               -v MAX_MOVE="${{ vars.MAX_MOVE || '2' }}" \
+               -f ops/checks/wsjf_recommendations_staging.sql
+
+      - name: Ingest WSJF recommendations → proposals (DRY-RUN by default)
+        env:
+          PGHOST: ${{ secrets.PGHOST_STAGING }}
+          PGPORT: ${{ secrets.PGPORT_STAGING }}
+          PGDATABASE: ${{ secrets.PGDATABASE_STAGING }}
+          PGUSER: ${{ secrets.PGUSER_STAGING }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
+          PGSSLMODE: require
+        run: |
+          mkdir -p ops/checks/out
+          psql -v ON_ERROR_STOP=1 \
+               -v DRY_RUN="${{ vars.DRY_RUN || '1' }}" \
+               -v MAX_MOVE="${{ vars.MAX_MOVE || '2' }}" \
+               -v CSV_PATH="ops/checks/out/wsjf_recommendations.csv" \
+               -v PROPOSED_BY="wsjf" \
+               -f ops/jobs/wsjf_proposals_ingest_staging.sql
+
+      - name: Summary
+        run: |
+          echo "### WSJF Proposals Ingest" >> $GITHUB_STEP_SUMMARY
+          echo "- DRY_RUN: ${{ vars.DRY_RUN || '1' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- MAX_MOVE: ${{ vars.MAX_MOVE || '2' }}" >> $GITHUB_STEP_SUMMARY
+          if [ -f ops/checks/out/wsjf_ingest_results.csv ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Recent proposals (status / proposed_execution_order):" >> $GITHUB_STEP_SUMMARY
+            head -n 11 ops/checks/out/wsjf_ingest_results.csv | tail -n +2 | awk -F, '{printf "- %s / %s / %s\n",$1,$2,$3}' >> $GITHUB_STEP_SUMMARY || true
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wsjf-ingest-results-${{ github.run_id }}
+          path: ops/checks/out/wsjf_ingest_results.csv
+          retention-days: 30

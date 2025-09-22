@@ -1,0 +1,62 @@
+name: WSJF Bulk-Accept (Staging)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '10 5 * * *'   # after proposals-ingest (optional)
+
+permissions:
+  contents: read
+
+jobs:
+  bulk_accept:
+    # Guard writes to staging; explicit opt-in
+    if: ${{ vars.STAGING_WRITE_OK == '1' && vars.ENABLE_WSJF_BULK_ACCEPT == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Bulk-accept top proposals per venture (guarded; DRY-RUN by default)
+        env:
+          PGHOST: ${{ secrets.PGHOST_STAGING }}
+          PGPORT: ${{ secrets.PGPORT_STAGING }}
+          PGDATABASE: ${{ secrets.PGDATABASE_STAGING }}
+          PGUSER: ${{ secrets.PGUSER_STAGING }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
+          PGSSLMODE: require
+        run: |
+          mkdir -p ops/checks/out
+          psql -v ON_ERROR_STOP=1 \
+               -v DRY_RUN="${{ vars.DRY_RUN || '1' }}" \
+               -v MAX_MOVE="${{ vars.MAX_MOVE || '2' }}" \
+               -v PER_VENTURE_LIMIT="${{ vars.PER_VENTURE_LIMIT || '3' }}" \
+               -v MIN_SCORE="${{ vars.MIN_SCORE || '0' }}" \
+               -v PROPOSED_BY="wsjf" \
+               -f ops/jobs/wsjf_bulk_accept_staging.sql
+
+      - name: Summary
+        run: |
+          echo "### WSJF Bulk-Accept (Staging)" >> $GITHUB_STEP_SUMMARY
+          echo "- DRY_RUN: ${{ vars.DRY_RUN || '1' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- MAX_MOVE: ${{ vars.MAX_MOVE || '2' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- PER_VENTURE_LIMIT: ${{ vars.PER_VENTURE_LIMIT || '3' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- MIN_SCORE: ${{ vars.MIN_SCORE || '0' }}" >> $GITHUB_STEP_SUMMARY
+          if [ -f ops/checks/out/wsjf_bulk_accept_results.csv ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Accepted/pending overview (sample):" >> $GITHUB_STEP_SUMMARY
+            head -n 11 ops/checks/out/wsjf_bulk_accept_results.csv | tail -n +2 | awk -F, '{printf "- %s sd=%s %s→%s [%s]\n",$1,$2,$3,$4,$6}' >> $GITHUB_STEP_SUMMARY || true
+          else
+            echo "_No results file produced_" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wsjf-bulk-accept-results-${{ github.run_id }}
+          path: ops/checks/out/wsjf_bulk_accept_results.csv
+          retention-days: 30

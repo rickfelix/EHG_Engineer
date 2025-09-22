@@ -1,0 +1,125 @@
+name: WSJF Apply Accepted Proposals (Staging)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '20 5 * * *'  # optional: after ingest window
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    if: ${{ vars.STAGING_WRITE_OK == '1' && vars.APPLY_WSJF == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Apply accepted proposals → execution_order (guarded; DRY-RUN by default)
+        env:
+          PGHOST: ${{ secrets.PGHOST_STAGING }}
+          PGPORT: ${{ secrets.PGPORT_STAGING }}
+          PGDATABASE: ${{ secrets.PGDATABASE_STAGING }}
+          PGUSER: ${{ secrets.PGUSER_STAGING }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
+          PGSSLMODE: require
+        run: |
+          mkdir -p ops/checks/out
+          psql -v ON_ERROR_STOP=1 \
+               -v DRY_RUN="${{ vars.DRY_RUN || '1' }}" \
+               -v MAX_MOVE="${{ vars.MAX_MOVE || '2' }}" <<'SQL'
+          \set ON_ERROR_STOP on
+          \timing on
+          BEGIN;
+
+          -- Snapshot 'before' for delta
+          DROP TABLE IF EXISTS _before;
+          CREATE TEMP TABLE _before AS
+          SELECT id AS sd_id, execution_order FROM strategic_directives_v2;
+
+          -- Candidate set: accepted proposals, re-validate bounded movement
+          DROP TABLE IF EXISTS _accepted;
+          CREATE TEMP TABLE _accepted AS
+          SELECT p.sd_id,
+                 p.proposed_execution_order,
+                 s.execution_order AS current_execution_order
+          FROM eng_sequence_proposals p
+          JOIN strategic_directives_v2 s ON s.id = p.sd_id
+          WHERE p.status = 'accepted';
+
+          -- Enforce MAX_MOVE again (safety)
+          DROP TABLE IF EXISTS _bounded;
+          CREATE TEMP TABLE _bounded AS
+          SELECT a.*
+          FROM _accepted a
+          WHERE a.current_execution_order IS NULL
+             OR abs(a.proposed_execution_order - a.current_execution_order) <= :MAX_MOVE::int;
+
+          -- Apply updates
+          UPDATE strategic_directives_v2 s
+          SET execution_order = b.proposed_execution_order
+          FROM _bounded b
+          WHERE s.id = b.sd_id;
+
+          -- Mark applied proposals
+          UPDATE eng_sequence_proposals p
+          SET status = 'applied', violation = NULL, proposed_at = now()
+          FROM _bounded b
+          WHERE p.sd_id = b.sd_id
+            AND p.proposed_execution_order = b.proposed_execution_order
+            AND p.status = 'accepted';
+
+          -- Delta report
+          DROP TABLE IF EXISTS _after;
+          CREATE TEMP TABLE _after AS
+          SELECT id AS sd_id, execution_order FROM strategic_directives_v2;
+
+          \copy (
+            SELECT 'updated' AS kind, a.sd_id,
+                   b.execution_order AS before_order,
+                   a.execution_order AS after_order
+            FROM _after a
+            JOIN _before b USING (sd_id)
+            WHERE a.execution_order IS DISTINCT FROM b.execution_order
+            UNION ALL
+            SELECT 'skipped' AS kind, a.sd_id,
+                   a.current_execution_order AS before_order,
+                   a.proposed_execution_order AS after_order
+            FROM _accepted a
+            WHERE NOT EXISTS (
+              SELECT 1 FROM _bounded b WHERE b.sd_id = a.sd_id
+            )
+          ) TO 'ops/checks/out/wsjf_apply_results.csv' WITH CSV HEADER;
+
+          \echo DRY_RUN=:DRY_RUN  MAX_MOVE=:MAX_MOVE
+          \if :DRY_RUN = '1'
+            \echo "*** DRY RUN: rolling back apply"
+            ROLLBACK;
+          \else
+            \echo "*** COMMIT: apply executed"
+            COMMIT;
+          \endif
+          SQL
+
+      - name: Summary
+        run: |
+          echo "### WSJF Apply — Accepted Proposals" >> $GITHUB_STEP_SUMMARY
+          echo "- DRY_RUN: ${{ vars.DRY_RUN || '1' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- MAX_MOVE: ${{ vars.MAX_MOVE || '2' }}" >> $GITHUB_STEP_SUMMARY
+          if [ -f ops/checks/out/wsjf_apply_results.csv ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Results (sample):" >> $GITHUB_STEP_SUMMARY
+            head -n 11 ops/checks/out/wsjf_apply_results.csv | tail -n +2 | awk -F, '{printf "- %s sd=%s %s→%s\n",$1,$2,$3,$4}' >> $GITHUB_STEP_SUMMARY || true
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wsjf-apply-results-${{ github.run_id }}
+          path: ops/checks/out/wsjf_apply_results.csv
+          retention-days: 30

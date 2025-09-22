@@ -1,0 +1,194 @@
+name: Vision Stories Apply (Staging)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '40 4 * * *'  # opt-in; will no-op unless guards set
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vision-stories-apply-staging-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    if: ${{ vars.STAGING_WRITE_OK == '1' && vars.APPLY_VISION_STORIES == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql & ripgrep
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client ripgrep
+
+      # --- PRE SNAPSHOT (read-only) ---
+      - name: Vision pre-snapshot — export CSVs (read-only)
+        env:
+          PGHOST: ${{ secrets.PGHOST_STAGING }}
+          PGPORT: ${{ secrets.PGPORT_STAGING }}
+          PGDATABASE: ${{ secrets.PGDATABASE_STAGING }}
+          PGUSER: ${{ secrets.PGUSER_STAGING }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
+          PGSSLMODE: require
+        run: |
+          mkdir -p ops/checks/out
+          psql -v ON_ERROR_STOP=1 -f ops/checks/vision_alignment_staging.sql || true
+          bash ops/checks/vision_code_scan.sh || true
+
+      - name: Vision pre-snapshot — build AC coverage baseline
+        run: |
+          python - <<'PY'
+          import csv, os
+          OUT="ops/checks/out"; os.makedirs(OUT, exist_ok=True)
+          def load(n):
+            p=os.path.join(OUT,n);
+            return list(csv.DictReader(open(p, newline='', encoding='utf-8'))) if os.path.exists(p) else []
+
+          # Get current AC coverage
+          ac_data = load("vision_story_coverage.csv")
+          ac_by_v = {}
+          for r in ac_data:
+            v = r.get("venture_id")
+            try:
+              pct = float(r.get("ac_coverage_pct", "0"))
+            except:
+              pct = 0
+            if v: ac_by_v[v] = pct
+
+          # Save pre-snapshot
+          with open(os.path.join(OUT,"ac_coverage_pre.csv"),"w",newline="",encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=["venture_id","ac_coverage_pct"])
+            w.writeheader()
+            for v,pct in ac_by_v.items():
+              w.writerow({"venture_id":v, "ac_coverage_pct":f"{pct:.1f}"})
+          PY
+
+      - name: Validate inbox files
+        run: |
+          ls -la ops/inbox || true
+          test -f ops/inbox/vision_story_manifest.csv || echo "::warning ::Story manifest missing - download from vision workflow artifacts"
+
+      - name: Run story apply (guarded, transactional)
+        env:
+          PGHOST: ${{ secrets.PGHOST_STAGING }}
+          PGPORT: ${{ secrets.PGPORT_STAGING }}
+          PGDATABASE: ${{ secrets.PGDATABASE_STAGING }}
+          PGUSER: ${{ secrets.PGUSER_STAGING }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
+          PGSSLMODE: require
+        run: |
+          mkdir -p ops/checks/out
+          DRY="${{ vars.DRY_RUN || '1' }}"
+          echo "DRY_RUN=${DRY}"
+          if [ -f ops/inbox/vision_story_manifest.csv ]; then
+            psql -v ON_ERROR_STOP=1 -v DRY_RUN="${DRY}" -f ops/jobs/vision_apply_stories_staging.sql
+          else
+            echo "No story manifest found - skipping apply"
+            echo "entity,action,status,msg" > ops/checks/out/vision_story_apply_results.csv
+            echo "story,create,skipped,no manifest file" >> ops/checks/out/vision_story_apply_results.csv
+          fi
+
+      # --- POST SNAPSHOT + DELTA (read-only) ---
+      - name: Vision post-snapshot — export & calculate AC delta
+        if: always()
+        env:
+          PGHOST: ${{ secrets.PGHOST_STAGING }}
+          PGPORT: ${{ secrets.PGPORT_STAGING }}
+          PGDATABASE: ${{ secrets.PGDATABASE_STAGING }}
+          PGUSER: ${{ secrets.PGUSER_STAGING }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
+          PGSSLMODE: require
+        run: |
+          psql -v ON_ERROR_STOP=1 -f ops/checks/vision_alignment_staging.sql || true
+          python - <<'PY'
+          import csv, os, math
+          OUT="ops/checks/out"
+          def load(n):
+            p=os.path.join(OUT,n);
+            return list(csv.DictReader(open(p, newline='', encoding='utf-8'))) if os.path.exists(p) else []
+
+          # Load pre and post AC coverage
+          pre = {r["venture_id"]: float(r.get("ac_coverage_pct","0")) for r in load("ac_coverage_pre.csv")}
+          post_data = load("vision_story_coverage.csv")
+          post = {}
+          for r in post_data:
+            v = r.get("venture_id")
+            try:
+              pct = float(r.get("ac_coverage_pct", "0"))
+            except:
+              pct = 0
+            if v: post[v] = pct
+
+          # Calculate deltas
+          deltas = []
+          for v in set(pre) | set(post):
+            pre_val = pre.get(v, 0)
+            post_val = post.get(v, 0)
+            delta = post_val - pre_val
+            if abs(delta) > 0.01:  # Only record meaningful changes
+              deltas.append({"venture_id": v, "pre": pre_val, "post": post_val, "delta": delta})
+
+          deltas.sort(key=lambda x: -x["delta"])  # Biggest improvements first
+
+          # Write delta report
+          with open(os.path.join(OUT,"ac_coverage_delta.csv"),"w",newline="",encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=["venture_id","pre_coverage","post_coverage","delta"])
+            w.writeheader()
+            for d in deltas:
+              w.writerow({
+                "venture_id": d["venture_id"],
+                "pre_coverage": f"{d['pre']:.1f}",
+                "post_coverage": f"{d['post']:.1f}",
+                "delta": f"{d['delta']:+.1f}"
+              })
+
+          # Add to summary
+          summ = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summ:
+            with open(summ,"a",encoding="utf-8") as s:
+              s.write("\n### AC Coverage — Delta after story apply\n")
+              if not deltas:
+                s.write("_No AC coverage changes detected._\n")
+              else:
+                for d in deltas[:5]:  # Top 5
+                  s.write(f"- {d['venture_id'][:8]}: {d['pre']:.1f}% → {d['post']:.1f}% (Δ{d['delta']:+.1f}%)\n")
+          PY
+
+      - name: Show apply summary
+        if: always()
+        run: |
+          file="ops/checks/out/vision_story_apply_results.csv"
+          echo "### Vision Story Apply — Results" >> $GITHUB_STEP_SUMMARY
+          if [ -f "$file" ]; then
+            CREATED=$(grep -c ',created,' "$file" || true)
+            EXISTS=$(grep -c ',exists,' "$file" || true)
+            WOULD=$(grep -c ',would_create,' "$file" || true)
+            ERR=$(grep -c ',error,' "$file" || true)
+            echo "- Stories created: ${CREATED}" >> $GITHUB_STEP_SUMMARY
+            echo "- Already exist: ${EXISTS}" >> $GITHUB_STEP_SUMMARY
+            echo "- Would create (dry-run): ${WOULD}" >> $GITHUB_STEP_SUMMARY
+            echo "- Errors: ${ERR}" >> $GITHUB_STEP_SUMMARY
+
+            # Show target table info
+            if grep -q 'eng_user_stories' "$file"; then
+              echo "- Target table: eng_user_stories" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- Target table: sd_backlog_map (item_type='story')" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "_No results produced._" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vision-story-apply-results-${{ github.run_id }}
+          path: |
+            ops/checks/out/vision_story_apply_results.csv
+            ops/checks/out/ac_coverage_pre.csv
+            ops/checks/out/ac_coverage_delta.csv
+          retention-days: 30

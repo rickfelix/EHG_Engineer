@@ -1,0 +1,699 @@
+name: Vision Alignment - Staging Read-Only
+
+on:
+  schedule:
+    - cron: '20 4 * * *'  # Daily at 04:20 UTC (after other checks)
+  workflow_dispatch:
+    inputs:
+      debug:
+        description: 'Enable debug output'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: vision-alignment-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  vision-alignment-check:
+    name: Vision Alignment Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: ${{ vars.ENABLE_VISION_CHECKS == '1' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          echo "📦 Installing psql and ripgrep..."
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client ripgrep
+          echo "✅ Dependencies installed"
+
+      - name: Prepare environment
+        run: |
+          mkdir -p ops/checks/out
+          echo "PGHOST=${{ secrets.PGHOST_STAGING }}" >> $GITHUB_ENV
+          echo "PGPORT=${{ secrets.PGPORT_STAGING }}" >> $GITHUB_ENV
+          echo "PGDATABASE=${{ secrets.PGDATABASE_STAGING }}" >> $GITHUB_ENV
+          echo "PGUSER=${{ secrets.PGUSER_STAGING }}" >> $GITHUB_ENV
+          echo "PGPASSWORD=${{ secrets.PGPASSWORD_STAGING }}" >> $GITHUB_ENV
+          echo "PGSSLMODE=require" >> $GITHUB_ENV
+          echo "✅ Environment configured"
+
+      - name: Run vision alignment SQL checks (read-only)
+        env:
+          PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
+        run: |
+          echo "🔍 Running vision alignment database checks..."
+          psql -v ON_ERROR_STOP=1 -f ops/checks/vision_alignment_staging.sql 2>&1 | tee vision_sql.log || true
+
+          # Extract summary from SQL notices
+          if grep -q "Vision Alignment Summary:" vision_sql.log; then
+            grep -A 4 "Vision Alignment Summary:" vision_sql.log || true
+          fi
+
+          echo "✅ SQL checks complete"
+
+      - name: Run vision code scan
+        run: |
+          echo "🔍 Running code implementation scan..."
+          ./ops/checks/vision_code_scan.sh
+
+          # Load summary variables if available
+          if [ -f ops/checks/out/vision_code_scan_summary.txt ]; then
+            source ops/checks/out/vision_code_scan_summary.txt
+            echo "   Scan found $MARKER_COUNT markers in $UNIQUE_FILES files"
+          fi
+
+      - name: Build Vision Scorecard (read-only)
+        run: |
+          python - <<'PY'
+          import csv, os, math, collections
+          OUTDIR = "ops/checks/out"
+          os.makedirs(OUTDIR, exist_ok=True)
+          def load(path):
+            if not os.path.exists(path): return []
+            with open(path, newline='', encoding='utf-8') as f:
+              return list(csv.DictReader(f))
+
+          readiness = load(f"{OUTDIR}/vh_stage_readiness.csv")
+          gaps      = load(f"{OUTDIR}/vh_stage_coverage_gaps.csv")
+          no_gov    = {r.get("venture_id") for r in load(f"{OUTDIR}/vh_ventures_without_governance.csv")}
+          ac_rows   = load(f"{OUTDIR}/vision_story_coverage.csv")
+
+          stages_by_v = collections.defaultdict(set)
+          pass_by_v   = collections.defaultdict(int)
+          for r in readiness:
+            v, st = r.get("venture_id"), r.get("stage")
+            if not v or not st: continue
+            stages_by_v[v].add(st)
+            gm = (r.get("gate_met") or "").strip().lower()
+            if gm in ("t","true","1","yes"): pass_by_v[v] += 1
+
+          miss_by_v = collections.defaultdict(int)
+          for r in gaps:
+            v, st = r.get("venture_id"), r.get("stage")
+            if not v or not st: continue
+            msd = (r.get("missing_sd")  or "").strip().lower() in ("t","true","1","yes")
+            mprd= (r.get("missing_prd") or "").strip().lower() in ("t","true","1","yes")
+            if msd or mprd: miss_by_v[v] += 1
+
+          # NEW: AC coverage per venture
+          ac_cov_by_v = {}
+          for r in ac_rows:
+            v = r.get("venture_id")
+            try:
+              pct = float(r.get("ac_coverage_pct") or "")
+            except:
+              pct = None
+            if v: ac_cov_by_v[v] = None if pct is None else (pct/100.0)
+
+          QUALITY_GATE_MIN = 0.85
+          GOV_COVERAGE_MIN = 1.00
+
+          rows, venture_ids = [], set(stages_by_v)|set(miss_by_v)|set(no_gov)|set(ac_cov_by_v)
+          for v in sorted(venture_ids):
+            total_stages = len(stages_by_v.get(v, set()))
+            gates_passed = pass_by_v.get(v, 0)
+            gate_rate    = (gates_passed / total_stages) if total_stages else None
+
+            missing_stage_cnt = miss_by_v.get(v, 0)
+            gov_cov = (max(0.0, 1.0 - (missing_stage_cnt / total_stages))
+                       if total_stages else None)
+
+            ac_cov = ac_cov_by_v.get(v)  # 0.0..1.0 or None
+
+            parts = [x for x in (gate_rate, gov_cov, ac_cov) if x is not None]
+            score = sum(parts)/len(parts) if parts else None
+
+            def status(val, thr):
+              if val is None: return "unknown"
+              return "ok" if val >= thr else "gap"
+
+            rows.append({
+              "venture_id": v,
+              "stages_total": total_stages,
+              "gate_pass_rate": f"{gate_rate:.3f}" if gate_rate is not None else "",
+              "gov_coverage":   f"{gov_cov:.3f}"    if gov_cov   is not None else "",
+              "story_ac_cov":   f"{ac_cov:.3f}"     if ac_cov    is not None else "",
+              "quality_status": status(gate_rate, QUALITY_GATE_MIN),
+              "governance_status": status(gov_cov, GOV_COVERAGE_MIN),
+              "alignment_score": f"{score:.3f}" if score is not None else "",
+              "has_any_governance": "no" if v in no_gov else "yes"
+            })
+
+          outp = f"{OUTDIR}/vision_scorecard.csv"
+          with open(outp, "w", newline="", encoding="utf-8") as f:
+            hdr = ["venture_id","stages_total","gate_pass_rate","gov_coverage","story_ac_cov",
+                   "quality_status","governance_status","alignment_score","has_any_governance"]
+            w = csv.DictWriter(f, fieldnames=hdr); w.writeheader()
+            for r in rows: w.writerow(r)
+
+          def parse(x):
+            try: return float(x)
+            except: return math.nan
+          scored = [r for r in rows if r["alignment_score"]]
+          scored.sort(key=lambda r: parse(r["alignment_score"]))
+          top5 = scored[:5]
+
+          summ = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summ:
+            with open(summ, "a", encoding="utf-8") as s:
+              s.write("\n### Vision Scorecard — Lowest 5 alignment scores\n")
+              if not top5:
+                s.write("_No scored ventures (metrics unknown)._\n")
+              else:
+                for r in top5:
+                  s.write(f"- {r['venture_id'][:8]} — score {r['alignment_score']} (gate {r['gate_pass_rate'] or '—'}, cov {r['gov_coverage'] or '—'}, AC {r['story_ac_cov'] or '—'})\n")
+          PY
+
+      - name: Generate summary report
+        run: |
+          echo "## 🎯 Vision Alignment Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Source Document**: EHG Chairman Vision (Only Human)" >> $GITHUB_STEP_SUMMARY
+          echo "**Rubric Version**: 1.0" >> $GITHUB_STEP_SUMMARY
+          echo "**Assessment Time**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Database metrics
+          echo "### 📊 Database Alignment Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Parse overview CSV
+          if [ -f ops/checks/out/vision_alignment_overview.csv ]; then
+            ventures_evaluated=$(tail -n +2 ops/checks/out/vision_alignment_overview.csv | wc -l)
+            aligned_count=$(grep ',aligned,' ops/checks/out/vision_alignment_overview.csv | wc -l || echo 0)
+            misaligned_count=$(grep ',misaligned,' ops/checks/out/vision_alignment_overview.csv | wc -l || echo 0)
+            insufficient_count=$(grep ',insufficient_data,' ops/checks/out/vision_alignment_overview.csv | wc -l || echo 0)
+
+            echo "- **Ventures Evaluated**: $ventures_evaluated" >> $GITHUB_STEP_SUMMARY
+            echo "- **Aligned**: $aligned_count ventures" >> $GITHUB_STEP_SUMMARY
+            echo "- **Misaligned**: $misaligned_count ventures" >> $GITHUB_STEP_SUMMARY
+            echo "- **Insufficient Data**: $insufficient_count ventures" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ⚠️ No overview data available" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Parse gaps CSV
+          if [ -f ops/checks/out/vision_alignment_gaps.csv ]; then
+            total_gaps=$(tail -n +2 ops/checks/out/vision_alignment_gaps.csv | wc -l)
+            critical_gaps=$(grep ',critical$' ops/checks/out/vision_alignment_gaps.csv | wc -l || echo 0)
+            high_gaps=$(grep ',high$' ops/checks/out/vision_alignment_gaps.csv | wc -l || echo 0)
+
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### ⚠️ Alignment Gaps" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- **Total Gaps**: $total_gaps" >> $GITHUB_STEP_SUMMARY
+            echo "- **Critical**: $critical_gaps" >> $GITHUB_STEP_SUMMARY
+            echo "- **High Priority**: $high_gaps" >> $GITHUB_STEP_SUMMARY
+
+            # Show top gaps
+            if [ $total_gaps -gt 0 ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**Top Gaps by Urgency:**" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              head -n 6 ops/checks/out/vision_alignment_gaps.csv | column -t -s ',' >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+          # Story coverage metrics
+          if [ -f ops/checks/out/vision_story_coverage.csv ]; then
+            stories_tracked=$(tail -n +2 ops/checks/out/vision_story_coverage.csv | wc -l)
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 📝 Story Coverage" >> $GITHUB_STEP_SUMMARY
+            echo "- **SD/PRD combinations tracked**: $stories_tracked" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Code scan results
+          if [ -f ops/checks/out/vision_code_scan_summary.txt ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 🔍 Code Implementation Scan" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            source ops/checks/out/vision_code_scan_summary.txt
+
+            echo "- **Total Markers Found**: $MARKER_COUNT" >> $GITHUB_STEP_SUMMARY
+            echo "- **Files with Markers**: $UNIQUE_FILES" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Category Breakdown:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Governance: $GOVERNANCE_COUNT markers" >> $GITHUB_STEP_SUMMARY
+            echo "- Quality: $QUALITY_COUNT markers" >> $GITHUB_STEP_SUMMARY
+            echo "- Efficiency: $EFFICIENCY_COUNT markers" >> $GITHUB_STEP_SUMMARY
+            echo "- Automation: $AUTOMATION_COUNT markers" >> $GITHUB_STEP_SUMMARY
+            echo "- Chairman: $CHAIRMAN_COUNT markers" >> $GITHUB_STEP_SUMMARY
+            echo "- Implementation: $IMPLEMENTATION_COUNT markers" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Unknown metrics
+          if [ -f ops/checks/out/vision_metrics_unknown.csv ]; then
+            unknown_count=$(tail -n +2 ops/checks/out/vision_metrics_unknown.csv | wc -l)
+            if [ $unknown_count -gt 0 ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### ❓ Unmeasurable Metrics" >> $GITHUB_STEP_SUMMARY
+              echo "- **Count**: $unknown_count metrics cannot be calculated" >> $GITHUB_STEP_SUMMARY
+              echo "- See `vision_metrics_unknown.csv` for details" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📁 Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "All detailed reports are available in the workflow artifacts:" >> $GITHUB_STEP_SUMMARY
+          echo "- `vision_alignment_overview.csv` - Per-venture alignment status" >> $GITHUB_STEP_SUMMARY
+          echo "- `vision_alignment_gaps.csv` - Specific unmet criteria" >> $GITHUB_STEP_SUMMARY
+          echo "- `vision_story_coverage.csv` - Per-venture story AC coverage metrics" >> $GITHUB_STEP_SUMMARY
+          echo "- `vision_trace_matrix.csv` - Linkage verification" >> $GITHUB_STEP_SUMMARY
+          echo "- `vision_code_markers.csv` - Code implementation markers" >> $GITHUB_STEP_SUMMARY
+          echo "- `vision_metrics_unknown.csv` - Unmeasurable metrics" >> $GITHUB_STEP_SUMMARY
+          echo "- `vision_scorecard.csv` - Per-venture alignment scores and metrics" >> $GITHUB_STEP_SUMMARY
+          echo "- `vision_gap_recommendations.csv` - Consolidated action items from all gap sources" >> $GITHUB_STEP_SUMMARY
+          echo "- `vision_intake_template.csv` - Editable template for manual triage and future apply" >> $GITHUB_STEP_SUMMARY
+          echo "- `vision_sd_manifest_template.csv` - SD creation template with governance fields" >> $GITHUB_STEP_SUMMARY
+          echo "- `vision_prd_manifest_template.csv` - PRD creation template with contract fields" >> $GITHUB_STEP_SUMMARY
+          echo "- `vision_story_manifest_template.csv` - User story creation template with AC" >> $GITHUB_STEP_SUMMARY
+
+      - name: Build Vision Gap Recommendations (read-only)
+        run: |
+          python - <<'PY'
+          import csv, os, math, collections, json
+
+          OUT = "ops/checks/out"
+          os.makedirs(OUT, exist_ok=True)
+
+          def load(name):
+            p = os.path.join(OUT, name)
+            if not os.path.exists(p): return []
+            with open(p, newline='', encoding='utf-8') as f:
+              return list(csv.DictReader(f))
+
+          score   = load("vision_scorecard.csv")                 # venture_id, gate_pass_rate, gov_coverage, story_ac_cov, alignment_score
+          idearec = load("vh_ideation_recommendations.csv")      # venture_id, venture_name, stage, rec_type(SD|PRD), urgency
+          dep     = load("gap_dependencies.csv")                 # backlog_id, dep_column, dep_value, gap_reason
+          trace   = load("gap_traceability.csv")                 # sd_id, backlog_id, story_key, verification_status (schema best effort)
+          shape   = load("gap_backlog_shape.csv")                # backlog_id, priority, item_type ...
+          prd     = load("gap_prd_contract.csv")                 # prd_id, sd_id, ...
+
+          # Index by venture_id
+          score_by_v = {r["venture_id"]: r for r in score if r.get("venture_id")}
+          def f(x):
+            try: return float(x)
+            except: return math.nan
+
+          # Helper to push a rec row
+          rows = []
+          def add(**kw):
+            rows.append(kw)
+
+          # 1) SD/PRD governance recs (from ideation recs), boosted by low alignment score
+          for r in idearec:
+            v = r.get("venture_id"); if not v: continue
+            s = score_by_v.get(v, {})
+            score_val = f(s.get("alignment_score") or "")
+            urgency = (r.get("urgency") or "medium").lower()
+            # If alignment score known and poor (<0.6), force high
+            if not math.isnan(score_val) and score_val < 0.6: urgency = "high"
+            add(
+              target_app="EHG_Engineering",
+              target_entity=r.get("rec_type","").lower(),   # sd or prd
+              venture_id=v,
+              sd_id="",
+              prd_id="",
+              backlog_id="",
+              story_id="",
+              urgency=urgency,
+              suggested_title=r.get("suggested_title") or "",
+              recommendation=("Create missing %s for %s at %s" % (r.get("rec_type","").upper(), (r.get("venture_name") or v[:8]), r.get("stage",""))),
+              rationale=r.get("reason") or "Governance artifact missing for active stage",
+              evidence="vh_ideation_recommendations.csv"
+            )
+
+          # 2) PRD contract violations -> fix PRD fields (acceptance criteria, risk, completeness)
+          for r in prd:
+            add(
+              target_app="EHG_Engineering",
+              target_entity="prd",
+              venture_id="",
+              sd_id=r.get("sd_id",""),
+              prd_id=r.get("prd_id",""),
+              backlog_id="",
+              story_id="",
+              urgency="high",
+              suggested_title=f"Fix PRD contract fields ({r.get('prd_id','')[:8]})",
+              recommendation="Normalize completeness (0–100), risk_rating (low|medium|high), acceptance_criteria_json (non-empty)",
+              rationale="PRD contract violations block traceability and downstream backlog quality",
+              evidence="gap_prd_contract.csv"
+            )
+
+          # 3) Backlog shape issues -> normalize priority/type
+          for r in shape:
+            add(
+              target_app="EHG_Engineering",
+              target_entity="backlog",
+              venture_id="",
+              sd_id="",
+              prd_id="",
+              backlog_id=r.get("backlog_id",""),
+              story_id="",
+              urgency="medium",
+              suggested_title=f"Normalize backlog item ({r.get('backlog_id','')[:8]})",
+              recommendation="Map priority to {P0..P3|High/Medium/Low}, ensure item_type present",
+              rationale="Backlog shape issues reduce scheduling fidelity and sequencing accuracy",
+              evidence="gap_backlog_shape.csv"
+            )
+
+          # 4) Traceability gaps -> link backlog/story to SD/PRD (read-only suggestion)
+          for r in trace:
+            add(
+              target_app="EHG_Engineering",
+              target_entity="backlog",
+              venture_id="",
+              sd_id=r.get("sd_id",""),
+              prd_id="",
+              backlog_id=r.get("backlog_id",""),
+              story_id=r.get("story_key",""),
+              urgency="high",
+              suggested_title=f"Restore trace link for backlog/story ({(r.get('backlog_id') or r.get('story_key') or '')[:8]})",
+              recommendation="Link backlog/story to canonical PRD and SD; verify via v_eng_trace",
+              rationale="Trace breaks block governance evidence chain",
+              evidence="gap_traceability.csv"
+            )
+
+          # 5) Dependency defects -> break 2-cycles / remove dangles
+          for r in dep:
+            add(
+              target_app="EHG_Engineering",
+              target_entity="backlog",
+              venture_id="",
+              sd_id="",
+              prd_id="",
+              backlog_id=r.get("backlog_id",""),
+              story_id="",
+              urgency="high" if (r.get("gap_reason","") == "two_cycle") else "medium",
+              suggested_title=f"Fix dependency in {r.get('dep_column','dep')}",
+              recommendation="Resolve dangling/self/2-cycle dependency; replace with valid upstream or remove",
+              rationale="Circular/invalid dependencies stall sequencing and delivery",
+              evidence="gap_dependencies.csv"
+            )
+
+          # Sort: high > medium > low, then by presence of IDs for quick wins
+          prio = {"high":0,"medium":1,"low":2}
+          rows.sort(key=lambda x: (prio.get(x["urgency"], 9), x["target_entity"], x.get("venture_id","")))
+
+          outp = os.path.join(OUT, "vision_gap_recommendations.csv")
+          hdr = ["target_app","target_entity","venture_id","sd_id","prd_id","backlog_id","story_id",
+                 "urgency","suggested_title","recommendation","rationale","evidence"]
+          with open(outp,"w",newline="",encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=hdr); w.writeheader()
+            for r in rows: w.writerow(r)
+
+          # Echo top 10 to Step Summary
+          summ = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summ:
+            with open(summ,"a",encoding="utf-8") as s:
+              s.write("\n### Vision — Top recommendations (read-only)\n")
+              for r in rows[:10]:
+                s.write(f"- [{r['urgency']}] {r['target_app']}:{r['target_entity']} — {r['suggested_title']}\n")
+          PY
+
+      - name: Generate vision intake template (read-only)
+        run: |
+          python - <<'PY'
+          import csv, os
+          src = "ops/checks/out/vision_gap_recommendations.csv"
+          dst = "ops/checks/out/vision_intake_template.csv"
+          if not os.path.exists(src):
+            open(dst,"w").write("target_app,target_entity,venture_id,sd_id,prd_id,backlog_id,story_id,action,comment\n")
+          else:
+            with open(src, newline='', encoding='utf-8') as f, open(dst,"w",newline='',encoding='utf-8') as g:
+              r = csv.DictReader(f)
+              w = csv.DictWriter(g, fieldnames=["target_app","target_entity","venture_id","sd_id","prd_id","backlog_id","story_id","action","comment"])
+              w.writeheader()
+              for i,row in enumerate(r):
+                if i>=200: break           # keep it small for review
+                row = {k: row.get(k,"") for k in ["target_app","target_entity","venture_id","sd_id","prd_id","backlog_id","story_id"]}
+                row.update({"action":"todo","comment":""})
+                w.writerow(row)
+          PY
+
+      - name: Check for critical issues
+        run: |
+          # This is report-only, so we don't fail the workflow
+          # But we can set outputs for downstream consumption
+
+          if [ -f ops/checks/out/vision_alignment_gaps.csv ]; then
+            critical_count=$(grep ',critical$' ops/checks/out/vision_alignment_gaps.csv | wc -l || echo 0)
+            if [ $critical_count -gt 0 ]; then
+              echo "⚠️ Found $critical_count critical alignment gaps"
+              echo "CRITICAL_GAPS=$critical_count" >> $GITHUB_OUTPUT
+            else
+              echo "✅ No critical alignment gaps found"
+              echo "CRITICAL_GAPS=0" >> $GITHUB_OUTPUT
+            fi
+          fi
+        id: critical_check
+
+      - name: Build Vision Governance Manifests (read-only)
+        run: |
+          python - <<'PY'
+          import csv, os, json
+
+          OUT = "ops/checks/out"
+          os.makedirs(OUT, exist_ok=True)
+          rec_path = os.path.join(OUT, "vh_ideation_recommendations.csv")
+
+          recs = []
+          if os.path.exists(rec_path):
+            with open(rec_path, newline='', encoding='utf-8') as f:
+              recs = list(csv.DictReader(f))
+
+          sd_rows, prd_rows = [], []
+
+          for r in recs:
+            rec_type = (r.get("rec_type") or "").upper()
+            venture_id = r.get("venture_id") or ""
+            venture_name = r.get("venture_name") or venture_id[:8]
+            stage = r.get("stage") or ""
+            urgency = (r.get("urgency") or "medium").lower()
+
+            if rec_type == "SD":
+              sd_rows.append({
+                "action": "create",                # create|ignore (edit if needed)
+                "venture_id": venture_id,
+                "stage": stage,
+                "urgency": urgency,
+                "sd_id": "",                       # leave blank (created later)
+                "sd_key": "",                      # optional: will be derived (SD-YYYY-MM-DD-<slug>)
+                "title": r.get("suggested_title") or f"Stage {stage}: Strategic Directive for {venture_name}",
+                "owner": "",                       # REQUIRED in governance
+                "decision_log_ref": "",            # REQUIRED in governance
+                "evidence_ref": "",                # REQUIRED in governance
+                "rationale": "Vision alignment: missing SD for active stage"
+              })
+
+            if rec_type == "PRD":
+              prd_rows.append({
+                "action": "create",                # create|ignore
+                "venture_id": venture_id,
+                "stage": stage,
+                "urgency": urgency,
+                "prd_id": "",                      # leave blank (created later)
+                "sd_id": "",                       # link to SD (existing or the one created above)
+                "title": r.get("suggested_title") or f"Stage {stage}: PRD for {venture_name}",
+                "priority": "",                    # P0..P3 or High/Medium/Low
+                "completeness_score": "",          # 0..100 (normalize on apply)
+                "risk_rating": "medium",           # low|medium|high (default)
+                "acceptance_criteria_json": "[]",  # JSON array string; curate as needed
+                "notes": "Vision alignment: missing PRD for active stage"
+              })
+
+          def write_csv(path, hdr, rows):
+            with open(path, "w", newline="", encoding="utf-8") as f:
+              w = csv.DictWriter(f, fieldnames=hdr); w.writeheader()
+              for row in rows: w.writerow(row)
+
+          # SD manifest template
+          write_csv(
+            os.path.join(OUT, "vision_sd_manifest_template.csv"),
+            ["action","venture_id","stage","urgency","sd_id","sd_key","title",
+             "owner","decision_log_ref","evidence_ref","rationale"],
+            sd_rows
+          )
+
+          # PRD manifest template
+          write_csv(
+            os.path.join(OUT, "vision_prd_manifest_template.csv"),
+            ["action","venture_id","stage","urgency","prd_id","sd_id","title",
+             "priority","completeness_score","risk_rating","acceptance_criteria_json","notes"],
+            prd_rows
+          )
+
+          # Echo counts to summary
+          summ = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summ:
+            with open(summ,"a",encoding="utf-8") as s:
+              s.write("\n### Vision — Governance manifests (templates)\n")
+              s.write(f"- SD rows: {len(sd_rows)}\n")
+              s.write(f"- PRD rows: {len(prd_rows)}\n")
+          PY
+
+      - name: Build Vision Story Manifests (read-only)
+        run: |
+          python - <<'PY'
+          import csv, os, json
+
+          OUT = "ops/checks/out"
+          os.makedirs(OUT, exist_ok=True)
+
+          # Load existing data sources
+          def load(name):
+            p = os.path.join(OUT, name)
+            if not os.path.exists(p): return []
+            with open(p, newline='', encoding='utf-8') as f:
+              return list(csv.DictReader(f))
+
+          # Sources for story generation
+          story_cov = load("vision_story_coverage.csv")  # venture_id, stories_total, stories_with_ac, ac_coverage_pct
+          scorecard = load("vision_scorecard.csv")        # venture_id, story_ac_cov, alignment_score
+          idearec = load("vh_ideation_recommendations.csv")  # venture_id, rec_type, stage
+          prd_gaps = load("gap_prd_contract.csv")         # prd_id with contract issues
+
+          # Find ventures with low AC coverage (<50%)
+          low_ac_ventures = {}
+          for r in story_cov:
+            v = r.get("venture_id")
+            try:
+              pct = float(r.get("ac_coverage_pct", "0"))
+            except:
+              pct = 0
+            if v and pct < 50:  # Below 50% AC coverage
+              low_ac_ventures[v] = pct
+
+          # Also check scorecard for low story_ac_cov
+          for r in scorecard:
+            v = r.get("venture_id")
+            try:
+              ac = float(r.get("story_ac_cov", "0"))
+            except:
+              ac = 0
+            if v and ac < 0.5:  # Below 0.5 (50%)
+              if v not in low_ac_ventures:
+                low_ac_ventures[v] = ac * 100
+
+          story_rows = []
+
+          # Generate stories for ventures with low AC coverage
+          for venture_id, ac_pct in low_ac_ventures.items():
+            venture_name = venture_id[:8]
+
+            # Create 3 template stories per low-AC venture
+            story_templates = [
+              f"As a user, I want to complete {venture_name} onboarding",
+              f"As a user, I want to access {venture_name} dashboard",
+              f"As a user, I want to manage {venture_name} settings"
+            ]
+
+            for idx, title in enumerate(story_templates):
+              story_rows.append({
+                "action": "create",
+                "venture_id": venture_id,
+                "sd_id": "",  # To be filled from existing SDs
+                "prd_id": "",  # To be filled from existing PRDs
+                "title": title,
+                "priority": "P2" if idx == 0 else "P3",  # First story higher priority
+                "status": "draft",
+                "item_type": "story",
+                "acceptance_criteria_json": json.dumps([
+                  {"criteria": f"User can {title.lower().replace('as a user, i want to ', '')}"},
+                  {"criteria": "Action is logged for audit"},
+                  {"criteria": "Error handling is in place"}
+                ]),
+                "story_points": "3",
+                "notes": f"Generated for low AC coverage venture (current: {ac_pct:.1f}%)"
+              })
+
+          # Also generate stories for PRDs with contract gaps (to improve completeness)
+          for r in prd_gaps[:10]:  # Limit to first 10
+            prd_id = r.get("prd_id")
+            if prd_id:
+              story_rows.append({
+                "action": "create",
+                "venture_id": "",
+                "sd_id": "",
+                "prd_id": prd_id,
+                "title": f"Implement acceptance criteria for PRD {prd_id[:8]}",
+                "priority": "P1",  # High priority to fix contract gaps
+                "status": "draft",
+                "item_type": "story",
+                "acceptance_criteria_json": json.dumps([
+                  {"criteria": "PRD acceptance criteria are defined"},
+                  {"criteria": "Test scenarios are documented"},
+                  {"criteria": "Completeness score is updated"}
+                ]),
+                "story_points": "5",
+                "notes": "Generated to address PRD contract gap"
+              })
+
+          # Write story manifest template
+          if story_rows:
+            outp = os.path.join(OUT, "vision_story_manifest_template.csv")
+            hdr = ["action","venture_id","sd_id","prd_id","title","priority","status","item_type",
+                   "acceptance_criteria_json","story_points","notes"]
+            with open(outp, "w", newline="", encoding="utf-8") as f:
+              w = csv.DictWriter(f, fieldnames=hdr); w.writeheader()
+              for row in story_rows[:200]:  # Limit to 200 rows
+                w.writerow(row)
+
+          # Echo counts to summary
+          summ = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summ:
+            with open(summ,"a",encoding="utf-8") as s:
+              s.write("\n### Vision — Story manifests (templates)\n")
+              s.write(f"- Story rows: {len(story_rows[:200])}\n")
+              s.write(f"- Low AC ventures targeted: {len(low_ac_ventures)}\n")
+          PY
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vision-alignment-reports-${{ github.run_id }}
+          path: |
+            ops/checks/out/*.csv
+            ops/checks/out/*.txt
+            docs/vision/rubric.yaml
+          retention-days: 30
+
+      - name: Debug output
+        if: ${{ inputs.debug }}
+        run: |
+          echo "=== Debug Information ==="
+          echo "Environment variables:"
+          env | grep -E '^PG' | sed 's/PASSWORD=.*/PASSWORD=***/'
+          echo ""
+          echo "CSV files generated:"
+          ls -la ops/checks/out/*.csv || echo "No CSV files found"
+          echo ""
+          echo "First few lines of each CSV:"
+          for f in ops/checks/out/*.csv; do
+            if [ -f "$f" ]; then
+              echo "--- $f ---"
+              head -n 5 "$f"
+              echo ""
+            fi
+          done
+
+      - name: Handle errors gracefully
+        if: failure()
+        run: |
+          echo "::warning::Vision alignment check encountered issues. This is non-blocking."
+          echo "Partial results may be available in artifacts."
+          # Don't fail the workflow - this is report-only
+          exit 0
