@@ -258,8 +258,8 @@ jobs:
         run: |
           set -e
           echo "Checking for monolithic files (path-aware)..."
-          MAX_CODE=900    # Stricter for code files
-          MAX_DOCS=2000   # Looser for documentation
+          MAX_CODE=900    # STRICT mode for code files
+          MAX_DOCS=2000   # WARN mode for documentation (kept loose)
           ALLOWLIST="ops/ci/bloat-allowlist.txt"
 
           # Create allowlist file if it doesn't exist
@@ -299,9 +299,28 @@ jobs:
           done
 
           if [ -n "$LONG" ]; then
-            echo "::warning::Long files detected. Code: >900 lines, Docs: >2000 lines"
-            # Uncomment next line to enforce strict mode for code
-            # case "$LONG" in *docs/*) true ;; *.md) true ;; *) exit 1 ;; esac
+            # Check if any code files are too long (strict mode)
+            CODE_VIOLATIONS=""
+            for entry in $LONG; do
+              file=$(echo "$entry" | cut -d' ' -f2)
+              case "$file" in
+                *.md|docs/*)
+                  # Only warn for documentation
+                  ;;
+                *)
+                  # Code file violation
+                  CODE_VIOLATIONS="${CODE_VIOLATIONS}\n${entry}"
+                  ;;
+              esac
+            done
+
+            if [ -n "$CODE_VIOLATIONS" ]; then
+              echo "❌ Code files exceed 900 line limit (STRICT MODE):"
+              echo -e "$CODE_VIOLATIONS"
+              exit 1
+            else
+              echo "::warning::Long documentation files detected (>2000 lines), but allowed"
+            fi
           else
             echo "✅ No monolithic files detected"
           fi
