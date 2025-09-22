@@ -106,6 +106,17 @@ jobs:
                -v PRD_MAX="${PRD_MAX}" \
                -f ops/checks/backlog_assert_critical.sql
 
+      - name: Backlog integrity – dependency cycle asserts (staging)
+        if: ${{ vars.ENABLE_DEP_ASSERTS == '1' }}
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+        run: |
+          DEP_CYCLES_MAX="${{ vars.DEP_CYCLES_MAX || 0 }}"
+          psql "$DATABASE_URL" \
+               -v ON_ERROR_STOP=1 \
+               -v DEP_CYCLES_MAX="${DEP_CYCLES_MAX}" \
+               -f ops/checks/backlog_assert_cycles.sql
+
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
