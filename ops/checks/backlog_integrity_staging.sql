@@ -95,5 +95,62 @@
   ORDER BY b.created_at DESC
 ) TO 'traceability_gaps.csv' WITH CSV HEADER;
 
+-- 5) Dependency hygiene (report-only)
+-- Detect dangling refs (dep points to non-existent backlog_id),
+-- self-references, and simple 2-cycles across common columns:
+--   parent_id, depends_on, blocked_by, predecessor_id
+DO $$
+DECLARE
+  col RECORD;
+BEGIN
+  CREATE TEMP TABLE IF NOT EXISTS dep_gaps(
+    backlog_id   uuid,
+    dep_column   text,
+    dep_value    uuid,
+    gap_reason   text
+  ) ON COMMIT DROP;
+
+  FOR col IN
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name   = 'sd_backlog_map'
+      AND column_name  IN ('parent_id','depends_on','blocked_by','predecessor_id')
+  LOOP
+    -- Dangling references: dependency set but target not found
+    EXECUTE format($f$
+      INSERT INTO dep_gaps (backlog_id, dep_column, dep_value, gap_reason)
+      SELECT s.backlog_id, %L, s.%I, 'dangling_reference'
+      FROM sd_backlog_map s
+      LEFT JOIN sd_backlog_map t ON t.backlog_id = s.%I
+      WHERE s.%I IS NOT NULL AND t.backlog_id IS NULL;
+    $f$, col.column_name, col.column_name, col.column_name, col.column_name);
+
+    -- Self reference
+    EXECUTE format($f$
+      INSERT INTO dep_gaps (backlog_id, dep_column, dep_value, gap_reason)
+      SELECT s.backlog_id, %L, s.%I, 'self_reference'
+      FROM sd_backlog_map s
+      WHERE s.%I IS NOT NULL AND s.%I = s.backlog_id;
+    $f$, col.column_name, col.column_name, col.column_name, col.column_name);
+
+    -- 2-cycle: A→B and B→A (record A only to avoid duplicates)
+    EXECUTE format($f$
+      INSERT INTO dep_gaps (backlog_id, dep_column, dep_value, gap_reason)
+      SELECT s.backlog_id, %L, s.%I, 'two_cycle'
+      FROM sd_backlog_map s
+      JOIN sd_backlog_map t ON t.backlog_id = s.%I
+      WHERE t.%I IS NOT NULL AND t.%I = s.backlog_id
+        AND s.backlog_id < t.backlog_id;
+    $f$, col.column_name, col.column_name, col.column_name, col.column_name, col.column_name);
+  END LOOP;
+END $$;
+
+\copy (
+  SELECT backlog_id, dep_column, dep_value, gap_reason
+  FROM dep_gaps
+  ORDER BY dep_column, backlog_id
+) TO 'gap_dependencies.csv' WITH CSV HEADER;
+
 -- Summary output
 \echo 'Backlog integrity checks complete. CSV reports generated.'
