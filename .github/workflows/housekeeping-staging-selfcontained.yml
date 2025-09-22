@@ -218,6 +218,63 @@ jobs:
           fi
           echo "✅ Boundary checks passed: no cross-app writes detected"
 
+      - name: Backlog integrity – export CSVs (read-only)
+        run: |
+          mkdir -p ops/checks/out
+          # 1) SD governance metadata
+          PSQL_ENV=.env.staging psql -c "\copy (
+            SELECT sd.sd_key, sd.owner, sd.decision_log_ref, sd.evidence_ref
+            FROM strategic_directives_v2 sd
+            WHERE (sd.owner IS NULL OR sd.owner = '')
+               OR (sd.decision_log_ref IS NULL OR sd.decision_log_ref = '')
+               OR (sd.evidence_ref IS NULL OR sd.evidence_ref = '')
+          ) TO 'ops/checks/out/gap_sd_metadata.csv' CSV HEADER"
+
+          # 2) PRD contract issues
+          PSQL_ENV=.env.staging psql -c "\copy (
+            SELECT p.id AS prd_id, p.sd_id, p.completeness_score, p.risk_rating, p.acceptance_criteria_json
+            FROM product_requirements_v2 p
+            LEFT JOIN strategic_directives_v2 sd ON sd.id = p.sd_id
+            WHERE sd.id IS NULL
+               OR p.completeness_score NOT BETWEEN 0 AND 100
+               OR p.risk_rating NOT IN ('low','medium','high')
+               OR p.acceptance_criteria_json IS NULL
+               OR p.acceptance_criteria_json::text IN ('[]','{}')
+          ) TO 'ops/checks/out/gap_prd_contract.csv' CSV HEADER"
+
+          # 3) Backlog shape problems
+          PSQL_ENV=.env.staging psql -c "\copy (
+            SELECT b.id AS backlog_id, b.prd_id, b.type, b.state, b.priority, b.qa_gate_min
+            FROM eng_backlog b
+            LEFT JOIN product_requirements_v2 p ON p.id = b.prd_id
+            WHERE p.id IS NULL
+               OR b.type IS NULL
+               OR b.state IS NULL
+               OR b.priority NOT IN ('P0','P1','P2','P3')
+               OR b.qa_gate_min IS NULL
+          ) TO 'ops/checks/out/gap_backlog_shape.csv' CSV HEADER"
+
+          # 4) Traceability gaps
+          PSQL_ENV=.env.staging psql -c "\copy (
+            SELECT t.sd_id, t.prd_id, t.backlog_id, t.commit_sha, t.pr_url
+            FROM v_eng_trace t
+            WHERE t.sd_id IS NULL OR t.prd_id IS NULL OR t.backlog_id IS NULL
+               OR t.commit_sha IS NULL OR t.pr_url IS NULL
+          ) TO 'ops/checks/out/gap_traceability.csv' CSV HEADER"
+
+      - name: Upload backlog integrity artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backlog-integrity
+          path: ops/checks/out/*.csv
+          retention-days: 14
+
+      - name: Summary – backlog integrity
+        if: always()
+        run: |
+          echo "### Backlog Integrity CSVs" >> $GITHUB_STEP_SUMMARY
+          for f in ops/checks/out/*.csv; do [ -f "$f" ] && echo "- $(basename "$f")" >> $GITHUB_STEP_SUMMARY; done
+
       - name: File bloat check (path-aware)
         run: |
           set -e
