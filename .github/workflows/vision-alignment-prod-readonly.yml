@@ -1,0 +1,290 @@
+name: Vision Alignment (Prod, Read-Only)
+
+on:
+  schedule:
+    - cron: '30 4 * * *'  # after staging checks
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vision-alignment-prod-readonly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    if: ${{ vars.ENABLE_PROD_READONLY == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql & ripgrep
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client ripgrep
+
+      - name: Vision alignment analysis (read-only)
+        env:
+          PGHOST: ${{ secrets.PGHOST_PROD }}
+          PGPORT: ${{ secrets.PGPORT_PROD }}
+          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
+          PGUSER: ${{ secrets.PGUSER_PROD }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
+          PGSSLMODE: require
+        run: |
+          mkdir -p ops/checks/out
+          psql -v ON_ERROR_STOP=1 -f ops/checks/vision_alignment_staging.sql || true
+          bash ops/checks/vision_code_scan.sh || true
+
+      - name: Build Vision Scorecard (read-only)
+        run: |
+          python - <<'PY'
+          import csv, os, json
+          OUT="ops/checks/out"; os.makedirs(OUT, exist_ok=True)
+          def load(n):
+            p=os.path.join(OUT,n)
+            return list(csv.DictReader(open(p, newline='', encoding='utf-8'))) if os.path.exists(p) else []
+
+          # Load readiness data
+          readiness = load("vision_venture_readiness.csv")
+          gaps = load("vision_governance_gaps.csv")
+          ac_cov = load("vision_story_coverage.csv")
+
+          # Build scorecard per venture
+          scorecard = {}
+          for r in readiness:
+            v = r.get("venture_id")
+            if v:
+              gates_passed = int(r.get("gates_passed", "0"))
+              total_gates = int(r.get("total_gates", "1"))
+              gate_rate = (gates_passed / total_gates * 100) if total_gates > 0 else 0
+              scorecard[v] = {
+                "venture_id": v,
+                "gate_pass_rate": gate_rate,
+                "gates_passed": gates_passed,
+                "total_gates": total_gates
+              }
+
+          # Add governance coverage
+          gov_by_v = {}
+          for g in gaps:
+            v = g.get("venture_id")
+            if v:
+              has_sd = g.get("has_strategic_directive", "").lower() in ("true", "1", "yes")
+              has_prd = g.get("has_product_requirements", "").lower() in ("true", "1", "yes")
+              gov_by_v[v] = {"has_sd": has_sd, "has_prd": has_prd}
+
+          for v, data in scorecard.items():
+            gov = gov_by_v.get(v, {"has_sd": False, "has_prd": False})
+            gov_score = (50 if gov["has_sd"] else 0) + (50 if gov["has_prd"] else 0)
+            data.update({"governance_coverage": gov_score, "has_sd": gov["has_sd"], "has_prd": gov["has_prd"]})
+
+          # Add AC coverage
+          for ac in ac_cov:
+            v = ac.get("venture_id")
+            if v and v in scorecard:
+              try:
+                ac_pct = float(ac.get("ac_coverage_pct", "0"))
+              except:
+                ac_pct = 0
+              scorecard[v]["ac_coverage_pct"] = ac_pct
+
+          # Compute composite scores
+          for v, data in scorecard.items():
+            gate_score = data.get("gate_pass_rate", 0)
+            gov_score = data.get("governance_coverage", 0)
+            ac_score = data.get("ac_coverage_pct", 0)
+            composite = (gate_score * 0.4) + (gov_score * 0.3) + (ac_score * 0.3)
+            data["composite_score"] = round(composite, 1)
+
+          # Write scorecard
+          if scorecard:
+            with open(os.path.join(OUT,"vision_scorecard.csv"),"w",newline="",encoding="utf-8") as f:
+              w = csv.DictWriter(f, fieldnames=["venture_id","composite_score","gate_pass_rate","governance_coverage","ac_coverage_pct","gates_passed","total_gates","has_sd","has_prd"])
+              w.writeheader()
+              for data in sorted(scorecard.values(), key=lambda x: x["composite_score"], reverse=True):
+                w.writerow(data)
+
+          # Top/bottom 5 for summary
+          sorted_scores = sorted(scorecard.values(), key=lambda x: x["composite_score"], reverse=True)
+          summ = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summ and sorted_scores:
+            with open(summ,"a",encoding="utf-8") as s:
+              s.write("\n### Vision Scorecard (Prod) — Top 5\n")
+              for sc in sorted_scores[:5]:
+                s.write(f"- {sc['venture_id'][:8]}: {sc['composite_score']:.1f}% (gates={sc['gate_pass_rate']:.0f}%, gov={sc['governance_coverage']:.0f}%, ac={sc['ac_coverage_pct']:.0f}%)\n")
+          PY
+
+      - name: Build Vision Gap Recommendations (read-only)
+        run: |
+          python - <<'PY'
+          import csv, os
+          OUT="ops/checks/out"
+          def load(n):
+            p=os.path.join(OUT,n)
+            return list(csv.DictReader(open(p, newline='', encoding='utf-8'))) if os.path.exists(p) else []
+
+          recs = []
+          scorecard = load("vision_scorecard.csv")
+          gaps = load("vision_governance_gaps.csv")
+          ac_cov = load("vision_story_coverage.csv")
+
+          # Low composite scores
+          for sc in scorecard:
+            try:
+              comp = float(sc.get("composite_score", "0"))
+              if comp < 70:
+                recs.append({
+                  "venture_id": sc["venture_id"],
+                  "priority": "HIGH" if comp < 50 else "MEDIUM",
+                  "category": "alignment",
+                  "recommendation": f"Overall alignment low ({comp:.1f}%)",
+                  "action": "comprehensive_review"
+                })
+            except: pass
+
+          # Missing governance
+          for g in gaps:
+            v = g.get("venture_id", "")
+            if not g.get("has_strategic_directive", "").lower() in ("true", "1", "yes"):
+              recs.append({
+                "venture_id": v, "priority": "CRITICAL", "category": "governance",
+                "recommendation": "Missing Strategic Directive", "action": "create_sd"
+              })
+            if not g.get("has_product_requirements", "").lower() in ("true", "1", "yes"):
+              recs.append({
+                "venture_id": v, "priority": "HIGH", "category": "governance",
+                "recommendation": "Missing Product Requirements", "action": "create_prd"
+              })
+
+          # Low AC coverage
+          for ac in ac_cov:
+            v = ac.get("venture_id", "")
+            try:
+              pct = float(ac.get("ac_coverage_pct", "0"))
+              if pct < 50:
+                recs.append({
+                  "venture_id": v, "priority": "MEDIUM", "category": "stories",
+                  "recommendation": f"Low AC coverage ({pct:.0f}%)", "action": "enhance_stories"
+                })
+            except: pass
+
+          # Write recommendations
+          if recs:
+            with open(os.path.join(OUT,"vision_gap_recommendations.csv"),"w",newline="",encoding="utf-8") as f:
+              w = csv.DictWriter(f, fieldnames=["venture_id","priority","category","recommendation","action"])
+              w.writeheader()
+              priority_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+              for r in sorted(recs, key=lambda x: (priority_order.get(x["priority"], 9), x["venture_id"])):
+                w.writerow(r)
+
+          # Top 10 for summary
+          summ = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summ and recs:
+            with open(summ,"a",encoding="utf-8") as s:
+              s.write("\n### Vision Gap Recommendations (Prod) — Top Actions\n")
+              for r in sorted(recs, key=lambda x: priority_order.get(x["priority"], 9))[:10]:
+                s.write(f"- **{r['priority']}**: {r['venture_id'][:8]} - {r['recommendation']}\n")
+          PY
+
+      - name: Generate Manifest Templates (read-only)
+        run: |
+          python - <<'PY'
+          import csv, os, uuid
+          OUT="ops/checks/out"
+          def load(n):
+            p=os.path.join(OUT,n)
+            return list(csv.DictReader(open(p, newline='', encoding='utf-8'))) if os.path.exists(p) else []
+
+          recs = load("vision_gap_recommendations.csv")
+
+          # SD manifest template
+          sd_rows = []
+          for r in recs:
+            if r.get("action") == "create_sd":
+              sd_rows.append({
+                "action": "create",
+                "venture_id": r["venture_id"],
+                "stage": "strategy",
+                "urgency": r["priority"].lower(),
+                "sd_id": "",
+                "sd_key": "",
+                "title": f"Strategic Directive for {r['venture_id'][:8]}",
+                "owner": "TODO",
+                "decision_log_ref": "TODO",
+                "evidence_ref": "TODO",
+                "rationale": f"Vision gap: {r['recommendation']}"
+              })
+
+          if sd_rows:
+            with open(os.path.join(OUT,"vision_sd_manifest_template.csv"),"w",newline="",encoding="utf-8") as f:
+              w = csv.DictWriter(f, fieldnames=["action","venture_id","stage","urgency","sd_id","sd_key","title","owner","decision_log_ref","evidence_ref","rationale"])
+              w.writeheader()
+              w.writerows(sd_rows)
+
+          # PRD manifest template
+          prd_rows = []
+          for r in recs:
+            if r.get("action") == "create_prd":
+              prd_rows.append({
+                "action": "create",
+                "venture_id": r["venture_id"],
+                "stage": "requirements",
+                "urgency": r["priority"].lower(),
+                "prd_id": "",
+                "sd_id": "TODO",
+                "title": f"Product Requirements for {r['venture_id'][:8]}",
+                "priority": "P2",
+                "completeness_score": "50",
+                "risk_rating": "medium",
+                "acceptance_criteria_json": '["Define core requirements", "Validate with stakeholders"]',
+                "notes": f"Vision gap: {r['recommendation']}"
+              })
+
+          if prd_rows:
+            with open(os.path.join(OUT,"vision_prd_manifest_template.csv"),"w",newline="",encoding="utf-8") as f:
+              w = csv.DictWriter(f, fieldnames=["action","venture_id","stage","urgency","prd_id","sd_id","title","priority","completeness_score","risk_rating","acceptance_criteria_json","notes"])
+              w.writeheader()
+              w.writerows(prd_rows)
+
+          # Story manifest template
+          story_rows = []
+          for r in recs:
+            if r.get("action") == "enhance_stories":
+              story_rows.append({
+                "action": "create",
+                "venture_id": r["venture_id"],
+                "sd_id": "TODO",
+                "prd_id": "TODO",
+                "title": f"Enhanced user story for {r['venture_id'][:8]}",
+                "priority": "P3",
+                "status": "draft",
+                "item_type": "story",
+                "acceptance_criteria_json": '["Clear acceptance criteria needed"]',
+                "story_points": "3",
+                "notes": f"Vision gap: {r['recommendation']}"
+              })
+
+          if story_rows:
+            with open(os.path.join(OUT,"vision_story_manifest_template.csv"),"w",newline="",encoding="utf-8") as f:
+              w = csv.DictWriter(f, fieldnames=["action","venture_id","sd_id","prd_id","title","priority","status","item_type","acceptance_criteria_json","story_points","notes"])
+              w.writeheader()
+              w.writerows(story_rows)
+          PY
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vision-alignment-prod-results-${{ github.run_id }}
+          path: |
+            ops/checks/out/vision_scorecard.csv
+            ops/checks/out/vision_gap_recommendations.csv
+            ops/checks/out/vision_sd_manifest_template.csv
+            ops/checks/out/vision_prd_manifest_template.csv
+            ops/checks/out/vision_story_manifest_template.csv
+            ops/checks/out/vision_venture_readiness.csv
+            ops/checks/out/vision_governance_gaps.csv
+            ops/checks/out/vision_story_coverage.csv
+          retention-days: 30

@@ -1,0 +1,228 @@
+name: WSJF Apply Accepted Proposals (Prod)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type PROMOTE to confirm production changes'
+        required: true
+        default: 'DRY_RUN'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: wsjf-apply-prod
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: ${{ vars.PROD_WRITE_OK == '1' && vars.APPLY_WSJF_PROD == '1' && (inputs.confirm == 'PROMOTE' || vars.DRY_RUN == '1') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Pre-apply snapshot (execution_order backup)
+        env:
+          PGHOST: ${{ secrets.PGHOST_PROD }}
+          PGPORT: ${{ secrets.PGPORT_PROD }}
+          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
+          PGUSER: ${{ secrets.PGUSER_PROD }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
+          PGSSLMODE: require
+        run: |
+          mkdir -p ops/checks/out
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          \copy (
+            SELECT id as sd_id, execution_order, title, status, priority
+            FROM strategic_directives_v2
+            ORDER BY execution_order NULLS LAST, id
+          ) TO 'ops/checks/out/execution_order_snapshot_before.csv' WITH CSV HEADER;
+          SQL
+
+      - name: Apply accepted proposals → execution_order (triple-guarded; DRY-RUN by default)
+        env:
+          PGHOST: ${{ secrets.PGHOST_PROD }}
+          PGPORT: ${{ secrets.PGPORT_PROD }}
+          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
+          PGUSER: ${{ secrets.PGUSER_PROD }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
+          PGSSLMODE: require
+        run: |
+          mkdir -p ops/checks/out
+          DRY_RUN_VAL="${{ vars.DRY_RUN || '1' }}"
+          if [ "${{ inputs.confirm }}" != "PROMOTE" ] && [ "$DRY_RUN_VAL" != "1" ]; then
+            echo "ERROR: Must specify confirm=PROMOTE for production changes"
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 \
+               -v DRY_RUN="$DRY_RUN_VAL" \
+               -v MAX_MOVE="${{ vars.MAX_MOVE || '2' }}" <<'SQL'
+          \set ON_ERROR_STOP on
+          \timing on
+          BEGIN;
+
+          -- Snapshot 'before' for delta
+          DROP TABLE IF EXISTS _before;
+          CREATE TEMP TABLE _before AS
+          SELECT id AS sd_id, execution_order FROM strategic_directives_v2;
+
+          -- Candidate set: accepted proposals, re-validate bounded movement
+          DROP TABLE IF EXISTS _accepted;
+          CREATE TEMP TABLE _accepted AS
+          SELECT p.sd_id,
+                 p.proposed_execution_order,
+                 s.execution_order AS current_execution_order
+          FROM eng_sequence_proposals p
+          JOIN strategic_directives_v2 s ON s.id = p.sd_id
+          WHERE p.status = 'accepted';
+
+          -- Enforce MAX_MOVE again (safety)
+          DROP TABLE IF EXISTS _bounded;
+          CREATE TEMP TABLE _bounded AS
+          SELECT a.*
+          FROM _accepted a
+          WHERE a.current_execution_order IS NULL
+             OR abs(a.proposed_execution_order - a.current_execution_order) <= :MAX_MOVE::int;
+
+          -- Apply updates
+          UPDATE strategic_directives_v2 s
+          SET execution_order = b.proposed_execution_order
+          FROM _bounded b
+          WHERE s.id = b.sd_id;
+
+          -- Mark applied proposals
+          UPDATE eng_sequence_proposals p
+          SET status = 'applied', violation = NULL, proposed_at = now()
+          FROM _bounded b
+          WHERE p.sd_id = b.sd_id
+            AND p.proposed_execution_order = b.proposed_execution_order
+            AND p.status = 'accepted';
+
+          -- Delta report
+          DROP TABLE IF EXISTS _after;
+          CREATE TEMP TABLE _after AS
+          SELECT id AS sd_id, execution_order FROM strategic_directives_v2;
+
+          \copy (
+            SELECT 'updated' AS kind, a.sd_id,
+                   b.execution_order AS before_order,
+                   a.execution_order AS after_order
+            FROM _after a
+            JOIN _before b USING (sd_id)
+            WHERE a.execution_order IS DISTINCT FROM b.execution_order
+            UNION ALL
+            SELECT 'skipped' AS kind, a.sd_id,
+                   a.current_execution_order AS before_order,
+                   a.proposed_execution_order AS after_order
+            FROM _accepted a
+            WHERE NOT EXISTS (
+              SELECT 1 FROM _bounded b WHERE b.sd_id = a.sd_id
+            )
+          ) TO 'ops/checks/out/wsjf_apply_delta.csv' WITH CSV HEADER;
+
+          \echo DRY_RUN=:DRY_RUN  MAX_MOVE=:MAX_MOVE
+          \if :DRY_RUN = '1'
+            \echo "*** DRY RUN: rolling back apply"
+            ROLLBACK;
+          \else
+            \echo "*** COMMIT: apply executed"
+            COMMIT;
+          \endif
+          SQL
+
+      - name: Post-apply snapshot (execution_order verification)
+        if: always()
+        env:
+          PGHOST: ${{ secrets.PGHOST_PROD }}
+          PGPORT: ${{ secrets.PGPORT_PROD }}
+          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
+          PGUSER: ${{ secrets.PGUSER_PROD }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
+          PGSSLMODE: require
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          \copy (
+            SELECT id as sd_id, execution_order, title, status, priority
+            FROM strategic_directives_v2
+            ORDER BY execution_order NULLS LAST, id
+          ) TO 'ops/checks/out/execution_order_snapshot_after.csv' WITH CSV HEADER;
+          SQL
+
+      - name: Generate audit report
+        if: always()
+        run: |
+          echo "# WSJF Apply Audit Report (Prod)" > ops/checks/out/wsjf_apply_audit.md
+          echo "" >> ops/checks/out/wsjf_apply_audit.md
+          echo "**Timestamp**: $(date -u)" >> ops/checks/out/wsjf_apply_audit.md
+          echo "**DRY_RUN**: ${{ vars.DRY_RUN || '1' }}" >> ops/checks/out/wsjf_apply_audit.md
+          echo "**MAX_MOVE**: ${{ vars.MAX_MOVE || '2' }}" >> ops/checks/out/wsjf_apply_audit.md
+          echo "**Confirm**: ${{ inputs.confirm }}" >> ops/checks/out/wsjf_apply_audit.md
+          echo "" >> ops/checks/out/wsjf_apply_audit.md
+          if [ -f ops/checks/out/wsjf_apply_delta.csv ]; then
+            echo "## Changes Applied" >> ops/checks/out/wsjf_apply_audit.md
+            echo "\`\`\`csv" >> ops/checks/out/wsjf_apply_audit.md
+            cat ops/checks/out/wsjf_apply_delta.csv >> ops/checks/out/wsjf_apply_audit.md
+            echo "\`\`\`" >> ops/checks/out/wsjf_apply_audit.md
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### WSJF Apply — Accepted Proposals (Prod)" >> $GITHUB_STEP_SUMMARY
+          echo "- DRY_RUN: ${{ vars.DRY_RUN || '1' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- MAX_MOVE: ${{ vars.MAX_MOVE || '2' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Confirm: ${{ inputs.confirm }}" >> $GITHUB_STEP_SUMMARY
+          if [ -f ops/checks/out/wsjf_apply_delta.csv ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Results (sample):" >> $GITHUB_STEP_SUMMARY
+            head -n 11 ops/checks/out/wsjf_apply_delta.csv | tail -n +2 | awk -F, '{printf "- %s sd=%s %s→%s\n",$1,$2,$3,$4}' >> $GITHUB_STEP_SUMMARY || true
+          fi
+
+      - name: Create audit PR
+        if: always() && vars.DRY_RUN != '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="audit/wsjf-apply-$(date +%Y%m%d-%H%M%S)"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add ops/checks/out/
+          git commit -m "audit: WSJF apply to production
+
+          - Timestamp: $(date -u)
+          - DRY_RUN: ${{ vars.DRY_RUN || '1' }}
+          - MAX_MOVE: ${{ vars.MAX_MOVE || '2' }}
+          - Confirm: ${{ inputs.confirm }}
+
+          Files:
+          - execution_order_snapshot_before.csv
+          - execution_order_snapshot_after.csv
+          - wsjf_apply_delta.csv
+          - wsjf_apply_audit.md"
+          git push origin "$BRANCH"
+          gh pr create --title "Audit: WSJF Apply to Production" \
+                       --body "Automated audit PR for WSJF execution_order changes in production.
+
+          **Review the attached snapshots and delta report.**
+
+          This PR serves as an audit trail and can be used for rollback if needed." \
+                       --head "$BRANCH" --base main
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wsjf-apply-prod-audit-${{ github.run_id }}
+          path: |
+            ops/checks/out/execution_order_snapshot_before.csv
+            ops/checks/out/execution_order_snapshot_after.csv
+            ops/checks/out/wsjf_apply_delta.csv
+            ops/checks/out/wsjf_apply_audit.md
+          retention-days: 90
