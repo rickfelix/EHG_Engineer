@@ -2,9 +2,13 @@ name: Housekeeping Staging (Self-Contained)
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   run:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -23,6 +27,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
       - name: Node version (for dbexec bundle)
         uses: actions/setup-node@v4
@@ -180,6 +187,22 @@ jobs:
           else
             echo "No assertion file found, skipping"
           fi
+
+      - name: Boundary tripwire
+        run: |
+          set -e
+          echo "Checking for cross-app boundary violations..."
+          if [ -d "applications/" ]; then
+            if grep -R "insert into strategic_directives_v2" -n applications/ 2>/dev/null | grep -v "/eng/" ; then
+              echo "❌ FORBIDDEN: venture code writing to governance tables"
+              exit 1
+            fi
+            if grep -R "insert into eng\." -n applications/ 2>/dev/null | grep -v "/eng/" ; then
+              echo "❌ FORBIDDEN: venture code writing to eng schema"
+              exit 1
+            fi
+          fi
+          echo "✅ Boundary checks passed: no cross-app writes detected"
 
       - name: Append CI Automation Close-Out
         run: |
