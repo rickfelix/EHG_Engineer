@@ -173,5 +173,18 @@ END $$;
   WHERE p.id IS NULL
 ) TO 'orphans.csv' WITH CSV HEADER;
 
+-- 7) Orphan linking template (read-only, for human curation)
+-- Produces a pre-filled CSV reviewers can edit and commit as ops/inbox/orphan_links.csv
+\copy (
+  SELECT
+    b.backlog_id,
+    NULL::uuid  AS chosen_prd_id,           -- fill with target PRD id
+    'link'::text AS action,                 -- or 'archive' / 'ignore'
+    ''::text     AS comment
+  FROM sd_backlog_map b
+  LEFT JOIN product_requirements_v2 p ON p.id = b.prd_id
+  WHERE p.id IS NULL
+) TO 'orphan_links_template.csv' WITH CSV HEADER;
+
 -- Summary output
 \echo 'Backlog integrity checks complete. CSV reports generated.'
