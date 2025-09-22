@@ -939,11 +939,54 @@ app.get('/api/stories/gate', storiesAPI.releaseGate);
 app.get('/api/stories/health', storiesAPI.health);
 
 // =============================================================================
+// INTEGRITY METRICS API
+// =============================================================================
+
+// Get latest integrity metrics for dashboard display
+app.get('/api/integrity-metrics', async (req, res) => {
+  try {
+    const { data: backlogMetrics, error: backlogError } = await dbLoader.supabase
+      .from('integrity_metrics')
+      .select('*')
+      .eq('source', 'backlog-integrity')
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    const { data: ideationMetrics, error: ideationError } = await dbLoader.supabase
+      .from('integrity_metrics')
+      .select('*')
+      .eq('source', 'vh-ideation')
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (backlogError) throw backlogError;
+    if (ideationError) throw ideationError;
+
+    res.json({
+      backlog: backlogMetrics || [],
+      ideation: ideationMetrics || []
+    });
+  } catch (error) {
+    console.error('Error loading integrity metrics:', error);
+    res.status(500).json({ error: 'Failed to load integrity metrics' });
+  }
+});
+
+// Mock metrics endpoint (for backward compatibility)
+app.get('/api/metrics', (req, res) => {
+  res.json({
+    tests: { total: 0, passed: 0, failed: 0 },
+    coverage: { lines: 0, branches: 0, functions: 0, statements: 0 },
+    git: { branch: 'main', uncommittedChanges: 0, lastCommit: '' }
+  });
+});
+
+// =============================================================================
 // CLIENT SERVING
 // =============================================================================
 
-// Serve the React app for all other routes
-app.get('*', (req, res) => {
+// Serve the React app for all other routes (catch-all)
+app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'src/client/dist/index.html'));
 });
 
@@ -998,6 +1041,12 @@ if (dbLoader.isConnected && realtimeManager.isConnected) {
     loadState().then(() => {
       broadcastUpdate('database', { table: 'execution_sequences_v2', payload });
     });
+  });
+
+  // Subscribe to Integrity Metrics changes
+  realtimeManager.subscribeToIntegrityMetrics((payload) => {
+    console.log('📡 Realtime update: Integrity Metrics');
+    broadcastUpdate('integrity-metrics', payload);
   });
 }
 

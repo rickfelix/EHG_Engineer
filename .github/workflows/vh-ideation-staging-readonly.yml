@@ -84,6 +84,55 @@ jobs:
                 out.write(line)
           PY
 
+      - name: Push metrics to database
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          # Install Node.js dependencies if needed
+          if [ ! -d "node_modules" ]; then
+            npm install @supabase/supabase-js dotenv
+          fi
+
+          # Count gaps from reports
+          count() { [ -f "$1" ] && echo $(( $(wc -l < "$1") - 1 )) || echo 0; }
+
+          STAGE_GAPS=$(count ops/checks/out/vh_stage_coverage_gaps.csv)
+          NOT_READY=$(count ops/checks/out/vh_stage_readiness.csv)
+          VENTURE_NO_GOV=$(count ops/checks/out/vh_ventures_without_governance.csv)
+          RECO=$(count ops/checks/out/vh_ideation_recommendations.csv)
+
+          # Extract top 5 recommendations as JSON
+          python - <<'EXTRACT_RECO' > /tmp/top_recommendations.json
+          import csv, json, os
+          path = 'ops/checks/out/vh_ideation_recommendations.csv'
+          recs = []
+          if os.path.exists(path):
+            with open(path, newline='', encoding='utf-8') as f:
+              for i, row in enumerate(csv.DictReader(f)):
+                if i >= 5: break
+                recs.append({
+                  'title': row.get('suggested_title', ''),
+                  'urgency': row.get('urgency', 'medium'),
+                  'type': row.get('rec_type', 'SD'),
+                  'venture': row.get('venture_name', 'Unknown')
+                })
+          print(json.dumps(recs))
+          EXTRACT_RECO
+
+          TOP_RECS=$(cat /tmp/top_recommendations.json)
+
+          # Push to database
+          node scripts/push-integrity-metrics.js \
+            --source "vh-ideation" \
+            --workflow-run "${{ github.run_id }}" \
+            --stage-gaps "${STAGE_GAPS}" \
+            --not-ready "${NOT_READY}" \
+            --ventures-no-gov "${VENTURE_NO_GOV}" \
+            --recommendation-count "${RECO}" \
+            --recommendations "${TOP_RECS}" \
+          || echo "Warning: Could not push metrics to database"
+
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4

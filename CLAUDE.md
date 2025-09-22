@@ -1,7 +1,7 @@
 # CLAUDE.md - LEO Protocol Workflow Guide for AI Agents
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-09-22 8:14:13 AM
+**Last Generated**: 2025-09-22 5:00:05 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 

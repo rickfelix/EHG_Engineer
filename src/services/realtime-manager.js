@@ -150,15 +150,49 @@ class RealtimeManager {
   }
 
   /**
+   * Subscribe to Integrity Metrics changes
+   */
+  subscribeToIntegrityMetrics(callback) {
+    if (!this.isConnected) return null;
+
+    const channel = this.supabase
+      .channel('integrity-metrics-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'integrity_metrics'
+        },
+        (payload) => {
+          console.log('📊 Integrity Metrics Change detected:', payload.eventType);
+          callback({
+            type: 'integrity_metrics_change',
+            event: payload.eventType,
+            data: payload.new || payload.old,
+            old: payload.old
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log('🔗 Integrity Metrics Subscription status:', status);
+      });
+
+    this.subscriptions.set('integrity_metrics', channel);
+    return channel;
+  }
+
+  /**
    * Subscribe to all database changes
    */
   subscribeToAll(callback) {
     const channels = [];
-    
+
     // Subscribe to all tables
     channels.push(this.subscribeToStrategicDirectives(callback));
     channels.push(this.subscribeToPRDs(callback));
     channels.push(this.subscribeToExecutionSequences(callback));
+    channels.push(this.subscribeToIntegrityMetrics(callback));
 
     return channels.filter(Boolean);
   }
@@ -286,6 +320,15 @@ class RealtimeManager {
     }
     this.isConnected = false;
     console.log('🧹 Real-time manager cleaned up');
+  }
+
+  // Aliases for backward compatibility
+  subscribeToSDs(callback) {
+    return this.subscribeToStrategicDirectives(callback);
+  }
+
+  subscribeToEES(callback) {
+    return this.subscribeToExecutionSequences(callback);
   }
 }
 

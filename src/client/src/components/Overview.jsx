@@ -16,9 +16,11 @@ import {
 import SDAssistant from './SDAssistant';
 import ActiveSDProgress from './ActiveSDProgress';
 import SmartRefreshButton from './SmartRefreshButton';
+import IntegrityMetrics from './IntegrityMetrics';
 
 function Overview({ state, onRefresh, onSetActiveSD, isCompact }) {
   const [showSDAssistant, setShowSDAssistant] = useState(false);
+  const [integrityMetrics, setIntegrityMetrics] = useState(null);
   const [metrics, setMetrics] = useState({
     tests: { total: 0, passed: 0, failed: 0 },
     coverage: { lines: 0, branches: 0, functions: 0, statements: 0 },
@@ -30,6 +32,12 @@ function Overview({ state, onRefresh, onSetActiveSD, isCompact }) {
       .then(res => res.json())
       .then(data => setMetrics(data))
       .catch(error => console.error('Error loading metrics:', error));
+
+    // Load integrity metrics
+    fetch('/api/integrity-metrics')
+      .then(res => res.json())
+      .then(data => setIntegrityMetrics(data))
+      .catch(error => console.error('Error loading integrity metrics:', error));
   }, []);
 
   const contextPercentage = Math.round((state.context.usage / state.context.total) * 100);
@@ -79,12 +87,20 @@ function Overview({ state, onRefresh, onSetActiveSD, isCompact }) {
       </div>
 
       {/* Active Strategic Directive Progress */}
-      <ActiveSDProgress 
+      <ActiveSDProgress
         strategicDirectives={state.strategicDirectives}
         currentSD={state.leoProtocol?.currentSD}
         onSetActiveSD={onSetActiveSD}
         isCompact={isCompact}
       />
+
+      {/* Integrity Metrics Widget */}
+      {integrityMetrics && (
+        <div className={`grid gap-${isCompact ? '3' : '4'} grid-cols-1 md:grid-cols-2`}>
+          <IntegrityMetrics metrics={integrityMetrics.backlog} source="backlog-integrity" />
+          <IntegrityMetrics metrics={integrityMetrics.ideation} source="vh-ideation" />
+        </div>
+      )}
 
       {/* Recent Handoffs */}
       <div className={cardClass}>

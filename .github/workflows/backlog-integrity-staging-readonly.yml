@@ -231,6 +231,40 @@ jobs:
             echo "✅ Fixes applied successfully"
           } >> $GITHUB_STEP_SUMMARY
 
+      - name: Push metrics to database
+        if: ${{ !inputs.dry_run }}
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          # Install Node.js dependencies if needed
+          if [ ! -d "node_modules" ]; then
+            npm install @supabase/supabase-js dotenv
+          fi
+
+          # Count gaps from reports
+          count() { [ -f "$1" ] && echo $(( $(wc -l < "$1") - 1 )) || echo 0; }
+
+          SD=$(count reports/sd_metadata_gaps.csv)
+          PRD=$(count reports/prd_contract_gaps.csv)
+          BL=$(count reports/backlog_shape_issues.csv)
+          TR=$(count reports/traceability_gaps.csv)
+          DEP=$(count reports/gap_dependencies.csv)
+          ORPH=$(count reports/orphans.csv)
+
+          # Push to database
+          node scripts/push-integrity-metrics.js \
+            --source "backlog-integrity" \
+            --workflow-run "${{ github.run_id }}" \
+            --sd-gaps "${SD}" \
+            --prd-gaps "${PRD}" \
+            --backlog-issues "${BL}" \
+            --trace-gaps "${TR}" \
+            --dependencies "${DEP}" \
+            --orphans "${ORPH}" \
+          || echo "Warning: Could not push metrics to database"
+
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
