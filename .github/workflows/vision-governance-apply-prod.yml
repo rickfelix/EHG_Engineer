@@ -1,0 +1,344 @@
+name: Vision Governance Apply (Prod)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type PROMOTE to apply changes to production'
+        required: false
+        type: string
+      dry_run:
+        description: 'Preview mode (no database writes)'
+        required: false
+        default: 'true'
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: vision-apply-${{ github.ref || github.run_id }}
+  cancel-in-progress: false  # Never cancel mid-apply
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Triple safety gate
+    if: |
+      vars.APPLY_VISION_GOV == '1' &&
+      (inputs.dry_run == true || (inputs.confirm == 'PROMOTE' && vars.PROD_WRITE_OK == '1'))
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client python3 python3-pip
+          pip3 install pandas
+
+      - name: Check for Manifests
+        run: |
+          echo "## 📋 Manifest Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "ops/inbox/vision_sd_manifest.csv" ]; then
+            echo "✅ SD manifest found: $(wc -l < ops/inbox/vision_sd_manifest.csv) lines" >> $GITHUB_STEP_SUMMARY
+            head -5 ops/inbox/vision_sd_manifest.csv
+          else
+            echo "⚠️ SD manifest not found at ops/inbox/vision_sd_manifest.csv" >> $GITHUB_STEP_SUMMARY
+            echo "Generate it with: gh workflow run 'Vision Alignment (Prod, Read-Only)'" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+          if [ -f "ops/inbox/vision_prd_manifest.csv" ]; then
+            echo "✅ PRD manifest found: $(wc -l < ops/inbox/vision_prd_manifest.csv) lines" >> $GITHUB_STEP_SUMMARY
+            head -5 ops/inbox/vision_prd_manifest.csv
+          else
+            echo "⚠️ PRD manifest not found at ops/inbox/vision_prd_manifest.csv" >> $GITHUB_STEP_SUMMARY
+            echo "Generate it with: gh workflow run 'Vision Alignment (Prod, Read-Only)'" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+      - name: Validate Manifests
+        run: |
+          cat > validate_manifests.py << 'EOF'
+          import csv
+          import sys
+          import re
+          from datetime import datetime
+
+          errors = []
+          warnings = []
+
+          # Validate SD manifest
+          print("Validating SD manifest...")
+          required_sd_cols = ['sd_key', 'title', 'priority', 'owner', 'decision_log_ref', 'evidence_ref']
+
+          with open('ops/inbox/vision_sd_manifest.csv', 'r') as f:
+              reader = csv.DictReader(f)
+              sd_keys = set()
+
+              for i, row in enumerate(reader):
+                  # Check required fields
+                  for col in required_sd_cols:
+                      if col not in row or not row[col] or row[col] == 'TODO':
+                          errors.append(f"SD row {i+1}: Missing/invalid {col}")
+
+                  # Validate sd_key format
+                  if row.get('sd_key'):
+                      if not re.match(r'^SD-[\w-]+$', row['sd_key']):
+                          errors.append(f"SD row {i+1}: Invalid sd_key format: {row['sd_key']}")
+                      if row['sd_key'] in sd_keys:
+                          errors.append(f"SD row {i+1}: Duplicate sd_key: {row['sd_key']}")
+                      sd_keys.add(row['sd_key'])
+
+                  # Validate priority
+                  if row.get('priority'):
+                      try:
+                          p = int(row['priority'])
+                          if p < 0 or p > 100:
+                              warnings.append(f"SD row {i+1}: Priority {p} outside 0-100 range")
+                      except:
+                          errors.append(f"SD row {i+1}: Invalid priority: {row['priority']}")
+
+          # Validate PRD manifest
+          print(f"Validating PRD manifest...")
+          required_prd_cols = ['title', 'sd_key', 'completeness_score', 'risk_rating']
+
+          with open('ops/inbox/vision_prd_manifest.csv', 'r') as f:
+              reader = csv.DictReader(f)
+
+              for i, row in enumerate(reader):
+                  # Check required fields
+                  for col in required_prd_cols:
+                      if col not in row or not row[col] or row[col] == 'TODO':
+                          errors.append(f"PRD row {i+1}: Missing/invalid {col}")
+
+                  # Check SD linkage
+                  if row.get('sd_key') and row['sd_key'] not in sd_keys:
+                      warnings.append(f"PRD row {i+1}: References unknown SD: {row['sd_key']}")
+
+                  # Validate scores
+                  if row.get('completeness_score'):
+                      try:
+                          c = int(row['completeness_score'])
+                          if c < 0 or c > 100:
+                              errors.append(f"PRD row {i+1}: Completeness {c} outside 0-100")
+                      except:
+                          errors.append(f"PRD row {i+1}: Invalid completeness: {row['completeness_score']}")
+
+          # Report results
+          print(f"\n📊 Validation Results:")
+          print(f"  SDs found: {len(sd_keys)}")
+          print(f"  Errors: {len(errors)}")
+          print(f"  Warnings: {len(warnings)}")
+
+          if errors:
+              print("\n❌ ERRORS (must fix):")
+              for e in errors[:10]:  # Show first 10
+                  print(f"  - {e}")
+              sys.exit(1)
+
+          if warnings:
+              print("\n⚠️ WARNINGS (review):")
+              for w in warnings[:10]:
+                  print(f"  - {w}")
+
+          print("\n✅ Manifests validated successfully!")
+
+          # Write summary
+          with open('ops/checks/out/manifest_validation.md', 'w') as f:
+              f.write(f"# Manifest Validation Report\n\n")
+              f.write(f"**Generated**: {datetime.now().isoformat()}\n\n")
+              f.write(f"## Summary\n")
+              f.write(f"- SDs to create: {len(sd_keys)}\n")
+              f.write(f"- Validation errors: {len(errors)}\n")
+              f.write(f"- Validation warnings: {len(warnings)}\n")
+          EOF
+
+          mkdir -p ops/checks/out
+          python3 validate_manifests.py
+
+      - name: Apply SDs and PRDs
+        env:
+          PGHOST: ${{ secrets.PGHOST_PROD }}
+          PGPORT: ${{ secrets.PGPORT_PROD }}
+          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
+          PGUSER: ${{ secrets.PGUSER_PROD }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
+          PGSSLMODE: require
+        run: |
+          # Set DRY_RUN based on input
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            DRY_RUN=1
+          else
+            DRY_RUN=0
+          fi
+
+          echo "Running vision_apply_governance with DRY_RUN=$DRY_RUN"
+
+          # Run the existing SQL job
+          psql -v ON_ERROR_STOP=1 \
+               -v DRY_RUN=$DRY_RUN \
+               -f ops/jobs/vision_apply_governance_staging.sql \
+               > ops/checks/out/apply_results.txt 2>&1
+
+          # Check results
+          if [ $? -eq 0 ]; then
+            echo "✅ Vision governance apply completed successfully"
+            cat ops/checks/out/apply_results.txt
+          else
+            echo "❌ Vision governance apply failed"
+            cat ops/checks/out/apply_results.txt
+            exit 1
+          fi
+
+          # Extract metrics
+          grep -E "(INSERT|UPDATE|SKIP)" ops/checks/out/apply_results.txt > ops/checks/out/apply_metrics.txt || true
+
+      - name: Verify Results
+        if: inputs.dry_run == false
+        env:
+          PGHOST: ${{ secrets.PGHOST_PROD }}
+          PGPORT: ${{ secrets.PGPORT_PROD }}
+          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
+          PGUSER: ${{ secrets.PGUSER_PROD }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
+          PGSSLMODE: require
+        run: |
+          # Query newly created records
+          psql << 'EOF' > ops/checks/out/new_records.csv
+          -- New SDs created in this run
+          SELECT
+            id AS sd_id,
+            sd_key,
+            title,
+            owner,
+            priority,
+            status,
+            created_at
+          FROM strategic_directives_v2
+          WHERE created_at >= now() - interval '5 minutes'
+          ORDER BY created_at DESC;
+          EOF
+
+          psql << 'EOF' > ops/checks/out/new_prds.csv
+          -- New PRDs created in this run
+          SELECT
+            p.id AS prd_id,
+            p.title,
+            p.sd_id,
+            p.completeness_score,
+            p.risk_rating,
+            jsonb_array_length(p.acceptance_criteria_json) AS ac_count,
+            p.created_at
+          FROM product_requirements_v2 p
+          WHERE p.created_at >= now() - interval '5 minutes'
+          ORDER BY p.created_at DESC;
+          EOF
+
+          echo "New records created:"
+          wc -l ops/checks/out/new_records.csv
+          wc -l ops/checks/out/new_prds.csv
+
+      - name: Create Audit PR
+        if: inputs.dry_run == false
+        run: |
+          git config --global user.name "Vision Apply Bot"
+          git config --global user.email "actions@github.com"
+
+          # Create audit branch
+          BRANCH="vision-apply-audit-${{ github.run_id }}"
+          git checkout -b $BRANCH
+
+          # Copy results to audit directory
+          mkdir -p audit/vision/${{ github.run_id }}
+          cp ops/checks/out/*.csv audit/vision/${{ github.run_id }}/ || true
+          cp ops/checks/out/*.txt audit/vision/${{ github.run_id }}/ || true
+          cp ops/checks/out/*.md audit/vision/${{ github.run_id }}/ || true
+
+          # Create rollback script
+          cat > audit/vision/${{ github.run_id }}/rollback.sql << 'EOF'
+          -- Rollback script for Vision Apply Run ${{ github.run_id }}
+          -- Generated: $(date)
+
+          BEGIN;
+
+          -- Delete PRDs created in this run
+          DELETE FROM product_requirements_v2
+          WHERE created_at >= now() - interval '1 hour'
+            AND created_at::date = CURRENT_DATE;
+
+          -- Delete SDs created in this run
+          DELETE FROM strategic_directives_v2
+          WHERE created_at >= now() - interval '1 hour'
+            AND created_at::date = CURRENT_DATE;
+
+          -- Verify before committing
+          -- COMMIT;
+          EOF
+
+          # Commit
+          git add audit/vision/${{ github.run_id }}
+          git commit -m "Vision Apply Audit: Run ${{ github.run_id }}
+
+          Applied vision governance data to production.
+          See audit/vision/${{ github.run_id }}/ for details and rollback."
+
+          # Push and create PR
+          git push origin $BRANCH
+
+          gh pr create \
+            --title "Vision Apply Audit: Run ${{ github.run_id }}" \
+            --body "Applied vision SDs and PRDs to production. See audit trail in audit/vision/${{ github.run_id }}/" \
+            --base main \
+            --head $BRANCH
+
+      - name: Generate Summary
+        run: |
+          echo "## 🎯 Vision Governance Apply Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "### 🔍 DRY RUN MODE" >> $GITHUB_STEP_SUMMARY
+            echo "No changes were applied to the database" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ✅ PRODUCTION CHANGES APPLIED" >> $GITHUB_STEP_SUMMARY
+            echo "SDs and PRDs have been created in production" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "ops/checks/out/manifest_validation.md" ]; then
+            cat ops/checks/out/manifest_validation.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Results" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "ops/checks/out/apply_metrics.txt" ]; then
+            echo "```" >> $GITHUB_STEP_SUMMARY
+            cat ops/checks/out/apply_metrics.txt >> $GITHUB_STEP_SUMMARY
+            echo "```" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Run Vision Stories Apply to create user stories" >> $GITHUB_STEP_SUMMARY
+          echo "2. Re-run Vision Alignment to verify improvements" >> $GITHUB_STEP_SUMMARY
+          echo "3. Run WSJF Recommendations to see updated scores" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vision-apply-${{ github.run_id }}
+          path: |
+            ops/checks/out/*.csv
+            ops/checks/out/*.txt
+            ops/checks/out/*.md
+            ops/inbox/vision_*.csv
+          retention-days: 90  # Keep for audit trail
