@@ -11,6 +11,10 @@ permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: housekeeping-prod-${{ github.workflow }}
+  cancel-in-progress: false  # Never cancel production operations
+
 jobs:
   promote:
     if: ${{ github.event.inputs.confirm == 'PROMOTE' }}
