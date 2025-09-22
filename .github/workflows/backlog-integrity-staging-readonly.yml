@@ -86,7 +86,21 @@ jobs:
           
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📊 Reports available as workflow artifacts" >> $GITHUB_STEP_SUMMARY
-      
+
+      - name: Backlog integrity – asserts (critical only)
+        if: ${{ vars.ENABLE_BACKLOG_ASSERTS == '1' }}
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+        run: |
+          # Defaults to 0 if not set
+          ORPHAN_MAX="${{ vars.ORPHAN_MAX || 0 }}"
+          PRD_MAX="${{ vars.PRD_MAX || 0 }}"
+          psql "$DATABASE_URL" \
+               -v ON_ERROR_STOP=1 \
+               -v ORPHAN_MAX="${ORPHAN_MAX}" \
+               -v PRD_MAX="${PRD_MAX}" \
+               -f ops/checks/backlog_assert_critical.sql
+
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
