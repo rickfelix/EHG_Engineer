@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 BEGIN;
 
 -- Temporarily relax RLS for seed (ephemeral DB only)
