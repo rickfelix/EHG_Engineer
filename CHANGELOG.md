@@ -2,6 +2,24 @@
 
 ## 2025-09-22
 
+### Refactoring
+- **database-loader.js**: Split 1503-line monolithic file into 6 modular components (PR #4)
+  - `connections.js` (45 lines) - Supabase client management
+  - `strategic-loaders.js` (422 lines) - SD/PRD/EES loading
+  - `submissions.js` (308 lines) - SDIP submission handling
+  - `pr-reviews.js` (188 lines) - PR review tracking
+  - `utilities.js` (215 lines) - Shared helpers
+  - `index.js` (182 lines) - Main orchestrator
+  - Created 26-line backward-compatible shim maintaining all exports
+  - Zero behavior changes, 100% backward compatibility
+
+### Housekeeping & CI
+- Implemented self-contained CI with ephemeral PostgreSQL for staging validation
+- Added file bloat detection with path-aware thresholds
+- Created production promotion workflow with safety checks
+- Added schema drift detection and weekly reporting
+- Configured daily/weekly automation schedules
+
 ### EHG_Engineering
 - Added governance metadata + slug/UUID keys for SDs (`202509221300__eng_sd_metadata.sql`).
 - Realigned PRD contract with completeness/risk constraints and UUID linkage (`202509221305__eng_prd_contract.sql`).
