@@ -153,7 +153,13 @@ jobs:
         run: |
           echo "Hydrating venture linkages..."
           if [ -f "ops/jobs/hydrate_vh_linkage.sql" ]; then
-            PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE -f ops/jobs/hydrate_vh_linkage.sql
+            # Check if vh_ventures table exists first
+            TABLE_EXISTS=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'vh_ventures');")
+            if [ "$TABLE_EXISTS" = "t" ]; then
+              PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE -f ops/jobs/hydrate_vh_linkage.sql
+            else
+              echo "vh_ventures table not found, skipping hydration"
+            fi
           else
             echo "No hydration script, skipping"
           fi
