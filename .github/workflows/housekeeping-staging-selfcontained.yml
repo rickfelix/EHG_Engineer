@@ -71,6 +71,14 @@ jobs:
           done
           echo "Postgres never became ready"; exit 1
 
+      - name: Build loader (TypeScript - if .ts files exist)
+        if: ${{ hashFiles('src/services/database-loader/*.ts') != '' }}
+        run: |
+          echo "TypeScript files detected, building..."
+          npm ci
+          npm run build:loader
+          echo "✅ TypeScript build complete"
+
       - name: Build apply list (ordered)
         shell: bash
         run: |
