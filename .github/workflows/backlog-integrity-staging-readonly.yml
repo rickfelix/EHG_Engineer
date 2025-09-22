@@ -117,6 +117,25 @@ jobs:
                -v DEP_CYCLES_MAX="${DEP_CYCLES_MAX}" \
                -f ops/checks/backlog_assert_cycles.sql
 
+      - name: Apply backlog normalizations (staging, guarded)
+        if: ${{ vars.APPLY_BACKLOG_FIXES == '1' && vars.STAGING_WRITE_OK == '1' }}
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+        run: |
+          # Set DRY_RUN=1 for a safe preview; set to 0 to commit.
+          DRY_RUN="${{ vars.DRY_RUN || '1' }}"
+          psql "$DATABASE_URL" \
+               -v ON_ERROR_STOP=1 \
+               -v DRY_RUN="${DRY_RUN}" \
+               -f ops/jobs/backlog_apply_fixes_staging.sql
+
+          # Re-export CSVs after a committed run so the summary reflects changes
+          if [ "$DRY_RUN" = "0" ]; then
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/checks/backlog_integrity_staging.sql
+            # Move regenerated CSVs to reports/
+            mv *.csv reports/ 2>/dev/null || true
+          fi
+
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
