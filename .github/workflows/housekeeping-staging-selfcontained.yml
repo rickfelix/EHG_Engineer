@@ -206,6 +206,59 @@ jobs:
           fi
           echo "✅ Boundary checks passed: no cross-app writes detected"
 
+      - name: File bloat check (>512KB)
+        run: |
+          set -e
+          echo "Checking for large files..."
+          BYTES=524288  # 512KB
+          BLOAT=""
+
+          # Find files larger than threshold
+          for file in $(git ls-files); do
+            if [ -f "$file" ]; then
+              SIZE=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo 0)
+              if [ "$SIZE" -gt "$BYTES" ]; then
+                SIZE_KB=$((SIZE / 1024))
+                echo "  📦 ${SIZE_KB}KB - $file"
+                BLOAT="${BLOAT}${file}\n"
+              fi
+            fi
+          done
+
+          if [ -n "$BLOAT" ]; then
+            echo "::warning::Large files detected (>512KB). Consider refactoring or moving to artifacts."
+            echo "⚠️ Files exceeding size limit found - review recommended"
+            # Change to 'exit 1' to enforce strict mode
+          else
+            echo "✅ No large files detected"
+          fi
+
+      - name: Monolith check (>1200 lines)
+        run: |
+          set -e
+          echo "Checking for monolithic files..."
+          MAX_LINES=1200
+          MONOLITHS=""
+
+          # Check specific file types for line count
+          for file in $(git ls-files '*.js' '*.ts' '*.jsx' '*.tsx' '*.sql' '*.md' 2>/dev/null); do
+            if [ -f "$file" ]; then
+              LINES=$(wc -l < "$file")
+              if [ "$LINES" -gt "$MAX_LINES" ]; then
+                echo "  📜 ${LINES} lines - $file"
+                MONOLITHS="${MONOLITHS}${file}\n"
+              fi
+            fi
+          done
+
+          if [ -n "$MONOLITHS" ]; then
+            echo "::warning::Monolithic files detected (>${MAX_LINES} lines). Consider refactoring."
+            echo "⚠️ Long files found - refactoring recommended"
+            # Change to 'exit 1' to enforce strict mode
+          else
+            echo "✅ No monolithic files detected"
+          fi
+
       - name: Append CI Automation Close-Out
         run: |
           TS=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
