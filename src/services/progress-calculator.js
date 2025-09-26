@@ -162,11 +162,11 @@ class ProgressCalculator {
   calculateExecImplementationProgress(prd) {
     if (!prd) return 0;
 
-    const execChecklist = prd.exec_checklist || [];
+    const execChecklist = Array.isArray(prd.exec_checklist) ? prd.exec_checklist : [];
     if (execChecklist.length === 0) return 100; // No checklist = considered complete
 
-    const completedItems = execChecklist.filter(item => 
-      (typeof item === 'object' && item.checked) || 
+    const completedItems = execChecklist.filter(item =>
+      (typeof item === 'object' && item.checked) ||
       (typeof item === 'string' && false)
     ).length;
 
@@ -174,10 +174,10 @@ class ProgressCalculator {
   }
 
   getExecImplementationDetails(prd) {
-    const execChecklist = prd.exec_checklist || [];
+    const execChecklist = Array.isArray(prd.exec_checklist) ? prd.exec_checklist : [];
     return {
       totalItems: execChecklist.length,
-      completedItems: execChecklist.filter(item => 
+      completedItems: execChecklist.filter(item =>
         typeof item === 'object' && item.checked
       ).length,
       phase: prd?.phase || 'unknown'

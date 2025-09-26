@@ -65,10 +65,8 @@ class StrategicLoaders {
         .from('execution_sequences_v2')
         .select('*');
 
-      // Load User Stories
-      const { data: allStories } = await supabase
-        .from('v_story_verification_status')
-        .select('*');
+      // Note: User stories functionality removed - replaced with backlog summaries
+      // Backlog summaries will be fetched via API on-demand for better performance
 
       // Create PRD lookup map (multiple PRDs per SD)
       const prdMap = {};
@@ -81,24 +79,16 @@ class StrategicLoaders {
         });
       }
 
-      // Create User Stories lookup map (multiple stories per SD)
-      const storiesMap = {};
-      if (allStories) {
-        allStories.forEach(story => {
-          if (!storiesMap[story.sd_key]) {
-            storiesMap[story.sd_key] = [];
-          }
-          storiesMap[story.sd_key].push(story);
-        });
-        console.log(`📋 Loaded ${allStories.length} user stories for ${Object.keys(storiesMap).length} SDs`);
-      }
+      // User stories functionality removed - replaced with AI-generated backlog summaries
+      // This improves performance and provides more relevant information from actual backlog data
 
       // Transform database records to dashboard format
       const sds = data.map(sd => {
         const backlogInfo = backlogMap[sd.id] || {};
         const sdPRDs = prdMap[sd.id] || [];
         const sdEES = allEES?.filter(e => e.sd_id === sd.id) || [];
-        const sdStories = storiesMap[sd.sd_key] || [];
+        // Backlog summary will be fetched on-demand via API
+        const backlogItemCount = backlogInfo.total_items || sd.total_items || 0;
 
         // Calculate overall progress - use first PRD for progress calculation
         // TODO: Enhance to handle multiple PRDs per SD properly
@@ -164,10 +154,9 @@ class StrategicLoaders {
           rolled_triage: backlogInfo.rolled_triage || sd.rolled_triage || 0,
           total_items: backlogInfo.total_items || sd.total_items || 0,
 
-          // Add user stories information
-          userStories: sdStories,
-          storyCount: sdStories.length,
-          storySummary: this.generateStorySummary(sdStories),
+          // Add backlog information for on-demand summary generation
+          backlogItemCount: backlogItemCount,
+          hasBacklogItems: backlogItemCount > 0,
 
           createdAt: sd.created_at,
           updatedAt: sd.updated_at || sd.created_at
@@ -439,31 +428,6 @@ ${prd.stakeholders?.map(stakeholder => `- ${stakeholder}`).join('\n') || '- No s
 *Generated from database record*`;
   }
 
-  generateStorySummary(stories) {
-    if (!stories || stories.length === 0) {
-      return {
-        total: 0,
-        statusBreakdown: { passing: 0, failing: 0, not_run: 0 },
-        summary: 'No user stories found'
-      };
-    }
-
-    const statusBreakdown = {
-      passing: stories.filter(s => s.status === 'passing').length,
-      failing: stories.filter(s => s.status === 'failing').length,
-      not_run: stories.filter(s => s.status === 'not_run').length
-    };
-
-    const totalStories = stories.length;
-    const passingPct = Math.round((statusBreakdown.passing / totalStories) * 100);
-
-    return {
-      total: totalStories,
-      statusBreakdown,
-      passingPct,
-      summary: `${totalStories} stories (${statusBreakdown.passing} passing, ${statusBreakdown.failing} failing, ${statusBreakdown.not_run} not run)`
-    };
-  }
 }
 
 export default StrategicLoaders;
