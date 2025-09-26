@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { 
-  FileText, 
+import {
+  FileText,
   ChevronDown,
   ChevronRight,
-  ChevronUp, 
+  ChevronUp,
   CheckSquare,
   Square,
   Calendar,
@@ -24,7 +24,10 @@ import {
   Package,
   Edit3,
   X,
-  Sparkles
+  Sparkles,
+  Brain,
+  RefreshCw,
+  Database
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 // SDAssistant removed - using DirectiveLab instead
@@ -191,15 +194,65 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
     }
   };
 
-  const generateStoriesForSD = async (sdKey) => {
+  // State for AI backlog summaries
+  const [backlogSummaries, setBacklogSummaries] = useState({});
+  const [loadingSummaries, setLoadingSummaries] = useState(new Set());
+  const [collapsedBacklogSections, setCollapsedBacklogSections] = useState(new Set());
+
+  // Function to fetch AI-generated backlog summary
+  const fetchBacklogSummary = async (sdId, forceRefresh = false) => {
+    // Don't refetch if we have it and not forcing refresh
+    if (!forceRefresh && backlogSummaries[sdId] && backlogSummaries[sdId].summary) {
+      return; // Already loaded
+    }
+
+    if (loadingSummaries.has(sdId)) {
+      return; // Currently loading
+    }
+
+    setLoadingSummaries(prev => new Set(prev).add(sdId));
+
     try {
-      // TODO: Implement story generation API call
-      console.log('Generating stories for SD:', sdKey);
-      // This would call the OpenAI story generation endpoint
-      // For now, navigate to the stories page where generation can happen
-      navigate(`/stories/${sdKey}`);
+      const url = `/api/strategic-directives/${sdId}/backlog-summary${forceRefresh ? '?force_refresh=true' : ''}`;
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (response.ok) {
+        setBacklogSummaries(prev => ({
+          ...prev,
+          [sdId]: {
+            ...data,
+            timestamp: Date.now() // Track when we fetched it
+          }
+        }));
+      } else {
+        console.warn(`Failed to fetch backlog summary for ${sdId}:`, data.error);
+        // Set fallback data
+        setBacklogSummaries(prev => ({
+          ...prev,
+          [sdId]: {
+            summary: data.fallback || 'Backlog summary unavailable.',
+            itemCount: 0,
+            cached: false
+          }
+        }));
+      }
     } catch (error) {
-      console.error('Error generating stories:', error);
+      console.error('Error fetching backlog summary:', error);
+      setBacklogSummaries(prev => ({
+        ...prev,
+        [sdId]: {
+          summary: 'Unable to load backlog summary.',
+          itemCount: 0,
+          cached: false
+        }
+      }));
+    } finally {
+      setLoadingSummaries(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(sdId);
+        return newSet;
+      });
     }
   };
 
@@ -719,7 +772,7 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
           {sortedDirectives.map((sd) => (
             <div
               key={sd.id}
-              className={`bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 ${getPriorityBorderColor(sd.priority)}`}
+              className={`group bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 ${getPriorityBorderColor(sd.priority)}`}
             >
               <div className={`${isCompact ? 'p-3' : 'p-6'} relative`}>
                 <div className="flex items-start justify-between">
@@ -739,11 +792,6 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                       <div className="space-y-2">
                         {/* SD ID and sequence rank */}
                         <div className="flex items-center">
-                          {sd.sequence_rank && (
-                            <span className="text-xs font-medium px-1.5 py-0.5 mr-2 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400 rounded">
-                              #{sd.sequence_rank}
-                            </span>
-                          )}
                           <span className="inline-flex items-center group">
                             <span className="text-primary-600 dark:text-primary-400 font-mono text-lg font-bold">{sd.id}</span>
                             <button
@@ -769,140 +817,8 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                         </h2>
                       </div>
                     </div>
-                    
-                    <div className={`${isCompact ? 'mt-2 gap-1' : 'mt-3 gap-2'} flex flex-wrap items-center`}>
-                      {/* Status badge with edit capability */}
-                      <div className="relative inline-block">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setStatusDropdownOpen(statusDropdownOpen === sd.id ? null : sd.id);
-                          }}
-                          className="group flex items-center gap-1 hover:opacity-80 transition-opacity"
-                        >
-                          {getStatusBadge(sd.status)}
-                          <Edit3 className="w-3 h-3 text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
-                        </button>
-                        
-                        {statusDropdownOpen === sd.id && (
-                          <div className="absolute left-0 mt-1 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
-                            <div className="py-1">
-                              {['active', 'draft', 'on_hold', 'cancelled', 'archived'].map(status => (
-                                <button
-                                  key={status}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (onUpdateStatus) {
-                                      onUpdateStatus(sd.id, status);
-                                    }
-                                    setStatusDropdownOpen(null);
-                                  }}
-                                  className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between ${
-                                    sd.status === status ? 'bg-gray-50 dark:bg-gray-700/50 text-primary-600' : 'text-gray-700 dark:text-gray-200'
-                                  }`}
-                                >
-                                  <span className="capitalize">{status}</span>
-                                  {sd.status === status && <CheckSquare className="w-3 h-3" />}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
 
-                      {/* Target Application badge */}
-                      {sd.targetApplication && (
-                        <span className={`${isCompact ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-xs'} font-medium rounded ${
-                          sd.targetApplication === 'EHG_ENGINEER'
-                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400'
-                            : sd.targetApplication === 'EHG'
-                            ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                        }`}>
-                          {sd.targetApplication.replace('_', ' ')}
-                        </span>
-                      )}
 
-                      {/* View Backlog button - always show, indicate count if available */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/backlog?sd=${sd.sd_id || sd.id}`);
-                        }}
-                        className={`flex items-center ${isCompact ? 'px-2 py-0.5 text-xs' : 'px-3 py-1 text-sm'} ${
-                          (sd.total_backlog_items > 0 || sd.total_items > 0 || sd.backlog_count > 0) 
-                            ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-800/40' 
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-                        } rounded transition-colors`}
-                      >
-                        <Package className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} />
-                        Backlog
-                        <span className={`ml-1 ${isCompact ? 'px-1' : 'px-1.5'} py-0.5 ${
-                          (sd.total_backlog_items > 0 || sd.total_items > 0 || sd.backlog_count > 0)
-                            ? 'bg-indigo-200 dark:bg-indigo-800'
-                            : 'bg-gray-200 dark:bg-gray-600'
-                        } rounded text-xs font-bold`}>
-                          {sd.total_backlog_items || sd.total_items || sd.backlog_count || 0}
-                        </span>
-                      </button>
-                      
-                      {/* Show rolled triage from import */}
-                      {sd.rolled_triage && (
-                        <span className={`${isCompact ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-xs'} font-medium rounded ${
-                          sd.rolled_triage === 'High' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                          sd.rolled_triage === 'Medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                          sd.rolled_triage === 'Low' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                          'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                        }`}>
-                          {isCompact ? sd.rolled_triage[0] : `Triage: ${sd.rolled_triage}`}
-                        </span>
-                      )}
-                      
-                      {/* Show must-have percentage */}
-                      {sd.must_have_pct !== null && (
-                        <span className={`${isCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 rounded`}>
-                          {sd.must_have_pct}%{!isCompact && ' Must-Have'}
-                        </span>
-                      )}
-                      
-                      {/* Show category */}
-                      {sd.category && !isCompact && (
-                        <span className="px-2 py-1 text-xs bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400 rounded">
-                          {sd.category}
-                        </span>
-                      )}
-                      
-                      {sd.metadata.Status && sd.metadata.Status !== sd.status && (
-                        <span className={`px-2 py-1 text-xs rounded ${
-                          sd.metadata.Status === 'Completed' ? 'bg-green-100 text-green-800' :
-                          sd.metadata.Status === 'In Progress' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {sd.metadata.Status}
-                        </span>
-                      )}
-                      {sd.metadata.Priority && (
-                        <span className={`px-2 py-1 text-xs rounded ${
-                          sd.metadata.Priority === 'High' ? 'bg-red-100 text-red-800' :
-                          sd.metadata.Priority === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-green-100 text-green-800'
-                        }`}>
-                          {sd.metadata.Priority}
-                        </span>
-                      )}
-                      {sd.metadata.Owner && (
-                        <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded flex items-center">
-                          <User className="w-3 h-3 mr-1" />
-                          {sd.metadata.Owner}
-                        </span>
-                      )}
-                      {sd.metadata.Date && (
-                        <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded flex items-center">
-                          <Calendar className="w-3 h-3 mr-1" />
-                          {sd.metadata.Date}
-                        </span>
-                      )}
-                    </div>
 
                     {/* Enhanced Progress Bar */}
                     <div className={`${isCompact ? 'mt-2' : 'mt-4'}`}>
@@ -933,14 +849,8 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                   </div>
 
                   <div className={`${isCompact ? 'ml-2' : 'ml-4'} flex flex-col items-end ${isCompact ? 'space-y-1' : 'space-y-2'}`}>
-                    
+
                     <div className={`flex ${isCompact ? 'space-x-1' : 'space-x-2'}`}>
-                      <button
-                        onClick={() => viewDetail(sd)}
-                        className={`${isCompact ? 'px-2 py-1 text-xs' : 'px-4 py-2'} bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg`}
-                      >
-                        {isCompact ? 'View' : 'View Full'}
-                      </button>
                       {currentSD === sd.id ? (
                         <button
                           disabled
@@ -960,70 +870,88 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                       )}
                     </div>
 
-                    {/* Metadata display */}
-                    {sd.metadata && (
-                      <div className={`${isCompact ? 'mt-2' : 'mt-3'} space-y-1`}>
-                        <div className={`${isCompact ? 'text-xs' : 'text-sm'} text-gray-600 dark:text-gray-400 font-medium`}>
-                          Metadata
-                        </div>
-                        <div className="space-y-1">
-                          {Object.entries(sd.metadata).map(([key, value]) => (
-                            value && (
-                              <div key={key} className={`flex ${isCompact ? 'text-xs' : 'text-sm'} text-gray-600 dark:text-gray-400`}>
-                                <span className="font-medium mr-2 min-w-[80px]">{key}:</span>
-                                <span className="break-all">{value}</span>
-                              </div>
-                            )
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    {/* Metadata Badges - MOVED HERE with neutral colors */}
+                    <div className={`${isCompact ? 'mt-2 gap-1' : 'mt-3 gap-2'} flex flex-wrap items-end justify-end`}>
+                      {/* Status badge with edit capability */}
+                      <div className="relative inline-block">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setStatusDropdownOpen(statusDropdownOpen === sd.id ? null : sd.id);
+                          }}
+                          className="group flex items-center gap-1 hover:opacity-80 transition-opacity"
+                        >
+                          {getStatusBadge(sd.status)}
+                          <Edit3 className="w-3 h-3 text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                        </button>
 
-                    {/* User Stories Summary */}
-                    {sd.storySummary && (
-                      <div className={`${isCompact ? 'mt-2' : 'mt-3'} pt-3 border-t border-gray-200 dark:border-gray-700`}>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className={`${isCompact ? 'text-xs' : 'text-sm'} font-medium text-gray-700 dark:text-gray-300 flex items-center`}>
-                            📚 User Stories
-                          </span>
-                          <span className={`${isCompact ? 'text-xs' : 'text-sm'} bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-1 rounded-full`}>
-                            {sd.storyCount}
-                          </span>
-                        </div>
-
-                        {sd.storyCount > 0 ? (
-                          <div className="space-y-2">
-                            <div className={`flex items-center space-x-2 ${isCompact ? 'text-xs' : 'text-sm'}`}>
-                              <span className="text-green-600 dark:text-green-400">✅ {sd.storySummary.statusBreakdown.passing}</span>
-                              <span className="text-red-600 dark:text-red-400">❌ {sd.storySummary.statusBreakdown.failing}</span>
-                              <span className="text-gray-600 dark:text-gray-400">⏸️ {sd.storySummary.statusBreakdown.not_run}</span>
+                        {statusDropdownOpen === sd.id && (
+                          <div className="absolute left-0 mt-1 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+                            <div className="py-1">
+                              {['active', 'draft', 'on_hold', 'cancelled', 'archived'].map(status => (
+                                <button
+                                  key={status}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onUpdateStatus) {
+                                      onUpdateStatus(sd.id, status);
+                                    }
+                                    setStatusDropdownOpen(null);
+                                  }}
+                                  className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between ${
+                                    sd.status === status ? 'bg-gray-50 dark:bg-gray-700/50 text-primary-600' : 'text-gray-700 dark:text-gray-200'
+                                  }`}
+                                >
+                                  <span className="capitalize">{status}</span>
+                                  {sd.status === status && <CheckSquare className="w-3 h-3" />}
+                                </button>
+                              ))}
                             </div>
-                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                              <div
-                                className="bg-green-500 h-2 rounded-full transition-all duration-300"
-                                style={{ width: `${sd.storySummary.passingPct || 0}%` }}
-                              ></div>
-                            </div>
-                            <Link
-                              to={`/stories/${sd.sdKey}`}
-                              className={`inline-flex items-center ${isCompact ? 'text-xs' : 'text-sm'} text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300`}
-                            >
-                              View Stories →
-                            </Link>
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            <p className={`${isCompact ? 'text-xs' : 'text-sm'} text-gray-500 dark:text-gray-400`}>No stories yet</p>
-                            <button
-                              onClick={() => generateStoriesForSD(sd.sdKey)}
-                              className={`inline-flex items-center ${isCompact ? 'text-xs' : 'text-sm'} text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300`}
-                            >
-                              + Generate Stories
-                            </button>
                           </div>
                         )}
                       </div>
-                    )}
+
+                      {/* Target Application badge with neutral colors */}
+                      {sd.targetApplication && (
+                        <span className={`${isCompact ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-xs'} font-medium rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300`}>
+                          {sd.targetApplication.replace('_', ' ')}
+                        </span>
+                      )}
+
+                      {/* View Backlog with neutral colors */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/backlog?sd=${sd.sd_id || sd.id}`);
+                        }}
+                        className={`flex items-center ${isCompact ? 'px-2 py-0.5 text-xs' : 'px-2 py-1 text-xs'} transition-all duration-200 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded`}
+                        title={`${sd.total_backlog_items || sd.total_items || sd.backlog_count || 0} backlog items`}
+                      >
+                        <Package className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'}`} />
+                        <span className="ml-1 text-xs">
+                          {sd.total_backlog_items || sd.total_items || sd.backlog_count || 0}
+                        </span>
+                      </button>
+
+                      {/* Priority with neutral colors */}
+                      {(sd.priority || sd.rolled_triage) && (
+                        <span className={`${isCompact ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-xs'} font-medium rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300`}>
+                          {isCompact ?
+                            (sd.priority?.[0]?.toUpperCase() || sd.rolled_triage?.[0]) :
+                            `${sd.priority || sd.rolled_triage}`
+                          }
+                        </span>
+                      )}
+
+                      {/* Category with neutral colors */}
+                      {sd.category && (
+                        <span className={`px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded`}>
+                          {sd.category}
+                        </span>
+                      )}
+                    </div>
+
+
 
                     {sd.checklist && sd.checklist.length > 0 && (
                       <div className="text-sm text-gray-600">
@@ -1036,52 +964,131 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                   </div>
                 </div>
 
+                {/* AI-Generated Backlog Summary - Full width below flex container */}
+                {sd.hasBacklogItems && (
+                  <div className={`${isCompact ? 'mt-3' : 'mt-4'} pt-3 border-t border-gray-200 dark:border-gray-700`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <button
+                        onClick={() => {
+                          setCollapsedBacklogSections(prev => {
+                            const next = new Set(prev);
+                            if (next.has(sd.id)) {
+                              next.delete(sd.id);
+                            } else {
+                              next.add(sd.id);
+                            }
+                            return next;
+                          });
+                        }}
+                        className={`${isCompact ? 'text-xs' : 'text-sm'} font-medium text-gray-700 dark:text-gray-300 flex items-center hover:text-purple-600 dark:hover:text-purple-400 transition-colors`}
+                      >
+                        {collapsedBacklogSections.has(sd.id) ? (
+                          <ChevronRight className="w-4 h-4 mr-1" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 mr-1" />
+                        )}
+                        <Brain className="w-4 h-4 mr-1" />
+                        Backlog Overview
+                      </button>
+                      <div className="flex items-center gap-2">
+                        {backlogSummaries[sd.id] && !collapsedBacklogSections.has(sd.id) && (
+                          <button
+                            onClick={() => fetchBacklogSummary(sd.id, true)}
+                            disabled={loadingSummaries.has(sd.id)}
+                            className={`p-1 text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors ${loadingSummaries.has(sd.id) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            title="Refresh summary"
+                          >
+                            <RefreshCw className={`w-4 h-4 ${loadingSummaries.has(sd.id) ? 'animate-spin' : ''}`} />
+                          </button>
+                        )}
+                        <span className={`${isCompact ? 'text-xs' : 'text-sm'} bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 px-2 py-1 rounded-full`}>
+                          {sd.backlogItemCount}
+                        </span>
+                      </div>
+                    </div>
+
+                    {!collapsedBacklogSections.has(sd.id) && (
+                      <>
+                        {backlogSummaries[sd.id] ? (
+                          <div className="space-y-2">
+                            <div className={`${isCompact ? 'text-xs' : 'text-sm'} text-gray-700 dark:text-gray-300 leading-relaxed`}>
+                              {backlogSummaries[sd.id].summary}
+                            </div>
+                            {/* Show when summary was generated and if it's from database */}
+                            {(backlogSummaries[sd.id].generated_at || backlogSummaries[sd.id].from_database) && (
+                              <div className="flex items-center justify-between mt-2">
+                                <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                                  {backlogSummaries[sd.id].from_database && (
+                                    <>
+                                      <Database className="w-3 h-3 mr-1" />
+                                      Stored in database
+                                    </>
+                                  )}
+                                  {backlogSummaries[sd.id].generated_at && (
+                                    <span className="ml-2">
+                                      Generated: {new Date(backlogSummaries[sd.id].generated_at).toLocaleString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                            )}
+                            <div className={`flex items-center space-x-2 ${isCompact ? 'text-xs' : 'text-sm'}`}>
+                              <span className="text-red-600 dark:text-red-400">🔥 {sd.h_count} High</span>
+                              <span className="text-orange-600 dark:text-orange-400">📋 {sd.m_count} Medium</span>
+                              <span className="text-blue-600 dark:text-blue-400">📝 {sd.l_count} Low</span>
+                              <span className="text-gray-600 dark:text-gray-400">🔮 {sd.future_count} Future</span>
+                            </div>
+                            {backlogSummaries[sd.id].generated_at && (
+                              <div className="text-xs text-gray-500 dark:text-gray-400 italic">
+                                Generated: {new Date(backlogSummaries[sd.id].generated_at).toLocaleString()}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {loadingSummaries.has(sd.id) ? (
+                              <div className={`${isCompact ? 'text-xs' : 'text-sm'} text-gray-500 dark:text-gray-400 flex items-center`}>
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-500 mr-2"></div>
+                                Generating AI summary...
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => fetchBacklogSummary(sd.id)}
+                                className={`inline-flex items-center ${isCompact ? 'text-xs px-2 py-1' : 'text-sm px-3 py-1'} bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/30 dark:hover:bg-purple-800/30 text-purple-800 dark:text-purple-300 rounded transition-colors`}
+                              >
+                                <Brain className="w-3 h-3 mr-1" />
+                                Generate AI Summary
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
                 {/* Expanded Content */}
                 {expandedSD === sd.id && (
                   <div className="mt-6 border-t pt-6">
-                    {/* Backlog Items Summary */}
+                    {/* Consolidated Backlog Summary - Details available in compact badge above */}
                     {(sd.h_count > 0 || sd.m_count > 0 || sd.l_count > 0 || sd.future_count > 0) && (
-                      <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                        <h3 className="text-lg font-semibold mb-3 flex items-center">
-                          <FileText className="w-5 h-5 mr-2 text-blue-600" />
-                          Backlog Items Summary
-                        </h3>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                          {sd.h_count > 0 && (
-                            <div className="text-center p-2 bg-red-100 dark:bg-red-900/20 rounded">
-                              <p className="text-2xl font-bold text-red-700 dark:text-red-400">{sd.h_count}</p>
-                              <p className="text-xs text-red-600 dark:text-red-300">High Priority</p>
-                            </div>
-                          )}
-                          {sd.m_count > 0 && (
-                            <div className="text-center p-2 bg-yellow-100 dark:bg-yellow-900/20 rounded">
-                              <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">{sd.m_count}</p>
-                              <p className="text-xs text-yellow-600 dark:text-yellow-300">Medium Priority</p>
-                            </div>
-                          )}
-                          {sd.l_count > 0 && (
-                            <div className="text-center p-2 bg-green-100 dark:bg-green-900/20 rounded">
-                              <p className="text-2xl font-bold text-green-700 dark:text-green-400">{sd.l_count}</p>
-                              <p className="text-xs text-green-600 dark:text-green-300">Low Priority</p>
-                            </div>
-                          )}
-                          {sd.future_count > 0 && (
-                            <div className="text-center p-2 bg-gray-100 dark:bg-gray-600 rounded">
-                              <p className="text-2xl font-bold text-gray-700 dark:text-gray-300">{sd.future_count}</p>
-                              <p className="text-xs text-gray-600 dark:text-gray-400">Future</p>
-                            </div>
-                          )}
+                      <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
+                            <FileText className="w-4 h-4 mr-2 text-blue-600" />
+                            Backlog Details
+                          </span>
+                          <span className="text-xs text-gray-600 dark:text-gray-400">
+                            H: {sd.h_count || 0} • M: {sd.m_count || 0} • L: {sd.l_count || 0}
+                            {sd.future_count > 0 && ` • Future: ${sd.future_count}`}
+                            {sd.must_have_count > 0 && ` • Must-have: ${sd.must_have_count}`}
+                          </span>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Total backlog items: {(sd.h_count || 0) + (sd.m_count || 0) + (sd.l_count || 0) + (sd.future_count || 0)}
-                          {sd.must_have_count > 0 && ` • Must-have: ${sd.must_have_count}`}
-                        </p>
-                        <button
-                          onClick={() => viewDetail(sd)}
-                          className="mt-3 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium"
-                        >
-                          View all backlog items →
-                        </button>
                       </div>
                     )}
                     
@@ -1110,12 +1117,9 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                             </label>
                           ))}
                           {sd.checklist && sd.checklist.length > 5 && (
-                            <button
-                              onClick={() => viewDetail(sd)}
-                              className="text-primary-600 hover:text-primary-700 text-sm"
-                            >
-                              View all {sd.checklist.length} items...
-                            </button>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              +{sd.checklist.length - 5} more items
+                            </span>
                           )}
                         </div>
                       </div>
@@ -1129,12 +1133,59 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                           {sd.content.substring(0, 500) + (sd.content.length > 500 ? '...' : '')}
                         </ReactMarkdown>
                       </div>
-                      <button
-                        onClick={() => viewDetail(sd)}
-                        className="mt-3 text-primary-600 hover:text-primary-700"
-                      >
-                        Read full document →
-                      </button>
+                      <span className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                        Full content available in detail view
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Consolidated Action Bar - Clear hierarchy for secondary actions */}
+                {expandedSD === sd.id && (
+                  <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex flex-wrap gap-2 justify-between items-center">
+                      {/* Secondary Actions */}
+                      <div className="flex flex-wrap gap-2">
+                        {/* User Stories Action */}
+                        {sd.storyCount > 0 ? (
+                          <Link
+                            to={`/stories/${sd.sdKey}`}
+                            className="inline-flex items-center px-3 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-200"
+                          >
+                            📚 View {sd.storyCount} Stories
+                          </Link>
+                        ) : (
+                          <button
+                            onClick={() => generateStoriesForSD(sd.sdKey)}
+                            className="inline-flex items-center px-3 py-1.5 text-sm text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 border border-green-200 dark:border-green-800 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 transition-all duration-200"
+                          >
+                            ✨ Generate Stories
+                          </button>
+                        )}
+
+                        {/* Checklist Action */}
+                        {sd.checklist && sd.checklist.length > 0 && (
+                          <button
+                            onClick={() => viewDetail(sd)}
+                            className="inline-flex items-center px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200"
+                          >
+                            ✅ View All {sd.checklist.length} Tasks
+                          </button>
+                        )}
+
+                        {/* Content Action */}
+                        <button
+                          onClick={() => viewDetail(sd)}
+                          className="inline-flex items-center px-3 py-1.5 text-sm text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all duration-200"
+                        >
+                          📄 Full Document
+                        </button>
+                      </div>
+
+                      {/* Tertiary Action */}
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Updated {new Date(sd.updatedAt).toLocaleDateString()}
+                      </div>
                     </div>
                   </div>
                 )}
