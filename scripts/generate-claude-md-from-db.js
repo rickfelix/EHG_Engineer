@@ -133,6 +133,16 @@ class CLAUDEMDGenerator {
     
     return `# CLAUDE.md - LEO Protocol Workflow Guide for AI Agents
 
+## Session Prologue (Short)
+1. **Follow LEAD→PLAN→EXEC** - Target ≥85% gate pass rate
+2. **Use sub-agents** - Architect, QA, Reviewer - summarize outputs
+3. **Database-first** - No markdown files as source of truth
+4. **Small PRs** - Keep diffs ≤100 lines per change
+5. **7-element handoffs** - Required for all phase transitions
+6. **Priority-first** - Use \`npm run prio:top3\` to justify work
+
+*For copy-paste version: see \`templates/session-prologue.md\` (generate via \`npm run session:prologue\`)*
+
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
 **Last Generated**: ${today} ${new Date().toLocaleTimeString()}
 **Source**: Supabase Database (not files)
@@ -225,6 +235,11 @@ LEO Protocol v4.1.2 is **DATABASE-FIRST ONLY**. **NEVER** create:
 - ✅ Handoffs: Store in handoff tracking tables
 - ✅ Progress: Update database fields directly
 - ✅ Verification: Store results in database
+- ✅ Boundary Rules: See \`docs/boundary-examples.md\` (generate: \`npm run docs:boundary\`)
+- ✅ Dependency Policy: New dependencies require rationale; policy warns on unknown, blocks denied (see \`config/allowed-deps.json\`)
+- ✅ Session Starter: Copy \`templates/session-prologue.md\` at session start (generate: \`npm run session:prologue\`)
+- ✅ Coverage Floor: 50% minimum (\`coverage-grace\` label allows 2 PRs bypass)
+- ✅ Bundle Cap: 480KB absolute limit (delta: +50KB max vs main branch)
 
 ### If You Create Files By Mistake:
 1. **STOP immediately**
@@ -232,6 +247,33 @@ LEO Protocol v4.1.2 is **DATABASE-FIRST ONLY**. **NEVER** create:
 3. Delete the files
 4. Update progress tracking
 5. Verify dashboard shows correct status
+
+## 📊 Communication & Context
+
+### Context Economy Rules
+
+**Core Principles**:
+- **Response Budget**: ≤500 tokens default (unless complexity requires more)
+- **Summarize > Paste**: Reference paths/links instead of full content
+- **Fetch-on-Demand**: Name files first, retrieve only needed parts
+- **Running Summaries**: Keep condensed handoff/PR descriptions
+
+### Best Practices
+
+**Efficient Context Usage**:
+- **Quote selectively**: Show only relevant lines with context
+- **Use file:line references**: \`src/component.js:42-58\` instead of full file
+- **Batch related reads**: Minimize round-trips when exploring
+- **Archive verbosity**: Move details to handoffs/database, not conversation
+
+### Examples
+
+| ❌ Inefficient | ✅ Efficient |
+|----------------|--------------|
+| Paste entire 500-line file | Quote lines 42-58 with \`...\` markers |
+| Read file multiple times | Batch read relevant sections once |
+| Repeat full error in response | Summarize error + reference line |
+| Include all test output | Show failed tests + counts only |
 
 ### 🔄 MANDATORY: Server Restart Protocol
 After ANY code changes:
