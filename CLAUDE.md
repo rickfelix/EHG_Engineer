@@ -748,6 +748,12 @@ Three quality gates are enforced in CI/CD pipelines to maintain code quality:
    - Lighthouse CI monitoring
    - React.lazy code splitting implemented
 
+4. **Visual Regression**
+   - Playwright screenshot baselines for 4 critical routes
+   - ≤3% pixel difference tolerance
+   - Artifacts uploaded on failure as `visual-diffs`
+   - Deterministic rendering (fixed viewport/time/animations)
+
 ### Stabilization Status
 
 **Step 1 ✅ COMPLETE**: Performance gate stabilized

@@ -1,0 +1,51 @@
+name: Visual Regression
+
+on:
+  pull_request:
+    paths:
+      - 'src/client/**'
+      - 'tests/visual/**'
+      - 'package*.json'
+
+jobs:
+  visual-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build client
+        run: npm run build:client
+
+      - name: Start server
+        run: |
+          PORT=3000 node server.js &
+          npx wait-on http://localhost:3000 --timeout 30000
+
+      - name: Run visual regression tests
+        run: |
+          BASE_URL=http://localhost:3000 npx playwright test --config=playwright.visual.config.js
+
+      - name: Upload visual diffs
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: visual-diffs
+          path: test-results/
+          retention-days: 7
+
+      - name: Kill server
+        if: always()
+        run: pkill -f "node server.js" || true
