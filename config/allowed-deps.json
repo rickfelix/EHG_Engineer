@@ -1,0 +1,37 @@
+{
+  "allow": [
+    "zod",
+    "openai",
+    "axios",
+    "playwright",
+    "@axe-core/playwright",
+    "@lhci/cli",
+    "jest",
+    "@supabase/supabase-js",
+    "@anthropic-ai/sdk",
+    "chalk",
+    "dotenv",
+    "express",
+    "cors",
+    "commander",
+    "cli-table3",
+    "express-validator",
+    "ws",
+    "uuid",
+    "p-retry",
+    "chokidar",
+    "pg",
+    "typescript",
+    "esbuild",
+    "@types/node",
+    "@types/pg",
+    "wait-on",
+    "esbuild-visualizer"
+  ],
+  "deny": [
+    "inflight",
+    "request",
+    "request-promise",
+    "node-fetch@2"
+  ]
+}
