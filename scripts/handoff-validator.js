@@ -6,8 +6,8 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import DynamicChecklistGenerator from './dynamic-checklist-generator';
-import SubAgentEnforcementSystem from './subagent-enforcement-system';
+import DynamicChecklistGenerator from './dynamic-checklist-generator.js';
+import SubAgentEnforcementSystem from './subagent-enforcement-system.js';
 import fsModule from 'fs';
 const fs = fsModule.promises;
 import dotenv from "dotenv";
@@ -485,6 +485,9 @@ class HandoffValidator {
     }
   }
 }
+
+// Export for use in other modules
+export default HandoffValidator;
 
 // Main execution
 async function main() {

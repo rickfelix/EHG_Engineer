@@ -33,7 +33,11 @@
     "build:client": "cd src/client && npm run build",
     "docs:boundary": "node scripts/generate-boundary-examples.js",
     "prio:top3": "node scripts/wsjf-priority-fetcher.js",
-    "session:prologue": "node scripts/generate-session-prologue.js"
+    "session:prologue": "node scripts/generate-session-prologue.js",
+    "db:create": "node scripts/execute-database-sql.js",
+    "db:timeline": "node scripts/execute-database-sql.js database/schema/sd_execution_timeline.sql",
+    "db:leo": "node scripts/execute-database-sql.js database/schema/007_leo_protocol_schema.sql",
+    "db:ehg": "node scripts/execute-database-sql.js --ehg"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",

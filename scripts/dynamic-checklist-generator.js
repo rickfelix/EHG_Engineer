@@ -457,6 +457,9 @@ class DynamicChecklistGenerator {
 }
 
 // Main execution
+// Export the class for use in other modules
+export default DynamicChecklistGenerator;
+
 async function main() {
   const generator = new DynamicChecklistGenerator();
   

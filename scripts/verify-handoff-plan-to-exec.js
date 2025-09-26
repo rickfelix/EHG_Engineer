@@ -17,7 +17,7 @@ const __dirname = dirname(__filename);
  */
 
 import { createClient } from '@supabase/supabase-js';
-import HandoffValidator from '../lib/dashboard/handoff-validator.js';
+import HandoffValidator from './handoff-validator.js';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';

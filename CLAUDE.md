@@ -12,22 +12,28 @@
 
 ## 🏗️ Application Architecture - CRITICAL CONTEXT
 
-### Two Distinct Applications:
-1. **EHG_Engineer** (Management Dashboard) - WHERE YOU ARE NOW
+### Two Distinct Applications with SEPARATE DATABASES:
+
+#### 1. **EHG_Engineer** (Management Dashboard) - WHERE YOU ARE NOW
    - **Path**: `/mnt/c/_EHG/EHG_Engineer/`
    - **Purpose**: LEO Protocol dashboard for managing Strategic Directives & PRDs
-   - **Database**: dedlbzhpgkmetvhbkyzq (Supabase)
+   - **Database**: `dedlbzhpgkmetvhbkyzq` (Supabase - MANAGEMENT DATABASE)
    - **GitHub**: https://github.com/rickfelix/EHG_Engineer.git
    - **Port**: 3000-3001
    - **Role**: MANAGEMENT TOOL ONLY - no customer features here!
 
-2. **EHG** (Business Application) - IMPLEMENTATION TARGET
+#### 2. **EHG** (Business Application) - IMPLEMENTATION TARGET
    - **Path**: `/mnt/c/_EHG/ehg/`
    - **Purpose**: The actual customer-facing business application
-   - **Database**: liapbndqlqxdcgpwntbv (Supabase)
+   - **Database**: `liapbndqlqxdcgpwntbv` (Supabase - CUSTOMER DATABASE)
    - **GitHub**: https://github.com/rickfelix/ehg.git
    - **Built with**: Vite + React + Shadcn + TypeScript
    - **Role**: WHERE ALL FEATURES GET IMPLEMENTED
+
+⚠️ **CRITICAL DATABASE DISTINCTION**:
+- **EHG_Engineer DB** (`dedlbzhpgkmetvhbkyzq`): Contains SDs, PRDs, LEO Protocol data
+- **EHG App DB** (`liapbndqlqxdcgpwntbv`): Contains customer data, business logic
+- **NEVER** mix these databases - they serve completely different purposes!
 
 ### ⚠️ CRITICAL: During EXEC Phase Implementation
 1. **Read PRD** from EHG_Engineer database
@@ -710,38 +716,65 @@ Dashboard automatically connects to database:
 5. **WebSocket Updates** - Dashboard stays synchronized
 6. **PLAN Supervisor** - Final verification before LEAD approval
 
-## 🗄️ Supabase Database Operations
+## 🗄️ Supabase Database Operations (EHG_Engineer Management DB)
 
-### Connection Details
+⚠️ **THIS SECTION IS FOR EHG_Engineer DATABASE ONLY**
+- **Database**: `dedlbzhpgkmetvhbkyzq` - Management/LEO Protocol database
+- **NOT for**: EHG customer database (`liapbndqlqxdcgpwntbv`)
+
+### Connection Details (EHG_Engineer DB)
 - **Project URL**: https://dedlbzhpgkmetvhbkyzq.supabase.co
 - **Project ID**: dedlbzhpgkmetvhbkyzq
+- **Purpose**: Strategic Directives, PRDs, LEO Protocol data
 - **Connection**: Via Supabase client using environment variables
 
-### Creating Database Tables
+### Creating Database Tables (in EHG_Engineer DB)
 
-#### Method 1: Using RPC Function (if available)
-```javascript
-const { error } = await supabase.rpc('execute_sql', {
-  sql: 'CREATE TABLE IF NOT EXISTS ...'
-});
-```
-
-#### Method 2: Using psql Command
+#### Method 1: Using Pooler Connection (FASTEST - Already Configured!)
 ```bash
-# If DATABASE_URL is available in .env
-psql $DATABASE_URL -f path/to/migration.sql
+# SUPABASE_POOLER_URL is already in .env - use it directly!
+node scripts/execute-database-sql.js path/to/schema.sql
+
+# Examples:
+node scripts/execute-database-sql.js database/schema/sd_execution_timeline.sql
+node scripts/execute-database-sql.js database/schema/007_leo_protocol_schema.sql
 ```
 
-#### Method 3: Supabase Dashboard (always works)
-1. Go to: https://supabase.com/dashboard/project/dedlbzhpgkmetvhbkyzq
+#### Method 2: Supabase Dashboard (Manual Fallback)
+1. Go to: https://supabase.com/dashboard/project/dedlbzhpgkmetvhbkyzq/editor
 2. Navigate to SQL Editor
 3. Paste and execute SQL
 
+#### Method 3: Enable RPC for Future Automation (Optional)
+```sql
+-- Run once in Dashboard to enable programmatic SQL execution
+CREATE OR REPLACE FUNCTION execute_sql(sql text)
+RETURNS json LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  EXECUTE sql;
+  RETURN json_build_object('status', 'success');
+EXCEPTION WHEN OTHERS THEN
+  RETURN json_build_object('status', 'error', 'message', SQLERRM);
+END; $$;
+```
+
+### Database Quick Reference (EHG_Engineer DB)
+- **Database Name**: EHG_Engineer Management Database
+- **Project ID**: dedlbzhpgkmetvhbkyzq (NOT the EHG customer DB!)
+- **Connection**: SUPABASE_POOLER_URL in .env (pre-configured for Engineer DB)
+- **Schema Location**: /database/schema/ (Engineer DB schemas only)
+- **Create Any Table**: `node scripts/execute-database-sql.js database/schema/[filename].sql`
+- **Tables Include**: strategic_directives_v2, product_requirements_v2, leo_protocols, etc.
+
 ### Key Database Operations Scripts
-- `scripts/execute-leo-protocol-sql.js` - Execute protocol migrations
-- `scripts/create-leo-protocol-tables.js` - Create LEO tables
-- `scripts/apply-supervisor-safe.sql` - PLAN supervisor tables
+- `scripts/execute-database-sql.js` - Universal SQL executor (uses pooler connection)
+- `scripts/generate-claude-md-from-db.js` - Generate this file from database
 - `database/schema/` - All schema definitions
+
+### Troubleshooting Database Operations
+- **SSL Certificate Error**: Already handled in execute-database-sql.js
+- **Missing SUPABASE_POOLER_URL**: Check .env file (should be present)
+- **Table Already Exists**: Script handles gracefully with ON CONFLICT clauses
 
 ## 🔧 CRITICAL DEVELOPMENT WORKFLOW
 
