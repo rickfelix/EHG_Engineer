@@ -129,40 +129,152 @@ class CLAUDEMDGenerator {
   }
   
   generateContent({ protocol, agents, subAgents, handoffTemplates, validationRules }) {
-    const today = new Date().toISOString().split('T')[0];
-    
+    const now = new Date();
+    const manifestVersion = '2.0';
+
     return `# CLAUDE.md - LEO Protocol Workflow Guide for AI Agents
 
-## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: ${today} ${new Date().toLocaleTimeString()}
-**Source**: Supabase Database (not files)
-**Auto-Update**: Run \`node scripts/generate-claude-md-from-db.js\` anytime
+**Manifest-Version**: ${manifestVersion}
+**Last-Updated**: ${now.toISOString()}
+**LEO Protocol**: v${protocol.version}
+**Source**: Database-First (Supabase)
 
-## 🟢 CURRENT LEO PROTOCOL VERSION: v${protocol.version}
+## Table of Contents
 
-**CRITICAL**: This is the ACTIVE version from database
-**ID**: ${protocol.id}
-**Status**: ${protocol.status.toUpperCase()}
-**Title**: ${protocol.title}
+1. [Project Overview & Purpose](#1-project-overview--purpose)
+2. [Architecture & Core Concepts](#2-architecture--core-concepts)
+3. [Developer Environment & Tooling](#3-developer-environment--tooling)
+4. [Common Commands & Workflows](#4-common-commands--workflows)
+5. [Code Style & Conventions](#5-code-style--conventions)
+6. [Testing, Quality, Linting & CI](#6-testing-quality-linting--ci)
+7. [Branching / Git / PR Conventions](#7-branching--git--pr-conventions)
+8. [Known Pitfalls & Gotchas](#8-known-pitfalls--gotchas)
+9. [Sub-agents & Handoffs](#9-sub-agents--handoffs)
+10. [Examples & Prompt Snippets](#10-examples--prompt-snippets)
+11. [Preference Rules & Heuristics](#11-preference-rules--heuristics)
+12. [Versioning](#12-versioning)
 
-### 📅 Protocol Management
+## 1. Project Overview & Purpose
 
-**Database-First Architecture**:
-- Protocol stored in \`leo_protocols\` table
-- Sub-agents in \`leo_sub_agents\` table  
-- Handoffs in \`leo_handoff_templates\` table
-- Single source of truth - no file conflicts
+- **Scope**: EHG_Engineer - LEO Protocol governance platform
+- **Boundary**: EHG_Engineer ↔ EHG separation enforced (separate repos)
+- **Purpose**: Manage strategic directives, PRDs, and handoffs via LEO Protocol
+- **DB-First**: All artifacts (PRDs/handoffs/retros) stored in database, not files
 
-**To update protocol version**:
-\`\`\`sql
--- Only via database operations
-UPDATE leo_protocols SET status = 'active' WHERE version = 'new_version';
-UPDATE leo_protocols SET status = 'superseded' WHERE version != 'new_version';
+## 2. Architecture & Core Concepts
+
+- **Database**: Supabase PostgreSQL (project: dedlbzhpgkmetvhbkyzq)
+- **Protocol**: LEO v${protocol.version} - ${protocol.title}
+- **Agents**: LEAD (strategic) → PLAN (technical) → EXEC (implementation)
+- **Tables**: \`leo_protocols\`, \`leo_sub_agents\`, \`leo_handoff_templates\`, \`strategic_directives_v2\`
+
+## 3. Developer Environment & Tooling
+
+- **Node.js**: v20+ required
+- **Database**: \`NEXT_PUBLIC_SUPABASE_URL\` and \`NEXT_PUBLIC_SUPABASE_ANON_KEY\` required
+- **Server**: \`PORT=3000 node server.js\`
+- **Client Build**: \`npm run build:client\` (Vite bundler)
+- **Key Tools**: Playwright (testing), Jest (unit tests), Lighthouse (performance)
+
+## 4. Common Commands & Workflows
+
+- **Generate CLAUDE.md**: \`node scripts/generate-claude-md-from-db.js\`
+- **Query Active SDs**: \`node scripts/query-active-sds.js\`
+- **Create Handoff**: \`node scripts/unified-handoff-system.js\`
+- **Add PRD**: \`node scripts/add-prd-to-database.js\`
+- **Run Tests**: \`npm run test:coverage\` (35% floor, 75% target)
+
+## 5. Code Style & Conventions
+
+- **No Comments**: Unless explicitly requested
+- **DB-First**: Never create markdown files for work artifacts
+- **Small Diffs**: ≤100 lines per PR
+- **7-Element Handoffs**: Mandatory for all agent transitions
+- **Simplicity**: Avoid over-engineering, use proven patterns
+
+## 6. Testing, Quality, Linting & CI
+
+### Quality Gates (≥85% pass rate target)
+- **Coverage**: 75% target (35% floor with \`coverage-bypass\` label)
+- **Accessibility**: WCAG AA on 4 routes (\`/\`, \`/strategic-directives\`, \`/prds\`, \`/handoffs\`)
+- **Performance**: ≤50KB growth delta, <812KB absolute
+- **Visual**: ≤3% pixel difference tolerance (Playwright screenshots)
+
+### CI Workflows
+- \`test-coverage.yml\`: Enforces coverage thresholds
+- \`a11y-check.yml\`: Axe-core validation
+- \`perf-budget.yml\`: Bundle size limits
+- \`visual-regression.yml\`: Screenshot comparisons
+
+## 7. Branching / Git / PR Conventions
+
+- **Branch Protection**: main requires status checks
+- **Required Checks**: Coverage, A11y, Performance, Visual
+- **Commit Format**: Conventional commits (feat/fix/docs/chore)
+- **PR Size**: ≤100 lines (excluding lockfiles/generated)
+- **Co-author**: Include Claude attribution
+
+## 8. Known Pitfalls & Gotchas
+
+- **Server Restart**: Required after code changes (no hot reload)
+- **ESM/CJS**: Mixed modules need \`--legacy-peer-deps\`
+- **Boundary Violations**: Never reference EHG app directly
+- **File Creation**: PRDs/handoffs must go to DB, not files
+- **OpenAI Peer Dep**: Shows warning but works with zod@4
+
+## 9. Sub-agents & Handoffs
+
+### Agents (${agents.length})
+${this.generateAgentSection(agents)}
+
+### Sub-agents (${subAgents.length} Active)
+${this.generateAllSubAgents(subAgents)}
+
+### Handoff Templates (7 Elements Required)
+Every handoff MUST include:
+${handoffTemplates.length > 0 ? handoffTemplates[0].template_structure.sections.map((s, i) => `${i+1}. ${s}`).join('\n') : '1. Executive Summary\n2. Completeness Report\n3. Deliverables Manifest\n4. Key Decisions & Rationale\n5. Known Issues & Risks\n6. Resource Utilization\n7. Action Items for Receiver'}
+
+## 10. Examples & Prompt Snippets
+
+### Session Prologue (Copy-Paste)
+\`\`\`markdown
+You are Claude Code on EHG_Engineer. Follow LEO Protocol v${protocol.version}.
+- Use DB-first approach (no markdown files for work artifacts)
+- Maintain ≤100 line diffs per PR
+- Include 7-element handoffs for all transitions
+- Respect EHG↔EHG_Engineer boundary (separate repos)
+- Run quality gates: coverage (75%), a11y (WCAG AA), perf (≤50KB delta), visual (≤3% diff)
 \`\`\`
 
-## Agent Responsibilities
+### Slash Command Cheatsheet
+- \`/leo-verify\`: Trigger PLAN supervisor verification
+- \`/leo-security\`: Force security sub-agent analysis
+- \`/leo-debug\`: Force debug sub-agent for troubleshooting
+- \`/leo-perf\`: Force performance analysis
 
-${this.generateAgentSection(agents)}
+## 11. Preference Rules & Heuristics
+
+### Context Economy
+- **Default**: ≤500 tokens per response
+- **Summarize > Paste**: Provide file paths over full content
+- **Fetch-on-Demand**: Load details only when needed
+- **Code Diffs**: Show only changed lines, not entire files
+
+### Ask-Before-Act Triggers
+- **Schema Changes**: Any database DDL modifications
+- **New Dependencies**: Adding packages to package.json
+- **Cross-Boundary**: Any reference to EHG app
+- **Security**: Authentication/authorization changes
+- **Breaking Changes**: API contract modifications
+
+## 12. Versioning
+
+- **Manifest Version**: ${manifestVersion}
+- **LEO Protocol**: v${protocol.version}
+- **Last Generated**: ${now.toISOString()}
+- **Update Command**: \`node scripts/generate-claude-md-from-db.js\`
+
+---
 
 ## 🚨 EXEC Agent Implementation Requirements
 
@@ -745,12 +857,29 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=[your-anon-key]
 
 ---
 
-*Generated from Database: ${today}*
+*Generated from Database: ${now.toISOString().split('T')[0]}*
 *Protocol Version: v${protocol.version}*
 *Database-First Architecture: ACTIVE*
 `;
   }
-  
+
+  generateAllSubAgents(subAgents) {
+    if (!subAgents || subAgents.length === 0) {
+      return '- No sub-agents configured';
+    }
+
+    // Sort by priority descending
+    const sorted = [...subAgents].sort((a, b) => b.priority - a.priority);
+
+    return sorted.map(sa => `
+#### ${sa.name} (${sa.code})
+- **Priority**: ${sa.priority}
+- **Activation**: ${sa.activation_type}
+- **Purpose**: ${sa.description || 'Specialized assistance'}
+- **Script**: \`${sa.script_path || 'N/A'}\`
+- **Triggers**: ${sa.triggers?.length || 0} configured`).join('\n');
+  }
+
   generateAgentSection(agents) {
     return agents.map(agent => {
       // Add supervisor note for PLAN

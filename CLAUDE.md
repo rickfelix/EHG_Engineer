@@ -1,34 +1,96 @@
 # CLAUDE.md - LEO Protocol Workflow Guide for AI Agents
 
-## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-09-26 8:14:52 AM
-**Source**: Supabase Database (not files)
-**Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
+**Manifest-Version**: 2.0
+**Last-Updated**: 2025-09-26T13:29:30.506Z
+**LEO Protocol**: vv4.2.0_story_gates
+**Source**: Database-First (Supabase)
 
-## 🟢 CURRENT LEO PROTOCOL VERSION: vv4.2.0_story_gates
+## Table of Contents
 
-**CRITICAL**: This is the ACTIVE version from database
-**ID**: leo-v4-2-0-story-gates
-**Status**: ACTIVE
-**Title**: LEO Protocol v4.2.0 - Story Gates & Automated Release Control
+1. [Project Overview & Purpose](#1-project-overview--purpose)
+2. [Architecture & Core Concepts](#2-architecture--core-concepts)
+3. [Developer Environment & Tooling](#3-developer-environment--tooling)
+4. [Common Commands & Workflows](#4-common-commands--workflows)
+5. [Code Style & Conventions](#5-code-style--conventions)
+6. [Testing, Quality, Linting & CI](#6-testing-quality-linting--ci)
+7. [Branching / Git / PR Conventions](#7-branching--git--pr-conventions)
+8. [Known Pitfalls & Gotchas](#8-known-pitfalls--gotchas)
+9. [Sub-agents & Handoffs](#9-sub-agents--handoffs)
+10. [Examples & Prompt Snippets](#10-examples--prompt-snippets)
+11. [Preference Rules & Heuristics](#11-preference-rules--heuristics)
+12. [Versioning](#12-versioning)
 
-### 📅 Protocol Management
+## 1. Project Overview & Purpose
 
-**Database-First Architecture**:
-- Protocol stored in `leo_protocols` table
-- Sub-agents in `leo_sub_agents` table  
-- Handoffs in `leo_handoff_templates` table
-- Single source of truth - no file conflicts
+- **Scope**: EHG_Engineer - LEO Protocol governance platform
+- **Boundary**: EHG_Engineer ↔ EHG separation enforced (separate repos)
+- **Purpose**: Manage strategic directives, PRDs, and handoffs via LEO Protocol
+- **DB-First**: All artifacts (PRDs/handoffs/retros) stored in database, not files
 
-**To update protocol version**:
-```sql
--- Only via database operations
-UPDATE leo_protocols SET status = 'active' WHERE version = 'new_version';
-UPDATE leo_protocols SET status = 'superseded' WHERE version != 'new_version';
-```
+## 2. Architecture & Core Concepts
 
-## Agent Responsibilities
+- **Database**: Supabase PostgreSQL (project: dedlbzhpgkmetvhbkyzq)
+- **Protocol**: LEO vv4.2.0_story_gates - LEO Protocol v4.2.0 - Story Gates & Automated Release Control
+- **Agents**: LEAD (strategic) → PLAN (technical) → EXEC (implementation)
+- **Tables**: `leo_protocols`, `leo_sub_agents`, `leo_handoff_templates`, `strategic_directives_v2`
 
+## 3. Developer Environment & Tooling
+
+- **Node.js**: v20+ required
+- **Database**: `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` required
+- **Server**: `PORT=3000 node server.js`
+- **Client Build**: `npm run build:client` (Vite bundler)
+- **Key Tools**: Playwright (testing), Jest (unit tests), Lighthouse (performance)
+
+## 4. Common Commands & Workflows
+
+- **Generate CLAUDE.md**: `node scripts/generate-claude-md-from-db.js`
+- **Query Active SDs**: `node scripts/query-active-sds.js`
+- **Create Handoff**: `node scripts/unified-handoff-system.js`
+- **Add PRD**: `node scripts/add-prd-to-database.js`
+- **Run Tests**: `npm run test:coverage` (35% floor, 75% target)
+
+## 5. Code Style & Conventions
+
+- **No Comments**: Unless explicitly requested
+- **DB-First**: Never create markdown files for work artifacts
+- **Small Diffs**: ≤100 lines per PR
+- **7-Element Handoffs**: Mandatory for all agent transitions
+- **Simplicity**: Avoid over-engineering, use proven patterns
+
+## 6. Testing, Quality, Linting & CI
+
+### Quality Gates (≥85% pass rate target)
+- **Coverage**: 75% target (35% floor with `coverage-bypass` label)
+- **Accessibility**: WCAG AA on 4 routes (`/`, `/strategic-directives`, `/prds`, `/handoffs`)
+- **Performance**: ≤50KB growth delta, <812KB absolute
+- **Visual**: ≤3% pixel difference tolerance (Playwright screenshots)
+
+### CI Workflows
+- `test-coverage.yml`: Enforces coverage thresholds
+- `a11y-check.yml`: Axe-core validation
+- `perf-budget.yml`: Bundle size limits
+- `visual-regression.yml`: Screenshot comparisons
+
+## 7. Branching / Git / PR Conventions
+
+- **Branch Protection**: main requires status checks
+- **Required Checks**: Coverage, A11y, Performance, Visual
+- **Commit Format**: Conventional commits (feat/fix/docs/chore)
+- **PR Size**: ≤100 lines (excluding lockfiles/generated)
+- **Co-author**: Include Claude attribution
+
+## 8. Known Pitfalls & Gotchas
+
+- **Server Restart**: Required after code changes (no hot reload)
+- **ESM/CJS**: Mixed modules need `--legacy-peer-deps`
+- **Boundary Violations**: Never reference EHG app directly
+- **File Creation**: PRDs/handoffs must go to DB, not files
+- **OpenAI Peer Dep**: Shows warning but works with zod@4
+
+## 9. Sub-agents & Handoffs
+
+### Agents (3)
 
 ### Implementation Agent (EXEC)
 - **Responsibilities**: Implementation based on PRD, no validation. **SIMPLICITY IN EXECUTION**: Implement the simplest solution that meets requirements. Avoid over-engineering. Use proven patterns and existing libraries. Focus on working solutions over perfect code.
@@ -54,6 +116,130 @@ UPDATE leo_protocols SET status = 'superseded' WHERE version != 'new_version';
 - **Verification**: 15%
 - **Approval**: 0%
 - **Total**: 35%
+
+### Sub-agents (10 Active)
+
+#### Information Architecture Lead (DOCMON)
+- **Priority**: 95
+- **Activation**: automatic
+- **Purpose**: Documentation systems architect with 25 years experience. Built docs platforms at MongoDB and Stripe. Philosophy: Documentation is code. Enforces single source of truth, prevents drift, automates doc generation. Knows when to be strict about structure vs flexible for velocity.
+- **Script**: `scripts/documentation-monitor-subagent.js`
+- **Triggers**: 14 configured
+
+#### DevOps Platform Architect (GITHUB)
+- **Priority**: 90
+- **Activation**: automatic
+- **Purpose**: GitHub/DevOps expert with 20 years automating workflows. Helped GitHub design Actions, built CI/CD at GitLab. Philosophy: Automation should feel invisible. Expert in: trunk-based development, progressive delivery, GitOps. Knows when to automate vs when human judgment is needed.
+- **Script**: `scripts/github-deployment-subagent.js`
+- **Triggers**: 8 configured
+
+#### Continuous Improvement Coach (RETRO)
+- **Priority**: 85
+- **Activation**: automatic
+- **Purpose**: Agile coach with 20 years turning failures into learning. Led retrospectives at Amazon and Toyota. Philosophy: Blame the system, not the person. Expert in: root cause analysis, blameless postmortems, improvement metrics. Captures insights that actually change behavior, not just fill reports.
+- **Script**: `scripts/retrospective-sub-agent.js`
+- **Triggers**: 15 configured
+
+#### Product Requirements Expert (STORIES)
+- **Priority**: 8
+- **Activation**: automatic
+- **Purpose**: Product manager with 25 years translating business needs to development tasks. Led product at Atlassian and Pivotal. Philosophy: User stories are promises to users. Expert in: story mapping, acceptance criteria, INVEST principles. Knows when detailed specs help vs when they slow teams down.
+- **Script**: `scripts/generate-stories-from-prd.js`
+- **Triggers**: 4 configured
+
+#### Chief Security Architect (SECURITY)
+- **Priority**: 7
+- **Activation**: automatic
+- **Purpose**: Former NSA security architect with 25 years experience. **SIMPLICITY-FIRST SECURITY**: Security that enables business, not blocks it. Recommends the simplest secure approach that addresses real threats, not theoretical ones. Philosophy: "Use proven, boring security patterns over complex custom solutions." Focuses on practical protections with minimal complexity overhead.
+- **Script**: `N/A`
+- **Triggers**: 2 configured
+
+#### Principal Database Architect (DATABASE)
+- **Priority**: 6
+- **Activation**: automatic
+- **Purpose**: Database architect with 30 years experience scaling systems from startup to IPO. Worked at Oracle, PostgreSQL core team, and Netflix. Expert in: performance optimization, sharding strategies, migration patterns, ACID vs BASE tradeoffs. Philosophy: Right database for right job. Knows when to normalize vs denormalize, when to use NoSQL vs SQL. Makes data access patterns drive schema design.
+- **Script**: `N/A`
+- **Triggers**: 2 configured
+
+#### QA Engineering Director (TESTING)
+- **Priority**: 5
+- **Activation**: automatic
+- **Purpose**: QA leader with 20 years experience. Built testing practices at Spotify and Microsoft. Philosophy: Testing enables velocity, not slows it. Expert in: test pyramid strategy, mutation testing, contract testing, chaos engineering. Pragmatic - knows 100% coverage is often wasteful. Focuses on: critical path coverage, regression prevention, and fast feedback loops.
+- **Script**: `N/A`
+- **Triggers**: 1 configured
+
+#### Performance Engineering Lead (PERFORMANCE)
+- **Priority**: 4
+- **Activation**: automatic
+- **Purpose**: Performance engineering lead with 20+ years optimizing high-scale systems. **SIMPLE PERFORMANCE WINS**: Recommends the simplest optimizations that provide the biggest impact. Philosophy: "Measure first, optimize the bottleneck, not everything." Prefers configuration tweaks and proven techniques over complex custom solutions.
+- **Script**: `N/A`
+- **Triggers**: 1 configured
+
+#### Senior Design Sub-Agent (DESIGN)
+- **Priority**: 3
+- **Activation**: automatic
+- **Purpose**: Senior UX architect with 15+ years at design-forward companies. **SIMPLE, USABLE DESIGN**: Advocates for the simplest interface that solves user needs. Philosophy: "Good design is as little design as possible." Recommends proven UI patterns over novel interactions. Focuses on usability over aesthetics, configuration over custom components.
+- **Script**: `N/A`
+- **Triggers**: 1 configured
+
+#### Principal Systems Analyst (VALIDATION)
+- **Priority**: 0
+- **Activation**: automatic
+- **Purpose**: Systems analyst with 28 years preventing duplicate work and technical debt. Expert at: codebase archaeology, impact analysis, dependency mapping. Philosophy: An hour of analysis saves a week of rework. Catches conflicts before they happen. Understands when reuse makes sense vs fresh implementation.
+- **Script**: `scripts/lead-codebase-validation.js`
+- **Triggers**: 5 configured
+
+### Handoff Templates (7 Elements Required)
+Every handoff MUST include:
+1. Executive Summary
+2. Completeness Report
+3. Deliverables Manifest
+4. Key Decisions & Rationale
+5. Known Issues & Risks
+6. Resource Utilization
+7. Action Items for Receiver
+
+## 10. Examples & Prompt Snippets
+
+### Session Prologue (Copy-Paste)
+```markdown
+You are Claude Code on EHG_Engineer. Follow LEO Protocol vv4.2.0_story_gates.
+- Use DB-first approach (no markdown files for work artifacts)
+- Maintain ≤100 line diffs per PR
+- Include 7-element handoffs for all transitions
+- Respect EHG↔EHG_Engineer boundary (separate repos)
+- Run quality gates: coverage (75%), a11y (WCAG AA), perf (≤50KB delta), visual (≤3% diff)
+```
+
+### Slash Command Cheatsheet
+- `/leo-verify`: Trigger PLAN supervisor verification
+- `/leo-security`: Force security sub-agent analysis
+- `/leo-debug`: Force debug sub-agent for troubleshooting
+- `/leo-perf`: Force performance analysis
+
+## 11. Preference Rules & Heuristics
+
+### Context Economy
+- **Default**: ≤500 tokens per response
+- **Summarize > Paste**: Provide file paths over full content
+- **Fetch-on-Demand**: Load details only when needed
+- **Code Diffs**: Show only changed lines, not entire files
+
+### Ask-Before-Act Triggers
+- **Schema Changes**: Any database DDL modifications
+- **New Dependencies**: Adding packages to package.json
+- **Cross-Boundary**: Any reference to EHG app
+- **Security**: Authentication/authorization changes
+- **Breaking Changes**: API contract modifications
+
+## 12. Versioning
+
+- **Manifest Version**: 2.0
+- **LEO Protocol**: vv4.2.0_story_gates
+- **Last Generated**: 2025-09-26T13:29:30.506Z
+- **Update Command**: `node scripts/generate-claude-md-from-db.js`
+
+---
 
 ## 🚨 EXEC Agent Implementation Requirements
 
@@ -110,13 +296,6 @@ LEO Protocol v4.1.2 is **DATABASE-FIRST ONLY**. **NEVER** create:
 - ❌ Handoff documents 
 - ❌ Verification reports
 - ❌ Any work-related documentation files
-
-### Quality Gate Requirements
-- **Test Coverage**: ≥75% statement coverage (enforced via test-coverage.yml)
-- **Accessibility**: WCAG AA compliance on key routes (a11y-check.yml)
-- **Performance**: Bundle <512KB, Perf checks via Lighthouse CI (warn at LCP >3.5s; tighten later based on baselines)
-- **Performance Delta**: Enforces ≤50KB growth vs main branch while working to reduce to 512KB target
-- **Branch Protection**: These checks are required status checks on main
 
 ### REQUIRED: Database Operations Only
 - ✅ PRDs: Use `scripts/add-prd-to-database.js`
@@ -296,30 +475,6 @@ ${subAgents.map(sa => `| ${sa.name} | ${sa.code} | ${sa.activation_type} | ${sa.
 ### Sub-Agent Activation Triggers
 
 
-#### Principal Database Architect Triggers:
-- "schema" (keyword) in any context
-- "migration" (keyword) in any context
-
-#### QA Engineering Director Triggers:
-- "coverage" (keyword) in any context
-
-#### Principal Systems Analyst Triggers:
-- "existing implementation" (keyword) in any context
-- "duplicate" (keyword) in any context
-- "conflict" (keyword) in any context
-- "already implemented" (keyword) in any context
-- "codebase check" (keyword) in any context
-
-#### DevOps Platform Architect Triggers:
-- "EXEC_IMPLEMENTATION_COMPLETE" (keyword) in any context
-- "create pull request" (keyword) in any context
-- "gh pr create" (keyword) in any context
-- "LEAD_APPROVAL_COMPLETE" (keyword) in any context
-- "create release" (keyword) in any context
-- "PLAN_VERIFICATION_PASS" (keyword) in any context
-- "github deploy" (keyword) in any context
-- "github status" (keyword) in any context
-
 #### Information Architecture Lead Triggers:
 - "LEAD_SD_CREATION" (keyword) in any context
 - "LEAD_HANDOFF_CREATION" (keyword) in any context
@@ -335,6 +490,16 @@ ${subAgents.map(sa => `| ${sa.name} | ${sa.code} | ${sa.activation_type} | ${sa.
 - "FILE_CREATED" (keyword) in any context
 - "VIOLATION_DETECTED" (keyword) in any context
 - "DAILY_DOCMON_CHECK" (keyword) in any context
+
+#### DevOps Platform Architect Triggers:
+- "EXEC_IMPLEMENTATION_COMPLETE" (keyword) in any context
+- "create pull request" (keyword) in any context
+- "gh pr create" (keyword) in any context
+- "LEAD_APPROVAL_COMPLETE" (keyword) in any context
+- "create release" (keyword) in any context
+- "PLAN_VERIFICATION_PASS" (keyword) in any context
+- "github deploy" (keyword) in any context
+- "github status" (keyword) in any context
 
 #### Continuous Improvement Coach Triggers:
 - "LEAD_APPROVAL_COMPLETE" (keyword) in any context
@@ -363,11 +528,25 @@ ${subAgents.map(sa => `| ${sa.name} | ${sa.code} | ${sa.activation_type} | ${sa.
 - "authentication" (keyword) in any context
 - "security" (keyword) in any context
 
+#### Principal Database Architect Triggers:
+- "schema" (keyword) in any context
+- "migration" (keyword) in any context
+
+#### QA Engineering Director Triggers:
+- "coverage" (keyword) in any context
+
 #### Performance Engineering Lead Triggers:
 - "optimization" (keyword) in any context
 
 #### Senior Design Sub-Agent Triggers:
 - "accessibility" (keyword) in any context
+
+#### Principal Systems Analyst Triggers:
+- "existing implementation" (keyword) in any context
+- "duplicate" (keyword) in any context
+- "conflict" (keyword) in any context
+- "already implemented" (keyword) in any context
+- "codebase check" (keyword) in any context
 
 ### Sub-Agent Activation Process
 
@@ -412,7 +591,61 @@ Required: [object Object], [object Object], [object Object]
 
 ## Validation Rules (From Database)
 
-No validation rules in database
+
+- **hasADR** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **hasInterfaces** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **hasTechDesign** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **designArtifacts** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **dbSchemaReady** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **securityScanClean** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **riskSpikesClosed** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **nfrBudgetsPresent** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **coverageTargetSet** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **testPlanMatrices** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **supervisorChecklistPass** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
 
 ## Database Schema Overview
 
@@ -725,67 +958,6 @@ NEXT_PUBLIC_SUPABASE_URL=https://dedlbzhpgkmetvhbkyzq.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=[your-anon-key]
 # Optional: SUPABASE_SERVICE_ROLE_KEY for admin operations
 # Optional: DATABASE_URL for direct psql access
-```
-
-## 🔧 Quality Gates (CI/CD)
-
-### Overview
-Three quality gates are enforced in CI/CD pipelines to maintain code quality:
-
-1. **Test Coverage (75% target)**
-   - Currently building from 0% → 35% → 75%
-   - Temporary bypass label: `coverage-bypass`
-   - ESM/CJS migration in progress
-
-2. **Accessibility (WCAG AA)**
-   - Playwright + axe-core validation
-   - Tests 4 key routes
-   - Configuration in `config/a11y.routes.json`
-
-3. **Performance Budget (512KB target)**
-   - **Performance Delta**: Enforces ≤50KB growth vs main branch while working to reduce to 512KB target
-   - Currently at ~812KB (working to reduce)
-   - Lighthouse CI monitoring
-   - React.lazy code splitting implemented
-
-4. **Visual Regression**
-   - Playwright screenshot baselines for 4 critical routes
-   - ≤3% pixel difference tolerance
-   - Artifacts uploaded on failure as `visual-diffs`
-   - Deterministic rendering (fixed viewport/time/animations)
-
-### Stabilization Status
-
-**Step 1 ✅ COMPLETE**: Performance gate stabilized
-- Baseline-delta approach (fail on >50KB growth)
-- React.lazy for SDManager and PRDManager
-- Lighthouse reporting added
-
-**Step 2 ✅ COMPLETE**: Test harness stabilized
-- Fixed module format issue in `close-foundation-sd.js`
-- Created unit tests for DatabaseManager and unified-handoff-system
-- Added `coverage-bypass` label support
-- Jest config simplified for ESM migration
-
-**Step 3 (Pending)**: Dependency resolution
-- Resolve zod v3/v4 conflict
-- Upgrade deprecated packages
-- Fix security vulnerabilities
-
-### Running Quality Checks Locally
-
-```bash
-# Test coverage
-npm run test:coverage
-
-# Accessibility
-npm run test:a11y
-
-# Bundle size
-npm run build:client && npm run analyze:bundle
-
-# All checks
-npm run quality:check
 ```
 
 ---
