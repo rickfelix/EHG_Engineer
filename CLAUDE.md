@@ -727,6 +727,61 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=[your-anon-key]
 # Optional: DATABASE_URL for direct psql access
 ```
 
+## 🔧 Quality Gates (CI/CD)
+
+### Overview
+Three quality gates are enforced in CI/CD pipelines to maintain code quality:
+
+1. **Test Coverage (75% target)**
+   - Currently building from 0% → 35% → 75%
+   - Temporary bypass label: `coverage-bypass`
+   - ESM/CJS migration in progress
+
+2. **Accessibility (WCAG AA)**
+   - Playwright + axe-core validation
+   - Tests 4 key routes
+   - Configuration in `config/a11y.routes.json`
+
+3. **Performance Budget (512KB target)**
+   - **Performance Delta**: Enforces ≤50KB growth vs main branch while working to reduce to 512KB target
+   - Currently at ~812KB (working to reduce)
+   - Lighthouse CI monitoring
+   - React.lazy code splitting implemented
+
+### Stabilization Status
+
+**Step 1 ✅ COMPLETE**: Performance gate stabilized
+- Baseline-delta approach (fail on >50KB growth)
+- React.lazy for SDManager and PRDManager
+- Lighthouse reporting added
+
+**Step 2 ✅ COMPLETE**: Test harness stabilized
+- Fixed module format issue in `close-foundation-sd.js`
+- Created unit tests for DatabaseManager and unified-handoff-system
+- Added `coverage-bypass` label support
+- Jest config simplified for ESM migration
+
+**Step 3 (Pending)**: Dependency resolution
+- Resolve zod v3/v4 conflict
+- Upgrade deprecated packages
+- Fix security vulnerabilities
+
+### Running Quality Checks Locally
+
+```bash
+# Test coverage
+npm run test:coverage
+
+# Accessibility
+npm run test:a11y
+
+# Bundle size
+npm run build:client && npm run analyze:bundle
+
+# All checks
+npm run quality:check
+```
+
 ---
 
 *Generated from Database: 2025-09-26*

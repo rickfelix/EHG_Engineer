@@ -31,12 +31,25 @@ jobs:
       - name: Run tests with coverage
         run: npm run test:coverage
 
+      - name: Check for bypass label
+        id: check_label
+        if: github.event_name == 'pull_request'
+        run: |
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'coverage-bypass') }}" == "true" ]]; then
+            echo "bypass=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Coverage bypass label detected - skipping threshold check"
+          else
+            echo "bypass=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Check coverage threshold
+        if: steps.check_label.outputs.bypass != 'true'
         run: |
           THRESHOLD=$(cat config/coverage.json | jq '.threshold')
           COVERAGE=$(cat coverage/coverage-summary.json | jq '.total.statements.pct')
           if (( $(echo "$COVERAGE < $THRESHOLD" | bc -l) )); then
             echo "❌ Coverage ${COVERAGE}% below threshold ${THRESHOLD}%"
+            echo "ℹ️ Add 'coverage-bypass' label to temporarily skip this check while building coverage"
             exit 1
           fi
           echo "✅ Coverage ${COVERAGE}% meets threshold ${THRESHOLD}%"

@@ -1,12 +1,13 @@
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { createClient } from '@supabase/supabase-js';
+import path from 'path';
+import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-import { createClient } from '@supabase/supabase-js';
-import path from 'path';
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
