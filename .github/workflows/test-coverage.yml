@@ -53,3 +53,20 @@ jobs:
             exit 1
           fi
           echo "✅ Coverage ${COVERAGE}% meets threshold ${THRESHOLD}%"
+
+      - name: Security audit
+        run: |
+          npm audit --json > audit.json || true
+          HIGH_VULNS=$(jq '.metadata.vulnerabilities.high // 0' audit.json)
+          echo "High vulnerabilities: $HIGH_VULNS"
+          if [ "$HIGH_VULNS" -gt 5 ]; then
+            echo "⚠️ More than 5 high vulnerabilities detected"
+          fi
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: audit-report
+          path: audit.json
+          retention-days: 7
