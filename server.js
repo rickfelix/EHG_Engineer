@@ -195,16 +195,54 @@ wss.on('connection', (ws) => {
     try {
       const msg = JSON.parse(message);
       
-      if (msg.type === 'updateSDStatus') {
+      if (msg.type === 'setActiveSD') {
+        const { sdId } = msg.data;
+        console.log(`🎯 Setting active SD to: ${sdId}`);
+
+        // First, clear is_working_on flag from all SDs
+        const { error: clearError } = await dbLoader.supabase
+          .from('strategic_directives_v2')
+          .update({ is_working_on: false })
+          .eq('is_working_on', true);
+
+        if (clearError) {
+          console.error('❌ Error clearing working_on flags:', clearError);
+        }
+
+        // Then set the new active SD
+        const { error: setError } = await dbLoader.supabase
+          .from('strategic_directives_v2')
+          .update({ is_working_on: true })
+          .eq('id', sdId);
+
+        if (setError) {
+          console.error('❌ Error setting working_on flag:', setError);
+          ws.send(JSON.stringify({
+            type: 'error',
+            message: `Failed to set active SD: ${setError.message}`
+          }));
+        } else {
+          console.log(`✅ Successfully set ${sdId} as working_on`);
+
+          // Update local state
+          dashboardState.leoProtocol.currentSD = sdId;
+
+          // Reload strategic directives to get updated is_working_on flags
+          dashboardState.strategicDirectives = await dbLoader.loadStrategicDirectives();
+
+          // Broadcast the updated state to all clients
+          broadcastUpdate('state', dashboardState);
+        }
+      } else if (msg.type === 'updateSDStatus') {
         const { sdId, status } = msg.data;
         console.log(`📝 Updating SD ${sdId} status to: ${status}`);
-        
+
         // Update in database
         const { error } = await dbLoader.supabase
           .from('strategic_directives_v2')
           .update({ status })
           .eq('id', sdId);
-        
+
         if (error) {
           console.error('❌ Error updating SD status:', error);
           ws.send(JSON.stringify({
@@ -213,10 +251,10 @@ wss.on('connection', (ws) => {
           }));
         } else {
           console.log(`✅ Successfully updated ${sdId} to ${status}`);
-          
+
           // Reload strategic directives to broadcast update to all clients
           dashboardState.strategicDirectives = await dbLoader.loadStrategicDirectives();
-          
+
           // Broadcast the updated state to all clients
           broadcastUpdate('state', dashboardState);
         }

@@ -2,6 +2,12 @@
 *Copy-paste this at session start to align Claude with EHG_Engineer practices*
 *Generated: 2025-09-26T14:18:32.015Z*
 
+## 🎯 APPLICATION QUICK REFERENCE
+- **Management Dashboard**: `/mnt/c/_EHG/EHG_Engineer/` (YOU ARE HERE - for managing work)
+- **Target App for Features**: `/mnt/c/_EHG/ehg/` (IMPLEMENT HERE - actual features)
+- **Before ANY implementation**: `cd /mnt/c/_EHG/ehg` then verify with `pwd`
+- **GitHub Repos**: EHG_Engineer.git (dashboard) vs ehg.git (app)
+
 ## Core Directives
 
 1. **Follow LEAD→PLAN→EXEC workflow** - Target ≥85% gate pass rate for all phases

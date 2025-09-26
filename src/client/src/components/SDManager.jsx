@@ -27,7 +27,15 @@ import {
   Sparkles,
   Brain,
   RefreshCw,
-  Database
+  Database,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Save,
+  FolderOpen,
+  RotateCcw,
+  Trash2,
+  GripVertical
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 // SDAssistant removed - using DirectiveLab instead
@@ -75,6 +83,37 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
 
   // Collapsible metadata filter states
   const [showMetadataFilters, setShowMetadataFilters] = useState(false);
+
+  // Sorting states
+  const [showSortingPanel, setShowSortingPanel] = useState(false);
+  const [sortLevels, setSortLevels] = useState(() => {
+    const saved = localStorage.getItem('sd-sort-levels');
+    return saved ? JSON.parse(saved) : [
+      { field: 'sequence_rank', direction: 'asc', label: 'Sequence Rank' }
+    ];
+  });
+  const [savedSorts, setSavedSorts] = useState(() => {
+    const saved = localStorage.getItem('sd-saved-sorts');
+    return saved ? JSON.parse(saved) : {
+      'Default': [{ field: 'sequence_rank', direction: 'asc', label: 'Sequence Rank' }],
+      'WSJF Priority': [
+        { field: 'wsjf_score', direction: 'desc', label: 'WSJF Score' },
+        { field: 'status', direction: 'asc', label: 'Status' },
+        { field: 'created_at', direction: 'desc', label: 'Created Date' }
+      ],
+      'Progress Tracking': [
+        { field: 'progress', direction: 'asc', label: 'Progress' },
+        { field: 'priority', direction: 'desc', label: 'Priority' },
+        { field: 'title', direction: 'asc', label: 'Title' }
+      ],
+      'Recent Activity': [
+        { field: 'updated_at', direction: 'desc', label: 'Last Updated' },
+        { field: 'status', direction: 'asc', label: 'Status' }
+      ]
+    };
+  });
+  const [sortPresetName, setSortPresetName] = useState('');
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('all');
   // Owner filter removed as requested
   const [editingStatus, setEditingStatus] = useState(null);
@@ -92,7 +131,16 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
   useEffect(() => {
     localStorage.setItem('sd-application-filter', applicationFilter);
   }, [applicationFilter]);
-  
+
+  // Save sorting preferences when they change
+  useEffect(() => {
+    localStorage.setItem('sd-sort-levels', JSON.stringify(sortLevels));
+  }, [sortLevels]);
+
+  useEffect(() => {
+    localStorage.setItem('sd-saved-sorts', JSON.stringify(savedSorts));
+  }, [savedSorts]);
+
   // Handle URL-based detail view with navigation guards
   useEffect(() => {
     if (detailMode && id) {
@@ -495,28 +543,62 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
     return statusMatch && searchMatch && priorityMatch && applicationMatch && categoryMatch;
   });
   
-  // Sort directives by sequence_rank first, then by ID
-  const sortedDirectives = [...filteredDirectives].sort((a, b) => {
-    // First sort by sequence_rank if it exists (lower numbers first)
-    if (a.sequence_rank !== undefined && b.sequence_rank !== undefined) {
-      return a.sequence_rank - b.sequence_rank;
-    }
-    // If only one has sequence_rank, put it first
-    if (a.sequence_rank !== undefined) return -1;
-    if (b.sequence_rank !== undefined) return 1;
-    
-    // Fallback to ID-based sorting for SDs without sequence_rank
-    const getNumericId = (id) => {
-      if (!id) return 999999;
-      const match = id.match(/SD-(\d+)/);
-      return match ? parseInt(match[1], 10) : 999999;
-    };
-    
-    const aNum = getNumericId(a.id);
-    const bNum = getNumericId(b.id);
-    
-    return aNum - bNum;
-  });
+  // Multi-level sorting function
+  const performMultiLevelSort = (directives, levels) => {
+    return [...directives].sort((a, b) => {
+      // Skip completed SDs with is_working_on flag
+      if (a.is_working_on && a.progress >= 100) return 1;
+      if (b.is_working_on && b.progress >= 100) return -1;
+
+      for (const level of levels) {
+        let aValue = a[level.field];
+        let bValue = b[level.field];
+
+        // Handle special cases for different field types
+        if (level.field === 'priority') {
+          const priorityOrder = { 'critical': 1, 'high': 2, 'medium': 3, 'low': 4, 'minimal': 5 };
+          aValue = priorityOrder[aValue?.toLowerCase()] || 999;
+          bValue = priorityOrder[bValue?.toLowerCase()] || 999;
+        } else if (level.field === 'status') {
+          const statusOrder = { 'active': 1, 'draft': 2, 'in_progress': 3, 'pending_approval': 4, 'completed': 5 };
+          aValue = statusOrder[aValue?.toLowerCase()] || 999;
+          bValue = statusOrder[bValue?.toLowerCase()] || 999;
+        } else if (level.field === 'wsjf_score') {
+          // Calculate WSJF score if not present
+          if (aValue === undefined || aValue === null) {
+            const aPriority = a.priority?.toLowerCase();
+            aValue = aPriority === 'critical' ? 100 : aPriority === 'high' ? 75 : aPriority === 'medium' ? 50 : 25;
+          }
+          if (bValue === undefined || bValue === null) {
+            const bPriority = b.priority?.toLowerCase();
+            bValue = bPriority === 'critical' ? 100 : bPriority === 'high' ? 75 : bPriority === 'medium' ? 50 : 25;
+          }
+        } else if (level.field === 'id') {
+          // Extract numeric part from SD-XXX format
+          const aMatch = aValue?.match(/SD-(\d+)/);
+          const bMatch = bValue?.match(/SD-(\d+)/);
+          aValue = aMatch ? parseInt(aMatch[1], 10) : 999999;
+          bValue = bMatch ? parseInt(bMatch[1], 10) : 999999;
+        }
+
+        // Handle null/undefined values
+        if (aValue === null || aValue === undefined) aValue = level.direction === 'asc' ? 999999 : -999999;
+        if (bValue === null || bValue === undefined) bValue = level.direction === 'asc' ? 999999 : -999999;
+
+        // Compare values based on direction
+        let comparison = 0;
+        if (aValue < bValue) comparison = -1;
+        else if (aValue > bValue) comparison = 1;
+
+        if (comparison !== 0) {
+          return level.direction === 'asc' ? comparison : -comparison;
+        }
+      }
+      return 0;
+    });
+  };
+
+  const sortedDirectives = performMultiLevelSort(filteredDirectives, sortLevels);
 
 
   const getStatusBadge = (status) => {
@@ -751,6 +833,206 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                       Done
                     </button>
                   </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Sorting Section - New Collapsible Panel */}
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-3">
+            <button
+              onClick={() => setShowSortingPanel(!showSortingPanel)}
+              className={`flex items-center gap-2 ${isCompact ? 'text-xs' : 'text-sm'} text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors duration-200 w-full justify-between bg-gray-50 dark:bg-gray-800/50 px-3 py-2 rounded-lg`}
+            >
+              <div className="flex items-center gap-2">
+                {showSortingPanel ?
+                  <ChevronDown className={`${isCompact ? 'w-4 h-4' : 'w-5 h-5'}`} /> :
+                  <ChevronRight className={`${isCompact ? 'w-4 h-4' : 'w-5 h-5'}`} />
+                }
+                <ArrowUpDown className={`${isCompact ? 'w-4 h-4' : 'w-5 h-5'}`} />
+                <span className="font-medium">Sorting</span>
+              </div>
+
+              <div className="flex items-center">
+                <span className={`${isCompact ? 'text-xs' : 'text-sm'} text-blue-600 dark:text-blue-400 font-medium`}>
+                  {sortLevels.map(level => level.label).join(' → ')}
+                </span>
+              </div>
+            </button>
+
+            {showSortingPanel && (
+              <div className="mt-4 bg-gradient-to-br from-white via-gray-50 to-white dark:from-gray-800 dark:via-gray-750 dark:to-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-lg transition-all duration-300 animate-in slide-in-from-top-2">
+
+                {/* Sort Presets Bar */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <select
+                      onChange={(e) => {
+                        const preset = savedSorts[e.target.value];
+                        if (preset) setSortLevels(preset);
+                      }}
+                      className={`${isCompact ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'} bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg`}
+                    >
+                      <option value="">Load Preset...</option>
+                      {Object.keys(savedSorts).map(name => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => setShowSaveDialog(true)}
+                      className={`${isCompact ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'} bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2`}
+                    >
+                      <Save className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'}`} />
+                      Save Current
+                    </button>
+                    <button
+                      onClick={() => setSortLevels([{ field: 'sequence_rank', direction: 'asc', label: 'Sequence Rank' }])}
+                      className={`${isCompact ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'} bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2`}
+                    >
+                      <RotateCcw className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'}`} />
+                      Reset
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sort Levels */}
+                <div className="space-y-3">
+                  {sortLevels.map((level, index) => (
+                    <div key={index} className="flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-600">
+                      <GripVertical className={`${isCompact ? 'w-4 h-4' : 'w-5 h-5'} text-gray-400 cursor-move`} />
+
+                      <span className={`${isCompact ? 'text-xs' : 'text-sm'} font-medium text-gray-500 dark:text-gray-400 w-20`}>
+                        {index === 0 ? 'Primary' : index === 1 ? 'Secondary' : index === 2 ? 'Tertiary' : `Level ${index + 1}`}:
+                      </span>
+
+                      <select
+                        value={level.field}
+                        onChange={(e) => {
+                          const newLevels = [...sortLevels];
+                          const fieldLabels = {
+                            'wsjf_score': 'WSJF Score',
+                            'priority': 'Priority',
+                            'status': 'Status',
+                            'progress': 'Progress',
+                            'sequence_rank': 'Sequence Rank',
+                            'created_at': 'Created Date',
+                            'updated_at': 'Last Updated',
+                            'title': 'Title',
+                            'id': 'ID',
+                            'readiness': 'Ready Score',
+                            'must_have_count': 'Story Count'
+                          };
+                          newLevels[index] = { ...level, field: e.target.value, label: fieldLabels[e.target.value] || e.target.value };
+                          setSortLevels(newLevels);
+                        }}
+                        className={`flex-1 ${isCompact ? 'px-3 py-2 text-xs' : 'px-4 py-2.5 text-sm'} bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg`}
+                      >
+                        <option value="wsjf_score">WSJF Score</option>
+                        <option value="priority">Priority</option>
+                        <option value="status">Status</option>
+                        <option value="progress">Progress</option>
+                        <option value="sequence_rank">Sequence Rank</option>
+                        <option value="created_at">Created Date</option>
+                        <option value="updated_at">Last Updated</option>
+                        <option value="title">Title</option>
+                        <option value="id">ID</option>
+                        <option value="readiness">Ready Score</option>
+                        <option value="must_have_count">Story Count</option>
+                      </select>
+
+                      <button
+                        onClick={() => {
+                          const newLevels = [...sortLevels];
+                          newLevels[index] = { ...level, direction: level.direction === 'asc' ? 'desc' : 'asc' };
+                          setSortLevels(newLevels);
+                        }}
+                        className={`${isCompact ? 'px-3 py-2' : 'px-4 py-2.5'} bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2`}
+                      >
+                        {level.direction === 'asc' ?
+                          <ArrowUp className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'}`} /> :
+                          <ArrowDown className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'}`} />
+                        }
+                        <span className={`${isCompact ? 'text-xs' : 'text-sm'}`}>
+                          {level.direction === 'asc' ? 'Ascending' : 'Descending'}
+                        </span>
+                      </button>
+
+                      {sortLevels.length > 1 && (
+                        <button
+                          onClick={() => {
+                            setSortLevels(sortLevels.filter((_, i) => i !== index));
+                          }}
+                          className="p-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                        >
+                          <Trash2 className={`${isCompact ? 'w-4 h-4' : 'w-5 h-5'}`} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add Sort Level Button */}
+                {sortLevels.length < 5 && (
+                  <button
+                    onClick={() => {
+                      setSortLevels([...sortLevels, { field: 'priority', direction: 'desc', label: 'Priority' }]);
+                    }}
+                    className={`mt-3 ${isCompact ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'} bg-white dark:bg-gray-900 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-gray-400 dark:hover:border-gray-500 w-full flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400`}
+                  >
+                    <Plus className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'}`} />
+                    Add Sort Level
+                  </button>
+                )}
+
+                {/* Save Dialog */}
+                {showSaveDialog && (
+                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+                      <h3 className="text-lg font-semibold mb-4">Save Sort Configuration</h3>
+                      <input
+                        type="text"
+                        value={sortPresetName}
+                        onChange={(e) => setSortPresetName(e.target.value)}
+                        placeholder="Enter preset name..."
+                        className="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg mb-4"
+                        autoFocus
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          onClick={() => {
+                            setShowSaveDialog(false);
+                            setSortPresetName('');
+                          }}
+                          className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (sortPresetName) {
+                              setSavedSorts({ ...savedSorts, [sortPresetName]: sortLevels });
+                              setShowSaveDialog(false);
+                              setSortPresetName('');
+                            }
+                          }}
+                          className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <button
+                    onClick={() => setShowSortingPanel(false)}
+                    className={`${isCompact ? 'px-4 py-1.5 text-xs' : 'px-6 py-2 text-sm'} bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-lg transition-all duration-200 flex items-center gap-2 font-medium shadow-md hover:shadow-lg transform hover:scale-105`}
+                  >
+                    <ChevronUp className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'}`} />
+                    Apply Sorting
+                  </button>
                 </div>
               </div>
             )}

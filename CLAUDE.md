@@ -10,8 +10,43 @@
 
 *For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
 
+## 🏗️ Application Architecture - CRITICAL CONTEXT
+
+### Two Distinct Applications:
+1. **EHG_Engineer** (Management Dashboard) - WHERE YOU ARE NOW
+   - **Path**: `/mnt/c/_EHG/EHG_Engineer/`
+   - **Purpose**: LEO Protocol dashboard for managing Strategic Directives & PRDs
+   - **Database**: dedlbzhpgkmetvhbkyzq (Supabase)
+   - **GitHub**: https://github.com/rickfelix/EHG_Engineer.git
+   - **Port**: 3000-3001
+   - **Role**: MANAGEMENT TOOL ONLY - no customer features here!
+
+2. **EHG** (Business Application) - IMPLEMENTATION TARGET
+   - **Path**: `/mnt/c/_EHG/ehg/`
+   - **Purpose**: The actual customer-facing business application
+   - **Database**: liapbndqlqxdcgpwntbv (Supabase)
+   - **GitHub**: https://github.com/rickfelix/ehg.git
+   - **Built with**: Vite + React + Shadcn + TypeScript
+   - **Role**: WHERE ALL FEATURES GET IMPLEMENTED
+
+### ⚠️ CRITICAL: During EXEC Phase Implementation
+1. **Read PRD** from EHG_Engineer database
+2. **Navigate** to `/mnt/c/_EHG/ehg/` for implementation
+3. **Make code changes** in EHG application (NOT in EHG_Engineer!)
+4. **Push changes** to EHG's GitHub repo: `rickfelix/ehg.git`
+5. **Track progress** in EHG_Engineer dashboard
+
+### 🔄 Workflow Relationship
+```
+EHG_Engineer (Management)          EHG App (Implementation)
+├── Strategic Directives     →     Features implemented here
+├── PRDs                     →     Code changes made here
+├── Progress Tracking        ←     Results verified from here
+└── Dashboard Views          ←     No changes here!
+```
+
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-09-26 2:01:41 PM
+**Last Generated**: 2025-09-26 2:23:28 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -41,7 +76,7 @@ UPDATE leo_protocols SET status = 'superseded' WHERE version != 'new_version';
 
 
 ### Implementation Agent (EXEC)
-- **Responsibilities**: Implementation based on PRD, no validation. **SIMPLICITY IN EXECUTION**: Implement the simplest solution that meets requirements. Avoid over-engineering. Use proven patterns and existing libraries. Focus on working solutions over perfect code.
+- **Responsibilities**: Implementation based on PRD. **CRITICAL: Implementations happen in /mnt/c/_EHG/ehg/ (EHG app), NOT in EHG_Engineer!** Always cd to target app before coding. **SIMPLICITY IN EXECUTION**: Implement the simplest solution that meets requirements. Avoid over-engineering. Use proven patterns and existing libraries.
 - **Planning**: 0%
 - **Implementation**: 30%
 - **Verification**: 0%
@@ -69,6 +104,12 @@ UPDATE leo_protocols SET status = 'superseded' WHERE version != 'new_version';
 
 ### MANDATORY Pre-Implementation Verification
 Before writing ANY code, EXEC MUST:
+
+0. **APPLICATION CHECK** ⚠️ CRITICAL FIRST STEP
+   - Confirm target app: `/mnt/c/_EHG/ehg/` (NOT EHG_Engineer!)
+   - Verify: `cd /mnt/c/_EHG/ehg && pwd` should show `/mnt/c/_EHG/ehg`
+   - Check GitHub: `git remote -v` should show `rickfelix/ehg.git`
+   - If you're in EHG_Engineer, you're in the WRONG place for implementation!
 
 1. **URL Verification** ✅
    - Navigate to the EXACT URL specified in the PRD
@@ -164,8 +205,14 @@ All commits MUST follow Conventional Commits format with SD-ID:
 3. **At logical breakpoints** (feature complete, tests passing)
 4. **Frequency**: Min 1/session, Max 10/checklist item
 
-### Branch Strategy
-- **Development**: `<type>/<sd-id>/<description>` (e.g., feature/SD-2025-001-voice-api)
+### Branch Strategy by Application
+- **EHG_Engineer changes** (dashboard/tooling): Use `eng/` prefix
+  - Example: `eng/dashboard-update`, `eng/leo-protocol-v4`
+- **EHG app features** (customer features): Use standard prefixes
+  - Example: `feature/SD-2025-001-voice-api`, `fix/SD-2025-002-auth-bug`
+- **CRITICAL**: Verify you're in the correct directory before branching!
+  - `pwd` should show `/mnt/c/_EHG/ehg` for feature implementation
+  - `pwd` should show `/mnt/c/_EHG/EHG_Engineer` for dashboard changes
 - **Main branch**: NO direct commits during EXEC phase
 - **Merges**: Only via approved Pull Requests after LEAD approval
 

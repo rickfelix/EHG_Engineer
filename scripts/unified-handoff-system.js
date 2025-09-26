@@ -14,7 +14,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import HandoffValidator from '../lib/dashboard/handoff-validator.js';
+import HandoffValidator from './handoff-validator.js';
 import LeadToPlanVerifier from './verify-handoff-lead-to-plan.js';
 import PlanToExecVerifier from './verify-handoff-plan-to-exec.js';
 import path from 'path';

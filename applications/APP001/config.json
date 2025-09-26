@@ -1,7 +1,8 @@
 {
   "id": "APP001",
   "name": "ehg",
-  "description": "This is the EHG main application",
+  "description": "EHG customer-facing business application (IMPLEMENTATION TARGET)",
+  "local_path": "/mnt/c/_EHG/ehg",
   "github": {
     "owner": "rickfelix",
     "repo": "ehg.git",
@@ -9,8 +10,9 @@
     "full_repo": "rickfelix/ehg.git"
   },
   "supabase": {
-    "project_id": "https://dedlbzhpgkmetvhbkyzq.supabase.co",
-    "url": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlZGxiemhwZ2ttZXR2aGJreXpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MTE5MzcsImV4cCI6MjA3MjA4NzkzN30.o-AUQPUXAobkhMfdxa5g3oDkcneXNnmwK80KfAER16g"
+    "project_id": "liapbndqlqxdcgpwntbv",
+    "url": "https://liapbndqlqxdcgpwntbv.supabase.co",
+    "anon_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpYXBibmRxbHF4ZGNncHdudGJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYzNzI4MzcsImV4cCI6MjA3MTk0ODgzN30.YlzzH17RYHsFs3TBmKlbmZPJYfUEWU71cAURwTsu8-M"
   },
   "environment": "development",
   "settings": {

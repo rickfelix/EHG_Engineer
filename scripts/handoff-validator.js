@@ -8,6 +8,8 @@
 import { createClient } from '@supabase/supabase-js';
 import DynamicChecklistGenerator from './dynamic-checklist-generator';
 import SubAgentEnforcementSystem from './subagent-enforcement-system';
+import fsModule from 'fs';
+const fs = fsModule.promises;
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -323,8 +325,6 @@ class HandoffValidator {
       { agent: 'documentation', file: 'documentation-fixes.md' }
     ];
     
-    import fsModule from 'fs';
-const fs = fsModule.promises;
     
     for (const report of reportFiles) {
       try {
