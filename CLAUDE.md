@@ -1,7 +1,7 @@
 # CLAUDE.md - LEO Protocol Workflow Guide for AI Agents
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-09-22 5:00:05 PM
+**Last Generated**: 2025-09-26 8:14:52 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -31,7 +31,7 @@ UPDATE leo_protocols SET status = 'superseded' WHERE version != 'new_version';
 
 
 ### Implementation Agent (EXEC)
-- **Responsibilities**: Implementation based on PRD, no validation
+- **Responsibilities**: Implementation based on PRD, no validation. **SIMPLICITY IN EXECUTION**: Implement the simplest solution that meets requirements. Avoid over-engineering. Use proven patterns and existing libraries. Focus on working solutions over perfect code.
 - **Planning**: 0%
 - **Implementation**: 30%
 - **Verification**: 0%
@@ -39,7 +39,7 @@ UPDATE leo_protocols SET status = 'superseded' WHERE version != 'new_version';
 - **Total**: 30%
 
 ### Strategic Leadership Agent (LEAD)
-- **Responsibilities**: Strategic planning, business objectives, final approval
+- **Responsibilities**: Strategic planning, business objectives, final approval. **SIMPLICITY FIRST**: Challenge complexity, favor simple solutions over perfect architectures. Ask "What's the simplest solution?" and "Why not just configure existing tools?" Default to 80/20 solutions that deliver value quickly.
 - **Planning**: 20%
 - **Implementation**: 0%
 - **Verification**: 0%
@@ -47,7 +47,7 @@ UPDATE leo_protocols SET status = 'superseded' WHERE version != 'new_version';
 - **Total**: 35%
 
 ### Technical Planning Agent (PLAN)
-- **Responsibilities**: Technical design, PRD creation with comprehensive and detailed test plans, pre-automation validation, acceptance testing
+- **Responsibilities**: Technical design, PRD creation with comprehensive test plans, pre-automation validation, acceptance testing. **PRAGMATIC ENGINEERING**: Use boring technology that works reliably. Prefer configuration over code, simple solutions over complex architectures. Filter sub-agent recommendations through simplicity lens.
 - **🔍 Supervisor Mode**: Final "done done" verification with all sub-agents
 - **Planning**: 20%
 - **Implementation**: 0%
@@ -110,6 +110,12 @@ LEO Protocol v4.1.2 is **DATABASE-FIRST ONLY**. **NEVER** create:
 - ❌ Handoff documents 
 - ❌ Verification reports
 - ❌ Any work-related documentation files
+
+### Quality Gate Requirements
+- **Test Coverage**: ≥75% statement coverage (enforced via test-coverage.yml)
+- **Accessibility**: WCAG AA compliance on key routes (a11y-check.yml)
+- **Performance**: Bundle <512KB, Perf checks via Lighthouse CI (warn at LCP >3.5s; tighten later based on baselines)
+- **Branch Protection**: These checks are required status checks on main
 
 ### REQUIRED: Database Operations Only
 - ✅ PRDs: Use `scripts/add-prd-to-database.js`
@@ -289,21 +295,77 @@ ${subAgents.map(sa => `| ${sa.name} | ${sa.code} | ${sa.activation_type} | ${sa.
 ### Sub-Agent Activation Triggers
 
 
-#### Security Sub-Agent Triggers:
-- "authentication" (keyword) in any context
-- "security" (keyword) in any context
-
-#### Database Sub-Agent Triggers:
+#### Principal Database Architect Triggers:
 - "schema" (keyword) in any context
 - "migration" (keyword) in any context
 
-#### Testing Sub-Agent Triggers:
+#### QA Engineering Director Triggers:
 - "coverage" (keyword) in any context
 
-#### Performance Sub-Agent Triggers:
+#### Principal Systems Analyst Triggers:
+- "existing implementation" (keyword) in any context
+- "duplicate" (keyword) in any context
+- "conflict" (keyword) in any context
+- "already implemented" (keyword) in any context
+- "codebase check" (keyword) in any context
+
+#### DevOps Platform Architect Triggers:
+- "EXEC_IMPLEMENTATION_COMPLETE" (keyword) in any context
+- "create pull request" (keyword) in any context
+- "gh pr create" (keyword) in any context
+- "LEAD_APPROVAL_COMPLETE" (keyword) in any context
+- "create release" (keyword) in any context
+- "PLAN_VERIFICATION_PASS" (keyword) in any context
+- "github deploy" (keyword) in any context
+- "github status" (keyword) in any context
+
+#### Information Architecture Lead Triggers:
+- "LEAD_SD_CREATION" (keyword) in any context
+- "LEAD_HANDOFF_CREATION" (keyword) in any context
+- "LEAD_APPROVAL" (keyword) in any context
+- "PLAN_PRD_GENERATION" (keyword) in any context
+- "PLAN_VERIFICATION" (keyword) in any context
+- "EXEC_IMPLEMENTATION" (keyword) in any context
+- "EXEC_COMPLETION" (keyword) in any context
+- "HANDOFF_CREATED" (keyword) in any context
+- "HANDOFF_ACCEPTED" (keyword) in any context
+- "PHASE_TRANSITION" (keyword) in any context
+- "RETRO_GENERATED" (keyword) in any context
+- "FILE_CREATED" (keyword) in any context
+- "VIOLATION_DETECTED" (keyword) in any context
+- "DAILY_DOCMON_CHECK" (keyword) in any context
+
+#### Continuous Improvement Coach Triggers:
+- "LEAD_APPROVAL_COMPLETE" (keyword) in any context
+- "LEAD_REJECTION" (keyword) in any context
+- "PLAN_VERIFICATION_COMPLETE" (keyword) in any context
+- "PLAN_COMPLEXITY_HIGH" (keyword) in any context
+- "EXEC_SPRINT_COMPLETE" (keyword) in any context
+- "EXEC_QUALITY_ISSUE" (keyword) in any context
+- "HANDOFF_REJECTED" (keyword) in any context
+- "HANDOFF_DELAY" (keyword) in any context
+- "PHASE_COMPLETE" (keyword) in any context
+- "SD_STATUS_COMPLETED" (keyword) in any context
+- "SD_STATUS_BLOCKED" (keyword) in any context
+- "PATTERN_DETECTED" (keyword) in any context
+- "SUBAGENT_MULTIPLE_FAILURES" (keyword) in any context
+- "WEEKLY_LEO_REVIEW" (keyword) in any context
+- "LEAD_PRE_APPROVAL_REVIEW" (keyword) in any context
+
+#### Product Requirements Expert Triggers:
+- "PRD created" (keyword) in any context
+- "acceptance criteria" (keyword) in any context
+- "user stories" (keyword) in any context
+- "generate stories" (keyword) in any context
+
+#### Chief Security Architect Triggers:
+- "authentication" (keyword) in any context
+- "security" (keyword) in any context
+
+#### Performance Engineering Lead Triggers:
 - "optimization" (keyword) in any context
 
-#### Design Sub-Agent Triggers:
+#### Senior Design Sub-Agent Triggers:
 - "accessibility" (keyword) in any context
 
 ### Sub-Agent Activation Process
@@ -454,6 +516,45 @@ Dashboard automatically connects to database:
 - PLAN supervisor verification status
 - No file scanning needed
 
+## 📝 Retrospective Management System
+
+### Overview
+The Retrospective Sub-Agent (RETRO) automatically captures learnings, stores them in the database, and feeds insights into the cross-agent intelligence system.
+
+### Database Tables
+- `retrospectives` - Main retrospective records
+- `retrospective_insights` - Extracted learnings and patterns
+- `retrospective_templates` - Standardized formats (sprint, SD completion, etc.)
+- `retrospective_action_items` - Tracked improvements with agent assignments
+- `retrospective_learning_links` - Links to cross-agent intelligence
+- `retrospective_triggers` - Automatic generation rules
+
+### Retrospective Sub-Agent (RETRO)
+- **Code**: RETRO
+- **Priority**: 85 (high priority)
+- **Activation**: Automatic on sprint/SD completion + manual triggers
+- **Script**: `scripts/retrospective-sub-agent.js`
+
+### Automatic Triggers
+- Sprint completion → Sprint retrospective
+- SD status change to "completed" → SD completion retrospective
+- Weekly scheduled review (Fridays 5 PM)
+- High bug threshold (>10 bugs in 7 days)
+- Keywords: "retrospective", "lessons learned", "post-mortem"
+
+### Key Scripts
+- `scripts/retrospective-sub-agent.js` - Main sub-agent logic
+- `scripts/migrate-retrospectives-to-db.js` - Import existing retrospectives
+- `scripts/retrospective-intelligence-integration.js` - Link to AI learning
+- `scripts/execute-retrospective-migration.js` - Database schema setup
+
+### Integration with Cross-Agent Intelligence
+Retrospectives automatically:
+1. Update `agent_learning_outcomes` with success/failure patterns
+2. Generate `intelligence_patterns` for ML analysis
+3. Create `agent_intelligence_insights` for decision adjustments
+4. Track `cross_agent_correlations` for team dynamics
+
 ## Important Notes
 
 1. **Database is Source of Truth** - Files are deprecated
@@ -462,6 +563,7 @@ Dashboard automatically connects to database:
 4. **Audit Trail** - All changes tracked in database
 5. **WebSocket Updates** - Dashboard stays synchronized
 6. **PLAN Supervisor** - Final verification before LEAD approval
+7. **Retrospectives** - Automatic learning capture and pattern recognition
 
 ## 🗄️ Supabase Database Operations
 
@@ -470,25 +572,88 @@ Dashboard automatically connects to database:
 - **Project ID**: dedlbzhpgkmetvhbkyzq
 - **Connection**: Via Supabase client using environment variables
 
-### Creating Database Tables
+### 🔨 Creating Database Tables - Multi-Approach Strategy
 
-#### Method 1: Using RPC Function (if available)
+**📚 Full Database Connection Guide**: See `docs/DATABASE_CONNECTION_GUIDE.md` for comprehensive documentation
+
+#### Critical Decision Process for Table Creation
+
+When you need to create database tables, **TRY MULTIPLE APPROACHES** in this order:
+
+#### Approach 1: Direct PostgreSQL with Pooler Connection (BEST SUCCESS RATE)
+```bash
+# Set environment variable to bypass SSL certificate issues
+NODE_TLS_REJECT_UNAUTHORIZED=0 node scripts/execute-retrospective-migration.js
+```
+
+**Implementation example:**
+```javascript
+const { Pool } = require('pg');
+const pool = new Pool({
+  connectionString: process.env.SUPABASE_POOLER_URL,
+  ssl: { rejectUnauthorized: false, require: true }
+});
+
+// Execute DDL
+const client = await pool.connect();
+await client.query('CREATE TABLE ...');
+client.release();
+```
+
+**Success indicators**:
+- ✅ Works for all DDL operations
+- ✅ Bypasses RLS policies
+- ✅ Handles complex migrations with functions/triggers
+
+**Common issues & fixes**:
+- SSL certificate error → Use `NODE_TLS_REJECT_UNAUTHORIZED=0`
+- Connection timeout → Check SUPABASE_POOLER_URL format
+- Required .env variables: `SUPABASE_POOLER_URL`, `SUPABASE_DB_PASSWORD`
+
+#### Approach 2: Using psql with Pooler URL (Shell-based)
+```bash
+# Uses SUPABASE_POOLER_URL from .env file
+source .env && psql "$SUPABASE_POOLER_URL" -f path/to/migration.sql
+```
+
+**Note**: May fail in WSL environments due to psql client issues
+
+#### Approach 3: Supabase Client with RPC (Limited)
 ```javascript
 const { error } = await supabase.rpc('execute_sql', {
   sql: 'CREATE TABLE IF NOT EXISTS ...'
 });
 ```
 
-#### Method 2: Using psql Command
-```bash
-# If DATABASE_URL is available in .env
-psql $DATABASE_URL -f path/to/migration.sql
-```
+**Limitations**:
+- ❌ RPC function may not exist
+- ❌ Cannot handle complex DDL
+- ❌ Fails for triggers/functions
 
-#### Method 3: Supabase Dashboard (always works)
-1. Go to: https://supabase.com/dashboard/project/dedlbzhpgkmetvhbkyzq
-2. Navigate to SQL Editor
-3. Paste and execute SQL
+#### Approach 4: Supabase Dashboard (Manual Fallback)
+1. Go to: https://supabase.com/dashboard/project/dedlbzhpgkmetvhbkyzq/sql/new
+2. Copy content from migration file
+3. Paste and execute in SQL editor
+4. Verify table creation in Table Editor
+
+**Use when**: All programmatic approaches fail
+
+#### 🎯 Key Scripts for Database Operations
+
+| Script | Purpose | Success Rate |
+|--------|---------|--------------|
+| `scripts/execute-retrospective-migration.js` | Direct PG connection for DDL | 95% |
+| `scripts/apply-retrospective-schema.js` | Supabase client attempts | 30% |
+| `scripts/create-learning-links-table.js` | Single table creation | 90% |
+| `scripts/execute-ddl-migration.js` | Legacy migration tool | 40% |
+
+#### 🚨 Important Lessons Learned
+
+1. **Always try multiple approaches** - Don't give up after first failure
+2. **SSL certificates are tricky** - Use `NODE_TLS_REJECT_UNAUTHORIZED=0` when needed
+3. **Check table dependencies** - Some tables reference others (foreign keys)
+4. **Verify after creation** - Always check tables were actually created
+5. **Document what works** - Update this guide with successful approaches
 
 ### Key Database Operations Scripts
 - `scripts/execute-leo-protocol-sql.js` - Execute protocol migrations
@@ -563,6 +728,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=[your-anon-key]
 
 ---
 
-*Generated from Database: 2025-09-22*
+*Generated from Database: 2025-09-26*
 *Protocol Version: vv4.2.0_story_gates*
 *Database-First Architecture: ACTIVE*

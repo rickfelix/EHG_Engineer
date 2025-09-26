@@ -1,0 +1,14 @@
+{
+  "baseUrl": "http://localhost:3001",
+  "routes": [
+    "/",
+    "/strategic-directives",
+    "/prds",
+    "/handoffs"
+  ],
+  "rules": {
+    "color-contrast": "error",
+    "label": "error",
+    "aria-required-attr": "error"
+  }
+}

@@ -1,0 +1,53 @@
+name: Performance Budget
+
+on:
+  pull_request:
+    paths:
+      - 'src/client/**'
+      - 'package*.json'
+
+jobs:
+  perf:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: System deps (jq)
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Build and analyze bundle
+        run: |
+          npm run build:client
+          npm run analyze:bundle
+
+      - name: Check bundle budget
+        run: |
+          BUDGET=$(cat config/bundle-budget.json | jq '.maxSize')
+          SIZE=$(stat -c%s src/client/dist/assets/*.js | sort -nr | head -1)
+          if [ "$SIZE" -gt "$BUDGET" ]; then
+            echo "❌ Bundle ${SIZE}b exceeds budget ${BUDGET}b"
+            exit 1
+          fi
+          echo "✅ Bundle ${SIZE}b within budget ${BUDGET}b"
+
+      - name: Start server
+        run: |
+          PORT=3001 node server.js &
+          npx wait-on http://localhost:3001
+
+      - name: Lighthouse CI
+        run: npm run lighthouse:ci
+
+      - name: Kill server
+        if: always()
+        run: pkill -f "node server.js" || true

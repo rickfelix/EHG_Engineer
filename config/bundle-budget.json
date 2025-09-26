@@ -1,0 +1,13 @@
+{
+  "maxSize": 512000,
+  "bundles": [
+    {
+      "path": "src/client/dist/assets/*.js",
+      "maxSize": 512000
+    },
+    {
+      "path": "src/client/dist/assets/*.css",
+      "maxSize": 102400
+    }
+  ]
+}
