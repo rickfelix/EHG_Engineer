@@ -1,0 +1,79 @@
+{
+  "type": "LEAD_TO_PLAN",
+  "sd_id": "SD-001",
+  "title": "AI Agents: CrewAI-Style Dashboard",
+  "from_agent": "LEAD",
+  "to_agent": "PLAN",
+  "created_at": "2025-09-24T13:45:00Z",
+  "status": "PENDING_ACCEPTANCE",
+  
+  "executive_summary": "Strategic Directive SD-001 requires implementation of a CrewAI-style dashboard for monitoring and controlling AI agents. This addresses the critical gap in agent visibility and operational control within the EHG system. Business value: 10+ hours/week operational savings.",
+  
+  "completeness_report": {
+    "business_case": "COMPLETE",
+    "competitive_analysis": "COMPLETE",
+    "scope_definition": "COMPLETE",
+    "priority_justification": "COMPLETE",
+    "resource_estimation": "COMPLETE"
+  },
+  
+  "deliverables_manifest": [
+    "Technical PRD with architecture design",
+    "Component specifications for dashboard UI",
+    "WebSocket real-time update design",
+    "Agent status data model",
+    "Performance requirements",
+    "Acceptance criteria and user stories",
+    "Test plan for agent monitoring features"
+  ],
+  
+  "key_decisions_rationale": [
+    "Priority elevated to CRITICAL - Foundational for agent operations",
+    "Scope limited to monitoring/control - No complex workflow design",
+    "Real-time updates via WebSocket - Leverages existing infrastructure",
+    "CrewAI-inspired UI - Proven design patterns for agent visualization"
+  ],
+  
+  "known_issues_risks": [
+    "Agent infrastructure must support status reporting",
+    "WebSocket connection stability for real-time updates",
+    "UI performance with multiple active agents",
+    "Integration with existing LEO Protocol agents"
+  ],
+  
+  "resource_utilization": {
+    "lead_phase": "4 hours (COMPLETE)",
+    "plan_estimate": "1 week",
+    "exec_estimate": "3 weeks",
+    "total_timeline": "4 weeks"
+  },
+  
+  "action_items_for_plan": [
+    "Generate technical PRD with architecture diagrams",
+    "Design component hierarchy for dashboard",
+    "Define agent status data model",
+    "Create WebSocket event specifications",
+    "Develop comprehensive acceptance criteria",
+    "Design test scenarios for real-time features",
+    "Validate technical feasibility with VALIDATION sub-agent"
+  ],
+  
+  "scope": {
+    "must_have": [
+      "Real-time agent status display",
+      "Agent task queue visualization",
+      "Start/stop agent controls",
+      "Basic performance metrics"
+    ],
+    "nice_to_have": [
+      "Historical agent performance",
+      "Agent communication graph",
+      "Advanced debugging tools"
+    ],
+    "out_of_scope": [
+      "Agent code editing",
+      "Complex workflow designer",
+      "Machine learning optimization"
+    ]
+  }
+}

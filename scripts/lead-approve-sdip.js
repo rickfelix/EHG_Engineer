@@ -7,6 +7,7 @@
 import dotenv from "dotenv";
 dotenv.config();
 import { createClient } from '@supabase/supabase-js';
+import { CodebaseValidator } from './lead-codebase-validation.js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -15,28 +16,66 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 async function leadApprovalAssessment() {
   console.log('👔 LEAD APPROVAL PHASE - Strategic Directive Initiation Protocol');
   console.log('=' .repeat(60));
-  
+
   // Get Strategic Directive
   const { data: sd } = await supabase
     .from('strategic_directives_v2')
     .select('*')
     .eq('id', 'SD-2025-0903-SDIP')
     .single();
-    
+
   // Get PRD with verification results
   const { data: prd } = await supabase
     .from('product_requirements_v2')
     .select('*')
     .eq('id', 'PRD-1756934172732')
     .single();
-    
+
   if (!sd || !prd) {
     console.error('❌ Cannot proceed: SD or PRD not found');
     return;
   }
-  
+
   console.log('📋 Reviewing Strategic Directive:', sd.id);
   console.log('📄 Associated PRD:', prd.id);
+
+  // MANDATORY: Check for existing codebase validation
+  console.log('\n🔍 CHECKING CODEBASE VALIDATION STATUS');
+  console.log('-'.repeat(40));
+
+  const { data: existingValidation } = await supabase
+    .from('leo_codebase_validations')
+    .select('*')
+    .eq('sd_id', sd.id)
+    .eq('prd_id', prd.id)
+    .order('validation_timestamp', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (!existingValidation) {
+    console.log('⚠️  No validation found - Running codebase validation now...');
+    const validator = new CodebaseValidator(sd.id, prd.id);
+    const validationResult = await validator.validate();
+
+    if (validationResult.approval_recommendation === 'BLOCKED') {
+      console.error('❌ VALIDATION BLOCKED - Cannot approve SD/PRD');
+      console.error('Reasons:', validationResult.human_review_reasons);
+      return;
+    }
+
+    if (validationResult.human_review_required) {
+      console.warn('⚠️  Human review required:', validationResult.human_review_reasons);
+    }
+  } else {
+    console.log('✅ Existing validation found:', existingValidation.validation_timestamp);
+    if (existingValidation.approval_recommendation === 'BLOCKED') {
+      console.error('❌ Previous validation BLOCKED - Cannot approve SD/PRD');
+      console.error('Reasons:', existingValidation.human_review_reasons);
+      return;
+    }
+  }
+
+  console.log('✅ Codebase Validation Status: PASSED');
   console.log('✅ PLAN Verification Status:', prd.validation_checklist?.overallStatus || 'PENDING');
   
   // LEAD Strategic Assessment

@@ -1,19 +1,43 @@
-name: WSJF Bulk-Accept (Staging)
+name: WSJF Bulk-Accept (Prod)
 
 on:
-  workflow_dispatch: {}
-  schedule:
-    - cron: '10 5 * * *'   # after proposals-ingest (optional)
+  workflow_dispatch:
+    inputs:
+      per_venture_limit:
+        description: 'Max proposals to accept per venture'
+        required: false
+        default: '1'
+        type: string
+      max_delta:
+        description: 'Maximum allowed |delta| to accept'
+        required: false
+        default: '2'
+        type: string
+      min_score:
+        description: 'Minimum WSJF score to accept'
+        required: false
+        default: '0'
+        type: string
+      dry_run:
+        description: 'Preview mode (no database writes)'
+        required: false
+        default: 'true'
+        type: boolean
 
 permissions:
   contents: read
 
+concurrency:
+  group: wsjf-pipeline-${{ github.ref || github.run_id }}
+  cancel-in-progress: false  # Never cancel during acceptance
+
 jobs:
-  bulk_accept:
-    # Guard writes to staging; explicit opt-in
-    if: ${{ vars.STAGING_WRITE_OK == '1' && vars.ENABLE_WSJF_BULK_ACCEPT == '1' }}
+  accept:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
+
+    # Safety gate
+    if: vars.ENABLE_PROD_BULK_ACCEPT == '1'
 
     steps:
       - uses: actions/checkout@v4
@@ -21,42 +45,157 @@ jobs:
       - name: Install psql
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Bulk-accept top proposals per venture (guarded; DRY-RUN by default)
+      - name: Query Candidate Proposals
         env:
-          PGHOST: ${{ secrets.PGHOST_STAGING }}
-          PGPORT: ${{ secrets.PGPORT_STAGING }}
-          PGDATABASE: ${{ secrets.PGDATABASE_STAGING }}
-          PGUSER: ${{ secrets.PGUSER_STAGING }}
-          PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
+          PGHOST: ${{ secrets.PGHOST_PROD }}
+          PGPORT: ${{ secrets.PGPORT_PROD }}
+          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
+          PGUSER: ${{ secrets.PGUSER_PROD }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
           PGSSLMODE: require
         run: |
           mkdir -p ops/checks/out
-          psql -v ON_ERROR_STOP=1 \
-               -v DRY_RUN="${{ vars.DRY_RUN || '1' }}" \
-               -v MAX_MOVE="${{ vars.MAX_MOVE || '2' }}" \
-               -v PER_VENTURE_LIMIT="${{ vars.PER_VENTURE_LIMIT || '3' }}" \
-               -v MIN_SCORE="${{ vars.MIN_SCORE || '0' }}" \
-               -v PROPOSED_BY="wsjf" \
-               -f ops/jobs/wsjf_bulk_accept_staging.sql
 
-      - name: Summary
+          # Query proposals meeting criteria
+          psql << 'EOF' > ops/checks/out/candidates.csv
+          WITH ranked AS (
+            SELECT
+              id,
+              sd_id,
+              venture_id,
+              current_execution_order,
+              proposed_execution_order,
+              delta,
+              wsjf_score,
+              rationale,
+              ROW_NUMBER() OVER (
+                PARTITION BY COALESCE(venture_id::text, 'no-venture')
+                ORDER BY ABS(delta) ASC, wsjf_score DESC
+              ) AS rank_in_venture
+            FROM eng_sequence_proposals
+            WHERE status = 'proposed'
+              AND ABS(delta) <= ${{ inputs.max_delta }}
+              AND wsjf_score >= ${{ inputs.min_score }}
+          )
+          SELECT
+            id,
+            sd_id,
+            COALESCE(venture_id::text, 'no-venture') AS venture_group,
+            current_execution_order,
+            proposed_execution_order,
+            delta,
+            wsjf_score,
+            rank_in_venture
+          FROM ranked
+          WHERE rank_in_venture <= ${{ inputs.per_venture_limit }}
+          ORDER BY venture_group, rank_in_venture;
+          EOF
+
+          echo "Candidates identified:"
+          cat ops/checks/out/candidates.csv
+
+      - name: Generate Acceptance List
         run: |
-          echo "### WSJF Bulk-Accept (Staging)" >> $GITHUB_STEP_SUMMARY
-          echo "- DRY_RUN: ${{ vars.DRY_RUN || '1' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- MAX_MOVE: ${{ vars.MAX_MOVE || '2' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- PER_VENTURE_LIMIT: ${{ vars.PER_VENTURE_LIMIT || '3' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- MIN_SCORE: ${{ vars.MIN_SCORE || '0' }}" >> $GITHUB_STEP_SUMMARY
-          if [ -f ops/checks/out/wsjf_bulk_accept_results.csv ]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Accepted/pending overview (sample):" >> $GITHUB_STEP_SUMMARY
-            head -n 11 ops/checks/out/wsjf_bulk_accept_results.csv | tail -n +2 | awk -F, '{printf "- %s sd=%s %s→%s [%s]\n",$1,$2,$3,$4,$6}' >> $GITHUB_STEP_SUMMARY || true
+          cat > generate_accepts.py << 'EOF'
+          import csv
+
+          accepts = []
+          with open('ops/checks/out/candidates.csv', 'r') as f:
+              reader = csv.reader(f)
+              next(reader)  # Skip header
+              for row in reader:
+                  if len(row) >= 8:
+                      accepts.append(row[0])  # proposal ID
+
+          print(f"Will accept {len(accepts)} proposals")
+
+          # Write IDs for SQL
+          with open('ops/checks/out/accept_ids.txt', 'w') as f:
+              if accepts:
+                  f.write(','.join(f"'{id}'" for id in accepts))
+              else:
+                  f.write("'00000000-0000-0000-0000-000000000000'")  # Dummy UUID
+
+          # Summary
+          with open('ops/checks/out/accept_summary.md', 'w') as f:
+              f.write(f"# WSJF Bulk Accept Summary\n\n")
+              f.write(f"**Criteria**:\n")
+              f.write(f"- Max delta: ±{inputs.max_delta}\n")
+              f.write(f"- Min score: {inputs.min_score}\n")
+              f.write(f"- Per venture limit: {inputs.per_venture_limit}\n\n")
+              f.write(f"**Total to accept**: {len(accepts)}\n")
+          EOF
+
+          python3 generate_accepts.py
+
+      - name: Accept Proposals
+        if: inputs.dry_run == false
+        env:
+          PGHOST: ${{ secrets.PGHOST_PROD }}
+          PGPORT: ${{ secrets.PGPORT_PROD }}
+          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
+          PGUSER: ${{ secrets.PGUSER_PROD }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
+          PGSSLMODE: require
+        run: |
+          # Update proposals to accepted
+          psql << EOF
+          UPDATE eng_sequence_proposals
+          SET
+            status = 'accepted',
+            accepted_at = now(),
+            accepted_by = 'wsjf-bulk-accept-${{ github.run_id }}',
+            metadata = metadata || jsonb_build_object(
+              'accepted_criteria', jsonb_build_object(
+                'max_delta', ${{ inputs.max_delta }},
+                'min_score', ${{ inputs.min_score }},
+                'per_venture_limit', ${{ inputs.per_venture_limit }}
+              )
+            )
+          WHERE id::text IN ($(cat ops/checks/out/accept_ids.txt))
+            AND status = 'proposed';
+
+          -- Report results
+          SELECT
+            COUNT(*) FILTER (WHERE status = 'accepted') AS accepted_count,
+            COUNT(*) FILTER (WHERE status = 'proposed') AS remaining_proposed
+          FROM eng_sequence_proposals;
+          EOF
+
+          echo "✅ Proposals accepted successfully"
+
+      - name: Generate Report
+        run: |
+          echo "## ✅ WSJF Bulk Accept Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "### 🔍 DRY RUN MODE" >> $GITHUB_STEP_SUMMARY
+            echo "The following proposals WOULD be accepted:" >> $GITHUB_STEP_SUMMARY
           else
-            echo "_No results file produced_" >> $GITHUB_STEP_SUMMARY
+            echo "### ✅ PRODUCTION MODE" >> $GITHUB_STEP_SUMMARY
+            echo "The following proposals WERE accepted:" >> $GITHUB_STEP_SUMMARY
           fi
 
-      - uses: actions/upload-artifact@v4
-        if: always()
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat ops/checks/out/accept_summary.md >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Accepted Proposals" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`csv" >> $GITHUB_STEP_SUMMARY
+          head -20 ops/checks/out/candidates.csv >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "Run the **WSJF Apply Accepted Proposals** workflow to update execution_order" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: wsjf-bulk-accept-results-${{ github.run_id }}
-          path: ops/checks/out/wsjf_bulk_accept_results.csv
+          name: wsjf-accept-${{ github.run_id }}
+          path: |
+            ops/checks/out/candidates.csv
+            ops/checks/out/accept_ids.txt
+            ops/checks/out/accept_summary.md
           retention-days: 30

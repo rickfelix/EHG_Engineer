@@ -17,7 +17,7 @@ const __dirname = dirname(__filename);
  */
 
 import { createClient } from '@supabase/supabase-js';
-import HandoffValidator from '../lib/dashboard/handoff-validator.js';
+import HandoffValidator from '../src/services/handoff-validator.js';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
@@ -158,9 +158,23 @@ class PlanToExecVerifier {
         });
       }
       
-      // 5. Check PLAN phase completion
+      // 5. Check PLAN phase completion AND proper approval
       if (prd.status !== 'approved' && prd.status !== 'ready_for_exec') {
         return this.rejectHandoff(sdId, 'PLAN_INCOMPLETE', `PRD status is '${prd.status}', expected 'approved' or 'ready_for_exec'`);
+      }
+
+      // 5a. CRITICAL: Verify PRD was approved by LEAD (not PLAN or EXEC)
+      // This prevents the violation where PLAN approved their own PRD
+      if (prd.status === 'approved' && prd.approved_by !== 'LEAD') {
+        return this.rejectHandoff(sdId, 'INVALID_APPROVAL',
+          `PRD was approved by '${prd.approved_by || 'unknown'}' instead of LEAD. ` +
+          `LEO Protocol requires LEAD approval. PLAN cannot self-approve.`);
+      }
+
+      // 5b. Verify approval date exists
+      if (prd.status === 'approved' && !prd.approval_date) {
+        return this.rejectHandoff(sdId, 'MISSING_APPROVAL_DATE',
+          `PRD marked as approved but no approval date found`);
       }
       
       // 6. Validate handoff content (if provided)

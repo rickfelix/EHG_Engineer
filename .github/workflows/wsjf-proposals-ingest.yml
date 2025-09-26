@@ -1,18 +1,36 @@
-name: WSJF Proposals Ingest (Staging)
+name: WSJF Proposals Ingest (Prod)
 
 on:
-  workflow_dispatch: {}
-  schedule:
-    - cron: '5 5 * * *'  # optional: after WSJF export
+  workflow_dispatch:
+    inputs:
+      max_move:
+        description: 'Maximum positions an SD can move'
+        required: false
+        default: '3'
+        type: string
+      dry_run:
+        description: 'Preview mode (no database writes)'
+        required: false
+        default: 'true'
+        type: boolean
 
 permissions:
   contents: read
+  pull-requests: write
+
+concurrency:
+  group: wsjf-pipeline-${{ github.ref || github.run_id }}
+  cancel-in-progress: false  # Don't cancel mid-ingest
 
 jobs:
   ingest:
-    if: ${{ vars.ENABLE_WSJF_INGEST == '1' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
+
+    # Safety gates
+    if: |
+      vars.ENABLE_PROD_INGEST == '1' &&
+      (inputs.dry_run == true || vars.PROD_WRITE_OK == '1')
 
     steps:
       - uses: actions/checkout@v4
@@ -20,55 +38,183 @@ jobs:
       - name: Install psql
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Generate fresh WSJF CSV (read-only)
+      - name: Run WSJF Analysis
         env:
-          PGHOST: ${{ secrets.PGHOST_STAGING }}
-          PGPORT: ${{ secrets.PGPORT_STAGING }}
-          PGDATABASE: ${{ secrets.PGDATABASE_STAGING }}
-          PGUSER: ${{ secrets.PGUSER_STAGING }}
-          PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
+          PGHOST: ${{ secrets.PGHOST_PROD }}
+          PGPORT: ${{ secrets.PGPORT_PROD }}
+          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
+          PGUSER: ${{ secrets.PGUSER_PROD }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
           PGSSLMODE: require
         run: |
           mkdir -p ops/checks/out
-          psql -v ON_ERROR_STOP=1 \
-               -v W_BV="${{ vars.W_BV || '1.2' }}" \
-               -v W_TC="${{ vars.W_TC || '1.0' }}" \
-               -v W_RR="${{ vars.W_RR || '0.9' }}" \
-               -v W_JS="${{ vars.W_JS || '1.0' }}" \
-               -v MAX_MOVE="${{ vars.MAX_MOVE || '2' }}" \
-               -f ops/checks/wsjf_recommendations_staging.sql
 
-      - name: Ingest WSJF recommendations → proposals (DRY-RUN by default)
+          # Generate fresh WSJF recommendations
+          psql -v W_BV=1.0 -v W_TC=1.0 -v W_RR=1.0 -v W_JS=1.0 \
+               -v MAX_MOVE=${{ inputs.max_move }} \
+               -f ops/checks/wsjf_recommendations_staging.sql \
+               --quiet --tuples-only --no-align -F',' \
+               > ops/checks/out/wsjf_raw.csv 2>/dev/null
+
+      - name: Parse and Validate Proposals
+        run: |
+          cat > parse_proposals.py << 'EOF'
+          import csv
+          import json
+          import sys
+          from datetime import datetime
+
+          proposals = []
+          violations = []
+
+          with open('ops/checks/out/wsjf_raw.csv', 'r') as f:
+              for line in f:
+                  if not line.strip() or 'Time:' in line or 'SELECT' in line:
+                      continue
+                  parts = line.strip().split(',', 5)
+                  if len(parts) >= 6:
+                      venture_id = parts[0] or None
+                      sd_id = parts[1]
+                      current = int(parts[2]) if parts[2] else None
+                      proposed = int(parts[3])
+                      score = float(parts[4])
+                      rationale = parts[5]
+
+                      delta = proposed - (current or 0) if current else proposed
+
+                      # Validation
+                      if abs(delta) > ${{ inputs.max_move }}:
+                          violations.append({
+                              'sd_id': sd_id,
+                              'reason': f'Delta {delta} exceeds MAX_MOVE=${{ inputs.max_move }}'
+                          })
+                          continue
+
+                      if delta == 0:
+                          continue  # Skip no-op proposals
+
+                      proposals.append({
+                          'sd_id': sd_id,
+                          'venture_id': venture_id,
+                          'current_execution_order': current,
+                          'proposed_execution_order': proposed,
+                          'delta': delta,
+                          'wsjf_score': score,
+                          'rationale': rationale
+                      })
+
+          # Summary stats
+          print(f"Total proposals: {len(proposals)}")
+          print(f"Violations: {len(violations)}")
+          print(f"Max delta: {max([abs(p['delta']) for p in proposals]) if proposals else 0}")
+
+          # Write outputs
+          with open('ops/checks/out/proposals.json', 'w') as f:
+              json.dump(proposals, f, indent=2)
+
+          with open('ops/checks/out/violations.json', 'w') as f:
+              json.dump(violations, f, indent=2)
+
+          # Generate summary for PR
+          with open('ops/checks/out/summary.md', 'w') as f:
+              f.write(f"# WSJF Proposal Ingest Summary\n\n")
+              f.write(f"**Generated**: {datetime.now().isoformat()}\n")
+              f.write(f"**Max Move**: {inputs.max_move}\n")
+              f.write(f"**Mode**: {'DRY RUN' if ${{ inputs.dry_run }} else 'PRODUCTION'}\n\n")
+
+              f.write(f"## Statistics\n")
+              f.write(f"- Total proposals: {len(proposals)}\n")
+              f.write(f"- Violations filtered: {len(violations)}\n")
+              f.write(f"- Up-moves: {len([p for p in proposals if p['delta'] > 0])}\n")
+              f.write(f"- Down-moves: {len([p for p in proposals if p['delta'] < 0])}\n\n")
+
+              if proposals[:10]:
+                  f.write(f"## Top 10 Proposals by Impact\n\n")
+                  f.write(f"| SD ID | Current | Proposed | Delta | WSJF Score |\n")
+                  f.write(f"|-------|---------|----------|-------|------------|\n")
+                  for p in sorted(proposals, key=lambda x: abs(x['delta']), reverse=True)[:10]:
+                      f.write(f"| {p['sd_id']} | {p['current_execution_order'] or '-'} | ")
+                      f.write(f"{p['proposed_execution_order']} | {p['delta']:+d} | ")
+                      f.write(f"{p['wsjf_score']:.2f} |\n")
+          EOF
+
+          python3 parse_proposals.py
+
+      - name: Ingest to Database
+        if: inputs.dry_run == false
         env:
-          PGHOST: ${{ secrets.PGHOST_STAGING }}
-          PGPORT: ${{ secrets.PGPORT_STAGING }}
-          PGDATABASE: ${{ secrets.PGDATABASE_STAGING }}
-          PGUSER: ${{ secrets.PGUSER_STAGING }}
-          PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
+          PGHOST: ${{ secrets.PGHOST_PROD }}
+          PGPORT: ${{ secrets.PGPORT_PROD }}
+          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
+          PGUSER: ${{ secrets.PGUSER_PROD }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
           PGSSLMODE: require
         run: |
-          mkdir -p ops/checks/out
-          psql -v ON_ERROR_STOP=1 \
-               -v DRY_RUN="${{ vars.DRY_RUN || '1' }}" \
-               -v MAX_MOVE="${{ vars.MAX_MOVE || '2' }}" \
-               -v CSV_PATH="ops/checks/out/wsjf_recommendations.csv" \
-               -v PROPOSED_BY="wsjf" \
-               -f ops/jobs/wsjf_proposals_ingest_staging.sql
+          # Create migration if needed
+          psql -f database/migrations/2025-09-22-eng-sequence-proposals.sql || true
 
-      - name: Summary
+          # Mark existing proposals as stale
+          psql << 'EOF'
+          UPDATE eng_sequence_proposals
+          SET status = 'stale',
+              metadata = metadata || jsonb_build_object('staled_at', now(), 'staled_by', 'wsjf-ingest')
+          WHERE status = 'proposed';
+          EOF
+
+          # Insert new proposals
+          cat > insert_proposals.sql << 'EOF'
+          WITH proposals AS (
+            SELECT
+              (p->>'sd_id')::varchar(50) AS sd_id,
+              (p->>'venture_id')::uuid AS venture_id,
+              (p->>'current_execution_order')::integer AS current_execution_order,
+              (p->>'proposed_execution_order')::integer AS proposed_execution_order,
+              (p->>'wsjf_score')::numeric AS wsjf_score,
+              (p->>'rationale')::text AS rationale
+            FROM jsonb_array_elements('$(cat ops/checks/out/proposals.json)'::jsonb) AS p
+          )
+          INSERT INTO eng_sequence_proposals (
+            sd_id, venture_id, current_execution_order, proposed_execution_order,
+            wsjf_score, rationale, status, source_workflow, source_run_id
+          )
+          SELECT
+            sd_id, venture_id, current_execution_order, proposed_execution_order,
+            wsjf_score, rationale, 'proposed', 'wsjf-proposals-ingest',
+            '${{ github.run_id }}'::uuid
+          FROM proposals;
+          EOF
+
+          psql -f insert_proposals.sql
+
+          echo "✅ Proposals ingested to eng_sequence_proposals table"
+
+      - name: Generate Report
         run: |
-          echo "### WSJF Proposals Ingest" >> $GITHUB_STEP_SUMMARY
-          echo "- DRY_RUN: ${{ vars.DRY_RUN || '1' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- MAX_MOVE: ${{ vars.MAX_MOVE || '2' }}" >> $GITHUB_STEP_SUMMARY
-          if [ -f ops/checks/out/wsjf_ingest_results.csv ]; then
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Recent proposals (status / proposed_execution_order):" >> $GITHUB_STEP_SUMMARY
-            head -n 11 ops/checks/out/wsjf_ingest_results.csv | tail -n +2 | awk -F, '{printf "- %s / %s / %s\n",$1,$2,$3}' >> $GITHUB_STEP_SUMMARY || true
+          echo "## 📊 WSJF Proposals Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "### 🔍 DRY RUN MODE - No database changes" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ✅ PRODUCTION MODE - Proposals written to database" >> $GITHUB_STEP_SUMMARY
           fi
 
-      - uses: actions/upload-artifact@v4
-        if: always()
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat ops/checks/out/summary.md >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review proposals in eng_sequence_proposals table" >> $GITHUB_STEP_SUMMARY
+          echo "2. Run WSJF Bulk-Accept workflow to accept safe proposals" >> $GITHUB_STEP_SUMMARY
+          echo "3. Run WSJF Apply workflow to update execution_order" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: wsjf-ingest-results-${{ github.run_id }}
-          path: ops/checks/out/wsjf_ingest_results.csv
+          name: wsjf-proposals-${{ github.run_id }}
+          path: |
+            ops/checks/out/proposals.json
+            ops/checks/out/violations.json
+            ops/checks/out/summary.md
+            ops/checks/out/wsjf_raw.csv
           retention-days: 30

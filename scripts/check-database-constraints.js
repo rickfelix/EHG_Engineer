@@ -31,7 +31,7 @@ async function checkDatabaseConstraints() {
       
       // Test SD statuses
       console.log('📋 Strategic Directives (strategic_directives_v2):');
-      const sdStatuses = ['draft', 'active', 'in_progress', 'on_hold', 'completed', 'complete', 'approved', 'cancelled', 'archived'];
+      const sdStatuses = ['draft', 'active', 'in_progress', 'on_hold', 'completed', 'complete', 'approved', 'cancelled'];
       for (const status of sdStatuses) {
         const { error: testError } = await supabase
           .from('strategic_directives_v2')

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.ts';
 import LoadingSkeleton from './LoadingSkeleton';
 import Button from './ui/Button';
 import Toast from './ui/Toast';

@@ -10,7 +10,9 @@ import {
   X,
   FlaskConical,
   Package,
-  GitPullRequest
+  GitPullRequest,
+  BookOpen,
+  TrendingUp
 } from 'lucide-react';
 import Breadcrumbs from './Breadcrumbs';
 import SmartRefreshButton from './SmartRefreshButton';
@@ -47,6 +49,7 @@ function AnimatedAppLayout({
     { path: '/', icon: Home, label: 'Dashboard', tooltip: 'Dashboard' },
     { path: '/strategic-directives', icon: FileText, label: 'Strategic Directives', tooltip: 'SDs' },
     { path: '/backlog', icon: Package, label: 'Backlog', tooltip: 'Backlog' },
+    { path: '/stories', icon: BookOpen, label: 'User Stories', tooltip: 'Stories' },
     { path: '/directive-lab', icon: FlaskConical, label: 'Directive Lab', tooltip: 'Lab' },
     { path: '/pr-reviews', icon: GitPullRequest, label: 'PR Reviews', tooltip: 'PRs' }
   ];

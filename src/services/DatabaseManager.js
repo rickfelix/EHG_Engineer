@@ -88,6 +88,19 @@ export class DatabaseManager {
         dbPassword: process.env.SUPABASE_DB_PASSWORD,
         dbPort: 5432,
         dbName: 'postgres'
+      },
+      // Add EHG Business Application Database
+      ehg: {
+        appName: 'EHG Business Application DB',
+        purpose: 'Customer-facing features, business agents, dashboards',
+        projectUrl: process.env.EHG_SUPABASE_URL,
+        anonKey: process.env.EHG_SUPABASE_ANON_KEY,
+        serviceRoleKey: process.env.EHG_SUPABASE_SERVICE_ROLE_KEY,
+        dbHost: this.extractHostFromUrl(process.env.EHG_SUPABASE_URL),
+        dbUser: 'postgres',
+        dbPassword: process.env.EHG_SUPABASE_DB_PASSWORD, // If available
+        dbPort: 5432,
+        dbName: 'postgres'
       }
     };
 

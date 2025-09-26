@@ -1,0 +1,306 @@
+{
+  "timestamp": "2025-09-23T23:37:46.505Z",
+  "summary": {
+    "total": 72,
+    "ehg": 70,
+    "ehg_engineer": 2
+  },
+  "classifications": {
+    "EHG_ENGINEER": [
+      {
+        "id": "SD-043",
+        "title": "Development Workflow: Consolidated",
+        "status": "active",
+        "reason": "Title indicates LEO Protocol/development feature"
+      },
+      {
+        "id": "SD-DASHBOARD-AUDIT-2025-08-31-A",
+        "title": "Critical Issues Audit for LEO Protocol Dashboard",
+        "status": "archived",
+        "reason": "Title indicates LEO Protocol/development feature"
+      }
+    ],
+    "EHG": [
+      {
+        "title": "Governance UI Implementation",
+        "status": "draft"
+      },
+      {
+        "title": "Vision Alignment Pipeline",
+        "status": "active"
+      },
+      {
+        "title": "CI/CD Pipeline Hardening",
+        "status": "active"
+      },
+      {
+        "title": "Observability Framework",
+        "status": "active"
+      },
+      {
+        "title": "Governance Data Model",
+        "status": "archived"
+      },
+      {
+        "title": "WSJF Sequencing Optimization",
+        "status": "active"
+      },
+      {
+        "title": "Add Timestamp Utility Function",
+        "status": "archived"
+      },
+      {
+        "title": "Production Pilot: User Story System",
+        "status": "active"
+      },
+      {
+        "title": "EHG Message Bus (RabbitMQ) for Agent Handoffs",
+        "status": "active"
+      },
+      {
+        "title": "Stage-1 Emergent Ideation Engine",
+        "status": "active"
+      },
+      {
+        "title": "Scenario-Driven Vision Alignment System (EHG_Engineering)",
+        "status": "active"
+      },
+      {
+        "title": "Stage-1 Opportunity Sourcing Modes",
+        "status": "active"
+      },
+      {
+        "title": "EVA Assistant — Stage-1 Integration",
+        "status": "active"
+      },
+      {
+        "title": "EVA Orchestration Engine: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Chairman Dashboard: Consolidated 2",
+        "status": "active"
+      },
+      {
+        "title": "Stage 29 - Final Polish: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Governance: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Ventures List: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 15 - Pricing Strategy: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Team: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "New Page: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Other: Consolidated 2",
+        "status": "active"
+      },
+      {
+        "title": "Knowledge Base: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Other: Consolidated 1",
+        "status": "active"
+      },
+      {
+        "title": "Chairman Dashboard: Consolidated 1",
+        "status": "active"
+      },
+      {
+        "title": "Landing Page: Consolidated 1",
+        "status": "active"
+      },
+      {
+        "title": "Stage 35 - GTM Timing Intelligence: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 11 - Strategic Naming: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Reports: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Phase 2 Testing: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 39 - Multi-Venture Coordination: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Communications: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 3 - Comprehensive Validation: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Notifications: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Orchestration: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "EVA Assistant: Consolidated 1",
+        "status": "active"
+      },
+      {
+        "title": "Venture Detail (Stage View): Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Other: Consolidated 3",
+        "status": "active"
+      },
+      {
+        "title": "Insights: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 34 - Creative Media Automation: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Agents: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 4 - Competitive Intelligence: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 9 - Gap Analysis: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 6 - Risk Evaluation: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 5 - Profitability Forecasting: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 40 - Venture Active/Portfolio Exit: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 36 - Parallel Exploration: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 31 - MVP Launch: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 25 - Quality Assurance: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 23 - Feedback Loops: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 20 - Enhanced Context Loading: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 18 - Documentation Sync: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 17 - GTM Strategist: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 16 - AI CEO Agent: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Stage 14 - Development Preparation: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Integrations: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Data Management: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Settings: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Landing Page: Consolidated 2",
+        "status": "active"
+      },
+      {
+        "title": "Analytics: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "EVA Assistant: UI Cleanup Only [CONSTRAINED]",
+        "status": "active"
+      },
+      {
+        "title": "AI Navigation: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "AI Agents: Consolidated",
+        "status": "active"
+      },
+      {
+        "title": "Complete 40-Stage Venture Lifecycle Management System ✅",
+        "status": "archived"
+      },
+      {
+        "title": "The main intent is to enhance the EHG application by adding a toggle button for switching between light mode and dark mode on the chairman page, ensuring that the entire application and all its components function effectively in both modes.",
+        "status": "archived"
+      },
+      {
+        "title": "Strategic Directive Initiation Protocol (SDIP) - MVP+ Implementation",
+        "status": "archived"
+      },
+      {
+        "title": "OpenAI Realtime Voice Consolidation",
+        "status": "archived"
+      },
+      {
+        "title": "Dashboard UI/UX Improvements",
+        "status": "archived"
+      },
+      {
+        "title": "Dashboard Progress Tooltip Enhancement",
+        "status": "archived"
+      },
+      {
+        "title": "EHG_Engineer Platform Foundation",
+        "status": "archived"
+      }
+    ]
+  }
+}

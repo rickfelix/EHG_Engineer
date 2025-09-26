@@ -1,17 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUserPreferences, usePersistentState } from './hooks/useLocalStorage';
 import AnimatedAppLayout from './components/AnimatedAppLayout';
 import EnhancedOverview from './components/EnhancedOverview';
-import SDManager from './components/SDManager';
-import PRDManager from './components/PRDManager';
 import HandoffCenter from './components/HandoffCenter';
 import ContextMonitor from './components/ContextMonitor';
 import DirectiveLab from './components/DirectiveLab';
 import BacklogManager from './components/BacklogManager';
 import PRReviews from './components/PRReviews';
+import UserStories from './components/UserStories';
+import StoryDetail from './components/StoryDetail';
+import CommandPalette from './components/CommandPalette';
 import logger from './utils/logger';
+
+// Lazy load heavy routes to reduce main bundle
+const SDManager = lazy(() => import('./components/SDManager'));
+const PRDManager = lazy(() => import('./components/PRDManager'));
+
+// Loading fallback component
+const LoadingFallback = () => (
+  <div style={{ padding: '20px', textAlign: 'center' }}>
+    <div>Loading...</div>
+  </div>
+);
 
 function App() {
   const [state, setState] = useState({
@@ -55,6 +67,10 @@ function App() {
         const message = JSON.parse(event.data);
         if (message.type === 'state') {
           setState(message.data);
+        } else if (message.type === 'sd-reordered') {
+          // Refresh strategic directives when reordering happens
+          logger.log('Strategic directives reordered, refreshing...');
+          refreshData();
         }
       } catch (error) {
         logger.error('Error parsing WebSocket message:', error);
@@ -101,6 +117,21 @@ function App() {
   }, [preferences.theme]);
 
   const refreshData = () => {
+    // Fetch fresh data from the server
+    fetch('/api/state')
+      .then(res => res.json())
+      .then(data => {
+        // Merge saved checklists with server state
+        const mergedData = {
+          ...data,
+          checklists: { ...data.checklists, ...savedChecklists }
+        };
+        setState(mergedData);
+        logger.log('State refreshed successfully');
+      })
+      .catch(error => logger.error('Error refreshing state:', error));
+
+    // Also send refresh via WebSocket if available
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'refresh' }));
     }
@@ -169,6 +200,7 @@ function App() {
 
   return (
     <Router>
+      <CommandPalette />
       <Routes>
         <Route
           path="/"
@@ -202,55 +234,63 @@ function App() {
             } 
           />
           <Route path="strategic-directives">
-            <Route 
-              index 
+            <Route
+              index
               element={
-                <SDManager 
-                  strategicDirectives={state.strategicDirectives}
-                  onUpdateChecklist={updateChecklist}
-                  onSetActiveSD={setActiveSD}
-                  onUpdateStatus={updateSDStatus}
-                  currentSD={state.leoProtocol?.currentSD}
-                  isCompact={isCompactMode}
-                  onRefresh={refreshData}
-                />
-              } 
+                <Suspense fallback={<LoadingFallback />}>
+                  <SDManager
+                    strategicDirectives={state.strategicDirectives}
+                    onUpdateChecklist={updateChecklist}
+                    onSetActiveSD={setActiveSD}
+                    onUpdateStatus={updateSDStatus}
+                    currentSD={state.leoProtocol?.currentSD}
+                    isCompact={isCompactMode}
+                    onRefresh={refreshData}
+                  />
+                </Suspense>
+              }
             />
-            <Route 
-              path=":id" 
+            <Route
+              path=":id"
               element={
-                <SDManager 
-                  strategicDirectives={state.strategicDirectives}
-                  onUpdateChecklist={updateChecklist}
-                  onSetActiveSD={setActiveSD}
-                  onUpdateStatus={updateSDStatus}
-                  currentSD={state.leoProtocol?.currentSD}
-                  isCompact={isCompactMode}
-                  detailMode={true}
-                  onRefresh={refreshData}
-                />
-              } 
+                <Suspense fallback={<LoadingFallback />}>
+                  <SDManager
+                    strategicDirectives={state.strategicDirectives}
+                    onUpdateChecklist={updateChecklist}
+                    onSetActiveSD={setActiveSD}
+                    onUpdateStatus={updateSDStatus}
+                    currentSD={state.leoProtocol?.currentSD}
+                    isCompact={isCompactMode}
+                    detailMode={true}
+                    onRefresh={refreshData}
+                  />
+                </Suspense>
+              }
             />
           </Route>
           <Route path="prds">
-            <Route 
-              index 
+            <Route
+              index
               element={
-                <PRDManager 
-                  prds={state.prds}
-                  isCompact={isCompactMode}
-                />
-              } 
+                <Suspense fallback={<LoadingFallback />}>
+                  <PRDManager
+                    prds={state.prds}
+                    isCompact={isCompactMode}
+                  />
+                </Suspense>
+              }
             />
-            <Route 
-              path=":id" 
+            <Route
+              path=":id"
               element={
-                <PRDManager 
-                  prds={state.prds}
-                  isCompact={isCompactMode}
-                  detailMode={true}
-                />
-              } 
+                <Suspense fallback={<LoadingFallback />}>
+                  <PRDManager
+                    prds={state.prds}
+                    isCompact={isCompactMode}
+                    detailMode={true}
+                  />
+                </Suspense>
+              }
             />
           </Route>
           <Route path="backlog">
@@ -274,6 +314,36 @@ function App() {
                   onRefresh={refreshData}
                 />
               } 
+            />
+          </Route>
+          <Route path="stories">
+            <Route
+              index
+              element={
+                <UserStories
+                  strategicDirectives={state.strategicDirectives}
+                  prds={state.prds}
+                  isCompact={isCompactMode}
+                />
+              }
+            />
+            <Route
+              path=":sdKey"
+              element={
+                <UserStories
+                  strategicDirectives={state.strategicDirectives}
+                  prds={state.prds}
+                  isCompact={isCompactMode}
+                />
+              }
+            />
+            <Route
+              path=":sdKey/:storyKey"
+              element={
+                <StoryDetail
+                  isCompact={isCompactMode}
+                />
+              }
             />
           </Route>
           <Route

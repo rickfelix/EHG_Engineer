@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 // PRD Generation from Strategic Directives (Non-lossy)
 // Preserves all backlog item nuance in Evidence Appendix
+// Enhanced with SD overlap detection
 
 import { createClient } from '@supabase/supabase-js';
 import { program } from 'commander';
 import dotenv from 'dotenv';
 import fs from 'fs/promises';
 import path from 'path';
+import { SDOverlapDetector } from './sd-overlap-detector.js';
+import { CrossSDBacklogManager } from './cross-sd-backlog-manager.js';
+import { AutomaticReasoningEngine } from '../src/services/AutomaticReasoningEngine.js';
+import chalk from 'chalk';
 
 dotenv.config();
 
@@ -19,18 +24,231 @@ program
   .option('--sd-id <id>', 'SD ID to generate PRD for')
   .option('--all', 'Generate PRDs for all SDs')
   .option('--output <dir>', 'Output directory for markdown files', './prds')
+  .option('--force', 'Skip overlap warnings and proceed')
+  .option('--check-overlaps', 'Only check for overlaps, do not generate PRD')
+  .option('--enhanced-validation', 'Include PLAN technical validation data in PRD')
   .parse();
 
 const options = program.opts();
 
+// Function to get PLAN validation data if enhanced validation is requested
+async function getPlanValidationData(sdId) {
+  if (!options.enhancedValidation) return null;
+
+  try {
+    console.log(`🔧 Fetching PLAN technical validation data for ${sdId}...`);
+
+    const { data: validation } = await supabase
+      .rpc('get_latest_plan_validation', { p_sd_id: sdId });
+
+    if (!validation || validation.length === 0) {
+      console.log(chalk.yellow(`⚠️  No PLAN validation found for ${sdId}`));
+      return null;
+    }
+
+    // Get quality gates
+    const { data: qualityGates } = await supabase
+      .from('plan_quality_gates')
+      .select('*')
+      .eq('validation_id', validation[0].validation_id)
+      .order('gate_name');
+
+    // Get sub-agent reports
+    const { data: subAgentReports } = await supabase
+      .from('plan_sub_agent_executions')
+      .select('*')
+      .eq('validation_id', validation[0].validation_id)
+      .order('sub_agent_type');
+
+    return {
+      ...validation[0],
+      quality_gates: qualityGates || [],
+      sub_agent_reports: subAgentReports || []
+    };
+
+  } catch (error) {
+    console.error(chalk.red(`Error fetching PLAN validation: ${error.message}`));
+    return null;
+  }
+}
+
+async function checkBacklogCompletion(sdId) {
+  try {
+    const manager = new CrossSDBacklogManager();
+
+    // Get backlog items for this SD
+    const { data: items } = await supabase
+      .from('sd_backlog_map')
+      .select('backlog_id, backlog_title')
+      .eq('sd_id', sdId);
+
+    if (!items || items.length === 0) return null;
+
+    let completedCount = 0;
+    let completedElsewhere = [];
+
+    for (const item of items) {
+      const completion = await manager.getCompletionStatus(item.backlog_id);
+
+      if (completion.status === 'COMPLETED') {
+        completedCount++;
+
+        if (completion.completed_by && completion.completed_by !== sdId) {
+          completedElsewhere.push({
+            title: item.backlog_title,
+            completedBy: completion.completed_by
+          });
+        }
+      }
+    }
+
+    if (completedCount > 0) {
+      let warning = `${completedCount}/${items.length} backlog items already completed`;
+
+      if (completedElsewhere.length > 0) {
+        const elsewhere = completedElsewhere.map(i =>
+          `${i.title.substring(0, 30)} (by ${i.completedBy})`
+        ).join(', ');
+        warning += `. Cross-SD completions: ${elsewhere}`;
+      }
+
+      return warning;
+    }
+
+    return null;
+
+  } catch (error) {
+    console.error(chalk.yellow(`⚠️  Could not check completion: ${error.message}`));
+    return null;
+  }
+}
+
+async function checkSDOverlaps(sdId) {
+  try {
+    // Get SD details
+    const { data: sd } = await supabase
+      .from('strategic_directives_v2')
+      .select('*')
+      .eq('id', sdId)
+      .single();
+
+    if (!sd) return null;
+
+    const detector = new SDOverlapDetector();
+
+    // Get other active SDs
+    const { data: otherSDs } = await supabase
+      .from('strategic_directives_v2')
+      .select('*')
+      .neq('id', sdId)
+      .in('status', ['active', 'in_progress']);
+
+    if (!otherSDs || otherSDs.length === 0) return null;
+
+    let criticalOverlaps = [];
+
+    // Check for overlaps
+    for (const otherSD of otherSDs) {
+      const overlap = await detector.analyzePair(sd, otherSD);
+
+      if (overlap && overlap.overlap_score >= 50) {
+        criticalOverlaps.push({
+          sd_key: otherSD.sd_key,
+          title: otherSD.title,
+          score: overlap.overlap_score,
+          recommendation: overlap.recommendation
+        });
+      }
+    }
+
+    if (criticalOverlaps.length > 0) {
+      const warnings = criticalOverlaps.map(o =>
+        `${o.sd_key}: ${o.score}% overlap (${o.recommendation})`
+      ).join(', ');
+
+      return `SD has critical overlaps with: ${warnings}`;
+    }
+
+    return null;
+
+  } catch (error) {
+    console.error(chalk.yellow(`⚠️  Could not check overlaps: ${error.message}`));
+    return null;
+  }
+}
+
+/**
+ * Generate acceptance criteria from backlog item descriptions
+ */
+function generateAcceptanceCriteria(items) {
+  const criteria = [];
+
+  // Group items by priority
+  const criticalItems = items.filter(i => i.priority === 'Critical' || i.priority === 'Very High');
+  const highItems = items.filter(i => i.priority === 'High');
+  const mediumItems = items.filter(i => i.priority === 'Medium');
+
+  // Generate criteria for critical items
+  criticalItems.forEach(item => {
+    if (item.item_description) {
+      criteria.push({
+        id: `AC-${item.backlog_id}`,
+        priority: 'MUST',
+        description: item.backlog_title,
+        criteria: `System must ${item.item_description.toLowerCase().replace(/^the |^a |^an /, '')}`,
+        source: item.backlog_id
+      });
+    }
+  });
+
+  // Generate criteria for high priority items
+  highItems.forEach(item => {
+    if (item.item_description) {
+      criteria.push({
+        id: `AC-${item.backlog_id}`,
+        priority: 'SHOULD',
+        description: item.backlog_title,
+        criteria: `System should ${item.item_description.toLowerCase().replace(/^the |^a |^an /, '')}`,
+        source: item.backlog_id
+      });
+    }
+  });
+
+  // Generate criteria for medium priority items
+  mediumItems.forEach(item => {
+    if (item.item_description) {
+      criteria.push({
+        id: `AC-${item.backlog_id}`,
+        priority: 'COULD',
+        description: item.backlog_title,
+        criteria: `System could ${item.item_description.toLowerCase().replace(/^the |^a |^an /, '')}`,
+        source: item.backlog_id
+      });
+    }
+  });
+
+  return criteria;
+}
+
 function generatePRDMarkdown(payload) {
   const sd = payload;
   const items = sd.items || [];
-  
+
   // Build scope list
-  const scopeItems = items.map(item => 
+  const scopeItems = items.map(item =>
     `- [${item.backlog_id}] ${item.backlog_title}`
   ).join('\n');
+
+  // Generate acceptance criteria
+  const acceptanceCriteria = generateAcceptanceCriteria(items);
+
+  // Format acceptance criteria for markdown
+  const formattedCriteria = acceptanceCriteria.map(ac =>
+    `### ${ac.id}: ${ac.description}
+- **Priority:** ${ac.priority}
+- **Criteria:** ${ac.criteria}
+- **Source:** Backlog item ${ac.source}`
+  ).join('\n\n');
   
   
   const markdown = `# PRD – ${sd.sd_id}: ${sd.sd_title}
@@ -100,9 +318,14 @@ ${sd.readiness ? `- Current readiness: ${sd.readiness}` : ''}
 ### Dependencies:
 Items are distributed across ${new Set(items.map(i => i.phase)).size} phases with dependencies managed through stage sequencing.
 
-## 6. Traceability
+## 6. Acceptance Criteria (Auto-Generated from Backlog)
+
+${acceptanceCriteria.length > 0 ? formattedCriteria : '*No acceptance criteria could be generated from backlog items.*'}
+
+## 7. Traceability
 
 - **Strategic Directive:** ${sd.sd_id}
+- **Target Application:** ${sd.target_application || 'Not specified'}
 - **Backlog Items:** ${items.map(i => i.backlog_id).join(', ')}
 - **Import Run:** ${sd.import_run_id || 'N/A'}
 - **Generated:** ${new Date().toISOString()}
@@ -122,31 +345,176 @@ Items are distributed across ${new Set(items.map(i => i.phase)).size} phases wit
 
 async function generatePRD(sdId) {
   console.log(`\n📋 Generating PRD for ${sdId}...`);
-  
+
+  // Initialize automatic reasoning engine
+  const reasoningEngine = new AutomaticReasoningEngine();
+
+  // First, get the SD to check target_application
+  const { data: sdData, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('*')
+    .eq('id', sdId)
+    .single();
+
+  if (sdError || !sdData) {
+    console.error(`❌ SD ${sdId} not found:`, sdError?.message);
+    return null;
+  }
+
+  console.log(`🎯 Target Application: ${sdData.target_application || 'Not specified'}`);
+
+  // Get PLAN validation data if enhanced validation is requested
+  const planValidation = await getPlanValidationData(sdId);
+
+  // Check target_application and use appropriate view
+  let backlogView;
+  if (sdData.target_application === 'EHG_ENGINEER') {
+    backlogView = 'v_ehg_engineer_backlog';
+    console.log('📚 Using EHG_ENGINEER backlog view');
+  } else if (sdData.target_application === 'EHG' || !sdData.target_application) {
+    backlogView = 'v_ehg_backlog';
+    console.log('📚 Using EHG backlog view');
+  } else {
+    console.error(`❌ Unknown target_application: ${sdData.target_application}`);
+    return null;
+  }
+
+  // Check for boundary violations
+  const { data: validationData } = await supabase
+    .from('v_backlog_validation')
+    .select('*')
+    .eq('sd_id', sdId)
+    .single();
+
+  if (validationData) {
+    if (validationData.potential_ehg_in_engineer > 0) {
+      console.log(chalk.yellow(`⚠️  WARNING: ${validationData.potential_ehg_in_engineer} EHG items detected in EHG_ENGINEER SD`));
+    }
+    if (validationData.potential_engineer_in_ehg > 0) {
+      console.log(chalk.yellow(`⚠️  WARNING: ${validationData.potential_engineer_in_ehg} EHG_ENGINEER items detected in EHG SD`));
+    }
+  }
+
+  // Check for completed backlog items
+  const completionWarning = await checkBacklogCompletion(sdId);
+  if (completionWarning) {
+    console.log(chalk.yellow(`\n⚠️  WARNING: ${completionWarning}`));
+    console.log(chalk.yellow('Some backlog items may already be completed.\n'));
+  }
+
+  // Check for overlaps before generating PRD
+  const overlapWarning = await checkSDOverlaps(sdId);
+  if (overlapWarning) {
+    console.log(chalk.yellow(`\n⚠️  WARNING: ${overlapWarning}`));
+    console.log(chalk.yellow('Consider reviewing overlaps before proceeding.\n'));
+
+    // Ask for confirmation if running interactively
+    if (process.stdin.isTTY && !program.opts().force) {
+      const readline = await import('readline');
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+
+      const answer = await new Promise(resolve => {
+        rl.question('Continue with PRD generation? (y/n): ', resolve);
+      });
+      rl.close();
+
+      if (answer.toLowerCase() !== 'y') {
+        console.log('PRD generation cancelled.');
+        return null;
+      }
+    }
+  }
+
+  // Get backlog items from the appropriate view
+  const { data: backlogItems, error: backlogError } = await supabase
+    .from(backlogView)
+    .select('*')
+    .eq('sd_id', sdId)
+    .order('priority_rank')
+    .order('stage_number');
+
+  if (backlogError) {
+    console.error(`❌ Error fetching backlog items:`, backlogError.message);
+  }
+
   // Fetch SD with items from view
   const { data: payload, error } = await supabase
     .from('v_prd_sd_payload')
     .select('*')
     .eq('sd_id', sdId)
     .single();
-  
+
   if (error) {
     console.error(`❌ Error fetching SD ${sdId}:`, error.message);
     return null;
   }
-  
+
   if (!payload) {
     console.error(`❌ SD ${sdId} not found`);
     return null;
   }
   
-  // Generate content
-  const items = payload.items || [];
-  const contentMd = generatePRDMarkdown(payload);
-  const contentJson = {
+  // Generate content - use backlog items from the correct view
+  const items = backlogItems || payload.items || [];
+
+  // === AUTOMATIC REASONING ANALYSIS ===
+  console.log('\n🧠 INITIATING AUTOMATIC REASONING ANALYSIS');
+  console.log('=' .repeat(50));
+
+  // Prepare reasoning context
+  const reasoningContext = {
+    sdId: sdId,
+    prdId: payload.prd_id || `PRD-${payload.sd_id}`,
+    description: payload.sd_title || payload.description || '',
+    requirements: payload.scope_overview || '',
+    priority: payload.priority_score || 50,
+    functionalRequirements: items.map(item => ({
+      title: item.backlog_title,
+      description: item.item_description,
+      priority: item.priority
+    })),
+    backlogItems: items
+  };
+
+  // Analyze complexity and determine reasoning depth
+  const complexityAnalysis = await reasoningEngine.analyzeComplexity(reasoningContext);
+
+  // Execute chain-of-thought reasoning
+  const reasoningResults = await reasoningEngine.executeChainOfThought(
+    { ...reasoningContext, ...complexityAnalysis },
+    complexityAnalysis.reasoningDepth
+  );
+
+  console.log(`✅ Reasoning completed with ${complexityAnalysis.reasoningDepth.toUpperCase()} depth`);
+  console.log(`📊 Confidence: ${reasoningResults.synthesis?.confidence || 'N/A'}%`);
+
+  // Enhance payload with target_application, backlog items, validation data, and reasoning
+  const enhancedPayload = {
+    ...payload,
+    items: items,
+    target_application: sdData.target_application,
+    plan_validation: planValidation,
+    reasoning_analysis: reasoningResults,
+    complexity_analysis: complexityAnalysis
+  };
+
+  // Prepare PRD data for database storage (database-first approach)
+  const prdData = {
+    id: payload.prd_id || `PRD-${payload.sd_id}`,
+    directive_id: payload.sd_id,
     sd_id: payload.sd_id,
-    sd_title: payload.sd_title,
-    metadata: {
+    title: payload.sd_title,
+    version: '1.0',
+    status: 'draft',
+    category: 'technical',
+    priority: payload.priority || 'high',
+    executive_summary: `PRD for ${payload.sd_title}`,
+    scope_overview: payload.scope_overview || '',
+    acceptance_criteria: payload.items || [],
+    technical_specifications: {
       sequence_rank: payload.sequence_rank,
       page_category: payload.page_category,
       page_title: payload.page_title,
@@ -163,95 +531,96 @@ async function generatePRD(sdId) {
         percentage: payload.must_have_pct
       }
     },
-    items: payload.items || []
+    plan_validation: enhancedPayload.plan_validation || null,
+    validation_status: enhancedPayload.plan_validation ? 'validated' : 'pending_validation',
+    reasoning_analysis: enhancedPayload.reasoning_analysis || null,
+    complexity_analysis: enhancedPayload.complexity_analysis || null,
+    reasoning_depth: enhancedPayload.complexity_analysis?.reasoningDepth || 'standard',
+    confidence_score: enhancedPayload.reasoning_analysis?.synthesis?.confidence || null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
   };
   
-  // Build the Evidence Appendix from items
-  const evidenceItems = items.map(item => {
-    const extras = item.extras && Object.keys(item.extras).length > 0 
-      ? JSON.stringify(item.extras, null, 2) 
-      : 'None';
-    
-    return `### [${item.backlog_id}] ${item.backlog_title}
-- **My Comments:** ${item.my_comments || 'N/A'}
-- **Priority/Stage/Phase:** ${item.priority || 'N/A'} / ${item.stage_number || 'N/A'} / ${item.phase || 'N/A'}
-- **New Module:** ${item.new_module ? 'Yes' : 'No'}
-- **Item Description (user-facing):**  
-${item.item_description || 'N/A'}
+  // Store evidence as structured JSON for database
+  const evidenceData = items.map(item => ({
+    backlog_id: item.backlog_id,
+    backlog_title: item.backlog_title,
+    my_comments: item.my_comments,
+    priority: item.priority,
+    stage_number: item.stage_number,
+    phase: item.phase,
+    new_module: item.new_module,
+    item_description: item.item_description,
+    description_raw: item.description_raw,
+    extras: item.extras || {}
+  }));
 
-- **Raw Description (tag source):**  
-${item.description_raw || 'N/A'}
+  // Add evidenceData to prdData
+  prdData.evidence_data = evidenceData;
+  prdData.backlog_items = items || [];
+  
+  // Store in database (database-first approach)
+  console.log(`📋 Storing PRD ${prdData.id} in database...`);
 
-- **Extras:**  
-\`\`\`json
-${extras}
-\`\`\`
-`;
-  }).join('\n\n');
-  
-  const evidenceAppendix = `## Appendix A — Backlog Evidence (full text)\n\n${evidenceItems}`;
-  
-  // Store in database (v2 with new fields)
   const { data: prd, error: prdError } = await supabase
     .from('product_requirements_v2')
-    .insert({
-      id: `PRD-${sdId}`,  // v2 uses 'id' not 'sd_id'
-      directive_id: sdId,  // Link to SD
-      title: payload.sd_title,
-      version: '1.0',
-      status: 'draft',
-      category: 'technical',
-      priority: payload.rolled_triage?.toLowerCase() || 'medium',
-      executive_summary: `Product requirements for ${payload.sd_title} with ${payload.total_items} backlog items`,
-      content: contentMd,  // v2 uses 'content' not 'content_md'
-      evidence_appendix: evidenceAppendix,  // New field
-      backlog_items: payload.items || [],  // New field
-      created_by: 'PLAN',
-      phase: 'planning'
-    })
+    .insert(prdData)
     .select()
     .single();
   
   if (prdError && prdError.code === '23505') {
     // Duplicate - update existing
-    console.log(`⚠️  PRD-${sdId} already exists, updating...`);
-    
+    console.log(`⚠️  ${prdData.id} already exists, updating with validation data...`);
+
+    const updateData = {
+      title: prdData.title,
+      priority: prdData.priority,
+      executive_summary: prdData.executive_summary,
+      technical_specifications: prdData.technical_specifications,
+      evidence_data: prdData.evidence_data,
+      backlog_items: prdData.backlog_items,
+      plan_validation: prdData.plan_validation,
+      validation_status: prdData.validation_status,
+      reasoning_analysis: prdData.reasoning_analysis,
+      complexity_analysis: prdData.complexity_analysis,
+      reasoning_depth: prdData.reasoning_depth,
+      confidence_score: prdData.confidence_score,
+      updated_at: new Date().toISOString()
+    };
+
     const { data: updatedPrd, error: updateError } = await supabase
       .from('product_requirements_v2')
-      .update({
-        title: payload.sd_title,
-        priority: payload.rolled_triage?.toLowerCase() || 'medium',
-        executive_summary: `Product requirements for ${payload.sd_title} with ${payload.total_items} backlog items`,
-        content: contentMd,
-        evidence_appendix: evidenceAppendix,
-        backlog_items: payload.items || [],
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', `PRD-${sdId}`)
+      .update(updateData)
+      .eq('id', prdData.id)
       .select()
       .single();
-    
+
     if (updateError) {
       console.error(`❌ Error updating PRD:`, updateError.message);
       return null;
     }
-    
-    console.log(`✅ Updated PRD-${sdId}`);
+
+    console.log(`✅ Updated ${prdData.id} with PLAN validation data`);
     return updatedPrd;
   } else if (prdError) {
     console.error(`❌ Error creating PRD:`, prdError.message);
     return null;
   }
   
-  console.log(`✅ Generated PRD-${sdId}`);
-  
-  // Optionally save to file
+  console.log(`✅ Generated ${prdData.id} in database`);
+
+  // Log PLAN validation status
+  if (prdData.plan_validation) {
+    console.log(`🔍 PLAN Validation: ${prdData.plan_validation.final_decision} (${prdData.plan_validation.complexity_score}/10 complexity)`);
+    console.log(`✅ Technical Feasibility: ${prdData.plan_validation.technical_feasibility}`);
+    console.log(`⚠️ Implementation Risk: ${prdData.plan_validation.implementation_risk}`);
+  } else {
+    console.log(`⚠️ No PLAN validation data - PRD marked as 'pending_validation'`);
+  }
+
+  // No file output - database-first approach only
   if (options.output) {
-    const outputDir = options.output;
-    await fs.mkdir(outputDir, { recursive: true });
-    const filePath = path.join(outputDir, `PRD-${sdId}.md`);
-    await fs.writeFile(filePath, contentMd);
-    console.log(`   📄 Saved to ${filePath}`);
+    console.log(`⚠️ --output option ignored: Using database-first approach per LEO Protocol v4.2.0`);
   }
   
   return prd;

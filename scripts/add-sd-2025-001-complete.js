@@ -100,7 +100,7 @@ async function addOpenAIRealtimeSDToDatabase() {
         target_completion_date: '2025-01-05',
         estimated_effort_hours: 18,
         actual_effort_hours: null,
-        progress_percentage: 40, // 20% LEAD + 20% PLAN complete
+        progress: 40, // 20% LEAD + 20% PLAN complete
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }, {

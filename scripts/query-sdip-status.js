@@ -146,7 +146,7 @@ async function querySDIPStatus() {
         
         console.log(`📊 Overall Progress: ${overallProgress}% (${completedItems}/${totalItems} items completed)`);
         
-        const isComplete = sdData.status === 'archived' && 
+        const isComplete = sdData.status === 'completed' && 
                           (prdData && prdData[0] && prdData[0].status === 'approved') &&
                           overallProgress === 100;
         
@@ -154,8 +154,8 @@ async function querySDIPStatus() {
         
         if (!isComplete) {
             console.log('\n📋 NEXT STEPS NEEDED:');
-            if (sdData.status !== 'archived') {
-                console.log('   • Strategic Directive needs to be completed/archived');
+            if (sdData.status !== 'completed') {
+                console.log('   • Strategic Directive needs to be completed');
             }
             if (!prdData || prdData[0]?.status !== 'approved') {
                 console.log('   • PRD needs to be approved');

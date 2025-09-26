@@ -8,13 +8,12 @@ class StatusValidator {
     // Define valid statuses for each document type
     this.validStatuses = {
       SD: {
-        all: ['draft', 'active', 'in_progress', 'on_hold', 'completed', 'complete', 'approved', 'cancelled', 'archived'],
-        preferred: ['draft', 'active', 'on_hold', 'cancelled', 'archived'],
+        all: ['draft', 'active', 'in_progress', 'on_hold', 'completed', 'complete', 'approved', 'cancelled'],
+        preferred: ['draft', 'active', 'on_hold', 'cancelled', 'completed'],
         deprecated: {
           'in_progress': 'active',
-          'completed': 'archived',
-          'complete': 'archived',
-          'approved': 'archived'
+          'complete': 'completed',
+          'approved': 'completed'
         }
       },
       PRD: {
@@ -37,10 +36,10 @@ class StatusValidator {
     this.transitions = {
       SD: {
         'draft': ['active', 'cancelled'],
-        'active': ['on_hold', 'cancelled', 'archived'],
+        'active': ['on_hold', 'cancelled', 'completed'],
         'on_hold': ['active', 'cancelled'],
         'cancelled': [],
-        'archived': []
+        'completed': []
       },
       PRD: {
         'draft': ['planning', 'cancelled'],
@@ -149,8 +148,7 @@ class StatusValidator {
         'working': 'active',
         'paused': 'on_hold',
         'stopped': 'cancelled',
-        'completed': 'archived',
-        'done': 'archived'
+        'done': 'completed'
       },
       PRD: {
         'created': 'draft',
@@ -237,7 +235,7 @@ class StatusValidator {
   getAgentPermissions(docType, agent) {
     const permissions = {
       SD: {
-        LEAD: ['draft', 'active', 'on_hold', 'cancelled', 'archived'],
+        LEAD: ['draft', 'active', 'on_hold', 'cancelled', 'completed'],
         PLAN: [],
         EXEC: []
       },

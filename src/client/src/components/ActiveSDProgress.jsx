@@ -17,9 +17,11 @@ function ActiveSDProgress({ strategicDirectives, prds, currentSD, onSetActiveSD,
   const [searchQuery, setSearchQuery] = useState(''); // Search functionality
   const [expandedSections, setExpandedSections] = useState({}); // Expandable sections
   const [progressData, setProgressData] = useState(null); // Progress calculation data
+  const [showProgressTooltip, setShowProgressTooltip] = useState(false); // Tooltip for progress breakdown
   const dropdownRef = useRef(null);
   const promptRef = useRef(null);
   const searchInputRef = useRef(null);
+  const progressBarRef = useRef(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -136,10 +138,11 @@ function ActiveSDProgress({ strategicDirectives, prds, currentSD, onSetActiveSD,
     
     // Final safety check: if SD shows 100% progress, don't show pending items
     // This prevents stale data issues from showing false positives
-    if (sd.progress >= 100 && pendingItems.length > 0) {
+    const progressValue = typeof sd.progress === 'object' ? sd.progress.total : sd.progress;
+    if (progressValue >= 100 && pendingItems.length > 0) {
       console.log('⚠️ Progress/Pending Mismatch Detected:', {
         sdId: sd.id,
-        sdProgress: sd.progress,
+        sdProgress: progressValue,
         pendingCount: pendingItems.length,
         message: 'SD shows 100% but has pending items - clearing pending list to match progress'
       });
@@ -150,7 +153,7 @@ function ActiveSDProgress({ strategicDirectives, prds, currentSD, onSetActiveSD,
     if (pendingItems.length > 0) {
       console.log('🔍 Pending Items Debug:', {
         sdId: sd.id,
-        sdProgress: sd.progress,
+        sdProgress: progressValue,
         totalPendingItems: pendingItems.length,
         pendingByPhase: pendingItems.reduce((acc, item) => {
           acc[item.phase] = (acc[item.phase] || 0) + 1;
@@ -309,12 +312,16 @@ Please proceed with the implementation.`;
   const activeSD = currentSD ? strategicDirectives.find(sd => sd.id === currentSD) : null;
   
   // If no currentSD is set, find the most recently created or first incomplete SD
-  const fallbackActiveSD = !activeSD && strategicDirectives.length > 0 
+  const fallbackActiveSD = !activeSD && strategicDirectives.length > 0
     ? strategicDirectives.find(sd => {
+        // Skip completed SDs
+        if (sd.status === 'completed' || sd.status === 'complete') {
+          return false;
+        }
         const completedItems = sd.checklist?.filter(item => item.checked).length || 0;
         const totalItems = sd.checklist?.length || 0;
         return totalItems > 0 && completedItems < totalItems; // Find first incomplete SD
-      }) || strategicDirectives[0] // Fallback to first SD
+      }) || strategicDirectives.find(sd => sd.status !== 'completed' && sd.status !== 'complete') // Fallback to first non-completed SD
     : null;
   
   const displaySD = activeSD || fallbackActiveSD;
@@ -351,8 +358,9 @@ Please proceed with the implementation.`;
   const checkedItems = displaySD.checklist?.filter(item => item.checked).length || 0;
   const totalItems = displaySD.checklist?.length || 0;
   // Use the SD's calculated progress if available (accounts for LEAD/PLAN/EXEC phases)
-  const progressPercentage = displaySD.progress !== undefined ? displaySD.progress : 
-    (totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0);
+  const progressPercentage = displaySD.progress !== undefined
+    ? (typeof displaySD.progress === 'object' ? displaySD.progress.total : displaySD.progress)
+    : (totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0);
   
   // Determine status and colors
   const getStatusInfo = () => {
@@ -500,7 +508,9 @@ Please proceed with the implementation.`;
                         filteredSDs.map((sd, index) => {
                     const isActive = sd.id === currentSD || (sd.id === displaySD.id && !currentSD);
                     // Use the SD's calculated progress which accounts for LEO Protocol phases
-                    const sdProgress = sd.progress !== undefined ? sd.progress : 0;
+                    const sdProgress = sd.progress !== undefined
+                      ? (typeof sd.progress === 'object' ? sd.progress.total : sd.progress)
+                      : 0;
                     
                     return (
                       <button
@@ -671,14 +681,69 @@ Please proceed with the implementation.`;
         </div>
       </div>
       
-      {/* Enhanced Animated Progress Bar */}
-      <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3 overflow-hidden">
-        <motion.div 
+      {/* Enhanced Animated Progress Bar with Tooltip */}
+      <div
+        className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3 overflow-hidden relative"
+        onMouseEnter={() => setShowProgressTooltip(true)}
+        onMouseLeave={() => setShowProgressTooltip(false)}
+        ref={progressBarRef}
+      >
+        {/* Progress Tooltip with LEO Phase Breakdown */}
+        <AnimatePresence>
+          {showProgressTooltip && (
+            <motion.div
+              className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-50"
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 5 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className="bg-gray-800 dark:bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl border border-gray-700 min-w-[250px]">
+                <div className="font-semibold mb-2 flex items-center">
+                  <Info className="w-3 h-3 mr-1" />
+                  LEO Protocol Phase Breakdown
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-green-300">LEAD Planning:</span>
+                    <span className="font-mono">20%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-blue-300">PLAN Design:</span>
+                    <span className="font-mono">20%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-purple-300">EXEC Implementation:</span>
+                    <span className="font-mono">30%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-orange-300">VERIFICATION:</span>
+                    <span className="font-mono">15%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-yellow-300">APPROVAL:</span>
+                    <span className="font-mono">15%</span>
+                  </div>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-700">
+                  <div className="flex justify-between font-semibold">
+                    <span>Current Progress:</span>
+                    <span className="text-green-400">{progressPercentage}%</span>
+                  </div>
+                </div>
+                {/* Arrow pointing down */}
+                <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-t-4 border-t-gray-800 dark:border-t-gray-900"></div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <motion.div
           className={`h-3 ${statusInfo.progressColor} rounded-full relative`}
           initial={{ width: 0 }}
           animate={{ width: `${progressPercentage}%` }}
-          transition={{ 
-            duration: shouldReduceMotion ? 0 : 1.2, 
+          transition={{
+            duration: shouldReduceMotion ? 0 : 1.2,
             ease: "easeOut",
             delay: shouldReduceMotion ? 0 : 0.2
           }}

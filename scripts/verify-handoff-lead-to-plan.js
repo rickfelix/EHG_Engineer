@@ -10,7 +10,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import HandoffValidator from '../lib/dashboard/handoff-validator.js';
+import HandoffValidator from '../src/services/handoff-validator.js';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';

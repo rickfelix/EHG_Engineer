@@ -30,7 +30,7 @@ async function completeSD2025001() {
       .update({
         status: 'completed',
         completion_date: new Date().toISOString(),
-        progress_percentage: 100,
+        progress: 100,
         final_status: 'success',
         notes: 'LEAD Agent approval complete. All sub-agents approved. Ready for production deployment.',
         lead_approval: true,
@@ -48,7 +48,7 @@ async function completeSD2025001() {
         .from('strategic_directives_v2')  
         .update({
           status: 'completed',
-          progress_percentage: 100
+          progress: 100
         })
         .eq('id', 'SD-2025-001')
         .select();

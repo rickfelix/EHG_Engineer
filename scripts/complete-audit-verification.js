@@ -77,7 +77,7 @@ async function completeAuditVerification() {
       .from('strategic_directives_v2')
       .update({
         metadata: updatedMetadata,
-        status: 'archived', // Completed verification = archived
+        status: 'completed', // Completed verification = archived
         updated_at: new Date().toISOString()
       })
       .eq('id', sdId)

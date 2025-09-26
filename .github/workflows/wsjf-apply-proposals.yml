@@ -1,0 +1,376 @@
+name: WSJF Apply Accepted Proposals (Prod)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type PROMOTE to apply changes to production'
+        required: true
+        type: string
+      dry_run:
+        description: 'Preview mode (no database writes)'
+        required: false
+        default: 'true'
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: wsjf-pipeline-${{ github.ref || github.run_id }}
+  cancel-in-progress: false  # CRITICAL: Never cancel mid-apply
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Triple safety gate
+    if: |
+      vars.APPLY_WSJF_PROD == '1' &&
+      (inputs.dry_run == true || inputs.confirm == 'PROMOTE')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Create Before Snapshot
+        env:
+          PGHOST: ${{ secrets.PGHOST_PROD }}
+          PGPORT: ${{ secrets.PGPORT_PROD }}
+          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
+          PGUSER: ${{ secrets.PGUSER_PROD }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
+          PGSSLMODE: require
+        run: |
+          mkdir -p ops/checks/out
+
+          # Snapshot current state
+          psql << 'EOF' > ops/checks/out/before_snapshot.csv
+          SELECT
+            id AS sd_id,
+            execution_order,
+            title,
+            status
+          FROM strategic_directives_v2
+          ORDER BY execution_order, id;
+          EOF
+
+          echo "Current state captured:"
+          wc -l ops/checks/out/before_snapshot.csv
+
+          # Store in database for rollback
+          if [ "${{ inputs.dry_run }}" = "false" ]; then
+            psql << 'EOF'
+            INSERT INTO execution_order_snapshots (
+              snapshot_type, sd_id, execution_order, snapshot_run_id, metadata
+            )
+            SELECT
+              'before',
+              id,
+              execution_order,
+              '${{ github.run_id }}'::uuid,
+              jsonb_build_object('workflow', 'wsjf-apply', 'timestamp', now())
+            FROM strategic_directives_v2;
+            EOF
+          fi
+
+      - name: Query Accepted Proposals
+        env:
+          PGHOST: ${{ secrets.PGHOST_PROD }}
+          PGPORT: ${{ secrets.PGPORT_PROD }}
+          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
+          PGUSER: ${{ secrets.PGUSER_PROD }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
+          PGSSLMODE: require
+        run: |
+          # Get accepted proposals
+          psql << 'EOF' > ops/checks/out/to_apply.csv
+          SELECT
+            sd_id,
+            current_execution_order,
+            proposed_execution_order,
+            delta,
+            wsjf_score
+          FROM eng_sequence_proposals
+          WHERE status = 'accepted'
+          ORDER BY ABS(delta) DESC;
+          EOF
+
+          echo "Proposals to apply:"
+          cat ops/checks/out/to_apply.csv
+
+      - name: Validate No Conflicts
+        run: |
+          cat > validate.py << 'EOF'
+          import csv
+          import sys
+
+          # Load proposals
+          proposals = {}
+          with open('ops/checks/out/to_apply.csv', 'r') as f:
+              reader = csv.DictReader(f)
+              for row in reader:
+                  sd_id = row['sd_id']
+                  proposed = int(row['proposed_execution_order'])
+                  proposals[sd_id] = proposed
+
+          # Check for duplicates
+          values = list(proposals.values())
+          if len(values) != len(set(values)):
+              print("ERROR: Duplicate execution_order values detected!")
+              sys.exit(1)
+
+          # Check MAX_MOVE not exceeded
+          MAX_MOVE = 3
+          violations = []
+          with open('ops/checks/out/to_apply.csv', 'r') as f:
+              reader = csv.DictReader(f)
+              for row in reader:
+                  delta = int(row['delta'])
+                  if abs(delta) > MAX_MOVE:
+                      violations.append(f"{row['sd_id']}: delta={delta}")
+
+          if violations:
+              print(f"ERROR: MAX_MOVE violations: {violations}")
+              sys.exit(1)
+
+          print(f"✅ Validation passed: {len(proposals)} proposals ready to apply")
+          EOF
+
+          python3 validate.py
+
+      - name: Apply Changes
+        if: inputs.dry_run == false
+        env:
+          PGHOST: ${{ secrets.PGHOST_PROD }}
+          PGPORT: ${{ secrets.PGPORT_PROD }}
+          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
+          PGUSER: ${{ secrets.PGUSER_PROD }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
+          PGSSLMODE: require
+        run: |
+          # Apply execution_order updates with stale-read protection
+          psql << 'EOF'
+          -- First, detect and reject stale proposals
+          WITH stale_check AS (
+            UPDATE eng_sequence_proposals p
+            SET
+              status = 'rejected',
+              rejection_reason = 'stale_current_order',
+              metadata = metadata || jsonb_build_object(
+                'rejected_at', now(),
+                'rejected_by', 'wsjf-apply-stale-check',
+                'actual_current', s.execution_order,
+                'expected_current', p.current_execution_order
+              )
+            FROM strategic_directives_v2 s
+            WHERE p.sd_id = s.id
+              AND p.status = 'accepted'
+              AND s.execution_order != p.current_execution_order
+            RETURNING p.sd_id
+          )
+          SELECT COUNT(*) AS stale_rejected FROM stale_check;
+
+          -- Apply only fresh proposals (with stale protection)
+          UPDATE strategic_directives_v2 s
+          SET execution_order = p.proposed_execution_order
+          FROM eng_sequence_proposals p
+          WHERE s.id = p.sd_id
+            AND p.status = 'accepted'
+            AND s.execution_order = p.current_execution_order;  -- Stale protection
+
+          -- Mark successfully applied proposals
+          UPDATE eng_sequence_proposals p
+          SET
+            status = 'applied',
+            applied_at = now(),
+            applied_by = 'wsjf-apply-${{ github.run_id }}'
+          FROM strategic_directives_v2 s
+          WHERE p.sd_id = s.id
+            AND p.status = 'accepted'
+            AND s.execution_order = p.proposed_execution_order;  -- Verify applied
+
+          -- Report results
+          SELECT
+            COUNT(*) FILTER (WHERE status = 'applied') AS applied_count,
+            COUNT(*) FILTER (WHERE status = 'rejected' AND rejection_reason = 'stale_current_order') AS stale_rejected,
+            COUNT(*) FILTER (WHERE status = 'accepted') AS still_pending
+          FROM eng_sequence_proposals
+          WHERE source_run_id = (
+            SELECT source_run_id FROM eng_sequence_proposals
+            WHERE status IN ('applied', 'rejected') ORDER BY updated_at DESC LIMIT 1
+          );
+          EOF
+
+          echo "✅ Changes applied to production"
+
+      - name: Create After Snapshot
+        env:
+          PGHOST: ${{ secrets.PGHOST_PROD }}
+          PGPORT: ${{ secrets.PGPORT_PROD }}
+          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
+          PGUSER: ${{ secrets.PGUSER_PROD }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
+          PGSSLMODE: require
+        run: |
+          # Capture new state
+          psql << 'EOF' > ops/checks/out/after_snapshot.csv
+          SELECT
+            id AS sd_id,
+            execution_order,
+            title,
+            status
+          FROM strategic_directives_v2
+          ORDER BY execution_order, id;
+          EOF
+
+          # Store after snapshot
+          if [ "${{ inputs.dry_run }}" = "false" ]; then
+            psql << 'EOF'
+            INSERT INTO execution_order_snapshots (
+              snapshot_type, sd_id, execution_order, snapshot_run_id, metadata
+            )
+            SELECT
+              'after',
+              id,
+              execution_order,
+              '${{ github.run_id }}'::uuid,
+              jsonb_build_object('workflow', 'wsjf-apply', 'timestamp', now())
+            FROM strategic_directives_v2;
+            EOF
+          fi
+
+      - name: Generate Delta Report
+        run: |
+          cat > delta_report.py << 'EOF'
+          import csv
+          import json
+
+          # Load before/after
+          before = {}
+          after = {}
+
+          with open('ops/checks/out/before_snapshot.csv', 'r') as f:
+              reader = csv.DictReader(f)
+              for row in reader:
+                  before[row['sd_id']] = int(row['execution_order']) if row['execution_order'] else None
+
+          with open('ops/checks/out/after_snapshot.csv', 'r') as f:
+              reader = csv.DictReader(f)
+              for row in reader:
+                  after[row['sd_id']] = int(row['execution_order']) if row['execution_order'] else None
+
+          # Find changes
+          changes = []
+          for sd_id in before:
+              if sd_id in after and before[sd_id] != after[sd_id]:
+                  changes.append({
+                      'sd_id': sd_id,
+                      'before': before[sd_id],
+                      'after': after[sd_id],
+                      'delta': after[sd_id] - before[sd_id] if before[sd_id] and after[sd_id] else None
+                  })
+
+          # Write report
+          with open('ops/checks/out/delta_report.md', 'w') as f:
+              f.write(f"# WSJF Apply Delta Report\n\n")
+              f.write(f"**Total changes**: {len(changes)}\n\n")
+
+              if changes:
+                  f.write("## Changes Applied\n\n")
+                  f.write("| SD ID | Before | After | Delta |\n")
+                  f.write("|-------|--------|-------|-------|\n")
+                  for c in sorted(changes, key=lambda x: abs(x['delta'] or 0), reverse=True):
+                      f.write(f"| {c['sd_id']} | {c['before'] or '-'} | {c['after'] or '-'} | ")
+                      if c['delta']:
+                          f.write(f"{c['delta']:+d} |\n")
+                      else:
+                          f.write("- |\n")
+
+          # Write rollback SQL
+          with open('ops/checks/out/rollback.sql', 'w') as f:
+              f.write("-- Rollback script for WSJF apply\n")
+              f.write(f"-- Generated from run {github.run_id}\n\n")
+              f.write("BEGIN;\n\n")
+              for c in changes:
+                  if c['before'] is not None:
+                      f.write(f"UPDATE strategic_directives_v2 SET execution_order = {c['before']} ")
+                      f.write(f"WHERE id = '{c['sd_id']}';\n")
+              f.write("\nCOMMIT;\n")
+
+          print(f"Generated delta report: {len(changes)} changes")
+          EOF
+
+          python3 delta_report.py
+
+      - name: Create Audit PR
+        if: inputs.dry_run == false
+        run: |
+          git config --global user.name "WSJF Apply Bot"
+          git config --global user.email "actions@github.com"
+
+          # Create audit branch
+          BRANCH="wsjf-apply-audit-${{ github.run_id }}"
+          git checkout -b $BRANCH
+
+          # Copy artifacts to audit directory
+          mkdir -p audit/wsjf/${{ github.run_id }}
+          cp ops/checks/out/*.csv audit/wsjf/${{ github.run_id }}/
+          cp ops/checks/out/*.md audit/wsjf/${{ github.run_id }}/
+          cp ops/checks/out/rollback.sql audit/wsjf/${{ github.run_id }}/
+
+          # Commit
+          git add audit/wsjf/${{ github.run_id }}
+          git commit -m "WSJF Apply Audit: Run ${{ github.run_id }}
+
+          Applied accepted WSJF proposals to production.
+          See audit/wsjf/${{ github.run_id }}/ for details and rollback script."
+
+          # Push and create PR
+          git push origin $BRANCH
+
+          gh pr create \
+            --title "WSJF Apply Audit: Run ${{ github.run_id }}" \
+            --body "$(cat ops/checks/out/delta_report.md)" \
+            --base main \
+            --head $BRANCH
+
+      - name: Generate Summary
+        run: |
+          echo "## 🚀 WSJF Apply Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "### 🔍 DRY RUN MODE" >> $GITHUB_STEP_SUMMARY
+            echo "No changes were applied to the database" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ✅ PRODUCTION CHANGES APPLIED" >> $GITHUB_STEP_SUMMARY
+            echo "Execution orders have been updated in production" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat ops/checks/out/delta_report.md >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ inputs.dry_run }}" = "false" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 🔄 Rollback" >> $GITHUB_STEP_SUMMARY
+            echo "If needed, use the rollback script in audit/wsjf/${{ github.run_id }}/rollback.sql" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wsjf-apply-${{ github.run_id }}
+          path: |
+            ops/checks/out/before_snapshot.csv
+            ops/checks/out/after_snapshot.csv
+            ops/checks/out/to_apply.csv
+            ops/checks/out/delta_report.md
+            ops/checks/out/rollback.sql
+          retention-days: 90  # Keep longer for audit trail

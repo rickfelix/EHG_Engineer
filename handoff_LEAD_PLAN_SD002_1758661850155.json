@@ -1,0 +1,42 @@
+{
+  "sd_id": "SD-002",
+  "sd_title": "AI Navigation: Consolidated",
+  "handoff_type": "LEAD_TO_PLAN",
+  "from_agent": "LEAD",
+  "to_agent": "PLAN",
+  "status": "ready",
+  "executive_summary": "## Executive Summary\nSD-002 (AI Navigation: Consolidated) requires technical planning to create an intelligent, context-aware navigation system for the EHG platform. This high-priority initiative (execution order #41, WSJF score 56.45) will consolidate fragmented navigation components and implement AI-powered features to enhance user productivity.\n\n### Strategic Value\n- **Business Impact**: 30% reduction in user task completion time\n- **Technical Innovation**: First AI-powered navigation in the platform\n- **User Experience**: Predictive routing and intelligent shortcuts",
+  "completeness_report": "## Completeness Report\n- ✅ Strategic objectives defined (5 items)\n- ✅ Success criteria established (5 metrics)\n- ✅ Scope clearly defined\n- ✅ Dependencies identified (SD-001, infrastructure)\n- ✅ Risk assessment complete (3 risks identified)\n- ✅ Resource requirements estimated\n- **Completeness Score: 100%**",
+  "deliverables_manifest": "## Deliverables Manifest\n1. **AI Navigation Engine Core Module** - Central processing unit for navigation intelligence\n2. **Context Analysis Service** - User behavior and pattern recognition\n3. **Route Prediction Algorithm** - ML-based path optimization\n4. **Navigation UI Components** - React components with AI integration\n5. **Integration APIs** - RESTful endpoints for system communication\n6. **Performance Monitoring Dashboard** - Real-time metrics and analytics",
+  "key_decisions_rationale": "## Key Decisions & Rationale\n### 1. Architecture Decision\n**Choice**: Microservices approach\n**Rationale**: Enables independent scaling and deployment of AI components\n\n### 2. Technology Stack\n**Choice**: React + Node.js + TensorFlow.js\n**Rationale**: Leverages existing team expertise while adding AI capabilities\n\n### 3. Integration Strategy\n**Choice**: Progressive enhancement\n**Rationale**: Ensures zero downtime and gradual feature rollout\n\n### 4. Priority Justification\n**Choice**: High priority, execution order #41\n**Rationale**: Direct impact on all users, foundation for future AI features",
+  "known_issues_risks": "## Known Issues & Risks\n### Risks\n1. **AI Model Training Data Quality**\n   - Impact: HIGH\n   - Mitigation: Implement data validation pipeline and monitoring\n\n2. **Performance on Low-end Devices**\n   - Impact: MEDIUM\n   - Mitigation: Progressive enhancement with graceful degradation\n\n3. **Legacy Code Integration**\n   - Impact: MEDIUM\n   - Mitigation: Phased refactoring with adapter patterns\n\n### Current Issues\n- Navigation code fragmentation across 12+ components\n- No existing telemetry for user navigation patterns\n- Accessibility gaps in current implementation",
+  "resource_utilization": "## Resource Utilization\n### Team Requirements\n- 1 AI/ML Engineer (8 weeks)\n- 2 Full-stack Developers (6 weeks each)\n- 1 UX Designer (4 weeks)\n- 1 QA Engineer (3 weeks)\n\n### Infrastructure\n- ML training pipeline (AWS SageMaker or equivalent)\n- A/B testing framework\n- Performance monitoring (DataDog/New Relic)\n\n### Budget Estimate\n- Development: $45,000 - $60,000\n- Infrastructure: $5,000/month ongoing\n- Total Initial Investment: $50,000 - $65,000",
+  "action_items_for_receiver": "## Action Items for PLAN Agent\n### Immediate (Week 1)\n1. Create comprehensive Product Requirements Document (PRD)\n2. Define detailed technical architecture\n3. Establish AI model specifications and training requirements\n\n### Planning Phase (Week 2)\n4. Create user stories with acceptance criteria\n5. Design performance benchmarks and monitoring strategy\n6. Develop phased rollout plan with feature flags\n\n### Pre-Implementation (Week 3)\n7. Set up ML training pipeline\n8. Create integration test framework\n9. Establish accessibility testing protocols\n10. Document API specifications\n\n### Success Metrics to Track\n- Navigation response time (target: <200ms)\n- AI prediction accuracy (target: >85%)\n- User task completion time (target: -30%)\n- Accessibility score (target: WCAG 2.1 AA)",
+  "metadata": {
+    "strategic_objectives": [
+      "Create intelligent, context-aware navigation system",
+      "Consolidate fragmented navigation components",
+      "Implement AI-powered route suggestions",
+      "Enhance user productivity through predictions",
+      "Ensure seamless UI integration"
+    ],
+    "success_criteria": [
+      "Navigation response time < 200ms",
+      "AI prediction accuracy > 85%",
+      "User task completion reduced by 30%",
+      "Zero critical navigation bugs",
+      "WCAG 2.1 AA compliance"
+    ],
+    "dependencies": [
+      "SD-001",
+      "Platform Infrastructure"
+    ],
+    "priority": "high",
+    "wsjf_score": 56.45,
+    "execution_order": 41,
+    "estimated_duration": "6-8 weeks",
+    "created_at": "2025-09-23T21:10:50.032Z",
+    "created_by": "LEAD Agent",
+    "leo_protocol_version": "v4.2.0"
+  }
+}

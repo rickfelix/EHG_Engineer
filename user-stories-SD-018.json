@@ -1,0 +1,118 @@
+{
+  "sd_id": "SD-018",
+  "prd_id": "PRD-SD-018-VENTURE-EXIT",
+  "created_by": "LEO_PLAN_Agent",
+  "created_at": "2025-09-24T23:05:21.816Z",
+  "protocol_version": "v4.2.0_story_gates",
+  "stories": [
+    {
+      "id": "US-SD018-001",
+      "title": "Portfolio Manager - View Active Ventures Dashboard",
+      "story": "As a Portfolio Manager, I want to view a comprehensive dashboard of all active ventures approaching exit stage, so that I can monitor progress and prioritize my exit coordination efforts.",
+      "acceptance_criteria": [
+        "GIVEN I am logged in as a Portfolio Manager",
+        "WHEN I navigate to the Stage 40 dashboard",
+        "THEN I see a list of all ventures with exit status indicators",
+        "AND each venture shows: name, current stage, exit timeline, key metrics",
+        "AND I can filter ventures by exit type, timeline, or status",
+        "AND the dashboard refreshes automatically every 5 minutes"
+      ],
+      "priority": "HIGH",
+      "story_points": 8,
+      "phase": 1,
+      "persona": "Portfolio Manager"
+    },
+    {
+      "id": "US-SD018-002",
+      "title": "Portfolio Manager - Initiate Exit Process",
+      "story": "As a Portfolio Manager, I want to initiate the exit process for a venture, so that all stakeholders are notified and the exit workflow begins systematically.",
+      "acceptance_criteria": [
+        "GIVEN I have a venture ready for exit",
+        "WHEN I click \"Initiate Exit\" from the venture detail view",
+        "THEN I see an exit configuration form with exit type selection",
+        "AND I can set target timeline and assign exit coordinator",
+        "AND clicking \"Start Exit Process\" creates workflow and notifies stakeholders",
+        "AND the venture status updates to \"Exit in Progress\""
+      ],
+      "priority": "HIGH",
+      "story_points": 5,
+      "phase": 2,
+      "persona": "Portfolio Manager"
+    },
+    {
+      "id": "US-SD018-003",
+      "title": "Exit Coordinator - Manage Exit Workflow",
+      "story": "As an Exit Coordinator, I want to track and update exit workflow progress, so that all stakeholders stay informed and no critical steps are missed.",
+      "acceptance_criteria": [
+        "GIVEN I am assigned to coordinate a venture exit",
+        "WHEN I access the exit workflow dashboard",
+        "THEN I see all workflow steps with completion status",
+        "AND I can update step status and add notes to each step",
+        "AND status updates automatically notify relevant stakeholders"
+      ],
+      "priority": "HIGH",
+      "story_points": 8,
+      "phase": 2,
+      "persona": "Exit Coordinator"
+    },
+    {
+      "id": "US-SD018-004",
+      "title": "Venture Team Lead - Transition Team Activities",
+      "story": "As a Venture Team Lead, I want to coordinate my team's transition from active development to exit preparation, so that team members understand their new roles.",
+      "acceptance_criteria": [
+        "GIVEN my venture has entered exit process",
+        "WHEN I access the team transition dashboard",
+        "THEN I see all team members with their exit-phase assignments",
+        "AND I can schedule transition meetings and track handover documentation"
+      ],
+      "priority": "MEDIUM",
+      "story_points": 5,
+      "phase": 3,
+      "persona": "Venture Team Lead"
+    },
+    {
+      "id": "US-SD018-005",
+      "title": "Executive Stakeholder - Monitor Portfolio Performance",
+      "story": "As an Executive Stakeholder, I want to view portfolio-level exit analytics and performance metrics, so that I can assess venture exit strategy effectiveness.",
+      "acceptance_criteria": [
+        "GIVEN I need to review portfolio exit performance",
+        "WHEN I access the executive analytics dashboard",
+        "THEN I see portfolio-wide exit success rates and ROI metrics",
+        "AND I can filter by time period and export performance reports"
+      ],
+      "priority": "MEDIUM",
+      "story_points": 8,
+      "phase": 3,
+      "persona": "Executive Stakeholder"
+    },
+    {
+      "id": "US-SD018-006",
+      "title": "Exit Coordinator - Regulatory Compliance Tracking",
+      "story": "As an Exit Coordinator, I want to track regulatory compliance requirements for different exit types, so that all legal obligations are met.",
+      "acceptance_criteria": [
+        "GIVEN I am coordinating an exit with regulatory requirements",
+        "WHEN I access the compliance tracking module",
+        "THEN I see all required compliance items for the exit type",
+        "AND I can update completion status and upload compliance documents"
+      ],
+      "priority": "HIGH",
+      "story_points": 8,
+      "phase": 4,
+      "persona": "Exit Coordinator"
+    }
+  ],
+  "summary": {
+    "total_stories": 6,
+    "total_story_points": 42,
+    "high_priority_stories": 4,
+    "medium_priority_stories": 2,
+    "phases": 4,
+    "estimated_duration": "6-8 weeks",
+    "key_personas": [
+      "Portfolio Manager",
+      "Exit Coordinator",
+      "Venture Team Lead",
+      "Executive Stakeholder"
+    ]
+  }
+}

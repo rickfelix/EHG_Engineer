@@ -14,9 +14,11 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import HandoffValidator from '../lib/dashboard/handoff-validator.js';
+import HandoffValidator from '../src/services/handoff-validator.js';
 import LeadToPlanVerifier from './verify-handoff-lead-to-plan.js';
 import PlanToExecVerifier from './verify-handoff-plan-to-exec.js';
+import { CodebaseValidator } from './lead-codebase-validation.js';
+import { ApplicationBoundaryValidator } from '../src/services/ApplicationBoundaryValidator.js';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
@@ -30,7 +32,8 @@ class UnifiedHandoffSystem {
     );
     
     this.handoffValidator = new HandoffValidator();
-    
+    this.boundaryValidator = new ApplicationBoundaryValidator();
+
     // Initialize specialized verifiers
     this.leadToPlanVerifier = new LeadToPlanVerifier();
     this.planToExecVerifier = new PlanToExecVerifier();
@@ -53,24 +56,83 @@ class UnifiedHandoffSystem {
     console.log(`Strategic Directive: ${sdId}`);
     console.log(`Options:`, options);
     console.log('');
-    
+
     try {
       // Validate handoff type
       if (!this.supportedHandoffs.includes(handoffType)) {
         throw new Error(`Unsupported handoff type: ${handoffType}`);
       }
-      
+
+      // MANDATORY: Run codebase validation for LEAD-to-PLAN handoffs
+      if (handoffType === 'LEAD-to-PLAN') {
+        console.log('\n🔍 MANDATORY CODEBASE VALIDATION CHECK');
+        console.log('-'.repeat(40));
+
+        const validationResult = await this.runCodebaseValidation(sdId, options.prdId);
+
+        if (validationResult.approval_recommendation === 'BLOCKED') {
+          console.error('❌ Validation BLOCKED - Cannot proceed with handoff');
+          console.error('Reasons:', validationResult.human_review_reasons);
+          return {
+            success: false,
+            error: 'Codebase validation failed - conflicts detected',
+            validation: validationResult,
+            blocked: true
+          };
+        }
+
+        if (validationResult.human_review_required) {
+          console.warn('⚠️  Human review required before proceeding');
+          console.warn('Reasons:', validationResult.human_review_reasons);
+          // Store flag for human review but continue
+          options.humanReviewRequired = true;
+          options.validationResult = validationResult;
+        }
+
+        console.log('✅ Codebase validation passed');
+      }
+
+      // Application Boundary Validation for all handoff types
+      console.log('\n🔍 APPLICATION BOUNDARY VALIDATION');
+      console.log('-'.repeat(40));
+
+      const boundaryReport = await this.boundaryValidator.generateValidationReport(sdId);
+
+      if (!boundaryReport.sd_validation.valid) {
+        console.error('❌ Application boundary validation failed');
+        console.error('Error:', boundaryReport.sd_validation.error);
+        return {
+          success: false,
+          error: 'Application boundary validation failed',
+          validation: boundaryReport,
+          blocked: true
+        };
+      }
+
+      if (!boundaryReport.contamination_check.clean) {
+        console.warn('⚠️  Cross-contamination detected in backlog items');
+        console.warn('Issues:', boundaryReport.contamination_check.issues);
+        options.contaminationWarning = true;
+        options.boundaryValidation = boundaryReport;
+      }
+
+      console.log(`✅ SD validated for ${boundaryReport.sd_validation.target_application} application`);
+
       // Load handoff template
       const template = await this.loadHandoffTemplate(handoffType);
       if (!template) {
         throw new Error(`No template found for handoff type: ${handoffType}`);
       }
-      
+
       // Route to specialized verifier
       let result;
       switch (handoffType) {
         case 'LEAD-to-PLAN':
           result = await this.leadToPlanVerifier.verifyHandoff(sdId);
+          // Attach validation results to handoff
+          if (options.validationResult) {
+            result.validationResults = options.validationResult;
+          }
           break;
           
         case 'PLAN-to-EXEC':

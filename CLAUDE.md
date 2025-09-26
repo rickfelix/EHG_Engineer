@@ -115,6 +115,7 @@ LEO Protocol v4.1.2 is **DATABASE-FIRST ONLY**. **NEVER** create:
 - **Test Coverage**: ≥75% statement coverage (enforced via test-coverage.yml)
 - **Accessibility**: WCAG AA compliance on key routes (a11y-check.yml)
 - **Performance**: Bundle <512KB, Perf checks via Lighthouse CI (warn at LCP >3.5s; tighten later based on baselines)
+- **Performance Delta**: Enforces ≤50KB growth vs main branch while working to reduce to 512KB target
 - **Branch Protection**: These checks are required status checks on main
 
 ### REQUIRED: Database Operations Only

@@ -74,7 +74,7 @@ async function closeFoundationSD() {
     const { data: archivedSD, error: archiveError } = await supabase
       .from('strategic_directives_v2')
       .update({
-        status: 'archived',
+        status: 'completed',
         metadata: {
           ...sd.metadata,
           lead_status: 'complete',

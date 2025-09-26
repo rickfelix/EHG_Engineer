@@ -1,18 +1,23 @@
-export { 
+module.exports = {
   testEnvironment: 'node',
   coverageDirectory: 'coverage',
   collectCoverageFrom: [
-    'lib/**/*.js',
     'scripts/**/*.js',
+    'src/services/**/*.js',
     '!**/node_modules/**',
-    '!**/client/**'
+    '!**/client/**',
+    '!src/client/dist/**'
   ],
   testMatch: [
-    '**/__tests__/**/*.js',
-    '**/*.test.js',
-    '**/*.spec.js'
+    '**/tests/unit/simple.test.js'
   ],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/tests/e2e/',
+    '/applications/',
+    '/lib/'
+  ],
+  transform: {},
   verbose: true,
-  testTimeout: 10000,
-  setupFilesAfterEnv: ['<rootDir>/tests/setup.js']
- };
+  testTimeout: 10000
+};

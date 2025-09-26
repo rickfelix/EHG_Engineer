@@ -29,6 +29,8 @@ class StrategicLoaders {
       const { data, error } = await supabase
         .from('strategic_directives_v2')
         .select('*')
+        .order('execution_order', { ascending: true, nullsFirst: false })
+        .order('priority')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -82,23 +84,12 @@ class StrategicLoaders {
         const sdPRDs = prdMap[sd.id] || [];
         const sdEES = allEES?.filter(e => e.sd_id === sd.id) || [];
 
-        // Calculate overall progress
-        const overallProgress = this.progressCalculator.calculateStrategicDirectiveProgress(
-          sd.id,
-          sdPRDs,
-          sdEES,
-          [], // TRPD for future
-          backlogInfo
-        );
+        // Calculate overall progress using the primary PRD
+        const primaryPRD = sdPRDs.length > 0 ? sdPRDs[0] : null;
+        const overallProgress = this.progressCalculator.calculateSDProgress(sd, primaryPRD);
 
-        // Add progress breakdown
-        const progressBreakdown = this.progressCalculator.generateProgressBreakdown(
-          sd.id,
-          sdPRDs,
-          sdEES,
-          [],
-          backlogInfo
-        );
+        // Progress breakdown is part of the calculateSDProgress response
+        const progressBreakdown = overallProgress;
 
         // Calculate SD phase based on PRDs and EES
         let sdPhase = 'pending';
@@ -122,6 +113,7 @@ class StrategicLoaders {
           priority: sd.priority || 'medium',
           targetOutcome: sd.target_outcome,
           status: normalizedStatus,
+          target_application: sd.target_application || 'EHG', // Add target_application field
           metadata: {
             'SD Key': sd.sd_key,
             Status: normalizedStatus,
@@ -130,7 +122,8 @@ class StrategicLoaders {
             Owner: sd.owner,
             'Decision Log Reference': sd.decision_log_ref,
             'Evidence Reference': sd.evidence_ref,
-            'Approved At': sd.approved_at
+            'Approved At': sd.approved_at,
+            'Target Application': sd.target_application || 'EHG' // Also add to metadata
           },
           checklist: this.extractChecklist(sd),
           content: sd.content || this.generateSDContent(sd),
@@ -303,8 +296,9 @@ class StrategicLoaders {
   combinePRDChecklists(prd) {
     const allItems = [];
 
-    if (prd.functional_requirements?.length > 0) {
-      prd.functional_requirements.forEach(req => {
+    const functionalReqs = Array.isArray(prd.functional_requirements) ? prd.functional_requirements : [];
+    if (functionalReqs.length > 0) {
+      functionalReqs.forEach(req => {
         allItems.push({
           text: `[Functional] ${req}`,
           checked: false,
@@ -313,8 +307,9 @@ class StrategicLoaders {
       });
     }
 
-    if (prd.test_scenarios?.length > 0) {
-      prd.test_scenarios.forEach(scenario => {
+    const testScenarios = Array.isArray(prd.test_scenarios) ? prd.test_scenarios : [];
+    if (testScenarios.length > 0) {
+      testScenarios.forEach(scenario => {
         allItems.push({
           text: `[Test] ${scenario}`,
           checked: false,
@@ -323,8 +318,9 @@ class StrategicLoaders {
       });
     }
 
-    if (prd.acceptance_criteria?.length > 0) {
-      prd.acceptance_criteria.forEach(criteria => {
+    const acceptanceCriteria = Array.isArray(prd.acceptance_criteria) ? prd.acceptance_criteria : [];
+    if (acceptanceCriteria.length > 0) {
+      acceptanceCriteria.forEach(criteria => {
         allItems.push({
           text: `[Acceptance] ${criteria}`,
           checked: false,
@@ -389,31 +385,31 @@ ${prd.executive_summary || 'No summary provided'}
 - **Version**: ${prd.version || '1.0'}
 
 ## Functional Requirements
-${prd.functional_requirements?.map(req => `- ${req}`).join('\n') || '- No functional requirements specified'}
+${Array.isArray(prd.functional_requirements) ? prd.functional_requirements.map(req => `- ${req}`).join('\n') : '- No functional requirements specified'}
 
 ## Non-Functional Requirements
-${prd.non_functional_requirements?.map(req => `- ${req}`).join('\n') || '- No non-functional requirements specified'}
+${Array.isArray(prd.non_functional_requirements) ? prd.non_functional_requirements.map(req => `- ${req}`).join('\n') : '- No non-functional requirements specified'}
 
 ## Technical Requirements
-${prd.technical_requirements?.map(req => `- ${req}`).join('\n') || '- No technical requirements specified'}
+${Array.isArray(prd.technical_requirements) ? prd.technical_requirements.map(req => `- ${req}`).join('\n') : '- No technical requirements specified'}
 
 ## Test Scenarios
-${prd.test_scenarios?.map(scenario => `- ${scenario}`).join('\n') || '- No test scenarios specified'}
+${Array.isArray(prd.test_scenarios) ? prd.test_scenarios.map(scenario => `- ${scenario}`).join('\n') : '- No test scenarios specified'}
 
 ## Acceptance Criteria
-${prd.acceptance_criteria?.map(criteria => `- ${criteria}`).join('\n') || '- No acceptance criteria specified'}
+${Array.isArray(prd.acceptance_criteria) ? prd.acceptance_criteria.map(criteria => `- ${criteria}`).join('\n') : '- No acceptance criteria specified'}
 
 ## Risks
-${prd.risks?.map(risk => `- ${risk}`).join('\n') || '- No risks identified'}
+${Array.isArray(prd.risks) ? prd.risks.map(risk => `- ${risk}`).join('\n') : '- No risks identified'}
 
 ## Constraints
-${prd.constraints?.map(constraint => `- ${constraint}`).join('\n') || '- No constraints identified'}
+${Array.isArray(prd.constraints) ? prd.constraints.map(constraint => `- ${constraint}`).join('\n') : '- No constraints identified'}
 
 ## Assumptions
-${prd.assumptions?.map(assumption => `- ${assumption}`).join('\n') || '- No assumptions identified'}
+${Array.isArray(prd.assumptions) ? prd.assumptions.map(assumption => `- ${assumption}`).join('\n') : '- No assumptions identified'}
 
 ## Stakeholders
-${prd.stakeholders?.map(stakeholder => `- ${stakeholder}`).join('\n') || '- No stakeholders identified'}
+${Array.isArray(prd.stakeholders) ? prd.stakeholders.map(stakeholder => `- ${stakeholder}`).join('\n') : '- No stakeholders identified'}
 
 ---
 *Generated from database record*`;

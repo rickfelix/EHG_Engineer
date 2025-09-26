@@ -52,7 +52,7 @@ async function validateSDCompletion(sdId) {
     } else {
       // Check required SD fields
       const requiredSDFields = {
-        'status': 'archived',
+        'status': 'completed',
         'metadata.completion_percentage': 100,
         'metadata.current_phase': 'COMPLETE',
         'metadata.phase_progress.LEAD': 100,

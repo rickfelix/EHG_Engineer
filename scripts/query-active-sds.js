@@ -65,8 +65,8 @@ async function queryActiveStrategicDirectives() {
                     console.log(`   Objectives: ${sd.objectives.substring(0, 100)}...`);
                 }
                 
-                if (sd.progress_percentage !== null && sd.progress_percentage !== undefined) {
-                    console.log(`   Progress: ${getProgressBar(sd.progress_percentage)} ${sd.progress_percentage}%`);
+                if (sd.progress !== null && sd.progress !== undefined) {
+                    console.log(`   Progress: ${getProgressBar(sd.progress)} ${sd.progress}%`);
                 }
 
                 // Check for associated PRDs
@@ -105,7 +105,7 @@ async function queryActiveStrategicDirectives() {
         if (grouped['in_progress'] && grouped['in_progress'].length > 0) {
             console.log('\n3. SDs currently being executed:');
             grouped['in_progress'].forEach(sd => {
-                console.log(`   → Monitor progress: ${sd.sd_id || sd.id} (${sd.progress_percentage || 0}% complete)`);
+                console.log(`   → Monitor progress: ${sd.sd_id || sd.id} (${sd.progress || 0}% complete)`);
             });
         }
 

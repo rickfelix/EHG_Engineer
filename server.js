@@ -33,6 +33,12 @@ import RealtimeDashboard from './src/services/realtime-dashboard.js';
 import * as storiesAPI from './src/api/stories.js';
 import StoryAgentBootstrap from './src/agents/story-bootstrap.js';
 
+// Import Smart Search Engine (Sprint 4)
+import { getSearchEngine } from './src/services/ai-navigation/SmartSearchEngine.js';
+
+// Import Opportunity Management Routes (SD-1A)
+import opportunitiesRouter from './src/routes/opportunities.js';
+
 // Initialize Express app
 const app = express();
 const server = http.createServer(app);
@@ -149,7 +155,23 @@ async function loadState() {
       dashboardState.executionSequences = await dbLoader.loadExecutionSequences();
       
       console.log(`✅ Loaded ${dashboardState.strategicDirectives.length} SDs from database`);
-      
+
+      // Load current working SD from database
+      try {
+        const { data: workingSD } = await dbLoader.supabase
+          .rpc('get_working_sd');
+
+        if (workingSD && workingSD.length > 0) {
+          dashboardState.leoProtocol.currentSD = workingSD[0].id;
+          console.log(`⚡ Current working SD: ${workingSD[0].id} - ${workingSD[0].title}`);
+          console.log(`   Started at: ${new Date(workingSD[0].started_at).toLocaleString()}`);
+        } else {
+          console.log('💤 No SD currently being worked on');
+        }
+      } catch (error) {
+        console.log('⚠️ Could not load working SD:', error.message);
+      }
+
       // Check for SD-2025-001
       const sd2025 = dashboardState.strategicDirectives.find(sd => sd.id === 'SD-2025-001');
       if (sd2025) {
@@ -191,7 +213,31 @@ wss.on('connection', (ws) => {
     try {
       const msg = JSON.parse(message);
       
-      if (msg.type === 'updateSDStatus') {
+      if (msg.type === 'setActiveSD') {
+        const { sdId } = msg.data;
+        console.log(`⚡ Setting working SD to: ${sdId}`);
+
+        // Update in database using our new function
+        const { data, error } = await dbLoader.supabase
+          .rpc('set_working_sd', { p_sd_id: sdId });
+
+        if (error) {
+          console.error('❌ Error setting working SD:', error);
+          ws.send(JSON.stringify({
+            type: 'error',
+            message: `Failed to set working SD: ${error.message}`
+          }));
+        } else {
+          console.log(`✅ Successfully set working SD to ${sdId}`);
+          console.log('Result:', data);
+
+          // Update dashboard state
+          dashboardState.leoProtocol.currentSD = sdId;
+
+          // Broadcast to all clients
+          broadcastUpdate('workingSD', { sdId, timestamp: new Date() });
+        }
+      } else if (msg.type === 'updateSDStatus') {
         const { sdId, status } = msg.data;
         console.log(`📝 Updating SD ${sdId} status to: ${status}`);
         
@@ -245,6 +291,319 @@ function broadcastUpdate(type, data) {
 // =============================================================================
 // API ROUTES
 // =============================================================================
+
+// AI Navigation API endpoints (SD-002 Sprint 2)
+// Predict navigation destinations
+app.post('/api/v1/navigation/predictions', async (req, res) => {
+  try {
+    const { userId, currentPath, context } = req.body;
+
+    // Simplified prediction logic for Sprint 2
+    const predictions = [
+      { path: '/dashboard', confidence: 0.8, reason: 'frequently_visited' },
+      { path: '/strategic-directives', confidence: 0.6, reason: 'workflow_pattern' },
+      { path: '/backlog', confidence: 0.4, reason: 'related_content' }
+    ];
+
+    res.json({
+      success: true,
+      predictions,
+      confidence: 0.6,
+      fromCache: false,
+      responseTime: 50
+    });
+  } catch (error) {
+    console.error('Navigation prediction error:', error);
+    res.status(500).json({ error: 'Failed to generate predictions' });
+  }
+});
+
+// Get user shortcuts
+app.post('/api/v1/navigation/shortcuts', async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!dbLoader.isConnected) {
+      // Fallback to default shortcuts (Sprint 3: Full 1-9 range)
+      const shortcuts = [
+        { shortcut_key: '1', label: 'Dashboard', target_path: '/dashboard', icon: 'home', is_enabled: true, display_order: 1, is_custom: false },
+        { shortcut_key: '2', label: 'Strategic Directives', target_path: '/strategic-directives', icon: 'target', is_enabled: true, display_order: 2, is_custom: false },
+        { shortcut_key: '3', label: 'PRDs', target_path: '/prds', icon: 'file-text', is_enabled: true, display_order: 3, is_custom: false },
+        { shortcut_key: '4', label: 'Backlog', target_path: '/backlog', icon: 'list', is_enabled: true, display_order: 4, is_custom: false },
+        { shortcut_key: '5', label: 'Stories', target_path: '/stories', icon: 'book', is_enabled: true, display_order: 5, is_custom: false },
+        { shortcut_key: '6', label: 'Reports', target_path: '/reports', icon: 'bar-chart', is_enabled: true, display_order: 6, is_custom: false },
+        { shortcut_key: '7', label: 'Analytics', target_path: '/analytics', icon: 'trending-up', is_enabled: true, display_order: 7, is_custom: false },
+        { shortcut_key: '8', label: 'Settings', target_path: '/settings', icon: 'settings', is_enabled: true, display_order: 8, is_custom: false },
+        { shortcut_key: '9', label: 'Profile', target_path: '/profile', icon: 'user', is_enabled: true, display_order: 9, is_custom: false }
+      ];
+      return res.json({ success: true, shortcuts, persistence: 'localStorage_fallback' });
+    }
+
+    // Get user shortcuts from database using the function
+    if (userId) {
+      const { data: shortcuts, error } = await dbLoader.supabase.rpc('get_user_shortcuts', { p_user_id: userId });
+
+      if (error) {
+        console.error('Database error getting shortcuts:', error);
+        throw error;
+      }
+
+      if (shortcuts && shortcuts.length > 0) {
+        return res.json({ success: true, shortcuts });
+      }
+    }
+
+    // Fallback to default shortcuts from navigation_shortcuts table
+    const { data: defaultShortcuts, error: defaultError } = await dbLoader.supabase
+      .from('navigation_shortcuts')
+      .select('key as shortcut_key, label, target_path, icon, is_enabled, display_order, is_custom')
+      .is('user_id', null)
+      .eq('is_enabled', true)
+      .order('display_order');
+
+    if (defaultError) {
+      console.error('Database error getting default shortcuts:', defaultError);
+      throw defaultError;
+    }
+
+    res.json({ success: true, shortcuts: defaultShortcuts || [] });
+  } catch (error) {
+    console.error('Shortcuts error:', error);
+    res.status(500).json({ error: 'Failed to get shortcuts' });
+  }
+});
+
+// Get available paths for customization
+app.get('/api/v1/navigation/available-paths', (req, res) => {
+  const paths = [
+    { path: '/dashboard', label: 'Dashboard', icon: 'home' },
+    { path: '/strategic-directives', label: 'Strategic Directives', icon: 'target' },
+    { path: '/prds', label: 'Product Requirements', icon: 'file-text' },
+    { path: '/backlog', label: 'Backlog', icon: 'list' },
+    { path: '/stories', label: 'User Stories', icon: 'book' },
+    { path: '/reports', label: 'Reports', icon: 'bar-chart' },
+    { path: '/analytics', label: 'Analytics', icon: 'trending-up' },
+    { path: '/settings', label: 'Settings', icon: 'settings' },
+    { path: '/profile', label: 'Profile', icon: 'user' }
+  ];
+
+  res.json({ success: true, paths });
+});
+
+// Save custom shortcut
+app.post('/api/v1/navigation/shortcuts/save', async (req, res) => {
+  try {
+    const { userId, shortcutKey, targetPath, label, icon, displayOrder } = req.body;
+    console.log('Saving custom shortcut:', { userId, shortcutKey, targetPath, label, icon });
+
+    if (!dbLoader.isConnected) {
+      return res.json({ success: true, message: 'Database not connected - changes not persisted' });
+    }
+
+    if (!userId || !shortcutKey || !targetPath || !label) {
+      return res.status(400).json({ success: false, error: 'Missing required fields: userId, shortcutKey, targetPath, label' });
+    }
+
+    // Save user shortcut using database function
+    const { data: result, error } = await dbLoader.supabase.rpc('save_user_shortcut', {
+      p_user_id: userId,
+      p_shortcut_key: shortcutKey,
+      p_target_path: targetPath,
+      p_label: label,
+      p_icon: icon || null,
+      p_display_order: displayOrder || 0
+    });
+
+    if (error) {
+      console.error('Database error saving shortcut:', error);
+      return res.status(500).json({ success: false, error: 'Failed to save shortcut' });
+    }
+
+    res.json({ success: true, message: 'Shortcut saved successfully' });
+  } catch (error) {
+    console.error('Save shortcut error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Reset shortcuts
+app.post('/api/v1/navigation/shortcuts/reset', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    console.log('Resetting shortcuts for user:', userId);
+
+    if (!dbLoader.isConnected) {
+      return res.json({ success: true, message: 'Database not connected - using defaults' });
+    }
+
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'Missing userId' });
+    }
+
+    // Reset user shortcuts using database function
+    const { data: result, error } = await dbLoader.supabase.rpc('reset_user_shortcuts', {
+      p_user_id: userId
+    });
+
+    if (error) {
+      console.error('Database error resetting shortcuts:', error);
+      return res.status(500).json({ success: false, error: 'Failed to reset shortcuts' });
+    }
+
+    res.json({ success: true, message: 'Shortcuts reset to defaults' });
+  } catch (error) {
+    console.error('Reset shortcuts error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Record navigation event
+app.post('/api/v1/navigation/record', (req, res) => {
+  try {
+    const { userId, sessionId, from, to, source, predictionUsed } = req.body;
+    console.log('Recording navigation:', { userId, from, to, source, predictionUsed });
+
+    // Log for telemetry (will integrate with database in future)
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to record navigation' });
+  }
+});
+
+// ==========================================
+// Sprint 4: Smart Search API Endpoints
+// ==========================================
+
+// Initialize search engine
+const searchEngine = getSearchEngine();
+
+// Main search endpoint
+app.post('/api/v1/search', async (req, res) => {
+  try {
+    const { query, context = {} } = req.body;
+
+    if (!query) {
+      return res.status(400).json({ error: 'Query parameter is required' });
+    }
+
+    // Add session context
+    context.sessionId = req.sessionID || 'default';
+    context.currentPath = req.headers.referer || '/';
+
+    // Perform search
+    const startTime = Date.now();
+    const searchResults = searchEngine
+      ? await searchEngine.search(query, context)
+      : { results: [], searchTime: 0, error: 'Search engine not initialized' };
+
+    // Ensure response time is under 500ms
+    const totalTime = Date.now() - startTime;
+    if (totalTime > 500) {
+      console.warn(`Search exceeded 500ms target: ${totalTime}ms for query "${query}"`);
+    }
+
+    res.json({
+      query,
+      results: searchResults.results || [],
+      searchTime: searchResults.searchTime || totalTime,
+      fromCache: searchResults.fromCache || false,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Search error:', error);
+    res.status(500).json({
+      error: 'Search failed',
+      message: error.message
+    });
+  }
+});
+
+// Search suggestions endpoint
+app.get('/api/v1/search/suggestions', async (req, res) => {
+  try {
+    const { prefix } = req.query;
+
+    if (!prefix || prefix.length < 2) {
+      return res.json({ suggestions: [] });
+    }
+
+    const suggestions = searchEngine
+      ? await searchEngine.getSuggestions(prefix)
+      : ['Dashboard', 'Settings', 'Portfolio', 'Search'];
+
+    res.json({
+      prefix,
+      suggestions: suggestions || []
+    });
+  } catch (error) {
+    console.error('Suggestions error:', error);
+    res.json({ suggestions: [] });
+  }
+});
+
+// Search feedback endpoint (for learning)
+app.post('/api/v1/search/feedback', async (req, res) => {
+  try {
+    const { query, selectedResult, shownResults = [] } = req.body;
+
+    if (!query) {
+      return res.status(400).json({ error: 'Query is required' });
+    }
+
+    if (searchEngine) {
+      await searchEngine.recordFeedback(query, selectedResult, shownResults);
+    }
+
+    res.json({
+      success: true,
+      message: 'Feedback recorded'
+    });
+  } catch (error) {
+    console.error('Feedback error:', error);
+    res.status(500).json({
+      error: 'Failed to record feedback',
+      message: error.message
+    });
+  }
+});
+
+// Search index status endpoint
+app.get('/api/v1/search/status', async (req, res) => {
+  try {
+    const status = {
+      engineInitialized: !!searchEngine,
+      cacheEnabled: true,
+      databaseConnected: !!dbLoader.supabase,
+      searchAvailable: true
+    };
+
+    res.json(status);
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to get search status',
+      message: error.message
+    });
+  }
+});
+
+// Clear search cache endpoint (admin)
+app.post('/api/v1/search/cache/clear', async (req, res) => {
+  try {
+    if (searchEngine) {
+      searchEngine.clearCache();
+    }
+
+    res.json({
+      success: true,
+      message: 'Search cache cleared'
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to clear cache',
+      message: error.message
+    });
+  }
+});
 
 // SDIP/DirectiveLab API endpoints
 app.post('/api/sdip/submit', async (req, res) => {
@@ -589,6 +948,256 @@ app.get('/api/backlog/strategic-directives-with-items', async (req, res) => {
   }
 });
 
+// Simple in-memory cache for backlog summaries (1 hour TTL)
+const summaryCache = new Map();
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour in milliseconds
+
+// Get AI-generated backlog summary for a strategic directive
+app.get('/api/strategic-directives/:id/backlog-summary', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const cacheKey = `backlog_summary_${id}`;
+
+    // Check cache first
+    const cached = summaryCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return res.json(cached.data);
+    }
+
+    // Get backlog items for this SD
+    const { data: items, error: itemsError } = await dbLoader.supabase
+      .from('sd_backlog_map')
+      .select('*')
+      .eq('sd_id', id)
+      .order('stage_number', { ascending: true });
+
+    if (itemsError) {
+      throw itemsError;
+    }
+
+    if (!items || items.length === 0) {
+      return res.json({
+        summary: null,
+        item_count: 0,
+        message: "No backlog items found"
+      });
+    }
+
+    // Combine all text fields from backlog items
+    const allText = items.map(item => {
+      const parts = [];
+      if (item.backlog_title) parts.push(`Title: ${item.backlog_title}`);
+      if (item.item_description) parts.push(`Description: ${item.item_description}`);
+      if (item.my_comments) parts.push(`Comments: ${item.my_comments}`);
+      if (item.phase) parts.push(`Phase: ${item.phase}`);
+      if (item.priority) parts.push(`Priority: ${item.priority}`);
+      return parts.join(' | ');
+    }).join('\n\n');
+
+    let summary = null;
+    let ai_generated = false;
+
+    // Try to generate AI summary if OpenAI is available
+    if (openai && allText.trim()) {
+      try {
+        console.log(`🤖 Generating backlog summary for SD ${id}...`);
+
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: "You are a technical project manager. Summarize backlog items in 2-3 clear sentences, focusing on main features, priorities, and scope. Be concise and actionable."
+            },
+            {
+              role: "user",
+              content: `Please summarize these backlog items for a strategic directive:\n\n${allText}`
+            }
+          ],
+          max_tokens: 200,
+          temperature: 0.3
+        });
+
+        summary = completion.choices[0]?.message?.content?.trim();
+        ai_generated = true;
+
+        console.log(`✅ AI summary generated for SD ${id}`);
+
+      } catch (aiError) {
+        console.error('⚠️ OpenAI summarization failed:', aiError.message);
+
+        // Fallback to simple text summary
+        const titles = items.map(item => item.backlog_title).filter(Boolean);
+        const priorities = [...new Set(items.map(item => item.priority).filter(Boolean))];
+
+        summary = `${items.length} backlog items including: ${titles.slice(0, 3).join(', ')}${titles.length > 3 ? '...' : ''}. Priority levels: ${priorities.join(', ')}.`;
+        ai_generated = false;
+      }
+    } else {
+      // Fallback summary when OpenAI not available
+      const titles = items.map(item => item.backlog_title).filter(Boolean);
+      const priorities = [...new Set(items.map(item => item.priority).filter(Boolean))];
+
+      summary = `${items.length} backlog items including: ${titles.slice(0, 3).join(', ')}${titles.length > 3 ? '...' : ''}. Priority levels: ${priorities.join(', ')}.`;
+      ai_generated = false;
+    }
+
+    const result = {
+      summary,
+      ai_generated,
+      item_count: items.length,
+      generated_at: new Date().toISOString()
+    };
+
+    // Cache the result
+    summaryCache.set(cacheKey, {
+      data: result,
+      timestamp: Date.now()
+    });
+
+    res.json(result);
+
+  } catch (error) {
+    console.error('API Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Reorder strategic directives by updating execution_order
+app.patch('/api/strategic-directives/:id/reorder', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { direction } = req.body;
+
+    if (!['up', 'down'].includes(direction)) {
+      return res.status(400).json({ error: 'Direction must be "up" or "down"' });
+    }
+
+    // Get all strategic directives sorted by current order
+    const { data: allSDs, error: fetchError } = await dbLoader.supabase
+      .from('strategic_directives_v2')
+      .select('id, execution_order, title, priority')
+      .order('execution_order', { ascending: true, nullsFirst: true })
+      .order('priority', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (fetchError) {
+      throw fetchError;
+    }
+
+    // First, ensure all SDs have execution_order values
+    // If any are null, assign them sequential values
+    let needsInitialization = false;
+    const updateData = [];
+
+    allSDs.forEach((sd, index) => {
+      if (sd.execution_order === null || sd.execution_order === undefined) {
+        needsInitialization = true;
+        const newOrder = index + 1;
+        updateData.push({
+          id: sd.id,
+          newOrder: newOrder
+        });
+        sd.execution_order = newOrder; // Update local copy for later use
+      }
+    });
+
+    // Apply initialization updates if needed
+    if (needsInitialization) {
+      console.log(`Initializing execution_order for ${updateData.length} strategic directives`);
+
+      // Execute all initialization updates properly
+      for (const update of updateData) {
+        const { data, error } = await dbLoader.supabase
+          .from('strategic_directives_v2')
+          .update({ execution_order: update.newOrder })
+          .eq('id', update.id);
+
+        if (error) {
+          console.error(`Error initializing execution_order for ${update.id}:`, error);
+          throw error;
+        }
+        console.log(`Initialized ${update.id} with execution_order: ${update.newOrder}`);
+      }
+
+      // Re-sort the array after initialization to ensure correct order
+      allSDs.sort((a, b) => a.execution_order - b.execution_order);
+    }
+
+    // Find the current SD and its position
+    const currentIndex = allSDs.findIndex(sd => sd.id === id);
+
+    if (currentIndex === -1) {
+      return res.status(404).json({ error: 'Strategic directive not found' });
+    }
+
+    // Determine the target index based on direction
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+    // Check boundaries
+    if (targetIndex < 0 || targetIndex >= allSDs.length) {
+      return res.status(400).json({ error: `Cannot move ${direction} - at boundary` });
+    }
+
+    // Get the two SDs to swap
+    const currentSD = allSDs[currentIndex];
+    const targetSD = allSDs[targetIndex];
+
+    console.log(`Swapping ${currentSD.id} (order: ${currentSD.execution_order}) with ${targetSD.id} (order: ${targetSD.execution_order})`);
+
+    // Swap execution_order values - execute updates properly
+    const { data: data1, error: error1 } = await dbLoader.supabase
+      .from('strategic_directives_v2')
+      .update({ execution_order: targetSD.execution_order })
+      .eq('id', currentSD.id);
+
+    if (error1) {
+      console.error(`Error updating ${currentSD.id}:`, error1);
+      throw error1;
+    }
+    console.log(`Updated ${currentSD.id} to execution_order: ${targetSD.execution_order}`);
+
+    const { data: data2, error: error2 } = await dbLoader.supabase
+      .from('strategic_directives_v2')
+      .update({ execution_order: currentSD.execution_order })
+      .eq('id', targetSD.id);
+
+    if (error2) {
+      console.error(`Error updating ${targetSD.id}:`, error2);
+      throw error2;
+    }
+    console.log(`Updated ${targetSD.id} to execution_order: ${currentSD.execution_order}`);
+
+    // Broadcast update to all connected clients
+    broadcastUpdate('sd-reordered', {
+      movedId: id,
+      direction,
+      swappedWithId: targetSD.id
+    });
+
+    // Return updated strategic directives list
+    const updatedSDs = await dbLoader.loadStrategicDirectives();
+
+    // Update dashboard state
+    dashboardState.strategicDirectives = updatedSDs;
+
+    // Broadcast the update to all WebSocket clients
+    broadcastUpdate('sd-reordered', {
+      strategicDirectives: updatedSDs
+    });
+
+    res.json({
+      success: true,
+      strategicDirectives: updatedSDs,
+      message: `Strategic directive moved ${direction}`
+    });
+
+  } catch (error) {
+    console.error('Error reordering strategic directive:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get PRD by SD ID
 app.get('/api/prd/:sd_id', async (req, res) => {
   try {
@@ -920,6 +1529,13 @@ app.post('/api/github/pr-review-webhook', async (req, res) => {
 });
 
 // =============================================================================
+// OPPORTUNITY MANAGEMENT API ROUTES (SD-1A)
+// =============================================================================
+
+// Register all opportunity routes
+app.use('/api', opportunitiesRouter);
+
+// =============================================================================
 // STORY API ROUTES
 // =============================================================================
 
@@ -1051,11 +1667,66 @@ if (dbLoader.isConnected && realtimeManager.isConnected) {
 }
 
 // =============================================================================
+// DATABASE MIGRATION
+// =============================================================================
+
+async function checkNavigationShortcutsSchema() {
+  if (!dbLoader.isConnected) {
+    console.log('⚠️ Database not connected - navigation shortcuts will use localStorage fallback');
+    return false;
+  }
+
+  try {
+    console.log('🔍 Checking navigation shortcuts database schema...');
+
+    // Test if navigation_shortcuts table exists by querying it
+    const { data, error } = await dbLoader.supabase
+      .from('navigation_shortcuts')
+      .select('id')
+      .limit(1);
+
+    if (error) {
+      console.log('📋 Navigation shortcuts tables not found');
+      console.log('💡 To enable database persistence:');
+      console.log('   1. Run: node scripts/setup-navigation-shortcuts-db.js');
+      console.log('   2. Execute the SQL in Supabase Dashboard');
+      console.log('   3. Restart the server');
+      console.log('⚡ Using localStorage fallback for now');
+      return false;
+    } else {
+      console.log('✅ Navigation shortcuts database schema ready');
+
+      // Test if we can call the database functions
+      try {
+        const { data: testData, error: funcError } = await dbLoader.supabase
+          .rpc('get_user_shortcuts');
+
+        if (funcError) {
+          console.log('⚠️ Database functions not available, using localStorage fallback');
+          return false;
+        } else {
+          console.log('✅ Database functions ready, full persistence enabled');
+          return true;
+        }
+      } catch (funcErr) {
+        console.log('⚠️ Database functions test failed, using localStorage fallback');
+        return false;
+      }
+    }
+  } catch (err) {
+    console.log('⚠️ Database schema check failed:', err.message);
+    console.log('⚡ Using localStorage fallback');
+    return false;
+  }
+}
+
+// =============================================================================
 // SERVER STARTUP
 // =============================================================================
 
 async function startServer() {
   await loadState();
+  const dbSchemaReady = await checkNavigationShortcutsSchema();
 
   // Initialize STORY agent if enabled
   if (process.env.FEATURE_STORY_AGENT === 'true') {

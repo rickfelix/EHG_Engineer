@@ -41,7 +41,7 @@ async function completeStrategicDirective(sdId) {
     const { data: sdUpdate, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .update({
-        status: 'archived', // MUST be 'archived' for completion
+        status: 'completed', // MUST be 'completed' for completion
         metadata: {
           lead_status: 'complete',
           plan_status: 'complete', 

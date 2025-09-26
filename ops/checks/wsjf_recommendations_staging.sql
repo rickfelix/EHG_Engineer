@@ -18,36 +18,59 @@ FROM strategic_directives_v2 s
 LEFT JOIN v_vh_governance_snapshot gs ON gs.sd_id = s.id;
 
 -- PRD metrics per SD (handle both sd_id and directive_id columns)
-CREATE TEMP TABLE _prd_metrics AS
-WITH prd_unified AS (
-  SELECT p.*,
-         -- Dynamically determine which column exists and use it
-         CASE
-           WHEN EXISTS (SELECT 1 FROM information_schema.columns
-                       WHERE table_name='product_requirements_v2'
-                       AND column_name='sd_id')
-           THEN (SELECT p2.sd_id::text FROM product_requirements_v2 p2 WHERE p2.id = p.id)
-           WHEN EXISTS (SELECT 1 FROM information_schema.columns
-                       WHERE table_name='product_requirements_v2'
-                       AND column_name='directive_id')
-           THEN p.directive_id::text
-           ELSE NULL
-         END AS sd_id_unified
-  FROM product_requirements_v2 p
-)
-SELECT prd.sd_id_unified AS sd_id,
-       AVG(NULLIF(prd.completeness_score,0))                 AS prd_completeness_avg,  -- 0..100
-       AVG(CASE lower(prd.risk_rating)
-             WHEN 'low' THEN 0
-             WHEN 'medium' THEN 0.5
-             WHEN 'high' THEN 1
-             ELSE 0.5 END)                                       AS prd_risk_avg           -- 0..1
-FROM prd_unified prd
-WHERE prd.sd_id_unified IS NOT NULL
-GROUP BY prd.sd_id_unified;
+DO $$
+DECLARE
+  sd_col text;
+  comp_col text;
+  risk_expr text;
+  query text;
+BEGIN
+  -- Determine which SD column exists
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name='product_requirements_v2' AND column_name='sd_id') THEN
+    sd_col := 'sd_id';
+  ELSIF EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_name='product_requirements_v2' AND column_name='directive_id') THEN
+    sd_col := 'directive_id';
+  ELSE
+    sd_col := 'NULL';
+  END IF;
+
+  -- Determine which completeness column exists
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name='product_requirements_v2' AND column_name='completeness_score') THEN
+    comp_col := 'NULLIF(completeness_score,0)';
+  ELSIF EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_name='product_requirements_v2' AND column_name='confidence_score') THEN
+    comp_col := 'NULLIF(confidence_score::numeric,0)';
+  ELSE
+    comp_col := '0';
+  END IF;
+
+  -- Determine risk expression
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name='product_requirements_v2' AND column_name='risk_rating') THEN
+    risk_expr := 'CASE lower(risk_rating) WHEN ''low'' THEN 0 WHEN ''medium'' THEN 0.5 WHEN ''high'' THEN 1 ELSE 0.5 END';
+  ELSE
+    risk_expr := '0.5';
+  END IF;
+
+  -- Build and execute dynamic query
+  query := format('
+    CREATE TEMP TABLE _prd_metrics AS
+    SELECT %s::text AS sd_id,
+           AVG(%s) AS prd_completeness_avg,
+           AVG(%s) AS prd_risk_avg
+    FROM product_requirements_v2
+    WHERE %s IS NOT NULL
+    GROUP BY %s',
+    sd_col, comp_col, risk_expr, sd_col, sd_col);
+
+  EXECUTE query;
+END $$;
 
 -- Story AC coverage per SD (if a stories table exists). We try vh_user_stories first.
-DO $
+DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_catalog.pg_tables WHERE tablename='vh_user_stories') THEN
     CREATE TEMP TABLE _stories_norm AS
@@ -66,78 +89,106 @@ BEGIN
   ELSE
     CREATE TEMP TABLE _stories_norm (story_id uuid, prd_id uuid, sd_id uuid, ac_json text);
   END IF;
-END $;
+END $$;
 
-CREATE TEMP TABLE _ac_by_sd AS
-WITH prd_unified AS (
-  SELECT p.id,
-         CASE
-           WHEN EXISTS (SELECT 1 FROM information_schema.columns
-                       WHERE table_name='product_requirements_v2'
-                       AND column_name='sd_id')
-           THEN (SELECT p2.sd_id::text FROM product_requirements_v2 p2 WHERE p2.id = p.id)
-           WHEN EXISTS (SELECT 1 FROM information_schema.columns
-                       WHERE table_name='product_requirements_v2'
-                       AND column_name='directive_id')
-           THEN p.directive_id::text
-           ELSE NULL
-         END AS sd_id_unified
-  FROM product_requirements_v2 p
-)
-SELECT COALESCE(sn.sd_id::text, prd.sd_id_unified) AS sd_id,
-       COUNT(*)::int AS stories_total,
-       COUNT(*) FILTER (WHERE ac_json IS NOT NULL AND ac_json <> '[]')::int AS stories_with_ac
-FROM _stories_norm sn
-LEFT JOIN prd_unified prd ON prd.id = sn.prd_id
-GROUP BY COALESCE(sn.sd_id::text, prd.sd_id_unified);
+DO $$
+DECLARE
+  sd_col text;
+  query text;
+BEGIN
+  -- Determine which SD column exists
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name='product_requirements_v2' AND column_name='sd_id') THEN
+    sd_col := 'sd_id';
+  ELSIF EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_name='product_requirements_v2' AND column_name='directive_id') THEN
+    sd_col := 'directive_id';
+  ELSE
+    sd_col := 'NULL';
+  END IF;
+
+  query := format('
+    CREATE TEMP TABLE _ac_by_sd AS
+    WITH prd_sd AS (
+      SELECT id, %s::text AS sd_id_unified
+      FROM product_requirements_v2
+    )
+    SELECT COALESCE(sn.sd_id::text, prd.sd_id_unified) AS sd_id,
+           COUNT(*)::int AS stories_total,
+           COUNT(*) FILTER (WHERE ac_json IS NOT NULL AND ac_json <> ''[]'')::int AS stories_with_ac
+    FROM _stories_norm sn
+    LEFT JOIN prd_sd prd ON prd.id = sn.prd_id
+    GROUP BY COALESCE(sn.sd_id::text, prd.sd_id_unified)',
+    sd_col);
+
+  EXECUTE query;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- If _stories_norm doesn't exist or query fails, create empty table
+    CREATE TEMP TABLE _ac_by_sd (sd_id text, stories_total int, stories_with_ac int);
+END $$;
 
 -- Gate pass rate per venture (optional view)
-CREATE TEMP TABLE _gate_by_v AS
-SELECT venture_id,
-       AVG(CASE WHEN lower(gate_met) IN ('t','true','1','yes') THEN 1.0 ELSE 0.0 END) AS gate_pass_rate
-FROM v_vh_stage_progress
-GROUP BY venture_id;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.views WHERE table_name = 'v_vh_stage_progress') THEN
+    CREATE TEMP TABLE _gate_by_v AS
+    SELECT venture_id,
+           AVG(CASE WHEN lower(gate_met) IN ('t','true','1','yes') THEN 1.0 ELSE 0.0 END) AS gate_pass_rate
+    FROM v_vh_stage_progress
+    GROUP BY venture_id;
+  ELSE
+    CREATE TEMP TABLE _gate_by_v (venture_id uuid, gate_pass_rate numeric);
+  END IF;
+END $$;
 
 -- Dependency extraction from sd_backlog_map (handle optional dep columns)
-CREATE TEMP TABLE _deps_acc(backlog_id uuid, dep_value uuid, dep_col text);
+CREATE TEMP TABLE _deps_acc(backlog_id text, dep_value text, dep_col text);
 
-INSERT INTO _deps_acc
-SELECT backlog_id, depends_on, 'depends_on'
-FROM sd_backlog_map
-WHERE EXISTS (
-  SELECT 1 FROM information_schema.columns
-  WHERE table_name='sd_backlog_map' AND column_name='depends_on'
-) AND depends_on IS NOT NULL;
+DO $$
+BEGIN
+  -- Check and insert depends_on if exists
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name='sd_backlog_map' AND column_name='depends_on') THEN
+    INSERT INTO _deps_acc
+    SELECT backlog_id::text, depends_on::text, 'depends_on'
+    FROM sd_backlog_map
+    WHERE depends_on IS NOT NULL;
+  END IF;
 
-INSERT INTO _deps_acc
-SELECT backlog_id, blocked_by, 'blocked_by'
-FROM sd_backlog_map
-WHERE EXISTS (
-  SELECT 1 FROM information_schema.columns
-  WHERE table_name='sd_backlog_map' AND column_name='blocked_by'
-) AND blocked_by IS NOT NULL;
+  -- Check and insert blocked_by if exists
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name='sd_backlog_map' AND column_name='blocked_by') THEN
+    INSERT INTO _deps_acc
+    SELECT backlog_id::text, blocked_by::text, 'blocked_by'
+    FROM sd_backlog_map
+    WHERE blocked_by IS NOT NULL;
+  END IF;
 
-INSERT INTO _deps_acc
-SELECT backlog_id, parent_id, 'parent_id'
-FROM sd_backlog_map
-WHERE EXISTS (
-  SELECT 1 FROM information_schema.columns
-  WHERE table_name='sd_backlog_map' AND column_name='parent_id'
-) AND parent_id IS NOT NULL;
+  -- Check and insert parent_id if exists
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name='sd_backlog_map' AND column_name='parent_id') THEN
+    INSERT INTO _deps_acc
+    SELECT backlog_id::text, parent_id::text, 'parent_id'
+    FROM sd_backlog_map
+    WHERE parent_id IS NOT NULL;
+  END IF;
 
-INSERT INTO _deps_acc
-SELECT backlog_id, predecessor_id, 'predecessor_id'
-FROM sd_backlog_map
-WHERE EXISTS (
-  SELECT 1 FROM information_schema.columns
-  WHERE table_name='sd_backlog_map' AND column_name='predecessor_id'
-) AND predecessor_id IS NOT NULL;
+  -- Check and insert predecessor_id if exists
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name='sd_backlog_map' AND column_name='predecessor_id') THEN
+    INSERT INTO _deps_acc
+    SELECT backlog_id::text, predecessor_id::text, 'predecessor_id'
+    FROM sd_backlog_map
+    WHERE predecessor_id IS NOT NULL;
+  END IF;
+END $$;
 
 CREATE TEMP VIEW _deps AS SELECT * FROM _deps_acc;
 
 -- Map backlog items to SD (for dep degrees)
 CREATE TEMP TABLE _backlog_by_sd AS
-SELECT b.backlog_id, b.sd_id
+SELECT b.backlog_id::text AS backlog_id, b.sd_id::text AS sd_id
 FROM sd_backlog_map b
 WHERE b.sd_id IS NOT NULL;
 
@@ -186,7 +237,7 @@ WITH base AS (
          CASE WHEN stories_total > 0
               THEN (stories_with_ac::numeric / stories_total)
               ELSE NULL END AS ac_cov,
-         NULLIF(m.prd_completeness_avg,0) AS prd_comp_safe
+         NULLIF(COALESCE(m.prd_completeness_avg,0),0) AS prd_comp_safe
   FROM _sd_metrics m
 ),
 norm AS (
@@ -195,7 +246,7 @@ norm AS (
          (1.0 - COALESCE(ac_cov,0.0))::numeric       AS bv_cov_gap,
          (1.0 - COALESCE(gate_pass_rate,0.0))::numeric AS tc_gate,
          COALESCE(prd_risk_avg,0.5)::numeric         AS rr_risk,
-         (1.0 - COALESCE(prd_completeness_avg,0)/100.0)::numeric AS js_incomp,
+         (1.0 - COALESCE(prd_completeness_avg,0.0)/100.0)::numeric AS js_incomp,
          COALESCE(in_deg,0)::numeric                 AS js_in_deg
   FROM base
 ),
@@ -214,7 +265,7 @@ SELECT sd_id, venture_id, current_execution_order,
          '; in_deg=', in_deg,
          '; gate_pass=', to_char(COALESCE(gate_pass_rate,0.0),'FM0.00'),
          '; ac_cov=', to_char(COALESCE(ac_cov,0.0),'FM0.00'),
-         '; prd_comp=', to_char(COALESCE(prd_completeness_avg,0.0),'FM00')
+         '; prd_comp=', to_char(COALESCE(prd_completeness_avg,0.0),'FM90.00')
        ) AS rationale
 FROM score;
 
@@ -239,8 +290,7 @@ SELECT sd_id, venture_id, current_execution_order, wsjf_score, rationale, wsjf_r
        END AS suggested_execution_order
 FROM _ranked;
 
-\copy (
-  SELECT venture_id, sd_id, current_execution_order, suggested_execution_order, wsjf_score, rationale
-  FROM _suggest
-  ORDER BY venture_id NULLS LAST, suggested_execution_order ASC, wsjf_score DESC
-) TO 'ops/checks/out/wsjf_recommendations.csv' WITH CSV HEADER;
+-- Output results (client will handle file writing)
+SELECT venture_id, sd_id, current_execution_order, suggested_execution_order, wsjf_score, rationale
+FROM _suggest
+ORDER BY venture_id NULLS LAST, suggested_execution_order ASC, wsjf_score DESC;

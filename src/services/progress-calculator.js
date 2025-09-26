@@ -29,9 +29,9 @@ class ProgressCalculator {
    * This is the SINGLE SOURCE OF TRUTH for progress calculation
    */
   calculateSDProgress(sd, prd) {
-    // SPECIAL CASE: For archived SDs with metadata completion_percentage = 100,
+    // SPECIAL CASE: For completed SDs with metadata completion_percentage = 100,
     // respect the manual completion percentage (regardless of PRD status)
-    if (sd?.status?.toLowerCase() === 'archived' && sd?.metadata?.completion_percentage === 100) {
+    if (sd?.status?.toLowerCase() === 'completed' && sd?.metadata?.completion_percentage === 100) {
       return {
         phases: {
           LEAD_PLANNING: 100,
@@ -133,11 +133,11 @@ class ProgressCalculator {
   calculatePlanDesignProgress(prd) {
     if (!prd) return 0;
 
-    const planChecklist = prd.plan_checklist || [];
+    const planChecklist = Array.isArray(prd.plan_checklist) ? prd.plan_checklist : [];
     if (planChecklist.length === 0) return 100; // No checklist = considered complete
 
-    const completedItems = planChecklist.filter(item => 
-      (typeof item === 'object' && item.checked) || 
+    const completedItems = planChecklist.filter(item =>
+      (typeof item === 'object' && item.checked) ||
       (typeof item === 'string' && false) // strings default to unchecked
     ).length;
 
@@ -145,14 +145,17 @@ class ProgressCalculator {
   }
 
   getPlanDesignDetails(prd) {
-    const planChecklist = prd.plan_checklist || [];
+    const planChecklist = Array.isArray(prd.plan_checklist) ? prd.plan_checklist : [];
+    const functionalReqs = Array.isArray(prd.functional_requirements) ? prd.functional_requirements : [];
+    const technicalReqs = Array.isArray(prd.technical_requirements) ? prd.technical_requirements : [];
+
     return {
       totalItems: planChecklist.length,
-      completedItems: planChecklist.filter(item => 
+      completedItems: planChecklist.filter(item =>
         typeof item === 'object' && item.checked
       ).length,
-      hasRequirements: prd?.functional_requirements?.length > 0,
-      hasTechnicalSpecs: prd?.technical_requirements?.length > 0
+      hasRequirements: functionalReqs.length > 0,
+      hasTechnicalSpecs: technicalReqs.length > 0
     };
   }
 
@@ -162,11 +165,11 @@ class ProgressCalculator {
   calculateExecImplementationProgress(prd) {
     if (!prd) return 0;
 
-    const execChecklist = prd.exec_checklist || [];
+    const execChecklist = Array.isArray(prd.exec_checklist) ? prd.exec_checklist : [];
     if (execChecklist.length === 0) return 100; // No checklist = considered complete
 
-    const completedItems = execChecklist.filter(item => 
-      (typeof item === 'object' && item.checked) || 
+    const completedItems = execChecklist.filter(item =>
+      (typeof item === 'object' && item.checked) ||
       (typeof item === 'string' && false)
     ).length;
 
@@ -174,10 +177,10 @@ class ProgressCalculator {
   }
 
   getExecImplementationDetails(prd) {
-    const execChecklist = prd.exec_checklist || [];
+    const execChecklist = Array.isArray(prd.exec_checklist) ? prd.exec_checklist : [];
     return {
       totalItems: execChecklist.length,
-      completedItems: execChecklist.filter(item => 
+      completedItems: execChecklist.filter(item =>
         typeof item === 'object' && item.checked
       ).length,
       phase: prd?.phase || 'unknown'
@@ -194,11 +197,11 @@ class ProgressCalculator {
     let verificationItems = [];
 
     // 1. Check direct validation_checklist
-    if (prd.validation_checklist && prd.validation_checklist.length > 0) {
+    if (Array.isArray(prd.validation_checklist) && prd.validation_checklist.length > 0) {
       verificationItems = prd.validation_checklist;
     }
     // 2. Check metadata for verification_checklist (new approach)
-    else if (prd.metadata?.verification_checklist && prd.metadata.verification_checklist.length > 0) {
+    else if (Array.isArray(prd.metadata?.verification_checklist) && prd.metadata.verification_checklist.length > 0) {
       verificationItems = prd.metadata.verification_checklist;
     }
     // 3. Check status-based completion
@@ -208,8 +211,8 @@ class ProgressCalculator {
 
     if (verificationItems.length === 0) return 0; // No verification data
 
-    const completedItems = verificationItems.filter(item => 
-      (typeof item === 'object' && item.checked) || 
+    const completedItems = verificationItems.filter(item =>
+      (typeof item === 'object' && item.checked) ||
       (typeof item === 'string' && false)
     ).length;
 
@@ -217,11 +220,17 @@ class ProgressCalculator {
   }
 
   getPlanVerificationDetails(prd) {
-    let verificationItems = prd.validation_checklist || prd.metadata?.verification_checklist || [];
-    
+    let verificationItems = [];
+
+    if (Array.isArray(prd.validation_checklist)) {
+      verificationItems = prd.validation_checklist;
+    } else if (Array.isArray(prd.metadata?.verification_checklist)) {
+      verificationItems = prd.metadata.verification_checklist;
+    }
+
     return {
       totalItems: verificationItems.length,
-      completedItems: verificationItems.filter(item => 
+      completedItems: verificationItems.filter(item =>
         typeof item === 'object' && item.checked
       ).length,
       status: prd?.status,

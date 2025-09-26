@@ -28,7 +28,7 @@ async function fixSDIPCompletion() {
         const { error: sdError } = await supabase
             .from('strategic_directives_v2')
             .update({
-                status: 'archived',
+                status: 'completed',
                 metadata: {
                     completion_percentage: 100,
                     current_phase: 'COMPLETE',

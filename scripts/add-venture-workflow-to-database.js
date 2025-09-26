@@ -67,7 +67,7 @@ const ventureSD = {
     implementation_status: 'production_ready',
     portfolio_impact: 'critical',
     completed_at: new Date().toISOString(),
-    progress_percentage: 100
+    progress: 100
   },
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),

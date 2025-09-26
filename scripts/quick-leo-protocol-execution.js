@@ -14,13 +14,16 @@ const supabase = createClient(
 );
 
 async function quickLeoProtocolExecution() {
+  console.log('\n⚠️  IMPORTANT NOTICE: Simulation is no longer allowed!');
+  console.log('This script has been updated to require ACTUAL implementation.');
+  console.log('');
   try {
     console.log('\n=== QUICK LEO PROTOCOL v4.1 EXECUTION ===\n');
     
     const sdId = 'SD-003-dashboard';
     const prdId = 'PRD-SD-003-dashboard';
     
-    console.log('🚀 Executing all LEO Protocol phases for tooltip enhancement\n');
+    console.log('🚀 Executing LEO Protocol phases (REAL implementation required)\n');
     
     // PHASE 1: Create minimal PRD (PLAN phase)
     console.log('📋 PHASE 2: PLAN - Creating minimal PRD...');
@@ -88,11 +91,28 @@ async function quickLeoProtocolExecution() {
     
     console.log('  ✅ PRD created successfully');
     
-    // PHASE 2: Mark EXEC as complete (simulated implementation)
-    console.log('⚡ PHASE 3: EXEC - Simulating tooltip implementation...');
-    console.log('  ✅ Tooltip component created (simulated)');
-    console.log('  ✅ Progress indicator integration (simulated)');
-    console.log('  ✅ Hover functionality tested (simulated)');
+    // PHASE 2: EXEC Implementation - ACTUAL IMPLEMENTATION REQUIRED
+    console.log('⚡ PHASE 3: EXEC - Implementation phase...');
+    console.log('  ⚠️  WARNING: This script previously used simulation.');
+    console.log('  ⚠️  ACTUAL IMPLEMENTATION IS NOW REQUIRED.');
+    console.log('  ❌ Cannot proceed without real code implementation.');
+    console.log('');
+    console.log('  Required actions for EXEC:');
+    console.log('  1. Create actual tooltip component files');
+    console.log('  2. Write real integration code');
+    console.log('  3. Add proper test coverage');
+    console.log('  4. Provide implementation evidence');
+
+    // Enforce evidence requirement
+    const ImplementationEvidenceEnforcer = require('./enforce-implementation-evidence.js');
+    const enforcer = new ImplementationEvidenceEnforcer(sdId, prdId);
+    const evidenceResult = await enforcer.enforceEvidence();
+
+    if (evidenceResult.status !== 'approved') {
+      console.log('\n❌ BLOCKED: Cannot proceed without actual implementation');
+      console.log('Missing requirements:', evidenceResult.missingRequirements);
+      process.exit(1);
+    }
     
     // PHASE 3: Mark VERIFICATION as complete
     console.log('🔍 PHASE 4: VERIFICATION - Testing complete...');

@@ -1,0 +1,9 @@
+action,venture_id,stage,urgency,prd_id,sd_id,title,priority,completeness_score,risk_rating,acceptance_criteria_json,notes,sd_key
+create,,,high,,,Vision Gap Analysis Module,high,85,medium,"[""Gap detection for SDs without PRDs"",""Gap detection for PRDs without stories"",""Automated recommendations generation""]",,SD-VISION-001
+create,,,high,,,WSJF Scoring Algorithm,high,80,low,"[""Calculate business value from dependencies"",""Calculate time criticality from gates"",""Calculate risk reduction from coverage"",""Generate execution order proposals""]",,SD-WSJF-001
+create,,,high,,,WSJF Apply Workflow,high,75,medium,"[""Snapshot before state"",""Apply accepted proposals"",""Generate rollback script"",""Create audit trail""]",,SD-WSJF-001
+create,,,high,,,Strategic Directive Schema,high,90,low,"[""SD table with all required fields"",""PRD table with SD linkage"",""Story tables with PRD linkage"",""Unique constraints enforced""]",,SD-GOVERNANCE-001
+create,,,medium,,,Proposals Management System,medium,70,medium,"[""Proposal state machine"",""Acceptance workflow"",""Stale detection"",""Audit logging""]",,SD-GOVERNANCE-001
+create,,,high,,,GitHub Actions Security,high,85,high,"[""Secrets rotation process"",""Concurrency controls"",""Dry-run defaults"",""Triple safety gates""]",,SD-PIPELINE-001
+create,,,high,,,Production Apply Gates,high,80,high,"[""Variable-based enablement"",""Confirmation requirement"",""Rollback capability"",""Audit PR generation""]",,SD-PIPELINE-001
+create,,,medium,,,Metrics Collection Pipeline,medium,65,medium,"[""Collect workflow metrics"",""Track apply success rates"",""Monitor data quality"",""Generate dashboards""]",,SD-MONITORING-001

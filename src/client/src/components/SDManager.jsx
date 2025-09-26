@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  FileText, 
-  ChevronDown, 
-  ChevronRight, 
+import {
+  FileText,
+  ChevronDown,
+  ChevronUp,
+  ChevronRight,
   CheckSquare,
+  GripVertical,
   Square,
   Calendar,
   User,
@@ -22,8 +24,11 @@ import {
   Zap,
   Package,
   Edit3,
+  Edit2,
   X,
-  Sparkles
+  Sparkles,
+  MessageSquare,
+  Loader2
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 // SDAssistant removed - using DirectiveLab instead
@@ -37,15 +42,22 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
   const [selectedSD, setSelectedSD] = useState(null);
   // SDAssistant state removed - using DirectiveLab navigation instead
   const [statusFilter, setStatusFilter] = useState(() => {
-    // Load filter preference from localStorage, default to 'active'
-    return localStorage.getItem('sd-status-filter') || 'active';
+    // Load filter preference from localStorage, default to 'active_draft'
+    return localStorage.getItem('sd-status-filter') || 'active_draft';
   });
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('all');
+  const [targetAppFilter, setTargetAppFilter] = useState('all');
   const [copiedId, setCopiedId] = useState(null);
   const [editingStatus, setEditingStatus] = useState(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(null);
+  const [reorderingId, setReorderingId] = useState(null);
+
+  // Backlog summary state
+  const [backlogSummaries, setBacklogSummaries] = useState({});
+  const [expandedSummaries, setExpandedSummaries] = useState({});
+  const [loadingSummaries, setLoadingSummaries] = useState({});
   
   // Save filter preference when it changes - MUST be before any conditional returns
   useEffect(() => {
@@ -90,20 +102,61 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
   const toggleExpand = (sdId) => {
     setExpandedSD(expandedSD === sdId ? null : sdId);
   };
-  
+
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     setCopiedId(text);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // Fetch backlog summary for an SD
+  const fetchBacklogSummary = async (sdId) => {
+    if (backlogSummaries[sdId] || loadingSummaries[sdId]) {
+      return; // Already have it or currently loading
+    }
+
+    setLoadingSummaries(prev => ({ ...prev, [sdId]: true }));
+
+    try {
+      const response = await fetch(`/api/strategic-directives/${sdId}/backlog-summary`);
+      const data = await response.json();
+
+      if (response.ok) {
+        setBacklogSummaries(prev => ({
+          ...prev,
+          [sdId]: data
+        }));
+      } else {
+        console.error('Failed to fetch backlog summary:', data.error);
+      }
+    } catch (error) {
+      console.error('Error fetching backlog summary:', error);
+    } finally {
+      setLoadingSummaries(prev => ({ ...prev, [sdId]: false }));
+    }
+  };
+
+  // Toggle backlog summary expansion
+  const toggleSummaryExpansion = (sdId) => {
+    const isExpanded = expandedSummaries[sdId];
+
+    if (isExpanded) {
+      setExpandedSummaries(prev => ({ ...prev, [sdId]: false }));
+    } else {
+      setExpandedSummaries(prev => ({ ...prev, [sdId]: true }));
+      // Fetch summary when expanding if not already available
+      fetchBacklogSummary(sdId);
+    }
   };
   
   const clearFilters = () => {
     setSearchQuery('');
     setPriorityFilter('all');
     setStatusFilter('all');
+    setTargetAppFilter('all');
   };
-  
-  const hasActiveFilters = searchQuery || priorityFilter !== 'all' || statusFilter !== 'all';
+
+  const hasActiveFilters = searchQuery || priorityFilter !== 'all' || statusFilter !== 'all' || targetAppFilter !== 'all';
   
   const getPriorityBorderColor = (priority) => {
     switch(priority?.toLowerCase()) {
@@ -130,13 +183,40 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
     }
   };
 
+  const handleReorder = async (sdId, direction) => {
+    setReorderingId(sdId);
+
+    try {
+      const response = await fetch(`/api/strategic-directives/${sdId}/reorder`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ direction })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to reorder');
+      }
+
+      // Refresh the directives list to get updated order
+      if (onRefresh) {
+        await onRefresh();
+      }
+    } catch (error) {
+      console.error('Error reordering strategic directive:', error);
+    } finally {
+      setReorderingId(null);
+    }
+  };
+
   const viewDetail = (sd) => {
     // Navigation guard: Validate SD before navigating
     if (!sd || !sd.id) {
       console.error('Invalid SD for navigation:', sd);
       return;
     }
-    
+
     // Navigate to detail URL instead of just changing state
     try {
       navigate(`/strategic-directives/${sd.id}`);
@@ -158,8 +238,14 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
         </button>
         
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+          {/* SD Code */}
+          <div className="text-primary-600 dark:text-primary-400 font-mono text-lg font-semibold mb-2">
+            {selectedSD.id}
+          </div>
+
+          {/* Title */}
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-            {selectedSD.id}: {selectedSD.title || 'Untitled'}
+            {selectedSD.title || 'Untitled'}
           </h1>
           
           {/* Metadata */}
@@ -339,10 +425,17 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
     // Status filter
     let statusMatch = true;
     if (statusFilter !== 'all') {
-      if (statusFilter === 'active') statusMatch = sd.status?.toLowerCase() === 'active';
-      if (statusFilter === 'draft') statusMatch = sd.status?.toLowerCase() === 'draft';
-      if (statusFilter === 'superseded') statusMatch = sd.status?.toLowerCase() === 'superseded';
-      if (statusFilter === 'archived') statusMatch = sd.status?.toLowerCase() === 'archived';
+      if (statusFilter === 'active_draft') {
+        statusMatch = sd.status?.toLowerCase() === 'active' || sd.status?.toLowerCase() === 'draft';
+      } else if (statusFilter === 'active') {
+        statusMatch = sd.status?.toLowerCase() === 'active';
+      } else if (statusFilter === 'draft') {
+        statusMatch = sd.status?.toLowerCase() === 'draft';
+      } else if (statusFilter === 'superseded') {
+        statusMatch = sd.status?.toLowerCase() === 'superseded';
+      } else if (statusFilter === 'completed') {
+        statusMatch = sd.status?.toLowerCase() === 'completed';
+      }
     }
     
     // Search filter
@@ -360,50 +453,68 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
     if (priorityFilter !== 'all') {
       priorityMatch = sd.priority?.toLowerCase() === priorityFilter.toLowerCase();
     }
-    
-    return statusMatch && searchMatch && priorityMatch;
+
+    // Target Application filter
+    let targetAppMatch = true;
+    if (targetAppFilter !== 'all') {
+      if (targetAppFilter === 'ehg_engineer') {
+        targetAppMatch = sd.target_application === 'EHG_ENGINEER';
+      } else if (targetAppFilter === 'ehg') {
+        targetAppMatch = sd.target_application === 'EHG' || !sd.target_application;
+      }
+    }
+
+    return statusMatch && searchMatch && priorityMatch && targetAppMatch;
   });
   
-  // Sort directives by sequence_rank first, then by ID
+  // Sort directives by execution_order (set by WSJF scoring)
   const sortedDirectives = [...filteredDirectives].sort((a, b) => {
-    // First sort by sequence_rank if it exists (lower numbers first)
+    // Primary sort by execution_order if it exists
+    if (a.execution_order !== undefined && b.execution_order !== undefined) {
+      return a.execution_order - b.execution_order;
+    }
+    // If only one has execution_order, put it first
+    if (a.execution_order !== undefined) return -1;
+    if (b.execution_order !== undefined) return 1;
+
+    // Secondary sort by sequence_rank if it exists
     if (a.sequence_rank !== undefined && b.sequence_rank !== undefined) {
       return a.sequence_rank - b.sequence_rank;
     }
-    // If only one has sequence_rank, put it first
     if (a.sequence_rank !== undefined) return -1;
     if (b.sequence_rank !== undefined) return 1;
-    
-    // Fallback to ID-based sorting for SDs without sequence_rank
+
+    // Tertiary fallback to ID-based sorting
     const getNumericId = (id) => {
       if (!id) return 999999;
       const match = id.match(/SD-(\d+)/);
       return match ? parseInt(match[1], 10) : 999999;
     };
-    
+
     const aNum = getNumericId(a.id);
     const bNum = getNumericId(b.id);
-    
+
     return aNum - bNum;
   });
 
   const getFilterLabel = () => {
     switch (statusFilter) {
+      case 'active_draft': return 'Active & Draft';
       case 'active': return 'Active Only';
       case 'draft': return 'Draft Only';
       case 'superseded': return 'Superseded Only';
-      case 'archived': return 'Archived Only';
+      case 'completed': return 'Completed Only';
       case 'all': return 'All Directives';
-      default: return 'Active Only';
+      default: return 'Active & Draft';
     }
   };
 
   const getStatusBadge = (status) => {
-    if (status?.toLowerCase() === 'archived') {
+    if (status?.toLowerCase() === 'completed') {
       return (
-        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 transition-all duration-200 hover:scale-105">
-          <Package className="w-3 h-3 mr-1" />
-          Archived
+        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-700 dark:text-green-300 transition-all duration-200 hover:scale-105">
+          <CheckSquare className="w-3 h-3 mr-1" />
+          Completed
         </span>
       );
     } else if (status?.toLowerCase() === 'draft') {
@@ -433,27 +544,100 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
     <div className={isCompact ? 'p-3' : 'p-6'}>
       {/* SDAssistant removed - now navigating to DirectiveLab */}
       
-      <div className={isCompact ? 'mb-3' : 'mb-6'}>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className={`${isCompact ? 'text-2xl' : 'text-3xl'} font-bold text-gray-900 dark:text-white flex items-center`}>
-              <Sparkles className="w-6 h-6 mr-2 text-primary-500 animate-pulse" />
-              Strategic Directives
-            </h1>
-            <p className={`text-gray-600 dark:text-gray-400 ${isCompact ? 'text-sm mt-1' : 'mt-2'}`}>
-              Showing {filteredDirectives.length} of {strategicDirectives.length} directives
+      <div className="space-y-4 mb-6">
+        {/* Page Header Section */}
+        <div className="flex items-start justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-6 h-6 text-primary-500 animate-pulse" />
+              <h1 className={`${isCompact ? 'text-2xl' : 'text-3xl'} font-bold text-gray-900 dark:text-white`}>
+                Strategic Directives
+              </h1>
+            </div>
+            <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+              <span>
+                Showing {filteredDirectives.length} of {strategicDirectives.length} directives
+              </span>
               {filteredDirectives.filter(sd => sd.rolled_triage).length > 0 && (
-                <span className="ml-2">
-                  ({filteredDirectives.filter(sd => sd.rolled_triage === 'High').length}H /
-                  {filteredDirectives.filter(sd => sd.rolled_triage === 'Medium').length}M /
-                  {filteredDirectives.filter(sd => sd.rolled_triage === 'Low').length}L /
-                  {filteredDirectives.filter(sd => sd.rolled_triage === 'Future').length}F)
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                  <span className="font-medium">
+                    {filteredDirectives.filter(sd => sd.rolled_triage === 'High').length}H /
+                    {filteredDirectives.filter(sd => sd.rolled_triage === 'Medium').length}M /
+                    {filteredDirectives.filter(sd => sd.rolled_triage === 'Low').length}L /
+                    {filteredDirectives.filter(sd => sd.rolled_triage === 'Future').length}F
+                  </span>
+                </div>
               )}
-            </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Filter Dropdown */}
+            <SmartRefreshButton onRefresh={onRefresh} className={isCompact ? 'p-1.5' : 'p-2'} />
+            <button
+              onClick={() => navigate('/directive-lab')}
+              className={`flex items-center gap-2 ${isCompact ? 'px-3 py-1.5 text-sm' : 'px-4 py-2'} bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors`}
+            >
+              <Plus className={`${isCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
+              New Directive
+            </button>
+          </div>
+        </div>
+
+        {/* Status Bar Section */}
+        <div className="w-full">
+          {(() => {
+            const currentSDData = strategicDirectives.find(sd => sd.id === currentSD);
+            const isCurrentSDCompleted = currentSDData?.status?.toLowerCase() === 'completed';
+
+            if (currentSD && !isCurrentSDCompleted) {
+              // Show active work status (purple)
+              return (
+                <div className="w-full p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg flex items-center transition-all duration-200">
+                  <Zap className="w-4 h-4 mr-2 text-purple-600 dark:text-purple-400 animate-pulse" />
+                  <span className="text-purple-700 dark:text-purple-300 font-medium">
+                    Currently Working On: {currentSDData?.title || currentSD}
+                  </span>
+                </div>
+              );
+            } else {
+              // Show "select new directive" status (green)
+              return (
+                <div className="w-full p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg flex items-center transition-all duration-200">
+                  <Target className="w-4 h-4 mr-2 text-green-600 dark:text-green-400" />
+                  <span className="text-green-700 dark:text-green-300 font-medium">
+                    Select a new strategic directive to work on
+                  </span>
+                </div>
+              );
+            }
+          })()}
+        </div>
+
+        {/* Search and Filter Controls Section */}
+        <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center">
+          {/* Search Input - Full width on mobile, flex-1 on desktop */}
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search strategic directives..."
+              className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Filter Controls Group */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Status Filter Dropdown */}
             <div className="relative">
               <button
                 onClick={() => setShowFilterDropdown(!showFilterDropdown)}
@@ -463,10 +647,25 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                 {getFilterLabel()}
                 <ChevronDown className={`${isCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
               </button>
-              
+
               {showFilterDropdown && (
                 <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
                   <div className="py-1">
+                    <button
+                      onClick={() => {
+                        setStatusFilter('active_draft');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between ${
+                        statusFilter === 'active_draft' ? 'bg-gray-50 dark:bg-gray-700/50 text-primary-600 dark:text-primary-400' : 'text-gray-700 dark:text-gray-200'
+                      }`}
+                    >
+                      <span className="flex items-center">
+                        <Activity className="w-4 h-4 mr-2" />
+                        Active & Draft
+                      </span>
+                      {statusFilter === 'active_draft' && <CheckSquare className="w-4 h-4" />}
+                    </button>
                     <button
                       onClick={() => {
                         setStatusFilter('all');
@@ -530,91 +729,87 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                     </button>
                     <button
                       onClick={() => {
-                        setStatusFilter('archived');
+                        setStatusFilter('completed');
                         setShowFilterDropdown(false);
                       }}
                       className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between ${
-                        statusFilter === 'archived' ? 'bg-gray-50 dark:bg-gray-700/50 text-primary-600 dark:text-primary-400' : 'text-gray-700 dark:text-gray-200'
+                        statusFilter === 'completed' ? 'bg-gray-50 dark:bg-gray-700/50 text-primary-600 dark:text-primary-400' : 'text-gray-700 dark:text-gray-200'
                       }`}
                     >
                       <span className="flex items-center">
-                        <Package className="w-4 h-4 mr-2" />
-                        Archived Only
+                        <CheckSquare className="w-4 h-4 mr-2" />
+                        Completed Only
                       </span>
-                      {statusFilter === 'archived' && <CheckSquare className="w-4 h-4" />}
+                      {statusFilter === 'completed' && <CheckSquare className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
               )}
             </div>
-            
-            {/* Refresh Button */}
-            <SmartRefreshButton
-              onRefresh={onRefresh}
-              isCompact={isCompact}
-            />
-            
-            {/* New Directive Button - Navigate to Directive Lab */}
-            <button
-              onClick={() => navigate('/directive-lab?mode=quick')}
-              className={`flex items-center ${isCompact ? 'px-3 py-1.5 text-sm' : 'px-4 py-2'} bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors`}
-            >
-              <Wand2 className={`${isCompact ? 'w-4 h-4' : 'w-5 h-5'} mr-2`} />
-              New Directive
-            </button>
-          </div>
-        </div>
-        
-        {/* Search Bar and Quick Filters */}
-        <div className="mt-4 space-y-3">
-          {/* Search Bar */}
-          <div className="relative">
-            <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 ${isCompact ? 'w-4 h-4' : 'w-5 h-5'}`} />
-            <input
-              type="text"
-              placeholder="Search by ID, title, or description..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full ${isCompact ? 'pl-9 pr-3 py-1.5 text-sm' : 'pl-10 pr-4 py-2'} bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200`}
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              >
-                <X className={`${isCompact ? 'w-4 h-4' : 'w-5 h-5'}`} />
-              </button>
-            )}
-          </div>
-          
-          {/* Quick Priority Filters */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`${isCompact ? 'text-xs' : 'text-sm'} text-gray-600 dark:text-gray-400 mr-2`}>Priority:</span>
-            {['all', 'critical', 'high', 'medium', 'low'].map((priority) => (
-              <button
-                key={priority}
-                onClick={() => setPriorityFilter(priority)}
-                className={`${isCompact ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'} rounded-full transition-all duration-200 ${
-                  priorityFilter === priority
-                    ? priority === 'critical' ? 'bg-red-500 text-white' :
-                      priority === 'high' ? 'bg-orange-500 text-white' :
-                      priority === 'medium' ? 'bg-yellow-500 text-white' :
-                      priority === 'low' ? 'bg-gray-500 text-white' :
-                      'bg-primary-500 text-white'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                }`}
-              >
-                {priority.charAt(0).toUpperCase() + priority.slice(1)}
-              </button>
-            ))}
-            
+
+            {/* Priority Filter Pills */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-gray-600 dark:text-gray-400">Priority:</span>
+              {['all', 'critical', 'high', 'medium', 'low'].map((priority) => (
+                <button
+                  key={priority}
+                  onClick={() => setPriorityFilter(priority)}
+                  className={`px-2 py-1 text-xs rounded-full transition-all duration-200 ${
+                    priorityFilter === priority
+                      ? priority === 'critical' ? 'bg-red-500 text-white' :
+                        priority === 'high' ? 'bg-orange-500 text-white' :
+                        priority === 'medium' ? 'bg-yellow-500 text-white' :
+                        priority === 'low' ? 'bg-gray-500 text-white' :
+                        'bg-primary-500 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            {/* Target Application Filter */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-gray-600 dark:text-gray-400">Target:</span>
+              {[
+                { value: 'all', label: 'All', icon: '📱' },
+                { value: 'ehg_engineer', label: 'EHG_Engineer', icon: '🛠️' },
+                { value: 'ehg', label: 'EHG', icon: '🚀' }
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setTargetAppFilter(option.value)}
+                  className={`px-2 py-1 text-xs rounded-full transition-all duration-200 flex items-center gap-1 ${
+                    targetAppFilter === option.value
+                      ? option.value === 'ehg_engineer'
+                        ? 'bg-purple-500 text-white'
+                        : option.value === 'ehg'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-primary-500 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                  title={
+                    option.value === 'ehg_engineer'
+                      ? 'LEO Protocol development platform'
+                      : option.value === 'ehg'
+                      ? 'Business application features'
+                      : 'Show all strategic directives'
+                  }
+                >
+                  <span>{option.icon}</span>
+                  {option.label}
+                </button>
+              ))}
+            </div>
+
             {/* Clear Filters Button */}
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
-                className={`ml-auto ${isCompact ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'} bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full hover:bg-red-200 dark:hover:bg-red-900/50 transition-all duration-200 flex items-center gap-1`}
+                className="px-3 py-1 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full hover:bg-red-200 dark:hover:bg-red-900/50 transition-all duration-200 flex items-center gap-1"
               >
-                <X className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'}`} />
+                <X className="w-3 h-3" />
                 Clear Filters
               </button>
             )}
@@ -638,169 +833,185 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
               key={sd.id}
               className={`bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 ${getPriorityBorderColor(sd.priority)}`}
             >
-              <div className={`${isCompact ? 'p-3' : 'p-6'} relative`}>
+              <div className={`${isCompact ? 'p-3' : 'p-6'} relative group`}>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center">
-                      <button
-                        onClick={() => toggleExpand(sd.id)}
-                        className="mr-2 p-1 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-primary-100 dark:hover:bg-primary-900/20 text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-all duration-200 transform hover:scale-105"
-                        aria-label={expandedSD === sd.id ? 'Collapse' : 'Expand'}
-                      >
-                        <ChevronRight 
-                          className={`w-4 h-4 transition-transform duration-200 ease-in-out ${
-                            expandedSD === sd.id ? 'rotate-90' : ''
-                          }`} 
-                        />
-                      </button>
-                      <h2 className={`${isCompact ? 'text-base' : 'text-xl'} font-semibold text-gray-900 dark:text-white`}>
-                        {sd.sequence_rank && (
-                          <span className="text-xs font-medium px-1.5 py-0.5 mr-2 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400 rounded">
-                            #{sd.sequence_rank}
-                          </span>
-                        )}
-                        <span className="inline-flex items-center group">
-                          <span className="text-primary-600 dark:text-primary-400 font-mono mr-1">{sd.id}</span>
+                      {/* Reorder Control Zone - Enhanced Visibility */}
+                      <div className="flex items-center mr-3">
+                        {/* Grip Handle */}
+                        <div className="text-gray-400 dark:text-gray-500 mr-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-grab active:cursor-grabbing">
+                          <GripVertical className="w-5 h-5" />
+                        </div>
+
+                        {/* Reorder Buttons - Always Visible with Enhanced Styling */}
+                        <div className="flex flex-col gap-1 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg p-1">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              copyToClipboard(sd.id);
+                              handleReorder(sd.id, 'up');
                             }}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded ml-1 mr-2"
-                            title="Copy ID"
+                            disabled={sortedDirectives.indexOf(sd) === 0 || reorderingId === sd.id}
+                            className={`p-2 rounded-md transition-all duration-200 ${
+                              sortedDirectives.indexOf(sd) === 0 || reorderingId === sd.id
+                                ? 'opacity-40 cursor-not-allowed bg-gray-100 dark:bg-gray-800'
+                                : 'bg-white dark:bg-gray-700 hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:shadow-md border border-transparent hover:border-primary-200 dark:hover:border-primary-700'
+                            }`}
+                            aria-label="Move up in priority"
+                            title="Move up"
                           >
-                            {copiedId === sd.id ? (
-                              <CheckSquare className="w-3 h-3 text-green-500" />
-                            ) : (
-                              <Copy className="w-3 h-3 text-gray-500" />
-                            )}
+                            <ChevronUp className={`w-5 h-5 ${
+                              sortedDirectives.indexOf(sd) === 0 || reorderingId === sd.id
+                                ? 'text-gray-400 dark:text-gray-600'
+                                : 'text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400'
+                            }`} />
                           </button>
-                          <span className="text-gray-600 dark:text-gray-400 mr-2">:</span>
-                        </span>
-                        <span className={isCompact ? 'line-clamp-1' : ''}>{sd.title || 'Untitled'}</span>
-                      </h2>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleReorder(sd.id, 'down');
+                            }}
+                            disabled={sortedDirectives.indexOf(sd) === sortedDirectives.length - 1 || reorderingId === sd.id}
+                            className={`p-2 rounded-md transition-all duration-200 ${
+                              sortedDirectives.indexOf(sd) === sortedDirectives.length - 1 || reorderingId === sd.id
+                                ? 'opacity-40 cursor-not-allowed bg-gray-100 dark:bg-gray-800'
+                                : 'bg-white dark:bg-gray-700 hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:shadow-md border border-transparent hover:border-primary-200 dark:hover:border-primary-700'
+                            }`}
+                            aria-label="Move down in priority"
+                            title="Move down"
+                          >
+                            <ChevronDown className={`w-5 h-5 ${
+                              sortedDirectives.indexOf(sd) === sortedDirectives.length - 1 || reorderingId === sd.id
+                                ? 'text-gray-400 dark:text-gray-600'
+                                : 'text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400'
+                            }`} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Expand Button */}
+                      <button
+                        onClick={() => toggleExpand(sd.id)}
+                        className="mr-3 p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-primary-100 dark:hover:bg-primary-900/20 text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-all duration-200 transform hover:scale-110"
+                        aria-label={expandedSD === sd.id ? 'Collapse details' : 'Expand details'}
+                      >
+                        <ChevronRight
+                          className={`w-5 h-5 transition-transform duration-200 ease-in-out ${
+                            expandedSD === sd.id ? 'rotate-90' : ''
+                          }`}
+                        />
+                      </button>
+
+                      {/* Title Section */}
+                      <div className="flex-1">
+                        {/* SD Code Line */}
+                        <div className="flex items-center mb-1">
+                          {/* Execution Order Badge - Enhanced */}
+                          {sd.execution_order && (
+                            <span className="inline-flex items-center mr-2">
+                              <span className="text-sm font-bold px-2.5 py-1 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-md shadow-md" title={`Execution order (WSJF Score: ${sd.metadata?.wsjf_score || 'N/A'})`}>
+                                #{sd.execution_order}
+                              </span>
+                            </span>
+                          )}
+
+                          {/* Loading state during reorder */}
+                          {reorderingId === sd.id && (
+                            <span className="inline-flex items-center mr-2">
+                              <span className="px-2.5 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-md text-sm font-medium animate-pulse shadow-sm">
+                                <Loader2 className="w-4 h-4 inline mr-1 animate-spin" />
+                                Updating...
+                              </span>
+                            </span>
+                          )}
+                          <span className="inline-flex items-center group">
+                            <span className="text-primary-600 dark:text-primary-400 font-mono text-sm font-semibold">{sd.id}</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                copyToClipboard(sd.id);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded ml-1"
+                              title="Copy ID"
+                            >
+                              {copiedId === sd.id ? (
+                                <CheckSquare className="w-3 h-3 text-green-500" />
+                              ) : (
+                                <Copy className="w-3 h-3 text-gray-500" />
+                              )}
+                            </button>
+                          </span>
+                        </div>
+
+                        {/* Title Line */}
+                        <h2 className={`${isCompact ? 'text-base' : 'text-xl'} font-semibold text-gray-900 dark:text-white ${isCompact ? 'line-clamp-1' : ''}`}>
+                          {sd.title || 'Untitled'}
+                        </h2>
+                      </div>
                     </div>
                     
-                    <div className={`${isCompact ? 'mt-2 gap-1' : 'mt-3 gap-2'} flex flex-wrap items-center`}>
-                      {/* Status badge with edit capability */}
-                      <div className="relative inline-block">
+                    {/* Keep only metadata badges on left side - all other attributes moved to right */}
+                    {(sd.metadata?.Owner || sd.metadata?.Date) && (
+                      <div className={`${isCompact ? 'mt-2 gap-1' : 'mt-3 gap-2'} flex flex-wrap items-center`}>
+                        {sd.metadata.Owner && (
+                          <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 rounded flex items-center">
+                            <User className="w-3 h-3 mr-1" />
+                            {sd.metadata.Owner}
+                          </span>
+                        )}
+                        {sd.metadata.Date && (
+                          <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 rounded flex items-center">
+                            <Calendar className="w-3 h-3 mr-1" />
+                            {sd.metadata.Date}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Backlog Summary Section */}
+                    {sd.total_items && sd.total_items > 0 && (
+                      <div className={`${isCompact ? 'mt-2' : 'mt-3'} border-t border-gray-200 dark:border-gray-700 pt-3`}>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setStatusDropdownOpen(statusDropdownOpen === sd.id ? null : sd.id);
-                          }}
-                          className="group flex items-center gap-1 hover:opacity-80 transition-opacity"
+                          onClick={() => toggleSummaryExpansion(sd.id)}
+                          className="flex items-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors duration-200"
                         >
-                          {getStatusBadge(sd.status)}
-                          <Edit3 className="w-3 h-3 text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                          <MessageSquare className="w-4 h-4 mr-2" />
+                          {expandedSummaries[sd.id] ? 'Hide' : 'Show'} backlog summary
+                          {loadingSummaries[sd.id] && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
                         </button>
-                        
-                        {statusDropdownOpen === sd.id && (
-                          <div className="absolute left-0 mt-1 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
-                            <div className="py-1">
-                              {['active', 'draft', 'superseded', 'archived'].map(status => (
-                                <button
-                                  key={status}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (onUpdateStatus) {
-                                      onUpdateStatus(sd.id, status);
-                                    }
-                                    setStatusDropdownOpen(null);
-                                  }}
-                                  className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between ${
-                                    sd.status === status ? 'bg-gray-50 dark:bg-gray-700/50 text-primary-600' : 'text-gray-700 dark:text-gray-200'
-                                  }`}
-                                >
-                                  <span className="capitalize">{status}</span>
-                                  {sd.status === status && <CheckSquare className="w-3 h-3" />}
-                                </button>
-                              ))}
-                            </div>
+
+                        {expandedSummaries[sd.id] && (
+                          <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700">
+                            {loadingSummaries[sd.id] ? (
+                              <div className="flex items-center justify-center py-4">
+                                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                                <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">Generating AI summary...</span>
+                              </div>
+                            ) : backlogSummaries[sd.id] ? (
+                              <div>
+                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                  {backlogSummaries[sd.id].summary}
+                                </p>
+                                <div className="mt-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                                  <span>Based on {backlogSummaries[sd.id].item_count} backlog items</span>
+                                  <span className="flex items-center">
+                                    {backlogSummaries[sd.id].ai_generated ? (
+                                      <>🤖 AI Generated</>
+                                    ) : (
+                                      <>📝 Text Summary</>
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-sm text-gray-500 dark:text-gray-400 italic">
+                                Failed to load summary. Please try again.
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
-                      
-                      {/* View Backlog button - always show, indicate count if available */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/backlog?sd=${sd.sd_id || sd.id}`);
-                        }}
-                        className={`flex items-center ${isCompact ? 'px-2 py-0.5 text-xs' : 'px-3 py-1 text-sm'} ${
-                          (sd.total_backlog_items > 0 || sd.total_items > 0 || sd.backlog_count > 0) 
-                            ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-800/40' 
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-                        } rounded transition-colors`}
-                      >
-                        <Package className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} />
-                        Backlog
-                        <span className={`ml-1 ${isCompact ? 'px-1' : 'px-1.5'} py-0.5 ${
-                          (sd.total_backlog_items > 0 || sd.total_items > 0 || sd.backlog_count > 0)
-                            ? 'bg-indigo-200 dark:bg-indigo-800'
-                            : 'bg-gray-200 dark:bg-gray-600'
-                        } rounded text-xs font-bold`}>
-                          {sd.total_backlog_items || sd.total_items || sd.backlog_count || 0}
-                        </span>
-                      </button>
-                      
-                      {/* Show rolled triage from import */}
-                      {sd.rolled_triage && (
-                        <span className={`${isCompact ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-xs'} font-medium rounded ${
-                          sd.rolled_triage === 'High' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                          sd.rolled_triage === 'Medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                          sd.rolled_triage === 'Low' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                          'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                        }`}>
-                          {isCompact ? sd.rolled_triage[0] : `Triage: ${sd.rolled_triage}`}
-                        </span>
-                      )}
-                      
-                      {/* Show must-have percentage */}
-                      {sd.must_have_pct !== null && (
-                        <span className={`${isCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 rounded`}>
-                          {sd.must_have_pct}%{!isCompact && ' Must-Have'}
-                        </span>
-                      )}
-                      
-                      {/* Show category */}
-                      {sd.category && !isCompact && (
-                        <span className="px-2 py-1 text-xs bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400 rounded">
-                          {sd.category}
-                        </span>
-                      )}
-                      
-                      {sd.metadata.Status && sd.metadata.Status !== sd.status && (
-                        <span className={`px-2 py-1 text-xs rounded ${
-                          sd.metadata.Status === 'Completed' ? 'bg-green-100 text-green-800' :
-                          sd.metadata.Status === 'In Progress' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {sd.metadata.Status}
-                        </span>
-                      )}
-                      {sd.metadata.Priority && (
-                        <span className={`px-2 py-1 text-xs rounded ${
-                          sd.metadata.Priority === 'High' ? 'bg-red-100 text-red-800' :
-                          sd.metadata.Priority === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-green-100 text-green-800'
-                        }`}>
-                          {sd.metadata.Priority}
-                        </span>
-                      )}
-                      {sd.metadata.Owner && (
-                        <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded flex items-center">
-                          <User className="w-3 h-3 mr-1" />
-                          {sd.metadata.Owner}
-                        </span>
-                      )}
-                      {sd.metadata.Date && (
-                        <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded flex items-center">
-                          <Calendar className="w-3 h-3 mr-1" />
-                          {sd.metadata.Date}
-                        </span>
-                      )}
-                    </div>
+                    )}
 
                     {/* Enhanced Progress Bar */}
                     <div className={`${isCompact ? 'mt-2' : 'mt-4'}`}>
@@ -814,16 +1025,16 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                           )}
                         </span>
                         <span className={`${isCompact ? 'text-xs' : 'text-sm'} font-semibold flex items-center`}>
-                          {sd.progress}%
-                          {sd.progress === 100 && <Sparkles className="w-3 h-3 ml-1 text-green-500 animate-pulse" />}
+                          {typeof sd.progress === 'object' ? sd.progress.total : sd.progress}%
+                          {(typeof sd.progress === 'object' ? sd.progress.total : sd.progress) === 100 && <Sparkles className="w-3 h-3 ml-1 text-green-500 animate-pulse" />}
                         </span>
                       </div>
                       <div className={`w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden ${isCompact ? 'h-2' : 'h-3'} shadow-inner`}>
                         <div
-                          className={`${isCompact ? 'h-2' : 'h-3'} rounded-full transition-all duration-1000 ease-out ${getProgressBarGradient(sd.progress)}`}
-                          style={{ 
-                            width: `${sd.progress}%`,
-                            boxShadow: sd.progress === 100 ? '0 0 10px rgba(34, 197, 94, 0.5)' : 'none'
+                          className={`${isCompact ? 'h-2' : 'h-3'} rounded-full transition-all duration-1000 ease-out ${getProgressBarGradient(typeof sd.progress === 'object' ? sd.progress.total : sd.progress)}`}
+                          style={{
+                            width: `${typeof sd.progress === 'object' ? sd.progress.total : sd.progress}%`,
+                            boxShadow: (typeof sd.progress === 'object' ? sd.progress.total : sd.progress) === 100 ? '0 0 10px rgba(34, 197, 94, 0.5)' : 'none'
                           }}
                         />
                       </div>
@@ -831,20 +1042,7 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                   </div>
 
                   <div className={`${isCompact ? 'ml-2' : 'ml-4'} flex flex-col items-end ${isCompact ? 'space-y-1' : 'space-y-2'}`}>
-                    {/* Backlog count button */}
-                    {((sd.h_count || 0) + (sd.m_count || 0) + (sd.l_count || 0) + (sd.future_count || 0)) > 0 && (
-                      <button
-                        onClick={() => toggleExpand(sd.id)}
-                        className={`${isCompact ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'} bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors flex items-center ${isCompact ? 'space-x-1' : 'space-x-2'}`}
-                      >
-                        <FileText className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'}`} />
-                        <span className="font-semibold">
-                          {(sd.h_count || 0) + (sd.m_count || 0) + (sd.l_count || 0) + (sd.future_count || 0)}
-                        </span>
-                        {!isCompact && <span>Backlog Items</span>}
-                      </button>
-                    )}
-                    
+                    {/* Action Buttons */}
                     <div className={`flex ${isCompact ? 'space-x-1' : 'space-x-2'}`}>
                       <button
                         onClick={() => viewDetail(sd)}
@@ -852,32 +1050,147 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                       >
                         {isCompact ? 'View' : 'View Full'}
                       </button>
-                      {currentSD === sd.id ? (
+                      {currentSD === sd.id && sd.status?.toLowerCase() !== 'completed' ? (
                         <button
                           disabled
-                          className={`${isCompact ? 'px-2 py-1 text-xs' : 'px-4 py-2'} bg-green-500 text-white rounded flex items-center`}
+                          className={`${isCompact ? 'px-2 py-1 text-xs' : 'px-4 py-2'} bg-purple-600 text-white rounded flex items-center`}
+                          title="This is the SD currently being worked on"
                         >
-                          <Target className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} />
-                          {isCompact ? '✓' : 'Active'}
+                          <Zap className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} />
+                          {isCompact ? '⚡' : 'Working On'}
+                        </button>
+                      ) : sd.status?.toLowerCase() === 'completed' ? (
+                        <button
+                          disabled
+                          className={`${isCompact ? 'px-2 py-1 text-xs' : 'px-4 py-2'} bg-green-400 text-green-800 rounded flex items-center cursor-not-allowed`}
+                          title="Cannot set completed directives as active"
+                        >
+                          <CheckSquare className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'} ${isCompact ? '' : 'mr-1'}`} />
+                          {!isCompact && 'Completed'}
                         </button>
                       ) : (
                         <button
                           onClick={() => onSetActiveSD && onSetActiveSD(sd.id)}
-                          className={`${isCompact ? 'px-2 py-1 text-xs' : 'px-4 py-2'} bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg flex items-center`}
+                          className={`${isCompact ? 'px-2 py-1 text-xs' : 'px-4 py-2'} bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg flex items-center`}
+                          title="Select this SD to work on"
                         >
-                          <Target className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'} ${isCompact ? '' : 'mr-1'} animate-pulse`} />
-                          {!isCompact && 'Set Active'}
+                          <Zap className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'} ${isCompact ? '' : 'mr-1'} animate-pulse`} />
+                          {!isCompact && 'Start Work'}
                         </button>
                       )}
                     </div>
-                    {sd.checklist && sd.checklist.length > 0 && (
-                      <div className="text-sm text-gray-600">
-                        <span className="flex items-center">
+
+                    {/* Attributes Grid - Moved from left side */}
+                    <div className={`${isCompact ? 'mt-2' : 'mt-3'} grid ${isCompact ? 'grid-cols-2 gap-1' : 'grid-cols-2 gap-2'} w-full`}>
+                      {/* Target Application Badge */}
+                      {sd.target_application && (
+                        <span className={`${isCompact ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-xs'} font-medium rounded text-center ${
+                          sd.target_application === 'EHG_Engineer'
+                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
+                            : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                        }`}>
+                          {isCompact ? (sd.target_application === 'EHG_Engineer' ? 'Eng' : 'EHG') : sd.target_application}
+                        </span>
+                      )}
+
+                      {/* Status Badge with Edit */}
+                      <div className="flex items-center justify-center">
+                        {editingStatus === sd.id ? (
+                          <select
+                            value={sd.status}
+                            onChange={(e) => handleStatusChange(sd, e.target.value)}
+                            onBlur={() => setEditingStatus(null)}
+                            className={`${isCompact ? 'text-xs px-1 py-0.5' : 'text-sm px-2 py-1'} rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <option value="draft">Draft</option>
+                            <option value="active">Active</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="completed">Completed</option>
+                            <option value="archived">Archived</option>
+                          </select>
+                        ) : (
+                          <div
+                            className="flex items-center cursor-pointer group"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingStatus(sd.id);
+                            }}
+                          >
+                            {getStatusBadge(sd.status)}
+                            <Edit2 className={`${isCompact ? 'w-2 h-2' : 'w-3 h-3'} ml-1 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300`} />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Category */}
+                      {sd.category && (
+                        <span className={`${isCompact ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-xs'} bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400 rounded text-center`}>
+                          {isCompact && sd.category.length > 8 ? sd.category.substring(0, 8) + '...' : sd.category}
+                        </span>
+                      )}
+
+                      {/* Priority/Metadata Priority */}
+                      {(sd.priority || sd.metadata?.Priority) && (
+                        <span className={`${isCompact ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-xs'} rounded text-center ${
+                          (sd.priority || sd.metadata?.Priority) === 'High' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                          (sd.priority || sd.metadata?.Priority) === 'Medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                          'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                        }`}>
+                          {isCompact ? (sd.priority || sd.metadata?.Priority)[0] : (sd.priority || sd.metadata?.Priority)}
+                        </span>
+                      )}
+
+                      {/* View Backlog button - moved from left side */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/backlog?sd=${sd.sd_id || sd.id}`);
+                        }}
+                        className={`col-span-2 flex items-center justify-center ${isCompact ? 'px-2 py-0.5 text-xs' : 'px-3 py-1 text-sm'} ${
+                          (sd.total_backlog_items > 0 || sd.total_items > 0 || sd.backlog_count > 0)
+                            ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-800/40'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        } rounded transition-colors`}
+                      >
+                        <Package className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} />
+                        Backlog
+                        <span className={`ml-1 ${isCompact ? 'px-1' : 'px-1.5'} py-0.5 ${
+                          (sd.total_backlog_items > 0 || sd.total_items > 0 || sd.backlog_count > 0)
+                            ? 'bg-indigo-200 dark:bg-indigo-800'
+                            : 'bg-gray-200 dark:bg-gray-600'
+                        } rounded text-xs font-bold`}>
+                          {sd.total_backlog_items || sd.total_items || sd.backlog_count || 0}
+                        </span>
+                      </button>
+
+                      {/* Rolled Triage */}
+                      {sd.rolled_triage && (
+                        <span className={`${isCompact ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-xs'} font-medium rounded text-center ${
+                          sd.rolled_triage === 'High' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                          sd.rolled_triage === 'Medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                          sd.rolled_triage === 'Low' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                          'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                        }`}>
+                          {isCompact ? sd.rolled_triage[0] : `Triage: ${sd.rolled_triage}`}
+                        </span>
+                      )}
+
+                      {/* Must-Have Percentage */}
+                      {sd.must_have_pct !== null && sd.must_have_pct !== undefined && (
+                        <span className={`${isCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 rounded text-center`}>
+                          {sd.must_have_pct}%{!isCompact && ' Must-Have'}
+                        </span>
+                      )}
+
+                      {/* Checklist Progress */}
+                      {sd.checklist && sd.checklist.length > 0 && (
+                        <div className="col-span-2 text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center">
                           <CheckSquare className="w-4 h-4 mr-1" />
                           {sd.checklist.filter(item => item.checked).length}/{sd.checklist.length}
-                        </span>
-                      </div>
-                    )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 

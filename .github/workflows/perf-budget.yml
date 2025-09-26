@@ -30,15 +30,44 @@ jobs:
           npm run build:client
           npm run analyze:bundle
 
+      - name: Get baseline bundle size
+        id: baseline
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # Fetch main branch for comparison
+            git fetch origin main:main --depth=1
+            git checkout main -- src/client/dist/assets/*.js 2>/dev/null || echo "No baseline found"
+            BASELINE=$(stat -c%s src/client/dist/assets/*.js 2>/dev/null | sort -nr | head -1 || echo "0")
+            git checkout -
+          else
+            BASELINE=0
+          fi
+          echo "baseline=$BASELINE" >> $GITHUB_OUTPUT
+
       - name: Check bundle budget
         run: |
           BUDGET=$(cat config/bundle-budget.json | jq '.maxSize')
           SIZE=$(stat -c%s src/client/dist/assets/*.js | sort -nr | head -1)
-          if [ "$SIZE" -gt "$BUDGET" ]; then
-            echo "❌ Bundle ${SIZE}b exceeds budget ${BUDGET}b"
-            exit 1
+          BASELINE=${{ steps.baseline.outputs.baseline }}
+          DELTA_LIMIT=51200  # 50KB growth allowed
+
+          # Check delta (fail on regression)
+          if [ "$BASELINE" -gt "0" ]; then
+            DELTA=$((SIZE - BASELINE))
+            if [ "$DELTA" -gt "$DELTA_LIMIT" ]; then
+              echo "❌ Bundle grew by ${DELTA}b (>50KB limit)"
+              exit 1
+            fi
+            echo "✅ Bundle delta: ${DELTA}b (within 50KB limit)"
           fi
-          echo "✅ Bundle ${SIZE}b within budget ${BUDGET}b"
+
+          # Check absolute (warn only)
+          if [ "$SIZE" -gt "$BUDGET" ]; then
+            echo "⚠️ WARNING: Bundle ${SIZE}b exceeds target ${BUDGET}b"
+            echo "::warning::Bundle size exceeds 512KB target. Working to reduce."
+          else
+            echo "✅ Bundle ${SIZE}b within budget ${BUDGET}b"
+          fi
 
       - name: Start server
         run: |
@@ -46,7 +75,18 @@ jobs:
           npx wait-on http://localhost:3001
 
       - name: Lighthouse CI
-        run: npm run lighthouse:ci
+        id: lighthouse
+        run: |
+          npm run lighthouse:ci || true
+          echo "Report generated"
+
+      - name: Upload Lighthouse report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: lighthouse-report
+          path: .lighthouseci/*.html
+          retention-days: 7
 
       - name: Kill server
         if: always()

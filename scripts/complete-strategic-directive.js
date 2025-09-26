@@ -30,7 +30,7 @@ async function completeStrategicDirective() {
     const { data: sdUpdate, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .update({
-        status: 'archived', // SD complete moves to archived per LEO Protocol
+        status: 'completed', // SD complete moves to completed per LEO Protocol
         metadata: {
           lead_status: 'complete',
           plan_status: 'complete', 
