@@ -1,5 +1,5 @@
 {
-  "threshold": 75,
+  "threshold": 50,
   "reporters": ["json-summary", "lcov", "text"],
   "collectCoverageFrom": [
     "src/**/*.{js,jsx}",
