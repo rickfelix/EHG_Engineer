@@ -1,0 +1,50 @@
+<type>(<SD-ID>): <subject>
+
+# Why this change is needed:
+
+# What changed:
+
+# How to test:
+
+# Checklist item: [ ] of [ ]
+# SD Reference: SD-YYYY-XXX
+# Phase: EXEC/PLAN/LEAD
+
+# ────────────────────────────────────────────────────────────
+# LEO Protocol v4.2.0 Git Commit Guidelines
+#
+# Format: <type>(SD-YYYY-XXX): <subject>
+#
+# Types:
+#   feat     - New feature implementation
+#   fix      - Bug fix or error correction
+#   docs     - Documentation changes only
+#   style    - Code formatting, no logic changes
+#   refactor - Code restructuring, no behavior changes
+#   test     - Adding or updating tests
+#   chore    - Maintenance, dependencies, tooling
+#   perf     - Performance improvements
+#   ci       - CI/CD configuration changes
+#   revert   - Reverting previous commits
+#
+# Rules:
+#   - Use imperative mood: "Add" not "Added" or "Adds"
+#   - No period at the end of subject
+#   - Maximum 72 characters for subject
+#   - Include SD-ID in scope (e.g., SD-2025-001)
+#   - Wrap body at 72 characters
+#
+# Example:
+#   feat(SD-2025-001): Add OAuth2 authentication flow
+#
+#   - Implemented Google OAuth2 provider
+#   - Added token refresh logic
+#   - Configured CORS for OAuth redirects
+#
+#   Implements requirement 3.2 from PRD
+#   Checklist item: 3 of 10
+#
+# AI Attribution (if applicable):
+#   🤖 Generated with [Claude Code](https://claude.ai/code)
+#   Co-Authored-By: Claude <noreply@anthropic.com>
+# ────────────────────────────────────────────────────────────

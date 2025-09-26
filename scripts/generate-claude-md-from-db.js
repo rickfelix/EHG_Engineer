@@ -248,6 +248,54 @@ LEO Protocol v4.1.2 is **DATABASE-FIRST ONLY**. **NEVER** create:
 4. Update progress tracking
 5. Verify dashboard shows correct status
 
+## 🔄 Git Commit Guidelines
+
+### Commit Format (MANDATORY)
+All commits MUST follow Conventional Commits format with SD-ID:
+\`\`\`
+<type>(<SD-ID>): <subject>
+
+<body>
+
+<footer>
+\`\`\`
+
+### Required Elements
+- **Type**: feat|fix|docs|style|refactor|test|chore|perf|ci|revert
+- **Scope**: MUST include Strategic Directive ID (e.g., SD-2025-001)
+- **Subject**: Imperative mood, no period, max 72 chars
+- **Body**: Explain "why" not "what", wrap at 72 chars
+- **Footer**: Breaking changes, co-authorship, AI attribution
+
+### Commit Timing (During EXEC Phase)
+1. **After completing each checklist item**
+2. **Before context switches** (end of session, meetings, breaks)
+3. **At logical breakpoints** (feature complete, tests passing)
+4. **Frequency**: Min 1/session, Max 10/checklist item
+
+### Branch Strategy
+- **Development**: \`<type>/<sd-id>/<description>\` (e.g., feature/SD-2025-001-voice-api)
+- **Main branch**: NO direct commits during EXEC phase
+- **Merges**: Only via approved Pull Requests after LEAD approval
+
+### AI Attribution
+When AI generates code, include in footer:
+\`\`\`bash
+git commit -m "feat(SD-2025-001): Implement retry logic
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+\`\`\`
+
+### Quick Reference
+- Format: \`<type>(<SD-ID>): <subject>\`
+- Size: <100 lines ideal, <200 max
+- Files: 1-3 ideal, 10 max per commit
+- Validation: Commits without proper format fail CI
+
+**Full Guidelines**: See \`docs/03_protocols_and_standards/leo_git_commit_guidelines_v4.2.0.md\`
+
 ## 📊 Communication & Context
 
 ### Context Economy Rules

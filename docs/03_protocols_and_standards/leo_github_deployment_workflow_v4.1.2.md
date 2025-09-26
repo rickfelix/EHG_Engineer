@@ -47,7 +47,7 @@ DEPLOYMENT COMPLETE (100%)
 ### Phase 3: EXEC Implementation (30%)
 **Git Operations**: Development only
 - ✅ Create feature branches for organization
-- ✅ Local commits for progress tracking  
+- ✅ Local commits for progress tracking (following commit guidelines)
 - ✅ Push to development/feature branches
 - ✅ Evidence preservation (screenshots, test results)
 - ❌ NO production branch merges
@@ -60,6 +60,12 @@ exec/<sd-id>/<purpose>
 feature/<sd-id>-<description>
 dev/<sd-id>
 ```
+
+**Commit Message Requirements**:
+All commits MUST follow LEO Protocol v4.2.0 Git Commit Guidelines:
+- Format: `<type>(SD-YYYY-XXX): <subject>`
+- Types: feat|fix|docs|style|refactor|test|chore|perf|ci|revert
+- See: `docs/03_protocols_and_standards/leo_git_commit_guidelines_v4.2.0.md`
 
 ### Phase 4: PLAN Verification (15%)
 **Git Operations**: Review only

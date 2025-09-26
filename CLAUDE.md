@@ -11,7 +11,7 @@
 *For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-09-26 1:05:24 PM
+**Last Generated**: 2025-09-26 2:01:41 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -138,6 +138,54 @@ LEO Protocol v4.1.2 is **DATABASE-FIRST ONLY**. **NEVER** create:
 3. Delete the files
 4. Update progress tracking
 5. Verify dashboard shows correct status
+
+## 🔄 Git Commit Guidelines
+
+### Commit Format (MANDATORY)
+All commits MUST follow Conventional Commits format with SD-ID:
+```
+<type>(<SD-ID>): <subject>
+
+<body>
+
+<footer>
+```
+
+### Required Elements
+- **Type**: feat|fix|docs|style|refactor|test|chore|perf|ci|revert
+- **Scope**: MUST include Strategic Directive ID (e.g., SD-2025-001)
+- **Subject**: Imperative mood, no period, max 72 chars
+- **Body**: Explain "why" not "what", wrap at 72 chars
+- **Footer**: Breaking changes, co-authorship, AI attribution
+
+### Commit Timing (During EXEC Phase)
+1. **After completing each checklist item**
+2. **Before context switches** (end of session, meetings, breaks)
+3. **At logical breakpoints** (feature complete, tests passing)
+4. **Frequency**: Min 1/session, Max 10/checklist item
+
+### Branch Strategy
+- **Development**: `<type>/<sd-id>/<description>` (e.g., feature/SD-2025-001-voice-api)
+- **Main branch**: NO direct commits during EXEC phase
+- **Merges**: Only via approved Pull Requests after LEAD approval
+
+### AI Attribution
+When AI generates code, include in footer:
+```bash
+git commit -m "feat(SD-2025-001): Implement retry logic
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+```
+
+### Quick Reference
+- Format: `<type>(<SD-ID>): <subject>`
+- Size: <100 lines ideal, <200 max
+- Files: 1-3 ideal, 10 max per commit
+- Validation: Commits without proper format fail CI
+
+**Full Guidelines**: See `docs/03_protocols_and_standards/leo_git_commit_guidelines_v4.2.0.md`
 
 ## 📊 Communication & Context
 
@@ -331,30 +379,6 @@ ${subAgents.map(sa => `| ${sa.name} | ${sa.code} | ${sa.activation_type} | ${sa.
 ### Sub-Agent Activation Triggers
 
 
-#### Principal Database Architect Triggers:
-- "schema" (keyword) in any context
-- "migration" (keyword) in any context
-
-#### QA Engineering Director Triggers:
-- "coverage" (keyword) in any context
-
-#### Principal Systems Analyst Triggers:
-- "existing implementation" (keyword) in any context
-- "duplicate" (keyword) in any context
-- "conflict" (keyword) in any context
-- "already implemented" (keyword) in any context
-- "codebase check" (keyword) in any context
-
-#### DevOps Platform Architect Triggers:
-- "EXEC_IMPLEMENTATION_COMPLETE" (keyword) in any context
-- "create pull request" (keyword) in any context
-- "gh pr create" (keyword) in any context
-- "LEAD_APPROVAL_COMPLETE" (keyword) in any context
-- "create release" (keyword) in any context
-- "PLAN_VERIFICATION_PASS" (keyword) in any context
-- "github deploy" (keyword) in any context
-- "github status" (keyword) in any context
-
 #### Information Architecture Lead Triggers:
 - "LEAD_SD_CREATION" (keyword) in any context
 - "LEAD_HANDOFF_CREATION" (keyword) in any context
@@ -370,6 +394,16 @@ ${subAgents.map(sa => `| ${sa.name} | ${sa.code} | ${sa.activation_type} | ${sa.
 - "FILE_CREATED" (keyword) in any context
 - "VIOLATION_DETECTED" (keyword) in any context
 - "DAILY_DOCMON_CHECK" (keyword) in any context
+
+#### DevOps Platform Architect Triggers:
+- "EXEC_IMPLEMENTATION_COMPLETE" (keyword) in any context
+- "create pull request" (keyword) in any context
+- "gh pr create" (keyword) in any context
+- "LEAD_APPROVAL_COMPLETE" (keyword) in any context
+- "create release" (keyword) in any context
+- "PLAN_VERIFICATION_PASS" (keyword) in any context
+- "github deploy" (keyword) in any context
+- "github status" (keyword) in any context
 
 #### Continuous Improvement Coach Triggers:
 - "LEAD_APPROVAL_COMPLETE" (keyword) in any context
@@ -398,11 +432,25 @@ ${subAgents.map(sa => `| ${sa.name} | ${sa.code} | ${sa.activation_type} | ${sa.
 - "authentication" (keyword) in any context
 - "security" (keyword) in any context
 
+#### Principal Database Architect Triggers:
+- "schema" (keyword) in any context
+- "migration" (keyword) in any context
+
+#### QA Engineering Director Triggers:
+- "coverage" (keyword) in any context
+
 #### Performance Engineering Lead Triggers:
 - "optimization" (keyword) in any context
 
 #### Senior Design Sub-Agent Triggers:
 - "accessibility" (keyword) in any context
+
+#### Principal Systems Analyst Triggers:
+- "existing implementation" (keyword) in any context
+- "duplicate" (keyword) in any context
+- "conflict" (keyword) in any context
+- "already implemented" (keyword) in any context
+- "codebase check" (keyword) in any context
 
 ### Sub-Agent Activation Process
 
@@ -447,7 +495,61 @@ Required: [object Object], [object Object], [object Object]
 
 ## Validation Rules (From Database)
 
-No validation rules in database
+
+- **hasADR** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **hasInterfaces** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **hasTechDesign** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **designArtifacts** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **dbSchemaReady** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **securityScanClean** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **riskSpikesClosed** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **nfrBudgetsPresent** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **coverageTargetSet** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **testPlanMatrices** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **supervisorChecklistPass** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
 
 ## Database Schema Overview
 
