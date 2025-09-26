@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   FileText, 
-  ChevronDown, 
-  ChevronRight, 
+  ChevronDown,
+  ChevronRight,
+  ChevronUp, 
   CheckSquare,
   Square,
   Calendar,
@@ -37,20 +38,57 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
   const [selectedSD, setSelectedSD] = useState(null);
   // SDAssistant state removed - using DirectiveLab navigation instead
   const [statusFilter, setStatusFilter] = useState(() => {
-    // Load filter preference from localStorage, default to 'active'
-    return localStorage.getItem('sd-status-filter') || 'active';
+    // Check for migration flag and apply new defaults if needed
+    const migrationFlag = localStorage.getItem('sd-filter-migration-v2');
+    if (!migrationFlag) {
+      // First time with new defaults - apply them
+      localStorage.setItem('sd-filter-migration-v2', 'true');
+      localStorage.setItem('sd-status-filter', 'active,draft');
+      localStorage.setItem('sd-priority-filter', 'critical,high');
+      localStorage.setItem('sd-application-filter', 'EHG');
+      return 'active,draft';
+    }
+    // Use saved preference after migration
+    return localStorage.getItem('sd-status-filter') || 'active,draft';
   });
-  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState(() => {
+    // Apply default if migration flag indicates new defaults should be used
+    const migrationFlag = localStorage.getItem('sd-filter-migration-v2');
+    if (!migrationFlag) {
+      return 'critical,high';
+    }
+    return localStorage.getItem('sd-priority-filter') || 'critical,high';
+  });
+  const [applicationFilter, setApplicationFilter] = useState(() => {
+    // Apply default if migration flag indicates new defaults should be used
+    const migrationFlag = localStorage.getItem('sd-filter-migration-v2');
+    if (!migrationFlag) {
+      return 'EHG';
+    }
+    return localStorage.getItem('sd-application-filter') || 'EHG';
+  });
   const [copiedId, setCopiedId] = useState(null);
+
+  // Collapsible metadata filter states
+  const [showMetadataFilters, setShowMetadataFilters] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  // Owner filter removed as requested
   const [editingStatus, setEditingStatus] = useState(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(null);
   
-  // Save filter preference when it changes - MUST be before any conditional returns
+  // Save filter preferences when they change - MUST be before any conditional returns
   useEffect(() => {
     localStorage.setItem('sd-status-filter', statusFilter);
   }, [statusFilter]);
+
+  useEffect(() => {
+    localStorage.setItem('sd-priority-filter', priorityFilter);
+  }, [priorityFilter]);
+
+  useEffect(() => {
+    localStorage.setItem('sd-application-filter', applicationFilter);
+  }, [applicationFilter]);
   
   // Handle URL-based detail view with navigation guards
   useEffect(() => {
@@ -101,9 +139,16 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
     setSearchQuery('');
     setPriorityFilter('all');
     setStatusFilter('all');
+    setApplicationFilter('all');
+    setCategoryFilter('all');
   };
-  
-  const hasActiveFilters = searchQuery || priorityFilter !== 'all' || statusFilter !== 'all';
+
+  const applyFilters = () => {
+    // Close the filter section when "Done" is clicked
+    setShowMetadataFilters(false);
+  };
+
+  const hasActiveFilters = searchQuery || priorityFilter !== 'all' || statusFilter !== 'all' || applicationFilter !== 'all' || categoryFilter !== 'all';
   
   const getPriorityBorderColor = (priority) => {
     switch(priority?.toLowerCase()) {
@@ -136,13 +181,25 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
       console.error('Invalid SD for navigation:', sd);
       return;
     }
-    
+
     // Navigate to detail URL instead of just changing state
     try {
       navigate(`/strategic-directives/${sd.id}`);
     } catch (error) {
       console.error('Navigation error:', error);
       // Fallback: Stay on current page
+    }
+  };
+
+  const generateStoriesForSD = async (sdKey) => {
+    try {
+      // TODO: Implement story generation API call
+      console.log('Generating stories for SD:', sdKey);
+      // This would call the OpenAI story generation endpoint
+      // For now, navigate to the stories page where generation can happen
+      navigate(`/stories/${sdKey}`);
+    } catch (error) {
+      console.error('Error generating stories:', error);
     }
   };
 
@@ -336,13 +393,19 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
 
   // Filter directives based on selected status, search query, and priority
   const filteredDirectives = strategicDirectives.filter(sd => {
-    // Status filter
+    // Status filter - support multiple values
     let statusMatch = true;
     if (statusFilter !== 'all') {
-      if (statusFilter === 'active') statusMatch = sd.status?.toLowerCase() === 'active';
-      if (statusFilter === 'draft') statusMatch = sd.status?.toLowerCase() === 'draft';
-      if (statusFilter === 'superseded') statusMatch = sd.status?.toLowerCase() === 'superseded';
-      if (statusFilter === 'archived') statusMatch = sd.status?.toLowerCase() === 'archived';
+      const sdStatus = sd.status?.toLowerCase();
+      const statusValues = statusFilter.includes(',') ? statusFilter.split(',') : [statusFilter];
+      statusMatch = statusValues.some(status => {
+        if (status === 'active') return sdStatus === 'active';
+        if (status === 'draft') return sdStatus === 'draft';
+        if (status === 'on_hold') return sdStatus === 'on_hold';
+        if (status === 'cancelled') return sdStatus === 'cancelled';
+        if (status === 'archived') return sdStatus === 'archived' || sdStatus === 'completed' || sdStatus === 'complete';
+        return false;
+      });
     }
     
     // Search filter
@@ -355,13 +418,28 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
         sd.description?.toLowerCase().includes(query);
     }
     
-    // Priority filter
+    // Priority filter - support multiple values
     let priorityMatch = true;
     if (priorityFilter !== 'all') {
-      priorityMatch = sd.priority?.toLowerCase() === priorityFilter.toLowerCase();
+      const priorityValues = priorityFilter.includes(',') ? priorityFilter.split(',') : [priorityFilter];
+      priorityMatch = priorityValues.some(priority =>
+        sd.priority?.toLowerCase() === priority.toLowerCase()
+      );
     }
-    
-    return statusMatch && searchMatch && priorityMatch;
+
+    // Application filter
+    let applicationMatch = true;
+    if (applicationFilter !== 'all') {
+      applicationMatch = sd.targetApplication === applicationFilter;
+    }
+
+    // Category filter
+    let categoryMatch = true;
+    if (categoryFilter !== 'all') {
+      categoryMatch = sd.category?.toLowerCase() === categoryFilter.toLowerCase();
+    }
+
+    return statusMatch && searchMatch && priorityMatch && applicationMatch && categoryMatch;
   });
   
   // Sort directives by sequence_rank first, then by ID
@@ -387,40 +465,41 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
     return aNum - bNum;
   });
 
-  const getFilterLabel = () => {
-    switch (statusFilter) {
-      case 'active': return 'Active Only';
-      case 'draft': return 'Draft Only';
-      case 'superseded': return 'Superseded Only';
-      case 'archived': return 'Archived Only';
-      case 'all': return 'All Directives';
-      default: return 'Active Only';
-    }
-  };
 
   const getStatusBadge = (status) => {
-    if (status?.toLowerCase() === 'archived') {
+    const lowerStatus = status?.toLowerCase();
+
+    if (lowerStatus === 'archived' || lowerStatus === 'completed' || lowerStatus === 'complete') {
       return (
         <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 transition-all duration-200 hover:scale-105">
           <Package className="w-3 h-3 mr-1" />
           Archived
         </span>
       );
-    } else if (status?.toLowerCase() === 'draft') {
+    } else if (lowerStatus === 'draft') {
       return (
         <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 transition-all duration-200 hover:scale-105">
           <Edit3 className="w-3 h-3 mr-1" />
           Draft
         </span>
       );
-    } else if (status?.toLowerCase() === 'superseded') {
+    } else if (lowerStatus === 'on_hold') {
       return (
-        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 transition-all duration-200 hover:scale-105">
-          <Archive className="w-3 h-3 mr-1" />
-          Superseded
+        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 transition-all duration-200 hover:scale-105">
+          <AlertCircle className="w-3 h-3 mr-1" />
+          On Hold
+        </span>
+      );
+    } else if (lowerStatus === 'cancelled') {
+      return (
+        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 transition-all duration-200 hover:scale-105">
+          <X className="w-3 h-3 mr-1" />
+          Cancelled
         </span>
       );
     }
+
+    // Default to Active for anything else
     return (
       <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 transition-all duration-200 hover:scale-105">
         <Zap className="w-3 h-3 mr-1 animate-pulse" />
@@ -440,114 +519,8 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
               <Sparkles className="w-6 h-6 mr-2 text-primary-500 animate-pulse" />
               Strategic Directives
             </h1>
-            <p className={`text-gray-600 dark:text-gray-400 ${isCompact ? 'text-sm mt-1' : 'mt-2'}`}>
-              Showing {filteredDirectives.length} of {strategicDirectives.length} directives
-              {filteredDirectives.filter(sd => sd.rolled_triage).length > 0 && (
-                <span className="ml-2">
-                  ({filteredDirectives.filter(sd => sd.rolled_triage === 'High').length}H /
-                  {filteredDirectives.filter(sd => sd.rolled_triage === 'Medium').length}M /
-                  {filteredDirectives.filter(sd => sd.rolled_triage === 'Low').length}L /
-                  {filteredDirectives.filter(sd => sd.rolled_triage === 'Future').length}F)
-                </span>
-              )}
-            </p>
           </div>
           <div className="flex items-center gap-2">
-            {/* Filter Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                className={`flex items-center gap-2 ${isCompact ? 'px-3 py-1.5 text-sm' : 'px-4 py-2'} bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors`}
-              >
-                <Filter className={`${isCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
-                {getFilterLabel()}
-                <ChevronDown className={`${isCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
-              </button>
-              
-              {showFilterDropdown && (
-                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
-                  <div className="py-1">
-                    <button
-                      onClick={() => {
-                        setStatusFilter('all');
-                        setShowFilterDropdown(false);
-                      }}
-                      className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between ${
-                        statusFilter === 'all' ? 'bg-gray-50 dark:bg-gray-700/50 text-primary-600 dark:text-primary-400' : 'text-gray-700 dark:text-gray-200'
-                      }`}
-                    >
-                      <span className="flex items-center">
-                        <FileText className="w-4 h-4 mr-2" />
-                        All Directives
-                      </span>
-                      {statusFilter === 'all' && <CheckSquare className="w-4 h-4" />}
-                    </button>
-                    <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
-                    <button
-                      onClick={() => {
-                        setStatusFilter('active');
-                        setShowFilterDropdown(false);
-                      }}
-                      className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between ${
-                        statusFilter === 'active' ? 'bg-gray-50 dark:bg-gray-700/50 text-primary-600 dark:text-primary-400' : 'text-gray-700 dark:text-gray-200'
-                      }`}
-                    >
-                      <span className="flex items-center">
-                        <Activity className="w-4 h-4 mr-2" />
-                        Active Only
-                      </span>
-                      {statusFilter === 'active' && <CheckSquare className="w-4 h-4" />}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setStatusFilter('draft');
-                        setShowFilterDropdown(false);
-                      }}
-                      className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between ${
-                        statusFilter === 'draft' ? 'bg-gray-50 dark:bg-gray-700/50 text-primary-600 dark:text-primary-400' : 'text-gray-700 dark:text-gray-200'
-                      }`}
-                    >
-                      <span className="flex items-center">
-                        <Edit3 className="w-4 h-4 mr-2" />
-                        Draft Only
-                      </span>
-                      {statusFilter === 'draft' && <CheckSquare className="w-4 h-4" />}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setStatusFilter('superseded');
-                        setShowFilterDropdown(false);
-                      }}
-                      className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between ${
-                        statusFilter === 'superseded' ? 'bg-gray-50 dark:bg-gray-700/50 text-primary-600 dark:text-primary-400' : 'text-gray-700 dark:text-gray-200'
-                      }`}
-                    >
-                      <span className="flex items-center">
-                        <Archive className="w-4 h-4 mr-2" />
-                        Superseded Only
-                      </span>
-                      {statusFilter === 'superseded' && <CheckSquare className="w-4 h-4" />}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setStatusFilter('archived');
-                        setShowFilterDropdown(false);
-                      }}
-                      className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between ${
-                        statusFilter === 'archived' ? 'bg-gray-50 dark:bg-gray-700/50 text-primary-600 dark:text-primary-400' : 'text-gray-700 dark:text-gray-200'
-                      }`}
-                    >
-                      <span className="flex items-center">
-                        <Package className="w-4 h-4 mr-2" />
-                        Archived Only
-                      </span>
-                      {statusFilter === 'archived' && <CheckSquare className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-            
             {/* Refresh Button */}
             <SmartRefreshButton
               onRefresh={onRefresh}
@@ -587,36 +560,146 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
             )}
           </div>
           
-          {/* Quick Priority Filters */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`${isCompact ? 'text-xs' : 'text-sm'} text-gray-600 dark:text-gray-400 mr-2`}>Priority:</span>
-            {['all', 'critical', 'high', 'medium', 'low'].map((priority) => (
-              <button
-                key={priority}
-                onClick={() => setPriorityFilter(priority)}
-                className={`${isCompact ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'} rounded-full transition-all duration-200 ${
-                  priorityFilter === priority
-                    ? priority === 'critical' ? 'bg-red-500 text-white' :
-                      priority === 'high' ? 'bg-orange-500 text-white' :
-                      priority === 'medium' ? 'bg-yellow-500 text-white' :
-                      priority === 'low' ? 'bg-gray-500 text-white' :
-                      'bg-primary-500 text-white'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                }`}
-              >
-                {priority.charAt(0).toUpperCase() + priority.slice(1)}
-              </button>
-            ))}
-            
-            {/* Clear Filters Button */}
-            {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                className={`ml-auto ${isCompact ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'} bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full hover:bg-red-200 dark:hover:bg-red-900/50 transition-all duration-200 flex items-center gap-1`}
-              >
-                <X className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'}`} />
-                Clear Filters
-              </button>
+
+          {/* Collapsible Filters */}
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
+            <button
+              onClick={() => setShowMetadataFilters(!showMetadataFilters)}
+              className={`flex items-center gap-2 ${isCompact ? 'text-xs' : 'text-sm'} text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors duration-200 w-full justify-between bg-gray-50 dark:bg-gray-800/50 px-3 py-2 rounded-lg`}
+            >
+              <div className="flex items-center gap-2">
+                {showMetadataFilters ?
+                  <ChevronDown className={`${isCompact ? 'w-4 h-4' : 'w-5 h-5'}`} /> :
+                  <ChevronRight className={`${isCompact ? 'w-4 h-4' : 'w-5 h-5'}`} />
+                }
+                <Filter className={`${isCompact ? 'w-4 h-4' : 'w-5 h-5'}`} />
+                <span className="font-medium">Filters</span>
+              </div>
+
+              <div className="flex items-center">
+                <span className={`${isCompact ? 'text-sm' : 'text-sm'} text-blue-600 dark:text-blue-400 font-medium`}>
+                  {filteredDirectives.length} of {strategicDirectives.length}
+                  {filteredDirectives.filter(sd => sd.rolled_triage).length > 0 && (
+                    <span className="ml-1">
+                      ({filteredDirectives.filter(sd => sd.rolled_triage === 'High').length}H /
+                      {filteredDirectives.filter(sd => sd.rolled_triage === 'Medium').length}M /
+                      {filteredDirectives.filter(sd => sd.rolled_triage === 'Low').length}L /
+                      {filteredDirectives.filter(sd => sd.rolled_triage === 'Future').length}F)
+                    </span>
+                  )}
+                </span>
+              </div>
+            </button>
+
+            {showMetadataFilters && (
+              <div className="mt-4 bg-gradient-to-br from-white via-gray-50 to-white dark:from-gray-800 dark:via-gray-750 dark:to-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-lg transition-all duration-300 animate-in slide-in-from-top-2">
+                {/* 2x2 Grid Layout for Filters */}
+                <div className="grid grid-cols-2 gap-6 mb-6">
+                  {/* Status Filter */}
+                  <div className="group">
+                    <label className={`block ${isCompact ? 'text-xs' : 'text-sm'} font-semibold text-gray-700 dark:text-gray-300 mb-2 transition-colors duration-200 group-hover:text-primary-600 dark:group-hover:text-primary-400`}>
+                      Status
+                    </label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className={`w-full ${isCompact ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'} bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 hover:border-gray-300 dark:hover:border-gray-500 shadow-sm hover:shadow-md`}
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="active,draft">Active & Draft (Default)</option>
+                      <option value="active">Active Only</option>
+                      <option value="draft">Draft Only</option>
+                      <option value="on_hold">On Hold</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="archived">Archived/Completed</option>
+                    </select>
+                  </div>
+
+                  {/* Priority Filter */}
+                  <div className="group">
+                    <label className={`block ${isCompact ? 'text-xs' : 'text-sm'} font-semibold text-gray-700 dark:text-gray-300 mb-2 transition-colors duration-200 group-hover:text-primary-600 dark:group-hover:text-primary-400`}>
+                      Priority
+                    </label>
+                    <select
+                      value={priorityFilter}
+                      onChange={(e) => setPriorityFilter(e.target.value)}
+                      className={`w-full ${isCompact ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'} bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 hover:border-gray-300 dark:hover:border-gray-500 shadow-sm hover:shadow-md`}
+                    >
+                      <option value="all">All Priorities</option>
+                      <option value="critical,high">Critical & High (Default)</option>
+                      <option value="critical">Critical</option>
+                      <option value="high">High</option>
+                      <option value="medium">Medium</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </div>
+
+                  {/* Application Filter */}
+                  <div className="group">
+                    <label className={`block ${isCompact ? 'text-xs' : 'text-sm'} font-semibold text-gray-700 dark:text-gray-300 mb-2 transition-colors duration-200 group-hover:text-primary-600 dark:group-hover:text-primary-400`}>
+                      Application
+                    </label>
+                    <select
+                      value={applicationFilter}
+                      onChange={(e) => setApplicationFilter(e.target.value)}
+                      className={`w-full ${isCompact ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'} bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 hover:border-gray-300 dark:hover:border-gray-500 shadow-sm hover:shadow-md`}
+                    >
+                      <option value="all">All Applications</option>
+                      <option value="EHG">EHG (Default)</option>
+                      <option value="EHG_ENGINEER">EHG Engineer</option>
+                    </select>
+                  </div>
+
+                  {/* Category Filter */}
+                  <div className="group">
+                    <label className={`block ${isCompact ? 'text-xs' : 'text-sm'} font-semibold text-gray-700 dark:text-gray-300 mb-2 transition-colors duration-200 group-hover:text-primary-600 dark:group-hover:text-primary-400`}>
+                      Category
+                    </label>
+                    <select
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
+                      className={`w-full ${isCompact ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'} bg-white dark:bg-gray-900 border-2 border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 hover:border-gray-300 dark:hover:border-gray-500 shadow-sm hover:shadow-md`}
+                    >
+                      <option value="all">All Categories</option>
+                      {[...new Set(strategicDirectives.map(sd => sd.category).filter(Boolean))].map((category) => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-600">
+                  <div className="flex items-center gap-2">
+                    {hasActiveFilters && (
+                      <span className={`${isCompact ? 'text-xs' : 'text-sm'} text-gray-500 dark:text-gray-400 flex items-center gap-1`}>
+                        <Filter className="w-4 h-4" />
+                        Filtering applied
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {hasActiveFilters && (
+                      <button
+                        onClick={clearFilters}
+                        className={`${isCompact ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'} bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200 flex items-center gap-2 font-medium border border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500`}
+                      >
+                        <X className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'}`} />
+                        Clear All
+                      </button>
+                    )}
+
+                    <button
+                      onClick={applyFilters}
+                      className={`${isCompact ? 'px-4 py-1.5 text-xs' : 'px-6 py-2 text-sm'} bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-lg transition-all duration-200 flex items-center gap-2 font-medium shadow-md hover:shadow-lg transform hover:scale-105`}
+                    >
+                      <ChevronUp className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'}`} />
+                      Done
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -653,32 +736,38 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                           }`} 
                         />
                       </button>
-                      <h2 className={`${isCompact ? 'text-base' : 'text-xl'} font-semibold text-gray-900 dark:text-white`}>
-                        {sd.sequence_rank && (
-                          <span className="text-xs font-medium px-1.5 py-0.5 mr-2 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400 rounded">
-                            #{sd.sequence_rank}
+                      <div className="space-y-2">
+                        {/* SD ID and sequence rank */}
+                        <div className="flex items-center">
+                          {sd.sequence_rank && (
+                            <span className="text-xs font-medium px-1.5 py-0.5 mr-2 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400 rounded">
+                              #{sd.sequence_rank}
+                            </span>
+                          )}
+                          <span className="inline-flex items-center group">
+                            <span className="text-primary-600 dark:text-primary-400 font-mono text-lg font-bold">{sd.id}</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                copyToClipboard(sd.id);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded ml-2"
+                              title="Copy ID"
+                            >
+                              {copiedId === sd.id ? (
+                                <CheckSquare className="w-3 h-3 text-green-500" />
+                              ) : (
+                                <Copy className="w-3 h-3 text-gray-500" />
+                              )}
+                            </button>
                           </span>
-                        )}
-                        <span className="inline-flex items-center group">
-                          <span className="text-primary-600 dark:text-primary-400 font-mono mr-1">{sd.id}</span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              copyToClipboard(sd.id);
-                            }}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded ml-1 mr-2"
-                            title="Copy ID"
-                          >
-                            {copiedId === sd.id ? (
-                              <CheckSquare className="w-3 h-3 text-green-500" />
-                            ) : (
-                              <Copy className="w-3 h-3 text-gray-500" />
-                            )}
-                          </button>
-                          <span className="text-gray-600 dark:text-gray-400 mr-2">:</span>
-                        </span>
-                        <span className={isCompact ? 'line-clamp-1' : ''}>{sd.title || 'Untitled'}</span>
-                      </h2>
+                        </div>
+
+                        {/* SD Title on separate line */}
+                        <h2 className={`${isCompact ? 'text-base' : 'text-xl'} font-semibold text-gray-900 dark:text-white ${isCompact ? 'line-clamp-2' : ''}`}>
+                          {sd.title || 'Untitled'}
+                        </h2>
+                      </div>
                     </div>
                     
                     <div className={`${isCompact ? 'mt-2 gap-1' : 'mt-3 gap-2'} flex flex-wrap items-center`}>
@@ -698,7 +787,7 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                         {statusDropdownOpen === sd.id && (
                           <div className="absolute left-0 mt-1 w-40 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
                             <div className="py-1">
-                              {['active', 'draft', 'superseded', 'archived'].map(status => (
+                              {['active', 'draft', 'on_hold', 'cancelled', 'archived'].map(status => (
                                 <button
                                   key={status}
                                   onClick={(e) => {
@@ -720,7 +809,20 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                           </div>
                         )}
                       </div>
-                      
+
+                      {/* Target Application badge */}
+                      {sd.targetApplication && (
+                        <span className={`${isCompact ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-xs'} font-medium rounded ${
+                          sd.targetApplication === 'EHG_ENGINEER'
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400'
+                            : sd.targetApplication === 'EHG'
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                        }`}>
+                          {sd.targetApplication.replace('_', ' ')}
+                        </span>
+                      )}
+
                       {/* View Backlog button - always show, indicate count if available */}
                       <button
                         onClick={(e) => {
@@ -831,19 +933,6 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                   </div>
 
                   <div className={`${isCompact ? 'ml-2' : 'ml-4'} flex flex-col items-end ${isCompact ? 'space-y-1' : 'space-y-2'}`}>
-                    {/* Backlog count button */}
-                    {((sd.h_count || 0) + (sd.m_count || 0) + (sd.l_count || 0) + (sd.future_count || 0)) > 0 && (
-                      <button
-                        onClick={() => toggleExpand(sd.id)}
-                        className={`${isCompact ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'} bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors flex items-center ${isCompact ? 'space-x-1' : 'space-x-2'}`}
-                      >
-                        <FileText className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'}`} />
-                        <span className="font-semibold">
-                          {(sd.h_count || 0) + (sd.m_count || 0) + (sd.l_count || 0) + (sd.future_count || 0)}
-                        </span>
-                        {!isCompact && <span>Backlog Items</span>}
-                      </button>
-                    )}
                     
                     <div className={`flex ${isCompact ? 'space-x-1' : 'space-x-2'}`}>
                       <button
@@ -858,7 +947,7 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                           className={`${isCompact ? 'px-2 py-1 text-xs' : 'px-4 py-2'} bg-green-500 text-white rounded flex items-center`}
                         >
                           <Target className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'} mr-1`} />
-                          {isCompact ? '✓' : 'Active'}
+                          {isCompact ? '✓ Working' : '✓ Working On'}
                         </button>
                       ) : (
                         <button
@@ -866,10 +955,76 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                           className={`${isCompact ? 'px-2 py-1 text-xs' : 'px-4 py-2'} bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg flex items-center`}
                         >
                           <Target className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'} ${isCompact ? '' : 'mr-1'} animate-pulse`} />
-                          {!isCompact && 'Set Active'}
+                          {isCompact ? 'Work On' : 'Work On This'}
                         </button>
                       )}
                     </div>
+
+                    {/* Metadata display */}
+                    {sd.metadata && (
+                      <div className={`${isCompact ? 'mt-2' : 'mt-3'} space-y-1`}>
+                        <div className={`${isCompact ? 'text-xs' : 'text-sm'} text-gray-600 dark:text-gray-400 font-medium`}>
+                          Metadata
+                        </div>
+                        <div className="space-y-1">
+                          {Object.entries(sd.metadata).map(([key, value]) => (
+                            value && (
+                              <div key={key} className={`flex ${isCompact ? 'text-xs' : 'text-sm'} text-gray-600 dark:text-gray-400`}>
+                                <span className="font-medium mr-2 min-w-[80px]">{key}:</span>
+                                <span className="break-all">{value}</span>
+                              </div>
+                            )
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* User Stories Summary */}
+                    {sd.storySummary && (
+                      <div className={`${isCompact ? 'mt-2' : 'mt-3'} pt-3 border-t border-gray-200 dark:border-gray-700`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`${isCompact ? 'text-xs' : 'text-sm'} font-medium text-gray-700 dark:text-gray-300 flex items-center`}>
+                            📚 User Stories
+                          </span>
+                          <span className={`${isCompact ? 'text-xs' : 'text-sm'} bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-1 rounded-full`}>
+                            {sd.storyCount}
+                          </span>
+                        </div>
+
+                        {sd.storyCount > 0 ? (
+                          <div className="space-y-2">
+                            <div className={`flex items-center space-x-2 ${isCompact ? 'text-xs' : 'text-sm'}`}>
+                              <span className="text-green-600 dark:text-green-400">✅ {sd.storySummary.statusBreakdown.passing}</span>
+                              <span className="text-red-600 dark:text-red-400">❌ {sd.storySummary.statusBreakdown.failing}</span>
+                              <span className="text-gray-600 dark:text-gray-400">⏸️ {sd.storySummary.statusBreakdown.not_run}</span>
+                            </div>
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                              <div
+                                className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${sd.storySummary.passingPct || 0}%` }}
+                              ></div>
+                            </div>
+                            <Link
+                              to={`/stories/${sd.sdKey}`}
+                              className={`inline-flex items-center ${isCompact ? 'text-xs' : 'text-sm'} text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300`}
+                            >
+                              View Stories →
+                            </Link>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <p className={`${isCompact ? 'text-xs' : 'text-sm'} text-gray-500 dark:text-gray-400`}>No stories yet</p>
+                            <button
+                              onClick={() => generateStoriesForSD(sd.sdKey)}
+                              className={`inline-flex items-center ${isCompact ? 'text-xs' : 'text-sm'} text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300`}
+                            >
+                              + Generate Stories
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {sd.checklist && sd.checklist.length > 0 && (
                       <div className="text-sm text-gray-600">
                         <span className="flex items-center">
