@@ -1,0 +1,37 @@
+{
+  "handoff_type": "EXEC_TO_PLAN",
+  "sd_id": "ERROR_RECOVERY_OPT_IN",
+  "timestamp": "2025-09-26T13:41:00Z",
+  "from_agent": "EXEC",
+  "to_agent": "PLAN",
+  "elements": {
+    "1_executive_summary": {
+      "title": "Executive Summary",
+      "content": "Implemented safe, opt-in error recovery system for CI gate failures. Generates revert instructions only when PR has ci-allow-revert label AND commit contains [revert-ok] marker. Total: 98 lines script + 33 lines CI."
+    },
+    "2_completeness_report": {
+      "title": "Completeness Report",
+      "content": "✅ Created scripts/auto-revert.js (98 lines)\n✅ Added recovery job to test-coverage.yml\n✅ Updated CLAUDE.md with error recovery docs\n✅ Tested with/without required conditions\n✅ Generates recovery.txt artifact on failure\n✅ No destructive commands executed"
+    },
+    "3_deliverables_manifest": {
+      "title": "Deliverables Manifest",
+      "content": "1. scripts/auto-revert.js - Recovery helper script\n2. .github/workflows/test-coverage.yml - Recovery job addition\n3. CLAUDE.md - Error recovery documentation\n4. artifacts/recovery.txt - Generated recovery plan (when eligible)\n5. Double opt-in: label + commit marker required"
+    },
+    "4_key_decisions_rationale": {
+      "title": "Key Decisions & Rationale",
+      "content": "1. Double opt-in (label + marker) - Prevents accidental rollbacks\n2. Generate instructions only - No actual git commands executed\n3. 3-step micro-plan - Clear recovery path\n4. Artifact upload - Accessible via GitHub UI\n5. Runs only on PR failure - Efficient resource use"
+    },
+    "5_known_issues_risks": {
+      "title": "Known Issues & Risks",
+      "content": "1. Requires GitHub token for PR label access\n2. Recovery plan is suggestion only - user must execute\n3. No validation of revert feasibility\n4. Artifact retention limited to 7 days"
+    },
+    "6_resource_utilization": {
+      "title": "Resource Utilization",
+      "content": "Time: 15 minutes\nFiles: 3 modified (auto-revert.js, test-coverage.yml, generate-claude-md-from-db.js)\nLines: 98 (script) + 33 (CI workflow) + 3 (docs)\nCI Impact: Minimal - only runs on PR failure"
+    },
+    "7_action_items": {
+      "title": "Action Items for Receiver",
+      "content": "1. Document label creation process for teams\n2. Consider adding auto-label for trusted contributors\n3. Add recovery metrics tracking\n4. Extend to other gate types (a11y, perf, visual)\n5. Consider Slack/email notification on recovery generation"
+    }
+  }
+}
