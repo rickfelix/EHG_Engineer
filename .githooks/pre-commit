@@ -18,9 +18,13 @@ echo -n "Checking for filesystem drift... "
 # Check for PRD files
 if ls prds/*.md 2>/dev/null | grep -q .; then
     echo -e "${RED}❌${NC}"
+    # Log failure for feedback system
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    echo "{\"type\":\"prd_files_detected\",\"message\":\"PRD markdown files detected\",\"timestamp\":\"$timestamp\"}" >> .leo-hook-failures.log
     echo -e "${RED}ERROR: PRD markdown files detected!${NC}"
     echo "PRDs must be stored in database only (LEO v4.1.2)"
     echo "Fix: node scripts/add-prd-to-database.js && rm prds/*.md"
+    echo -e "${YELLOW}💡 TIP: Use 'npm run leo:commit' for auto-resolution${NC}"
     exit 1
 fi
 
@@ -86,5 +90,56 @@ if [ -n "$DEPRECATED_IMPORTS" ]; then
   echo "   Consider updating imports to use src/services/ instead"
   # This is a warning, not blocking the commit
 fi
+
+# SD-LEO-003: Enforce LEO Protocol Orchestrator Usage
+echo "🤖 Checking LEO Protocol Orchestrator session..."
+
+# Function to log failures
+log_failure() {
+  local error_type="$1"
+  local error_msg="$2"
+
+  # Create or append to failure log
+  if [ ! -f ".leo-hook-failures.json" ]; then
+    echo "[]" > .leo-hook-failures.json
+  fi
+
+  # Add new failure (simple append for bash compatibility)
+  timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  echo "{\"type\":\"$error_type\",\"message\":\"$error_msg\",\"timestamp\":\"$timestamp\"}" >> .leo-hook-failures.log
+}
+
+# Check for orchestrator session file
+if [ ! -f ".leo-session-active" ]; then
+  log_failure "no_orchestrator_session" "No active LEO Protocol Orchestrator session detected"
+  echo -e "${RED}❌ ERROR: No active LEO Protocol Orchestrator session detected${NC}"
+  echo ""
+  echo "To commit changes, you must be running an SD through the orchestrator:"
+  echo "  npm run leo:execute SD-YYYY-XXX"
+  echo ""
+  echo -e "${YELLOW}💡 TIP: Use 'npm run leo:commit' for auto-resolution${NC}"
+  echo ""
+  echo "This ensures:"
+  echo "  • All sub-agents are properly activated"
+  echo "  • Protocol compliance is enforced"
+  echo "  • Database tracking is automatic"
+  echo ""
+  exit 1
+fi
+
+# Validate session is recent (within last 2 hours)
+if [ $(find ".leo-session-active" -mmin +120 2>/dev/null | wc -l) -gt 0 ]; then
+  log_failure "stale_session" "Orchestrator session is stale (>2 hours old)"
+  echo -e "${YELLOW}⚠️ WARNING: Orchestrator session is stale (>2 hours old)${NC}"
+  echo ""
+  echo "Please restart your orchestrator session:"
+  echo "  npm run leo:execute SD-YYYY-XXX"
+  echo ""
+  echo -e "${YELLOW}💡 TIP: Use 'npm run leo:commit' for auto-resolution${NC}"
+  echo ""
+  exit 1
+fi
+
+echo -e "${GREEN}✅ LEO Protocol Orchestrator session validated${NC}"
 
 exit 0

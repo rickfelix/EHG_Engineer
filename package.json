@@ -2,6 +2,7 @@
   "name": "ehg-engineer",
   "version": "1.0.0",
   "description": "LEO Protocol development environment with Claude Code multi-agent workflow support",
+  "type": "module",
   "scripts": {
     "check-db": "node scripts/verify-connection.js",
     "setup-db": "node scripts/setup-database.js",
@@ -37,7 +38,13 @@
     "db:create": "node scripts/execute-database-sql.js",
     "db:timeline": "node scripts/execute-database-sql.js database/schema/sd_execution_timeline.sql",
     "db:leo": "node scripts/execute-database-sql.js database/schema/007_leo_protocol_schema.sql",
-    "db:ehg": "node scripts/execute-database-sql.js --ehg"
+    "db:ehg": "node scripts/execute-database-sql.js --ehg",
+    "leo:execute": "node scripts/leo-orchestrator-enforced.js",
+    "leo:new": "node scripts/create-strategic-directive.js",
+    "leo:help": "node scripts/leo.js help",
+    "leo:status": "node scripts/leo.js status",
+    "leo:orchestrate": "node scripts/leo-orchestrator-enforced.js",
+    "leo:commit": "node scripts/leo-hook-feedback.js commit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",
