@@ -1,0 +1,124 @@
+{
+  "LEAD_TO_PLAN": {
+    "from_agent": "LEAD",
+    "to_agent": "PLAN",
+    "required_elements": [
+      "executive_summary",
+      "completeness_report",
+      "deliverables_manifest",
+      "key_decisions_rationale",
+      "known_issues_risks",
+      "resource_utilization",
+      "action_items_for_receiver"
+    ],
+    "template": {
+      "executive_summary": "Strategic handoff from LEAD to PLAN for {sd_title}. Strategic objectives defined, business case established, ready for technical planning phase.",
+      "completeness_report": {
+        "strategic_objectives_defined": true,
+        "business_value_articulated": true,
+        "priority_justified": true,
+        "stakeholder_alignment": true,
+        "completion_percentage": 100
+      },
+      "action_items_for_receiver": [
+        "Create comprehensive PRD for {sd_title}",
+        "Define technical architecture",
+        "Specify acceptance criteria",
+        "Plan implementation approach",
+        "Activate required sub-agents",
+        "Create PLAN→EXEC handoff"
+      ]
+    }
+  },
+  "PLAN_TO_EXEC": {
+    "from_agent": "PLAN",
+    "to_agent": "EXEC",
+    "required_elements": [
+      "executive_summary",
+      "completeness_report",
+      "deliverables_manifest",
+      "key_decisions_rationale",
+      "known_issues_risks",
+      "resource_utilization",
+      "action_items_for_receiver"
+    ],
+    "template": {
+      "executive_summary": "Technical planning complete for {sd_title}. PRD created with {user_story_count} user stories, ready for implementation in {target_app}.",
+      "completeness_report": {
+        "prd_created": true,
+        "technical_design_complete": true,
+        "acceptance_criteria_defined": true,
+        "test_plan_created": true,
+        "completion_percentage": 100
+      },
+      "action_items_for_receiver": [
+        "Navigate to {target_app} for implementation",
+        "Review PRD and user stories",
+        "Implement based on priority order",
+        "Create unit tests for each component",
+        "Document API endpoints",
+        "Create EXEC→VERIFICATION handoff"
+      ]
+    }
+  },
+  "EXEC_TO_VERIFICATION": {
+    "from_agent": "EXEC",
+    "to_agent": "VERIFICATION",
+    "required_elements": [
+      "executive_summary",
+      "completeness_report",
+      "deliverables_manifest",
+      "key_decisions_rationale",
+      "known_issues_risks",
+      "resource_utilization",
+      "action_items_for_receiver"
+    ],
+    "template": {
+      "executive_summary": "Implementation complete for {sd_title}. All user stories implemented, tests passing, ready for final verification.",
+      "completeness_report": {
+        "implementation_complete": true,
+        "tests_passing": true,
+        "code_review_complete": true,
+        "documentation_updated": true,
+        "completion_percentage": 100
+      },
+      "action_items_for_receiver": [
+        "Verify all acceptance criteria met",
+        "Run performance validation",
+        "Execute security scan",
+        "Confirm user acceptance",
+        "Create VERIFICATION→APPROVAL handoff"
+      ]
+    }
+  },
+  "VERIFICATION_TO_APPROVAL": {
+    "from_agent": "VERIFICATION",
+    "to_agent": "APPROVAL",
+    "required_elements": [
+      "executive_summary",
+      "completeness_report",
+      "deliverables_manifest",
+      "key_decisions_rationale",
+      "known_issues_risks",
+      "resource_utilization",
+      "action_items_for_receiver"
+    ],
+    "template": {
+      "executive_summary": "Verification complete for {sd_title}. All acceptance criteria validated, performance tested, security cleared, ready for final approval.",
+      "completeness_report": {
+        "acceptance_criteria_met": true,
+        "performance_validated": true,
+        "security_scan_clean": true,
+        "user_acceptance_confirmed": true,
+        "completion_percentage": 100
+      },
+      "action_items_for_receiver": [
+        "Conduct final business review",
+        "Obtain stakeholder approval",
+        "Authorize deployment",
+        "Generate retrospective",
+        "Mark SD as completed"
+      ]
+    }
+  }
+}

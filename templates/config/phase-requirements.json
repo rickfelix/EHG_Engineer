@@ -1,0 +1,62 @@
+{
+  "LEAD": {
+    "requirements": [
+      "session_prologue_completed",
+      "priority_justified",
+      "strategic_objectives_defined",
+      "handoff_created_in_database",
+      "no_over_engineering_check"
+    ],
+    "sub_agents": ["RETRO", "DOCMON"],
+    "outputs": ["strategic_objectives", "business_case", "handoff_to_plan"],
+    "validation_threshold": 100
+  },
+  "PLAN": {
+    "requirements": [
+      "prd_created_in_database",
+      "acceptance_criteria_defined",
+      "sub_agents_activated",
+      "test_plan_created",
+      "handoff_from_lead_received"
+    ],
+    "sub_agents": ["DATABASE", "SECURITY", "TESTING", "STORIES"],
+    "outputs": ["prd_document", "technical_design", "handoff_to_exec"],
+    "validation_threshold": 85
+  },
+  "EXEC": {
+    "requirements": [
+      "implementation_complete",
+      "tests_passing",
+      "code_review_complete",
+      "documentation_updated",
+      "handoff_to_verification"
+    ],
+    "sub_agents": ["TESTING", "SECURITY", "PERFORMANCE"],
+    "outputs": ["working_implementation", "test_results", "handoff_to_verification"],
+    "validation_threshold": 90
+  },
+  "VERIFICATION": {
+    "requirements": [
+      "all_acceptance_criteria_met",
+      "performance_validated",
+      "security_scan_clean",
+      "user_acceptance_confirmed",
+      "handoff_to_approval"
+    ],
+    "sub_agents": ["TESTING", "PERFORMANCE", "VALIDATION"],
+    "outputs": ["verification_report", "quality_metrics", "handoff_to_approval"],
+    "validation_threshold": 95
+  },
+  "APPROVAL": {
+    "requirements": [
+      "business_objectives_met",
+      "final_review_complete",
+      "deployment_ready",
+      "documentation_complete",
+      "stakeholder_approval"
+    ],
+    "sub_agents": ["GITHUB", "DOCMON", "SECURITY"],
+    "outputs": ["approval_decision", "deployment_authorization", "retrospective"],
+    "validation_threshold": 100
+  }
+}
