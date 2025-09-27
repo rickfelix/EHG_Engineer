@@ -11,6 +11,7 @@ import ContextMonitor from './components/ContextMonitor';
 import DirectiveLab from './components/DirectiveLab';
 import BacklogManager from './components/BacklogManager';
 import PRReviews from './components/PRReviews';
+import BacklogImportView from './pages/BacklogImportView';
 import logger from './utils/logger';
 
 function App() {
@@ -295,6 +296,10 @@ function App() {
                 refreshData={refreshData}
               />
             }
+          />
+          <Route
+            path="backlog-import"
+            element={<BacklogImportView />}
           />
           {/* 404 Fallback Route */}
           <Route

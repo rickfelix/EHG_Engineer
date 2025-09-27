@@ -50,6 +50,14 @@
     "leo:cleanup": "node scripts/leo-cleanup.js",
     "leo:cleanup:full": "node scripts/leo-cleanup.js --full",
     "leo:cleanup:force": "node scripts/leo-cleanup.js --force",
+    "prd:validate": "node scripts/prd-format-validator.js",
+    "prd:fix": "node scripts/prd-format-validator.js --fix",
+    "prd:health": "node scripts/prd-diagnostic-toolkit.js health-check",
+    "prd:check": "node scripts/prd-diagnostic-toolkit.js sd-check",
+    "prd:report": "node scripts/prd-diagnostic-toolkit.js format-report",
+    "prd:tables": "node scripts/prd-diagnostic-toolkit.js table-status",
+    "prd:orphaned": "node scripts/prd-diagnostic-toolkit.js orphaned-prds",
+    "prd:consolidated": "node scripts/unified-consolidated-prd.js",
     "db:subagent": "echo 'Apply database/schema/complete_subagent_integration.sql to Supabase'"
   },
   "dependencies": {

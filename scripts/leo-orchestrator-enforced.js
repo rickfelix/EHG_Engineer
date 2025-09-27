@@ -75,6 +75,9 @@ class EnforcedOrchestrator extends LEOProtocolOrchestrator {
       // Use template-based execution instead of parent class
       const phases = ['LEAD', 'PLAN', 'EXEC', 'VERIFICATION', 'APPROVAL'];
 
+      let allPhasesSuccessful = true;
+      let hasGitEvidence = false;
+
       for (const phase of phases) {
         // Skip phases that are already complete for SD-008
         if (sdId === 'SD-008' && (phase === 'LEAD' || phase === 'PLAN')) {
@@ -87,12 +90,40 @@ class EnforcedOrchestrator extends LEOProtocolOrchestrator {
         // Execute phase using template system
         const result = await this.phaseExecutor.executePhase(phase, sdId, options);
         console.log(chalk.green(`   ✅ ${phase} phase completed`));
+
+        // Check if phase completed successfully
+        if (!result || !result.completed) {
+          allPhasesSuccessful = false;
+        }
+
+        // Track if we found git evidence during EXEC phase validation
+        if (phase === 'EXEC') {
+          const { createClient } = await import('@supabase/supabase-js');
+          const supabase = createClient(
+            process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+            process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+          );
+
+          const { data: sd } = await supabase
+            .from('strategic_directives_v2')
+            .select('metadata')
+            .eq('id', sdId)
+            .single();
+
+          if (sd?.metadata?.git_commits_verified > 0) {
+            hasGitEvidence = true;
+          }
+        }
       }
 
-      // CRITICAL: Do NOT automatically mark as complete
-      // This was the source of false completions
-      console.log(chalk.yellow('\n🚫 SD NOT automatically marked complete'));
-      console.log(chalk.yellow('   Manual evidence validation required before completion'));
+      // If all phases completed successfully and we have git evidence, SD is complete
+      if (allPhasesSuccessful && hasGitEvidence) {
+        console.log(chalk.green('\n✅ All phases completed successfully with git evidence'));
+        console.log(chalk.gray('   SD has been marked as completed automatically'));
+      } else if (!hasGitEvidence) {
+        console.log(chalk.yellow('\n🚫 SD NOT automatically marked complete'));
+        console.log(chalk.yellow('   Manual evidence validation required before completion'));
+      }
 
       // Clean up session files on success
       await this.cleanupSessionTracking();

@@ -156,6 +156,78 @@ Before writing ANY code, EXEC MUST:
 - ❌ Not restarting dev servers after changes
 - ❌ **CRITICAL**: Creating files for PRDs, handoffs, or documentation
 
+## 📋 PRD STANDARDS - MANDATORY COMPLIANCE
+
+### CANONICAL PRD STORAGE
+**ONLY** use `product_requirements_v2` table for all PRD operations:
+- ❌ **DEPRECATED**: `prds` table - DO NOT USE
+- ✅ **REQUIRED**: `product_requirements_v2` table
+- Field mapping: `directive_id` = Strategic Directive ID
+
+### PRD CONTENT FORMAT REQUIREMENTS
+All PRDs MUST contain valid JSON in the `content` field with these mandatory elements:
+
+```json
+{
+  "id": "PRD-{SD-ID}",
+  "title": "Strategic Directive Title",
+  "user_stories": [
+    {
+      "id": "US-{SD-ID}-001",
+      "title": "User Story Title",
+      "description": "Detailed description",
+      "priority": "HIGH|MEDIUM|LOW|CRITICAL",
+      "acceptance_criteria": ["criterion 1", "criterion 2"]
+    }
+  ]
+}
+```
+
+### CONSOLIDATED SD REQUIREMENTS
+For consolidated Strategic Directives, include additional fields:
+```json
+{
+  "is_consolidated": true,
+  "backlog_items": 10,
+  "priority_distribution": {"HIGH": 4, "MEDIUM": 3, "LOW": 3},
+  "metadata": {
+    "backlog_evidence": [/* backlog item references */]
+  }
+}
+```
+
+### PRD VALIDATION TOOLS
+Before EXEC phase execution, ensure PRD compliance:
+
+```bash
+# Validate all PRDs
+node scripts/prd-format-validator.js
+
+# Fix invalid PRDs
+node scripts/prd-format-validator.js --fix
+
+# Generate proper consolidated PRD
+node scripts/unified-consolidated-prd.js {SD-ID}
+
+# Force regenerate PRD
+node scripts/unified-consolidated-prd.js {SD-ID} --force
+```
+
+### EXEC PHASE VALIDATION
+EXEC phase includes enhanced PRD validation:
+- Validates JSON format before parsing
+- Checks for required `user_stories` array
+- Provides fix instructions for invalid PRDs
+- **NO MARKDOWN CONTENT** accepted in EXEC phase
+
+### PREVENTION CHECKLIST
+Before running orchestrator:
+- [ ] Verify PRD exists in `product_requirements_v2` table
+- [ ] Confirm `content` field contains valid JSON
+- [ ] Validate `user_stories` array is present and populated
+- [ ] For consolidated SDs: ensure backlog evidence included
+- [ ] Run format validator if unsure: `node scripts/prd-format-validator.js`
+
 ## 🚨 DATABASE-ONLY ENFORCEMENT
 
 ### ABSOLUTE PROHIBITION: No File Creation
