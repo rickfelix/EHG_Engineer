@@ -41,10 +41,15 @@ async function completeStrategicDirective(sdId) {
     const { data: sdUpdate, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .update({
-        status: 'archived', // MUST be 'archived' for completion
+        status: 'completed', // Use 'completed' status instead of 'archived'
+        is_working_on: false, // CRITICAL: Mark as not being worked on
+        current_phase: 'APPROVAL_COMPLETE',
+        progress: 100,
+        completion_date: completionTimestamp,
+        updated_at: completionTimestamp,
         metadata: {
           lead_status: 'complete',
-          plan_status: 'complete', 
+          plan_status: 'complete',
           exec_status: 'complete',
           verification_status: 'complete',
           approval_status: 'complete',
@@ -61,7 +66,7 @@ async function completeStrategicDirective(sdId) {
           approved_by: 'LEAD',
           approval_date: completionTimestamp,
           final_status: 'SUCCESSFULLY_COMPLETED',
-          leo_protocol_version: '4.1'
+          leo_protocol_version: '4.2.0'
         }
       })
       .eq('id', sdId)

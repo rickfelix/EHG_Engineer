@@ -6,9 +6,9 @@
  * Designed for minimal performance impact
  */
 
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
+import fs from 'fs';
+import path from 'path';
+import { execSync  } from 'child_process';
 
 class LEOStatusLine {
   constructor() {
@@ -502,7 +502,7 @@ class LEOStatusLine {
 }
 
 // CLI interface
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   const statusLine = new LEOStatusLine();
   
@@ -609,4 +609,4 @@ Examples:
   }
 }
 
-module.exports = LEOStatusLine;
+export default LEOStatusLine;

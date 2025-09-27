@@ -86,7 +86,7 @@ async function updatePRDStatus() {
         status: 'completed',
         completion_date: new Date().toISOString()
       })
-      .eq('strategic_directive_id', 'SD-2025-001');
+      .eq('sd_id', 'SD-2025-001');
 
     if (error) {
       console.warn('⚠️ Could not update PRD:', error.message);

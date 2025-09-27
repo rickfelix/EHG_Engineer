@@ -7,8 +7,14 @@
  * in a proper terminal environment with clear step-by-step instructions.
  */
 
-const fs = require('fs').promises;
-const path = require('path');
+import fs from 'fs';.promises;
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 
 class LEORegistrationWizard {
   constructor() {
@@ -232,7 +238,7 @@ AFTER REGISTRATION:
 }
 
 // Run the wizard
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const wizard = new LEORegistrationWizard();
   wizard.run().catch(error => {
     console.error('❌ Wizard error:', error.message);
@@ -240,4 +246,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = LEORegistrationWizard;
+export default LEORegistrationWizard;

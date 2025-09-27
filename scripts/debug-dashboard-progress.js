@@ -1,12 +1,13 @@
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+
+
 
 import { createClient } from '@supabase/supabase-js';
 import path from 'path';
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+import dotenv from 'dotenv';
+dotenv.config(); });
 import ProgressCalculator from '../lib/dashboard/progress-calculator';
 
 const supabase = createClient(

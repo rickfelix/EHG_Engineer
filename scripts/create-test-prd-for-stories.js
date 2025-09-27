@@ -73,7 +73,7 @@ async function createTestPRD() {
   const { data: existingPRD } = await supabase
     .from('product_requirements_v2')
     .select('id')
-    .eq('strategic_directive_id', sdId)
+    .eq('sd_id', sdId)
     .single();
 
   if (existingPRD) {
@@ -146,7 +146,7 @@ async function createTestPRD() {
   const { data: prd, error: prdError } = await supabase
     .from('product_requirements_v2')
     .insert({
-      strategic_directive_id: sdId,
+      sd_id: sdId,
       title: 'EHG Backlog Import and Story Management System',
       description: 'Complete system for importing, managing, and verifying backlog items with automated story generation',
       acceptance_criteria: acceptanceCriteria,

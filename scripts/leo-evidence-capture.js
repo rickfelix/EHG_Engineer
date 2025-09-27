@@ -6,9 +6,9 @@
  * For use by PLAN and EXEC agents when completing tasks
  */
 
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
+import fs from 'fs';
+import path from 'path';
+import { execSync  } from 'child_process';
 
 class EvidenceCapture {
   constructor(taskId, agentRole = 'EXEC') {
@@ -259,7 +259,7 @@ ${JSON.stringify(this.evidence, null, 2)}
    */
   getFileHash(filePath) {
     try {
-      const crypto = require('crypto');
+      import crypto from 'crypto';
       const content = fs.readFileSync(filePath);
       return crypto.createHash('sha256').update(content).digest('hex').substring(0, 8);
     } catch {
@@ -282,7 +282,7 @@ ${JSON.stringify(this.evidence, null, 2)}
 }
 
 // CLI interface
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   
   if (args.length < 1) {
@@ -368,4 +368,4 @@ Example:
   console.log(`📄 Report: ${reportPath}`);
 }
 
-module.exports = EvidenceCapture;
+export default EvidenceCapture;

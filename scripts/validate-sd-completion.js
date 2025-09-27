@@ -3,8 +3,8 @@
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+
+
 
 /**
  * Validate Strategic Directive Completion Readiness
@@ -17,7 +17,8 @@ const __dirname = dirname(__filename);
 
 import { createClient } from '@supabase/supabase-js';
 import path from 'path';
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+import dotenv from 'dotenv';
+dotenv.config(); });
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,

@@ -2,15 +2,21 @@
 
 /**
  * LEO Protocol - Unified User-Friendly CLI Interface
- * 
+ *
  * This is a user-friendly wrapper around all existing LEO Protocol functionality.
  * It preserves all the smart features but makes them more intuitive to use.
  */
 
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const path = require('path');
-const fs = require('fs').promises;
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import path from 'path';
+import fs from 'fs/promises';
+
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const execAsync = promisify(exec);
 
@@ -375,12 +381,10 @@ To see all projects: leo projects
 }
 
 // Run the CLI
-if (require.main === module) {
-  const cli = new LEOProtocolCLI();
-  cli.run().catch(error => {
-    console.error('❌ Fatal error:', error.message);
-    process.exit(1);
-  });
-}
+const cli = new LEOProtocolCLI();
+cli.run().catch(error => {
+  console.error('❌ Fatal error:', error.message);
+  process.exit(1);
+});
 
-module.exports = LEOProtocolCLI;
+export default LEOProtocolCLI;

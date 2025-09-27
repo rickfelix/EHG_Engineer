@@ -6,7 +6,7 @@
  * For use by EXEC agents after pushing code
  */
 
-const { execSync } = require('child_process');
+import { execSync  } from 'child_process';
 
 async function monitorCI(options = {}) {
   const {
@@ -174,7 +174,7 @@ function sleep(ms) {
 }
 
 // CLI interface
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   const options = {};
   
@@ -198,4 +198,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { monitorCI };
+export {  monitorCI  };

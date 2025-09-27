@@ -6,8 +6,8 @@
  * For use by LEAD and PLAN agents when creating/reviewing PRDs
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 class PRDValidator {
   constructor() {
@@ -998,7 +998,7 @@ class PRDValidator {
 }
 
 // CLI interface
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   
   if (args.length < 1 || args[0] === '--help' || args[0] === '-h') {
@@ -1052,4 +1052,4 @@ PRD Validation Checks:
   }
 }
 
-module.exports = PRDValidator;
+export default PRDValidator;

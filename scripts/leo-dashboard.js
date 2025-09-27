@@ -5,10 +5,16 @@
  * Command-line interface to manage the dashboard server
  */
 
-const { spawn, execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const http = require('http');
+import { spawn, execSync  } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import http from 'http';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 
 const DASHBOARD_DIR = path.join(__dirname, '..', 'lib', 'dashboard');
 const PID_FILE = path.join(process.cwd(), '.leo-dashboard.pid');
@@ -141,7 +147,7 @@ class DashboardCLI {
     const port = config.port || 3000;
     const url = `http://localhost:${port}`;
     
-    const { exec } = require('child_process');
+    import { exec  } from 'child_process';
     const platform = process.platform;
     let command;
     

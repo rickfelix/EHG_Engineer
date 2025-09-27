@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+import { createClient  } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
 
 async function createTables() {
   console.log('🔧 Creating EHG_Engineer database tables...\n');
@@ -29,7 +30,7 @@ async function createTables() {
         rationale: 'Need clean LEO Protocol foundation without EHG platform complexity',
         scope: 'Core LEO Protocol implementation with database, templates, and agent communication',
         created_by: 'LEAD',
-        execution_order: 1
+        sequence_rank: 1
       })
       .select();
     
@@ -51,7 +52,7 @@ async function createTables() {
               rationale TEXT NOT NULL,
               scope TEXT NOT NULL,
               created_by VARCHAR(100),
-              execution_order INTEGER,
+              sequence_rank INTEGER,
               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
               updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )

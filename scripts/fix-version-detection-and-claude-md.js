@@ -1,10 +1,12 @@
-#!/usr/bin/env node
-
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import fs from 'fs';
+import path from 'path';
+#!/usr/bin/env node
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+
+
+
 
 /**
  * Fix Version Detection and CLAUDE.md Accuracy
@@ -259,7 +261,7 @@ async function main() {
   
   // Run the update script to ensure latest version
   console.log('\n🔄 Running CLAUDE.md update script...');
-  require('./update-claude-md-version.js');
+  import './update-claude-md-version.js';
   
   console.log('\n✅ All fixes complete!');
   console.log('\n📋 Summary:');

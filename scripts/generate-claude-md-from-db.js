@@ -517,6 +517,14 @@ When creating an SD from a submission:
 3. Preserve chairman's original intent
 4. Map submission scope to SD objectives
 
+## Protocol Sections
+
+${protocol.sections && protocol.sections.length > 0 ? protocol.sections.map(section => `
+## ${section.title}
+
+${section.content}
+`).join('\n') : ''}
+
 ## Mandatory Handoff Requirements
 
 Every handoff MUST include these 7 elements:

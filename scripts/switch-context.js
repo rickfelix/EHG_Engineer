@@ -6,10 +6,17 @@
  * Switch between different application contexts
  */
 
-const fs = require('fs').promises;
-const path = require('path');
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+import fs from 'fs';.promises;
+import path from 'path';
+import { createClient  } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+dotenv.config();
 
 class ContextSwitcher {
   constructor() {
@@ -261,7 +268,7 @@ Created By:  ${config.created_by}
 }
 
 // CLI interface
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const switcher = new ContextSwitcher();
   const command = process.argv[2];
   
@@ -306,4 +313,4 @@ Examples:
   run().catch(console.error);
 }
 
-module.exports = ContextSwitcher;
+export default ContextSwitcher;

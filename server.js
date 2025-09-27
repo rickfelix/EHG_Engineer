@@ -194,12 +194,22 @@ wss.on('connection', (ws) => {
   ws.on('message', async (message) => {
     try {
       const msg = JSON.parse(message);
-      
+      console.log('📨 WebSocket message received:', msg.type, msg.data ? JSON.stringify(msg.data) : '');
+
       if (msg.type === 'setActiveSD') {
         const { sdId } = msg.data;
         console.log(`🎯 Setting active SD to: ${sdId}`);
 
         // First, clear is_working_on flag from all SDs
+        if (!dbLoader.supabase) {
+          console.error('❌ dbLoader.supabase is not initialized!');
+          ws.send(JSON.stringify({
+            type: 'error',
+            message: 'Database connection not initialized'
+          }));
+          return;
+        }
+
         const { error: clearError } = await dbLoader.supabase
           .from('strategic_directives_v2')
           .update({ is_working_on: false })

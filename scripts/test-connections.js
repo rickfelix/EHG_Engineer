@@ -5,11 +5,17 @@
  * Tests GitHub and Supabase connections for registered projects
  */
 
-const fs = require('fs').promises;
-const path = require('path');
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const https = require('https');
+import fs from 'fs';.promises;
+import path from 'path';
+import { exec  } from 'child_process';
+import { promisify  } from 'util';
+import https from 'https';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 
 const execAsync = promisify(exec);
 
@@ -166,7 +172,7 @@ class ConnectionTester {
 }
 
 // Run the tester
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const tester = new ConnectionTester();
   tester.run().catch(error => {
     console.error('❌ Fatal error:', error.message);
@@ -174,4 +180,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = ConnectionTester;
+export default ConnectionTester;

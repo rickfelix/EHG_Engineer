@@ -44,7 +44,13 @@
     "leo:help": "node scripts/leo.js help",
     "leo:status": "node scripts/leo.js status",
     "leo:orchestrate": "node scripts/leo-orchestrator-enforced.js",
-    "leo:commit": "node scripts/leo-hook-feedback.js commit"
+    "leo:commit": "node scripts/leo-hook-feedback.js commit",
+    "leo:maintenance": "node scripts/leo-maintenance.js",
+    "leo:test-feedback": "node scripts/test-feedback-loop-integration.js",
+    "leo:cleanup": "node scripts/leo-cleanup.js",
+    "leo:cleanup:full": "node scripts/leo-cleanup.js --full",
+    "leo:cleanup:force": "node scripts/leo-cleanup.js --force",
+    "db:subagent": "echo 'Apply database/schema/complete_subagent_integration.sql to Supabase'"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",
@@ -58,6 +64,7 @@
     "dotenv": "^16.3.0",
     "express": "^5.1.0",
     "express-validator": "^7.2.1",
+    "inquirer": "^12.9.6",
     "openai": "^5.22.0",
     "p-retry": "^7.0.0",
     "playwright": "^1.40.1",

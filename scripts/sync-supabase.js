@@ -5,7 +5,7 @@
  * LEO Protocol v3.1.5 - Wrapper for Supabase sync operations
  */
 
-const SyncManager = require('../lib/sync/sync-manager');
+import SyncManager from '../lib/sync/sync-manager';
 
 async function main() {
   const syncManager = new SyncManager();

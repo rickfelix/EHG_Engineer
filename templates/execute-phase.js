@@ -189,12 +189,10 @@ class UniversalPhaseExecutor {
   }
 
   async executeEXECPhase(sd, options) {
-    console.log('   💻 Implementation planning');
-    console.log(chalk.yellow('   ⚠️  CRITICAL: Implementation must happen in /mnt/c/_EHG/ehg/'));
-    console.log('   📋 Following PRD user stories');
-    console.log('   🧪 Test creation and validation');
+    console.log('   💻 EXEC Phase: ACTUAL IMPLEMENTATION REQUIRED');
+    console.log(chalk.red('   🚨 CRITICAL: This phase requires REAL code changes in /mnt/c/_EHG/ehg/'));
 
-    // Get PRD for implementation guidance
+    // MANDATORY: Verify we have a PRD to implement
     const { data: prd } = await supabase
       .from('product_requirements_v2')
       .select('*')
@@ -203,32 +201,63 @@ class UniversalPhaseExecutor {
       .limit(1)
       .single();
 
-    if (prd) {
-      const content = JSON.parse(prd.content);
-      console.log(chalk.cyan(`\n   📄 Implementation Guide:`));
-      console.log(`     PRD: ${prd.title}`);
-      console.log(`     User Stories: ${content.user_stories?.length || 0}`);
-
-      if (content.user_stories?.length > 0) {
-        const priorities = {};
-        content.user_stories.forEach(story => {
-          priorities[story.priority] = (priorities[story.priority] || 0) + 1;
-        });
-        console.log(chalk.yellow('     Priority Distribution:'));
-        Object.entries(priorities).forEach(([p, count]) => {
-          console.log(`       ${p}: ${count} stories`);
-        });
-      }
+    if (!prd) {
+      throw new Error(`No PRD found for ${sd.id}. Cannot proceed with implementation without requirements.`);
     }
 
-    console.log(chalk.cyan('\n   🎯 Implementation Checklist:'));
-    console.log('     1. cd /mnt/c/_EHG/ehg/');
-    console.log('     2. Review PRD and user stories');
-    console.log('     3. Implement high-priority items first');
-    console.log('     4. Create unit tests for each component');
-    console.log('     5. Document API endpoints');
+    const content = JSON.parse(prd.content);
+    console.log(chalk.cyan(`\n   📄 Implementation Requirements:`));
+    console.log(`     PRD: ${prd.title}`);
+    console.log(`     User Stories: ${content.user_stories?.length || 0}`);
 
-    console.log(chalk.green('   ✅ EXEC phase ready for implementation'));
+    if (!content.user_stories || content.user_stories.length === 0) {
+      throw new Error(`PRD ${prd.id} has no user stories. Cannot implement without specific requirements.`);
+    }
+
+    // Show what needs to be implemented
+    console.log(chalk.yellow('\n   📋 Required Implementation:'));
+    content.user_stories.forEach((story, i) => {
+      console.log(`     ${i + 1}. [${story.priority}] ${story.title}`);
+    });
+
+    // BLOCKING: Require manual implementation
+    console.log(chalk.red.bold('\n   🛑 IMPLEMENTATION BLOCKER:'));
+    console.log(chalk.red('   This EXEC phase will NOT automatically mark as complete.'));
+    console.log(chalk.red('   You MUST:'));
+    console.log(chalk.red('     1. Navigate to /mnt/c/_EHG/ehg/'));
+    console.log(chalk.red('     2. Implement the user stories above'));
+    console.log(chalk.red('     3. Make git commits with the SD-ID'));
+    console.log(chalk.red('     4. Run validation to verify implementation'));
+    console.log(chalk.red('     5. Only then will the SD be marked complete'));
+
+    console.log(chalk.yellow('\n   ⏸️  EXEC phase requires manual implementation before completion'));
+
+    // Update SD to blocked state requiring implementation
+    await supabase
+      .from('strategic_directives_v2')
+      .update({
+        current_phase: 'EXEC_IMPLEMENTATION_REQUIRED',
+        metadata: {
+          ...sd.metadata,
+          implementation_required: true,
+          implementation_blocker: 'Awaiting manual implementation with git evidence',
+          prd_id: prd.id,
+          user_stories_count: content.user_stories.length,
+          blocked_at: new Date().toISOString()
+        },
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', sd.id);
+
+    // DO NOT mark as complete - this must be done manually after real implementation
+    console.log(chalk.red('   🚫 EXEC phase NOT marked complete - implementation required'));
+
+    return {
+      requires_manual_implementation: true,
+      prd_id: prd.id,
+      user_stories_count: content.user_stories.length,
+      implementation_status: 'BLOCKED_PENDING_CODE_CHANGES'
+    };
   }
 
   async executeVERIFICATIONPhase(sd, options) {
@@ -246,7 +275,32 @@ class UniversalPhaseExecutor {
     console.log('   🚀 Deployment authorization');
     console.log('   📊 Retrospective generation');
 
-    console.log(chalk.green('   ✅ APPROVAL phase completed'));
+    // CRITICAL: Do NOT automatically mark as complete
+    // Require manual verification of all implementation evidence
+    console.log(chalk.yellow('\n   ⚠️  APPROVAL phase requires manual verification:'));
+    console.log(chalk.yellow('   • Verify all git commits contain actual implementation'));
+    console.log(chalk.yellow('   • Confirm user stories are implemented in code'));
+    console.log(chalk.yellow('   • Test functionality in target application'));
+    console.log(chalk.yellow('   • Only mark complete after evidence validation'));
+
+    // Update SD to approval pending state (not completed)
+    await supabase
+      .from('strategic_directives_v2')
+      .update({
+        current_phase: 'APPROVAL_PENDING_EVIDENCE',
+        metadata: {
+          ...sd.metadata,
+          approval_phase_completed: true,
+          requires_evidence_validation: true,
+          evidence_validation_pending: true,
+          approval_pending_since: new Date().toISOString()
+        },
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', sd.id);
+
+    console.log(chalk.yellow('   ⏸️  APPROVAL phase ready but NOT marked complete'));
+    console.log(chalk.red('   🚫 SD completion requires manual evidence validation'));
   }
 
   async isPhaseComplete(sdId, phase) {
@@ -271,12 +325,178 @@ class UniversalPhaseExecutor {
   }
 
   async validatePhase(phase, sd, phaseConfig) {
-    // Simple validation - could be enhanced with actual requirement checking
+    console.log(chalk.cyan(`\n   🔍 Validating ${phase} phase for ${sd.id}...`));
+
+    const errors = [];
+    const warnings = [];
+    let score = 100;
+
+    // CRITICAL: Time-based validation (4-minute rule)
+    const completionTime = await this.validateCompletionTiming(sd, phase);
+    if (!completionTime.valid) {
+      errors.push(completionTime.error);
+      score -= 50;
+    }
+
+    // EXEC phase requires git evidence
+    if (phase === 'EXEC') {
+      const gitEvidence = await this.validateGitEvidence(sd.id);
+      if (!gitEvidence.valid) {
+        errors.push(`No git commits found for ${sd.id} - implementation not verified`);
+        score -= 50;
+      } else {
+        console.log(chalk.green(`   ✅ Found ${gitEvidence.commitCount} git commits`));
+      }
+    }
+
+    // PRD requirement validation
+    if (phase === 'PLAN' || phase === 'EXEC') {
+      const prdValidation = await this.validatePRDExists(sd.id);
+      if (!prdValidation.valid) {
+        errors.push('No PRD found - cannot proceed without requirements');
+        score -= 30;
+      }
+    }
+
+    // APPROVAL phase timing checks
+    if (phase === 'APPROVAL') {
+      const approvalTiming = await this.validateApprovalTiming(sd);
+      if (!approvalTiming.valid) {
+        warnings.push(approvalTiming.warning);
+        score -= 10;
+      }
+    }
+
+    const isValid = errors.length === 0 && score >= 70;
+
+    if (!isValid) {
+      console.log(chalk.red(`   ❌ Validation failed (Score: ${score}/100)`));
+      errors.forEach(error => console.log(chalk.red(`      • ${error}`)));
+    } else {
+      console.log(chalk.green(`   ✅ Validation passed (Score: ${score}/100)`));
+    }
+
+    if (warnings.length > 0) {
+      warnings.forEach(warning => console.log(chalk.yellow(`   ⚠️  ${warning}`)));
+    }
+
     return {
-      valid: true,
-      score: 100,
-      errors: []
+      valid: isValid,
+      score,
+      errors,
+      warnings
     };
+  }
+
+  async validateCompletionTiming(sd, phase) {
+    try {
+      // Get when work started on this SD
+      const startTime = sd.created_at || sd.updated_at;
+      const currentTime = new Date().toISOString();
+
+      const timeDiff = new Date(currentTime) - new Date(startTime);
+      const minutesElapsed = Math.floor(timeDiff / (1000 * 60));
+
+      console.log(chalk.gray(`   ⏱️  Time elapsed: ${minutesElapsed} minutes`));
+
+      // RED FLAG: Completed in less than 4 minutes
+      if (minutesElapsed < 4 && phase === 'APPROVAL') {
+        return {
+          valid: false,
+          error: `🚨 RED FLAG: SD completed in ${minutesElapsed} minutes (< 4 min threshold). Likely false completion.`,
+          minutesElapsed
+        };
+      }
+
+      // WARNING: Completed very quickly for complex phases
+      if (minutesElapsed < 10 && (phase === 'EXEC' || phase === 'VERIFICATION')) {
+        return {
+          valid: true,
+          warning: `Fast completion: ${minutesElapsed} minutes for ${phase} phase`,
+          minutesElapsed
+        };
+      }
+
+      return { valid: true, minutesElapsed };
+    } catch (error) {
+      return { valid: true, error: 'Could not validate timing' };
+    }
+  }
+
+  async validateGitEvidence(sdId) {
+    try {
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+
+      // Check both repos for git commits mentioning the SD-ID
+      const repos = [
+        '/mnt/c/_EHG/EHG_Engineer',
+        '/mnt/c/_EHG/ehg'
+      ];
+
+      let totalCommits = 0;
+      const commitDetails = [];
+
+      for (const repoPath of repos) {
+        try {
+          const { stdout } = await execAsync(
+            `cd ${repoPath} && git log --oneline --since="7 days ago" --grep="${sdId}" --all`,
+            { timeout: 5000 }
+          );
+
+          if (stdout.trim()) {
+            const commits = stdout.trim().split('\n');
+            totalCommits += commits.length;
+            commitDetails.push(...commits.map(commit => ({ repo: repoPath, commit })));
+          }
+        } catch (error) {
+          // Repo might not exist, continue
+        }
+      }
+
+      return {
+        valid: totalCommits > 0,
+        commitCount: totalCommits,
+        commits: commitDetails
+      };
+    } catch (error) {
+      return { valid: false, error: 'Could not validate git evidence' };
+    }
+  }
+
+  async validatePRDExists(sdId) {
+    try {
+      const { data: prd } = await supabase
+        .from('product_requirements_v2')
+        .select('id, title')
+        .eq('directive_id', sdId)
+        .single();
+
+      return {
+        valid: !!prd,
+        prd: prd
+      };
+    } catch (error) {
+      return { valid: false };
+    }
+  }
+
+  async validateApprovalTiming(sd) {
+    // Check if all previous phases were completed too quickly
+    const phases = ['LEAD', 'PLAN', 'EXEC', 'VERIFICATION'];
+    const startTime = new Date(sd.created_at || sd.updated_at);
+    const currentTime = new Date();
+    const totalMinutes = Math.floor((currentTime - startTime) / (1000 * 60));
+
+    if (totalMinutes < 15) {
+      return {
+        valid: false,
+        warning: `Full SD lifecycle completed in ${totalMinutes} minutes - suspiciously fast`
+      };
+    }
+
+    return { valid: true };
   }
 
   async markPhaseComplete(sdId, phase) {
@@ -307,6 +527,63 @@ class UniversalPhaseExecutor {
     };
 
     return phaseFlow[currentPhase];
+  }
+
+  async markSDComplete(sdId) {
+    try {
+      console.log(chalk.blue(`   🏁 Marking ${sdId} as fully completed...`));
+
+      const completionTimestamp = new Date().toISOString();
+
+      // Update SD to completed status with is_working_on: false
+      const { data: sdUpdate, error: sdError } = await supabase
+        .from('strategic_directives_v2')
+        .update({
+          status: 'completed',
+          is_working_on: false,
+          current_phase: 'APPROVAL_COMPLETE',
+          progress: 100,
+          completion_date: completionTimestamp,
+          updated_at: completionTimestamp,
+          metadata: {
+            completion_percentage: 100,
+            completion_date: completionTimestamp,
+            approved_by: 'LEO_PHASE_EXECUTOR',
+            approval_date: completionTimestamp,
+            final_status: 'SUCCESSFULLY_COMPLETED',
+            leo_protocol_version: '4.2.0'
+          }
+        })
+        .eq('id', sdId)
+        .select();
+
+      if (sdError) {
+        console.log(chalk.yellow(`   ⚠️  Could not update SD status: ${sdError.message}`));
+      } else {
+        console.log(chalk.green(`   ✅ ${sdId} marked as completed`));
+        console.log(chalk.gray(`   Status: completed | Working On: false | Progress: 100%`));
+      }
+
+      // Update associated PRDs
+      const { error: prdError } = await supabase
+        .from('product_requirements_v2')
+        .update({
+          status: 'approved',
+          progress: 100,
+          updated_at: completionTimestamp
+        })
+        .eq('sd_id', sdId);
+
+      if (prdError) {
+        console.log(chalk.yellow(`   ⚠️  Could not update PRD status: ${prdError.message}`));
+      } else {
+        console.log(chalk.green(`   ✅ Associated PRDs marked as approved`));
+      }
+
+    } catch (error) {
+      console.log(chalk.yellow(`   ⚠️  Completion marking failed: ${error.message}`));
+      // Don't throw - this is a cleanup operation, not critical to main flow
+    }
   }
 
   showNextSteps(phase, nextPhase, sd) {

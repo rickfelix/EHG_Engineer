@@ -89,13 +89,14 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
   const [sortLevels, setSortLevels] = useState(() => {
     const saved = localStorage.getItem('sd-sort-levels');
     return saved ? JSON.parse(saved) : [
-      { field: 'sequence_rank', direction: 'asc', label: 'Sequence Rank' }
+      { field: 'sequenceRank', direction: 'asc', label: 'Sequence Rank' }
     ];
   });
   const [savedSorts, setSavedSorts] = useState(() => {
     const saved = localStorage.getItem('sd-saved-sorts');
     return saved ? JSON.parse(saved) : {
-      'Default': [{ field: 'sequence_rank', direction: 'asc', label: 'Sequence Rank' }],
+      'Strategic Priority': [{ field: 'sequenceRank', direction: 'asc', label: 'Sequence Rank' }],
+      'Default': [{ field: 'sequenceRank', direction: 'asc', label: 'Sequence Rank' }],
       'WSJF Priority': [
         { field: 'wsjf_score', direction: 'desc', label: 'WSJF Score' },
         { field: 'status', direction: 'asc', label: 'Status' },
@@ -502,6 +503,7 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
       statusMatch = statusValues.some(status => {
         if (status === 'active') return sdStatus === 'active';
         if (status === 'draft') return sdStatus === 'draft';
+        if (status === 'deferred') return sdStatus === 'deferred';
         if (status === 'on_hold') return sdStatus === 'on_hold';
         if (status === 'cancelled') return sdStatus === 'cancelled';
         if (status === 'archived') return sdStatus === 'archived' || sdStatus === 'completed' || sdStatus === 'complete';
@@ -579,6 +581,10 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
           const bMatch = bValue?.match(/SD-(\d+)/);
           aValue = aMatch ? parseInt(aMatch[1], 10) : 999999;
           bValue = bMatch ? parseInt(bMatch[1], 10) : 999999;
+        } else if (level.field === 'sequenceRank') {
+          // Ensure numeric comparison for sequenceRank
+          aValue = typeof aValue === 'number' ? aValue : parseInt(aValue, 10) || 999999;
+          bValue = typeof bValue === 'number' ? bValue : parseInt(bValue, 10) || 999999;
         }
 
         // Handle null/undefined values
@@ -744,6 +750,7 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                       <option value="active,draft">Active & Draft (Default)</option>
                       <option value="active">Active Only</option>
                       <option value="draft">Draft Only</option>
+                      <option value="deferred">Deferred</option>
                       <option value="on_hold">On Hold</option>
                       <option value="cancelled">Cancelled</option>
                       <option value="archived">Archived/Completed</option>
@@ -886,7 +893,7 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                       Save Current
                     </button>
                     <button
-                      onClick={() => setSortLevels([{ field: 'sequence_rank', direction: 'asc', label: 'Sequence Rank' }])}
+                      onClick={() => setSortLevels([{ field: 'sequenceRank', direction: 'asc', label: 'Sequence Rank' }])}
                       className={`${isCompact ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'} bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2`}
                     >
                       <RotateCcw className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'}`} />
@@ -914,7 +921,7 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                             'priority': 'Priority',
                             'status': 'Status',
                             'progress': 'Progress',
-                            'sequence_rank': 'Sequence Rank',
+                            'sequenceRank': 'Sequence Rank',
                             'created_at': 'Created Date',
                             'updated_at': 'Last Updated',
                             'title': 'Title',
@@ -931,7 +938,7 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                         <option value="priority">Priority</option>
                         <option value="status">Status</option>
                         <option value="progress">Progress</option>
-                        <option value="sequence_rank">Sequence Rank</option>
+                        <option value="sequenceRank">Sequence Rank</option>
                         <option value="created_at">Created Date</option>
                         <option value="updated_at">Last Updated</option>
                         <option value="title">Title</option>
@@ -983,6 +990,40 @@ function SDManager({ strategicDirectives, onUpdateChecklist, onSetActiveSD, curr
                     Add Sort Level
                   </button>
                 )}
+
+                {/* Reset to Strategic Priority Sort Button */}
+                <button
+                  onClick={() => {
+                    const strategicSort = [{ field: 'sequenceRank', direction: 'asc', label: 'Sequence Rank' }];
+                    setSortLevels(strategicSort);
+                    localStorage.setItem('sd-sort-levels', JSON.stringify(strategicSort));
+                    // Reset saved sorts to defaults
+                    const defaultSavedSorts = {
+                      'Strategic Priority': [{ field: 'sequenceRank', direction: 'asc', label: 'Sequence Rank' }],
+                      'Default': [{ field: 'sequenceRank', direction: 'asc', label: 'Sequence Rank' }],
+                      'WSJF Priority': [
+                        { field: 'wsjf_score', direction: 'desc', label: 'WSJF Score' },
+                        { field: 'status', direction: 'asc', label: 'Status' },
+                        { field: 'created_at', direction: 'desc', label: 'Created Date' }
+                      ],
+                      'Progress Tracking': [
+                        { field: 'progress', direction: 'asc', label: 'Progress' },
+                        { field: 'priority', direction: 'desc', label: 'Priority' },
+                        { field: 'title', direction: 'asc', label: 'Title' }
+                      ],
+                      'Recent Activity': [
+                        { field: 'updated_at', direction: 'desc', label: 'Last Updated' },
+                        { field: 'status', direction: 'asc', label: 'Status' }
+                      ]
+                    };
+                    setSavedSorts(defaultSavedSorts);
+                    localStorage.setItem('sd-saved-sorts', JSON.stringify(defaultSavedSorts));
+                  }}
+                  className={`mt-3 ${isCompact ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'} bg-blue-600 text-white rounded-lg hover:bg-blue-700 w-full flex items-center justify-center gap-2`}
+                >
+                  <RefreshCw className={`${isCompact ? 'w-3 h-3' : 'w-4 h-4'}`} />
+                  Reset to Strategic Priority Sort
+                </button>
 
                 {/* Save Dialog */}
                 {showSaveDialog && (

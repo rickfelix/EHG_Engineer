@@ -5,8 +5,9 @@
  * Per LEO Protocol v3.1.5
  */
 
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
 
 async function addSDToDatabase(sdId) {
   console.log(`📋 Adding ${sdId} to database...\n`);
@@ -38,7 +39,7 @@ async function addSDToDatabase(sdId) {
         rationale: 'To be filled in from strategic directive document',
         scope: 'To be defined in strategic directive document',
         created_by: 'LEAD',
-        execution_order: 1,
+        sequence_rank: 1,
         version: '1.0'
       })
       .select()

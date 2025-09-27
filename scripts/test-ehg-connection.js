@@ -5,9 +5,9 @@
  * Tests GitHub and Supabase connections specifically for the EHG project
  */
 
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const https = require('https');
+import { exec  } from 'child_process';
+import { promisify  } from 'util';
+import https from 'https';
 
 const execAsync = promisify(exec);
 
@@ -226,7 +226,7 @@ Supabase: ${this.project.supabase_url}
 }
 
 // Run the tester
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const tester = new EHGConnectionTester();
   tester.run().catch(error => {
     console.error('❌ Fatal error:', error.message);
@@ -234,4 +234,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = EHGConnectionTester;
+export default EHGConnectionTester;

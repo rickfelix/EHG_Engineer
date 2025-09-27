@@ -6,9 +6,10 @@
  * Part of LEO Protocol v3.1.5.9
  */
 
-const readline = require('readline');
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+import readline from 'readline';
+import { createClient  } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -491,7 +492,7 @@ This tool helps LEO Protocol agents determine when Vision QA is required.
 }
 
 // CLI execution
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const helper = new VisionQADecisionHelper();
   const args = process.argv.slice(2);
 
@@ -519,4 +520,4 @@ Examples:
   }
 }
 
-module.exports = VisionQADecisionHelper;
+export default VisionQADecisionHelper;

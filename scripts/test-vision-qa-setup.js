@@ -5,9 +5,10 @@
  * Verifies API keys and Vision QA system configuration
  */
 
-const MultimodalClient = require('../lib/ai/multimodal-client');
-const VisionQAAgent = require('../lib/testing/vision-qa-agent');
-require('dotenv').config();
+import MultimodalClient from '../lib/ai/multimodal-client';
+import VisionQAAgent from '../lib/testing/vision-qa-agent';
+import dotenv from 'dotenv';
+dotenv.config();
 
 console.log(`
 ╔════════════════════════════════════════════════╗

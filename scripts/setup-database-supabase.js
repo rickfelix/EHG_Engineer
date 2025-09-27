@@ -5,10 +5,11 @@
  * This script provides the SQL and instructions for setting up the database
  */
 
-const fs = require('fs').promises;
-const path = require('path');
-const { exec } = require('child_process');
-require('dotenv').config();
+import fs from 'fs';.promises;
+import path from 'path';
+import { exec  } from 'child_process';
+import dotenv from 'dotenv';
+dotenv.config();
 
 async function setupSupabaseDatabase() {
   console.log('🔧 EHG_Engineer Database Setup Helper\n');

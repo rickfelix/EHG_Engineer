@@ -3,8 +3,8 @@
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+
+
 
 /**
  * LEO Protocol Bootstrap System
@@ -212,8 +212,10 @@ class LEOBootstrap {
     const quickScript = `
 
 // LEO Quick Access - Auto-updates CLAUDE.md
-require('./scripts/leo-auto-init.js').LEOAutoInit().initialize().then(() => {
-  require('./scripts/leo.js');
+import { LEOAutoInit } from './scripts/leo-auto-init.js';
+
+LEOAutoInit().initialize().then(() => {
+  import('./scripts/leo.js');
 });`;
     
     const quickPath = path.join(__dirname, '..', 'leo');

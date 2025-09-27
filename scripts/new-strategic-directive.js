@@ -5,10 +5,11 @@
  * Per LEO Protocol v3.1.5
  */
 
-const { createClient } = require('@supabase/supabase-js');
-const fs = require('fs').promises;
-const path = require('path');
-require('dotenv').config();
+import { createClient  } from '@supabase/supabase-js';
+import fs from 'fs';.promises;
+import path from 'path';
+import dotenv from 'dotenv';
+dotenv.config();
 
 async function createNewSD() {
   console.log('📋 Creating new Strategic Directive...\n');

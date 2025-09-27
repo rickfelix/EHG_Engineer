@@ -6,8 +6,8 @@
  * For use by LEAD agents when creating/modifying strategic directives
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 class SDValidator {
   constructor() {
@@ -381,7 +381,7 @@ class SDValidator {
 }
 
 // CLI interface
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   
   if (args.length < 1) {
@@ -415,4 +415,4 @@ Examples:
   }
 }
 
-module.exports = SDValidator;
+export default SDValidator;

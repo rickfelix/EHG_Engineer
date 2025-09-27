@@ -1,6 +1,13 @@
 #!/usr/bin/env node
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
+import dotenv from 'dotenv';
+dotenv.config();
+import { createClient  } from '@supabase/supabase-js';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -101,8 +108,8 @@ async function checkBacklogGaps() {
 
   // Export CSV data for CI
   if (process.env.EXPORT_CSV) {
-    const fs = require('fs');
-    const path = require('path');
+    import fs from 'fs';
+    import path from 'path';
     const outDir = path.join(__dirname, '..', 'ops', 'checks', 'out');
 
     if (!fs.existsSync(outDir)) {

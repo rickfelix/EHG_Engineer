@@ -5,10 +5,11 @@
  * Per LEO Protocol v3.1.5
  */
 
-const { createClient } = require('@supabase/supabase-js');
-const fs = require('fs').promises;
-const path = require('path');
-require('dotenv').config();
+import { createClient } from '@supabase/supabase-js';
+import fs from 'fs';.promises;
+import path from 'path';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -34,7 +35,7 @@ async function updateDirectiveStatus(sdId, newStatus) {
         updated_at: new Date().toISOString()
       })
       .eq('id', sdId)
-      .select('id, title, status, execution_order, priority, category, updated_at')
+      .select('id, title, status, sequence_rank, priority, category, updated_at')
       .single();
 
     if (error) {
@@ -75,7 +76,7 @@ VERIFICATION
 ------------
 Strategic Directive: ${sdId}
 Title: ${data.title}
-Execution Order: ${data.execution_order}
+Execution Order: ${data.sequence_rank}
 Priority: ${data.priority}
 Category: ${data.category}
 

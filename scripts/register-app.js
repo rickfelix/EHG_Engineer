@@ -6,12 +6,18 @@
  * Interactive wizard to register new applications
  */
 
-const fs = require('fs').promises;
-const path = require('path');
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const readline = require('readline');
-const encryption = require('../lib/security/encryption');
+import fs from 'fs';.promises;
+import path from 'path';
+import { exec  } from 'child_process';
+import { promisify  } from 'util';
+import readline from 'readline';
+import encryption from '../lib/security/encryption';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 
 const execAsync = promisify(exec);
 
@@ -271,7 +277,7 @@ Credentials encrypted in: ${appId}/.env.encrypted
 }
 
 // Run if called directly
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const registrar = new AppRegistration();
   registrar.registerApplication().catch(error => {
     console.error('❌ Registration failed:', error.message);
@@ -279,4 +285,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = AppRegistration;
+export default AppRegistration;

@@ -1,7 +1,8 @@
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
-const fs = require('fs').promises;
-const path = require('path');
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
+import fs from 'fs';.promises;
+import path from 'path';
 
 async function setupDatabase() {
   console.log('🔧 Setting up EHG_Engineer database schema...\n');

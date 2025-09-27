@@ -14,6 +14,7 @@ import chalk from 'chalk';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import dotenv from 'dotenv';
+import HookSubAgentActivator from './hook-subagent-activator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -28,6 +29,26 @@ class LEOHookFeedback {
   constructor() {
     this.failureLogPath = '.leo-hook-failures.json';
     this.maxRetries = 3;
+    this.subAgentActivator = new HookSubAgentActivator();
+
+    // Error recovery configuration
+    this.retryConfig = {
+      baseDelay: 1000,          // Start with 1 second
+      maxDelay: 30000,          // Max 30 seconds
+      backoffMultiplier: 2,     // Exponential backoff
+      operationTimeout: 30000,  // 30 second timeout per operation
+      circuitBreakerThreshold: 3 // Open circuit after 3 consecutive failures
+    };
+
+    // Circuit breaker state
+    this.circuitBreaker = {
+      failures: 0,
+      state: 'closed', // closed, open, half-open
+      lastFailureTime: null,
+      nextRetryTime: null
+    };
+
+    // Legacy resolution strategies (fallback if sub-agent fails)
     this.resolutionStrategies = {
       'no_orchestrator_session': this.resolveNoSession.bind(this),
       'prd_files_detected': this.resolvePRDFiles.bind(this),
@@ -35,6 +56,61 @@ class LEOHookFeedback {
       'stale_session': this.resolveStaleSession.bind(this),
       'handoff_files_detected': this.resolveHandoffFiles.bind(this)
     };
+  }
+
+  /**
+   * Calculate retry delay with exponential backoff
+   */
+  calculateRetryDelay(attemptNumber) {
+    const delay = Math.min(
+      this.retryConfig.baseDelay * Math.pow(this.retryConfig.backoffMultiplier, attemptNumber - 1),
+      this.retryConfig.maxDelay
+    );
+    // Add jitter to prevent thundering herd
+    const jitter = Math.random() * 0.3 * delay;
+    return Math.floor(delay + jitter);
+  }
+
+  /**
+   * Check circuit breaker state
+   */
+  checkCircuitBreaker() {
+    if (this.circuitBreaker.state === 'open') {
+      if (Date.now() >= this.circuitBreaker.nextRetryTime) {
+        console.log(chalk.yellow('⚡ Circuit breaker entering half-open state'));
+        this.circuitBreaker.state = 'half-open';
+      } else {
+        const waitTime = Math.ceil((this.circuitBreaker.nextRetryTime - Date.now()) / 1000);
+        throw new Error(`Circuit breaker is open. Retry in ${waitTime} seconds`);
+      }
+    }
+  }
+
+  /**
+   * Record circuit breaker failure
+   */
+  recordCircuitFailure() {
+    this.circuitBreaker.failures++;
+    this.circuitBreaker.lastFailureTime = Date.now();
+
+    if (this.circuitBreaker.failures >= this.retryConfig.circuitBreakerThreshold) {
+      this.circuitBreaker.state = 'open';
+      this.circuitBreaker.nextRetryTime = Date.now() + 60000; // Wait 1 minute before retry
+      console.log(chalk.red('⚡ Circuit breaker opened due to repeated failures'));
+    }
+  }
+
+  /**
+   * Reset circuit breaker on success
+   */
+  resetCircuitBreaker() {
+    if (this.circuitBreaker.state !== 'closed') {
+      console.log(chalk.green('⚡ Circuit breaker reset to closed'));
+    }
+    this.circuitBreaker.failures = 0;
+    this.circuitBreaker.state = 'closed';
+    this.circuitBreaker.lastFailureTime = null;
+    this.circuitBreaker.nextRetryTime = null;
   }
 
   /**
@@ -49,11 +125,24 @@ class LEOHookFeedback {
 
     while (attempts < this.maxRetries) {
       attempts++;
+
+      // Check circuit breaker before attempting
+      try {
+        this.checkCircuitBreaker();
+      } catch (cbError) {
+        console.log(chalk.red(`\n❌ ${cbError.message}`));
+        process.exit(1);
+      }
+
       console.log(chalk.cyan(`\n📝 Attempt ${attempts}/${this.maxRetries}`));
 
       try {
-        // Try to execute git commit
-        const result = await this.executeGitCommand(args);
+        // Try to execute git command with timeout
+        const result = await this.executeWithTimeout(
+          this.executeGitCommand(args),
+          this.retryConfig.operationTimeout,
+          'Git command timed out'
+        );
 
         if (result.success) {
           console.log(chalk.green('\n✅ Commit successful!'));
@@ -87,12 +176,30 @@ class LEOHookFeedback {
 
         console.log(chalk.green('✅ Issue resolved, retrying commit...'));
 
-        // Add small delay before retry
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Reset circuit breaker on successful resolution
+        this.resetCircuitBreaker();
+
+        // Calculate and apply retry delay with exponential backoff
+        const retryDelay = this.calculateRetryDelay(attempts);
+        console.log(chalk.gray(`   Waiting ${retryDelay}ms before retry...`));
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
 
       } catch (error) {
-        console.error(chalk.red('\n❌ Fatal error:'), error);
-        process.exit(1);
+        console.error(chalk.red('\n❌ Error:'), error.message);
+
+        // Record failure for circuit breaker
+        this.recordCircuitFailure();
+
+        // If this was the last attempt, exit
+        if (attempts >= this.maxRetries) {
+          console.error(chalk.red('\n❌ Fatal: Max retries exceeded'));
+          process.exit(1);
+        }
+
+        // Apply exponential backoff before next attempt
+        const retryDelay = this.calculateRetryDelay(attempts);
+        console.log(chalk.yellow(`\n⏳ Retrying in ${retryDelay}ms...`));
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
     }
 
@@ -103,6 +210,17 @@ class LEOHookFeedback {
     }
 
     process.exit(1);
+  }
+
+  /**
+   * Execute with timeout wrapper
+   */
+  async executeWithTimeout(promise, timeout, timeoutMessage) {
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(timeoutMessage)), timeout);
+    });
+
+    return Promise.race([promise, timeoutPromise]);
   }
 
   /**
@@ -217,14 +335,54 @@ class LEOHookFeedback {
    * Attempt to resolve the issue
    */
   async attemptResolution(failure) {
+    console.log(chalk.cyan('\n🔧 Attempting automatic resolution...'));
+
+    // First, try sub-agent activation
+    if (this.subAgentActivator.canHandle(failure.type)) {
+      console.log(chalk.blue('🤖 Delegating to sub-agent system...'));
+
+      try {
+        const subAgentResult = await this.subAgentActivator.activateForFailure(
+          failure.type,
+          { sdId: await this.getCurrentSDContext() }
+        );
+
+        if (subAgentResult.success) {
+          console.log(chalk.green('✅ Sub-agent resolution successful'));
+
+          // Update database with sub-agent info
+          try {
+            await supabase
+              .from('leo_hook_feedback')
+              .update({
+                resolution_status: 'resolved',
+                resolved_at: new Date().toISOString(),
+                sub_agent_activated: subAgentResult.subAgent || 'UNKNOWN',
+                resolution_method: 'sub-agent',
+                resolution_details: subAgentResult
+              })
+              .eq('error_type', failure.type)
+              .eq('resolution_status', 'pending');
+          } catch {
+            // Database might not be available
+          }
+
+          return subAgentResult;
+        } else {
+          console.log(chalk.yellow('⚠️  Sub-agent resolution failed, trying legacy method...'));
+        }
+      } catch (error) {
+        console.error(chalk.red('Sub-agent error:'), error.message);
+      }
+    }
+
+    // Fallback to legacy resolution strategies
     const resolver = this.resolutionStrategies[failure.type];
 
     if (!resolver) {
       console.log(chalk.yellow('⚠️  No automatic resolution available'));
       return false;
     }
-
-    console.log(chalk.cyan('\n🔧 Attempting automatic resolution...'));
 
     try {
       const resolved = await resolver(failure);
@@ -237,7 +395,8 @@ class LEOHookFeedback {
             .update({
               resolution_status: 'resolved',
               resolved_at: new Date().toISOString(),
-              sub_agent_activated: resolved.subAgent || null
+              sub_agent_activated: resolved.subAgent || null,
+              resolution_method: 'legacy'
             })
             .eq('error_type', failure.type)
             .eq('resolution_status', 'pending');
@@ -409,6 +568,27 @@ class LEOHookFeedback {
   }
 
   /**
+   * Get current SD context from git or session
+   */
+  async getCurrentSDContext() {
+    try {
+      // Try session file first
+      const sdId = await fs.readFile('.leo-session-id', 'utf8');
+      return sdId.trim();
+    } catch {
+      // Try branch name
+      try {
+        const branch = execSync('git branch --show-current', { encoding: 'utf8' }).trim();
+        const match = branch.match(/SD-\d{4}-\d{3}/);
+        if (match) return match[0];
+      } catch {
+        // Ignore
+      }
+    }
+    return null;
+  }
+
+  /**
    * Clean up failure log after success
    */
   async cleanupFailureLog() {
@@ -416,6 +596,22 @@ class LEOHookFeedback {
       await fs.unlink(this.failureLogPath);
     } catch {
       // File might not exist
+    }
+
+    // Get sub-agent activation summary if available
+    if (this.subAgentActivator) {
+      const summary = this.subAgentActivator.getActivationSummary();
+      if (summary.totalActivations > 0) {
+        console.log(chalk.blue('\n📊 Sub-Agent Activity Summary:'));
+        console.log(chalk.gray(`   Total activations: ${summary.totalActivations}`));
+        console.log(chalk.green(`   Successful: ${summary.successful}`));
+        if (summary.failed > 0) {
+          console.log(chalk.yellow(`   Failed: ${summary.failed}`));
+        }
+        if (summary.errors > 0) {
+          console.log(chalk.red(`   Errors: ${summary.errors}`));
+        }
+      }
     }
   }
 }

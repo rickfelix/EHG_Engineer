@@ -12,28 +12,22 @@
 
 ## 🏗️ Application Architecture - CRITICAL CONTEXT
 
-### Two Distinct Applications with SEPARATE DATABASES:
-
-#### 1. **EHG_Engineer** (Management Dashboard) - WHERE YOU ARE NOW
+### Two Distinct Applications:
+1. **EHG_Engineer** (Management Dashboard) - WHERE YOU ARE NOW
    - **Path**: `/mnt/c/_EHG/EHG_Engineer/`
    - **Purpose**: LEO Protocol dashboard for managing Strategic Directives & PRDs
-   - **Database**: `dedlbzhpgkmetvhbkyzq` (Supabase - MANAGEMENT DATABASE)
+   - **Database**: dedlbzhpgkmetvhbkyzq (Supabase)
    - **GitHub**: https://github.com/rickfelix/EHG_Engineer.git
    - **Port**: 3000-3001
    - **Role**: MANAGEMENT TOOL ONLY - no customer features here!
 
-#### 2. **EHG** (Business Application) - IMPLEMENTATION TARGET
+2. **EHG** (Business Application) - IMPLEMENTATION TARGET
    - **Path**: `/mnt/c/_EHG/ehg/`
    - **Purpose**: The actual customer-facing business application
-   - **Database**: `liapbndqlqxdcgpwntbv` (Supabase - CUSTOMER DATABASE)
+   - **Database**: liapbndqlqxdcgpwntbv (Supabase)
    - **GitHub**: https://github.com/rickfelix/ehg.git
    - **Built with**: Vite + React + Shadcn + TypeScript
    - **Role**: WHERE ALL FEATURES GET IMPLEMENTED
-
-⚠️ **CRITICAL DATABASE DISTINCTION**:
-- **EHG_Engineer DB** (`dedlbzhpgkmetvhbkyzq`): Contains SDs, PRDs, LEO Protocol data
-- **EHG App DB** (`liapbndqlqxdcgpwntbv`): Contains customer data, business logic
-- **NEVER** mix these databases - they serve completely different purposes!
 
 ### ⚠️ CRITICAL: During EXEC Phase Implementation
 1. **Read PRD** from EHG_Engineer database
@@ -52,7 +46,7 @@ EHG_Engineer (Management)          EHG App (Implementation)
 ```
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-09-26 2:23:28 PM
+**Last Generated**: 2025-09-27 9:52:00 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -91,6 +85,9 @@ UPDATE leo_protocols SET status = 'superseded' WHERE version != 'new_version';
 
 ### Strategic Leadership Agent (LEAD)
 - **Responsibilities**: Strategic planning, business objectives, final approval. **SIMPLICITY FIRST**: Challenge complexity, favor simple solutions over perfect architectures. Ask "What's the simplest solution?" and "Why not just configure existing tools?" Default to 80/20 solutions that deliver value quickly.
+- **🛡️ HUMAN APPROVAL REQUIRED**: LEAD MUST request human approval before changing SD status/priority. Use standardized over-engineering rubric for evaluations. NEVER override user selections without explicit permission.
+- **📋 Over-Engineering Evaluation**: Use `scripts/lead-over-engineering-rubric.js` for standardized assessments. Present findings to human for approval before any changes.
+- **🚫 PROHIBITED**: Autonomous SD status changes, user selection overrides, subjective over-engineering calls without rubric.
 - **Planning**: 20%
 - **Implementation**: 0%
 - **Verification**: 0%
@@ -414,6 +411,57 @@ When creating an SD from a submission:
 3. Preserve chairman's original intent
 4. Map submission scope to SD objectives
 
+## Protocol Sections
+
+
+## LEAD Over-Engineering Evaluation Process
+
+### 🛡️ LEAD Over-Engineering Evaluation Process
+
+**MANDATORY**: LEAD agents MUST use the standardized rubric before making any SD status/priority changes.
+
+#### Step-by-Step Evaluation Process
+
+1. **Execute Rubric Evaluation**:
+   ```bash
+   node scripts/lead-over-engineering-rubric.js --sd-id [SD_ID]
+   ```
+
+2. **Review 6-Dimension Scores** (1-5 scale each):
+   - **Technical Complexity vs Business Value**: Complexity-to-value ratio
+   - **Resource Intensity vs Urgency**: Development effort vs business urgency  
+   - **Strategic Priority Alignment**: Alignment with Stage 1/EVA/GTM priorities
+   - **Market Timing & Opportunity Window**: Market opportunity timing
+   - **Implementation & Business Risk**: Risk vs reward assessment
+   - **Return on Investment Projection**: Expected ROI evaluation
+
+3. **Check Over-Engineering Thresholds**:
+   - Total Score ≤15/30 = Over-engineered
+   - Complexity ≤2 = Problematic
+   - Strategic Alignment ≤2 = Concerning  
+   - Risk Assessment ≤2 = Dangerous
+
+4. **Present Findings to Human**:
+   ```bash
+   node scripts/lead-human-approval-system.js --sd-id [SD_ID] --evaluation [RESULTS]
+   ```
+
+5. **Request Explicit Approval**: Show scores, reasoning, and consequences
+
+6. **Execute Only After Approval**: NEVER make autonomous changes
+
+#### Available Scripts for LEAD Agents
+- `scripts/lead-over-engineering-rubric.js` - Standardized 6-dimension evaluation
+- `scripts/lead-human-approval-system.js` - Human approval workflow
+- `scripts/enhanced-priority-rubric.js` - Priority rebalancing tools
+
+#### Prohibited Actions
+- ❌ Autonomous SD status/priority changes  
+- ❌ Overriding user selections without permission
+- ❌ Subjective over-engineering calls without rubric
+- ❌ Making changes before human approval
+
+
 ## Mandatory Handoff Requirements
 
 Every handoff MUST include these 7 elements:
@@ -716,65 +764,63 @@ Dashboard automatically connects to database:
 5. **WebSocket Updates** - Dashboard stays synchronized
 6. **PLAN Supervisor** - Final verification before LEAD approval
 
-## 🗄️ Supabase Database Operations (EHG_Engineer Management DB)
+## 🗄️ Supabase Database Operations
 
-⚠️ **THIS SECTION IS FOR EHG_Engineer DATABASE ONLY**
-- **Database**: `dedlbzhpgkmetvhbkyzq` - Management/LEO Protocol database
-- **NOT for**: EHG customer database (`liapbndqlqxdcgpwntbv`)
-
-### Connection Details (EHG_Engineer DB)
+### Connection Details
 - **Project URL**: https://dedlbzhpgkmetvhbkyzq.supabase.co
 - **Project ID**: dedlbzhpgkmetvhbkyzq
-- **Purpose**: Strategic Directives, PRDs, LEO Protocol data
 - **Connection**: Via Supabase client using environment variables
 
-### Creating Database Tables (in EHG_Engineer DB)
+### Creating Database Tables
 
-#### Method 1: Using Pooler Connection (FASTEST - Already Configured!)
-```bash
-# SUPABASE_POOLER_URL is already in .env - use it directly!
-node scripts/execute-database-sql.js path/to/schema.sql
-
-# Examples:
-node scripts/execute-database-sql.js database/schema/sd_execution_timeline.sql
-node scripts/execute-database-sql.js database/schema/007_leo_protocol_schema.sql
+#### Method 1: Using RPC Function (if available)
+```javascript
+const { error } = await supabase.rpc('execute_sql', {
+  sql: 'CREATE TABLE IF NOT EXISTS ...'
+});
 ```
 
-#### Method 2: Supabase Dashboard (Manual Fallback)
-1. Go to: https://supabase.com/dashboard/project/dedlbzhpgkmetvhbkyzq/editor
+#### Method 2: Using psql Command
+```bash
+# If DATABASE_URL is available in .env
+psql $DATABASE_URL -f path/to/migration.sql
+```
+
+#### Method 3: Supabase Dashboard (always works)
+1. Go to: https://supabase.com/dashboard/project/dedlbzhpgkmetvhbkyzq
 2. Navigate to SQL Editor
 3. Paste and execute SQL
 
-#### Method 3: Enable RPC for Future Automation (Optional)
-```sql
--- Run once in Dashboard to enable programmatic SQL execution
-CREATE OR REPLACE FUNCTION execute_sql(sql text)
-RETURNS json LANGUAGE plpgsql SECURITY DEFINER AS $$
-BEGIN
-  EXECUTE sql;
-  RETURN json_build_object('status', 'success');
-EXCEPTION WHEN OTHERS THEN
-  RETURN json_build_object('status', 'error', 'message', SQLERRM);
-END; $$;
-```
-
-### Database Quick Reference (EHG_Engineer DB)
-- **Database Name**: EHG_Engineer Management Database
-- **Project ID**: dedlbzhpgkmetvhbkyzq (NOT the EHG customer DB!)
-- **Connection**: SUPABASE_POOLER_URL in .env (pre-configured for Engineer DB)
-- **Schema Location**: /database/schema/ (Engineer DB schemas only)
-- **Create Any Table**: `node scripts/execute-database-sql.js database/schema/[filename].sql`
-- **Tables Include**: strategic_directives_v2, product_requirements_v2, leo_protocols, etc.
-
 ### Key Database Operations Scripts
-- `scripts/execute-database-sql.js` - Universal SQL executor (uses pooler connection)
-- `scripts/generate-claude-md-from-db.js` - Generate this file from database
+- `scripts/execute-leo-protocol-sql.js` - Execute protocol migrations
+- `scripts/create-leo-protocol-tables.js` - Create LEO tables
+- `scripts/apply-supervisor-safe.sql` - PLAN supervisor tables
 - `database/schema/` - All schema definitions
 
-### Troubleshooting Database Operations
-- **SSL Certificate Error**: Already handled in execute-database-sql.js
-- **Missing SUPABASE_POOLER_URL**: Check .env file (should be present)
-- **Table Already Exists**: Script handles gracefully with ON CONFLICT clauses
+## 🧹 LEO Session Cleanup Utility
+
+**Purpose**: Clean up lingering sessions, orphaned handoffs, and ensure clean orchestrator runs.
+
+### Commands
+```bash
+npm run leo:cleanup        # Basic cleanup (sessions & orphaned handoffs)
+npm run leo:cleanup:full   # Full cleanup including all cache files
+npm run leo:cleanup:force  # Force cancel all active sessions (use with caution)
+```
+
+### What It Cleans
+1. **Session Files**: Removes `.leo-session-*`, `.handoff-*`, `.sd-active` files
+2. **Completed SDs**: Marks lingering sessions for completed SDs as finished
+3. **Orphaned Handoffs**: Cancels pending handoffs for completed SDs
+4. **Cache Files** (with `--full`): Clears `.leo-cache.json`, analysis caches
+5. **Active Sessions** (with `--force`): Cancels all in-progress LEO sessions
+
+### When to Use
+- Before starting new SD execution
+- When orchestrator shows wrong SD (like SD-2025-001 instead of current)
+- After manual SD status changes
+- When handoffs are stuck
+- To see all active work: `npm run leo:cleanup` (shows status without force)
 
 ## 🔧 CRITICAL DEVELOPMENT WORKFLOW
 
@@ -843,6 +889,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=[your-anon-key]
 
 ---
 
-*Generated from Database: 2025-09-26*
+*Generated from Database: 2025-09-27*
 *Protocol Version: vv4.2.0_story_gates*
 *Database-First Architecture: ACTIVE*

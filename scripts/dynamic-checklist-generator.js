@@ -508,4 +508,7 @@ async function main() {
   console.log('\nThis ensures checklists are always relevant and meaningful!');
 }
 
-main().catch(console.error);
+// Only run main if this script is executed directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(console.error);
+}

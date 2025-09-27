@@ -6,8 +6,8 @@ import yaml from 'js-yaml';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+
+
 
 // Load stages data
 const stagesPath = path.join(__dirname, '../docs/workflow/stages.yaml');
@@ -44,7 +44,7 @@ stages.forEach(stage => {
   
   // Check for SOP
   const sopPattern = `../docs/workflow/sop/${padded}-*.md`;
-  const sopFiles = require('glob').sync(path.join(__dirname, sopPattern));
+  import sopFiles from 'glob';.sync(path.join(__dirname, sopPattern));
   if (sopFiles.length === 0) {
     missing.push(`SOP for stage ${stage.id}`);
   }

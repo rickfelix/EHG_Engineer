@@ -89,6 +89,11 @@ class EnforcedOrchestrator extends LEOProtocolOrchestrator {
         console.log(chalk.green(`   ✅ ${phase} phase completed`));
       }
 
+      // CRITICAL: Do NOT automatically mark as complete
+      // This was the source of false completions
+      console.log(chalk.yellow('\n🚫 SD NOT automatically marked complete'));
+      console.log(chalk.yellow('   Manual evidence validation required before completion'));
+
       // Clean up session files on success
       await this.cleanupSessionTracking();
 
@@ -119,6 +124,70 @@ class EnforcedOrchestrator extends LEOProtocolOrchestrator {
       console.log('🧹 Session tracking files cleaned up');
     } catch (error) {
       // Files might not exist, that's ok
+    }
+  }
+
+  async markSDComplete(sdId) {
+    try {
+      console.log(chalk.blue(`\n🏁 Marking ${sdId} as fully completed...`));
+
+      const completionTimestamp = new Date().toISOString();
+
+      // Create Supabase client using environment variables
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(
+        process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      );
+
+      // Update SD to completed status with is_working_on: false
+      const { data: sdUpdate, error: sdError } = await supabase
+        .from('strategic_directives_v2')
+        .update({
+          status: 'completed',
+          is_working_on: false,
+          current_phase: 'APPROVAL_COMPLETE',
+          progress: 100,
+          completion_date: completionTimestamp,
+          updated_at: completionTimestamp,
+          metadata: {
+            completion_percentage: 100,
+            completion_date: completionTimestamp,
+            approved_by: 'LEO_ORCHESTRATOR',
+            approval_date: completionTimestamp,
+            final_status: 'SUCCESSFULLY_COMPLETED',
+            leo_protocol_version: '4.2.0'
+          }
+        })
+        .eq('id', sdId)
+        .select();
+
+      if (sdError) {
+        console.log(chalk.yellow(`⚠️  Could not update SD status: ${sdError.message}`));
+      } else {
+        console.log(chalk.green(`✅ ${sdId} marked as completed`));
+        console.log(chalk.gray(`   Status: completed | Working On: false | Progress: 100%`));
+      }
+
+      // Update associated PRDs
+      const { error: prdError } = await supabase
+        .from('product_requirements_v2')
+        .update({
+          status: 'approved',
+          progress: 100,
+          updated_at: completionTimestamp
+        })
+        .eq('sd_id', sdId);
+
+      if (prdError) {
+        console.log(chalk.yellow(`⚠️  Could not update PRD status: ${prdError.message}`));
+      } else {
+        console.log(chalk.green(`✅ Associated PRDs marked as approved`));
+      }
+
+    } catch (error) {
+      console.log(chalk.yellow(`⚠️  Completion marking failed: ${error.message}`));
+      // Don't throw - this is a cleanup operation, not critical to main flow
     }
   }
 

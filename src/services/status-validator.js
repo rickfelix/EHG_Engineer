@@ -8,13 +8,12 @@ class StatusValidator {
     // Define valid statuses for each document type
     this.validStatuses = {
       SD: {
-        all: ['draft', 'active', 'in_progress', 'on_hold', 'completed', 'complete', 'approved', 'cancelled', 'archived'],
-        preferred: ['draft', 'active', 'on_hold', 'cancelled', 'archived'],
+        all: ['draft', 'active', 'in_progress', 'on_hold', 'completed', 'complete', 'approved', 'cancelled', 'deferred'],
+        preferred: ['draft', 'active', 'on_hold', 'cancelled', 'completed', 'deferred'],
         deprecated: {
           'in_progress': 'active',
-          'completed': 'archived',
-          'complete': 'archived',
-          'approved': 'archived'
+          'complete': 'completed',
+          'approved': 'completed'
         }
       },
       PRD: {
@@ -36,11 +35,12 @@ class StatusValidator {
     // Define valid status transitions
     this.transitions = {
       SD: {
-        'draft': ['active', 'cancelled'],
-        'active': ['on_hold', 'cancelled', 'archived'],
-        'on_hold': ['active', 'cancelled'],
+        'draft': ['active', 'cancelled', 'deferred'],
+        'active': ['on_hold', 'cancelled', 'completed', 'deferred'],
+        'on_hold': ['active', 'cancelled', 'deferred'],
+        'deferred': ['active', 'cancelled'],
         'cancelled': [],
-        'archived': []
+        'completed': []
       },
       PRD: {
         'draft': ['planning', 'cancelled'],
@@ -149,8 +149,10 @@ class StatusValidator {
         'working': 'active',
         'paused': 'on_hold',
         'stopped': 'cancelled',
-        'completed': 'archived',
-        'done': 'archived'
+        'completed': 'completed',
+        'done': 'completed',
+        'postponed': 'deferred',
+        'delayed': 'deferred'
       },
       PRD: {
         'created': 'draft',
@@ -237,7 +239,7 @@ class StatusValidator {
   getAgentPermissions(docType, agent) {
     const permissions = {
       SD: {
-        LEAD: ['draft', 'active', 'on_hold', 'cancelled', 'archived'],
+        LEAD: ['draft', 'active', 'on_hold', 'cancelled', 'completed', 'deferred'],
         PLAN: [],
         EXEC: []
       },

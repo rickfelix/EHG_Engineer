@@ -126,6 +126,7 @@ class StrategicLoaders {
           targetOutcome: sd.target_outcome,
           targetApplication: sd.target_application,
           status: normalizedStatus,
+          sequenceRank: sd.sequence_rank,
           metadata: {
             'SD Key': sd.sd_key,
             Status: normalizedStatus,

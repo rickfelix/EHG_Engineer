@@ -19,7 +19,9 @@ import { createClient } from '@supabase/supabase-js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+import dotenv from 'dotenv';
+
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const execAsync = promisify(exec);
 
@@ -54,6 +56,20 @@ class GitHubDeploymentSubAgent {
       await this.runPreDeploymentChecks();
       console.log('✅ Pre-deployment checks passed\n');
 
+      // STEP 2.5: Generate Repository State Report
+      console.log('📊 STEP 2.5: Repository State Analysis...');
+      const repoState = await this.generateRepositoryStateReport();
+      if (!repoState.deploymentReadiness.ready) {
+        console.log('⚠️  Repository state issues:');
+        repoState.deploymentReadiness.issues.forEach(issue => {
+          console.log(`   - ${issue}`);
+        });
+        if (!repoState.deploymentReadiness.clean) {
+          throw new Error('Repository has uncommitted changes - cannot deploy');
+        }
+      }
+      console.log('✅ Repository state verified\n');
+
       // STEP 3: GitHub Operations
       console.log('📦 STEP 3: Production Deployment...');
       await this.executeGitHubDeployment();
@@ -87,7 +103,7 @@ class GitHubDeploymentSubAgent {
 
   async validateLEADApproval() {
     console.log('  🔍 Checking Strategic Directive status...');
-    
+
     // Check SD status
     const { data: sd, error: sdError } = await supabase
       .from('strategic_directives_v2')
@@ -148,10 +164,256 @@ class GitHubDeploymentSubAgent {
     return true;
   }
 
+  async checkUncommittedChanges() {
+    console.log('  🔍 Checking for uncommitted changes...');
+    const report = {
+      hasUncommittedChanges: false,
+      modified: [],
+      staged: [],
+      untracked: [],
+      branches: {},
+      summary: ''
+    };
+
+    try {
+      // Get current branch
+      const { stdout: currentBranch } = await execAsync('git branch --show-current');
+      report.currentBranch = currentBranch.trim();
+
+      // Check for uncommitted changes in current branch
+      const { stdout: statusOutput } = await execAsync('git status --porcelain');
+      if (statusOutput.trim()) {
+        report.hasUncommittedChanges = true;
+        const lines = statusOutput.trim().split('\n');
+
+        lines.forEach(line => {
+          const status = line.substring(0, 2);
+          const file = line.substring(3);
+
+          if (status.includes('M')) {
+            report.modified.push(file);
+          }
+          if (status[0] !== ' ' && status[0] !== '?') {
+            report.staged.push(file);
+          }
+          if (status === '??') {
+            report.untracked.push(file);
+          }
+        });
+      }
+
+      // Check for uncommitted changes in all branches
+      const { stdout: branchList } = await execAsync('git for-each-ref --format="%(refname:short)" refs/heads/');
+      const branches = branchList.trim().split('\n').filter(b => b);
+
+      for (const branch of branches) {
+        if (branch !== report.currentBranch) {
+          // Switch to branch and check status
+          const { stdout: diffStat } = await execAsync(`git diff ${branch}...HEAD --stat 2>/dev/null || echo ""`);
+          if (diffStat.trim()) {
+            report.branches[branch] = {
+              hasDifferences: true,
+              summary: diffStat.trim().split('\n').pop() // Last line is summary
+            };
+          }
+        }
+      }
+
+      // Generate summary
+      if (report.hasUncommittedChanges) {
+        report.summary = `Found uncommitted changes: ${report.modified.length} modified, ${report.staged.length} staged, ${report.untracked.length} untracked files`;
+      } else {
+        report.summary = 'No uncommitted changes detected';
+      }
+
+      return report;
+    } catch (error) {
+      console.error('  ⚠️  Error checking uncommitted changes:', error.message);
+      report.summary = `Error during check: ${error.message}`;
+      return report;
+    }
+  }
+
+  async checkBranchSynchronization() {
+    console.log('  🔍 Checking branch synchronization with remote...');
+    const syncReport = {
+      allSynced: true,
+      branches: {},
+      staleBranches: [],
+      summary: ''
+    };
+
+    try {
+      // Fetch latest from remote (dry-run to see what would be fetched)
+      await execAsync('git fetch --all');
+
+      // Check all branches against their upstream
+      const { stdout: branchVerbose } = await execAsync('git branch -vv');
+      const lines = branchVerbose.trim().split('\n');
+
+      for (const line of lines) {
+        const match = line.match(/^[\s\*]*([^\s]+)\s+([a-f0-9]+)\s+(?:\[([^\]]+)\])?\s+(.+)/);
+        if (match) {
+          const [, branch, commit, tracking, lastCommitMsg] = match;
+          const branchInfo = {
+            branch,
+            commit: commit.substring(0, 7),
+            lastCommitMsg,
+            tracking: tracking || 'no-upstream',
+            status: 'synced'
+          };
+
+          // Parse tracking info
+          if (tracking) {
+            if (tracking.includes('ahead')) {
+              const aheadMatch = tracking.match(/ahead (\d+)/);
+              branchInfo.ahead = aheadMatch ? parseInt(aheadMatch[1]) : 0;
+              branchInfo.status = 'ahead';
+              syncReport.allSynced = false;
+            }
+            if (tracking.includes('behind')) {
+              const behindMatch = tracking.match(/behind (\d+)/);
+              branchInfo.behind = behindMatch ? parseInt(behindMatch[1]) : 0;
+              branchInfo.status = branchInfo.status === 'ahead' ? 'diverged' : 'behind';
+              syncReport.allSynced = false;
+            }
+          } else {
+            branchInfo.status = 'no-upstream';
+          }
+
+          syncReport.branches[branch] = branchInfo;
+        }
+      }
+
+      // Check for stale branches (not committed to in 30+ days)
+      const { stdout: branchDates } = await execAsync(
+        'git for-each-ref --format="%(refname:short)|%(committerdate:unix)" refs/heads/'
+      );
+      const thirtyDaysAgo = Date.now() / 1000 - (30 * 24 * 60 * 60);
+
+      branchDates.trim().split('\n').forEach(line => {
+        const [branch, timestamp] = line.split('|');
+        if (parseInt(timestamp) < thirtyDaysAgo) {
+          syncReport.staleBranches.push(branch);
+        }
+      });
+
+      // Generate summary
+      const unsyncedBranches = Object.values(syncReport.branches)
+        .filter(b => b.status !== 'synced' && b.status !== 'no-upstream');
+
+      if (unsyncedBranches.length > 0) {
+        syncReport.summary = `${unsyncedBranches.length} branches need synchronization`;
+      } else {
+        syncReport.summary = 'All branches synchronized with remote';
+      }
+
+      if (syncReport.staleBranches.length > 0) {
+        syncReport.summary += `. ${syncReport.staleBranches.length} stale branches detected`;
+      }
+
+      return syncReport;
+    } catch (error) {
+      console.error('  ⚠️  Error checking branch synchronization:', error.message);
+      syncReport.summary = `Error during sync check: ${error.message}`;
+      return syncReport;
+    }
+  }
+
+  async resolveUncommittedItems(report) {
+    console.log('  🔧 Attempting to resolve uncommitted items...');
+    const resolution = {
+      actions: [],
+      success: true,
+      recommendations: []
+    };
+
+    try {
+      if (report.hasUncommittedChanges) {
+        // Offer to stash changes
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const stashName = `pre-deployment-${this.sdId}-${timestamp}`;
+
+        console.log(`  📦 Creating stash: ${stashName}`);
+        await execAsync(`git stash push -m "${stashName}" --include-untracked`);
+        resolution.actions.push(`Stashed uncommitted changes as: ${stashName}`);
+
+        // Add recommendation to restore stash after deployment
+        resolution.recommendations.push(
+          `After deployment, restore stashed changes with: git stash pop`
+        );
+      }
+
+      // Check for unpushed commits
+      const { stdout: unpushed } = await execAsync(
+        'git log --branches --not --remotes --oneline'
+      );
+      if (unpushed.trim()) {
+        const unpushedCount = unpushed.trim().split('\n').length;
+        resolution.recommendations.push(
+          `Push ${unpushedCount} unpushed commits: git push --all`
+        );
+      }
+
+      // Handle stale branches
+      if (report.staleBranches && report.staleBranches.length > 0) {
+        resolution.recommendations.push(
+          `Consider deleting ${report.staleBranches.length} stale branches: ${report.staleBranches.join(', ')}`
+        );
+      }
+
+      return resolution;
+    } catch (error) {
+      console.error('  ❌ Error resolving uncommitted items:', error.message);
+      resolution.success = false;
+      resolution.actions.push(`Failed to resolve: ${error.message}`);
+      return resolution;
+    }
+  }
+
   async runPreDeploymentChecks() {
+    console.log('  📋 Running comprehensive pre-deployment checks...');
+
+    // Check for uncommitted changes first
+    const uncommittedReport = await this.checkUncommittedChanges();
+    console.log(`  📊 Uncommitted changes: ${uncommittedReport.summary}`);
+
+    if (uncommittedReport.hasUncommittedChanges) {
+      console.log('  ⚠️  WARNING: Uncommitted changes detected!');
+      console.log(`     Modified files: ${uncommittedReport.modified.length}`);
+      console.log(`     Staged files: ${uncommittedReport.staged.length}`);
+      console.log(`     Untracked files: ${uncommittedReport.untracked.length}`);
+
+      // Attempt to resolve
+      const resolution = await this.resolveUncommittedItems(uncommittedReport);
+      if (resolution.success) {
+        console.log('  ✅ Uncommitted changes resolved:');
+        resolution.actions.forEach(action => console.log(`     - ${action}`));
+      } else {
+        throw new Error('Cannot proceed with deployment: uncommitted changes must be resolved');
+      }
+    }
+
+    // Check branch synchronization
+    const syncReport = await this.checkBranchSynchronization();
+    console.log(`  📊 Branch sync: ${syncReport.summary}`);
+
+    if (!syncReport.allSynced) {
+      console.log('  ⚠️  WARNING: Some branches are not synchronized!');
+      Object.entries(syncReport.branches).forEach(([branch, info]) => {
+        if (info.status !== 'synced' && info.status !== 'no-upstream') {
+          console.log(`     ${branch}: ${info.status}` +
+            (info.ahead ? ` (${info.ahead} ahead)` : '') +
+            (info.behind ? ` (${info.behind} behind)` : ''));
+        }
+      });
+    }
+
+    // Run standard checks
     const checks = [
-      { name: 'Git repository status', command: 'git status --porcelain' },
+      { name: 'Git repository clean', command: 'git status --porcelain' },
       { name: 'Branch verification', command: 'git branch --show-current' },
+      { name: 'Remote connectivity', command: 'git ls-remote --heads origin > /dev/null 2>&1' },
       { name: 'Build verification', command: 'npm run build || echo "No build script"' },
       { name: 'Test verification', command: 'npm test || echo "No test script"' }
     ];
@@ -160,11 +422,20 @@ class GitHubDeploymentSubAgent {
       console.log(`  🔍 ${check.name}...`);
       try {
         const { stdout, stderr } = await execAsync(check.command);
+        if (check.name === 'Git repository clean' && stdout.trim()) {
+          throw new Error(`Repository not clean: ${stdout.trim().split('\n').length} uncommitted files`);
+        }
         console.log(`  ✅ ${check.name} passed`);
       } catch (error) {
+        if (check.name === 'Git repository clean' || check.name === 'Remote connectivity') {
+          throw error; // Critical checks - must pass
+        }
         console.log(`  ⚠️  ${check.name} warning: ${error.message}`);
       }
     }
+
+    // Final summary
+    console.log('  ✅ All pre-deployment checks completed successfully');
   }
 
   async executeGitHubDeployment() {
@@ -250,14 +521,80 @@ class GitHubDeploymentSubAgent {
     console.log('  ✅ Deployment monitoring complete');
   }
 
+  async generateRepositoryStateReport() {
+    console.log('  📊 Generating repository state report...');
+
+    const report = {
+      timestamp: new Date().toISOString(),
+      repository: {},
+      branches: {},
+      uncommittedChanges: {},
+      synchronization: {}
+    };
+
+    try {
+      // Get repository info
+      const { stdout: remoteUrl } = await execAsync('git config --get remote.origin.url');
+      const { stdout: currentBranch } = await execAsync('git branch --show-current');
+      const { stdout: latestCommit } = await execAsync('git rev-parse HEAD');
+      const { stdout: commitMessage } = await execAsync('git log -1 --pretty=%B');
+
+      report.repository = {
+        remoteUrl: remoteUrl.trim(),
+        currentBranch: currentBranch.trim(),
+        latestCommit: latestCommit.trim().substring(0, 7),
+        latestCommitMessage: commitMessage.trim().split('\n')[0]
+      };
+
+      // Get branch information
+      const { stdout: branchList } = await execAsync('git branch -r');
+      report.branches.remote = branchList.trim().split('\n').length;
+      const { stdout: localBranches } = await execAsync('git branch');
+      report.branches.local = localBranches.trim().split('\n').length;
+
+      // Check uncommitted state
+      report.uncommittedChanges = await this.checkUncommittedChanges();
+      report.synchronization = await this.checkBranchSynchronization();
+
+      // Add deployment readiness assessment
+      report.deploymentReadiness = {
+        clean: !report.uncommittedChanges.hasUncommittedChanges,
+        synchronized: report.synchronization.allSynced,
+        ready: !report.uncommittedChanges.hasUncommittedChanges && report.synchronization.allSynced,
+        issues: []
+      };
+
+      if (report.uncommittedChanges.hasUncommittedChanges) {
+        report.deploymentReadiness.issues.push('Uncommitted changes detected');
+      }
+      if (!report.synchronization.allSynced) {
+        report.deploymentReadiness.issues.push('Branches not synchronized with remote');
+      }
+      if (report.synchronization.staleBranches?.length > 0) {
+        report.deploymentReadiness.issues.push(`${report.synchronization.staleBranches.length} stale branches found`);
+      }
+
+      console.log('  ✅ Repository state report generated');
+      return report;
+    } catch (error) {
+      console.error('  ⚠️  Error generating repository report:', error.message);
+      report.error = error.message;
+      return report;
+    }
+  }
+
   async updateDeploymentMetadata() {
+    // Generate comprehensive repository state report
+    const repositoryState = await this.generateRepositoryStateReport();
+
     const deploymentMetadata = {
       deployment_id: this.deploymentId,
       release_tag: this.releaseTag,
       deployment_date: new Date().toISOString(),
       deployed_by: 'GitHub-Deployment-SubAgent',
       deployment_status: 'successful',
-      led_protocol_version: '4.1.2'
+      led_protocol_version: '4.1.2',
+      repository_state: repositoryState
     };
 
     // Update SD with deployment info

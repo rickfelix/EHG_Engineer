@@ -5,8 +5,8 @@
  * Helps users choose the right model for their QA testing needs
  */
 
-const MultimodalClient = require('../lib/ai/multimodal-client');
-const readline = require('readline');
+import MultimodalClient from '../lib/ai/multimodal-client';
+import readline from 'readline';
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -377,12 +377,12 @@ async function main() {
 }
 
 // Run if executed directly
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch(console.error);
 }
 
-module.exports = {
+export { 
   modelProfiles,
   scenarioRecommendations,
   calculateBestModel
-};
+ };

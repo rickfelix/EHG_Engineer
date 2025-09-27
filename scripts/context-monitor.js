@@ -5,8 +5,14 @@
  * Tracks token usage and provides warnings for context management
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 
 class ContextMonitor {
   constructor() {
@@ -307,7 +313,7 @@ class ContextMonitor {
 }
 
 // CLI interface
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const monitor = new ContextMonitor();
   const args = process.argv.slice(2);
   const command = args[0];
@@ -340,4 +346,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = ContextMonitor;
+export default ContextMonitor;

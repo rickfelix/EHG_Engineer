@@ -5,8 +5,9 @@
  * LEO Protocol v3.1.5 compliant
  */
 
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+import { createClient  } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
 
 async function updateSDContent() {
   const supabase = createClient(
@@ -77,7 +78,7 @@ async function updateSDContent() {
     approval_date: new Date().toISOString(),
     effective_date: new Date().toISOString(),
     review_schedule: 'Quarterly',
-    execution_order: 1
+    sequence_rank: 1
   };
 
   console.log('📋 Updating SD-2025-01-15-A with full content...\n');

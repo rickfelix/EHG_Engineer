@@ -5,9 +5,15 @@
  * Reads configuration from .env.project-registration file
  */
 
-const fs = require('fs').promises;
-const path = require('path');
-const encryption = require('../lib/security/encryption');
+import fs from 'fs';.promises;
+import path from 'path';
+import encryption from '../lib/security/encryption';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 
 class EnvProjectRegistration {
   constructor() {
@@ -206,7 +212,7 @@ class EnvProjectRegistration {
 }
 
 // Run the registration
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const registration = new EnvProjectRegistration();
   registration.run().catch(error => {
     console.error('❌ Fatal error:', error.message);
@@ -214,4 +220,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = EnvProjectRegistration;
+export default EnvProjectRegistration;

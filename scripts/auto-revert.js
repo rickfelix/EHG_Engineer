@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Safe, opt-in error recovery helper for CI gate failures
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 class AutoRevertHelper {
   constructor() {
@@ -102,9 +102,9 @@ git push
 }
 
 // Main execution
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const helper = new AutoRevertHelper();
   helper.run();
 }
 
-module.exports = AutoRevertHelper;
+export default AutoRevertHelper;

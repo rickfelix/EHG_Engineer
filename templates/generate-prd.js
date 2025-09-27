@@ -100,7 +100,7 @@ class UniversalPRDGenerator {
         .from('product_requirements_v2')
         .insert({
           ...prd,
-          directive_id: prd.strategic_directive_id
+          sd_id: prd.sd_id || prd.strategic_directive_id
         })
         .select()
         .single();

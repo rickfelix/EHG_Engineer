@@ -5,8 +5,9 @@
  * Per LEO Protocol v3.1.5
  */
 
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -32,9 +33,9 @@ async function queryPendingDirectives() {
     
     const { data: directives, error } = await supabase
       .from('strategic_directives_v2')
-      .select('id, title, status, execution_order, priority, category')
+      .select('id, title, status, sequence_rank, priority, category')
       .in('status', validPendingStatuses)
-      .order('execution_order', { ascending: true });
+      .order('sequence_rank', { ascending: true });
 
     if (error) {
       if (error.code === 'PGRST116') {
@@ -64,7 +65,7 @@ async function queryPendingDirectives() {
       console.log(`   Status: ${sd.status}`);
       console.log(`   Priority: ${sd.priority}`);
       console.log(`   Category: ${sd.category}`);
-      console.log(`   Execution Order: ${sd.execution_order}`);
+      console.log(`   Execution Order: ${sd.sequence_rank}`);
       console.log('');
     });
 

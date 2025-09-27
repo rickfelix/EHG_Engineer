@@ -5,9 +5,15 @@
  * Enforces mandatory checklists and manages agent transitions
  */
 
-const fs = require('fs');
-const path = require('path');
-const readline = require('readline');
+import fs from 'fs';
+import path from 'path';
+import readline from 'readline';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 
 class HandoffController {
   constructor() {
@@ -374,7 +380,7 @@ class HandoffController {
 }
 
 // CLI interface
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const controller = new HandoffController();
   const args = process.argv.slice(2);
   const command = args[0];
@@ -424,4 +430,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = HandoffController;
+export default HandoffController;
