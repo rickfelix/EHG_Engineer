@@ -128,16 +128,30 @@ class CLAUDEMDGenerator {
     return data || [];
   }
   
+  getSectionByType(sections, type) {
+    const section = sections.find(s => s.section_type === type);
+    return section ? `## ${section.title}\n\n${section.content}\n` : '';
+  }
+
   generateContent({ protocol, agents, subAgents, handoffTemplates, validationRules }) {
     const today = new Date().toISOString().split('T')[0];
-    
+    const sections = protocol.sections || [];
+
+    // Helper to inject section at specific location
+    const fileWarning = this.getSectionByType(sections, 'file_warning');
+    const prSizeGuidelines = this.getSectionByType(sections, 'pr_size_guidelines');
+    const parallelExecution = this.getSectionByType(sections, 'parallel_execution');
+    const subagentParallelExecution = this.getSectionByType(sections, 'subagent_parallel_execution');
+
     return `# CLAUDE.md - LEO Protocol Workflow Guide for AI Agents
+
+${fileWarning}
 
 ## Session Prologue (Short)
 1. **Follow LEAD→PLAN→EXEC** - Target ≥85% gate pass rate
 2. **Use sub-agents** - Architect, QA, Reviewer - summarize outputs
 3. **Database-first** - No markdown files as source of truth
-4. **Small PRs** - Keep diffs ≤100 lines per change
+4. **Small PRs** - Target ≤100 lines, max 400 with justification
 5. **7-element handoffs** - Required for all phase transitions
 6. **Priority-first** - Use \`npm run prio:top3\` to justify work
 
@@ -343,6 +357,8 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 **Full Guidelines**: See \`docs/03_protocols_and_standards/leo_git_commit_guidelines_v4.2.0.md\`
 
+${prSizeGuidelines}
+
 ## 📊 Communication & Context
 
 ### Context Economy Rules
@@ -369,6 +385,8 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 | Read file multiple times | Batch read relevant sections once |
 | Repeat full error in response | Summarize error + reference line |
 | Include all test output | Show failed tests + counts only |
+
+${parallelExecution}
 
 ### 🔄 MANDATORY: Server Restart Protocol
 After ANY code changes:
@@ -519,7 +537,9 @@ When creating an SD from a submission:
 
 ## Protocol Sections
 
-${protocol.sections && protocol.sections.length > 0 ? protocol.sections.map(section => `
+${protocol.sections && protocol.sections.length > 0 ? protocol.sections
+  .filter(section => !['file_warning', 'pr_size_guidelines', 'parallel_execution', 'subagent_parallel_execution'].includes(section.section_type))
+  .map(section => `
 ## ${section.title}
 
 ${section.content}
