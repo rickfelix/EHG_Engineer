@@ -1,0 +1,111 @@
+name: UAT Testing Pipeline for EHG Application
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *' # Daily at 2 AM
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  uat-tests:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        browser: [chromium, firefox, webkit]
+
+    steps:
+      - name: Checkout EHG_Engineer (Test Framework)
+        uses: actions/checkout@v3
+        with:
+          repository: rickfelix/EHG_Engineer
+          path: EHG_Engineer
+
+      - name: Checkout EHG Application (Target)
+        uses: actions/checkout@v3
+        with:
+          repository: rickfelix/ehg
+          path: ehg
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: |
+            EHG_Engineer/package-lock.json
+            ehg/package-lock.json
+
+      - name: Install EHG_Engineer dependencies
+        working-directory: EHG_Engineer
+        run: npm ci
+
+      - name: Install EHG Application dependencies
+        working-directory: ehg
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        working-directory: EHG_Engineer
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Start EHG Application
+        working-directory: ehg
+        run: |
+          npm run dev &
+          npx wait-on http://localhost:8080 --timeout 60000
+        env:
+          PORT: 8080
+
+      - name: Run UAT Tests
+        working-directory: EHG_Engineer
+        run: npx playwright test --config=playwright-uat.config.js --project=${{ matrix.browser }}
+        env:
+          BASE_URL: http://localhost:8080  # EHG app port
+          EHG_APP_PORT: 8080
+          DASHBOARD_PORT: 3000
+          HEADLESS: true
+          CI: true
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results-${{ matrix.browser }}
+          path: test-results/
+
+      - name: Upload Coverage Report
+        if: matrix.browser == 'chromium'
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: coverage/
+
+      - name: Store Results in Database
+        if: always()
+        run: node scripts/store-test-results.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RUN_ID: ${{ github.run_id }}
+          BROWSER: ${{ matrix.browser }}
+
+      - name: Generate Fix SDs for Failures
+        if: failure()
+        run: node scripts/auto-fix-sd-generator.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: Quality Gate Check
+        run: |
+          PASS_RATE=$(node scripts/calculate-pass-rate.js)
+          if [ "$PASS_RATE" -lt "85" ]; then
+            echo "Quality gate failed: Pass rate $PASS_RATE% < 85%"
+            exit 1
+          fi
+          echo "Quality gate passed: Pass rate $PASS_RATE%"

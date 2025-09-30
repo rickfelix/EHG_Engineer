@@ -31,7 +31,7 @@ export default defineConfig({
   // Shared settings for all the projects below
   use: {
     // Base URL for tests
-    baseURL: process.env.BASE_URL || 'http://localhost:3000',
+    baseURL: process.env.BASE_URL || 'http://localhost:8080',
     
     // Collect trace when retrying the failed test
     trace: 'on-first-retry',
@@ -83,6 +83,8 @@ export default defineConfig({
   // globalTeardown: './tests/setup/global-teardown.js',
 
   // Run your local dev server before starting the tests
+  // NOTE: This config is for EHG_Engineer dashboard tests only
+  // For EHG app UAT tests, use playwright-uat.config.js instead
   webServer: [
     {
       command: 'cd lib/dashboard && node server.js',
