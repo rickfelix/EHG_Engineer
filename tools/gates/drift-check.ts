@@ -360,8 +360,8 @@ async function main(): Promise<void> {
   }
 }
 
-// Run if executed directly
-if (require.main === module) {
+// Run if executed directly (ES module check)
+if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch(error => {
     console.error('❌ Drift checker failed:', error);
     exit(2);
