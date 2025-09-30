@@ -60,7 +60,9 @@
     "prd:consolidated": "node scripts/unified-consolidated-prd.js",
     "db:subagent": "echo 'Apply database/schema/complete_subagent_integration.sql to Supabase'",
     "context:refresh": "node scripts/generate-file-trees.js --force",
-    "context:status": "node lib/context/memory-manager.js"
+    "context:status": "node lib/context/memory-manager.js",
+    "context:compact": "node scripts/context-compact.js",
+    "memory:view": "node scripts/view-memory.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",
@@ -78,6 +80,7 @@
     "openai": "^5.22.0",
     "p-retry": "^7.0.0",
     "playwright": "^1.40.1",
+    "tiktoken": "^1.0.22",
     "uuid": "^13.0.0",
     "ws": "^8.18.3",
     "zod": "^4.1.11"
