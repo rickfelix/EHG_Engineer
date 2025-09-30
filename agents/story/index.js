@@ -77,7 +77,7 @@ class StorySubAgent extends EventEmitter {
 
       console.log(`Stories generated for ${event.payload.sd_key}:`, result);
     } catch (error) {
-      console.error(`Failed to generate stories:`, error);
+      console.error('Failed to generate stories:', error);
 
       // Send to DLQ if available
       this.emit('story.create.failed', {
@@ -122,9 +122,9 @@ class StorySubAgent extends EventEmitter {
       // Check if all stories for SD are complete
       await this.checkReleaseGate(event.payload.story_keys[0].split(':')[0]);
 
-      console.log(`Stories verified:`, result);
+      console.log('Stories verified:', result);
     } catch (error) {
-      console.error(`Failed to verify stories:`, error);
+      console.error('Failed to verify stories:', error);
 
       this.emit('story.verify.failed', {
         event,
@@ -152,7 +152,7 @@ class StorySubAgent extends EventEmitter {
         timestamp: new Date().toISOString()
       });
     } catch (error) {
-      console.error(`Failed to check release gate:`, error);
+      console.error('Failed to check release gate:', error);
     }
   }
 
