@@ -1,5 +1,7 @@
 // Test setup file (ES module compatible)
 import { config } from 'dotenv';
+import { jest } from '@jest/globals';
+
 config({ path: '.env.test' });
 
 // Mock console methods to reduce noise during tests
