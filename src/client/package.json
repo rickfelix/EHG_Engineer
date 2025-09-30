@@ -28,5 +28,10 @@
     "postcss": "^8.4.32",
     "tailwindcss": "^3.3.6",
     "vite": "^5.0.0"
+  },
+  "overrides": {
+    "vite": {
+      "esbuild": "^0.25.10"
+    }
   }
 }
