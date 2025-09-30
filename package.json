@@ -58,7 +58,9 @@
     "prd:tables": "node scripts/prd-diagnostic-toolkit.js table-status",
     "prd:orphaned": "node scripts/prd-diagnostic-toolkit.js orphaned-prds",
     "prd:consolidated": "node scripts/unified-consolidated-prd.js",
-    "db:subagent": "echo 'Apply database/schema/complete_subagent_integration.sql to Supabase'"
+    "db:subagent": "echo 'Apply database/schema/complete_subagent_integration.sql to Supabase'",
+    "context:refresh": "node scripts/generate-file-trees.js --force",
+    "context:status": "node lib/context/memory-manager.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",
@@ -93,6 +95,15 @@
     "wait-on": "^7.0.1"
   },
   "overrides": {
-    "axios": "1.12.2"
+    "axios": "1.12.2",
+    "tar-fs": "3.0.9",
+    "puppeteer-core": {
+      "ws": "8.18.3"
+    },
+    "lighthouse": {
+      "puppeteer-core": {
+        "ws": "8.18.3"
+      }
+    }
   }
 }
