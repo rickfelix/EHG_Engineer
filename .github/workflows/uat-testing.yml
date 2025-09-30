@@ -85,14 +85,14 @@ jobs:
           name: coverage-report
           path: coverage/
 
-      - name: Store Results in Database
-        if: always()
-        run: node scripts/store-test-results.js
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          RUN_ID: ${{ github.run_id }}
-          BROWSER: ${{ matrix.browser }}
+      # - name: Store Results in Database
+      #   if: always()
+      #   run: node scripts/store-test-results.js
+      #   env:
+      #     SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      #     SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      #     RUN_ID: ${{ github.run_id }}
+      #     BROWSER: ${{ matrix.browser }}
 
       - name: Generate Fix SDs for Failures
         if: failure()
