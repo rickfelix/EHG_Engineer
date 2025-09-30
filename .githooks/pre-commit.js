@@ -61,7 +61,7 @@ function checkFilesystemDrift() {
         log.info('Fix: Migrate to leo_handoff_tracking table');
         return false;
       }
-    } catch (_e) {
+    } catch {
       // glob not installed, skip this check
     }
   }
@@ -74,7 +74,7 @@ function checkFilesystemDrift() {
       if (files.length > 0) {
         log.warning('Gate review files detected - consider migrating to database');
       }
-    } catch (_e) {
+    } catch {
       // glob not installed, skip
     }
   }
@@ -95,7 +95,7 @@ function checkModuleBoundaries() {
     stagedFiles = execSync('git diff --cached --name-only --diff-filter=ACM', { encoding: 'utf8' })
       .split('\n')
       .filter(f => f && (f.endsWith('.js') || f.endsWith('.jsx') || f.endsWith('.ts') || f.endsWith('.tsx')));
-  } catch (_e) {
+  } catch {
     log.warning('Could not get staged files');
     return true;
   }
@@ -108,7 +108,7 @@ function checkModuleBoundaries() {
   // Check if ESLint is available
   try {
     execSync('npx eslint --version', { stdio: 'ignore' });
-  } catch (_e) {
+  } catch {
     log.warning('ESLint not configured - skipping boundary check');
     return true;
   }
@@ -118,7 +118,7 @@ function checkModuleBoundaries() {
     execSync(`npx eslint ${stagedFiles.join(' ')} --max-warnings 0`, { stdio: 'ignore' });
     log.success('Module boundary check passed');
     return true;
-  } catch (_e) {
+  } catch {
     log.error('Module boundary violations detected!');
     log.info('LEO Engineering and EHG App modules must remain separate');
     log.info(`Run: npx eslint ${stagedFiles.join(' ')}`);
@@ -178,7 +178,7 @@ function runFullDriftCheck() {
       execSync(`node ${driftCheckPath}`, { stdio: 'inherit' });
       log.success('Full drift check passed');
       return true;
-    } catch (_e) {
+    } catch {
       log.error('Drift check failed!');
       log.info(`Run: node ${driftCheckPath}`);
       return false;
