@@ -14,5 +14,9 @@ module.exports = {
   ],
   verbose: true,
   testTimeout: 10000,
-  setupFilesAfterEnv: ['<rootDir>/tests/setup.js']
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
+  // ES Module support
+  extensionsToTreatAsEsm: ['.js'],
+  transform: {},
+  transformIgnorePatterns: []
 };
