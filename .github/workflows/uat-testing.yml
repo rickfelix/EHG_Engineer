@@ -24,11 +24,12 @@ jobs:
           repository: rickfelix/EHG_Engineer
           path: EHG_Engineer
 
-      - name: Checkout EHG Application (Target)
-        uses: actions/checkout@v3
-        with:
-          repository: rickfelix/ehg
-          path: ehg
+      # - name: Checkout EHG Application (Target)
+      #   uses: actions/checkout@v3
+      #   with:
+      #     repository: rickfelix/ehg
+      #     path: ehg
+      #     token: ${{ secrets.GH_PAT }}  # Requires PAT with repo access for private repo
 
       - name: Setup Node.js
         uses: actions/setup-node@v3

@@ -27,7 +27,7 @@
     "leo-status": "node scripts/leo-status-line.js show",
     "build:loader": "tsc -p tsconfig.json",
     "test:loader:dry": "node dist/services/database-loader/index.js --dry-run",
-    "test:coverage": "jest --coverage --coverageReporters=json-summary --coverageDirectory=coverage",
+    "test:coverage": "jest --config jest.config.cjs --coverage --coverageReporters=json-summary --coverageDirectory=coverage",
     "test:a11y": "playwright test tests/a11y.spec.js",
     "analyze:bundle": "esbuild src/client/src/main.jsx --bundle --metafile=meta.json --outfile=/dev/null && esbuild-visualizer --metadata meta.json",
     "lighthouse:ci": "lhci autorun --config=lighthouserc.json",
