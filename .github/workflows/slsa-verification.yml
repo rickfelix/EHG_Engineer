@@ -224,7 +224,7 @@ jobs:
 
       - name: Upload verification report
         if: always() && steps.extract.outputs.digests_found == 'true'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: slsa-verification-report
           path: verification-report.json

@@ -46,7 +46,7 @@ jobs:
 
       - name: Upload drift report
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: drift-report
           path: |
@@ -74,7 +74,7 @@ jobs:
 
       - name: Run ESLint boundary checks
         run: |
-          npx eslint . --ext .js,.jsx,.ts,.tsx --config .eslintrc.json --max-warnings 0
+          npx eslint . --ext .js,.jsx,.ts,.tsx --max-warnings 0
         continue-on-error: false  # Fail on boundary violations
 
       - name: Report boundary violations
