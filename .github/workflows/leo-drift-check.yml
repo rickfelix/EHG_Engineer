@@ -34,15 +34,14 @@ jobs:
 
       - name: Compile drift checker
         run: |
-          npx tsc tools/gates/drift-check.ts --outDir dist/tools/gates --module commonjs --esModuleInterop
-          mv dist/tools/gates/drift-check.js dist/tools/gates/drift-check.cjs
+          npx tsc tools/gates/drift-check.ts --outDir dist/tools/gates --module es2020 --target es2020 --moduleResolution node --esModuleInterop
 
       - name: Run drift detection
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
-          node dist/tools/gates/drift-check.cjs
+          node dist/tools/gates/drift-check.js
         continue-on-error: false  # Fail the workflow on critical drift
 
       - name: Upload drift report
