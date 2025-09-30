@@ -113,13 +113,7 @@ export default [
       'boundaries/no-private': [
         1,
         {
-          default: 'disallow',
-          rules: [
-            {
-              from: ['*'],
-              disallow: ['*/internal/*', '*/private/*']
-            }
-          ]
+          allowUncles: false
         }
       ],
       'no-console': ['warn', { allow: ['warn', 'error'] }],

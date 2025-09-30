@@ -94,12 +94,12 @@ jobs:
       #     RUN_ID: ${{ github.run_id }}
       #     BROWSER: ${{ matrix.browser }}
 
-      - name: Generate Fix SDs for Failures
-        if: failure()
-        run: node scripts/auto-fix-sd-generator.js
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      # - name: Generate Fix SDs for Failures
+      #   if: failure()
+      #   run: node scripts/auto-fix-sd-generator.js
+      #   env:
+      #     SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      #     SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
       - name: Quality Gate Check
         run: |
