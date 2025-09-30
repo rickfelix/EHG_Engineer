@@ -1,5 +1,6 @@
-// Test setup file
-require('dotenv').config({ path: '.env.test' });
+// Test setup file (ES module compatible)
+import { config } from 'dotenv';
+config({ path: '.env.test' });
 
 // Mock console methods to reduce noise during tests
 global.console = {
