@@ -10,7 +10,9 @@ module.exports = {
   testMatch: [
     '**/__tests__/**/*.js',
     '**/*.test.js',
-    '**/*.spec.js'
+    '!**/tests/e2e/**',
+    '!**/tests/a11y.spec.js',
+    '!**/tests/**/*.spec.js'
   ],
   verbose: true,
   testTimeout: 10000,
