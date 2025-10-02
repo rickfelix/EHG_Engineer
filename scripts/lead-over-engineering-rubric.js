@@ -6,81 +6,84 @@
 
 class OverEngineeringRubric {
   constructor() {
+    // Aligned with LEAD persona decision_making.criteria from lead-agent.json
     this.criteria = {
-      complexity: {
-        name: 'Technical Complexity vs Business Value',
-        description: 'Ratio of technical complexity to actual business value delivered',
+      userNeedValidation: {
+        name: 'Validated User Need & Problem Severity',
+        description: 'Is the user problem validated and severity documented?',
         scale: {
-          1: 'Extremely complex with minimal business value - clear over-engineering',
-          2: 'High complexity with limited business value - likely over-engineered',
-          3: 'Moderate complexity with reasonable business value - balanced',
-          4: 'Low complexity with good business value - well-scoped',
-          5: 'Simple implementation with high business value - ideal'
+          1: 'No user validation - building without user need confirmation',
+          2: 'Weak validation - assumed need without data',
+          3: 'Some validation - user feedback exists but limited',
+          4: 'Well validated - clear user pain points documented',
+          5: 'Fully validated - critical user need with severity data'
         }
       },
-      resourceIntensity: {
-        name: 'Resource Intensity vs Urgency',
-        description: 'Development effort required relative to business urgency',
+      userImpact: {
+        name: 'Measurable User Impact & Adoption Potential',
+        description: 'Can we measure user impact? What is adoption potential?',
         scale: {
-          1: 'Massive effort required with no urgency - resource waste',
-          2: 'High effort with low urgency - questionable timing',
-          3: 'Moderate effort with moderate urgency - acceptable',
-          4: 'Reasonable effort with good urgency - justified',
-          5: 'Low effort with high urgency - high ROI'
+          1: 'No measurable impact - unclear how users benefit',
+          2: 'Limited impact - affects few users or edge cases',
+          3: 'Moderate impact - benefits subset of users',
+          4: 'High impact - benefits majority of users measurably',
+          5: 'Critical impact - transformative for all users'
         }
       },
-      strategicAlignment: {
-        name: 'Strategic Priority Alignment',
-        description: 'Alignment with Stage 1 Ideation, EVA Assistant, and GTM priorities',
+      businessValue: {
+        name: 'Business Value & Strategic Alignment',
+        description: 'Does this deliver clear business value aligned with strategy?',
         scale: {
-          1: 'No alignment with strategic priorities - misaligned',
-          2: 'Weak alignment with strategic priorities - questionable',
-          3: 'Some alignment with strategic priorities - acceptable',
-          4: 'Good alignment with strategic priorities - strategic',
-          5: 'Perfect alignment with multiple strategic priorities - critical'
+          1: 'No business value - unclear strategic fit',
+          2: 'Minimal business value - weak strategic alignment',
+          3: 'Moderate business value - acceptable strategic fit',
+          4: 'High business value - strong strategic alignment',
+          5: 'Critical business value - essential to strategy'
         }
       },
-      marketTiming: {
-        name: 'Market Timing & Opportunity Window',
-        description: 'Timing relative to market opportunity and competitive advantage',
+      timeToValue: {
+        name: 'Time to Value for Users',
+        description: 'How quickly can users realize value?',
         scale: {
-          1: 'Poor timing, missed opportunity or too early - market misalignment',
-          2: 'Questionable timing, limited opportunity - risky',
-          3: 'Acceptable timing, moderate opportunity - reasonable',
-          4: 'Good timing, clear opportunity window - advantageous',
-          5: 'Perfect timing, critical opportunity - competitive advantage'
+          1: 'Very delayed - value realized only after many iterations',
+          2: 'Delayed - value requires significant user effort',
+          3: 'Moderate - value realized within reasonable timeframe',
+          4: 'Fast - value realized quickly with minimal friction',
+          5: 'Immediate - value realized instantly on delivery'
         }
       },
-      riskAssessment: {
-        name: 'Implementation & Business Risk',
-        description: 'Technical and business risks vs potential rewards',
+      effortVsImpact: {
+        name: 'Effort vs Impact (RICE/ICE Scoring)',
+        description: 'Development effort compared to expected impact',
         scale: {
-          1: 'Very high risk with low reward potential - dangerous',
-          2: 'High risk with moderate reward potential - risky',
-          3: 'Moderate risk with reasonable reward potential - manageable',
-          4: 'Low risk with good reward potential - safe bet',
-          5: 'Minimal risk with high reward potential - no-brainer'
+          1: 'Massive effort, minimal impact - poor RICE score',
+          2: 'High effort, limited impact - questionable RICE score',
+          3: 'Moderate effort, moderate impact - acceptable RICE score',
+          4: 'Reasonable effort, high impact - good RICE score',
+          5: 'Low effort, massive impact - excellent RICE score'
         }
       },
-      roiProjection: {
-        name: 'Return on Investment Projection',
-        description: 'Expected ROI considering all factors',
+      technicalFeasibility: {
+        name: 'Technical Feasibility & Risk',
+        description: 'Is this technically feasible? What are the risks?',
         scale: {
-          1: 'Negative or minimal ROI expected - waste of resources',
-          2: 'Low ROI expected - questionable investment',
-          3: 'Moderate ROI expected - acceptable investment',
-          4: 'Good ROI expected - solid investment',
-          5: 'Excellent ROI expected - high-value investment'
+          1: 'Very high technical risk - feasibility uncertain',
+          2: 'High technical risk - significant unknowns',
+          3: 'Moderate technical risk - manageable challenges',
+          4: 'Low technical risk - proven technology',
+          5: 'Minimal technical risk - straightforward implementation'
         }
       }
     };
 
-    // Thresholds for over-engineering determination
+    // Thresholds for over-engineering determination (aligned with LEAD persona)
     this.thresholds = {
       overEngineered: 15, // Total score ≤15/30 indicates over-engineering
-      criticalComplexity: 2, // Complexity score ≤2 is problematic
-      lowStrategicAlignment: 2, // Strategic alignment ≤2 is concerning
-      dangerousRisk: 2 // Risk assessment ≤2 is dangerous
+      clarificationZone: 18, // Scores 15-18 trigger intent clarification
+      lowUserNeed: 2, // User need validation ≤2 is problematic
+      lowBusinessValue: 2, // Business value ≤2 is concerning
+      poorRICE: 2, // Effort vs Impact ≤2 is poor RICE score
+      highTechnicalRisk: 2 // Technical feasibility ≤2 is high risk
     };
   }
 
@@ -91,11 +94,11 @@ class OverEngineeringRubric {
     const scores = manualScores || this.autoScore(sd);
     const totalScore = Object.values(scores).reduce((sum, score) => sum + score, 0);
 
-    // Determine over-engineering status
-    const isOverEngineered = this.determineOverEngineering(scores, totalScore);
+    // Determine over-engineering status (returns object with clarification info)
+    const engineeringStatus = this.determineOverEngineering(scores, totalScore);
 
     // Generate recommendation
-    const recommendation = this.generateRecommendation(scores, totalScore, isOverEngineered);
+    const recommendation = this.generateRecommendation(scores, totalScore, engineeringStatus.isOverEngineered);
 
     return {
       sdId: sd.id,
@@ -104,10 +107,14 @@ class OverEngineeringRubric {
       totalScore,
       maxScore: 30,
       percentage: ((totalScore / 30) * 100).toFixed(1),
-      isOverEngineered,
+      isOverEngineered: engineeringStatus.isOverEngineered,
+      needsClarification: engineeringStatus.needsClarification,
+      clarificationReason: engineeringStatus.clarificationReason,
+      clarifyingQuestions: engineeringStatus.needsClarification ? this.generateClarifyingQuestions(sd, scores) : [],
+      rephrasesSuggestions: engineeringStatus.needsClarification ? this.suggestRephrases(sd, scores) : [],
       recommendation,
-      reasoning: this.generateReasoning(scores, totalScore, isOverEngineered),
-      requiresHumanReview: this.requiresHumanReview(scores, totalScore)
+      reasoning: this.generateReasoning(scores, totalScore, engineeringStatus.isOverEngineered),
+      requiresHumanReview: this.requiresHumanReview(scores, totalScore) || engineeringStatus.needsClarification
     };
   }
 
@@ -120,71 +127,74 @@ class OverEngineeringRubric {
       .join(' ')
       .toLowerCase();
 
-    // Strategic alignment detection
-    const strategicKeywords = {
-      stage1: ['ideation', 'innovation', 'validation', 'concept', 'pilot', 'mvp'],
-      eva: ['eva', 'assistant', 'ai', 'automation', 'voice', 'chat'],
-      gtm: ['gtm', 'go-to-market', 'sales', 'marketing', 'revenue', 'pricing']
-    };
+    // Detect validation and user need indicators
+    const validationIndicators = ['validated', 'research', 'data', 'feedback', 'survey', 'interview', 'analysis'];
+    const validationMatches = validationIndicators.filter(i => text.includes(i)).length;
 
-    let strategicMatches = 0;
-    Object.values(strategicKeywords).forEach(keywords => {
-      keywords.forEach(keyword => {
-        if (text.includes(keyword)) strategicMatches++;
-      });
-    });
+    // Detect user impact indicators
+    const userImpactIndicators = ['user', 'customer', 'adoption', 'engagement', 'retention', 'satisfaction'];
+    const userImpactMatches = userImpactIndicators.filter(i => text.includes(i)).length;
 
-    // Complexity indicators
-    const complexityIndicators = ['framework', 'architecture', 'system', 'infrastructure', 'pipeline', 'integration'];
-    const complexityMatches = complexityIndicators.filter(indicator => text.includes(indicator)).length;
+    // Detect business value indicators
+    const businessValueIndicators = ['revenue', 'cost', 'efficiency', 'productivity', 'quality', 'risk', 'compliance'];
+    const businessValueMatches = businessValueIndicators.filter(i => text.includes(i)).length;
 
-    // Business value indicators
-    const businessValueIndicators = ['revenue', 'customer', 'user', 'value', 'benefit', 'improvement'];
-    const businessValueMatches = businessValueIndicators.filter(indicator => text.includes(indicator)).length;
+    // Detect critical infrastructure needs (high severity)
+    const criticalIndicators = ['critical', 'zero', 'crisis', 'security', 'reliability', 'testing', 'quality'];
+    const criticalMatches = criticalIndicators.filter(i => text.includes(i)).length;
 
-    // Generate scores based on analysis
+    // Detect effort indicators
+    const highEffortIndicators = ['comprehensive', 'infrastructure', 'framework', 'architecture', 'migration'];
+    const effortMatches = highEffortIndicators.filter(i => text.includes(i)).length;
+
+    // Detect technical risk indicators
+    const riskIndicators = ['new', 'experimental', 'prototype', 'poc', 'spike', 'unknown'];
+    const riskMatches = riskIndicators.filter(i => text.includes(i)).length;
+
+    // Generate scores based on LEAD persona criteria
     return {
-      complexity: this.calculateComplexityScore(complexityMatches, businessValueMatches),
-      resourceIntensity: this.calculateResourceScore(sd),
-      strategicAlignment: Math.min(5, Math.max(1, strategicMatches > 0 ? 2 + strategicMatches : 1)),
-      marketTiming: 3, // Default to moderate - requires human assessment
-      riskAssessment: 3, // Default to moderate - requires human assessment
-      roiProjection: Math.min(5, Math.max(1, businessValueMatches > 0 ? 2 + businessValueMatches : 2))
+      userNeedValidation: Math.min(5, Math.max(1, validationMatches > 0 ? 2 + validationMatches : (criticalMatches >= 2 ? 4 : 2))),
+      userImpact: Math.min(5, Math.max(1, userImpactMatches > 0 ? 2 + userImpactMatches : (criticalMatches >= 2 ? 5 : 3))),
+      businessValue: Math.min(5, Math.max(1, businessValueMatches > 0 ? 2 + businessValueMatches : (criticalMatches >= 2 ? 5 : 3))),
+      timeToValue: effortMatches > 2 ? 2 : 3, // High effort = delayed time to value
+      effortVsImpact: this.calculateRICEScore(effortMatches, userImpactMatches, criticalMatches),
+      technicalFeasibility: Math.min(5, Math.max(1, riskMatches > 2 ? 2 : (riskMatches > 0 ? 3 : 4)))
     };
   }
 
-  calculateComplexityScore(complexityMatches, businessValueMatches) {
-    if (complexityMatches > 3 && businessValueMatches === 0) return 1; // High complexity, no value
-    if (complexityMatches > 2 && businessValueMatches <= 1) return 2; // High complexity, low value
-    if (complexityMatches <= 1 && businessValueMatches >= 2) return 5; // Low complexity, high value
-    if (complexityMatches <= 2 && businessValueMatches >= 1) return 4; // Reasonable balance
+  calculateRICEScore(effortMatches, impactMatches, criticalMatches) {
+    // RICE = Reach × Impact × Confidence ÷ Effort
+    // Simplified scoring based on detected indicators
+
+    if (effortMatches > 3 && impactMatches === 0) return 1; // Massive effort, minimal impact
+    if (effortMatches > 2 && impactMatches <= 1 && criticalMatches === 0) return 2; // High effort, limited impact
+    if (criticalMatches >= 2) return 4; // Critical need = high RICE even with high effort
+    if (effortMatches <= 1 && impactMatches >= 2) return 5; // Low effort, high impact
+    if (effortMatches <= 2 && impactMatches >= 1) return 4; // Reasonable effort, good impact
     return 3; // Moderate balance
-  }
-
-  calculateResourceScore(sd) {
-    // Estimate based on scope and description length
-    const scope = (sd.scope || '').length;
-    const description = (sd.description || '').length;
-    const totalLength = scope + description;
-
-    if (totalLength > 1000) return 2; // Very detailed = high effort
-    if (totalLength > 500) return 3; // Detailed = moderate effort
-    if (totalLength > 200) return 4; // Reasonable detail = low effort
-    return 5; // Brief = minimal effort
   }
 
   /**
    * Determine if SD is over-engineered based on scores
    */
   determineOverEngineering(scores, totalScore) {
-    // Multiple criteria for over-engineering detection
+    // Check if in clarification zone (needs intent review)
+    const inClarificationZone = totalScore > this.thresholds.overEngineered &&
+                                 totalScore <= this.thresholds.clarificationZone;
+
+    // Multiple criteria for over-engineering detection (LEAD persona aligned)
     const conditions = [
       totalScore <= this.thresholds.overEngineered,
-      scores.complexity <= this.thresholds.criticalComplexity && scores.strategicAlignment <= this.thresholds.lowStrategicAlignment,
-      scores.riskAssessment <= this.thresholds.dangerousRisk && scores.roiProjection <= 2
+      scores.userNeedValidation <= this.thresholds.lowUserNeed && scores.businessValue <= this.thresholds.lowBusinessValue,
+      scores.effortVsImpact <= this.thresholds.poorRICE && scores.userImpact <= 2,
+      scores.technicalFeasibility <= this.thresholds.highTechnicalRisk && scores.businessValue <= 2
     ];
 
-    return conditions.some(condition => condition);
+    return {
+      isOverEngineered: conditions.some(condition => condition),
+      needsClarification: inClarificationZone,
+      clarificationReason: inClarificationZone ? this.getClarificationReason(scores, totalScore) : null
+    };
   }
 
   /**
@@ -208,27 +218,34 @@ class OverEngineeringRubric {
   generateReasoning(scores, totalScore, isOverEngineered) {
     const reasons = [];
 
-    if (scores.complexity <= 2) reasons.push('High technical complexity with limited business value');
-    if (scores.strategicAlignment <= 2) reasons.push('Poor alignment with strategic priorities');
-    if (scores.riskAssessment <= 2) reasons.push('High implementation or business risk');
-    if (scores.roiProjection <= 2) reasons.push('Low expected return on investment');
+    // Negative indicators
+    if (scores.userNeedValidation <= 2) reasons.push('User need not validated - building without confirmation');
+    if (scores.userImpact <= 2) reasons.push('Limited measurable user impact');
+    if (scores.businessValue <= 2) reasons.push('Weak business value or strategic alignment');
+    if (scores.effortVsImpact <= 2) reasons.push('Poor RICE score - high effort, limited impact');
+    if (scores.technicalFeasibility <= 2) reasons.push('High technical risk or feasibility concerns');
+    if (scores.timeToValue <= 2) reasons.push('Delayed time to value for users');
 
-    if (scores.complexity >= 4) reasons.push('Good complexity-to-value ratio');
-    if (scores.strategicAlignment >= 4) reasons.push('Strong strategic alignment');
-    if (totalScore >= 20) reasons.push('Overall strong business case');
+    // Positive indicators
+    if (scores.userNeedValidation >= 4) reasons.push('Well-validated user need with documented severity');
+    if (scores.userImpact >= 4) reasons.push('High measurable user impact and adoption potential');
+    if (scores.businessValue >= 4) reasons.push('Strong business value and strategic alignment');
+    if (scores.effortVsImpact >= 4) reasons.push('Excellent RICE score - good effort to impact ratio');
+    if (totalScore >= 20) reasons.push('Overall strong business case with clear user value');
 
-    return reasons.length > 0 ? reasons : ['Evaluation based on standard criteria'];
+    return reasons.length > 0 ? reasons : ['Evaluation based on LEAD persona criteria'];
   }
 
   /**
    * Determine if human review is required
    */
   requiresHumanReview(scores, totalScore) {
-    // Always require human review for:
+    // Always require human review for (LEAD persona aligned):
     return (
       totalScore <= 18 || // Borderline cases
-      scores.complexity <= 2 || // High complexity concerns
-      scores.strategicAlignment <= 2 || // Strategic misalignment
+      scores.userNeedValidation <= 2 || // Unvalidated user need
+      scores.businessValue <= 2 || // Weak business value
+      scores.effortVsImpact <= 2 || // Poor RICE score
       Math.abs(totalScore - 18) <= 3 // Scores near the threshold
     );
   }
@@ -259,37 +276,306 @@ class OverEngineeringRubric {
   getWarningFlags(scores, totalScore) {
     const flags = [];
 
-    if (totalScore <= 15) flags.push('🚨 TOTAL SCORE BELOW THRESHOLD');
-    if (scores.complexity <= 2) flags.push('⚠️ HIGH COMPLEXITY CONCERN');
-    if (scores.strategicAlignment <= 2) flags.push('⚠️ POOR STRATEGIC ALIGNMENT');
-    if (scores.riskAssessment <= 2) flags.push('⚠️ HIGH RISK ASSESSMENT');
-    if (scores.roiProjection <= 2) flags.push('⚠️ LOW ROI PROJECTION');
+    if (totalScore <= 15) flags.push('🚨 TOTAL SCORE BELOW THRESHOLD - LIKELY OVER-ENGINEERED');
+    if (scores.userNeedValidation <= 2) flags.push('⚠️ USER NEED NOT VALIDATED');
+    if (scores.userImpact <= 2) flags.push('⚠️ LIMITED USER IMPACT');
+    if (scores.businessValue <= 2) flags.push('⚠️ WEAK BUSINESS VALUE');
+    if (scores.effortVsImpact <= 2) flags.push('⚠️ POOR RICE SCORE');
+    if (scores.technicalFeasibility <= 2) flags.push('⚠️ HIGH TECHNICAL RISK');
+    if (scores.timeToValue <= 2) flags.push('⚠️ DELAYED TIME TO VALUE');
 
     return flags;
+  }
+
+  /**
+   * Get clarification reason for borderline scores
+   */
+  getClarificationReason(scores, totalScore) {
+    const reasons = [];
+
+    if (scores.complexity <= 3) {
+      reasons.push('Technical complexity may be higher than business value - need to clarify scope');
+    }
+    if (scores.strategicAlignment <= 3) {
+      reasons.push('Strategic alignment unclear - wording may not reflect true intent');
+    }
+    if (scores.resourceIntensity <= 3) {
+      reasons.push('Resource requirements uncertain - may need to rephrase objectives');
+    }
+
+    return reasons.length > 0
+      ? reasons.join('; ')
+      : 'Score in borderline range - intent clarification recommended';
+  }
+
+  /**
+   * Generate clarifying questions to understand true intent
+   */
+  generateClarifyingQuestions(sd, scores) {
+    const questions = [];
+    const text = [sd.title, sd.description, sd.scope].filter(Boolean).join(' ').toLowerCase();
+
+    // Questions based on low scores
+    if (scores.complexity <= 3) {
+      questions.push({
+        question: 'Can you describe the core problem this directive aims to solve in simpler terms?',
+        purpose: 'Clarify if complexity is necessary or if a simpler approach exists',
+        adjacentTruth: 'Perhaps the directive is trying to address a simple need but is worded in complex technical terms'
+      });
+    }
+
+    if (scores.strategicAlignment <= 3) {
+      questions.push({
+        question: 'How does this directive support our primary business objectives (Stage 1 Ideation, EVA Assistant, GTM)?',
+        purpose: 'Understand strategic value that may not be apparent from wording',
+        adjacentTruth: 'The strategic value may be implicit rather than explicit in the description'
+      });
+    }
+
+    if (scores.roiProjection <= 3) {
+      questions.push({
+        question: 'What business outcomes or user benefits do you expect from this directive?',
+        purpose: 'Identify ROI factors that may not be clearly stated',
+        adjacentTruth: 'Business value might be assumed rather than documented'
+      });
+    }
+
+    // Questions based on content analysis
+    if (text.includes('improve') || text.includes('enhance') || text.includes('update')) {
+      questions.push({
+        question: 'What specific pain points or limitations will this improvement address?',
+        purpose: 'Connect technical changes to user/business impact',
+        adjacentTruth: 'Incremental improvements often have significant cumulative value'
+      });
+    }
+
+    if (text.includes('add') || text.includes('new') || text.includes('create')) {
+      questions.push({
+        question: 'Is this new capability essential now, or could it be deferred until we have more user feedback?',
+        purpose: 'Validate timing and priority',
+        adjacentTruth: 'New features may be exploring opportunities rather than solving known problems'
+      });
+    }
+
+    return questions;
+  }
+
+  /**
+   * Suggest rephrased versions that might better capture intent
+   */
+  suggestRephrases(sd, scores) {
+    const suggestions = [];
+    const text = [sd.title, sd.description].filter(Boolean).join(' ');
+
+    // Suggest simplification if complexity is low-scored
+    if (scores.complexity <= 3) {
+      suggestions.push({
+        type: 'SIMPLIFY',
+        original: sd.title,
+        rephrased: this.simplifyTitle(sd.title),
+        rationale: 'Simpler wording may better reflect the core intent without technical jargon'
+      });
+    }
+
+    // Suggest strategic framing if alignment is weak
+    if (scores.strategicAlignment <= 3) {
+      suggestions.push({
+        type: 'STRATEGIC_FRAME',
+        original: sd.description || sd.title,
+        rephrased: this.addStrategicFraming(sd),
+        rationale: 'Adding strategic context may reveal alignment that was implicit in the original'
+      });
+    }
+
+    // Suggest value-focused framing if ROI is unclear
+    if (scores.roiProjection <= 3) {
+      suggestions.push({
+        type: 'VALUE_FOCUS',
+        original: sd.title,
+        rephrased: this.addValueFraming(sd.title),
+        rationale: 'Emphasizing user/business value may clarify the intended benefit'
+      });
+    }
+
+    return suggestions;
+  }
+
+  /**
+   * Helper: Simplify technical title to plain language
+   */
+  simplifyTitle(title) {
+    const simplifications = {
+      'implement': 'add',
+      'enhance': 'improve',
+      'refactor': 'reorganize',
+      'optimize': 'speed up',
+      'integrate': 'connect',
+      'architecture': 'structure',
+      'framework': 'system',
+      'infrastructure': 'foundation'
+    };
+
+    let simplified = title.toLowerCase();
+    Object.entries(simplifications).forEach(([complex, simple]) => {
+      simplified = simplified.replace(new RegExp(complex, 'gi'), simple);
+    });
+
+    return simplified.charAt(0).toUpperCase() + simplified.slice(1);
+  }
+
+  /**
+   * Helper: Add strategic framing to description
+   */
+  addStrategicFraming(sd) {
+    const text = sd.description || sd.title;
+    const strategicPhrases = [
+      'To support our innovation pipeline, ',
+      'To enhance our market position, ',
+      'To improve customer experience, ',
+      'To drive growth, '
+    ];
+
+    // Pick a strategic phrase based on content
+    let prefix = strategicPhrases[0]; // default
+    if (text.toLowerCase().includes('user') || text.toLowerCase().includes('customer')) {
+      prefix = strategicPhrases[2];
+    } else if (text.toLowerCase().includes('revenue') || text.toLowerCase().includes('sales')) {
+      prefix = strategicPhrases[3];
+    }
+
+    return prefix + text.charAt(0).toLowerCase() + text.slice(1);
+  }
+
+  /**
+   * Helper: Add value-focused framing to title
+   */
+  addValueFraming(title) {
+    const valuePhrases = [
+      'Enable users to',
+      'Help customers',
+      'Reduce friction for',
+      'Increase efficiency by'
+    ];
+
+    // Convert action-oriented title to value-oriented
+    let valueTitle = title;
+    if (title.toLowerCase().startsWith('add') || title.toLowerCase().startsWith('create')) {
+      valueTitle = `${valuePhrases[0]} ${title.replace(/^(add|create)\s+/i, '')}`;
+    } else if (title.toLowerCase().includes('fix') || title.toLowerCase().includes('resolve')) {
+      valueTitle = `${valuePhrases[2]} ${title}`;
+    }
+
+    return valueTitle;
   }
 }
 
 // Export for use in other modules
-if (typeof module !== 'undefined' && module.exports) {
-  export default OverEngineeringRubric;
-}
+export default OverEngineeringRubric;
 
-// Example usage
+// CLI usage
 if (import.meta.url === `file://${process.argv[1]}`) {
-  console.log('Over-Engineering Evaluation Rubric');
-  console.log('==================================');
-  console.log('');
-  console.log('📋 Evaluation Criteria:');
+  import('dotenv').then(dotenv => dotenv.default.config());
+  import('@supabase/supabase-js').then(async ({ createClient }) => {
+    const args = process.argv.slice(2);
+    const sdIdArg = args.find(arg => arg.startsWith('--sd-id='));
 
-  const rubric = new OverEngineeringRubric();
-  Object.entries(rubric.criteria).forEach(([key, criterion]) => {
-    console.log(`• ${criterion.name}`);
-    console.log(`  ${criterion.description}`);
+    if (sdIdArg) {
+      // Evaluate specific SD
+      const sdId = sdIdArg.split('=')[1];
+
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      );
+
+      console.log(`\n🔍 Evaluating ${sdId}...\n`);
+
+      const { data: sd, error } = await supabase
+        .from('strategic_directives_v2')
+        .select('*')
+        .eq('id', sdId)
+        .single();
+
+      if (error || !sd) {
+        console.error(`❌ Error fetching ${sdId}:`, error?.message || 'Not found');
+        process.exit(1);
+      }
+
+      const rubric = new OverEngineeringRubric();
+      const evaluation = rubric.evaluateSD(sd);
+      const formatted = rubric.formatForHumanReview(evaluation);
+
+      // Display results
+      console.log('📊 OVER-ENGINEERING EVALUATION RESULTS');
+      console.log('═'.repeat(70));
+      console.log(`\nSD: ${evaluation.title}`);
+      console.log(`ID: ${evaluation.sdId}\n`);
+      console.log(formatted.summary);
+      console.log(`\n🎯 Recommendation: ${formatted.recommendation}\n`);
+
+      if (formatted.warningFlags.length > 0) {
+        console.log('⚠️  Warning Flags:');
+        formatted.warningFlags.forEach(flag => console.log(`   ${flag}`));
+        console.log('');
+      }
+
+      console.log('📋 Detailed Scores:');
+      formatted.scores.forEach(score => {
+        console.log(`   ${score.criterion}: ${score.score}`);
+        console.log(`   → ${score.description}\n`);
+      });
+
+      console.log('💡 Reasoning:');
+      formatted.reasoning.forEach(reason => console.log(`   • ${reason}`));
+      console.log('');
+
+      if (evaluation.needsClarification) {
+        console.log('🤔 CLARIFICATION NEEDED');
+        console.log(`   Reason: ${evaluation.clarificationReason}\n`);
+
+        if (evaluation.clarifyingQuestions.length > 0) {
+          console.log('   Questions to ask:');
+          evaluation.clarifyingQuestions.forEach((q, i) => {
+            console.log(`   ${i + 1}. ${q.question}`);
+            console.log(`      Purpose: ${q.purpose}`);
+            console.log(`      Note: ${q.adjacentTruth}\n`);
+          });
+        }
+
+        if (evaluation.rephrasesSuggestions.length > 0) {
+          console.log('   Suggested Rephrases:');
+          evaluation.rephrasesSuggestions.forEach((s, i) => {
+            console.log(`   ${i + 1}. [${s.type}]`);
+            console.log(`      Original: ${s.original}`);
+            console.log(`      Rephrased: ${s.rephrased}`);
+            console.log(`      Rationale: ${s.rationale}\n`);
+          });
+        }
+      }
+
+      console.log(`${formatted.requiresApproval ? '⚠️' : '✅'} Human Review: ${formatted.requiresApproval ? 'REQUIRED' : 'Optional'}\n`);
+
+      process.exit(evaluation.isOverEngineered ? 1 : 0);
+    } else {
+      // Show criteria only
+      console.log('Over-Engineering Evaluation Rubric');
+      console.log('==================================');
+      console.log('');
+      console.log('📋 Evaluation Criteria:');
+
+      const rubric = new OverEngineeringRubric();
+      Object.entries(rubric.criteria).forEach(([key, criterion]) => {
+        console.log(`• ${criterion.name}`);
+        console.log(`  ${criterion.description}`);
+      });
+
+      console.log('');
+      console.log('🎯 Over-Engineering Thresholds:');
+      console.log(`• Total Score ≤ ${rubric.thresholds.overEngineered}/30`);
+      console.log(`• Complexity ≤ ${rubric.thresholds.criticalComplexity}/5 + Strategic Alignment ≤ ${rubric.thresholds.lowStrategicAlignment}/5`);
+      console.log(`• Risk Assessment ≤ ${rubric.thresholds.dangerousRisk}/5`);
+      console.log('');
+      console.log('Usage: node lead-over-engineering-rubric.js --sd-id=SD-XXX-XXX');
+    }
   });
-
-  console.log('');
-  console.log('🎯 Over-Engineering Thresholds:');
-  console.log(`• Total Score ≤ ${rubric.thresholds.overEngineered}/30`);
-  console.log(`• Complexity ≤ ${rubric.thresholds.criticalComplexity}/5 + Strategic Alignment ≤ ${rubric.thresholds.lowStrategicAlignment}/5`);
-  console.log(`• Risk Assessment ≤ ${rubric.thresholds.dangerousRisk}/5`);
 }
