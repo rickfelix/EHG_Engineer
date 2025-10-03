@@ -1,0 +1,433 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e4]:
+    - button "Skip to main content" [ref=e5] [cursor=pointer]
+    - button "Skip to navigation" [ref=e6] [cursor=pointer]
+    - button "Skip to search" [ref=e7] [cursor=pointer]
+  - button [ref=e8] [cursor=pointer]:
+    - img
+  - link "Skip to main content" [ref=e9] [cursor=pointer]:
+    - /url: "#main-content"
+  - status [ref=e10]
+  - generic [ref=e12]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e18]:
+          - img [ref=e20]
+          - generic [ref=e23]:
+            - heading "EHG Platform" [level=3] [ref=e24]
+            - paragraph [ref=e25]: Executive Hub
+        - generic [ref=e26]:
+          - generic [ref=e27]:
+            - img [ref=e28]
+            - textbox "Quick navigation..." [ref=e31]
+          - paragraph [ref=e32]: Use ⌘K for global search
+      - generic [ref=e33]:
+        - generic [ref=e34]:
+          - generic [ref=e35]: Main
+          - list [ref=e37]:
+            - listitem [ref=e38]:
+              - link "Chairman Console" [ref=e39] [cursor=pointer]:
+                - /url: /chairman
+                - img [ref=e40] [cursor=pointer]
+                - generic [ref=e47] [cursor=pointer]: Chairman Console
+                - img [ref=e48] [cursor=pointer]
+            - listitem [ref=e50]:
+              - link "EVA Assistant" [ref=e51] [cursor=pointer]:
+                - /url: /eva-assistant
+                - img [ref=e52] [cursor=pointer]
+                - generic [ref=e57] [cursor=pointer]: EVA Assistant
+                - img [ref=e58] [cursor=pointer]
+            - listitem [ref=e60]:
+              - link "Ventures" [ref=e61] [cursor=pointer]:
+                - /url: /ventures
+                - img [ref=e62] [cursor=pointer]
+                - generic [ref=e66] [cursor=pointer]: Ventures
+                - img [ref=e67] [cursor=pointer]
+            - listitem [ref=e69]:
+              - link "Portfolios" [ref=e70] [cursor=pointer]:
+                - /url: /portfolios
+                - img [ref=e71] [cursor=pointer]
+                - generic [ref=e77] [cursor=pointer]: Portfolios
+                - img [ref=e78] [cursor=pointer]
+        - generic [ref=e80]:
+          - generic [ref=e81]: AI Orchestration
+          - list [ref=e83]:
+            - listitem [ref=e84]:
+              - link "EVA Dashboard" [ref=e85] [cursor=pointer]:
+                - /url: /orchestration
+                - img [ref=e86] [cursor=pointer]
+                - generic [ref=e91] [cursor=pointer]: EVA Dashboard
+                - img [ref=e92] [cursor=pointer]
+            - listitem [ref=e94]:
+              - link "Workflows" [ref=e95] [cursor=pointer]:
+                - /url: /workflows
+                - img [ref=e96] [cursor=pointer]
+                - generic [ref=e102] [cursor=pointer]: Workflows
+                - img [ref=e103] [cursor=pointer]
+            - listitem [ref=e105]:
+              - link "AI Agents" [ref=e106] [cursor=pointer]:
+                - /url: /agents
+                - img [ref=e107] [cursor=pointer]
+                - generic [ref=e114] [cursor=pointer]: AI Agents
+                - img [ref=e115] [cursor=pointer]
+            - listitem [ref=e117]:
+              - link "EVA Knowledge Base" [ref=e118] [cursor=pointer]:
+                - /url: /eva-knowledge-base
+                - img [ref=e119] [cursor=pointer]
+                - generic [ref=e131] [cursor=pointer]: EVA Knowledge Base
+                - img [ref=e132] [cursor=pointer]
+        - generic [ref=e134]:
+          - generic [ref=e135]: Analytics & Reports
+          - list [ref=e137]:
+            - listitem [ref=e138]:
+              - link "Analytics" [ref=e139] [cursor=pointer]:
+                - /url: /analytics
+                - img [ref=e140] [cursor=pointer]
+                - generic [ref=e144] [cursor=pointer]: Analytics
+                - img [ref=e145] [cursor=pointer]
+            - listitem [ref=e147]:
+              - link "Reports" [ref=e148] [cursor=pointer]:
+                - /url: /reports
+                - img [ref=e149] [cursor=pointer]
+                - generic [ref=e154] [cursor=pointer]: Reports
+                - img [ref=e155] [cursor=pointer]
+            - listitem [ref=e157]:
+              - link "Insights" [ref=e158] [cursor=pointer]:
+                - /url: /insights
+                - img [ref=e159] [cursor=pointer]
+                - generic [ref=e164] [cursor=pointer]: Insights
+                - img [ref=e165] [cursor=pointer]
+            - listitem [ref=e167]:
+              - link "Risk Forecasting" [ref=e168] [cursor=pointer]:
+                - /url: /risk-forecasting
+                - img [ref=e169] [cursor=pointer]
+                - generic [ref=e173] [cursor=pointer]: Risk Forecasting
+                - img [ref=e174] [cursor=pointer]
+            - listitem [ref=e176]:
+              - link "Advanced Analytics" [ref=e177] [cursor=pointer]:
+                - /url: /advanced-analytics
+                - img [ref=e178] [cursor=pointer]
+                - generic [ref=e190] [cursor=pointer]: Advanced Analytics
+                - img [ref=e191] [cursor=pointer]
+            - listitem [ref=e193]:
+              - link "Mobile Companion" [ref=e194] [cursor=pointer]:
+                - /url: /mobile-companion-app
+                - img [ref=e195] [cursor=pointer]
+                - generic [ref=e202] [cursor=pointer]: Mobile Companion
+                - img [ref=e203] [cursor=pointer]
+        - generic [ref=e205]:
+          - generic [ref=e206]: Administration
+          - list [ref=e208]:
+            - listitem [ref=e209]:
+              - link "Governance" [ref=e210] [cursor=pointer]:
+                - /url: /governance
+                - img [ref=e211] [cursor=pointer]
+                - generic [ref=e215] [cursor=pointer]: Governance
+                - img [ref=e216] [cursor=pointer]
+            - listitem [ref=e218]:
+              - link "Integration Hub" [ref=e219] [cursor=pointer]:
+                - /url: /integration-hub
+                - img [ref=e220] [cursor=pointer]
+                - generic [ref=e224] [cursor=pointer]: Integration Hub
+                - img [ref=e225] [cursor=pointer]
+            - listitem [ref=e227]:
+              - link "Enhanced Security" [ref=e228] [cursor=pointer]:
+                - /url: /enhanced-auth
+                - img [ref=e229] [cursor=pointer]
+                - generic [ref=e234] [cursor=pointer]: Enhanced Security
+                - img [ref=e235] [cursor=pointer]
+            - listitem [ref=e237]:
+              - link "Settings" [ref=e238] [cursor=pointer]:
+                - /url: /settings
+                - img [ref=e239] [cursor=pointer]
+                - generic [ref=e244] [cursor=pointer]: Settings
+                - img [ref=e245] [cursor=pointer]
+      - generic [ref=e248]:
+        - generic [ref=e250]: QUICK ACTIONS
+        - generic [ref=e251]:
+          - button "⌘+N" [ref=e252] [cursor=pointer]:
+            - img
+            - generic [ref=e254] [cursor=pointer]: ⌘+N
+          - button "⌘+K" [ref=e255] [cursor=pointer]:
+            - img
+            - generic [ref=e257] [cursor=pointer]: ⌘+K
+          - button "⌘+." [ref=e258] [cursor=pointer]:
+            - img
+            - generic [ref=e260] [cursor=pointer]: ⌘+.
+          - button "⌘+⇧+V" [ref=e261] [cursor=pointer]:
+            - img
+            - generic [ref=e263] [cursor=pointer]: ⌘+⇧+V
+        - generic [ref=e267]: All Systems Operational
+    - generic [ref=e268]:
+      - banner [ref=e269]:
+        - generic [ref=e270]:
+          - button "Toggle Sidebar" [ref=e271] [cursor=pointer]:
+            - img
+            - generic [ref=e272] [cursor=pointer]: Toggle Sidebar
+          - button "Search platform... ⌘K" [ref=e274] [cursor=pointer]:
+            - img
+            - generic [ref=e275] [cursor=pointer]: Search platform...
+            - generic: ⌘K
+          - generic [ref=e276]:
+            - button "Shortcuts" [ref=e277] [cursor=pointer]:
+              - img
+              - generic [ref=e278] [cursor=pointer]: Shortcuts
+            - combobox [ref=e279] [cursor=pointer]:
+              - generic:
+                - generic:
+                  - img
+                  - text: All Companies
+              - img [ref=e280] [cursor=pointer]
+            - button "Switch to dark mode" [ref=e282] [cursor=pointer]:
+              - img
+              - generic [ref=e283] [cursor=pointer]: Dark
+            - button "Chairman" [ref=e284] [cursor=pointer]:
+              - img
+              - generic [ref=e285] [cursor=pointer]: Chairman
+      - main [ref=e286]:
+        - generic [ref=e288]:
+          - generic [ref=e289]:
+            - generic [ref=e290]:
+              - heading "Chairman Dashboard" [level=1] [ref=e291]
+              - paragraph [ref=e292]: Executive-level oversight with real-time strategic intelligence
+            - generic [ref=e293]:
+              - combobox [ref=e294] [cursor=pointer]:
+                - generic:
+                  - generic:
+                    - img
+                    - text: All Companies
+                - img [ref=e295] [cursor=pointer]
+              - generic [ref=e297]:
+                - button "Export Report" [ref=e298] [cursor=pointer]:
+                  - img
+                  - text: Export Report
+                - button "Configure" [ref=e299] [cursor=pointer]:
+                  - img
+                  - text: Configure
+          - generic [ref=e300]:
+            - generic [ref=e301]:
+              - generic [ref=e302]:
+                - heading "Portfolio Value" [level=3] [ref=e303]
+                - img [ref=e305]
+              - generic [ref=e308]:
+                - generic [ref=e309]: $0
+                - generic [ref=e311]:
+                  - img [ref=e312]
+                  - text: 0%
+            - generic [ref=e315]:
+              - generic [ref=e316]:
+                - heading "Active Ventures" [level=3] [ref=e317]
+                - img [ref=e319]
+              - generic [ref=e321]:
+                - generic [ref=e322]: "0"
+                - generic [ref=e324]: 0 in final stages
+            - generic [ref=e325]:
+              - generic [ref=e326]:
+                - heading "Success Rate" [level=3] [ref=e327]
+                - img [ref=e329]
+              - generic [ref=e333]:
+                - generic [ref=e334]: 0%
+                - generic [ref=e336]:
+                  - img [ref=e337]
+                  - text: 0%
+            - generic [ref=e340]:
+              - generic [ref=e341]:
+                - heading "At Risk" [level=3] [ref=e342]
+                - img [ref=e344]
+              - generic [ref=e346]:
+                - generic [ref=e347]: "0"
+                - generic [ref=e349]: "0"
+          - generic [ref=e350]:
+            - tablist [ref=e351]:
+              - tab "Overview" [selected] [ref=e352] [cursor=pointer]:
+                - img [ref=e353] [cursor=pointer]
+                - generic [ref=e355] [cursor=pointer]: Overview
+              - tab "Portfolio" [ref=e356] [cursor=pointer]:
+                - img [ref=e357] [cursor=pointer]
+                - generic [ref=e361] [cursor=pointer]: Portfolio
+              - tab "KPIs" [ref=e362] [cursor=pointer]:
+                - img [ref=e363] [cursor=pointer]
+                - generic [ref=e367] [cursor=pointer]: KPIs
+              - tab "Financial" [ref=e368] [cursor=pointer]:
+                - img [ref=e369] [cursor=pointer]
+                - generic [ref=e371] [cursor=pointer]: Financial
+              - tab "Operations" [ref=e372] [cursor=pointer]:
+                - img [ref=e373] [cursor=pointer]
+                - generic [ref=e375] [cursor=pointer]: Operations
+              - tab "Intelligence" [ref=e376] [cursor=pointer]:
+                - img [ref=e377] [cursor=pointer]
+                - generic [ref=e379] [cursor=pointer]: Intelligence
+            - tabpanel "Overview" [ref=e380]:
+              - generic [ref=e381]:
+                - generic [ref=e383]:
+                  - heading "Performance Drive Cycle" [level=3] [ref=e385]:
+                    - img [ref=e386]
+                    - text: Performance Drive Cycle
+                  - generic [ref=e390]:
+                    - generic [ref=e393]:
+                      - img [ref=e395]
+                      - generic [ref=e398]:
+                        - generic [ref=e399]:
+                          - generic [ref=e400]:
+                            - heading "Strategy Development" [level=4] [ref=e401]
+                            - paragraph [ref=e402]: Market analysis and strategic positioning
+                          - generic [ref=e403]: Completed
+                        - generic [ref=e404]:
+                          - generic [ref=e405]:
+                            - generic [ref=e406]: Progress
+                            - generic [ref=e407]: 100%
+                          - progressbar [ref=e408]
+                          - paragraph [ref=e410]: Last updated 2 days ago
+                    - generic [ref=e413]:
+                      - img [ref=e415]
+                      - generic [ref=e418]:
+                        - generic [ref=e419]:
+                          - generic [ref=e420]:
+                            - heading "Goal Setting" [level=4] [ref=e421]
+                            - paragraph [ref=e422]: Define measurable objectives and KPIs
+                          - generic [ref=e423]: In Progress
+                        - generic [ref=e424]:
+                          - generic [ref=e425]:
+                            - generic [ref=e426]: Progress
+                            - generic [ref=e427]: 75%
+                          - progressbar [ref=e428]
+                          - paragraph [ref=e430]: Last updated 1 day ago
+                    - generic [ref=e433]:
+                      - img [ref=e435]
+                      - generic [ref=e438]:
+                        - generic [ref=e439]:
+                          - generic [ref=e440]:
+                            - heading "Plan Development" [level=4] [ref=e441]
+                            - paragraph [ref=e442]: Detailed execution and resource planning
+                          - generic [ref=e443]: In Progress
+                        - generic [ref=e444]:
+                          - generic [ref=e445]:
+                            - generic [ref=e446]: Progress
+                            - generic [ref=e447]: 45%
+                          - progressbar [ref=e448]
+                          - paragraph [ref=e450]: Last updated about 3 hours ago
+                    - generic [ref=e452]:
+                      - img [ref=e454]
+                      - generic [ref=e457]:
+                        - generic [ref=e458]:
+                          - generic [ref=e459]:
+                            - heading "Implementation" [level=4] [ref=e460]
+                            - paragraph [ref=e461]: Execute plans and monitor progress
+                          - generic [ref=e462]: Pending
+                        - generic [ref=e463]:
+                          - generic [ref=e464]:
+                            - generic [ref=e465]: Progress
+                            - generic [ref=e466]: 10%
+                          - progressbar [ref=e467]
+                          - paragraph [ref=e469]: Last updated about 6 hours ago
+                - generic [ref=e471]:
+                  - generic [ref=e472]:
+                    - heading "AI Strategic Insights" [level=3] [ref=e473]:
+                      - img [ref=e474]
+                      - text: AI Strategic Insights
+                    - generic [ref=e476]:
+                      - button "Generate Insights" [ref=e477] [cursor=pointer]
+                      - button "Advanced Analytics" [ref=e478] [cursor=pointer]
+                  - paragraph [ref=e481]: Click "Generate Insights" to get AI-powered strategic analysis
+                - generic [ref=e483]:
+                  - heading "Priority Alerts" [level=3] [ref=e486]:
+                    - img [ref=e487]
+                    - text: Priority Alerts
+                  - generic [ref=e490]:
+                    - img [ref=e491]
+                    - paragraph [ref=e493]: No alerts at this time
+                    - paragraph [ref=e494]: All systems are running smoothly
+              - generic [ref=e495]:
+                - generic [ref=e496]:
+                  - generic [ref=e498]:
+                    - heading "Cross-Company Synergies" [level=3] [ref=e499]:
+                      - img [ref=e500]
+                      - text: Cross-Company Synergies
+                    - generic [ref=e502]: 3 opportunities
+                  - generic [ref=e504]:
+                    - generic [ref=e507]:
+                      - generic [ref=e508]:
+                        - heading "AI Technology Cross-Platform Integration" [level=4] [ref=e509]
+                        - generic [ref=e510]: Evaluating
+                      - paragraph [ref=e511]: Leverage HealthTech AI models for FinTech fraud detection
+                      - generic [ref=e512]:
+                        - generic [ref=e513]:
+                          - generic [ref=e514]: HealthTech Co + FinTech Solutions
+                          - generic [ref=e515]:
+                            - img [ref=e516]
+                            - text: $2,500,000
+                        - button [ref=e518] [cursor=pointer]:
+                          - img
+                    - generic [ref=e521]:
+                      - generic [ref=e522]:
+                        - heading "Shared Customer Data Platform" [level=4] [ref=e523]
+                        - generic [ref=e524]: Identified
+                      - paragraph [ref=e525]: Unified customer insights across retail and e-commerce ventures
+                      - generic [ref=e526]:
+                        - generic [ref=e527]:
+                          - generic [ref=e528]: RetailTech + E-Commerce Plus
+                          - generic [ref=e529]:
+                            - img [ref=e530]
+                            - text: $1,800,000
+                        - button [ref=e532] [cursor=pointer]:
+                          - img
+                    - generic [ref=e535]:
+                      - generic [ref=e536]:
+                        - heading "Supply Chain Optimization" [level=4] [ref=e537]
+                        - generic [ref=e538]: Planning
+                      - paragraph [ref=e539]: Combine logistics networks for cost reduction
+                      - generic [ref=e540]:
+                        - generic [ref=e541]:
+                          - generic [ref=e542]: LogiFlow + ManufacturePro
+                          - generic [ref=e543]:
+                            - img [ref=e544]
+                            - text: $3,200,000
+                        - button [ref=e546] [cursor=pointer]:
+                          - img
+                - generic [ref=e547]:
+                  - heading "Portfolio Performance Summary" [level=3] [ref=e549]:
+                    - img [ref=e550]
+                    - text: Portfolio Performance Summary
+                  - generic [ref=e553]:
+                    - generic [ref=e554]:
+                      - generic [ref=e555]:
+                        - generic [ref=e556]: "23"
+                        - generic [ref=e557]: Ideation
+                      - generic [ref=e558]:
+                        - generic [ref=e559]: "31"
+                        - generic [ref=e560]: Validation
+                      - generic [ref=e561]:
+                        - generic [ref=e562]: "28"
+                        - generic [ref=e563]: Development
+                      - generic [ref=e564]:
+                        - generic [ref=e565]: "34"
+                        - generic [ref=e566]: Launch
+                      - generic [ref=e567]:
+                        - generic [ref=e568]: "11"
+                        - generic [ref=e569]: Growth
+                    - generic [ref=e571]:
+                      - heading "Team Utilization Preview" [level=4] [ref=e572]:
+                        - img [ref=e573]
+                        - text: Team Utilization Preview
+                      - generic [ref=e578]:
+                        - generic [ref=e579]:
+                          - generic [ref=e580]:
+                            - generic [ref=e581]: Development
+                            - generic [ref=e582]: 87%
+                          - progressbar [ref=e583]
+                        - generic [ref=e585]:
+                          - generic [ref=e586]:
+                            - generic [ref=e587]: Strategy
+                            - generic [ref=e588]: 73%
+                          - progressbar [ref=e589]
+                      - button "View detailed operations →" [ref=e591] [cursor=pointer]
+      - button [ref=e593] [cursor=pointer]:
+        - generic [ref=e598] [cursor=pointer]:
+          - img
+```

@@ -10,7 +10,8 @@ import {
   X,
   FlaskConical,
   Package,
-  GitPullRequest
+  GitPullRequest,
+  ClipboardCheck
 } from 'lucide-react';
 import Breadcrumbs from './Breadcrumbs';
 import SmartRefreshButton from './SmartRefreshButton';
@@ -44,11 +45,9 @@ function AnimatedAppLayout({
   const location = useLocation();
   
   const navItems = [
-    { path: '/', icon: Home, label: 'Dashboard', tooltip: 'Dashboard' },
-    { path: '/strategic-directives', icon: FileText, label: 'Strategic Directives', tooltip: 'SDs' },
+    { path: '/', icon: Home, label: 'Strategic Directives', tooltip: 'Home' },
     { path: '/backlog', icon: Package, label: 'Backlog', tooltip: 'Backlog' },
-    { path: '/directive-lab', icon: FlaskConical, label: 'Directive Lab', tooltip: 'Lab' },
-    { path: '/pr-reviews', icon: GitPullRequest, label: 'PR Reviews', tooltip: 'PRs' }
+    { path: '/uat-tests', icon: ClipboardCheck, label: 'UAT Tests', tooltip: 'UAT' }
   ];
 
   // Animation variants for sidebar

@@ -1,0 +1,239 @@
+{
+  "sd_id": "SD-RECONNECT-005",
+  "title": "PRD: Component Directory Consolidation",
+  "overview": "Systematically consolidate 4 duplicate component implementations and merge fragmented directories to eliminate maintenance burden and establish single source of truth. This PRD covers the simplified 4-week scope: Discovery, Venture Dialog Consolidation, Directory Merge, and Duplicate Resolution.",
+  "problem_statement": "4 duplicate components create developer confusion and maintenance burden. VenturesPage imports stub (48 LOC) instead of full implementation (361 LOC). Directory fragmentation: venture/ (2 files) vs ventures/ (28 files) causes import inconsistency.",
+  "user_stories": [
+    "As a developer, I want single canonical component versions so I don't waste time choosing between duplicates",
+    "As a developer, I want consistent import paths so I know where to find components",
+    "As a maintainer, I want zero duplicate basenames so updates only need to happen in one place",
+    "As a developer, I want VenturesPage to use the full VentureCreationDialog not the stub",
+    "As a developer, I want all venture components in one directory (ventures/) not split across two"
+  ],
+  "requirements": {
+    "functional": [
+      {
+        "id": "REQ-001",
+        "title": "Duplicate Component Audit",
+        "description": "Identify all duplicate component basenames beyond the known 4",
+        "priority": "MUST_HAVE",
+        "acceptance_criteria": [
+          "Run: find src/components -name '*.tsx' | xargs basename -a | sort | uniq -d",
+          "Document all duplicates with file paths and line counts",
+          "For each duplicate pair, identify which imports it (grep -r)",
+          "Calculate complexity score: (LOC × 0.4) + (Imports × 0.3) + (Features × 0.3)",
+          "Determine canonical version (highest score)",
+          "Store audit results in SD metadata"
+        ]
+      },
+      {
+        "id": "REQ-002",
+        "title": "VentureCreateDialog Consolidation",
+        "description": "Replace stub VentureCreateDialog with full VentureCreationDialog",
+        "priority": "MUST_HAVE",
+        "acceptance_criteria": [
+          "Update src/pages/VenturesPage.tsx import from VentureCreateDialog to VentureCreationDialog",
+          "Update component usage in VenturesPage.tsx",
+          "Remove src/components/ventures/VentureCreateDialog.tsx (stub)",
+          "Test venture creation: navigate to /ventures, click Create, verify full dialog appears",
+          "Verify VoiceCapture, ChairmanFeedbackDisplay, EVA validation features work",
+          "Zero console errors on /ventures page"
+        ]
+      },
+      {
+        "id": "REQ-003",
+        "title": "Directory Structure Consolidation",
+        "description": "Merge venture/ directory (2 files) into ventures/ directory",
+        "priority": "MUST_HAVE",
+        "acceptance_criteria": [
+          "Move src/components/venture/ChairmanDashboard.tsx → src/components/ventures/ChairmanDashboard.tsx",
+          "Update lazy import in src/App.tsx from @/components/venture/ to @/components/ventures/",
+          "Move src/components/venture/VentureGrid.tsx → src/components/ventures/VentureGrid.tsx",
+          "Update any imports of VentureGrid to new path",
+          "Update src/components/ventures/index.ts with new exports",
+          "Remove empty src/components/venture/ directory",
+          "Test /chairman route loads correctly",
+          "Zero TypeScript compilation errors"
+        ]
+      },
+      {
+        "id": "REQ-004",
+        "title": "AgentStatusCard Consolidation",
+        "description": "Consolidate AgentStatusCard from agents/ and ai-agents/",
+        "priority": "MUST_HAVE",
+        "acceptance_criteria": [
+          "Analyze usage: grep -r 'import.*AgentStatusCard' src",
+          "Compare implementations: wc -l on both files (agents/: 7.8KB, ai-agents/: 4.7KB)",
+          "Determine canonical based on usage and quality",
+          "Update all imports to canonical version",
+          "Remove duplicate file",
+          "Test agent pages: /agents and /ai-agents load correctly",
+          "Verify AgentStatusCard displays agent status correctly"
+        ]
+      },
+      {
+        "id": "REQ-005",
+        "title": "NotificationSettings Consolidation",
+        "description": "Consolidate NotificationSettings to settings/ version (canonical)",
+        "priority": "MUST_HAVE",
+        "acceptance_criteria": [
+          "Canonical: src/components/settings/NotificationSettings.tsx (18KB, 470 LOC)",
+          "Update src/pages/Notifications.tsx import from notifications/ to settings/",
+          "Remove src/components/notifications/NotificationSettings.tsx (8.4KB duplicate)",
+          "Test /notifications page loads and settings work",
+          "Test /settings page loads and notification settings work",
+          "Verify all notification preferences save correctly"
+        ]
+      }
+    ],
+    "non_functional": [
+      {
+        "id": "NFR-001",
+        "title": "Zero Import Errors",
+        "description": "All import paths must resolve correctly",
+        "priority": "MUST_HAVE",
+        "acceptance_criteria": [
+          "Run tsc --noEmit with zero errors",
+          "All imports resolved in VS Code (no red squiggles)",
+          "npm run build succeeds without import errors"
+        ]
+      },
+      {
+        "id": "NFR-002",
+        "title": "Git History Preservation",
+        "description": "Use git mv to preserve file history during moves",
+        "priority": "MUST_HAVE",
+        "acceptance_criteria": [
+          "All file moves use git mv command",
+          "Git history accessible via git log --follow",
+          "Blame information preserved for moved files"
+        ]
+      }
+    ]
+  },
+  "technical_design": {
+    "implementation_approach": "Systematic consolidation using file moves and import updates. No new architecture. Use grep for exhaustive import search, git mv for history preservation, tsc for validation.",
+    "technology_stack": [
+      "TypeScript compiler (tsc --noEmit for validation)",
+      "Git (git mv for moves, git grep for search)",
+      "Unix tools (find, grep, wc for analysis)"
+    ],
+    "file_changes": [
+      {
+        "file": "src/pages/VenturesPage.tsx",
+        "changes": [
+          "Update import: VentureCreateDialog → VentureCreationDialog",
+          "Update component usage in JSX"
+        ]
+      },
+      {
+        "file": "src/components/ventures/VentureCreateDialog.tsx",
+        "changes": ["DELETE (stub file)"]
+      },
+      {
+        "file": "src/components/venture/ChairmanDashboard.tsx",
+        "changes": ["MOVE to src/components/ventures/ChairmanDashboard.tsx"]
+      },
+      {
+        "file": "src/components/venture/VentureGrid.tsx",
+        "changes": ["MOVE to src/components/ventures/VentureGrid.tsx"]
+      },
+      {
+        "file": "src/App.tsx",
+        "changes": ["Update lazy import path for ChairmanDashboard"]
+      },
+      {
+        "file": "src/pages/Notifications.tsx",
+        "changes": ["Update import: notifications/NotificationSettings → settings/NotificationSettings"]
+      },
+      {
+        "file": "src/components/notifications/NotificationSettings.tsx",
+        "changes": ["DELETE (duplicate file)"]
+      }
+    ]
+  },
+  "testing_plan": {
+    "integration_tests": [
+      {
+        "test_id": "IT-001",
+        "description": "Verify venture creation with VentureCreationDialog",
+        "steps": [
+          "Navigate to /ventures",
+          "Click 'Create Venture' button",
+          "Verify VentureCreationDialog appears (not stub)",
+          "Verify VoiceCapture component present",
+          "Create test venture",
+          "Verify venture appears in list"
+        ]
+      },
+      {
+        "test_id": "IT-002",
+        "description": "Verify ChairmanDashboard loads from ventures/",
+        "steps": [
+          "Navigate to /chairman",
+          "Verify dashboard loads without errors",
+          "Check browser console for import errors",
+          "Verify all dashboard widgets render"
+        ]
+      },
+      {
+        "test_id": "IT-003",
+        "description": "Verify AgentStatusCard consolidated version",
+        "steps": [
+          "Navigate to /agents and /ai-agents",
+          "Verify AgentStatusCard renders on both pages",
+          "Check agent status displays correctly",
+          "Verify no duplicate component warnings in console"
+        ]
+      },
+      {
+        "test_id": "IT-004",
+        "description": "Verify NotificationSettings from settings/",
+        "steps": [
+          "Navigate to /notifications",
+          "Verify settings UI renders",
+          "Navigate to /settings",
+          "Verify notification settings section present",
+          "Update a notification preference",
+          "Verify change persists"
+        ]
+      }
+    ],
+    "validation_tests": [
+      {
+        "test_id": "VT-001",
+        "description": "TypeScript compilation validation",
+        "command": "tsc --noEmit",
+        "expected": "Zero errors"
+      },
+      {
+        "test_id": "VT-002",
+        "description": "Duplicate detection validation",
+        "command": "find src/components -name '*.tsx' | xargs basename -a | sort | uniq -d",
+        "expected": "No output (zero duplicates)"
+      },
+      {
+        "test_id": "VT-003",
+        "description": "Build validation",
+        "command": "npm run build",
+        "expected": "Build succeeds, no import errors"
+      }
+    ]
+  },
+  "success_criteria": [
+    "Zero duplicate component basenames (4 → 0)",
+    "venture/ directory removed, files in ventures/",
+    "VentureCreationDialog is canonical, stub removed",
+    "AgentStatusCard consolidated to single version",
+    "NotificationSettings consolidated to settings/ version",
+    "tsc --noEmit passes with zero errors",
+    "All affected workflows tested and working"
+  ],
+  "out_of_scope": [
+    "ESLint rules for duplicate prevention (deferred to SD-CODE-QUALITY-001)",
+    "Pre-commit hooks (deferred to SD-CODE-QUALITY-001)",
+    "Component naming standards documentation (deferred to SD-CODE-QUALITY-001)",
+    "Component registry creation (deferred to SD-CODE-QUALITY-001)",
+    "Comprehensive E2E test suite (deferred to SD-CODE-QUALITY-002)"
+  ]
+}

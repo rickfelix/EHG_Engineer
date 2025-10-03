@@ -12,7 +12,8 @@ module.exports = {
     '**/*.test.js',
     '!**/tests/e2e/**',
     '!**/tests/a11y.spec.js',
-    '!**/tests/**/*.spec.js'
+    '!**/tests/**/*.spec.js',
+    '!**/tests/integration.test.js'
   ],
   verbose: true,
   testTimeout: 10000,

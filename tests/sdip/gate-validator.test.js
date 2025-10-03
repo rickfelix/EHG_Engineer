@@ -4,8 +4,8 @@
  * Created: 2025-01-03
  */
 
-const { describe, it, expect, beforeEach, afterEach } = require('@jest/globals');
-const ValidationGateEnforcer = require('../../lib/dashboard/sdip/validators/gate-enforcer');
+import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import ValidationGateEnforcer from '../../lib/dashboard/sdip/validators/gate-enforcer.js';
 
 describe('SDIP Gate Validation Tests', () => {
   let enforcer;

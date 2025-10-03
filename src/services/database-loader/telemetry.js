@@ -15,4 +15,4 @@ async function time(label, fn) {
   }
 }
 
-module.exports = { time };
+export { time };

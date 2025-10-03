@@ -1,0 +1,52 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e4]:
+    - button "Skip to main content" [ref=e5] [cursor=pointer]
+    - button "Skip to navigation" [ref=e6] [cursor=pointer]
+    - button "Skip to search" [ref=e7] [cursor=pointer]
+  - generic [ref=e9]:
+    - link "EHG Platform" [ref=e11] [cursor=pointer]:
+      - /url: /
+      - img [ref=e12] [cursor=pointer]
+      - generic [ref=e15] [cursor=pointer]: EHG Platform
+    - generic [ref=e16]:
+      - tablist [ref=e17]:
+        - tab "Sign In" [selected] [ref=e18] [cursor=pointer]
+        - tab "Sign Up" [ref=e19] [cursor=pointer]
+      - tabpanel "Sign In" [ref=e20]:
+        - generic [ref=e21]:
+          - generic [ref=e22]:
+            - heading "Welcome Back" [level=3] [ref=e23]
+            - paragraph [ref=e24]: Sign in to your EHG Platform account
+          - generic [ref=e27]:
+            - generic [ref=e28]:
+              - generic [ref=e29]: Email
+              - textbox "Email" [ref=e30]
+            - generic [ref=e31]:
+              - generic [ref=e32]: Password
+              - generic [ref=e33]:
+                - textbox "Password" [ref=e34]
+                - button [ref=e35] [cursor=pointer]:
+                  - img
+            - button "Sign In" [ref=e36] [cursor=pointer]
+    - link "← Back to home" [ref=e38] [cursor=pointer]:
+      - /url: /
+    - generic [ref=e40]:
+      - generic [ref=e42]:
+        - heading "AI Security Monitor" [level=3] [ref=e43]:
+          - img [ref=e44]
+          - text: AI Security Monitor
+        - generic [ref=e46]:
+          - img [ref=e47]
+          - generic [ref=e49]: monitoring
+      - generic [ref=e50]:
+        - paragraph [ref=e52]: Analyzing security patterns...
+        - generic [ref=e54]:
+          - paragraph [ref=e55]: AI-powered security analysis
+          - button "Refresh Analysis" [ref=e56] [cursor=pointer]
+```

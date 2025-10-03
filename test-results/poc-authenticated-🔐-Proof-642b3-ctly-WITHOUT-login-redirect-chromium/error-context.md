@@ -1,0 +1,78 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e4]:
+    - button "Skip to main content" [ref=e5] [cursor=pointer]
+    - button "Skip to navigation" [ref=e6] [cursor=pointer]
+    - button "Skip to search" [ref=e7] [cursor=pointer]
+  - generic [ref=e9]:
+    - link "EHG Platform" [ref=e11] [cursor=pointer]:
+      - /url: /
+      - img [ref=e12] [cursor=pointer]
+      - generic [ref=e15] [cursor=pointer]: EHG Platform
+    - generic [ref=e16]:
+      - tablist [ref=e17]:
+        - tab "Sign In" [selected] [ref=e18] [cursor=pointer]
+        - tab "Sign Up" [ref=e19] [cursor=pointer]
+      - tabpanel "Sign In" [ref=e20]:
+        - generic [ref=e21]:
+          - generic [ref=e22]:
+            - heading "Welcome Back" [level=3] [ref=e23]
+            - paragraph [ref=e24]: Sign in to your EHG Platform account
+          - generic [ref=e27]:
+            - generic [ref=e28]:
+              - generic [ref=e29]: Email
+              - textbox "Email" [ref=e30]
+            - generic [ref=e31]:
+              - generic [ref=e32]: Password
+              - generic [ref=e33]:
+                - textbox "Password" [ref=e34]
+                - button [ref=e35] [cursor=pointer]:
+                  - img
+            - button "Sign In" [ref=e36] [cursor=pointer]
+    - link "← Back to home" [ref=e38] [cursor=pointer]:
+      - /url: /
+    - generic [ref=e40]:
+      - generic [ref=e42]:
+        - heading "AI Security Monitor" [level=3] [ref=e43]:
+          - img [ref=e44]
+          - text: AI Security Monitor
+        - generic [ref=e46]:
+          - img [ref=e47]
+          - generic [ref=e50]: secure
+      - generic [ref=e51]:
+        - generic [ref=e52]:
+          - generic [ref=e53]:
+            - heading "Multi-Factor Authentication" [level=5] [ref=e54]
+            - generic [ref=e55]: medium
+          - paragraph [ref=e56]: Enable MFA for all executive accounts to enhance security posture
+          - paragraph [ref=e57]: Configure MFA in user settings within 48 hours
+          - generic [ref=e58]:
+            - generic [ref=e59]: "Confidence: 95%"
+            - generic [ref=e60]: 11:06:11 PM
+        - generic [ref=e61]:
+          - generic [ref=e62]:
+            - heading "Session Duration Analysis" [level=5] [ref=e63]
+            - generic [ref=e64]: low
+          - paragraph [ref=e65]: Current session duration is within normal parameters
+          - paragraph [ref=e66]: Continue monitoring session patterns
+          - generic [ref=e67]:
+            - generic [ref=e68]: "Confidence: 88%"
+            - generic [ref=e69]: 11:06:11 PM
+        - generic [ref=e70]:
+          - generic [ref=e71]:
+            - 'heading "Security Status: Good" [level=5] [ref=e72]'
+            - generic [ref=e73]: low
+          - paragraph [ref=e74]: No immediate security threats detected. All authentication patterns appear normal.
+          - paragraph [ref=e75]: Maintain current security practices
+          - generic [ref=e76]:
+            - generic [ref=e77]: "Confidence: 92%"
+            - generic [ref=e78]: 11:06:11 PM
+        - generic [ref=e80]:
+          - paragraph [ref=e81]: AI-powered security analysis
+          - button "Refresh Analysis" [ref=e82] [cursor=pointer]
+```

@@ -714,31 +714,171 @@ Dashboard automatically connects to database:
 - **Project ID**: dedlbzhpgkmetvhbkyzq
 - **Connection**: Via Supabase client using environment variables
 
-### Creating Database Tables
+### Executing SQL Migrations (Automated - Preferred)
 
-#### Method 1: Using RPC Function (if available)
+### ⚠️ CRITICAL: Migration Execution Protocol
+
+**MANDATORY CHECKLIST** - Complete ALL steps before considering manual migration:
+
+- [ ] **Step 1: Find Working Examples** (5 min)
+  \`\`\`bash
+  # Search for existing migration scripts in codebase
+  find . -name "*migration*.js" -o -name "*migration*.mjs" | head -5
+  grep -r "from 'pg'" scripts/ | head -3
+  \`\`\`
+  **Action**: Copy working pattern from existing script (e.g., \`apply-demo-migration-direct.js\`)
+  **If no examples exist**: Proceed to Step 2
+
+- [ ] **Step 2: Verify Environment Variables** (2 min)
+  \`\`\`bash
+  # Check all .env files
+  cat .env | grep -i supabase
+  cat ../EHG_Engineer/.env | grep -i supabase
+  \`\`\`
+  **Action**: Load correct env vars with dotenv
+  **Common issues**: VITE_ prefix, wrong directory, missing SUPABASE_DB_PASSWORD
+
+- [ ] **Step 3: Try Method 1 - PostgreSQL Direct** (10 min)
+  - Check AWS region (aws-0 vs aws-1)
+  - Parse URL into config object (don't use connection string directly)
+  - Use \`ssl: { rejectUnauthorized: false }\`
+  **Expected errors**: SSL cert (region mismatch), connection refused (wrong password)
+  **If fails after config fixes**: Proceed to Step 4
+
+- [ ] **Step 4: Try Method 2 - Supabase Client with dotenv** (5 min)
+  **If fails**: Proceed to Step 5
+
+- [ ] **Step 5: Try Method 3 - Create exec_sql RPC function** (10 min)
+  **If all methods fail**: Debug systematically using error patterns below
+
+**Minimum Attempts Required**: 3 methods OR 30 minutes of debugging
+**Forbidden**: Giving up after 1-2 quick attempts - persist and debug
+
+**IMPORTANT**: Claude CAN execute SQL migrations directly using proven patterns below. Automated migration is ALWAYS possible with proper debugging.
+
+#### Method 1: PostgreSQL Direct Connection (RECOMMENDED)
+Use this for migrations in the EHG application (\`/mnt/c/_EHG/ehg/\`):
+
 \`\`\`javascript
-const { error } = await supabase.rpc('execute_sql', {
+import pg from 'pg';
+import fs from 'fs/promises';
+
+const { Client } = pg;
+const projectId = 'liapbndqlqxdcgpwntbv'; // EHG app database
+const password = process.env.SUPABASE_DB_PASSWORD || 'Fl!M32DaM00n!1';
+
+// Pooler connection (IPv4 compatible)
+const connStr = \\\`postgresql://postgres.\\\${projectId}:\\\${encodeURIComponent(password)}@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require\\\`;
+
+const client = new Client({
+  connectionString: connStr,
+  ssl: { rejectUnauthorized: false }
+});
+
+await client.connect();
+await client.query('BEGIN');
+
+// Read and execute migration file
+const sql = await fs.readFile('database/migrations/your-migration.sql', 'utf-8');
+const statements = sql.split(';').filter(s => s.trim() && !s.startsWith('--'));
+
+for (const statement of statements) {
+  await client.query(statement + ';');
+}
+
+await client.query('COMMIT');
+await client.end();
+\`\`\`
+
+**Pattern Example**: See \`/mnt/c/_EHG/ehg/scripts/apply-demo-migration-pg.js\`
+
+#### Method 2: For EHG_Engineer Database
+Use standard Supabase client with pooler URL:
+
+\`\`\`bash
+# Set environment variables
+export SUPABASE_POOLER_URL="postgresql://postgres.dedlbzhpgkmetvhbkyzq:Fl%21M32DaM00n%211@aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require"
+
+# Use Node.js with pg library (same pattern as Method 1)
+node scripts/your-migration-script.js
+\`\`\`
+
+#### Method 3: Supabase RPC (If exec_sql function exists)
+\`\`\`javascript
+const { error } = await supabase.rpc('exec_sql', {
   sql: 'CREATE TABLE IF NOT EXISTS ...'
 });
 \`\`\`
 
-#### Method 2: Using psql Command
-\`\`\`bash
-# If DATABASE_URL is available in .env
-psql $DATABASE_URL -f path/to/migration.sql
+**Note**: This requires the \`exec_sql\` RPC function to be created in Supabase first.
+
+### 🔧 Common Migration Errors & Solutions
+
+| Error | Root Cause | Solution | Time to Fix |
+|-------|-----------|----------|-------------|
+| \`self-signed certificate in certificate chain\` | Wrong AWS region or SSL config | Use \`aws-1-us-east-1\` for EHG DB, parse URL to config object | 5 min |
+| \`EHG_SUPABASE_ANON_KEY not set\` | Environment vars not loaded | Add \`dotenv.config()\`, check for \`VITE_\` prefix | 2 min |
+| \`relation "users" does not exist\` | Foreign key to missing table | Remove FK constraints or make nullable | 10 min |
+| \`Could not find function exec_sql\` | RPC function doesn't exist | Use Method 1 (pg direct) or Method 2 (client) instead | 1 min |
+| \`Connection refused\` | Wrong password or project ID | Check \`.env\` files, verify project ID matches | 5 min |
+
+**Pattern**: Environment/config errors are NOT blockers. They indicate "check your setup", not "use manual migration".
+
+### 💪 Examples of Proper Persistence
+
+#### ✅ GOOD: Systematic Debugging
+\`\`\`
+Attempt 1: SSL error with aws-0 region
+→ Check codebase for working examples
+→ Find apply-demo-migration-direct.js uses aws-1
+→ Fix region, retry
+
+Attempt 2: Still SSL error
+→ Check SSL config in working example
+→ See it uses parsed URL config object, not connection string
+→ Fix config, retry
+
+Attempt 3: "relation users does not exist"
+→ Check if users table exists in DB
+→ Table missing, remove FK constraint
+→ Success!
+
+Time spent: 20 minutes
+Result: Working automated migration
 \`\`\`
 
-#### Method 3: Supabase Dashboard (always works)
-1. Go to: https://supabase.com/dashboard/project/dedlbzhpgkmetvhbkyzq
-2. Navigate to SQL Editor
-3. Paste and execute SQL
+#### ❌ BAD: Premature Fallback
+\`\`\`
+Attempt 1: SSL error
+→ "This looks hard"
+→ Jump to manual migration
+
+Time spent: 5 minutes
+Result: Manual migration required for every future SD
+Why bad: Didn't check codebase, didn't verify config, took shortcut
+\`\`\`
 
 ### Key Database Operations Scripts
 - \`scripts/execute-leo-protocol-sql.js\` - Execute protocol migrations
 - \`scripts/create-leo-protocol-tables.js\` - Create LEO tables
-- \`scripts/apply-supervisor-safe.sql\` - PLAN supervisor tables
+- \`scripts/apply-demo-migration-pg.js\` - **Reference implementation for PG direct**
+- \`scripts/apply-demo-migration-direct.js\` - **Working example with correct region/config**
+- \`scripts/apply-chairman-dashboard-schema.js\` - Reference for Supabase client
 - \`database/schema/\` - All schema definitions
+
+### Environment Variables Required
+\`\`\`bash
+# For EHG application (liapbndqlqxdcgpwntbv)
+EHG_SUPABASE_URL=https://liapbndqlqxdcgpwntbv.supabase.co
+EHG_SUPABASE_ANON_KEY=[anon-key]
+EHG_POOLER_URL=postgresql://postgres.liapbndqlqxdcgpwntbv:[password]@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
+
+# For EHG_Engineer (dedlbzhpgkmetvhbkyzq)
+SUPABASE_URL=https://dedlbzhpgkmetvhbkyzq.supabase.co
+SUPABASE_ANON_KEY=[anon-key]
+SUPABASE_POOLER_URL=postgresql://postgres.dedlbzhpgkmetvhbkyzq:[password]@aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
+SUPABASE_DB_PASSWORD=Fl!M32DaM00n!1
+\`\`\`
 
 ## 🔧 CRITICAL DEVELOPMENT WORKFLOW
 

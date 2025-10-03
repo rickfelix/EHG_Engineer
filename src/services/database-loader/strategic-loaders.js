@@ -313,8 +313,38 @@ class StrategicLoaders {
   combinePRDChecklists(prd) {
     const allItems = [];
 
-    if (prd.functional_requirements?.length > 0) {
-      prd.functional_requirements.forEach(req => {
+    // Parse functional_requirements if it's a JSON string
+    let functionalRequirements = prd.functional_requirements;
+    if (typeof functionalRequirements === 'string') {
+      try {
+        functionalRequirements = JSON.parse(functionalRequirements);
+      } catch (e) {
+        functionalRequirements = [];
+      }
+    }
+
+    // Parse test_scenarios if it's a JSON string
+    let testScenarios = prd.test_scenarios;
+    if (typeof testScenarios === 'string') {
+      try {
+        testScenarios = JSON.parse(testScenarios);
+      } catch (e) {
+        testScenarios = [];
+      }
+    }
+
+    // Parse acceptance_criteria if it's a JSON string
+    let acceptanceCriteria = prd.acceptance_criteria;
+    if (typeof acceptanceCriteria === 'string') {
+      try {
+        acceptanceCriteria = JSON.parse(acceptanceCriteria);
+      } catch (e) {
+        acceptanceCriteria = [];
+      }
+    }
+
+    if (Array.isArray(functionalRequirements) && functionalRequirements.length > 0) {
+      functionalRequirements.forEach(req => {
         allItems.push({
           text: `[Functional] ${req}`,
           checked: false,
@@ -323,8 +353,8 @@ class StrategicLoaders {
       });
     }
 
-    if (prd.test_scenarios?.length > 0) {
-      prd.test_scenarios.forEach(scenario => {
+    if (Array.isArray(testScenarios) && testScenarios.length > 0) {
+      testScenarios.forEach(scenario => {
         allItems.push({
           text: `[Test] ${scenario}`,
           checked: false,
@@ -333,8 +363,8 @@ class StrategicLoaders {
       });
     }
 
-    if (prd.acceptance_criteria?.length > 0) {
-      prd.acceptance_criteria.forEach(criteria => {
+    if (Array.isArray(acceptanceCriteria) && acceptanceCriteria.length > 0) {
+      acceptanceCriteria.forEach(criteria => {
         allItems.push({
           text: `[Acceptance] ${criteria}`,
           checked: false,
@@ -386,6 +416,29 @@ ${(sd.checklist || '').split('\n').filter(item => item.trim()).map(item => `- ${
   generatePRDContent(prd) {
     // Generate PRD content - preserved from original
     // This is a large method but will be kept as-is for PR #1
+
+    // Parse JSON string fields from database
+    const parseField = (field) => {
+      if (typeof field === 'string') {
+        try {
+          return JSON.parse(field);
+        } catch (e) {
+          return [];
+        }
+      }
+      return Array.isArray(field) ? field : [];
+    };
+
+    const functionalReqs = parseField(prd.functional_requirements);
+    const nonFunctionalReqs = parseField(prd.non_functional_requirements);
+    const technicalReqs = parseField(prd.technical_requirements);
+    const testScenarios = parseField(prd.test_scenarios);
+    const acceptanceCriteria = parseField(prd.acceptance_criteria);
+    const risks = parseField(prd.risks);
+    const constraints = parseField(prd.constraints);
+    const assumptions = parseField(prd.assumptions);
+    const stakeholders = parseField(prd.stakeholders);
+
     return `# ${prd.title}
 
 ## Executive Summary
@@ -399,31 +452,31 @@ ${prd.executive_summary || 'No summary provided'}
 - **Version**: ${prd.version || '1.0'}
 
 ## Functional Requirements
-${prd.functional_requirements?.map(req => `- ${req}`).join('\n') || '- No functional requirements specified'}
+${functionalReqs.length > 0 ? functionalReqs.map(req => `- ${req}`).join('\n') : '- No functional requirements specified'}
 
 ## Non-Functional Requirements
-${prd.non_functional_requirements?.map(req => `- ${req}`).join('\n') || '- No non-functional requirements specified'}
+${nonFunctionalReqs.length > 0 ? nonFunctionalReqs.map(req => `- ${req}`).join('\n') : '- No non-functional requirements specified'}
 
 ## Technical Requirements
-${prd.technical_requirements?.map(req => `- ${req}`).join('\n') || '- No technical requirements specified'}
+${technicalReqs.length > 0 ? technicalReqs.map(req => `- ${req}`).join('\n') : '- No technical requirements specified'}
 
 ## Test Scenarios
-${prd.test_scenarios?.map(scenario => `- ${scenario}`).join('\n') || '- No test scenarios specified'}
+${testScenarios.length > 0 ? testScenarios.map(scenario => `- ${scenario}`).join('\n') : '- No test scenarios specified'}
 
 ## Acceptance Criteria
-${prd.acceptance_criteria?.map(criteria => `- ${criteria}`).join('\n') || '- No acceptance criteria specified'}
+${acceptanceCriteria.length > 0 ? acceptanceCriteria.map(criteria => `- ${criteria}`).join('\n') : '- No acceptance criteria specified'}
 
 ## Risks
-${prd.risks?.map(risk => `- ${risk}`).join('\n') || '- No risks identified'}
+${risks.length > 0 ? risks.map(risk => `- ${risk}`).join('\n') : '- No risks identified'}
 
 ## Constraints
-${prd.constraints?.map(constraint => `- ${constraint}`).join('\n') || '- No constraints identified'}
+${constraints.length > 0 ? constraints.map(constraint => `- ${constraint}`).join('\n') : '- No constraints identified'}
 
 ## Assumptions
-${prd.assumptions?.map(assumption => `- ${assumption}`).join('\n') || '- No assumptions identified'}
+${assumptions.length > 0 ? assumptions.map(assumption => `- ${assumption}`).join('\n') : '- No assumptions identified'}
 
 ## Stakeholders
-${prd.stakeholders?.map(stakeholder => `- ${stakeholder}`).join('\n') || '- No stakeholders identified'}
+${stakeholders.length > 0 ? stakeholders.map(stakeholder => `- ${stakeholder}`).join('\n') : '- No stakeholders identified'}
 
 ---
 *Generated from database record*`;

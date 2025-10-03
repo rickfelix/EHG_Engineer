@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useWebSocket } from './hooks/useWebSocket';
 import { useUserPreferences, usePersistentState } from './hooks/useLocalStorage';
 import AnimatedAppLayout from './components/AnimatedAppLayout';
-import EnhancedOverview from './components/EnhancedOverview';
 import SDManager from './components/SDManager';
 import PRDManager from './components/PRDManager';
 import HandoffCenter from './components/HandoffCenter';
@@ -12,6 +11,7 @@ import DirectiveLab from './components/DirectiveLab';
 import BacklogManager from './components/BacklogManager';
 import PRReviews from './components/PRReviews';
 import BacklogImportView from './pages/BacklogImportView';
+import { UATDashboard } from './components/uat/UATDashboard';
 import logger from './utils/logger';
 
 function App() {
@@ -191,16 +191,19 @@ function App() {
             />
           }
         >
-          <Route 
-            index 
+          <Route
+            index
             element={
-              <EnhancedOverview 
-                state={state} 
-                onRefresh={refreshData}
+              <SDManager
+                strategicDirectives={state.strategicDirectives}
+                onUpdateChecklist={updateChecklist}
                 onSetActiveSD={setActiveSD}
+                onUpdateStatus={updateSDStatus}
+                currentSD={state.leoProtocol?.currentSD}
                 isCompact={isCompactMode}
+                onRefresh={refreshData}
               />
-            } 
+            }
           />
           <Route path="strategic-directives">
             <Route 
@@ -296,6 +299,10 @@ function App() {
                 refreshData={refreshData}
               />
             }
+          />
+          <Route
+            path="uat-tests"
+            element={<UATDashboard />}
           />
           <Route
             path="backlog-import"

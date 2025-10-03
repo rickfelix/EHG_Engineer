@@ -1,0 +1,640 @@
+
+Running 30 tests using 12 workers
+
+Test 1 completed: List all ventures with pagination
+  ✓   7 [chromium] › tests/uat/ventures.spec.js:26:3 › EHG Venture Management Tests › US-UAT-VENTURES-001: List all ventures with pagination (3.6s)
+  ✘   2 [chromium] › tests/uat/ventures.spec.js:222:3 › EHG Venture Management Tests › US-UAT-VENTURES-009: Search ventures by name (8.3s)
+  ✘   3 [chromium] › tests/uat/ventures.spec.js:248:3 › EHG Venture Management Tests › US-UAT-VENTURES-010: Search ventures by status (8.5s)
+  ✘   1 [chromium] › tests/uat/ventures.spec.js:300:3 › EHG Venture Management Tests › US-UAT-VENTURES-012: Filter ventures by date range (8.5s)
+  ✘   5 [chromium] › tests/uat/ventures.spec.js:128:3 › EHG Venture Management Tests › US-UAT-VENTURES-005: Edit venture details - financial data (8.4s)
+  ✘   6 [chromium] › tests/uat/ventures.spec.js:155:3 › EHG Venture Management Tests › US-UAT-VENTURES-006: Edit venture details - team members (8.6s)
+  ✘   9 [chromium] › tests/uat/ventures.spec.js:202:3 › EHG Venture Management Tests › US-UAT-VENTURES-008: Cancel delete operation (8.3s)
+  ✘   8 [chromium] › tests/uat/ventures.spec.js:274:3 › EHG Venture Management Tests › US-UAT-VENTURES-011: Filter ventures by category (8.4s)
+  ✘  11 [chromium] › tests/uat/ventures.spec.js:182:3 › EHG Venture Management Tests › US-UAT-VENTURES-007: Delete venture with confirmation (7.1s)
+  ✘  12 [chromium] › tests/uat/ventures.spec.js:326:3 › EHG Venture Management Tests › US-UAT-VENTURES-013: Sort ventures by name (6.9s)
+  ✘  13 [chromium] › tests/uat/ventures.spec.js:101:3 › EHG Venture Management Tests › US-UAT-VENTURES-004: Edit venture details - name and description (7.0s)
+Test 19 completed: View venture details
+Test 16 completed: Bulk select ventures
+  ✓  17 [chromium] › tests/uat/ventures.spec.js:457:3 › EHG Venture Management Tests › US-UAT-VENTURES-019: View venture details (2.5s)
+  ✓  16 [chromium] › tests/uat/ventures.spec.js:393:3 › EHG Venture Management Tests › US-UAT-VENTURES-016: Bulk select ventures (2.5s)
+Test 20 completed: Navigate between ventures
+Test 25 completed: Venture quick actions menu
+Test 24 completed: Print venture summary
+  ✓  20 [chromium] › tests/uat/ventures.spec.js:478:3 › EHG Venture Management Tests › US-UAT-VENTURES-020: Navigate between ventures (2.3s)
+  ✓  22 [chromium] › tests/uat/ventures.spec.js:588:3 › EHG Venture Management Tests › US-UAT-VENTURES-025: Venture quick actions menu (2.2s)
+  ✓  21 [chromium] › tests/uat/ventures.spec.js:567:3 › EHG Venture Management Tests › US-UAT-VENTURES-024: Print venture summary (2.2s)
+  ✓  25 [chromium] › tests/uat/ventures.spec.js:630:3 › EHG Venture Management Tests › US-UAT-VENTURES-027: Venture permission checks (2.0s)
+Test 26 completed: Venture status transitions
+  ✓  24 [chromium] › tests/uat/ventures.spec.js:609:3 › EHG Venture Management Tests › US-UAT-VENTURES-026: Venture status transitions (2.3s)
+Test 28 completed: Venture data validation
+  ✓  26 [chromium] › tests/uat/ventures.spec.js:653:3 › EHG Venture Management Tests › US-UAT-VENTURES-028: Venture data validation (2.4s)
+  ✘  15 [chromium] › tests/uat/ventures.spec.js:346:3 › EHG Venture Management Tests › US-UAT-VENTURES-014: Sort ventures by value (7.4s)
+  ✘  18 [chromium] › tests/uat/ventures.spec.js:414:3 › EHG Venture Management Tests › US-UAT-VENTURES-017: Bulk delete ventures (7.3s)
+  ✘  19 [chromium] › tests/uat/ventures.spec.js:434:3 › EHG Venture Management Tests › US-UAT-VENTURES-018: Bulk export ventures (7.0s)
+Test 29 completed: Venture audit trail
+Performance metrics: { domContentLoaded: [33m0[39m, loadComplete: [33m0[39m, firstPaint: [33m272[39m }
+  ✓  28 [chromium] › tests/uat/ventures.spec.js:674:3 › EHG Venture Management Tests › US-UAT-VENTURES-029: Venture audit trail (2.3s)
+  ✓  30 [chromium] › tests/uat/ventures.spec.js:695:3 › EHG Venture Management Tests › US-UAT-VENTURES-030: Venture performance metrics (2.1s)
+Test 23 completed: Share venture report
+  ✓  29 [chromium] › tests/uat/ventures.spec.js:546:3 › EHG Venture Management Tests › US-UAT-VENTURES-023: Share venture report (2.3s)
+  ✘  27 [chromium] › tests/uat/ventures.spec.js:526:3 › EHG Venture Management Tests › US-UAT-VENTURES-022: Remove venture from portfolio (7.1s)
+  ✘   4 [chromium] › tests/uat/ventures.spec.js:47:3 › EHG Venture Management Tests › US-UAT-VENTURES-002: Create new venture - basic flow (30.7s)
+  ✘  10 [chromium] › tests/uat/ventures.spec.js:74:3 › EHG Venture Management Tests › US-UAT-VENTURES-003: Create new venture - with all optional fields (30.7s)
+  ✘  14 [chromium] › tests/uat/ventures.spec.js:366:3 › EHG Venture Management Tests › US-UAT-VENTURES-015: Sort ventures by created date (30.7s)
+  ✘  23 [chromium] › tests/uat/ventures.spec.js:499:3 › EHG Venture Management Tests › US-UAT-VENTURES-021: Add venture to portfolio (30.7s)
+
+
+  1) [chromium] › tests/uat/ventures.spec.js:47:3 › EHG Venture Management Tests › US-UAT-VENTURES-002: Create new venture - basic flow 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('button[type="submit"], button:has-text("Save"), button:has-text("Create")').last()[22m
+
+
+      64 |     // Submit form
+      65 |     const submitBtn = page.locator('button[type="submit"], button:has-text("Save"), button:has-text("Create")').last();
+    > 66 |     await submitBtn.click();
+         |                     ^
+      67 |
+      68 |     // Verify success
+      69 |     await page.waitForTimeout(2000);
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:66:21
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-b7a65-te-new-venture---basic-flow-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-b7a65-te-new-venture---basic-flow-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-b7a65-te-new-venture---basic-flow-chromium/error-context.md
+
+  2) [chromium] › tests/uat/ventures.spec.js:74:3 › EHG Venture Management Tests › US-UAT-VENTURES-003: Create new venture - with all optional fields 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('button[type="submit"], button:has-text("Save"), button:has-text("Create")').last()[22m
+
+
+      91 |     // Submit form
+      92 |     const submitBtn = page.locator('button[type="submit"], button:has-text("Save"), button:has-text("Create")').last();
+    > 93 |     await submitBtn.click();
+         |                     ^
+      94 |
+      95 |     // Verify success
+      96 |     await page.waitForTimeout(2000);
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:93:21
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-84e68----with-all-optional-fields-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-84e68----with-all-optional-fields-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-84e68----with-all-optional-fields-chromium/error-context.md
+
+  3) [chromium] › tests/uat/ventures.spec.js:101:3 › EHG Venture Management Tests › US-UAT-VENTURES-004: Edit venture details - name and description 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m failed
+
+    Locator:  locator('button:has-text("Edit"), [aria-label*="edit" i]').first()
+    Expected: visible
+    Received: <element(s) not found>
+    Timeout:  5000ms
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('button:has-text("Edit"), [aria-label*="edit" i]').first()[22m
+
+
+      104 |     // Find and click edit button
+      105 |     const editBtn = page.locator('button:has-text("Edit"), [aria-label*="edit" i]').first();
+    > 106 |     await expect(editBtn).toBeVisible();
+          |                           ^
+      107 |     await editBtn.click();
+      108 |
+      109 |     // Wait for edit form
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:106:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-5d577-ails---name-and-description-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-5d577-ails---name-and-description-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-5d577-ails---name-and-description-chromium/error-context.md
+
+  4) [chromium] › tests/uat/ventures.spec.js:128:3 › EHG Venture Management Tests › US-UAT-VENTURES-005: Edit venture details - financial data 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m failed
+
+    Locator:  locator('button:has-text("Edit"), [aria-label*="edit" i]').first()
+    Expected: visible
+    Received: <element(s) not found>
+    Timeout:  5000ms
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('button:has-text("Edit"), [aria-label*="edit" i]').first()[22m
+
+
+      131 |     // Find and click edit button
+      132 |     const editBtn = page.locator('button:has-text("Edit"), [aria-label*="edit" i]').first();
+    > 133 |     await expect(editBtn).toBeVisible();
+          |                           ^
+      134 |     await editBtn.click();
+      135 |
+      136 |     // Wait for edit form
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:133:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-b46f9-re-details---financial-data-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-b46f9-re-details---financial-data-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-b46f9-re-details---financial-data-chromium/error-context.md
+
+  5) [chromium] › tests/uat/ventures.spec.js:155:3 › EHG Venture Management Tests › US-UAT-VENTURES-006: Edit venture details - team members 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m failed
+
+    Locator:  locator('button:has-text("Edit"), [aria-label*="edit" i]').first()
+    Expected: visible
+    Received: <element(s) not found>
+    Timeout:  5000ms
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('button:has-text("Edit"), [aria-label*="edit" i]').first()[22m
+
+
+      158 |     // Find and click edit button
+      159 |     const editBtn = page.locator('button:has-text("Edit"), [aria-label*="edit" i]').first();
+    > 160 |     await expect(editBtn).toBeVisible();
+          |                           ^
+      161 |     await editBtn.click();
+      162 |
+      163 |     // Wait for edit form
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:160:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-177b1-ture-details---team-members-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-177b1-ture-details---team-members-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-177b1-ture-details---team-members-chromium/error-context.md
+
+  6) [chromium] › tests/uat/ventures.spec.js:182:3 › EHG Venture Management Tests › US-UAT-VENTURES-007: Delete venture with confirmation 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m failed
+
+    Locator:  locator('button:has-text("Delete"), [aria-label*="delete" i]').first()
+    Expected: visible
+    Received: <element(s) not found>
+    Timeout:  5000ms
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('button:has-text("Delete"), [aria-label*="delete" i]').first()[22m
+
+
+      185 |     // Find and click delete button
+      186 |     const deleteBtn = page.locator('button:has-text("Delete"), [aria-label*="delete" i]').first();
+    > 187 |     await expect(deleteBtn).toBeVisible();
+          |                             ^
+      188 |     await deleteBtn.click();
+      189 |
+      190 |     // Handle confirmation dialog
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:187:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-9727b-e-venture-with-confirmation-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-9727b-e-venture-with-confirmation-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-9727b-e-venture-with-confirmation-chromium/error-context.md
+
+  7) [chromium] › tests/uat/ventures.spec.js:202:3 › EHG Venture Management Tests › US-UAT-VENTURES-008: Cancel delete operation 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m failed
+
+    Locator:  locator('button:has-text("Delete"), [aria-label*="delete" i]').first()
+    Expected: visible
+    Received: <element(s) not found>
+    Timeout:  5000ms
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('button:has-text("Delete"), [aria-label*="delete" i]').first()[22m
+
+
+      205 |     // Find and click delete button
+      206 |     const deleteBtn = page.locator('button:has-text("Delete"), [aria-label*="delete" i]').first();
+    > 207 |     await expect(deleteBtn).toBeVisible();
+          |                             ^
+      208 |     await deleteBtn.click();
+      209 |
+      210 |     // Handle confirmation dialog
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:207:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-35103-008-Cancel-delete-operation-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-35103-008-Cancel-delete-operation-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-35103-008-Cancel-delete-operation-chromium/error-context.md
+
+  8) [chromium] › tests/uat/ventures.spec.js:222:3 › EHG Venture Management Tests › US-UAT-VENTURES-009: Search ventures by name 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m failed
+
+    Locator:  locator('input[type="search"], input[placeholder*="search" i]').first()
+    Expected: visible
+    Received: <element(s) not found>
+    Timeout:  5000ms
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('input[type="search"], input[placeholder*="search" i]').first()[22m
+
+
+      225 |     // Find search/filter input
+      226 |     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    > 227 |     await expect(searchInput).toBeVisible();
+          |                               ^
+      228 |
+      229 |     // Enter search term
+      230 |     await searchInput.fill('test search 8');
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:227:31
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-d3c44-009-Search-ventures-by-name-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-d3c44-009-Search-ventures-by-name-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-d3c44-009-Search-ventures-by-name-chromium/error-context.md
+
+  9) [chromium] › tests/uat/ventures.spec.js:248:3 › EHG Venture Management Tests › US-UAT-VENTURES-010: Search ventures by status 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m failed
+
+    Locator:  locator('input[type="search"], input[placeholder*="search" i]').first()
+    Expected: visible
+    Received: <element(s) not found>
+    Timeout:  5000ms
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('input[type="search"], input[placeholder*="search" i]').first()[22m
+
+
+      251 |     // Find search/filter input
+      252 |     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    > 253 |     await expect(searchInput).toBeVisible();
+          |                               ^
+      254 |
+      255 |     // Enter search term
+      256 |     await searchInput.fill('test search 9');
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:253:31
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-23fc4-0-Search-ventures-by-status-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-23fc4-0-Search-ventures-by-status-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-23fc4-0-Search-ventures-by-status-chromium/error-context.md
+
+  10) [chromium] › tests/uat/ventures.spec.js:274:3 › EHG Venture Management Tests › US-UAT-VENTURES-011: Filter ventures by category 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m failed
+
+    Locator:  locator('input[type="search"], input[placeholder*="search" i]').first()
+    Expected: visible
+    Received: <element(s) not found>
+    Timeout:  5000ms
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('input[type="search"], input[placeholder*="search" i]').first()[22m
+
+
+      277 |     // Find search/filter input
+      278 |     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    > 279 |     await expect(searchInput).toBeVisible();
+          |                               ^
+      280 |
+      281 |     // Enter search term
+      282 |     await searchInput.fill('test search 10');
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:279:31
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-72d4b-Filter-ventures-by-category-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-72d4b-Filter-ventures-by-category-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-72d4b-Filter-ventures-by-category-chromium/error-context.md
+
+  11) [chromium] › tests/uat/ventures.spec.js:300:3 › EHG Venture Management Tests › US-UAT-VENTURES-012: Filter ventures by date range 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m failed
+
+    Locator:  locator('input[type="search"], input[placeholder*="search" i]').first()
+    Expected: visible
+    Received: <element(s) not found>
+    Timeout:  5000ms
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('input[type="search"], input[placeholder*="search" i]').first()[22m
+
+
+      303 |     // Find search/filter input
+      304 |     const searchInput = page.locator('input[type="search"], input[placeholder*="search" i]').first();
+    > 305 |     await expect(searchInput).toBeVisible();
+          |                               ^
+      306 |
+      307 |     // Enter search term
+      308 |     await searchInput.fill('test search 11');
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:305:31
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-a4ac4-lter-ventures-by-date-range-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-a4ac4-lter-ventures-by-date-range-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-a4ac4-lter-ventures-by-date-range-chromium/error-context.md
+
+  12) [chromium] › tests/uat/ventures.spec.js:326:3 › EHG Venture Management Tests › US-UAT-VENTURES-013: Sort ventures by name 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m failed
+
+    Locator:  locator('th, [role="columnheader"]').first()
+    Expected: visible
+    Received: <element(s) not found>
+    Timeout:  5000ms
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('th, [role="columnheader"]').first()[22m
+
+
+      329 |     // Find sortable column header
+      330 |     const sortHeader = page.locator('th, [role="columnheader"]').first();
+    > 331 |     await expect(sortHeader).toBeVisible();
+          |                              ^
+      332 |
+      333 |     // Click to sort
+      334 |     await sortHeader.click();
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:331:30
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-514f0-S-013-Sort-ventures-by-name-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-514f0-S-013-Sort-ventures-by-name-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-514f0-S-013-Sort-ventures-by-name-chromium/error-context.md
+
+  13) [chromium] › tests/uat/ventures.spec.js:346:3 › EHG Venture Management Tests › US-UAT-VENTURES-014: Sort ventures by value 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m failed
+
+    Locator:  locator('th, [role="columnheader"]').first()
+    Expected: visible
+    Received: <element(s) not found>
+    Timeout:  5000ms
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('th, [role="columnheader"]').first()[22m
+
+
+      349 |     // Find sortable column header
+      350 |     const sortHeader = page.locator('th, [role="columnheader"]').first();
+    > 351 |     await expect(sortHeader).toBeVisible();
+          |                              ^
+      352 |
+      353 |     // Click to sort
+      354 |     await sortHeader.click();
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:351:30
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-7e63e--014-Sort-ventures-by-value-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-7e63e--014-Sort-ventures-by-value-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-7e63e--014-Sort-ventures-by-value-chromium/error-context.md
+
+  14) [chromium] › tests/uat/ventures.spec.js:366:3 › EHG Venture Management Tests › US-UAT-VENTURES-015: Sort ventures by created date 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('button[type="submit"], button:has-text("Save"), button:has-text("Create")').last()[22m
+
+
+      383 |     // Submit form
+      384 |     const submitBtn = page.locator('button[type="submit"], button:has-text("Save"), button:has-text("Create")').last();
+    > 385 |     await submitBtn.click();
+          |                     ^
+      386 |
+      387 |     // Verify success
+      388 |     await page.waitForTimeout(2000);
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:385:21
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-c2476-rt-ventures-by-created-date-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-c2476-rt-ventures-by-created-date-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-c2476-rt-ventures-by-created-date-chromium/error-context.md
+
+  15) [chromium] › tests/uat/ventures.spec.js:414:3 › EHG Venture Management Tests › US-UAT-VENTURES-017: Bulk delete ventures 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m failed
+
+    Locator:  locator('button:has-text("Delete"), [aria-label*="delete" i]').first()
+    Expected: visible
+    Received: <element(s) not found>
+    Timeout:  5000ms
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('button:has-text("Delete"), [aria-label*="delete" i]').first()[22m
+
+
+      417 |     // Find and click delete button
+      418 |     const deleteBtn = page.locator('button:has-text("Delete"), [aria-label*="delete" i]').first();
+    > 419 |     await expect(deleteBtn).toBeVisible();
+          |                             ^
+      420 |     await deleteBtn.click();
+      421 |
+      422 |     // Handle confirmation dialog
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:419:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-a950e-ES-017-Bulk-delete-ventures-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-a950e-ES-017-Bulk-delete-ventures-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-a950e-ES-017-Bulk-delete-ventures-chromium/error-context.md
+
+  16) [chromium] › tests/uat/ventures.spec.js:434:3 › EHG Venture Management Tests › US-UAT-VENTURES-018: Bulk export ventures 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m failed
+
+    Locator:  locator('button:has-text("Export"), button:has-text("Download")').first()
+    Expected: visible
+    Received: <element(s) not found>
+    Timeout:  5000ms
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('button:has-text("Export"), button:has-text("Download")').first()[22m
+
+
+      437 |     // Find and click export button
+      438 |     const exportBtn = page.locator('button:has-text("Export"), button:has-text("Download")').first();
+    > 439 |     await expect(exportBtn).toBeVisible();
+          |                             ^
+      440 |
+      441 |     // Start download promise
+      442 |     const downloadPromise = page.waitForEvent('download');
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:439:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-5c0c4-ES-018-Bulk-export-ventures-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-5c0c4-ES-018-Bulk-export-ventures-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-5c0c4-ES-018-Bulk-export-ventures-chromium/error-context.md
+
+  17) [chromium] › tests/uat/ventures.spec.js:499:3 › EHG Venture Management Tests › US-UAT-VENTURES-021: Add venture to portfolio 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for locator('button[type="submit"], button:has-text("Save"), button:has-text("Create")').last()[22m
+
+
+      516 |     // Submit form
+      517 |     const submitBtn = page.locator('button[type="submit"], button:has-text("Save"), button:has-text("Create")').last();
+    > 518 |     await submitBtn.click();
+          |                     ^
+      519 |
+      520 |     // Verify success
+      521 |     await page.waitForTimeout(2000);
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:518:21
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-129b8-21-Add-venture-to-portfolio-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-129b8-21-Add-venture-to-portfolio-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-129b8-21-Add-venture-to-portfolio-chromium/error-context.md
+
+  18) [chromium] › tests/uat/ventures.spec.js:526:3 › EHG Venture Management Tests › US-UAT-VENTURES-022: Remove venture from portfolio 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m failed
+
+    Locator:  locator('button:has-text("Delete"), [aria-label*="delete" i]').first()
+    Expected: visible
+    Received: <element(s) not found>
+    Timeout:  5000ms
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('button:has-text("Delete"), [aria-label*="delete" i]').first()[22m
+
+
+      529 |     // Find and click delete button
+      530 |     const deleteBtn = page.locator('button:has-text("Delete"), [aria-label*="delete" i]').first();
+    > 531 |     await expect(deleteBtn).toBeVisible();
+          |                             ^
+      532 |     await deleteBtn.click();
+      533 |
+      534 |     // Handle confirmation dialog
+        at /mnt/c/_EHG/EHG_Engineer/tests/uat/ventures.spec.js:531:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-55896-move-venture-from-portfolio-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/ventures-EHG-Venture-Manag-55896-move-venture-from-portfolio-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ventures-EHG-Venture-Manag-55896-move-venture-from-portfolio-chromium/error-context.md
+
+  18 failed
+    [chromium] › tests/uat/ventures.spec.js:47:3 › EHG Venture Management Tests › US-UAT-VENTURES-002: Create new venture - basic flow 
+    [chromium] › tests/uat/ventures.spec.js:74:3 › EHG Venture Management Tests › US-UAT-VENTURES-003: Create new venture - with all optional fields 
+    [chromium] › tests/uat/ventures.spec.js:101:3 › EHG Venture Management Tests › US-UAT-VENTURES-004: Edit venture details - name and description 
+    [chromium] › tests/uat/ventures.spec.js:128:3 › EHG Venture Management Tests › US-UAT-VENTURES-005: Edit venture details - financial data 
+    [chromium] › tests/uat/ventures.spec.js:155:3 › EHG Venture Management Tests › US-UAT-VENTURES-006: Edit venture details - team members 
+    [chromium] › tests/uat/ventures.spec.js:182:3 › EHG Venture Management Tests › US-UAT-VENTURES-007: Delete venture with confirmation 
+    [chromium] › tests/uat/ventures.spec.js:202:3 › EHG Venture Management Tests › US-UAT-VENTURES-008: Cancel delete operation 
+    [chromium] › tests/uat/ventures.spec.js:222:3 › EHG Venture Management Tests › US-UAT-VENTURES-009: Search ventures by name 
+    [chromium] › tests/uat/ventures.spec.js:248:3 › EHG Venture Management Tests › US-UAT-VENTURES-010: Search ventures by status 
+    [chromium] › tests/uat/ventures.spec.js:274:3 › EHG Venture Management Tests › US-UAT-VENTURES-011: Filter ventures by category 
+    [chromium] › tests/uat/ventures.spec.js:300:3 › EHG Venture Management Tests › US-UAT-VENTURES-012: Filter ventures by date range 
+    [chromium] › tests/uat/ventures.spec.js:326:3 › EHG Venture Management Tests › US-UAT-VENTURES-013: Sort ventures by name 
+    [chromium] › tests/uat/ventures.spec.js:346:3 › EHG Venture Management Tests › US-UAT-VENTURES-014: Sort ventures by value 
+    [chromium] › tests/uat/ventures.spec.js:366:3 › EHG Venture Management Tests › US-UAT-VENTURES-015: Sort ventures by created date 
+    [chromium] › tests/uat/ventures.spec.js:414:3 › EHG Venture Management Tests › US-UAT-VENTURES-017: Bulk delete ventures 
+    [chromium] › tests/uat/ventures.spec.js:434:3 › EHG Venture Management Tests › US-UAT-VENTURES-018: Bulk export ventures 
+    [chromium] › tests/uat/ventures.spec.js:499:3 › EHG Venture Management Tests › US-UAT-VENTURES-021: Add venture to portfolio 
+    [chromium] › tests/uat/ventures.spec.js:526:3 › EHG Venture Management Tests › US-UAT-VENTURES-022: Remove venture from portfolio 
+  12 passed (49.8s)

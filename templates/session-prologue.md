@@ -31,5 +31,32 @@
 - `node scripts/check-deps.js` - Verify dependency policy compliance
 - `node scripts/query-active-sds.js` - List active strategic directives
 
+## 🛡️ Pre-Session Validation (NEW - MANDATORY)
+
+**Run BEFORE starting any SD work:**
+
+```bash
+# Validate LEO Protocol database schema
+node scripts/validate-leo-schema.js
+```
+
+This checks:
+- ✅ Handoff tables exist with correct schema
+- ✅ Strategic directives table is accessible
+- ✅ Sub-agent configuration is loaded
+- ✅ Environment variables are set
+
+**If validation fails:**
+- Red warnings (❌) = Use fallback handoff methods
+- See: `docs/handoff-resilience-guide.md` for recovery steps
+- Handoff fallback: Use git commit messages with 7 elements
+
+**Handoff Table Check:**
+```bash
+node scripts/check-handoff-tables-new.mjs
+```
+
+Returns: `handoff_tracking` (preferred) or `leo_sub_agent_handoffs` (legacy) or null (use git)
+
 ---
-*Remind Claude: Follow database-first, keep PRs small, use sub-agents, create handoffs*
+*Remind Claude: Validate schema first, follow database-first, keep PRs small, use sub-agents, create resilient handoffs*

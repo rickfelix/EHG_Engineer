@@ -1,0 +1,461 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e4]:
+    - button "Skip to main content" [ref=e5] [cursor=pointer]
+    - button "Skip to navigation" [ref=e6] [cursor=pointer]
+    - button "Skip to search" [ref=e7] [cursor=pointer]
+  - button [ref=e8] [cursor=pointer]:
+    - img
+  - link "Skip to main content" [ref=e9] [cursor=pointer]:
+    - /url: "#main-content"
+  - status [ref=e10]
+  - generic [ref=e12]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e18]:
+          - img [ref=e20]
+          - generic [ref=e23]:
+            - heading "EHG Platform" [level=3] [ref=e24]
+            - paragraph [ref=e25]: Executive Hub
+        - generic [ref=e26]:
+          - generic [ref=e27]:
+            - img [ref=e28]
+            - textbox "Quick navigation..." [ref=e31]
+          - paragraph [ref=e32]: Use ⌘K for global search
+      - generic [ref=e33]:
+        - generic [ref=e34]:
+          - generic [ref=e35]: Main
+          - list [ref=e37]:
+            - listitem [ref=e38]:
+              - link "Chairman Console" [ref=e39] [cursor=pointer]:
+                - /url: /chairman
+                - img [ref=e40] [cursor=pointer]
+                - generic [ref=e47] [cursor=pointer]: Chairman Console
+                - img [ref=e48] [cursor=pointer]
+            - listitem [ref=e50]:
+              - link "EVA Assistant" [ref=e51] [cursor=pointer]:
+                - /url: /eva-assistant
+                - img [ref=e52] [cursor=pointer]
+                - generic [ref=e57] [cursor=pointer]: EVA Assistant
+                - img [ref=e58] [cursor=pointer]
+            - listitem [ref=e60]:
+              - link "Ventures" [ref=e61] [cursor=pointer]:
+                - /url: /ventures
+                - img [ref=e62] [cursor=pointer]
+                - generic [ref=e66] [cursor=pointer]: Ventures
+                - img [ref=e67] [cursor=pointer]
+            - listitem [ref=e69]:
+              - link "Portfolios" [ref=e70] [cursor=pointer]:
+                - /url: /portfolios
+                - img [ref=e71] [cursor=pointer]
+                - generic [ref=e77] [cursor=pointer]: Portfolios
+                - img [ref=e78] [cursor=pointer]
+        - generic [ref=e80]:
+          - generic [ref=e81]: AI Orchestration
+          - list [ref=e83]:
+            - listitem [ref=e84]:
+              - link "EVA Dashboard" [ref=e85] [cursor=pointer]:
+                - /url: /orchestration
+                - img [ref=e86] [cursor=pointer]
+                - generic [ref=e91] [cursor=pointer]: EVA Dashboard
+                - img [ref=e92] [cursor=pointer]
+            - listitem [ref=e94]:
+              - link "Workflows" [ref=e95] [cursor=pointer]:
+                - /url: /workflows
+                - img [ref=e96] [cursor=pointer]
+                - generic [ref=e102] [cursor=pointer]: Workflows
+                - img [ref=e103] [cursor=pointer]
+            - listitem [ref=e105]:
+              - link "AI Agents" [ref=e106] [cursor=pointer]:
+                - /url: /agents
+                - img [ref=e107] [cursor=pointer]
+                - generic [ref=e114] [cursor=pointer]: AI Agents
+                - img [ref=e115] [cursor=pointer]
+            - listitem [ref=e117]:
+              - link "EVA Knowledge Base" [ref=e118] [cursor=pointer]:
+                - /url: /eva-knowledge-base
+                - img [ref=e119] [cursor=pointer]
+                - generic [ref=e131] [cursor=pointer]: EVA Knowledge Base
+                - img [ref=e132] [cursor=pointer]
+        - generic [ref=e134]:
+          - generic [ref=e135]: Analytics & Reports
+          - list [ref=e137]:
+            - listitem [ref=e138]:
+              - link "Analytics" [ref=e139] [cursor=pointer]:
+                - /url: /analytics
+                - img [ref=e140] [cursor=pointer]
+                - generic [ref=e144] [cursor=pointer]: Analytics
+                - img [ref=e145] [cursor=pointer]
+            - listitem [ref=e147]:
+              - link "Reports" [ref=e148] [cursor=pointer]:
+                - /url: /reports
+                - img [ref=e149] [cursor=pointer]
+                - generic [ref=e154] [cursor=pointer]: Reports
+                - img [ref=e155] [cursor=pointer]
+            - listitem [ref=e157]:
+              - link "Insights" [ref=e158] [cursor=pointer]:
+                - /url: /insights
+                - img [ref=e159] [cursor=pointer]
+                - generic [ref=e164] [cursor=pointer]: Insights
+                - img [ref=e165] [cursor=pointer]
+            - listitem [ref=e167]:
+              - link "Risk Forecasting" [ref=e168] [cursor=pointer]:
+                - /url: /risk-forecasting
+                - img [ref=e169] [cursor=pointer]
+                - generic [ref=e173] [cursor=pointer]: Risk Forecasting
+                - img [ref=e174] [cursor=pointer]
+            - listitem [ref=e176]:
+              - link "Advanced Analytics" [ref=e177] [cursor=pointer]:
+                - /url: /advanced-analytics
+                - img [ref=e178] [cursor=pointer]
+                - generic [ref=e190] [cursor=pointer]: Advanced Analytics
+                - img [ref=e191] [cursor=pointer]
+            - listitem [ref=e193]:
+              - link "Mobile Companion" [ref=e194] [cursor=pointer]:
+                - /url: /mobile-companion-app
+                - img [ref=e195] [cursor=pointer]
+                - generic [ref=e202] [cursor=pointer]: Mobile Companion
+                - img [ref=e203] [cursor=pointer]
+        - generic [ref=e205]:
+          - generic [ref=e206]: Administration
+          - list [ref=e208]:
+            - listitem [ref=e209]:
+              - link "Governance" [ref=e210] [cursor=pointer]:
+                - /url: /governance
+                - img [ref=e211] [cursor=pointer]
+                - generic [ref=e215] [cursor=pointer]: Governance
+                - img [ref=e216] [cursor=pointer]
+            - listitem [ref=e218]:
+              - link "Integration Hub" [ref=e219] [cursor=pointer]:
+                - /url: /integration-hub
+                - img [ref=e220] [cursor=pointer]
+                - generic [ref=e224] [cursor=pointer]: Integration Hub
+                - img [ref=e225] [cursor=pointer]
+            - listitem [ref=e227]:
+              - link "Enhanced Security" [ref=e228] [cursor=pointer]:
+                - /url: /enhanced-auth
+                - img [ref=e229] [cursor=pointer]
+                - generic [ref=e234] [cursor=pointer]: Enhanced Security
+                - img [ref=e235] [cursor=pointer]
+            - listitem [ref=e237]:
+              - link "Settings" [ref=e238] [cursor=pointer]:
+                - /url: /settings
+                - img [ref=e239] [cursor=pointer]
+                - generic [ref=e244] [cursor=pointer]: Settings
+                - img [ref=e245] [cursor=pointer]
+      - generic [ref=e248]:
+        - generic [ref=e250]: QUICK ACTIONS
+        - generic [ref=e251]:
+          - button "⌘+N" [ref=e252] [cursor=pointer]:
+            - img
+            - generic [ref=e254] [cursor=pointer]: ⌘+N
+          - button "⌘+K" [ref=e255] [cursor=pointer]:
+            - img
+            - generic [ref=e257] [cursor=pointer]: ⌘+K
+          - button "⌘+." [ref=e258] [cursor=pointer]:
+            - img
+            - generic [ref=e260] [cursor=pointer]: ⌘+.
+          - button "⌘+⇧+V" [ref=e261] [cursor=pointer]:
+            - img
+            - generic [ref=e263] [cursor=pointer]: ⌘+⇧+V
+        - generic [ref=e267]: All Systems Operational
+    - generic [ref=e268]:
+      - banner [ref=e269]:
+        - generic [ref=e270]:
+          - button "Toggle Sidebar" [ref=e271] [cursor=pointer]:
+            - img
+            - generic [ref=e272] [cursor=pointer]: Toggle Sidebar
+          - button "Search platform... ⌘K" [ref=e274] [cursor=pointer]:
+            - img
+            - generic [ref=e275] [cursor=pointer]: Search platform...
+            - generic: ⌘K
+          - navigation "Breadcrumb" [ref=e277]:
+            - button "Go to Chairman Console" [ref=e278] [cursor=pointer]:
+              - img
+              - generic [ref=e279] [cursor=pointer]: Home
+            - img [ref=e280]
+            - generic [ref=e282]: Ventures
+          - generic [ref=e283]:
+            - button "Shortcuts" [ref=e284] [cursor=pointer]:
+              - img
+              - generic [ref=e285] [cursor=pointer]: Shortcuts
+            - combobox [ref=e286] [cursor=pointer]:
+              - generic:
+                - generic:
+                  - img
+                  - text: All Companies
+              - img [ref=e287] [cursor=pointer]
+            - button "Switch to dark mode" [ref=e289] [cursor=pointer]:
+              - img
+              - generic [ref=e290] [cursor=pointer]: Dark
+            - button "Chairman" [ref=e291] [cursor=pointer]:
+              - img
+              - generic [ref=e292] [cursor=pointer]: Chairman
+      - main [ref=e293]:
+        - generic [ref=e296]:
+          - generic [ref=e297]:
+            - generic [ref=e298]:
+              - heading "Venture Management" [level=1] [ref=e299]:
+                - img [ref=e300]
+                - text: Venture Management
+              - paragraph [ref=e304]: Manage and track venture progress across your portfolio
+            - generic [ref=e305]:
+              - link "Docs" [ref=e306] [cursor=pointer]:
+                - /url: /mnt/c/_EHG/ehg/docs/app/ventures/README.md
+                - button "Docs" [ref=e307] [cursor=pointer]
+              - button "New Venture" [ref=e308] [cursor=pointer]:
+                - img
+                - text: New Venture
+          - generic [ref=e312]: Advanced Filters (wired)
+          - generic [ref=e313]:
+            - heading "Triage Summary" [level=3] [ref=e315]:
+              - generic [ref=e316]: Triage Summary
+              - img [ref=e317]
+            - generic [ref=e319]:
+              - generic [ref=e320]: 10 stuck, 3 need attention, 9 excessive retries, 4 ESG blackout
+              - generic [ref=e321]:
+                - generic [ref=e322]: "Stuck: 10"
+                - generic [ref=e323]: "Attention: 3"
+                - generic [ref=e324]: "Retries: 9"
+                - generic [ref=e325]: "ESG: 4"
+          - generic [ref=e326]:
+            - generic [ref=e327]:
+              - heading "Total Ventures" [level=3] [ref=e329]:
+                - generic [ref=e330]: Total Ventures
+                - img [ref=e331]
+              - generic [ref=e333]:
+                - generic [ref=e334]: "20"
+                - paragraph [ref=e335]: 18 active
+            - generic [ref=e336]:
+              - heading "Average Stage" [level=3] [ref=e338]:
+                - generic [ref=e339]: Average Stage
+                - img [ref=e340]
+              - generic [ref=e344]:
+                - generic [ref=e345]: 21.9/40
+                - paragraph [ref=e346]: Workflow progress
+            - generic [ref=e347]:
+              - heading "Projected Revenue" [level=3] [ref=e349]:
+                - generic [ref=e350]: Projected Revenue
+                - img [ref=e351]
+              - generic [ref=e353]:
+                - generic [ref=e354]: $115,582,218
+                - paragraph [ref=e355]: Total portfolio
+            - generic [ref=e356]:
+              - heading "At Risk" [level=3] [ref=e358]:
+                - generic [ref=e359]: At Risk
+                - img [ref=e360]
+              - generic [ref=e362]:
+                - generic [ref=e363]: "7"
+                - paragraph [ref=e364]: High risk ventures
+          - generic [ref=e365]:
+            - heading "Stage Distribution" [level=3] [ref=e367]:
+              - img [ref=e368]
+              - text: Stage Distribution
+            - generic [ref=e371]:
+              - generic [ref=e372]:
+                - paragraph [ref=e373]: Ideation (1-10)
+                - paragraph [ref=e374]: "4"
+                - paragraph [ref=e375]: ventures
+              - generic [ref=e376]:
+                - paragraph [ref=e377]: Validation (11-20)
+                - paragraph [ref=e378]: "4"
+                - paragraph [ref=e379]: ventures
+              - generic [ref=e380]:
+                - paragraph [ref=e381]: Development (21-30)
+                - paragraph [ref=e382]: "6"
+                - paragraph [ref=e383]: ventures
+              - generic [ref=e384]:
+                - paragraph [ref=e385]: Launch & Growth (31-40)
+                - paragraph [ref=e386]: "6"
+                - paragraph [ref=e387]: ventures
+          - generic [ref=e388]:
+            - heading "All Ventures" [level=3] [ref=e391]
+            - generic [ref=e393]:
+              - generic [ref=e394]:
+                - generic [ref=e395]:
+                  - img [ref=e396]
+                  - generic [ref=e398]: "View:"
+                - tablist [ref=e399]:
+                  - tab "Stage Navigation" [selected] [ref=e400] [cursor=pointer]
+                  - tab "Stage Distribution" [ref=e401] [cursor=pointer]
+                  - tab "Table" [ref=e402] [cursor=pointer]
+                  - tab "Grid" [ref=e403] [cursor=pointer]
+                  - tab "Kanban" [ref=e404] [cursor=pointer]
+              - tabpanel "Stage Navigation" [ref=e405]:
+                - generic [ref=e406]:
+                  - generic [ref=e407]:
+                    - generic [ref=e408] [cursor=pointer]:
+                      - generic [ref=e409] [cursor=pointer]:
+                        - generic [ref=e410] [cursor=pointer]:
+                          - img [ref=e412] [cursor=pointer]
+                          - generic [ref=e414] [cursor=pointer]: "2"
+                        - heading "Foundation" [level=3] [ref=e415] [cursor=pointer]
+                      - generic [ref=e416] [cursor=pointer]:
+                        - paragraph [ref=e417] [cursor=pointer]: Ideation & validation
+                        - paragraph [ref=e418] [cursor=pointer]: Stages 1-3
+                    - generic [ref=e419] [cursor=pointer]:
+                      - generic [ref=e420] [cursor=pointer]:
+                        - generic [ref=e421] [cursor=pointer]:
+                          - img [ref=e423] [cursor=pointer]
+                          - generic [ref=e426] [cursor=pointer]: "1"
+                        - heading "Validation" [level=3] [ref=e427] [cursor=pointer]
+                      - generic [ref=e428] [cursor=pointer]:
+                        - paragraph [ref=e429] [cursor=pointer]: Market & technical validation
+                        - paragraph [ref=e430] [cursor=pointer]: Stages 4-6
+                    - generic [ref=e431] [cursor=pointer]:
+                      - generic [ref=e432] [cursor=pointer]:
+                        - generic [ref=e433] [cursor=pointer]:
+                          - img [ref=e435] [cursor=pointer]
+                          - generic [ref=e438] [cursor=pointer]: "1"
+                        - heading "Planning" [level=3] [ref=e439] [cursor=pointer]
+                      - generic [ref=e440] [cursor=pointer]:
+                        - paragraph [ref=e441] [cursor=pointer]: Strategic planning & technical review
+                        - paragraph [ref=e442] [cursor=pointer]: Stages 7-10
+                    - generic [ref=e443] [cursor=pointer]:
+                      - generic [ref=e444] [cursor=pointer]:
+                        - generic [ref=e445] [cursor=pointer]:
+                          - img [ref=e447] [cursor=pointer]
+                          - generic [ref=e450] [cursor=pointer]: "4"
+                        - heading "Development" [level=3] [ref=e451] [cursor=pointer]
+                      - generic [ref=e452] [cursor=pointer]:
+                        - paragraph [ref=e453] [cursor=pointer]: MVP through advanced development
+                        - paragraph [ref=e454] [cursor=pointer]: Stages 11-20
+                    - generic [ref=e455] [cursor=pointer]:
+                      - generic [ref=e456] [cursor=pointer]:
+                        - generic [ref=e457] [cursor=pointer]:
+                          - img [ref=e459] [cursor=pointer]
+                          - generic [ref=e464] [cursor=pointer]: "4"
+                        - heading "Launch & Growth" [level=3] [ref=e465] [cursor=pointer]
+                      - generic [ref=e466] [cursor=pointer]:
+                        - paragraph [ref=e467] [cursor=pointer]: Launch preparation through scaling
+                        - paragraph [ref=e468] [cursor=pointer]: Stages 21-25
+                    - generic [ref=e469] [cursor=pointer]:
+                      - generic [ref=e470] [cursor=pointer]:
+                        - generic [ref=e471] [cursor=pointer]:
+                          - img [ref=e473] [cursor=pointer]
+                          - generic [ref=e476] [cursor=pointer]: "2"
+                        - heading "Operations" [level=3] [ref=e477] [cursor=pointer]
+                      - generic [ref=e478] [cursor=pointer]:
+                        - paragraph [ref=e479] [cursor=pointer]: Operational excellence & optimization
+                        - paragraph [ref=e480] [cursor=pointer]: Stages 26-30
+                    - generic [ref=e481] [cursor=pointer]:
+                      - generic [ref=e482] [cursor=pointer]:
+                        - generic [ref=e483] [cursor=pointer]:
+                          - img [ref=e485] [cursor=pointer]
+                          - generic [ref=e487] [cursor=pointer]: "2"
+                        - heading "Advanced Features" [level=3] [ref=e488] [cursor=pointer]
+                      - generic [ref=e489] [cursor=pointer]:
+                        - paragraph [ref=e490] [cursor=pointer]: Analytics through innovation
+                        - paragraph [ref=e491] [cursor=pointer]: Stages 31-35
+                    - generic [ref=e492] [cursor=pointer]:
+                      - generic [ref=e493] [cursor=pointer]:
+                        - generic [ref=e494] [cursor=pointer]:
+                          - img [ref=e496] [cursor=pointer]
+                          - generic [ref=e500] [cursor=pointer]: "4"
+                        - heading "Strategic Intelligence" [level=3] [ref=e501] [cursor=pointer]
+                      - generic [ref=e502] [cursor=pointer]:
+                        - paragraph [ref=e503] [cursor=pointer]: Portfolio governance & coordination
+                        - paragraph [ref=e504] [cursor=pointer]: Stages 36-40
+                  - generic [ref=e505]:
+                    - tablist [ref=e506]:
+                      - tab "Foundation" [selected] [ref=e507] [cursor=pointer]:
+                        - img [ref=e508] [cursor=pointer]
+                        - generic [ref=e510] [cursor=pointer]: Foundation
+                      - tab "Validation" [ref=e511] [cursor=pointer]:
+                        - img [ref=e512] [cursor=pointer]
+                        - generic [ref=e515] [cursor=pointer]: Validation
+                      - tab "Planning" [ref=e516] [cursor=pointer]:
+                        - img [ref=e517] [cursor=pointer]
+                        - generic [ref=e520] [cursor=pointer]: Planning
+                      - tab "Development" [ref=e521] [cursor=pointer]:
+                        - img
+                        - generic [ref=e524] [cursor=pointer]: Development
+                      - tab "Launch & Growth" [ref=e525] [cursor=pointer]:
+                        - img
+                        - generic [ref=e530] [cursor=pointer]: Launch & Growth
+                      - tab "Operations" [ref=e531] [cursor=pointer]:
+                        - img [ref=e532] [cursor=pointer]
+                        - generic [ref=e535] [cursor=pointer]: Operations
+                      - tab "Advanced Features" [ref=e536] [cursor=pointer]:
+                        - img
+                        - generic [ref=e538] [cursor=pointer]: Advanced Features
+                      - tab "Strategic Intelligence" [ref=e539] [cursor=pointer]:
+                        - img
+                        - generic [ref=e543] [cursor=pointer]: Strategic Intelligence
+                    - tabpanel "Foundation" [ref=e544]:
+                      - generic [ref=e545]:
+                        - generic [ref=e547]:
+                          - generic [ref=e548]:
+                            - img [ref=e550]
+                            - generic [ref=e552]:
+                              - heading "Foundation" [level=3] [ref=e553]
+                              - paragraph [ref=e554]: Ideation & validation
+                          - generic [ref=e555]: 2 ventures
+                        - generic [ref=e557]:
+                          - generic [ref=e558]:
+                            - generic [ref=e559]:
+                              - generic [ref=e561]: "1"
+                              - img [ref=e562]
+                            - generic [ref=e564]:
+                              - paragraph [ref=e565]: Initial Ideation
+                              - paragraph [ref=e566]: Core concept development
+                          - generic [ref=e567]:
+                            - generic [ref=e568]:
+                              - generic [ref=e570]: "2"
+                              - img [ref=e571]
+                            - generic [ref=e573]:
+                              - paragraph [ref=e574]: Idea Refinement
+                              - paragraph [ref=e575]: Concept validation and refinement
+                          - generic [ref=e576]:
+                            - generic [ref=e579]: "3"
+                            - generic [ref=e580]:
+                              - paragraph [ref=e581]: Feasibility Assessment
+                              - paragraph [ref=e582]: Initial feasibility analysis
+                      - generic [ref=e583]:
+                        - heading "Ventures in Foundation 2" [level=3] [ref=e584]:
+                          - text: Ventures in Foundation
+                          - generic [ref=e585]: "2"
+                        - generic [ref=e586]:
+                          - generic [ref=e588] [cursor=pointer]:
+                            - generic [ref=e589] [cursor=pointer]:
+                              - generic [ref=e590] [cursor=pointer]:
+                                - generic [ref=e591] [cursor=pointer]:
+                                  - img [ref=e592] [cursor=pointer]
+                                  - heading "Project Aurora" [level=4] [ref=e594] [cursor=pointer]
+                                  - generic [ref=e595] [cursor=pointer]: Stage 1
+                                - paragraph [ref=e596] [cursor=pointer]: Ideation stage venture focused on HealthTech innovation
+                              - img [ref=e597] [cursor=pointer]
+                            - generic [ref=e599] [cursor=pointer]:
+                              - generic [ref=e600] [cursor=pointer]:
+                                - generic [ref=e601] [cursor=pointer]: Progress in Foundation
+                                - generic [ref=e602] [cursor=pointer]: 33%
+                              - progressbar [ref=e603] [cursor=pointer]
+                              - generic [ref=e605] [cursor=pointer]:
+                                - generic [ref=e606] [cursor=pointer]: "Portfolio: Emerging"
+                                - generic [ref=e607] [cursor=pointer]: "ROI: 58.0%"
+                          - generic [ref=e609] [cursor=pointer]:
+                            - generic [ref=e610] [cursor=pointer]:
+                              - generic [ref=e611] [cursor=pointer]:
+                                - generic [ref=e612] [cursor=pointer]:
+                                  - img [ref=e613] [cursor=pointer]
+                                  - heading "Initiative Quantum" [level=4] [ref=e615] [cursor=pointer]
+                                  - generic [ref=e616] [cursor=pointer]: Stage 3
+                                - paragraph [ref=e617] [cursor=pointer]: Ideation stage venture focused on LogisticsTech innovation
+                              - img [ref=e618] [cursor=pointer]
+                            - generic [ref=e620] [cursor=pointer]:
+                              - generic [ref=e621] [cursor=pointer]:
+                                - generic [ref=e622] [cursor=pointer]: Progress in Foundation
+                                - generic [ref=e623] [cursor=pointer]: 100%
+                              - progressbar [ref=e624] [cursor=pointer]
+                              - generic [ref=e626] [cursor=pointer]:
+                                - generic [ref=e627] [cursor=pointer]: "Portfolio: Innovation"
+                                - generic [ref=e628] [cursor=pointer]: "ROI: 66.0%"
+      - button [ref=e630] [cursor=pointer]:
+        - generic [ref=e635] [cursor=pointer]:
+          - img
+```

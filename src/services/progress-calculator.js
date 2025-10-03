@@ -133,11 +133,20 @@ class ProgressCalculator {
   calculatePlanDesignProgress(prd) {
     if (!prd) return 0;
 
-    const planChecklist = prd.plan_checklist || [];
-    if (planChecklist.length === 0) return 100; // No checklist = considered complete
+    // Parse plan_checklist if it's a JSON string
+    let planChecklist = prd.plan_checklist || [];
+    if (typeof planChecklist === 'string') {
+      try {
+        planChecklist = JSON.parse(planChecklist);
+      } catch (e) {
+        console.error('Failed to parse plan_checklist:', e.message);
+        return 0;
+      }
+    }
+    if (!Array.isArray(planChecklist) || planChecklist.length === 0) return 100;
 
-    const completedItems = planChecklist.filter(item => 
-      (typeof item === 'object' && item.checked) || 
+    const completedItems = planChecklist.filter(item =>
+      (typeof item === 'object' && item.checked) ||
       (typeof item === 'string' && false) // strings default to unchecked
     ).length;
 
@@ -145,14 +154,46 @@ class ProgressCalculator {
   }
 
   getPlanDesignDetails(prd) {
-    const planChecklist = prd.plan_checklist || [];
+    if (!prd) return { totalItems: 0, completedItems: 0, hasRequirements: false, hasTechnicalSpecs: false };
+
+    // Parse plan_checklist if it's a JSON string
+    let planChecklist = prd.plan_checklist || [];
+    if (typeof planChecklist === 'string') {
+      try {
+        planChecklist = JSON.parse(planChecklist);
+      } catch (e) {
+        planChecklist = [];
+      }
+    }
+    if (!Array.isArray(planChecklist)) planChecklist = [];
+
+    // Parse functional_requirements if it's a JSON string
+    let functionalReqs = prd.functional_requirements || [];
+    if (typeof functionalReqs === 'string') {
+      try {
+        functionalReqs = JSON.parse(functionalReqs);
+      } catch (e) {
+        functionalReqs = [];
+      }
+    }
+
+    // Parse technical_requirements if it's a JSON string
+    let technicalReqs = prd.technical_requirements || [];
+    if (typeof technicalReqs === 'string') {
+      try {
+        technicalReqs = JSON.parse(technicalReqs);
+      } catch (e) {
+        technicalReqs = [];
+      }
+    }
+
     return {
       totalItems: planChecklist.length,
-      completedItems: planChecklist.filter(item => 
+      completedItems: planChecklist.filter(item =>
         typeof item === 'object' && item.checked
       ).length,
-      hasRequirements: prd?.functional_requirements?.length > 0,
-      hasTechnicalSpecs: prd?.technical_requirements?.length > 0
+      hasRequirements: Array.isArray(functionalReqs) && functionalReqs.length > 0,
+      hasTechnicalSpecs: Array.isArray(technicalReqs) && technicalReqs.length > 0
     };
   }
 
@@ -193,13 +234,33 @@ class ProgressCalculator {
     // Check multiple sources for verification data
     let verificationItems = [];
 
+    // Parse validation_checklist if it's a JSON string
+    let validationChecklist = prd.validation_checklist;
+    if (typeof validationChecklist === 'string') {
+      try {
+        validationChecklist = JSON.parse(validationChecklist);
+      } catch (e) {
+        validationChecklist = null;
+      }
+    }
+
+    // Parse metadata verification_checklist if it's a JSON string
+    let metadataVerificationChecklist = prd.metadata?.verification_checklist;
+    if (typeof metadataVerificationChecklist === 'string') {
+      try {
+        metadataVerificationChecklist = JSON.parse(metadataVerificationChecklist);
+      } catch (e) {
+        metadataVerificationChecklist = null;
+      }
+    }
+
     // 1. Check direct validation_checklist
-    if (prd.validation_checklist && prd.validation_checklist.length > 0) {
-      verificationItems = prd.validation_checklist;
+    if (Array.isArray(validationChecklist) && validationChecklist.length > 0) {
+      verificationItems = validationChecklist;
     }
     // 2. Check metadata for verification_checklist (new approach)
-    else if (prd.metadata?.verification_checklist && prd.metadata.verification_checklist.length > 0) {
-      verificationItems = prd.metadata.verification_checklist;
+    else if (Array.isArray(metadataVerificationChecklist) && metadataVerificationChecklist.length > 0) {
+      verificationItems = metadataVerificationChecklist;
     }
     // 3. Check status-based completion
     else if (prd.status === 'verification_complete' || prd.status === 'approved') {
@@ -208,8 +269,8 @@ class ProgressCalculator {
 
     if (verificationItems.length === 0) return 0; // No verification data
 
-    const completedItems = verificationItems.filter(item => 
-      (typeof item === 'object' && item.checked) || 
+    const completedItems = verificationItems.filter(item =>
+      (typeof item === 'object' && item.checked) ||
       (typeof item === 'string' && false)
     ).length;
 
@@ -217,11 +278,32 @@ class ProgressCalculator {
   }
 
   getPlanVerificationDetails(prd) {
-    let verificationItems = prd.validation_checklist || prd.metadata?.verification_checklist || [];
-    
+    // Parse validation_checklist if it's a JSON string
+    let validationChecklist = prd?.validation_checklist;
+    if (typeof validationChecklist === 'string') {
+      try {
+        validationChecklist = JSON.parse(validationChecklist);
+      } catch (e) {
+        validationChecklist = [];
+      }
+    }
+
+    // Parse metadata verification_checklist if it's a JSON string
+    let metadataVerificationChecklist = prd?.metadata?.verification_checklist;
+    if (typeof metadataVerificationChecklist === 'string') {
+      try {
+        metadataVerificationChecklist = JSON.parse(metadataVerificationChecklist);
+      } catch (e) {
+        metadataVerificationChecklist = [];
+      }
+    }
+
+    let verificationItems = validationChecklist || metadataVerificationChecklist || [];
+    if (!Array.isArray(verificationItems)) verificationItems = [];
+
     return {
       totalItems: verificationItems.length,
-      completedItems: verificationItems.filter(item => 
+      completedItems: verificationItems.filter(item =>
         typeof item === 'object' && item.checked
       ).length,
       status: prd?.status,

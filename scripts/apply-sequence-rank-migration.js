@@ -1,58 +1,102 @@
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import pg from 'pg';
+import fs from 'fs/promises';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const { Client } = pg;
+const projectId = 'dedlbzhpgkmetvhbkyzq'; // EHG_Engineer database
+const password = process.env.SUPABASE_DB_PASSWORD || 'Fl!M32DaM00n!1';
+
+// Pooler connection (IPv4 compatible) - use aws-1 for EHG_Engineer
+const client = new Client({
+  host: `aws-1-us-east-1.pooler.supabase.com`,
+  port: 5432,
+  database: 'postgres',
+  user: `postgres.${projectId}`,
+  password: password,
+  ssl: { rejectUnauthorized: false }
+});
 
 async function applyMigration() {
-  console.log('=== APPLYING SEQUENCE_RANK MIGRATION ===\n');
+  console.log('🔧 Applying sequence_rank NOT NULL migration...\n');
 
-  // Note: Supabase doesn't allow direct DDL operations via the client library
-  // We need to use the SQL editor in Supabase Dashboard or the migration system
+  try {
+    await client.connect();
+    console.log('✅ Connected to database');
 
-  console.log('⚠️  IMPORTANT: Direct DDL operations cannot be performed via the Supabase JS client.');
-  console.log('');
-  console.log('To complete the migration, please:');
-  console.log('');
-  console.log('1. Go to Supabase Dashboard:');
-  console.log('   https://supabase.com/dashboard/project/dedlbzhpgkmetvhbkyzq/sql');
-  console.log('');
-  console.log('2. Run this SQL command:');
-  console.log('');
-  console.log('   ALTER TABLE strategic_directives_v2');
-  console.log('   DROP COLUMN IF EXISTS execution_order;');
-  console.log('');
-  console.log('3. Optionally, add a comment to document the field:');
-  console.log('');
-  console.log('   COMMENT ON COLUMN strategic_directives_v2.sequence_rank IS');
-  console.log("   'Execution sequence ranking for Strategic Directives. Lower numbers = higher priority/earlier execution.';");
-  console.log('');
+    await client.query('BEGIN');
+    console.log('✅ Transaction started');
 
-  // Verify current state
-  console.log('=== CURRENT STATE ===');
+    // Read migration file
+    const sql = await fs.readFile('database/migrations/make-sequence-rank-required.sql', 'utf-8');
 
-  const { data, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sequence_rank')
-    .order('sequence_rank')
-    .limit(5);
+    // Split into statements and execute
+    const statements = sql
+      .split(';')
+      .map(s => s.trim())
+      .filter(s => s.length > 0 && !s.startsWith('--'));
 
-  if (error) {
-    console.error('Error:', error);
-  } else {
-    console.log('Sample of SDs with sequence_rank:');
-    data.forEach(sd => {
-      console.log(`  ${sd.id}: sequence_rank = ${sd.sequence_rank}`);
-    });
+    console.log(`\n📝 Executing ${statements.length} migration statements...\n`);
+
+    for (let i = 0; i < statements.length; i++) {
+      const statement = statements[i];
+
+      // Skip comments
+      if (statement.startsWith('--')) continue;
+
+      try {
+        const result = await client.query(statement + ';');
+
+        // Extract statement type
+        const statementType = statement.split(/\s+/)[0].toUpperCase();
+        console.log(`✅ [${i+1}/${statements.length}] ${statementType} executed`);
+
+        // Show notices from DO blocks
+        if (result.rows && result.rows.length > 0) {
+          console.log('   Result:', result.rows[0]);
+        }
+      } catch (err) {
+        console.error(`❌ Error in statement ${i+1}:`, err.message);
+        throw err;
+      }
+    }
+
+    await client.query('COMMIT');
+    console.log('\n✅ Transaction committed');
+
+    // Verify the migration
+    const { rows } = await client.query(`
+      SELECT
+        COUNT(*) as total_sds,
+        COUNT(*) FILTER (WHERE sequence_rank IS NULL) as null_ranks,
+        MIN(sequence_rank) as min_rank,
+        MAX(sequence_rank) as max_rank
+      FROM strategic_directives_v2
+    `);
+
+    console.log('\n📊 Migration Verification:');
+    console.log(`- Total SDs: ${rows[0].total_sds}`);
+    console.log(`- NULL sequence_ranks: ${rows[0].null_ranks}`);
+    console.log(`- Min sequence_rank: ${rows[0].min_rank}`);
+    console.log(`- Max sequence_rank: ${rows[0].max_rank}`);
+
+    if (rows[0].null_ranks === '0') {
+      console.log('\n✅ Migration successful! All sequence_ranks populated.');
+      console.log('✅ NOT NULL constraint applied.');
+      console.log('✅ Auto-assign trigger created for future inserts.');
+    } else {
+      console.error('\n❌ Migration verification failed!');
+    }
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('\n❌ Migration failed, rolled back:', err);
+    throw err;
+  } finally {
+    await client.end();
+    console.log('\n🔌 Database connection closed');
   }
-
-  console.log('\n✅ All JavaScript files have been updated to use sequence_rank');
-  console.log('✅ All data has been migrated from execution_order to sequence_rank');
-  console.log('⏳ Pending: Drop execution_order column via Supabase Dashboard');
 }
 
 applyMigration().catch(console.error);

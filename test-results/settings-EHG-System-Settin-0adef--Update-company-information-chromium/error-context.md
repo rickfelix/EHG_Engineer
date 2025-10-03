@@ -1,0 +1,236 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e4]:
+    - button "Skip to main content" [ref=e5] [cursor=pointer]
+    - button "Skip to navigation" [ref=e6] [cursor=pointer]
+    - button "Skip to search" [ref=e7] [cursor=pointer]
+  - button [ref=e8] [cursor=pointer]:
+    - img
+  - link "Skip to main content" [ref=e9] [cursor=pointer]:
+    - /url: "#main-content"
+  - status [ref=e10]
+  - generic [ref=e12]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e18]:
+          - img [ref=e20]
+          - generic [ref=e23]:
+            - heading "EHG Platform" [level=3] [ref=e24]
+            - paragraph [ref=e25]: Executive Hub
+        - generic [ref=e26]:
+          - generic [ref=e27]:
+            - img [ref=e28]
+            - textbox "Quick navigation..." [ref=e31]
+          - paragraph [ref=e32]: Use ⌘K for global search
+      - generic [ref=e33]:
+        - generic [ref=e34]:
+          - generic [ref=e35]: Main
+          - list [ref=e37]:
+            - listitem [ref=e38]:
+              - link "Chairman Console" [ref=e39] [cursor=pointer]:
+                - /url: /chairman
+                - img [ref=e40] [cursor=pointer]
+                - generic [ref=e47] [cursor=pointer]: Chairman Console
+                - img [ref=e48] [cursor=pointer]
+            - listitem [ref=e50]:
+              - link "EVA Assistant" [ref=e51] [cursor=pointer]:
+                - /url: /eva-assistant
+                - img [ref=e52] [cursor=pointer]
+                - generic [ref=e57] [cursor=pointer]: EVA Assistant
+                - img [ref=e58] [cursor=pointer]
+            - listitem [ref=e60]:
+              - link "Ventures" [ref=e61] [cursor=pointer]:
+                - /url: /ventures
+                - img [ref=e62] [cursor=pointer]
+                - generic [ref=e66] [cursor=pointer]: Ventures
+                - img [ref=e67] [cursor=pointer]
+            - listitem [ref=e69]:
+              - link "Portfolios" [ref=e70] [cursor=pointer]:
+                - /url: /portfolios
+                - img [ref=e71] [cursor=pointer]
+                - generic [ref=e77] [cursor=pointer]: Portfolios
+                - img [ref=e78] [cursor=pointer]
+        - generic [ref=e80]:
+          - generic [ref=e81]: AI Orchestration
+          - list [ref=e83]:
+            - listitem [ref=e84]:
+              - link "EVA Dashboard" [ref=e85] [cursor=pointer]:
+                - /url: /orchestration
+                - img [ref=e86] [cursor=pointer]
+                - generic [ref=e91] [cursor=pointer]: EVA Dashboard
+                - img [ref=e92] [cursor=pointer]
+            - listitem [ref=e94]:
+              - link "Workflows" [ref=e95] [cursor=pointer]:
+                - /url: /workflows
+                - img [ref=e96] [cursor=pointer]
+                - generic [ref=e102] [cursor=pointer]: Workflows
+                - img [ref=e103] [cursor=pointer]
+            - listitem [ref=e105]:
+              - link "AI Agents" [ref=e106] [cursor=pointer]:
+                - /url: /agents
+                - img [ref=e107] [cursor=pointer]
+                - generic [ref=e114] [cursor=pointer]: AI Agents
+                - img [ref=e115] [cursor=pointer]
+            - listitem [ref=e117]:
+              - link "EVA Knowledge Base" [ref=e118] [cursor=pointer]:
+                - /url: /eva-knowledge-base
+                - img [ref=e119] [cursor=pointer]
+                - generic [ref=e131] [cursor=pointer]: EVA Knowledge Base
+                - img [ref=e132] [cursor=pointer]
+        - generic [ref=e134]:
+          - generic [ref=e135]: Analytics & Reports
+          - list [ref=e137]:
+            - listitem [ref=e138]:
+              - link "Analytics" [ref=e139] [cursor=pointer]:
+                - /url: /analytics
+                - img [ref=e140] [cursor=pointer]
+                - generic [ref=e144] [cursor=pointer]: Analytics
+                - img [ref=e145] [cursor=pointer]
+            - listitem [ref=e147]:
+              - link "Reports" [ref=e148] [cursor=pointer]:
+                - /url: /reports
+                - img [ref=e149] [cursor=pointer]
+                - generic [ref=e154] [cursor=pointer]: Reports
+                - img [ref=e155] [cursor=pointer]
+            - listitem [ref=e157]:
+              - link "Insights" [ref=e158] [cursor=pointer]:
+                - /url: /insights
+                - img [ref=e159] [cursor=pointer]
+                - generic [ref=e164] [cursor=pointer]: Insights
+                - img [ref=e165] [cursor=pointer]
+            - listitem [ref=e167]:
+              - link "Risk Forecasting" [ref=e168] [cursor=pointer]:
+                - /url: /risk-forecasting
+                - img [ref=e169] [cursor=pointer]
+                - generic [ref=e173] [cursor=pointer]: Risk Forecasting
+                - img [ref=e174] [cursor=pointer]
+            - listitem [ref=e176]:
+              - link "Advanced Analytics" [ref=e177] [cursor=pointer]:
+                - /url: /advanced-analytics
+                - img [ref=e178] [cursor=pointer]
+                - generic [ref=e190] [cursor=pointer]: Advanced Analytics
+                - img [ref=e191] [cursor=pointer]
+            - listitem [ref=e193]:
+              - link "Mobile Companion" [ref=e194] [cursor=pointer]:
+                - /url: /mobile-companion-app
+                - img [ref=e195] [cursor=pointer]
+                - generic [ref=e202] [cursor=pointer]: Mobile Companion
+                - img [ref=e203] [cursor=pointer]
+        - generic [ref=e205]:
+          - generic [ref=e206]: Administration
+          - list [ref=e208]:
+            - listitem [ref=e209]:
+              - link "Governance" [ref=e210] [cursor=pointer]:
+                - /url: /governance
+                - img [ref=e211] [cursor=pointer]
+                - generic [ref=e215] [cursor=pointer]: Governance
+                - img [ref=e216] [cursor=pointer]
+            - listitem [ref=e218]:
+              - link "Integration Hub" [ref=e219] [cursor=pointer]:
+                - /url: /integration-hub
+                - img [ref=e220] [cursor=pointer]
+                - generic [ref=e224] [cursor=pointer]: Integration Hub
+                - img [ref=e225] [cursor=pointer]
+            - listitem [ref=e227]:
+              - link "Enhanced Security" [ref=e228] [cursor=pointer]:
+                - /url: /enhanced-auth
+                - img [ref=e229] [cursor=pointer]
+                - generic [ref=e234] [cursor=pointer]: Enhanced Security
+                - img [ref=e235] [cursor=pointer]
+            - listitem [ref=e237]:
+              - link "Settings" [ref=e238] [cursor=pointer]:
+                - /url: /settings
+                - img [ref=e239] [cursor=pointer]
+                - generic [ref=e244] [cursor=pointer]: Settings
+                - img [ref=e245] [cursor=pointer]
+      - generic [ref=e248]:
+        - generic [ref=e250]: QUICK ACTIONS
+        - generic [ref=e251]:
+          - button "⌘+N" [ref=e252] [cursor=pointer]:
+            - img
+            - generic [ref=e254] [cursor=pointer]: ⌘+N
+          - button "⌘+K" [ref=e255] [cursor=pointer]:
+            - img
+            - generic [ref=e257] [cursor=pointer]: ⌘+K
+          - button "⌘+." [ref=e258] [cursor=pointer]:
+            - img
+            - generic [ref=e260] [cursor=pointer]: ⌘+.
+          - button "⌘+⇧+V" [ref=e261] [cursor=pointer]:
+            - img
+            - generic [ref=e263] [cursor=pointer]: ⌘+⇧+V
+        - generic [ref=e267]: All Systems Operational
+    - generic [ref=e268]:
+      - banner [ref=e269]:
+        - generic [ref=e270]:
+          - button "Toggle Sidebar" [ref=e271] [cursor=pointer]:
+            - img
+            - generic [ref=e272] [cursor=pointer]: Toggle Sidebar
+          - button "Search platform... ⌘K" [ref=e274] [cursor=pointer]:
+            - img
+            - generic [ref=e275] [cursor=pointer]: Search platform...
+            - generic: ⌘K
+          - navigation "Breadcrumb" [ref=e277]:
+            - button "Go to Chairman Console" [ref=e278] [cursor=pointer]:
+              - img
+              - generic [ref=e279] [cursor=pointer]: Home
+            - img [ref=e280]
+            - generic [ref=e282]: Settings
+          - generic [ref=e283]:
+            - button "Shortcuts" [ref=e284] [cursor=pointer]:
+              - img
+              - generic [ref=e285] [cursor=pointer]: Shortcuts
+            - combobox [ref=e286] [cursor=pointer]:
+              - generic:
+                - generic:
+                  - img
+                  - text: All Companies
+              - img [ref=e287] [cursor=pointer]
+            - button "Switch to dark mode" [ref=e289] [cursor=pointer]:
+              - img
+              - generic [ref=e290] [cursor=pointer]: Dark
+            - button "Chairman" [ref=e291] [cursor=pointer]:
+              - img
+              - generic [ref=e292] [cursor=pointer]: Chairman
+      - main [ref=e293]:
+        - generic [ref=e295]:
+          - generic [ref=e296]:
+            - heading "Settings" [level=1] [ref=e297]
+            - paragraph [ref=e298]: Customize your EHG platform experience
+          - generic [ref=e299]:
+            - tablist [ref=e300]:
+              - tab "General" [selected] [ref=e301] [cursor=pointer]
+              - tab "EVA Voice" [ref=e302] [cursor=pointer]
+              - tab "Notifications" [ref=e303] [cursor=pointer]
+              - tab "Accessibility" [ref=e304] [cursor=pointer]
+              - tab "Privacy" [ref=e305] [cursor=pointer]
+            - tabpanel "General" [ref=e306]:
+              - generic [ref=e307]:
+                - generic [ref=e308]:
+                  - heading "General Settings" [level=3] [ref=e309]
+                  - paragraph [ref=e310]: Configure your basic preferences for theme, language, and timezone.
+                - generic [ref=e313]:
+                  - generic [ref=e314]:
+                    - generic [ref=e315]:
+                      - generic [ref=e316]: Theme
+                      - combobox [ref=e317] [cursor=pointer]:
+                        - generic: System
+                        - img [ref=e318] [cursor=pointer]
+                    - generic [ref=e320]:
+                      - generic [ref=e321]: Language
+                      - combobox [ref=e322] [cursor=pointer]:
+                        - generic: English
+                        - img [ref=e323] [cursor=pointer]
+                  - generic [ref=e325]:
+                    - generic [ref=e326]: Timezone
+                    - combobox [ref=e327] [cursor=pointer]:
+                      - generic: Eastern Time
+                      - img [ref=e328] [cursor=pointer]
+      - button [ref=e331] [cursor=pointer]:
+        - generic [ref=e336] [cursor=pointer]:
+          - img
+```
