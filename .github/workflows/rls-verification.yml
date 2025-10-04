@@ -1,0 +1,149 @@
+name: RLS Policy Verification
+
+# Trigger on pull requests to main and direct pushes
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  verify-rls-policies:
+    name: Verify RLS Policies
+    runs-on: ubuntu-latest
+
+    # Required status check - blocks PR merge if this fails
+    permissions:
+      contents: read
+      pull-requests: write # For commenting on PRs
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run RLS verification
+        id: rls-check
+        env:
+          SUPABASE_RLS_AUDITOR_URL: ${{ secrets.SUPABASE_RLS_AUDITOR_URL }}
+        run: |
+          set +e # Don't exit on error, we want to capture the output
+
+          echo "Running RLS policy verification..."
+          node scripts/verify-rls-policies.js --json > rls-report.json
+          EXIT_CODE=$?
+
+          # Save exit code for later steps
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+
+          # Display human-readable report
+          echo ""
+          echo "=== RLS Verification Report ==="
+          node scripts/verify-rls-policies.js
+          echo "==============================="
+
+          # Exit with the original code
+          exit $EXIT_CODE
+
+      - name: Upload verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rls-verification-report
+          path: rls-report.json
+          retention-days: 7
+
+      - name: Comment on PR (if failed)
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('rls-report.json', 'utf8'));
+
+            const failedTables = report.failed_tables.map(t =>
+              `- \`${t.table_name}\`: ${t.issues.join(', ')}`
+            ).join('\n');
+
+            const warnings = report.warnings.map(t =>
+              `- \`${t.table_name}\`: ${t.issues.join(', ')} (Missing: ${t.missing_policies.join(', ')})`
+            ).join('\n');
+
+            const body = `## ❌ RLS Policy Verification Failed
+
+            **Coverage**: ${report.policy_coverage_percentage}%
+            **Tables Checked**: ${report.total_tables_checked}
+            **Tables Missing RLS**: ${report.tables_missing_rls}
+            **Execution Time**: ${report.execution_time_ms}ms
+
+            ${report.failed_tables.length > 0 ? `### Failed Tables\n${failedTables}\n` : ''}
+            ${report.warnings.length > 0 ? `### Warnings\n${warnings}\n` : ''}
+
+            ### 🔧 Next Steps
+            1. Add RLS policies to the failed tables
+            2. Ensure policies cover SELECT, INSERT, UPDATE, DELETE operations
+            3. Re-run verification: \`node scripts/verify-rls-policies.js\`
+
+            ### 🆘 Emergency Override
+            If this is a critical deployment and RLS policies cannot be added immediately:
+            1. Add \`rls-override\` label to this PR
+            2. Obtain CODEOWNERS approval
+            3. Create follow-up issue to add missing RLS policies
+
+            **Note**: This check is required. PR cannot be merged until RLS verification passes or emergency override is approved.
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+      - name: Check for emergency override
+        if: failure() && github.event_name == 'pull_request'
+        id: check-override
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = context.payload.pull_request.labels.map(l => l.name);
+            const hasOverride = labels.includes('rls-override');
+
+            if (hasOverride) {
+              console.log('⚠️  Emergency override label detected');
+              console.log('⚠️  RLS verification failure will be treated as warning');
+
+              // Create issue for follow-up
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `[SECURITY] Add missing RLS policies from PR #${context.issue.number}`,
+                body: `Emergency override was used to bypass RLS verification in PR #${context.issue.number}.\n\nMissing RLS policies must be added ASAP.\n\nSee RLS verification report in PR for details.`,
+                labels: ['security', 'technical-debt', 'high-priority']
+              });
+
+              return true;
+            }
+            return false;
+
+      - name: Fail if no override
+        if: failure() && steps.check-override.outputs.result == 'false'
+        run: |
+          echo "❌ RLS verification failed and no emergency override label found"
+          echo "Add 'rls-override' label with CODEOWNERS approval to bypass this check"
+          exit 1
+
+      - name: Success summary
+        if: success()
+        run: |
+          echo "✅ RLS Policy Verification Passed"
+          echo "All application tables have proper RLS policies configured"
