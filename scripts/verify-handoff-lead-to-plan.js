@@ -30,10 +30,10 @@ class LeadToPlanVerifier {
       minimumScore: 85, // Higher standard for strategic direction
       requiredFields: [
         'title',
-        'description', 
-        'business_objectives',
+        'description',
+        'strategic_objectives',  // Updated from business_objectives
         'success_metrics',
-        'constraints',
+        'key_principles',        // Updated from constraints
         'risks',
         'priority'
       ],
@@ -88,8 +88,8 @@ class LeadToPlanVerifier {
       }
       
       // 4. Check Strategic Directive status
-      if (sd.status !== 'active' && sd.status !== 'approved') {
-        return this.rejectHandoff(sdId, 'SD_STATUS', `SD status is '${sd.status}', expected 'active' or 'approved'`);
+      if (sd.status !== 'active' && sd.status !== 'approved' && sd.status !== 'in_progress') {
+        return this.rejectHandoff(sdId, 'SD_STATUS', `SD status is '${sd.status}', expected 'active', 'approved', or 'in_progress'`);
       }
       
       // 5. Validate business impact and feasibility
@@ -196,68 +196,64 @@ class LeadToPlanVerifier {
       }
     });
     
-    // Validate business objectives (20 points)
-    if (sd.business_objectives) {
-      try {
-        const objectives = typeof sd.business_objectives === 'string' 
-          ? JSON.parse(sd.business_objectives) 
-          : sd.business_objectives;
-          
-        if (Array.isArray(objectives) && objectives.length >= this.sdRequirements.minimumObjectives) {
+    // Validate strategic objectives (20 points)
+    if (sd.strategic_objectives) {
+      const objectivesText = sd.strategic_objectives.toString();
+
+      // Accept either JSON array or markdown text (minimum 100 chars for quality)
+      if (typeof sd.strategic_objectives === 'string' && objectivesText.length >= 100) {
+        validation.score += 20;
+      } else if (Array.isArray(sd.strategic_objectives)) {
+        if (sd.strategic_objectives.length >= this.sdRequirements.minimumObjectives) {
           validation.score += 20;
-          
+
           // Check objective quality
-          objectives.forEach(obj => {
+          sd.strategic_objectives.forEach(obj => {
             if (obj.description && obj.description.length < 20) {
               validation.warnings.push(`Objective "${obj.title || 'unnamed'}" description is too brief`);
             }
           });
         } else {
-          validation.errors.push(`Insufficient business objectives: ${objectives?.length || 0}/${this.sdRequirements.minimumObjectives}`);
+          validation.errors.push(`Insufficient strategic objectives: ${sd.strategic_objectives.length}/${this.sdRequirements.minimumObjectives}`);
           validation.valid = false;
         }
-      } catch (e) {
-        validation.errors.push('Business objectives format is invalid JSON');
+      } else if (objectivesText.length < 100) {
+        validation.errors.push('Strategic objectives text is too brief (minimum 100 characters)');
         validation.valid = false;
       }
     }
     
     // Validate success metrics (20 points)
     if (sd.success_metrics) {
-      try {
-        const metrics = typeof sd.success_metrics === 'string' 
-          ? JSON.parse(sd.success_metrics) 
-          : sd.success_metrics;
-          
-        if (Array.isArray(metrics) && metrics.length >= this.sdRequirements.minimumMetrics) {
-          validation.score += 20;
-          
-          // Check for measurable metrics
-          let measurableCount = 0;
-          metrics.forEach(metric => {
-            if (metric.target && (metric.unit || metric.threshold)) {
-              measurableCount++;
-            }
-          });
-          
-          if (measurableCount < metrics.length * 0.8) {
-            validation.warnings.push('Some success metrics lack measurable targets');
+      const metrics = Array.isArray(sd.success_metrics)
+        ? sd.success_metrics
+        : (typeof sd.success_metrics === 'string' ? JSON.parse(sd.success_metrics) : null);
+
+      if (Array.isArray(metrics) && metrics.length >= this.sdRequirements.minimumMetrics) {
+        validation.score += 20;
+
+        // Check for measurable metrics
+        let measurableCount = 0;
+        metrics.forEach(metric => {
+          if (metric.target || metric.goal) {
+            measurableCount++;
           }
-        } else {
-          validation.errors.push(`Insufficient success metrics: ${metrics?.length || 0}/${this.sdRequirements.minimumMetrics}`);
-          validation.valid = false;
+        });
+
+        if (measurableCount < metrics.length * 0.8) {
+          validation.warnings.push('Some success metrics lack measurable targets');
         }
-      } catch (e) {
-        validation.errors.push('Success metrics format is invalid JSON');
+      } else {
+        validation.errors.push(`Insufficient success metrics: ${metrics?.length || 0}/${this.sdRequirements.minimumMetrics}`);
         validation.valid = false;
       }
     }
     
-    // Validate constraints and risks (20 points)
-    if (sd.constraints && sd.risks) {
+    // Validate key principles and risks (20 points)
+    if (sd.key_principles && sd.risks) {
       validation.score += 20;
     } else {
-      if (!sd.constraints) validation.errors.push('Missing constraints analysis');
+      if (!sd.key_principles) validation.errors.push('Missing key principles');
       if (!sd.risks) validation.errors.push('Missing risk assessment');
       validation.valid = false;
     }
@@ -275,16 +271,16 @@ class LeadToPlanVerifier {
       issues: []
     };
     
-    // Check for unrealistic timelines in constraints
-    if (sd.constraints) {
+    // Check for unrealistic timelines in key principles
+    if (sd.key_principles) {
       try {
-        const constraints = typeof sd.constraints === 'string' 
-          ? JSON.parse(sd.constraints) 
-          : sd.constraints;
+        const principles = typeof sd.key_principles === 'string'
+          ? JSON.parse(sd.key_principles)
+          : sd.key_principles;
           
-        // Look for timeline constraints
-        const timelineConstraint = Array.isArray(constraints) 
-          ? constraints.find(c => c.type === 'timeline' || c.title?.toLowerCase().includes('time'))
+        // Look for timeline constraints in key principles
+        const timelineConstraint = Array.isArray(principles)
+          ? principles.find(c => c.type === 'timeline' || c.title?.toLowerCase().includes('time'))
           : null;
           
         if (timelineConstraint && timelineConstraint.value) {

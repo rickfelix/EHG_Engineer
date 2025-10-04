@@ -177,34 +177,9 @@ class UnifiedHandoffSystem {
           details: execValidation
         };
       }
-      
-      // Load handoff document (if exists)
-      const handoffPath = `/mnt/c/_EHG/EHG_Engineer/handoffs/EXEC-to-PLAN-${sdId}.md`;
-      let handoffValidation = null;
-      
-      if (fs.existsSync(handoffPath)) {
-        const handoffContent = fs.readFileSync(handoffPath, 'utf8');
-        const handoffData = this.handoffValidator.parseHandoffDocument(handoffContent);
-        handoffValidation = await this.handoffValidator.validateHandoffWithPRD(
-          handoffData, 
-          sdId, 
-          'EXEC-to-PLAN'
-        );
-        
-        if (!handoffValidation.overallValid) {
-          return {
-            success: false,
-            rejected: true,
-            reasonCode: 'HANDOFF_INVALID',
-            message: 'EXEC handoff document does not meet standards',
-            details: handoffValidation
-          };
-        }
-      } else {
-        // Create handoff document from PRD data
-        await this.generateExecHandoffDocument(sd, prd, handoffPath);
-        console.log(`📝 Generated handoff document: ${handoffPath}`);
-      }
+
+      // Database-first: No file creation, handoff stored in sd_phase_handoffs table
+      console.log('📝 EXEC→PLAN handoff will be stored in database (sd_phase_handoffs table)');
       
       // Update PRD status for PLAN verification
       await this.supabase

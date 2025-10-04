@@ -37,12 +37,12 @@ class PlanToExecVerifier {
       minimumScore: 80, // Minimum 80% quality score
       requiredFields: [
         'executive_summary',
-        'functional_requirements', 
-        'technical_requirements',
+        'functional_requirements',
+        'system_architecture',      // Updated from technical_requirements
         'acceptance_criteria',
-        'success_metrics',
-        'constraints',
-        'risk_assessment'
+        'test_scenarios',           // Updated from success_metrics
+        'implementation_approach',  // Updated from constraints
+        'risks'                     // Updated from risk_assessment
       ],
       minimumFunctionalReqs: 3,
       minimumTechnicalReqs: 2,
