@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
+import { createPRDLink } from '../lib/sd-helpers.js';
 
 dotenv.config();
 
@@ -9,9 +10,10 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-const prdData = {
+async function createPRDData() {
+  return {
   id: `PRD-SD-045-${randomUUID()}`,
-  directive_id: 'SD-045',
+  ...await createPRDLink('SD-045'),
   title: 'AI Research & Development Team Management Dashboard',
   executive_summary: `Create an AI Agent Management Dashboard in the EHG application to display and manage the company's AI R&D team (EVA, LEAD, PLAN, EXEC, and AI_CEO agents). This dashboard will provide visibility into AI agent status, performance metrics, current workload, and enable venture assignment capabilities.
 
@@ -194,10 +196,13 @@ const prdData = {
   approval_date: null,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString()
-};
+  };
+}
 
 async function createPRD() {
   console.log('📝 Creating PRD for SD-045...\n');
+
+  const prdData = await createPRDData();
 
   const { data, error } = await supabase
     .from('product_requirements_v2')

@@ -7,6 +7,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { createPRDLink } from '../lib/sd-helpers.js';
 
 dotenv.config();
 
@@ -20,7 +21,7 @@ async function createPRD() {
 
   const prdData = {
     id: 'PRD-SD-QUALITY-001',
-    directive_id: 'SD-QUALITY-001',
+    ...await createPRDLink('SD-QUALITY-001'),
     title: 'Unit Test Coverage Gap - Business Logic Testing Infrastructure',
     version: '1.0',
     status: 'active',

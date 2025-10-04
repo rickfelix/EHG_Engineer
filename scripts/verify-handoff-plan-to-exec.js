@@ -75,14 +75,26 @@ class PlanToExecVerifier {
       errors: [],
       warnings: []
     };
-    
+
     // Check required fields
     this.prdRequirements.requiredFields.forEach(field => {
-      if (!prd[field] || !prd[field].toString().trim()) {
+      const value = prd[field];
+      const isPresent = value !== null && value !== undefined;
+
+      if (!isPresent) {
         validation.valid = false;
         validation.errors.push(`Missing required field: ${field}`);
       } else {
-        validation.score += 10;
+        // For strings, check if non-empty after trim
+        if (typeof value === 'string' && !value.trim()) {
+          validation.valid = false;
+          validation.errors.push(`Empty required field: ${field}`);
+        } else if (Array.isArray(value) && value.length === 0) {
+          validation.valid = false;
+          validation.errors.push(`Empty array for required field: ${field}`);
+        } else {
+          validation.score += 10;
+        }
       }
     });
     
@@ -146,7 +158,7 @@ class PlanToExecVerifier {
         
       // 4. Validate PRD Quality
       const prdValidator = await this.loadPRDValidator();
-      const prdValidation = await prdValidator(prd.id);
+      const prdValidation = await prdValidator(prd);
       
       console.log(`\\n📊 PRD Quality Score: ${prdValidation.percentage || prdValidation.score}%`);
       

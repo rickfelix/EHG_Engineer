@@ -38,8 +38,9 @@ class UnifiedHandoffSystem {
     // Supported handoff types
     this.supportedHandoffs = [
       'LEAD-to-PLAN',
-      'PLAN-to-EXEC', 
-      'EXEC-to-PLAN'
+      'PLAN-to-EXEC',
+      'EXEC-to-PLAN',
+      'PLAN-to-LEAD'
     ];
   }
   
@@ -72,15 +73,19 @@ class UnifiedHandoffSystem {
         case 'LEAD-to-PLAN':
           result = await this.leadToPlanVerifier.verifyHandoff(sdId);
           break;
-          
+
         case 'PLAN-to-EXEC':
           result = await this.planToExecVerifier.verifyHandoff(sdId, options.prdId);
           break;
-          
+
         case 'EXEC-to-PLAN':
           result = await this.executeExecToPlan(sdId, options);
           break;
-          
+
+        case 'PLAN-to-LEAD':
+          result = await this.executePlanToLead(sdId, options);
+          break;
+
         default:
           throw new Error(`Handler not implemented for: ${handoffType}`);
       }
@@ -149,11 +154,14 @@ class UnifiedHandoffSystem {
         throw new Error(`Strategic Directive not found: ${sdId}`);
       }
       
+      // Use new sd_uuid column (post-migration) with fallback to uuid_id lookup
+      const sdUuid = sd.uuid_id || sd.id;
+
       const { data: prds } = await this.supabase
         .from('product_requirements_v2')
         .select('*')
-        .eq('directive_id', sdId);
-        
+        .eq('sd_uuid', sdUuid);
+
       if (!prds || prds.length === 0) {
         return {
           success: false,
@@ -167,7 +175,13 @@ class UnifiedHandoffSystem {
       
       // Check if EXEC work is complete
       const execValidation = this.validateExecWork(prd);
-      
+
+      console.log('📊 EXEC Validation Results:');
+      console.log('   Score:', execValidation.score);
+      console.log('   Checklist:', execValidation.checkedItems, '/', execValidation.totalItems);
+      console.log('   Issues:', execValidation.issues);
+      console.log('   Complete:', execValidation.complete);
+
       if (!execValidation.complete) {
         return {
           success: false,
@@ -180,7 +194,9 @@ class UnifiedHandoffSystem {
 
       // Database-first: No file creation, handoff stored in sd_phase_handoffs table
       console.log('📝 EXEC→PLAN handoff will be stored in database (sd_phase_handoffs table)');
-      
+
+      const handoffId = `EXEC-to-PLAN-${sdId}-${Date.now()}`;
+
       // Update PRD status for PLAN verification
       await this.supabase
         .from('product_requirements_v2')
@@ -191,21 +207,22 @@ class UnifiedHandoffSystem {
           metadata: {
             ...prd.metadata,
             exec_handoff: {
+              handoff_id: handoffId,
               completed_at: new Date().toISOString(),
-              validation: execValidation,
-              handoff_document: handoffPath
+              validation: execValidation
             }
           }
         })
         .eq('id', prd.id);
-      
+
       console.log('✅ EXEC → PLAN HANDOFF APPROVED');
       console.log('📋 EXEC work complete and handed to PLAN for verification');
-      
+      console.log('📊 Handoff ID:', handoffId);
+
       return {
         success: true,
         prdId: prd.id,
-        handoffPath: handoffPath,
+        handoffId: handoffId,
         validation: execValidation
       };
       
@@ -218,6 +235,168 @@ class UnifiedHandoffSystem {
     }
   }
   
+  /**
+   * Execute PLAN → LEAD handoff
+   * PLAN has completed verification and is handing back to LEAD for final approval
+   */
+  async executePlanToLead(sdId, options) {
+    console.log('🔍 PLAN → LEAD HANDOFF EXECUTION');
+    console.log('-'.repeat(30));
+
+    try {
+      // Load Strategic Directive and PRD
+      const { data: sd } = await this.supabase
+        .from('strategic_directives_v2')
+        .select('*')
+        .eq('id', sdId)
+        .single();
+
+      if (!sd) {
+        throw new Error(`Strategic Directive not found: ${sdId}`);
+      }
+
+      // Use new sd_uuid column (post-migration) with fallback to uuid_id lookup
+      const sdUuid = sd.uuid_id || sd.id;
+
+      const { data: prds } = await this.supabase
+        .from('product_requirements_v2')
+        .select('*')
+        .eq('sd_uuid', sdUuid);
+
+      if (!prds || prds.length === 0) {
+        return {
+          success: false,
+          rejected: true,
+          reasonCode: 'NO_PRD',
+          message: 'No PRD found - cannot verify work'
+        };
+      }
+
+      const prd = prds[0];
+
+      // Validate PLAN verification is complete
+      const planValidation = this.validatePlanVerification(prd, sd);
+
+      console.log('📊 PLAN Verification Results:');
+      console.log('   Score:', planValidation.score);
+      console.log('   Issues:', planValidation.issues);
+      console.log('   Warnings:', planValidation.warnings);
+      console.log('   Complete:', planValidation.complete);
+
+      if (!planValidation.complete) {
+        return {
+          success: false,
+          rejected: true,
+          reasonCode: 'PLAN_INCOMPLETE',
+          message: 'PLAN verification not complete - cannot handoff to LEAD for approval',
+          details: planValidation
+        };
+      }
+
+      // Database-first: Store handoff in database
+      console.log('📝 PLAN→LEAD handoff will be stored in database');
+
+      const handoffId = `PLAN-to-LEAD-${sdId}-${Date.now()}`;
+
+      // Update PRD status for LEAD approval
+      await this.supabase
+        .from('product_requirements_v2')
+        .update({
+          status: 'pending_approval',
+          phase: 'LEAD_APPROVAL',
+          updated_at: new Date().toISOString(),
+          metadata: {
+            ...prd.metadata,
+            plan_handoff: {
+              handoff_id: handoffId,
+              completed_at: new Date().toISOString(),
+              validation: planValidation
+            }
+          }
+        })
+        .eq('id', prd.id);
+
+      // Update SD status for LEAD approval
+      await this.supabase
+        .from('strategic_directives_v2')
+        .update({
+          status: 'pending_approval',
+          current_phase: 'LEAD',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', sdId);
+
+      console.log('✅ PLAN → LEAD HANDOFF APPROVED');
+      console.log('📋 PLAN verification complete and handed to LEAD for approval');
+      console.log('📊 Handoff ID:', handoffId);
+
+      return {
+        success: true,
+        sdId: sdId,
+        prdId: prd.id,
+        handoffId: handoffId,
+        validation: planValidation
+      };
+
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+        reasonCode: 'SYSTEM_ERROR'
+      };
+    }
+  }
+
+  /**
+   * Validate PLAN verification completeness
+   */
+  validatePlanVerification(prd, sd) {
+    const validation = {
+      complete: false,
+      score: 0,
+      issues: [],
+      warnings: []
+    };
+
+    // Check PRD status is 'verification' (from EXEC→PLAN handoff)
+    if (prd.status === 'verification' || prd.status === 'completed') {
+      validation.score += 30;
+    } else {
+      validation.issues.push(`PRD status is '${prd.status}', expected 'verification' or 'completed'`);
+    }
+
+    // Check EXEC handoff exists in metadata
+    if (prd.metadata?.exec_handoff) {
+      validation.score += 20;
+    } else {
+      validation.issues.push('No EXEC→PLAN handoff found in metadata');
+    }
+
+    // Check sub-agent verification results (should be in metadata)
+    const hasSubAgentResults = prd.metadata?.qa_verification || prd.metadata?.db_verification || prd.metadata?.design_review;
+    if (hasSubAgentResults) {
+      validation.score += 30;
+    } else {
+      validation.warnings.push('No sub-agent verification results found - verification may be incomplete');
+    }
+
+    // Check exec_checklist completion (should be high from EXEC phase)
+    if (prd.exec_checklist && Array.isArray(prd.exec_checklist)) {
+      const checkedItems = prd.exec_checklist.filter(item => item.checked).length;
+      const totalItems = prd.exec_checklist.length;
+      const completionRate = checkedItems / totalItems;
+
+      if (completionRate >= 0.8) {
+        validation.score += 20;
+      } else {
+        validation.warnings.push(`EXEC checklist only ${Math.round(completionRate * 100)}% complete`);
+      }
+    }
+
+    validation.complete = validation.score >= 70 && validation.issues.length === 0;
+    return validation;
+  }
+
   /**
    * Validate EXEC work completeness
    */
@@ -244,8 +423,9 @@ class UnifiedHandoffSystem {
       validation.issues.push('No EXEC checklist found');
     }
     
-    // Check deliverables
-    if (prd.deliverables && prd.deliverables.length > 0) {
+    // Check deliverables (in deliverables field OR metadata.exec_deliverables)
+    const deliverables = prd.deliverables || prd.metadata?.exec_deliverables;
+    if (deliverables && deliverables.length > 0) {
       validation.score += 30;
     } else {
       validation.issues.push('No deliverables specified');

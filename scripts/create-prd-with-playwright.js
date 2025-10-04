@@ -9,6 +9,7 @@
 import dotenv from "dotenv";
 dotenv.config();
 import { createClient } from '@supabase/supabase-js';
+import { createPRDLink } from '../lib/sd-helpers.js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -28,12 +29,12 @@ async function createEnhancedPRD() {
   const prdData = {
     // Core PRD fields
     id: `PRD-ENHANCED-${Date.now()}`,
+    ...await createPRDLink('SD-2025-0904-SDIP-V2'),
     title: 'Strategic Directive Initiation Protocol (SDIP) - Enhanced with Playwright',
     version: '2.0',
     status: 'draft',
     priority: 'critical',
     category: 'feature',
-    directive_id: 'SD-2025-0904-SDIP-V2',
     created_by: 'PLAN',
     
     // Executive summary

@@ -3,6 +3,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
+import { createPRDLink } from '../lib/sd-helpers.js';
 
 dotenv.config();
 
@@ -12,8 +13,6 @@ const supabase = createClient(
 );
 
 async function createPRD() {
-  const sdId = '877e8838-e9d2-44fc-9725-806c64521adf';
-
   const prdContent = {
     functional_requirements: [
       'Navigation to settings page must be accessible from main menu',
@@ -98,7 +97,7 @@ async function createPRD() {
 
   const prd = {
     id: randomUUID(),
-    strategic_directive_id: sdId,
+    ...await createPRDLink('SD-UAT-020'),
     title: 'PRD-SD-UAT-020: Settings Section Implementation',
     content: JSON.stringify(prdContent, null, 2),
     status: 'approved',

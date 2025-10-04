@@ -14,6 +14,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { createPRDLink } from '../lib/sd-helpers.js';
 
 dotenv.config();
 
@@ -717,7 +718,7 @@ async function createPRD() {
     // Create PRD record (match actual table schema)
     const prdData = {
       id: 'PRD-BACKEND-001',
-      strategic_directive_id: 'SD-BACKEND-001',
+      ...await createPRDLink('SD-BACKEND-001'),
       title: PRD_CONTENT.title,
       status: 'approved',
       content: PRD_CONTENT,

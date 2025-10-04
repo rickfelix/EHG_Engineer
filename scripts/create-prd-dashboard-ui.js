@@ -1,13 +1,11 @@
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-
-
-
-
 import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 import dotenv from 'dotenv';
-dotenv.config(); });
+import { createPRDLink } from '../lib/sd-helpers.js';
+
+dotenv.config();
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -90,7 +88,7 @@ async function createPRD() {
       .from('product_requirements_v2')
       .insert({
         id: prdId,
-        directive_id: 'SD-DASHBOARD-UI-2025-08-31-A',
+        ...await createPRDLink('SD-DASHBOARD-UI-2025-08-31-A'),
         title: 'Dashboard UI/UX Improvements PRD',
         executive_summary: 'Technical implementation plan for comprehensive dashboard UI/UX improvements focusing on user experience, accessibility, and performance optimization.',
         status: 'draft',
