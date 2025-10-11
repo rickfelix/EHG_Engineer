@@ -34,7 +34,7 @@ class PlanToExecVerifier {
     
     // PRD Quality Requirements (LEO Protocol v4.1.2)
     this.prdRequirements = {
-      minimumScore: 80, // Minimum 80% quality score
+      minimumScore: 100, // MAXIMUM standard - 100% completeness required
       requiredFields: [
         'executive_summary',
         'functional_requirements',
@@ -155,7 +155,30 @@ class PlanToExecVerifier {
         .eq('from_agent', 'PLAN')
         .eq('to_agent', 'EXEC')
         .single();
-        
+
+      // 3a. MANDATORY: Check User Stories Exist
+      console.log('\n📝 Checking for user stories...');
+      const { data: userStories, error: userStoriesError } = await this.supabase
+        .from('user_stories')
+        .select('story_key, title, status')
+        .eq('sd_id', sdId);
+
+      if (userStoriesError) {
+        return this.rejectHandoff(sdId, 'USER_STORIES_ERROR', `Error querying user stories: ${userStoriesError.message}`);
+      }
+
+      if (!userStories || userStories.length === 0) {
+        console.log('   ❌ No user stories found');
+        return this.rejectHandoff(sdId, 'NO_USER_STORIES', 'User stories are MANDATORY before EXEC phase. Product Requirements Expert must generate user stories from PRD.', {
+          userStoriesCount: 0,
+          requiredMinimum: 1
+        });
+      }
+
+      console.log(`   ✅ User stories found: ${userStories.length}`);
+      const completedStories = userStories.filter(s => s.status === 'completed').length;
+      console.log(`   📊 Status: ${completedStories}/${userStories.length} completed`);
+
       // 4. Validate PRD Quality
       const prdValidator = await this.loadPRDValidator();
       const prdValidation = await prdValidator(prd);
@@ -365,7 +388,27 @@ class PlanToExecVerifier {
         guidance.timeEstimate = '45-90 minutes';
         guidance.instructions = 'Complete all PLAN phase checklist items before requesting EXEC handoff.';
         break;
-        
+
+      case 'NO_USER_STORIES':
+        guidance.required = ['Generate user stories from PRD via Product Requirements Expert sub-agent'];
+        guidance.actions = [
+          'Trigger Product Requirements Expert sub-agent',
+          'Generate user stories from PRD acceptance criteria',
+          'Map user stories to E2E test scenarios',
+          'Store user stories in database',
+          'Retry PLAN→EXEC handoff'
+        ];
+        guidance.timeEstimate = '30-45 minutes';
+        guidance.instructions = 'User stories are MANDATORY for testing validation. Run Product Requirements Expert to generate user stories from PRD before proceeding to EXEC phase.';
+        break;
+
+      case 'USER_STORIES_ERROR':
+        guidance.required = ['Fix database access issues for user_stories table'];
+        guidance.actions = ['Check database connectivity', 'Verify user_stories table exists', 'Retry handoff'];
+        guidance.timeEstimate = '15-20 minutes';
+        guidance.instructions = 'Database error accessing user_stories table. Verify table exists and permissions are correct.';
+        break;
+
       case 'HANDOFF_INVALID':
         guidance.required = ['Fix handoff document to meet LEO Protocol standards'];
         guidance.actions = ['Review handoff validation errors', 'Update handoff document', 'Ensure all 7 elements present'];

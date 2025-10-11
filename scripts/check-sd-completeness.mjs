@@ -6,51 +6,33 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_URL || 'https://dedlbzhpgkmetvhbkyzq.supabase.co',
+  process.env.SUPABASE_ANON_KEY
 );
 
-const { data, error } = await supabase
-  .from('strategic_directives_v2')
-  .select('*')
-  .eq('id', 'SD-REALTIME-001')
-  .single();
+async function checkCompleteness() {
+  const { data: sd } = await supabase
+    .from('strategic_directives_v2')
+    .select('*')
+    .eq('id', 'SD-VIDEO-VARIANT-001')
+    .single();
 
-if (error) {
-  console.error('Error:', error);
-  process.exit(1);
+  console.log('📊 SD COMPLETENESS CHECK');
+  console.log('='.repeat(80));
+  
+  const fields = [
+    'title', 'description', 'business_objectives', 'success_metrics',
+    'constraints', 'assumptions', 'risks', 'priority', 'target_application',
+    'category', 'scope'
+  ];
+
+  fields.forEach(field => {
+    const value = sd[field];
+    const status = value && (Array.isArray(value) ? value.length > 0 : value.trim().length > 0) ? '✅' : '❌';
+    console.log(`${status} ${field}: ${Array.isArray(value) ? `${value.length} items` : value ? `${String(value).substring(0, 50)}...` : 'MISSING'}`);
+  });
+
+  console.log('\n' + '='.repeat(80));
 }
 
-console.log('SD-REALTIME-001 Completeness Check:');
-console.log('='.repeat(50));
-console.log('✅ = Present | ❌ = Missing/Empty\n');
-
-const fields = {
-  'title': data.title,
-  'description': data.description,
-  'strategic_objectives': data.strategic_objectives,
-  'success_metrics': data.success_metrics,
-  'key_principles': data.key_principles,
-  'risks': data.risks,
-  'priority': data.priority,
-  'status': data.status
-};
-
-let missingFields = [];
-
-Object.entries(fields).forEach(([key, value]) => {
-  const present = value && value.toString().trim().length > 0;
-  console.log(`${present ? '✅' : '❌'} ${key}: ${present ? '✓' : 'MISSING'}`);
-  if (!present) missingFields.push(key);
-});
-
-console.log('\n' + '='.repeat(50));
-if (missingFields.length > 0) {
-  console.log(`Missing fields (${missingFields.length}):`);
-  missingFields.forEach(f => console.log(`  - ${f}`));
-} else {
-  console.log('✅ All required fields present');
-}
-
-console.log('\nStatus:', data.status);
-console.log('Priority:', data.priority);
+checkCompleteness();

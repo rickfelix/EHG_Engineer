@@ -21,19 +21,25 @@ class SubmissionsManager {
     const supabase = this.connectionManager.getClient();
 
     try {
-      // Prepare the submission data
+      // Prepare the submission data (matching actual database schema)
       const submissionData = {
         id: submission.id || crypto.randomUUID(),
-        chairman_input: submission.chairmanInput || submission.chairman_input,
-        intent_summary: submission.intentSummary || submission.intent_summary,
-        screenshot_url: submission.screenshotUrl || submission.screenshot_url,
+        submission_id: submission.submission_id || submission.id || crypto.randomUUID(),
+        chairman_input: submission.chairmanInput || submission.chairman_input || submission.feedback || '',
+        intent_summary: submission.intentSummary || submission.intent_summary || '',
+        screenshot_url: submission.screenshotUrl || submission.screenshot_url || '',
+        strategic_tactical_classification: submission.strategicTacticalClassification || submission.strategic_tactical_classification || null,
+        synthesis_data: submission.synthesisData || submission.synthesis_data || null,
+        questions: submission.questions || null,
+        final_summary: submission.finalSummary || submission.final_summary || '',
         status: submission.status || 'pending',
         current_step: submission.currentStep || submission.current_step || 1,
-        processing_history: submission.processingHistory || submission.processing_history || [],
+        completed_steps: submission.completedSteps || submission.completed_steps || [],
         gate_status: submission.gateStatus || submission.gate_status || {},
-        metadata: submission.metadata || {},
+        created_by: submission.createdBy || submission.created_by || 'Chairman',
         created_at: submission.createdAt || submission.created_at || new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        completed_at: submission.completedAt || submission.completed_at || null
       };
 
       // Insert or update the submission
@@ -122,13 +128,11 @@ class SubmissionsManager {
         return null;
       }
 
-      // Update the processing history
-      const processingHistory = submission.processing_history || [];
-      processingHistory[stepNumber - 1] = {
-        step: stepNumber,
-        ...stepData,
-        timestamp: new Date().toISOString()
-      };
+      // Update the completed_steps array
+      const completedSteps = submission.completed_steps || [];
+      if (!completedSteps.includes(stepNumber)) {
+        completedSteps.push(stepNumber);
+      }
 
       // Update gate status if provided
       const gateStatus = submission.gate_status || {};
@@ -140,16 +144,26 @@ class SubmissionsManager {
         };
       }
 
+      // Build update object based on step data
+      const updateData = {
+        current_step: stepNumber,
+        completed_steps: completedSteps,
+        gate_status: gateStatus,
+        status: stepData.status || submission.status,
+        updated_at: new Date().toISOString()
+      };
+
+      // Add step-specific fields
+      if (stepData.intent_summary) updateData.intent_summary = stepData.intent_summary;
+      if (stepData.strategic_tactical_classification) updateData.strategic_tactical_classification = stepData.strategic_tactical_classification;
+      if (stepData.synthesis_data) updateData.synthesis_data = stepData.synthesis_data;
+      if (stepData.questions) updateData.questions = stepData.questions;
+      if (stepData.final_summary) updateData.final_summary = stepData.final_summary;
+
       // Update the submission
       const { data, error } = await supabase
         .from('directive_submissions')
-        .update({
-          current_step: stepNumber,
-          processing_history: processingHistory,
-          gate_status: gateStatus,
-          status: stepData.status || submission.status,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', submissionId)
         .select()
         .single();

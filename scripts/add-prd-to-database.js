@@ -3,10 +3,14 @@
 /**
  * Add PRD to database
  * Creates a PRD entry for a given Strategic Directive
+ *
+ * Enhanced with auto-trigger for Product Requirements Expert (STORIES sub-agent)
+ * Part of Phase 3.2: User story validation enforcement
  */
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from "dotenv";
+import { autoTriggerStories } from './modules/auto-trigger-stories.mjs';
 dotenv.config();
 
 async function addPRDToDatabase(sdId, prdTitle) {
@@ -145,11 +149,37 @@ This PRD defines the technical requirements and implementation approach for ${sd
     
     console.log(`✅ ${prdId} added to database successfully!`);
     console.log('Database record:', JSON.stringify(data, null, 2));
-    
+
+    // Auto-trigger Product Requirements Expert sub-agent
+    console.log('\n═══════════════════════════════════════════════════');
+    console.log('🤖 AUTO-TRIGGER: Product Requirements Expert');
+    console.log('═══════════════════════════════════════════════════');
+
+    try {
+      const storiesResult = await autoTriggerStories(supabase, sdId, prdId, {
+        skipIfExists: true,
+        notifyOnSkip: true,
+        logExecution: true
+      });
+
+      if (storiesResult.skipped) {
+        console.log('✅ User stories already exist, auto-trigger skipped');
+      } else if (storiesResult.executed) {
+        console.log('✅ User stories generated successfully');
+      } else if (storiesResult.recommendation) {
+        console.log('⚠️  User stories need to be generated manually');
+        console.log(`   Recommendation: ${storiesResult.recommendation}`);
+      }
+    } catch (triggerError) {
+      console.warn('⚠️  Auto-trigger warning:', triggerError.message);
+      console.log('   User stories will need to be created manually');
+    }
+
     console.log('\n📝 Next steps:');
     console.log('1. Update PRD with actual requirements');
     console.log('2. Mark checklist items as complete');
     console.log('3. Update phase as work progresses');
+    console.log('4. If user stories not auto-generated, run: node scripts/create-user-stories-[sd-id].mjs');
     
   } catch (error) {
     console.error('❌ Error adding PRD to database:', error.message);

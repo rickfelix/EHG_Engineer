@@ -17,11 +17,15 @@ class StatusValidator {
         }
       },
       PRD: {
-        all: ['draft', 'planning', 'ready', 'in_progress', 'development', 'testing', 'verification', 'verification_complete', 'approved', 'completed', 'complete', 'rejected', 'on_hold', 'cancelled'],
+        all: ['draft', 'planning', 'ready', 'active', 'in_progress', 'development', 'testing', 'verification', 'verification_complete', 'approved', 'completed', 'complete', 'implemented', 'pending_approval', 'ready_for_implementation', 'rejected', 'on_hold', 'cancelled'],
         preferred: ['draft', 'planning', 'ready', 'in_progress', 'development', 'testing', 'verification', 'approved', 'rejected', 'on_hold', 'cancelled'],
         deprecated: {
+          'active': 'in_progress',
           'completed': 'approved',
           'complete': 'approved',
+          'implemented': 'completed',
+          'pending_approval': 'verification',
+          'ready_for_implementation': 'ready',
           'verification_complete': 'approved'
         }
       },

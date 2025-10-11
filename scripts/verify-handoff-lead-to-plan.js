@@ -27,10 +27,11 @@ class LeadToPlanVerifier {
     
     // Strategic Directive Quality Requirements (LEO Protocol v4.1.2)
     this.sdRequirements = {
-      minimumScore: 85, // Higher standard for strategic direction
+      minimumScore: 100, // MAXIMUM standard - 100% completeness required
       requiredFields: [
         'title',
         'description',
+        'scope',                 // What the SD will implement
         'strategic_objectives',  // Updated from business_objectives
         'success_metrics',
         'key_principles',        // Updated from constraints
