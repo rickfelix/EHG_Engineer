@@ -150,6 +150,7 @@ class CLAUDEMDGeneratorV2 {
     const subagentParallelExecution = this.getSectionByType(sections, 'subagent_parallel_execution');
     const leadOperations = this.getSectionByType(sections, 'lead_operations');
     const directiveSubmissionReview = this.getSectionByType(sections, 'directive_submission_review');
+    const databaseMigrationValidation = this.getSectionByType(sections, 'database_migration_validation');
     const unifiedHandoffSystem = this.getSectionByType(sections, 'unified_handoff_system');
     const databaseSchemaOverview = this.getSectionByType(sections, 'database_schema_overview');
     const supabaseOperations = this.getSectionByType(sections, 'supabase_operations');
@@ -161,8 +162,9 @@ class CLAUDEMDGeneratorV2 {
         'file_warning', 'session_prologue', 'application_architecture',
         'exec_implementation_requirements', 'git_commit_guidelines', 'pr_size_guidelines',
         'communication_context', 'parallel_execution', 'subagent_parallel_execution',
-        'lead_operations', 'directive_submission_review', 'unified_handoff_system',
-        'database_schema_overview', 'supabase_operations', 'development_workflow'
+        'lead_operations', 'directive_submission_review', 'database_migration_validation',
+        'unified_handoff_system', 'database_schema_overview', 'supabase_operations',
+        'development_workflow'
       ].includes(section.section_type))
       .map(section => `## ${section.title}\n\n${section.content}`)
       .join('\n\n');
@@ -226,6 +228,8 @@ ${leadOperations}
 
 ${directiveSubmissionReview}
 
+${databaseMigrationValidation}
+
 ${protocolSections}
 
 ## Mandatory Handoff Requirements
@@ -243,7 +247,7 @@ ${unifiedHandoffSystem}
 
 | Sub-Agent | Code | Activation | Priority |
 |-----------|------|------------|----------|
-${subAgents.map(sa => `| ${sa.name} | ${sa.code} | ${sa.activation_type} | ${sa.priority} |`).join('\n')}
+${this.generateSubAgentListWithDescriptions(subAgents)}
 
 ### Sub-Agent Activation Triggers
 
@@ -311,6 +315,52 @@ ${subagentParallelExecution}
 - **Verification**: ${agent.verification_percentage || 0}%
 - **Approval**: ${agent.approval_percentage || 0}%
 - **Total**: ${agent.total_percentage}%`;
+    }).join('\n');
+  }
+
+  extractBriefDescription(fullDescription) {
+    if (!fullDescription) return 'No description available';
+
+    // Remove markdown headers, bullet points, and code blocks from beginning
+    let cleanDesc = fullDescription
+      .replace(/^#+\s+.+$/gm, '') // Remove markdown headers
+      .replace(/^-\s+/gm, '')       // Remove bullet points
+      .replace(/^```[\s\S]*?```/gm, '') // Remove code blocks
+      .replace(/^\*\*/gm, '')       // Remove bold markers at start
+      .trim();
+
+    // Extract first 1-2 sentences (up to ~150 chars or 2 periods)
+    const sentences = cleanDesc
+      .split(/\.[\s\n]/)
+      .filter(s => s.trim().length > 0 && !s.trim().startsWith('#'));
+
+    if (sentences.length === 0) return 'No description available';
+
+    // Take first sentence, or first two if first is very short
+    let brief = sentences[0].trim();
+    if (brief.length < 50 && sentences.length > 1) {
+      brief += '. ' + sentences[1].trim();
+    }
+
+    // Clean up any remaining markdown
+    brief = brief.replace(/\*\*/g, ''); // Remove bold
+    brief = brief.replace(/\*/g, '');   // Remove italics
+
+    // Ensure it ends with a period
+    if (!brief.endsWith('.')) brief += '.';
+
+    // Limit to ~150 chars
+    if (brief.length > 150) {
+      brief = brief.substring(0, 147) + '...';
+    }
+
+    return brief;
+  }
+
+  generateSubAgentListWithDescriptions(subAgents) {
+    return subAgents.map(sa => {
+      const briefDesc = this.extractBriefDescription(sa.description);
+      return `| ${sa.name} | ${sa.code} | ${sa.activation_type} | ${sa.priority} |\n  ${briefDesc}`;
     }).join('\n');
   }
 
