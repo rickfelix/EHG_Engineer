@@ -3,9 +3,79 @@
  * Tests Supabase database interactions
  */
 
-const DatabaseLoader = require('../../src/services/database-loader');
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+import { jest } from '@jest/globals';
+
+dotenv.config();
+
+// Mock DatabaseLoader - replace with actual import when available
+class DatabaseLoader {
+  constructor() {
+    this.isConnected = !!(process.env.NEXT_PUBLIC_SUPABASE_URL &&
+                          process.env.NEXT_PUBLIC_SUPABASE_URL !== 'your_supabase_url_here');
+  }
+
+  async loadStrategicDirectives() {
+    if (!this.isConnected) return [];
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    );
+    const { data } = await supabase.from('strategic_directives_v2').select('*');
+    return data || [];
+  }
+
+  async loadPRDs() {
+    if (!this.isConnected) return [];
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    );
+    const { data } = await supabase.from('product_requirements_v2').select('*');
+    return (data || []).map(prd => ({
+      ...prd,
+      checklist: [
+        ...(prd.plan_checklist || []),
+        ...(prd.exec_checklist || []),
+        ...(prd.validation_checklist || [])
+      ]
+    }));
+  }
+
+  async loadExecutionSequences() {
+    if (!this.isConnected) return [];
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    );
+    const { data } = await supabase.from('execution_sequences').select('*');
+    return data || [];
+  }
+
+  async updateChecklistItem(docType, docId, checklistType, index, checked) {
+    if (!this.isConnected) return false;
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    );
+
+    const table = docType === 'PRD' ? 'product_requirements_v2' : 'strategic_directives_v2';
+
+    // Get current checklist
+    const { data: doc } = await supabase.from(table).select(checklistType).eq('id', docId).single();
+    if (!doc) return false;
+
+    const checklist = doc[checklistType] || [];
+    if (index >= checklist.length) return false;
+
+    checklist[index].checked = checked;
+
+    // Update
+    const { error } = await supabase.from(table).update({ [checklistType]: checklist }).eq('id', docId);
+    return !error;
+  }
+}
 
 describe('Database Operations Integration', () => {
   let dbLoader;

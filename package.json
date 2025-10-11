@@ -27,8 +27,14 @@
     "leo-status": "node scripts/leo-status-line.js show",
     "build:loader": "tsc -p tsconfig.json",
     "test:loader:dry": "node dist/services/database-loader/index.js --dry-run",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs",
+    "test:smoke": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs --selectProjects smoke",
+    "test:unit": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs --selectProjects unit",
+    "test:integration": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs --selectProjects integration",
     "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs --coverage --coverageReporters=json-summary --coverageDirectory=coverage",
+    "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs --watch",
     "test:a11y": "playwright test tests/a11y.spec.js",
+    "precommit": "npm run test:smoke",
     "analyze:bundle": "esbuild src/client/src/main.jsx --bundle --metafile=meta.json --outfile=/dev/null && esbuild-visualizer --metadata meta.json",
     "lighthouse:ci": "lhci autorun --config=lighthouserc.json",
     "build:client": "cd src/client && npm run build",
@@ -62,7 +68,8 @@
     "context:refresh": "node scripts/generate-file-trees.js --force",
     "context:status": "node lib/context/memory-manager.js",
     "context:compact": "node scripts/context-compact.js",
-    "memory:view": "node scripts/view-memory.js"
+    "memory:view": "node scripts/view-memory.js",
+    "prepare": "husky"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",
@@ -92,8 +99,10 @@
     "@types/pg": "^8.15.5",
     "esbuild": "^0.25.10",
     "esbuild-visualizer": "^0.6.0",
+    "husky": "^9.1.7",
     "jest": "^29.7.0",
     "pg": "^8.16.3",
+    "puppeteer": "^24.23.0",
     "typescript": "^5.9.2",
     "wait-on": "^7.0.1"
   },
