@@ -192,6 +192,46 @@ class UnifiedHandoffSystem {
         };
       }
 
+      // SD-DOCUMENTATION-001: Documentation validation (MANDATORY)
+      console.log('📚 Validating documentation exists...');
+      const { data: docs, error: docsError } = await this.supabase
+        .from('generated_docs')
+        .select('id')
+        .eq('sd_id', sdId)
+        .limit(1);
+
+      if (docsError) {
+        console.warn(`⚠️  Documentation check failed: ${docsError.message}`);
+        console.warn('   Proceeding with warning (infrastructure issue, not blocking)');
+      } else if (!docs || docs.length === 0) {
+        console.error('❌ DOCUMENTATION MISSING');
+        console.error('   No documentation found in generated_docs table');
+        console.error('');
+        console.error('   This SD has not been documented according to LEO Protocol requirements.');
+        console.error('   EXEC agents must generate documentation before creating EXEC→PLAN handoff.');
+        console.error('');
+        console.error('   REMEDIATION:');
+        console.error(`   node scripts/generate-workflow-docs.js --sd-id ${sdId}`);
+        console.error('');
+        console.error('   After generating documentation, retry this handoff.');
+
+        return {
+          success: false,
+          rejected: true,
+          reasonCode: 'DOCUMENTATION_MISSING',
+          message: 'No documentation found - EXEC→PLAN handoff blocked per SD-DOCUMENTATION-001',
+          remediation: `node scripts/generate-workflow-docs.js --sd-id ${sdId}`,
+          details: {
+            sd_id: sdId,
+            docs_found: 0,
+            requirement: 'All Strategic Directives must have documentation before EXEC→PLAN handoff',
+            protocol_integration: 'SD-DOCUMENTATION-001'
+          }
+        };
+      } else {
+        console.log(`✅ Documentation validated: ${docs.length} record(s) found`);
+      }
+
       // Database-first: No file creation, handoff stored in sd_phase_handoffs table
       console.log('📝 EXEC→PLAN handoff will be stored in database (sd_phase_handoffs table)');
 
