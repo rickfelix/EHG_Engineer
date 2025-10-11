@@ -25,6 +25,7 @@ import { TestExecutionModal } from './TestExecutionModal';
 import { CreateTestCaseModal } from './CreateTestCaseModal';
 import { EditTestCaseModal } from './EditTestCaseModal';
 import { SDGenerationModal } from './SDGenerationModal';
+import { TestingCampaignManager } from './TestingCampaignManager';
 import { UAT_SECTIONS, getAllSections, getSectionLabel } from '../../config/uat-sections';
 
 const supabase = createClient(
@@ -447,6 +448,9 @@ export function UATDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-3 sm:p-4 md:p-6">
+      {/* Testing Campaign Manager */}
+      <TestingCampaignManager />
+
       {/* Header */}
       <div className="mb-6 md:mb-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">

@@ -16,6 +16,7 @@ import chokidar from 'chokidar';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
+import { spawn, execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1114,14 +1115,6 @@ app.get('/api/eva/status', (req, res) => {
   });
 });
 
-// Portfolio management routes (placeholder)
-app.get('/api/portfolio/status', (req, res) => {
-  res.json({
-    enabled: dashboardState.application.features.portfolio,
-    message: 'Portfolio management features coming soon'
-  });
-});
-
 // =============================================================================
 // PR REVIEW SYSTEM (Agentic Review Integration)
 // =============================================================================
@@ -1239,6 +1232,275 @@ app.get('/api/metrics', (req, res) => {
 });
 
 // =============================================================================
+// TESTING CAMPAIGN API
+// =============================================================================
+
+let activeCampaignProcess = null;
+
+// Get campaign status from heartbeat file
+app.get('/api/testing/campaign/status', (req, res) => {
+  try {
+    const heartbeatPath = '/tmp/campaign-heartbeat.txt';
+    if (fs.existsSync(heartbeatPath)) {
+      const heartbeat = JSON.parse(fs.readFileSync(heartbeatPath, 'utf8'));
+      res.json({
+        running: heartbeat.status === 'running',
+        status: heartbeat.status,
+        targetApplication: heartbeat.target_application || 'EHG',
+        progress: heartbeat.progress,
+        percent: heartbeat.percent,
+        currentSD: heartbeat.current_sd,
+        lastUpdate: heartbeat.iso_time,
+        pid: heartbeat.pid
+      });
+    } else {
+      res.json({
+        running: false,
+        status: 'not_started',
+        targetApplication: null,
+        progress: '0/0',
+        percent: 0,
+        currentSD: null,
+        lastUpdate: null,
+        pid: null
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get health report
+app.get('/api/testing/campaign/health', (req, res) => {
+  try {
+    const heartbeatPath = '/tmp/campaign-heartbeat.txt';
+    const checkpointPath = '/tmp/campaign-checkpoint.json';
+    const statusPath = '/tmp/campaign-status.json';
+    const alertsPath = '/tmp/campaign-alerts.log';
+
+    const heartbeat = fs.existsSync(heartbeatPath)
+      ? JSON.parse(fs.readFileSync(heartbeatPath, 'utf8'))
+      : null;
+
+    const checkpoint = fs.existsSync(checkpointPath)
+      ? JSON.parse(fs.readFileSync(checkpointPath, 'utf8'))
+      : null;
+
+    const status = fs.existsSync(statusPath)
+      ? JSON.parse(fs.readFileSync(statusPath, 'utf8'))
+      : null;
+
+    const alerts = fs.existsSync(alertsPath)
+      ? fs.readFileSync(alertsPath, 'utf8').trim().split('\n').slice(-10)
+      : [];
+
+    // Check if process is alive
+    let processAlive = false;
+    if (heartbeat?.pid) {
+      try {
+        process.kill(heartbeat.pid, 0);
+        processAlive = true;
+      } catch (e) {
+        processAlive = false;
+      }
+    }
+
+    res.json({
+      heartbeat,
+      checkpoint,
+      status,
+      alerts,
+      processAlive,
+      lastCheck: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get SD counts by application
+app.get('/api/testing/campaign/apps', async (req, res) => {
+  try {
+    // Query database for counts
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY
+    );
+
+    const { data, error } = await supabase
+      .from('v_untested_sds')
+      .select('target_application, tested, status');
+
+    if (error) throw error;
+
+    // Group by application
+    const apps = {
+      EHG: { total: 0, tested: 0, untested: 0, completed: 0 },
+      EHG_Engineer: { total: 0, tested: 0, untested: 0, completed: 0 }
+    };
+
+    data.forEach(sd => {
+      const app = sd.target_application || 'EHG';
+      if (apps[app]) {
+        apps[app].total++;
+        if (sd.status === 'completed') apps[app].completed++;
+        if (sd.tested) {
+          apps[app].tested++;
+        } else if (sd.status === 'completed') {
+          apps[app].untested++;
+        }
+      }
+    });
+
+    res.json(apps);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Start campaign
+app.post('/api/testing/campaign/start', (req, res) => {
+  try {
+    const targetApp = req.body.targetApplication || 'EHG';
+    const smokeOnly = req.body.smokeOnly === true;
+
+    if (!['EHG', 'EHG_Engineer'].includes(targetApp)) {
+      return res.status(400).json({ error: 'Invalid target application' });
+    }
+
+    if (activeCampaignProcess) {
+      return res.status(400).json({ error: 'Campaign already running' });
+    }
+
+    const modeLabel = smokeOnly ? 'FAST MODE (smoke-only)' : 'Full Testing';
+    console.log(`🚀 Starting testing campaign for ${targetApp} - ${modeLabel}...`);
+
+    // Launch campaign process with optional smoke-only flag
+    const args = [path.join(PROJECT_ROOT, 'scripts/start-testing-campaign.cjs'), targetApp];
+    if (smokeOnly) {
+      args.push('--smoke-only');
+    }
+
+    activeCampaignProcess = spawn(
+      'node',
+      args,
+      {
+        detached: true,
+        stdio: 'ignore'
+      }
+    );
+
+    activeCampaignProcess.unref();
+
+    // Give it a moment to start
+    setTimeout(() => {
+      const heartbeatPath = '/tmp/campaign-heartbeat.txt';
+      if (fs.existsSync(heartbeatPath)) {
+        const heartbeat = JSON.parse(fs.readFileSync(heartbeatPath, 'utf8'));
+        res.json({
+          started: true,
+          pid: heartbeat.pid,
+          targetApplication: targetApp
+        });
+      } else {
+        res.json({
+          started: true,
+          pid: activeCampaignProcess.pid,
+          targetApplication: targetApp
+        });
+      }
+    }, 1000);
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Stop campaign
+app.post('/api/testing/campaign/stop', (req, res) => {
+  try {
+    // Read heartbeat to get PID
+    const heartbeatPath = '/tmp/campaign-heartbeat.txt';
+    if (!fs.existsSync(heartbeatPath)) {
+      return res.status(404).json({ error: 'No active campaign found' });
+    }
+
+    const heartbeat = JSON.parse(fs.readFileSync(heartbeatPath, 'utf8'));
+    const pid = heartbeat.pid;
+
+    if (pid) {
+      console.log(`🛑 Stopping campaign (PID: ${pid})...`);
+
+      try {
+        // Try to kill the process
+        process.kill(pid, 'SIGTERM');
+      } catch (killError) {
+        // Process might already be dead
+        console.log(`⚠️ Process ${pid} not found (already stopped)`);
+      }
+
+      // Clean up campaign files regardless
+      try {
+        if (fs.existsSync(heartbeatPath)) fs.unlinkSync(heartbeatPath);
+        if (fs.existsSync('/tmp/campaign-checkpoint.json')) fs.unlinkSync('/tmp/campaign-checkpoint.json');
+        console.log('🧹 Cleaned up campaign files');
+      } catch (cleanupError) {
+        console.warn('Cleanup warning:', cleanupError.message);
+      }
+
+      activeCampaignProcess = null;
+      res.json({ stopped: true, pid, cleaned: true });
+    } else {
+      res.status(404).json({ error: 'No PID found' });
+    }
+  } catch (error) {
+    // Even if we error, try to clean up
+    try {
+      const heartbeatPath = '/tmp/campaign-heartbeat.txt';
+      if (fs.existsSync(heartbeatPath)) fs.unlinkSync(heartbeatPath);
+      if (fs.existsSync('/tmp/campaign-checkpoint.json')) fs.unlinkSync('/tmp/campaign-checkpoint.json');
+    } catch (e) {}
+
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get logs
+app.get('/api/testing/campaign/logs/:type', (req, res) => {
+  try {
+    const logType = req.params.type;
+    const limit = parseInt(req.query.limit) || 100;
+
+    let logPath;
+    switch (logType) {
+      case 'progress':
+        logPath = '/tmp/batch-test-progress.log';
+        break;
+      case 'errors':
+        logPath = '/tmp/batch-test-errors.log';
+        break;
+      case 'alerts':
+        logPath = '/tmp/campaign-alerts.log';
+        break;
+      default:
+        return res.status(400).json({ error: 'Invalid log type' });
+    }
+
+    if (!fs.existsSync(logPath)) {
+      return res.json({ lines: [] });
+    }
+
+    const content = fs.readFileSync(logPath, 'utf8');
+    const lines = content.trim().split('\n').slice(-limit);
+
+    res.json({ lines });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================================================
 // CLIENT SERVING
 // =============================================================================
 
@@ -1328,8 +1590,7 @@ async function startServer() {
     console.log(`📍 Local:            http://localhost:${PORT}`);
     console.log(`📍 Network:          http://0.0.0.0:${PORT}`);
     console.log(`📊 Dashboard:        http://localhost:${PORT}/dashboard`);
-    console.log(`🎙️  EVA Voice:       http://localhost:${PORT}/eva (coming soon)`);
-    console.log(`💼 Portfolio:        http://localhost:${PORT}/portfolio (coming soon)`);
+    console.log(`🎙️  EVA Voice:       http://localhost:8080/eva-assistant (EHG App) ✅`);
     console.log('-------------------------------------------------------------');
     console.log(`✅ Database:        ${dbLoader.isConnected ? 'Connected' : 'Not connected'}`);
     console.log(`📋 LEO Protocol:    ${dashboardState.leoProtocol.version}`);
