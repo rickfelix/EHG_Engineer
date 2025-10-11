@@ -2085,10 +2085,10 @@ const DirectiveLab = () => {
             {/* Header - Fixed */}
             <div className="mb-3 flex-shrink-0">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {steps[activeStep - 1].title}
+                {steps[activeStep - 1]?.title || 'Step ' + activeStep}
               </h2>
               <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
-                {steps[activeStep - 1].description}
+                {steps[activeStep - 1]?.description || 'Loading...'}
               </p>
             </div>
             

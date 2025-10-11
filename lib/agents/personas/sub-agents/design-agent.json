@@ -156,7 +156,7 @@
           "visual_components_defined": "All UI components specified with visual design",
           "design_system_compliant": "Components follow design system patterns",
           "responsive_design_verified": "Responsive breakpoints tested",
-          "theme_support_implemented": "Light/dark theme support included",
+          "theme_support_implemented": "MANDATORY: All color classes must have dark: variants. Check for: bg-*, text-*, border-* without dark: prefix = FAIL. Verify ThemeProvider exists in App.tsx. Test both light and dark modes visually.",
           "css_implementation_ready": "CSS/styling specifications complete"
         }
       },
@@ -265,6 +265,29 @@
         "purpose": "Cross-device compatibility"
       }
     ]
+  },
+  "theme_validation": {
+    "description": "MANDATORY theme support verification for all UI components",
+    "validation_steps": [
+      "1. Check if ThemeProvider exists in App.tsx (grep ThemeProvider src/App.tsx)",
+      "2. Scan component for hardcoded colors: grep -E 'bg-(white|gray|blue|slate)-[0-9]+[^/]' [component-file]",
+      "3. Verify dark: variants exist: grep -c 'dark:' [component-file] should be > 0",
+      "4. Count color classes vs dark variants: should be roughly equal",
+      "5. Visual inspection: Toggle theme in browser and verify readability"
+    ],
+    "common_violations": [
+      "bg-white without dark:bg-slate-900",
+      "text-gray-800 without dark:text-gray-100",
+      "border-blue-500 without dark:border-blue-400",
+      "bg-blue-50 without dark:bg-slate-800"
+    ],
+    "required_patterns": {
+      "backgrounds": "bg-[color] dark:bg-[dark-color]",
+      "text": "text-[color] dark:text-[dark-color]",
+      "borders": "border-[color] dark:border-[dark-color]",
+      "gradients": "from-[color] dark:from-[dark-color] to-[color] dark:to-[dark-color]"
+    },
+    "failure_criteria": "If ANY color class lacks dark: variant AND component has >5 color classes, mark as FAIL"
   },
   "design_system": {
     "foundations": {

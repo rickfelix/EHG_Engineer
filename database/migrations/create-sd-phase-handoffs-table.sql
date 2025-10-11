@@ -61,6 +61,25 @@ CREATE POLICY "Allow service role all sd_phase_handoffs"
   USING (true)
   WITH CHECK (true);
 
+-- Allow authenticated users to INSERT handoffs (LEO agents creating handoffs)
+CREATE POLICY "Allow authenticated insert sd_phase_handoffs"
+  ON sd_phase_handoffs FOR INSERT
+  TO authenticated
+  WITH CHECK (true);
+
+-- Allow authenticated users to UPDATE handoffs (accepting/rejecting handoffs)
+CREATE POLICY "Allow authenticated update sd_phase_handoffs"
+  ON sd_phase_handoffs FOR UPDATE
+  TO authenticated
+  USING (true)
+  WITH CHECK (true);
+
+-- Allow authenticated users to DELETE handoffs (cleanup/corrections)
+CREATE POLICY "Allow authenticated delete sd_phase_handoffs"
+  ON sd_phase_handoffs FOR DELETE
+  TO authenticated
+  USING (true);
+
 -- Comments
 COMMENT ON TABLE sd_phase_handoffs IS 'Unified handoff tracking for all LEO Protocol phase transitions. Database-first, no markdown files.';
 COMMENT ON COLUMN sd_phase_handoffs.executive_summary IS 'Element 1: High-level summary of handoff';
