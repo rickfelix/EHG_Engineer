@@ -141,13 +141,51 @@ grep -r "function name" /mnt/c/_EHG/ehg/src/lib
 
 ### GATE 4: PLAN Verification (AUDIT)
 **MANDATORY before PLAN→LEAD handoff**:
+- [ ] **Sub-Agent Coverage**: All appropriate sub-agents invoked based on SD characteristics
 - [ ] **User Story Completion**: All user stories delivered and E2E tests passing (100% coverage validation)
 - [ ] **Implementation Validation**: Code matches approved PRD scope
 - [ ] **No Scope Creep**: Delivered features = approved features
 - [ ] **Documentation Validation**: All changes documented
 - [ ] **Integration Validation**: New code integrates with existing systems
 
-**Blocks**: PLAN→LEAD handoff if user stories incomplete OR scope mismatches detected
+**Blocks**: PLAN→LEAD handoff if required sub-agents missing OR user stories incomplete OR scope mismatches detected
+
+**Sub-Agent Coverage Requirements**:
+
+**MANDATORY for ALL SDs**:
+- [ ] VALIDATION (Principal Systems Analyst) - Duplicate check, infrastructure validation
+- [ ] TESTING (QA Engineering Director) - E2E test execution and validation
+- [ ] GITHUB (DevOps Platform Architect) - CI/CD pipeline verification
+- [ ] RETRO (Continuous Improvement Coach) - Retrospective generation
+
+**CONDITIONAL based on SD keywords**:
+- [ ] DATABASE - If mentions: database, migration, schema, table, RLS, SQL, Postgres
+- [ ] SECURITY - If mentions: auth, security, permissions, RLS, authentication, authorization
+- [ ] DESIGN - If mentions: UI, UX, design, component, interface, accessibility, a11y
+- [ ] PERFORMANCE - If mentions: performance, optimization, speed, latency, load, scalability
+- [ ] DOCMON - If mentions: documentation, docs, README, guide
+- [ ] UAT - If mentions: UAT, user acceptance, acceptance testing
+
+**Validation Query**:
+```javascript
+// Check which sub-agents executed
+const { data: executed } = await supabase
+  .from('sub_agent_execution_results')
+  .select('sub_agent_code, verdict, created_at')
+  .eq('sd_id', sd_id)
+  .order('created_at', { ascending: true });
+
+// Compare with required sub-agents based on SD keywords
+const missing = requiredAgents.filter(code =>
+  !executed.some(e => e.sub_agent_code === code)
+);
+
+if (missing.length > 0) {
+  console.error('❌ GATE 4 BLOCKED: Missing required sub-agents');
+  console.error('Required but not executed:', missing);
+  process.exit(1);
+}
+```
 
 ---
 
@@ -249,6 +287,7 @@ grep -r "function name" /mnt/c/_EHG/ehg/src/lib
 - [ ] Review test strategy aligns with existing framework
 
 ### PLAN Verification Phase
+- [ ] Verify all required sub-agents executed (4 MANDATORY + keyword-triggered CONDITIONAL)
 - [ ] Verify all user stories completed and E2E tests passing (100% coverage)
 - [ ] Validate delivered features match PRD scope
 - [ ] Check for scope creep (extra features not in PRD)

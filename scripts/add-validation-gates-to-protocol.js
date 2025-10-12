@@ -118,12 +118,17 @@ npm run type-check && npm run build:skip-checks
 ---
 
 **GATE 4: PLAN Verification** (BLOCKING)
+- [ ] **Sub-Agent Coverage**: All appropriate sub-agents invoked? (4 MANDATORY + keyword-triggered CONDITIONAL)
 - [ ] **User Story Completion**: All user stories delivered and E2E tests passing (100% coverage validation)?
 - [ ] **Handoff Completeness**: All 7 handoff elements present?
 - [ ] **Test Validation**: Unit tests AND E2E tests both passing?
 - [ ] **Documentation Validation**: Generated docs exist?
 - [ ] **Protocol Compliance**: All phases followed correctly?
 - [ ] **CI/CD Validation**: GitHub Actions green?
+
+**Sub-Agent Requirements**:
+- MANDATORY: VALIDATION, TESTING, GITHUB, RETRO (all SDs)
+- CONDITIONAL: DATABASE, SECURITY, DESIGN, PERFORMANCE, DOCMON, UAT (keyword-triggered)
 
 **Command**:
 \`\`\`bash

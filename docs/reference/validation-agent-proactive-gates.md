@@ -132,11 +132,28 @@ find /mnt/c/_EHG/ehg/src/components -name "*ComponentName*"
 **Purpose**: Ensure delivered features match approved scope
 
 **Mandatory Checks**:
+- [ ] **Sub-Agent Coverage**: All appropriate sub-agents invoked based on SD characteristics
 - [ ] **User Story Completion**: All user stories delivered and E2E tests passing (100% coverage validation)
 - [ ] **Implementation Validation**: Code matches approved PRD scope exactly
 - [ ] **No Scope Creep**: Delivered features = approved features (SCOPE LOCK enforcement)
 - [ ] **Documentation Validation**: All changes documented (generated_docs, ADRs)
 - [ ] **Integration Validation**: New code integrates with existing systems
+
+**Sub-Agent Coverage Requirements**:
+
+**MANDATORY for ALL SDs** (Must execute for every SD):
+- VALIDATION (Principal Systems Analyst) - Duplicate check, infrastructure validation
+- TESTING (QA Engineering Director) - E2E test execution and validation
+- GITHUB (DevOps Platform Architect) - CI/CD pipeline verification
+- RETRO (Continuous Improvement Coach) - Retrospective generation
+
+**CONDITIONAL based on SD keywords** (Must execute if keywords present):
+- DATABASE - Keywords: database, migration, schema, table, RLS, SQL, Postgres
+- SECURITY - Keywords: auth, security, permissions, RLS, authentication, authorization
+- DESIGN - Keywords: UI, UX, design, component, interface, accessibility, a11y
+- PERFORMANCE - Keywords: performance, optimization, speed, latency, load, scalability
+- DOCMON - Keywords: documentation, docs, README, guide
+- UAT - Keywords: UAT, user acceptance, acceptance testing, user journey
 
 **Invocation**:
 ```bash
@@ -149,10 +166,26 @@ node scripts/plan-supervisor-verification.js --prd PRD-ID
 ```
 
 **Blocks When**:
+- Sub-agent coverage incomplete → Missing required sub-agents (MANDATORY or keyword-triggered CONDITIONAL)
 - User stories incomplete → All user stories must be delivered and E2E tests passing
 - Scope creep detected → Remove extra features OR create new SD for additions
 - Documentation missing → Complete before handoff
 - Integration failures → Fix before claiming completion
+
+**Sub-Agent Validation Example**:
+```bash
+# Query sub_agent_execution_results table
+SELECT sub_agent_code, verdict, created_at
+FROM sub_agent_execution_results
+WHERE sd_id = 'SD-XXX'
+ORDER BY created_at;
+
+# Expected: VALIDATION, TESTING, GITHUB, RETRO (minimum)
+# Plus: DATABASE, SECURITY, DESIGN, PERFORMANCE, DOCMON, UAT (if keywords match)
+
+# If any MANDATORY sub-agent missing → BLOCKED
+# If CONDITIONAL sub-agent needed but missing → BLOCKED
+```
 
 **Success Pattern**:
 > "SCOPE LOCK validated: Delivered exactly what was approved, no surprises"
