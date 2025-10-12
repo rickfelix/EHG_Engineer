@@ -63,7 +63,7 @@ EHG_Engineer (Management)          EHG App (Implementation)
 
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-10-11 6:54:25 PM
+**Last Generated**: 2025-10-12 2:19:25 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -388,10 +388,10 @@ These principles override default behavior and must be internalized before start
 - Retrospectives → `retrospectives`
 - Sub-agent results → `sub_agent_execution_results`
 
-### Simplicity-First (GATEKEEPING)
-**Challenge complexity BEFORE approval, commit to full scope AFTER.**
-- LEAD questions: Can we document instead? Solving real or imagined problems?
-- After LEAD approval: SCOPE LOCK - no unilateral deferrals
+### Validation-First (GATEKEEPING)
+**Thorough validation BEFORE approval, full commitment AFTER.**
+- LEAD validates: Real problem? Feasible solution? Resources available?
+- After LEAD approval: SCOPE LOCK - deliver what was approved
 - Exception: Critical blocker + human approval + new SD for deferred work
 
 ### Context-Aware (PROACTIVE)
@@ -415,6 +415,7 @@ These principles override default behavior and must be internalized before start
 
 **REMEMBER**: The goal is NOT to complete SDs quickly. The goal is to complete SDs CORRECTLY. A properly implemented SD that takes 8 hours is infinitely better than a rushed implementation that takes 4 hours but requires 6 hours of fixes.
 
+
 ## 5-Phase Strategic Directive Workflow
 
 ## 🎯 5-PHASE STRATEGIC DIRECTIVE WORKFLOW
@@ -426,7 +427,7 @@ Total: 100% = LEAD (35%) + PLAN (35%) + EXEC (30%)
 ### PHASE 1: LEAD PRE-APPROVAL (20% of LEAD allocation)
 
 **Agent**: Strategic Leadership Agent (LEAD)
-**Purpose**: Strategic validation, business alignment, simplicity gate
+**Purpose**: Strategic validation, business alignment, feasibility assessment
 **Duration**: 1-2 hours
 
 **Mandatory Sub-Agents**:
@@ -447,13 +448,13 @@ wait
 
 **Deliverables**:
 - SD approved or rejected with feedback
-- SIMPLICITY FIRST gate passed
+- Strategic Validation gate passed
 - Over-engineering rubric applied (if needed)
 - LEAD→PLAN handoff created
 
 **Exit Criteria**:
 - SD status = 'active'
-- SIMPLICITY gate passed (6 questions answered)
+- Strategic Validation gate passed (6 questions answered)
 - No critical blockers identified
 - Handoff stored in `sd_phase_handoffs`
 
@@ -652,6 +653,7 @@ node scripts/database-architect-schema-review.js <SD-ID>
 - completed_at timestamp set
 - Retrospective exists with quality_score ≥ 70
 
+
 ## Context Management Throughout Execution
 
 ## 🧠 CONTEXT MANAGEMENT (Throughout Execution)
@@ -782,6 +784,68 @@ Example:
 - **EHG**: Vitest (unit) + Playwright (E2E)
 
 **Full Guide**: See `docs/reference/multi-app-testing.md`
+
+## LEAD Over-Engineering Evaluation Process
+
+### 🛡️ LEAD Over-Engineering Evaluation Process
+
+**MANDATORY**: LEAD agents MUST use the standardized rubric before making any SD status/priority changes.
+
+#### Step-by-Step Evaluation Process
+
+1. **Execute Rubric Evaluation**:
+   ```bash
+   node scripts/lead-over-engineering-rubric.js --sd-id [SD_ID]
+   ```
+
+2. **Review 6-Dimension Scores** (1-5 scale each):
+   - **Technical Complexity vs Business Value**: Complexity-to-value ratio
+   - **Resource Intensity vs Urgency**: Development effort vs business urgency  
+   - **Strategic Priority Alignment**: Alignment with Stage 1/EVA/GTM priorities
+   - **Market Timing & Opportunity Window**: Market opportunity timing
+   - **Implementation & Business Risk**: Risk vs reward assessment
+   - **Return on Investment Projection**: Expected ROI evaluation
+
+3. **Check Over-Engineering Thresholds**:
+   - Total Score ≤15/30 = Over-engineered
+   - Complexity ≤2 = Problematic
+   - Strategic Alignment ≤2 = Concerning  
+   - Risk Assessment ≤2 = Dangerous
+
+4. **Present Findings to Human**:
+   ```bash
+   node scripts/lead-human-approval-system.js --sd-id [SD_ID] --evaluation [RESULTS]
+   ```
+
+5. **Request Explicit Approval**: Show scores, reasoning, and consequences
+
+6. **Execute Only After Approval**: NEVER make autonomous changes
+
+#### Available Scripts for LEAD Agents
+- `scripts/lead-over-engineering-rubric.js` - Standardized 6-dimension evaluation
+- `scripts/lead-human-approval-system.js` - Human approval workflow
+- `scripts/enhanced-priority-rubric.js` - Priority rebalancing tools
+
+#### Prohibited Actions
+- ❌ Autonomous SD status/priority changes  
+- ❌ Overriding user selections without permission
+- ❌ Subjective over-engineering calls without rubric
+- ❌ Making changes before human approval
+
+## 6-Step SD Evaluation Checklist
+
+**6-Step SD Evaluation Checklist (MANDATORY for LEAD & PLAN)**:
+
+1. Query `strategic_directives_v2` for SD metadata
+2. Query `product_requirements_v2` for existing PRD
+3. **Query `sd_backlog_map` for linked backlog items** ← CRITICAL
+4. Search codebase for existing infrastructure
+5. Identify gaps between backlog requirements and existing code
+6. **Execute QA smoke tests** ← NEW (verify tests run before approval)
+
+**Backlog Review Requirements**: Review backlog_title, item_description, extras.Description_1 for each item
+
+**Complete Checklist**: See `docs/reference/sd-evaluation-checklist.md`
 
 ## Enhanced QA Engineering Director v2.0 - Testing-First Edition
 
@@ -963,93 +1027,44 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 "
 ```
 
-## LEAD Over-Engineering Evaluation Process
+## Quality Validation Examples
 
-### 🛡️ LEAD Over-Engineering Evaluation Process
+**Evidence from Retrospectives**: Thorough validation saves 4-6 hours per SD by catching issues early.
 
-**MANDATORY**: LEAD agents MUST use the standardized rubric before making any SD status/priority changes.
+### LEAD Pre-Approval Validation Examples
 
-#### Step-by-Step Evaluation Process
+#### Example 1: Verify Claims Against Reality
 
-1. **Execute Rubric Evaluation**:
-   ```bash
-   node scripts/lead-over-engineering-rubric.js --sd-id [SD_ID]
-   ```
+**Case** (SD-UAT-002): Code review revealed 3/5 claimed issues didn't exist → saved 3-4 hours of unnecessary work
 
-2. **Review 6-Dimension Scores** (1-5 scale each):
-   - **Technical Complexity vs Business Value**: Complexity-to-value ratio
-   - **Resource Intensity vs Urgency**: Development effort vs business urgency  
-   - **Strategic Priority Alignment**: Alignment with Stage 1/EVA/GTM priorities
-   - **Market Timing & Opportunity Window**: Market opportunity timing
-   - **Implementation & Business Risk**: Risk vs reward assessment
-   - **Return on Investment Projection**: Expected ROI evaluation
+**Lesson**: Always verify claims with actual code inspection, don't trust assumptions
 
-3. **Check Over-Engineering Thresholds**:
-   - Total Score ≤15/30 = Over-engineered
-   - Complexity ≤2 = Problematic
-   - Strategic Alignment ≤2 = Concerning  
-   - Risk Assessment ≤2 = Dangerous
+#### Example 2: Leverage Existing Infrastructure
 
-4. **Present Findings to Human**:
-   ```bash
-   node scripts/lead-human-approval-system.js --sd-id [SD_ID] --evaluation [RESULTS]
-   ```
+**Case** (SD-UAT-020): Used existing Supabase Auth instead of custom solution → saved 8-10 hours
 
-5. **Request Explicit Approval**: Show scores, reasoning, and consequences
+**Lesson**: Check what already exists before approving new development
 
-6. **Execute Only After Approval**: NEVER make autonomous changes
+#### Example 3: Document Blockers Instead of Building Around Them
 
-#### Available Scripts for LEAD Agents
-- `scripts/lead-over-engineering-rubric.js` - Standardized 6-dimension evaluation
-- `scripts/lead-human-approval-system.js` - Human approval workflow
-- `scripts/enhanced-priority-rubric.js` - Priority rebalancing tools
+**Case** (SD-UAT-003): Database blocker identified early → documented constraint instead of workaround → saved 4-6 hours
 
-#### Prohibited Actions
-- ❌ Autonomous SD status/priority changes  
-- ❌ Overriding user selections without permission
-- ❌ Subjective over-engineering calls without rubric
-- ❌ Making changes before human approval
+**Lesson**: Identify true blockers during approval phase, not during implementation
 
-## 6-Step SD Evaluation Checklist
+#### Example 4: Question Necessity vs. Nicety
 
-**6-Step SD Evaluation Checklist (MANDATORY for LEAD & PLAN)**:
+**Lesson**: Distinguish between "must have" (core requirements) and "nice to have" (future enhancements) during validation
 
-1. Query `strategic_directives_v2` for SD metadata
-2. Query `product_requirements_v2` for existing PRD
-3. **Query `sd_backlog_map` for linked backlog items** ← CRITICAL
-4. Search codebase for existing infrastructure
-5. Identify gaps between backlog requirements and existing code
-6. **Execute QA smoke tests** ← NEW (verify tests run before approval)
+### Quality Gate Benefits
 
-**Backlog Review Requirements**: Review backlog_title, item_description, extras.Description_1 for each item
+Thorough LEAD pre-approval validation:
+- Catches false assumptions early
+- Identifies existing solutions
+- Documents blockers before implementation starts
+- Ensures resource allocation matches real requirements
 
-**Complete Checklist**: See `docs/reference/sd-evaluation-checklist.md`
+**Total Time Saved from Examples**: 15-20 hours across validated SDs
 
-## SIMPLICITY FIRST Decision Framework
-
-## SIMPLICITY FIRST Decision Framework (MANDATORY)
-
-**Evidence from Retrospectives**: Applied successfully in 4 out of 7 retrospectives, saved 4-6 hours per SD.
-
-### LEAD Decision Framework (Before Approving ANY SD)
-
-#### Question 1: Can We Document Instead of Implement?
-
-**Example** (SD-UAT-003): Database blocker → documented instead → saved 4-6 hours
-
-#### Question 2: Is This Solving Real or Imagined Problems?
-
-**Example** (SD-UAT-002): Code review rejected 3/5 false claims → saved 3-4 hours
-
-#### Question 3: Can We Use Existing Infrastructure?
-
-**Example** (SD-UAT-020): Used existing Supabase Auth → saved 8-10 hours
-
-#### Question 4: Is Complexity Inherent or Self-Imposed?
-
-**Reject**: Premature optimization, custom solutions when proven tools exist
-
-### Total Savings from Retrospectives: 15-20 hours across 3 SDs
 
 ## PLAN Pre-EXEC Checklist
 
@@ -1081,12 +1096,14 @@ Before creating PLAN→EXEC handoff, PLAN agent MUST verify:
 - [ ] **Smoke tests defined** (3-5 tests minimum)
 - [ ] **Test scenarios documented** in PRD
 
-### SIMPLICITY FIRST Validation ✅
+### Quality Validation ✅
 - [ ] **Verified claims with code review** (if UI/UX SD)
-- [ ] **Rejected unnecessary complexity**
+- [ ] **Assessed technical feasibility**
+- [ ] **Identified potential blockers**
 
 **Success Pattern** (SD-UAT-002):
 > "LEAD code review rejected 3/5 false claims → saved hours of unnecessary work"
+
 
 ## Testing Tier Strategy
 
@@ -1152,21 +1169,6 @@ Before creating PLAN→EXEC handoff, PLAN agent MUST verify:
 **Success Pattern** (SD-UAT-003):
 > "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
 
-## CI/CD Pipeline Verification
-
-## CI/CD Pipeline Verification (MANDATORY)
-
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
-
-### Verification Process
-
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
-
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
-
 ## EXEC Dual Test Requirement
 
 ### ⚠️ MANDATORY: Dual Test Execution
@@ -1221,6 +1223,21 @@ npm run test:e2e
 - **SD-EXPORT-001**: 30-minute gap between marking "complete" and discovering tests weren't run
 - **SD-EVA-MEETING-002**: 67% E2E failure rate revealed only when tests finally executed
 - **Impact**: Testing enforcement prevents claiming "done" without proof
+
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## Sub-Agent Auto-Trigger Enforcement (MANDATORY)
 
@@ -1423,36 +1440,37 @@ await client.query('ALTER TABLE ... ENABLE TRIGGER trigger_name');
 
 **Verification**: `find . -name "SD-*.md" -o -name "PRD-*.md"` should return ONLY legacy files
 
-## 🛡️ LEAD Pre-Approval Simplicity Gate
+## 🛡️ LEAD Pre-Approval Strategic Validation Gate
 
 ### MANDATORY Before Approving ANY Strategic Directive
 
 LEAD MUST answer these questions BEFORE approval:
 
 1. **Need Validation**: Is this solving a real user problem or perceived problem?
-2. **Simplicity Check**: What's the simplest solution that delivers core value?
-3. **Existing Tools**: Can we configure existing tools instead of building new?
-4. **80/20 Analysis**: Can we deliver 80% value with 20% of proposed effort?
-5. **Scope Reduction**: Should this be split into multiple smaller SDs?
-6. **Phase Decomposition**: Can we defer Phase 3-4 features to separate SD?
+2. **Solution Assessment**: Does the proposed solution align with business objectives?
+3. **Existing Tools**: Can we leverage existing tools/infrastructure instead of building new?
+4. **Value Analysis**: Does the expected value justify the development effort?
+5. **Feasibility Review**: Are there any technical or resource constraints that make this infeasible?
+6. **Risk Assessment**: What are the key risks and how are they mitigated?
 
-**If answers suggest over-engineering → LEAD MUST**:
-- Reduce scope BEFORE approval
-- Create separate SDs for deferred work
-- Document rationale for scope changes
-- Get human approval for major reductions
+**Approval Criteria**:
+- Real user/business problem identified
+- Solution is technically feasible
+- Resources are available or can be allocated
+- Risks are acceptable and documented
+- Expected value justifies effort
 
-**SCOPE LOCK**: Once LEAD approves an SD, the scope is LOCKED. LEAD may NOT:
+**SCOPE LOCK**: Once LEAD approves an SD, the scope is LOCKED. LEAD commits to delivering the approved scope. LEAD may NOT:
 - ❌ Re-evaluate "do we really need this?" during final approval
-- ❌ Apply simplicity filter after EXEC phase begins
+- ❌ Reduce scope after EXEC phase begins without critical justification
 - ❌ Defer work unilaterally during verification
 - ❌ Mark SD complete if PRD requirements not met
 
-**Exception**: LEAD may reduce scope mid-execution ONLY if:
-1. Critical technical blocker discovered (impossibility)
-2. External business priorities changed dramatically
+**Exception**: LEAD may adjust scope mid-execution ONLY if:
+1. Critical technical blocker discovered (true impossibility, not difficulty)
+2. External business priorities changed dramatically (documented)
 3. Explicit human approval obtained
-4. New SD created for all deferred work
+4. New SD created for all deferred work (no silent scope reduction)
 
 
 ## Testing Tier Strategy (Updated)
@@ -1520,6 +1538,77 @@ node scripts/validate-migration-files.js <SD-ID> --verify-db --check-seed-data
 ```
 
 **Complete Guide**: See `docs/database-migration-validation-guide.md`
+
+## Playwright MCP Integration
+
+## 🎭 Playwright MCP Integration
+
+**Status**: ✅ READY (Installed 2025-10-12)
+
+### Overview
+Playwright MCP (Model Context Protocol) provides browser automation capabilities for testing, scraping, and UI verification.
+
+### Installed Components
+- **Chrome**: Google Chrome browser for MCP operations
+- **Chromium**: Chromium 141.0.7390.37 (build 1194) for standard Playwright tests
+- **Chromium Headless Shell**: Headless browser for CI/CD pipelines
+- **System Dependencies**: All required Linux libraries installed
+
+### Available MCP Tools
+
+#### Navigation
+- `mcp__playwright__browser_navigate` - Navigate to URL
+- `mcp__playwright__browser_navigate_back` - Go back to previous page
+
+#### Interaction
+- `mcp__playwright__browser_click` - Click elements
+- `mcp__playwright__browser_fill` - Fill form fields
+- `mcp__playwright__browser_select` - Select dropdown options
+- `mcp__playwright__browser_hover` - Hover over elements
+- `mcp__playwright__browser_type` - Type text into elements
+
+#### Verification
+- `mcp__playwright__browser_snapshot` - Capture accessibility snapshot
+- `mcp__playwright__browser_take_screenshot` - Take screenshots
+- `mcp__playwright__browser_evaluate` - Execute JavaScript
+
+#### Management
+- `mcp__playwright__browser_close` - Close browser
+- `mcp__playwright__browser_tabs` - Manage tabs
+
+### Testing Integration
+
+**When to Use Playwright MCP**:
+1. ✅ Visual regression testing
+2. ✅ UI component verification
+3. ✅ Screenshot capture for evidence
+4. ✅ Accessibility tree validation
+5. ✅ Cross-browser testing
+
+**When to Use Standard Playwright**:
+1. ✅ E2E test suites (`npm run test:e2e`)
+2. ✅ CI/CD pipeline tests
+3. ✅ Automated test runs
+4. ✅ User story validation
+
+### Usage Example
+
+```javascript
+// Using Playwright MCP for visual verification
+await mcp__playwright__browser_navigate({ url: 'http://localhost:3000/dashboard' });
+await mcp__playwright__browser_snapshot(); // Get accessibility tree
+await mcp__playwright__browser_take_screenshot({ name: 'dashboard-state' });
+await mcp__playwright__browser_click({ element: 'Submit button', ref: 'e5' });
+```
+
+### QA Director Integration
+
+The QA Engineering Director sub-agent now has access to:
+- Playwright MCP for visual testing
+- Standard Playwright for E2E automation
+- Both Chrome (MCP) and Chromium (tests) browsers
+
+**Complete Guide**: See `docs/reference/playwright-mcp-guide.md`
 
 ## Playwright Server Management Best Practice
 
@@ -1590,6 +1679,332 @@ npm run test:e2e
 - Not handling "already exists" errors
 
 **Complete Guide**: See `docs/reference/migration-preflight.md`
+
+## Native Claude Code Sub-Agent Integration
+
+## 🤖 Native Claude Code Sub-Agent Integration
+
+**Status**: ✅ TESTED & DOCUMENTED (2025-10-12)
+
+### Overview
+Claude Code supports native sub-agents via the Task tool. These sub-agents work alongside the database-driven LEO Protocol orchestration system in a hybrid architecture.
+
+### Critical Dependency: ripgrep
+**REQUIRED**: `ripgrep` (command: `rg`) must be installed for agent discovery.
+```bash
+# Check if installed
+which rg
+
+# Install on Ubuntu/Debian WSL2
+sudo apt update && sudo apt install ripgrep -y
+```
+
+**Without ripgrep**: Agent discovery fails silently (no error messages, agents simply won't be found).
+
+### Discovery Mechanism
+1. Claude Code uses ripgrep to scan `.claude/agents/*.md` files
+2. YAML frontmatter is parsed for agent configuration
+3. Successfully discovered agents appear in `/agents` menu
+4. Verify with: `/agents` command
+
+### Three Proven Invocation Patterns
+
+#### Pattern 1: Advisory Mode ✅ (RECOMMENDED for guidance)
+**Use Case**: General architecture questions, no SD context
+
+**Example**:
+```
+User: "What's the best way to structure a many-to-many relationship?"
+Main Agent → Task(database-agent) → Expert Guidance
+```
+
+**Performance**: ~3 seconds, 0 database records
+**Best For**: Design exploration, best practices, architectural guidance
+
+---
+
+#### Pattern 2: Targeted Validation ⚠️ (NOT WORKING - experimental)
+**Use Case**: Single sub-agent validation with SD context
+
+**Expected Flow**:
+```
+Main Agent → Task(sub-agent) → Bash(script) → Database Storage
+```
+
+**Current Issue**: Sub-agents provide analysis but don't reliably invoke Bash tools
+**Status**: Documented limitation, use Pattern 3 instead
+
+---
+
+#### Pattern 3: Direct Orchestration ✅ (PRODUCTION-READY)
+**Use Case**: Phase-based validation, multiple sub-agents, production workflows
+
+**Example**:
+```bash
+node scripts/orchestrate-phase-subagents.js PLAN_VERIFY SD-MONITORING-001
+```
+
+**Performance**: ~2 seconds (parallel execution), 4 database records
+**Best For**: Phase validation, multi-agent orchestration, audit trails
+
+### Decision Matrix
+
+| Scenario | Pattern | Command |
+|----------|---------|---------|
+| "What's the best way to...?" | 1 (Advisory) | Natural language query |
+| "How should I structure...?" | 1 (Advisory) | Natural language query |
+| "Validate SD-XXX" | 3 (Direct Script) | `node scripts/orchestrate-phase-subagents.js` |
+| "Run PLAN_VERIFY for SD-XXX" | 3 (Direct Script) | `node scripts/orchestrate-phase-subagents.js PLAN_VERIFY SD-XXX` |
+
+### Invocation Mechanism (Task Tool)
+
+**What WORKS** ✅:
+- **Task tool**: Main agent uses Task tool to delegate to sub-agents
+- From user perspective: Natural language (transparent delegation)
+- Behind the scenes: `Task(subagent_type: "database-agent", description: "...", prompt: "...")`
+
+**What DOESN'T WORK** ❌:
+- Automatic delegation (typing keywords)
+- @-mention syntax (`@database-agent` or `@agent-database-agent`)
+
+### Integration with LEO Protocol 5-Phase Workflow
+
+**LEAD Pre-Approval**:
+- Pattern 1 for design questions
+- Pattern 3 for validation: `node scripts/orchestrate-phase-subagents.js LEAD_PRE_APPROVAL SD-XXX`
+
+**PLAN PRD Creation**:
+- Pattern 1 for architecture guidance
+- Pattern 3 for validation: `node scripts/orchestrate-phase-subagents.js PLAN_PRD SD-XXX`
+
+**EXEC Implementation**:
+- Pattern 1 for implementation questions
+- Pattern 3 for final validation: `node lib/sub-agent-executor.js DATABASE SD-XXX`
+
+**PLAN Verification**:
+- Pattern 3 (always): `node scripts/orchestrate-phase-subagents.js PLAN_VERIFY SD-XXX`
+
+**LEAD Final Approval**:
+- Pattern 3 for retrospective: `node scripts/orchestrate-phase-subagents.js LEAD_FINAL SD-XXX`
+
+### Active Native Sub-Agents
+
+**Currently Available**:
+- `database-agent` - Principal Database Architect (tested, working)
+- `test-agent` - Test agent for diagnostics (tested, working)
+
+**Agent File Location**: `.claude/agents/*.md`
+
+**Example Agent Structure**:
+```yaml
+---
+name: database-agent
+description: "MUST BE USED PROACTIVELY for all database tasks. Handles schema design, Supabase migrations, RLS policies, SQL validation, and architecture. Trigger on keywords: database, migration, schema, table, RLS, SQL, Postgres."
+tools: Bash, Read, Write
+model: inherit
+---
+```
+
+### Performance Metrics
+
+| Operation | Pattern 1 | Pattern 3 |
+|-----------|-----------|-----------|
+| Invocation | <1s | <1s |
+| Execution | 2-5s | 1-3s |
+| Database Writes | 0 | 1-6 |
+| Token Usage | Medium | Low |
+| Best For | Guidance | Production |
+
+### Troubleshooting
+
+**Agent not appearing in /agents menu**:
+1. Check ripgrep installed: `which rg`
+2. Verify file location: `.claude/agents/*.md`
+3. Validate YAML frontmatter
+4. Restart Claude Code
+
+**Sub-agent not executing scripts** (Pattern 2 issue):
+- Use Pattern 3 (Direct Orchestration) instead
+- Main agent invokes scripts directly via Bash tool
+
+### Complete Documentation
+
+**Detailed Guides**:
+- `docs/reference/native-sub-agent-invocation.md` - Discovery, invocation, troubleshooting (420 lines)
+- `docs/guides/hybrid-sub-agent-workflow.md` - Decision matrix, patterns, integration (450 lines)
+
+**Test Results**: All patterns comprehensively tested (2025-10-12)
+**Production Status**: Patterns 1 & 3 ready, Pattern 2 experimental
+
+## Test Execution Timeout Handling
+
+## 🕐 Test Execution Timeout Handling
+
+**Problem**: Test suites timing out in WSL2/resource-constrained environments
+**Solution**: 4-step fallback strategy with clear escalation path
+
+### Quick Reference
+
+**Timeout Thresholds**:
+- Unit Tests: 2 min (native) / 3 min (WSL2)
+- E2E Tests: 5 min (native) / 7 min (WSL2)
+
+**4-Step Fallback Strategy**:
+1. **Quick Validation** (60s): `vitest run --no-coverage`
+2. **Focused Testing** (30s): `vitest run --grep="ComponentName"`
+3. **Manual Smoke Test** (5 min): Navigate + test critical paths
+4. **CI/CD-Only** (7-10 min): Push to branch, document GitHub Actions URL
+
+**When to Escalate**: All 4 steps timeout → LEAD investigation
+
+**Complete Guide**: `docs/reference/test-timeout-handling.md` (200 lines)
+
+**Evidence**: SD-SETTINGS-2025-10-12 - Unit tests timed out after 2 min in WSL2
+**Impact**: Prevents 30-60 min of blocked time per timeout occurrence
+
+## Checkpoint Pattern for Large SDs
+
+## 📍 Checkpoint Pattern for Large SDs
+
+**Problem**: Large SDs (12+ user stories) consume excessive context, high rework risk
+**Solution**: Break into 3-4 checkpoints with interim validation
+
+### Quick Reference
+
+**When to Use**:
+- 9+ user stories → Recommended (3 checkpoints)
+- 13+ user stories → Mandatory (4+ checkpoints)
+- >1500 LOC → Recommended
+- >8 hours estimated → Recommended
+
+**Checkpoint Structure** (Example: SD with 12 US):
+- **Checkpoint 1**: US-001 to US-004 (Component creation, 2-3 hours)
+- **Checkpoint 2**: US-005 to US-008 (Feature implementation, 2-3 hours)
+- **Checkpoint 3**: US-009 to US-012 (Testing + docs, 2-3 hours)
+
+**Benefits**:
+- 30-40% reduction in context consumption
+- 50% faster debugging (smaller change sets)
+- Incremental progress visibility
+- Pause/resume flexibility
+
+**Complete Guide**: `docs/reference/checkpoint-pattern.md` (150 lines)
+
+**Evidence**: SD-SETTINGS-2025-10-12 analysis - Would have reduced context from 85K to 60K tokens
+**Impact**: Saves 2-4 hours per large SD through early error detection
+
+## Session Continuation Best Practices
+
+## 🔄 Session Continuation Best Practices
+
+**Problem**: Context limits require session handoffs, risking progress loss
+**Solution**: Proven patterns from successful SD continuation
+
+### Quick Reference
+
+**Before Ending Session**:
+1. Update TodoWrite with current task marked "in_progress"
+2. Document exact resume point (file, line, next step)
+3. Create checkpoint commit if mid-implementation
+4. Report context health (usage %, status, recommendation)
+
+**When Resuming**:
+1. Read continuation summary
+2. Verify application state: `cd /path && pwd`, `git status`
+3. Read current files mentioned in summary
+4. Check build status: `npm run type-check && npm run lint`
+5. Confirm resume point with user
+
+**Key Patterns**:
+- **Comprehensive Summary**: 9 sections (request, concepts, files, errors, solutions, messages, tasks, current work, next step)
+- **Todo Maintenance**: Update after EACH milestone, not in batches
+- **Incremental Implementation**: One component at a time with verification
+- **Pre-Verification Checklist**: App check, GitHub remote, URL, component path
+
+**Complete Guide**: `docs/reference/claude-code-session-continuation.md` (100 lines)
+
+**Evidence**: SD-SETTINGS-2025-10-12 - Zero "wrong directory" errors, seamless continuation
+**Impact**: 90% reduction in resume confusion, 95% accuracy in state reconstruction
+
+## Parallel Execution Optimization
+
+## ⚡ Parallel Execution Optimization
+
+**Problem**: Sequential execution wastes time when operations are independent
+**Solution**: Guidelines for safe parallel tool execution
+
+### Quick Reference
+
+**Safe for Parallel** ✅:
+- Reading multiple independent files
+- Multiple read-only Git commands (`git status`, `git log`, `git remote -v`)
+- Database queries from different tables (read-only)
+- Sub-agent execution (independent assessments)
+
+**NOT Safe for Parallel** ❌:
+- Write operations (Edit, Write tools)
+- Database mutations (INSERT, UPDATE, DELETE)
+- Sequential dependencies (build before test)
+- Git operations that modify state
+
+**Time Savings Examples**:
+- File reading: 2-3s saved per file after first (parallel vs sequential)
+- Line count: 3-6s saved (`wc -l file1 file2 file3` vs 3 separate commands)
+- Sub-agents: 1-2 min saved (4 sub-agents in 30s vs 2min sequential)
+
+**Decision Rule**:
+- Independent operations + >2s saved + <30K combined output → Use parallel
+- Any dependencies or order requirements → Use sequential
+
+**Complete Guide**: `docs/reference/parallel-execution-opportunities.md` (80 lines)
+
+**Evidence**: SD-SETTINGS-2025-10-12 - Identified missed opportunities (6-9s in file reads)
+**Impact**: 2-5 min saved per SD through parallelization
+
+## Progressive Testing Strategy
+
+## 🧪 Progressive Testing Strategy
+
+**Problem**: End-of-phase testing causes late discovery of errors
+**Solution**: Test after each user story or major component
+
+### Quick Reference
+
+**After Each User Story**:
+```bash
+vitest run --no-coverage --grep="US-001"  # Quick validation
+```
+
+**After Each Component**:
+```bash
+npm run type-check  # TypeScript validation
+npm run lint        # Code quality check
+npm run build:skip-checks  # Build validation
+```
+
+**Before EXEC→PLAN Handoff**:
+```bash
+npm run test:unit   # Full unit suite
+npm run test:e2e    # Full E2E suite
+```
+
+**Benefits**:
+- Early error detection (smaller blast radius)
+- Faster feedback loop
+- Less context consumed by debugging
+- Can proceed with partial completion if blocked
+
+**Testing Decision Matrix**:
+| Scenario | Command | Timeout | When |
+|----------|---------|---------|------|
+| Quick validation | `vitest --no-coverage` | 60s | After each component |
+| Smoke tests | `vitest --grep="US-"` | 90s | Handoff requirement |
+| Full suite | `npm run test:unit` | 120s | PLAN verification |
+
+**Complete Guide**: See `docs/reference/test-timeout-handling.md` (Section: Progressive Testing)
+
+**Evidence**: Pattern from successful SDs - Early testing catches 80% of issues before handoff
+**Impact**: 50% reduction in late-stage debugging time
 
 ## Mandatory Handoff Requirements
 
@@ -1924,6 +2339,6 @@ const securityReview = await callSubAgent('security-architect', schema); // Need
 
 ---
 
-*Generated from Database: 2025-10-11*
+*Generated from Database: 2025-10-12*
 *Protocol Version: vv4.2.0_story_gates*
 *Database-First Architecture: ACTIVE*
