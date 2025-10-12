@@ -84,6 +84,7 @@ node scripts/orchestrate-phase-subagents.js LEAD_PRE_APPROVAL <SD-ID>
 **GATE 2: PLAN PRD Creation** (BLOCKING)
 - [ ] **Schema Validation**: Do tables exist? Any conflicts?
 - [ ] **Route Validation**: Are routes available? Any conflicts?
+- [ ] **User Story Validation**: User stories created and mapped to E2E tests (100% coverage)?
 - [ ] **Test Infrastructure Validation**: Is test environment ready?
 - [ ] **Form Validation**: Are validation attributes needed for forms?
 - [ ] **Build Validation**: Do dependencies exist? Can project build?
@@ -117,6 +118,7 @@ npm run type-check && npm run build:skip-checks
 ---
 
 **GATE 4: PLAN Verification** (BLOCKING)
+- [ ] **User Story Completion**: All user stories delivered and E2E tests passing (100% coverage validation)?
 - [ ] **Handoff Completeness**: All 7 handoff elements present?
 - [ ] **Test Validation**: Unit tests AND E2E tests both passing?
 - [ ] **Documentation Validation**: Generated docs exist?

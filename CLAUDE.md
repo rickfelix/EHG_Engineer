@@ -63,7 +63,7 @@ EHG_Engineer (Management)          EHG App (Implementation)
 
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-10-12 2:58:35 PM
+**Last Generated**: 2025-10-12 3:02:58 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 

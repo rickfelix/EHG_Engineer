@@ -121,9 +121,10 @@ grep -r "function name" /mnt/c/_EHG/ehg/src/lib
 - [ ] **Schema Validation**: Database tables exist or migration planned
 - [ ] **Route Validation**: URLs/paths available and not conflicting
 - [ ] **Component Validation**: Check for existing similar components
+- [ ] **User Story Validation**: User stories created and mapped to E2E tests (100% coverage required)
 - [ ] **Test Infrastructure Validation**: Existing test patterns identified
 
-**Blocks**: PRD creation if critical infrastructure gaps found
+**Blocks**: PRD creation if critical infrastructure gaps found OR user stories missing
 
 ---
 
@@ -140,12 +141,13 @@ grep -r "function name" /mnt/c/_EHG/ehg/src/lib
 
 ### GATE 4: PLAN Verification (AUDIT)
 **MANDATORY before PLAN→LEAD handoff**:
+- [ ] **User Story Completion**: All user stories delivered and E2E tests passing (100% coverage validation)
 - [ ] **Implementation Validation**: Code matches approved PRD scope
 - [ ] **No Scope Creep**: Delivered features = approved features
 - [ ] **Documentation Validation**: All changes documented
 - [ ] **Integration Validation**: New code integrates with existing systems
 
-**Blocks**: PLAN→LEAD handoff if scope mismatches detected
+**Blocks**: PLAN→LEAD handoff if user stories incomplete OR scope mismatches detected
 
 ---
 
@@ -235,6 +237,7 @@ grep -r "function name" /mnt/c/_EHG/ehg/src/lib
 ### PLAN PRD Creation Phase
 - [ ] Invoke validation agent for schema/route validation
 - [ ] Coordinate with database agent for schema checks
+- [ ] Create user stories in PRD and map to E2E tests (100% coverage required)
 - [ ] Verify test infrastructure exists for planned tests
 - [ ] Identify reusable components/patterns
 - [ ] Document validation results in PLAN→EXEC handoff
@@ -246,6 +249,7 @@ grep -r "function name" /mnt/c/_EHG/ehg/src/lib
 - [ ] Review test strategy aligns with existing framework
 
 ### PLAN Verification Phase
+- [ ] Verify all user stories completed and E2E tests passing (100% coverage)
 - [ ] Validate delivered features match PRD scope
 - [ ] Check for scope creep (extra features not in PRD)
 - [ ] Verify documentation completeness

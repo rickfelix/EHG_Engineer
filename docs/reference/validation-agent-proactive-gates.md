@@ -64,6 +64,7 @@ node scripts/systems-analyst-codebase-audit.js <SD-ID>
 - [ ] **Schema Validation**: Database tables exist or migration planned
 - [ ] **Route Validation**: URLs/paths available and not conflicting
 - [ ] **Component Validation**: Check for existing similar components (reuse > rebuild)
+- [ ] **User Story Validation**: User stories created in PRD and mapped to E2E tests (100% coverage required)
 - [ ] **Test Infrastructure Validation**: Existing test patterns identified
 
 **Invocation**:
@@ -79,6 +80,7 @@ node lib/sub-agent-executor.js VALIDATION <SD-ID>
 **Blocks When**:
 - Critical schema gaps → Escalate to database agent + LEAD decision
 - Route conflicts detected → Resolve before PRD creation
+- User stories missing or not mapped to E2E tests → Must complete before PRD approval
 - Missing test infrastructure → Create infrastructure SD first
 
 **Success Pattern** (SD-UAT-020):
@@ -130,6 +132,7 @@ find /mnt/c/_EHG/ehg/src/components -name "*ComponentName*"
 **Purpose**: Ensure delivered features match approved scope
 
 **Mandatory Checks**:
+- [ ] **User Story Completion**: All user stories delivered and E2E tests passing (100% coverage validation)
 - [ ] **Implementation Validation**: Code matches approved PRD scope exactly
 - [ ] **No Scope Creep**: Delivered features = approved features (SCOPE LOCK enforcement)
 - [ ] **Documentation Validation**: All changes documented (generated_docs, ADRs)
@@ -146,6 +149,7 @@ node scripts/plan-supervisor-verification.js --prd PRD-ID
 ```
 
 **Blocks When**:
+- User stories incomplete → All user stories must be delivered and E2E tests passing
 - Scope creep detected → Remove extra features OR create new SD for additions
 - Documentation missing → Complete before handoff
 - Integration failures → Fix before claiming completion
