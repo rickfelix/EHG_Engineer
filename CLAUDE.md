@@ -63,7 +63,7 @@ EHG_Engineer (Management)          EHG App (Implementation)
 
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-10-12 2:19:25 PM
+**Last Generated**: 2025-10-12 2:43:47 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -832,38 +832,6 @@ Example:
 - ❌ Subjective over-engineering calls without rubric
 - ❌ Making changes before human approval
 
-## 6-Step SD Evaluation Checklist
-
-**6-Step SD Evaluation Checklist (MANDATORY for LEAD & PLAN)**:
-
-1. Query `strategic_directives_v2` for SD metadata
-2. Query `product_requirements_v2` for existing PRD
-3. **Query `sd_backlog_map` for linked backlog items** ← CRITICAL
-4. Search codebase for existing infrastructure
-5. Identify gaps between backlog requirements and existing code
-6. **Execute QA smoke tests** ← NEW (verify tests run before approval)
-
-**Backlog Review Requirements**: Review backlog_title, item_description, extras.Description_1 for each item
-
-**Complete Checklist**: See `docs/reference/sd-evaluation-checklist.md`
-
-## Enhanced QA Engineering Director v2.0 - Testing-First Edition
-
-**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
-
-**Core Capabilities:**
-1. Professional test case generation from user stories
-2. Pre-test build validation (saves 2-3 hours)
-3. Database migration verification (prevents 1-2 hours debugging)
-4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
-5. Test infrastructure discovery and reuse
-
-**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
-
-**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
-
-**Full Guide**: See `docs/reference/qa-director-guide.md`
-
 ## Quick Reference
 
 ## 📋 QUICK REFERENCE
@@ -1027,6 +995,38 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 "
 ```
 
+## 6-Step SD Evaluation Checklist
+
+**6-Step SD Evaluation Checklist (MANDATORY for LEAD & PLAN)**:
+
+1. Query `strategic_directives_v2` for SD metadata
+2. Query `product_requirements_v2` for existing PRD
+3. **Query `sd_backlog_map` for linked backlog items** ← CRITICAL
+4. Search codebase for existing infrastructure
+5. Identify gaps between backlog requirements and existing code
+6. **Execute QA smoke tests** ← NEW (verify tests run before approval)
+
+**Backlog Review Requirements**: Review backlog_title, item_description, extras.Description_1 for each item
+
+**Complete Checklist**: See `docs/reference/sd-evaluation-checklist.md`
+
+## Enhanced QA Engineering Director v2.0 - Testing-First Edition
+
+**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
+
+**Core Capabilities:**
+1. Professional test case generation from user stories
+2. Pre-test build validation (saves 2-3 hours)
+3. Database migration verification (prevents 1-2 hours debugging)
+4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
+5. Test infrastructure discovery and reuse
+
+**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
+
+**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
+
+**Full Guide**: See `docs/reference/qa-director-guide.md`
+
 ## Quality Validation Examples
 
 **Evidence from Retrospectives**: Thorough validation saves 4-6 hours per SD by catching issues early.
@@ -1169,6 +1169,21 @@ Before creating PLAN→EXEC handoff, PLAN agent MUST verify:
 **Success Pattern** (SD-UAT-003):
 > "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
 
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
+
 ## EXEC Dual Test Requirement
 
 ### ⚠️ MANDATORY: Dual Test Execution
@@ -1223,21 +1238,6 @@ npm run test:e2e
 - **SD-EXPORT-001**: 30-minute gap between marking "complete" and discovering tests weren't run
 - **SD-EVA-MEETING-002**: 67% E2E failure rate revealed only when tests finally executed
 - **Impact**: Testing enforcement prevents claiming "done" without proof
-
-## CI/CD Pipeline Verification
-
-## CI/CD Pipeline Verification (MANDATORY)
-
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
-
-### Verification Process
-
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
-
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## Sub-Agent Auto-Trigger Enforcement (MANDATORY)
 
@@ -2005,6 +2005,278 @@ npm run test:e2e    # Full E2E suite
 
 **Evidence**: Pattern from successful SDs - Early testing catches 80% of issues before handoff
 **Impact**: 50% reduction in late-stage debugging time
+
+## Database Agent Error-Triggered Invocation
+
+## 🚨 Database Agent Error-Triggered Invocation
+
+**Problem**: Agents attempt workarounds when encountering database errors instead of using database agent
+**Solution**: Immediate database agent invocation on ANY database error
+
+### Error Patterns That MUST Trigger Database Agent
+
+**PostgreSQL Errors** (immediate database agent call):
+- `column "X" does not exist` → Database agent (schema validation)
+- `relation "X" does not exist` → Database agent (table validation)
+- `table "X" already exists` → Database agent (migration conflict)
+- `foreign key constraint` errors → Database agent (relationship validation)
+- `permission denied for table` → Database agent (RLS policy issue)
+- `syntax error at or near` (in SQL) → Database agent (SQL validation)
+- `trigger function` errors → Database agent (function schema mismatch)
+- `duplicate key value violates unique constraint` → Database agent (data/schema issue)
+
+**Supabase-Specific Errors**:
+- RLS policy failures → Database agent (security architecture)
+- Connection string issues → Database agent (connection helper)
+- Cross-schema foreign key warnings → Database agent (architecture violation)
+- `row level security` errors → Database agent (policy design)
+
+**Migration Errors**:
+- ANY migration file execution failure → Database agent (don't retry manually)
+- `CREATE TABLE IF NOT EXISTS` silent failures → Database agent (conflict detection)
+- Schema version mismatches → Database agent (version management)
+
+### Error Response Protocol
+
+**When ANY database error occurs**:
+
+❌ **DO NOT**:
+- Attempt manual fixes
+- Try workarounds
+- Modify SQL without validation
+- Skip table/column verification
+- Use trial-and-error debugging
+
+✅ **DO IMMEDIATELY**:
+1. STOP current approach
+2. Document the exact error message
+3. Invoke database agent:
+   ```bash
+   node lib/sub-agent-executor.js DATABASE <SD-ID>
+   ```
+4. Provide error context to database agent
+5. Implement database agent's solution
+
+**Pattern**: Database error detected → Invoke database agent → Wait for diagnosis → Implement solution
+
+**Evidence**: 74 retrospectives analyzed, 3 failure patterns from workaround attempts
+**Impact**: Eliminates technical debt from band-aid solutions, saves 2-4 hours per database issue
+
+## Database Workaround Anti-Patterns (NEVER DO THIS)
+
+## ⛔ Database Workaround Anti-Patterns (NEVER DO THIS)
+
+**Problem**: Common workarounds create technical debt and mask root causes
+**Solution**: Block these patterns, use database agent instead
+
+### Anti-Pattern Catalog
+
+**❌ Anti-Pattern 1: Table Rename Workarounds**
+```sql
+-- WRONG: Renaming table to avoid conflict
+CREATE TABLE webhook_events_new ...
+
+-- RIGHT: Use database agent to diagnose why table exists
+node lib/sub-agent-executor.js DATABASE <SD-ID>
+```
+
+**❌ Anti-Pattern 2: Column Existence Guards**
+```sql
+-- WRONG: Adding columns conditionally without knowing schema
+ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...
+
+-- RIGHT: Database agent validates schema FIRST
+```
+
+**❌ Anti-Pattern 3: RLS Policy Bypassing**
+```typescript
+// WRONG: Using service role key to bypass RLS
+const supabase = createClient(url, SERVICE_ROLE_KEY)
+
+// RIGHT: Database agent designs proper RLS policies
+```
+
+**❌ Anti-Pattern 4: Manual SQL Trial-and-Error**
+```bash
+# WRONG: Trying different SQL variations manually
+psql -c "CREATE TABLE ..." # fails
+psql -c "CREATE TABLE IF NOT EXISTS ..." # fails
+psql -c "DROP TABLE ... CASCADE; CREATE TABLE ..." # dangerous
+
+# RIGHT: Database agent analyzes schema state FIRST
+```
+
+**❌ Anti-Pattern 5: Skipping Migration Validation**
+```javascript
+// WRONG: Executing migration without validation
+await executeMigration(sql) // Hope it works
+
+// RIGHT: Database agent validates migration safety
+```
+
+**❌ Anti-Pattern 6: Connection String Trial-and-Error**
+```javascript
+// WRONG: Trying different regions/ports/SSL configs
+postgresql://postgres.PROJECT:PASSWORD@aws-0... // fails
+postgresql://postgres.PROJECT:PASSWORD@aws-1... // try this?
+
+// RIGHT: Database agent provides correct connection pattern
+// Uses: scripts/lib/supabase-connection.js
+```
+
+**❌ Anti-Pattern 7: Ignoring Schema Conflicts**
+```javascript
+// WRONG: Proceeding despite "table exists" warnings
+// "It says it already exists, let me just use it"
+
+// RIGHT: Database agent investigates conflict and validates schema match
+```
+
+### Detection Rules
+
+**BLOCKED PATTERNS** (must use database agent instead):
+- Renaming tables to avoid conflicts
+- Adding IF NOT EXISTS without schema knowledge
+- Using SERVICE_ROLE_KEY to bypass RLS
+- Trial-and-error with connection strings
+- Multiple psql attempts without diagnosis
+- Modifying migrations after first failure
+- Proceeding with "table exists" warnings without validation
+
+**Evidence**: SD-AGENT-ADMIN-003 (schema mismatch), SD-1A (multiple schema issues), SD-041C (table conflict)
+**Impact**: Prevents 100% of workaround-related technical debt
+
+## Database Agent First-Responder Checklist
+
+## ✅ Database Agent First-Responder Checklist
+
+**Problem**: Database work attempted without validation, leading to errors
+**Solution**: Proactive database agent invocation BEFORE attempting database work
+
+### BEFORE Attempting ANY Database Work
+
+**Pre-Database-Work Checklist** (MANDATORY):
+
+**Before PLANNING database work**:
+- [ ] Invoke database agent for schema review
+- [ ] Verify tables mentioned in PRD exist
+- [ ] Check for naming conflicts (existing tables)
+- [ ] Validate RLS policy requirements
+- [ ] Confirm correct database target (EHG vs EHG_Engineer)
+
+**Before EXECUTING database migrations**:
+- [ ] Database agent validated migration file
+- [ ] Schema conflicts identified and resolved
+- [ ] Connection helper pattern confirmed (`scripts/lib/supabase-connection.js`)
+- [ ] Rollback plan documented
+- [ ] Test environment validated
+
+**Before WRITING database queries**:
+- [ ] Database agent confirmed table schema
+- [ ] Column names verified (not assumed)
+- [ ] RLS policies understood
+- [ ] Query performance considerations reviewed
+
+**When in doubt**: ALWAYS invoke database agent FIRST
+
+### Integration Points
+
+**PLAN Phase (PRD Creation)**:
+```markdown
+## PLAN Pre-EXEC Checklist (ENHANCED)
+
+### Database Dependencies ✅
+- [ ] **FIRST**: Invoke database agent for schema validation
+- [ ] Identify all data dependencies in PRD
+- [ ] Verify tables/columns exist OR create migration plan
+- [ ] Document database agent findings in PLAN→EXEC handoff
+- [ ] If ANY issues found: Escalate to LEAD with database agent report
+```
+
+**EXEC Phase (Implementation)**:
+```markdown
+## EXEC Pre-Implementation Checklist (NEW)
+
+### Database Operations ✅
+- [ ] If SD involves database work: Database agent invoked? YES/NO
+- [ ] Schema validation complete: YES/NO
+- [ ] Migration safety confirmed: YES/NO
+- [ ] Connection pattern verified: YES/NO
+- [ ] RLS policies designed: YES/NO (if needed)
+```
+
+**Success Pattern Examples**:
+- SD-041C: Database agent identified table conflict early, proper rename implemented
+- SD-BACKEND-002C: Database agent provided migration pattern, 45-minute execution success
+- SD-AGENT-ADMIN-003: Database agent caught trigger function schema mismatch before deployment
+
+**Evidence**: 12 success patterns from proactive database agent usage
+**Impact**: Zero schema conflicts, 100% migration success rate when database agent used first
+
+## Database Agent Integration Requirements
+
+## 🔧 Database Agent Integration Requirements
+
+**Problem**: Database agent treated as last resort instead of first responder
+**Solution**: Mandatory integration at key workflow checkpoints
+
+### Mandatory Invocation Points
+
+**LEAD Pre-Approval Phase**:
+- IF SD mentions: database, migration, schema, table, RLS, SQL, Postgres
+- THEN: Database agent included in parallel sub-agent execution
+- ```bash
+  node lib/sub-agent-executor.js DATABASE <SD-ID>
+  ```
+
+**PLAN PRD Creation Phase**:
+- Database agent runs FIRST for any SD with data dependencies
+- Validates schema before creating PRD
+- Documents table existence, RLS requirements, migration needs
+- BLOCKS PRD creation if critical database issues found
+
+**EXEC Implementation Phase**:
+- Database agent validates schema BEFORE implementation starts
+- Consulted for ANY database error encountered
+- Provides migration patterns and connection helpers
+- Reviews database changes before commit
+
+**PLAN Verification Phase**:
+- Database agent verifies migrations executed correctly
+- Validates schema matches documentation
+- Confirms RLS policies working as designed
+
+### Behavior Change Summary
+
+**Before (Anti-Pattern)**:
+1. Agent encounters database error
+2. Agent tries manual fix / workaround
+3. Fix fails or creates technical debt
+4. User intervenes: "Use database agent!"
+5. Database agent called
+6. Proper solution found (finally)
+
+**After (First-Responder Pattern)**:
+1. Agent encounters database task OR database error
+2. Agent IMMEDIATELY invokes database agent
+3. Database agent diagnoses root cause
+4. Proper solution implemented (first try)
+5. No workarounds, no technical debt
+
+### Success Metrics
+
+- **Zero workaround attempts** when database errors occur
+- **100% database agent usage** for migration work
+- **90% reduction** in user reminders to use database agent
+- **Zero schema mismatch errors** through proactive validation
+- **Faster database operations** (no trial-and-error)
+
+### Key Principle
+
+**DATABASE-FIRST CULTURE**: Database agent is a FIRST RESPONDER, not a LAST RESORT.
+
+**Evidence**: User feedback: "I constantly have to remind that we should use the database subagent"
+**Impact**: Eliminates need for manual reminders, establishes proactive database expertise
 
 ## Mandatory Handoff Requirements
 
