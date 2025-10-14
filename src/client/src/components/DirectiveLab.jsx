@@ -45,7 +45,6 @@ import GroupCreationModal from './GroupCreationModal';
 import ImpactAnalysisPanel from './ImpactAnalysisPanel';
 import { PolicyBadgeSet, generatePolicyBadges } from './ui/PolicyBadge';
 import { ToastProvider, useToast } from './ui/Toast';
-import DarkModeToggle from './DarkModeToggle';
 
 // Import design tokens
 import './ui/design-tokens.css';
@@ -1922,7 +1921,6 @@ const DirectiveLab = () => {
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-3">
-              <DarkModeToggle />
               <h1 className="text-lg font-bold text-gray-900 dark:text-white">Directive Lab</h1>
               {/* Mode Toggle */}
               <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
