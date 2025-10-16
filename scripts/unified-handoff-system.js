@@ -27,6 +27,7 @@ import LeadToPlanVerifier from './verify-handoff-lead-to-plan.js';
 import PlanToExecVerifier from './verify-handoff-plan-to-exec.js';
 import { orchestrate } from './orchestrate-phase-subagents.js';
 import { validateBMADForPlanToExec, validateBMADForExecToPlan, validateRiskAssessment } from './modules/bmad-validation.js';
+import { autoValidateUserStories } from './auto-validate-user-stories-on-exec-complete.js';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
@@ -599,10 +600,27 @@ class UnifiedHandoffSystem {
       validation.issues.push(`Deliverables check failed: ${deliverablesError.message}`);
     } else if (deliverables && deliverables.length > 0) {
       validation.score += 30;
+
+      // AUTO-VALIDATION: Validate user stories when deliverables complete
+      // Prevention mechanism for SD-TEST-MOCK-001 root cause
+      console.log('🔍 Auto-validating user stories...');
+      const userStoryValidation = await autoValidateUserStories(sdId);
+
+      if (userStoryValidation.validated) {
+        console.log(`✅ User stories validated: ${userStoryValidation.count} stories (${userStoryValidation.message})`);
+      } else {
+        console.log(`⚠️  User story validation: ${userStoryValidation.message || 'Validation incomplete'}`);
+        if (userStoryValidation.error) {
+          console.warn(`   Error: ${userStoryValidation.error}`);
+        }
+      }
+
+      // Store validation results in handoff metadata for audit trail
+      validation.user_story_validation = userStoryValidation;
     } else {
       validation.issues.push('No completed deliverables found');
     }
-    
+
     // Check implementation status
     if (prd.status === 'implemented' || prd.status === 'completed') {
       validation.score += 20;
