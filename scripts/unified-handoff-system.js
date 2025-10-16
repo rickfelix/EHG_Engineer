@@ -3,7 +3,7 @@
 /**
  * Unified LEO Protocol Handoff System
  * Comprehensive handoff management leveraging database templates
- * 
+ *
  * FEATURES:
  * - Unified interface for all handoff types (LEAD→PLAN, PLAN→EXEC, EXEC→PLAN)
  * - Database-driven execution with full audit trail
@@ -11,12 +11,22 @@
  * - Template-based validation with custom rules
  * - Rejection workflow with improvement guidance
  * - Dashboard integration for real-time monitoring
+ *
+ * BMAD ENHANCEMENTS:
+ * - Risk assessment validation (checks risk_assessments table)
+ * - User story context engineering validation (PLAN→EXEC gate)
+ * - Checkpoint plan validation (for SDs with >8 stories)
+ * - Test plan validation (EXEC→PLAN gate)
+ * - User story → E2E test mapping validation (100% coverage requirement)
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 import HandoffValidator from './handoff-validator.js';
 import LeadToPlanVerifier from './verify-handoff-lead-to-plan.js';
 import PlanToExecVerifier from './verify-handoff-plan-to-exec.js';
+import { orchestrate } from './orchestrate-phase-subagents.js';
+import { validateBMADForPlanToExec, validateBMADForExecToPlan, validateRiskAssessment } from './modules/bmad-validation.js';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
@@ -75,7 +85,36 @@ class UnifiedHandoffSystem {
           break;
 
         case 'PLAN-to-EXEC':
-          result = await this.planToExecVerifier.verifyHandoff(sdId, options.prdId);
+          // BMAD Enhancement: Validate PLAN→EXEC requirements before executing handoff
+          const bmadPlanToExec = await validateBMADForPlanToExec(sdId, this.supabase);
+
+          if (!bmadPlanToExec.passed) {
+            console.error('\n❌ BMAD VALIDATION FAILED (PLAN→EXEC)');
+            console.error(`   Score: ${bmadPlanToExec.score}/${bmadPlanToExec.max_score}`);
+            console.error(`   Issues: ${bmadPlanToExec.issues.join(', ')}`);
+
+            result = {
+              success: false,
+              rejected: true,
+              reasonCode: 'BMAD_VALIDATION_FAILED',
+              message: `BMAD validation failed - ${bmadPlanToExec.issues.join('; ')}`,
+              details: bmadPlanToExec
+            };
+          } else {
+            if (bmadPlanToExec.warnings.length > 0) {
+              console.log('\n⚠️  BMAD VALIDATION WARNINGS:');
+              bmadPlanToExec.warnings.forEach(w => console.log(`   • ${w}`));
+            }
+            console.log('✅ BMAD validation passed (PLAN→EXEC)\n');
+
+            // Proceed with standard PLAN-to-EXEC verification
+            result = await this.planToExecVerifier.verifyHandoff(sdId, options.prdId);
+
+            // Merge BMAD details into result
+            if (result.success) {
+              result.bmad_validation = bmadPlanToExec.details;
+            }
+          }
           break;
 
         case 'EXEC-to-PLAN':
@@ -141,19 +180,75 @@ class UnifiedHandoffSystem {
   async executeExecToPlan(sdId, options) {
     console.log('🔍 EXEC → PLAN HANDOFF EXECUTION');
     console.log('-'.repeat(30));
-    
+
     try {
+      // SUB-AGENT ORCHESTRATION: Run required sub-agents for PLAN_VERIFY phase
+      console.log('\n🤖 Step 0: Sub-Agent Orchestration (PLAN_VERIFY phase)');
+      console.log('-'.repeat(50));
+
+      const orchestrationResult = await orchestrate('PLAN_VERIFY', sdId);
+
+      if (!orchestrationResult.can_proceed) {
+        console.error('\n❌ SUB-AGENT VERIFICATION FAILED');
+        console.error(`   Verdict: ${orchestrationResult.verdict}`);
+        console.error(`   Message: ${orchestrationResult.message}`);
+        console.error(`   Failed agents: ${orchestrationResult.failed}`);
+        console.error(`   Blocked agents: ${orchestrationResult.blocked}`);
+        console.error('');
+        console.error('   REMEDIATION: Fix sub-agent failures before creating EXEC→PLAN handoff');
+
+        return {
+          success: false,
+          rejected: true,
+          reasonCode: 'SUB_AGENT_VERIFICATION_FAILED',
+          message: `${orchestrationResult.message} - Sub-agent verification must pass before handoff`,
+          details: orchestrationResult,
+          remediation: 'Review sub-agent results and fix issues, then retry handoff'
+        };
+      }
+
+      console.log(`✅ Sub-agent orchestration passed: ${orchestrationResult.passed}/${orchestrationResult.total_agents} agents`);
+      console.log('-'.repeat(50));
+
+      // BMAD Enhancement: Validate EXEC→PLAN requirements
+      const bmadValidation = await validateBMADForExecToPlan(sdId, this.supabase);
+
+      if (!bmadValidation.passed) {
+        console.error('\n❌ BMAD VALIDATION FAILED');
+        console.error(`   Score: ${bmadValidation.score}/${bmadValidation.max_score}`);
+        console.error(`   Issues: ${bmadValidation.issues.join(', ')}`);
+        console.error('');
+        console.error('   REMEDIATION: Fix BMAD validation issues before creating EXEC→PLAN handoff');
+
+        return {
+          success: false,
+          rejected: true,
+          reasonCode: 'BMAD_VALIDATION_FAILED',
+          message: `BMAD validation failed - ${bmadValidation.issues.join('; ')}`,
+          details: bmadValidation,
+          remediation: bmadValidation.details
+        };
+      }
+
+      if (bmadValidation.warnings.length > 0) {
+        console.log('\n⚠️  BMAD VALIDATION WARNINGS:');
+        bmadValidation.warnings.forEach(w => console.log(`   • ${w}`));
+      }
+
+      console.log('\n✅ BMAD validation passed');
+      console.log('-'.repeat(50));
+
       // Load Strategic Directive and PRD
       const { data: sd } = await this.supabase
         .from('strategic_directives_v2')
         .select('*')
         .eq('id', sdId)
         .single();
-        
+
       if (!sd) {
         throw new Error(`Strategic Directive not found: ${sdId}`);
       }
-      
+
       // Use new sd_uuid column (post-migration) with fallback to uuid_id lookup
       const sdUuid = sd.uuid_id || sd.id;
 
@@ -170,11 +265,11 @@ class UnifiedHandoffSystem {
           message: 'No PRD found - cannot verify EXEC work'
         };
       }
-      
+
       const prd = prds[0];
-      
+
       // Check if EXEC work is complete
-      const execValidation = this.validateExecWork(prd);
+      const execValidation = await this.validateExecWork(prd, sdId);
 
       console.log('📊 EXEC Validation Results:');
       console.log('   Score:', execValidation.score);
@@ -284,6 +379,36 @@ class UnifiedHandoffSystem {
     console.log('-'.repeat(30));
 
     try {
+      // SUB-AGENT ORCHESTRATION: Run required sub-agents for LEAD_FINAL phase
+      console.log('\n🤖 Step 0: Sub-Agent Orchestration (LEAD_FINAL phase)');
+      console.log('-'.repeat(50));
+
+      const orchestrationResult = await orchestrate('LEAD_FINAL', sdId);
+
+      if (!orchestrationResult.can_proceed) {
+        console.error('\n❌ SUB-AGENT VERIFICATION FAILED');
+        console.error(`   Verdict: ${orchestrationResult.verdict}`);
+        console.error(`   Message: ${orchestrationResult.message}`);
+        console.error('');
+        console.error('   CRITICAL: Retrospective must be generated before LEAD final approval');
+        console.error('');
+        console.error('   REMEDIATION:');
+        console.error(`   node scripts/generate-comprehensive-retrospective.js ${sdId}`);
+
+        return {
+          success: false,
+          rejected: true,
+          reasonCode: 'SUB_AGENT_VERIFICATION_FAILED',
+          message: `${orchestrationResult.message} - Sub-agent verification must pass before handoff`,
+          details: orchestrationResult,
+          remediation: `node scripts/generate-comprehensive-retrospective.js ${sdId}`
+        };
+      }
+
+      console.log(`✅ Sub-agent orchestration passed: ${orchestrationResult.passed}/${orchestrationResult.total_agents} agents`);
+      console.log('-'.repeat(50));
+
+
       // Load Strategic Directive and PRD
       const { data: sd } = await this.supabase
         .from('strategic_directives_v2')
@@ -440,7 +565,7 @@ class UnifiedHandoffSystem {
   /**
    * Validate EXEC work completeness
    */
-  validateExecWork(prd) {
+  async validateExecWork(prd, sdId) {
     const validation = {
       complete: false,
       score: 0,
@@ -463,12 +588,19 @@ class UnifiedHandoffSystem {
       validation.issues.push('No EXEC checklist found');
     }
     
-    // Check deliverables (in deliverables field OR metadata.exec_deliverables)
-    const deliverables = prd.deliverables || prd.metadata?.exec_deliverables;
-    if (deliverables && deliverables.length > 0) {
+    // Check deliverables in sd_scope_deliverables table
+    const { data: deliverables, error: deliverablesError } = await this.supabase
+      .from('sd_scope_deliverables')
+      .select('id')
+      .eq('sd_id', sdId)
+      .eq('completion_status', 'completed');
+
+    if (deliverablesError) {
+      validation.issues.push(`Deliverables check failed: ${deliverablesError.message}`);
+    } else if (deliverables && deliverables.length > 0) {
       validation.score += 30;
     } else {
-      validation.issues.push('No deliverables specified');
+      validation.issues.push('No completed deliverables found');
     }
     
     // Check implementation status
@@ -552,8 +684,9 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
    * Record successful handoff execution
    */
   async recordSuccessfulHandoff(handoffType, sdId, result, template) {
-    const executionId = `SUCCESS-${handoffType.replace('/', '')}-${sdId}-${Date.now()}`;
-    
+    // Generate proper UUID instead of TEXT ID
+    const executionId = randomUUID();
+
     const execution = {
       id: executionId,
       template_id: template?.id,
@@ -563,7 +696,7 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
       prd_id: result.prdId,
       handoff_type: handoffType,
       status: 'accepted',
-      
+
       validation_score: result.qualityScore || 100,
       validation_passed: true,
       validation_details: {
@@ -571,25 +704,33 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
         verified_at: new Date().toISOString(),
         verifier: 'unified-handoff-system.js'
       },
-      
+
       completed_at: new Date().toISOString(),
+      accepted_at: new Date().toISOString(),
       created_by: 'UNIFIED-HANDOFF-SYSTEM'
     };
-    
+
     try {
-      await this.supabase.from('leo_handoff_executions').insert(execution);
+      const { data, error } = await this.supabase.from('leo_handoff_executions').insert(execution).select();
+      if (error) {
+        console.error('❌ Failed to store handoff execution:', error.message);
+        console.error('   Details:', error);
+        throw error; // Re-throw to surface the issue
+      }
       console.log(`📝 Success recorded: ${executionId}`);
     } catch (error) {
-      console.warn('⚠️  Could not store execution:', error.message);
+      console.error('⚠️  Critical: Could not store execution:', error.message);
+      throw error; // Don't silently fail
     }
   }
   
   /**
-   * Record failed handoff execution  
+   * Record failed handoff execution
    */
   async recordFailedHandoff(handoffType, sdId, result, template) {
-    const executionId = `FAILED-${handoffType.replace('/', '')}-${sdId}-${Date.now()}`;
-    
+    // Generate proper UUID instead of TEXT ID
+    const executionId = randomUUID();
+
     const execution = {
       id: executionId,
       template_id: template?.id,
@@ -598,7 +739,7 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
       sd_id: sdId,
       handoff_type: handoffType,
       status: 'rejected',
-      
+
       validation_score: result.actualScore || 0,
       validation_passed: false,
       validation_details: {
@@ -607,16 +748,22 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
         reason: result.reasonCode,
         message: result.message
       },
-      
+
+      rejection_reason: result.message,
       completed_at: new Date().toISOString(),
       created_by: 'UNIFIED-HANDOFF-SYSTEM'
     };
-    
+
     try {
-      await this.supabase.from('leo_handoff_executions').insert(execution);
+      const { data, error } = await this.supabase.from('leo_handoff_executions').insert(execution).select();
+      if (error) {
+        console.error('❌ Failed to store handoff rejection:', error.message);
+        throw error;
+      }
       console.log(`📝 Failure recorded: ${executionId}`);
     } catch (error) {
-      console.warn('⚠️  Could not store execution:', error.message);
+      console.error('⚠️  Critical: Could not store execution:', error.message);
+      // Don't throw here - rejection recording is less critical
     }
   }
   
@@ -624,29 +771,33 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
    * Record system error
    */
   async recordSystemError(handoffType, sdId, errorMessage) {
-    const executionId = `ERROR-${handoffType.replace('/', '')}-${sdId}-${Date.now()}`;
-    
+    // Generate proper UUID instead of TEXT ID
+    const executionId = randomUUID();
+
     const execution = {
       id: executionId,
       from_agent: handoffType.split('-')[0],
-      to_agent: handoffType.split('-')[2], 
+      to_agent: handoffType.split('-')[2],
       sd_id: sdId,
       handoff_type: handoffType,
       status: 'failed',
-      
+
       validation_score: 0,
       validation_passed: false,
       validation_details: {
         system_error: errorMessage,
         failed_at: new Date().toISOString()
       },
-      
+
       completed_at: new Date().toISOString(),
       created_by: 'UNIFIED-HANDOFF-SYSTEM'
     };
-    
+
     try {
-      await this.supabase.from('leo_handoff_executions').insert(execution);
+      const { data, error} = await this.supabase.from('leo_handoff_executions').insert(execution).select();
+      if (error) {
+        console.error('❌ Failed to store system error:', error.message);
+      }
     } catch (error) {
       console.warn('⚠️  Could not store error:', error.message);
     }
