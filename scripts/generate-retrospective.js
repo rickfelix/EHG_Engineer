@@ -68,6 +68,7 @@ async function generateRetrospective(sdId) {
   // Generate retrospective
   const retrospective = {
     sd_id: sdId,
+    target_application: sd.target_application || 'APP001',
     project_name: sd.title,
     retro_type: 'SD_COMPLETION',
     title: `${sd.sd_key} Retrospective`,
