@@ -54,7 +54,7 @@ async function generateRetrospective(sdId) {
 
   // Get PRD for context
   const { data: prd } = await supabase
-    .from('prds')
+    .from('product_requirements_v2')
     .select('*')
     .eq('strategic_directive_id', sdId)
     .single();
@@ -76,23 +76,23 @@ async function generateRetrospective(sdId) {
     agents_involved: ['LEAD', 'PLAN', 'EXEC'],
     sub_agents_involved: [],
     human_participants: ['LEAD'],
-    what_went_well: JSON.stringify([
+    what_went_well: [
       'SD completed successfully',
       'Protocol followed',
       `Progress: ${sd.progress}%`
-    ]),
-    what_needs_improvement: JSON.stringify([
+    ],
+    what_needs_improvement: [
       'Automated retrospective (template-based)',
       'Add more detailed analysis'
-    ]),
-    action_items: JSON.stringify([
+    ],
+    action_items: [
       'Review automated retrospective quality',
       'Enhance with AI analysis'
-    ]),
-    key_learnings: JSON.stringify([
+    ],
+    key_learnings: [
       'Automation system working',
       `SD ${sd.sd_key} completed`
-    ]),
+    ],
     quality_score: sd.progress || 80,
     team_satisfaction: 4,
     business_value_delivered: sd.priority >= 70 ? 'HIGH' : 'MEDIUM',
