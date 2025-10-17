@@ -54,7 +54,7 @@ const PHASE_SUBAGENT_MAP = {
   LEAD_PRE_APPROVAL: ['VALIDATION', 'DATABASE', 'SECURITY', 'DESIGN', 'RISK'],
   PLAN_PRD: ['DATABASE', 'STORIES', 'RISK'],
   EXEC_IMPL: [], // EXEC does the work, no sub-agents
-  PLAN_VERIFY: ['TESTING', 'GITHUB', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN'],
+  PLAN_VERIFY: ['TESTING', 'GITHUB', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'API', 'DEPENDENCY'],
   LEAD_FINAL: ['RETRO']
 };
 
@@ -108,9 +108,9 @@ function isSubAgentRequired(subAgent, sd, phase) {
 
   // Always required sub-agents per phase (MANDATORY regardless of content)
   const alwaysRequired = {
-    LEAD_PRE_APPROVAL: ['RISK'], // BMAD Enhancement: Risk assessment for all SDs
-    PLAN_VERIFY: ['TESTING', 'GITHUB'],
-    LEAD_FINAL: ['RETRO']
+    LEAD_PRE_APPROVAL: ['RISK', 'VALIDATION', 'SECURITY'], // Risk assessment, duplicate check, security review for ALL SDs
+    PLAN_VERIFY: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES'], // Tests, CI/CD, documentation, story verification for ALL implementations
+    LEAD_FINAL: ['RETRO'] // Retrospective for continuous improvement
   };
 
   if (alwaysRequired[phase]?.includes(code)) {
