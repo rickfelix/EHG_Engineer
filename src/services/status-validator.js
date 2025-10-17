@@ -8,12 +8,13 @@ class StatusValidator {
     // Define valid statuses for each document type
     this.validStatuses = {
       SD: {
-        all: ['draft', 'active', 'in_progress', 'on_hold', 'completed', 'complete', 'approved', 'cancelled', 'deferred'],
+        all: ['draft', 'active', 'in_progress', 'on_hold', 'completed', 'complete', 'approved', 'pending_approval', 'cancelled', 'deferred'],
         preferred: ['draft', 'active', 'on_hold', 'cancelled', 'completed', 'deferred'],
         deprecated: {
           'in_progress': 'active',
           'complete': 'completed',
-          'approved': 'completed'
+          'approved': 'completed',
+          'pending_approval': 'active'  // Added: pending_approval is a PRD status, normalize to active for SDs
         }
       },
       PRD: {

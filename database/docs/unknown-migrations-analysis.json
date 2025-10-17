@@ -1,0 +1,581 @@
+{
+  "generated": "2025-10-05T16:43:41.080Z",
+  "total_files": 33,
+  "categories": {
+    "EHG_ENGINEER": 2,
+    "EHG_APP": 0,
+    "MIXED": 4,
+    "UTILITY": 27,
+    "UNKNOWN": 0
+  },
+  "files": {
+    "EHG_ENGINEER": [
+      {
+        "filename": "20250830084714_schema_vision_qa_schema.sql",
+        "category": "EHG_ENGINEER",
+        "confidence": "LOW",
+        "engineer_score": 1,
+        "app_score": 0,
+        "tables": [
+          "IF"
+        ],
+        "operations": [
+          "CREATE TABLE",
+          "CREATE INDEX"
+        ],
+        "engineer_keywords": [
+          "vision_qa"
+        ],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250922112147_schema_plan_supervisor_schema.sql",
+        "category": "EHG_ENGINEER",
+        "confidence": "LOW",
+        "engineer_score": 1,
+        "app_score": 0,
+        "tables": [
+          "leo_agents",
+          "IF",
+          "plan_conflict_rules",
+          "leo_sub_agent_triggers",
+          "leo_protocol_changes"
+        ],
+        "operations": [
+          "CREATE TABLE",
+          "ALTER TABLE",
+          "CREATE INDEX",
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [
+          "plan_supervisor"
+        ],
+        "app_keywords": []
+      }
+    ],
+    "EHG_APP": [],
+    "MIXED": [
+      {
+        "filename": "20250922112148_schema_2025-09-emb-message-bus.sql",
+        "category": "MIXED",
+        "confidence": "MEDIUM",
+        "engineer_score": 1,
+        "app_score": 1,
+        "tables": [
+          "IF",
+          "prds_v2",
+          "backlog_epics_v2",
+          "backlog_stories_v2",
+          "backlog_tasks_v2",
+          "strategic_directives_v2"
+        ],
+        "operations": [
+          "CREATE TABLE",
+          "ALTER TABLE",
+          "RLS",
+          "CREATE TRIGGER",
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [
+          "strategic_directives"
+        ],
+        "app_keywords": [
+          "ventures"
+        ]
+      },
+      {
+        "filename": "20250922185519_schema_compatibility_check.sql",
+        "category": "MIXED",
+        "confidence": "MEDIUM",
+        "engineer_score": 1,
+        "app_score": 1,
+        "tables": [
+          "IF",
+          "_compat_report"
+        ],
+        "operations": [
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [
+          "strategic_directives"
+        ],
+        "app_keywords": [
+          "ventures"
+        ]
+      },
+      {
+        "filename": "20250922185722_schema_vh-bridge-tables.sql",
+        "category": "MIXED",
+        "confidence": "MEDIUM",
+        "engineer_score": 1,
+        "app_score": 1,
+        "tables": [
+          "IF",
+          "vh"
+        ],
+        "operations": [
+          "CREATE TABLE",
+          "CREATE TRIGGER",
+          "CREATE INDEX",
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [
+          "strategic_directives"
+        ],
+        "app_keywords": [
+          "ventures"
+        ]
+      },
+      {
+        "filename": "20250927175653_schema_uat-tracking-schema.sql",
+        "category": "MIXED",
+        "confidence": "MEDIUM",
+        "engineer_score": 1,
+        "app_score": 1,
+        "tables": [
+          "IF",
+          "uat_test_suites"
+        ],
+        "operations": [
+          "CREATE TABLE",
+          "CREATE TRIGGER",
+          "CREATE INDEX",
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [
+          "uat_test_cases"
+        ],
+        "app_keywords": [
+          "ventures"
+        ]
+      }
+    ],
+    "UTILITY": [
+      {
+        "filename": "20250903080304_.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "public"
+        ],
+        "operations": [
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250903080304_alter_.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "user_company_access"
+        ],
+        "operations": [
+          "ALTER TABLE",
+          "RLS",
+          "CREATE INDEX"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250903080304_schema_.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "public"
+        ],
+        "operations": [
+          "CREATE TABLE",
+          "ALTER TABLE",
+          "RLS",
+          "CREATE FUNCTION",
+          "CREATE TRIGGER",
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250922112147_schema_context_learning_schema.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "IF",
+          "learning_configurations"
+        ],
+        "operations": [
+          "CREATE TABLE",
+          "CREATE TRIGGER",
+          "CREATE INDEX",
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250922112148_alter_rollback-2025-01-17-user-stories.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "sd_backlog_map",
+          "IF"
+        ],
+        "operations": [
+          "ALTER TABLE"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250922112148_ingest_governance_views.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [],
+        "operations": [],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250922112148_schema_create_learning_tables.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "IF",
+          "public"
+        ],
+        "operations": [
+          "CREATE TABLE",
+          "ALTER TABLE",
+          "RLS",
+          "CREATE INDEX",
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250922112148_schema_ui_validation_schema.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "IF",
+          "leo_validation_rules",
+          "ui_validation_checkpoints"
+        ],
+        "operations": [
+          "CREATE TABLE",
+          "CREATE TRIGGER",
+          "CREATE INDEX",
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250922112148_verify-2025-01-17-user-stories.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [],
+        "operations": [],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250922112152_schema_supervisor-migration-clipboard.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "IF",
+          "plan_conflict_rules"
+        ],
+        "operations": [
+          "CREATE TABLE",
+          "CREATE INDEX",
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250922112153_schema_ui_validation_schema.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "IF",
+          "leo_validation_rules",
+          "ui_validation_checkpoints"
+        ],
+        "operations": [
+          "CREATE TABLE",
+          "CREATE TRIGGER",
+          "CREATE INDEX",
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250926140217_schema_leo_commit_rules.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "IF",
+          "leo_commit_types",
+          "leo_commit_rules",
+          "leo_commit_templates"
+        ],
+        "operations": [
+          "CREATE TABLE",
+          "CREATE TRIGGER",
+          "CREATE INDEX",
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250927084714_schema_sub_agent_tracking.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "IF",
+          "leo_hook_feedback"
+        ],
+        "operations": [
+          "CREATE TABLE",
+          "ALTER TABLE",
+          "CREATE INDEX"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250927204832_schema_uat-structured-reports.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "IF",
+          "uat_reports",
+          "uat_report_recommendations"
+        ],
+        "operations": [
+          "CREATE TABLE",
+          "CREATE INDEX",
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250929104139_verify-uat-data.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [],
+        "operations": [],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250929104248_rls_fix-uat-rls-policies.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [],
+        "operations": [
+          "RLS"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250929111909_alter_uat-active-test-tracking.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "uat_runs",
+          "uat_results"
+        ],
+        "operations": [
+          "ALTER TABLE",
+          "CREATE INDEX",
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250929123745_insert-manual-test-cases.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "uat_cases"
+        ],
+        "operations": [
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250929132950_create-set-active-test-function.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "uat_results"
+        ],
+        "operations": [
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250929140035_delete-manual-uat-tests.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [],
+        "operations": [],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250929140701_rls_allow-uat-cases-insert.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [],
+        "operations": [
+          "RLS"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250929141045_safe-delete-uat-case-function.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [],
+        "operations": [],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20250930175249_create-gate-integrity-view.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [],
+        "operations": [],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20251001083855_alter_add-uat-sort-order.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "uat_cases"
+        ],
+        "operations": [
+          "ALTER TABLE",
+          "CREATE INDEX"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20251004113408_schema_create-test-coverage-policies.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "IF",
+          "test_coverage_policies"
+        ],
+        "operations": [
+          "CREATE TABLE",
+          "CREATE INDEX",
+          "INSERT INTO"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20251004155303_create-rls-auditor-role.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [],
+        "operations": [],
+        "engineer_keywords": [],
+        "app_keywords": []
+      },
+      {
+        "filename": "20251004231128_alter_enhance_sd_testing_status.sql",
+        "category": "UTILITY",
+        "confidence": "LOW",
+        "engineer_score": 0,
+        "app_score": 0,
+        "tables": [
+          "sd_testing_status"
+        ],
+        "operations": [
+          "ALTER TABLE",
+          "CREATE INDEX"
+        ],
+        "engineer_keywords": [],
+        "app_keywords": []
+      }
+    ],
+    "UNKNOWN": []
+  }
+}

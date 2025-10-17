@@ -756,7 +756,7 @@ async function createPRD() {
     console.log('💾 Storing PRD in database (prds table)...\n');
 
     const { data: prd, error } = await supabase
-      .from('prds')
+      .from('product_requirements_v2')
       .insert(prdData)
       .select()
       .single();

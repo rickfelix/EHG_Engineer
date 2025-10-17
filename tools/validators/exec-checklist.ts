@@ -324,7 +324,7 @@ export async function validateEXECChecklist(
     console.log('🔍 Fetching PRD from database...');
     const supabase = getSupabaseClient();
     const { data: prd, error } = await supabase
-      .from('prds')
+      .from('product_requirements_v2')
       .select('target_url, component_name, app_path, port')
       .eq('id', prdId)
       .single();

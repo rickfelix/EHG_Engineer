@@ -1,0 +1,386 @@
+{
+  "generated": "2025-10-05T16:37:07.274Z",
+  "total_migrations": 58,
+  "successful": 58,
+  "failed": 0,
+  "migrations": [
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829000247_866f55bc-62a6-47a1-a999-7f218c37b05b.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "database/migrations/2025-09-22-vh-bridge-tables.sql",
+      "new_path": "archive/migrations/manual_review/20250922185722_schema_vh-bridge-tables.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "database/migrations/uat-tracking-schema.sql",
+      "new_path": "archive/migrations/manual_review/20250927175653_schema_uat-tracking-schema.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "db/migrations/eng/legacy/2025-09-EMB-message-bus.sql",
+      "new_path": "archive/migrations/manual_review/20250922112148_schema_2025-09-emb-message-bus.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "ops/checks/schema_compatibility_check.sql",
+      "new_path": "archive/migrations/manual_review/20250922185519_schema_compatibility_check.sql",
+      "category": null,
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828155709_ae75aaf0-8073-4c0b-9fef-a11540a5b061.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828224304_bc046d64-7758-4f6e-9ab8-66bc85448794.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828234818_c8a501cd-d532-473e-afd6-dee995fa8719.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828234924_43b786fb-8da4-4607-910c-8cb349496e3a.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829100257_b9a6238f-257e-42ff-b8e5-54cec003a197.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829101141_514c5607-05df-4b83-ac5c-496b24cc0a40.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829104435_9a7d0454-907f-4360-bd6e-fc27b19641e9.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_alter_.sql",
+      "category": "alter",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829104539_1c46926f-1a6f-4b5d-83a4-d88555c5e033.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_alter_.sql",
+      "category": "alter",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829104555_307a4dfa-9973-4dfe-99f3-e65d18fd8cb3.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_alter_.sql",
+      "category": "alter",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829105148_68cc66e7-4255-43b6-b483-1a4a930e6842.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829105252_0e17478b-d8df-4f4f-91be-6bbdff61fd31.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829105316_0db63f24-d248-47dc-8995-fc9683d466b9.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829105343_9da73fcb-c8a4-43a6-ba53-9faad6d6bf19.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829110022_231c7d6c-7325-4477-8475-68738894716a.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829110104_4b3cba61-e841-44b0-a3e9-0b9848334dbb.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829110132_caa5f67b-f459-41de-ab2d-ed66fef808ea.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829110149_4a244419-1617-459a-9d0a-c6406c844708.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829110217_8be9f00c-4387-44a6-b6f5-d53d94d504c6.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829110902_1db8ebe7-a651-4724-b999-b6058cf7498f.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829132050_176f7e63-a120-4f8d-b22a-3a86777a84a4.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_.sql",
+      "category": null,
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829132109_0274aaf8-58f6-43ca-88e6-1ea1d5c6eb02.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_.sql",
+      "category": null,
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829141742_aa4b2f60-7830-4ad8-a830-775e52b4e9e5.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829141817_80213681-e522-4478-8a9c-f442460ea19d.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829141852_e48ca6ea-d7bb-43ba-9c32-d75aab06fa4a.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829141937_31b66776-e970-4673-95ee-8abcdba5de19.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829142829_caf34e41-9690-4d00-a8b9-79e9cac19c68.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829151332_b3dab31f-cd24-4df8-a428-f85a255004d4.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829152544_d247b2dc-eb80-4738-af70-078656c1080a.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829165049_4cd87d07-a700-4fd1-bb45-a2ca027bc012.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829181246_16ea8638-0d0d-4e86-85e3-c658ab6be9d0.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829205633_39032358-e8c8-4edb-a15a-84e1b3c4f2dc.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_schema_.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829205749_830a92e7-2b94-4523-9a3b-bcfbeb729714.sql",
+      "new_path": "archive/migrations/manual_review/20250903080304_.sql",
+      "category": null,
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/migrations/add-uat-sort-order.sql",
+      "new_path": "archive/migrations/manual_review/20251001083855_alter_add-uat-sort-order.sql",
+      "category": "alter",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/migrations/allow-uat-cases-insert.sql",
+      "new_path": "archive/migrations/manual_review/20250929140701_rls_allow-uat-cases-insert.sql",
+      "category": "rls",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/migrations/create-gate-integrity-view.sql",
+      "new_path": "archive/migrations/manual_review/20250930175249_create-gate-integrity-view.sql",
+      "category": null,
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/migrations/create-rls-auditor-role.sql",
+      "new_path": "archive/migrations/manual_review/20251004155303_create-rls-auditor-role.sql",
+      "category": null,
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/migrations/create-set-active-test-function.sql",
+      "new_path": "archive/migrations/manual_review/20250929132950_create-set-active-test-function.sql",
+      "category": null,
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/migrations/create-test-coverage-policies.sql",
+      "new_path": "archive/migrations/manual_review/20251004113408_schema_create-test-coverage-policies.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/migrations/delete-manual-uat-tests.sql",
+      "new_path": "archive/migrations/manual_review/20250929140035_delete-manual-uat-tests.sql",
+      "category": null,
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/migrations/fix-uat-rls-policies.sql",
+      "new_path": "archive/migrations/manual_review/20250929104248_rls_fix-uat-rls-policies.sql",
+      "category": "rls",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/migrations/insert-manual-test-cases.sql",
+      "new_path": "archive/migrations/manual_review/20250929123745_insert-manual-test-cases.sql",
+      "category": null,
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/migrations/safe-delete-uat-case-function.sql",
+      "new_path": "archive/migrations/manual_review/20250929141045_safe-delete-uat-case-function.sql",
+      "category": null,
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/migrations/uat-active-test-tracking.sql",
+      "new_path": "archive/migrations/manual_review/20250929111909_alter_uat-active-test-tracking.sql",
+      "category": "alter",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/migrations/uat-structured-reports.sql",
+      "new_path": "archive/migrations/manual_review/20250927204832_schema_uat-structured-reports.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/migrations/verify-uat-data.sql",
+      "new_path": "archive/migrations/manual_review/20250929104139_verify-uat-data.sql",
+      "category": null,
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/schema/003_vision_qa_schema.sql",
+      "new_path": "archive/migrations/manual_review/20250830084714_schema_vision_qa_schema.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/schema/009_context_learning_schema.sql",
+      "new_path": "archive/migrations/manual_review/20250922112147_schema_context_learning_schema.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/schema/010_plan_supervisor_schema.sql",
+      "new_path": "archive/migrations/manual_review/20250922112147_schema_plan_supervisor_schema.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/schema/enhance_sd_testing_status.sql",
+      "new_path": "archive/migrations/manual_review/20251004231128_alter_enhance_sd_testing_status.sql",
+      "category": "alter",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/schema/leo_commit_rules.sql",
+      "new_path": "archive/migrations/manual_review/20250926140217_schema_leo_commit_rules.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "database/schema/sub_agent_tracking.sql",
+      "new_path": "archive/migrations/manual_review/20250927084714_schema_sub_agent_tracking.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "db/migrations/eng/legacy/008_ui_validation_schema.sql",
+      "new_path": "archive/migrations/manual_review/20250922112148_schema_ui_validation_schema.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "db/migrations/eng/legacy/009_create_learning_tables.sql",
+      "new_path": "archive/migrations/manual_review/20250922112148_schema_create_learning_tables.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "db/migrations/eng/legacy/rollback-2025-01-17-user-stories.sql",
+      "new_path": "archive/migrations/manual_review/20250922112148_alter_rollback-2025-01-17-user-stories.sql",
+      "category": "alter",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "db/migrations/eng/legacy/verify-2025-01-17-user-stories.sql",
+      "new_path": "archive/migrations/manual_review/20250922112148_verify-2025-01-17-user-stories.sql",
+      "category": null,
+      "confidence_score": 0
+    },
+    {
+      "original_path": "db/migrations/vh/202509221340__vh_ingest_governance_views.sql",
+      "new_path": "archive/migrations/manual_review/20250922112148_ingest_governance_views.sql",
+      "category": null,
+      "confidence_score": 0
+    },
+    {
+      "original_path": "scripts/supervisor-migration-clipboard.sql",
+      "new_path": "archive/migrations/manual_review/20250922112152_schema_supervisor-migration-clipboard.sql",
+      "category": "schema",
+      "confidence_score": 0
+    },
+    {
+      "original_path": "supabase/migrations/008_ui_validation_schema.sql",
+      "new_path": "archive/migrations/manual_review/20250922112153_schema_ui_validation_schema.sql",
+      "category": "schema",
+      "confidence_score": 0
+    }
+  ]
+}

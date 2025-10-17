@@ -1,0 +1,15 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+# Run smoke tests before commit
+echo "Running smoke tests before commit..."
+npm run test:smoke
+
+# Check exit code
+if [ $? -ne 0 ]; then
+  echo "❌ Smoke tests failed. Commit aborted."
+  echo "Run 'npm run test:smoke' to see details."
+  exit 1
+fi
+
+echo "✅ Smoke tests passed. Proceeding with commit."

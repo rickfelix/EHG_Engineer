@@ -1,0 +1,813 @@
+{
+  "total_retrospectives": 74,
+  "analyzed_at": "2025-10-12T18:25:56.295Z",
+  "source": "DATABASE (retrospectives table)",
+  "sub_agent_findings": {
+    "DOCMON": {
+      "name": "Information Architecture Lead",
+      "total_mentions": 0,
+      "sds_involved_count": 1,
+      "sds_involved": [
+        "SD-RECONNECT-009"
+      ],
+      "explicit_mentions": 0,
+      "success_patterns_count": 0,
+      "failure_patterns_count": 1,
+      "key_learnings_count": 0,
+      "what_went_well_count": 0,
+      "what_needs_improvement_count": 0,
+      "improvement_areas_count": 0,
+      "success_patterns": [],
+      "failure_patterns": [
+        {
+          "sd_id": "SD-RECONNECT-009",
+          "pattern": "Late DOCMON detection"
+        }
+      ],
+      "key_learnings": [],
+      "what_went_well": [],
+      "what_needs_improvement": [],
+      "improvement_areas": []
+    },
+    "UAT": {
+      "name": "UAT Test Executor",
+      "total_mentions": 0,
+      "sds_involved_count": 3,
+      "sds_involved": [
+        "SD-EXPORT-001",
+        "SD-RECONNECT-013",
+        "SD-1A"
+      ],
+      "explicit_mentions": 0,
+      "success_patterns_count": 1,
+      "failure_patterns_count": 1,
+      "key_learnings_count": 1,
+      "what_went_well_count": 0,
+      "what_needs_improvement_count": 1,
+      "improvement_areas_count": 3,
+      "success_patterns": [
+        {
+          "sd_id": "SD-RECONNECT-013",
+          "pattern": "LEAD 5-step evaluation checklist"
+        }
+      ],
+      "failure_patterns": [
+        {
+          "sd_id": "SD-1A",
+          "pattern": "wrong_timing_critical_evaluator"
+        }
+      ],
+      "key_learnings": [
+        {
+          "sd_id": "SD-1A",
+          "category": "Process Timing",
+          "learning": "Business value evaluation must happen BEFORE implementation, not after"
+        }
+      ],
+      "what_went_well": [],
+      "what_needs_improvement": [
+        {
+          "sd_id": "SD-1A",
+          "category": "LEAD Critical Evaluator Timing",
+          "description": "Critical Evaluator runs at wrong time in workflow (end vs beginning)"
+        }
+      ],
+      "improvement_areas": [
+        {
+          "sd_id": "SD-EXPORT-001",
+          "area": "Add Step 6 to 5-step SD evaluation checklist"
+        },
+        {
+          "sd_id": "SD-EXPORT-001",
+          "area": "Add \"Duplicate Detection\" as mandatory step 4.5 in 5-step SD evaluation checklist"
+        },
+        {
+          "sd_id": "SD-1A",
+          "area": "evaluation_timing"
+        }
+      ]
+    },
+    "GITHUB": {
+      "name": "DevOps Platform Architect",
+      "total_mentions": 0,
+      "sds_involved_count": 0,
+      "sds_involved": [],
+      "explicit_mentions": 0,
+      "success_patterns_count": 0,
+      "failure_patterns_count": 0,
+      "key_learnings_count": 0,
+      "what_went_well_count": 0,
+      "what_needs_improvement_count": 0,
+      "improvement_areas_count": 0,
+      "success_patterns": [],
+      "failure_patterns": [],
+      "key_learnings": [],
+      "what_went_well": [],
+      "what_needs_improvement": [],
+      "improvement_areas": []
+    },
+    "RETRO": {
+      "name": "Continuous Improvement Coach",
+      "total_mentions": 1,
+      "sds_involved_count": 7,
+      "sds_involved": [
+        "SD-EVA-CONTENT-001",
+        "SD-SUBAGENT-IMPROVE-001",
+        "SD-AGENT-ADMIN-003",
+        "SD-EVA-MEETING-001",
+        "SD-EXPORT-001",
+        "ccf6484d-9182-4879-a36a-33c7bbb1796c",
+        "SD-1A"
+      ],
+      "explicit_mentions": 1,
+      "success_patterns_count": 2,
+      "failure_patterns_count": 3,
+      "key_learnings_count": 1,
+      "what_went_well_count": 0,
+      "what_needs_improvement_count": 2,
+      "improvement_areas_count": 6,
+      "success_patterns": [
+        {
+          "sd_id": "SD-SUBAGENT-IMPROVE-001",
+          "pattern": "Repository lessons consolidation (65 retrospectives → 39 SDs)"
+        },
+        {
+          "sd_id": "SD-EVA-MEETING-001",
+          "pattern": "Retroactive user story creation from E2E tests (6 stories, 22 points)"
+        }
+      ],
+      "failure_patterns": [
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "pattern": "Missing retrospective blocks completion"
+        },
+        {
+          "sd_id": "ccf6484d-9182-4879-a36a-33c7bbb1796c",
+          "pattern": "Retrospective not automatic on completion"
+        },
+        {
+          "sd_id": "SD-1A",
+          "pattern": "empty_retrospective_shells"
+        }
+      ],
+      "key_learnings": [
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "category": "LEO Protocol",
+          "learning": "Retrospectives are MANDATORY - create them proactively before marking SD complete"
+        }
+      ],
+      "what_went_well": [],
+      "what_needs_improvement": [
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "category": "Protocol Enforcement",
+          "description": "Progress enforcement trigger initially blocked completion due to missing retrospective",
+          "severity": "LOW"
+        },
+        {
+          "sd_id": "SD-1A",
+          "category": "Retrospective System",
+          "description": "Retrospective trigger created empty shells instead of meaningful content"
+        }
+      ],
+      "improvement_areas": [
+        {
+          "sd_id": "SD-EVA-CONTENT-001",
+          "area": "Retrospective automation at SD completion"
+        },
+        {
+          "sd_id": "SD-EVA-CONTENT-001",
+          "area": "Retrospective automation at SD completion"
+        },
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "area": "Retrospective automation"
+        },
+        {
+          "sd_id": "SD-EXPORT-001",
+          "area": "Add testing section to retrospective template"
+        },
+        {
+          "sd_id": "ccf6484d-9182-4879-a36a-33c7bbb1796c",
+          "area": "Automated retrospective trigger"
+        },
+        {
+          "sd_id": "SD-1A",
+          "area": "retrospective_quality"
+        }
+      ]
+    },
+    "DESIGN": {
+      "name": "Senior Design Sub-Agent",
+      "total_mentions": 1,
+      "sds_involved_count": 7,
+      "sds_involved": [
+        "SD-AGENT-ADMIN-003",
+        "SD-AGENT-ADMIN-002",
+        "SD-VENTURE-IDEATION-MVP-001",
+        "SD-RECONNECT-009",
+        "SD-RECONNECT-002",
+        "SD-CREATIVE-001",
+        "SD-1A"
+      ],
+      "explicit_mentions": 1,
+      "success_patterns_count": 2,
+      "failure_patterns_count": 0,
+      "key_learnings_count": 1,
+      "what_went_well_count": 3,
+      "what_needs_improvement_count": 0,
+      "improvement_areas_count": 0,
+      "success_patterns": [
+        {
+          "sd_id": "SD-VENTURE-IDEATION-MVP-001",
+          "pattern": "Accessibility-first design philosophy"
+        },
+        {
+          "sd_id": "SD-CREATIVE-001",
+          "pattern": "✅ 100% Design compliance on first implementation (loading/error/empty states + WCAG 2.1 AA)"
+        }
+      ],
+      "failure_patterns": [],
+      "key_learnings": [
+        {
+          "sd_id": "SD-AGENT-ADMIN-002",
+          "category": "Protocol Design"
+        }
+      ],
+      "what_went_well": [
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "category": "Schema Design",
+          "description": "Comprehensive 4-table schema (ab_test_results, search_preferences, agent_executions, performance_alerts) with proper foreign keys",
+          "impact": "HIGH"
+        },
+        {
+          "sd_id": "SD-RECONNECT-009",
+          "category": "design"
+        },
+        {
+          "sd_id": "SD-1A",
+          "category": "Progressive Disclosure UI",
+          "description": "Created professional UI with progressive disclosure design pattern"
+        }
+      ],
+      "what_needs_improvement": [],
+      "improvement_areas": []
+    },
+    "RESEARCH": {
+      "name": "Research Agent",
+      "total_mentions": 0,
+      "sds_involved_count": 0,
+      "sds_involved": [],
+      "explicit_mentions": 0,
+      "success_patterns_count": 0,
+      "failure_patterns_count": 0,
+      "key_learnings_count": 0,
+      "what_went_well_count": 0,
+      "what_needs_improvement_count": 0,
+      "improvement_areas_count": 0,
+      "success_patterns": [],
+      "failure_patterns": [],
+      "key_learnings": [],
+      "what_went_well": [],
+      "what_needs_improvement": [],
+      "improvement_areas": []
+    },
+    "STORIES": {
+      "name": "Product Requirements Expert",
+      "total_mentions": 0,
+      "sds_involved_count": 1,
+      "sds_involved": [
+        "SD-EVA-MEETING-001"
+      ],
+      "explicit_mentions": 0,
+      "success_patterns_count": 2,
+      "failure_patterns_count": 0,
+      "key_learnings_count": 0,
+      "what_went_well_count": 0,
+      "what_needs_improvement_count": 0,
+      "improvement_areas_count": 0,
+      "success_patterns": [
+        {
+          "sd_id": "SD-EVA-MEETING-001",
+          "pattern": "Retroactive user story creation from E2E tests (6 stories, 22 points)"
+        },
+        {
+          "sd_id": "SD-EVA-MEETING-001",
+          "pattern": "Auto-trigger pattern (Product Requirements Expert on PRD creation)"
+        }
+      ],
+      "failure_patterns": [],
+      "key_learnings": [],
+      "what_went_well": [],
+      "what_needs_improvement": [],
+      "improvement_areas": []
+    },
+    "FINANCIAL_ANALYTICS": {
+      "name": "Senior Financial Analytics Engineer",
+      "total_mentions": 0,
+      "sds_involved_count": 0,
+      "sds_involved": [],
+      "explicit_mentions": 0,
+      "success_patterns_count": 0,
+      "failure_patterns_count": 0,
+      "key_learnings_count": 0,
+      "what_went_well_count": 0,
+      "what_needs_improvement_count": 0,
+      "improvement_areas_count": 0,
+      "success_patterns": [],
+      "failure_patterns": [],
+      "key_learnings": [],
+      "what_went_well": [],
+      "what_needs_improvement": [],
+      "improvement_areas": []
+    },
+    "SECURITY": {
+      "name": "Chief Security Architect",
+      "total_mentions": 0,
+      "sds_involved_count": 4,
+      "sds_involved": [
+        "SD-AGENT-ADMIN-003",
+        "SD-CREATIVE-001",
+        "0d5f1ecc-80b1-4a9c-b4e1-d1bd4a373cda",
+        "SD-1A"
+      ],
+      "explicit_mentions": 0,
+      "success_patterns_count": 3,
+      "failure_patterns_count": 0,
+      "key_learnings_count": 1,
+      "what_went_well_count": 2,
+      "what_needs_improvement_count": 0,
+      "improvement_areas_count": 0,
+      "success_patterns": [
+        {
+          "sd_id": "SD-CREATIVE-001",
+          "pattern": "✅ Security-first architecture (Edge Functions for API key protection)"
+        },
+        {
+          "sd_id": "0d5f1ecc-80b1-4a9c-b4e1-d1bd4a373cda",
+          "pattern": "Add RLS testing framework that works with anon key for automated security verification"
+        },
+        {
+          "sd_id": "SD-1A",
+          "pattern": "comprehensive_security"
+        }
+      ],
+      "failure_patterns": [],
+      "key_learnings": [
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "category": "Security",
+          "learning": "Cross-schema foreign keys (auth.users) should be avoided - use RLS with auth.uid() instead"
+        }
+      ],
+      "what_went_well": [
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "category": "Security",
+          "description": "RLS policies properly configured (20 policies) with anon SELECT and authenticated full access patterns",
+          "impact": "HIGH"
+        },
+        {
+          "sd_id": "SD-1A",
+          "category": "Security Implementation",
+          "description": "Implemented proper authentication, input validation, and SQL injection prevention"
+        }
+      ],
+      "what_needs_improvement": [],
+      "improvement_areas": []
+    },
+    "DATABASE": {
+      "name": "Principal Database Architect",
+      "total_mentions": 2,
+      "sds_involved_count": 13,
+      "sds_involved": [
+        "SD-BOARD-VISUAL-BUILDER-002",
+        "SD-EVA-CONTENT-001",
+        "SD-SUBAGENT-IMPROVE-001",
+        "SD-AGENT-ADMIN-003",
+        "SD-EVA-MEETING-001",
+        "SD-AGENT-ADMIN-002",
+        "SD-VENTURE-IDEATION-MVP-001",
+        "SD-RECONNECT-009",
+        "SD-EXPORT-001",
+        "d79779f5-3fb4-4745-a45b-2690033716bf",
+        "SD-RECONNECT-002",
+        "0d5f1ecc-80b1-4a9c-b4e1-d1bd4a373cda",
+        "SD-1A"
+      ],
+      "explicit_mentions": 2,
+      "success_patterns_count": 12,
+      "failure_patterns_count": 3,
+      "key_learnings_count": 3,
+      "what_went_well_count": 5,
+      "what_needs_improvement_count": 4,
+      "improvement_areas_count": 5,
+      "success_patterns": [
+        {
+          "sd_id": "SD-BOARD-VISUAL-BUILDER-002",
+          "pattern": "Database-first handoff creation with direct PostgreSQL"
+        },
+        {
+          "sd_id": "SD-EVA-CONTENT-001",
+          "pattern": "Database Architect pattern for all DB operations"
+        },
+        {
+          "sd_id": "SD-EVA-CONTENT-001",
+          "pattern": "Database Architect pattern for all DB operations"
+        },
+        {
+          "sd_id": "SD-SUBAGENT-IMPROVE-001",
+          "pattern": "Database-first sub-agent definitions"
+        },
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "pattern": "Database-first architecture prevents data loss"
+        },
+        {
+          "sd_id": "SD-EVA-MEETING-001",
+          "pattern": "Database-first enforcement (sub_agent_execution_results logging)"
+        },
+        {
+          "sd_id": "SD-AGENT-ADMIN-002",
+          "pattern": "Database-first protocol architecture enables rapid iteration"
+        },
+        {
+          "sd_id": "SD-RECONNECT-009",
+          "pattern": "Database-first compliance"
+        },
+        {
+          "sd_id": "d79779f5-3fb4-4745-a45b-2690033716bf",
+          "pattern": "Database-first architecture"
+        },
+        {
+          "sd_id": "SD-RECONNECT-002",
+          "pattern": "Database-first architecture compliance"
+        },
+        {
+          "sd_id": "0d5f1ecc-80b1-4a9c-b4e1-d1bd4a373cda",
+          "pattern": "Build database schema documentation generator to keep TypeScript interfaces synchronized"
+        },
+        {
+          "sd_id": "SD-1A",
+          "pattern": "database_first_implementation"
+        }
+      ],
+      "failure_patterns": [
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "pattern": "Database function column references become stale"
+        },
+        {
+          "sd_id": "SD-EXPORT-001",
+          "pattern": "{\"pattern\":\"SDs approved without backlog validation\",\"instances\":\"SD-EXPORT-001 had 0 backlog items\",\"risk\":\"Moving forward without user requirements = scope creep\",\"mitigation\":\"Enforce backlog requirement via database constraint\"}"
+        },
+        {
+          "sd_id": "SD-1A",
+          "pattern": "database_schema_mismatches"
+        }
+      ],
+      "key_learnings": [
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "category": "Database Operations",
+          "learning": "Always verify trigger functions match current table schema before migrations"
+        },
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "category": "Architecture",
+          "learning": "Database migrations for agent management belong in EHG app (liapbndqlqxdcgpwntbv), not EHG_Engineer"
+        },
+        {
+          "sd_id": "SD-1A",
+          "category": "Database-First Architecture",
+          "learning": "Database-first approach works but requires reliable schema management"
+        }
+      ],
+      "what_went_well": [
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "category": "Database Implementation",
+          "description": "Database migration executed flawlessly with 100% validation test pass rate",
+          "impact": "HIGH"
+        },
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "category": "Quality Assurance",
+          "description": "Sub-agent verification thorough - Database Architect (100% confidence) and QA Director (95% confidence)",
+          "impact": "HIGH"
+        },
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "category": "Architecture",
+          "description": "Database-first architecture maintained throughout - no data loss",
+          "impact": "HIGH"
+        },
+        {
+          "sd_id": "SD-RECONNECT-009",
+          "category": "database"
+        },
+        {
+          "sd_id": "SD-1A",
+          "category": "Database-First Implementation",
+          "description": "Successfully implemented comprehensive database schema with 5 tables and view"
+        }
+      ],
+      "what_needs_improvement": [
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "category": "Database Functions",
+          "description": "check_required_sub_agents function had schema mismatch (confidence_score vs confidence column)",
+          "severity": "MEDIUM"
+        },
+        {
+          "sd_id": "SD-RECONNECT-009",
+          "category": "database"
+        },
+        {
+          "sd_id": "SD-1A",
+          "category": "Database Schema Management",
+          "description": "Multiple database schema issues encountered throughout development"
+        },
+        {
+          "sd_id": "SD-1A",
+          "category": "Handoff System Reliability",
+          "description": "Handoff governance system had missing database tables causing failures"
+        }
+      ],
+      "improvement_areas": [
+        {
+          "sd_id": "SD-SUBAGENT-IMPROVE-001",
+          "area": "Standardize Database Connection Helper Usage"
+        },
+        {
+          "sd_id": "SD-SUBAGENT-IMPROVE-001",
+          "area": "Add Confidence Field Default to Database Schema"
+        },
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "area": "CI/CD integration for database changes"
+        },
+        {
+          "sd_id": "SD-VENTURE-IDEATION-MVP-001",
+          "area": "Database migration idempotency automation"
+        },
+        {
+          "sd_id": "SD-EXPORT-001",
+          "area": "Require backlog items before draft→active transition (database constraint)"
+        }
+      ]
+    },
+    "TESTING": {
+      "name": "QA Engineering Director",
+      "total_mentions": 5,
+      "sds_involved_count": 10,
+      "sds_involved": [
+        "SD-BOARD-VISUAL-BUILDER-003",
+        "SD-EVA-CONTENT-001",
+        "SD-AGENT-ADMIN-003",
+        "SD-AGENT-ADMIN-002",
+        "SD-RECONNECT-014",
+        "SD-EXPORT-001",
+        "d79779f5-3fb4-4745-a45b-2690033716bf",
+        "SD-RECONNECT-002",
+        "0d5f1ecc-80b1-4a9c-b4e1-d1bd4a373cda",
+        "ccf6484d-9182-4879-a36a-33c7bbb1796c"
+      ],
+      "explicit_mentions": 5,
+      "success_patterns_count": 5,
+      "failure_patterns_count": 1,
+      "key_learnings_count": 2,
+      "what_went_well_count": 0,
+      "what_needs_improvement_count": 0,
+      "improvement_areas_count": 7,
+      "success_patterns": [
+        {
+          "sd_id": "SD-EVA-CONTENT-001",
+          "pattern": "QA Engineering Director v2.0 pre-flight checks saved 2-3 hours"
+        },
+        {
+          "sd_id": "SD-AGENT-ADMIN-002",
+          "pattern": "Dev mode provides faster feedback and more reliable E2E testing"
+        },
+        {
+          "sd_id": "SD-AGENT-ADMIN-002",
+          "pattern": "QA Engineering Director auto-triggers prevent human oversight"
+        },
+        {
+          "sd_id": "d79779f5-3fb4-4745-a45b-2690033716bf",
+          "pattern": "Comprehensive testing"
+        },
+        {
+          "sd_id": "0d5f1ecc-80b1-4a9c-b4e1-d1bd4a373cda",
+          "pattern": "Add RLS testing framework that works with anon key for automated security verification"
+        }
+      ],
+      "failure_patterns": [
+        {
+          "sd_id": "ccf6484d-9182-4879-a36a-33c7bbb1796c",
+          "pattern": "Deferred testing leads to unknown runtime behavior"
+        }
+      ],
+      "key_learnings": [
+        {
+          "sd_id": "SD-AGENT-ADMIN-002",
+          "category": "Testing Strategy"
+        },
+        {
+          "sd_id": "SD-AGENT-ADMIN-002",
+          "category": "Testing Strategy"
+        }
+      ],
+      "what_went_well": [],
+      "what_needs_improvement": [],
+      "improvement_areas": [
+        {
+          "sd_id": "SD-BOARD-VISUAL-BUILDER-003",
+          "area": "Earlier E2E testing in development"
+        },
+        {
+          "sd_id": "SD-AGENT-ADMIN-002",
+          "area": "{\"area\":\"QA Engineering Director Automation\",\"current_state\":\"Script reports E2E failure when manual tests pass\",\"desired_state\":\"Script execution matches manual test results exactly\",\"action_taken\":\"Investigating script configuration and working directory\"}"
+        },
+        {
+          "sd_id": "SD-AGENT-ADMIN-002",
+          "area": "{\"area\":\"E2E Testing Documentation\",\"current_state\":\"No guidance on dev mode vs preview mode trade-offs\",\"desired_state\":\"Clear decision matrix in CLAUDE.md for test mode selection\",\"action_taken\":\"Creating documentation section with examples\"}"
+        },
+        {
+          "sd_id": "SD-AGENT-ADMIN-002",
+          "area": "{\"area\":\"Testing Strategy\",\"current_state\":\"Ambiguous \\\"smoke tests\\\" allowed E2E-only execution\",\"desired_state\":\"Explicit dual test execution (unit + E2E) enforced automatically\",\"action_taken\":\"Added validation rules, auto-triggers, protocol sections\"}"
+        },
+        {
+          "sd_id": "SD-AGENT-ADMIN-002",
+          "area": "{\"area\":\"Protocol Clarity\",\"current_state\":\"Testing tier strategy lacked framework/command specificity\",\"desired_state\":\"Each tier specifies exact commands, frameworks, success criteria\",\"action_taken\":\"Updated CLAUDE.md with \\\"npm run test:unit\\\" + \\\"npm run test:e2e\\\" commands\"}"
+        },
+        {
+          "sd_id": "SD-EXPORT-001",
+          "area": "Add testing section to retrospective template"
+        },
+        {
+          "sd_id": "ccf6484d-9182-4879-a36a-33c7bbb1796c",
+          "area": "Runtime testing during EXEC"
+        }
+      ]
+    },
+    "PERFORMANCE": {
+      "name": "Performance Engineering Lead",
+      "total_mentions": 0,
+      "sds_involved_count": 1,
+      "sds_involved": [
+        "SD-AGENT-ADMIN-003"
+      ],
+      "explicit_mentions": 0,
+      "success_patterns_count": 0,
+      "failure_patterns_count": 0,
+      "key_learnings_count": 0,
+      "what_went_well_count": 1,
+      "what_needs_improvement_count": 0,
+      "improvement_areas_count": 0,
+      "success_patterns": [],
+      "failure_patterns": [],
+      "key_learnings": [],
+      "what_went_well": [
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "category": "Schema Design",
+          "description": "Comprehensive 4-table schema (ab_test_results, search_preferences, agent_executions, performance_alerts) with proper foreign keys",
+          "impact": "HIGH"
+        }
+      ],
+      "what_needs_improvement": [],
+      "improvement_areas": []
+    },
+    "VALIDATION": {
+      "name": "Principal Systems Analyst",
+      "total_mentions": 0,
+      "sds_involved_count": 12,
+      "sds_involved": [
+        "SD-AGENT-ADMIN-003",
+        "SD-EVA-MEETING-001",
+        "SD-AGENT-ADMIN-002",
+        "SD-VENTURE-IDEATION-MVP-001",
+        "SD-RECONNECT-009",
+        "SD-RECONNECT-014",
+        "SD-EXPORT-001",
+        "SD-RECONNECT-013",
+        "d79779f5-3fb4-4745-a45b-2690033716bf",
+        "SD-RECONNECT-002",
+        "SD-1A",
+        "SD-001"
+      ],
+      "explicit_mentions": 0,
+      "success_patterns_count": 2,
+      "failure_patterns_count": 2,
+      "key_learnings_count": 1,
+      "what_went_well_count": 2,
+      "what_needs_improvement_count": 2,
+      "improvement_areas_count": 12,
+      "success_patterns": [
+        {
+          "sd_id": "SD-EVA-MEETING-001",
+          "pattern": "Three-checkpoint validation system (QA + Handoff + Auto-trigger)"
+        },
+        {
+          "sd_id": "SD-RECONNECT-002",
+          "pattern": "Early scope validation with over-engineering rubric"
+        }
+      ],
+      "failure_patterns": [
+        {
+          "sd_id": "SD-EVA-MEETING-001",
+          "pattern": "No enforcement of user story validation"
+        },
+        {
+          "sd_id": "SD-EXPORT-001",
+          "pattern": "{\"pattern\":\"SDs approved without backlog validation\",\"instances\":\"SD-EXPORT-001 had 0 backlog items\",\"risk\":\"Moving forward without user requirements = scope creep\",\"mitigation\":\"Enforce backlog requirement via database constraint\"}"
+        }
+      ],
+      "key_learnings": [
+        {
+          "sd_id": "SD-1A",
+          "category": "Handoff Governance",
+          "learning": "Handoff validation is critical but system must be reliable"
+        }
+      ],
+      "what_went_well": [
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "category": "Database Implementation",
+          "description": "Database migration executed flawlessly with 100% validation test pass rate",
+          "impact": "HIGH"
+        },
+        {
+          "sd_id": "SD-1A",
+          "category": "Security Implementation",
+          "description": "Implemented proper authentication, input validation, and SQL injection prevention"
+        }
+      ],
+      "what_needs_improvement": [
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "category": "Schema Validation",
+          "description": "Trigger bugs on strategic_directives_v2 caused delays - auto_transition_status referenced wrong field (phase vs current_phase)",
+          "severity": "MEDIUM"
+        },
+        {
+          "sd_id": "SD-001",
+          "category": "validation"
+        }
+      ],
+      "improvement_areas": [
+        {
+          "sd_id": "SD-AGENT-ADMIN-003",
+          "area": "Automated trigger validation"
+        },
+        {
+          "sd_id": "SD-AGENT-ADMIN-002",
+          "area": "{\"area\":\"Test Environment Validation\",\"current_state\":\"No pre-flight checks before test execution\",\"desired_state\":\"Automated validation of server availability and build mode\",\"action_taken\":\"Adding health checks to QA Director script\"}"
+        },
+        {
+          "sd_id": "SD-AGENT-ADMIN-002",
+          "area": "{\"area\":\"Testing Strategy\",\"current_state\":\"Ambiguous \\\"smoke tests\\\" allowed E2E-only execution\",\"desired_state\":\"Explicit dual test execution (unit + E2E) enforced automatically\",\"action_taken\":\"Added validation rules, auto-triggers, protocol sections\"}"
+        },
+        {
+          "sd_id": "SD-VENTURE-IDEATION-MVP-001",
+          "area": "Test execution infrastructure validation"
+        },
+        {
+          "sd_id": "SD-VENTURE-IDEATION-MVP-001",
+          "area": "Form validation attribute checking"
+        },
+        {
+          "sd_id": "SD-RECONNECT-009",
+          "area": "Build validation"
+        },
+        {
+          "sd_id": "SD-RECONNECT-014",
+          "area": "Protocol compliance validation"
+        },
+        {
+          "sd_id": "SD-RECONNECT-013",
+          "area": "Route validation automation"
+        },
+        {
+          "sd_id": "SD-RECONNECT-013",
+          "area": "Schema validation improvements"
+        },
+        {
+          "sd_id": "d79779f5-3fb4-4745-a45b-2690033716bf",
+          "area": "Schema validation before PRD creation"
+        },
+        {
+          "sd_id": "SD-RECONNECT-002",
+          "area": "Handoff system completeness validation"
+        },
+        {
+          "sd_id": "SD-001",
+          "area": "pre-handoff-validation"
+        }
+      ]
+    }
+  }
+}

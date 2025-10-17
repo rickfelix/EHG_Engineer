@@ -1,0 +1,206 @@
+name: Schema & System Consistency Validation
+
+# Trigger on all pushes and pull requests
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+      - 'feat/**'
+      - 'fix/**'
+  pull_request:
+    branches:
+      - main
+      - master
+      - develop
+
+# Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  validate-schema:
+    name: System Consistency Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run System Consistency Validation
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: node scripts/validate-system-consistency.js
+
+      - name: Run Schema Validation Tests
+        run: node scripts/test-schema-validation.js
+
+      - name: Comment on PR (if validation failed)
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `❌ **Schema Validation Failed**
+
+              The system consistency validation checks have failed. Please review the logs above and fix the issues before merging.
+
+              Common issues:
+              - Duplicate or similar table names
+              - Triggers referencing deprecated tables
+              - Inconsistent foreign key naming
+              - Usage of deprecated tables in code
+              - Missing required database functions
+
+              See [SD-KNOWLEDGE-001 Prevention Guide](../docs/retrospectives/SD-KNOWLEDGE-001-completion-issues-and-prevention.md) for details.`
+            })
+
+      - name: Comment on PR (if validation passed)
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ **Schema Validation Passed**
+
+              All system consistency checks have passed. The codebase maintains proper database schema consistency.
+
+              Checks performed:
+              - ✅ No duplicate table names
+              - ✅ Trigger-code consistency verified
+              - ✅ Foreign key naming conventions followed
+              - ✅ No deprecated table usage
+              - ✅ Required schema functions available`
+            })
+
+  validate-retrospective-quality:
+    name: Retrospective Quality Score Validation
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, 'retrospective') || contains(github.event.head_commit.message, 'retro')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Retrospective Generator
+        run: |
+          echo "Checking retrospective quality score calculation..."
+          grep -n "let score = 70" scripts/generate-comprehensive-retrospective.js || {
+            echo "❌ Base score is not 70! Must be >= 70 to prevent SD-KNOWLEDGE-001 Issue #4"
+            exit 1
+          }
+          echo "✅ Base score check passed"
+
+          echo "Checking validateRetrospective function exists..."
+          grep -n "function validateRetrospective" scripts/generate-comprehensive-retrospective.js || {
+            echo "❌ validateRetrospective function missing!"
+            exit 1
+          }
+          echo "✅ Validation function exists"
+
+      - name: Comment on PR
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ **Retrospective Quality Validation Passed**
+
+              The retrospective generator maintains the required quality score standards:
+              - ✅ Base quality score = 70 (prevents score = 0)
+              - ✅ Validation function present
+              - ✅ SD-KNOWLEDGE-001 Issue #4 prevention active`
+            })
+
+  validate-handoff-recording:
+    name: Mandatory Recording Validation
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, 'handoff') || contains(github.event.head_commit.message, 'sub-agent')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Orchestrator Recording
+        run: |
+          echo "Checking orchestrator uses safeInsert..."
+          grep -n "import.*safeInsert" scripts/orchestrate-phase-subagents.js || {
+            echo "❌ Orchestrator does not import safeInsert!"
+            exit 1
+          }
+          echo "✅ safeInsert import found"
+
+          echo "Checking verifyExecutionRecorded function exists..."
+          grep -n "function verifyExecutionRecorded" scripts/orchestrate-phase-subagents.js || {
+            echo "❌ verifyExecutionRecorded function missing!"
+            exit 1
+          }
+          echo "✅ Verification function exists"
+
+          echo "Checking for MANDATORY RECORDING enforcement..."
+          grep -n "MANDATORY RECORDING FAILED" scripts/orchestrate-phase-subagents.js || {
+            echo "❌ Mandatory recording enforcement missing!"
+            exit 1
+          }
+          echo "✅ Mandatory recording enforced"
+
+      - name: Comment on PR
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ **Mandatory Recording Validation Passed**
+
+              The orchestrator maintains mandatory sub-agent recording:
+              - ✅ Uses safeInsert() for type safety
+              - ✅ Verification function present
+              - ✅ Recording failures throw errors
+              - ✅ SD-KNOWLEDGE-001 Issue #5 prevention active`
+            })

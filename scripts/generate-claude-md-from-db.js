@@ -166,7 +166,13 @@ class CLAUDEMDGeneratorV2 {
         'unified_handoff_system', 'database_schema_overview', 'supabase_operations',
         'development_workflow'
       ].includes(section.section_type))
-      .map(section => `## ${section.title}\n\n${section.content}`)
+      .map(section => {
+        // Remove leading markdown header from content if it matches title
+        let content = section.content;
+        const headerPattern = new RegExp(`^##\\s+${section.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\n`, 'i');
+        content = content.replace(headerPattern, '');
+        return `## ${section.title}\n\n${content}`;
+      })
       .join('\n\n');
 
     return `# CLAUDE.md - LEO Protocol Workflow Guide for AI Agents
@@ -243,38 +249,20 @@ ${unifiedHandoffSystem}
 
 ## Sub-Agent System (Database-Driven)
 
-### Active Sub-Agents
+**Active Sub-Agents**: ${subAgents.length} specialist agents for validation, testing, security, and quality
 
-| Sub-Agent | Code | Activation | Priority |
-|-----------|------|------------|----------|
-${this.generateSubAgentListWithDescriptions(subAgents)}
+| Code | Name | Priority | Auto-Trigger |
+|------|------|----------|--------------|
+${subAgents.map(sa => `| ${sa.code} | ${sa.name} | ${sa.priority} | ${sa.activation_type === 'automatic' ? '✅' : '❌'} |`).join('\n')}
 
-### Sub-Agent Activation Triggers
+**Quick Reference**:
+- **High Priority** (90+): DOCMON, GITHUB, UAT
+- **Quality Gates** (70-85): RETRO, DESIGN
+- **Validation** (0-10): SECURITY, DATABASE, TESTING, PERFORMANCE, VALIDATION
 
-${this.generateSubAgentTriggers(subAgents)}
+**Activation**: Sub-agents trigger automatically on keywords/events. Query \`leo_sub_agent_triggers\` for complete trigger list.
 
-### Sub-Agent Activation Process
-
-When triggers are detected, EXEC MUST:
-
-1. **Query Database for Active Triggers**
-   \`\`\`sql
-   SELECT * FROM leo_sub_agent_triggers
-   WHERE active = true
-   AND trigger_phrase IN (detected_phrases);
-   \`\`\`
-
-2. **Create Formal Handoff** (7 elements from database template)
-
-3. **Execute Sub-Agent**
-   - Option A: Run tool from \`script_path\` field
-   - Option B: Use context from \`context_file\` field
-   - Option C: Document analysis if no tool exists
-
-4. **Store Results in Database**
-   \`\`\`sql
-   INSERT INTO sub_agent_executions (sub_agent_id, results, ...);
-   \`\`\`
+**Complete Documentation**: See \`docs/reference/sub-agent-system.md\` for full details, triggers, and activation patterns
 
 ### Handoff Templates
 
@@ -301,21 +289,26 @@ ${subagentParallelExecution}
   }
 
   generateAgentSection(agents) {
-    return agents.map(agent => {
-      // Add supervisor note for PLAN
-      const supervisorNote = agent.agent_code === 'PLAN'
-        ? '\n- **🔍 Supervisor Mode**: Final "done done" verification with all sub-agents'
-        : '';
+    // Compact table format
+    let table = `| Agent | Code | Responsibilities | % Split |\n`;
+    table += `|-------|------|------------------|----------|\n`;
 
-      return `
-### ${agent.name} (${agent.agent_code})
-- **Responsibilities**: ${agent.responsibilities}${supervisorNote}
-- **Planning**: ${agent.planning_percentage || 0}%
-- **Implementation**: ${agent.implementation_percentage || 0}%
-- **Verification**: ${agent.verification_percentage || 0}%
-- **Approval**: ${agent.approval_percentage || 0}%
-- **Total**: ${agent.total_percentage}%`;
-    }).join('\n');
+    agents.forEach(agent => {
+      const responsibilities = agent.responsibilities.substring(0, 80) + (agent.responsibilities.length > 80 ? '...' : '');
+      const percentages = [];
+      if (agent.planning_percentage) percentages.push(`P:${agent.planning_percentage}`);
+      if (agent.implementation_percentage) percentages.push(`I:${agent.implementation_percentage}`);
+      if (agent.verification_percentage) percentages.push(`V:${agent.verification_percentage}`);
+      if (agent.approval_percentage) percentages.push(`A:${agent.approval_percentage}`);
+      const split = percentages.join(' ') + ` = ${agent.total_percentage}%`;
+
+      table += `| ${agent.name} | ${agent.agent_code} | ${responsibilities} | ${split} |\n`;
+    });
+
+    table += `\n**Legend**: P=Planning, I=Implementation, V=Verification, A=Approval\n`;
+    table += `**Total**: EXEC (30%) + LEAD (35%) + PLAN (35%) = 100%`;
+
+    return table;
   }
 
   extractBriefDescription(fullDescription) {
@@ -369,14 +362,30 @@ ${subagentParallelExecution}
 
     for (const sa of subAgents) {
       if (sa.triggers && sa.triggers.length > 0) {
-        triggers.push(`\n#### ${sa.name} Triggers:`);
-        triggers.push(sa.triggers.map(t =>
-          `- "${t.trigger_phrase}" (${t.trigger_type}) in ${t.trigger_context || 'any'} context`
-        ).join('\n'));
+        // Get unique trigger types and sample keywords
+        const keywordTriggers = sa.triggers.filter(t => t.trigger_type === 'keyword');
+        const eventTriggers = sa.triggers.filter(t => t.trigger_type === 'event');
+
+        // Show count and samples only
+        const parts = [];
+        if (keywordTriggers.length > 0) {
+          const samples = keywordTriggers.slice(0, 3).map(t => `"${t.trigger_phrase}"`).join(', ');
+          const more = keywordTriggers.length > 3 ? ` + ${keywordTriggers.length - 3} more` : '';
+          parts.push(`${keywordTriggers.length} keywords (${samples}${more})`);
+        }
+        if (eventTriggers.length > 0) {
+          const samples = eventTriggers.slice(0, 2).map(t => t.trigger_phrase).join(', ');
+          const more = eventTriggers.length > 2 ? ` + ${eventTriggers.length - 2} more` : '';
+          parts.push(`${eventTriggers.length} events (${samples}${more})`);
+        }
+
+        triggers.push(`- **${sa.name}**: ${parts.join('; ')}`);
       }
     }
 
-    return triggers.join('\n') || 'No triggers defined in database';
+    return triggers.length > 0
+      ? `**Quick Reference** (complete list in database):\n${triggers.join('\n')}`
+      : 'No triggers defined in database';
   }
 
   generateHandoffTemplates(templates) {

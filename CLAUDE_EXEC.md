@@ -400,6 +400,13 @@ node scripts/unified-handoff-system.js execute <TYPE> <SD-ID>
 - Prevents PLAN_verification blocking at 0% progress
 - No manual intervention required - handled by unified-handoff-system.js
 
+**Mandatory Database Verification** (Prevention: SD-TEST-MOCK-001):
+- ALL handoffs verify SD exists in database BEFORE proceeding
+- BLOCKING gate - prevents work on non-existent SDs
+- Implemented in: `unified-handoff-system.js` (`verifySDExistsInDatabase()` method)
+- Protocol violation: SD-TEST-MOCK-001 completed EXEC phase without database record
+- **CRITICAL**: Create SD in database BEFORE starting ANY work (LEAD, PLAN, EXEC)
+
 ### Progress Verification
 
 ```bash

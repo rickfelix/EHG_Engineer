@@ -54,7 +54,62 @@ class UnifiedHandoffSystem {
       'PLAN-to-LEAD'
     ];
   }
-  
+
+  /**
+   * MANDATORY DATABASE VERIFICATION GATE (SD-TEST-MOCK-001 prevention)
+   *
+   * Verifies that a Strategic Directive exists in the database before allowing any handoff work to proceed.
+   * This prevents the protocol violation where work was done on SD-TEST-MOCK-001 without it existing in the database.
+   *
+   * BLOCKING GATE: Throws error if SD not found - all handoffs MUST pass this check first
+   *
+   * @param {string} sdId - Strategic Directive ID
+   * @throws {Error} If SD not found in database
+   */
+  async verifySDExistsInDatabase(sdId) {
+    console.log(`🔍 Verifying SD exists in database: ${sdId}`);
+
+    const { data: sd, error } = await this.supabase
+      .from('strategic_directives_v2')
+      .select('id, title, status, category')
+      .eq('id', sdId)
+      .single();
+
+    if (error || !sd) {
+      console.error('');
+      console.error('❌ BLOCKING: Strategic Directive not found in database');
+      console.error('='.repeat(60));
+      console.error(`   SD ID: ${sdId}`);
+      console.error('');
+      console.error('   CRITICAL: All Strategic Directives MUST exist in the database');
+      console.error('   before ANY work begins (LEAD, PLAN, EXEC, or handoffs).');
+      console.error('');
+      console.error('   This verification gate prevents the protocol violation that');
+      console.error('   occurred in SD-TEST-MOCK-001, where EXEC work completed');
+      console.error('   without a database record existing.');
+      console.error('');
+      console.error('   REMEDIATION:');
+      console.error('   1. Create SD in database using LEO Protocol dashboard');
+      console.error('   2. OR use: node scripts/create-strategic-directive.js');
+      console.error('   3. Ensure SD has title, category, priority, and rationale');
+      console.error('   4. Retry this handoff after SD is created');
+      console.error('');
+      console.error('   Database error: ' + (error ? error.message : 'SD not found'));
+      console.error('='.repeat(60));
+
+      throw new Error(
+        `❌ BLOCKING: Strategic Directive ${sdId} not found in database. ` +
+        `All SDs must exist in strategic_directives_v2 table before work begins. ` +
+        `Create SD first using the LEO Protocol dashboard or create-strategic-directive.js script.`
+      );
+    }
+
+    console.log(`✅ SD verified in database: ${sd.title}`);
+    console.log(`   Status: ${sd.status} | Category: ${sd.category || 'N/A'}`);
+
+    return sd;
+  }
+
   /**
    * Main handoff execution entry point
    */
@@ -65,13 +120,17 @@ class UnifiedHandoffSystem {
     console.log(`Strategic Directive: ${sdId}`);
     console.log(`Options:`, options);
     console.log('');
-    
+
     try {
+      // MANDATORY DATABASE VERIFICATION (SD-TEST-MOCK-001 prevention)
+      // This BLOCKING gate ensures SD exists in database before ANY handoff work proceeds
+      await this.verifySDExistsInDatabase(sdId);
+
       // Validate handoff type
       if (!this.supportedHandoffs.includes(handoffType)) {
         throw new Error(`Unsupported handoff type: ${handoffType}`);
       }
-      
+
       // Load handoff template
       const template = await this.loadHandoffTemplate(handoffType);
       if (!template) {

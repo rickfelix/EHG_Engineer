@@ -120,7 +120,7 @@ async function parsePRDFile(filePath: string): Promise<{
  */
 async function prdExistsInDatabase(prdId: string): Promise<boolean> {
   const { data, error } = await supabase
-    .from('prds')
+    .from('product_requirements_v2')
     .select('id')
     .eq('id', prdId)
     .single();
@@ -142,7 +142,7 @@ async function migratePRD(filePath: string): Promise<void> {
 
     // Update existing record with latest content
     const { error } = await supabase
-      .from('prds')
+      .from('product_requirements_v2')
       .update({
         content,
         metadata: {
@@ -162,7 +162,7 @@ async function migratePRD(filePath: string): Promise<void> {
   } else {
     // Insert new PRD
     const { error } = await supabase
-      .from('prds')
+      .from('product_requirements_v2')
       .insert({
         id: metadata.id,
         title: metadata.title,

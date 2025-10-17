@@ -95,6 +95,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.8.0",
     "@lhci/cli": "^0.13.0",
+    "@playwright/test": "^1.56.0",
     "@types/node": "^20.10.0",
     "@types/pg": "^8.15.5",
     "esbuild": "^0.25.10",

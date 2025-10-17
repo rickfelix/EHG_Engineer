@@ -85,7 +85,7 @@ export default async function handler(
   try {
     // 1) Check if PRD exists
     const { data: prd, error: prdError } = await supabase
-      .from('prds')
+      .from('product_requirements_v2')
       .select('id, title')
       .eq('id', prd_id)
       .single();

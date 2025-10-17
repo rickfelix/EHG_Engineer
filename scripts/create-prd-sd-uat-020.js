@@ -114,7 +114,7 @@ async function createPRD() {
   };
 
   const { data, error } = await supabase
-    .from('prds')
+    .from('product_requirements_v2')
     .insert(prd)
     .select();
 

@@ -8,7 +8,7 @@ const supabase = createClient(
 async function updatePRD() {
   // Update PRD-SD-001 with required fields
   const { data, error } = await supabase
-    .from('prds')
+    .from('product_requirements_v2')
     .update({
       target_url: 'http://localhost:3000/dashboard',
       component_name: 'Dashboard',
@@ -25,7 +25,7 @@ async function updatePRD() {
 
   // Verify the update
   const { data: prd } = await supabase
-    .from('prds')
+    .from('product_requirements_v2')
     .select('id, target_url, component_name, app_path, port')
     .eq('id', 'PRD-SD-001')
     .single();

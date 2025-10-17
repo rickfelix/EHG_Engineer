@@ -536,7 +536,7 @@ CREATE POLICY "Users can delete own documents"
 
   // Insert PRD
   const { data, error } = await supabase
-    .from('prds')
+    .from('product_requirements_v2')
     .insert(prdData)
     .select();
 

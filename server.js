@@ -34,6 +34,9 @@ import RealtimeDashboard from './src/services/realtime-dashboard.js';
 import * as storiesAPI from './src/api/stories.js';
 import StoryAgentBootstrap from './src/agents/story-bootstrap.js';
 
+// Import Directive Enhancement Service
+import { DirectiveEnhancer } from './src/services/directive-enhancer.js';
+
 // Initialize Express app
 const app = express();
 const server = http.createServer(app);
@@ -59,11 +62,17 @@ const realtimeDashboard = new RealtimeDashboard(dbLoader);
 
 // Initialize OpenAI if API key is provided
 let openai = null;
+let directiveEnhancer = null;
+
 if (process.env.OPENAI_API_KEY) {
   openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
   });
   console.log('✅ OpenAI integration enabled');
+
+  // Initialize Directive Enhancement Service
+  directiveEnhancer = new DirectiveEnhancer(openai, dbLoader);
+  console.log('✅ Directive Enhancement Service enabled');
 } else {
   console.log('⚠️ OpenAI API key not found - AI features will use fallback mode');
 }
@@ -304,17 +313,17 @@ app.post('/api/sdip/submit', async (req, res) => {
   console.log('\n🚀 ========== NEW SUBMISSION (STEP 1) ==========');
   console.log('📥 [SERVER] Received POST /api/sdip/submit');
   console.log('📦 [SERVER] Request body keys:', Object.keys(req.body));
-  
+
   try {
     const submission = req.body;
     console.log('👤 [SERVER] Chairman Input:', submission.chairman_input ? submission.chairman_input.substring(0, 100) + '...' : 'None');
     console.log('📝 [SERVER] Submission Title:', submission.submission_title || 'Untitled');
     console.log('🔢 [SERVER] Current Step:', submission.current_step || 1);
-    
+
     // Store initial submission in database (Step 1 data only)
     console.log('💾 [SERVER] Saving to database...');
     const result = await dbLoader.saveSDIPSubmission(submission);
-    
+
     // Broadcast update to WebSocket clients
     wss.clients.forEach(client => {
       if (client.readyState === 1) { // WebSocket.OPEN
@@ -324,9 +333,42 @@ app.post('/api/sdip/submit', async (req, res) => {
         }));
       }
     });
-    
+
     console.log('✅ [SERVER] Submission saved with ID:', result.id);
     console.log('🆔 [SERVER] Submission ID type:', typeof result.id);
+
+    // NEW: Trigger background enhancement (non-blocking, invisible to chairman)
+    if (directiveEnhancer && result.chairman_input) {
+      setImmediate(async () => {
+        try {
+          console.log('🔄 [ENHANCER] Starting background enhancement for submission:', result.id);
+          const enhancement = await directiveEnhancer.enhance(result);
+
+          if (enhancement) {
+            // Store enhancement data in existing columns
+            await dbLoader.updateSubmissionStep(result.id, 1, {
+              intent_summary: enhancement.intent,  // Store extracted intent (80 words)
+              questions: enhancement.questions,     // Store decision-shaping questions
+              final_summary: enhancement.comprehensiveDescription,  // Store comprehensive description (200-300 words)
+              synthesis_data: {                     // Store codebase findings + enhanced SD structure
+                codebaseFindings: enhancement.codebaseFindings,
+                enhancedSD: enhancement.enhancedSD,
+                enhanced_at: enhancement.enhanced_at
+              }
+            });
+            console.log('✅ [ENHANCER] Background enhancement complete for submission:', result.id);
+            console.log('📝 [ENHANCER] Intent extracted:', enhancement.intent?.substring(0, 80) + '...');
+            console.log('📄 [ENHANCER] Comprehensive description:', enhancement.comprehensiveDescription?.length || 0, 'characters');
+            console.log('❓ [ENHANCER] Questions generated:', enhancement.questions?.length || 0);
+            console.log('🔍 [ENHANCER] Components found:', enhancement.codebaseFindings?.components?.length || 0);
+          }
+        } catch (enhanceError) {
+          console.error('⚠️ [ENHANCER] Background enhancement failed:', enhanceError.message);
+          // Don't block user flow - enhancement is optional
+        }
+      });
+    }
+
     console.log('✅ [SERVER] Step 1 complete, returning submission');
     res.json({ success: true, submission: result });
   } catch (error) {
@@ -894,8 +936,9 @@ app.get('/api/prd/:sd_id', async (req, res) => {
 // Create Strategic Directive from SDIP submission
 app.post('/api/sdip/create-strategic-directive', async (req, res) => {
   try {
-    const { submission_id } = req.body;
+    const { submission_id, priority } = req.body;
     console.log('📋 [SERVER] Creating Strategic Directive from submission:', submission_id);
+    console.log('📋 [SERVER] Priority from request:', priority || 'medium (default)');
 
     // Get submission from database
     const submission = await dbLoader.getSubmissionById(submission_id);
@@ -919,8 +962,8 @@ app.post('/api/sdip/create-strategic-directive', async (req, res) => {
     }
 
     // Also check if any existing SD references this submission
-    const existingSDs = await dbLoader.getStrategicDirectives();
-    const existingSD = existingSDs.find(sd => 
+    const existingSDs = await dbLoader.loadStrategicDirectives();
+    const existingSD = existingSDs.find(sd =>
       sd.metadata?.submission_id === submission_id
     );
     
@@ -950,32 +993,52 @@ app.post('/api/sdip/create-strategic-directive', async (req, res) => {
     const random = Math.random().toString(36).substring(2, 5).toUpperCase();
     const sdId = `SD-${year}-${month}${day}-${random}`;
 
-    // Create Strategic Directive data
+    // Get enhanced data from synthesis_data (from automated enhancement)
+    const enhancedSD = submission.synthesis_data?.enhancedSD || {};
+    const questions = submission.questions || [];
+
+    // Create Strategic Directive data using enhanced intelligence
     const sdData = {
       id: sdId,
-      title: submission.intent_summary || 'Strategic Initiative',
-      description: submission.final_summary || submission.chairman_input || '',
+      sd_key: sdId, // Required field - same as id
+      title: enhancedSD.title || submission.intent_summary || 'Strategic Initiative',
+      description: submission.final_summary || submission.intent_summary || submission.chairman_input || '',
       status: 'active',
       category: 'strategic_initiative',
-      priority: 'medium',
-      rationale: submission.chairman_input || '',
+      priority: priority || 'medium',
+      rationale: enhancedSD.rationale || submission.chairman_input || '',
       scope: 'Application Enhancement',
-      key_changes: [],
+      key_changes: enhancedSD.key_constraints || [],
       strategic_objectives: [],
-      success_criteria: [],
+      success_criteria: enhancedSD.success_criteria || [],
       implementation_guidelines: [],
-      dependencies: [],
-      risks: [],
-      success_metrics: [],
+      dependencies: enhancedSD.dependencies || [],
+      risks: enhancedSD.risks || [],
+      success_metrics: enhancedSD.acceptance_signals || [],
       metadata: {
         source: 'SDIP',
         submission_id: submission.id,
-        created_via: 'Directive Lab'
+        created_via: 'Directive Lab',
+        target_application: enhancedSD.target_application || 'EHG',
+        estimated_complexity: enhancedSD.estimated_complexity || 'medium',
+        ai_enhanced: true,
+        enhancement_timestamp: submission.synthesis_data?.enhanced_at || null,
+        decision_questions: questions,
+        codebase_findings: submission.synthesis_data?.codebaseFindings || null
       },
       created_by: 'Chairman',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
+
+    console.log('📋 [SERVER] Using enhanced SD data:');
+    console.log('  - Title:', sdData.title);
+    console.log('  - Success Criteria:', sdData.success_criteria.length, 'items');
+    console.log('  - Dependencies:', sdData.dependencies.length, 'items');
+    console.log('  - Risks:', sdData.risks.length, 'items');
+    console.log('  - Questions:', questions.length, 'questions');
+    console.log('  - Target App:', sdData.metadata.target_application);
+    console.log('  - Complexity:', sdData.metadata.estimated_complexity);
 
     // Save to database
     const savedSD = await dbLoader.saveStrategicDirective(sdData);

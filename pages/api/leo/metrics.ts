@@ -94,7 +94,7 @@ export default async function handler(
 async function getOverviewMetrics() {
   // Total PRDs
   const { count: totalPrds } = await supabase
-    .from('prds')
+    .from('product_requirements_v2')
     .select('*', { count: 'exact', head: true });
 
   // Active PRDs (with recent gate reviews)

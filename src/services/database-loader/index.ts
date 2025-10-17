@@ -72,7 +72,7 @@ export class DatabaseLoader {
     }
 
     const { data, error } = await this.supabase
-      .from('prds')
+      .from('product_requirements_v2')
       .select('*')
       .order('created_at', { ascending: false });
 

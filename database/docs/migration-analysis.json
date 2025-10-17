@@ -1,0 +1,1354 @@
+{
+  "EHG_ENGINEER": [
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/2025-09-22-add-sd-key.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 2790
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/2025-09-22-prd-add-sd-id.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 4055
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/2025-09-22-prd-sd-sync-trigger.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 4706
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/add-sd-key-constraints.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 1554
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/add-sd-key-not-null-constraint.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 1082
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/add_backlog_summary_columns.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 516
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/add_status_automation.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 4003
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/add_strategic_directive_id_alias.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 653
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/create-handoff-tracking-tables.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 2865
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/create-issue-patterns-table.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 10328
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/create-sd-phase-handoffs-table.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 3512
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/create-subagent-automation.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 6711
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/create-uat-sd-linking.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 2165
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/design-subagent-complete.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 15907
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/expand-design-subagent-triggers-safe.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 12253
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/expand-design-subagent-triggers-uuid.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 7536
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/expand-design-subagent-triggers.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 11849
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/leo-ci-cd-integration.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 3,
+      "appScore": 0,
+      "size": 11259
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/make-sequence-rank-required.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 1748
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/migrate-id-schema-phase1.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 4486
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/migrate-id-schema-phase2.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 4201
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/parallel-execution-simple.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 4263
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/parallel-execution.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 4,
+      "appScore": 0,
+      "size": 11103
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/remove_execution_order_column.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 816
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/strategic_directive_id_migration.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 478
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/uat-credentials-tables.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 2720
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/001_initial_schema.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 5325
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/002_multi_app_schema.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 7787
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/004_prd_schema.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 3784
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/005_test_failures_schema.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 13115
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/006_sdip_schema.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 4822
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/007_leo_protocol_schema.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 3,
+      "appScore": 0,
+      "size": 14080
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/007_leo_protocol_schema_fixed.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 3,
+      "appScore": 0,
+      "size": 14293
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/008_impact_analysis_schema.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 15154
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/009_prd_playwright_integration.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 19175
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/010_ehg_backlog_schema.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 4405
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/011_agentic_reviews_schema.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 3,
+      "appScore": 0,
+      "size": 4904
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/011_extend_existing_tables.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 4826
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/012_create_prd_view_v2.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 1630
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/013_leo_protocol_dashboard_fixes.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 16732
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/013_leo_protocol_dashboard_schema.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 14469
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/add_cancelled_status.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 618
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/add_deferred_status.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 608
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/cleanup_tech_debt.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 1453
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/complete_subagent_integration.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 11767
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/drop_execution_order.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 504
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/fix_sd_key_default.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 1283
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/sd_execution_timeline.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 4124
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/sd_testing_status.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 5938
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/strategic_directives.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 3,
+      "appScore": 0,
+      "size": 4581
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/sub_agent_execution_results.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 2879
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/v_sd_release_gate.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 2300
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/202509221300__eng_sd_metadata.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 2570
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/202509221305__eng_prd_contract.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 4013
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/202509221310__eng_backlog_contract.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 5165
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/202509221315__eng_archive_legacy.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 1029
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/202509221320__eng_fix_prd_storage_fk.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 1313
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/202509221325__eng_commit_pr_linkage.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 520
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/001_add_status_field_to_sdip_submissions.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 980
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/007_sdip_database_improvements.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 10452
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/014_leo_gap_remediation.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 3,
+      "appScore": 0,
+      "size": 10649
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/015_leo_gap_remediation_polish.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 10840
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/2025-01-17-prod-hardening.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 1377
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/2025-01-17-user-stories-compat.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 14039
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/2025-01-17-user-stories.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 7887
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/create-handoff-tracking-tables.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 3921
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/create_directive_submissions_basic.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 1649
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/create_directive_submissions_table.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 1878
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/hardening-fixes.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 3376
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/prod-pilot-seed.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 4807
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/prod-verification-queries.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 4914
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/rollback-SD-2025-09-EMB.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 1651
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/schema-discovery-queries.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 2242
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/seed-test-data.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 5513
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/verify-SD-2025-09-EMB.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 3394
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/scripts/apply-complete-sd-testing-migration.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 1,
+      "appScore": 0,
+      "size": 7495
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/scripts/create-progress-tracking-schema.sql",
+      "category": "EHG_ENGINEER",
+      "engineerScore": 2,
+      "appScore": 0,
+      "size": 5738
+    }
+  ],
+  "EHG_APP": [
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828094259_8d7885bb-3d16-4518-8816-b804e0fe894b.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 3,
+      "size": 9140
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828095134_d205058b-0784-4891-ad32-543c822ce88e.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 3,
+      "size": 6344
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828095254_0083514c-1da9-4b46-8627-bee94aa67ea2.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 3,
+      "size": 6344
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828095417_9a87912b-1ac1-4919-aa88-de6e83ac2820.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 3,
+      "size": 2408
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828095718_646fdabe-d8a5-40cf-8c7d-3db72b1158a5.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 736
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828111443_3e6446f8-dea8-468d-b33c-23074bcf83ea.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 8206
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828111525_60ddebd0-4489-46e9-822c-86c1b48acc88.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 8194
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828161004_f7d7beb9-17ed-4c49-890b-9ddb94c26901.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 8880
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828172739_482313fa-09ac-4be0-9101-a2b60753ac5d.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 10662
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828172806_85f77080-8990-495d-9ff5-b022dbd16f77.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 10662
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828172922_b877beff-6c9e-4ebf-aef0-9a77431b0824.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 1606
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828191610_e7a39b5f-e2dd-4bcc-b438-29de5cdcf72f.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 1269
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828191913_72abc906-91f4-4464-8198-81c10b8c7168.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 1441
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828193601_c1d78de1-0d47-4d2a-b876-a146731fd6ee.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 832
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828200256_0a891029-93a6-4274-8408-a281bb6a3d95.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 3423
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828214615_d3f6231c-5b29-469b-be2a-9fd6718613cb.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 7820
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828222538_9ebfa569-ef68-469c-807f-4be8c1250c38.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 2,
+      "size": 3583
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828233654_ad68a67f-9a34-49fa-8571-9a1da51629a5.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 2,
+      "size": 11104
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829002305_7813e66f-9bfe-40cf-88bd-9a21205d5a48.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 12924
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829003957_99f8f779-d6b9-4283-81b3-1b64679dc4e0.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 11879
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829005823_dc552347-ac5e-41d2-a240-ece77c698741.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 10664
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829011205_7769ec3c-4a74-488b-ab44-39e0ffeb5586.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 2,
+      "size": 8568
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829021855_af736656-6733-4752-9561-c0a2bf418c9f.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 19560
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829103906_5c0d671c-6e50-4dc7-8ff4-1f8027ea858b.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 19531
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829104002_44794c58-11f5-49af-b581-7dc6e968ddd3.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 1961
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829104209_030eeaec-dbcf-4105-9ac5-b3ddd991ad1b.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 1526
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829104518_e380d248-dfc4-4cfa-bb69-0f0a1cc688fb.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 6704
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829112853_b8d1062c-a196-4711-96dc-9a8afb067ad6.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 2,
+      "size": 3129
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829113003_c25b4cd7-574d-41b5-ae0d-08cbb65fcc31.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 2,
+      "size": 3129
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829113143_1bb36a07-aa6e-4c50-b5d7-6c6e03b8b939.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 2,
+      "size": 2951
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829113205_7e5cb10c-4803-431c-9978-10daca5abd36.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 2,
+      "size": 3012
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829113329_c6801088-e989-489c-87b2-4d26f807d19a.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 2,
+      "size": 2966
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829113545_dbe51449-c959-4c60-a6e0-ec64aef9188f.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 2,
+      "size": 3713
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829121222_fea897db-7238-49b8-8499-6a9dbfbfec3f.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 5207
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829122937_dd62e853-f1a9-4756-b340-4eb2b2a3f1e0.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 9955
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829123022_f998ce5c-ecd5-4360-98ce-38167083d7a9.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 9975
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829131052_66ef1ec8-42ad-4515-ae84-fa61f3004a98.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 9094
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829132027_ea30fc27-9251-4c4a-8034-774ed67fc0b4.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 2,
+      "size": 20123
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829144908_a4af3c6b-8fd4-4b0b-afa8-cc8510e1a19a.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 11832
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/2025-09-22-integrity-metrics.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 2027
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/add-uat-description-field.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 2833
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/create-ehg-application-architecture-tables.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 5850
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/create-settings-tables-sd-uat-020.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 8737
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/seed-uat-test-cases.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 5677
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/uat-simple-tracking.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 16245
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/vh/202509221330__vh_namespace_core.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 2,
+      "size": 1562
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/vh/202509221335__vh_trace_columns.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 745
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/vh/legacy/001_initial_schema.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 2,
+      "size": 11720
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/vh/legacy/002_onboarding_progress.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 6910
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/vh/legacy/003_analytics_events.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 1,
+      "size": 9010
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/vh/legacy/rollback.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 2,
+      "size": 4202
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/supabase/migrations/004_voice_conversations.sql",
+      "category": "EHG_APP",
+      "engineerScore": 0,
+      "appScore": 3,
+      "size": 6667
+    }
+  ],
+  "MIXED": [
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829000247_866f55bc-62a6-47a1-a999-7f218c37b05b.sql",
+      "category": "MIXED",
+      "engineerScore": 1,
+      "appScore": 1,
+      "size": 9038
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/2025-09-22-vh-bridge-tables.sql",
+      "category": "MIXED",
+      "engineerScore": 1,
+      "appScore": 1,
+      "size": 5112
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/uat-tracking-schema.sql",
+      "category": "MIXED",
+      "engineerScore": 1,
+      "appScore": 1,
+      "size": 15313
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/2025-09-EMB-message-bus.sql",
+      "category": "MIXED",
+      "engineerScore": 1,
+      "appScore": 1,
+      "size": 25650
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/ops/checks/schema_compatibility_check.sql",
+      "category": "MIXED",
+      "engineerScore": 1,
+      "appScore": 1,
+      "size": 6033
+    }
+  ],
+  "UNKNOWN": [
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828155709_ae75aaf0-8073-4c0b-9fef-a11540a5b061.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 2849
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828224304_bc046d64-7758-4f6e-9ab8-66bc85448794.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 1429
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828234818_c8a501cd-d532-473e-afd6-dee995fa8719.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 13532
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250828234924_43b786fb-8da4-4607-910c-8cb349496e3a.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 13818
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829100257_b9a6238f-257e-42ff-b8e5-54cec003a197.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 1282
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829101141_514c5607-05df-4b83-ac5c-496b24cc0a40.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 16448
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829104435_9a7d0454-907f-4360-bd6e-fc27b19641e9.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 2261
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829104539_1c46926f-1a6f-4b5d-83a4-d88555c5e033.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 2261
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829104555_307a4dfa-9973-4dfe-99f3-e65d18fd8cb3.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 2261
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829105148_68cc66e7-4255-43b6-b483-1a4a930e6842.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 13702
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829105252_0e17478b-d8df-4f4f-91be-6bbdff61fd31.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 12351
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829105316_0db63f24-d248-47dc-8995-fc9683d466b9.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 12351
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829105343_9da73fcb-c8a4-43a6-ba53-9faad6d6bf19.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 3732
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829110022_231c7d6c-7325-4477-8475-68738894716a.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 11890
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829110104_4b3cba61-e841-44b0-a3e9-0b9848334dbb.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 5941
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829110132_caa5f67b-f459-41de-ab2d-ed66fef808ea.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 4719
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829110149_4a244419-1617-459a-9d0a-c6406c844708.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 5941
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829110217_8be9f00c-4387-44a6-b6f5-d53d94d504c6.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 3969
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829110902_1db8ebe7-a651-4724-b999-b6058cf7498f.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 11197
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829132050_176f7e63-a120-4f8d-b22a-3a86777a84a4.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 789
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829132109_0274aaf8-58f6-43ca-88e6-1ea1d5c6eb02.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 789
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829141742_aa4b2f60-7830-4ad8-a830-775e52b4e9e5.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 6847
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829141817_80213681-e522-4478-8a9c-f442460ea19d.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 6847
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829141852_e48ca6ea-d7bb-43ba-9c32-d75aab06fa4a.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 6847
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829141937_31b66776-e970-4673-95ee-8abcdba5de19.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 3772
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829142829_caf34e41-9690-4d00-a8b9-79e9cac19c68.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 7007
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829151332_b3dab31f-cd24-4df8-a428-f85a255004d4.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 11261
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829152544_d247b2dc-eb80-4738-af70-078656c1080a.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 11527
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829165049_4cd87d07-a700-4fd1-bb45-a2ca027bc012.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 3780
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829181246_16ea8638-0d0d-4e86-85e3-c658ab6be9d0.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 5341
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829205633_39032358-e8c8-4edb-a15a-84e1b3c4f2dc.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 1777
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/supabase/migrations/20250829205749_830a92e7-2b94-4523-9a3b-bcfbeb729714.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 628
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/add-uat-sort-order.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 795
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/allow-uat-cases-insert.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 1481
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/create-gate-integrity-view.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 1737
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/create-rls-auditor-role.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 2311
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/create-set-active-test-function.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 675
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/create-test-coverage-policies.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 3458
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/delete-manual-uat-tests.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 285
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/fix-uat-rls-policies.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 1425
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/insert-manual-test-cases.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 4895
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/safe-delete-uat-case-function.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 1177
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/uat-active-test-tracking.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 4579
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/uat-structured-reports.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 10464
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/migrations/verify-uat-data.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 422
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/003_vision_qa_schema.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 6638
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/009_context_learning_schema.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 14916
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/010_plan_supervisor_schema.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 10754
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/enhance_sd_testing_status.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 1742
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/leo_commit_rules.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 7981
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/database/schema/sub_agent_tracking.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 3703
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/008_ui_validation_schema.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 10236
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/009_create_learning_tables.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 7642
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/rollback-2025-01-17-user-stories.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 1090
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/eng/legacy/verify-2025-01-17-user-stories.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 5076
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/db/migrations/vh/202509221340__vh_ingest_governance_views.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 519
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/scripts/supervisor-migration-clipboard.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 4611
+    },
+    {
+      "filePath": "/mnt/c/_EHG/EHG_Engineer/supabase/migrations/008_ui_validation_schema.sql",
+      "category": "UNKNOWN",
+      "engineerScore": 0,
+      "appScore": 0,
+      "size": 10236
+    }
+  ]
+}
