@@ -34,12 +34,14 @@ class GitCommitVerifier {
       commitsExist: false,
       allCommitsPushed: false,
       remoteBranchExists: false,
+      branchMatchesSD: false,
       verdict: 'FAIL',
       blockers: [],
       warnings: [],
       commitCount: 0,
       unpushedCount: 0,
-      uncommittedFiles: []
+      uncommittedFiles: [],
+      currentBranch: ''
     };
   }
 
@@ -258,6 +260,60 @@ class GitCommitVerifier {
   }
 
   /**
+   * Check 5: Branch matches SD-ID
+   */
+  async checkBranchMatchesSD() {
+    console.log('\n🔍 CHECK 5: Branch Matches SD-ID');
+    console.log('-'.repeat(50));
+
+    // Get current branch
+    const branchResult = await this.gitCommand('git branch --show-current');
+    if (!branchResult.success || !branchResult.stdout) {
+      this.results.warnings.push('Could not determine current branch for SD validation');
+      console.warn('⚠️  Could not determine current branch');
+      this.results.branchMatchesSD = true; // Don't block on this
+      return true;
+    }
+
+    const currentBranch = branchResult.stdout;
+    this.results.currentBranch = currentBranch;
+    console.log(`   Current branch: ${currentBranch}`);
+
+    // Extract SD-ID from branch name
+    // Expected format: <type>/<SD-ID>-<description> or <type>/<SD-ID>
+    // Match SD-YYYY-NNNN-XXX but stop before description slug
+    const sdMatch = currentBranch.match(/SD-[A-Z0-9]+(-[A-Z0-9]+)*/);
+
+    if (!sdMatch) {
+      this.results.warnings.push(`Branch "${currentBranch}" does not follow SD naming convention`);
+      console.warn('⚠️  Branch does not contain recognizable SD-ID pattern');
+      console.warn('   Expected format: <type>/SD-ID-description');
+      console.warn(`   Current branch: ${currentBranch}`);
+      this.results.branchMatchesSD = true; // Don't block, just warn
+      return true;
+    }
+
+    const branchSDId = sdMatch[0];
+    console.log(`   Branch SD-ID: ${branchSDId}`);
+
+    if (branchSDId !== this.sdId) {
+      this.results.blockers.push(`Branch SD-ID "${branchSDId}" does not match target SD-ID "${this.sdId}"`);
+      console.error(`❌ Branch SD-ID mismatch:`);
+      console.error(`   Expected: ${this.sdId}`);
+      console.error(`   Found in branch: ${branchSDId}`);
+      console.error(`   Current branch: ${currentBranch}`);
+      console.error('');
+      console.error('   This indicates you may be working on the wrong branch.');
+      console.error(`   Switch to correct branch: git checkout <type>/${this.sdId}-<description>`);
+      return false;
+    }
+
+    console.log(`✅ Branch matches SD-ID: ${this.sdId}`);
+    this.results.branchMatchesSD = true;
+    return true;
+  }
+
+  /**
    * Run all checks and determine verdict
    */
   async verify() {
@@ -288,9 +344,10 @@ class GitCommitVerifier {
     const check2 = await this.checkCommitsExist();
     const check3 = await this.checkAllCommitsPushed();
     const check4 = await this.checkRemoteBranchExists();
+    const check5 = await this.checkBranchMatchesSD();
 
     // Determine verdict
-    const allPassed = check1 && check2 && check3 && check4;
+    const allPassed = check1 && check2 && check3 && check4 && check5;
     this.results.verdict = allPassed ? 'PASS' : 'FAIL';
 
     // Print summary
@@ -300,6 +357,10 @@ class GitCommitVerifier {
     console.log(`Commits Exist (${this.results.commitCount}):        ${check2 ? '✅ PASS' : '❌ FAIL'}`);
     console.log(`All Commits Pushed:       ${check3 ? '✅ PASS' : '❌ FAIL'}`);
     console.log(`Remote Branch Exists:     ${check4 ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`Branch Matches SD-ID:     ${check5 ? '✅ PASS' : '❌ FAIL'}`);
+    if (this.results.currentBranch) {
+      console.log(`   Current branch: ${this.results.currentBranch}`);
+    }
     console.log('-'.repeat(50));
     console.log(`Verdict: ${this.results.verdict === 'PASS' ? '✅ PASS' : '❌ FAIL'}`);
 

@@ -26,6 +26,7 @@ import HandoffValidator from './handoff-validator.js';
 import LeadToPlanVerifier from './verify-handoff-lead-to-plan.js';
 import PlanToExecVerifier from './verify-handoff-plan-to-exec.js';
 import GitCommitVerifier from './verify-git-commit-status.js';
+import GitBranchVerifier from './verify-git-branch-status.js';
 import { orchestrate } from './orchestrate-phase-subagents.js';
 import { validateBMADForPlanToExec, validateBMADForExecToPlan, validateRiskAssessment } from './modules/bmad-validation.js';
 import { autoValidateUserStories } from './auto-validate-user-stories-on-exec-complete.js';
@@ -146,36 +147,7 @@ class UnifiedHandoffSystem {
           break;
 
         case 'PLAN-to-EXEC':
-          // BMAD Enhancement: Validate PLAN→EXEC requirements before executing handoff
-          const bmadPlanToExec = await validateBMADForPlanToExec(sdId, this.supabase);
-
-          if (!bmadPlanToExec.passed) {
-            console.error('\n❌ BMAD VALIDATION FAILED (PLAN→EXEC)');
-            console.error(`   Score: ${bmadPlanToExec.score}/${bmadPlanToExec.max_score}`);
-            console.error(`   Issues: ${bmadPlanToExec.issues.join(', ')}`);
-
-            result = {
-              success: false,
-              rejected: true,
-              reasonCode: 'BMAD_VALIDATION_FAILED',
-              message: `BMAD validation failed - ${bmadPlanToExec.issues.join('; ')}`,
-              details: bmadPlanToExec
-            };
-          } else {
-            if (bmadPlanToExec.warnings.length > 0) {
-              console.log('\n⚠️  BMAD VALIDATION WARNINGS:');
-              bmadPlanToExec.warnings.forEach(w => console.log(`   • ${w}`));
-            }
-            console.log('✅ BMAD validation passed (PLAN→EXEC)\n');
-
-            // Proceed with standard PLAN-to-EXEC verification
-            result = await this.planToExecVerifier.verifyHandoff(sdId, options.prdId);
-
-            // Merge BMAD details into result
-            if (result.success) {
-              result.bmad_validation = bmadPlanToExec.details;
-            }
-          }
+          result = await this.executePlanToExec(sdId, options);
           break;
 
         case 'EXEC-to-PLAN':
@@ -234,7 +206,203 @@ class UnifiedHandoffSystem {
     console.log(`📋 Template loaded: ${template.name}`);
     return template;
   }
-  
+
+  /**
+   * Execute PLAN → EXEC handoff
+   * PLAN has created PRD and is handing off to EXEC for implementation
+   *
+   * GATE 6 Integration: Branch enforcement before EXEC work begins
+   */
+  async executePlanToExec(sdId, options) {
+    console.log('🔍 PLAN → EXEC HANDOFF EXECUTION');
+    console.log('-'.repeat(30));
+
+    try {
+      // Load Strategic Directive to determine target repository
+      const { data: sd } = await this.supabase
+        .from('strategic_directives_v2')
+        .select('*')
+        .eq('id', sdId)
+        .single();
+
+      if (!sd) {
+        throw new Error(`Strategic Directive not found: ${sdId}`);
+      }
+
+      // Determine target repository based on SD category
+      // Engineering/Tool SDs → EHG_Engineer repository
+      // Feature/Business SDs → EHG application repository
+      const appPath = this.determineTargetRepository(sd);
+      console.log(`   Target repository: ${appPath}`);
+
+      // BMAD Enhancement: Validate PLAN→EXEC requirements before executing handoff
+      console.log('\n🔍 Step 1: BMAD Validation');
+      console.log('-'.repeat(50));
+
+      const bmadPlanToExec = await validateBMADForPlanToExec(sdId, this.supabase);
+
+      if (!bmadPlanToExec.passed) {
+        console.error('\n❌ BMAD VALIDATION FAILED (PLAN→EXEC)');
+        console.error(`   Score: ${bmadPlanToExec.score}/${bmadPlanToExec.max_score}`);
+        console.error(`   Issues: ${bmadPlanToExec.issues.join(', ')}`);
+
+        return {
+          success: false,
+          rejected: true,
+          reasonCode: 'BMAD_VALIDATION_FAILED',
+          message: `BMAD validation failed - ${bmadPlanToExec.issues.join('; ')}`,
+          details: bmadPlanToExec
+        };
+      }
+
+      if (bmadPlanToExec.warnings.length > 0) {
+        console.log('\n⚠️  BMAD VALIDATION WARNINGS:');
+        bmadPlanToExec.warnings.forEach(w => console.log(`   • ${w}`));
+      }
+      console.log('✅ BMAD validation passed (PLAN→EXEC)\n');
+
+      // GATE 6: BRANCH ENFORCEMENT (BLOCKING)
+      // Ensures correct branch exists and is checked out before EXEC work begins
+      console.log('\n🔒 GATE 6: Git Branch Enforcement');
+      console.log('-'.repeat(50));
+
+      const branchVerifier = new GitBranchVerifier(sdId, sd.title, appPath);
+      const branchResults = await branchVerifier.verify();
+
+      if (branchResults.verdict === 'FAIL') {
+        console.error('\n❌ GIT BRANCH ENFORCEMENT GATE FAILED');
+        console.error(`   Blockers: ${branchResults.blockers.join(', ')}`);
+        console.error('');
+        console.error('   CRITICAL: Correct branch must be created and checked out');
+        console.error('   before EXEC implementation work can begin.');
+        console.error('');
+        console.error('   This gate prevents wrong-branch issues and uncommitted work.');
+        console.error('');
+        console.error('   REMEDIATION:');
+        console.error('   1. Branch will be created/switched automatically (stash-safe)');
+        console.error('   2. Or resolve branch issues manually');
+        console.error('   3. Re-run this handoff');
+
+        return {
+          success: false,
+          rejected: true,
+          reasonCode: 'BRANCH_ENFORCEMENT_FAILED',
+          message: `Branch enforcement failed - ${branchResults.blockers.join('; ')}`,
+          details: branchResults,
+          remediation: 'Resolve branch issues, then retry handoff'
+        };
+      }
+
+      console.log('✅ GATE 6: On correct branch, ready for EXEC work');
+      console.log(`   Branch: ${branchResults.expectedBranch}`);
+      console.log(`   Remote tracking: ${branchResults.remoteTrackingSetup ? 'configured' : 'will setup on first push'}`);
+      console.log('-'.repeat(50));
+
+      // Proceed with standard PLAN-to-EXEC verification
+      console.log('\n🔍 Step 2: Standard PLAN→EXEC Verification');
+      console.log('-'.repeat(50));
+
+      const verificationResult = await this.planToExecVerifier.verifyHandoff(sdId, options.prdId);
+
+      if (!verificationResult.success) {
+        return verificationResult;
+      }
+
+      // Merge validation details
+      verificationResult.bmad_validation = bmadPlanToExec.details;
+      verificationResult.branch_validation = {
+        branch: branchResults.expectedBranch,
+        created: branchResults.branchCreated,
+        switched: branchResults.branchSwitched,
+        remote_tracking: branchResults.remoteTrackingSetup
+      };
+
+      console.log('\n✅ PLAN → EXEC HANDOFF APPROVED');
+      console.log('📋 Ready for EXEC implementation work');
+      console.log(`   Branch: ${branchResults.expectedBranch}`);
+      console.log(`   Repository: ${appPath}`);
+
+      return verificationResult;
+
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+        reasonCode: 'SYSTEM_ERROR'
+      };
+    }
+  }
+
+  /**
+   * Determine target repository based on SD target_application field
+   * PRIMARY: Use target_application field (explicit specification)
+   * FALLBACK: Use category/ID pattern heuristics if field not set
+   *
+   * Engineering/Tool SDs → EHG_Engineer repository
+   * Feature/Business SDs → EHG application repository
+   */
+  determineTargetRepository(sd) {
+    // PRIMARY: Use target_application field if explicitly set
+    if (sd.target_application) {
+      const targetApp = sd.target_application.toLowerCase().trim();
+
+      // Match EHG_Engineer repository
+      if (targetApp.includes('engineer') ||
+          targetApp === 'ehg_engineer' ||
+          targetApp === 'ehg-engineer' ||
+          targetApp === 'engineer' ||
+          targetApp === 'ehg engineer') {
+        console.log(`   Repository determined by target_application: "${sd.target_application}" → EHG_Engineer`);
+        return '/mnt/c/_EHG/EHG_Engineer';
+      }
+
+      // Match EHG application repository
+      if (targetApp === 'ehg' ||
+          targetApp === 'app' ||
+          targetApp === 'application' ||
+          targetApp === 'ehg app' ||
+          targetApp === 'ehg-app') {
+        console.log(`   Repository determined by target_application: "${sd.target_application}" → EHG`);
+        return '/mnt/c/_EHG/ehg';
+      }
+
+      // If target_application is set but doesn't match, warn and fall through to heuristics
+      console.warn(`   ⚠️  Unknown target_application value: "${sd.target_application}"`);
+      console.warn(`   Falling back to heuristic detection...`);
+    }
+
+    // FALLBACK: Heuristic detection if target_application not set or invalid
+    console.log(`   Repository determined by heuristics (category/keywords)...`);
+
+    const engineeringCategories = ['engineering', 'tool', 'infrastructure', 'devops', 'ci-cd'];
+    const engineeringKeywords = ['eng/', 'tool/', 'infra/', 'pipeline/', 'build/', 'deploy/'];
+
+    // Check if SD ID starts with engineering prefix patterns
+    if (engineeringKeywords.some(keyword => sd.id.toLowerCase().includes(keyword))) {
+      return '/mnt/c/_EHG/EHG_Engineer';
+    }
+
+    // Check if SD category is engineering-related
+    if (sd.category && engineeringCategories.includes(sd.category.toLowerCase())) {
+      return '/mnt/c/_EHG/EHG_Engineer';
+    }
+
+    // Check if title contains engineering keywords
+    if (sd.title) {
+      const titleLower = sd.title.toLowerCase();
+      if (titleLower.includes('engineer') ||
+          titleLower.includes('protocol') ||
+          titleLower.includes('leo ') ||
+          titleLower.includes('gate ') ||
+          titleLower.includes('handoff')) {
+        return '/mnt/c/_EHG/EHG_Engineer';
+      }
+    }
+
+    // Default to EHG application for customer-facing features
+    return '/mnt/c/_EHG/ehg';
+  }
+
   /**
    * Execute EXEC → PLAN handoff (verification and acceptance)
    */
