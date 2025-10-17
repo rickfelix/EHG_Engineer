@@ -156,6 +156,44 @@ function isSubAgentRequired(subAgent, sd, phase) {
       return { required: true, reason: 'High priority SD requires performance review' };
     }
 
+    // Smart COST agent triggering - auto-detect infrastructure changes
+    if (code === 'COST' && phase === 'PLAN_VERIFY') {
+      const content = `${sd.title || ''} ${sd.scope || ''} ${sd.description || ''}`.toLowerCase();
+
+      const infraKeywords = [
+        'database migration',
+        'scaling',
+        'infrastructure',
+        'cloud',
+        'serverless',
+        'deployment',
+        'instances',
+        'storage',
+        'bandwidth',
+        'compute',
+        'load balancer',
+        'CDN',
+        'cache',
+        'Redis',
+        'Elasticsearch',
+        'S3',
+        'CloudFront',
+        'Lambda',
+        'EC2',
+        'RDS',
+        'DynamoDB'
+      ];
+
+      const matchedKeywords = infraKeywords.filter(kw => content.includes(kw));
+
+      if (matchedKeywords.length > 0) {
+        return {
+          required: true,
+          reason: `Infrastructure changes detected (${matchedKeywords.slice(0, 3).join(', ')}) - cost analysis required`
+        };
+      }
+    }
+
     return { required: false, reason: 'Not recommended by context-aware analysis' };
 
   } catch (error) {
