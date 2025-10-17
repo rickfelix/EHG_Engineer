@@ -65,10 +65,38 @@ async function generateRetrospective(sdId) {
     .select('*')
     .eq('sd_id', sdId);
 
+  // Determine appropriate learning category based on SD type
+  const determinelearning_category = (sd) => {
+    const title = (sd.title || '').toLowerCase();
+    const description = (sd.description || '').toLowerCase();
+
+    if (title.includes('process') || title.includes('workflow') || description.includes('protocol')) {
+      return 'PROCESS_IMPROVEMENT';
+    } else if (title.includes('test') || title.includes('qa') || description.includes('testing')) {
+      return 'TESTING_STRATEGY';
+    } else if (title.includes('database') || title.includes('schema') || title.includes('migration')) {
+      return 'DATABASE_SCHEMA';
+    } else if (title.includes('deploy') || title.includes('ci/cd') || title.includes('pipeline')) {
+      return 'DEPLOYMENT_ISSUE';
+    } else if (title.includes('performance') || title.includes('optimization')) {
+      return 'PERFORMANCE_OPTIMIZATION';
+    } else if (title.includes('security') || title.includes('auth')) {
+      return 'SECURITY_VULNERABILITY';
+    } else if (title.includes('docs') || title.includes('documentation')) {
+      return 'DOCUMENTATION';
+    } else if (title.includes('ui') || title.includes('ux') || title.includes('user experience')) {
+      return 'USER_EXPERIENCE';
+    }
+    // Default to APPLICATION_ISSUE for feature implementations
+    return 'APPLICATION_ISSUE';
+  };
+
+  const learning_category = determinelearning_category(sd);
+
   // Generate retrospective
   const retrospective = {
     sd_id: sdId,
-    target_application: sd.target_application || 'APP001',
+    target_application: sd.target_application || 'EHG_engineer',
     project_name: sd.title,
     retro_type: 'SD_COMPLETION',
     title: `${sd.sd_key} Retrospective`,
@@ -94,6 +122,14 @@ async function generateRetrospective(sdId) {
       'Automation system working',
       `SD ${sd.sd_key} completed`
     ],
+    learning_category: learning_category,
+    // Required: affected_components for APPLICATION_ISSUE category (trigger validation)
+    affected_components: learning_category === 'APPLICATION_ISSUE' ? [sd.title] : [],
+    // Optional but recommended: code traceability fields
+    related_files: [],
+    related_commits: [],
+    related_prs: [],
+    tags: [sd.sd_key, 'automated-retro'],
     quality_score: sd.progress || 80,
     team_satisfaction: 4,
     business_value_delivered: sd.priority >= 70 ? 'HIGH' : 'MEDIUM',
