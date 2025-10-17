@@ -25,6 +25,7 @@ import { randomUUID } from 'crypto';
 import HandoffValidator from './handoff-validator.js';
 import LeadToPlanVerifier from './verify-handoff-lead-to-plan.js';
 import PlanToExecVerifier from './verify-handoff-plan-to-exec.js';
+import GitCommitVerifier from './verify-git-commit-status.js';
 import { orchestrate } from './orchestrate-phase-subagents.js';
 import { validateBMADForPlanToExec, validateBMADForExecToPlan, validateRiskAssessment } from './modules/bmad-validation.js';
 import { autoValidateUserStories } from './auto-validate-user-stories-on-exec-complete.js';
@@ -468,6 +469,45 @@ class UnifiedHandoffSystem {
       console.log(`✅ Sub-agent orchestration passed: ${orchestrationResult.passed}/${orchestrationResult.total_agents} agents`);
       console.log('-'.repeat(50));
 
+      // GATE 5: GIT COMMIT ENFORCEMENT (BLOCKING)
+      // Ensures all implementation work is committed and pushed before final approval
+      console.log('\n🔒 GATE 5: Git Commit Enforcement');
+      console.log('-'.repeat(50));
+
+      // Determine application path (EHG vs EHG_Engineer)
+      const appPath = options.appPath || '/mnt/c/_EHG/ehg';
+
+      const gitVerifier = new GitCommitVerifier(sdId, appPath);
+      const gitResults = await gitVerifier.verify();
+
+      if (gitResults.verdict === 'FAIL') {
+        console.error('\n❌ GIT COMMIT ENFORCEMENT GATE FAILED');
+        console.error(`   Blockers: ${gitResults.blockers.join(', ')}`);
+        console.error('');
+        console.error('   CRITICAL: All implementation work must be committed and pushed');
+        console.error('   to the remote repository before PLAN→LEAD handoff.');
+        console.error('');
+        console.error('   This gate prevents lost work (e.g., uncommitted Ventures page changes).');
+        console.error('');
+        console.error('   REMEDIATION:');
+        console.error('   1. Review uncommitted changes: git status');
+        console.error('   2. Commit all work: git commit -m "feat(' + sdId + '): <description>"');
+        console.error('   3. Push to remote: git push');
+        console.error('   4. Re-run this handoff');
+
+        return {
+          success: false,
+          rejected: true,
+          reasonCode: 'GIT_COMMIT_ENFORCEMENT_FAILED',
+          message: `Git commit enforcement failed - ${gitResults.blockers.join('; ')}`,
+          details: gitResults,
+          remediation: 'Commit and push all changes, then retry handoff'
+        };
+      }
+
+      console.log('✅ GATE 5: Git status clean, all commits pushed');
+      console.log(`   Commits found: ${gitResults.commitCount}`);
+      console.log('-'.repeat(50));
 
       // Load Strategic Directive and PRD
       const { data: sd } = await this.supabase
