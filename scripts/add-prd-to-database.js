@@ -67,13 +67,30 @@ CREATE TABLE IF NOT EXISTS product_requirements_v2 (
       console.log('Paste the SQL above and click "Run"');
       process.exit(1);
     }
-    
+
+    // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
+    const { data: sdData, error: sdError } = await supabase
+      .from('strategic_directives_v2')
+      .select('uuid_id')
+      .eq('id', sdId)
+      .single();
+
+    if (sdError || !sdData) {
+      console.log(`❌ Strategic Directive ${sdId} not found in database`);
+      console.log('   Create SD first before creating PRD');
+      process.exit(1);
+    }
+
+    const sdUuid = sdData.uuid_id;
+    console.log(`   SD uuid_id: ${sdUuid}`);
+
     // Create PRD entry
     const { data, error } = await supabase
       .from('product_requirements_v2')
       .insert({
         id: prdId,
         directive_id: sdId,
+        sd_uuid: sdUuid,  // FIX: Populate sd_uuid for handoff validation
         title: prdTitle || `Product Requirements for ${sdId}`,
         status: 'planning',
         category: 'technical',
