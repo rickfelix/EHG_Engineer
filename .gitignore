@@ -11,4 +11,4 @@ verification-packages/
 applications/*/codebase/
 applications/*/.env.encrypted
 applications/*/.env.decrypted
-applications/*/.leo-sync/
+applications/*/.leo-sync/supabase/.temp/
