@@ -4,13 +4,18 @@
  * Add PRD to database
  * Creates a PRD entry for a given Strategic Directive
  *
- * Enhanced with auto-trigger for Product Requirements Expert (STORIES sub-agent)
+ * Enhanced with:
+ * - Auto-trigger for Product Requirements Expert (STORIES sub-agent)
+ * - Semantic component recommendations with explainable AI
+ *
  * Part of Phase 3.2: User story validation enforcement
+ * Part of Semantic Component Selector: PRD enhancement
  */
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from "dotenv";
 import { autoTriggerStories } from './modules/auto-trigger-stories.mjs';
+import { getComponentRecommendations, formatForPRD, generateInstallScript } from '../lib/shadcn-semantic-explainable-selector.js';
 dotenv.config();
 
 async function addPRDToDatabase(sdId, prdTitle) {
@@ -69,9 +74,10 @@ CREATE TABLE IF NOT EXISTS product_requirements_v2 (
     }
 
     // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
+    // Also fetch SD metadata for component recommendations
     const { data: sdData, error: sdError } = await supabase
       .from('strategic_directives_v2')
-      .select('uuid_id')
+      .select('uuid_id, scope, description, strategic_objectives, title')
       .eq('id', sdId)
       .single();
 
@@ -167,6 +173,91 @@ This PRD defines the technical requirements and implementation approach for ${sd
     console.log(`✅ ${prdId} added to database successfully!`);
     console.log('Database record:', JSON.stringify(data, null, 2));
 
+    // Generate semantic component recommendations
+    console.log('\n═══════════════════════════════════════════════════');
+    console.log('🎨 SEMANTIC COMPONENT RECOMMENDATIONS');
+    console.log('═══════════════════════════════════════════════════');
+
+    try {
+      console.log('🔍 Analyzing SD scope and generating component recommendations...\n');
+
+      const { recommendations, summary } = await getComponentRecommendations({
+        sdScope: sdData.scope || sdData.title || sdId,
+        sdDescription: sdData.description || '',
+        sdObjectives: sdData.strategic_objectives || '',
+        maxComponents: 8,
+        similarityThreshold: 0.65, // Lower threshold to show more options
+        supabase
+      });
+
+      if (recommendations.length > 0) {
+        console.log(`✅ Found ${recommendations.length} component recommendations:\n`);
+
+        recommendations.forEach((rec, idx) => {
+          console.log(`${idx + 1}. ${rec.component_name} (${rec.registry_source})`);
+          console.log(`   Priority: ${rec.explanation.installation_priority}`);
+          console.log(`   Confidence: ${rec.explanation.confidence_percentage}% (${rec.explanation.confidence_tier})`);
+          console.log(`   Install: ${rec.install_command}`);
+          console.log(`   Reason: ${rec.explanation.reasons.join('; ')}`);
+          if (rec.explanation.warnings.length > 0) {
+            console.log(`   ⚠️  Warnings: ${rec.explanation.warnings.map(w => w.message).join('; ')}`);
+          }
+          console.log('');
+        });
+
+        // Format for PRD
+        const prdComponents = formatForPRD(recommendations);
+
+        // Update PRD with component recommendations
+        const { error: updateError } = await supabase
+          .from('product_requirements_v2')
+          .update({
+            ui_components: prdComponents.ui_components,
+            ui_components_summary: prdComponents.ui_components_summary,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', prdId);
+
+        if (updateError) {
+          console.warn('⚠️  Failed to update PRD with component recommendations:', updateError.message);
+        } else {
+          console.log('✅ Component recommendations added to PRD\n');
+        }
+
+        // Generate installation script
+        const installScript = generateInstallScript(recommendations, ['CRITICAL', 'RECOMMENDED']);
+        if (installScript) {
+          console.log('📦 Installation Script (Critical + Recommended):');
+          console.log('-'.repeat(70));
+          console.log(installScript);
+          console.log('-'.repeat(70));
+          console.log('');
+        }
+
+        console.log('Summary:');
+        console.log(`- ${summary.breakdown.critical} CRITICAL components`);
+        console.log(`- ${summary.breakdown.recommended} RECOMMENDED components`);
+        console.log(`- ${summary.breakdown.optional} OPTIONAL components`);
+
+        if (summary.top_recommendation) {
+          console.log(`\nTop recommendation: ${summary.top_recommendation.component} (${summary.top_recommendation.confidence}% confidence, ${summary.top_recommendation.priority} priority)`);
+        }
+
+      } else {
+        console.log('ℹ️  No component recommendations found above confidence threshold');
+        console.log(`   Threshold: ${0.65 * 100}%`);
+        console.log('   Consider lowering threshold or refining SD description');
+      }
+
+    } catch (componentError) {
+      console.warn('⚠️  Component recommendation warning:', componentError.message);
+      console.log('   PRD created successfully, but component recommendations could not be generated');
+      console.log('   This is likely due to:');
+      console.log('   - Missing OPENAI_API_KEY in .env');
+      console.log('   - component_registry_embeddings table not yet created');
+      console.log('   - No components seeded in registry');
+    }
+
     // Auto-trigger Product Requirements Expert sub-agent
     console.log('\n═══════════════════════════════════════════════════');
     console.log('🤖 AUTO-TRIGGER: Product Requirements Expert');
@@ -193,10 +284,12 @@ This PRD defines the technical requirements and implementation approach for ${sd
     }
 
     console.log('\n📝 Next steps:');
-    console.log('1. Update PRD with actual requirements');
-    console.log('2. Mark checklist items as complete');
-    console.log('3. Update phase as work progresses');
-    console.log('4. If user stories not auto-generated, run: node scripts/create-user-stories-[sd-id].mjs');
+    console.log('1. Review component recommendations in PRD ui_components field');
+    console.log('2. Install recommended components using the generated installation script');
+    console.log('3. Update PRD with actual requirements');
+    console.log('4. Mark checklist items as complete');
+    console.log('5. Update phase as work progresses');
+    console.log('6. If user stories not auto-generated, run: node scripts/create-user-stories-[sd-id].mjs');
     
   } catch (error) {
     console.error('❌ Error adding PRD to database:', error.message);
