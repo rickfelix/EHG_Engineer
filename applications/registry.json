@@ -27,26 +27,12 @@
       "environment": "development",
       "registered_at": "2025-08-30T16:06:36.693Z",
       "registered_by": "ENV_REGISTRATION"
-    },
-    "APP003": {
-      "id": "APP003",
-      "name": "ehg-duplicate",
-      "description": "The EHG application is a portfolio application used to create other ventures",
-      "github_repo": "rickfelix/ehg",
-      "github_branch": "main",
-      "supabase_project_id": "liapbndqlqxdcgpwntbv",
-      "supabase_url": "https://liapbndqlqxdcgpwntbv.supabase.co",
-      "status": "active",
-      "environment": "development",
-      "registered_at": "2025-08-30T16:17:23.096Z",
-      "registered_by": "ENV_REGISTRATION",
-      "note": "Duplicate of APP001 - consider removing"
     }
   },
   "metadata": {
-    "total_apps": 3,
-    "active_apps": 3,
-    "last_updated": "2025-08-30T16:17:23.111Z",
+    "total_apps": 2,
+    "active_apps": 2,
+    "last_updated": "2025-10-17T20:20:00.000Z",
     "last_sync": null
   },
   "settings": {
