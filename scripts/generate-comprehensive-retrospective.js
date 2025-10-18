@@ -405,7 +405,7 @@ async function generateComprehensiveRetrospective(sdId) {
     improvement_areas: whatNeedsImprovement.slice(0, 3),
     generated_by: 'MANUAL',
     trigger_event: 'SD_STATUS_COMPLETED',
-    status: 'DRAFT', // Start as DRAFT to bypass PUBLISHED quality constraints
+    status: 'PUBLISHED', // Default to PUBLISHED (LEO Protocol v4.3.0 - fixes progress calculation)
     performance_impact: handoffInsights.patterns.find(p => p.includes('ms')) || 'Standard',
 
     // SD-RETRO-ENHANCE-001: New required fields from Checkpoint 1

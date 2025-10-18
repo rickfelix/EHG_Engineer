@@ -28,6 +28,8 @@ import PlanToExecVerifier from './verify-handoff-plan-to-exec.js';
 import GitCommitVerifier from './verify-git-commit-status.js';
 import GitBranchVerifier from './verify-git-branch-status.js';
 import { orchestrate } from './orchestrate-phase-subagents.js';
+import { mapE2ETestsToUserStories, validateE2ECoverage } from './modules/handoff/map-e2e-tests-to-stories.js';
+import { extractAndPopulateDeliverables } from './modules/handoff/extract-deliverables-from-prd.js';
 import { validateBMADForPlanToExec, validateBMADForExecToPlan, validateRiskAssessment } from './modules/bmad-validation.js';
 import { autoValidateUserStories } from './auto-validate-user-stories-on-exec-complete.js';
 import path from 'path';
@@ -298,6 +300,40 @@ class UnifiedHandoffSystem {
       console.log(`   Remote tracking: ${branchResults.remoteTrackingSetup ? 'configured' : 'will setup on first push'}`);
       console.log('-'.repeat(50));
 
+      // NEW: Auto-populate deliverables from PRD (ROOT CAUSE FIX)
+      console.log('\n📦 Step 1.5: Auto-Populate Deliverables from PRD');
+      console.log('-'.repeat(50));
+
+      // Get PRD first
+      const sdUuid = sd.uuid_id || sd.id;
+      const { data: prds } = await this.supabase
+        .from('product_requirements_v2')
+        .select('*')
+        .eq('sd_uuid', sdUuid);
+
+      if (prds && prds.length > 0) {
+        const prd = prds[0];
+        const deliverablesResult = await extractAndPopulateDeliverables(sdId, prd, this.supabase, {
+          skipIfExists: true
+        });
+
+        if (deliverablesResult.success) {
+          if (deliverablesResult.skipped) {
+            console.log('   ℹ️  Deliverables already exist - skipping');
+          } else {
+            console.log(`   ✅ Populated ${deliverablesResult.count} deliverables`);
+            console.log('   EXEC agents will track completion in sd_scope_deliverables table');
+          }
+        } else {
+          console.log('   ⚠️  Could not extract deliverables from PRD');
+          console.log(`   ${deliverablesResult.message}`);
+          console.log('   EXEC agents may need to create deliverables manually');
+        }
+      } else {
+        console.log('   ⚠️  No PRD found - cannot extract deliverables');
+      }
+      console.log('-'.repeat(50));
+
       // Proceed with standard PLAN-to-EXEC verification
       console.log('\n🔍 Step 2: Standard PLAN→EXEC Verification');
       console.log('-'.repeat(50));
@@ -556,8 +592,53 @@ class UnifiedHandoffSystem {
         console.log(`✅ Documentation validated: ${docs.length} record(s) found`);
       }
 
+      // NEW: E2E Test → User Story Mapping (ROOT CAUSE FIX)
+      console.log('\n🔗 Step 2.5: E2E Test → User Story Mapping');
+      console.log('-'.repeat(50));
+
+      const mappingResult = await mapE2ETestsToUserStories(sdId, this.supabase);
+
+      // Validate coverage (minimum 50% for UI features, backend validated via deliverables)
+      const coverageValidation = validateE2ECoverage(mappingResult, 50);
+
+      if (!coverageValidation.passed) {
+        console.error('\n❌ E2E TEST COVERAGE INSUFFICIENT');
+        console.error(`   Coverage: ${coverageValidation.coverage}%`);
+        console.error(`   Threshold: 50% (UI features should have E2E tests)`);
+        console.error(`   Unmapped: ${mappingResult.unmatchedStories.length} user stories`);
+        console.error('');
+        console.error('   REMEDIATION:');
+        console.error('   • Create E2E tests for UI user stories (US-XXX naming convention)');
+        console.error('   • OR validate backend stories via deliverables completion');
+        console.error('   • OR update user_stories manually if tests exist but use different naming');
+        console.error('');
+        console.error('   Unmapped user stories:');
+        mappingResult.unmatchedStories.slice(0, 10).forEach((s, idx) => {
+          console.error(`   ${idx + 1}. ${s.story_key}: ${s.title}`);
+        });
+        if (mappingResult.unmatchedStories.length > 10) {
+          console.error(`   ... and ${mappingResult.unmatchedStories.length - 10} more`);
+        }
+
+        return {
+          success: false,
+          rejected: true,
+          reasonCode: 'E2E_COVERAGE_INSUFFICIENT',
+          message: coverageValidation.message,
+          details: mappingResult,
+          remediation: coverageValidation.remediation
+        };
+      }
+
+      console.log('✅ E2E test mapping complete');
+      console.log(`   Coverage: ${mappingResult.coverage}% (${mappingResult.matched}/${mappingResult.total} stories)`);
+      if (mappingResult.unmatched > 0) {
+        console.log(`   Note: ${mappingResult.unmatched} backend stories validated via deliverables`);
+      }
+      console.log('-'.repeat(50));
+
       // Database-first: No file creation, handoff stored in sd_phase_handoffs table
-      console.log('📝 EXEC→PLAN handoff will be stored in database (sd_phase_handoffs table)');
+      console.log('\n📝 EXEC→PLAN handoff will be stored in database (sd_phase_handoffs table)');
 
       const handoffId = `EXEC-to-PLAN-${sdId}-${Date.now()}`;
 
