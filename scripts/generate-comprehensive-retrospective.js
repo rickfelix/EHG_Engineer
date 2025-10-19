@@ -409,7 +409,7 @@ async function generateComprehensiveRetrospective(sdId) {
     performance_impact: handoffInsights.patterns.find(p => p.includes('ms')) || 'Standard',
 
     // SD-RETRO-ENHANCE-001: New required fields from Checkpoint 1
-    target_application: 'EHG_engineer', // All retrospectives are from management dashboard
+    target_application: sd.target_application || 'EHG_engineer', // From SD or default to management dashboard
     learning_category: learningCategory, // Inferred from SD title/scope
     related_files: [], // Can be populated from handoff documents
     related_commits: [], // Can be extracted from git history

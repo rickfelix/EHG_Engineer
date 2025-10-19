@@ -637,8 +637,9 @@ class UnifiedHandoffSystem {
       }
       console.log('-'.repeat(50));
 
-      // Database-first: No file creation, handoff stored in sd_phase_handoffs table
-      console.log('\n📝 EXEC→PLAN handoff will be stored in database (sd_phase_handoffs table)');
+      // Database-first: No file creation, handoff stored in PRD metadata + audit trail
+      console.log('\n📝 EXEC→PLAN handoff will be stored in database (product_requirements_v2.metadata.exec_handoff)');
+      console.log('   Audit trail: leo_handoff_executions table');
 
       const handoffId = `EXEC-to-PLAN-${sdId}-${Date.now()}`;
 
@@ -819,8 +820,9 @@ class UnifiedHandoffSystem {
         };
       }
 
-      // Database-first: Store handoff in database
-      console.log('📝 PLAN→LEAD handoff will be stored in database');
+      // Database-first: Store handoff in database (PRD metadata + audit trail)
+      console.log('📝 PLAN→LEAD handoff will be stored in database (product_requirements_v2.metadata.plan_handoff)');
+      console.log('   Audit trail: leo_handoff_executions table');
 
       const handoffId = `PLAN-to-LEAD-${sdId}-${Date.now()}`;
 
