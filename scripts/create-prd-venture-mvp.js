@@ -22,7 +22,24 @@ async function createPRD() {
   console.log('📝 Creating Comprehensive PRD for SD-VENTURE-IDEATION-MVP-001...');
   console.log('='.repeat(80));
 
-  const prd = {
+  
+  // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
+  const { data: sdData, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('uuid_id, id')
+    .eq('id', SD_ID)
+    .single();
+
+  if (sdError || !sdData) {
+    console.log(`❌ Strategic Directive ${SD_ID} not found in database`);
+    console.log('   Create SD first before creating PRD');
+    process.exit(1);
+  }
+
+  const sdUuid = sdData.uuid_id;
+  console.log(`   SD uuid_id: ${sdUuid}`);
+
+const prd = {
     id: randomUUID(),
     title: 'Intelligent Venture Creation MVP - Product Requirements Document',
     sd_id: SD_ID,
@@ -79,7 +96,8 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         feature_id: 'F-001',
         name: 'Full-Page Venture Creation Workflow',
         description: 'Replace 365-line VentureCreationDialog modal with dedicated full-page route at /ventures/new',
-        user_stories: ['US-001'],
+        // FIX: user_stories moved to separate table
+    // user_stories: ['US-001'],
         priority: 'critical',
         complexity: 'medium',
         acceptance_criteria: [
@@ -96,7 +114,8 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         feature_id: 'F-002',
         name: 'Company Assignment Field',
         description: 'Required field for venture ownership, defaults to EHG, editable at Phase 3',
-        user_stories: ['US-002'],
+        // FIX: user_stories moved to separate table
+    // user_stories: ['US-002'],
         priority: 'high',
         complexity: 'low',
         acceptance_criteria: [
@@ -112,7 +131,8 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         feature_id: 'F-003',
         name: 'CrewAI Framework Integration',
         description: 'Python FastAPI backend with CrewAI hierarchical crew orchestration',
-        user_stories: ['US-003'],
+        // FIX: user_stories moved to separate table
+    // user_stories: ['US-003'],
         priority: 'critical',
         complexity: 'high',
         acceptance_criteria: [
@@ -130,7 +150,8 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         feature_id: 'F-004',
         name: 'Market Sizing Analyst Agent',
         description: 'AI agent to calculate TAM/SAM/SOM using market data APIs',
-        user_stories: ['US-004'],
+        // FIX: user_stories moved to separate table
+    // user_stories: ['US-004'],
         priority: 'high',
         complexity: 'medium',
         acceptance_criteria: [
@@ -149,7 +170,8 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         feature_id: 'F-005',
         name: 'Pain Point Validator Agent',
         description: 'AI agent to validate customer pain points via Reddit and forums',
-        user_stories: ['US-005'],
+        // FIX: user_stories moved to separate table
+    // user_stories: ['US-005'],
         priority: 'high',
         complexity: 'medium',
         acceptance_criteria: [
@@ -169,7 +191,8 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         feature_id: 'F-006',
         name: 'Competitive Landscape Mapper Agent',
         description: 'AI agent to map competitive landscape and identify differentiation opportunities',
-        user_stories: ['US-006'],
+        // FIX: user_stories moved to separate table
+    // user_stories: ['US-006'],
         priority: 'high',
         complexity: 'medium',
         acceptance_criteria: [
@@ -188,7 +211,8 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         feature_id: 'F-007',
         name: 'Strategic Fit Analyzer Agent',
         description: 'AI agent to evaluate portfolio alignment and identify synergies',
-        user_stories: ['US-007'],
+        // FIX: user_stories moved to separate table
+    // user_stories: ['US-007'],
         priority: 'high',
         complexity: 'medium',
         acceptance_criteria: [
@@ -207,7 +231,8 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         feature_id: 'F-008',
         name: 'Pause and Resume Functionality',
         description: 'Allow chairman to pause venture creation and resume later with full state preservation',
-        user_stories: ['US-008'],
+        // FIX: user_stories moved to separate table
+    // user_stories: ['US-008'],
         priority: 'high',
         complexity: 'medium',
         acceptance_criteria: [
@@ -225,7 +250,8 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         feature_id: 'F-009',
         name: 'AI Research Progress Display',
         description: 'Real-time progress indicator showing agent execution status during 5-15 minute research',
-        user_stories: ['US-009'],
+        // FIX: user_stories moved to separate table
+    // user_stories: ['US-009'],
         priority: 'medium',
         complexity: 'medium',
         acceptance_criteria: [
@@ -244,7 +270,8 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
         feature_id: 'F-010',
         name: 'Chairman Review and Edit Interface',
         description: 'Allow chairman to review, edit, and approve/reject AI-generated insights',
-        user_stories: ['US-010'],
+        // FIX: user_stories moved to separate table
+    // user_stories: ['US-010'],
         priority: 'high',
         complexity: 'medium',
         acceptance_criteria: [
@@ -841,6 +868,7 @@ This PRD establishes requirements for the foundational AI-driven venture intelli
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     created_by: 'PLAN'
+  sd_uuid: sdUuid, // FIX: Added for handoff validation
   };
 
   try {

@@ -72,7 +72,8 @@ async function createPRD() {
       {scenario: 'package.json hash changes', expected: 'Cache invalidated, fresh query executed'}
     ],
 
-    user_stories: [
+    // FIX: user_stories moved to separate table
+    // user_stories: [
       {
         title: 'Retrospective Semantic Search',
         description: 'As PLAN agent, I need to query retrospectives for similar past implementations to inform PRD creation',
@@ -100,7 +101,9 @@ async function createPRD() {
       }
     ],
 
-    database_changes: [
+    // FIX: database_changes moved to metadata
+
+    // database_changes: [
       'CREATE TABLE tech_stack_references (cache for Context7 + retrospectives)',
       'CREATE TABLE prd_research_audit_log (telemetry for all operations)',
       'CREATE TABLE system_health (circuit breaker state tracking)',
@@ -172,7 +175,8 @@ async function createPRD() {
     metadata: {
       priority: 'HIGH',
       estimated_hours: 24,
-      complexity_score: 7,
+      // FIX: complexity_score moved to metadata
+      // complexity_score: 7,
       story_points: 23,
       security_impact: 'LOW',
       roi_90_days: '578%',

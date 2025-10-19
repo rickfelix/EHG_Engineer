@@ -16,7 +16,24 @@ const { Client } = pg;
 async function createPRD() {
   console.log('🔄 Creating PRD for SD-EVA-CONTENT-001...\n');
 
-  const prd = {
+  
+  // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
+  const { data: sdData, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('uuid_id, id')
+    .eq('id', sdId)
+    .single();
+
+  if (sdError || !sdData) {
+    console.log(`❌ Strategic Directive ${sdId} not found in database`);
+    console.log('   Create SD first before creating PRD');
+    process.exit(1);
+  }
+
+  const sdUuid = sdData.uuid_id;
+  console.log(`   SD uuid_id: ${sdUuid}`);
+
+const prd = {
     directive_id: 'SD-EVA-CONTENT-001',
     sd_id: 'SD-EVA-CONTENT-001',
     title: 'EVA Content Catalogue & Dynamic Presentation System MVP',

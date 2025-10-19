@@ -10,7 +10,24 @@ const supabase = createClient(
 async function updatePRD() {
   const prdId = 'PRD-SD-028';
 
-  const prdUpdate = {
+  
+  // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
+  const { data: sdData, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('uuid_id, id')
+    .eq('id', sdId)
+    .single();
+
+  if (sdError || !sdData) {
+    console.log(`❌ Strategic Directive ${sdId} not found in database`);
+    console.log('   Create SD first before creating PRD');
+    process.exit(1);
+  }
+
+  const sdUuid = sdData.uuid_id;
+  console.log(`   SD uuid_id: ${sdUuid}`);
+
+const prdUpdate = {
     executive_summary: `Comprehensive enhancement of EVA (Executive Virtual Assistant) capabilities, consolidating 12 related features to create an intelligent, multi-modal assistant system. Building on the foundation of SD-003A (voice capture and validation), this PRD extends EVA with advanced conversational AI, persistent context management, and comprehensive dashboard features.`,
 
     business_context: `The EVA Assistant is critical for user productivity and decision-making support. Current implementation (SD-003A) provides basic voice capture and quality scoring. This consolidated enhancement adds sophisticated AI reasoning, multi-modal inputs, and intelligent assistance features requested across 12 backlog items.`,

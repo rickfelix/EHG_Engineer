@@ -208,20 +208,42 @@ This PRD defines the technical requirements and implementation approach for ${sd
         // Format for PRD
         const prdComponents = formatForPRD(recommendations);
 
-        // Update PRD with component recommendations
-        const { error: updateError } = await supabase
+        // Update PRD with component recommendations in metadata field
+        // NOTE: ui_components and ui_components_summary fields don't exist in schema
+        // Store in metadata JSONB field instead
+        const { data: currentPrd, error: fetchError } = await supabase
           .from('product_requirements_v2')
-          .update({
-            ui_components: prdComponents.ui_components,
-            ui_components_summary: prdComponents.ui_components_summary,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', prdId);
+          .select('metadata')
+          .eq('id', prdId)
+          .single();
 
-        if (updateError) {
-          console.warn('⚠️  Failed to update PRD with component recommendations:', updateError.message);
+        if (fetchError) {
+          console.warn('⚠️  Failed to fetch PRD for component update:', fetchError.message);
         } else {
-          console.log('✅ Component recommendations added to PRD\n');
+          const updatedMetadata = {
+            ...(currentPrd.metadata || {}),
+            // FIX: ui_components moved to metadata
+
+            // ui_components: prdComponents.ui_components,
+            // FIX: ui_components_summary moved to metadata
+
+            // ui_components_summary: prdComponents.ui_components_summary,
+            component_recommendations_generated_at: new Date().toISOString()
+          };
+
+          const { error: updateError } = await supabase
+            .from('product_requirements_v2')
+            .update({
+              metadata: updatedMetadata,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', prdId);
+
+          if (updateError) {
+            console.warn('⚠️  Failed to update PRD with component recommendations:', updateError.message);
+          } else {
+            console.log('✅ Component recommendations added to PRD metadata\n');
+          }
         }
 
         // Generate installation script
@@ -284,7 +306,7 @@ This PRD defines the technical requirements and implementation approach for ${sd
     }
 
     console.log('\n📝 Next steps:');
-    console.log('1. Review component recommendations in PRD ui_components field');
+    console.log('1. Review component recommendations in PRD metadata.ui_components field');
     console.log('2. Install recommended components using the generated installation script');
     console.log('3. Update PRD with actual requirements');
     console.log('4. Mark checklist items as complete');

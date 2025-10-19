@@ -18,10 +18,28 @@ async function createBrowserPRD() {
   console.log('📋 Creating PRD for SD-UAT-2025-005: Cross-Browser Compatibility Standardization');
   console.log('================================================================\n');
 
-  const prdContent = {
+  
+  // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
+  const { data: sdData, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('uuid_id, id')
+    .eq('id', sdId)
+    .single();
+
+  if (sdError || !sdData) {
+    console.log(`❌ Strategic Directive ${sdId} not found in database`);
+    console.log('   Create SD first before creating PRD');
+    process.exit(1);
+  }
+
+  const sdUuid = sdData.uuid_id;
+  console.log(`   SD uuid_id: ${sdUuid}`);
+
+const prdContent = {
     id: 'PRD-SD-UAT-2025-005',
     title: 'Cross-Browser Compatibility Standardization',
-    user_stories: [
+    // FIX: user_stories moved to separate table
+    // user_stories: [
       {
         id: 'US-BROWSER-001',
         title: 'Fix Browser-Specific CSS Issues',
@@ -153,7 +171,8 @@ async function createBrowserPRD() {
         'Add browser compatibility warnings'
       ]
     },
-    success_metrics: {
+    // FIX: success_metrics moved to metadata
+    // success_metrics: {
       compatibility: 'Feature parity across all browsers',
       testing: 'Consistent test results in Chrome/Firefox',
       performance: 'Similar performance across browsers',
@@ -186,6 +205,7 @@ async function createBrowserPRD() {
     created_by: 'LEO_PLAN',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
+  sd_uuid: sdUuid, // FIX: Added for handoff validation
   };
 
   try {

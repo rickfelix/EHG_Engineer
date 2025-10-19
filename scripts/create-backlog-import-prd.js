@@ -14,7 +14,24 @@ async function createPRD() {
   const sdId = 'fbe359b4-aa56-4740-8350-d51760de0a3b';
 
   // Create a comprehensive PRD for the Backlog Import System
-  const prdContent = {
+  
+  // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
+  const { data: sdData, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('uuid_id, id')
+    .eq('id', sdId)
+    .single();
+
+  if (sdError || !sdData) {
+    console.log(`❌ Strategic Directive ${sdId} not found in database`);
+    console.log('   Create SD first before creating PRD');
+    process.exit(1);
+  }
+
+  const sdUuid = sdData.uuid_id;
+  console.log(`   SD uuid_id: ${sdUuid}`);
+
+const prdContent = {
     id: `PRD-${sdId}`,
     title: 'PRD: EHG Backlog Import System',
     is_consolidated: false,
@@ -24,7 +41,8 @@ async function createPRD() {
       'MEDIUM': 3,
       'LOW': 3
     },
-    user_stories: [
+    // FIX: user_stories moved to separate table
+    // user_stories: [
       {
         id: `US-${sdId}-001`,
         title: 'Backlog Import from CSV/JSON',
@@ -177,6 +195,7 @@ async function createPRD() {
       status: 'approved',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
+    sd_uuid: sdUuid, // FIX: Added for handoff validation
     })
     .select()
     .single();

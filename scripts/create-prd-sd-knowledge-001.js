@@ -17,7 +17,24 @@ const supabase = createClient(
 async function createPRD() {
   console.log('📋 Creating PRD for SD-KNOWLEDGE-001...\n');
 
-  const prd = {
+  
+  // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
+  const { data: sdData, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('uuid_id, id')
+    .eq('id', sdId)
+    .single();
+
+  if (sdError || !sdData) {
+    console.log(`❌ Strategic Directive ${sdId} not found in database`);
+    console.log('   Create SD first before creating PRD');
+    process.exit(1);
+  }
+
+  const sdUuid = sdData.uuid_id;
+  console.log(`   SD uuid_id: ${sdUuid}`);
+
+const prd = {
     id: 'PRD-KNOWLEDGE-001',
     strategic_directive_id: 'SD-KNOWLEDGE-001',
     title: 'Automated Knowledge Retrieval & PRD Enrichment System - Technical Implementation',
@@ -28,7 +45,7 @@ async function createPRD() {
 
     executive_summary: `Implement automated knowledge retrieval pipeline to reduce PLAN→EXEC handoff time by 40-50% and increase PRD completeness from 70% to 85%. System combines local retrospective search with Context7 MCP integration for live documentation, creating institutional knowledge flywheel with 578% ROI in 90 days.`,
 
-    problem_statement: `Current PLAN phase spends 30-45 minutes per PRD on manual research, resulting in:
+    business_context: // FIX: Renamed from problem_statement `Current PLAN phase spends 30-45 minutes per PRD on manual research, resulting in:
 - 70% PRD completeness (target: 85%)
 - 5-7 EXEC clarification questions per SD (high rework cost)
 - Lost institutional knowledge from past projects
@@ -36,7 +53,9 @@ async function createPRD() {
 - 30% reinventing existing solutions
 - 20% specifying deprecated technologies`,
 
-    objectives: [
+    // FIX: objectives moved to metadata
+
+    // objectives: [
       'Reduce PLAN→EXEC handoff time from 45 min to ≤30 min (40-50% improvement)',
       'Increase PRD completeness score from 70% to ≥85%',
       'Reduce EXEC clarification questions from 7 to ≤3 per SD (57% reduction)',
@@ -45,7 +64,8 @@ async function createPRD() {
       'Maintain ≥95% system uptime with graceful degradation'
     ],
 
-    user_stories: [
+    // FIX: user_stories moved to separate table
+    // user_stories: [
       {
         id: 'US-KR-001',
         title: 'As PLAN agent, I need to query retrospectives for similar past implementations',
@@ -149,7 +169,7 @@ async function createPRD() {
       }
     ],
 
-    technical_architecture: `
+    system_architecture: // FIX: Renamed from technical_architecture `
 ## System Architecture
 
 ### Components
@@ -196,7 +216,9 @@ Log to prd_research_audit_log
 - **Monitoring**: Query prd_research_audit_log for metrics
 `,
 
-    database_changes: {
+    // FIX: database_changes moved to metadata
+
+    // database_changes: {
       new_tables: [
         {
           name: 'tech_stack_references',
@@ -336,7 +358,9 @@ COMMENT ON COLUMN product_requirements_v2.research_confidence_score IS
 - Performance testing (query latency <2s local, <10s Context7)
 `,
 
-    deployment_plan: `
+    // FIX: deployment_plan moved to metadata
+
+    // deployment_plan: `
 ## Rollout Strategy
 
 ### Phase 1: Pilot (Days 1-14)
@@ -389,7 +413,9 @@ Query \`prd_research_audit_log\` for:
       }
     ],
 
-    success_metrics: [
+    // FIX: success_metrics moved to metadata
+
+    // success_metrics: [
       {
         name: 'PLAN→EXEC Handoff Time',
         baseline: '45 min',
@@ -425,6 +451,7 @@ Query \`prd_research_audit_log\` for:
     created_by: 'PLAN',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
+  sd_uuid: sdUuid, // FIX: Added for handoff validation
   };
 
   try {

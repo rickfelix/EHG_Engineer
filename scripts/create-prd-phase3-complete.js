@@ -14,10 +14,10 @@ async function main() {
   console.log('📋 Creating PRD for SD-BOARD-VISUAL-BUILDER-003');
   console.log('═'.repeat(80));
 
-  // Get SD
+  // Get SD with uuid_id for sd_uuid field (prevents handoff validation failures)
   const { data: sd, error: sdError } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title')
+    .select('id, uuid_id, sd_key, title')
     .eq('sd_key', 'SD-BOARD-VISUAL-BUILDER-003')
     .single();
 
@@ -27,11 +27,12 @@ async function main() {
   }
 
   console.log(`🎯 Target SD: ${sd.title}`);
+  console.log(`   SD uuid_id: ${sd.uuid_id}`);
   console.log('');
 
-  const prd = {
+const prd = {
     id: 'PRD-BOARD-VISUAL-BUILDER-003',
-    sd_id: sd.id,
+    sd_uuid: sd.uuid_id,
     title: 'Visual Workflow Builder - Phase 3: Code Generation & Execution Engine',
     version: '1.0.0',
     status: 'approved',
@@ -146,7 +147,6 @@ async function main() {
 
     metadata: {
       phase: 3,
-      user_stories: 8,
       story_points: 50,
       estimated_lines: 1800,
       complexity: 'HIGH',

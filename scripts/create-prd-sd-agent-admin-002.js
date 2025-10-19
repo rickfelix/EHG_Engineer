@@ -22,7 +22,24 @@ async function createPRD() {
   const userStories = JSON.parse(readFileSync('/tmp/user-stories-sd-agent-admin-002.json', 'utf-8'));
   const leadAggregation = JSON.parse(readFileSync('/tmp/lead-subagent-aggregation-sd-agent-admin-002.json', 'utf-8'));
 
-  const prdContent = {
+  
+  // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
+  const { data: sdData, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('uuid_id, id')
+    .eq('id', sd_id)
+    .single();
+
+  if (sdError || !sdData) {
+    console.log(`❌ Strategic Directive ${sd_id} not found in database`);
+    console.log('   Create SD first before creating PRD');
+    process.exit(1);
+  }
+
+  const sdUuid = sdData.uuid_id;
+  console.log(`   SD uuid_id: ${sdUuid}`);
+
+const prdContent = {
     prd_id: prd_id,
     sd_id: sd_id,
     version: '1.0',
@@ -48,7 +65,8 @@ async function createPRD() {
         id: 'obj-1',
         title: 'Complete Agent Configuration Management',
         description: 'Enable agent managers to create, save, and apply configuration presets for rapid agent setup and consistent behavior across deployments',
-        success_metrics: [
+        // FIX: success_metrics moved to metadata
+        // success_metrics: [
           'Agents can be configured from presets in <60 seconds (vs 5-10 minutes manual)',
           '80% of configurations use presets',
           'Configuration error rate <5% (vs 20%+ manual)'
@@ -60,7 +78,8 @@ async function createPRD() {
         id: 'obj-2',
         title: 'Implement Prompt Template Library with A/B Testing',
         description: 'Provide centralized prompt management with versioning, categorization, and built-in A/B testing to optimize agent performance',
-        success_metrics: [
+        // FIX: success_metrics moved to metadata
+        // success_metrics: [
           'Prompt reuse rate >70%',
           'A/B tests show 15%+ performance improvement',
           'Prompt iteration time <2 minutes'
@@ -72,7 +91,8 @@ async function createPRD() {
         id: 'obj-3',
         title: 'Enable Advanced Performance Analytics',
         description: 'Add historical trend analysis, comparative dashboards, and performance alerts to monitor and optimize agent behavior over time',
-        success_metrics: [
+        // FIX: success_metrics moved to metadata
+        // success_metrics: [
           'Performance trends visible across 7d/30d/90d for 100% of agents',
           'Alerts configured for 100% of production agents',
           'Anomaly detection <5 minutes'
@@ -101,7 +121,8 @@ async function createPRD() {
               'Preview preset before applying'
             ],
             technical_approach: 'React component AgentPresetsTab (400 LOC) with Supabase CRUD to agent_configs table',
-            ui_components: ['AgentPresetsTab', 'PresetCard', 'PresetForm', 'PresetPreviewDialog']
+            // FIX: ui_components moved to metadata
+            // ui_components: ['AgentPresetsTab', 'PresetCard', 'PresetForm', 'PresetPreviewDialog']
           },
           {
             feature_id: 'PM-02',
@@ -114,7 +135,8 @@ async function createPRD() {
               'Display active preset name in settings tab'
             ],
             technical_approach: 'Shared state management between AgentPresetsTab and AgentSettingsTab',
-            ui_components: ['PresetSelectorDropdown', 'PresetIndicatorBadge']
+            // FIX: ui_components moved to metadata
+            // ui_components: ['PresetSelectorDropdown', 'PresetIndicatorBadge']
           },
           {
             feature_id: 'PM-03',
@@ -127,10 +149,12 @@ async function createPRD() {
               'Handle duplicate preset names'
             ],
             technical_approach: 'JSON serialization/deserialization with validation schema',
-            ui_components: ['ExportPresetsDialog', 'ImportPresetsDialog']
+            // FIX: ui_components moved to metadata
+            // ui_components: ['ExportPresetsDialog', 'ImportPresetsDialog']
           }
         ],
-        database_changes: ['agent_configs table (see database migration section)']
+        // FIX: database_changes moved to metadata
+        // database_changes: ['agent_configs table (see database migration section)']
       },
 
       subsystem_2_prompt_library_ab_testing: {
@@ -151,7 +175,8 @@ async function createPRD() {
               'Template variables support ({{variable}})'
             ],
             technical_approach: 'PromptLibraryTab (600 LOC) with Monaco editor (lazy loaded), Supabase CRUD to prompt_templates table',
-            ui_components: ['PromptLibraryTab', 'CategoryTree', 'PromptList', 'MonacoPromptEditor', 'VersionHistoryTimeline']
+            // FIX: ui_components moved to metadata
+            // ui_components: ['PromptLibraryTab', 'CategoryTree', 'PromptList', 'MonacoPromptEditor', 'VersionHistoryTimeline']
           },
           {
             feature_id: 'PL-02',
@@ -164,7 +189,8 @@ async function createPRD() {
               'Test status: Running, Paused, Completed'
             ],
             technical_approach: 'ABTestingTab (500 LOC) with wizard UI, Supabase CRUD to ab_tests table',
-            ui_components: ['ABTestingTab', 'TestCreationWizard', 'VariantSelector', 'MetricSelector']
+            // FIX: ui_components moved to metadata
+            // ui_components: ['ABTestingTab', 'TestCreationWizard', 'VariantSelector', 'MetricSelector']
           },
           {
             feature_id: 'PL-03',
@@ -178,10 +204,12 @@ async function createPRD() {
               'Recharts visualization (bar chart, line chart over time)'
             ],
             technical_approach: 'Statistical analysis with confidence calculation, Recharts for visualization',
-            ui_components: ['TestResultsDashboard', 'VariantComparisonChart', 'WinnerDeclarationDialog']
+            // FIX: ui_components moved to metadata
+            // ui_components: ['TestResultsDashboard', 'VariantComparisonChart', 'WinnerDeclarationDialog']
           }
         ],
-        database_changes: ['prompt_templates table', 'ab_tests table (see database migration section)']
+        // FIX: database_changes moved to metadata
+        // database_changes: ['prompt_templates table', 'ab_tests table (see database migration section)']
       },
 
       subsystem_3_agent_settings_completion: {
@@ -202,10 +230,12 @@ async function createPRD() {
               'Two-way sync with AgentPresetsTab'
             ],
             technical_approach: 'Enhance existing AgentSettingsTab.tsx (406 LOC) by +200 lines = 606 total',
-            ui_components: ['PresetSelectorDropdown (enhancement)', 'PresetIndicatorBadge (new)', 'SaveAsPresetButton (new)', 'ResetToPresetButton (new)']
+            // FIX: ui_components moved to metadata
+            // ui_components: ['PresetSelectorDropdown (enhancement)', 'PresetIndicatorBadge (new)', 'SaveAsPresetButton (new)', 'ResetToPresetButton (new)']
           }
         ],
-        database_changes: ['Reads from agent_configs table (created in subsystem 1)']
+        // FIX: database_changes moved to metadata
+        // database_changes: ['Reads from agent_configs table (created in subsystem 1)']
       },
 
       subsystem_4_search_preferences: {
@@ -227,10 +257,12 @@ async function createPRD() {
               'Test search button with results preview'
             ],
             technical_approach: 'SearchPreferencesTab (350 LOC) with Supabase CRUD to search_preferences table, pgcrypto for API key encryption',
-            ui_components: ['SearchPreferencesTab', 'SearchEngineSelector', 'CustomEndpointForm', 'TestSearchButton']
+            // FIX: ui_components moved to metadata
+            // ui_components: ['SearchPreferencesTab', 'SearchEngineSelector', 'CustomEndpointForm', 'TestSearchButton']
           }
         ],
-        database_changes: ['search_preferences table with encrypted api_key_encrypted column (see database migration section)']
+        // FIX: database_changes moved to metadata
+        // database_changes: ['search_preferences table with encrypted api_key_encrypted column (see database migration section)']
       },
 
       subsystem_5_advanced_performance: {
@@ -250,7 +282,8 @@ async function createPRD() {
               'Real-time updates via Supabase subscription'
             ],
             technical_approach: 'Enhance AgentPerformanceTab.tsx (existing 8.5KB) by +400 lines = ~900 LOC total',
-            ui_components: ['TrendChartPanel (new)', 'TimeRangeSel ector (new)', 'PerformanceSummaryCards (enhancement)']
+            // FIX: ui_components moved to metadata
+            // ui_components: ['TrendChartPanel (new)', 'TimeRangeSel ector (new)', 'PerformanceSummaryCards (enhancement)']
           },
           {
             feature_id: 'AP-02',
@@ -263,10 +296,12 @@ async function createPRD() {
               'Export performance report (PDF, CSV)'
             ],
             technical_approach: 'Alert rules stored in database, triggered via backend service or Supabase triggers',
-            ui_components: ['ComparisonChart (new)', 'AlertsPanel (new)', 'AlertRulesConfig (new)', 'ExportReportDialog (new)']
+            // FIX: ui_components moved to metadata
+            // ui_components: ['ComparisonChart (new)', 'AlertsPanel (new)', 'AlertRulesConfig (new)', 'ExportReportDialog (new)']
           }
         ],
-        database_changes: ['May require performance_alerts table for alert rules (optional)']
+        // FIX: database_changes moved to metadata
+        // database_changes: ['May require performance_alerts table for alert rules (optional)']
       }
     },
 
@@ -613,6 +648,7 @@ async function createPRD() {
       created_by: 'PLAN Agent',
       phase: 'planning',
       progress: 0
+    sd_uuid: sdUuid, // FIX: Added for handoff validation
     })
     .select();
 

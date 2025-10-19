@@ -1,0 +1,44 @@
+name: PRD Schema Validation
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/create-prd-**.js'
+      - 'scripts/add-prd-**.js'
+      - 'scripts/generate-prd-**.js'
+      - 'scripts/update-prd-**.js'
+      - 'scripts/insert-prd-**.js'
+      - 'scripts/populate-prd-**.js'
+
+jobs:
+  validate-prd-scripts:
+    name: Validate PRD Scripts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run PRD schema audit
+        run: npm run prd:audit
+
+      - name: Comment on PR if validation fails
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ **PRD Schema Validation Failed**\n\nPlease fix the issues and push again.\n\nRun `npm run prd:audit` locally to see details.\nRun `npm run prd:audit:fix` to auto-fix common issues.\n\n📚 See [PRD Developer Guide](../docs/PRD_DEVELOPER_GUIDE.md) for help.'
+            })

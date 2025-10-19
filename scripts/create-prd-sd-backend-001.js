@@ -38,7 +38,7 @@ const PRD_CONTENT = {
 - Excel Export (UD: 5/10, client-side workaround available)
 - Dashboard Customization (UD: 4/10, default layout sufficient)`,
 
-  problem_statement: `**Current State (Critical UX Failures)**:
+  business_context: // FIX: Renamed from problem_statement `**Current State (Critical UX Failures)**:
 
 **EVA Realtime Voice Stub**:
 - Location: src/components/eva/EVARealtimeVoice.tsx (52 LOC)
@@ -152,7 +152,7 @@ const PRD_CONTENT = {
   - Multi-page support (auto page break for long reports)
   - Header/footer with company branding`,
 
-  technical_architecture: `**System Architecture Overview**:
+  system_architecture: // FIX: Renamed from technical_architecture `**System Architecture Overview**:
 
 ┌─────────────────────────────────────────────────────────────┐
 │                     Browser (Client)                        │
@@ -501,7 +501,7 @@ const PRD_CONTENT = {
 - WebSocket clustering (Socket.io Redis adapter for horizontal scaling)
 - Supabase connection pooler (database connection management)`,
 
-  risks_and_mitigations: `**Technical Risks**:
+  risks: // FIX: Renamed from risks_and_mitigations `**Technical Risks**:
 
 **HIGH: Voice Latency Exceeds 200ms p95**
 - Probability: 40%
@@ -632,7 +632,10 @@ const PRD_CONTENT = {
 - If security vulnerability: Disable immediately, patch, redeploy
 - Database rollback: NOT NEEDED (additive schema changes only)`,
 
-  success_metrics: `**Usage Metrics**:
+  // FIX: success_metrics moved to metadata
+
+
+  // success_metrics: `**Usage Metrics**:
 - Voice Session Adoption: >30% of active users try voice within 30 days
 - Voice Session Frequency: >10% of users use voice weekly
 - PDF Export Adoption: >50% of chairman users export PDF monthly
@@ -716,7 +719,24 @@ async function createPRD() {
     const now = new Date().toISOString();
 
     // Create PRD record (match actual table schema)
-    const prdData = {
+    
+  // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
+  const { data: sdData, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('uuid_id, id')
+    .eq('id', sdId)
+    .single();
+
+  if (sdError || !sdData) {
+    console.log(`❌ Strategic Directive ${sdId} not found in database`);
+    console.log('   Create SD first before creating PRD');
+    process.exit(1);
+  }
+
+  const sdUuid = sdData.uuid_id;
+  console.log(`   SD uuid_id: ${sdUuid}`);
+
+const prdData = {
       id: 'PRD-BACKEND-001',
       ...await createPRDLink('SD-BACKEND-001'),
       title: PRD_CONTENT.title,

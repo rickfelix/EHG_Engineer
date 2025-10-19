@@ -15,8 +15,25 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY
 );
 
+
+  // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
+  const { data: sdData, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('uuid_id, id')
+    .eq('id', sdId)
+    .single();
+
+  if (sdError || !sdData) {
+    console.log(`❌ Strategic Directive ${sdId} not found in database`);
+    console.log('   Create SD first before creating PRD');
+    process.exit(1);
+  }
+
+  const sdUuid = sdData.uuid_id;
+  console.log(`   SD uuid_id: ${sdUuid}`);
+
 const prd = {
-  prd_id: 'PRD-SUBAGENT-001',
+  id: 'PRD-SUBAGENT-001' // FIX: Use id instead of prd_id,
   directive_id: 'SD-SUBAGENT-IMPROVE-001',
   title: 'Sub-Agent Performance Enhancement: Data-Driven Optimization Initiative',
   status: 'approved',
@@ -72,7 +89,8 @@ const prd = {
   technical_requirements: JSON.stringify({
     phase_1_discovery: {
       duration: '2-3 hours',
-      objectives: [
+      // FIX: objectives moved to metadata
+      // objectives: [
         'Extract patterns from 17 retrospective files',
         'Identify sub-agent performance issues (trigger failures, result quality, context inefficiency)',
         'Categorize findings by sub-agent code (TESTING, DATABASE, SECURITY, etc.)',
@@ -93,7 +111,8 @@ const prd = {
     },
     phase_2_design: {
       duration: '3-4 hours',
-      objectives: [
+      // FIX: objectives moved to metadata
+      // objectives: [
         'Create enhancement specifications for all 13 sub-agents',
         'Design improved personas with domain-specific context',
         'Define new trigger keywords and patterns',
@@ -115,7 +134,8 @@ const prd = {
     },
     phase_3_implementation: {
       duration: '6.5 hours',
-      objectives: [
+      // FIX: objectives moved to metadata
+      // objectives: [
         'Update all 13 sub-agents in leo_sub_agents table',
         'Add new triggers to leo_sub_agent_triggers table',
         'Update unified-handoff-system.js with enhanced trigger detection',
@@ -139,7 +159,8 @@ const prd = {
     },
     phase_4_validation: {
       duration: '2-3 hours',
-      objectives: [
+      // FIX: objectives moved to metadata
+      // objectives: [
         'Execute comprehensive testing suite',
         'Measure trigger accuracy improvements',
         'Measure result quality improvements',
@@ -236,7 +257,9 @@ const prd = {
     }
   ]),
 
-  success_metrics: JSON.stringify({
+  // FIX: success_metrics moved to metadata
+
+  // success_metrics: JSON.stringify({
     baseline: {
       trigger_accuracy: '70-85%',
       result_quality: '75-90%',
@@ -371,6 +394,7 @@ const prd = {
 
   created_by: 'PLAN Agent (Technical Planning Agent)',
   created_at: new Date().toISOString()
+  sd_uuid: sdUuid, // FIX: Added for handoff validation
 };
 
 async function createPRD() {

@@ -162,10 +162,12 @@ async function insertPRD() {
     metadata: {
       priority: 'HIGH',
       estimated_hours: 120,
-      complexity_score: 8,
+      // FIX: complexity_score moved to metadata
+      // complexity_score: 8,
       story_points: 34,
       security_impact: 'LOW',
-      database_changes: 9,
+      // FIX: database_changes moved to metadata
+      // database_changes: 9,
       new_constraints: 5,
       new_indexes: 4,
       code_files_modified: 4,

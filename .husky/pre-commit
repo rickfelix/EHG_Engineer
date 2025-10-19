@@ -12,4 +12,72 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-echo "✅ Smoke tests passed. Proceeding with commit."
+echo "✅ Smoke tests passed."
+
+# ============================================================================
+# PRD Schema Validation
+# ============================================================================
+
+# Get list of staged files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+# Check if any PRD scripts are being committed
+PRD_SCRIPTS=$(echo "$STAGED_FILES" | grep -E "scripts/(create-prd|add-prd|generate-prd|update-prd|insert-prd|populate-prd)" || true)
+
+if [ ! -z "$PRD_SCRIPTS" ]; then
+  echo ""
+  echo "🔍 Detected PRD script changes. Running schema validation..."
+  echo ""
+
+  # Run validation on changed scripts
+  for script in $PRD_SCRIPTS; do
+    if [ -f "$script" ]; then
+      echo "Validating: $script"
+
+      # Check if script uses deprecated fields
+      DEPRECATED_FIELDS=$(grep -E "strategic_directive_id:|prd_id:|user_stories:|ui_components:|success_metrics:|risks_and_mitigations:|technical_architecture:|problem_statement:" "$script" | grep -v "// FIX:" | grep -v "\/\/" || true)
+
+      if [ ! -z "$DEPRECATED_FIELDS" ]; then
+        echo ""
+        echo "❌ PRD Schema Validation Failed: $script"
+        echo ""
+        echo "Found deprecated/invalid fields:"
+        echo "$DEPRECATED_FIELDS"
+        echo ""
+        echo "💡 Fix suggestions:"
+        echo "   - strategic_directive_id → sd_uuid"
+        echo "   - prd_id → id"
+        echo "   - user_stories → (use separate table)"
+        echo "   - ui_components → metadata.ui_components"
+        echo "   - success_metrics → metadata.success_metrics"
+        echo "   - risks_and_mitigations → risks"
+        echo "   - technical_architecture → system_architecture"
+        echo "   - problem_statement → business_context"
+        echo ""
+        echo "📚 See docs/PRD_SCRIPTS_AUDIT_SUMMARY.md for field mapping guide"
+        echo "🔧 Run 'npm run prd:audit:fix $script' to auto-fix common issues"
+        echo ""
+        exit 1
+      fi
+
+      # Check if script fetches sd_uuid
+      if grep -q "product_requirements_v2" "$script"; then
+        if ! grep -q "sd_uuid" "$script" && ! grep -q "uuid_id" "$script"; then
+          echo ""
+          echo "⚠️  Warning: $script may be missing sd_uuid population"
+          echo "   Make sure you fetch uuid_id from strategic_directives_v2"
+          echo "   See templates/prd-script-template.js for correct pattern"
+          echo ""
+        fi
+      fi
+
+      echo "✅ $script passed validation"
+    fi
+  done
+
+  echo ""
+  echo "✅ All PRD scripts validated successfully!"
+fi
+
+echo ""
+echo "✅ Pre-commit checks passed. Proceeding with commit."

@@ -654,8 +654,7 @@ class UnifiedHandoffSystem {
             ...prd.metadata,
             exec_handoff: {
               handoff_id: handoffId,
-              completed_at: new Date().toISOString(),
-              validation: execValidation
+                      validation: execValidation
             }
           }
         })
@@ -837,8 +836,7 @@ class UnifiedHandoffSystem {
             ...prd.metadata,
             plan_handoff: {
               handoff_id: handoffId,
-              completed_at: new Date().toISOString(),
-              validation: planValidation
+                      validation: planValidation
             }
           }
         })
@@ -1085,7 +1083,6 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
         verifier: 'unified-handoff-system.js'
       },
 
-      completed_at: new Date().toISOString(),
       accepted_at: new Date().toISOString(),
       created_by: 'UNIFIED-HANDOFF-SYSTEM'
     };
@@ -1313,7 +1310,6 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
       },
 
       rejection_reason: result.message,
-      completed_at: new Date().toISOString(),
       created_by: 'UNIFIED-HANDOFF-SYSTEM'
     };
 
@@ -1352,7 +1348,6 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
         failed_at: new Date().toISOString()
       },
 
-      completed_at: new Date().toISOString(),
       created_by: 'UNIFIED-HANDOFF-SYSTEM'
     };
 

@@ -64,12 +64,17 @@
     "prd:tables": "node scripts/prd-diagnostic-toolkit.js table-status",
     "prd:orphaned": "node scripts/prd-diagnostic-toolkit.js orphaned-prds",
     "prd:consolidated": "node scripts/unified-consolidated-prd.js",
+    "prd:audit": "node scripts/audit-all-prd-scripts.js",
+    "prd:audit:fix": "node scripts/fix-prd-scripts.js",
+    "prd:audit:dry": "node scripts/fix-prd-scripts.js --dry-run",
+    "prd:schema": "node lib/prd-schema-validator.js",
     "db:subagent": "echo 'Apply database/schema/complete_subagent_integration.sql to Supabase'",
     "context:refresh": "node scripts/generate-file-trees.js --force",
     "context:status": "node lib/context/memory-manager.js",
     "context:compact": "node scripts/context-compact.js",
     "memory:view": "node scripts/view-memory.js",
-    "prepare": "husky"
+    "prepare": "husky",
+    "prd:new": "node scripts/generate-prd-script.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",

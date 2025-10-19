@@ -26,7 +26,24 @@ async function createPRD() {
       return;
     }
 
-    const prdData = {
+    
+  // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
+  const { data: sdData, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('uuid_id, id')
+    .eq('id', sdId)
+    .single();
+
+  if (sdError || !sdData) {
+    console.log(`❌ Strategic Directive ${sdId} not found in database`);
+    console.log('   Create SD first before creating PRD');
+    process.exit(1);
+  }
+
+  const sdUuid = sdData.uuid_id;
+  console.log(`   SD uuid_id: ${sdUuid}`);
+
+const prdData = {
       id: prdId,
       directive_id: sdId,
       title: 'Tiered Ideation Engine - Complexity Routing System',
@@ -499,6 +516,7 @@ Target: Enable Chairman to capture simple ideas in 15 minutes while preserving d
       created_by: 'PLAN (Claude Code)',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
+    sd_uuid: sdUuid, // FIX: Added for handoff validation
     };
 
     // Insert PRD

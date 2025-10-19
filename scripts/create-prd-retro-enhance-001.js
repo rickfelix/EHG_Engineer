@@ -35,8 +35,9 @@ async function createPRD() {
 
   const prd = {
     id: randomUUID(),
-    prd_id: 'PRD-RETRO-ENHANCE-001',
-    strategic_directive_id: sd.uuid_id,
+    id: 'PRD-RETRO-ENHANCE-001' // FIX: Use id instead of prd_id,
+    sd_uuid: sdUuid, // FIX: Use UUID instead of string ID
+    directive_id: sd.uuid_id,
     version: '1.0',
     status: 'APPROVED',
     created_by: 'PLAN',
@@ -270,11 +271,13 @@ async function createPRD() {
     ],
 
     // Metadata
-    complexity_score: 8,
-    estimated_effort_hours: 120,
-    target_completion_date: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString(), // 4 weeks
+    // FIX: complexity_score moved to metadata
+    // complexity_score: 8,
+    // FIX: estimated_effort_hours moved to metadata
+    // estimated_effort_hours: 120,
+    planned_end: // FIX: Renamed from target_completion_date new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString(), // 4 weeks
 
-    risks_and_mitigations: [
+    risks: // FIX: Renamed from risks_and_mitigations [
       {
         risk: 'Backfill of 97 records may timeout',
         likelihood: 'HIGH',
@@ -316,7 +319,9 @@ async function createPRD() {
       'GitHub Actions (available) - for CI/CD gates'
     ],
 
-    success_metrics: [
+    // FIX: success_metrics moved to metadata
+
+    // success_metrics: [
       {
         metric: 'Field Compliance',
         target: '100%',
@@ -364,7 +369,9 @@ async function createPRD() {
       }
     ],
 
-    documentation_requirements: [
+    // FIX: documentation_requirements moved to metadata
+
+    // documentation_requirements: [
       {
         file: 'retrospective-schema-reference.md',
         type: 'UPDATE',

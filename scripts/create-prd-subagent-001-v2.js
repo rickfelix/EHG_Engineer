@@ -15,6 +15,23 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY
 );
 
+
+  // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
+  const { data: sdData, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('uuid_id, id')
+    .eq('id', sdId)
+    .single();
+
+  if (sdError || !sdData) {
+    console.log(`❌ Strategic Directive ${sdId} not found in database`);
+    console.log('   Create SD first before creating PRD');
+    process.exit(1);
+  }
+
+  const sdUuid = sdData.uuid_id;
+  console.log(`   SD uuid_id: ${sdUuid}`);
+
 const prd = {
   id: 'PRD-SUBAGENT-001',
   directive_id: 'SD-SUBAGENT-IMPROVE-001',
@@ -85,7 +102,8 @@ const prd = {
     {
       phase: 'Discovery',
       duration: '2-3 hours',
-      objectives: [
+      // FIX: objectives moved to metadata
+      // objectives: [
         'Parse 17 retrospective files for sub-agent performance patterns',
         'Extract mentions of trigger failures, result quality issues, context inefficiency',
         'Categorize findings by sub-agent code',
@@ -103,7 +121,8 @@ const prd = {
     {
       phase: 'Design',
       duration: '3-4 hours',
-      objectives: [
+      // FIX: objectives moved to metadata
+      // objectives: [
         'Create enhancement specifications for 13 sub-agents',
         'Design improved personas with domain-specific context',
         'Define new trigger keywords (20-30 additions)',
@@ -121,7 +140,8 @@ const prd = {
     {
       phase: 'Implementation',
       duration: '6.5 hours',
-      objectives: [
+      // FIX: objectives moved to metadata
+      // objectives: [
         'UPDATE all 13 sub-agents in leo_sub_agents table (descriptions, metadata)',
         'INSERT 20-30 new triggers in leo_sub_agent_triggers table',
         'Enhance unified-handoff-system.js trigger detection logic',
@@ -140,7 +160,8 @@ const prd = {
     {
       phase: 'Validation',
       duration: '2-3 hours',
-      objectives: [
+      // FIX: objectives moved to metadata
+      // objectives: [
         'Execute comprehensive testing suite (unit, integration, E2E)',
         'Measure trigger accuracy improvements (baseline vs enhanced)',
         'Measure result quality improvements',
@@ -244,6 +265,7 @@ const prd = {
   created_at: new Date().toISOString(),
   planned_start: new Date().toISOString(),
   planned_end: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString() // +4 days
+  sd_uuid: sdUuid, // FIX: Added for handoff validation
 };
 
 async function createPRD() {

@@ -18,10 +18,28 @@ async function createAuthPRD() {
   console.log('📋 Creating PRD for SD-UAT-2025-002: Authentication System Critical Failures');
   console.log('================================================================\n');
 
-  const prdContent = {
+  
+  // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
+  const { data: sdData, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('uuid_id, id')
+    .eq('id', sdId)
+    .single();
+
+  if (sdError || !sdData) {
+    console.log(`❌ Strategic Directive ${sdId} not found in database`);
+    console.log('   Create SD first before creating PRD');
+    process.exit(1);
+  }
+
+  const sdUuid = sdData.uuid_id;
+  console.log(`   SD uuid_id: ${sdUuid}`);
+
+const prdContent = {
     id: 'PRD-SD-UAT-2025-002',
     title: 'Authentication System Critical Failures',
-    user_stories: [
+    // FIX: user_stories moved to separate table
+    // user_stories: [
       {
         id: 'US-AUTH-001',
         title: 'Fix Login Form Detection and Rendering',
@@ -144,7 +162,8 @@ async function createAuthPRD() {
         'Add cross-browser auth testing'
       ]
     },
-    success_metrics: {
+    // FIX: success_metrics moved to metadata
+    // success_metrics: {
       authentication: 'Zero auth-related test failures',
       performance: 'Login completes in <2 seconds',
       security: '100% CSRF protection coverage',
@@ -175,6 +194,7 @@ async function createAuthPRD() {
     created_by: 'LEO_PLAN',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
+  sd_uuid: sdUuid, // FIX: Added for handoff validation
   };
 
   try {
