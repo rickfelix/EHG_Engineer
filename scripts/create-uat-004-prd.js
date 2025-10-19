@@ -18,10 +18,28 @@ async function createUIPRD() {
   console.log('📋 Creating PRD for SD-UAT-2025-004: UI Component Visibility and Initialization Issues');
   console.log('================================================================\n');
 
-  const prdContent = {
+  
+  // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
+  const { data: sdData, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('uuid_id, id')
+    .eq('id', sdId)
+    .single();
+
+  if (sdError || !sdData) {
+    console.log(`❌ Strategic Directive ${sdId} not found in database`);
+    console.log('   Create SD first before creating PRD');
+    process.exit(1);
+  }
+
+  const sdUuid = sdData.uuid_id;
+  console.log(`   SD uuid_id: ${sdUuid}`);
+
+const prdContent = {
     id: 'PRD-SD-UAT-2025-004',
     title: 'UI Component Visibility and Initialization Issues',
-    user_stories: [
+    // FIX: user_stories moved to separate table
+    // user_stories: [
       {
         id: 'US-UI-001',
         title: 'Fix Dashboard Widget Rendering',
@@ -153,7 +171,8 @@ async function createUIPRD() {
         'Ensure proper contrast ratios'
       ]
     },
-    success_metrics: {
+    // FIX: success_metrics moved to metadata
+    // success_metrics: {
       visibility: 'Zero "element not found" errors',
       performance: 'All components render <3 seconds',
       reliability: '100% component initialization success',
@@ -185,6 +204,7 @@ async function createUIPRD() {
     created_by: 'LEO_PLAN',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
+  sd_uuid: sdUuid, // FIX: Added for handoff validation
   };
 
   try {

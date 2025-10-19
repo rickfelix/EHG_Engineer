@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.6.0",
+    "@xyflow/react": "^12.8.6",
     "clsx": "^2.0.0",
     "framer-motion": "^12.23.12",
     "lucide-react": "^0.292.0",

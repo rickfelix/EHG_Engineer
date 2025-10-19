@@ -1,0 +1,320 @@
+{
+  "generated": "2025-10-05T16:37:07.271Z",
+  "total_migrations": 52,
+  "successful": 52,
+  "failed": 0,
+  "migrations": [
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828094259_8d7885bb-3d16-4518-8816-b804e0fe894b.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828094259_schema_companies.sql",
+      "category": "schema",
+      "confidence_score": 3
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828095134_d205058b-0784-4891-ad32-543c822ce88e.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828095134_data_seed_companies.sql",
+      "category": null,
+      "confidence_score": 3
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828095254_0083514c-1da9-4b46-8627-bee94aa67ea2.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828095254_data_seed_companies.sql",
+      "category": null,
+      "confidence_score": 3
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828095417_9a87912b-1ac1-4919-aa88-de6e83ac2820.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828095417_data_seed_companies.sql",
+      "category": "data",
+      "confidence_score": 3
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828095718_646fdabe-d8a5-40cf-8c7d-3db72b1158a5.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828095718_data_seed_user_company_access.sql",
+      "category": "data",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828111443_3e6446f8-dea8-468d-b33c-23074bcf83ea.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828111443_schema_public.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828111525_60ddebd0-4489-46e9-822c-86c1b48acc88.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828111525_schema_public.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828161004_f7d7beb9-17ed-4c49-890b-9ddb94c26901.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828161004_schema_integration_events.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828172739_482313fa-09ac-4be0-9101-a2b60753ac5d.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828172739_schema_ai_decisions.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828172806_85f77080-8990-495d-9ff5-b022dbd16f77.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828172806_schema_ai_decisions.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828172922_b877beff-6c9e-4ebf-aef0-9a77431b0824.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828172922_schema_if.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828191610_e7a39b5f-e2dd-4bcc-b438-29de5cdcf72f.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828191610_rls_public.sql",
+      "category": "rls",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828191913_72abc906-91f4-4464-8198-81c10b8c7168.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828191913_rls_public.sql",
+      "category": "rls",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828193601_c1d78de1-0d47-4d2a-b876-a146731fd6ee.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828193601_data_seed_public.sql",
+      "category": null,
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828200256_0a891029-93a6-4274-8408-a281bb6a3d95.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828200256_schema_security_threats.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828214615_d3f6231c-5b29-469b-be2a-9fd6718613cb.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828214615_schema_public.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828222538_9ebfa569-ef68-469c-807f-4be8c1250c38.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828222538_schema_public.sql",
+      "category": "schema",
+      "confidence_score": 2
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250828233654_ad68a67f-9a34-49fa-8571-9a1da51629a5.sql",
+      "new_path": "supabase/ehg_app/migrations/20250828233654_schema_risk_evaluations.sql",
+      "category": "schema",
+      "confidence_score": 2
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829002305_7813e66f-9bfe-40cf-88bd-9a21205d5a48.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829002305_schema_if.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829003957_99f8f779-d6b9-4283-81b3-1b64679dc4e0.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829003957_schema_adaptive_name_variants.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829005823_dc552347-ac5e-41d2-a240-ece77c698741.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829005823_schema_if.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829011205_7769ec3c-4a74-488b-ab44-39e0ffeb5586.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829011205_schema_public.sql",
+      "category": "schema",
+      "confidence_score": 2
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829021855_af736656-6733-4752-9561-c0a2bf418c9f.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829021855_schema_if.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829103906_5c0d671c-6e50-4dc7-8ff4-1f8027ea858b.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829103906_schema_if.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829104002_44794c58-11f5-49af-b581-7dc6e968ddd3.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829104002_schema_if.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829104209_030eeaec-dbcf-4105-9ac5-b3ddd991ad1b.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829104209_schema_if.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829104518_e380d248-dfc4-4cfa-bb69-0f0a1cc688fb.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829104518_schema_if.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829112853_b8d1062c-a196-4711-96dc-9a8afb067ad6.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829112853_data_seed_companies.sql",
+      "category": null,
+      "confidence_score": 2
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829113003_c25b4cd7-574d-41b5-ae0d-08cbb65fcc31.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829113003_data_seed_companies.sql",
+      "category": null,
+      "confidence_score": 2
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829113143_1bb36a07-aa6e-4c50-b5d7-6c6e03b8b939.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829113143_data_seed_companies.sql",
+      "category": null,
+      "confidence_score": 2
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829113205_7e5cb10c-4803-431c-9978-10daca5abd36.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829113205_data_seed_companies.sql",
+      "category": null,
+      "confidence_score": 2
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829113329_c6801088-e989-489c-87b2-4d26f807d19a.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829113329_data_seed_companies.sql",
+      "category": null,
+      "confidence_score": 2
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829113545_dbe51449-c959-4c60-a6e0-ec64aef9188f.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829113545_data_seed_companies.sql",
+      "category": null,
+      "confidence_score": 2
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829121222_fea897db-7238-49b8-8499-6a9dbfbfec3f.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829121222_schema_if.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829122937_dd62e853-f1a9-4756-b340-4eb2b2a3f1e0.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829122937_schema_if.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829123022_f998ce5c-ecd5-4360-98ce-38167083d7a9.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829123022_schema_if.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829131052_66ef1ec8-42ad-4515-ae84-fa61f3004a98.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829131052_schema_if.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829132027_ea30fc27-9251-4c4a-8034-774ed67fc0b4.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829132027_schema_if.sql",
+      "category": "schema",
+      "confidence_score": 2
+    },
+    {
+      "original_path": "applications/APP001/codebase/supabase/migrations/20250829144908_a4af3c6b-8fd4-4b0b-afa8-cc8510e1a19a.sql",
+      "new_path": "supabase/ehg_app/migrations/20250829144908_schema_public.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "database/migrations/2025-09-22-integrity-metrics.sql",
+      "new_path": "supabase/ehg_app/migrations/20250922183639_schema_integrity-metrics.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "database/migrations/add-uat-description-field.sql",
+      "new_path": "supabase/ehg_app/migrations/20250929123449_alter_add-uat-description-field.sql",
+      "category": "alter",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "database/migrations/create-ehg-application-architecture-tables.sql",
+      "new_path": "supabase/ehg_app/migrations/20251003105937_schema_create-ehg-application-architecture-tables.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "database/migrations/create-settings-tables-sd-uat-020.sql",
+      "new_path": "supabase/ehg_app/migrations/20251001141003_schema_create-settings-tables-sd-uat-020.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "database/migrations/seed-uat-test-cases.sql",
+      "new_path": "supabase/ehg_app/migrations/20250929104109_seed-uat-test-cases.sql",
+      "category": null,
+      "confidence_score": 1
+    },
+    {
+      "original_path": "database/migrations/uat-simple-tracking.sql",
+      "new_path": "supabase/ehg_app/migrations/20250929095516_schema_uat-simple-tracking.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "db/migrations/vh/202509221330__vh_namespace_core.sql",
+      "new_path": "supabase/ehg_app/migrations/20250922112148_alter_namespace_core.sql",
+      "category": "alter",
+      "confidence_score": 2
+    },
+    {
+      "original_path": "db/migrations/vh/202509221335__vh_trace_columns.sql",
+      "new_path": "supabase/ehg_app/migrations/20250922112148_alter_trace_columns.sql",
+      "category": "alter",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "db/migrations/vh/legacy/001_initial_schema.sql",
+      "new_path": "supabase/ehg_app/migrations/20250922112148_schema_initial_schema.sql",
+      "category": "schema",
+      "confidence_score": 2
+    },
+    {
+      "original_path": "db/migrations/vh/legacy/002_onboarding_progress.sql",
+      "new_path": "supabase/ehg_app/migrations/20250922112148_schema_onboarding_progress.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "db/migrations/vh/legacy/003_analytics_events.sql",
+      "new_path": "supabase/ehg_app/migrations/20250922112148_schema_analytics_events.sql",
+      "category": "schema",
+      "confidence_score": 1
+    },
+    {
+      "original_path": "db/migrations/vh/legacy/rollback.sql",
+      "new_path": "supabase/ehg_app/migrations/20250922112148_rollback.sql",
+      "category": null,
+      "confidence_score": 2
+    },
+    {
+      "original_path": "supabase/migrations/004_voice_conversations.sql",
+      "new_path": "supabase/ehg_app/migrations/20250922112153_schema_voice_conversations.sql",
+      "category": "schema",
+      "confidence_score": 3
+    }
+  ]
+}

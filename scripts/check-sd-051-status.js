@@ -12,7 +12,7 @@ async function checkSD051() {
 
   // Check for PRD
   const { data: prds } = await supabase
-    .from('prds')
+    .from('product_requirements_v2')
     .select('*')
     .eq('sd_id', 'SD-051');
 

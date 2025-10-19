@@ -258,7 +258,7 @@ const prdContent = {
   },
 
   // Technical Architecture
-  technical_architecture: {
+  system_architecture: // FIX: Renamed from technical_architecture {
     service_layer: {
       file: "src/lib/services/ventureIdeationService.ts",
       exports: [
@@ -277,7 +277,10 @@ const prdContent = {
       ]
     },
 
-    ui_components: {
+    // FIX: ui_components moved to metadata
+
+
+    // ui_components: {
       enhancement: "Stage4CompetitiveIntelligence.tsx",
       new_tab: "Venture Cloning Workflow",
       sub_components: [
@@ -404,7 +407,9 @@ async function createPRD() {
   const { data, error } = await supabase
     .from('strategic_directives_v2')
     .update({
-      objectives: prdContent.requirements.functional.map(fr => `${fr.id}: ${fr.title}`).join('\n'),
+      // FIX: objectives moved to metadata
+
+      // objectives: prdContent.requirements.functional.map(fr => `${fr.id}: ${fr.title}`).join('\n'),
       acceptance_criteria: prdContent.acceptance_criteria.map(ac =>
         `${ac.id}: ${ac.scenario}\n  Given: ${ac.given}\n  When: ${ac.when}\n  Then: ${ac.then}`
       ).join('\n\n'),

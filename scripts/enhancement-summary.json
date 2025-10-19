@@ -1,0 +1,38 @@
+{
+  "execution_time": "2025-10-11T13:38:40.506Z",
+  "results": {
+    "successful": [
+      "VALIDATION",
+      "TESTING",
+      "GITHUB",
+      "DOCMON",
+      "RETRO",
+      "SECURITY",
+      "DATABASE",
+      "PERFORMANCE",
+      "STORIES",
+      "DESIGN",
+      "UAT",
+      "RESEARCH",
+      "FINANCIAL_ANALYTICS"
+    ],
+    "failed": [],
+    "skipped": []
+  },
+  "priority_order": [
+    "VALIDATION",
+    "TESTING",
+    "GITHUB",
+    "DOCMON",
+    "RETRO",
+    "SECURITY",
+    "DATABASE",
+    "PERFORMANCE",
+    "STORIES",
+    "DESIGN",
+    "UAT",
+    "RESEARCH",
+    "FINANCIAL_ANALYTICS"
+  ],
+  "sd_id": "SD-SUBAGENT-IMPROVE-001"
+}

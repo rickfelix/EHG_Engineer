@@ -160,7 +160,7 @@ function AppLayout({
             <Breadcrumbs isCompact={isCompactMode} />
           </div>
           <div className="flex items-center px-4 py-2">
-            {location.pathname !== '/directive-lab' && <DarkModeToggle />}
+            <DarkModeToggle />
           </div>
         </div>
         

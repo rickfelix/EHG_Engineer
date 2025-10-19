@@ -28,6 +28,23 @@ if (!sdData) {
   process.exit(1);
 }
 
+
+  // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
+  const { data: sdData, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('uuid_id, id')
+    .eq('id', sdId)
+    .single();
+
+  if (sdError || !sdData) {
+    console.log(`❌ Strategic Directive ${sdId} not found in database`);
+    console.log('   Create SD first before creating PRD');
+    process.exit(1);
+  }
+
+  const sdUuid = sdData.uuid_id;
+  console.log(`   SD uuid_id: ${sdUuid}`);
+
 const prdContent = {
   overview: `Add comprehensive timeline/Gantt visualization to the ventures management interface. Enable executive teams to visualize venture progress through the 40-stage lifecycle, identify bottlenecks, track dependencies, and understand critical paths across multiple ventures.
 
@@ -444,7 +461,7 @@ const prdContent = {
     ]
   }),
 
-  risks_and_mitigations: JSON.stringify([
+  risks: // FIX: Renamed from risks_and_mitigations JSON.stringify([
     {
       risk: 'Gantt library (gantt-task-react) limitations',
       probability: 'Medium',
@@ -471,7 +488,10 @@ const prdContent = {
     }
   ]),
 
-  success_metrics: JSON.stringify({
+  // FIX: success_metrics moved to metadata
+
+
+  // success_metrics: JSON.stringify({
     primary: {
       metric: 'Manual reporting time reduction',
       target: '60% reduction (measured via user time study)',
@@ -514,7 +534,7 @@ async function createPRD() {
 
   // Insert PRD into database
   const { data, error } = await supabase
-    .from('prds')
+    .from('product_requirements_v2')
     .insert(prdData)
     .select();
 

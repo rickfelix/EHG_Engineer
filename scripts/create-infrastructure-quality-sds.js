@@ -34,12 +34,18 @@ const strategicDirectives = [
   // ===== CRITICAL PRIORITY =====
   {
     id: 'SD-QUALITY-001',
+    sd_key: 'SD-QUALITY-001',
     title: 'Zero Test Coverage Crisis - Comprehensive Testing Infrastructure',
     version: '1.0',
     status: 'draft',
     category: 'quality_assurance',
     priority: 'critical',
+    target_application: 'EHG',
+    current_phase: 'IDEATION',
     description: 'Establish comprehensive testing infrastructure and achieve minimum 50% code coverage. The EHG application has 362,538 lines of code with ZERO unit or integration tests, representing a critical quality and reliability gap.',
+    rationale: 'Zero test coverage represents critical technical debt with 362,538 LOC unverified. Without automated testing, every code change risks regressions, deployment confidence is low, and refactoring is dangerous. Testing infrastructure is essential for quality, velocity, and maintainability.',
+    scope: 'Create complete testing infrastructure (Vitest unit/integration, Playwright E2E), write tests for critical business logic and workflows, establish coverage reporting and CI/CD integration, document testing patterns. EXCLUDES: Achieving 100% coverage immediately (target 50% on critical paths first).',
+    strategic_intent: 'Transform EHG from an untested codebase into a quality-first application with comprehensive test coverage, automated verification, and confidence in deployments. Enable safe refactoring and rapid feature development.',
     objectives: [
       'Create test infrastructure for unit, integration, and E2E testing',
       'Implement unit tests for critical business logic (services, utilities, hooks)',
@@ -85,6 +91,16 @@ const strategicDirectives = [
       risk: 'medium'
     },
     dependencies: [],
+    key_principles: [
+      'Test-driven quality: Automated testing is not optional',
+      'Coverage targets: 50% minimum on critical paths, trending toward 80%',
+      'Testing pyramid: Unit tests (majority), integration tests (moderate), E2E tests (critical paths)',
+      'Fast feedback: Tests run in CI/CD, block merges on failures',
+      'Documentation: Test examples guide future development'
+    ],
+    created_by: 'INFRASTRUCTURE_AUDIT',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
     metadata: {
       total_loc: 362538,
       current_test_files: 0,
@@ -103,12 +119,18 @@ const strategicDirectives = [
   },
   {
     id: 'SD-RELIABILITY-001',
+    sd_key: 'SD-RELIABILITY-001',
     title: 'Error Boundary & Error Handling Infrastructure',
     version: '1.0',
     status: 'draft',
     category: 'reliability',
     priority: 'critical',
+    target_application: 'EHG',
+    current_phase: 'IDEATION',
     description: 'Implement comprehensive error handling infrastructure including React Error Boundaries, global error recovery, graceful degradation, and error monitoring. Currently, unhandled errors crash the entire application, exposing users to white screens.',
+    rationale: 'Application currently has zero error boundaries. Unhandled React errors crash the entire UI, exposing users to white screens and data loss. Lack of error monitoring means production issues go undetected. Comprehensive error handling infrastructure is essential for production-grade reliability and user experience.',
+    scope: 'Implement 3-level error boundary hierarchy (global, route, component), create fallback UIs for all error states, add error logging and monitoring infrastructure, establish graceful degradation patterns. EXCLUDES: Third-party error monitoring service integration (use logging initially), automatic error recovery for all error types (focus on user-actionable recovery first).',
+    strategic_intent: 'Transform EHG from a fragile application that crashes on errors into a resilient system with graceful error handling, user-friendly recovery options, and comprehensive monitoring. Eliminate white screens and improve user trust.',
     objectives: [
       'Implement React Error Boundaries at strategic levels (app, page, component)',
       'Create error recovery strategies and fallback UIs',
@@ -133,6 +155,15 @@ const strategicDirectives = [
       'Error monitoring dashboard created',
       'User testing validates error UX'
     ],
+    key_changes: [
+      'Create GlobalErrorBoundary component wrapping App',
+      'Add RouteErrorBoundary for each major route',
+      'Implement ComponentErrorBoundary wrapper for critical features',
+      'Build fallback UI components for different error types',
+      'Add error logging service with structured logs',
+      'Create error monitoring dashboard',
+      'Implement retry and recovery mechanisms'
+    ],
     technical_requirements: {
       components: ['GlobalErrorBoundary', 'RouteErrorBoundary', 'ComponentErrorBoundary'],
       monitoring: ['Error tracking service', 'Analytics integration', 'Error dashboard'],
@@ -146,6 +177,16 @@ const strategicDirectives = [
       risk: 'low'
     },
     dependencies: [],
+    key_principles: [
+      'Fail gracefully: Never show white screens to users',
+      'User-actionable errors: Provide clear recovery actions',
+      'Isolation: Component failures should not crash entire app',
+      'Monitoring: Log all errors with context for debugging',
+      'Progressive enhancement: Core features work even if secondary features fail'
+    ],
+    created_by: 'INFRASTRUCTURE_AUDIT',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
     metadata: {
       current_error_boundaries: 0,
       error_handling_patterns: 'inconsistent',
@@ -161,12 +202,18 @@ const strategicDirectives = [
   },
   {
     id: 'SD-DATA-001',
+    sd_key: 'SD-DATA-001',
     title: 'Missing Critical Database Tables - Schema Completion',
     version: '1.0',
     status: 'draft',
     category: 'data_architecture',
     priority: 'critical',
+    target_application: 'EHG',
+    current_phase: 'IDEATION',
     description: 'Create missing database tables that are referenced in application code but do not exist in the database. This includes analytics_exports, performance_cycle, synergy_opportunities, and unapplied migration schemas. Runtime errors occur when code attempts to query these tables.',
+    rationale: 'Code references database tables that do not exist, causing runtime errors when users access features. Migration files exist but were never applied (exit-workflow-schema.sql, automation_learning_schema.sql). This creates a disconnect between codebase expectations and database reality, leading to feature failures and poor user experience.',
+    scope: 'Create all missing database tables referenced in code (analytics_exports, performance_cycle, synergy_opportunities, exit workflows, automation learning), apply pending migrations, verify foreign key relationships and RLS policies, create performance indexes. EXCLUDES: Data migration from old schemas (start fresh), modifying existing working tables (only add new ones).',
+    strategic_intent: 'Align database schema with application code expectations, eliminate runtime errors from missing tables, complete pending migrations to unlock blocked features. Establish database integrity and enable full feature set.',
     objectives: [
       'Create analytics_exports table for export-engine.ts',
       'Create performance_cycle table for Chairman Dashboard',
@@ -216,6 +263,25 @@ const strategicDirectives = [
       risk: 'low'
     },
     dependencies: [],
+    key_changes: [
+      'Create analytics_exports table with schema',
+      'Create performance_cycle table for Chairman metrics',
+      'Create synergy_opportunities table for portfolio analysis',
+      'Apply exit-workflow-schema.sql migration',
+      'Apply automation_learning_schema.sql migration',
+      'Add RLS policies for all new tables',
+      'Create indexes for performance'
+    ],
+    key_principles: [
+      'Schema-code alignment: Database must match code expectations',
+      'Migration-first: All schema changes via tracked migrations',
+      'Security-by-default: RLS policies on all tables',
+      'Performance-aware: Indexes on frequently queried columns',
+      'Documentation: Comment all table purposes and relationships'
+    ],
+    created_by: 'INFRASTRUCTURE_AUDIT',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
     metadata: {
       missing_tables: [
         'analytics_exports (referenced in export-engine.ts:86)',
@@ -239,12 +305,18 @@ const strategicDirectives = [
   // ===== HIGH PRIORITY =====
   {
     id: 'SD-UX-001',
+    sd_key: 'SD-UX-001',
     title: 'First-Run Experience & Onboarding Flow Integration',
     version: '1.0',
     status: 'draft',
     category: 'user_experience',
     priority: 'high',
+    target_application: 'EHG',
+    current_phase: 'IDEATION',
     description: 'Connect fully-built FirstRunWizard (269 LOC) to application entry point and create comprehensive onboarding experience. Currently, new users land in an empty application with no guidance, causing confusion and poor first impressions.',
+    rationale: 'FirstRunWizard component exists (269 LOC) but is never imported or used. New users see empty dashboard with no data or guidance, leading to confusion and poor first impressions. Onboarding experience is critical for user activation and product adoption. Component is complete but disconnected from application flow.',
+    scope: 'Integrate existing FirstRunWizard into App.tsx, create empty state detection logic, build demo data seeding workflow, add product tour for feature discovery, implement onboarding progress tracking and user preference persistence. EXCLUDES: Redesigning FirstRunWizard (already built), creating new onboarding content (use existing), advanced personalization (start with basic preferences).',
+    strategic_intent: 'Transform first-run experience from confusing empty state into guided, welcoming onboarding that helps users understand the product and get started quickly. Activate existing 269 LOC investment in FirstRunWizard component.',
     objectives: [
       'Integrate FirstRunWizard into App.tsx',
       'Create empty state detection and handling',
@@ -282,6 +354,25 @@ const strategicDirectives = [
       risk: 'low'
     },
     dependencies: [],
+    key_changes: [
+      'Add FirstRunWizard import to App.tsx',
+      'Create empty state detection logic',
+      'Build demo data seeding service',
+      'Implement product tour component',
+      'Add onboarding progress tracking',
+      'Create user preference storage',
+      'Add route guards for onboarding flow'
+    ],
+    key_principles: [
+      'Use existing component: Leverage 269 LOC FirstRunWizard investment',
+      'Progressive disclosure: Don\'t overwhelm new users',
+      'Demo mode option: Let users explore with sample data',
+      'Skippable steps: Don\'t force lengthy onboarding',
+      'Persistent preferences: Remember user choices'
+    ],
+    created_by: 'INFRASTRUCTURE_AUDIT',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
     metadata: {
       existing_component_loc: 269,
       current_imports: 0,
@@ -297,12 +388,18 @@ const strategicDirectives = [
   },
   {
     id: 'SD-EXPORT-001',
+    sd_key: 'SD-EXPORT-001',
     title: 'Analytics Export Engine UI & Integration',
     version: '1.0',
     status: 'draft',
     category: 'feature_integration',
+    target_application: 'EHG',
+    current_phase: 'IDEATION',
     priority: 'high',
     description: 'Create user interface for fully-built Analytics Export Engine (609 LOC) supporting PDF, Excel, CSV, and JSON exports with scheduling capabilities. The export engine is complete but has zero UI access, making it completely inaccessible to users.',
+    rationale: 'Export engine exists (609 LOC) with PDF, Excel, CSV, JSON support and scheduling capabilities, but has zero UI components. Users cannot access this functionality. Chairman Dashboard has "Export" button that does nothing. This represents 609 LOC of wasted investment and missing user value. UI integration needed to activate existing backend capability.',
+    scope: 'Create export configuration UI, report scheduling interface, export history viewer, download manager, and preview functionality. Integrate with Chairman Dashboard and Analytics views. Connect to existing 609 LOC export-engine.ts. EXCLUDES: Rewriting export engine (use existing), adding new export formats (PDF/Excel/CSV/JSON sufficient), advanced customization (basic branding only).',
+    strategic_intent: 'Unlock existing 609 LOC export engine investment by creating user-accessible UI. Enable Chairman to generate and schedule reports in multiple formats. Transform unused backend capability into valuable user feature.',
     objectives: [
       'Create export configuration interface',
       'Add report scheduling UI',
@@ -345,6 +442,25 @@ const strategicDirectives = [
       risk: 'low'
     },
     dependencies: ['SD-DATA-001 (analytics_exports table)'],
+    key_changes: [
+      'Create ExportConfigDialog component',
+      'Build ExportScheduler for recurring exports',
+      'Add ExportHistory table component',
+      'Implement DownloadManager service',
+      'Connect Chairman Dashboard export button',
+      'Add export preview functionality',
+      'Create scheduled export management UI'
+    ],
+    key_principles: [
+      'Leverage existing engine: Reuse 609 LOC export-engine.ts',
+      'Progressive enhancement: Start with manual exports, add scheduling later',
+      'Format flexibility: Support PDF, Excel, CSV, JSON',
+      'User control: Preview before generating, manage scheduled exports',
+      'Performance: Async export generation with progress indicators'
+    ],
+    created_by: 'INFRASTRUCTURE_AUDIT',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
     metadata: {
       backend_loc: 609,
       backend_file: 'src/lib/analytics/export-engine.ts',
@@ -368,12 +484,18 @@ const strategicDirectives = [
   },
   {
     id: 'SD-ACCESSIBILITY-001',
+    sd_key: 'SD-ACCESSIBILITY-001',
     title: 'WCAG 2.1 AA Compliance & Accessibility Enhancement',
     version: '1.0',
     status: 'draft',
     category: 'accessibility',
     priority: 'high',
+    target_application: 'EHG',
+    current_phase: 'IDEATION',
     description: 'Achieve comprehensive WCAG 2.1 Level AA compliance and implement systematic accessibility features. While 182 aria attributes exist, there is no comprehensive accessibility strategy, risking legal compliance issues and excluding users with disabilities.',
+    rationale: 'Application has 182 aria attributes showing some accessibility awareness, but no systematic strategy or testing. Lack of WCAG 2.1 AA compliance creates legal risk (ADA lawsuits) and excludes users with disabilities. Enterprise customers increasingly require accessibility compliance. Piecemeal aria attributes insufficient without comprehensive keyboard navigation, screen reader optimization, and automated testing.',
+    scope: 'Conduct comprehensive WCAG 2.1 AA compliance audit, implement keyboard navigation for all features, add screen reader optimizations, create high-contrast and reduced-motion modes, build focus management system, integrate accessibility testing in CI/CD. EXCLUDES: AAA compliance (target AA first), mobile-specific a11y (web focus), extensive customization (standard modes only).',
+    strategic_intent: 'Transform EHG from accessibility-aware (182 aria attributes) to accessibility-compliant (WCAG 2.1 AA). Mitigate legal risk, expand addressable market to users with disabilities, meet enterprise compliance requirements, and demonstrate inclusive design commitment.',
     objectives: [
       'Complete WCAG 2.1 AA compliance audit',
       'Implement comprehensive keyboard navigation',
@@ -417,6 +539,25 @@ const strategicDirectives = [
       risk: 'medium'
     },
     dependencies: [],
+    key_changes: [
+      'Run comprehensive WCAG 2.1 AA audit',
+      'Implement keyboard navigation for all interactive elements',
+      'Add screen reader live regions and announcements',
+      'Create high-contrast theme mode',
+      'Implement reduced-motion preferences',
+      'Build focus management utilities',
+      'Integrate axe-core testing in CI/CD pipeline'
+    ],
+    key_principles: [
+      'Inclusive by default: Accessibility is not optional',
+      'Keyboard-first: All features accessible without mouse',
+      'Screen reader optimization: ARIA used correctly and systematically',
+      'Automated testing: Catch regressions in CI/CD',
+      'Legal compliance: Meet ADA and WCAG 2.1 AA requirements'
+    ],
+    created_by: 'INFRASTRUCTURE_AUDIT',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
     metadata: {
       current_aria_count: 182,
       contexts_exist: ['AccessibilityContext.tsx', 'EVAContext.tsx'],
@@ -439,12 +580,18 @@ const strategicDirectives = [
   },
   {
     id: 'SD-REALTIME-001',
+    sd_key: 'SD-REALTIME-001',
     title: 'Real-time Data Synchronization & Collaborative Features',
     version: '1.0',
     status: 'draft',
     category: 'feature_enhancement',
     priority: 'high',
+    target_application: 'EHG',
+    current_phase: 'IDEATION',
     description: 'Implement systematic real-time data synchronization across all data tables and add collaborative editing features. Currently, real-time capabilities exist but are inconsistently applied, resulting in stale data and poor collaborative UX.',
+    rationale: 'Application built on Supabase with real-time capabilities, but subscriptions applied inconsistently across tables. Users see stale data until manual refresh. Multi-user scenarios have no presence indicators or conflict resolution. Real-time infrastructure exists but not systematically leveraged. Enterprise collaboration requires real-time sync and presence awareness.',
+    scope: 'Implement real-time subscriptions for all critical data tables, add optimistic updates for responsiveness, create presence indicators showing who is viewing/editing, build collaborative editing with conflict resolution, add real-time notifications for data changes, create activity feed. EXCLUDES: Operational transform (use last-write-wins with notifications), video/voice collaboration (separate feature), mobile offline sync (web focus first).',
+    strategic_intent: 'Transform EHG from refresh-required application into truly real-time collaborative platform. Leverage Supabase real-time infrastructure systematically across all tables. Enable multi-user collaboration with presence awareness and conflict resolution. Improve UX with instant updates and optimistic UI.',
     objectives: [
       'Implement real-time subscriptions for all data tables',
       'Add optimistic updates for better UX',
@@ -495,6 +642,25 @@ const strategicDirectives = [
       risk: 'medium'
     },
     dependencies: [],
+    key_changes: [
+      'Add Supabase real-time subscriptions to all data tables',
+      'Implement optimistic update patterns in React hooks',
+      'Create presence tracking system with Supabase presence',
+      'Build collaborative editing with last-write-wins + notifications',
+      'Add real-time notification system',
+      'Create live activity feed component',
+      'Implement connection state management'
+    ],
+    key_principles: [
+      'Leverage Supabase real-time: Use built-in capabilities',
+      'Optimistic UI: Update immediately, reconcile async',
+      'Graceful degradation: Work without real-time if connection fails',
+      'Conflict notification: Alert users to simultaneous edits',
+      'Performance-aware: Batch updates, debounce high-frequency changes'
+    ],
+    created_by: 'INFRASTRUCTURE_AUDIT',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
     metadata: {
       realtime_files: 10,
       subscription_pattern: 'Inconsistent implementation',

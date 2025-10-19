@@ -4,6 +4,12 @@ node_modules/
 *.log
 verification-packages/
 
+# Backup files (git already provides versioning)
+*.backup
+*.bak
+*.old
+*.tmp
+
 # Multi-Application Management
 .leo-keys
 .leo-keys.backup*
@@ -11,4 +17,4 @@ verification-packages/
 applications/*/codebase/
 applications/*/.env.encrypted
 applications/*/.env.decrypted
-applications/*/.leo-sync/
+applications/*/.leo-sync/supabase/.temp/

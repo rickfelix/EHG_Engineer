@@ -113,7 +113,7 @@ async function runLeadApprovalChecklist(sdId) {
   // 5. Check for PRD
   console.log('\n5️⃣  Checking PRD...');
   const { data: prd } = await supabase
-    .from('prds')
+    .from('product_requirements_v2')
     .select('*')
     .eq('strategic_directive_id', sdId)
     .single();

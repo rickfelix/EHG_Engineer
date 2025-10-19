@@ -64,15 +64,22 @@
     "prd:tables": "node scripts/prd-diagnostic-toolkit.js table-status",
     "prd:orphaned": "node scripts/prd-diagnostic-toolkit.js orphaned-prds",
     "prd:consolidated": "node scripts/unified-consolidated-prd.js",
+    "prd:audit": "node scripts/audit-all-prd-scripts.js",
+    "prd:audit:fix": "node scripts/fix-prd-scripts.js",
+    "prd:audit:dry": "node scripts/fix-prd-scripts.js --dry-run",
+    "prd:schema": "node lib/prd-schema-validator.js",
     "db:subagent": "echo 'Apply database/schema/complete_subagent_integration.sql to Supabase'",
     "context:refresh": "node scripts/generate-file-trees.js --force",
     "context:status": "node lib/context/memory-manager.js",
     "context:compact": "node scripts/context-compact.js",
     "memory:view": "node scripts/view-memory.js",
-    "prepare": "husky"
+    "prepare": "husky",
+    "prd:new": "node scripts/generate-prd-script.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",
+    "@babel/parser": "^7.28.4",
+    "@babel/traverse": "^7.28.4",
     "@supabase/supabase-js": "^2.39.0",
     "axios": "1.12.2",
     "chalk": "^5.6.2",
@@ -95,6 +102,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.8.0",
     "@lhci/cli": "^0.13.0",
+    "@playwright/test": "^1.56.0",
     "@types/node": "^20.10.0",
     "@types/pg": "^8.15.5",
     "esbuild": "^0.25.10",

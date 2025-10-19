@@ -38,7 +38,7 @@ const retrospective = {
     },
     {
       item: 'Database-First Compliance',
-      description: 'All artifacts stored in database (strategic_directives_v2, product_requirements_v2, leo_handoff_executions). Zero markdown files created.',
+      description: 'All artifacts stored in database (strategic_directives_v2, product_requirements_v2, sd_phase_handoffs). Zero markdown files created.',
       impact: 'Single source of truth maintained, dashboard shows real-time status'
     },
     {

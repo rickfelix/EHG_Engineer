@@ -208,6 +208,7 @@ ${extras}
       backlog_items: payload.items || [],  // New field
       created_by: 'PLAN',
       phase: 'planning'
+    sd_uuid: sdUuid, // FIX: Added for handoff validation
     })
     .select()
     .single();

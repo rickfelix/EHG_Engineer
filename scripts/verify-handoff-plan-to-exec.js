@@ -115,6 +115,71 @@ class PlanToExecVerifier {
   }
   
   /**
+   * Validate plan_presentation structure in handoff metadata
+   * SD-PLAN-PRESENT-001: Ensures PLAN→EXEC handoffs include implementation guidance
+   */
+  validatePlanPresentation(metadata) {
+    const validation = {
+      valid: true,
+      errors: []
+    };
+
+    if (!metadata?.plan_presentation) {
+      validation.valid = false;
+      validation.errors.push('plan_presentation required in PLAN→EXEC handoff metadata');
+      return validation;
+    }
+
+    const pp = metadata.plan_presentation;
+
+    // Validate goal_summary
+    if (!pp.goal_summary || pp.goal_summary.trim().length === 0) {
+      validation.errors.push('plan_presentation.goal_summary is required');
+      validation.valid = false;
+    } else if (pp.goal_summary.length > 300) {
+      validation.errors.push(`plan_presentation.goal_summary must be ≤300 characters (current: ${pp.goal_summary.length})`);
+      validation.valid = false;
+    }
+
+    // Validate file_scope
+    if (!pp.file_scope || typeof pp.file_scope !== 'object') {
+      validation.errors.push('plan_presentation.file_scope is required');
+      validation.valid = false;
+    } else {
+      const hasFiles = (pp.file_scope.create?.length > 0) ||
+                       (pp.file_scope.modify?.length > 0) ||
+                       (pp.file_scope.delete?.length > 0);
+      if (!hasFiles) {
+        validation.errors.push('plan_presentation.file_scope must have at least one of: create, modify, or delete');
+        validation.valid = false;
+      }
+    }
+
+    // Validate execution_plan
+    if (!Array.isArray(pp.execution_plan) || pp.execution_plan.length === 0) {
+      validation.errors.push('plan_presentation.execution_plan must be array with ≥1 step');
+      validation.valid = false;
+    }
+
+    // Validate testing_strategy
+    if (!pp.testing_strategy || typeof pp.testing_strategy !== 'object') {
+      validation.errors.push('plan_presentation.testing_strategy is required');
+      validation.valid = false;
+    } else {
+      if (!pp.testing_strategy.unit_tests) {
+        validation.errors.push('plan_presentation.testing_strategy.unit_tests is required');
+        validation.valid = false;
+      }
+      if (!pp.testing_strategy.e2e_tests) {
+        validation.errors.push('plan_presentation.testing_strategy.e2e_tests is required');
+        validation.valid = false;
+      }
+    }
+
+    return validation;
+  }
+
+  /**
    * Verify PLAN → EXEC handoff readiness
    */
   async verifyHandoff(sdId, prdId = null) {
@@ -135,13 +200,18 @@ class PlanToExecVerifier {
       }
       
       // 2. Load associated PRD
-      const prdQuery = prdId 
+      // Use sd_uuid (post-migration) with fallback to uuid_id lookup
+      const sdUuid = sd.uuid_id || sd.id;
+
+      const prdQuery = prdId
         ? this.supabase.from('product_requirements_v2').select('*').eq('id', prdId)
-        : this.supabase.from('product_requirements_v2').select('*').eq('directive_id', sdId);
-        
+        : this.supabase.from('product_requirements_v2').select('*').eq('sd_uuid', sdUuid);
+
       const { data: prds, error: prdError } = await prdQuery;
-      
+
       if (prdError || !prds || prds.length === 0) {
+        console.log(`   ❌ No PRD found with sd_uuid: ${sdUuid}`);
+        console.log(`   PRD Error:`, prdError);
         return this.rejectHandoff(sdId, 'NO_PRD', 'No PRD found for Strategic Directive');
       }
       
@@ -201,19 +271,36 @@ class PlanToExecVerifier {
       // 6. Validate handoff content (if provided)
       const handoffPath = `/mnt/c/_EHG/EHG_Engineer/handoffs/PLAN-to-EXEC-${sdId}.md`;
       let handoffValidation = null;
-      
+      let planPresentationValidation = null;
+
       if (fs.existsSync(handoffPath)) {
         const handoffContent = fs.readFileSync(handoffPath, 'utf8');
         const handoffData = this.handoffValidator.parseHandoffDocument(handoffContent);
         handoffValidation = this.handoffValidator.validateHandoff(handoffData);
-        
+
         if (!handoffValidation.valid) {
           return this.rejectHandoff(sdId, 'HANDOFF_INVALID', 'Handoff document does not meet LEO Protocol requirements', {
             handoffValidation
           });
         }
+
+        // 6a. Validate plan_presentation in handoff metadata (SD-PLAN-PRESENT-001)
+        if (handoffData.metadata) {
+          console.log('\n📋 Validating plan_presentation...');
+          planPresentationValidation = this.validatePlanPresentation(handoffData.metadata);
+
+          if (!planPresentationValidation.valid) {
+            console.log('   ❌ plan_presentation validation failed');
+            planPresentationValidation.errors.forEach(err => console.log(`      • ${err}`));
+            return this.rejectHandoff(sdId, 'PLAN_PRESENTATION_INVALID', 'plan_presentation does not meet template requirements', {
+              planPresentationValidation
+            });
+          }
+
+          console.log('   ✅ plan_presentation validation passed');
+        }
       }
-      
+
       // 7. Create handoff execution record
       const execution = await this.createHandoffExecution(sd, prd, template, prdValidation, handoffValidation);
       
@@ -225,6 +312,9 @@ class PlanToExecVerifier {
       console.log('✅ PRD status ready for execution');
       if (handoffValidation) {
         console.log('✅ Handoff document meets protocol standards');
+      }
+      if (planPresentationValidation) {
+        console.log('✅ plan_presentation template validated (SD-PLAN-PRESENT-001)');
       }
       
       // Update PRD to EXEC phase
@@ -285,7 +375,7 @@ class PlanToExecVerifier {
     
     // Store execution (if table exists)
     try {
-      await this.supabase.from('leo_handoff_executions').insert(execution);
+      await this.supabase.from('sd_phase_handoffs').insert(execution);
       console.log(`📝 Handoff execution recorded: ${executionId}`);
     } catch (error) {
       console.warn('⚠️  Could not store handoff execution:', error.message);
@@ -415,7 +505,23 @@ class PlanToExecVerifier {
         guidance.timeEstimate = '30-45 minutes';
         guidance.instructions = 'Handoff document must include all 7 required elements per LEO Protocol v4.1.2.';
         break;
-        
+
+      case 'PLAN_PRESENTATION_INVALID':
+        const ppValidation = details.planPresentationValidation;
+        guidance.required = ppValidation?.errors || ['Add complete plan_presentation to handoff metadata'];
+        guidance.actions = [
+          'Review plan_presentation template structure in leo_handoff_templates',
+          'Add plan_presentation object to handoff metadata',
+          'Ensure goal_summary ≤300 chars',
+          'Include file_scope (create/modify/delete)',
+          'Define execution_plan steps',
+          'Specify testing_strategy (unit_tests + e2e_tests)',
+          'Resubmit handoff'
+        ];
+        guidance.timeEstimate = '20-30 minutes';
+        guidance.instructions = 'PLAN→EXEC handoffs require plan_presentation in metadata per SD-PLAN-PRESENT-001. Include implementation goals, file scope, execution steps, and testing strategy.';
+        break;
+
       default:
         guidance.required = ['Address system errors and retry'];
         guidance.actions = ['Check system status', 'Verify database connectivity', 'Retry handoff'];

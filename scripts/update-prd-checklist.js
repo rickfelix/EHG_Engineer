@@ -143,7 +143,7 @@ async function updatePRDChecklist() {
       from: 'PLAN',
       to: 'EXEC',
       sd_id: 'SD-2025-001',
-      prd_id: 'PRD-PRD-2025-001',
+      id: 'PRD-PRD-2025-001' // FIX: Use id instead of prd_id,
       timestamp: new Date().toISOString(),
       status: 'ready',
       checklist_status: {

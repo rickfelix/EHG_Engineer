@@ -1,0 +1,273 @@
+{
+  "total_files": 15,
+  "analyzed_at": "2025-10-11T13:35:32.667Z",
+  "sub_agent_findings": {
+    "DOCMON": {
+      "name": "Information Architecture Lead",
+      "mentions": 1,
+      "trigger_failures": [],
+      "quality_issues": [],
+      "context_issues": [],
+      "successes": [],
+      "files_mentioned": [
+        "SD-BACKEND-002B-RETROSPECTIVE.md"
+      ]
+    },
+    "UAT": {
+      "name": "UAT Test Executor",
+      "mentions": 28,
+      "trigger_failures": [],
+      "quality_issues": [],
+      "context_issues": [],
+      "successes": [],
+      "files_mentioned": [
+        "SD-051-CANCELLATION-RETROSPECTIVE.md",
+        "SD-UAT-002-RETROSPECTIVE.md",
+        "SD-UAT-003-RETROSPECTIVE.md",
+        "SD-UAT-020-RETROSPECTIVE.md"
+      ]
+    },
+    "GITHUB": {
+      "name": "DevOps Platform Architect",
+      "mentions": 6,
+      "trigger_failures": [],
+      "quality_issues": [],
+      "context_issues": [],
+      "successes": [],
+      "files_mentioned": [
+        "SD-041C-COMPLETE.md",
+        "SD-BACKEND-002B-RETROSPECTIVE.md",
+        "SD-UAT-002-RETROSPECTIVE.md",
+        "SD-UAT-003-RETROSPECTIVE.md"
+      ]
+    },
+    "RETRO": {
+      "name": "Continuous Improvement Coach",
+      "mentions": 16,
+      "trigger_failures": [],
+      "quality_issues": [],
+      "context_issues": [],
+      "successes": [],
+      "files_mentioned": [
+        "SD-041C-COMPLETE.md",
+        "SD-BACKEND-002A-ROOT-CAUSE.md",
+        "SD-BACKEND-002B-RETROSPECTIVE.md",
+        "SD-BACKEND-002C-RETROSPECTIVE.md",
+        "SD-UAT-002-RETROSPECTIVE.md",
+        "SD-UAT-003-RETROSPECTIVE.md",
+        "SD-UAT-020-RETROSPECTIVE.md"
+      ]
+    },
+    "DESIGN": {
+      "name": "Senior Design Sub-Agent",
+      "mentions": 3,
+      "trigger_failures": [],
+      "quality_issues": [],
+      "context_issues": [],
+      "successes": [],
+      "files_mentioned": [
+        "SD-051-CANCELLATION-RETROSPECTIVE.md"
+      ]
+    },
+    "RESEARCH": {
+      "name": "Research Agent",
+      "mentions": 0,
+      "trigger_failures": [],
+      "quality_issues": [],
+      "context_issues": [],
+      "successes": [],
+      "files_mentioned": []
+    },
+    "STORIES": {
+      "name": "Product Requirements Expert",
+      "mentions": 0,
+      "trigger_failures": [],
+      "quality_issues": [],
+      "context_issues": [],
+      "successes": [],
+      "files_mentioned": []
+    },
+    "FINANCIAL_ANALYTICS": {
+      "name": "Senior Financial Analytics Engineer",
+      "mentions": 0,
+      "trigger_failures": [],
+      "quality_issues": [],
+      "context_issues": [],
+      "successes": [],
+      "files_mentioned": []
+    },
+    "SECURITY": {
+      "name": "Chief Security Architect",
+      "mentions": 5,
+      "trigger_failures": [],
+      "quality_issues": [],
+      "context_issues": [],
+      "successes": [],
+      "files_mentioned": [
+        "SD-BACKEND-002B-RETROSPECTIVE.md",
+        "SD-LEO-002-retrospective.md"
+      ]
+    },
+    "DATABASE": {
+      "name": "Principal Database Architect",
+      "mentions": 3,
+      "trigger_failures": [],
+      "quality_issues": [],
+      "context_issues": [],
+      "successes": [],
+      "files_mentioned": [
+        "SD-BACKEND-002B-RETROSPECTIVE.md",
+        "SD-LEO-002-retrospective.md"
+      ]
+    },
+    "TESTING": {
+      "name": "QA Engineering Director",
+      "mentions": 2,
+      "trigger_failures": [],
+      "quality_issues": [],
+      "context_issues": [],
+      "successes": [],
+      "files_mentioned": [
+        "SD-BACKEND-002B-RETROSPECTIVE.md",
+        "SD-LEO-002-retrospective.md"
+      ]
+    },
+    "PERFORMANCE": {
+      "name": "Performance Engineering Lead",
+      "mentions": 1,
+      "trigger_failures": [],
+      "quality_issues": [],
+      "context_issues": [],
+      "successes": [],
+      "files_mentioned": [
+        "SD-BACKEND-002B-RETROSPECTIVE.md"
+      ]
+    },
+    "VALIDATION": {
+      "name": "Principal Systems Analyst",
+      "mentions": 4,
+      "trigger_failures": [
+        {
+          "file": "SD-BACKEND-002A-ROOT-CAUSE.md",
+          "line": 92,
+          "context": "**SHOULD HAVE TRIGGERED**: Principal Systems Analyst",
+          "keyword": "should have triggered"
+        }
+      ],
+      "quality_issues": [],
+      "context_issues": [],
+      "successes": [],
+      "files_mentioned": [
+        "SD-BACKEND-002A-ROOT-CAUSE.md"
+      ]
+    }
+  },
+  "baseline_metrics": {
+    "trigger_accuracy": "70-85%",
+    "result_quality": "75-90%",
+    "token_usage": "15K-30K per SD",
+    "explanation": "Estimated from retrospective patterns"
+  },
+  "patterns_by_category": {
+    "trigger_failures": [
+      {
+        "sub_agent": "VALIDATION",
+        "file": "SD-BACKEND-002A-ROOT-CAUSE.md",
+        "issue": "**SHOULD HAVE TRIGGERED**: Principal Systems Analyst"
+      }
+    ],
+    "quality_issues": [],
+    "context_inefficiencies": [],
+    "success_patterns": []
+  },
+  "recommendations": [
+    {
+      "sub_agent": "RESEARCH",
+      "priority": "LOW",
+      "category": "Usage",
+      "issue": "No mentions in retrospectives",
+      "recommendation": "Verify sub-agent is properly configured and triggers are working"
+    },
+    {
+      "sub_agent": "STORIES",
+      "priority": "LOW",
+      "category": "Usage",
+      "issue": "No mentions in retrospectives",
+      "recommendation": "Verify sub-agent is properly configured and triggers are working"
+    },
+    {
+      "sub_agent": "FINANCIAL_ANALYTICS",
+      "priority": "LOW",
+      "category": "Usage",
+      "issue": "No mentions in retrospectives",
+      "recommendation": "Verify sub-agent is properly configured and triggers are working"
+    },
+    {
+      "sub_agent": "VALIDATION",
+      "priority": "CRITICAL",
+      "category": "Trigger Detection",
+      "issue": "1 trigger failure(s) detected",
+      "recommendation": "Add new trigger keywords based on contexts where sub-agent should have activated"
+    }
+  ],
+  "summary": {
+    "total_trigger_failures": 1,
+    "total_quality_issues": 0,
+    "total_context_issues": 0,
+    "total_successes": 0,
+    "most_problematic_sub_agents": [
+      {
+        "code": "VALIDATION",
+        "name": "Principal Systems Analyst",
+        "total_issues": 1
+      },
+      {
+        "code": "DOCMON",
+        "name": "Information Architecture Lead",
+        "total_issues": 0
+      },
+      {
+        "code": "UAT",
+        "name": "UAT Test Executor",
+        "total_issues": 0
+      },
+      {
+        "code": "GITHUB",
+        "name": "DevOps Platform Architect",
+        "total_issues": 0
+      },
+      {
+        "code": "RETRO",
+        "name": "Continuous Improvement Coach",
+        "total_issues": 0
+      }
+    ],
+    "most_successful_sub_agents": [
+      {
+        "code": "DOCMON",
+        "name": "Information Architecture Lead",
+        "total_successes": 0
+      },
+      {
+        "code": "UAT",
+        "name": "UAT Test Executor",
+        "total_successes": 0
+      },
+      {
+        "code": "GITHUB",
+        "name": "DevOps Platform Architect",
+        "total_successes": 0
+      },
+      {
+        "code": "RETRO",
+        "name": "Continuous Improvement Coach",
+        "total_successes": 0
+      },
+      {
+        "code": "DESIGN",
+        "name": "Senior Design Sub-Agent",
+        "total_successes": 0
+      }
+    ]
+  }
+}

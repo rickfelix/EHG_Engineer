@@ -82,7 +82,7 @@ async function executeLEADPhase() {
   // Store handoff in database
   try {
     const { data, error } = await supabase
-      .from('leo_handoff_executions')
+      .from('sd_phase_handoffs')
       .insert({
         id: `HANDOFF-${Date.now()}`,
         template_id: 'strategic_to_technical',

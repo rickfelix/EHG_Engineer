@@ -17,10 +17,12 @@ const supabase = createClient(
 );
 
 const newSD = {
-  id: randomUUID(),
+  id: 'SD-047A',
   sd_key: 'SD-047A',
   category: 'UI/UX',
   title: 'Venture Timeline Tab: Gantt & Milestone Visualization',
+  target_application: 'EHG',
+  current_phase: 'IDEATION',
   description: `Add comprehensive timeline visualization to the ventures management interface, providing visual tracking of venture progress through the 40-stage lifecycle.
 
 **Current State**: Ventures tracked via Grid, Kanban, and Table views. No visual timeline or Gantt chart for milestone tracking.

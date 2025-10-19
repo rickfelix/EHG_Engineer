@@ -74,7 +74,7 @@ async function testPolishMigration() {
     console.log('------------------------------------------\n');
 
     const { data: prds } = await supabase
-      .from('prds')
+      .from('product_requirements_v2')
       .select('id, target_url, component_name')
       .limit(3);
 

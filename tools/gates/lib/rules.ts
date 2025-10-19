@@ -47,7 +47,7 @@ export async function getPRDDetails(prdId: string): Promise<any> {
   const db = await getDb();
   
   const { data, error } = await db
-    .from('prds')
+    .from('product_requirements_v2')
     .select('id, title, sd_id, status')
     .eq('id', prdId)
     .single();

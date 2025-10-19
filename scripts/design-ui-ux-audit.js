@@ -104,7 +104,7 @@ class DesignAudit {
     // Fallback to prds table if not found
     if (error || !prd) {
       const result = await supabase
-        .from('prds')
+        .from('product_requirements_v2')
         .select('*')
         .eq('id', prdId)
         .single();
@@ -277,7 +277,7 @@ class DesignAudit {
 
     // Fetch all active PRDs
     const { data: prds, error } = await supabase
-      .from('prds')
+      .from('product_requirements_v2')
       .select('id, title, strategic_directive_id')
       .in('status', ['draft', 'approved', 'in_progress'])
       .order('created_at', { ascending: false });
@@ -444,7 +444,7 @@ Examples:
 
     // Fetch PRDs for this SD
     const { data: prds, error } = await supabase
-      .from('prds')
+      .from('product_requirements_v2')
       .select('id')
       .eq('strategic_directive_id', sdId);
 

@@ -258,7 +258,7 @@ class HookSubAgentActivator {
       try {
         for (const migration of migrations) {
           await supabase
-            .from('leo_handoff_executions')
+            .from('sd_phase_handoffs')
             .insert({
               from_agent: migration.from_agent,
               to_agent: migration.to_agent,
@@ -291,7 +291,7 @@ class HookSubAgentActivator {
           success: false,
           error: dbError.message,
           message: 'Failed to store handoffs in database',
-          recommendation: 'Ensure leo_handoff_executions table exists'
+          recommendation: 'Ensure sd_phase_handoffs table exists'
         };
       }
 

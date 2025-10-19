@@ -15,7 +15,7 @@ async function createPRD() {
 
   const prdData = {
     sd_id: 'SD-041C',
-    prd_id: 'PRD-041C-001',
+    id: 'PRD-041C-001' // FIX: Use id instead of prd_id,
     title: 'AI-Powered Documentation Generator - Product Requirements',
     version: '1.0.0',
     status: 'active',

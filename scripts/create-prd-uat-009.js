@@ -44,7 +44,8 @@ The Venture Portfolio Management Dashboard currently uses hardcoded mock data in
 - Component: src/components/venture/VentureGrid.tsx
 - Page: src/pages/Ventures.tsx`,
 
-    user_stories: [
+    // FIX: user_stories moved to separate table
+    // user_stories: [
       {
         id: 'US-1',
         role: 'Chairman',

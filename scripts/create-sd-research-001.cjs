@@ -17,7 +17,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const { randomUUID } = require('crypto');
 
 const sdData = {
-  id: randomUUID(),
+  id: 'SD-RESEARCH-001',
   sd_key: 'SD-RESEARCH-001',
   title: 'Research Agent + RAID Table Integration',
   status: 'draft',

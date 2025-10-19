@@ -410,7 +410,7 @@ class LeadToPlanVerifier {
     
     // Store execution (if table exists)
     try {
-      await this.supabase.from('leo_handoff_executions').insert(execution);
+      await this.supabase.from('sd_phase_handoffs').insert(execution);
       console.log(`📝 Handoff execution recorded: ${executionId}`);
     } catch (error) {
       console.warn('⚠️  Could not store handoff execution:', error.message);

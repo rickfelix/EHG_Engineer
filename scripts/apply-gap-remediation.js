@@ -47,7 +47,7 @@ async function applyMigration() {
 
     // Check PRDs structure
     const { data: prds, error: prdError } = await supabase
-      .from('prds')
+      .from('product_requirements_v2')
       .select('id, title, target_url, component_name')
       .limit(3);
 

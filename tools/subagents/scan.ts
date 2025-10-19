@@ -30,7 +30,7 @@ export async function scanSubAgents(prdId: string): Promise<ScanResult> {
 
   // 1) Load PRD content from DB only (no filesystem)
   const { data: prd, error: prdError } = await db
-    .from('prds')
+    .from('product_requirements_v2')
     .select('id, title, content')
     .eq('id', prdId)
     .single();

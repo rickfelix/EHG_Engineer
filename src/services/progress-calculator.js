@@ -29,6 +29,25 @@ class ProgressCalculator {
    * This is the SINGLE SOURCE OF TRUTH for progress calculation
    */
   calculateSDProgress(sd, prd) {
+    // SPECIAL CASE: For completed SDs, respect the database progress field
+    if (sd?.status?.toLowerCase() === 'completed' || sd?.current_phase === 'COMPLETE') {
+      return {
+        phases: {
+          LEAD_PLANNING: 100,
+          PLAN_DESIGN: 100,
+          EXEC_IMPLEMENTATION: 100,
+          PLAN_VERIFICATION: 100,
+          LEAD_APPROVAL: 100
+        },
+        total: sd?.progress || 100,
+        currentPhase: sd?.current_phase || 'COMPLETE',
+        details: {
+          completed: true,
+          reason: 'SD marked as completed in database'
+        }
+      };
+    }
+
     // SPECIAL CASE: For archived SDs with metadata completion_percentage = 100,
     // respect the manual completion percentage (regardless of PRD status)
     if (sd?.status?.toLowerCase() === 'archived' && sd?.metadata?.completion_percentage === 100) {

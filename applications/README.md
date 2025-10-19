@@ -17,6 +17,21 @@ applications/
 └── APP002/               # Another application...
 ```
 
+## CRITICAL: Development Workflow Warning
+
+The `codebase/` directories in each APP folder should **NEVER** be used for direct development. They are gitignored and meant to remain empty or contain only placeholder files.
+
+**Always work in the actual repository location specified in each APP's `config.json` under `local_path`.**
+
+Example:
+- APP001 `config.json` specifies: `"local_path": "/mnt/c/_EHG/ehg"`
+- Therefore, **always** work in `/mnt/c/_EHG/ehg`, **never** in `APP001/codebase/`
+
+This architecture ensures:
+- Single source of truth (the actual git repository)
+- No synchronization conflicts
+- Clear separation between orchestration (EHG_Engineer) and application code
+
 ## Setup Instructions
 
 ### 1. Prerequisites
