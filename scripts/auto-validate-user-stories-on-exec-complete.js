@@ -38,7 +38,7 @@ async function autoValidateUserStories() {
   // 1. Get all user stories for this SD
   const { data: stories, error: storiesError } = await supabase
     .from('user_stories')
-    .select('id, title, validation_status')
+    .select('id, title, status, validation_status')
     .eq('sd_id', sdId);
 
   if (storiesError) {
@@ -70,22 +70,31 @@ async function autoValidateUserStories() {
     return { validated: false, message: 'Deliverables incomplete' };
   }
 
-  // 3. Auto-validate pending user stories
-  const pendingStories = stories.filter(s => s.validation_status === 'pending');
+  // 3. Auto-validate completed user stories (must be both completed AND pending validation)
+  const completedPendingStories = stories.filter(
+    s => s.validation_status === 'pending' && s.status === 'completed'
+  );
 
-  if (pendingStories.length === 0) {
-    console.log('✅ All user stories already validated');
-    return { validated: true, count: stories.length, message: 'Already validated' };
+  if (completedPendingStories.length === 0) {
+    const allValidated = stories.every(s => s.validation_status === 'validated');
+    if (allValidated) {
+      console.log('✅ All user stories already validated');
+      return { validated: true, count: stories.length, message: 'Already validated' };
+    } else {
+      console.log('⏸️  User stories exist but not completed yet, skipping auto-validation');
+      return { validated: false, message: 'Stories not completed' };
+    }
   }
 
-  console.log(`📝 Auto-validating ${pendingStories.length} pending user stories...`);
+  console.log(`📝 Auto-validating ${completedPendingStories.length} completed user stories...`);
 
   const { data: updated, error: updateError } = await supabase
     .from('user_stories')
     .update({ validation_status: 'validated' })
     .eq('sd_id', sdId)
+    .eq('status', 'completed')
     .eq('validation_status', 'pending')
-    .select('id, title');
+    .select('id, title, status');
 
   if (updateError) {
     console.error('❌ Error updating user stories:', updateError.message);

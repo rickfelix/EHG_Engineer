@@ -370,6 +370,41 @@ async function generateComprehensiveRetrospective(sdId) {
     learningCategory = 'USER_EXPERIENCE';
   }
 
+  // Auto-detect target_application from SD category if not explicitly set
+  let targetApplication = sd.target_application;
+  if (!targetApplication) {
+    const category = (sd.category || '').toLowerCase();
+
+    // EHG_Engineer: Engineering/infrastructure/process improvements
+    if (category.includes('infrastructure') ||
+        category.includes('tooling') ||
+        category.includes('process') ||
+        category.includes('workflow') ||
+        title.includes('leo') ||
+        title.includes('sub-agent') ||
+        title.includes('handoff') ||
+        title.includes('retrospective') ||
+        scope.includes('engineering')) {
+      targetApplication = 'EHG_Engineer';
+    }
+    // EHG: User-facing features, UI/UX, business logic
+    else if (category.includes('feature') ||
+             category.includes('ui') ||
+             category.includes('enhancement') ||
+             category.includes('bug') ||
+             title.includes('venture') ||
+             title.includes('chairman') ||
+             title.includes('user')) {
+      targetApplication = 'EHG';
+    }
+    // Default: EHG_Engineer for ambiguous cases
+    else {
+      targetApplication = 'EHG_Engineer';
+    }
+
+    console.log(`   ℹ️  Auto-detected target_application: ${targetApplication} (from category: ${sd.category || 'none'})`);
+  }
+
   const retrospective = {
     sd_id: sdId,
     project_name: sd.title,
@@ -409,7 +444,7 @@ async function generateComprehensiveRetrospective(sdId) {
     performance_impact: handoffInsights.patterns.find(p => p.includes('ms')) || 'Standard',
 
     // SD-RETRO-ENHANCE-001: New required fields from Checkpoint 1
-    target_application: sd.target_application || 'EHG_engineer', // From SD or default to management dashboard
+    target_application: targetApplication, // Auto-detected from SD category or explicit value
     learning_category: learningCategory, // Inferred from SD title/scope
     related_files: [], // Can be populated from handoff documents
     related_commits: [], // Can be extracted from git history
