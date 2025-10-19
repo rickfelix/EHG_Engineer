@@ -13,27 +13,45 @@
 
 CREATE OR REPLACE FUNCTION auto_populate_prd_sd_uuid()
 RETURNS TRIGGER AS $$
+DECLARE
+  sd_id TEXT;
+  base_sd_id TEXT;
 BEGIN
   -- Only auto-populate if sd_uuid is NULL and ID follows convention
   IF NEW.sd_uuid IS NULL AND NEW.id LIKE 'PRD-SD-%' THEN
     -- Extract SD ID from PRD ID (PRD-SD-XXX-YYY-ZZZ → SD-XXX-YYY-ZZZ)
-    DECLARE
-      sd_id TEXT;
-    BEGIN
-      sd_id := REPLACE(NEW.id, 'PRD-', '');
+    sd_id := REPLACE(NEW.id, 'PRD-', '');
 
-      -- Look up SD UUID
-      SELECT uuid_id INTO NEW.sd_uuid
-      FROM strategic_directives_v2
-      WHERE id = sd_id;
+    -- Try exact match first
+    SELECT uuid_id INTO NEW.sd_uuid
+    FROM strategic_directives_v2
+    WHERE id = sd_id;
 
-      -- If SD not found, raise error (prevents orphaned PRDs)
-      IF NEW.sd_uuid IS NULL THEN
-        RAISE EXCEPTION 'Cannot create PRD: Strategic Directive % not found in database. Create SD first.', sd_id;
+    -- If not found, try stripping timestamp suffix (e.g., SD-023-1758985645577 → SD-023)
+    IF NEW.sd_uuid IS NULL THEN
+      -- Extract base ID by removing trailing -TIMESTAMP pattern (13 digits)
+      base_sd_id := REGEXP_REPLACE(sd_id, '-\d{13}$', '');
+
+      -- Only try base lookup if we actually stripped something
+      IF base_sd_id != sd_id THEN
+        SELECT uuid_id INTO NEW.sd_uuid
+        FROM strategic_directives_v2
+        WHERE id = base_sd_id;
+
+        IF NEW.sd_uuid IS NOT NULL THEN
+          RAISE NOTICE 'Auto-populated sd_uuid for PRD % from base SD % (original: %)',
+            NEW.id, base_sd_id, sd_id;
+        END IF;
       END IF;
-
+    ELSE
       RAISE NOTICE 'Auto-populated sd_uuid for PRD % from SD %', NEW.id, sd_id;
-    END;
+    END IF;
+
+    -- If SD still not found, raise error (prevents orphaned PRDs)
+    IF NEW.sd_uuid IS NULL THEN
+      RAISE EXCEPTION 'Cannot create PRD: Strategic Directive % (or base ID %) not found in database. Create SD first.',
+        sd_id, base_sd_id;
+    END IF;
   END IF;
 
   RETURN NEW;
@@ -94,29 +112,44 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- STEP 3: Add NOT NULL constraint (with grace period)
+-- STEP 3: Add NOT NULL constraint (DEFERRED - see note below)
 -- ============================================================================
 
--- Check if any NULL sd_uuid remain (excluding non-convention PRDs)
+-- NOTE: NOT NULL constraint is NOT added by this migration because:
+-- 1. There are 24 PRDs with NULL sd_uuid across different naming patterns
+-- 2. This trigger only auto-populates PRD-SD-* pattern (17 fixed by cleanup)
+-- 3. Other patterns (PRD-RECONNECT-*, PRD-BOARD-*, UUIDs) require manual sd_uuid
+-- 4. Cleanup of non-PRD-SD-* PRDs is deferred to future migration
+--
+-- To add constraint after cleanup:
+-- ALTER TABLE product_requirements_v2 ALTER COLUMN sd_uuid SET NOT NULL;
+
+-- Report current status
 DO $$
 DECLARE
-  null_count INTEGER;
+  null_count_sd_pattern INTEGER;
+  null_count_total INTEGER;
 BEGIN
-  SELECT COUNT(*) INTO null_count
+  SELECT COUNT(*) INTO null_count_sd_pattern
   FROM product_requirements_v2
-  WHERE sd_uuid IS NULL
-    AND id LIKE 'PRD-SD-%';
+  WHERE sd_uuid IS NULL AND id LIKE 'PRD-SD-%';
 
-  IF null_count = 0 THEN
-    -- Safe to add constraint
-    ALTER TABLE product_requirements_v2
-      ALTER COLUMN sd_uuid SET NOT NULL;
+  SELECT COUNT(*) INTO null_count_total
+  FROM product_requirements_v2
+  WHERE sd_uuid IS NULL;
 
-    RAISE NOTICE '✅ Added NOT NULL constraint to sd_uuid (0 violations)';
+  RAISE NOTICE '📊 PRD sd_uuid Status Report:';
+  RAISE NOTICE '   - PRD-SD-* pattern with NULL sd_uuid: %', null_count_sd_pattern;
+  RAISE NOTICE '   - Total PRDs with NULL sd_uuid: %', null_count_total;
+  RAISE NOTICE '   - Other patterns with NULL: %', (null_count_total - null_count_sd_pattern);
+  RAISE NOTICE '';
+
+  IF null_count_total > 0 THEN
+    RAISE WARNING '⚠️  NOT NULL constraint NOT added (% PRDs with NULL sd_uuid)', null_count_total;
+    RAISE WARNING '   Auto-population only works for PRD-SD-* pattern.';
+    RAISE WARNING '   Other PRD patterns require manual sd_uuid assignment.';
   ELSE
-    RAISE WARNING '⚠️  Cannot add NOT NULL constraint: % PRDs still have NULL sd_uuid', null_count;
-    RAISE WARNING '   Fix orphaned PRDs manually, then run:';
-    RAISE WARNING '   ALTER TABLE product_requirements_v2 ALTER COLUMN sd_uuid SET NOT NULL;';
+    RAISE NOTICE '✅ All PRDs have sd_uuid! Safe to add NOT NULL constraint.';
   END IF;
 END $$;
 
@@ -168,7 +201,12 @@ BEGIN
     category,
     priority,
     status,
-    rationale
+    rationale,
+    scope,
+    sd_key,
+    sequence_rank,
+    progress_percentage,
+    current_phase
   ) VALUES (
     test_sd_id,
     'Test Auto UUID Population',
@@ -176,7 +214,12 @@ BEGIN
     'testing',
     'low',
     'draft',
-    'Testing auto-population of PRD sd_uuid field'
+    'Testing auto-population of PRD sd_uuid field',
+    'Test scope for validation',
+    test_sd_id,
+    9999,
+    0,
+    'LEAD'
   ) RETURNING uuid_id INTO test_sd_uuid;
 
   RAISE NOTICE '1. Created test SD: % (UUID: %)', test_sd_id, test_sd_uuid;
@@ -185,15 +228,13 @@ BEGIN
   INSERT INTO product_requirements_v2 (
     id,
     title,
-    description,
-    category,
+    executive_summary,
     status
     -- sd_uuid intentionally omitted
   ) VALUES (
     test_prd_id,
     'Test PRD',
     'Should auto-populate sd_uuid',
-    'feature',
     'draft'
   ) RETURNING * INTO test_prd;
 
@@ -212,12 +253,11 @@ BEGIN
   -- Test error handling (PRD for non-existent SD)
   BEGIN
     INSERT INTO product_requirements_v2 (
-      id, title, description, category, status
+      id, title, executive_summary, status
     ) VALUES (
       'PRD-SD-NONEXISTENT-001',
       'Should Fail',
       'SD does not exist',
-      'feature',
       'draft'
     );
 
