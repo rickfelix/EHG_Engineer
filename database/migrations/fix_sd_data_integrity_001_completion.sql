@@ -34,15 +34,17 @@ WHERE sd_id = 'SD-DATA-INTEGRITY-001';
 -- ============================================================================
 -- STEP 1: Drop old functions completely
 -- ============================================================================
+-- CRITICAL: Use 'character varying' not 'TEXT' to match existing signature
 
-DROP FUNCTION IF EXISTS get_progress_breakdown(TEXT) CASCADE;
-DROP FUNCTION IF EXISTS calculate_sd_progress(TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.get_progress_breakdown(character varying) CASCADE;
+DROP FUNCTION IF EXISTS public.calculate_sd_progress(character varying) CASCADE;
 
 -- ============================================================================
 -- STEP 2: Create NEW get_progress_breakdown using sd_phase_handoffs
 -- ============================================================================
+-- CRITICAL: Use 'character varying' to match PostgreSQL function signature
 
-CREATE OR REPLACE FUNCTION get_progress_breakdown(sd_id_param TEXT)
+CREATE OR REPLACE FUNCTION public.get_progress_breakdown(sd_id_param character varying)
 RETURNS JSONB AS $$
 DECLARE
   total_handoffs INTEGER;
@@ -111,14 +113,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION get_progress_breakdown(TEXT) IS
+COMMENT ON FUNCTION public.get_progress_breakdown(character varying) IS
 'Returns progress breakdown for SD. NOW USES sd_phase_handoffs table (fixed 2025-10-19)';
 
 -- ============================================================================
 -- STEP 3: Create NEW calculate_sd_progress
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION calculate_sd_progress(sd_id_param TEXT)
+CREATE OR REPLACE FUNCTION public.calculate_sd_progress(sd_id_param character varying)
 RETURNS INTEGER AS $$
 DECLARE
   breakdown JSONB;
@@ -128,7 +130,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION calculate_sd_progress(TEXT) IS
+COMMENT ON FUNCTION public.calculate_sd_progress(character varying) IS
 'Calculates SD progress percentage. NOW USES sd_phase_handoffs table (fixed 2025-10-19)';
 
 -- ============================================================================
