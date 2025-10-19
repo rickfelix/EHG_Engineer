@@ -5,7 +5,7 @@
 -- SD: SD-DATA-INTEGRITY-001
 -- User Story: SD-DATA-INTEGRITY-001:US-005
 -- Created: 2025-10-19
--- Fixed: Column name corrections (from_phase/to_phase)
+-- Fixed: Column name corrections (from_phase/to_phase) + DO block for RAISE statements
 -- ============================================================================
 
 -- PHASE 1: Backup Verification
@@ -161,19 +161,23 @@ WHERE id NOT IN (SELECT id FROM sd_phase_handoffs)
 GROUP BY handoff_type
 ORDER BY count DESC;
 
-RAISE NOTICE '═══════════════════════════════════════════════════════════════';
-RAISE NOTICE 'DEPRECATION CHECKLIST';
-RAISE NOTICE '═══════════════════════════════════════════════════════════════';
-RAISE NOTICE '✅ Phase 1: Backup verification complete';
-RAISE NOTICE '✅ Phase 2: Read-only view created (legacy_handoff_executions_view)';
-RAISE NOTICE '⏸️  Phase 3: Table rename (COMMENTED OUT - manual review required)';
-RAISE NOTICE '⏸️  Phase 4: RLS policies (COMMENTED OUT - apply after rename)';
-RAISE NOTICE '✅ Phase 5: Migration status function created';
-RAISE NOTICE '';
-RAISE NOTICE 'NEXT STEPS:';
-RAISE NOTICE '1. Review unmigrated records report above';
-RAISE NOTICE '2. Verify all critical handoffs are migrated';
-RAISE NOTICE '3. Uncomment Phase 3 & 4 when ready to deprecate';
-RAISE NOTICE '4. Update documentation to reference new table';
-RAISE NOTICE '5. Monitor for any scripts still using legacy table';
-RAISE NOTICE '═══════════════════════════════════════════════════════════════';
+-- DEPRECATION CHECKLIST (wrapped in DO block)
+DO $$
+BEGIN
+  RAISE NOTICE '═══════════════════════════════════════════════════════════════';
+  RAISE NOTICE 'DEPRECATION CHECKLIST';
+  RAISE NOTICE '═══════════════════════════════════════════════════════════════';
+  RAISE NOTICE '✅ Phase 1: Backup verification complete';
+  RAISE NOTICE '✅ Phase 2: Read-only view created (legacy_handoff_executions_view)';
+  RAISE NOTICE '⏸️  Phase 3: Table rename (COMMENTED OUT - manual review required)';
+  RAISE NOTICE '⏸️  Phase 4: RLS policies (COMMENTED OUT - apply after rename)';
+  RAISE NOTICE '✅ Phase 5: Migration status function created';
+  RAISE NOTICE '';
+  RAISE NOTICE 'NEXT STEPS:';
+  RAISE NOTICE '1. Review unmigrated records report above';
+  RAISE NOTICE '2. Verify all critical handoffs are migrated';
+  RAISE NOTICE '3. Uncomment Phase 3 & 4 when ready to deprecate';
+  RAISE NOTICE '4. Update documentation to reference new table';
+  RAISE NOTICE '5. Monitor for any scripts still using legacy table';
+  RAISE NOTICE '═══════════════════════════════════════════════════════════════';
+END $$;
