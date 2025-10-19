@@ -58,6 +58,7 @@ DO $$
 DECLARE
   updated_count INTEGER;
   orphaned_count INTEGER;
+  prd_record RECORD;
 BEGIN
   RAISE NOTICE 'Backfilling NULL sd_uuid values...';
 
