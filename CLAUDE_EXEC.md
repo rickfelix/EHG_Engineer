@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - LEO Protocol EXEC Phase Context
 
-**Generated**: 2025-10-14 9:31:51 PM
+**Generated**: 2025-10-19 2:09:00 PM
 **Protocol**: LEO vv4.2.0_story_gates
 **Purpose**: EXEC phase operations + core context
 
@@ -23,8 +23,8 @@ This file contains:
 1. **Follow LEAD→PLAN→EXEC** - Target ≥85% gate pass rate
 2. **Use sub-agents** - Architect, QA, Reviewer - summarize outputs
 3. **Database-first** - No markdown files as source of truth
-4. **Small PRs** - Target ≤100 lines, max 400 with justification
-5. **7-element handoffs** - Required for all phase transitions
+4. **USE PROCESS SCRIPTS** - ⚠️ NEVER bypass add-prd-to-database.js, unified-handoff-system.js ⚠️
+5. **Small PRs** - Target ≤100 lines, max 400 with justification
 6. **Priority-first** - Use `npm run prio:top3` to justify work
 
 *For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
@@ -175,6 +175,32 @@ These principles override default behavior and must be internalized before start
 - ✅ **One record update at a time** - verify before next
 
 ## 📊 Communication & Context
+
+### Communication Style
+
+**Brief by Default**: Responses should be concise and action-oriented unless the user explicitly requests detailed explanations.
+
+**When to be Brief** (default):
+- Status updates and progress reports
+- Acknowledging commands or requests
+- Confirming successful operations
+- Error messages (summary + fix)
+- Tool invocation descriptions
+
+**When to be Verbose** (only if requested):
+- User asks "explain in detail"
+- User requests "comprehensive" or "thorough" analysis
+- Teaching or knowledge transfer scenarios
+- Complex debugging requiring full context
+- Documentation generation
+
+**Examples**:
+
+| Context | ❌ Verbose (unnecessary) | ✅ Brief (preferred) |
+|---------|------------------------|---------------------|
+| File created | "I have successfully created the file at the specified path with all the requested content..." | "File created: path/to/file.md" |
+| Test passed | "The test suite has been executed and all tests have passed successfully with 100% coverage..." | "✅ Tests passed (100% coverage)" |
+| Next step | "Now I will proceed to the next step which involves updating the database schema..." | "Updating database schema..." |
 
 ### Context Economy Rules
 
@@ -390,22 +416,9 @@ node scripts/unified-handoff-system.js execute <TYPE> <SD-ID>
 # Types:
 # - LEAD-to-PLAN
 # - PLAN-to-EXEC
-# - EXEC-to-PLAN (auto-runs PLAN_VERIFY sub-agents + auto-validates user stories)
+# - EXEC-to-PLAN (auto-runs PLAN_VERIFY sub-agents)
 # - PLAN-to-LEAD (auto-runs LEAD_FINAL sub-agents)
 ```
-
-**User Story Auto-Validation** (Prevention: SD-TEST-MOCK-001):
-- EXEC→PLAN handoff automatically validates user stories when deliverables complete
-- Script: `auto-validate-user-stories-on-exec-complete.js`
-- Prevents PLAN_verification blocking at 0% progress
-- No manual intervention required - handled by unified-handoff-system.js
-
-**Mandatory Database Verification** (Prevention: SD-TEST-MOCK-001):
-- ALL handoffs verify SD exists in database BEFORE proceeding
-- BLOCKING gate - prevents work on non-existent SDs
-- Implemented in: `unified-handoff-system.js` (`verifySDExistsInDatabase()` method)
-- Protocol violation: SD-TEST-MOCK-001 completed EXEC phase without database record
-- **CRITICAL**: Create SD in database BEFORE starting ANY work (LEAD, PLAN, EXEC)
 
 ### Progress Verification
 
@@ -613,7 +626,6 @@ node scripts/design-subagent-evaluation.js <SD-ID>
 - E2E tests pass (100% user story coverage)
 - CI/CD pipelines green
 - Documentation generated
-- User stories auto-validated (SD-TEST-MOCK-001 prevention)
 - EXEC→PLAN handoff created
 
 **Exit Criteria**:
@@ -621,7 +633,6 @@ node scripts/design-subagent-evaluation.js <SD-ID>
 - Both test types passing
 - CI/CD green
 - Documentation exists in `generated_docs`
-- User stories validated (automatic via unified-handoff-system.js)
 - Handoff stored in `sd_phase_handoffs`
 
 ---
@@ -721,29 +732,55 @@ node scripts/database-architect-schema-review.js <SD-ID>
 ### MANDATORY Pre-Implementation Verification
 Before writing ANY code, EXEC MUST:
 
-0. **APPLICATION CHECK** ⚠️ CRITICAL FIRST STEP
+0. **AMBIGUITY RESOLUTION** 🔍 CRITICAL FIRST STEP
+   - Review PRD for unclear requirements, missing details, or conflicting specifications
+   - Do NOT proceed with implementation if ANY ambiguity exists
+   - Use 3-tier escalation to resolve:
+     1. **Re-read PRD**: Check acceptance_criteria, functional_requirements, test_scenarios
+     2. **Query database context**: Check user stories, implementation_context, SD strategic_objectives
+     3. **Ask user**: Use AskUserQuestion tool with specific, focused questions
+   - Document resolution: "Ambiguity in [area] resolved via [method]: [resolution]"
+   - **If still unclear after escalation**: BLOCK implementation and await user clarification
+
+**Common Ambiguities to Watch For**:
+- Vague feature descriptions ("improve UX", "make it better")
+- Missing edge case handling ("what if user inputs invalid data?")
+- Unclear success criteria ("should be fast", "should look good")
+- Conflicting requirements between PRD sections
+- Undefined behavior for error states
+
+**Example Ambiguity Resolution**:
+```
+❌ BAD: Guess at implementation based on similar feature
+✅ GOOD:
+  - Tier 1: Re-read PRD section 3.2 → Still unclear on validation rules
+  - Tier 2: Query user_stories table → Found implementation_context with validation spec
+  - Resolution: "Email validation will use regex pattern from US-002 context"
+```
+
+1. **APPLICATION CHECK** ⚠️ CRITICAL
    - Confirm target app: `/mnt/c/_EHG/ehg/` (NOT EHG_Engineer!)
    - Verify: `cd /mnt/c/_EHG/ehg && pwd` should show `/mnt/c/_EHG/ehg`
    - Check GitHub: `git remote -v` should show `rickfelix/ehg.git`
    - If you're in EHG_Engineer, you're in the WRONG place for implementation!
 
-1. **URL Verification** ✅
+2. **URL Verification** ✅
    - Navigate to the EXACT URL specified in the PRD
    - Confirm the page loads and is accessible
    - Take a screenshot for evidence
    - Document: "Verified: [URL] is accessible"
 
-2. **Component Identification** 🎯
+3. **Component Identification** 🎯
    - Identify the exact file path of the target component
    - Confirm component exists at specified location
    - Document: "Target component: [full/path/to/component.tsx]"
 
-3. **Application Context** 📁
+4. **Application Context** 📁
    - Verify correct application directory
    - Confirm port number matches PRD
    - Document: "Application: [/path/to/app] on port [XXXX]"
 
-4. **Visual Confirmation** 📸
+5. **Visual Confirmation** 📸
    - Screenshot current state BEFORE changes
    - Identify exact location for new features
    - Document: "Current state captured, changes will go at [location]"
@@ -751,13 +788,15 @@ Before writing ANY code, EXEC MUST:
 ### Implementation Checklist Template
 ```markdown
 ## EXEC Pre-Implementation Checklist
-- [ ] URL verified: [exact URL from PRD]
-- [ ] Page accessible: [YES/NO]
-- [ ] Component identified: [path/to/component]
-- [ ] Application path: [/full/path/to/app]
-- [ ] Port confirmed: [port number]
-- [ ] Screenshot taken: [timestamp]
-- [ ] Target location confirmed: [where changes go]
+- [ ] **Ambiguity Check**: All requirements clear and unambiguous
+- [ ] **Ambiguity Resolution**: [NONE FOUND | Resolved via Tier X: description]
+- [ ] **Application verified**: [/mnt/c/_EHG/ehg/ confirmed]
+- [ ] **URL verified**: [exact URL from PRD]
+- [ ] **Page accessible**: [YES/NO]
+- [ ] **Component identified**: [path/to/component]
+- [ ] **Port confirmed**: [port number]
+- [ ] **Screenshot taken**: [timestamp]
+- [ ] **Target location confirmed**: [where changes go]
 ```
 
 ### Common Mistakes to AVOID
@@ -768,6 +807,7 @@ Before writing ANY code, EXEC MUST:
 - ❌ Starting to code before completing checklist
 - ❌ Not restarting dev servers after changes
 - ❌ **CRITICAL**: Creating files for PRDs, handoffs, or documentation
+- ❌ **CRITICAL**: Proceeding with implementation when requirements are ambiguous
 
 ## Sub-Agent Parallel Execution
 

@@ -1,6 +1,6 @@
 # 🗄️ Supabase Database Operations
 
-**Generated**: 2025-10-14T01:31:51.234Z
+**Generated**: 2025-10-19T18:09:00.366Z
 **Source**: Database (leo_protocol_sections)
 **Context Tier**: REFERENCE
 

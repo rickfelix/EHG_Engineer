@@ -1,6 +1,6 @@
 # Database Query Best Practices
 
-**Generated**: 2025-10-14T01:31:51.216Z
+**Generated**: 2025-10-19T18:09:00.358Z
 **Source**: Database (leo_protocol_sections)
 **Context Tier**: REFERENCE
 

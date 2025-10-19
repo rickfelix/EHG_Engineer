@@ -1,6 +1,6 @@
 # Handoff Creation: RLS Bypass Pattern
 
-**Generated**: 2025-10-14T01:31:51.210Z
+**Generated**: 2025-10-19T18:09:00.353Z
 **Source**: Database (leo_protocol_sections)
 **Context Tier**: REFERENCE
 

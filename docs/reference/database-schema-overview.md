@@ -1,6 +1,6 @@
 # Database Schema Overview
 
-**Generated**: 2025-10-14T01:31:51.233Z
+**Generated**: 2025-10-19T18:09:00.365Z
 **Source**: Database (leo_protocol_sections)
 **Context Tier**: REFERENCE
 

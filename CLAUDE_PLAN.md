@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - LEO Protocol PLAN Phase Context
 
-**Generated**: 2025-10-14 9:31:51 PM
+**Generated**: 2025-10-19 2:09:00 PM
 **Protocol**: LEO vv4.2.0_story_gates
 **Purpose**: PLAN phase operations + core context
 
@@ -10,9 +10,9 @@
 
 This file contains:
 1. **Core Context** (9 sections) - Essential for all sessions
-2. **PLAN Phase Context** (9 sections) - Phase-specific operations
+2. **PLAN Phase Context** (12 sections) - Phase-specific operations
 
-**Total Size**: ~54k chars
+**Total Size**: ~63k chars
 
 ---
 
@@ -23,8 +23,8 @@ This file contains:
 1. **Follow LEAD→PLAN→EXEC** - Target ≥85% gate pass rate
 2. **Use sub-agents** - Architect, QA, Reviewer - summarize outputs
 3. **Database-first** - No markdown files as source of truth
-4. **Small PRs** - Target ≤100 lines, max 400 with justification
-5. **7-element handoffs** - Required for all phase transitions
+4. **USE PROCESS SCRIPTS** - ⚠️ NEVER bypass add-prd-to-database.js, unified-handoff-system.js ⚠️
+5. **Small PRs** - Target ≤100 lines, max 400 with justification
 6. **Priority-first** - Use `npm run prio:top3` to justify work
 
 *For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
@@ -175,6 +175,32 @@ These principles override default behavior and must be internalized before start
 - ✅ **One record update at a time** - verify before next
 
 ## 📊 Communication & Context
+
+### Communication Style
+
+**Brief by Default**: Responses should be concise and action-oriented unless the user explicitly requests detailed explanations.
+
+**When to be Brief** (default):
+- Status updates and progress reports
+- Acknowledging commands or requests
+- Confirming successful operations
+- Error messages (summary + fix)
+- Tool invocation descriptions
+
+**When to be Verbose** (only if requested):
+- User asks "explain in detail"
+- User requests "comprehensive" or "thorough" analysis
+- Teaching or knowledge transfer scenarios
+- Complex debugging requiring full context
+- Documentation generation
+
+**Examples**:
+
+| Context | ❌ Verbose (unnecessary) | ✅ Brief (preferred) |
+|---------|------------------------|---------------------|
+| File created | "I have successfully created the file at the specified path with all the requested content..." | "File created: path/to/file.md" |
+| Test passed | "The test suite has been executed and all tests have passed successfully with 100% coverage..." | "✅ Tests passed (100% coverage)" |
+| Next step | "Now I will proceed to the next step which involves updating the database schema..." | "Updating database schema..." |
 
 ### Context Economy Rules
 
@@ -503,6 +529,324 @@ Example:
 /context-compact database-schema
 ```
 
+## Deferred Work Management
+
+
+## Deferred Work Management
+
+**Purpose**: Prevent losing track of work when reducing SD scope
+
+**Root Cause** (SD-VENTURE-BACKEND-002 Lesson):
+When SD-VENTURE-IDEATION-MVP-001's backend scope was deferred, no child SD was created immediately. Work was completed 6 months later but without tracking, requiring extensive backfill to restore LEO Protocol compliance.
+
+**The Problem**:
+- LEAD approves SD with 100 story points
+- During PLAN, team realizes 40 points should be deferred
+- PRD created with 60 points, work proceeds
+- Deferred 40 points forgotten → completed later without tracking → backfill nightmare
+
+---
+
+### MANDATORY PROCESS: Create Child SD Immediately
+
+**WHEN**: During PLAN phase, if any work is removed/deferred from approved scope
+
+**REQUIRED ACTION**:
+1. **Create child SD BEFORE finalizing PRD**
+2. **Transfer user stories** to child SD
+3. **Document relationship** in both SDs
+4. **Set priority** based on criticality
+5. **Link PRDs** (parent PRD references child SD)
+
+---
+
+### Example Workflow
+
+**Scenario**: SD-VENTURE-MVP-001 approved for 10 user stories (100 points)
+
+**PLAN discovers**: Stories 6-10 (40 points) are backend-only, can be deferred
+
+**CORRECT Process** ✅:
+
+```bash
+# 1. Create child SD immediately
+INSERT INTO strategic_directives_v2 (
+  id, title, description, priority, status,
+  parent_directive_id, relationship_type
+) VALUES (
+  'SD-VENTURE-BACKEND-001',
+  'Venture Backend Implementation',
+  'Deferred backend work from SD-VENTURE-MVP-001',
+  'high',           -- Set based on business need
+  'approved',       -- Already approved via parent
+  'SD-VENTURE-MVP-001',
+  'deferred_scope'
+);
+
+# 2. Transfer user stories to child SD
+UPDATE user_stories
+SET sd_id = 'SD-VENTURE-BACKEND-001'
+WHERE sd_id = 'SD-VENTURE-MVP-001'
+AND id IN ('US-006', 'US-007', 'US-008', 'US-009', 'US-010');
+
+# 3. Update parent PRD to document deferral
+UPDATE product_requirements_v2
+SET metadata = metadata || jsonb_build_object(
+  'scope_reductions', jsonb_build_array(
+    jsonb_build_object(
+      'deferred_to', 'SD-VENTURE-BACKEND-001',
+      'user_stories', ARRAY['US-006', 'US-007', 'US-008', 'US-009', 'US-010'],
+      'story_points', 40,
+      'reason', 'Backend implementation deferred to separate sprint',
+      'deferred_at', NOW()
+    )
+  )
+)
+WHERE id = 'PRD-VENTURE-MVP-001';
+
+# 4. Create child PRD immediately (or mark as TODO)
+-- Option A: Create minimal PRD now
+INSERT INTO product_requirements_v2 (
+  id, sd_uuid, title, status, progress,
+  deferred_from
+) VALUES (
+  'PRD-VENTURE-BACKEND-001',
+  (SELECT uuid_id FROM strategic_directives_v2 WHERE id = 'SD-VENTURE-BACKEND-001'),
+  'Venture Backend Implementation',
+  'planning',  -- Will be worked on later
+  0,
+  'PRD-VENTURE-MVP-001'
+);
+
+-- Option B: Add TODO to parent SD notes
+-- "TODO: Create PRD-VENTURE-BACKEND-001 when ready to start backend work"
+```
+
+---
+
+### Backfill Process (If Child SD Was Not Created)
+
+**Scenario**: Work completed without tracking (like SD-VENTURE-BACKEND-002)
+
+**Required Steps**:
+
+1. **Create SD record**
+   - Use historical commit data for dates
+   - Set status: 'completed'
+
+2. **Create PRD**
+   - Set status: 'implemented' (not 'planning')
+   - Set progress: 100
+
+3. **Create user stories**
+   - Extract from git commits
+   - Set verification_status: 'passing' or 'validated'
+   - Put in BOTH user_stories AND sd_backlog_map tables
+
+4. **Create deliverables**
+   - Extract from git history
+   - Map to valid deliverable_types: api, test, documentation, migration
+   - Mark all as completion_status: 'completed'
+
+5. **Create handoffs**
+   - EXEC→PLAN: Implementation summary
+   - PLAN→LEAD: Verification summary
+   - Use manual creation (validation gates not suitable for backfill)
+
+6. **Create retrospective**
+   - Document lessons learned
+   - Note: "Tracking backfilled retroactively"
+
+7. **Mark SD complete**
+   - Fix any blocking issues first
+   - Ensure all progress gates pass
+
+**Backfill Scripts Created**: See /scripts/create-*-venture-backend-002-*.mjs
+
+---
+
+### Checklist: Scope Reduction Decision Point
+
+Use this during PLAN phase when considering scope changes:
+
+- [ ] **Identify deferred work**: Which user stories/deliverables are being removed?
+- [ ] **Assess criticality**: Is this work needed eventually? (If yes → child SD required)
+- [ ] **Create child SD**: Don't defer this step! Create the SD now.
+- [ ] **Transfer user stories**: Move them to child SD immediately
+- [ ] **Set priority**: high/medium/low based on business need
+- [ ] **Document relationship**: Update parent PRD metadata
+- [ ] **Create child PRD** (minimal) OR add TODO to parent notes
+- [ ] **Notify LEAD**: "Scope reduced, child SD created: SD-XXX"
+
+---
+
+### Red Flags (Lessons from SD-VENTURE-BACKEND-002)
+
+❌ **"We'll create the SD later when we work on it"**
+   - Result: Work gets forgotten or done without tracking
+
+❌ **"Let's just note it in the parent PRD description"**
+   - Result: No tracking, no progress visibility, no reminders
+
+❌ **"It's only 3 user stories, not worth a separate SD"**
+   - Result: Those 3 stories = 25 deliverables, 4 commits, 2 handoffs to backfill
+
+✅ **"Scope changed, creating child SD now"**
+   - Result: Work tracked from day 1, no backfill needed
+
+---
+
+### Documentation Updates
+
+This section added to LEO Protocol based on:
+- **Incident**: SD-VENTURE-BACKEND-002 backfill (Oct 19, 2025)
+- **Root Cause**: Child SD not created when backend scope deferred
+- **Solution**: Mandatory child SD creation at scope reduction point
+- **Prevention**: PLAN checklist enforcement, LEAD verification
+
+**Related Sections**:
+- Phase 2 (PLAN Pre-EXEC Checklist): Added scope reduction check
+- Phase 4 (LEAD Verification): Verify child SDs created for deferrals
+- Retrospective Templates: Include "Deferred work management" assessment
+
+---
+
+### Integration with Existing Workflow
+
+**PLAN Agent** must now:
+1. Check for scope reductions during PRD creation
+2. Create child SDs for any deferred work
+3. Document relationship in metadata
+4. Report to LEAD in PLAN→LEAD handoff
+
+**LEAD Agent** must verify:
+- Any scope reduction has corresponding child SD
+- Child SD has appropriate priority
+- Parent-child relationship documented
+- User stories transferred correctly
+
+**Progress Tracking**:
+- Parent SD progress: Based on reduced scope (60 points)
+- Child SD progress: Tracked independently (40 points)
+- Portfolio view: Shows both SDs with relationship
+
+---
+
+### FAQ
+
+**Q: What if we're not sure the deferred work will ever be done?**
+A: Create the child SD with priority: 'low'. Better to have it and not need it than lose track of potential work.
+
+**Q: Can we combine multiple deferrals into one child SD?**
+A: Yes, if they're related. Example: "SD-VENTURE-FUTURE-ENHANCEMENTS" for all nice-to-have features.
+
+**Q: What if the deferred work changes significantly later?**
+A: Update the child SD's PRD when you start working on it. The SD serves as a placeholder until then.
+
+**Q: Do we need a full PRD for the child SD immediately?**
+A: Minimal PRD is acceptable. At minimum: title, description, deferred_from reference. Full PRD created when work begins.
+
+**Q: What section_type for database?**
+A: Use 'PHASE_2_PLANNING' (belongs in PLAN phase guidance)
+
+
+
+## ⚠️ Mandatory Process Scripts
+
+## ⚠️ MANDATORY PROCESS SCRIPTS
+
+**CRITICAL**: Bypassing these scripts will cause handoff failures and data quality issues.
+
+### Required Scripts by Phase
+
+**PLAN Phase - PRD Creation**:
+```bash
+# ALWAYS use this script to create PRDs
+node scripts/add-prd-to-database.js <SD-ID> [PRD-Title]
+
+# Example:
+node scripts/add-prd-to-database.js SD-EXPORT-001 "Export Feature PRD"
+```
+
+**Why mandatory:**
+- Auto-triggers Product Requirements Expert (STORIES sub-agent)
+- Generates user stories WITH implementation context
+- Validates PRD schema and completeness
+- Creates proper audit trail
+
+**If you bypass:** PLAN→EXEC handoff will fail due to missing implementation context.
+
+---
+
+**All Phases - Handoff Creation**:
+```bash
+# ALWAYS use unified handoff system
+node scripts/unified-handoff-system.js execute <TYPE> <SD-ID>
+
+# Types: LEAD-to-PLAN, PLAN-to-EXEC, EXEC-to-PLAN, PLAN-to-LEAD
+```
+
+**Why mandatory:**
+- Runs validation gates (BMAD, Git branch enforcement)
+- Triggers required sub-agents automatically
+- Ensures 7-element handoff structure
+- Enforces quality standards
+
+**If you bypass:** Phase transitions will be blocked by database constraints.
+
+---
+
+### ❌ NEVER Do This
+
+```javascript
+// ❌ WRONG: Direct database insert
+const { data, error } = await supabase
+  .from('product_requirements_v2')
+  .insert({ title: 'My PRD', ... });
+
+// ❌ WRONG: Manual user story creation
+const { data, error } = await supabase
+  .from('user_stories')
+  .insert({ title: 'My Story', ... });
+```
+
+**Why this fails:**
+- Bypasses STORIES sub-agent (no implementation context)
+- Bypasses validation gates
+- Missing required structured data
+- Breaks audit trail
+- **Database constraints will block invalid inserts**
+
+---
+
+### ✅ Always Do This
+
+```bash
+# ✅ CORRECT: Use process scripts
+node scripts/add-prd-to-database.js SD-XXX "PRD Title"
+# → Auto-triggers STORIES sub-agent
+# → Generates user stories with context
+# → Validates all required fields
+
+node scripts/unified-handoff-system.js execute PLAN-to-EXEC SD-XXX
+# → Runs BMAD validation
+# → Enforces git branch
+# → Triggers required sub-agents
+```
+
+---
+
+### Database Enforcement
+
+The following constraints enforce process compliance:
+
+- `product_requirements_v2.functional_requirements` must have ≥3 items
+- `product_requirements_v2.test_scenarios` must have ≥1 item  
+- `product_requirements_v2.acceptance_criteria` must have ≥1 item
+- `user_stories.implementation_context` must be populated (not NULL, not empty)
+
+**Attempting to bypass scripts will result in database constraint violations.**
+
 ## PR Size Guidelines
 
 **Philosophy**: Balance AI capability with human review capacity. Modern AI can handle larger changes, but humans still need to review them.
@@ -816,6 +1160,165 @@ cat docs/EXEC_CONTEXT.md
 2. Trigger DevOps sub-agent to verify pipeline status
 3. Document CI/CD status in PLAN→LEAD handoff
 4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
+
+## Pre-Implementation Plan Presentation Template
+
+## Pre-Implementation Plan Presentation Template
+
+**SD-PLAN-PRESENT-001** | **Template Type:** plan_presentation | **Phase:** PLAN → EXEC
+
+### Purpose
+
+The `plan_presentation` template standardizes PLAN→EXEC handoffs by providing structured implementation guidance to the EXEC agent. This template reduces EXEC confusion from 15-20 minutes to <5 minutes by clearly communicating:
+
+- **What** will be implemented (goal_summary)
+- **Where** changes will occur (file_scope)
+- **How** to implement step-by-step (execution_plan)
+- **Dependencies** and impacts (dependency_impacts)
+- **Testing approach** (testing_strategy)
+
+### Template Structure
+
+All plan_presentation objects must be included in the `metadata.plan_presentation` field of PLAN→EXEC handoffs.
+
+#### Required Fields
+
+1. **goal_summary** (string, ≤300 chars, required)
+   - Brief 2-3 sentence summary of implementation goals
+   - Focus on "what" and "why", not "how"
+   - Example: `"Add plan_presentation template to leo_handoff_templates table with JSONB validation structure. Enhance unified-handoff-system.js with validation logic (~50 LOC). Reduce EXEC confusion from 15-20 min to <5 min."`
+
+2. **file_scope** (object, required)
+   - Lists files to create, modify, or delete
+   - At least one category must have ≥1 file
+   - Structure:
+     ```json
+     {
+       "create": ["path/to/new-file.js"],
+       "modify": ["path/to/existing-file.js"],
+       "delete": ["path/to/deprecated-file.js"]
+     }
+     ```
+
+3. **execution_plan** (array, required, ≥1 step)
+   - Step-by-step implementation sequence
+   - Each step includes: step number, action description, affected files
+   - Structure:
+     ```json
+     [
+       {
+         "step": 1,
+         "action": "Add validatePlanPresentation() method to PlanToExecVerifier class",
+         "files": ["scripts/verify-handoff-plan-to-exec.js"]
+       },
+       {
+         "step": 2,
+         "action": "Integrate validation into verifyHandoff() method",
+         "files": ["scripts/verify-handoff-plan-to-exec.js"]
+       }
+     ]
+     ```
+
+4. **testing_strategy** (object, required)
+   - Specifies unit test and E2E test approaches
+   - Both unit_tests and e2e_tests fields required
+   - Structure:
+     ```json
+     {
+       "unit_tests": "Test validatePlanPresentation() with valid, missing, and invalid structures",
+       "e2e_tests": "Create PLAN→EXEC handoff and verify validation enforcement",
+       "verification_steps": [
+         "Run test script with 3 scenarios",
+         "Verify validation passes for complete plan_presentation"
+       ]
+     }
+     ```
+
+#### Optional Fields
+
+5. **dependency_impacts** (object, optional)
+   - Documents dependencies and their impacts
+   - Structure:
+     ```json
+     {
+       "npm_packages": ["react-hook-form", "zod"],
+       "internal_modules": ["handoff-validator.js"],
+       "database_changes": "None (reads from leo_handoff_templates)"
+     }
+     ```
+
+### Validation Rules
+
+The `verify-handoff-plan-to-exec.js` script validates plan_presentation structure:
+
+- ✅ `goal_summary` present and ≤300 characters
+- ✅ `file_scope` has at least one of: create, modify, delete
+- ✅ `execution_plan` has ≥1 step
+- ✅ `testing_strategy` has both `unit_tests` and `e2e_tests` defined
+
+**Validation Enforcement:** PLAN→EXEC handoffs are rejected if plan_presentation is missing or invalid.
+
+### Complete Example
+
+```json
+{
+  "metadata": {
+    "plan_presentation": {
+      "goal_summary": "Add plan_presentation template to leo_handoff_templates table with JSONB validation structure. Enhance unified-handoff-system.js with validation logic (~50 LOC). Reduce EXEC confusion from 15-20 min to <5 min.",
+      "file_scope": {
+        "create": [],
+        "modify": ["scripts/verify-handoff-plan-to-exec.js"],
+        "delete": []
+      },
+      "execution_plan": [
+        {
+          "step": 1,
+          "action": "Add validatePlanPresentation() method to PlanToExecVerifier class",
+          "files": ["scripts/verify-handoff-plan-to-exec.js"]
+        },
+        {
+          "step": 2,
+          "action": "Integrate validation into verifyHandoff() method",
+          "files": ["scripts/verify-handoff-plan-to-exec.js"]
+        },
+        {
+          "step": 3,
+          "action": "Add PLAN_PRESENTATION_INVALID rejection handler",
+          "files": ["scripts/verify-handoff-plan-to-exec.js"]
+        }
+      ],
+      "dependency_impacts": {
+        "npm_packages": [],
+        "internal_modules": ["handoff-validator.js"],
+        "database_changes": "None (reads from leo_handoff_templates)"
+      },
+      "testing_strategy": {
+        "unit_tests": "Test validatePlanPresentation() with valid, missing, and invalid structures",
+        "e2e_tests": "Create PLAN→EXEC handoff and verify validation enforcement",
+        "verification_steps": [
+          "Run test script with 3 scenarios (TS1, TS2, TS3)",
+          "Verify validation passes for complete plan_presentation",
+          "Verify validation fails with clear errors for incomplete/invalid structures"
+        ]
+      }
+    }
+  }
+}
+```
+
+### Benefits
+
+- **Reduced Confusion:** EXEC spends <5 min understanding implementation (vs 15-20 min)
+- **Consistent Handoffs:** All PLAN→EXEC handoffs follow same structure
+- **Auditability:** Implementation decisions queryable via metadata
+- **Quality Gate:** Invalid handoffs rejected before EXEC phase begins
+
+### Related Documentation
+
+- **Template Definition:** leo_handoff_templates table, handoff_type = 'plan_presentation'
+- **Validation Logic:** scripts/verify-handoff-plan-to-exec.js (PlanToExecVerifier.validatePlanPresentation)
+- **Test Coverage:** scripts/test-plan-presentation-validation.mjs (5 test scenarios)
+
 
 ---
 

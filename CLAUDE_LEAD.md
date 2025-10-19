@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEO Protocol LEAD Phase Context
 
-**Generated**: 2025-10-14 9:31:51 PM
+**Generated**: 2025-10-19 2:09:00 PM
 **Protocol**: LEO vv4.2.0_story_gates
 **Purpose**: LEAD phase operations + core context
 
@@ -23,8 +23,8 @@ This file contains:
 1. **Follow LEAD→PLAN→EXEC** - Target ≥85% gate pass rate
 2. **Use sub-agents** - Architect, QA, Reviewer - summarize outputs
 3. **Database-first** - No markdown files as source of truth
-4. **Small PRs** - Target ≤100 lines, max 400 with justification
-5. **7-element handoffs** - Required for all phase transitions
+4. **USE PROCESS SCRIPTS** - ⚠️ NEVER bypass add-prd-to-database.js, unified-handoff-system.js ⚠️
+5. **Small PRs** - Target ≤100 lines, max 400 with justification
 6. **Priority-first** - Use `npm run prio:top3` to justify work
 
 *For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
@@ -175,6 +175,32 @@ These principles override default behavior and must be internalized before start
 - ✅ **One record update at a time** - verify before next
 
 ## 📊 Communication & Context
+
+### Communication Style
+
+**Brief by Default**: Responses should be concise and action-oriented unless the user explicitly requests detailed explanations.
+
+**When to be Brief** (default):
+- Status updates and progress reports
+- Acknowledging commands or requests
+- Confirming successful operations
+- Error messages (summary + fix)
+- Tool invocation descriptions
+
+**When to be Verbose** (only if requested):
+- User asks "explain in detail"
+- User requests "comprehensive" or "thorough" analysis
+- Teaching or knowledge transfer scenarios
+- Complex debugging requiring full context
+- Documentation generation
+
+**Examples**:
+
+| Context | ❌ Verbose (unnecessary) | ✅ Brief (preferred) |
+|---------|------------------------|---------------------|
+| File created | "I have successfully created the file at the specified path with all the requested content..." | "File created: path/to/file.md" |
+| Test passed | "The test suite has been executed and all tests have passed successfully with 100% coverage..." | "✅ Tests passed (100% coverage)" |
+| Next step | "Now I will proceed to the next step which involves updating the database schema..." | "Updating database schema..." |
 
 ### Context Economy Rules
 
@@ -439,29 +465,6 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 
 **Complete Guide**: See `docs/reference/lead-operations.md`
 
-## 📋 Directive Submission Review Process
-
-**Directive Submission Review**: Review submissions before creating SDs.
-
-**Quick Review**:
-```bash
-node scripts/lead-review-submissions.js
-```
-
-**Review Checklist**:
-- Chairman input (original intent)
-- Intent clarity & strategic alignment
-- Priority assessment & scope validation
-- Duplicate check & gate progression
-
-**Decision Matrix**:
-- Completed + No SD → Create SD
-- Completed + SD exists → Verify & handoff
-- Pending → Monitor
-- Failed → Archive/remediate
-
-**Complete Process**: See `docs/reference/directive-submission-review.md`
-
 ## Stubbed/Mocked Code Detection
 
 
@@ -510,6 +513,29 @@ node scripts/detect-stubbed-code.js <SD-ID>
 
 **Exit Requirement**: Zero stubbed code in production files, OR documented in "Known Issues" with follow-up SD created.
 
+
+## 📋 Directive Submission Review Process
+
+**Directive Submission Review**: Review submissions before creating SDs.
+
+**Quick Review**:
+```bash
+node scripts/lead-review-submissions.js
+```
+
+**Review Checklist**:
+- Chairman input (original intent)
+- Intent clarity & strategic alignment
+- Priority assessment & scope validation
+- Duplicate check & gate progression
+
+**Decision Matrix**:
+- Completed + No SD → Create SD
+- Completed + SD exists → Verify & handoff
+- Pending → Monitor
+- Failed → Archive/remediate
+
+**Complete Process**: See `docs/reference/directive-submission-review.md`
 
 ## 6-Step SD Evaluation Checklist
 

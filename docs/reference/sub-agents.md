@@ -1,6 +1,6 @@
 # Native Claude Code Sub-Agent Integration
 
-**Generated**: 2025-10-14T01:31:51.245Z
+**Generated**: 2025-10-19T18:09:00.375Z
 **Source**: Database (leo_protocol_sections)
 **Context Tier**: REFERENCE
 
