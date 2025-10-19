@@ -9,7 +9,7 @@ const supabase = createClient(
 
 async function getSDDetails() {
   try {
-    const sdId = 'SD-VIF-PARENT-001';
+    const sdId = process.argv[2] || 'SD-VIF-PARENT-001';
 
     console.log(`\n=== SD DETAILS: ${sdId} ===\n`);
 
