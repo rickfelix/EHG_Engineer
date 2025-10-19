@@ -15,13 +15,13 @@ DECLARE
   unified_count INTEGER;
 BEGIN
   RAISE NOTICE '=== PRE-DEPRECATION VERIFICATION ===';
-
+  
   SELECT COUNT(*) INTO legacy_count FROM leo_handoff_executions;
   SELECT COUNT(*) INTO unified_count FROM sd_phase_handoffs;
-
+  
   RAISE NOTICE 'Legacy table (leo_handoff_executions): % records', legacy_count;
   RAISE NOTICE 'Unified table (sd_phase_handoffs): % records', unified_count;
-
+  
   IF legacy_count > unified_count THEN
     RAISE NOTICE '⚠️  WARNING: Legacy has more records. % records not migrated.', legacy_count - unified_count;
     RAISE NOTICE '   These records will remain accessible in read-only deprecated table.';
@@ -67,49 +67,6 @@ WHERE id NOT IN (SELECT id FROM sd_phase_handoffs);
 COMMENT ON VIEW legacy_handoff_executions_view IS
 'Read-only view combining migrated and non-migrated legacy handoffs for reference. Maps from_phase/to_phase to from_agent/to_agent for backward compatibility.';
 
--- PHASE 3: Rename Legacy Table (COMMENTED OUT FOR SAFETY)
--- IMPORTANT: Uncomment these lines when ready to deprecate
--- This is commented out for safety - manual review required before execution
-
-/*
-ALTER TABLE leo_handoff_executions
-  RENAME TO _deprecated_leo_handoff_executions;
-
-COMMENT ON TABLE _deprecated_leo_handoff_executions IS
-'DEPRECATED: Legacy handoff table. Use sd_phase_handoffs for all new handoffs.
-This table preserved for historical reference and unmigrated records.
-Migration date: 2025-10-19
-SD: SD-DATA-INTEGRITY-001';
-
-RAISE NOTICE '✅ Table renamed to _deprecated_leo_handoff_executions';
-*/
-
--- PHASE 4: Add RLS Policies for Read-Only Access (COMMENTED OUT)
--- Enable RLS on deprecated table (when renamed)
-/*
-ALTER TABLE _deprecated_leo_handoff_executions ENABLE ROW LEVEL SECURITY;
-
--- Policy: Allow all users to read (for reference)
-CREATE POLICY read_only_legacy_handoffs
-  ON _deprecated_leo_handoff_executions
-  FOR SELECT
-  USING (true);
-
--- Policy: Block all modifications
-CREATE POLICY block_modifications_legacy
-  ON _deprecated_leo_handoff_executions
-  FOR ALL
-  USING (false);
-
-COMMENT ON POLICY read_only_legacy_handoffs ON _deprecated_leo_handoff_executions IS
-'Allow read access to deprecated handoffs for historical reference';
-
-COMMENT ON POLICY block_modifications_legacy ON _deprecated_leo_handoff_executions IS
-'Block all modifications to deprecated table';
-
-RAISE NOTICE '✅ RLS policies applied: Read-only access enabled';
-*/
-
 -- PHASE 5: Create Migration Status Report Function
 CREATE OR REPLACE FUNCTION get_handoff_migration_status()
 RETURNS TABLE (metric VARCHAR, count INTEGER, percentage DECIMAL) AS $$
@@ -122,7 +79,7 @@ BEGIN
   SELECT COUNT(*) INTO total_unified FROM sd_phase_handoffs;
   SELECT COUNT(*) INTO migrated_count
   FROM sd_phase_handoffs WHERE metadata->>'migrated_from' = 'leo_handoff_executions';
-
+  
   RETURN QUERY
   SELECT 'Total Legacy Records'::VARCHAR, total_legacy, 100.0::DECIMAL
   UNION ALL
