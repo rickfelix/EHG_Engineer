@@ -718,13 +718,25 @@ class UnifiedHandoffSystem {
       console.log(`✅ Sub-agent orchestration passed: ${orchestrationResult.passed}/${orchestrationResult.total_agents} agents`);
       console.log('-'.repeat(50));
 
+      // Load Strategic Directive to determine target repository
+      const { data: sdForGit } = await this.supabase
+        .from('strategic_directives_v2')
+        .select('*')
+        .eq('id', sdId)
+        .single();
+
+      if (!sdForGit) {
+        throw new Error(`Strategic Directive not found: ${sdId}`);
+      }
+
       // GATE 5: GIT COMMIT ENFORCEMENT (BLOCKING)
       // Ensures all implementation work is committed and pushed before final approval
       console.log('\n🔒 GATE 5: Git Commit Enforcement');
       console.log('-'.repeat(50));
 
-      // Determine application path (EHG vs EHG_Engineer)
-      const appPath = options.appPath || '/mnt/c/_EHG/ehg';
+      // Determine application path (EHG vs EHG_Engineer) based on target_application
+      const appPath = options.appPath || this.determineTargetRepository(sdForGit);
+      console.log(`   Target repository: ${appPath}`);
 
       const gitVerifier = new GitCommitVerifier(sdId, appPath);
       const gitResults = await gitVerifier.verify();
