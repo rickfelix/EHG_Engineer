@@ -44,7 +44,7 @@ const CONFIG = {
 
   // Deprecated tables (marked for removal)
   DEPRECATED_TABLES: [
-    'sd_phase_handoffs'  // Replaced by leo_handoff_executions
+    'sd_phase_handoffs'  // Replaced by sd_phase_handoffs
   ],
 
   // Expected foreign key naming patterns

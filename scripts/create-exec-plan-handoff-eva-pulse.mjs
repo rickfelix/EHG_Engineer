@@ -325,7 +325,7 @@ const handoffData = {
 
 async function createHandoff() {
   const { data, error} = await supabase
-    .from('leo_handoff_executions')
+    .from('sd_phase_handoffs')
     .insert(handoffData)
     .select();
 

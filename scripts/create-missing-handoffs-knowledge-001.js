@@ -101,7 +101,7 @@ for (const handoff of handoffs) {
   console.log(`  Deliverables: ${handoff.deliverables.length} items`);
 
   const { data, error } = await supabase
-    .from('leo_handoff_executions')
+    .from('sd_phase_handoffs')
     .insert(execution)
     .select();
 
@@ -121,7 +121,7 @@ console.log(`\n✅ Created ${createdCount}/${handoffs.length} handoff records`);
 // Verify handoffs are now found
 console.log('\n🔍 Verifying handoffs in database:');
 const { data: verify, error: verifyError } = await supabase
-  .from('leo_handoff_executions')
+  .from('sd_phase_handoffs')
   .select('id, handoff_type, status, validation_score')
   .eq('sd_id', 'SD-KNOWLEDGE-001')
   .order('created_at', { ascending: true });

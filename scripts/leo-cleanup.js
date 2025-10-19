@@ -93,7 +93,7 @@ class LEOCleanup {
 
     // Find handoffs for completed SDs
     const { data: orphanedHandoffs } = await supabase
-      .from('leo_handoff_executions')
+      .from('sd_phase_handoffs')
       .select(`
         id,
         sd_id,
@@ -113,7 +113,7 @@ class LEOCleanup {
 
         // Mark as cancelled
         await supabase
-          .from('leo_handoff_executions')
+          .from('sd_phase_handoffs')
           .update({ status: 'cancelled', completed_at: new Date() })
           .eq('id', handoff.id);
       }

@@ -57,7 +57,7 @@ async function verifyArtifacts() {
 
   // 5. Check Handoffs
   const { data: handoffs } = await supabase
-    .from('leo_handoff_executions')
+    .from('sd_phase_handoffs')
     .select('id, handoff_type, verdict')
     .eq('sd_id', 'SD-VIF-TIER-001')
     .order('created_at');

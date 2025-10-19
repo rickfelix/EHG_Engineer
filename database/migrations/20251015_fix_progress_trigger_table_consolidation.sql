@@ -1,8 +1,8 @@
 -- ============================================================================
--- Fix Progress Trigger: Consolidate to leo_handoff_executions
+-- Fix Progress Trigger: Consolidate to sd_phase_handoffs
 -- Purpose: Fix SD completion blocking - use populated table instead of empty one
 -- Root Cause: Trigger was checking sd_phase_handoffs (0 records) instead of
---             leo_handoff_executions (166 records)
+--             sd_phase_handoffs (166 records)
 -- Date: 2025-10-15
 -- Related SD: SD-KNOWLEDGE-001
 -- ============================================================================
@@ -10,7 +10,7 @@
 -- ============================================================================
 -- FUNCTION: Calculate SD Progress (FIXED VERSION)
 -- Changes:
--- 1. Use leo_handoff_executions instead of sd_phase_handoffs for handoffs
+-- 1. Use sd_phase_handoffs instead of sd_phase_handoffs for handoffs
 -- 2. Use sd_uuid instead of directive_id for PRD queries
 -- 3. Add detailed logging for debugging
 -- ============================================================================
@@ -155,7 +155,7 @@ BEGIN
     AND quality_score IS NOT NULL
   ) INTO retrospective_exists;
 
-  -- FIX: Use leo_handoff_executions instead of sd_phase_handoffs
+  -- FIX: Use sd_phase_handoffs instead of sd_phase_handoffs
   -- Check if all required handoffs exist
   SELECT
     CASE
@@ -164,7 +164,7 @@ BEGIN
       WHEN COUNT(DISTINCT handoff_type) >= 3 THEN true
       ELSE false
     END INTO handoffs_complete
-  FROM leo_handoff_executions
+  FROM sd_phase_handoffs
   WHERE sd_id = sd_id_param
   AND status = 'accepted';
 
@@ -207,7 +207,7 @@ BEGIN
   -- Get handoff details for debugging
   SELECT COUNT(DISTINCT handoff_type), ARRAY_AGG(DISTINCT handoff_type)
   INTO handoff_count, handoff_types
-  FROM leo_handoff_executions
+  FROM sd_phase_handoffs
   WHERE sd_id = sd_id_param
   AND status = 'accepted';
 
@@ -289,7 +289,7 @@ BEGIN
         'handoffs_complete', handoff_count >= 3,
         'handoff_count', handoff_count,
         'handoff_types', handoff_types,
-        'handoff_table', 'leo_handoff_executions (FIXED from sd_phase_handoffs)',
+        'handoff_table', 'sd_phase_handoffs (FIXED from sd_phase_handoffs)',
         'progress', CASE WHEN (
           EXISTS (SELECT 1 FROM retrospectives WHERE sd_id = sd_id_param AND status = 'PUBLISHED' AND quality_score IS NOT NULL)
           AND handoff_count >= 3
@@ -314,7 +314,7 @@ $$ LANGUAGE plpgsql;
 -- DEPRECATE sd_phase_handoffs TABLE
 -- ============================================================================
 
-COMMENT ON TABLE sd_phase_handoffs IS 'DEPRECATED: Use leo_handoff_executions instead. This table is empty (0 records) and was created after leo_handoff_executions (166 records). Kept for backwards compatibility only. Single source of truth: leo_handoff_executions.';
+COMMENT ON TABLE sd_phase_handoffs IS 'DEPRECATED: Use sd_phase_handoffs instead. This table is empty (0 records) and was created after sd_phase_handoffs (166 records). Kept for backwards compatibility only. Single source of truth: sd_phase_handoffs.';
 
 -- ============================================================================
 -- VALIDATION
@@ -328,7 +328,7 @@ BEGIN
   RAISE NOTICE 'LEO Protocol Fix: Progress Trigger Table Consolidation';
   RAISE NOTICE '='.repeat(60);
   RAISE NOTICE 'Changes applied:';
-  RAISE NOTICE '  1. Handoffs: sd_phase_handoffs → leo_handoff_executions';
+  RAISE NOTICE '  1. Handoffs: sd_phase_handoffs → sd_phase_handoffs';
   RAISE NOTICE '  2. PRD query: directive_id → sd_uuid';
   RAISE NOTICE '  3. Retrospective: quality_score >= 70 → quality_score IS NOT NULL';
   RAISE NOTICE '';

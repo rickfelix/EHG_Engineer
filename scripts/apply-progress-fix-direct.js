@@ -4,7 +4,7 @@
  * Direct Application of Progress Trigger Fix
  *
  * Applies the key fixes without relying on exec_sql RPC:
- * 1. Updates calculate_sd_progress to use leo_handoff_executions
+ * 1. Updates calculate_sd_progress to use sd_phase_handoffs
  * 2. Fixes PRD query to use sd_uuid instead of directive_id
  * 3. Relaxes retrospective quality_score check
  */
@@ -106,13 +106,13 @@ async function main() {
           AND quality_score IS NOT NULL
         ) INTO retrospective_exists;
 
-        -- FIX: Use leo_handoff_executions instead of sd_phase_handoffs
+        -- FIX: Use sd_phase_handoffs instead of sd_phase_handoffs
         SELECT
           CASE
             WHEN COUNT(DISTINCT handoff_type) >= 3 THEN true
             ELSE false
           END INTO handoffs_complete
-        FROM leo_handoff_executions
+        FROM sd_phase_handoffs
         WHERE sd_id = sd_id_param
         AND status = 'accepted';
 
@@ -155,14 +155,14 @@ async function main() {
 
     // Check handoffs
     const { data: handoffs, error: handoffError } = await supabase
-      .from('leo_handoff_executions')
+      .from('sd_phase_handoffs')
       .select('handoff_type, status')
       .eq('sd_id', 'SD-KNOWLEDGE-001');
 
     if (handoffError) {
       console.error('❌ Error fetching handoffs:', handoffError.message);
     } else {
-      console.log('\n📋 Handoffs in leo_handoff_executions:');
+      console.log('\n📋 Handoffs in sd_phase_handoffs:');
       console.log('  Total:', handoffs.length);
       handoffs.forEach(h => {
         console.log(`  - ${h.handoff_type}: ${h.status}`);

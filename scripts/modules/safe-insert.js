@@ -35,7 +35,7 @@ const DEFAULT_OPTIONS = {
  * @returns {Promise<object>} - { success: boolean, data: object, warnings: [], error: null }
  *
  * @example
- * const result = await safeInsert(supabase, 'leo_handoff_executions', {
+ * const result = await safeInsert(supabase, 'sd_phase_handoffs', {
  *   id: generateUUID(),
  *   from_agent: 'EXEC',
  *   to_agent: 'PLAN',

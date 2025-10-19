@@ -96,7 +96,7 @@ async function verifySDCompletion() {
     console.log('\n5. Phase Handoffs:');
     const handoffsResult = await client.query(`
       SELECT handoff_type, status, created_at
-      FROM leo_handoff_executions
+      FROM sd_phase_handoffs
       WHERE sd_id = 'SD-TEST-MOCK-001'
       ORDER BY created_at
     `);

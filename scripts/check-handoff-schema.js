@@ -10,21 +10,21 @@ const supabase = createClient(
 );
 
 const { data, error } = await supabase
-  .from('leo_handoff_executions')
+  .from('sd_phase_handoffs')
   .select('*')
   .limit(1);
 
 if (error) {
   console.error('❌ Table may not exist:', error.message);
 } else if (data && data.length > 0) {
-  console.log('leo_handoff_executions columns:');
+  console.log('sd_phase_handoffs columns:');
   Object.keys(data[0]).sort().forEach(col => {
     console.log(`  - ${col}`);
   });
   
   // Now query for SD-KNOWLEDGE-001
   const { data: handoffs } = await supabase
-    .from('leo_handoff_executions')
+    .from('sd_phase_handoffs')
     .select('*')
     .eq('sd_id', 'SD-KNOWLEDGE-001');
     

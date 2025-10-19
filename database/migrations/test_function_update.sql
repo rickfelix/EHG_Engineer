@@ -85,7 +85,7 @@ BEGIN
 
   -- PHASE 5: LEAD Final Approval (15%)
   IF EXISTS (SELECT 1 FROM retrospectives WHERE sd_id = sd_id_param AND status = 'PUBLISHED') AND
-     (SELECT COUNT(DISTINCT handoff_type) >= 3 FROM leo_handoff_executions WHERE sd_id = sd_id_param AND status = 'accepted') THEN
+     (SELECT COUNT(DISTINCT handoff_type) >= 3 FROM sd_phase_handoffs WHERE sd_id = sd_id_param AND status = 'accepted') THEN
     progress := progress + 15;
   END IF;
 

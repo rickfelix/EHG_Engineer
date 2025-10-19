@@ -185,9 +185,9 @@ test('formatValidationError creates helpful message', () => {
     }
   ];
 
-  const error = formatValidationError('leo_handoff_executions', mismatches);
+  const error = formatValidationError('sd_phase_handoffs', mismatches);
   assert(error.includes('❌ Schema Validation Failed'), 'Should have header');
-  assert(error.includes('leo_handoff_executions'), 'Should include table name');
+  assert(error.includes('sd_phase_handoffs'), 'Should include table name');
   assert(error.includes('id'), 'Should include column name');
   assert(error.includes('uuid'), 'Should include expected type');
   assert(error.includes('randomUUID'), 'Should include helpful suggestion');

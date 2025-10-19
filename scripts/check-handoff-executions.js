@@ -12,7 +12,7 @@ const supabase = createClient(
 console.log('🔍 Checking Handoff Executions for SD-KNOWLEDGE-001\n');
 
 const { data: handoffs, error } = await supabase
-  .from('leo_handoff_executions')
+  .from('sd_phase_handoffs')
   .select('*')
   .eq('sd_id', 'SD-KNOWLEDGE-001')
   .order('completed_at', { ascending: true });
@@ -20,7 +20,7 @@ const { data: handoffs, error } = await supabase
 if (error) {
   console.error('❌ Error:', error.message);
 } else if (!handoffs || handoffs.length === 0) {
-  console.log('No handoffs found in leo_handoff_executions');
+  console.log('No handoffs found in sd_phase_handoffs');
 } else {
   console.log(`Found ${handoffs.length} handoff(s):\n`);
   handoffs.forEach((h, idx) => {

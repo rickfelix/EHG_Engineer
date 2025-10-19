@@ -60,7 +60,7 @@ console.log('');
 
 // Check handoffs
 const { data: handoffs } = await supabase
-  .from('leo_handoff_executions')
+  .from('sd_phase_handoffs')
   .select('handoff_type, status')
   .eq('sd_id', sdId)
   .order('created_at', { ascending: true });

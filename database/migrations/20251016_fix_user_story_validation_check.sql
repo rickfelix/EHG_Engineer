@@ -38,7 +38,7 @@ BEGIN
   -- Get handoff details for debugging
   SELECT COUNT(DISTINCT handoff_type), ARRAY_AGG(DISTINCT handoff_type)
   INTO handoff_count, handoff_types
-  FROM leo_handoff_executions
+  FROM sd_phase_handoffs
   WHERE sd_id = sd_id_param
   AND status = 'accepted';
 
@@ -133,7 +133,7 @@ BEGIN
         'handoffs_complete', handoff_count >= 3,
         'handoff_count', handoff_count,
         'handoff_types', handoff_types,
-        'handoff_table', 'leo_handoff_executions (FIXED from sd_phase_handoffs)',
+        'handoff_table', 'sd_phase_handoffs (FIXED from sd_phase_handoffs)',
         'progress', CASE WHEN (
           EXISTS (SELECT 1 FROM retrospectives WHERE sd_id = sd_id_param AND status = 'PUBLISHED' AND quality_score IS NOT NULL)
           AND handoff_count >= 3
@@ -289,7 +289,7 @@ BEGIN
       WHEN COUNT(DISTINCT handoff_type) >= 3 THEN true
       ELSE false
     END INTO handoffs_complete
-  FROM leo_handoff_executions
+  FROM sd_phase_handoffs
   WHERE sd_id = sd_id_param
   AND status = 'accepted';
 

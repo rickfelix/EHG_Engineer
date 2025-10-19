@@ -66,7 +66,7 @@ async function getSDDetails() {
     // Check for handoffs
     console.log('\n=== CHECKING FOR HANDOFFS ===\n');
     const { data: handoffs, error: handoffError } = await supabase
-      .from('leo_handoff_executions')
+      .from('sd_phase_handoffs')
       .select('*')
       .eq('sd_id', sdId)
       .order('created_at', { ascending: false });

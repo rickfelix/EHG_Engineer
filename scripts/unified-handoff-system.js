@@ -639,7 +639,7 @@ class UnifiedHandoffSystem {
 
       // Database-first: No file creation, handoff stored in PRD metadata + audit trail
       console.log('\n📝 EXEC→PLAN handoff will be stored in database (product_requirements_v2.metadata.exec_handoff)');
-      console.log('   Audit trail: leo_handoff_executions table');
+      console.log('   Audit trail: sd_phase_handoffs table');
 
       const handoffId = `EXEC-to-PLAN-${sdId}-${Date.now()}`;
 
@@ -822,7 +822,7 @@ class UnifiedHandoffSystem {
 
       // Database-first: Store handoff in database (PRD metadata + audit trail)
       console.log('📝 PLAN→LEAD handoff will be stored in database (product_requirements_v2.metadata.plan_handoff)');
-      console.log('   Audit trail: leo_handoff_executions table');
+      console.log('   Audit trail: sd_phase_handoffs table');
 
       const handoffId = `PLAN-to-LEAD-${sdId}-${Date.now()}`;
 
@@ -1091,7 +1091,7 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
     };
 
     try {
-      const { data, error } = await this.supabase.from('leo_handoff_executions').insert(execution).select();
+      const { data, error } = await this.supabase.from('sd_phase_handoffs').insert(execution).select();
       if (error) {
         console.error('❌ Failed to store handoff execution:', error.message);
         console.error('   Details:', error);
@@ -1102,6 +1102,11 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
       // BUG FIX: Also create actual handoff record in sd_phase_handoffs
       // The execution table is for tracking, but sd_phase_handoffs contains the actual handoff artifact
       await this.createHandoffArtifact(handoffType, sdId, result, executionId);
+
+      // AUTOMATION: Auto-generate PRD script on successful LEAD→PLAN handoff
+      if (handoffType === 'LEAD-to-PLAN') {
+        await this.autoGeneratePRDScript(sdId);
+      }
 
     } catch (error) {
       console.error('⚠️  Critical: Could not store execution:', error.message);
@@ -1313,7 +1318,7 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
     };
 
     try {
-      const { data, error } = await this.supabase.from('leo_handoff_executions').insert(execution).select();
+      const { data, error } = await this.supabase.from('sd_phase_handoffs').insert(execution).select();
       if (error) {
         console.error('❌ Failed to store handoff rejection:', error.message);
         throw error;
@@ -1366,9 +1371,9 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
    */
   async listHandoffExecutions(filters = {}) {
     let query = this.supabase
-      .from('leo_handoff_executions')
+      .from('sd_phase_handoffs')
       .select('*')
-      .order('initiated_at', { ascending: false });
+      .order('created_at', { ascending: false });
       
     if (filters.sdId) {
       query = query.eq('sd_id', filters.sdId);
@@ -1398,8 +1403,8 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
   async getHandoffStats() {
     try {
       const { data: executions } = await this.supabase
-        .from('leo_handoff_executions')
-        .select('status, handoff_type, validation_score');
+        .from('sd_phase_handoffs')
+        .select('status, handoff_type, metadata');
         
       if (!executions) return null;
       
@@ -1424,10 +1429,89 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
       });
       
       return stats;
-      
+
     } catch (error) {
       console.error('Error calculating stats:', error);
       return null;
+    }
+  }
+
+  /**
+   * AUTO-GENERATE PRD SCRIPT ON LEAD→PLAN HANDOFF
+   *
+   * Automatically generates a PRD creation script when LEAD approves an SD.
+   * This integration ensures PRD scripts are created immediately after approval,
+   * following the schema validation best practices.
+   *
+   * Workflow:
+   * 1. LEAD approves SD → LEAD-to-PLAN handoff created
+   * 2. This method automatically runs generate-prd-script.js
+   * 3. Creates scripts/create-prd-<sd-id>.js with proper schema
+   * 4. User can then run the script manually or it can be auto-executed
+   *
+   * @param {string} sdId - Strategic Directive ID
+   */
+  async autoGeneratePRDScript(sdId) {
+    try {
+      console.log('\n🤖 AUTO-GENERATING PRD SCRIPT');
+      console.log('='.repeat(70));
+
+      // Fetch SD details
+      const { data: sd, error: sdError } = await this.supabase
+        .from('strategic_directives_v2')
+        .select('id, title, category, priority')
+        .eq('id', sdId)
+        .single();
+
+      if (sdError || !sd) {
+        console.log(`⚠️  Could not fetch SD details: ${sdError?.message || 'Not found'}`);
+        console.log('   Skipping auto-generation (can be run manually)');
+        return;
+      }
+
+      console.log(`   SD: ${sd.title}`);
+
+      // Import and execute the generator
+      const { default: { execSync } } = await import('child_process');
+      const scriptPath = path.join(process.cwd(), 'scripts', 'generate-prd-script.js');
+
+      console.log(`   Running: node scripts/generate-prd-script.js ${sdId} "${sd.title} - Technical Implementation"`);
+
+      // Execute the PRD script generator
+      try {
+        const output = execSync(
+          `node "${scriptPath}" ${sdId} "${sd.title} - Technical Implementation"`,
+          { encoding: 'utf-8', cwd: process.cwd() }
+        );
+
+        console.log('\n' + output);
+        console.log('✅ PRD script auto-generated successfully!');
+        console.log('');
+        console.log('📝 NEXT STEPS:');
+        console.log(`   1. Edit: scripts/create-prd-${sdId.toLowerCase()}.js`);
+        console.log('      - Update TODO sections');
+        console.log('      - Add requirements, architecture, test scenarios');
+        console.log('');
+        console.log(`   2. Run: node scripts/create-prd-${sdId.toLowerCase()}.js`);
+        console.log('      - Creates PRD in database');
+        console.log('      - Validates schema automatically');
+        console.log('      - Triggers STORIES sub-agent');
+        console.log('');
+
+      } catch (execError) {
+        // Script already exists or other error
+        if (execError.message.includes('already exists')) {
+          console.log('   ℹ️  PRD script already exists - skipping generation');
+        } else {
+          console.log(`   ⚠️  Generation failed: ${execError.message}`);
+          console.log('   You can manually run: npm run prd:new ' + sdId);
+        }
+      }
+
+    } catch (error) {
+      console.log('\n⚠️  Auto-generation error:', error.message);
+      console.log('   PRD script can be generated manually:');
+      console.log(`   npm run prd:new ${sdId}`);
     }
   }
 }

@@ -311,7 +311,7 @@ class LEOProtocolOrchestrator {
 
       case 'handoff_created_in_database':
         const { data: handoff } = await this.supabase
-          .from('leo_handoff_executions')
+          .from('sd_phase_handoffs')
           .select('id')
           .eq('sd_id', sdId)
           .eq('from_agent', phase)

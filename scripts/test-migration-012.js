@@ -75,7 +75,7 @@ async function testMigration() {
     // Step 3: Insert test record
     console.log('\n2. Inserting test record with all new columns...');
     const { data, error } = await supabase
-      .from('leo_handoff_executions')
+      .from('sd_phase_handoffs')
       .insert(testData)
       .select();
 
@@ -150,7 +150,7 @@ async function testMigration() {
     // Step 6: Clean up test record
     console.log('\n5. Cleaning up test record...');
     const { error: deleteError } = await supabase
-      .from('leo_handoff_executions')
+      .from('sd_phase_handoffs')
       .delete()
       .eq('id', testId);
 

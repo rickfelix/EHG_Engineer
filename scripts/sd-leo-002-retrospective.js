@@ -127,7 +127,7 @@ const retrospective = {
   technical_artifacts: {
     migration_script: 'database/migrations/add_status_automation.sql',
     prd_id: 'PRD-LEO-002-*',
-    handoff_records: 'Stored in leo_handoff_executions',
+    handoff_records: 'Stored in sd_phase_handoffs',
     test_results: '5 PASS, 1 PENDING',
     rollback_procedure: 'rollback_status_transition() function'
   }
