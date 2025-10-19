@@ -167,14 +167,16 @@ BEGIN
     description,
     category,
     priority,
-    status
+    status,
+    rationale
   ) VALUES (
     test_sd_id,
     'Test Auto UUID Population',
     'Validation test for auto-population trigger',
     'testing',
     'low',
-    'draft'
+    'draft',
+    'Testing auto-population of PRD sd_uuid field'
   ) RETURNING uuid_id INTO test_sd_uuid;
 
   RAISE NOTICE '1. Created test SD: % (UUID: %)', test_sd_id, test_sd_uuid;
