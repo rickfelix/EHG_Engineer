@@ -61,7 +61,7 @@ const PHASE_SUBAGENT_MAP = {
   LEAD_PRE_APPROVAL: ['VALIDATION', 'DATABASE', 'SECURITY', 'DESIGN', 'RISK'],
   PLAN_PRD: ['DATABASE', 'STORIES', 'RISK'],
   EXEC_IMPL: [], // EXEC does the work, no sub-agents
-  PLAN_VERIFY: ['TESTING', 'GITHUB', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'API', 'DEPENDENCY'],
+  PLAN_VERIFY: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'API', 'DEPENDENCY'],
   LEAD_FINAL: ['RETRO']
 };
 
@@ -115,8 +115,9 @@ async function isSubAgentRequired(subAgent, sd, phase) {
 
   // Always required sub-agents per phase (MANDATORY regardless of content)
   const alwaysRequired = {
-    LEAD_PRE_APPROVAL: ['RISK', 'VALIDATION', 'SECURITY'], // Risk assessment, duplicate check, security review for ALL SDs
-    PLAN_VERIFY: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES'], // Tests, CI/CD, documentation, story verification for ALL implementations
+    LEAD_PRE_APPROVAL: ['RISK', 'VALIDATION', 'SECURITY', 'DATABASE', 'DESIGN'], // Risk assessment, duplicate check, security review, database validation, design review for ALL SDs
+    PLAN_PRD: ['DATABASE', 'STORIES', 'RISK'], // Database schema validation, user story generation, risk assessment for ALL PRDs
+    PLAN_VERIFY: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE'], // Tests, CI/CD, documentation, story verification, database verification for ALL implementations
     LEAD_FINAL: ['RETRO'] // Retrospective for continuous improvement
   };
 
