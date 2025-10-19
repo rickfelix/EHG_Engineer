@@ -1,0 +1,392 @@
+{
+  "timestamp": "2025-10-19T19:53:53.307Z",
+  "summary": {
+    "totalScripts": 76,
+    "cleanScripts": 45,
+    "scriptsWithIssues": 31,
+    "criticalIssues": 23
+  },
+  "topInvalidFields": [
+    {
+      "field": "user_stories",
+      "count": 6
+    },
+    {
+      "field": "prd_id",
+      "count": 4,
+      "suggestion": "id"
+    },
+    {
+      "field": "strategic_directive_id",
+      "count": 2,
+      "suggestion": "sd_uuid"
+    },
+    {
+      "field": "success_metrics",
+      "count": 2
+    },
+    {
+      "field": "test_strategy",
+      "count": 1
+    },
+    {
+      "field": "risks_and_mitigations",
+      "count": 1,
+      "suggestion": "risks"
+    },
+    {
+      "field": "technical_architecture",
+      "count": 1,
+      "suggestion": "system_architecture"
+    },
+    {
+      "field": "target_completion_date",
+      "count": 1,
+      "suggestion": "planned_end"
+    },
+    {
+      "field": "problem_statement",
+      "count": 1,
+      "suggestion": "business_context"
+    }
+  ],
+  "scriptsWithIssues": [
+    {
+      "file": "scripts/create-prd-dashboard-ui.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/create-prd-eva-content-001.js",
+      "invalidFields": [],
+      "missingCriticalFields": [],
+      "deprecatedFields": [
+        {
+          "field": "directive_id",
+          "suggestion": "Should also populate sd_uuid field"
+        }
+      ]
+    },
+    {
+      "file": "scripts/create-prd-phase3-complete.js",
+      "invalidFields": [
+        {
+          "field": "user_stories",
+          "suggestion": "Move to metadata.user_stories"
+        }
+      ],
+      "missingCriticalFields": [],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/create-prd-sd-047a.js",
+      "invalidFields": [
+        {
+          "field": "user_stories",
+          "suggestion": "Move to metadata.user_stories"
+        }
+      ],
+      "missingCriticalFields": [],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/create-prd-sd-agent-admin-002.js",
+      "invalidFields": [
+        {
+          "field": "prd_id",
+          "suggestion": "id"
+        },
+        {
+          "field": "user_stories",
+          "suggestion": "Move to metadata.user_stories"
+        }
+      ],
+      "missingCriticalFields": [],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/create-prd-sd-backend-001.js",
+      "invalidFields": [
+        {
+          "field": "user_stories",
+          "suggestion": "Move to metadata.user_stories"
+        }
+      ],
+      "missingCriticalFields": [],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/create-prd-sd-knowledge-001.js",
+      "invalidFields": [
+        {
+          "field": "strategic_directive_id",
+          "suggestion": "sd_uuid"
+        },
+        {
+          "field": "test_strategy",
+          "suggestion": "Move to metadata.test_strategy"
+        }
+      ],
+      "missingCriticalFields": [],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/create-prd-sd045.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/create-prd-with-playwright.js",
+      "invalidFields": [
+        {
+          "field": "prd_id",
+          "suggestion": "id"
+        }
+      ],
+      "missingCriticalFields": [],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/update-prd-checklist.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/update-prd-fields.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/update-prd-status.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/populate-prd-uat-009.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/add-missing-prd-fields.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/backfill-prd-visual-builder.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": [
+        {
+          "field": "directive_id",
+          "suggestion": "Should also populate sd_uuid field"
+        }
+      ]
+    },
+    {
+      "file": "scripts/check-prd-format.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/complete-prd-validation.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/create-auth-prd-detailed.js",
+      "invalidFields": [
+        {
+          "field": "user_stories",
+          "suggestion": "Move to metadata.user_stories"
+        },
+        {
+          "field": "success_metrics",
+          "suggestion": "Move to metadata.success_metrics"
+        }
+      ],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": [
+        {
+          "field": "directive_id",
+          "suggestion": "Should also populate sd_uuid field"
+        }
+      ]
+    },
+    {
+      "file": "scripts/create-test-prd-for-stories.js",
+      "invalidFields": [
+        {
+          "field": "success_metrics",
+          "suggestion": "Move to metadata.success_metrics"
+        },
+        {
+          "field": "prd_id",
+          "suggestion": "id"
+        }
+      ],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/database-architect-create-prd-eva-content.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/db-architect-minimal-prd-eva.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/enhance-prd-agent-migration.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/enhance-prd-sd-agent-admin-002.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/enrich-prd-with-research.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/execute-prd-sql.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/fix-prd-and-add-ees.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": [
+        {
+          "field": "directive_id",
+          "suggestion": "Should also populate sd_uuid field"
+        }
+      ]
+    },
+    {
+      "file": "scripts/fix-prd-knowledge-001-format.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/fix-prd-scripts.js",
+      "invalidFields": [
+        {
+          "field": "strategic_directive_id",
+          "suggestion": "sd_uuid"
+        },
+        {
+          "field": "prd_id",
+          "suggestion": "id"
+        },
+        {
+          "field": "user_stories",
+          "suggestion": "Move to metadata.user_stories"
+        },
+        {
+          "field": "risks_and_mitigations",
+          "suggestion": "risks"
+        },
+        {
+          "field": "technical_architecture",
+          "suggestion": "system_architecture"
+        },
+        {
+          "field": "target_completion_date",
+          "suggestion": "planned_end"
+        },
+        {
+          "field": "problem_statement",
+          "suggestion": "business_context"
+        }
+      ],
+      "missingCriticalFields": [],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/fix-prd-table-schema.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/setup-prd-database.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    },
+    {
+      "file": "scripts/update-sd-041a-prd-context.js",
+      "invalidFields": [],
+      "missingCriticalFields": [
+        "sd_uuid"
+      ],
+      "deprecatedFields": []
+    }
+  ]
+}

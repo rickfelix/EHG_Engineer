@@ -17,10 +17,12 @@ const supabase = createClient(
 );
 
 const newSD = {
-  id: randomUUID(),
+  id: 'SD-047B',
   sd_key: 'SD-047B',
   category: 'Document Management',
   title: 'Venture Documents Tab: File Management & Collaboration',
+  target_application: 'EHG',
+  current_phase: 'IDEATION',
   description: `Add comprehensive document management to ventures, enabling teams to upload, organize, version, and collaborate on venture-related files (pitch decks, financial models, contracts, etc.).
 
 **Current State**: No document storage for ventures. Teams use external file sharing tools, leading to fragmented information and version control issues.

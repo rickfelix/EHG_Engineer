@@ -30,6 +30,8 @@ const sd = {
   status: 'draft', // LEAD will approve
   category: 'EVA Assistant',
   priority: 'high', // Visual gap blocks production readiness
+  target_application: 'EHG',
+  current_phase: 'IDEATION',
 
   description: `Phase 2 visual design refinement of EVA Meeting Interface to match production design mockup. Builds on completed SD-EVA-MEETING-001 functional foundation (6 user stories validated, 12/12 E2E tests passing, 84.7% component reuse).
 

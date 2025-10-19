@@ -768,11 +768,12 @@ This Strategic Directive transforms EHG's video generation from manual single-pr
 4. **Scale creative testing** across 20 portfolio companies without proportional resource increase
 
 The comprehensive research prompts embedded in this SD ensure thorough technical design, statistical rigor, and seamless integration with EHG's 40-stage venture workflow. Implementation follows a phased approach with clear success criteria, risk mitigation strategies, and backward compatibility guarantees.`,
+    rationale: 'Current VideoPromptStudio generates single video prompts manually without variant testing capability. Portfolio companies need data-driven creative optimization to reduce costs (90% savings vs agencies), accelerate testing (1 week vs 6 months), and improve launch success rates (300% improvement). Existing infrastructure (VideoPromptStudio, 40-stage workflow, chairman_feedback) provides foundation for intelligent variant testing engine.',
     category: 'Creative Media Automation',
     priority: 85,
     status: 'draft',
     current_phase: 'lead_review',
-    target_application: 'ehg',
+    target_application: 'EHG',
     estimated_effort_weeks: 10,
     business_value: 'Transform video creation from single prompts to intelligent testing engine. Enable 90% cost reduction, 10x faster testing, 300% launch success improvement.',
     technical_approach: 'Extend existing VideoPromptStudio with wizard UI, variant generation algorithms, performance tracking infrastructure, and automated winner identification. Integrate with Stage 34/35 workflows.',
