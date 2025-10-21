@@ -1068,8 +1068,8 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
     const execution = {
       id: executionId,
       template_id: template?.id,
-      from_agent: handoffType.split('-')[0],
-      to_agent: handoffType.split('-')[2],
+      from_phase: handoffType.split('-')[0],
+      to_phase: handoffType.split('-')[2],
       sd_id: sdId,
       prd_id: result.prdId,
       handoff_type: handoffType,
@@ -1294,11 +1294,20 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
     const execution = {
       id: executionId,
       template_id: template?.id,
-      from_agent: handoffType.split('-')[0],
-      to_agent: handoffType.split('-')[2],
+      from_phase: handoffType.split('-')[0],
+      to_phase: handoffType.split('-')[2],
       sd_id: sdId,
       handoff_type: handoffType,
       status: 'rejected',
+
+      // 7-element handoff structure (required fields)
+      executive_summary: `${handoffType} handoff REJECTED for ${sdId}. Validation score: ${result.actualScore || 0}%. Reason: ${result.reasonCode || 'VALIDATION_FAILED'}`,
+      deliverables_manifest: result.message || 'Handoff validation failed',
+      key_decisions: `Decision: Reject handoff - ${result.reasonCode || 'quality below threshold'}`,
+      known_issues: result.issues?.join('\n') || 'See validation_details for full analysis',
+      resource_utilization: '',
+      action_items: result.recommendations?.join('\n') || 'Address validation issues and retry handoff',
+      completeness_report: `Validation Score: ${result.actualScore || 0}%. Required: ${result.requiredScore || 70}%`,
 
       validation_score: result.actualScore || 0,
       validation_passed: false,
@@ -1335,11 +1344,20 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
 
     const execution = {
       id: executionId,
-      from_agent: handoffType.split('-')[0],
-      to_agent: handoffType.split('-')[2],
+      from_phase: handoffType.split('-')[0],
+      to_phase: handoffType.split('-')[2],
       sd_id: sdId,
       handoff_type: handoffType,
       status: 'failed',
+
+      // 7-element handoff structure (required fields)
+      executive_summary: `${handoffType} handoff FAILED for ${sdId} due to system error: ${errorMessage.substring(0, 200)}`,
+      deliverables_manifest: 'System error prevented handoff completion',
+      key_decisions: 'Decision: System error - handoff aborted',
+      known_issues: `System Error: ${errorMessage}`,
+      resource_utilization: '',
+      action_items: 'Review error logs and retry handoff after resolving system issues',
+      completeness_report: 'Handoff failed - no validation performed due to system error',
 
       validation_score: 0,
       validation_passed: false,
