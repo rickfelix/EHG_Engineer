@@ -26,7 +26,8 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { glob } from 'glob';
+import globPkg from 'glob';
+const { glob } = globPkg;
 import fs from 'fs';
 import dotenv from 'dotenv';
 

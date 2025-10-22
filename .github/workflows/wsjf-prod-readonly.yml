@@ -24,10 +24,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Generate WSJF recommendations (read-only)
         env:
-          PGHOST: ${{ secrets.PGHOST_PROD }}
-          PGPORT: ${{ secrets.PGPORT_PROD }}
-          PGDATABASE: ${{ secrets.PGDATABASE_PROD }}
-          PGUSER: ${{ secrets.PGUSER_PROD }}
+          PGHOST: ${{ vars.PGHOST_PROD }}
+          PGPORT: ${{ vars.PGPORT_PROD }}
+          PGDATABASE: ${{ vars.PGDATABASE_PROD }}
+          PGUSER: ${{ vars.PGUSER_PROD }}
           PGPASSWORD: ${{ secrets.PGPASSWORD_PROD }}
           PGSSLMODE: require
         run: |
@@ -38,7 +38,7 @@ jobs:
                -v W_RR="${{ vars.W_RR || '0.9' }}" \
                -v W_JS="${{ vars.W_JS || '1.0' }}" \
                -v MAX_MOVE="${{ vars.MAX_MOVE || '2' }}" \
-               -f ops/checks/wsjf_recommendations_staging.sql
+               -f ops/checks/wsjf_recommendations_prod.sql
       - name: WSJF — top suggestions
         run: |
           f=ops/checks/out/wsjf_recommendations.csv
