@@ -443,9 +443,14 @@ async function checkSchemaFunctions() {
 
   for (const funcName of CONFIG.REQUIRED_FUNCTIONS) {
     // Try to call the function
-    const { data, error } = await supabase.rpc(funcName, funcName === 'get_table_schema' ? { table_name: 'strategic_directives_v2' } : {}).catch(() => ({ error: { message: 'Function not available' } }));
+    try {
+      const { data, error } = await supabase.rpc(funcName, funcName === 'get_table_schema' ? { table_name: 'strategic_directives_v2' } : {});
 
-    if (error && error.message.includes('not found')) {
+      if (error && error.message.includes('not found')) {
+        missingFunctions.push(funcName);
+      }
+    } catch (err) {
+      // Function not available or error calling it
       missingFunctions.push(funcName);
     }
   }
