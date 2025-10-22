@@ -83,7 +83,7 @@ jobs:
           PRD_ID: ${{ matrix.prd }}
         run: |
           echo "🔍 Validating Gate ${{ matrix.gate }} for PRD ${{ matrix.prd }}"
-          echo "═".repeat(50)
+          printf '═%.0s' {1..50} && echo
           
           case "${{ matrix.gate }}" in
             2A) npx tsx tools/gates/gate2a.ts ;;
