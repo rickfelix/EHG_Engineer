@@ -78,11 +78,12 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           PRD_ID: ${{ matrix.prd }}
         run: |
           echo "🔍 Validating Gate ${{ matrix.gate }} for PRD ${{ matrix.prd }}"
-          echo "═".repeat(50)
+          printf '═%.0s' {1..50} && echo
           
           case "${{ matrix.gate }}" in
             2A) npx tsx tools/gates/gate2a.ts ;;
