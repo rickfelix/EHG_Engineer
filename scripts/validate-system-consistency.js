@@ -27,7 +27,9 @@
 
 import { createClient } from '@supabase/supabase-js';
 import globPkg from 'glob';
-const { glob } = globPkg;
+import { promisify } from 'util';
+const globCallback = globPkg.default || globPkg;
+const glob = promisify(globCallback);
 import fs from 'fs';
 import dotenv from 'dotenv';
 
@@ -368,14 +370,18 @@ async function checkDeprecatedUsage() {
 
   const deprecatedUsages = [];
 
-  // Scan JavaScript/TypeScript files
-  const codeFiles = await glob('**/*.{js,mjs,ts,tsx}', {
-    ignore: ['node_modules/**', '**/dist/**', 'test-results/**']
+  // Scan JavaScript/TypeScript files (limit to key directories for performance)
+  const codeFiles = await glob('{src,scripts,lib,pages,components,api}/**/*.{js,mjs,ts,tsx}', {
+    ignore: ['node_modules/**', '**/dist/**', 'test-results/**', '**/node_modules/**', 'dist/**', '.next/**', 'coverage/**', 'build/**']
   });
 
   console.log(`   Scanning ${codeFiles.length} code files...`);
 
   for (const file of codeFiles) {
+    // Skip directories (glob may match directories despite pattern)
+    if (fs.statSync(file).isDirectory()) {
+      continue;
+    }
     const content = fs.readFileSync(file, 'utf8');
 
     for (const deprecated of CONFIG.DEPRECATED_TABLES) {
