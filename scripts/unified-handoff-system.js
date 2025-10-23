@@ -1230,7 +1230,7 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
     };
 
     // LEAD → PLAN handoff
-    if (handoffType === 'LEAD-to-PLAN') {
+    if (handoffType === 'LEAD-TO-PLAN') {
       content.executive_summary = `${fromPhase} phase complete for ${sd.id}: ${sd.title}. Strategic validation passed with ${result.qualityScore || 100}% completeness. SD approved for PLAN phase PRD creation.`;
 
       content.deliverables_manifest = [
@@ -1287,7 +1287,7 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
     }
 
     // PLAN → EXEC handoff
-    if (handoffType === 'PLAN-to-EXEC') {
+    if (handoffType === 'PLAN-TO-EXEC') {
       content.executive_summary = `${fromPhase} phase complete for ${sd.id}: ${sd.title}. PRD created and validated. All pre-EXEC requirements met. EXEC implementation authorized.`;
 
       content.deliverables_manifest = [
@@ -1322,7 +1322,7 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
     }
 
     // EXEC → PLAN handoff
-    if (handoffType === 'EXEC-to-PLAN') {
+    if (handoffType === 'EXEC-TO-PLAN') {
       content.executive_summary = `${fromPhase} phase complete for ${sd.id}: ${sd.title}. Implementation complete. All deliverables met, tests passing, documentation generated. Ready for PLAN verification.`;
 
       content.deliverables_manifest = [
@@ -1359,7 +1359,7 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
     }
 
     // PLAN → LEAD handoff
-    if (handoffType === 'PLAN-to-LEAD') {
+    if (handoffType === 'PLAN-TO-LEAD') {
       content.executive_summary = `${fromPhase} verification complete for ${sd.id}: ${sd.title}. All deliverables verified, tests validated, quality checks passed. Ready for LEAD final approval and SD completion.`;
 
       content.deliverables_manifest = [
