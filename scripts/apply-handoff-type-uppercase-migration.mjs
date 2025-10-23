@@ -22,9 +22,9 @@ async function applyMigration() {
     const statements = splitPostgreSQLStatements(sql);
     console.log(`   ✅ Parsed ${statements.length} SQL statements\n`);
 
-    // Connect to database
-    console.log('🔌 Connecting to database...');
-    client = await createDatabaseClient('ehg', { verify: true, verbose: true });
+    // Connect to database (CORRECTED: 'engineer' not 'ehg')
+    console.log('🔌 Connecting to EHG_Engineer database...');
+    client = await createDatabaseClient('engineer', { verify: true, verbose: true });
     console.log('   ✅ Connected\n');
 
     // Execute migration in transaction
@@ -43,20 +43,55 @@ async function applyMigration() {
     await client.query('COMMIT');
     console.log('\n✅ Migration applied successfully!\n');
 
-    // Verify
-    console.log('🔍 Verifying constraint...');
-    const { rows } = await client.query(`
-      SELECT con.conname AS constraint_name
+    // Verify constraint
+    console.log('🔍 Verifying new constraint...');
+    const { rows: constraintRows } = await client.query(`
+      SELECT con.conname AS constraint_name, pg_get_constraintdef(con.oid) AS definition
       FROM pg_constraint con
       JOIN pg_class rel ON rel.oid = con.conrelid
       WHERE rel.relname = 'sd_phase_handoffs'
         AND con.conname = 'sd_phase_handoffs_handoff_type_check';
     `);
 
-    if (rows.length > 0) {
+    if (constraintRows.length > 0) {
       console.log('   ✅ Constraint exists');
+      console.log(`   Definition: ${constraintRows[0].definition}`);
     } else {
       console.log('   ⚠️  Warning: Constraint not found');
+    }
+
+    // Verify updated records
+    console.log('\n🔍 Verifying updated records...');
+    const { rows: records } = await client.query(`
+      SELECT handoff_type, COUNT(*) as count
+      FROM sd_phase_handoffs
+      GROUP BY handoff_type
+      ORDER BY handoff_type;
+    `);
+
+    console.log('   Updated handoff types:');
+    records.forEach(r => {
+      console.log(`   - ${r.handoff_type}: ${r.count} records`);
+    });
+
+    // Test insertion with uppercase format
+    console.log('\n🧪 Testing insertion with uppercase format...');
+    await client.query('BEGIN');
+    try {
+      await client.query(`
+        INSERT INTO sd_phase_handoffs (sd_id, handoff_type, status, phase_from, phase_to, created_by)
+        VALUES ('TEST-SD-001', 'EXEC-TO-PLAN', 'pending', 'EXEC', 'PLAN', 'system')
+        RETURNING id;
+      `);
+      console.log('   ✅ Test insertion successful');
+
+      // Clean up test record
+      await client.query(`DELETE FROM sd_phase_handoffs WHERE sd_id = 'TEST-SD-001';`);
+      await client.query('COMMIT');
+      console.log('   ✅ Test record cleaned up');
+    } catch (testError) {
+      await client.query('ROLLBACK');
+      console.log(`   ❌ Test insertion failed: ${testError.message}`);
     }
 
   } catch (error) {

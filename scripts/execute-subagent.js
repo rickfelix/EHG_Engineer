@@ -37,6 +37,8 @@ function parseArgs() {
       parsed.code = args[++i]?.toUpperCase();
     } else if (arg === '--sd-id' || arg === '--sd') {
       parsed.sdId = args[++i];
+    } else if (arg === '--prd-id' || arg === '--prd') {
+      parsed.options.prd_id = args[++i];
     } else if (arg === '--table-name' || arg === '--table') {
       parsed.options.table_name = args[++i];
     } else if (arg.startsWith('--')) {
