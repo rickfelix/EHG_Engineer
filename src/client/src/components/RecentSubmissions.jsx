@@ -123,6 +123,13 @@ const RecentSubmissions = ({
     }
   };
 
+  const handleKeyDown = (event, callback) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      callback();
+    }
+  };
+
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -336,11 +343,15 @@ const RecentSubmissions = ({
                 <div
                   key={submission.id}
                   className={`p-3 mb-2 border rounded-lg transition-all cursor-pointer ${
-                    isActive 
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-sm' 
+                    isActive
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-sm'
                       : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:hover:border-gray-500 dark:hover:bg-gray-700/50'
                   }`}
                   onClick={() => handleViewSubmission(submission)}
+                  onKeyDown={(e) => handleKeyDown(e, () => handleViewSubmission(submission))}
+                  tabIndex="0"
+                  role="button"
+                  aria-label={`View submission: ${getSubmissionTitle(submission)}`}
                 >
                   <div className="flex items-start gap-3">
                     {/* Selection Checkbox */}

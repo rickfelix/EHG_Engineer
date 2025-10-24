@@ -156,6 +156,13 @@ function BacklogManager({ backlogData = [], strategicDirectives = [], isCompact,
     }));
   };
 
+  const handleKeyDown = (event, callback) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      callback();
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -306,6 +313,11 @@ function BacklogManager({ backlogData = [], strategicDirectives = [], isCompact,
                       <div
                         className={`${isCompact ? 'p-2' : 'p-3'} cursor-pointer`}
                         onClick={() => toggleItemExpansion(`${sdId}-${item.backlog_id}`)}
+                        onKeyDown={(e) => handleKeyDown(e, () => toggleItemExpansion(`${sdId}-${item.backlog_id}`))}
+                        tabIndex="0"
+                        role="button"
+                        aria-expanded={expandedItems[`${sdId}-${item.backlog_id}`] || false}
+                        aria-label={`Toggle details for ${item.backlog_title}`}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex items-start flex-1">

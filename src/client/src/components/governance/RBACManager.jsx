@@ -143,6 +143,13 @@ const RBACManager = () => {
     }));
   };
 
+  const handleKeyDown = (event, callback) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      callback();
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="mb-6">
@@ -208,6 +215,10 @@ const RBACManager = () => {
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
                 onClick={() => setSelectedRole(role)}
+                onKeyDown={(e) => handleKeyDown(e, () => setSelectedRole(role))}
+                tabIndex="0"
+                role="button"
+                aria-label={`Select role: ${role.name}`}
               >
                 <div className="flex items-start justify-between mb-2">
                   <div>

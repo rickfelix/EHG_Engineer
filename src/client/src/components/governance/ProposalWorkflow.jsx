@@ -131,6 +131,13 @@ const ProposalWorkflow = () => {
     ));
   };
 
+  const handleKeyDown = (event, callback) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      callback();
+    }
+  };
+
   const filteredProposals = filter === 'all'
     ? proposals
     : proposals.filter(p => p.status === filter);
@@ -202,6 +209,10 @@ const ProposalWorkflow = () => {
             key={proposal.id}
             className="border rounded-lg p-4 hover:bg-gray-50 cursor-pointer"
             onClick={() => setSelectedProposal(proposal)}
+            onKeyDown={(e) => handleKeyDown(e, () => setSelectedProposal(proposal))}
+            tabIndex="0"
+            role="button"
+            aria-label={`View proposal: ${proposal.title}`}
           >
             <div className="flex items-start justify-between">
               <div className="flex-1">

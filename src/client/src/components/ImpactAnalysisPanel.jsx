@@ -5,12 +5,12 @@
  */
 
 import React, { useState } from 'react';
-import { 
-  AlertTriangle, 
-  CheckCircle, 
-  XCircle, 
-  Info, 
-  TrendingUp, 
+import {
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Info,
+  TrendingUp,
   TrendingDown,
   Shield,
   Layers,
@@ -50,6 +50,13 @@ const ImpactAnalysisPanel = ({ impactAnalysis, consistencyValidation, submission
       ...prev,
       [section]: !prev[section]
     }));
+  };
+
+  const handleKeyDown = (event, callback) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      callback();
+    }
   };
 
   // Risk level styling
@@ -119,9 +126,14 @@ const ImpactAnalysisPanel = ({ impactAnalysis, consistencyValidation, submission
     <div className="space-y-6">
       {/* Overview Section */}
       <div className={`rounded-lg border ${riskStyling.bg} ${riskStyling.border} p-6`}>
-        <div 
+        <div
           className="flex items-center justify-between cursor-pointer"
           onClick={() => toggleSection('overview')}
+          onKeyDown={(e) => handleKeyDown(e, () => toggleSection('overview'))}
+          tabIndex="0"
+          role="button"
+          aria-expanded={expandedSections.overview}
+          aria-label="Toggle impact analysis overview"
         >
           <div className="flex items-center space-x-3">
             <RiskIcon className={`w-6 h-6 ${riskStyling.accent}`} />
@@ -134,8 +146,8 @@ const ImpactAnalysisPanel = ({ impactAnalysis, consistencyValidation, submission
               </p>
             </div>
           </div>
-          {expandedSections.overview ? 
-            <ChevronDown className={`w-5 h-5 ${riskStyling.accent}`} /> : 
+          {expandedSections.overview ?
+            <ChevronDown className={`w-5 h-5 ${riskStyling.accent}`} /> :
             <ChevronRight className={`w-5 h-5 ${riskStyling.accent}`} />
           }
         </div>
@@ -152,7 +164,7 @@ const ImpactAnalysisPanel = ({ impactAnalysis, consistencyValidation, submission
                     Impact Score
                   </div>
                 </div>
-                
+
                 <div className="text-center p-4 bg-white dark:bg-gray-700 rounded-lg">
                   <div className={`text-2xl font-bold ${riskStyling.accent}`}>
                     {impactAnalysis.effort_multiplier}x
@@ -161,7 +173,7 @@ const ImpactAnalysisPanel = ({ impactAnalysis, consistencyValidation, submission
                     Effort Multiplier
                   </div>
                 </div>
-                
+
                 <div className="text-center p-4 bg-white dark:bg-gray-700 rounded-lg">
                   <div className={`text-2xl font-bold ${riskStyling.accent}`}>
                     {impactAnalysis.affected_components?.length || 0}
@@ -172,7 +184,7 @@ const ImpactAnalysisPanel = ({ impactAnalysis, consistencyValidation, submission
                 </div>
               </>
             )}
-            
+
             {consistencyValidation && (
               <div className="text-center p-4 bg-white dark:bg-gray-700 rounded-lg">
                 <div className={`text-2xl font-bold ${consistencyValidation.passed ? 'text-green-600' : 'text-red-600'}`}>
@@ -190,16 +202,21 @@ const ImpactAnalysisPanel = ({ impactAnalysis, consistencyValidation, submission
       {/* Affected Components */}
       {impactAnalysis?.affected_components && impactAnalysis.affected_components.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-          <div 
+          <div
             className="flex items-center justify-between cursor-pointer"
             onClick={() => toggleSection('components')}
+            onKeyDown={(e) => handleKeyDown(e, () => toggleSection('components'))}
+            tabIndex="0"
+            role="button"
+            aria-expanded={expandedSections.components}
+            aria-label="Toggle affected components section"
           >
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
               <Layers className="w-5 h-5 mr-2" />
               Affected Components
             </h3>
-            {expandedSections.components ? 
-              <ChevronDown className="w-5 h-5 text-gray-400" /> : 
+            {expandedSections.components ?
+              <ChevronDown className="w-5 h-5 text-gray-400" /> :
               <ChevronRight className="w-5 h-5 text-gray-400" />
             }
           </div>
@@ -209,9 +226,9 @@ const ImpactAnalysisPanel = ({ impactAnalysis, consistencyValidation, submission
               {impactAnalysis.affected_components.map((component, index) => {
                 const ComponentIcon = getComponentIcon(component.name);
                 const componentRisk = getRiskStyling(component.risk_level);
-                
+
                 return (
-                  <div 
+                  <div
                     key={index}
                     className={`p-4 rounded-lg border ${componentRisk.bg} ${componentRisk.border}`}
                   >
@@ -228,13 +245,13 @@ const ImpactAnalysisPanel = ({ impactAnalysis, consistencyValidation, submission
                         </div>
                       </div>
                     </div>
-                    
+
                     {component.dependencies && component.dependencies.length > 0 && (
                       <div className="mt-2">
                         <p className={`text-xs ${componentRisk.text} opacity-60 mb-1`}>Dependencies:</p>
                         <div className="flex flex-wrap gap-1">
                           {component.dependencies.map((dep, depIndex) => (
-                            <span 
+                            <span
                               key={depIndex}
                               className={`px-2 py-1 rounded text-xs ${componentRisk.accent} bg-white dark:bg-gray-700`}
                             >
@@ -255,9 +272,14 @@ const ImpactAnalysisPanel = ({ impactAnalysis, consistencyValidation, submission
       {/* Consistency Validation */}
       {consistencyValidation && (
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-          <div 
+          <div
             className="flex items-center justify-between cursor-pointer"
             onClick={() => toggleSection('consistency')}
+            onKeyDown={(e) => handleKeyDown(e, () => toggleSection('consistency'))}
+            tabIndex="0"
+            role="button"
+            aria-expanded={expandedSections.consistency}
+            aria-label="Toggle consistency validation section"
           >
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
               <Shield className="w-5 h-5 mr-2" />
@@ -266,8 +288,8 @@ const ImpactAnalysisPanel = ({ impactAnalysis, consistencyValidation, submission
                 <XCircle className="w-5 h-5 ml-2 text-red-500" />
               )}
             </h3>
-            {expandedSections.consistency ? 
-              <ChevronDown className="w-5 h-5 text-gray-400" /> : 
+            {expandedSections.consistency ?
+              <ChevronDown className="w-5 h-5 text-gray-400" /> :
               <ChevronRight className="w-5 h-5 text-gray-400" />
             }
           </div>
@@ -286,7 +308,7 @@ const ImpactAnalysisPanel = ({ impactAnalysis, consistencyValidation, submission
                     {consistencyValidation.passed ? 'Validation Passed' : 'Validation Failed'}
                   </span>
                 </div>
-                
+
                 {consistencyValidation.blocking_issues && consistencyValidation.blocking_issues.length > 0 && (
                   <div className="mt-2">
                     <p className="text-sm font-medium text-red-900 dark:text-red-100 mb-1">Blocking Issues:</p>
@@ -320,7 +342,7 @@ const ImpactAnalysisPanel = ({ impactAnalysis, consistencyValidation, submission
                           </span>
                         </div>
                         <div className="mt-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                          <div 
+                          <div
                             className={`h-2 rounded-full transition-all ${score >= 70 ? 'bg-green-500' : score >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
                             style={{ width: `${score}%` }}
                           />
@@ -338,16 +360,21 @@ const ImpactAnalysisPanel = ({ impactAnalysis, consistencyValidation, submission
       {/* Recommendations */}
       {(impactAnalysis?.recommendations || consistencyValidation?.recommendations) && (
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-          <div 
+          <div
             className="flex items-center justify-between cursor-pointer"
             onClick={() => toggleSection('recommendations')}
+            onKeyDown={(e) => handleKeyDown(e, () => toggleSection('recommendations'))}
+            tabIndex="0"
+            role="button"
+            aria-expanded={expandedSections.recommendations}
+            aria-label="Toggle recommendations section"
           >
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
               <Target className="w-5 h-5 mr-2" />
               Recommendations
             </h3>
-            {expandedSections.recommendations ? 
-              <ChevronDown className="w-5 h-5 text-gray-400" /> : 
+            {expandedSections.recommendations ?
+              <ChevronDown className="w-5 h-5 text-gray-400" /> :
               <ChevronRight className="w-5 h-5 text-gray-400" />
             }
           </div>
@@ -371,7 +398,7 @@ const ImpactAnalysisPanel = ({ impactAnalysis, consistencyValidation, submission
                   </div>
                 </div>
               ))}
-              
+
               {consistencyValidation?.recommendations?.map((rec, index) => (
                 <div key={`consistency-${index}`} className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                   <div className="flex items-start">
@@ -402,16 +429,21 @@ const ImpactAnalysisPanel = ({ impactAnalysis, consistencyValidation, submission
       {/* Mitigation Strategies */}
       {impactAnalysis?.mitigation_strategies && impactAnalysis.mitigation_strategies.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-          <div 
+          <div
             className="flex items-center justify-between cursor-pointer"
             onClick={() => toggleSection('mitigation')}
+            onKeyDown={(e) => handleKeyDown(e, () => toggleSection('mitigation'))}
+            tabIndex="0"
+            role="button"
+            aria-expanded={expandedSections.mitigation}
+            aria-label="Toggle mitigation strategies section"
           >
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
               <Zap className="w-5 h-5 mr-2" />
               Mitigation Strategies
             </h3>
-            {expandedSections.mitigation ? 
-              <ChevronDown className="w-5 h-5 text-gray-400" /> : 
+            {expandedSections.mitigation ?
+              <ChevronDown className="w-5 h-5 text-gray-400" /> :
               <ChevronRight className="w-5 h-5 text-gray-400" />
             }
           </div>
