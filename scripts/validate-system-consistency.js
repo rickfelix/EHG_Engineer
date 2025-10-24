@@ -26,7 +26,10 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { glob } from 'glob';
+import globPkg from 'glob';
+import { promisify } from 'util';
+const globCallback = globPkg.default || globPkg;
+const glob = promisify(globCallback);
 import fs from 'fs';
 import dotenv from 'dotenv';
 
@@ -44,7 +47,8 @@ const CONFIG = {
 
   // Deprecated tables (marked for removal)
   DEPRECATED_TABLES: [
-    'sd_phase_handoffs'  // Replaced by sd_phase_handoffs
+    // No deprecated tables currently - sd_phase_handoffs is the CURRENT table
+    // (was incorrectly listed as deprecated, causing false positives)
   ],
 
   // Expected foreign key naming patterns
@@ -367,14 +371,18 @@ async function checkDeprecatedUsage() {
 
   const deprecatedUsages = [];
 
-  // Scan JavaScript/TypeScript files
-  const codeFiles = await glob('**/*.{js,mjs,ts,tsx}', {
-    ignore: ['node_modules/**', '**/dist/**', 'test-results/**']
+  // Scan JavaScript/TypeScript files (limit to key directories for performance)
+  const codeFiles = await glob('{src,scripts,lib,pages,components,api}/**/*.{js,mjs,ts,tsx}', {
+    ignore: ['node_modules/**', '**/dist/**', 'test-results/**', '**/node_modules/**', 'dist/**', '.next/**', 'coverage/**', 'build/**']
   });
 
   console.log(`   Scanning ${codeFiles.length} code files...`);
 
   for (const file of codeFiles) {
+    // Skip directories (glob may match directories despite pattern)
+    if (fs.statSync(file).isDirectory()) {
+      continue;
+    }
     const content = fs.readFileSync(file, 'utf8');
 
     for (const deprecated of CONFIG.DEPRECATED_TABLES) {
@@ -436,9 +444,14 @@ async function checkSchemaFunctions() {
 
   for (const funcName of CONFIG.REQUIRED_FUNCTIONS) {
     // Try to call the function
-    const { data, error } = await supabase.rpc(funcName, funcName === 'get_table_schema' ? { table_name: 'strategic_directives_v2' } : {}).catch(() => ({ error: { message: 'Function not available' } }));
+    try {
+      const { data, error } = await supabase.rpc(funcName, funcName === 'get_table_schema' ? { table_name: 'strategic_directives_v2' } : {});
 
-    if (error && error.message.includes('not found')) {
+      if (error && error.message.includes('not found')) {
+        missingFunctions.push(funcName);
+      }
+    } catch (err) {
+      // Function not available or error calling it
       missingFunctions.push(funcName);
     }
   }
