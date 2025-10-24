@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - LEO Protocol PLAN Phase Context
 
-**Generated**: 2025-10-19 2:09:00 PM
+**Generated**: 2025-10-24 7:50:52 AM
 **Protocol**: LEO vv4.2.0_story_gates
 **Purpose**: PLAN phase operations + core context
 
@@ -10,9 +10,9 @@
 
 This file contains:
 1. **Core Context** (9 sections) - Essential for all sessions
-2. **PLAN Phase Context** (12 sections) - Phase-specific operations
+2. **PLAN Phase Context** (13 sections) - Phase-specific operations
 
-**Total Size**: ~63k chars
+**Total Size**: ~66k chars
 
 ---
 
@@ -1319,6 +1319,53 @@ The `verify-handoff-plan-to-exec.js` script validates plan_presentation structur
 - **Validation Logic:** scripts/verify-handoff-plan-to-exec.js (PlanToExecVerifier.validatePlanPresentation)
 - **Test Coverage:** scripts/test-plan-presentation-validation.mjs (5 test scenarios)
 
+
+## Visual Documentation Best Practices
+
+## Visual Documentation Best Practices
+
+When creating PRDs and technical specifications, consider adding:
+
+### Architecture Diagrams (Mermaid)
+```mermaid
+graph TD
+    A[User Request] --> B[Validation Layer]
+    B --> C{Valid?}
+    C -->|Yes| D[Business Logic]
+    C -->|No| E[Error Response]
+    D --> F[Database]
+    F --> G[Success Response]
+```
+
+### State Flow Diagrams
+```mermaid
+stateDiagram-v2
+    [*] --> Draft
+    Draft --> Review
+    Review --> Approved
+    Review --> Rejected
+    Rejected --> Draft
+    Approved --> [*]
+```
+
+### Sequence Diagrams (Complex Interactions)
+```mermaid
+sequenceDiagram
+    User->>+Frontend: Submit Form
+    Frontend->>+API: POST /api/submit
+    API->>+Database: INSERT data
+    Database-->>-API: Success
+    API->>+Queue: Enqueue job
+    Queue-->>-API: Acknowledged
+    API-->>-Frontend: 202 Accepted
+    Frontend-->>-User: Show success
+```
+
+**When to Use**:
+- Complex workflows with multiple decision points → Flowchart
+- Multi-component interactions → Sequence diagram
+- State transitions → State diagram
+- System architecture → Component diagram
 
 ---
 

@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEO Protocol LEAD Phase Context
 
-**Generated**: 2025-10-19 2:09:00 PM
+**Generated**: 2025-10-24 7:50:52 AM
 **Protocol**: LEO vv4.2.0_story_gates
 **Purpose**: LEAD phase operations + core context
 
@@ -465,6 +465,29 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 
 **Complete Guide**: See `docs/reference/lead-operations.md`
 
+## 📋 Directive Submission Review Process
+
+**Directive Submission Review**: Review submissions before creating SDs.
+
+**Quick Review**:
+```bash
+node scripts/lead-review-submissions.js
+```
+
+**Review Checklist**:
+- Chairman input (original intent)
+- Intent clarity & strategic alignment
+- Priority assessment & scope validation
+- Duplicate check & gate progression
+
+**Decision Matrix**:
+- Completed + No SD → Create SD
+- Completed + SD exists → Verify & handoff
+- Pending → Monitor
+- Failed → Archive/remediate
+
+**Complete Process**: See `docs/reference/directive-submission-review.md`
+
 ## Stubbed/Mocked Code Detection
 
 
@@ -514,44 +537,6 @@ node scripts/detect-stubbed-code.js <SD-ID>
 **Exit Requirement**: Zero stubbed code in production files, OR documented in "Known Issues" with follow-up SD created.
 
 
-## 📋 Directive Submission Review Process
-
-**Directive Submission Review**: Review submissions before creating SDs.
-
-**Quick Review**:
-```bash
-node scripts/lead-review-submissions.js
-```
-
-**Review Checklist**:
-- Chairman input (original intent)
-- Intent clarity & strategic alignment
-- Priority assessment & scope validation
-- Duplicate check & gate progression
-
-**Decision Matrix**:
-- Completed + No SD → Create SD
-- Completed + SD exists → Verify & handoff
-- Pending → Monitor
-- Failed → Archive/remediate
-
-**Complete Process**: See `docs/reference/directive-submission-review.md`
-
-## 6-Step SD Evaluation Checklist
-
-**6-Step SD Evaluation Checklist (MANDATORY for LEAD & PLAN)**:
-
-1. Query `strategic_directives_v2` for SD metadata
-2. Query `product_requirements_v2` for existing PRD
-3. **Query `sd_backlog_map` for linked backlog items** ← CRITICAL
-4. Search codebase for existing infrastructure
-5. Identify gaps between backlog requirements and existing code
-6. **Execute QA smoke tests** ← NEW (verify tests run before approval)
-
-**Backlog Review Requirements**: Review backlog_title, item_description, extras.Description_1 for each item
-
-**Complete Checklist**: See `docs/reference/sd-evaluation-checklist.md`
-
 ## LEAD Over-Engineering Evaluation Process
 
 ### 🛡️ LEAD Over-Engineering Evaluation Process
@@ -598,6 +583,21 @@ node scripts/lead-review-submissions.js
 - ❌ Overriding user selections without permission
 - ❌ Subjective over-engineering calls without rubric
 - ❌ Making changes before human approval
+
+## 6-Step SD Evaluation Checklist
+
+**6-Step SD Evaluation Checklist (MANDATORY for LEAD & PLAN)**:
+
+1. Query `strategic_directives_v2` for SD metadata
+2. Query `product_requirements_v2` for existing PRD
+3. **Query `sd_backlog_map` for linked backlog items** ← CRITICAL
+4. Search codebase for existing infrastructure
+5. Identify gaps between backlog requirements and existing code
+6. **Execute QA smoke tests** ← NEW (verify tests run before approval)
+
+**Backlog Review Requirements**: Review backlog_title, item_description, extras.Description_1 for each item
+
+**Complete Checklist**: See `docs/reference/sd-evaluation-checklist.md`
 
 ## Quality Validation Examples
 

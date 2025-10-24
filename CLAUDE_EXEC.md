@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - LEO Protocol EXEC Phase Context
 
-**Generated**: 2025-10-19 2:09:00 PM
+**Generated**: 2025-10-24 7:50:52 AM
 **Protocol**: LEO vv4.2.0_story_gates
 **Purpose**: EXEC phase operations + core context
 
@@ -10,9 +10,9 @@
 
 This file contains:
 1. **Core Context** (9 sections) - Essential for all sessions
-2. **EXEC Phase Context** (8 sections) - Phase-specific operations
+2. **EXEC Phase Context** (9 sections) - Phase-specific operations
 
-**Total Size**: ~51k chars
+**Total Size**: ~54k chars
 
 ---
 
@@ -1048,6 +1048,40 @@ The QA Engineering Director sub-agent now has access to:
 - Both Chrome (MCP) and Chromium (tests) browsers
 
 **Complete Guide**: See `docs/reference/playwright-mcp-guide.md`
+
+## Edge Case Testing Checklist
+
+## Edge Case Testing Checklist
+
+When implementing tests, ensure coverage for:
+
+### Input Validation Edge Cases
+- [ ] Empty strings, null values, undefined
+- [ ] Maximum length inputs (overflow testing)
+- [ ] Special characters (SQL injection, XSS vectors)
+- [ ] Unicode and emoji inputs
+- [ ] Whitespace-only inputs
+
+### Boundary Conditions
+- [ ] Zero, negative, and maximum numeric values
+- [ ] Array min/max lengths (empty, single item, very large)
+- [ ] Date boundaries (leap years, timezone edge cases)
+
+### Concurrent Operations
+- [ ] Race conditions (simultaneous updates)
+- [ ] Database transaction rollbacks
+- [ ] Cache invalidation timing
+
+### Error Scenarios
+- [ ] Network failures (timeout, disconnect)
+- [ ] Database connection errors
+- [ ] Invalid authentication tokens
+- [ ] Permission denied scenarios
+
+### State Transitions
+- [ ] Idempotency (repeated operations)
+- [ ] State rollback on error
+- [ ] Partial success scenarios
 
 ---
 
