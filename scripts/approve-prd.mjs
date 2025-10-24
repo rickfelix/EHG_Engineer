@@ -5,20 +5,36 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
 );
 
-console.log('✅ Approving PRD for PLAN→EXEC Handoff');
+const PRD_ID = 'PRD-VWC-PHASE1-001';
 
-const { error } = await supabase
-  .from('product_requirements_v2')
-  .update({ status: 'approved' })
-  .eq('id', 'PRD-SD-AGENT-ADMIN-001');
+async function approvePRD() {
+  console.log(`📋 Approving PRD ${PRD_ID} for EXEC phase...\n`);
 
-if (error) {
-  console.error('❌ Error:', error);
-  process.exit(1);
+  const { error } = await supabase
+    .from('product_requirements_v2')
+    .update({
+      status: 'approved',
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', PRD_ID);
+
+  if (error) {
+    console.error('❌ Failed to approve PRD:', error.message);
+    process.exit(1);
+  }
+
+  console.log('✅ PRD approved successfully');
+  console.log('   Status: verification → approved');
+  console.log('   Ready for PLAN→EXEC handoff');
 }
 
-console.log('✅ PRD status updated to approved');
+approvePRD()
+  .then(() => process.exit(0))
+  .catch(e => {
+    console.error('❌ Error:', e.message);
+    process.exit(1);
+  });

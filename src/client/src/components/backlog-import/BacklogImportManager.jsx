@@ -203,6 +203,13 @@ const BacklogImportManager = () => {
     }
   };
 
+  const handleKeyDown = (event, callback) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      callback();
+    }
+  };
+
   // Reset import
   const resetImport = () => {
     setFile(null);
@@ -235,6 +242,10 @@ const BacklogImportManager = () => {
         <div
           className="flex flex-col items-center cursor-pointer"
           onClick={() => fileInputRef.current?.click()}
+          onKeyDown={(e) => handleKeyDown(e, () => fileInputRef.current?.click())}
+          tabIndex="0"
+          role="button"
+          aria-label="Upload file"
         >
           <Upload className="h-12 w-12 text-gray-400 mb-3" />
           <p className="text-sm font-medium text-gray-700">

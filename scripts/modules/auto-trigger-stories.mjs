@@ -103,21 +103,58 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
     }
 
     // Step 4: Execute Product Requirements Expert logic
-    console.log('🤖 Step 3: Generating user stories from PRD...');
-    console.log('   ⚠️  This is a placeholder - actual sub-agent execution not implemented yet\n');
+    console.log('🤖 Step 3: Generating user stories from PRD...\n');
 
-    // TODO: Implement actual user story generation logic
-    // For now, we just notify that the sub-agent SHOULD be executed
-    console.log('💡 RECOMMENDATION:');
-    console.log('   Run Product Requirements Expert sub-agent manually:');
-    console.log(`   node scripts/create-user-stories-[sd-id].mjs\n`);
+    // Generate user stories from PRD functional requirements
+    const userStories = await generateUserStoriesFromPRD(prd, sdId, prdId);
 
-    // Step 5: Store execution result
+    if (userStories.length === 0) {
+      console.log('   ⚠️  No functional requirements found in PRD');
+      console.log('   💡 Add functional_requirements array to PRD for auto-generation\n');
+    } else {
+      console.log(`   ✅ Generated ${userStories.length} user stories from PRD\n`);
+
+      // Step 5: Insert user stories into database
+      console.log('💾 Step 4: Storing user stories in database...');
+      let created = 0;
+      let failed = 0;
+
+      for (const story of userStories) {
+        try {
+          const { error: insertError } = await supabase
+            .from('user_stories')
+            .insert(story);
+
+          if (insertError) {
+            if (insertError.code === '23505') {
+              console.log(`   ⏭️  ${story.story_key} - Already exists`);
+            } else {
+              console.log(`   ❌ ${story.story_key} - Error: ${insertError.message}`);
+              failed++;
+            }
+          } else {
+            console.log(`   ✅ ${story.story_key} - ${story.title}`);
+            created++;
+          }
+        } catch (err) {
+          console.log(`   ❌ ${story.story_key} - Exception: ${err.message}`);
+          failed++;
+        }
+      }
+
+      console.log('');
+      console.log(`   Created: ${created}/${userStories.length} user stories`);
+      if (failed > 0) {
+        console.log(`   Failed: ${failed}`);
+      }
+    }
+
+    // Step 6: Store execution result
     const duration = Math.round((Date.now() - startTime) / 1000);
 
     const result = {
-      executed: false, // Set to true when actual implementation added
-      recommendation: 'RUN_PRODUCT_REQUIREMENTS_EXPERT',
+      executed: true,
+      generated_count: userStories.length,
       sd_id: sdId,
       prd_id: prdId,
       execution_id: executionId,
@@ -129,7 +166,7 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
     }
 
     console.log('═══════════════════════════════════════════════════');
-    console.log('✅ Auto-trigger check complete\n');
+    console.log('✅ User story generation complete\n');
 
     return result;
 
@@ -148,6 +185,112 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
       execution_id: executionId
     };
   }
+}
+
+/**
+ * Generate user stories from PRD functional requirements
+ */
+async function generateUserStoriesFromPRD(prd, sdId, prdId) {
+  const userStories = [];
+
+  // Extract functional requirements if available
+  const functionalRequirements = prd.functional_requirements || [];
+
+  if (functionalRequirements.length === 0) {
+    return userStories;
+  }
+
+  for (let i = 0; i < functionalRequirements.length; i++) {
+    const fr = functionalRequirements[i];
+    const storyNumber = String(i + 1).padStart(3, '0');
+    const storyKey = `${sdId}:US-${storyNumber}`;
+
+    // Determine story points based on priority
+    const storyPoints = fr.priority === 'CRITICAL' ? 5 :
+                        fr.priority === 'HIGH' ? 3 :
+                        fr.priority === 'MEDIUM' ? 2 : 1;
+
+    // Determine user role from requirement or default to stakeholder
+    const userRole = extractUserRole(fr.requirement, prd.category);
+
+    // Convert priority to lowercase for user story status
+    const priority = (fr.priority || 'medium').toLowerCase();
+
+    const userStory = {
+      id: randomUUID(),
+      story_key: storyKey,
+      sd_id: sdId,
+      prd_id: prdId,
+      title: fr.requirement || `Implement ${fr.id}`,
+      user_role: userRole,
+      user_want: fr.description || `to implement ${fr.requirement}`,
+      user_benefit: extractUserBenefit(fr.description, fr.rationale),
+      story_points: storyPoints,
+      priority: priority,
+      status: 'ready',
+      acceptance_criteria: fr.acceptance_criteria || [],
+      implementation_context: fr.description || '',
+      technical_notes: fr.rationale || '',
+      created_by: 'PRODUCT_REQUIREMENTS_EXPERT'
+    };
+
+    userStories.push(userStory);
+  }
+
+  return userStories;
+}
+
+/**
+ * Extract user role from requirement text or category
+ */
+function extractUserRole(requirement, category) {
+  const requirementLower = (requirement || '').toLowerCase();
+
+  // Role keywords mapping
+  if (requirementLower.includes('user') || requirementLower.includes('customer')) {
+    return 'User';
+  }
+  if (requirementLower.includes('admin') || requirementLower.includes('administrator')) {
+    return 'Administrator';
+  }
+  if (requirementLower.includes('developer') || requirementLower.includes('engineer')) {
+    return 'Developer';
+  }
+  if (requirementLower.includes('qa') || requirementLower.includes('tester')) {
+    return 'QA Engineer';
+  }
+  if (requirementLower.includes('devops')) {
+    return 'DevOps Engineer';
+  }
+
+  // Category-based defaults
+  if (category === 'infrastructure') return 'DevOps Engineer';
+  if (category === 'accessibility') return 'User';
+  if (category === 'product_feature') return 'User';
+  if (category === 'technical') return 'Developer';
+
+  return 'Stakeholder';
+}
+
+/**
+ * Extract user benefit from description
+ */
+function extractUserBenefit(description, rationale) {
+  // If rationale explains "why", use it as benefit
+  if (rationale && rationale.length > 0) {
+    return rationale;
+  }
+
+  // Otherwise extract benefit from description
+  if (description && description.length > 0) {
+    // If description is long, extract a concise benefit
+    if (description.length > 100) {
+      return 'this functionality meets the system requirements';
+    }
+    return description;
+  }
+
+  return 'the system meets its requirements';
 }
 
 /**

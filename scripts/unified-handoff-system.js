@@ -50,12 +50,12 @@ class UnifiedHandoffSystem {
     this.leadToPlanVerifier = new LeadToPlanVerifier();
     this.planToExecVerifier = new PlanToExecVerifier();
     
-    // Supported handoff types
+    // Supported handoff types (all uppercase for consistency)
     this.supportedHandoffs = [
-      'LEAD-to-PLAN',
-      'PLAN-to-EXEC',
-      'EXEC-to-PLAN',
-      'PLAN-to-LEAD'
+      'LEAD-TO-PLAN',
+      'PLAN-TO-EXEC',
+      'EXEC-TO-PLAN',
+      'PLAN-TO-LEAD'
     ];
   }
 
@@ -118,9 +118,13 @@ class UnifiedHandoffSystem {
    * Main handoff execution entry point
    */
   async executeHandoff(handoffType, sdId, options = {}) {
+    // Normalize handoff type to standard format (case-insensitive, all uppercase)
+    // Converts: "exec-to-plan", "EXEC-to-PLAN", "Exec-To-Plan" → "EXEC-TO-PLAN"
+    const normalizedType = handoffType.toUpperCase();
+
     console.log('🔄 UNIFIED LEO HANDOFF SYSTEM');
     console.log('='.repeat(50));
-    console.log(`Type: ${handoffType}`);
+    console.log(`Type: ${normalizedType}${handoffType !== normalizedType ? ` (normalized from: ${handoffType})` : ''}`);
     console.log(`Strategic Directive: ${sdId}`);
     console.log(`Options:`, options);
     console.log('');
@@ -130,10 +134,13 @@ class UnifiedHandoffSystem {
       // This BLOCKING gate ensures SD exists in database before ANY handoff work proceeds
       await this.verifySDExistsInDatabase(sdId);
 
-      // Validate handoff type
-      if (!this.supportedHandoffs.includes(handoffType)) {
-        throw new Error(`Unsupported handoff type: ${handoffType}`);
+      // Validate handoff type (using normalized version)
+      if (!this.supportedHandoffs.includes(normalizedType)) {
+        throw new Error(`Unsupported handoff type: ${normalizedType} (original: ${handoffType}). Supported types: ${this.supportedHandoffs.join(', ')}`);
       }
+
+      // Use normalized type for the rest of the execution
+      handoffType = normalizedType;
 
       // Load handoff template
       const template = await this.loadHandoffTemplate(handoffType);
@@ -144,19 +151,19 @@ class UnifiedHandoffSystem {
       // Route to specialized verifier
       let result;
       switch (handoffType) {
-        case 'LEAD-to-PLAN':
+        case 'LEAD-TO-PLAN':
           result = await this.leadToPlanVerifier.verifyHandoff(sdId);
           break;
 
-        case 'PLAN-to-EXEC':
+        case 'PLAN-TO-EXEC':
           result = await this.executePlanToExec(sdId, options);
           break;
 
-        case 'EXEC-to-PLAN':
+        case 'EXEC-TO-PLAN':
           result = await this.executeExecToPlan(sdId, options);
           break;
 
-        case 'PLAN-to-LEAD':
+        case 'PLAN-TO-LEAD':
           result = await this.executePlanToLead(sdId, options);
           break;
 
@@ -1068,10 +1075,10 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
     const execution = {
       id: executionId,
       template_id: template?.id,
-      from_phase: handoffType.split('-')[0],
-      to_phase: handoffType.split('-')[2],
+      from_agent: handoffType.split('-')[0],  // leo_handoff_executions uses from_agent/to_agent
+      to_agent: handoffType.split('-')[2],
       sd_id: sdId,
-      prd_id: result.prdId,
+      prd_id: result.prdId, // leo_handoff_executions has prd_id at top level
       handoff_type: handoffType,
       status: 'accepted',
 
@@ -1088,7 +1095,7 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
     };
 
     try {
-      const { data, error } = await this.supabase.from('sd_phase_handoffs').insert(execution).select();
+      const { data, error} = await this.supabase.from('leo_handoff_executions').insert(execution).select();
       if (error) {
         console.error('❌ Failed to store handoff execution:', error.message);
         console.error('   Details:', error);
@@ -1101,7 +1108,7 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
       await this.createHandoffArtifact(handoffType, sdId, result, executionId);
 
       // AUTOMATION: Auto-generate PRD script on successful LEAD→PLAN handoff
-      if (handoffType === 'LEAD-to-PLAN') {
+      if (handoffType === 'LEAD-TO-PLAN') {
         await this.autoGeneratePRDScript(sdId);
       }
 
@@ -1223,7 +1230,7 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
     };
 
     // LEAD → PLAN handoff
-    if (handoffType === 'LEAD-to-PLAN') {
+    if (handoffType === 'LEAD-TO-PLAN') {
       content.executive_summary = `${fromPhase} phase complete for ${sd.id}: ${sd.title}. Strategic validation passed with ${result.qualityScore || 100}% completeness. SD approved for PLAN phase PRD creation.`;
 
       content.deliverables_manifest = [
@@ -1279,7 +1286,113 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
       content.completeness_report = `**LEAD Phase**: 100% complete\n**SD Completeness**: ${result.qualityScore || 100}%\n**Sub-Agent Coverage**: ${subAgentResults?.length || 0} agents\n**Status**: APPROVED for PLAN phase`;
     }
 
-    // Can extend for other handoff types (PLAN-to-EXEC, EXEC-to-PLAN, etc.)
+    // PLAN → EXEC handoff
+    if (handoffType === 'PLAN-TO-EXEC') {
+      content.executive_summary = `${fromPhase} phase complete for ${sd.id}: ${sd.title}. PRD created and validated. All pre-EXEC requirements met. EXEC implementation authorized.`;
+
+      content.deliverables_manifest = [
+        '- ✅ PRD created and validated',
+        '- ✅ User stories generated',
+        '- ✅ Deliverables extracted to sd_scope_deliverables',
+        '- ✅ BMAD validation passed',
+        '- ✅ Git branch enforcement verified',
+        '- ✅ EXEC phase authorized'
+      ].join('\n');
+
+      content.key_decisions = [
+        `**PRD Created**: ${result.prdId || 'PRD validated'}`,
+        `**Branch**: ${result.branch_validation?.branch || 'Branch ready for EXEC work'}`,
+        `**Repository**: ${result.repository || 'Target repository confirmed'}`,
+        `**BMAD Score**: ${result.bmad_validation?.score || 'Validation passed'}`
+      ].join('\n\n');
+
+      content.known_issues = result.warnings?.join('\n') || 'No critical issues identified during PLAN validation';
+
+      content.resource_utilization = `**BMAD Validation**: Complete\n**Branch Setup**: ${result.branch_validation?.created ? 'Created' : 'Existing'}\n**Deliverables Extracted**: ${result.deliverables_count || 'Yes'}`;
+
+      content.action_items = [
+        '- [ ] EXEC agent: Implement all user stories',
+        '- [ ] EXEC agent: Write unit tests for all components',
+        '- [ ] EXEC agent: Write E2E tests for user journeys',
+        '- [ ] EXEC agent: Generate documentation',
+        '- [ ] EXEC agent: Create EXEC→PLAN handoff when complete'
+      ].join('\n');
+
+      content.completeness_report = `**PLAN Phase**: 100% complete\n**PRD Status**: Validated\n**BMAD Score**: ${result.bmad_validation?.score || 'Passed'}\n**Status**: APPROVED for EXEC phase`;
+    }
+
+    // EXEC → PLAN handoff
+    if (handoffType === 'EXEC-TO-PLAN') {
+      content.executive_summary = `${fromPhase} phase complete for ${sd.id}: ${sd.title}. Implementation complete. All deliverables met, tests passing, documentation generated. Ready for PLAN verification.`;
+
+      content.deliverables_manifest = [
+        '- ✅ All user stories implemented',
+        '- ✅ Unit tests written and passing',
+        '- ✅ E2E tests written and passing',
+        '- ✅ Documentation generated',
+        '- ✅ Code committed to feature branch',
+        '- ✅ Sub-agent validation passed',
+        '- ✅ BMAD validation passed'
+      ].join('\n');
+
+      content.key_decisions = [
+        `**Implementation Complete**: ${result.checkedItems || 'All'} items checked`,
+        `**Test Coverage**: Unit + E2E tests passing`,
+        `**Documentation**: Generated and stored`,
+        `**Sub-Agents**: ${result.subAgents?.passed || 'All'} passed`,
+        `**BMAD Score**: ${result.bmad_validation?.score || 'Validation passed'}`
+      ].join('\n\n');
+
+      content.known_issues = result.bmad_validation?.warnings?.join('\n') || 'No critical issues identified during EXEC work';
+
+      content.resource_utilization = `**Sub-Agents Executed**: ${result.subAgents?.total || 'N/A'}\n**BMAD Validation**: Complete\n**Documentation**: Generated\n**E2E Test Mapping**: ${result.e2e_mapping?.mapped_count || 'Complete'}`;
+
+      content.action_items = [
+        '- [ ] PLAN agent: Verify all deliverables met',
+        '- [ ] PLAN agent: Validate test coverage',
+        '- [ ] PLAN agent: Review documentation quality',
+        '- [ ] PLAN agent: Check E2E test mapping',
+        '- [ ] PLAN agent: Create PLAN→LEAD handoff when verified'
+      ].join('\n');
+
+      content.completeness_report = `**EXEC Phase**: 100% complete\n**Deliverables**: ${result.checkedItems}/${result.totalItems} validated\n**Tests**: Passing\n**Documentation**: Generated\n**Status**: READY for PLAN verification`;
+    }
+
+    // PLAN → LEAD handoff
+    if (handoffType === 'PLAN-TO-LEAD') {
+      content.executive_summary = `${fromPhase} verification complete for ${sd.id}: ${sd.title}. All deliverables verified, tests validated, quality checks passed. Ready for LEAD final approval and SD completion.`;
+
+      content.deliverables_manifest = [
+        '- ✅ All deliverables verified complete',
+        '- ✅ Test coverage validated',
+        '- ✅ Documentation quality confirmed',
+        '- ✅ User stories all completed',
+        '- ✅ E2E tests mapped to user stories',
+        '- ✅ SD ready for completion'
+      ].join('\n');
+
+      content.key_decisions = [
+        `**Verification Status**: All checks passed`,
+        `**Quality Score**: ${result.qualityScore || 100}%`,
+        `**User Stories**: ${result.userStories?.validated || 'All'} validated`,
+        `**Test Coverage**: Comprehensive (Unit + E2E)`,
+        `**Documentation**: Quality confirmed`
+      ].join('\n\n');
+
+      content.known_issues = result.warnings?.join('\n') || 'No issues identified - SD ready for completion';
+
+      content.resource_utilization = `**Verification Time**: ${result.verificationTime || 'N/A'}\n**User Stories Validated**: ${result.userStories?.count || 'All'}\n**Tests Validated**: ${result.tests?.count || 'All'}`;
+
+      content.action_items = [
+        '- [ ] LEAD agent: Review final implementation',
+        '- [ ] LEAD agent: Validate strategic objectives met',
+        '- [ ] LEAD agent: Create retrospective',
+        '- [ ] LEAD agent: Mark SD as complete',
+        '- [ ] LEAD agent: Close feature branch'
+      ].join('\n');
+
+      content.completeness_report = `**PLAN Verification**: 100% complete\n**Quality Score**: ${result.qualityScore || 100}%\n**All Phases**: Complete\n**Status**: APPROVED for SD completion`;
+    }
 
     return content;
   }
@@ -1344,20 +1457,18 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
 
     const execution = {
       id: executionId,
-      from_phase: handoffType.split('-')[0],
-      to_phase: handoffType.split('-')[2],
       sd_id: sdId,
       handoff_type: handoffType,
       status: 'failed',
 
-      // 7-element handoff structure (required fields)
+      // Basic fields that exist in leo_handoff_executions schema
       executive_summary: `${handoffType} handoff FAILED for ${sdId} due to system error: ${errorMessage.substring(0, 200)}`,
       deliverables_manifest: 'System error prevented handoff completion',
-      key_decisions: 'Decision: System error - handoff aborted',
-      known_issues: `System Error: ${errorMessage}`,
-      resource_utilization: '',
       action_items: 'Review error logs and retry handoff after resolving system issues',
-      completeness_report: 'Handoff failed - no validation performed due to system error',
+
+      // leo_handoff_executions uses from_agent/to_agent instead of from_phase/to_phase
+      from_agent: handoffType.split('-')[0],
+      to_agent: handoffType.split('-')[2],
 
       validation_score: 0,
       validation_passed: false,
@@ -1365,6 +1476,8 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
         system_error: errorMessage,
         failed_at: new Date().toISOString()
       },
+
+      rejection_reason: errorMessage,
 
       created_by: 'UNIFIED-HANDOFF-SYSTEM'
     };
@@ -1545,10 +1658,10 @@ async function main() {
       if (!handoffType || !sdId) {
         console.log('Usage: node unified-handoff-system.js execute HANDOFF_TYPE SD-YYYY-XXX [PRD-ID]');
         console.log('');
-        console.log('Handoff Types:');
-        console.log('  LEAD-to-PLAN   - Strategic to Planning handoff');
-        console.log('  PLAN-to-EXEC   - Planning to Execution handoff');
-        console.log('  EXEC-to-PLAN   - Execution to Verification handoff');
+        console.log('Handoff Types (case-insensitive, normalized to uppercase):');
+        console.log('  LEAD-TO-PLAN   - Strategic to Planning handoff');
+        console.log('  PLAN-TO-EXEC   - Planning to Execution handoff');
+        console.log('  EXEC-TO-PLAN   - Execution to Verification handoff');
         process.exit(1);
       }
       

@@ -1,24 +1,24 @@
-import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+#!/usr/bin/env node
+import { createDatabaseClient } from './lib/supabase-connection.js';
 
 async function checkSchema() {
-  const { data, error } = await supabase
-    .from('sd_phase_handoffs')
-    .select('*')
-    .limit(1);
+  const client = await createDatabaseClient('engineer', { verbose: false });
 
-  if (error) {
-    console.log('❌ Error:', error.message);
-    console.log('\nAttempting to get any record...');
-    
-    const result = await supabase.from('sd_phase_handoffs').select('*');
-    console.log('Query result:', JSON.stringify(result, null, 2));
-  } else {
-    console.log('✅ Sample record structure:');
-    console.log(JSON.stringify(data, null, 2));
+  try {
+    const result = await client.query(`
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+      AND table_name = 'sd_phase_handoffs'
+      ORDER BY ordinal_position;
+    `);
+
+    console.log('\n📊 sd_phase_handoffs table schema:\n');
+    console.table(result.rows);
+
+  } finally {
+    await client.end();
   }
 }
 
-checkSchema();
+checkSchema().catch(console.error);

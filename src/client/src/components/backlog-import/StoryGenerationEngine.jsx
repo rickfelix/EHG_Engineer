@@ -178,6 +178,13 @@ const StoryGenerationEngine = () => {
     return tags.filter(Boolean);
   };
 
+  const handleKeyDown = (event, callback) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      callback();
+    }
+  };
+
   // Save generated story
   const saveStory = async () => {
     if (!generatedStory) return;
@@ -255,6 +262,10 @@ const StoryGenerationEngine = () => {
                 <div
                   key={item.id}
                   onClick={() => !isGenerating && generateStory(item)}
+                  onKeyDown={(e) => handleKeyDown(e, () => !isGenerating && generateStory(item))}
+                  tabIndex="0"
+                  role="button"
+                  aria-label={`Generate story for ${item.title}`}
                   className={`p-3 border-b cursor-pointer hover:bg-gray-50 transition-colors ${
                     selectedItem?.id === item.id ? 'bg-blue-50' : ''
                   }`}

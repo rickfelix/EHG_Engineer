@@ -138,6 +138,13 @@ const NotificationPanel = () => {
     setNotifications(notifications.filter(n => !n.read));
   };
 
+  const handleKeyDown = (event, callback) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      callback();
+    }
+  };
+
   const filteredNotifications = filter === 'all'
     ? notifications
     : filter === 'unread'
@@ -289,6 +296,10 @@ const NotificationPanel = () => {
                 notification.read ? 'bg-gray-50' : 'bg-blue-50'
               } ${getPriorityColor(notification.priority)} hover:shadow-md`}
               onClick={() => markAsRead(notification.id)}
+              onKeyDown={(e) => handleKeyDown(e, () => markAsRead(notification.id))}
+              tabIndex="0"
+              role="button"
+              aria-label={`Mark notification as read: ${notification.title}`}
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-start flex-1">
