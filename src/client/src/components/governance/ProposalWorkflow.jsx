@@ -186,6 +186,7 @@ const ProposalWorkflow = () => {
           className={`px-3 py-1 rounded ${
             filter === 'all' ? 'bg-indigo-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
           }`}
+          aria-label="Show all proposals"
         >
           All ({proposals.length})
         </button>
@@ -196,6 +197,7 @@ const ProposalWorkflow = () => {
             className={`px-3 py-1 rounded ${
               filter === stage.id ? 'bg-indigo-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
             }`}
+            aria-label={`Filter by ${stage.name} proposals`}
           >
             {stage.name} ({proposals.filter(p => p.status === stage.id).length})
           </button>
@@ -269,6 +271,7 @@ const ProposalWorkflow = () => {
                       handleVote(proposal.id, 'for');
                     }}
                     className="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200"
+                    aria-label={`Vote for proposal ${proposal.id}: ${proposal.title}`}
                   >
                     👍 {proposal.votes.for}
                   </button>
@@ -278,6 +281,7 @@ const ProposalWorkflow = () => {
                       handleVote(proposal.id, 'against');
                     }}
                     className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                    aria-label={`Vote against proposal ${proposal.id}: ${proposal.title}`}
                   >
                     👎 {proposal.votes.against}
                   </button>
@@ -307,6 +311,7 @@ const ProposalWorkflow = () => {
                     handleStatusChange(proposal.id, 'approved');
                   }}
                   className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700"
+                  aria-label={`Approve proposal ${proposal.id}: ${proposal.title}`}
                 >
                   Approve
                 </button>
@@ -316,6 +321,7 @@ const ProposalWorkflow = () => {
                     handleStatusChange(proposal.id, 'rejected');
                   }}
                   className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700"
+                  aria-label={`Reject proposal ${proposal.id}: ${proposal.title}`}
                 >
                   Reject
                 </button>
@@ -330,6 +336,7 @@ const ProposalWorkflow = () => {
                     handleStatusChange(proposal.id, 'in_review');
                   }}
                   className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 flex items-center"
+                  aria-label={`Submit proposal ${proposal.id} for review: ${proposal.title}`}
                 >
                   <Send className="h-3 w-3 mr-1" />
                   Submit for Review
@@ -342,7 +349,10 @@ const ProposalWorkflow = () => {
 
       {/* Create New Proposal Button */}
       <div className="mt-6 text-center">
-        <button className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
+        <button
+          className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+          aria-label="Create new governance proposal"
+        >
           Create New Proposal
         </button>
       </div>

@@ -252,6 +252,7 @@ const NotificationPanel = () => {
           <button
             onClick={() => setShowSettings(!showSettings)}
             className="p-1 hover:bg-gray-100 rounded"
+            aria-label="Toggle notification settings"
           >
             <Settings className="h-4 w-4 text-gray-600" />
           </button>
@@ -263,20 +264,24 @@ const NotificationPanel = () => {
         <div className="mb-4 p-4 bg-gray-50 rounded-lg">
           <h3 className="font-semibold mb-3">Notification Preferences</h3>
           <div className="grid grid-cols-3 gap-3">
-            {Object.entries(notificationPreferences).map(([key, value]) => (
-              <label key={key} className="flex items-center text-sm">
-                <input
-                  type="checkbox"
-                  checked={value}
-                  onChange={(e) => setNotificationPreferences({
-                    ...notificationPreferences,
-                    [key]: e.target.checked
-                  })}
-                  className="mr-2"
-                />
-                <span className="capitalize">{key.replace(/_/g, ' ')}</span>
-              </label>
-            ))}
+            {Object.entries(notificationPreferences).map(([key, value]) => {
+              const prefId = `notif-pref-${key}`;
+              return (
+                <label key={key} htmlFor={prefId} className="flex items-center text-sm cursor-pointer">
+                  <input
+                    id={prefId}
+                    type="checkbox"
+                    checked={value}
+                    onChange={(e) => setNotificationPreferences({
+                      ...notificationPreferences,
+                      [key]: e.target.checked
+                    })}
+                    className="mr-2"
+                  />
+                  <span className="capitalize">{key.replace(/_/g, ' ')}</span>
+                </label>
+              );
+            })}
           </div>
         </div>
       )}
@@ -360,6 +365,7 @@ const NotificationPanel = () => {
                     dismissNotification(notification.id);
                   }}
                   className="ml-2 p-1 hover:bg-gray-200 rounded"
+                  aria-label={`Dismiss notification: ${notification.title}`}
                 >
                   <X className="h-4 w-4 text-gray-500" />
                 </button>

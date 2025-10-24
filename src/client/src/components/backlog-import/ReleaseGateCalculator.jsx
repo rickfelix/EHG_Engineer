@@ -369,7 +369,7 @@ const ReleaseGateCalculator = () => {
         <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="block text-sm text-gray-600 mb-1">Story Completion (%)</label>
-            <input
+            <input id="threshold-story-completion"
               type="number"
               value={gateThresholds.storyCompletion}
               onChange={(e) => updateThreshold('storyCompletion', e.target.value)}
@@ -442,7 +442,7 @@ const ReleaseGateCalculator = () => {
             <p className="text-gray-600 mb-4">
               Overriding the release gate requires justification and will be logged for audit purposes.
             </p>
-            <textarea
+            <textarea id="override-justification-textarea"
               value={overrideJustification}
               onChange={(e) => setOverrideJustification(e.target.value)}
               placeholder="Enter justification for override..."

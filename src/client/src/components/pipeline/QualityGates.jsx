@@ -345,7 +345,8 @@ const QualityGates = () => {
             <p className="text-sm text-gray-600 mb-4">
               You are about to override the "{selectedGate?.name}" gate. This action requires justification and will be logged.
             </p>
-            <textarea
+            <label htmlFor="override-reason-textarea" className="block text-sm font-medium text-gray-700 mb-2">Reason for Override</label>
+            <textarea id="override-reason-textarea"
               value={overrideReason}
               onChange={(e) => setOverrideReason(e.target.value)}
               placeholder="Enter reason for override..."

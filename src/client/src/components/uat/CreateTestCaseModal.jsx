@@ -135,6 +135,7 @@ export function CreateTestCaseModal({ onClose, onSave }) {
             <button
               onClick={onClose}
               className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              aria-label="Close modal"
             >
               <X className="h-5 w-5" />
             </button>
@@ -161,10 +162,11 @@ export function CreateTestCaseModal({ onClose, onSave }) {
 
           {/* Title */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="test-case-title" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Test Case Title *
             </label>
             <input
+              id="test-case-title"
               type="text"
               name="title"
               value={formData.title}
@@ -183,10 +185,11 @@ export function CreateTestCaseModal({ onClose, onSave }) {
 
           {/* Section */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="test-case-section" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Section *
             </label>
             <select
+              id="test-case-section"
               name="section"
               value={formData.section}
               onChange={handleChange}
@@ -216,10 +219,11 @@ export function CreateTestCaseModal({ onClose, onSave }) {
           <div className="grid grid-cols-2 gap-4">
             {/* Priority */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor="test-case-priority" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                 Priority
               </label>
               <select
+                id="test-case-priority"
                 name="priority"
                 value={formData.priority}
                 onChange={handleChange}
@@ -234,10 +238,11 @@ export function CreateTestCaseModal({ onClose, onSave }) {
 
             {/* Test Type */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor="test-case-type" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                 Test Type
               </label>
               <select
+                id="test-case-type"
                 name="test_type"
                 value={formData.test_type}
                 onChange={handleChange}
@@ -251,10 +256,11 @@ export function CreateTestCaseModal({ onClose, onSave }) {
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="test-case-description" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Test Description *
             </label>
             <textarea
+              id="test-case-description"
               name="description"
               value={formData.description}
               onChange={handleChange}

@@ -136,7 +136,8 @@ function PRMetrics({ metrics, reviews }) {
           Performance Metrics
         </h3>
         <div className="flex items-center space-x-2">
-          <select
+          <label htmlFor="time-range-select" className="sr-only">Time Range</label>
+          <select id="time-range-select"
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value)}
             className="px-3 py-1 text-sm border border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-600"

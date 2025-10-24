@@ -201,6 +201,7 @@ Please engage the UAT sub-agent now to begin test guidance.`;
             <button
               onClick={onClose}
               className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              aria-label="Close modal"
             >
               <X className="h-5 w-5" />
             </button>
@@ -338,7 +339,7 @@ Please engage the UAT sub-agent now to begin test guidance.`;
                   <span className="text-gray-400">or</span>
                   <label className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors cursor-pointer">
                     Browse Files
-                    <input
+                    <input id="screenshot-upload-input" aria-label="Upload screenshot file"
                       type="file"
                       accept="image/*"
                       onChange={handleFileUpload}
@@ -415,6 +416,7 @@ Please engage the UAT sub-agent now to begin test guidance.`;
             <button
               onClick={onClose}
               className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+              aria-label="Close modal"
             >
               Cancel
             </button>

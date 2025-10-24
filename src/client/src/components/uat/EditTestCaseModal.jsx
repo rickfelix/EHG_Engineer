@@ -167,6 +167,7 @@ export function EditTestCaseModal({ testCase, onClose, onSave, onDelete }) {
             <button
               onClick={onClose}
               className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              aria-label="Close modal"
             >
               <X className="h-5 w-5" />
             </button>
@@ -193,11 +194,12 @@ export function EditTestCaseModal({ testCase, onClose, onSave, onDelete }) {
 
           {/* Title */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="edit-test-title" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Test Case Title *
             </label>
             <input
               type="text"
+              id="edit-test-title"
               name="title"
               value={formData.title}
               onChange={handleChange}
@@ -215,10 +217,11 @@ export function EditTestCaseModal({ testCase, onClose, onSave, onDelete }) {
 
           {/* Section */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="edit-test-section" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Section *
             </label>
             <select
+              id="edit-test-section"
               name="section"
               value={formData.section}
               onChange={handleChange}
@@ -248,10 +251,11 @@ export function EditTestCaseModal({ testCase, onClose, onSave, onDelete }) {
           <div className="grid grid-cols-2 gap-4">
             {/* Priority */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor="edit-test-priority" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                 Priority
               </label>
               <select
+                id="edit-test-priority"
                 name="priority"
                 value={formData.priority}
                 onChange={handleChange}
@@ -266,10 +270,11 @@ export function EditTestCaseModal({ testCase, onClose, onSave, onDelete }) {
 
             {/* Test Type */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor="edit-test-type" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                 Test Type
               </label>
               <select
+                id="edit-test-type"
                 name="test_type"
                 value={formData.test_type}
                 onChange={handleChange}
@@ -283,10 +288,11 @@ export function EditTestCaseModal({ testCase, onClose, onSave, onDelete }) {
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="edit-test-description" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Test Description *
             </label>
             <textarea
+              id="edit-test-description"
               name="description"
               value={formData.description}
               onChange={handleChange}
@@ -310,7 +316,7 @@ export function EditTestCaseModal({ testCase, onClose, onSave, onDelete }) {
           {confirmDelete && (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
               <p className="text-red-800 dark:text-red-300 font-semibold mb-2">
-                ⚠️ Are you sure you want to delete this test case?
+                Are you sure you want to delete this test case?
               </p>
               <p className="text-sm text-red-700 dark:text-red-400">
                 This will permanently remove the test case and all associated test results.
@@ -331,6 +337,7 @@ export function EditTestCaseModal({ testCase, onClose, onSave, onDelete }) {
                   ? 'bg-red-600 text-white hover:bg-red-700'
                   : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50'
               } ${deleting ? 'opacity-50 cursor-not-allowed' : ''}`}
+              aria-label={confirmDelete ? 'Confirm delete test case' : 'Delete test case'}
             >
               {deleting && <Loader className="h-4 w-4 animate-spin" />}
               <Trash2 className="h-4 w-4" />

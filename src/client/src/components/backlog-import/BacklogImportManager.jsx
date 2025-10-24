@@ -233,7 +233,7 @@ const BacklogImportManager = () => {
       <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 mb-6">
         <input
           ref={fileInputRef}
-          type="file"
+          type="file" id="backlog-file-input" aria-label="Upload CSV or JSON file"
           accept=".csv,.json"
           onChange={handleFileSelect}
           className="hidden"
@@ -266,7 +266,7 @@ const BacklogImportManager = () => {
             <span className="text-sm text-gray-700">{file.name}</span>
             <button
               onClick={resetImport}
-              className="ml-auto text-red-500 hover:text-red-700"
+              aria-label="Remove selected file" className="ml-auto text-red-500 hover:text-red-700"
             >
               Remove
             </button>
@@ -316,7 +316,7 @@ const BacklogImportManager = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Duplicate Handling
               </label>
-              <select
+              <select id="duplicate-handling-select"
                 value={duplicateHandling}
                 onChange={(e) => setDuplicateHandling(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"

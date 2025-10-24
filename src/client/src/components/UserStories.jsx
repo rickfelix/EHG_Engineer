@@ -148,12 +148,14 @@ export default function UserStories() {
       </div>
 
       <div className="flex gap-4 items-center bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
-        <label className="flex items-center gap-2">
+        <label htmlFor="filter-status" className="flex items-center gap-2">
           <span className="text-sm font-medium dark:text-gray-300">Status:</span>
           <select
+            id="filter-status"
             value={filters.status}
             onChange={(e) => setFilters({ ...filters, status: e.target.value })}
             className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 dark:text-white"
+            aria-label="Filter user stories by status"
           >
             <option value="all">All</option>
             <option value="passing">Passing</option>
@@ -162,12 +164,14 @@ export default function UserStories() {
           </select>
         </label>
 
-        <label className="flex items-center gap-2">
+        <label htmlFor="filter-priority" className="flex items-center gap-2">
           <span className="text-sm font-medium dark:text-gray-300">Priority:</span>
           <select
+            id="filter-priority"
             value={filters.priority}
             onChange={(e) => setFilters({ ...filters, priority: e.target.value })}
             className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 dark:text-white"
+            aria-label="Filter user stories by priority"
           >
             <option value="all">All</option>
             <option value="critical">Critical</option>

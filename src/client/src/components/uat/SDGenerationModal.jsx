@@ -146,7 +146,7 @@ export function SDGenerationModal({ testResult, onClose, onSuccess }) {
             <button
               onClick={onClose}
               className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-              disabled={status !== 'complete' && status !== 'error'}
+              aria-label="Close modal" disabled={status !== 'complete' && status !== 'error'}
             >
               <X className="h-5 w-5" />
             </button>

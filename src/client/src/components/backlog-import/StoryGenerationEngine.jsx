@@ -297,7 +297,7 @@ const StoryGenerationEngine = () => {
                         e.stopPropagation();
                         generateStory(item);
                       }}
-                      className="ml-2 p-2 text-blue-600 hover:bg-blue-50 rounded"
+                      aria-label="Generate story for this item" className="ml-2 p-2 text-blue-600 hover:bg-blue-50 rounded"
                       disabled={isGenerating}
                     >
                       <Wand2 className="h-4 w-4" />
@@ -328,7 +328,7 @@ const StoryGenerationEngine = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     User Story
                   </label>
-                  <textarea
+                  <textarea id="generated-user-story"
                     value={generatedStory.user_story}
                     onChange={(e) => updateStoryContent('user_story', e.target.value)}
                     disabled={!editMode}

@@ -114,10 +114,13 @@ function HandoffCenter({ handoffs, leoProtocol, onRequestHandoff }) {
       {/* Handoff Checklist */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">Handoff Checklist</h2>
-        
+
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">Select Handoff Type</label>
+          <label htmlFor="handoff-type-select" className="block text-sm font-medium mb-2">
+            Select Handoff Type
+          </label>
           <select
+            id="handoff-type-select"
             value={selectedHandoff}
             onChange={(e) => handleHandoffTypeChange(e.target.value)}
             className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
@@ -144,19 +147,23 @@ function HandoffCenter({ handoffs, leoProtocol, onRequestHandoff }) {
         </div>
 
         <div className="space-y-2 mb-4">
-          {checklist.map((item, index) => (
-            <label key={index} className="flex items-center p-3 rounded hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={item.checked}
-                onChange={() => toggleChecklistItem(index)}
-                className="mr-3 w-5 h-5 text-primary-600 rounded"
-              />
-              <span className={item.checked ? 'line-through text-gray-500' : ''}>
-                {item.text}
-              </span>
-            </label>
-          ))}
+          {checklist.map((item, index) => {
+            const checkboxId = `checklist-item-${index}`;
+            return (
+              <label key={index} htmlFor={checkboxId} className="flex items-center p-3 rounded hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                <input
+                  id={checkboxId}
+                  type="checkbox"
+                  checked={item.checked}
+                  onChange={() => toggleChecklistItem(index)}
+                  className="mr-3 w-5 h-5 text-primary-600 rounded"
+                />
+                <span className={item.checked ? 'line-through text-gray-500' : ''}>
+                  {item.text}
+                </span>
+              </label>
+            );
+          })}
         </div>
 
         <button
@@ -166,6 +173,7 @@ function HandoffCenter({ handoffs, leoProtocol, onRequestHandoff }) {
               ? 'bg-green-600 hover:bg-green-700 text-white'
               : 'bg-yellow-600 hover:bg-yellow-700 text-white'
           }`}
+          aria-label={progress === 100 ? 'Request handoff' : 'Request exception for incomplete handoff'}
         >
           {progress === 100 ? 'Request Handoff' : 'Request Exception'}
         </button>
@@ -179,7 +187,11 @@ function HandoffCenter({ handoffs, leoProtocol, onRequestHandoff }) {
             <p className="text-sm mb-3">
               {checklist.length - completedCount} items incomplete. Provide justification:
             </p>
+            <label htmlFor="exception-reason" className="sr-only">
+              Exception justification
+            </label>
             <textarea
+              id="exception-reason"
               value={exceptionReason}
               onChange={(e) => setExceptionReason(e.target.value)}
               className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
@@ -190,12 +202,14 @@ function HandoffCenter({ handoffs, leoProtocol, onRequestHandoff }) {
               <button
                 onClick={handleExceptionSubmit}
                 className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+                aria-label="Submit exception request"
               >
                 Submit Exception
               </button>
               <button
                 onClick={() => setShowExceptionForm(false)}
                 className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                aria-label="Cancel exception request"
               >
                 Cancel
               </button>

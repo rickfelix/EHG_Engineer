@@ -185,6 +185,7 @@ function LEADApprovalDialog({ approvalRequest, onApprove, onReject, onClose }) {
                   checked={selectedOption?.action === option.action}
                   onChange={() => setSelectedOption(option)}
                   className="mr-3"
+                  aria-label={`Response option: ${option.description}`}
                 />
                 <span className="font-medium">{option.description}</span>
                 <div className="text-sm text-gray-600 ml-6 mt-1">
@@ -201,10 +202,11 @@ function LEADApprovalDialog({ approvalRequest, onApprove, onReject, onClose }) {
               <div className="grid md:grid-cols-2 gap-3">
                 {['complexity', 'resourceIntensity', 'strategicAlignment', 'marketTiming', 'riskAssessment', 'roiProjection'].map(criterion => (
                   <div key={criterion}>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor={`manual-score-${criterion}`} className="block text-sm font-medium text-gray-700 mb-1">
                       {criterion.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
                     </label>
                     <input
+                      id={`manual-score-${criterion}`}
                       type="number"
                       min="1"
                       max="5"
@@ -215,6 +217,7 @@ function LEADApprovalDialog({ approvalRequest, onApprove, onReject, onClose }) {
                         [criterion]: parseInt(e.target.value)
                       })}
                       placeholder="1-5"
+                      aria-label={`Manual score for ${criterion.replace(/([A-Z])/g, ' $1').toLowerCase()}`}
                     />
                   </div>
                 ))}
@@ -266,12 +269,14 @@ function LEADApprovalDialog({ approvalRequest, onApprove, onReject, onClose }) {
 
         {/* Rejection Reason */}
         <div className="p-6 border-b">
-          <h4 className="font-semibold mb-3">Rejection Reason (Optional)</h4>
+          <label htmlFor="rejection-reason" className="block font-semibold mb-3">Rejection Reason (Optional)</label>
           <textarea
+            id="rejection-reason"
             className="w-full p-3 border rounded h-20"
             placeholder="Explain why you're rejecting the LEAD recommendation..."
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
+            aria-label="Rejection reason for LEAD recommendation"
           />
         </div>
 

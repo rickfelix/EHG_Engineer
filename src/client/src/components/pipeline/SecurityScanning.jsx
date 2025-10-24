@@ -243,7 +243,7 @@ const SecurityScanning = () => {
         <div>
           {/* Severity Filter */}
           <div className="mb-4 flex gap-2">
-            <button
+            <button aria-label="Show all severity levels"
               onClick={() => setSelectedSeverity('all')}
               className={`px-3 py-1 rounded ${
                 selectedSeverity === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100'
@@ -252,7 +252,7 @@ const SecurityScanning = () => {
               All ({scanResults.vulnerabilities.length})
             </button>
             {['critical', 'high', 'medium', 'low'].map(severity => (
-              <button
+              <button aria-label={"Filter by " + severity + " severity"}
                 key={severity}
                 onClick={() => setSelectedSeverity(severity)}
                 className={`px-3 py-1 rounded capitalize ${

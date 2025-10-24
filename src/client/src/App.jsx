@@ -154,7 +154,7 @@ function App() {
     // Update local state immediately for better UX
     setState(prevState => ({
       ...prevState,
-      strategicDirectives: prevState.strategicDirectives.map(sd => 
+      strategicDirectives: prevState.strategicDirectives.map(sd =>
         sd.id === sdId ? { ...sd, status: newStatus } : sd
       )
     }));
@@ -206,10 +206,10 @@ function App() {
             }
           />
           <Route path="strategic-directives">
-            <Route 
-              index 
+            <Route
+              index
               element={
-                <SDManager 
+                <SDManager
                   strategicDirectives={state.strategicDirectives}
                   onUpdateChecklist={updateChecklist}
                   onSetActiveSD={setActiveSD}
@@ -218,12 +218,12 @@ function App() {
                   isCompact={isCompactMode}
                   onRefresh={refreshData}
                 />
-              } 
+              }
             />
-            <Route 
-              path=":id" 
+            <Route
+              path=":id"
               element={
-                <SDManager 
+                <SDManager
                   strategicDirectives={state.strategicDirectives}
                   onUpdateChecklist={updateChecklist}
                   onSetActiveSD={setActiveSD}
@@ -233,51 +233,51 @@ function App() {
                   detailMode={true}
                   onRefresh={refreshData}
                 />
-              } 
+              }
             />
           </Route>
           <Route path="prds">
-            <Route 
-              index 
+            <Route
+              index
               element={
-                <PRDManager 
+                <PRDManager
                   prds={state.prds}
                   isCompact={isCompactMode}
                 />
-              } 
+              }
             />
-            <Route 
-              path=":id" 
+            <Route
+              path=":id"
               element={
-                <PRDManager 
+                <PRDManager
                   prds={state.prds}
                   isCompact={isCompactMode}
                   detailMode={true}
                 />
-              } 
+              }
             />
           </Route>
           <Route path="backlog">
-            <Route 
-              index 
+            <Route
+              index
               element={
-                <BacklogManager 
+                <BacklogManager
                   strategicDirectives={state.strategicDirectives}
                   isCompact={isCompactMode}
                   onRefresh={refreshData}
                 />
-              } 
+              }
             />
-            <Route 
-              path=":id" 
+            <Route
+              path=":id"
               element={
-                <BacklogManager 
+                <BacklogManager
                   strategicDirectives={state.strategicDirectives}
                   isCompact={isCompactMode}
                   detailMode={true}
                   onRefresh={refreshData}
                 />
-              } 
+              }
             />
           </Route>
           <Route

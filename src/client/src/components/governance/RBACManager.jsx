@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Users, Key, Lock, Unlock, UserCheck, Settings, Edit, Trash2, Plus } from 'lucide-react';
+import { Shield, Users, Key, Lock, Unlock, UserCheck, Settings, Edit, Trash2, Plus, AlertCircle } from 'lucide-react';
 
 const RBACManager = () => {
   const [roles, setRoles] = useState([
@@ -234,6 +234,7 @@ const RBACManager = () => {
                         setEditingRole(role);
                       }}
                       className="p-1 hover:bg-gray-200 rounded"
+                      aria-label={`Edit role: ${role.name}`}
                     >
                       <Edit className="h-4 w-4 text-gray-500" />
                     </button>
@@ -243,6 +244,7 @@ const RBACManager = () => {
                         // Handle delete
                       }}
                       className="p-1 hover:bg-red-100 rounded"
+                      aria-label={`Delete role: ${role.name}`}
                     >
                       <Trash2 className="h-4 w-4 text-red-500" />
                     </button>
@@ -283,6 +285,7 @@ const RBACManager = () => {
                       <button
                         onClick={() => handleRemoveUser(selectedRole.id, user)}
                         className="text-red-500 hover:text-red-700"
+                        aria-label={`Remove user: ${user}`}
                       >
                         <Trash2 className="h-3 w-3" />
                       </button>
@@ -315,23 +318,28 @@ const RBACManager = () => {
                       <div key={category.category} className="mb-4">
                         <h5 className="font-medium text-sm mb-2">{category.category}</h5>
                         <div className="space-y-1">
-                          {category.items.map(permission => (
-                            <label
-                              key={permission.id}
-                              className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selectedRole.permissions.includes(permission.id)}
-                                onChange={() => handlePermissionToggle(selectedRole.id, permission.id)}
-                                className="mr-3"
-                              />
-                              <span className="flex-1 text-sm">{permission.name}</span>
-                              <span className={`text-xs px-2 py-1 rounded ${getRiskColor(permission.risk)}`}>
-                                {permission.risk} risk
-                              </span>
-                            </label>
-                          ))}
+                          {category.items.map(permission => {
+                            const permCheckboxId = `perm-${selectedRole.id}-${permission.id}`;
+                            return (
+                              <label
+                                key={permission.id}
+                                htmlFor={permCheckboxId}
+                                className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer"
+                              >
+                                <input
+                                  id={permCheckboxId}
+                                  type="checkbox"
+                                  checked={selectedRole.permissions.includes(permission.id)}
+                                  onChange={() => handlePermissionToggle(selectedRole.id, permission.id)}
+                                  className="mr-3"
+                                />
+                                <span className="flex-1 text-sm">{permission.name}</span>
+                                <span className={`text-xs px-2 py-1 rounded ${getRiskColor(permission.risk)}`}>
+                                  {permission.risk} risk
+                                </span>
+                              </label>
+                            );
+                          })}
                         </div>
                       </div>
                     ))}

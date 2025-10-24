@@ -189,13 +189,15 @@ function PRReviews({ state, isConnected, refreshData }) {
           <div className="space-y-4">
             {/* Filter Bar */}
             <div className="flex items-center space-x-4">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="filter-status" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Filter:
-              </span>
+              </label>
               <select
+                id="filter-status"
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
                 className="px-3 py-1 text-sm border border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-600"
+                aria-label="Filter PR reviews by status"
               >
                 <option value="all">All Reviews</option>
                 <option value="passed">Passed</option>
