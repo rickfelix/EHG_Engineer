@@ -633,7 +633,33 @@ node scripts/design-subagent-evaluation.js <SD-ID>
 - Both test types passing
 - CI/CD green
 - Documentation exists in `generated_docs`
+- **Branch lifecycle clean** (see below)
 - Handoff stored in `sd_phase_handoffs`
+
+**Branch Lifecycle Verification** (AUTOMATED):
+The GITHUB sub-agent (DevOps Platform Architect) automatically verifies:
+
+✅ **No uncommitted changes** - All work committed
+- ❌ **BLOCKING**: Uncommitted changes prevent handoff creation
+- Fix: Commit or stash changes before handoff
+
+✅ **No unpushed commits** - Branch synced with remote
+- ⚠️  **WARNING**: Unpushed commits lower confidence to 75%
+- Fix: Push commits to remote before handoff
+
+✅ **Minimal unmerged branches** - Clean branch hygiene
+- ⚠️  **WARNING**: 5+ unmerged branches lower confidence to 80%
+- Fix: Merge or delete stale branches
+
+ℹ️  **Stale branches detected** - Cleanup recommendation
+- Info only: Branches 30+ days old without commits
+- Recommendation: Delete or update stale branches
+
+**Automated Enforcement**:
+- Runs automatically during EXEC→PLAN and PLAN→LEAD handoff creation
+- Results stored in `sub_agent_execution_results` table
+- Critical issues (uncommitted changes) BLOCK handoff
+- Warnings reduce confidence score but don't block
 
 ---
 
