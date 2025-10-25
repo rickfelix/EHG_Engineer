@@ -179,9 +179,7 @@ class EnhancedPriorityRubric {
 }
 
 // Export for use in other scripts
-if (typeof module !== 'undefined' && module.exports) {
-  export default EnhancedPriorityRubric;
-}
+export default EnhancedPriorityRubric;
 
 // Example usage demonstration
 if (import.meta.url === `file://${process.argv[1]}`) {

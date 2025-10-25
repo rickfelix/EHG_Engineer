@@ -159,7 +159,7 @@ async function validateSDCompletion(sdId) {
         issues.push(`Dashboard will show ${dashboardProgress}% instead of 100%`);
         validationPassed = false;
       } else {
-        console.log(`  ✅ Dashboard will show 100%`);
+        console.log('  ✅ Dashboard will show 100%');
       }
     }
 

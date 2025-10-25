@@ -139,11 +139,11 @@ if (error) {
 
 console.log('\n✅ PRD Updated Successfully');
 console.log('='.repeat(50));
-console.log(`📝 New Status: implemented`);
+console.log('📝 New Status: implemented');
 console.log(`📋 Deliverables: ${deliverables.length} items`);
 console.log(`✅ EXEC Checklist: ${execChecklist.filter(i => i.checked).length}/${execChecklist.length} completed (100%)`);
 console.log('\n📊 EXEC Completion Details:');
 console.log(`   Total Deliverables: ${deliverables.length}`);
-console.log(`   Integration Issues Resolved: 6`);
-console.log(`   Checklist Completion: 100%`);
+console.log('   Integration Issues Resolved: 6');
+console.log('   Checklist Completion: 100%');
 console.log('\n🚀 Ready for EXEC→PLAN handoff');

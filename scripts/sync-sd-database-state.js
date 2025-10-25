@@ -60,7 +60,7 @@ if (!existingHandoff) {
     status: 'accepted',
     timestamp: new Date().toISOString(),
     agent_role: 'PLAN',
-    summary: `Implementation complete: TierGraduationModal, executeWithRetry, useKeyboardNav | Tests: 244/246 unit (99.2%), 22/22 E2E (100%) | Design: 95/100 WCAG AA`,
+    summary: 'Implementation complete: TierGraduationModal, executeWithRetry, useKeyboardNav | Tests: 244/246 unit (99.2%), 22/22 E2E (100%) | Design: 95/100 WCAG AA',
     verification_results: {
       unit_tests: { total: 246, passing: 244, coverage: 99.2, status: 'PASS' },
       e2e_tests: { total: 22, passing: 22, coverage: 100, status: 'PASS' },

@@ -169,7 +169,7 @@ async function createProgressTable() {
       }
     } else {
       console.log('✅ Sample progress data inserted successfully');
-      console.log(`📊 Inserted progress for SD and PRD`);
+      console.log('📊 Inserted progress for SD and PRD');
     }
 
     console.log('\n🎯 NEW PROGRESS TRACKING SYSTEM FEATURES:');

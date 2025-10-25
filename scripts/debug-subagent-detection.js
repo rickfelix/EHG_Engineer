@@ -5,6 +5,7 @@
  */
 
 import SubAgentEnforcementSystem from './subagent-enforcement-system';
+import fs from 'fs';
 
 async function debugDetection() {
   const enforcer = new SubAgentEnforcementSystem();
@@ -44,8 +45,7 @@ async function debugDetection() {
   
   console.log('\n🎯 Expected Component Files:');
   for (const file of ourComponents) {
-    import existsModule from 'fs';
-const exists = existsModule.existsSync;(file);
+    const exists = fs.existsSync(file);
     console.log(`  ${exists ? '✅' : '❌'} ${file}`);
   }
 }

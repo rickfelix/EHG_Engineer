@@ -29,7 +29,7 @@ const config = {
 
 console.log('🔧 Adding NOT NULL constraint to sd_key field\n');
 console.log(`📍 Target: ${config.host}`);
-console.log(`📁 Migration: database/migrations/add-sd-key-not-null-constraint.sql\n`);
+console.log('📁 Migration: database/migrations/add-sd-key-not-null-constraint.sql\n');
 
 const client = new Client(config);
 

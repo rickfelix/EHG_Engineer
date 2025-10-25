@@ -23,7 +23,7 @@ for (const table of tables) {
     if (data && data[0]) {
       console.log(`   Columns: ${Object.keys(data[0]).join(', ')}\n`);
     } else {
-      console.log(`   No data yet\n`);
+      console.log('   No data yet\n');
     }
   }
 }

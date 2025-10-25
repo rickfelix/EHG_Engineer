@@ -104,13 +104,13 @@ export async function validateRetrospective(retro) {
       if (newName) {
         errors.push({
           field: oldName,
-          error: `Field name incorrect`,
+          error: 'Field name incorrect',
           fix: `Rename '${oldName}' to '${newName}'`
         });
       } else {
         errors.push({
           field: oldName,
-          error: `Field does not exist in schema`,
+          error: 'Field does not exist in schema',
           fix: `Remove '${oldName}' field or merge into other fields`
         });
       }
@@ -154,7 +154,7 @@ export async function validateRetrospective(retro) {
       warnings.push({
         field: 'team_satisfaction',
         warning: `Value ${retro.team_satisfaction} suggests 0-100 scale`,
-        fix: `Use 1-10 scale instead (e.g., 95 → 9 or 10)`
+        fix: 'Use 1-10 scale instead (e.g., 95 → 9 or 10)'
       });
     }
   }
@@ -182,14 +182,14 @@ export async function validateRetrospective(retro) {
       if (typeof retro[field] === 'string') {
         errors.push({
           field,
-          error: `Must be array, got string`,
-          fix: `Remove JSON.stringify() - use plain array: ['item1', 'item2']`
+          error: 'Must be array, got string',
+          fix: 'Remove JSON.stringify() - use plain array: [\'item1\', \'item2\']'
         });
       } else if (!Array.isArray(retro[field])) {
         errors.push({
           field,
           error: `Must be array, got ${typeof retro[field]}`,
-          fix: `Use array format: ['item1', 'item2']`
+          fix: 'Use array format: [\'item1\', \'item2\']'
         });
       }
     }
@@ -205,7 +205,7 @@ export async function validateRetrospective(retro) {
       errors.push({
         field,
         error: `Must be number, got ${typeof retro[field]}`,
-        fix: `Use numeric value (e.g., 95 not "95")`
+        fix: 'Use numeric value (e.g., 95 not "95")'
       });
     }
   }

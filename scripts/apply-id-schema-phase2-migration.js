@@ -29,7 +29,7 @@ const config = {
 
 console.log('🔧 ID Schema Standardization - Phase 2: Add Foreign Key Constraint\n');
 console.log(`📍 Target: ${config.host}`);
-console.log(`📁 Migration: database/migrations/migrate-id-schema-phase2.sql\n`);
+console.log('📁 Migration: database/migrations/migrate-id-schema-phase2.sql\n');
 
 const client = new Client(config);
 

@@ -66,7 +66,7 @@ async function debugDashboardProgress() {
       console.log(`  Match: ${dashboardSD?.progress === calculatedProgress.total ? '✅ YES' : '❌ NO'}`);
       
       if (dashboardSD?.progress !== calculatedProgress.total) {
-        console.log(`  🔍 DISCREPANCY ANALYSIS:`);
+        console.log('  🔍 DISCREPANCY ANALYSIS:');
         console.log(`    Phase breakdown: ${JSON.stringify(calculatedProgress.phases)}`);
         console.log(`    Current phase: ${calculatedProgress.currentPhase}`);
         console.log(`    PRD exists: ${!!prd}`);

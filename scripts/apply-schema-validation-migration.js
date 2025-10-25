@@ -51,7 +51,7 @@ for (let i = 0; i < statements.length; i++) {
       console.error(`   ❌ Failed: ${error.message}`);
       failedCount++;
     } else {
-      console.log(`   ✅ Success`);
+      console.log('   ✅ Success');
       successCount++;
     }
   } catch (err) {
@@ -82,7 +82,7 @@ if (schemaError) {
   console.log(`   ✅ Success: Found ${schemaData.length} columns for strategic_directives`);
   console.log(`   Sample columns: ${schemaData.slice(0, 3).map(c => c.column_name).join(', ')}`);
 } else {
-  console.log(`   ⚠️  No data returned (this may be expected)`);
+  console.log('   ⚠️  No data returned (this may be expected)');
 }
 
 // Test validate_uuid_format

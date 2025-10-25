@@ -38,7 +38,7 @@ async function createSDIPStrategicDirective() {
     status: 'active',
     category: 'product_feature', // Required field
     priority: 'high',
-    description: `Implement a comprehensive validation workflow for Strategic Directive creation in the EHG_Engineer dashboard. This feature will transform raw Chairman feedback into properly validated and structured Strategic Directives through a 6-step validation process.`,
+    description: 'Implement a comprehensive validation workflow for Strategic Directive creation in the EHG_Engineer dashboard. This feature will transform raw Chairman feedback into properly validated and structured Strategic Directives through a 6-step validation process.',
     strategic_intent: 'Transform unstructured Chairman feedback into validated, actionable Strategic Directives through systematic validation workflow',
     rationale: 'Chairman requires efficient method to create Strategic Directives from raw feedback. Current ad-hoc process lacks validation and consistency.',
     scope: 'EHG_Engineer Dashboard Enhancement - Directive Lab Feature',
@@ -175,7 +175,7 @@ async function createSDIPStrategicDirective() {
       action_items: true
     },
     
-    executive_summary: `SDIP is a comprehensive validation workflow for Strategic Directive creation. Chairman needs ability to transform feedback into validated SDs through 6-step process. MVP+ includes full validation features with mandatory gates.`,
+    executive_summary: 'SDIP is a comprehensive validation workflow for Strategic Directive creation. Chairman needs ability to transform feedback into validated SDs through 6-step process. MVP+ includes full validation features with mandatory gates.',
     
     completeness_report: {
       objectives_defined: true,

@@ -58,7 +58,7 @@ async function debugProgressCalculator() {
     console.log('LEAD Approval:', calculator.calculateLeadApprovalProgress(prd));
     
     console.log('\n🎯 EXPECTED vs ACTUAL:');
-    console.log(`Expected: 100% (all phases complete)`);
+    console.log('Expected: 100% (all phases complete)');
     console.log(`Actual: ${progressData.total}%`);
     console.log(`Match: ${progressData.total === 100 ? '✅ YES' : '❌ NO'}`);
     

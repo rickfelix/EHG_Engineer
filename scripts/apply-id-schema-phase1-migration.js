@@ -29,7 +29,7 @@ const config = {
 
 console.log('🔧 ID Schema Standardization - Phase 1: Add UUID Columns\n');
 console.log(`📍 Target: ${config.host}`);
-console.log(`📁 Migration: database/migrations/migrate-id-schema-phase1.sql\n`);
+console.log('📁 Migration: database/migrations/migrate-id-schema-phase1.sql\n');
 
 const client = new Client(config);
 
@@ -41,7 +41,7 @@ try {
   const beforeSD = await client.query('SELECT COUNT(*) as count FROM strategic_directives_v2');
   const beforePRD = await client.query('SELECT COUNT(*) as count FROM product_requirements_v2');
 
-  console.log(`📊 Before Migration:`);
+  console.log('📊 Before Migration:');
   console.log(`   - Strategic Directives: ${beforeSD.rows[0].count}`);
   console.log(`   - Product Requirements: ${beforePRD.rows[0].count}\n`);
 

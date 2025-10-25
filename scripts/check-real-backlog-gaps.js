@@ -4,6 +4,8 @@ dotenv.config();
 import { createClient  } from '@supabase/supabase-js';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import fs from 'fs';
+import path from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -108,8 +110,6 @@ async function checkBacklogGaps() {
 
   // Export CSV data for CI
   if (process.env.EXPORT_CSV) {
-    import fs from 'fs';
-    import path from 'path';
     const outDir = path.join(__dirname, '..', 'ops', 'checks', 'out');
 
     if (!fs.existsSync(outDir)) {

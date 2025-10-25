@@ -35,7 +35,7 @@ if (prds && prds.length > 0) {
     console.log(`  ID: ${prd.id}`);
     console.log(`  Status: ${prd.status}`);
     console.log(`  Phase: ${prd.phase}`);
-    console.log(`  Metadata:`, JSON.stringify(prd.metadata, null, 2));
+    console.log('  Metadata:', JSON.stringify(prd.metadata, null, 2));
   });
 }
 

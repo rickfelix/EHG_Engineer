@@ -50,7 +50,7 @@ class PRDEnrichment {
    * Main enrichment workflow
    */
   async enrich() {
-    console.log(`\n🚀 PRD Auto-Enrichment Pipeline`);
+    console.log('\n🚀 PRD Auto-Enrichment Pipeline');
     console.log('================================================================');
     console.log(`PRD: ${this.prdId}\n`);
 
@@ -211,7 +211,7 @@ class PRDEnrichment {
    * Confidence-based gating: auto-apply >0.85, flag 0.7-0.85, reject <0.7
    */
   async enrichUserStories(userStories, researchResults) {
-    console.log(`\n📝 Enriching user stories with research context...\n`);
+    console.log('\n📝 Enriching user stories with research context...\n');
 
     for (const story of userStories) {
       const implementationContext = {

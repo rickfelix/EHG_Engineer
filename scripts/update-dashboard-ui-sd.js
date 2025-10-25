@@ -65,9 +65,9 @@ async function updateDashboardUISD() {
       'Design system documentation'
     ];
 
-    const executiveSummary = `This Strategic Directive addresses critical UI/UX improvements needed for the LEO Protocol Dashboard to enhance user experience, accessibility, and operational efficiency. The dashboard serves as the primary interface for managing LEO Protocol workflows, and improvements are essential for productivity.`;
+    const executiveSummary = 'This Strategic Directive addresses critical UI/UX improvements needed for the LEO Protocol Dashboard to enhance user experience, accessibility, and operational efficiency. The dashboard serves as the primary interface for managing LEO Protocol workflows, and improvements are essential for productivity.';
 
-    const scope = `In Scope: Dashboard layout optimization, Progress tracker improvements, Strategic Directive dropdown enhancements, Mobile responsiveness, Dark mode refinements, Real-time update indicators, Accessibility improvements. Out of Scope: Backend API changes, Database schema modifications, Authentication system changes, Third-party integrations.`;
+    const scope = 'In Scope: Dashboard layout optimization, Progress tracker improvements, Strategic Directive dropdown enhancements, Mobile responsiveness, Dark mode refinements, Real-time update indicators, Accessibility improvements. Out of Scope: Backend API changes, Database schema modifications, Authentication system changes, Third-party integrations.';
 
     // Update the SD in database
     const { data, error } = await supabase

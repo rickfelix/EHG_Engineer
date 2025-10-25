@@ -109,7 +109,7 @@ for (const handoff of handoffs) {
     console.error(`  ❌ Failed: ${error.message}`);
     console.error(`     Details: ${JSON.stringify(error)}`);
   } else {
-    console.log(`  ✅ Created successfully`);
+    console.log('  ✅ Created successfully');
     createdCount++;
   }
   console.log('');
