@@ -9,6 +9,7 @@
 import fs from 'fs';
 import path from 'path';
 import { execSync  } from 'child_process';
+import crypto from 'crypto';
 
 class EvidenceCapture {
   constructor(taskId, agentRole = 'EXEC') {
@@ -73,7 +74,7 @@ class EvidenceCapture {
         passed: false,
         error: error.message
       });
-      console.log(`   ❌ Test execution failed`);
+      console.log('   ❌ Test execution failed');
       return false;
     }
   }
@@ -95,10 +96,10 @@ class EvidenceCapture {
           captured: true,
           summary: result.trim()
         };
-        console.log(`   ✓ Vision QA evidence captured`);
+        console.log('   ✓ Vision QA evidence captured');
       }
     } catch {
-      console.log(`   ⚠️ Could not capture Vision QA from database`);
+      console.log('   ⚠️ Could not capture Vision QA from database');
     }
     
     // Check for screenshots
@@ -116,7 +117,7 @@ class EvidenceCapture {
    * Capture performance metrics
    */
   captureMetrics(metrics) {
-    console.log(`📊 Capturing performance metrics...`);
+    console.log('📊 Capturing performance metrics...');
     
     this.evidence.metrics = {
       ...this.evidence.metrics,
@@ -133,7 +134,7 @@ class EvidenceCapture {
    * Capture git commit information
    */
   captureGitInfo() {
-    console.log(`📝 Capturing git information...`);
+    console.log('📝 Capturing git information...');
     
     try {
       const branch = execSync('git branch --show-current', { encoding: 'utf8' }).trim();
@@ -159,7 +160,7 @@ class EvidenceCapture {
    * Generate evidence report
    */
   generateReport() {
-    console.log(`\n📋 Generating evidence report...`);
+    console.log('\n📋 Generating evidence report...');
     
     // Create evidence directory
     if (!fs.existsSync(this.evidenceDir)) {
@@ -259,7 +260,6 @@ ${JSON.stringify(this.evidence, null, 2)}
    */
   getFileHash(filePath) {
     try {
-      import crypto from 'crypto';
       const content = fs.readFileSync(filePath);
       return crypto.createHash('sha256').update(content).digest('hex').substring(0, 8);
     } catch {
@@ -364,7 +364,7 @@ Example:
   
   // Generate report
   const reportPath = capture.generateReport();
-  console.log(`\n✅ Evidence captured successfully!`);
+  console.log('\n✅ Evidence captured successfully!');
   console.log(`📄 Report: ${reportPath}`);
 }
 

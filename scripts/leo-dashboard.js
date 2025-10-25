@@ -5,7 +5,7 @@
  * Command-line interface to manage the dashboard server
  */
 
-import { spawn, execSync  } from 'child_process';
+import { spawn, execSync, exec  } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import http from 'http';
@@ -146,8 +146,7 @@ class DashboardCLI {
     const config = this.loadConfig();
     const port = config.port || 3000;
     const url = `http://localhost:${port}`;
-    
-    import { exec  } from 'child_process';
+
     const platform = process.platform;
     let command;
     

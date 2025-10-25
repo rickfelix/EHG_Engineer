@@ -12,12 +12,13 @@ import { dirname } from 'path';
  * Can run as a background service
  */
 
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 import { createClient } from '@supabase/supabase-js';
 import { LEOAutoInit } from './leo-auto-init.js';
 import fs from 'fs';
 import path from 'path';
+import detector from './get-latest-leo-protocol-version.js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -101,7 +102,6 @@ class LEOWatcher {
   async getCurrentVersion() {
     if (!this.hasDatabase) {
       // Fall back to file-based detection
-      import detector from './get-latest-leo-protocol-version.js';
       return detector.getLatestVersion();
     }
     

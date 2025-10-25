@@ -6,11 +6,12 @@
 
 import { createClient  } from '@supabase/supabase-js';
 import OverEngineeringRubric from './lead-over-engineering-rubric';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 class LEADApprovalSystem {
   constructor() {
-    import dotenv from 'dotenv';
-dotenv.config();
     this.supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
     this.rubric = new OverEngineeringRubric();
   }
@@ -159,16 +160,16 @@ dotenv.config();
    */
   getActionConsequences(recommendation, sd) {
     if (recommendation.includes('CANCEL')) {
-      return `SD will be permanently cancelled. Cannot be easily restored.`;
+      return 'SD will be permanently cancelled. Cannot be easily restored.';
     }
     if (recommendation.includes('DEFER')) {
-      return `SD will be deferred for later consideration. Can be reactivated.`;
+      return 'SD will be deferred for later consideration. Can be reactivated.';
     }
     if (recommendation.includes('DOWNGRADE')) {
-      return `Priority will be lowered, reducing visibility in filtered views.`;
+      return 'Priority will be lowered, reducing visibility in filtered views.';
     }
     if (recommendation.includes('UPGRADE')) {
-      return `Priority will be increased, making it more visible and urgent.`;
+      return 'Priority will be increased, making it more visible and urgent.';
     }
     return 'No status or priority changes proposed.';
   }
