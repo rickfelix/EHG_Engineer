@@ -5,20 +5,30 @@
 - **Status**: Active
 - **Version**: 1.0.0
 - **Author**: Documentation Sub-Agent
-- **Last Updated**: 2025-09-04
+- **Last Updated**: 2025-10-24
 - **Tags**: api, rest, websocket, endpoints
 
 ## Overview
 
-This directory contains API documentation for EHG_Engineer, including:
+This directory contains API documentation for EHG_Engineer, organized by development stages (1-40). Files are numbered according to the stage-gate development model.
 
-- REST API endpoints and specifications
-- WebSocket API documentation
-- GraphQL schema and queries
-- Authentication and authorization
-- API usage examples and guides
+---
 
-## Contents
+## Stage Numbering
+
+**Important**: Files are numbered by **development stage** (1-40), not sequential order:
+
+- **Gaps are intentional** - represent skipped or future stages
+- **Letter variants (a/b/c)** - parallel implementations or progressive enhancements
+- **Example**: `04a`, `04c` exist but `04b` missing = intentional gap
+
+**See**: [FILE_NUMBERING_AUDIT.md](/docs/FILE_NUMBERING_AUDIT.md) for complete numbering explanation
+
+---
+
+## Stage-Based Files
+
+### Stages 1-10: Idea & Validation
 
 | Document | Description |
 |----------|-------------|

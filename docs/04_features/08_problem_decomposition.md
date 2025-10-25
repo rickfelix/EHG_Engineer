@@ -1,5 +1,7 @@
 # Stage 08 – Problem Decomposition Engine PRD (Enhanced Technical Specification)
 
+> **⚠️ LARGE FILE NOTICE**: This file is 51KB (approximately 1,800+ lines). Use the table of contents below for navigation. Consider splitting into smaller focused documents if editing frequently.
+
 **Status:** Enhanced for Lovable.dev • **Owner:** EVA Core • **Scope:** AI-powered hierarchical problem decomposition  
 **Stack:** React + Vite + Tailwind • TypeScript/Zod • Supabase • Problem Analysis Engine
 **Enhancement Level:** Technical Architecture Specification (Not Implementation)

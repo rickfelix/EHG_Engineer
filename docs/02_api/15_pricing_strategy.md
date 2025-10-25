@@ -1,5 +1,7 @@
 # Stage 15 – Pricing Strategy Enhanced PRD (v4)
 
+> **⚠️ LARGE FILE NOTICE**: This file is 71KB (approximately 2,500+ lines). Use the table of contents below for navigation. Consider splitting into smaller focused documents if editing frequently.
+
 **Status:** EHG Integrated • **Owner:** LEAD Agent (Strategic Pricing) • **Scope:** Multi-agent pricing with Chairman approval  
 **Stack:** React + Vite + Tailwind • TypeScript/Zod • Supabase • Voice-Enabled Pricing Analytics
 **Enhancement Level:** EHG Management Model Integration

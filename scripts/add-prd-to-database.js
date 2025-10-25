@@ -130,6 +130,19 @@ CREATE TABLE IF NOT EXISTS product_requirements_v2 (
           { text: 'User acceptance testing passed', checked: false },
           { text: 'Deployment readiness confirmed', checked: false }
         ],
+        acceptance_criteria: [
+          'All functional requirements implemented',
+          'All tests passing (unit + E2E)',
+          'No regressions introduced'
+        ],
+        functional_requirements: [
+          { id: 'FR-1', requirement: 'To be defined based on SD objectives', priority: 'HIGH' },
+          { id: 'FR-2', requirement: 'To be defined during planning', priority: 'MEDIUM' },
+          { id: 'FR-3', requirement: 'To be defined during technical analysis', priority: 'MEDIUM' }
+        ],
+        test_scenarios: [
+          { id: 'TS-1', scenario: 'To be defined during planning', test_type: 'unit' }
+        ],
         progress: 10,
         content: `# Product Requirements Document
 

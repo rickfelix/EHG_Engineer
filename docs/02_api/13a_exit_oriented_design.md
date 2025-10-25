@@ -1,5 +1,7 @@
 # Stage 13 – Exit-Oriented Design PRD (Enhanced Technical Specification v3)
 
+> **⚠️ LARGE FILE NOTICE**: This file is 66KB (approximately 2,300+ lines). Use the table of contents below for navigation. Consider splitting into smaller focused documents if editing frequently.
+
 **Status:** Enhanced for Lovable.dev • **Owner:** EVA Core • **Scope:** Exit Strategy Planning & Readiness Engine  
 **Stack:** React + Vite + Tailwind • TypeScript/Zod • Supabase • Financial Modeling Libraries
 **Enhancement Level:** Technical Architecture Specification (Not Implementation)

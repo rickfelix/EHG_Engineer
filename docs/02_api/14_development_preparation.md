@@ -1,5 +1,7 @@
 # Stage 14 – Comprehensive Development Preparation PRD (Enhanced Technical Specification v3)
 
+> **⚠️ LARGE FILE NOTICE**: This file is 66KB (approximately 2,300+ lines). Use the table of contents below for navigation. Consider splitting into smaller focused documents if editing frequently.
+
 **Status:** Enhanced for Lovable.dev • **Owner:** EVA Core • **Scope:** Pre-Development Readiness & Artifact Management Engine  
 **Stack:** React + Vite + Tailwind • TypeScript/Zod • Supabase • Development Workflow Integration
 **Enhancement Level:** Technical Architecture Specification (Not Implementation)

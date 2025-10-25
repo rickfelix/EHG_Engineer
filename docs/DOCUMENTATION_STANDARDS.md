@@ -12,11 +12,16 @@
 
 ### Primary Documentation Hierarchy
 
+**Note**: Updated 2025-10-24 to reflect actual directory structure
+
 ```
 /mnt/c/_EHG/EHG_Engineer/
 ├── README.md                       # Project root readme only
-├── CLAUDE.md                       # AI assistant instructions (special)
-├── CLAUDE-LEO.md                   # LEO Protocol instructions (special)
+├── CLAUDE.md                       # LEO Protocol context router (special)
+├── CLAUDE_CORE.md                  # Core protocol implementation
+├── CLAUDE_LEAD.md                  # LEAD phase operations
+├── CLAUDE_PLAN.md                  # PLAN phase operations
+├── CLAUDE_EXEC.md                  # EXEC phase operations
 ├── docs/                           # ALL other documentation
 │   ├── README.md                   # Documentation index
 │   ├── DOCUMENTATION_STANDARDS.md  # This file
@@ -24,60 +29,63 @@
 │   ├── 01_architecture/            # System architecture docs
 │   │   ├── README.md
 │   │   ├── system-overview.md
-│   │   ├── component-diagrams.md
-│   │   └── data-flow.md
+│   │   └── component-diagrams.md
 │   │
 │   ├── 02_api/                     # API documentation
 │   │   ├── README.md
-│   │   ├── rest-api.md
-│   │   ├── websocket-api.md
-│   │   └── graphql-schema.md
+│   │   └── [stage]_[feature].md
 │   │
 │   ├── 03_protocols_and_standards/ # Protocols like LEO
 │   │   ├── README.md
-│   │   ├── leo_protocol_*.md
-│   │   └── coding_standards.md
+│   │   ├── LEO_v4.2_*.md          # Current protocol (v4.2.x)
+│   │   └── leo_git_commit_guidelines_v4.2.0.md
 │   │
-│   ├── 04_guides/                  # How-to guides
+│   ├── 04_features/                # Feature documentation
 │   │   ├── README.md
-│   │   ├── getting-started.md
-│   │   ├── deployment.md
-│   │   └── troubleshooting.md
+│   │   ├── [stage]_[feature].md   # Stage-based features
+│   │   ├── ai_leadership_agents.md
+│   │   ├── mvp_engine.md
+│   │   └── [feature-name].md
 │   │
-│   ├── 05_sub_agents/              # Sub-agent documentation
+│   ├── 05_testing/                 # Testing documentation
 │   │   ├── README.md
-│   │   ├── testing-debugging/
-│   │   ├── security/
-│   │   ├── performance/
-│   │   └── documentation/
+│   │   ├── testing_qa.md
+│   │   └── vision-qa-workflow.md
 │   │
-│   ├── 06_features/                # Feature documentation
+│   ├── 06_deployment/              # Deployment docs
 │   │   ├── README.md
-│   │   ├── directive-lab/
-│   │   ├── dashboard/
-│   │   └── realtime-voice/
+│   │   └── deployment_ops.md
 │   │
-│   ├── 07_testing/                 # Testing documentation
+│   ├── archive/                    # Archived documentation
 │   │   ├── README.md
-│   │   ├── unit-testing.md
-│   │   ├── e2e-testing.md
-│   │   └── playwright-guide.md
+│   │   ├── protocols/             # Old protocol versions
+│   │   │   ├── README.md
+│   │   │   └── leo_protocol_v3.*.md, v4.0.md, v4.1.*.md
+│   │   └── temp/                  # Temporary holding area
 │   │
-│   ├── 08_deployment/              # Deployment docs
+│   ├── database/                   # Database documentation
 │   │   ├── README.md
-│   │   ├── docker.md
-│   │   ├── kubernetes.md
-│   │   └── ci-cd.md
+│   │   ├── schema/
+│   │   └── migrations/
 │   │
-│   ├── 09_retrospectives/          # Project retrospectives
+│   ├── guides/                     # How-to guides (unnumbered)
 │   │   ├── README.md
-│   │   └── [date]-[topic].md
+│   │   └── [guide-name].md
 │   │
-│   └── 10_reports/                 # Generated reports
+│   ├── reference/                  # Quick reference docs (unnumbered)
+│   │   ├── database-agent-patterns.md
+│   │   ├── validation-enforcement.md
+│   │   ├── qa-director-guide.md
+│   │   └── [reference-name].md
+│   │
+│   ├── retrospectives/             # Project retrospectives
+│   │   ├── README.md
+│   │   └── [SD-ID]-retro.md
+│   │
+│   └── summaries/                  # Generated summaries
 │       ├── README.md
-│       ├── performance/
-│       ├── security/
-│       └── audits/
+│       ├── implementations/
+│       └── sd-sessions/
 ```
 
 ## 📋 Documentation Rules
@@ -121,20 +129,24 @@ Every markdown file MUST start with:
 
 ### 3. Location Rules
 
+**Updated 2025-10-24 to match actual structure**
+
 | Document Type | Location | Example |
 |--------------|----------|---------|
 | Project README | `/` | `/README.md` |
-| AI Instructions | `/` | `/CLAUDE.md` |
+| AI Instructions | `/` | `/CLAUDE.md`, `/CLAUDE_CORE.md` |
 | Architecture | `/docs/01_architecture/` | `system-overview.md` |
-| API Docs | `/docs/02_api/` | `rest-api.md` |
-| Protocols | `/docs/03_protocols_and_standards/` | `leo_protocol_v4.md` |
-| How-to Guides | `/docs/04_guides/` | `deployment.md` |
-| Sub-Agent Docs | `/docs/05_sub_agents/[agent]/` | `testing-debugging/README.md` |
-| Feature Docs | `/docs/06_features/[feature]/` | `directive-lab/overview.md` |
-| Test Docs | `/docs/07_testing/` | `playwright-guide.md` |
-| Deploy Docs | `/docs/08_deployment/` | `docker.md` |
-| Retrospectives | `/docs/09_retrospectives/` | `2025-09-04-testing.md` |
-| Reports | `/docs/10_reports/[type]/` | `performance/2025-09-04.md` |
+| API Docs | `/docs/02_api/` | `01a_draft_idea.md` |
+| Protocols | `/docs/03_protocols_and_standards/` | `LEO_v4.2_HYBRID_SUB_AGENTS.md` |
+| Feature Docs | `/docs/04_features/` | `mvp_engine.md`, `01b_idea_generation.md` |
+| Test Docs | `/docs/05_testing/` | `testing_qa.md` |
+| Deploy Docs | `/docs/06_deployment/` | `deployment_ops.md` |
+| How-to Guides | `/docs/guides/` | `[guide-name].md` |
+| Quick Reference | `/docs/reference/` | `database-agent-patterns.md` |
+| Database Docs | `/docs/database/` | `schema/`, `migrations/` |
+| Retrospectives | `/docs/retrospectives/` | `SD-XXX-retro.md` |
+| Summaries | `/docs/summaries/` | `implementations/`, `sd-sessions/` |
+| Archives | `/docs/archive/` | `protocols/leo_protocol_v3.1.5.md` |
 
 ### 4. Cross-References
 
@@ -143,7 +155,8 @@ Use relative paths for internal links:
 ```markdown
 ✅ CORRECT:
 - See [Architecture Overview](../01_architecture/system-overview.md)
-- Details in [Testing Guide](../07_testing/unit-testing.md)
+- Details in [Testing Guide](../05_testing/testing_qa.md)
+- Reference [Database Patterns](../reference/database-agent-patterns.md)
 
 ❌ INCORRECT:
 - See architecture.md (no path)
@@ -327,6 +340,14 @@ The Documentation sub-agent should:
 
 ---
 
-*Documentation Standards Version: 1.0.0*
-*Last Updated: 2025-09-04*
-*Maintained by: Documentation Sub-Agent*
+*Documentation Standards Version: 1.1.0*
+*Last Updated: 2025-10-24*
+*Maintained by: Documentation Sub-Agent (DOCMON)*
+
+**Changelog**:
+- **v1.1.0** (2025-10-24): Updated directory structure to match actual implementation
+  - Changed numbering: 04_features, 05_testing, 06_deployment (was 04_guides, 05_sub_agents, 06_features, 07_testing, 08_deployment)
+  - Added: archive/, database/, guides/, reference/ directories
+  - Updated CLAUDE.md references (context router instead of LEO Protocol)
+  - Updated location rules table with actual examples
+- **v1.0.0** (2025-09-04): Initial standards documentation
