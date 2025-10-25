@@ -534,14 +534,14 @@ async function insertStrategicDirectives() {
         .single();
 
       if (error) {
-        console.error(`   ❌ Error:`, error.message);
+        console.error('   ❌ Error:', error.message);
         errorCount++;
       } else {
-        console.log(`   ✅ Created successfully!`);
+        console.log('   ✅ Created successfully!');
         successCount++;
       }
     } catch (error) {
-      console.error(`   ❌ Unexpected error:`, error.message);
+      console.error('   ❌ Unexpected error:', error.message);
       errorCount++;
     }
   }

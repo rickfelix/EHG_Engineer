@@ -108,7 +108,7 @@ async function verifyMigration(migration) {
       }
 
       if (checkData && checkData.length > 0) {
-        console.log(`   ✅ Verified: Column exists`);
+        console.log('   ✅ Verified: Column exists');
         return true;
       }
     }
@@ -118,7 +118,7 @@ async function verifyMigration(migration) {
       return true;
     }
 
-    console.log(`   ❌ Verification failed: Column not found`);
+    console.log('   ❌ Verification failed: Column not found');
     return false;
 
   } catch (error) {
@@ -142,7 +142,7 @@ async function main() {
       console.log('\n📝 MANUAL STEPS REQUIRED:');
       console.log('\n1. Open Supabase SQL Editor:');
       console.log('   https://supabase.com/dashboard/project/dedlbzhpgkmetvhbkyzq/sql/new\n');
-      console.log(`2. Copy and paste this SQL:\n`);
+      console.log('2. Copy and paste this SQL:\n');
       console.log('-'.repeat(70));
       console.log(result.sql);
       console.log('-'.repeat(70));

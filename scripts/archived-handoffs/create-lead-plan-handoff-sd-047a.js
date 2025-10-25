@@ -367,12 +367,12 @@ CREATE INDEX idx_venture_milestones_status ON venture_milestones(status);
   }
 
   console.log('\\n📊 Handoff Summary:');
-  console.log(`   Strategic Objectives: 5`);
-  console.log(`   Success Criteria: 10`);
-  console.log(`   Estimated Hours: 28`);
-  console.log(`   Risk Level: Low`);
-  console.log(`   Database Migration: Required`);
-  console.log(`   Design Sub-Agent: Required`);
+  console.log('   Strategic Objectives: 5');
+  console.log('   Success Criteria: 10');
+  console.log('   Estimated Hours: 28');
+  console.log('   Risk Level: Low');
+  console.log('   Database Migration: Required');
+  console.log('   Design Sub-Agent: Required');
   console.log('\\n✅ LEAD phase complete. Ready for PLAN PRD creation.\\n');
 }
 

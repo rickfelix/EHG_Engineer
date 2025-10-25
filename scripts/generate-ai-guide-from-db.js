@@ -200,8 +200,8 @@ Follow the Documentation Standards for file placement:
     const aiGuidePath = path.join(__dirname, '..', 'docs', '03_guides', 'AI_GUIDE.md');
     await fs.writeFile(aiGuidePath, aiGuideContent);
     
-    console.log(`✅ AI_GUIDE.md generated successfully!`);
-    console.log(`📁 Location: docs/03_guides/AI_GUIDE.md`);
+    console.log('✅ AI_GUIDE.md generated successfully!');
+    console.log('📁 Location: docs/03_guides/AI_GUIDE.md');
     console.log(`📋 Protocol Version: ${currentProtocol.version}`);
     console.log(`🕒 Generated: ${timestamp}\n`);
 
@@ -211,7 +211,7 @@ Follow the Documentation Standards for file placement:
       await fs.access(oldGuidePath);
       const backupPath = path.join(__dirname, '..', 'AI_GUIDE_static_backup.md');
       await fs.rename(oldGuidePath, backupPath);
-      console.log(`📦 Backed up old static AI_GUIDE.md to AI_GUIDE_static_backup.md`);
+      console.log('📦 Backed up old static AI_GUIDE.md to AI_GUIDE_static_backup.md');
     } catch {
       // No old file to backup
     }

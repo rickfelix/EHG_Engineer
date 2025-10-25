@@ -673,18 +673,18 @@ class UATIntelligentAgent {
     console.log(chalk.bold.blue(`🤖 INTELLIGENT UAT ANALYSIS - ${results.agent_id}`));
     console.log('='.repeat(80));
 
-    console.log(`\n📊 Analysis Summary:`);
+    console.log('\n📊 Analysis Summary:');
     console.log(`   Confidence Score: ${chalk.green(results.confidence_score + '%')}`);
     console.log(`   Failures Analyzed: ${results.analysis.total_failures_analyzed}`);
     console.log(`   Patterns Identified: ${Object.keys(results.analysis.failure_patterns).length}`);
     console.log(`   Recommendations: ${results.recommendations.length}`);
 
-    console.log(`\n🔍 Key Patterns Identified:`);
+    console.log('\n🔍 Key Patterns Identified:');
     Object.entries(results.analysis.failure_patterns).forEach(([pattern, data]) => {
       console.log(`   ${chalk.yellow('●')} ${pattern}: ${data.failures.length} failures (${Math.round(data.confidence)}% confidence)`);
     });
 
-    console.log(`\n💡 Top Recommendations:`);
+    console.log('\n💡 Top Recommendations:');
     results.recommendations.slice(0, 3).forEach((rec, i) => {
       const priorityColor = rec.priority === 'CRITICAL' ? chalk.red :
                            rec.priority === 'HIGH' ? chalk.yellow : chalk.blue;
@@ -692,7 +692,7 @@ class UATIntelligentAgent {
       console.log(`      ${chalk.gray(`→ ${rec.implementation} (${rec.timeline})`)}`);
     });
 
-    console.log(`\n⚡ Immediate Actions Required:`);
+    console.log('\n⚡ Immediate Actions Required:');
     results.action_plan.immediate_actions.forEach((action, i) => {
       console.log(`   ${i + 1}. ${chalk.red(action.action)}`);
     });
@@ -726,7 +726,7 @@ async function main() {
 
     const results = await agent.analyzeFailures(reportPath);
 
-    console.log(`\n🎯 Intelligent analysis completed successfully!`);
+    console.log('\n🎯 Intelligent analysis completed successfully!');
     console.log(`📋 ${results.recommendations.length} actionable recommendations generated`);
 
   } catch (error) {

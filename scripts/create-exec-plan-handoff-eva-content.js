@@ -667,7 +667,7 @@ No active blockers preventing PLAN verification or deployment.
       handoffData.created_at,
     ]);
 
-    console.log(`✅ EXEC→PLAN handoff created successfully!`);
+    console.log('✅ EXEC→PLAN handoff created successfully!');
     console.log(`   Handoff ID: ${result.rows[0].id}`);
     console.log(`   SD: ${SD_ID}`);
     console.log('');

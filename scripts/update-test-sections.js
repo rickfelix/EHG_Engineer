@@ -109,7 +109,7 @@ async function updateSections() {
 
     for (const [oldSection, newSection] of Object.entries(SECTION_MAPPING)) {
       const updateResult = await client.query(
-        `UPDATE uat_cases SET section = $1 WHERE section = $2`,
+        'UPDATE uat_cases SET section = $1 WHERE section = $2',
         [newSection, oldSection]
       );
 
@@ -146,7 +146,7 @@ async function updateSections() {
 
       for (const section of sections) {
         const countResult = await client.query(
-          `SELECT COUNT(*) as count FROM uat_cases WHERE section = $1`,
+          'SELECT COUNT(*) as count FROM uat_cases WHERE section = $1',
           [section]
         );
         const count = countResult.rows[0].count;

@@ -93,7 +93,7 @@ async function setupDatabaseManager() {
     // Step 7: Insert test data
     console.log('\n📝 Inserting test data...');
     await dbManager.query(
-      `INSERT INTO database_manager_test (test_name, test_value) VALUES ($1, $2)`,
+      'INSERT INTO database_manager_test (test_name, test_value) VALUES ($1, $2)',
       ['DDL Test', 'DatabaseManager can execute DDL successfully!']
     );
     console.log('✅ Test data inserted');

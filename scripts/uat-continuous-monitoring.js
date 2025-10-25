@@ -200,7 +200,7 @@ class UATContinuousMonitoring {
         if (this.monitoring.activeProcesses.has(runId)) {
           testProcess.kill('SIGTERM');
           this.monitoring.activeProcesses.delete(runId);
-          reject(new Error(`Test execution timed out after 60 minutes`));
+          reject(new Error('Test execution timed out after 60 minutes'));
         }
       }, 60 * 60 * 1000);
     });
@@ -413,7 +413,7 @@ class UATContinuousMonitoring {
     const color = severity === 'critical' ? chalk.red : severity === 'warning' ? chalk.yellow : chalk.blue;
 
     console.log('\n' + '='.repeat(60));
-    console.log(color(`📢 UAT MONITORING NOTIFICATION`));
+    console.log(color('📢 UAT MONITORING NOTIFICATION'));
     console.log('='.repeat(60));
     console.log(`Type: ${notification.type}`);
     console.log(`Run ID: ${notification.runId}`);

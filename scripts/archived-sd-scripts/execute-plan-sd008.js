@@ -51,7 +51,7 @@ async function executePlanPhaseSD008() {
       .single();
 
     if (existingPrd) {
-      console.log(chalk.yellow(`\n⚠️  PRD already exists:`));
+      console.log(chalk.yellow('\n⚠️  PRD already exists:'));
       console.log(`   ID: ${existingPrd.id}`);
       console.log(`   Title: ${existingPrd.title}`);
       console.log(`   Created: ${new Date(existingPrd.created_at).toLocaleString()}`);

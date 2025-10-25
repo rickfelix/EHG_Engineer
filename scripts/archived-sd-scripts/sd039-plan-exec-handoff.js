@@ -29,7 +29,7 @@ async function createPlanExecHandoff() {
     phase: 'execution',
 
     // 7 Mandatory Elements
-    executive_summary: `Execute implementation of comprehensive Chairman Dashboard providing executive-level oversight and strategic decision-making tools. The PRD defines 8 user stories across venture portfolio management, strategic KPI monitoring, financial analytics, operational intelligence, executive reporting, decision support, mobile access, and real-time data integration. Target implementation in EHG application at /mnt/c/_EHG/ehg with 4-phase delivery approach over 4 days.`,
+    executive_summary: 'Execute implementation of comprehensive Chairman Dashboard providing executive-level oversight and strategic decision-making tools. The PRD defines 8 user stories across venture portfolio management, strategic KPI monitoring, financial analytics, operational intelligence, executive reporting, decision support, mobile access, and real-time data integration. Target implementation in EHG application at /mnt/c/_EHG/ehg with 4-phase delivery approach over 4 days.',
 
     completeness_report: {
       prd_generated: true,

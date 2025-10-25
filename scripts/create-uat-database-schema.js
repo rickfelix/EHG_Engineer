@@ -195,7 +195,7 @@ async function executeSQLFile() {
     console.log('\n1. Using Supabase Dashboard:');
     console.log('   - Go to: https://supabase.com/dashboard/project/dedlbzhpgkmetvhbkyzq/sql');
     console.log('   - Open the SQL Editor');
-    console.log(`   - Copy and paste the contents of: database/migrations/uat-tracking-schema.sql`);
+    console.log('   - Copy and paste the contents of: database/migrations/uat-tracking-schema.sql');
     console.log('   - Click "Run" to execute\n');
 
     console.log('2. Using psql (if DATABASE_URL is available):');

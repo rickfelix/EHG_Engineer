@@ -177,11 +177,11 @@ async function executeLEADFinalApproval() {
 
   console.log('✅ LEAD Approval Complete');
   console.log('=========================\n');
-  console.log(`📋 SD-039 Status: COMPLETED`);
+  console.log('📋 SD-039 Status: COMPLETED');
   console.log(`🎯 LEAD Decision: ${leadDecision.decision}`);
   console.log(`📊 Confidence: ${leadDecision.confidence}`);
-  console.log(`🔗 Dashboard URL: http://localhost:8080/chairman`);
-  console.log(`💻 Implementation Commit: f0c3ec3`);
+  console.log('🔗 Dashboard URL: http://localhost:8080/chairman');
+  console.log('💻 Implementation Commit: f0c3ec3');
 
   console.log('\n🎉 STRATEGIC DIRECTIVE SD-039 SUCCESSFULLY COMPLETED!');
   console.log('\n📈 Business Value Delivered:');

@@ -8,7 +8,7 @@ const supabase = createClient(
 );
 
 const updatedSD = {
-  description: `Enhance enterprise observability suite with role-based access, operational grouping, and AI-powered insights. **CURRENT STATE**: 4 complete observability pages (monitoring: 430 LOC/20KB, performance: 468 LOC/24KB, security: 341 LOC/16KB, data-management: 555 LOC/20KB) **already in navigation** at lines 84-121 of Navigation.tsx. Total: 1,794 LOC of production-ready observability infrastructure. **MISSING**: Role-based access controls, dedicated Operations nav section, unified alerting, cross-system analytics dashboard.`,
+  description: 'Enhance enterprise observability suite with role-based access, operational grouping, and AI-powered insights. **CURRENT STATE**: 4 complete observability pages (monitoring: 430 LOC/20KB, performance: 468 LOC/24KB, security: 341 LOC/16KB, data-management: 555 LOC/20KB) **already in navigation** at lines 84-121 of Navigation.tsx. Total: 1,794 LOC of production-ready observability infrastructure. **MISSING**: Role-based access controls, dedicated Operations nav section, unified alerting, cross-system analytics dashboard.',
 
   scope: `**8-Week Observability Enhancement Implementation**:
 
@@ -52,181 +52,181 @@ const updatedSD = {
 
   strategic_objectives: [
     "Reorganize navigation to create dedicated 'Operations' section with 4 observability pages",
-    "Implement role-based access controls (Ops Manager, SRE, Security Analyst, Developer roles)",
-    "Build unified /operations dashboard with cross-system metrics and AI correlation",
-    "Create AI-powered anomaly detection across monitoring, performance, security, and data quality",
-    "Implement predictive alerting with 7-day capacity forecasting",
-    "Build operations command center with incident timeline and war room view",
-    "Add export capabilities for operational reports (PDF/Excel with charts)",
-    "Integrate external monitoring platforms (Datadog, New Relic, PagerDuty)",
-    "Create mobile-responsive operations dashboard for on-call teams"
+    'Implement role-based access controls (Ops Manager, SRE, Security Analyst, Developer roles)',
+    'Build unified /operations dashboard with cross-system metrics and AI correlation',
+    'Create AI-powered anomaly detection across monitoring, performance, security, and data quality',
+    'Implement predictive alerting with 7-day capacity forecasting',
+    'Build operations command center with incident timeline and war room view',
+    'Add export capabilities for operational reports (PDF/Excel with charts)',
+    'Integrate external monitoring platforms (Datadog, New Relic, PagerDuty)',
+    'Create mobile-responsive operations dashboard for on-call teams'
   ],
 
   success_criteria: [
     "✅ Navigation shows 'Operations' section with 4 pages (Monitoring, Performance, Security, Data Management)",
-    "✅ Role-based access enforced: Only users with Ops/SRE/Security roles can access pages",
-    "✅ Permission denied pages show helpful message for unauthorized users",
-    "✅ Unified /operations dashboard displays real-time metrics from all 4 subsystems",
-    "✅ AI anomaly detection identifies 3+ correlation patterns (e.g., high DB load → slow API → more errors)",
-    "✅ Predictive alerts forecast capacity issues 7+ days in advance with ≥85% accuracy",
-    "✅ Operations command center displays incident timeline with cross-system correlation",
-    "✅ Operational reports export as PDF/Excel with charts, tables, and recommendations",
-    "✅ External monitoring integrations receive/send webhooks (Datadog, New Relic, PagerDuty)",
-    "✅ Mobile dashboard accessible on tablets/phones with core metrics",
-    "✅ SLA tracking shows 99.9%+ uptime with automated compliance reports",
-    "✅ Auto-remediation suggests fixes for 10+ common operational issues"
+    '✅ Role-based access enforced: Only users with Ops/SRE/Security roles can access pages',
+    '✅ Permission denied pages show helpful message for unauthorized users',
+    '✅ Unified /operations dashboard displays real-time metrics from all 4 subsystems',
+    '✅ AI anomaly detection identifies 3+ correlation patterns (e.g., high DB load → slow API → more errors)',
+    '✅ Predictive alerts forecast capacity issues 7+ days in advance with ≥85% accuracy',
+    '✅ Operations command center displays incident timeline with cross-system correlation',
+    '✅ Operational reports export as PDF/Excel with charts, tables, and recommendations',
+    '✅ External monitoring integrations receive/send webhooks (Datadog, New Relic, PagerDuty)',
+    '✅ Mobile dashboard accessible on tablets/phones with core metrics',
+    '✅ SLA tracking shows 99.9%+ uptime with automated compliance reports',
+    '✅ Auto-remediation suggests fixes for 10+ common operational issues'
   ],
 
   key_principles: [
-    "**Reconnection Focus**: Leverage existing 1,794 LOC of observability infrastructure",
-    "**Security First**: Role-based access prevents unauthorized metric viewing",
-    "**Operations Excellence**: Single pane of glass for all operational data",
-    "**Proactive AI**: Predict issues before they impact users",
-    "**Enterprise Grade**: SLA tracking, compliance reports, external integrations",
-    "**Mobile Ready**: On-call teams need mobile access to critical metrics",
-    "**Quick Wins**: Navigation reorganization unlocks immediate value",
-    "**Correlation Engine**: Cross-system insights reveal hidden patterns"
+    '**Reconnection Focus**: Leverage existing 1,794 LOC of observability infrastructure',
+    '**Security First**: Role-based access prevents unauthorized metric viewing',
+    '**Operations Excellence**: Single pane of glass for all operational data',
+    '**Proactive AI**: Predict issues before they impact users',
+    '**Enterprise Grade**: SLA tracking, compliance reports, external integrations',
+    '**Mobile Ready**: On-call teams need mobile access to critical metrics',
+    '**Quick Wins**: Navigation reorganization unlocks immediate value',
+    '**Correlation Engine**: Cross-system insights reveal hidden patterns'
   ],
 
   implementation_guidelines: [
     {
-      phase: "Phase 1: Role-Based Access & Operations Grouping",
+      phase: 'Phase 1: Role-Based Access & Operations Grouping',
       tasks: [
-        "Create src/hooks/useOperationsAccess.ts hook with role checking (Ops Manager, SRE, Security Analyst)",
+        'Create src/hooks/useOperationsAccess.ts hook with role checking (Ops Manager, SRE, Security Analyst)',
         "Update Navigation.tsx: Rename 'Management' section to 'Operations' for observability pages",
-        "Move 4 pages to Operations section: Monitoring, Performance, Security, Data Management",
-        "Add permission guards to each page: if (!hasOpsAccess) return <PermissionDenied />",
-        "Create PermissionDenied component with helpful message and role request link",
+        'Move 4 pages to Operations section: Monitoring, Performance, Security, Data Management',
+        'Add permission guards to each page: if (!hasOpsAccess) return <PermissionDenied />',
+        'Create PermissionDenied component with helpful message and role request link',
         "Add 'Operations' badge in nav with system health (Green/Yellow/Red based on alerts)",
-        "Update navigation tests to verify role-based access",
-        "Document operations roles in README"
+        'Update navigation tests to verify role-based access',
+        'Document operations roles in README'
       ],
       deliverables: [
-        "src/hooks/useOperationsAccess.ts",
-        "src/components/operations/PermissionDenied.tsx",
-        "Updated Navigation.tsx with Operations section",
-        "Role-based access tests"
+        'src/hooks/useOperationsAccess.ts',
+        'src/components/operations/PermissionDenied.tsx',
+        'Updated Navigation.tsx with Operations section',
+        'Role-based access tests'
       ]
     },
     {
-      phase: "Phase 2: Unified Observability Dashboard",
+      phase: 'Phase 2: Unified Observability Dashboard',
       tasks: [
-        "Create app/operations/page.tsx with unified overview",
-        "Build OperationsDashboard component with 4-quadrant layout (Monitoring, Performance, Security, Data)",
-        "Implement cross-system metric aggregation API at app/api/operations/overview/route.ts",
+        'Create app/operations/page.tsx with unified overview',
+        'Build OperationsDashboard component with 4-quadrant layout (Monitoring, Performance, Security, Data)',
+        'Implement cross-system metric aggregation API at app/api/operations/overview/route.ts',
         "Add correlation engine: Detect patterns like 'High DB load → Slow API → Error spike'",
-        "Create AlertsPriority component showing critical/high/medium/low alerts from all systems",
-        "Build SystemHealthOverview with traffic lights (Green: All OK, Yellow: Warnings, Red: Critical)",
-        "Add QuickActions component with links to drill into each subsystem",
-        "Implement real-time updates via WebSocket or polling (30-second refresh)",
-        "Add date range selector for historical analysis",
-        "Create operational summary cards (Uptime, Response Time, Error Rate, Throughput)"
+        'Create AlertsPriority component showing critical/high/medium/low alerts from all systems',
+        'Build SystemHealthOverview with traffic lights (Green: All OK, Yellow: Warnings, Red: Critical)',
+        'Add QuickActions component with links to drill into each subsystem',
+        'Implement real-time updates via WebSocket or polling (30-second refresh)',
+        'Add date range selector for historical analysis',
+        'Create operational summary cards (Uptime, Response Time, Error Rate, Throughput)'
       ],
       deliverables: [
-        "app/operations/page.tsx",
-        "src/components/operations/OperationsDashboard.tsx",
-        "src/components/operations/AlertsPriority.tsx",
-        "src/components/operations/SystemHealthOverview.tsx",
-        "app/api/operations/overview/route.ts"
+        'app/operations/page.tsx',
+        'src/components/operations/OperationsDashboard.tsx',
+        'src/components/operations/AlertsPriority.tsx',
+        'src/components/operations/SystemHealthOverview.tsx',
+        'app/api/operations/overview/route.ts'
       ]
     },
     {
-      phase: "Phase 3: AI-Powered Insights & Alerting",
+      phase: 'Phase 3: AI-Powered Insights & Alerting',
       tasks: [
-        "Create AIOperationalInsights component with pattern detection",
-        "Implement anomaly detection: Compare current metrics to 7/30/90-day baselines",
-        "Build PredictiveAlerting service: Forecast capacity issues using linear regression",
-        "Add SmartAlertRouting: Route alerts based on severity, time, and team availability",
-        "Create AutoRemediationSuggestions component with common issue fixes",
+        'Create AIOperationalInsights component with pattern detection',
+        'Implement anomaly detection: Compare current metrics to 7/30/90-day baselines',
+        'Build PredictiveAlerting service: Forecast capacity issues using linear regression',
+        'Add SmartAlertRouting: Route alerts based on severity, time, and team availability',
+        'Create AutoRemediationSuggestions component with common issue fixes',
         "Implement incident prediction: 'Database connections trending toward limit in 3 days'",
         "Add AI recommendations: 'Consider scaling web servers (CPU >80% for 2h)'",
-        "Build confidence scoring for predictions (Low/Medium/High confidence)",
-        "Create AlertHistory with resolution tracking and patterns",
-        "Add feedback loop: Users mark predictions as accurate/inaccurate"
+        'Build confidence scoring for predictions (Low/Medium/High confidence)',
+        'Create AlertHistory with resolution tracking and patterns',
+        'Add feedback loop: Users mark predictions as accurate/inaccurate'
       ],
       deliverables: [
-        "src/components/operations/AIOperationalInsights.tsx",
-        "src/lib/ai/anomaly-detection.ts",
-        "src/lib/ai/predictive-alerting.ts",
-        "src/components/operations/SmartAlertRouting.tsx",
-        "src/components/operations/AutoRemediationSuggestions.tsx"
+        'src/components/operations/AIOperationalInsights.tsx',
+        'src/lib/ai/anomaly-detection.ts',
+        'src/lib/ai/predictive-alerting.ts',
+        'src/components/operations/SmartAlertRouting.tsx',
+        'src/components/operations/AutoRemediationSuggestions.tsx'
       ]
     },
     {
-      phase: "Phase 4: Advanced Features & Integration",
+      phase: 'Phase 4: Advanced Features & Integration',
       tasks: [
-        "Create OperationsCommandCenter component (war room view for incidents)",
-        "Build IncidentTimeline showing correlated events across all systems",
-        "Implement operational report export: PDF with charts, Excel with raw data",
-        "Add external monitoring integration webhooks (Datadog, New Relic, PagerDuty)",
-        "Create mobile-responsive operations dashboard with touch-optimized controls",
-        "Build SLATracking component with uptime %, response time, error budget",
-        "Add ComplianceReporting for SOC2, ISO27001 operational requirements",
-        "Implement OperationsNotifications: Email/SMS/Slack for critical alerts",
-        "Create OperationsSettings page for thresholds, alert rules, integrations",
-        "Add OperationsAuditLog showing all operational actions (who viewed what, when)"
+        'Create OperationsCommandCenter component (war room view for incidents)',
+        'Build IncidentTimeline showing correlated events across all systems',
+        'Implement operational report export: PDF with charts, Excel with raw data',
+        'Add external monitoring integration webhooks (Datadog, New Relic, PagerDuty)',
+        'Create mobile-responsive operations dashboard with touch-optimized controls',
+        'Build SLATracking component with uptime %, response time, error budget',
+        'Add ComplianceReporting for SOC2, ISO27001 operational requirements',
+        'Implement OperationsNotifications: Email/SMS/Slack for critical alerts',
+        'Create OperationsSettings page for thresholds, alert rules, integrations',
+        'Add OperationsAuditLog showing all operational actions (who viewed what, when)'
       ],
       deliverables: [
-        "src/components/operations/OperationsCommandCenter.tsx",
-        "src/components/operations/IncidentTimeline.tsx",
-        "src/lib/export/operations-report-exporter.ts",
-        "app/api/webhooks/monitoring/route.ts (for external integrations)",
-        "src/components/operations/SLATracking.tsx",
-        "src/components/operations/ComplianceReporting.tsx",
-        "app/operations/settings/page.tsx"
+        'src/components/operations/OperationsCommandCenter.tsx',
+        'src/components/operations/IncidentTimeline.tsx',
+        'src/lib/export/operations-report-exporter.ts',
+        'app/api/webhooks/monitoring/route.ts (for external integrations)',
+        'src/components/operations/SLATracking.tsx',
+        'src/components/operations/ComplianceReporting.tsx',
+        'app/operations/settings/page.tsx'
       ]
     }
   ],
 
   risks: [
     {
-      risk: "Performance impact from real-time metric aggregation across 4 systems",
-      mitigation: "Use caching (Redis), background workers for heavy calculations, optimize database queries with indexes"
+      risk: 'Performance impact from real-time metric aggregation across 4 systems',
+      mitigation: 'Use caching (Redis), background workers for heavy calculations, optimize database queries with indexes'
     },
     {
-      risk: "False positive alerts from AI anomaly detection overwhelming operations team",
-      mitigation: "Start with high confidence thresholds (≥85%), allow manual tuning, implement alert fatigue detection"
+      risk: 'False positive alerts from AI anomaly detection overwhelming operations team',
+      mitigation: 'Start with high confidence thresholds (≥85%), allow manual tuning, implement alert fatigue detection'
     },
     {
-      risk: "Role-based access blocking legitimate users during incidents",
-      mitigation: "Emergency break-glass access with audit logging, clear role request process"
+      risk: 'Role-based access blocking legitimate users during incidents',
+      mitigation: 'Emergency break-glass access with audit logging, clear role request process'
     },
     {
-      risk: "External monitoring integration failures causing data loss",
-      mitigation: "Queue webhooks with retry logic, fallback to manual entry, alert on integration failures"
+      risk: 'External monitoring integration failures causing data loss',
+      mitigation: 'Queue webhooks with retry logic, fallback to manual entry, alert on integration failures'
     }
   ],
 
   success_metrics: [
     {
-      metric: "Operations Section Adoption",
-      target: "≥80% of ops team accesses unified dashboard weekly",
-      measurement: "Track page views, user sessions, time spent"
+      metric: 'Operations Section Adoption',
+      target: '≥80% of ops team accesses unified dashboard weekly',
+      measurement: 'Track page views, user sessions, time spent'
     },
     {
-      metric: "MTTR Reduction",
-      target: "Mean time to resolution decreases by ≥30% within 8 weeks",
-      measurement: "Compare incident resolution times before/after correlation engine"
+      metric: 'MTTR Reduction',
+      target: 'Mean time to resolution decreases by ≥30% within 8 weeks',
+      measurement: 'Compare incident resolution times before/after correlation engine'
     },
     {
-      metric: "Proactive Issue Detection",
-      target: "≥50% of capacity issues identified via predictive alerts before user impact",
-      measurement: "Count alerts that prevent incidents vs. alerts after incidents start"
+      metric: 'Proactive Issue Detection',
+      target: '≥50% of capacity issues identified via predictive alerts before user impact',
+      measurement: 'Count alerts that prevent incidents vs. alerts after incidents start'
     },
     {
-      metric: "Alert Accuracy",
-      target: "≥85% of predictive alerts are accurate (true positives)",
-      measurement: "User feedback on alert accuracy, manual review of predictions"
+      metric: 'Alert Accuracy',
+      target: '≥85% of predictive alerts are accurate (true positives)',
+      measurement: 'User feedback on alert accuracy, manual review of predictions'
     },
     {
-      metric: "Operations Report Usage",
-      target: "≥10 operational reports exported per month for leadership/compliance",
-      measurement: "Count PDF/Excel exports, track unique users"
+      metric: 'Operations Report Usage',
+      target: '≥10 operational reports exported per month for leadership/compliance',
+      measurement: 'Count PDF/Excel exports, track unique users'
     },
     {
-      metric: "Mobile Dashboard Usage",
-      target: "≥40% of on-call team accesses mobile dashboard during incidents",
-      measurement: "Track mobile vs. desktop access during incident windows"
+      metric: 'Mobile Dashboard Usage',
+      target: '≥40% of on-call team accesses mobile dashboard during incidents',
+      measurement: 'Track mobile vs. desktop access during incident windows'
     }
   ],
 

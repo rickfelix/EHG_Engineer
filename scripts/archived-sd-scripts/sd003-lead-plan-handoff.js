@@ -29,7 +29,7 @@ async function createHandoff() {
     phase: 'planning',
 
     // 7 Mandatory Elements
-    executive_summary: `UI cleanup task for EVA Assistant interface. This is a CONSTRAINED directive focused solely on removing two specific UI elements: the Savings/Latency Box and Session Status Box. No behavioral or functional changes are permitted.`,
+    executive_summary: 'UI cleanup task for EVA Assistant interface. This is a CONSTRAINED directive focused solely on removing two specific UI elements: the Savings/Latency Box and Session Status Box. No behavioral or functional changes are permitted.',
 
     completeness_report: {
       requirements_gathered: true,

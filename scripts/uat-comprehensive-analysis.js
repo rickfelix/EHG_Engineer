@@ -447,12 +447,12 @@ class UATComprehensiveAnalysis {
     console.log(chalk.bold.blue(`🔬 COMPREHENSIVE UAT ANALYSIS COMPLETE - ${pipeline.status.toUpperCase()}`));
     console.log('='.repeat(80));
 
-    console.log(`\n📊 Pipeline Summary:`);
+    console.log('\n📊 Pipeline Summary:');
     console.log(`   Analysis ID: ${this.analysisId}`);
     console.log(`   Total Duration: ${Math.round(pipeline.totalDuration / 1000)}s`);
     console.log(`   Phases Completed: ${pipeline.phases.length}`);
 
-    console.log(`\n🔍 Phase Results:`);
+    console.log('\n🔍 Phase Results:');
     pipeline.phases.forEach((phase, i) => {
       const status = phase.status === 'completed' ? chalk.green('✅ COMPLETED') :
                     phase.status === 'passed' ? chalk.green('✅ PASSED') :
@@ -463,7 +463,7 @@ class UATComprehensiveAnalysis {
 
     if (pipeline.results.report) {
       const report = pipeline.results.report;
-      console.log(`\n📈 Key Metrics:`);
+      console.log('\n📈 Key Metrics:');
       console.log(`   Pass Rate: ${report.executive_summary?.metrics?.pass_rate || 0}%`);
       console.log(`   Total Tests: ${report.executive_summary?.metrics?.total_tests || 0}`);
       console.log(`   Critical Issues: ${report.executive_summary?.issues?.critical || 0}`);
@@ -477,7 +477,7 @@ class UATComprehensiveAnalysis {
 
     if (pipeline.results.intelligent_analysis) {
       const intelligent = pipeline.results.intelligent_analysis;
-      console.log(`\n🤖 Intelligent Analysis:`);
+      console.log('\n🤖 Intelligent Analysis:');
       console.log(`   Recommendations: ${intelligent.recommendations?.length || 0}`);
       console.log(`   Confidence Score: ${intelligent.confidence_score || 0}%`);
     }

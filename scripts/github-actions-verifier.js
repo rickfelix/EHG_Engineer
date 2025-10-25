@@ -241,8 +241,8 @@ async function verify(sdId) {
   console.log('\n🤖 GITHUB ACTIONS VERIFIER (DevOps Platform Architect)');
   console.log('═'.repeat(60));
   console.log(`SD: ${sdId}`);
-  console.log(`Priority: CRITICAL (90)`);
-  console.log(`Phase: PLAN_VERIFY`);
+  console.log('Priority: CRITICAL (90)');
+  console.log('Phase: PLAN_VERIFY');
   console.log('');
 
   const startTime = Date.now();

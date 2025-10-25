@@ -337,28 +337,28 @@ All issues identified are either resolved or documented for future work.
  * Store handoff in database via direct PostgreSQL connection
  */
 async function storeHandoff() {
-  console.log(`\n╔═══════════════════════════════════════════════════════════════╗`);
-  console.log(`║  PLAN→LEAD Handoff: SD-SETTINGS-2025-10-12                  ║`);
-  console.log(`║  Verification Complete - Ready for Final Approval            ║`);
-  console.log(`╚═══════════════════════════════════════════════════════════════╝`);
+  console.log('\n╔═══════════════════════════════════════════════════════════════╗');
+  console.log('║  PLAN→LEAD Handoff: SD-SETTINGS-2025-10-12                  ║');
+  console.log('║  Verification Complete - Ready for Final Approval            ║');
+  console.log('╚═══════════════════════════════════════════════════════════════╝');
 
   const sdId = 'SD-SETTINGS-2025-10-12';
   const type = 'PLAN-to-LEAD';
   const phases = { from: 'PLAN', to: 'LEAD' };
 
   // Connect to EHG_Engineer database using transaction mode
-  console.log(`\n🔌 Connecting to EHG_Engineer database...`);
+  console.log('\n🔌 Connecting to EHG_Engineer database...');
   const client = await createDatabaseClient('engineer', {
     verify: true,
     verbose: true
   });
 
   try {
-    console.log(`\n📝 Generating handoff content...`);
+    console.log('\n📝 Generating handoff content...');
     const handoffContent = generateHandoffContent();
-    console.log(`   ✅ Content generated (7 mandatory elements)`);
+    console.log('   ✅ Content generated (7 mandatory elements)');
 
-    console.log(`\n💾 Inserting handoff into database...`);
+    console.log('\n💾 Inserting handoff into database...');
 
     const insertSQL = `
 INSERT INTO sd_phase_handoffs (
@@ -413,10 +413,10 @@ INSERT INTO sd_phase_handoffs (
 
     const handoffId = result.rows[0].id;
 
-    console.log(`   ✅ Handoff stored successfully!`);
+    console.log('   ✅ Handoff stored successfully!');
     console.log(`   ID: ${handoffId}`);
 
-    console.log(`\n🔍 Verifying handoff...`);
+    console.log('\n🔍 Verifying handoff...');
     const verification = await client.query(
       'SELECT id, sd_id, from_phase, to_phase, status, created_at FROM sd_phase_handoffs WHERE id = $1',
       [handoffId]
@@ -424,39 +424,39 @@ INSERT INTO sd_phase_handoffs (
 
     if (verification.rows.length > 0) {
       const record = verification.rows[0];
-      console.log(`   ✅ Verification successful`);
+      console.log('   ✅ Verification successful');
       console.log(`      SD: ${record.sd_id}`);
       console.log(`      Flow: ${record.from_phase} → ${record.to_phase}`);
       console.log(`      Status: ${record.status}`);
       console.log(`      Created: ${record.created_at}`);
     }
 
-    console.log(`\n╔═══════════════════════════════════════════════════════════════╗`);
-    console.log(`║  ✅ HANDOFF CREATED SUCCESSFULLY                            ║`);
-    console.log(`╚═══════════════════════════════════════════════════════════════╝`);
+    console.log('\n╔═══════════════════════════════════════════════════════════════╗');
+    console.log('║  ✅ HANDOFF CREATED SUCCESSFULLY                            ║');
+    console.log('╚═══════════════════════════════════════════════════════════════╝');
 
-    console.log(`\n📊 PLAN Verification Summary:`);
-    console.log(`   • Verdict: PASS (85% confidence)`);
-    console.log(`   • Critical violations fixed: 11 → 0 (100%)`);
-    console.log(`   • CI/CD status: GREEN`);
-    console.log(`   • Sub-agent blocks: Overridden (false positives)`);
-    console.log(`   • Ready for deployment: YES`);
+    console.log('\n📊 PLAN Verification Summary:');
+    console.log('   • Verdict: PASS (85% confidence)');
+    console.log('   • Critical violations fixed: 11 → 0 (100%)');
+    console.log('   • CI/CD status: GREEN');
+    console.log('   • Sub-agent blocks: Overridden (false positives)');
+    console.log('   • Ready for deployment: YES');
 
-    console.log(`\n📋 Next Steps:`);
-    console.log(`   1. LEAD agent reviews PLAN verification verdict`);
-    console.log(`   2. LEAD validates false positive analysis`);
-    console.log(`   3. LEAD grants final approval`);
-    console.log(`   4. LEAD marks SD as COMPLETED (100%)`);
-    console.log(`   5. Generate retrospective`);
+    console.log('\n📋 Next Steps:');
+    console.log('   1. LEAD agent reviews PLAN verification verdict');
+    console.log('   2. LEAD validates false positive analysis');
+    console.log('   3. LEAD grants final approval');
+    console.log('   4. LEAD marks SD as COMPLETED (100%)');
+    console.log('   5. Generate retrospective');
 
     return handoffId;
 
   } catch (error) {
-    console.error(`\n❌ Failed to store handoff:`, error.message);
+    console.error('\n❌ Failed to store handoff:', error.message);
     throw error;
   } finally {
     await client.end();
-    console.log(`\n🔌 Database connection closed\n`);
+    console.log('\n🔌 Database connection closed\n');
   }
 }
 
@@ -464,6 +464,6 @@ INSERT INTO sd_phase_handoffs (
 storeHandoff()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error(`\n❌ Error:`, error.message);
+    console.error('\n❌ Error:', error.message);
     process.exit(1);
   });

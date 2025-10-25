@@ -58,8 +58,8 @@ async function createManualSession() {
   console.log(chalk.cyan('║           MANUAL UAT SESSION DETAILS                  ║'));
   console.log(chalk.cyan('╚═══════════════════════════════════════════════════════╝'));
   console.log(chalk.white(`  Run ID:      ${newRun.id}`));
-  console.log(chalk.white(`  Type:        MANUAL TESTING`));
-  console.log(chalk.white(`  Environment: http://localhost:5173`));
+  console.log(chalk.white('  Type:        MANUAL TESTING'));
+  console.log(chalk.white('  Environment: http://localhost:5173'));
   console.log(chalk.white(`  Started:     ${new Date(newRun.started_at).toLocaleString()}`));
   console.log(chalk.cyan('═'.repeat(60)));
 
@@ -98,7 +98,7 @@ async function createManualSession() {
   // Save run ID for easy access
   const fs = (await import('fs')).default;
   fs.writeFileSync('.current-uat-run', newRun.id);
-  console.log(chalk.gray(`Run ID saved to .current-uat-run for reference\n`));
+  console.log(chalk.gray('Run ID saved to .current-uat-run for reference\n'));
 }
 
 // Run

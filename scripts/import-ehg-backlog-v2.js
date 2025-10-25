@@ -170,11 +170,11 @@ const options = program.opts();
 
 async function main() {
   console.log(`\n${'='.repeat(60)}`);
-  console.log(`🚀 EHG Backlog Import Tool (v2 - Using Existing Tables)`);
+  console.log('🚀 EHG Backlog Import Tool (v2 - Using Existing Tables)');
   console.log(`${'='.repeat(60)}`);
   console.log(`📝 Import Run ID: ${IMPORT_RUN_ID}`);
   console.log(`🔄 Mode: ${options.dryRun ? 'DRY RUN' : 'LIVE IMPORT'}`);
-  console.log(`📊 Target: strategic_directives_v2 (existing table)`);
+  console.log('📊 Target: strategic_directives_v2 (existing table)');
   console.log(`${'='.repeat(60)}\n`);
   
   // 1. Resolve file path
@@ -350,7 +350,7 @@ async function main() {
   processedSDs.forEach(({ sd }) => {
     triageDistribution[sd.rolled_triage]++;
   });
-  console.log(`\nRolled Triage Distribution:`);
+  console.log('\nRolled Triage Distribution:');
   console.log(`  High:   ${triageDistribution.High}`);
   console.log(`  Medium: ${triageDistribution.Medium}`);
   console.log(`  Low:    ${triageDistribution.Low}`);
@@ -541,15 +541,15 @@ async function importToDatabase(processedSDs, warnings, checksum, filePath) {
     console.error('⚠️  Failed to log audit:', auditError.message);
   }
   
-  console.log(`\n` + '='.repeat(60));
-  console.log(`📈 Import Results:`);
+  console.log('\n' + '='.repeat(60));
+  console.log('📈 Import Results:');
   console.log('='.repeat(60));
   console.log(`  ✅ Successfully imported: ${successCount} SDs`);
   if (errorCount > 0) {
     console.log(`  ❌ Failed: ${errorCount} SDs`);
   }
   console.log(`  🔄 Import Run ID: ${IMPORT_RUN_ID}`);
-  console.log(`  📊 Target Table: strategic_directives_v2`);
+  console.log('  📊 Target Table: strategic_directives_v2');
   console.log('='.repeat(60));
 }
 

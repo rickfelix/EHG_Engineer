@@ -162,7 +162,7 @@ scenarios.forEach(scenario => {
   
   // Old method (top 3)
   const oldSelected = oldSelection(agents, 3);
-  console.log(`   ⚠️ OLD METHOD (Top 3 only):`);
+  console.log('   ⚠️ OLD METHOD (Top 3 only):');
   console.log(`      Selected: ${oldSelected.map(a => a.code).join(', ')}`);
   oldSelected.forEach(a => {
     const bar = '█'.repeat(Math.floor(a.confidence * 10)).padEnd(10, '░');
@@ -171,7 +171,7 @@ scenarios.forEach(scenario => {
   
   // New method (intelligent)
   const newSelected = intelligentSelection(agents);
-  console.log(`\n   ✅ NEW METHOD (Intelligent Multi-Selection):`);
+  console.log('\n   ✅ NEW METHOD (Intelligent Multi-Selection):');
   console.log(`      Selected: ${newSelected.map(a => a.code).join(', ')} (${newSelected.length} agents)`);
   
   // Group by selection reason
@@ -180,7 +180,7 @@ scenarios.forEach(scenario => {
   const bySynergy = newSelected.filter(a => a.reason === 'synergy');
   
   if (byConfidence.length > 0) {
-    console.log(`      Primary (confidence-based):`);
+    console.log('      Primary (confidence-based):');
     byConfidence.forEach(a => {
       const bar = '█'.repeat(Math.floor(a.confidence * 10)).padEnd(10, '░');
       console.log(`      - ${a.code}: ${bar} ${Math.round(a.confidence * 100)}%`);
@@ -188,14 +188,14 @@ scenarios.forEach(scenario => {
   }
   
   if (byDependency.length > 0) {
-    console.log(`      Added as dependencies:`);
+    console.log('      Added as dependencies:');
     byDependency.forEach(a => {
       console.log(`      - ${a.code} (required by other agents)`);
     });
   }
   
   if (bySynergy.length > 0) {
-    console.log(`      Added for synergy:`);
+    console.log('      Added for synergy:');
     bySynergy.forEach(a => {
       console.log(`      - ${a.code} (works well with selected agents)`);
     });

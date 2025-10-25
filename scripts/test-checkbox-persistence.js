@@ -64,7 +64,7 @@ async function testCheckboxPersistence() {
     const savedCount = checkboxStates.filter(cb => cb.value !== undefined).length;
     const checkedCount = checkboxStates.filter(cb => cb.value === true).length;
     
-    console.log(`  Total checkboxes: 3`);
+    console.log('  Total checkboxes: 3');
     console.log(`  Saved states: ${savedCount}/3`);
     console.log(`  Checked boxes: ${checkedCount}`);
     

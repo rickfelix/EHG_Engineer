@@ -32,7 +32,7 @@ async function backfillPRD() {
   }
 
   const prd = {
-    id: `PRD-BOARD-VISUAL-BUILDER-001`,
+    id: 'PRD-BOARD-VISUAL-BUILDER-001',
     sd_id: 'SD-BOARD-VISUAL-BUILDER-001',
     directive_id: 'SD-BOARD-VISUAL-BUILDER-001',
     title: 'Visual Workflow Orchestration Builder with CrewAI Flows - Phase 1',
@@ -43,7 +43,7 @@ async function backfillPRD() {
     priority: 'critical',
 
     // Executive Summary
-    executive_summary: `Full-page visual workflow builder powered by React Flow enabling drag-and-drop creation of AI agent workflows with automatic CrewAI Flows Python code generation. Phase 1 delivers core canvas, 5 node types, template system, and database integration.`,
+    executive_summary: 'Full-page visual workflow builder powered by React Flow enabling drag-and-drop creation of AI agent workflows with automatic CrewAI Flows Python code generation. Phase 1 delivers core canvas, 5 node types, template system, and database integration.',
 
     // Business Context
     business_context: `**Problem**: Board members need to create custom AI agent workflows but lack technical skills for coding CrewAI Flows.

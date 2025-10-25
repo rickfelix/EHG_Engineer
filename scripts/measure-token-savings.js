@@ -175,20 +175,20 @@ async function measureTokenSavings(sdIds) {
   console.log('─'.repeat(70));
   console.log('🎯 VALIDATION AGAINST EXPECTED SAVINGS');
   console.log('─'.repeat(70));
-  console.log(`   Expected: 70-90% compression rate`);
+  console.log('   Expected: 70-90% compression rate');
   console.log(`   Actual: ${overallPercentage}%`);
 
   if (overallPercentage >= 70 && overallPercentage <= 95) {
-    console.log(`   ✅ MEETS EXPECTATIONS`);
+    console.log('   ✅ MEETS EXPECTATIONS');
   } else if (overallPercentage >= 50) {
-    console.log(`   ⚠️  BELOW EXPECTATIONS (but acceptable)`);
-    console.log(`   ℹ️  More critical issues than expected (context preserved correctly)`);
+    console.log('   ⚠️  BELOW EXPECTATIONS (but acceptable)');
+    console.log('   ℹ️  More critical issues than expected (context preserved correctly)');
   } else if (overallPercentage >= 20) {
-    console.log(`   ⚠️  SIGNIFICANTLY BELOW EXPECTATIONS`);
-    console.log(`   ℹ️  High number of critical/warning reports`);
+    console.log('   ⚠️  SIGNIFICANTLY BELOW EXPECTATIONS');
+    console.log('   ℹ️  High number of critical/warning reports');
   } else {
-    console.log(`   ❗ FAR BELOW EXPECTATIONS`);
-    console.log(`   ℹ️  Most reports have critical issues (full context preserved)`);
+    console.log('   ❗ FAR BELOW EXPECTATIONS');
+    console.log('   ℹ️  Most reports have critical issues (full context preserved)');
   }
   console.log('─'.repeat(70) + '\n');
 
@@ -202,14 +202,14 @@ async function measureTokenSavings(sdIds) {
     : 0;
 
   console.log(`   Average tokens saved per SD: ${avgTokensPerSD.toLocaleString()} tokens`);
-  console.log(`   Expected range: 10,000 - 20,000 tokens`);
+  console.log('   Expected range: 10,000 - 20,000 tokens');
 
   if (avgTokensPerSD >= 10000) {
-    console.log(`   ✅ Meets/exceeds expected savings`);
+    console.log('   ✅ Meets/exceeds expected savings');
   } else if (avgTokensPerSD >= 5000) {
-    console.log(`   ⚠️  Below expected savings (but still beneficial)`);
+    console.log('   ⚠️  Below expected savings (but still beneficial)');
   } else {
-    console.log(`   ℹ️  Lower savings (likely due to critical issues requiring full context)`);
+    console.log('   ℹ️  Lower savings (likely due to critical issues requiring full context)');
   }
 
   console.log('─'.repeat(70) + '\n');

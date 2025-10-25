@@ -26,7 +26,7 @@ async function checkSubDirectives() {
 
       if (error || !sd) {
         console.log(`❌ ${sdId}: NOT FOUND`);
-        console.log(`   Status: Does not exist in database`);
+        console.log('   Status: Does not exist in database');
         console.log('');
       } else {
         console.log(`✅ ${sdId}`);

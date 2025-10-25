@@ -181,7 +181,7 @@ class LEADSubmissionReviewer {
             .single();
 
         if (sd) {
-            console.log(`\n   📋 Linked Strategic Directive:`);
+            console.log('\n   📋 Linked Strategic Directive:');
             console.log(`      Title: ${sd.title?.substring(0, 60)}...`);
             console.log(`      Status: ${sd.status}`);
             console.log(`      Priority: ${sd.priority || 'Not set'}`);

@@ -36,8 +36,8 @@ async function createPattern() {
     }
   }
 
-  console.log(`\n📋 CREATE NEW ISSUE PATTERN`);
-  console.log(`═`.repeat(60));
+  console.log('\n📋 CREATE NEW ISSUE PATTERN');
+  console.log('═'.repeat(60));
 
   // Interactive mode
   const issueSummary = fromIssue || await question('\n1. Issue summary (clear, searchable description):\n   ');
@@ -48,16 +48,16 @@ async function createPattern() {
     process.exit(1);
   }
 
-  console.log(`\n2. Category (choose one):`);
-  console.log(`   - database`);
-  console.log(`   - testing`);
-  console.log(`   - build`);
-  console.log(`   - deployment`);
-  console.log(`   - security`);
-  console.log(`   - protocol`);
-  console.log(`   - code_structure`);
-  console.log(`   - performance`);
-  console.log(`   - over_engineering`);
+  console.log('\n2. Category (choose one):');
+  console.log('   - database');
+  console.log('   - testing');
+  console.log('   - build');
+  console.log('   - deployment');
+  console.log('   - security');
+  console.log('   - protocol');
+  console.log('   - code_structure');
+  console.log('   - performance');
+  console.log('   - over_engineering');
 
   const category = await question('\n   Category: ');
 
@@ -68,7 +68,7 @@ async function createPattern() {
     process.exit(1);
   }
 
-  console.log(`\n3. Severity (choose one): critical, high, medium, low`);
+  console.log('\n3. Severity (choose one): critical, high, medium, low');
   const severity = await question('   Severity: ') || 'medium';
 
   if (!['critical', 'high', 'medium', 'low'].includes(severity)) {
@@ -90,7 +90,7 @@ async function createPattern() {
 
   rl.close();
 
-  console.log(`\n📊 Creating pattern...`);
+  console.log('\n📊 Creating pattern...');
 
   try {
     const result = await kb.createPattern({
@@ -102,7 +102,7 @@ async function createPattern() {
       resolution_time_minutes: resTime ? parseInt(resTime) : null
     });
 
-    console.log(`\n✅ Pattern created successfully!`);
+    console.log('\n✅ Pattern created successfully!');
     console.log(`   ID: ${result.pattern_id}`);
     console.log(`   Category: ${result.category}`);
     console.log(`   Severity: ${result.severity}`);
@@ -112,10 +112,10 @@ async function createPattern() {
       console.log(`   Solution: ${result.proven_solutions[0].solution}`);
     }
 
-    console.log(`\n🔍 Search for this pattern:`);
+    console.log('\n🔍 Search for this pattern:');
     console.log(`   node scripts/search-prior-issues.js "${issueSummary.substring(0, 30)}..."`);
 
-    console.log(`\n📝 Record future occurrences:`);
+    console.log('\n📝 Record future occurrences:');
     console.log(`   node scripts/record-pattern-success.js --pattern ${result.pattern_id} --sd <SD_ID> --time <MINUTES>`);
 
   } catch (error) {

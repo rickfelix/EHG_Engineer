@@ -51,7 +51,7 @@ async function findMissingHighSDs() {
   console.log('');
   console.log('DEBUGGING INFO:');
   console.log(`  Total HIGH priority SDs in DB: ${data.length}`);
-  console.log(`  You see on dashboard: 9`);
+  console.log('  You see on dashboard: 9');
   console.log(`  Missing from dashboard: ${data.length - 9}`);
   console.log('');
 

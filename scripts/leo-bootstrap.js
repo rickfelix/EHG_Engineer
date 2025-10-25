@@ -12,7 +12,7 @@ import { dirname } from 'path';
  * Ensures everything is properly set up
  */
 
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 import { createClient } from '@supabase/supabase-js';
 import { LEOAutoInit } from './leo-auto-init.js';
@@ -105,7 +105,7 @@ class LEOBootstrap {
       });
     }
     
-    return `Environment validated`;
+    return 'Environment validated';
   }
   
   async validateDatabase() {

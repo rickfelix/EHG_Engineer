@@ -270,7 +270,7 @@ async function addUserStoryContext() {
   }
 
   console.log('\n' + '═'.repeat(60));
-  console.log(`✅ Context Engineering Complete`);
+  console.log('✅ Context Engineering Complete');
   console.log(`   Updated: ${updated} user stories`);
   console.log(`   Skipped: ${skipped} user stories`);
   console.log(`   Coverage: ${Math.round((updated / stories.length) * 100)}%`);

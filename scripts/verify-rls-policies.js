@@ -118,7 +118,7 @@ class RLSVerifier {
       WHERE
         n.nspname = 'public'
         AND c.relkind = 'r'
-        ${specificTable ? "AND c.relname = $1" : ""}
+        ${specificTable ? 'AND c.relname = $1' : ''}
       ORDER BY c.relname;
     `;
 

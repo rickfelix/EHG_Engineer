@@ -51,7 +51,7 @@ async function migrateHandoffFiles() {
 
     const placeholderSdId = 'SD-LEGACY-HANDOFFS';
     const checkSd = await client.query(
-      `SELECT id FROM strategic_directives_v2 WHERE id = $1`,
+      'SELECT id FROM strategic_directives_v2 WHERE id = $1',
       [placeholderSdId]
     );
 

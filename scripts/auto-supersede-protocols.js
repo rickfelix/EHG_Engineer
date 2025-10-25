@@ -123,10 +123,10 @@ class AutoSupersede {
     console.log(`✅ All previous versions now reference v${newVersion}`);
     console.log('✅ CLAUDE.md updated automatically');
     console.log('✅ Protocol version management maintained');
-    console.log(`\n📝 Next steps:`);
+    console.log('\n📝 Next steps:');
     console.log(`   1. Create the new protocol file: leo_protocol_v${newVersion}.md`);
-    console.log(`   2. Mark it with status: "🟢 CURRENT ACTIVE VERSION"`);
-    console.log(`   3. Run: node scripts/get-latest-leo-protocol-version.js`);
+    console.log('   2. Mark it with status: "🟢 CURRENT ACTIVE VERSION"');
+    console.log('   3. Run: node scripts/get-latest-leo-protocol-version.js');
   }
 
   async validateAllSuperseding() {
@@ -153,7 +153,7 @@ class AutoSupersede {
     } else {
       console.log('⚠️  Issues found:');
       issues.forEach(issue => console.log(`   - ${issue}`));
-      console.log(`\n💡 Run --fix-superseding to automatically fix these issues`);
+      console.log('\n💡 Run --fix-superseding to automatically fix these issues');
     }
 
     return { success: issues.length === 0, issues };

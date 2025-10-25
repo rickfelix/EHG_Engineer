@@ -128,11 +128,11 @@ async function testCompressionOnSD(sdId, currentPhase = 'EXEC') {
     console.log(`   └─ Saved: ${savings.tokens_saved} tokens (${savings.percentage_saved}%)`);
 
     if (tier === 'TIER_1_CRITICAL') {
-      console.log(`   └─ ⚠️  No compression (critical issues preserved)`);
+      console.log('   └─ ⚠️  No compression (critical issues preserved)');
     } else if (tier === 'TIER_2_IMPORTANT') {
-      console.log(`   └─ 📋 Structured summary (warnings preserved)`);
+      console.log('   └─ 📋 Structured summary (warnings preserved)');
     } else {
-      console.log(`   └─ 📝 Reference only (one-line summary)`);
+      console.log('   └─ 📝 Reference only (one-line summary)');
     }
     console.log('');
   }

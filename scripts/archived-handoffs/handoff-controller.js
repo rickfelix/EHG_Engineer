@@ -213,13 +213,13 @@ class HandoffController {
     // Create markdown summary
     let markdown = `## ${fromAgent} → ${toAgent} Handoff Summary\n\n`;
     markdown += `**Date**: ${summary.timestamp}\n\n`;
-    markdown += `### Completed:\n`;
+    markdown += '### Completed:\n';
     completedWork.forEach(item => markdown += `- ${item}\n`);
-    markdown += `\n### Next Steps:\n`;
+    markdown += '\n### Next Steps:\n';
     nextSteps.forEach(item => markdown += `- ${item}\n`);
     
     if (files.length > 0) {
-      markdown += `\n### Files:\n`;
+      markdown += '\n### Files:\n';
       files.forEach(file => markdown += `- ${file}\n`);
     }
     

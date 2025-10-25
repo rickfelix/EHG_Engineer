@@ -212,7 +212,7 @@ class GitCommitVerifier {
       this.results.unpushedCount = unpushedCount;
       this.results.blockers.push(`${unpushedCount} unpushed commit(s) on branch "${currentBranch}"`);
       console.error(`❌ ${unpushedCount} commit(s) not pushed to remote`);
-      console.error(`   Push commits: git push`);
+      console.error('   Push commits: git push');
       return false;
     }
 
@@ -298,7 +298,7 @@ class GitCommitVerifier {
 
     if (branchSDId !== this.sdId) {
       this.results.blockers.push(`Branch SD-ID "${branchSDId}" does not match target SD-ID "${this.sdId}"`);
-      console.error(`❌ Branch SD-ID mismatch:`);
+      console.error('❌ Branch SD-ID mismatch:');
       console.error(`   Expected: ${this.sdId}`);
       console.error(`   Found in branch: ${branchSDId}`);
       console.error(`   Current branch: ${currentBranch}`);

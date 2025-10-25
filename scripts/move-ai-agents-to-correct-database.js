@@ -153,7 +153,7 @@ async function moveAIAgents() {
       console.error('⚠️  Warning deleting triggers:', triggerDeleteError.message);
       // Continue anyway - triggers might not exist
     } else {
-      console.log(`   ✅ Removed related triggers`);
+      console.log('   ✅ Removed related triggers');
     }
   }
 
@@ -168,7 +168,7 @@ async function moveAIAgents() {
     process.exit(1);
   }
 
-  console.log(`✅ Removed 3 agents from leo_sub_agents\n`);
+  console.log('✅ Removed 3 agents from leo_sub_agents\n');
 
   // Step 4: Verify
   console.log('Step 4: Verifying...');
@@ -201,7 +201,7 @@ async function moveAIAgents() {
   console.log('='.repeat(70));
   console.log('');
   console.log('Summary:');
-  console.log(`  - Moved 3 AI agents from EHG_Engineer to EHG`);
+  console.log('  - Moved 3 AI agents from EHG_Engineer to EHG');
   console.log(`  - EHG_Engineer leo_sub_agents: ${remainingLeo.length} (LEO Protocol validation only)`);
   console.log(`  - EHG ai_agents: ${aiAgentsCount.length} (Customer-facing AI services)`);
   console.log('');

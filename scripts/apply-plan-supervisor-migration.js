@@ -82,7 +82,7 @@ async function applyMigration() {
     }
     
     console.log('\n' + '='.repeat(50));
-    console.log(`Migration Summary:`);
+    console.log('Migration Summary:');
     console.log(`  ✅ Successful: ${successCount}`);
     console.log(`  ❌ Failed: ${errorCount}`);
     console.log(`  ℹ️  Manual: ${statements.length - successCount - errorCount}`);

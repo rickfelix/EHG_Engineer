@@ -81,7 +81,7 @@ async function testAgent(name, modulePath) {
       
       // Show top issues if any
       if (results.issues && results.issues.length > 0) {
-        console.log(`   Top issues:`);
+        console.log('   Top issues:');
         results.issues.slice(0, 3).forEach(issue => {
           console.log(`   - ${issue.type || issue.description || issue}`);
         });

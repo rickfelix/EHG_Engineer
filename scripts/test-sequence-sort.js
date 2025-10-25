@@ -76,7 +76,7 @@ async function test() {
   const firstDesc = descSorted[0].id;
   if (firstAsc === firstDesc) {
     console.log(`  ❌ PROBLEM: Both ASC and DESC have ${firstAsc} first!`);
-    console.log(`     This means sorting is NOT working correctly.`);
+    console.log('     This means sorting is NOT working correctly.');
   } else {
     console.log(`  ✅ ASC first: ${firstAsc}, DESC first: ${firstDesc}`);
   }

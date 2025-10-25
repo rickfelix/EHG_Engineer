@@ -40,7 +40,7 @@ async function checkDirectiveStatus() {
                         .limit(3);
                     
                     if (samples && samples.length > 0) {
-                        console.log(`   Sample records:`);
+                        console.log('   Sample records:');
                         samples.forEach(record => {
                             const id = record.sd_id || record.prd_id || record.id;
                             const title = record.title || record.directive_title || 'Untitled';

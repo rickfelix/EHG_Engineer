@@ -285,7 +285,7 @@ async function backfillRetrospective(retro, dryRun, retries = 0) {
     console.log(`   Tags: ${updates.tags.length}`);
 
     if (dryRun) {
-      console.log(`   🔍 DRY RUN: Would update retrospective`);
+      console.log('   🔍 DRY RUN: Would update retrospective');
       return { success: true, updated: false };
     }
 
@@ -300,7 +300,7 @@ async function backfillRetrospective(retro, dryRun, retries = 0) {
       throw new Error(`Database update failed: ${error.message}`);
     }
 
-    console.log(`   ✅ Updated successfully`);
+    console.log('   ✅ Updated successfully');
     return { success: true, updated: true };
 
   } catch (error) {

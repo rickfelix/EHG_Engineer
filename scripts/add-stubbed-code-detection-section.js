@@ -65,7 +65,7 @@ async function main() {
   try {
     // Get the active protocol ID
     const protocolResult = await client.query(
-      `SELECT id FROM leo_protocols WHERE status = 'active' LIMIT 1`
+      'SELECT id FROM leo_protocols WHERE status = \'active\' LIMIT 1'
     );
 
     if (protocolResult.rows.length === 0) {

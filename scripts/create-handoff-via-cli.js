@@ -242,30 +242,30 @@ INSERT INTO sd_phase_handoffs (
 
   try {
     // Check if Supabase CLI is linked
-    console.log(`   🔍 Checking Supabase CLI status...`);
+    console.log('   🔍 Checking Supabase CLI status...');
     await execAsync('supabase status');
-    console.log(`      ✅ Supabase project linked`);
+    console.log('      ✅ Supabase project linked');
 
     // Execute via CLI (uses service role, bypasses RLS)
-    console.log(`   📤 Inserting handoff via service role...`);
+    console.log('   📤 Inserting handoff via service role...');
     const { stdout, stderr } = await execAsync(`supabase db execute --sql "${sql.replace(/"/g, '\\"')}"`);
 
     if (stderr && stderr.includes('ERROR')) {
       throw new Error(`SQL execution failed: ${stderr}`);
     }
 
-    console.log(`      ✅ Handoff created successfully`);
-    console.log(`\n📋 SQL Output:`);
+    console.log('      ✅ Handoff created successfully');
+    console.log('\n📋 SQL Output:');
     console.log(stdout);
 
     return { success: true, output: stdout };
 
   } catch (error) {
-    console.error(`\n❌ Failed to create handoff via CLI:`, error.message);
+    console.error('\n❌ Failed to create handoff via CLI:', error.message);
 
     if (error.message.includes('not linked')) {
-      console.log(`\n💡 Supabase CLI not linked. Run:`);
-      console.log(`   supabase link --project-ref dedlbzhpgkmetvhbkyzq`);
+      console.log('\n💡 Supabase CLI not linked. Run:');
+      console.log('   supabase link --project-ref dedlbzhpgkmetvhbkyzq');
     }
 
     throw error;
@@ -304,15 +304,15 @@ Example:
 
   // Validate arguments
   if (!type || !sdId) {
-    console.error(`\n❌ Missing required arguments`);
-    console.error(`   Usage: node scripts/create-handoff-via-cli.js --type <TYPE> --sd-id <SD-ID>`);
-    console.error(`   Run with --help for more information\n`);
+    console.error('\n❌ Missing required arguments');
+    console.error('   Usage: node scripts/create-handoff-via-cli.js --type <TYPE> --sd-id <SD-ID>');
+    console.error('   Run with --help for more information\n');
     process.exit(1);
   }
 
-  console.log(`\n╔═══════════════════════════════════════════════════════════════╗`);
-  console.log(`║  Create Phase Handoff via Supabase CLI                       ║`);
-  console.log(`╚═══════════════════════════════════════════════════════════════╝`);
+  console.log('\n╔═══════════════════════════════════════════════════════════════╗');
+  console.log('║  Create Phase Handoff via Supabase CLI                       ║');
+  console.log('╚═══════════════════════════════════════════════════════════════╝');
   console.log(`   Type: ${type}`);
   console.log(`   SD: ${sdId}`);
 
@@ -328,17 +328,17 @@ Example:
     // Create via CLI
     const result = await createHandoffViaCLI(type, sdId, handoffContent);
 
-    console.log(`\n✅ Handoff created successfully!`);
-    console.log(`\n📋 Next Steps:`);
-    console.log(`   1. PLAN agent should review handoff`);
-    console.log(`   2. Execute sub-agent validation suite`);
-    console.log(`   3. Generate PLAN verification verdict`);
-    console.log(`   4. Create PLAN-to-LEAD handoff\n`);
+    console.log('\n✅ Handoff created successfully!');
+    console.log('\n📋 Next Steps:');
+    console.log('   1. PLAN agent should review handoff');
+    console.log('   2. Execute sub-agent validation suite');
+    console.log('   3. Generate PLAN verification verdict');
+    console.log('   4. Create PLAN-to-LEAD handoff\n');
 
     process.exit(0);
 
   } catch (error) {
-    console.error(`\n❌ Error:`, error.message);
+    console.error('\n❌ Error:', error.message);
     process.exit(1);
   }
 }

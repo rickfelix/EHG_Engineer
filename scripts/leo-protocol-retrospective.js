@@ -27,7 +27,7 @@ async function generateRetrospective() {
     date: new Date().toISOString(),
     analyzed_sds: ['SD-046', 'SD-027'],
 
-    executive_summary: `Analysis of recent LEO Protocol executions reveals successful completion of all phases with 91-92% verification confidence, but identifies significant operational inefficiencies. Key findings: excessive script creation (8-9 per SD), manual status management consuming 15-20 minutes per SD, and module warnings cluttering 50% of console output. Three improvement initiatives have been created to address these issues.`,
+    executive_summary: 'Analysis of recent LEO Protocol executions reveals successful completion of all phases with 91-92% verification confidence, but identifies significant operational inefficiencies. Key findings: excessive script creation (8-9 per SD), manual status management consuming 15-20 minutes per SD, and module warnings cluttering 50% of console output. Three improvement initiatives have been created to address these issues.',
 
     what_went_well: [
       'Complete LEAD→PLAN→EXEC cycle execution for both SDs',

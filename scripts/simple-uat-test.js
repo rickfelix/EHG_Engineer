@@ -172,7 +172,7 @@ async function runLoginTest() {
   console.log(chalk.cyan('\n' + '═'.repeat(60)));
   console.log(chalk.bold('Test Summary'));
   console.log(chalk.cyan('═'.repeat(60)));
-  console.log(`Test Case: TEST-AUTH-001`);
+  console.log('Test Case: TEST-AUTH-001');
   console.log(`Result: ${status === 'PASS' ? chalk.green(status) :
                        status === 'FAIL' ? chalk.red(status) :
                        chalk.yellow(status)}`);

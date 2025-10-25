@@ -22,7 +22,7 @@ async function createStrategicDirective() {
     id: 'SD-TEST-001',
     sd_key: 'SD-TEST-001',
     title: 'Strategic Directive Testing Work-Down Plan',
-    description: `Establish systematic testing framework for validating Strategic Directives stored in database. Testing sub-agent analyzes SD metadata, PRDs, backlog items, and existing implementations to determine true completion status. Creates work-down plan tracking which SDs have been validated vs pending. CRITICAL: Only test SDs that haven't been tested yet - no duplicate testing.`,
+    description: 'Establish systematic testing framework for validating Strategic Directives stored in database. Testing sub-agent analyzes SD metadata, PRDs, backlog items, and existing implementations to determine true completion status. Creates work-down plan tracking which SDs have been validated vs pending. CRITICAL: Only test SDs that haven\'t been tested yet - no duplicate testing.',
 
     status: 'draft',
     priority: 'high',

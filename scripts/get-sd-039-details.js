@@ -41,36 +41,36 @@ async function getSD039Details() {
     console.log(`Status: ${data.status}`);
     console.log(`Priority: ${data.priority}`);
     console.log(`Created: ${data.created_at}`);
-    console.log(`\nDescription:`);
+    console.log('\nDescription:');
     console.log(data.description || 'No description available');
 
     if (data.strategic_intent) {
-      console.log(`\nStrategic Intent:`);
+      console.log('\nStrategic Intent:');
       console.log(data.strategic_intent);
     }
 
     if (data.rationale) {
-      console.log(`\nRationale:`);
+      console.log('\nRationale:');
       console.log(data.rationale);
     }
 
     if (data.scope_details) {
-      console.log(`\nScope Details:`);
+      console.log('\nScope Details:');
       console.log(data.scope_details);
     }
 
     if (data.success_criteria) {
-      console.log(`\nSuccess Criteria:`);
+      console.log('\nSuccess Criteria:');
       console.log(data.success_criteria);
     }
 
     if (data.acceptance_criteria) {
-      console.log(`\nAcceptance Criteria:`);
+      console.log('\nAcceptance Criteria:');
       console.log(data.acceptance_criteria);
     }
 
     if (data.metadata) {
-      console.log(`\nMetadata:`);
+      console.log('\nMetadata:');
       console.log(JSON.stringify(data.metadata, null, 2));
     }
 

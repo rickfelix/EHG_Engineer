@@ -94,23 +94,23 @@ async function executeMigration() {
                 {
                   rule_name: 'security_critical_override',
                   priority: 1,
-                  if_condition: { "SECURITY": "CRITICAL" },
+                  if_condition: { 'SECURITY': 'CRITICAL' },
                   then_action: 'BLOCK',
-                  override_agents: ["*"],
+                  override_agents: ['*'],
                   description: 'Security critical issues override all other agents'
                 },
                 {
                   rule_name: 'database_failure_override',
                   priority: 2,
-                  if_condition: { "DATABASE": "FAILED" },
+                  if_condition: { 'DATABASE': 'FAILED' },
                   then_action: 'BLOCK',
-                  override_agents: ["TESTING", "PERFORMANCE", "DESIGN", "COST", "DOCUMENTATION"],
+                  override_agents: ['TESTING', 'PERFORMANCE', 'DESIGN', 'COST', 'DOCUMENTATION'],
                   description: 'Database failures block except for security issues'
                 },
                 {
                   rule_name: 'testing_conditional_pass',
                   priority: 3,
-                  if_condition: { "TESTING": "PASSED", "others": "WARNING" },
+                  if_condition: { 'TESTING': 'PASSED', 'others': 'WARNING' },
                   then_action: 'CONDITIONAL_PASS',
                   override_agents: [],
                   description: 'Allow conditional pass if only warnings exist'

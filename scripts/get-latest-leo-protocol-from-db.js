@@ -4,7 +4,7 @@
  * Database-first approach for protocol version detection
  */
 
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 import { createClient } from '@supabase/supabase-js';
 import { LEOProtocolVersionDetector } from './get-latest-leo-protocol-version.js';

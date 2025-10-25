@@ -82,7 +82,7 @@ async function testRealistic() {
       }
 
       // Clean up
-      await client.query(`DELETE FROM retrospectives WHERE id = $1`, [result.rows[0].id]);
+      await client.query('DELETE FROM retrospectives WHERE id = $1', [result.rows[0].id]);
       console.log('\n✅ Test data cleaned up');
 
     } catch (err) {

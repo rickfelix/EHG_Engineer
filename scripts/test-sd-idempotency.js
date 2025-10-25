@@ -67,7 +67,7 @@ async function testSDIdempotency() {
     if (allSame && allExisting) {
       console.log('✅ PASS: SD creation is idempotent!');
       console.log(`   All 3 calls returned the same SD: ${result1.sd_id}`);
-      console.log(`   Existing flag properly set on subsequent calls`);
+      console.log('   Existing flag properly set on subsequent calls');
     } else if (allSame) {
       console.log('⚠️  PARTIAL: Same SD returned but existing flag not set');
       console.log(`   SD ID: ${result1.sd_id}`);

@@ -330,7 +330,7 @@ Before creating PLAN→EXEC handoff, PLAN agent MUST verify:
 
       if (error) {
         if (error.code === '23505') {
-          console.log(`   ⚠️  Already exists`);
+          console.log('   ⚠️  Already exists');
           skipCount++;
         } else {
           throw error;

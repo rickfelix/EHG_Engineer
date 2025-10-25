@@ -15,7 +15,7 @@
 export async function selectTestTier(sd) {
   const { category, scope, metadata = {} } = sd;
 
-  console.log(`🎯 Test Tier Selector: Analyzing SD type...`);
+  console.log('🎯 Test Tier Selector: Analyzing SD type...');
 
   // Tier 1: Smoke tests (ALWAYS REQUIRED)
   const tier1 = {
@@ -159,15 +159,15 @@ function generateRationale(sd, tier1, tier2, tier3) {
   parts.push(`Tier 1 (Smoke): Always required for ${sd.id || 'SD'}`);
 
   if (tier2.required) {
-    parts.push(`Tier 2 (E2E): Required - UI feature detected in category/scope`);
+    parts.push('Tier 2 (E2E): Required - UI feature detected in category/scope');
   } else {
-    parts.push(`Tier 2 (E2E): Skipped - no UI components identified`);
+    parts.push('Tier 2 (E2E): Skipped - no UI components identified');
   }
 
   if (tier3.required) {
-    parts.push(`Tier 3 (Manual): Recommended - complex business logic detected`);
+    parts.push('Tier 3 (Manual): Recommended - complex business logic detected');
   } else {
-    parts.push(`Tier 3 (Manual): Skipped - automated tests sufficient`);
+    parts.push('Tier 3 (Manual): Skipped - automated tests sufficient');
   }
 
   return parts.join('. ');

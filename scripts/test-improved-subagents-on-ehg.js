@@ -144,7 +144,7 @@ class ImprovedSubAgentTester {
     console.log('\n✅ Improvements Verified:');
     console.log(`  Deduplication: ${this.results.improvements.security.deduplicationWorking ? '✓' : '✗'}`);
     console.log(`  Context-aware: ${this.results.improvements.security.contextAware ? '✓' : '✗'}`);
-    console.log(`  Confidence filtering: ✓ (only high-confidence issues reported)\n`);
+    console.log('  Confidence filtering: ✓ (only high-confidence issues reported)\n');
     
     // Show sample findings to verify quality
     if (results.findings.length > 0) {
@@ -195,7 +195,7 @@ class ImprovedSubAgentTester {
     console.log('\n✅ Improvements Verified:');
     console.log(`  Pattern grouping: ${this.results.improvements.performance.groupingWorking ? '✓' : '✗'}`);
     console.log(`  Severity weighting: ${this.results.improvements.performance.severityWeighting ? '✓' : '✗'}`);
-    console.log(`  False positive reduction: ✓ (grouped similar issues)\n`);
+    console.log('  False positive reduction: ✓ (grouped similar issues)\n');
     
     // Show how grouping works
     if (results.findings.length > 0) {

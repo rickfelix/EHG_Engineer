@@ -46,7 +46,7 @@ async function executeSQLFile(filePath, description) {
         console.log(`   ❌ Error: ${error.message}`);
         errorCount++;
       } else {
-        console.log(`   ✅ Success`);
+        console.log('   ✅ Success');
         successCount++;
       }
     } catch (err) {

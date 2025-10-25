@@ -140,17 +140,17 @@ class FixValidationOrchestrator {
       
       if (validation.success) {
         result.success = true;
-        console.log(`   ✅ Validation passed!`);
+        console.log('   ✅ Validation passed!');
         break;
       } else {
-        console.log(`   ❌ Validation failed`);
+        console.log('   ❌ Validation failed');
         
         if (validation.refinedRecommendation) {
           result.refinements.push(validation.refinedRecommendation);
-          console.log(`   💡 Refined recommendation generated`);
+          console.log('   💡 Refined recommendation generated');
           
           if (attempt < this.maxRetries && options.autoApplyRefinements) {
-            console.log(`   🔧 Applying refinement and retrying...`);
+            console.log('   🔧 Applying refinement and retrying...');
             await this.applyRefinement(validation.refinedRecommendation);
             await this.waitForUserConfirmation(options);
           }
@@ -258,7 +258,7 @@ class FixValidationOrchestrator {
     
     report.push('# Fix Validation Report');
     report.push(`**Generated**: ${timestamp}`);
-    report.push(`**Protocol**: LEO v4.1.3`);
+    report.push('**Protocol**: LEO v4.1.3');
     report.push('');
     
     // Summary statistics

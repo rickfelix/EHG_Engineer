@@ -8,7 +8,7 @@ const supabase = createClient(
 );
 
 const updatedSD = {
-  description: `Build automated connectivity testing infrastructure to prevent future feature disconnections. **CURRENT STATE**: Strong test foundation exists (77 test files across e2e/unit/integration/a11y/performance/security/visual categories, Playwright configured with 12 e2e tests, CI/CD pipeline with lint/type-check/unit/integration/accessibility tests). **COVERAGE GAPS**: 10 Next.js pages and 26 API routes lack automated route coverage validation, navigation path checking, orphaned component detection, and import reference tracking. **MISSION**: Catch disconnected features before production with comprehensive automated checks integrated into CI/CD.`,
+  description: 'Build automated connectivity testing infrastructure to prevent future feature disconnections. **CURRENT STATE**: Strong test foundation exists (77 test files across e2e/unit/integration/a11y/performance/security/visual categories, Playwright configured with 12 e2e tests, CI/CD pipeline with lint/type-check/unit/integration/accessibility tests). **COVERAGE GAPS**: 10 Next.js pages and 26 API routes lack automated route coverage validation, navigation path checking, orphaned component detection, and import reference tracking. **MISSION**: Catch disconnected features before production with comprehensive automated checks integrated into CI/CD.',
 
   scope: `**10-Week Automated Connectivity Testing Implementation**:
 
@@ -68,215 +68,215 @@ const updatedSD = {
 • Orphaned component detector script (6 hours)`,
 
   strategic_objectives: [
-    "Create automated route coverage test suite validating all 10 Next.js pages and 26 API routes",
-    "Build navigation path validator detecting broken links and dead navigation items",
-    "Implement orphaned component detector scanning for unused React components",
-    "Develop import reference tracker with AST parsing to map component dependencies",
-    "Integrate all checks into CI/CD pipeline with fail-fast on disconnections",
-    "Build connectivity monitoring dashboard showing real-time health metrics",
-    "Create automated alerting system (Slack, Email, PagerDuty) for critical disconnections",
-    "Generate daily/weekly connectivity reports with actionable insights",
-    "Add pre-commit hooks to prevent broken navigation links from being committed",
-    "Establish connectivity baseline and regression protection to lock in current health"
+    'Create automated route coverage test suite validating all 10 Next.js pages and 26 API routes',
+    'Build navigation path validator detecting broken links and dead navigation items',
+    'Implement orphaned component detector scanning for unused React components',
+    'Develop import reference tracker with AST parsing to map component dependencies',
+    'Integrate all checks into CI/CD pipeline with fail-fast on disconnections',
+    'Build connectivity monitoring dashboard showing real-time health metrics',
+    'Create automated alerting system (Slack, Email, PagerDuty) for critical disconnections',
+    'Generate daily/weekly connectivity reports with actionable insights',
+    'Add pre-commit hooks to prevent broken navigation links from being committed',
+    'Establish connectivity baseline and regression protection to lock in current health'
   ],
 
   success_criteria: [
-    "✅ Route coverage test validates 100% of 10 pages and 26 API routes automatically",
-    "✅ Navigation path validator runs in CI/CD, fails builds on broken links",
-    "✅ Orphaned component detector identifies components with 0 imports weekly",
-    "✅ Import reference tracker generates dependency graph for all components",
-    "✅ CI/CD pipeline blocks PRs with new orphaned components or broken routes",
-    "✅ Connectivity monitoring dashboard displays real-time metrics (route coverage %, orphan count, broken links)",
-    "✅ Slack alerts fire within 5 minutes of critical disconnection (e.g., nav link to deleted page)",
-    "✅ Daily connectivity report emailed to ops team with summary and action items",
-    "✅ Pre-commit hook prevents commits with broken navigation paths",
-    "✅ Connectivity health score ≥95% maintained (target: 100%)",
-    "✅ Zero feature disconnections reach production after implementation",
-    "✅ Component usage trends tracked over time, declining usage alerts trigger"
+    '✅ Route coverage test validates 100% of 10 pages and 26 API routes automatically',
+    '✅ Navigation path validator runs in CI/CD, fails builds on broken links',
+    '✅ Orphaned component detector identifies components with 0 imports weekly',
+    '✅ Import reference tracker generates dependency graph for all components',
+    '✅ CI/CD pipeline blocks PRs with new orphaned components or broken routes',
+    '✅ Connectivity monitoring dashboard displays real-time metrics (route coverage %, orphan count, broken links)',
+    '✅ Slack alerts fire within 5 minutes of critical disconnection (e.g., nav link to deleted page)',
+    '✅ Daily connectivity report emailed to ops team with summary and action items',
+    '✅ Pre-commit hook prevents commits with broken navigation paths',
+    '✅ Connectivity health score ≥95% maintained (target: 100%)',
+    '✅ Zero feature disconnections reach production after implementation',
+    '✅ Component usage trends tracked over time, declining usage alerts trigger'
   ],
 
   key_principles: [
-    "**Prevention over Remediation**: Catch disconnections before production, not after",
-    "**Automated > Manual**: Zero reliance on manual checking or human memory",
-    "**Fail Fast**: CI/CD must block bad code immediately, not allow merge",
-    "**Proactive Alerts**: Predict issues before they become critical (declining usage trends)",
-    "**Developer Experience**: Clear error messages with fix suggestions",
-    "**Regression Protection**: Once connected, stay connected (baseline enforcement)",
-    "**Visibility**: Dashboard and reports make connectivity health transparent",
-    "**Continuous Improvement**: Learn from past disconnections, add new checks"
+    '**Prevention over Remediation**: Catch disconnections before production, not after',
+    '**Automated > Manual**: Zero reliance on manual checking or human memory',
+    '**Fail Fast**: CI/CD must block bad code immediately, not allow merge',
+    '**Proactive Alerts**: Predict issues before they become critical (declining usage trends)',
+    '**Developer Experience**: Clear error messages with fix suggestions',
+    '**Regression Protection**: Once connected, stay connected (baseline enforcement)',
+    '**Visibility**: Dashboard and reports make connectivity health transparent',
+    '**Continuous Improvement**: Learn from past disconnections, add new checks'
   ],
 
   implementation_guidelines: [
     {
-      phase: "Phase 1: Route Coverage Testing",
+      phase: 'Phase 1: Route Coverage Testing',
       tasks: [
-        "Create tests/connectivity/route-coverage.test.ts using Playwright",
-        "Scan app directory for all page.tsx files, extract routes",
-        "Write test case for each route: expect(await page.goto(route)).status().toBe(200)",
-        "Scan app/api directory for all route.ts files, test GET/POST endpoints",
-        "Build scripts/route-inventory.js: Compare filesystem routes vs. Navigation.tsx links",
-        "Detect orphaned routes: Pages that exist but have no navigation entry",
-        "Add to .github/workflows/ci.yml: npm run test:route-coverage",
-        "Configure to fail build if new page added without route test",
-        "Generate route coverage report: HTML with pass/fail status per route",
-        "Create route coverage badge for README.md (shields.io)"
+        'Create tests/connectivity/route-coverage.test.ts using Playwright',
+        'Scan app directory for all page.tsx files, extract routes',
+        'Write test case for each route: expect(await page.goto(route)).status().toBe(200)',
+        'Scan app/api directory for all route.ts files, test GET/POST endpoints',
+        'Build scripts/route-inventory.js: Compare filesystem routes vs. Navigation.tsx links',
+        'Detect orphaned routes: Pages that exist but have no navigation entry',
+        'Add to .github/workflows/ci.yml: npm run test:route-coverage',
+        'Configure to fail build if new page added without route test',
+        'Generate route coverage report: HTML with pass/fail status per route',
+        'Create route coverage badge for README.md (shields.io)'
       ],
       deliverables: [
-        "tests/connectivity/route-coverage.test.ts",
-        "scripts/route-inventory.js",
-        "Updated .github/workflows/ci.yml with route coverage step",
-        "Route coverage report generator",
-        "README badge showing route coverage %"
+        'tests/connectivity/route-coverage.test.ts',
+        'scripts/route-inventory.js',
+        'Updated .github/workflows/ci.yml with route coverage step',
+        'Route coverage report generator',
+        'README badge showing route coverage %'
       ]
     },
     {
-      phase: "Phase 2: Navigation Path Validation",
+      phase: 'Phase 2: Navigation Path Validation',
       tasks: [
-        "Create tests/connectivity/navigation-paths.test.ts",
-        "Parse Navigation.tsx, extract all href values from nav items",
-        "For each href, verify corresponding page.tsx exists in app directory",
-        "Check sidebar links point to valid routes (not 404)",
-        "Test breadcrumb navigation: Click breadcrumb link → Verify correct page loads",
-        "Validate deep linking: Direct URL access works without client-side navigation",
-        "Build scripts/validate-navigation.js: Pre-commit hook script",
-        "Add .husky/pre-commit hook running npm run validate:navigation",
-        "Create NavigationHealthReport showing all nav paths and their status",
-        "Add CI/CD gate: Block PR if navigation validation fails"
+        'Create tests/connectivity/navigation-paths.test.ts',
+        'Parse Navigation.tsx, extract all href values from nav items',
+        'For each href, verify corresponding page.tsx exists in app directory',
+        'Check sidebar links point to valid routes (not 404)',
+        'Test breadcrumb navigation: Click breadcrumb link → Verify correct page loads',
+        'Validate deep linking: Direct URL access works without client-side navigation',
+        'Build scripts/validate-navigation.js: Pre-commit hook script',
+        'Add .husky/pre-commit hook running npm run validate:navigation',
+        'Create NavigationHealthReport showing all nav paths and their status',
+        'Add CI/CD gate: Block PR if navigation validation fails'
       ],
       deliverables: [
-        "tests/connectivity/navigation-paths.test.ts",
-        "scripts/validate-navigation.js",
-        ".husky/pre-commit hook",
-        "NavigationHealthReport generator",
-        "CI/CD navigation validation gate"
+        'tests/connectivity/navigation-paths.test.ts',
+        'scripts/validate-navigation.js',
+        '.husky/pre-commit hook',
+        'NavigationHealthReport generator',
+        'CI/CD navigation validation gate'
       ]
     },
     {
-      phase: "Phase 3: Orphaned Component Detection",
+      phase: 'Phase 3: Orphaned Component Detection',
       tasks: [
-        "Create scripts/detect-orphaned-components.js using @babel/parser for AST parsing",
-        "Scan all src/components/**/*.tsx files, extract component names",
-        "Build import graph: For each component, find all files importing it",
-        "Identify orphans: Components with importCount === 0",
-        "Create allowlist.json: Manually curated list of intentionally standalone components",
-        "Filter orphans: Exclude allowlisted components from report",
-        "Generate weekly report: Email to ops team with orphan list and file paths",
-        "Add to CI/CD: Alert (not fail) if new component orphaned for >30 days",
-        "Build component usage dashboard showing import counts per component",
-        "Add Stale Component badge (Yellow: 1-2 imports, Red: 0 imports)"
+        'Create scripts/detect-orphaned-components.js using @babel/parser for AST parsing',
+        'Scan all src/components/**/*.tsx files, extract component names',
+        'Build import graph: For each component, find all files importing it',
+        'Identify orphans: Components with importCount === 0',
+        'Create allowlist.json: Manually curated list of intentionally standalone components',
+        'Filter orphans: Exclude allowlisted components from report',
+        'Generate weekly report: Email to ops team with orphan list and file paths',
+        'Add to CI/CD: Alert (not fail) if new component orphaned for >30 days',
+        'Build component usage dashboard showing import counts per component',
+        'Add Stale Component badge (Yellow: 1-2 imports, Red: 0 imports)'
       ],
       deliverables: [
-        "scripts/detect-orphaned-components.js",
-        "config/orphan-allowlist.json",
-        "Weekly orphan report email automation",
-        "CI/CD orphan detection alert",
-        "Component usage dashboard"
+        'scripts/detect-orphaned-components.js',
+        'config/orphan-allowlist.json',
+        'Weekly orphan report email automation',
+        'CI/CD orphan detection alert',
+        'Component usage dashboard'
       ]
     },
     {
-      phase: "Phase 4: Import Reference Tracking",
+      phase: 'Phase 4: Import Reference Tracking',
       tasks: [
-        "Create src/lib/connectivity/import-tracker.ts with AST-based dependency analysis",
-        "Build full dependency graph: Component A → [B, C] (A imports B and C)",
-        "Track usage trends: Store import counts in time-series database (InfluxDB or Supabase)",
-        "Identify at-risk components: Usage declining for 3+ consecutive weeks",
-        "Calculate ImportHealthScore: 100 * (currentImports / peakImports)",
-        "Generate architectural insights: Highly coupled components (imported by >10 others)",
-        "Add Slack webhook integration for critical disconnections (score drops >50%)",
-        "Create import-health-report.json generated daily with trends",
-        "Build visual dependency graph using D3.js or Cytoscape",
-        "Add regression tests: Lock in baseline import counts, alert on drops"
+        'Create src/lib/connectivity/import-tracker.ts with AST-based dependency analysis',
+        'Build full dependency graph: Component A → [B, C] (A imports B and C)',
+        'Track usage trends: Store import counts in time-series database (InfluxDB or Supabase)',
+        'Identify at-risk components: Usage declining for 3+ consecutive weeks',
+        'Calculate ImportHealthScore: 100 * (currentImports / peakImports)',
+        'Generate architectural insights: Highly coupled components (imported by >10 others)',
+        'Add Slack webhook integration for critical disconnections (score drops >50%)',
+        'Create import-health-report.json generated daily with trends',
+        'Build visual dependency graph using D3.js or Cytoscape',
+        'Add regression tests: Lock in baseline import counts, alert on drops'
       ],
       deliverables: [
-        "src/lib/connectivity/import-tracker.ts",
-        "Import usage time-series database",
-        "At-risk component detection logic",
-        "ImportHealthScore calculation",
-        "Slack webhook integration",
-        "Visual dependency graph UI"
+        'src/lib/connectivity/import-tracker.ts',
+        'Import usage time-series database',
+        'At-risk component detection logic',
+        'ImportHealthScore calculation',
+        'Slack webhook integration',
+        'Visual dependency graph UI'
       ]
     },
     {
-      phase: "Phase 5: Continuous Monitoring & Alerts",
+      phase: 'Phase 5: Continuous Monitoring & Alerts',
       tasks: [
-        "Create ConnectivityMonitoringDashboard in EHG_Engineer app (at /connectivity)",
-        "Display real-time metrics: Route Coverage % (target: 100%), Broken Links (target: 0), Orphaned Components (target: 0)",
-        "Show trend charts: Connectivity health over last 30/90 days",
-        "Build automated daily report: Email to ops@example.com with summary",
-        "Implement alert escalation: Slack (5 min) → Email (15 min) → PagerDuty (30 min)",
-        "Add GitHub Actions workflow: .github/workflows/weekly-connectivity-audit.yml",
-        "Create ConnectivityHealthReport.pdf generator with charts and recommendations",
+        'Create ConnectivityMonitoringDashboard in EHG_Engineer app (at /connectivity)',
+        'Display real-time metrics: Route Coverage % (target: 100%), Broken Links (target: 0), Orphaned Components (target: 0)',
+        'Show trend charts: Connectivity health over last 30/90 days',
+        'Build automated daily report: Email to ops@example.com with summary',
+        'Implement alert escalation: Slack (5 min) → Email (15 min) → PagerDuty (30 min)',
+        'Add GitHub Actions workflow: .github/workflows/weekly-connectivity-audit.yml',
+        'Create ConnectivityHealthReport.pdf generator with charts and recommendations',
         "Build self-healing suggestions: 'Component X is orphaned → Consider removing or documenting'",
-        "Add regression protection: Fail CI if connectivity drops below baseline (e.g., 95%)",
-        "Create ConnectivityMetrics API endpoint for external monitoring tools"
+        'Add regression protection: Fail CI if connectivity drops below baseline (e.g., 95%)',
+        'Create ConnectivityMetrics API endpoint for external monitoring tools'
       ],
       deliverables: [
-        "EHG_Engineer app/connectivity/page.tsx dashboard",
-        "Daily connectivity report email automation",
-        "Alert escalation system (Slack → Email → PagerDuty)",
-        ".github/workflows/weekly-connectivity-audit.yml",
-        "ConnectivityHealthReport.pdf generator",
-        "Self-healing suggestion engine",
-        "Regression protection baseline",
-        "ConnectivityMetrics API endpoint"
+        'EHG_Engineer app/connectivity/page.tsx dashboard',
+        'Daily connectivity report email automation',
+        'Alert escalation system (Slack → Email → PagerDuty)',
+        '.github/workflows/weekly-connectivity-audit.yml',
+        'ConnectivityHealthReport.pdf generator',
+        'Self-healing suggestion engine',
+        'Regression protection baseline',
+        'ConnectivityMetrics API endpoint'
       ]
     }
   ],
 
   risks: [
     {
-      risk: "False positives: Components flagged as orphaned but actually used via dynamic imports",
-      mitigation: "Enhance AST parser to detect dynamic imports (import()), maintain allowlist for edge cases, manual review process for flagged components"
+      risk: 'False positives: Components flagged as orphaned but actually used via dynamic imports',
+      mitigation: 'Enhance AST parser to detect dynamic imports (import()), maintain allowlist for edge cases, manual review process for flagged components'
     },
     {
-      risk: "CI/CD slowdown from expensive AST parsing on every commit",
-      mitigation: "Cache dependency graph, only re-parse changed files, run full scan weekly (not per-commit), optimize parser performance"
+      risk: 'CI/CD slowdown from expensive AST parsing on every commit',
+      mitigation: 'Cache dependency graph, only re-parse changed files, run full scan weekly (not per-commit), optimize parser performance'
     },
     {
-      risk: "Alert fatigue: Too many Slack alerts overwhelming developers",
-      mitigation: "Start with high-severity alerts only, implement quiet hours (no alerts overnight), allow per-user alert preferences"
+      risk: 'Alert fatigue: Too many Slack alerts overwhelming developers',
+      mitigation: 'Start with high-severity alerts only, implement quiet hours (no alerts overnight), allow per-user alert preferences'
     },
     {
-      risk: "Baseline enforcement blocking legitimate architectural changes",
-      mitigation: "Allow baseline updates via manual approval, provide override mechanism with justification, review baseline quarterly"
+      risk: 'Baseline enforcement blocking legitimate architectural changes',
+      mitigation: 'Allow baseline updates via manual approval, provide override mechanism with justification, review baseline quarterly'
     }
   ],
 
   success_metrics: [
     {
-      metric: "Route Coverage Percentage",
-      target: "100% of pages and API routes covered by automated tests",
-      measurement: "Count tested routes / total routes, track in CI/CD pipeline"
+      metric: 'Route Coverage Percentage',
+      target: '100% of pages and API routes covered by automated tests',
+      measurement: 'Count tested routes / total routes, track in CI/CD pipeline'
     },
     {
-      metric: "Navigation Validation Success Rate",
-      target: "0 broken navigation links in production",
-      measurement: "Count broken links detected in pre-commit hooks and CI/CD"
+      metric: 'Navigation Validation Success Rate',
+      target: '0 broken navigation links in production',
+      measurement: 'Count broken links detected in pre-commit hooks and CI/CD'
     },
     {
-      metric: "Orphaned Component Detection Rate",
-      target: "≥90% of orphaned components identified within 7 days of creation",
-      measurement: "Compare manual audit vs. automated detection results"
+      metric: 'Orphaned Component Detection Rate',
+      target: '≥90% of orphaned components identified within 7 days of creation',
+      measurement: 'Compare manual audit vs. automated detection results'
     },
     {
-      metric: "Time to Detection (TTD)",
-      target: "Connectivity issues detected within 5 minutes of code commit",
-      measurement: "Measure time from git commit to Slack alert"
+      metric: 'Time to Detection (TTD)',
+      target: 'Connectivity issues detected within 5 minutes of code commit',
+      measurement: 'Measure time from git commit to Slack alert'
     },
     {
-      metric: "False Positive Rate",
-      target: "≤10% of flagged components are false positives",
-      measurement: "Manual review of flagged components, track accuracy over time"
+      metric: 'False Positive Rate',
+      target: '≤10% of flagged components are false positives',
+      measurement: 'Manual review of flagged components, track accuracy over time'
     },
     {
-      metric: "Production Disconnections",
-      target: "Zero feature disconnections reach production post-implementation",
-      measurement: "Count disconnections in production before/after system deployment"
+      metric: 'Production Disconnections',
+      target: 'Zero feature disconnections reach production post-implementation',
+      measurement: 'Count disconnections in production before/after system deployment'
     },
     {
-      metric: "Developer Adoption",
-      target: "≥80% of PRs pass connectivity checks on first attempt",
-      measurement: "Track CI/CD pass rate for connectivity tests"
+      metric: 'Developer Adoption',
+      target: '≥80% of PRs pass connectivity checks on first attempt',
+      measurement: 'Track CI/CD pass rate for connectivity tests'
     }
   ],
 

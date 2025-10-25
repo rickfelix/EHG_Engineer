@@ -201,7 +201,7 @@ async function fixScript(scriptPath, dryRun = false) {
 
     // Write modified
     await fs.writeFile(scriptPath, modified);
-    console.log(`  ✅ File updated successfully`);
+    console.log('  ✅ File updated successfully');
 
     return { changed: true, dryRun: false };
 

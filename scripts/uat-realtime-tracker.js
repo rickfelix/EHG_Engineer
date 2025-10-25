@@ -79,10 +79,10 @@ async function displayProgress() {
 
   // Test categories being executed
   console.log(`📁 Test Categories (${17} suites, ${20} files):`);
-  console.log(`   ✓ Core User Journeys: ventures, dashboard, analytics, AI agents`);
-  console.log(`   ✓ Administrative: settings, security, governance`);
-  console.log(`   ✓ Cross-functional: accessibility, performance, mobile`);
-  console.log(`   ✓ End-to-End: venture lifecycle, executive reporting\n`);
+  console.log('   ✓ Core User Journeys: ventures, dashboard, analytics, AI agents');
+  console.log('   ✓ Administrative: settings, security, governance');
+  console.log('   ✓ Cross-functional: accessibility, performance, mobile');
+  console.log('   ✓ End-to-End: venture lifecycle, executive reporting\n');
 
   // Estimated completion
   if (stats.running && stats.current > 0) {

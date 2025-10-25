@@ -130,7 +130,7 @@ async function verifyPhase1Dependency() {
     return null;
   }
 
-  console.log(`📋 PHASE1 Status:`);
+  console.log('📋 PHASE1 Status:');
   console.log(`   ID: ${data.id}`);
   console.log(`   Title: ${data.title}`);
   console.log(`   Status: ${data.status}`);
@@ -138,9 +138,9 @@ async function verifyPhase1Dependency() {
   console.log(`   Phase: ${data.current_phase}`);
 
   if (data.status === 'completed' && data.progress_percentage === 100) {
-    console.log(`   ✅ PHASE1 COMPLETED - Dependency satisfied!\n`);
+    console.log('   ✅ PHASE1 COMPLETED - Dependency satisfied!\n');
   } else {
-    console.log(`   ⚠️  PHASE1 NOT COMPLETED - PRESETS-001 should wait!\n`);
+    console.log('   ⚠️  PHASE1 NOT COMPLETED - PRESETS-001 should wait!\n');
   }
 
   return data;
@@ -169,7 +169,7 @@ async function investigatePhase4Anomaly() {
     return null;
   }
 
-  console.log(`📋 PHASE4 Full Record:`);
+  console.log('📋 PHASE4 Full Record:');
   console.log(`   ID: ${sd.id}`);
   console.log(`   Title: ${sd.title}`);
   console.log(`   Status: ${sd.status}`);
@@ -222,10 +222,10 @@ async function investigatePhase4Anomaly() {
   console.log('🔍 Diagnosis:');
   if (sd.progress_percentage > 0 && sd.status === 'draft') {
     console.log(`   ⚠️  ANOMALY DETECTED: ${sd.progress_percentage}% progress on draft SD`);
-    console.log(`   Possible causes:`);
-    console.log(`   - Work started but not properly tracked`);
-    console.log(`   - Manual progress update without status change`);
-    console.log(`   - Leftover data from previous iteration`);
+    console.log('   Possible causes:');
+    console.log('   - Work started but not properly tracked');
+    console.log('   - Manual progress update without status change');
+    console.log('   - Leftover data from previous iteration');
 
     if (handoffs && handoffs.length > 0) {
       console.log(`   - ${handoffs.length} handoff(s) exist - work has begun!`);
@@ -291,7 +291,7 @@ function generateRecommendation(phase1Data, phase4Data) {
 
     if (sd.progress_percentage > 0 || handoffs.length > 0 || prds.length > 0) {
       console.log('⚡ PHASE4 Priority Adjustment: RECOMMENDED');
-      console.log(`   → Current rank: 1065 (TIER 2 - HIGH VALUE)`);
+      console.log('   → Current rank: 1065 (TIER 2 - HIGH VALUE)');
       console.log('   → Evidence of work in progress:');
       console.log(`      • Progress: ${sd.progress_percentage}%`);
       console.log(`      • Handoffs: ${handoffs.length}`);

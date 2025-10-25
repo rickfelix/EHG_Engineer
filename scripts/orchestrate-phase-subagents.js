@@ -362,7 +362,7 @@ async function storeSubAgentResult(sdId, result) {
 
   // Check if insert succeeded
   if (!insertResult.success) {
-    console.error(`   ❌ Failed to record sub-agent execution`);
+    console.error('   ❌ Failed to record sub-agent execution');
     console.error(`   Error: ${insertResult.error}`);
     throw new Error(`MANDATORY RECORDING FAILED: ${insertResult.error}`);
   }
@@ -567,7 +567,7 @@ async function orchestrate(phase, sdId) {
     console.log(`Can Proceed: ${aggregated.can_proceed ? '✅ YES' : '❌ NO'}`);
     console.log(`Confidence: ${aggregated.confidence}%`);
     console.log(`Message: ${aggregated.message}`);
-    console.log(`\nBreakdown:`);
+    console.log('\nBreakdown:');
     console.log(`  • Total agents: ${aggregated.total_agents}`);
     console.log(`  • Passed: ${aggregated.passed}`);
     console.log(`  • Failed: ${aggregated.failed}`);

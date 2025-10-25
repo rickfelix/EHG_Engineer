@@ -217,7 +217,7 @@ async function consolidateAgents() {
     const { rows: crewaiCount } = await ehgClient.query('SELECT COUNT(*) FROM crewai_agents');
     const { rows: aiCount } = await ehgClient.query('SELECT COUNT(*) FROM ai_agents');
 
-    console.log(`\n✅ Verification Results:`);
+    console.log('\n✅ Verification Results:');
     console.log(`   ai_agents table: ${aiCount[0].count} agents (source)`);
     console.log(`   crewai_agents table: ${crewaiCount[0].count} agents (target)`);
 
@@ -230,7 +230,7 @@ async function consolidateAgents() {
       ORDER BY role
     `);
 
-    console.log(`\n📊 Agent breakdown in crewai_agents:`);
+    console.log('\n📊 Agent breakdown in crewai_agents:');
     roleBreakdown.forEach(row => {
       console.log(`   - ${row.role}: ${row.count} (${row.status})`);
     });

@@ -97,65 +97,65 @@ async function updateSDUX001() {
 - ❌ Multi-step product tours (single tour sufficient)`,
 
     strategic_objectives: [
-      "Integrate FirstRunWizard into App.tsx entry point, rendering wizard on first load for users with 0 ventures and no completion flag, preventing empty-state confusion",
-      "Build ProductTour component with 7-step guided tour (Dashboard, Ventures, Create, Workflow, Analytics, Settings, Complete) using react-joyride, triggering after wizard completion",
-      "Create Demo Data Manager in Settings: Display demo venture count, bulk cleanup button (DELETE WHERE is_demo=true), wizard reset option to re-trigger FirstRunWizard",
-      "Implement onboarding progress tracking: Create user_onboarding_progress table (wizard_seen, wizard_completed, mode_choice, first_venture_created_at), measure activation funnel",
+      'Integrate FirstRunWizard into App.tsx entry point, rendering wizard on first load for users with 0 ventures and no completion flag, preventing empty-state confusion',
+      'Build ProductTour component with 7-step guided tour (Dashboard, Ventures, Create, Workflow, Analytics, Settings, Complete) using react-joyride, triggering after wizard completion',
+      'Create Demo Data Manager in Settings: Display demo venture count, bulk cleanup button (DELETE WHERE is_demo=true), wizard reset option to re-trigger FirstRunWizard',
+      'Implement onboarding progress tracking: Create user_onboarding_progress table (wizard_seen, wizard_completed, mode_choice, first_venture_created_at), measure activation funnel',
       "Enhance wizard UX: Add feature highlights (explain what Dashboard/Analytics do), improve skip consequences (show next steps), add 'Learn More' tooltips",
-      "Achieve 80%+ wizard completion: Target 80% of new users complete wizard (not skip), ≥60% choose demo mode, ≥50% create first venture within 7 days",
+      'Achieve 80%+ wizard completion: Target 80% of new users complete wizard (not skip), ≥60% choose demo mode, ≥50% create first venture within 7 days',
       "Reduce time-to-first-value: From current 'never' (empty app) to <5 minutes (wizard + tour + first venture created), demonstrating product value immediately"
     ],
 
     success_criteria: [
-      "✅ FirstRunWizard integrated: Imported in App.tsx, renders on first load, onComplete handler functional, wizard completion persists",
-      "✅ Empty state prevention: New users see wizard, not empty app, ≥95% of first-time users see wizard (track with analytics)",
-      "✅ Demo data functional: Demo mode creates 20 ventures successfully, ventures marked is_demo=true, data visible in Dashboard/Ventures",
+      '✅ FirstRunWizard integrated: Imported in App.tsx, renders on first load, onComplete handler functional, wizard completion persists',
+      '✅ Empty state prevention: New users see wizard, not empty app, ≥95% of first-time users see wizard (track with analytics)',
+      '✅ Demo data functional: Demo mode creates 20 ventures successfully, ventures marked is_demo=true, data visible in Dashboard/Ventures',
       "✅ Clean mode functional: Clean mode shows empty state guidance, provides 'Create First Venture' CTA, no demo data inserted",
-      "✅ ProductTour operational: 7-step tour triggers after wizard, highlights Dashboard/Ventures/Analytics, skip option works, completion tracked",
+      '✅ ProductTour operational: 7-step tour triggers after wizard, highlights Dashboard/Ventures/Analytics, skip option works, completion tracked',
       "✅ Demo cleanup available: Settings has Demo Data Manager, shows count (e.g., '20 demo ventures'), cleanup button deletes WHERE is_demo=true, confirmation dialog",
-      "✅ Progress tracked: user_onboarding_progress table populated, wizard completion rate ≥80%, demo mode choice ≥60%, first venture creation ≥50% within 7 days",
-      "✅ Wizard completion rate: ≥80% of new users complete wizard (not skip), measured via user_onboarding_progress.wizard_completed",
-      "✅ Time-to-first-value: ≥50% of users create first venture within 5 minutes of completing wizard (demo or real venture)",
-      "✅ User activation: ≥70% of wizard completers become activated users (≥3 ventures created, ≥5 dashboard views within 30 days)"
+      '✅ Progress tracked: user_onboarding_progress table populated, wizard completion rate ≥80%, demo mode choice ≥60%, first venture creation ≥50% within 7 days',
+      '✅ Wizard completion rate: ≥80% of new users complete wizard (not skip), measured via user_onboarding_progress.wizard_completed',
+      '✅ Time-to-first-value: ≥50% of users create first venture within 5 minutes of completing wizard (demo or real venture)',
+      '✅ User activation: ≥70% of wizard completers become activated users (≥3 ventures created, ≥5 dashboard views within 30 days)'
     ],
 
     key_principles: [
-      "**First Impression Critical**: Users decide product value in first 60 seconds - wizard must show value immediately via demo data or clear next steps",
+      '**First Impression Critical**: Users decide product value in first 60 seconds - wizard must show value immediately via demo data or clear next steps',
       "**Choice Empowers**: Offer demo (learn) vs clean (do) modes - users control experience, not forced into demo they don't want",
       "**Demo Data Discoverable**: All demo data marked is_demo=true, cleanup easy, transparency builds trust ('You can remove this anytime')",
       "**Progressive Disclosure**: Wizard → Tour → First Venture - layer guidance, don't overwhelm, user learns incrementally",
       "**Skip Respects Time**: 'Skip for now' is valid choice for experienced users, but must provide next steps (not empty void)",
       "**Wizard Skippable But Recommended**: Don't force wizard, but strongly recommend ('Recommended for new users' badge), track skip rate to optimize",
-      "**Track Everything**: Measure wizard completion, mode choice, tour completion, first venture creation - data drives optimization",
-      "**Performance Budget**: Wizard load <500ms, demo data insert <3s, tour navigation <100ms - onboarding must feel instant"
+      '**Track Everything**: Measure wizard completion, mode choice, tour completion, first venture creation - data drives optimization',
+      '**Performance Budget**: Wizard load <500ms, demo data insert <3s, tour navigation <100ms - onboarding must feel instant'
     ],
 
     implementation_guidelines: [
-      "**PHASE 1: App.tsx Integration (Week 1)**",
-      "",
-      "1. Import FirstRunWizard in App.tsx:",
+      '**PHASE 1: App.tsx Integration (Week 1)**',
+      '',
+      '1. Import FirstRunWizard in App.tsx:',
       "   - Add: import { FirstRunWizard } from '@/components/onboarding/FirstRunWizard';",
-      "   - State: const [wizardCompleted, setWizardCompleted] = useState(false);",
-      "   - Render: {!wizardCompleted && <FirstRunWizard onComplete={handleWizardComplete} />}",
-      "",
-      "2. Handle onComplete callback:",
+      '   - State: const [wizardCompleted, setWizardCompleted] = useState(false);',
+      '   - Render: {!wizardCompleted && <FirstRunWizard onComplete={handleWizardComplete} />}',
+      '',
+      '2. Handle onComplete callback:',
       "   - const handleWizardComplete = async (choice: 'demo' | 'clean' | 'skip') => {",
       "   -   await supabase.from('user_onboarding_progress').upsert({ user_id, wizard_completed: true, mode_choice: choice, completed_at: new Date() });",
-      "   -   setWizardCompleted(true);",
+      '   -   setWizardCompleted(true);',
       "   -   if (choice === 'demo') startProductTour();",
-      "   - }",
-      "",
-      "3. Create user_onboarding_progress table:",
-      "   - CREATE TABLE user_onboarding_progress (user_id UUID PRIMARY KEY, wizard_seen BOOLEAN, wizard_completed BOOLEAN, mode_choice TEXT, tour_completed BOOLEAN, first_venture_created_at TIMESTAMP, completed_at TIMESTAMP)",
-      "",
-      "**PHASE 2: Product Tour (Week 2)**",
-      "",
-      "4. Install react-joyride:",
-      "   - npm install react-joyride",
-      "",
-      "5. Create ProductTour.tsx component:",
+      '   - }',
+      '',
+      '3. Create user_onboarding_progress table:',
+      '   - CREATE TABLE user_onboarding_progress (user_id UUID PRIMARY KEY, wizard_seen BOOLEAN, wizard_completed BOOLEAN, mode_choice TEXT, tour_completed BOOLEAN, first_venture_created_at TIMESTAMP, completed_at TIMESTAMP)',
+      '',
+      '**PHASE 2: Product Tour (Week 2)**',
+      '',
+      '4. Install react-joyride:',
+      '   - npm install react-joyride',
+      '',
+      '5. Create ProductTour.tsx component:',
       "   - Import: import Joyride, { Step } from 'react-joyride';",
-      "   - Steps: const steps: Step[] = [",
+      '   - Steps: const steps: Step[] = [',
       "   -   { target: '.dashboard-section', content: 'This is your Executive Dashboard showing key metrics' },",
       "   -   { target: '.ventures-nav', content: 'View all your ventures here' },",
       "   -   { target: '.create-venture-btn', content: 'Click here to create your first venture' },",
@@ -163,113 +163,113 @@ async function updateSDUX001() {
       "   -   { target: '.analytics-nav', content: 'Analyze performance with advanced analytics' },",
       "   -   { target: '.settings-nav', content: 'Configure your account and preferences' },",
       "   -   { target: 'body', content: 'You're all set! Explore the platform and create your first venture.' }",
-      "   - ];",
-      "",
-      "6. Trigger tour after wizard:",
+      '   - ];',
+      '',
+      '6. Trigger tour after wizard:',
       "   - if (choice === 'demo') { setRunTour(true); }",
-      "   - <Joyride steps={steps} run={runTour} continuous showSkipButton onFinish={handleTourComplete} />",
-      "",
-      "**PHASE 3: Demo Cleanup (Week 3)**",
-      "",
-      "7. Create DemoDataManager.tsx in settings:",
+      '   - <Joyride steps={steps} run={runTour} continuous showSkipButton onFinish={handleTourComplete} />',
+      '',
+      '**PHASE 3: Demo Cleanup (Week 3)**',
+      '',
+      '7. Create DemoDataManager.tsx in settings:',
       "   - Query: const { data: demoVentures } = await supabase.from('ventures').select('id').eq('is_demo', true);",
       "   - Display: 'You have {demoVentures.length} demo ventures'",
       "   - Button: 'Clean Up Demo Data' → confirmation dialog → DELETE FROM ventures WHERE is_demo=true",
-      "",
-      "8. Add wizard reset option:",
+      '',
+      '8. Add wizard reset option:',
       "   - Button: 'Reset Onboarding' → localStorage.removeItem('ehg_wizard_completed') → toast 'Wizard will show on next reload'",
-      "",
-      "**PHASE 4: Progress Tracking (Week 4)**",
-      "",
-      "9. Track wizard steps:",
-      "   - On wizard open: INSERT INTO user_onboarding_progress (user_id, wizard_seen) VALUES (auth.uid(), true)",
+      '',
+      '**PHASE 4: Progress Tracking (Week 4)**',
+      '',
+      '9. Track wizard steps:',
+      '   - On wizard open: INSERT INTO user_onboarding_progress (user_id, wizard_seen) VALUES (auth.uid(), true)',
       "   - On step change: UPDATE user_onboarding_progress SET current_step='{step}' WHERE user_id=auth.uid()",
       "   - On complete: UPDATE user_onboarding_progress SET wizard_completed=true, mode_choice='{choice}', completed_at=NOW()",
-      "",
-      "10. Track first venture creation:",
-      "    - Venture creation handler: if (isFirstVenture) { UPDATE user_onboarding_progress SET first_venture_created_at=NOW() WHERE user_id=auth.uid(); }",
-      "",
-      "11. Build onboarding analytics:",
-      "    - Dashboard: SELECT wizard_completed, mode_choice, COUNT(*) FROM user_onboarding_progress GROUP BY wizard_completed, mode_choice",
-      "    - Funnel: wizard_seen → wizard_completed → first_venture_created (show conversion rates)",
-      "    - Time-to-value: AVG(first_venture_created_at - completed_at) WHERE first_venture_created_at IS NOT NULL"
+      '',
+      '10. Track first venture creation:',
+      '    - Venture creation handler: if (isFirstVenture) { UPDATE user_onboarding_progress SET first_venture_created_at=NOW() WHERE user_id=auth.uid(); }',
+      '',
+      '11. Build onboarding analytics:',
+      '    - Dashboard: SELECT wizard_completed, mode_choice, COUNT(*) FROM user_onboarding_progress GROUP BY wizard_completed, mode_choice',
+      '    - Funnel: wizard_seen → wizard_completed → first_venture_created (show conversion rates)',
+      '    - Time-to-value: AVG(first_venture_created_at - completed_at) WHERE first_venture_created_at IS NOT NULL'
     ],
 
     risks: [
       {
-        risk: "Demo data insert fails: Network error, database permissions, generateMockVentures() error, users stuck in loading state",
-        probability: "Medium (40%)",
-        impact: "High - Poor first impression, wizard unusable, users abandon",
-        mitigation: "Add error handling, retry logic (max 3 attempts), fallback to clean mode on failure, clear error messages, log errors to integration_events"
+        risk: 'Demo data insert fails: Network error, database permissions, generateMockVentures() error, users stuck in loading state',
+        probability: 'Medium (40%)',
+        impact: 'High - Poor first impression, wizard unusable, users abandon',
+        mitigation: 'Add error handling, retry logic (max 3 attempts), fallback to clean mode on failure, clear error messages, log errors to integration_events'
       },
       {
-        risk: "Wizard appears for existing users: checkFirstRun() bug, localStorage cleared, users see wizard again, confused/annoyed",
-        probability: "Low (20%)",
-        impact: "Medium - User annoyance, support tickets",
+        risk: 'Wizard appears for existing users: checkFirstRun() bug, localStorage cleared, users see wizard again, confused/annoyed',
+        probability: 'Low (20%)',
+        impact: 'Medium - User annoyance, support tickets',
         mitigation: "Also check user_onboarding_progress table (not just localStorage), require both conditions (0 ventures AND no database record), add 'Don't show again' option"
       },
       {
-        risk: "Product tour interferes with UI: Joyride tooltips overlap critical elements, tour steps target wrong elements, users cannot skip",
-        probability: "Medium (40%)",
-        impact: "Medium - Frustrating tour, users disable immediately",
-        mitigation: "Test tour on multiple screen sizes, add z-index management, ensure skip button always visible, allow ESC key to exit, test with keyboard navigation"
+        risk: 'Product tour interferes with UI: Joyride tooltips overlap critical elements, tour steps target wrong elements, users cannot skip',
+        probability: 'Medium (40%)',
+        impact: 'Medium - Frustrating tour, users disable immediately',
+        mitigation: 'Test tour on multiple screen sizes, add z-index management, ensure skip button always visible, allow ESC key to exit, test with keyboard navigation'
       }
     ],
 
     success_metrics: [
       {
-        metric: "Wizard completion rate",
-        target: "≥80% of new users complete wizard (not skip)",
-        measurement: "SELECT COUNT(*) FILTER (WHERE wizard_completed) / COUNT(*) FROM user_onboarding_progress WHERE wizard_seen"
+        metric: 'Wizard completion rate',
+        target: '≥80% of new users complete wizard (not skip)',
+        measurement: 'SELECT COUNT(*) FILTER (WHERE wizard_completed) / COUNT(*) FROM user_onboarding_progress WHERE wizard_seen'
       },
       {
-        metric: "Demo mode adoption",
-        target: "≥60% of wizard completers choose demo mode",
+        metric: 'Demo mode adoption',
+        target: '≥60% of wizard completers choose demo mode',
         measurement: "SELECT COUNT(*) FILTER (WHERE mode_choice='demo') / COUNT(*) FROM user_onboarding_progress WHERE wizard_completed"
       },
       {
-        metric: "First venture creation",
-        target: "≥50% of users create first venture within 7 days",
+        metric: 'First venture creation',
+        target: '≥50% of users create first venture within 7 days',
         measurement: "SELECT COUNT(*) FILTER (WHERE first_venture_created_at < completed_at + INTERVAL '7 days') / COUNT(*) FROM user_onboarding_progress WHERE wizard_completed"
       },
       {
-        metric: "Time-to-first-value",
-        target: "≥50% of users create first venture within 5 minutes",
-        measurement: "SELECT AVG(EXTRACT(EPOCH FROM (first_venture_created_at - completed_at))/60) FROM user_onboarding_progress WHERE first_venture_created_at IS NOT NULL"
+        metric: 'Time-to-first-value',
+        target: '≥50% of users create first venture within 5 minutes',
+        measurement: 'SELECT AVG(EXTRACT(EPOCH FROM (first_venture_created_at - completed_at))/60) FROM user_onboarding_progress WHERE first_venture_created_at IS NOT NULL'
       },
       {
-        metric: "Tour completion",
-        target: "≥70% of demo mode users complete product tour",
+        metric: 'Tour completion',
+        target: '≥70% of demo mode users complete product tour',
         measurement: "SELECT COUNT(*) FILTER (WHERE tour_completed) / COUNT(*) FROM user_onboarding_progress WHERE mode_choice='demo'"
       }
     ],
 
     metadata: {
-      "first_run_wizard": {
-        "file": "src/components/onboarding/FirstRunWizard.tsx",
-        "loc": 542,
-        "size": "20KB",
-        "steps": 5,
-        "current_imports": 0
+      'first_run_wizard': {
+        'file': 'src/components/onboarding/FirstRunWizard.tsx',
+        'loc': 542,
+        'size': '20KB',
+        'steps': 5,
+        'current_imports': 0
       },
-      "wizard_steps": ["welcome", "choice", "demo-config/clean-config", "confirm", "complete"],
-      "demo_data": {
-        "ventures": 20,
-        "companies": 2,
-        "source": "generateMockVentures() from @/data/mockVentures.ts"
+      'wizard_steps': ['welcome', 'choice', 'demo-config/clean-config', 'confirm', 'complete'],
+      'demo_data': {
+        'ventures': 20,
+        'companies': 2,
+        'source': 'generateMockVentures() from @/data/mockVentures.ts'
       },
-      "implementation_plan": {
-        "phase_1": "App.tsx integration (Week 1)",
-        "phase_2": "Product tour (Week 2)",
-        "phase_3": "Demo cleanup (Week 3)",
-        "phase_4": "Progress tracking (Week 4)"
+      'implementation_plan': {
+        'phase_1': 'App.tsx integration (Week 1)',
+        'phase_2': 'Product tour (Week 2)',
+        'phase_3': 'Demo cleanup (Week 3)',
+        'phase_4': 'Progress tracking (Week 4)'
       },
-      "business_value": "HIGH - Prevents empty-state confusion, improves first impression, increases user activation and retention",
-      "prd_readiness": {
-        "scope_clarity": "95%",
-        "execution_readiness": "95%",
-        "risk_coverage": "90%",
-        "business_impact": "95%"
+      'business_value': 'HIGH - Prevents empty-state confusion, improves first impression, increases user activation and retention',
+      'prd_readiness': {
+        'scope_clarity': '95%',
+        'execution_readiness': '95%',
+        'risk_coverage': '90%',
+        'business_impact': '95%'
       }
     }
   };

@@ -122,7 +122,7 @@ Please determine:
 
 Provide your analysis in JSON format.`
       }],
-      response_format: { type: "json_object" }
+      response_format: { type: 'json_object' }
     });
 
     return JSON.parse(response.choices[0].message.content);
@@ -162,7 +162,7 @@ Generate the following components:
 
 Format as JSON with these exact field names.`
       }],
-      response_format: { type: "json_object" }
+      response_format: { type: 'json_object' }
     });
 
     return JSON.parse(response.choices[0].message.content);
@@ -199,7 +199,7 @@ Return JSON with:
 - feedback (array of improvement suggestions)
 - improved_components (if quality < 0.8, provide improved versions)`
       }],
-      response_format: { type: "json_object" }
+      response_format: { type: 'json_object' }
     });
 
     const validation = JSON.parse(response.choices[0].message.content);
@@ -426,7 +426,7 @@ Return JSON with:
         `  SD Key: ${conflict.sd_key || '(null)'}\n` +
         `  Title: ${conflict.title}\n` +
         `  Status: ${conflict.status}\n` +
-        `Please use a different key or resolve the conflict.`
+        'Please use a different key or resolve the conflict.'
       );
     }
 

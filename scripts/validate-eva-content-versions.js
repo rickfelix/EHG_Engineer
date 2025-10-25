@@ -95,7 +95,7 @@ async function validateVersions(catalogueId = null) {
         console.log(`   ❌ ERROR: ${nullSnapshots.length} version(s) have null/empty data snapshots`);
         totalIssues++;
       } else {
-        console.log(`   ✅ All versions have data snapshots`);
+        console.log('   ✅ All versions have data snapshots');
       }
 
       // VALIDATION 4: Version timestamps are sequential
@@ -111,7 +111,7 @@ async function validateVersions(catalogueId = null) {
       }
 
       if (!timestampIssues) {
-        console.log(`   ✅ Version timestamps are sequential`);
+        console.log('   ✅ Version timestamps are sequential');
       }
 
       // VALIDATION 5: Change types are valid
@@ -121,18 +121,18 @@ async function validateVersions(catalogueId = null) {
         console.log(`   ❌ ERROR: ${invalidTypes.length} version(s) have invalid change_type`);
         totalIssues++;
       } else {
-        console.log(`   ✅ All change types are valid`);
+        console.log('   ✅ All change types are valid');
       }
 
       // VALIDATION 6: First version is type 'create'
       if (versions[0].change_type !== 'create') {
         console.log(`   ⚠️  WARNING: First version is not type 'create' (found: ${versions[0].change_type})`);
       } else {
-        console.log(`   ✅ First version is type 'create'`);
+        console.log('   ✅ First version is type \'create\'');
       }
 
       // Display version history
-      console.log(`\n   📜 Version History:`);
+      console.log('\n   📜 Version History:');
       for (const v of versions) {
         const timestamp = new Date(v.created_at).toLocaleString();
         console.log(`      v${v.version_number}: ${v.change_type || 'unknown'} - ${v.change_description || 'No description'} (${timestamp})`);

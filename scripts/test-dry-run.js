@@ -9,7 +9,7 @@ import DatabaseLoader, { parseFlags } from '../src/services/database-loader/inde
 
 async function main() {
   const flags = parseFlags();
-  console.log(`Running with flags:`, flags);
+  console.log('Running with flags:', flags);
 
   const loader = new DatabaseLoader();
 
@@ -29,7 +29,7 @@ async function main() {
     chairman_input: 'Test input',
   };
   const saved = await loader.saveSDIPSubmission(testSubmission, flags);
-  console.log(`Result: ${flags.dryRun ? 'dry-run mode' : `submission saved`}`);
+  console.log(`Result: ${flags.dryRun ? 'dry-run mode' : 'submission saved'}`);
 
   console.log('\n✅ Test complete');
   process.exit(0);

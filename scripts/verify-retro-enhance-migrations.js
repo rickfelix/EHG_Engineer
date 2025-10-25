@@ -67,7 +67,7 @@ const CHECKS = [
       return {
         passed: missing.length === 0,
         message: missing.length === 0
-          ? `All 8 columns present`
+          ? 'All 8 columns present'
           : `Missing columns: ${missing.map(c => c.name).join(', ')}`,
         details: VERBOSE ? rows : undefined
       };

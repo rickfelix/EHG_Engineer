@@ -68,7 +68,7 @@ async function analyzePrompt(prompt) {
         }
         
         if (agent.insights && agent.insights.length > 0) {
-          console.log(`   Key Insights:`);
+          console.log('   Key Insights:');
           agent.insights.slice(0, 3).forEach(insight => {
             console.log(`   • ${insight}`);
           });

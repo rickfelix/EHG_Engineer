@@ -144,7 +144,7 @@ The system is attempting IPv6 connection but the network doesn't support it:
 `;
     
     await fs.writeFile(instructionsPath, instructions);
-    console.log(`📄 Instructions saved to: UI_VALIDATION_SETUP_INSTRUCTIONS.md`);
+    console.log('📄 Instructions saved to: UI_VALIDATION_SETUP_INSTRUCTIONS.md');
     
   } catch (error) {
     console.error('❌ Error:', error.message);

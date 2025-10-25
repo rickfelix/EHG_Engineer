@@ -157,11 +157,11 @@ TASK: ${task}
       if (fs.existsSync(filePath)) {
         const content = fs.readFileSync(filePath, 'utf8');
         const lines = content.split('\n');
-        prompt += `\n\nCURRENT FILE CONTENT:\n\`\`\`\n`;
+        prompt += '\n\nCURRENT FILE CONTENT:\n```\n';
         lines.forEach((line, idx) => {
           prompt += `${idx + 1}: ${line}\n`;
         });
-        prompt += `\`\`\`\n`;
+        prompt += '```\n';
       }
     }
 
@@ -190,7 +190,7 @@ TASK: ${task}
 
     if (artifacts && artifacts.patch) {
       prompt += `\n\nCODEX-GENERATED PATCH TO APPLY:\n\`\`\`diff\n${artifacts.patch}\n\`\`\`\n`;
-      prompt += `\nPlease apply this patch and confirm the changes were made successfully.`;
+      prompt += '\nPlease apply this patch and confirm the changes were made successfully.';
     }
 
     return prompt;
@@ -201,18 +201,18 @@ TASK: ${task}
    */
   async callAnthropicAPI(prompt, lane) {
     const systemPrompt = lane === 'codex'
-      ? "You are Codex, a read-only agent that generates patches without modifying files. You can only use Read and Grep tools."
-      : "You are Claude, an agent with full capabilities including write access.";
+      ? 'You are Codex, a read-only agent that generates patches without modifying files. You can only use Read and Grep tools.'
+      : 'You are Claude, an agent with full capabilities including write access.';
 
     try {
       const message = await this.anthropic.messages.create({
-        model: "claude-3-5-sonnet-20241022",
+        model: 'claude-3-5-sonnet-20241022',
         max_tokens: 4096,
         temperature: 0,
         system: systemPrompt,
         messages: [
           {
-            role: "user",
+            role: 'user',
             content: prompt
           }
         ]
@@ -314,15 +314,15 @@ TASK: ${task}
 
     // Generate SBOM
     const sbom = {
-      bomFormat: "CycloneDX",
-      specVersion: "1.5",
+      bomFormat: 'CycloneDX',
+      specVersion: '1.5',
       version: 1,
       metadata: {
         timestamp: new Date().toISOString(),
         component: {
-          type: "application",
-          name: "codex-generated-patch",
-          version: "1.0.0"
+          type: 'application',
+          name: 'codex-generated-patch',
+          version: '1.0.0'
         }
       },
       components: this.extractComponentsFromPatch(patch)
@@ -331,8 +331,8 @@ TASK: ${task}
 
     // Generate attestation
     const attestation = {
-      _type: "https://in-toto.io/Statement/v1",
-      predicateType: "https://slsa.dev/provenance/v0.2",
+      _type: 'https://in-toto.io/Statement/v1',
+      predicateType: 'https://slsa.dev/provenance/v0.2',
       subject: [{
         name: `changes-${timestamp}.patch`,
         digest: {
@@ -340,12 +340,12 @@ TASK: ${task}
         }
       }],
       predicate: {
-        buildType: "https://example.com/codex/v1",
-        builder: { id: "codex-read-only-agent" },
+        buildType: 'https://example.com/codex/v1',
+        builder: { id: 'codex-read-only-agent' },
         invocation: {
           configSource: {
-            uri: "dual-lane-controller",
-            entryPoint: "executeAsCodex"
+            uri: 'dual-lane-controller',
+            entryPoint: 'executeAsCodex'
           },
           parameters: { task }
         },
@@ -382,9 +382,9 @@ TASK: ${task}
       fileMatches.forEach(match => {
         const fileName = match.replace(/---\s+a\//, '');
         components.push({
-          type: "file",
+          type: 'file',
           name: fileName,
-          version: "modified"
+          version: 'modified'
         });
       });
     }

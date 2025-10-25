@@ -259,78 +259,78 @@ Acceptance Criteria:
 
       // JSONB fields - structured data as JSON
       JSON.stringify([
-        { id: "FR-1", title: "Database Schema", hours: 16, priority: "HIGH" },
-        { id: "FR-2", title: "Content Type System", hours: 20, priority: "HIGH" },
-        { id: "FR-3", title: "Presentation Layout", hours: 18, priority: "HIGH" },
-        { id: "FR-4", title: "EVA Integration", hours: 22, priority: "HIGH" },
-        { id: "FR-5", title: "Settings & Testing", hours: 16, priority: "MEDIUM" }
+        { id: 'FR-1', title: 'Database Schema', hours: 16, priority: 'HIGH' },
+        { id: 'FR-2', title: 'Content Type System', hours: 20, priority: 'HIGH' },
+        { id: 'FR-3', title: 'Presentation Layout', hours: 18, priority: 'HIGH' },
+        { id: 'FR-4', title: 'EVA Integration', hours: 22, priority: 'HIGH' },
+        { id: 'FR-5', title: 'Settings & Testing', hours: 16, priority: 'MEDIUM' }
       ]), // functional_requirements
 
       JSON.stringify([
-        { id: "NFR-1", requirement: "Performance: <500ms load, 60fps transitions" },
-        { id: "NFR-2", requirement: "Security: RLS policies enforce user isolation" },
-        { id: "NFR-3", requirement: "Usability: Keyboard shortcuts, responsive design" },
-        { id: "NFR-4", requirement: "Maintainability: 300-600 LOC per component" }
+        { id: 'NFR-1', requirement: 'Performance: <500ms load, 60fps transitions' },
+        { id: 'NFR-2', requirement: 'Security: RLS policies enforce user isolation' },
+        { id: 'NFR-3', requirement: 'Usability: Keyboard shortcuts, responsive design' },
+        { id: 'NFR-4', requirement: 'Maintainability: 300-600 LOC per component' }
       ]), // non_functional_requirements
 
       JSON.stringify([
-        { id: "TR-1", requirement: "React 18 + TypeScript + Vite + Tailwind" },
-        { id: "TR-2", requirement: "Dependencies: react-markdown, react-table, recharts" },
-        { id: "TR-3", requirement: "Migration: 20251011_eva_content_catalogue_mvp.sql" },
-        { id: "TR-4", requirement: "Target URL: http://localhost:8080/eva-assistant" }
+        { id: 'TR-1', requirement: 'React 18 + TypeScript + Vite + Tailwind' },
+        { id: 'TR-2', requirement: 'Dependencies: react-markdown, react-table, recharts' },
+        { id: 'TR-3', requirement: 'Migration: 20251011_eva_content_catalogue_mvp.sql' },
+        { id: 'TR-4', requirement: 'Target URL: http://localhost:8080/eva-assistant' }
       ]), // technical_requirements
 
       JSON.stringify([
-        { id: "TS-1", scenario: "User creates content via EVA: 'create pitch deck'" },
-        { id: "TS-2", scenario: "User navigates slides with arrow keys" },
-        { id: "TS-3", scenario: "User saves settings in panel" },
-        { id: "TS-4", scenario: "E2E tests pass with 100% user story coverage" }
+        { id: 'TS-1', scenario: "User creates content via EVA: 'create pitch deck'" },
+        { id: 'TS-2', scenario: 'User navigates slides with arrow keys' },
+        { id: 'TS-3', scenario: 'User saves settings in panel' },
+        { id: 'TS-4', scenario: 'E2E tests pass with 100% user story coverage' }
       ]), // test_scenarios
 
       JSON.stringify([
-        { id: "AC-D", criteria: "All 9 tables created with RLS + seed data" },
-        { id: "AC-C", criteria: "3 content types render correctly (text/table/chart)" },
-        { id: "AC-P", criteria: "Presentation mode with keyboard shortcuts functional" },
-        { id: "AC-E", criteria: "EVA recognizes intents and generates content" },
-        { id: "AC-T", criteria: "Unit + E2E tests pass, 100% coverage" }
+        { id: 'AC-D', criteria: 'All 9 tables created with RLS + seed data' },
+        { id: 'AC-C', criteria: '3 content types render correctly (text/table/chart)' },
+        { id: 'AC-P', criteria: 'Presentation mode with keyboard shortcuts functional' },
+        { id: 'AC-E', criteria: 'EVA recognizes intents and generates content' },
+        { id: 'AC-T', criteria: 'Unit + E2E tests pass, 100% coverage' }
       ]), // acceptance_criteria
 
       JSON.stringify([
-        { id: "R-1", risk: "Migration failure", severity: "HIGH", mitigation: "Validate before apply" },
-        { id: "R-2", risk: "Performance degradation", severity: "MEDIUM", mitigation: "GIN indexes + pagination" },
-        { id: "R-3", risk: "E2E test failures", severity: "MEDIUM", mitigation: "data-testid attributes" }
+        { id: 'R-1', risk: 'Migration failure', severity: 'HIGH', mitigation: 'Validate before apply' },
+        { id: 'R-2', risk: 'Performance degradation', severity: 'MEDIUM', mitigation: 'GIN indexes + pagination' },
+        { id: 'R-3', risk: 'E2E test failures', severity: 'MEDIUM', mitigation: 'data-testid attributes' }
       ]), // risks
 
       JSON.stringify([
-        { id: "C-1", constraint: "Target URL: http://localhost:8080/eva-assistant (fixed)" },
-        { id: "C-2", constraint: "Component sizing: 300-600 LOC (enforced)" },
-        { id: "C-3", constraint: "Testing: 100% user story coverage (mandatory)" },
-        { id: "C-4", constraint: "Database: Schema fixed (9 tables via migration)" }
+        { id: 'C-1', constraint: 'Target URL: http://localhost:8080/eva-assistant (fixed)' },
+        { id: 'C-2', constraint: 'Component sizing: 300-600 LOC (enforced)' },
+        { id: 'C-3', constraint: 'Testing: 100% user story coverage (mandatory)' },
+        { id: 'C-4', constraint: 'Database: Schema fixed (9 tables via migration)' }
       ]), // constraints
 
       JSON.stringify([
-        { id: "A-1", assumption: "EXEC has access to EHG Supabase (liapbndqlqxdcgpwntbv)" },
-        { id: "A-2", assumption: "EVA conversation service is functional" },
-        { id: "A-3", assumption: "Dependencies install without conflicts" },
-        { id: "A-4", assumption: "Venture data exists for content generation" }
+        { id: 'A-1', assumption: 'EXEC has access to EHG Supabase (liapbndqlqxdcgpwntbv)' },
+        { id: 'A-2', assumption: 'EVA conversation service is functional' },
+        { id: 'A-3', assumption: 'Dependencies install without conflicts' },
+        { id: 'A-4', assumption: 'Venture data exists for content generation' }
       ]), // assumptions
 
       JSON.stringify([
-        { step: "5-Step SD Evaluation", status: "complete" },
-        { step: "Database Architect validation", status: "complete" },
-        { step: "Design Sub-Agent assessment", status: "complete" },
-        { step: "PRD creation", status: "complete" }
+        { step: '5-Step SD Evaluation', status: 'complete' },
+        { step: 'Database Architect validation', status: 'complete' },
+        { step: 'Design Sub-Agent assessment', status: 'complete' },
+        { step: 'PRD creation', status: 'complete' }
       ]), // plan_checklist
 
       JSON.stringify([
-        { step: "Verify application directory (/mnt/c/_EHG/ehg)", status: "pending", critical: true },
-        { step: "Apply migration to EHG database", status: "pending", critical: true },
-        { step: "Navigate to http://localhost:8080/eva-assistant", status: "pending", critical: true },
-        { step: "Install dependencies", status: "pending", critical: true },
-        { step: "Implement 8 components (~3000 LOC)", status: "pending", critical: false },
-        { step: "Run unit tests (npm run test:unit)", status: "pending", critical: true },
-        { step: "Run E2E tests (npm run test:e2e)", status: "pending", critical: true },
-        { step: "Collect test evidence", status: "pending", critical: true }
+        { step: 'Verify application directory (/mnt/c/_EHG/ehg)', status: 'pending', critical: true },
+        { step: 'Apply migration to EHG database', status: 'pending', critical: true },
+        { step: 'Navigate to http://localhost:8080/eva-assistant', status: 'pending', critical: true },
+        { step: 'Install dependencies', status: 'pending', critical: true },
+        { step: 'Implement 8 components (~3000 LOC)', status: 'pending', critical: false },
+        { step: 'Run unit tests (npm run test:unit)', status: 'pending', critical: true },
+        { step: 'Run E2E tests (npm run test:e2e)', status: 'pending', critical: true },
+        { step: 'Collect test evidence', status: 'pending', critical: true }
       ]), // exec_checklist
 
       'PLAN_AGENT', // approved_by

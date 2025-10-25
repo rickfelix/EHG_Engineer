@@ -51,8 +51,8 @@ function toJsonb(arr) {
 }
 
 async function generateRetrospective(sdId) {
-  console.log(`\n🔍 CONTINUOUS IMPROVEMENT COACH`);
-  console.log(`═`.repeat(60));
+  console.log('\n🔍 CONTINUOUS IMPROVEMENT COACH');
+  console.log('═'.repeat(60));
   console.log(`Generating retrospective for SD: ${sdId}`);
 
   // Get SD details
@@ -129,33 +129,33 @@ async function generateRetrospective(sdId) {
   // High-quality content arrays (will be converted to JSONB)
   const what_went_well_array = [
     `${sd.sd_key} completed successfully with ${sd.progress}% progress achieved`,
-    `LEO Protocol validation gates passed with comprehensive testing coverage`,
-    `Clear handoffs maintained between LEAD→PLAN→EXEC phases with proper documentation`,
-    `Database schema changes validated through Database Architect sub-agent review`,
-    `Code quality maintained through automated testing and code review processes`,
-    `Stakeholder communication maintained throughout implementation lifecycle`
+    'LEO Protocol validation gates passed with comprehensive testing coverage',
+    'Clear handoffs maintained between LEAD→PLAN→EXEC phases with proper documentation',
+    'Database schema changes validated through Database Architect sub-agent review',
+    'Code quality maintained through automated testing and code review processes',
+    'Stakeholder communication maintained throughout implementation lifecycle'
   ];
 
   const key_learnings_array = [
-    `Automated quality validation triggers enforce minimum content standards for retrospectives, requiring 5+ items per section`,
-    `Database constraints work in tandem with trigger functions to ensure data quality at insert time`,
-    `Clear separation between constraint validation (schema level) and business logic validation (trigger level) improves maintainability`,
-    `Comprehensive retrospective content provides better insights for continuous improvement than generic template responses`,
-    `Quality score calculation considers both quantity (number of items) and quality (avoiding generic phrases, including metrics)`
+    'Automated quality validation triggers enforce minimum content standards for retrospectives, requiring 5+ items per section',
+    'Database constraints work in tandem with trigger functions to ensure data quality at insert time',
+    'Clear separation between constraint validation (schema level) and business logic validation (trigger level) improves maintainability',
+    'Comprehensive retrospective content provides better insights for continuous improvement than generic template responses',
+    'Quality score calculation considers both quantity (number of items) and quality (avoiding generic phrases, including metrics)'
   ];
 
   const action_items_array = [
-    `Review retrospective quality scoring algorithm to ensure it aligns with team's definition of valuable retrospectives`,
-    `Update retrospective generation templates to include specific prompts for metrics and measurable outcomes`,
-    `Consider adding retrospective quality trends dashboard to track improvement over time`,
-    `Document the quality scoring rubric in developer guidelines for manual retrospective creation`
+    'Review retrospective quality scoring algorithm to ensure it aligns with team\'s definition of valuable retrospectives',
+    'Update retrospective generation templates to include specific prompts for metrics and measurable outcomes',
+    'Consider adding retrospective quality trends dashboard to track improvement over time',
+    'Document the quality scoring rubric in developer guidelines for manual retrospective creation'
   ];
 
   const what_needs_improvement_array = [
-    `Initial retrospective template was too generic, triggering quality validation failures`,
-    `Documentation could better explain the relationship between constraints and trigger functions`,
-    `Error messages from constraint violations should hint at trigger-based recalculation of quality scores`,
-    `Automated retrospective generation should query actual handoff data for richer content`
+    'Initial retrospective template was too generic, triggering quality validation failures',
+    'Documentation could better explain the relationship between constraints and trigger functions',
+    'Error messages from constraint violations should hint at trigger-based recalculation of quality scores',
+    'Automated retrospective generation should query actual handoff data for richer content'
   ];
 
   // Generate high-quality retrospective content
@@ -212,12 +212,12 @@ async function generateRetrospective(sdId) {
     status: 'DRAFT'
   };
 
-  console.log(`\n📊 Retrospective Content Summary:`);
+  console.log('\n📊 Retrospective Content Summary:');
   console.log(`   what_went_well: ${what_went_well_array.length} items`);
   console.log(`   key_learnings: ${key_learnings_array.length} items`);
   console.log(`   action_items: ${action_items_array.length} items`);
   console.log(`   what_needs_improvement: ${what_needs_improvement_array.length} items`);
-  console.log(`\n   Expected quality_score: 90-100 (calculated by trigger)`);
+  console.log('\n   Expected quality_score: 90-100 (calculated by trigger)');
 
   // Insert retrospective with DRAFT status
   const { data: inserted, error: insertError} = await supabase
@@ -232,15 +232,15 @@ async function generateRetrospective(sdId) {
   const retroId = inserted[0].id;
   const calculatedScore = inserted[0].quality_score;
 
-  console.log(`\n✅ Retrospective inserted (DRAFT)`);
+  console.log('\n✅ Retrospective inserted (DRAFT)');
   console.log(`   ID: ${retroId}`);
   console.log(`   Quality Score: ${calculatedScore}/100 (auto-calculated)`);
 
   // Check if quality score meets threshold
   if (calculatedScore < 70) {
     console.log(`\n⚠️  Quality score (${calculatedScore}) below threshold (70)`);
-    console.log(`   Retrospective will remain in DRAFT status`);
-    console.log(`   Issues:`, inserted[0].quality_issues);
+    console.log('   Retrospective will remain in DRAFT status');
+    console.log('   Issues:', inserted[0].quality_issues);
 
     return {
       success: false,
@@ -261,7 +261,7 @@ async function generateRetrospective(sdId) {
 
   if (updateError) {
     console.log(`\n⚠️  Failed to update to PUBLISHED status: ${updateError.message}`);
-    console.log(`   Retrospective remains in DRAFT status`);
+    console.log('   Retrospective remains in DRAFT status');
 
     return {
       success: false,
@@ -272,8 +272,8 @@ async function generateRetrospective(sdId) {
     };
   }
 
-  console.log(`\n✅ Retrospective published successfully!`);
-  console.log(`   Status: PUBLISHED`);
+  console.log('\n✅ Retrospective published successfully!');
+  console.log('   Status: PUBLISHED');
 
   return {
     success: true,

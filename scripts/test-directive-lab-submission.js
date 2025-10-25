@@ -37,7 +37,7 @@ function logTestCase(name, status, message, details = null) {
   const icon = status === 'PASS' ? '✅' : status === 'FAIL' ? '❌' : '⚠️';
   console.log(`${icon} ${name}: ${status}`);
   if (message) console.log(`   ${message}`);
-  if (details) console.log(`   Details:`, details);
+  if (details) console.log('   Details:', details);
 }
 
 /**

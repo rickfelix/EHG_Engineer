@@ -29,7 +29,7 @@ async function createLEADPlanHandoff() {
     phase: 'planning',
 
     // 7 Mandatory Elements
-    executive_summary: `Enhance existing Venture Detail pages with comprehensive stage view integration. Current implementation provides basic 5-tab overview but lacks detailed stage-by-stage management capabilities. Focus on enhanced stage navigation, real-time status updates, stage-specific analytics, and improved workflow integration. Build upon existing VentureDetail.tsx and VentureDetailEnhanced.tsx components while integrating with 40+ existing Stage components for seamless venture execution management.`,
+    executive_summary: 'Enhance existing Venture Detail pages with comprehensive stage view integration. Current implementation provides basic 5-tab overview but lacks detailed stage-by-stage management capabilities. Focus on enhanced stage navigation, real-time status updates, stage-specific analytics, and improved workflow integration. Build upon existing VentureDetail.tsx and VentureDetailEnhanced.tsx components while integrating with 40+ existing Stage components for seamless venture execution management.',
 
     completeness_report: {
       current_implementation_analyzed: true,

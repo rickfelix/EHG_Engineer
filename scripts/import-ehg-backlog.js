@@ -161,7 +161,7 @@ const options = program.opts();
 
 async function main() {
   console.log(`\n${'='.repeat(60)}`);
-  console.log(`🚀 EHG Backlog Import Tool`);
+  console.log('🚀 EHG Backlog Import Tool');
   console.log(`${'='.repeat(60)}`);
   console.log(`📝 Import Run ID: ${IMPORT_RUN_ID}`);
   console.log(`🔄 Mode: ${options.dryRun ? 'DRY RUN' : 'LIVE IMPORT'}`);
@@ -332,7 +332,7 @@ async function main() {
   processedSDs.forEach(({ sd }) => {
     triageDistribution[sd.rolled_triage]++;
   });
-  console.log(`\nRolled Triage Distribution:`);
+  console.log('\nRolled Triage Distribution:');
   console.log(`  High:   ${triageDistribution.High}`);
   console.log(`  Medium: ${triageDistribution.Medium}`);
   console.log(`  Low:    ${triageDistribution.Low}`);
@@ -523,8 +523,8 @@ async function importToDatabase(processedSDs, warnings, checksum, filePath) {
     console.error('⚠️  Failed to log audit:', auditError.message);
   }
   
-  console.log(`\n` + '='.repeat(60));
-  console.log(`📈 Import Results:`);
+  console.log('\n' + '='.repeat(60));
+  console.log('📈 Import Results:');
   console.log('='.repeat(60));
   console.log(`  ✅ Successfully imported: ${successCount} SDs`);
   if (errorCount > 0) {

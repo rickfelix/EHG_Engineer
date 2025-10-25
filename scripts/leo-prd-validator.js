@@ -70,9 +70,9 @@ class PRDValidator {
    * Validate a PRD file
    */
   validateFile(filePath) {
-    console.log(`\n╔════════════════════════════════════════════════╗`);
-    console.log(`║        PRD Validator v1.0 - LEO Protocol      ║`);
-    console.log(`╚════════════════════════════════════════════════╝\n`);
+    console.log('\n╔════════════════════════════════════════════════╗');
+    console.log('║        PRD Validator v1.0 - LEO Protocol      ║');
+    console.log('╚════════════════════════════════════════════════╝\n');
     
     console.log(`📄 File: ${filePath}\n`);
     
@@ -253,7 +253,7 @@ class PRDValidator {
       results.errors.push('No user stories found in User Stories section');
       results.score -= 10;
     } else if (wellFormedCount < results.quality.userStories.found / 2) {
-      results.warnings.push(`Only ${wellFormedCount}/${results.quality.userStories.found} user stories follow standard format (As a... I want... So that...)`)
+      results.warnings.push(`Only ${wellFormedCount}/${results.quality.userStories.found} user stories follow standard format (As a... I want... So that...)`);
       results.score -= 5;
     }
     
@@ -704,7 +704,7 @@ class PRDValidator {
     const hasVisionQA = /Vision QA/i.test(content);
     
     if (hasUIWork && !hasVisionQA) {
-      const vqSection = `\n## Vision QA Requirements\n\n**Status**: REQUIRED\n\n**Test Goals**:\n- [ ] All UI components render correctly\n- [ ] Forms validate properly\n- [ ] Responsive design works on mobile/tablet/desktop\n- [ ] Accessibility standards met (WCAG 2.1 AA)\n\n**Configuration**:\n\`\`\`json\n{\n  "appId": "APP-001",\n  "maxIterations": 30,\n  "costLimit": 2.00,\n  "viewports": ["desktop", "mobile"],\n  "checkAccessibility": true\n}\n\`\`\`\n`;
+      const vqSection = '\n## Vision QA Requirements\n\n**Status**: REQUIRED\n\n**Test Goals**:\n- [ ] All UI components render correctly\n- [ ] Forms validate properly\n- [ ] Responsive design works on mobile/tablet/desktop\n- [ ] Accessibility standards met (WCAG 2.1 AA)\n\n**Configuration**:\n```json\n{\n  "appId": "APP-001",\n  "maxIterations": 30,\n  "costLimit": 2.00,\n  "viewports": ["desktop", "mobile"],\n  "checkAccessibility": true\n}\n```\n';
       
       // Add before success criteria or at end
       const successIndex = content.search(/##.*Success Criteria/i);

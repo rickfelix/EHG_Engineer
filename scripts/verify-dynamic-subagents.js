@@ -120,12 +120,12 @@ async function runVerification() {
   console.log('VERIFICATION SUMMARY');
   console.log('='.repeat(60));
   
-  console.log(`\n📊 Overall Results:`);
+  console.log('\n📊 Overall Results:');
   console.log(`   Total Agents: ${results.total}`);
   console.log(`   Working: ${results.successful}`);
   console.log(`   Failed: ${results.failed}`);
   
-  console.log(`\n📋 Detailed Status:`);
+  console.log('\n📋 Detailed Status:');
   for (const detail of results.details) {
     const icon = detail.status === 'success' ? '✅' : 
                   detail.status === 'timeout' ? '⏱️' : '❌';

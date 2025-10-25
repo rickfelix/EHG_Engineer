@@ -54,11 +54,11 @@ async function updateSections() {
     }
   }
 
-  console.log(`\n======================`);
-  console.log(`Summary:`);
+  console.log('\n======================');
+  console.log('Summary:');
   console.log(`✅ Successfully updated: ${successCount}`);
   console.log(`❌ Errors: ${errorCount}`);
-  console.log(`======================`);
+  console.log('======================');
 
   // Show updated records
   console.log('\nVerifying updates...\n');

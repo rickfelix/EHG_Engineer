@@ -314,10 +314,10 @@ async function createHandoff() {
   }
 
   console.log('\n📊 Handoff Summary:');
-  console.log(`   Scope Reduction: 65h → 12h (82% savings)`);
-  console.log(`   Strategic Objectives: 4`);
-  console.log(`   Success Criteria: 5`);
-  console.log(`   Deferred SDs: 2 (047A, 047B)`);
+  console.log('   Scope Reduction: 65h → 12h (82% savings)');
+  console.log('   Strategic Objectives: 4');
+  console.log('   Success Criteria: 5');
+  console.log('   Deferred SDs: 2 (047A, 047B)');
   console.log('\n✅ LEAD phase complete. Ready for PLAN PRD creation.\n');
 }
 

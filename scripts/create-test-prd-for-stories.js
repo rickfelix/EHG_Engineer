@@ -181,10 +181,10 @@ async function createTestPRD() {
   console.log('Title:', prd.title);
   console.log('Acceptance Criteria:', acceptanceCriteria.length, 'items');
   console.log('\nYou can now generate stories using:');
-  console.log(`make stories-generate SD=SD-2025-09-EMB`);
+  console.log('make stories-generate SD=SD-2025-09-EMB');
   console.log('\nOr directly:');
-  console.log(`curl -X POST http://localhost:3000/api/stories/generate \\`);
-  console.log(`  -H "Content-Type: application/json" \\`);
+  console.log('curl -X POST http://localhost:3000/api/stories/generate \\');
+  console.log('  -H "Content-Type: application/json" \\');
   console.log(`  -d '{"sd_key":"SD-2025-09-EMB","prd_id":"${prd.id}","mode":"dry_run"}'`);
 
   return prd.id;

@@ -91,7 +91,7 @@ class EXECChecklistEnforcer {
           this.results[key] = result;
 
           if (result.passed) {
-            console.log(chalk.green(`  ✓ PASSED`));
+            console.log(chalk.green('  ✓ PASSED'));
             if (result.evidence) {
               console.log(chalk.gray(`    Evidence: ${result.evidence}`));
               this.evidence[key] = result.evidence;
@@ -130,7 +130,7 @@ class EXECChecklistEnforcer {
         const { override } = await inquirer.prompt([{
           type: 'confirm',
           name: 'override',
-          message: `Non-critical items failed. Continue anyway?`,
+          message: 'Non-critical items failed. Continue anyway?',
           default: false
         }]);
 

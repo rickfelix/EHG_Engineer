@@ -151,7 +151,7 @@ async function applyMigration() {
     await client.query('COMMIT');
     console.log('✅ Transaction committed!\n');
 
-    console.log(`📊 Summary:`);
+    console.log('📊 Summary:');
     console.log(`  ✅ Executed: ${successCount}`);
     console.log(`  ⏭️  Skipped: ${skipCount}`);
     console.log(`  📝 Total: ${statements.length}\n`);

@@ -93,7 +93,7 @@ class SubAgentTriggerSystem {
     }
     
     // Display sub-agent identity
-    console.log(`\n📋 IDENTITY`);
+    console.log('\n📋 IDENTITY');
     console.log(`Name: ${subAgent.name}`);
     console.log(`Code: ${subAgent.code}`);
     console.log(`Priority: ${subAgent.priority}`);
@@ -103,7 +103,7 @@ class SubAgentTriggerSystem {
     if (subAgent.metadata?.backstory) {
       const backstory = subAgent.metadata.backstory;
       
-      console.log(`\n📖 BACKSTORY`);
+      console.log('\n📖 BACKSTORY');
       console.log(`Summary: ${backstory.summary || 'N/A'}`);
       
       if (backstory.full_story) {
@@ -111,14 +111,14 @@ class SubAgentTriggerSystem {
       }
       
       if (backstory.achievements && backstory.achievements.length > 0) {
-        console.log(`\n🏆 ACHIEVEMENTS:`);
+        console.log('\n🏆 ACHIEVEMENTS:');
         backstory.achievements.slice(0, 3).forEach((achievement, i) => {
           console.log(`   ${i + 1}. ${achievement}`);
         });
       }
       
       if (backstory.mantras && backstory.mantras.length > 0) {
-        console.log(`\n💭 GUIDING MANTRAS:`);
+        console.log('\n💭 GUIDING MANTRAS:');
         backstory.mantras.slice(0, 3).forEach((mantra, i) => {
           console.log(`   ${i + 1}. "${mantra}"`);
         });
@@ -137,11 +137,11 @@ class SubAgentTriggerSystem {
     // Generate behavior instructions based on backstory
     const behaviorInstructions = this.generateBehaviorInstructions(subAgent);
     
-    console.log(`\n🎭 BEHAVIORAL INSTRUCTIONS FOR AI AGENT:`);
+    console.log('\n🎭 BEHAVIORAL INSTRUCTIONS FOR AI AGENT:');
     console.log(behaviorInstructions);
     
     // Simulate sub-agent execution
-    console.log(`\n🔧 EXECUTING SUB-AGENT TASK...`);
+    console.log('\n🔧 EXECUTING SUB-AGENT TASK...');
     console.log(`Context: ${context.substring(0, 100)}...`);
     
     // In real implementation, this would:
@@ -168,7 +168,7 @@ class SubAgentTriggerSystem {
     }
     
     if (subAgent.metadata?.backstory?.mantras) {
-      instructions.push(`\nYour guiding principles:`);
+      instructions.push('\nYour guiding principles:');
       subAgent.metadata.backstory.mantras.forEach(mantra => {
         instructions.push(`• ${mantra}`);
       });
@@ -179,13 +179,13 @@ class SubAgentTriggerSystem {
     }
     
     if (subAgent.capabilities && subAgent.capabilities.length > 0) {
-      instructions.push(`\nYour capabilities include:`);
+      instructions.push('\nYour capabilities include:');
       subAgent.capabilities.slice(0, 5).forEach(cap => {
         instructions.push(`• ${cap}`);
       });
     }
     
-    instructions.push(`\nApproach every task with the expertise and perspective defined by your backstory.`);
+    instructions.push('\nApproach every task with the expertise and perspective defined by your backstory.');
     
     return instructions.join('\n');
   }

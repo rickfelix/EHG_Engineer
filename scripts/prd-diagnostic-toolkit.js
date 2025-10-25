@@ -165,7 +165,7 @@ async function checkSDReadiness(sdId) {
       });
 
       console.log(chalk.yellow('\\n🔧 Fix suggestions:'));
-      console.log(chalk.cyan(`   1. node scripts/prd-format-validator.js --fix`));
+      console.log(chalk.cyan('   1. node scripts/prd-format-validator.js --fix'));
       console.log(chalk.cyan(`   2. node scripts/unified-consolidated-prd.js ${sdId} --force`));
     }
 

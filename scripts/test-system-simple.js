@@ -32,7 +32,7 @@ async function testSystemBasics() {
     // Test 3: Rule-based analysis (no AI)
     console.log('\n3️⃣ Testing rule-based analysis...');
     
-    const testPrompt = "I need to add authentication to my React application";
+    const testPrompt = 'I need to add authentication to my React application';
     const testContext = {
       current_files: ['src/Login.jsx'],
       recent_errors: [],

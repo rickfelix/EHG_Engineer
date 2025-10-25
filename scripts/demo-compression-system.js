@@ -37,7 +37,7 @@ function generateSyntheticReports() {
           issue: 'Stored XSS vulnerability in comment system',
           location: 'src/components/CommentBox.tsx:45',
           recommendation: 'Sanitize user input and use DOMPurify',
-          code_snippet: "dangerouslySetInnerHTML={{ __html: comment.text }}",
+          code_snippet: 'dangerouslySetInnerHTML={{ __html: comment.text }}',
           cve_reference: 'CWE-79',
           attack_vector: 'User-supplied content'
         }

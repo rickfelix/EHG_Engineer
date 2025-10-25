@@ -7,7 +7,7 @@ import { dirname } from 'path';
 import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 import dotenv from 'dotenv';
-dotenv.config(); });
+dotenv.config();
 import ProgressCalculator from '../lib/dashboard/progress-calculator';
 
 const supabase = createClient(

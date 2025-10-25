@@ -158,7 +158,7 @@ async function migratePRD(filePath: string): Promise<void> {
       throw new Error(`Failed to update: ${error.message}`);
     }
 
-    console.log(`    ✅ Updated existing PRD`);
+    console.log('    ✅ Updated existing PRD');
   } else {
     // Insert new PRD
     const { error } = await supabase
@@ -184,7 +184,7 @@ async function migratePRD(filePath: string): Promise<void> {
       throw new Error(`Failed to insert: ${error.message}`);
     }
 
-    console.log(`    ✅ Migrated to database`);
+    console.log('    ✅ Migrated to database');
   }
 
   // Store migration audit record

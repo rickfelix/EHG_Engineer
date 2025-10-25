@@ -167,7 +167,7 @@ async function testDualLaneActive() {
     // Verify audit trail has Codex entries
     const codexEntries = auditTrail.filter(e => e.mode === 'codex');
     if (codexEntries.length > 0) {
-      tests.passed.push(`✅ Audit trail shows Codex activity`);
+      tests.passed.push('✅ Audit trail shows Codex activity');
     }
   } else {
     tests.failed.push('❌ No audit trail generated');
@@ -191,7 +191,7 @@ async function testDualLaneActive() {
 
       if (claudeResult.success) {
         tests.passed.push('✅ End-to-end handoff successful');
-        tests.passed.push(`✅ Codex → Claude flow completed`);
+        tests.passed.push('✅ Codex → Claude flow completed');
       } else {
         tests.failed.push('❌ Claude failed to apply Codex artifacts');
       }

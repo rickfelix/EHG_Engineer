@@ -53,7 +53,7 @@ class LEOCICDValidator {
       if (sdError) {
         // If columns don't exist, skip CI/CD validation gracefully
         if (sdError.message.includes('column') && sdError.message.includes('does not exist')) {
-          console.log(chalk.yellow(`⚠️  CI/CD columns not available - skipping CI/CD validation`));
+          console.log(chalk.yellow('⚠️  CI/CD columns not available - skipping CI/CD validation'));
           return {
             valid: true,
             score: 100,
@@ -73,7 +73,7 @@ class LEOCICDValidator {
       if (pipelineError) {
         // If RPC function doesn't exist, skip CI/CD validation gracefully
         if (pipelineError.message.includes('function') && pipelineError.message.includes('does not exist')) {
-          console.log(chalk.yellow(`⚠️  CI/CD RPC functions not available - validation passed by default`));
+          console.log(chalk.yellow('⚠️  CI/CD RPC functions not available - validation passed by default'));
           return {
             valid: true,
             score: 100,

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createClient } from '@supabase/supabase-js';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -44,7 +44,7 @@ async function querySDIPStatus() {
             console.log(`📝 Description: ${sdData.description || 'N/A'}`);
             
             if (sdData.metadata) {
-                console.log(`🔧 Metadata:`, JSON.stringify(sdData.metadata, null, 2));
+                console.log('🔧 Metadata:', JSON.stringify(sdData.metadata, null, 2));
             }
         }
 
@@ -69,7 +69,7 @@ async function querySDIPStatus() {
             console.log(`📅 Created: ${new Date(prd.created_at).toISOString()}`);
             
             if (prd.phase_progress) {
-                console.log(`🔍 Phase Progress:`, JSON.stringify(prd.phase_progress, null, 2));
+                console.log('🔍 Phase Progress:', JSON.stringify(prd.phase_progress, null, 2));
             }
             
             if (prd.requirements) {

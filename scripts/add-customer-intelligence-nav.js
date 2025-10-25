@@ -24,7 +24,7 @@ async function addNavigationRoute() {
     // Check if route already exists
     console.log('\n2️⃣  Checking if nav_routes entry exists...');
     const checkResult = await client.query(
-      "SELECT id, path, title, maturity, is_enabled FROM nav_routes WHERE path = $1",
+      'SELECT id, path, title, maturity, is_enabled FROM nav_routes WHERE path = $1',
       ['/customer-intelligence']
     );
 
@@ -44,7 +44,7 @@ async function addNavigationRoute() {
     // Get max sort_index for intelligence section
     console.log('\n3️⃣  Calculating sort index for intelligence section...');
     const sortResult = await client.query(
-      "SELECT COALESCE(MAX(sort_index), 0) + 10 as next_index FROM nav_routes WHERE section = $1",
+      'SELECT COALESCE(MAX(sort_index), 0) + 10 as next_index FROM nav_routes WHERE section = $1',
       ['intelligence']
     );
     const sortIndex = sortResult.rows[0].next_index;

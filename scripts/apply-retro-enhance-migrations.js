@@ -403,7 +403,7 @@ async function main() {
         console.log(`   ⏱️  Duration: ${result.duration}s`);
         console.log(`   📝 Statements: ${result.statementCount}`);
         if (result.verification) {
-          console.log(`   ✅ Verification: Passed`);
+          console.log('   ✅ Verification: Passed');
         }
       } else if (result.error) {
         console.log(`   ❌ Error: ${result.error}`);

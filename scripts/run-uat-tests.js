@@ -230,7 +230,7 @@ async function createTestRun() {
 async function runPlaywrightTests() {
   console.log(chalk.blue('\n3️⃣  Running Playwright Tests'));
   console.log(`   Target: http://localhost:${CONFIG.ehgPort} (EHG Application)`);
-  console.log(`   Config: playwright-uat.config.js`);
+  console.log('   Config: playwright-uat.config.js');
   console.log(`   Workers: ${CONFIG.workers}`);
   console.log(`   Mode: ${CONFIG.headless ? 'Headless' : 'Headed'}\n`);
 

@@ -21,7 +21,7 @@ async function createHandoff() {
     created_at: new Date().toISOString(),
     handoff_data: {
       sections: {
-        executive_summary: `SD-028: EVA Assistant Consolidated - Building on the successful SD-003A implementation, this SD consolidates 12 EVA-related features including enhanced voice capabilities, advanced validation, and comprehensive assistant features. Priority: HIGH, WSJF Score: 56.45.`,
+        executive_summary: 'SD-028: EVA Assistant Consolidated - Building on the successful SD-003A implementation, this SD consolidates 12 EVA-related features including enhanced voice capabilities, advanced validation, and comprehensive assistant features. Priority: HIGH, WSJF Score: 56.45.',
 
         completeness_report: {
           completed: [

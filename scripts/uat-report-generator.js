@@ -455,24 +455,24 @@ class UATReportGenerator {
     console.log(`🎯 UAT EXECUTION REPORT - ${summary.status}`);
     console.log('='.repeat(80));
 
-    console.log(`\n📊 Test Results:`);
+    console.log('\n📊 Test Results:');
     console.log(`   Total Tests: ${summary.metrics.total_tests}`);
     console.log(`   Passed: ${summary.metrics.passed} (${summary.metrics.pass_rate}%)`);
     console.log(`   Failed: ${summary.metrics.failed}`);
     console.log(`   Flaky: ${summary.metrics.flaky}`);
 
-    console.log(`\n🚪 Quality Gates:`);
+    console.log('\n🚪 Quality Gates:');
     console.log(`   Status: ${summary.quality_gates.overall_status}`);
     console.log(`   Passed: ${summary.quality_gates.gates_passed}/${summary.quality_gates.gates_total}`);
     console.log(`   Critical Failures: ${summary.quality_gates.critical_failures}`);
 
-    console.log(`\n🔧 Issues:`);
+    console.log('\n🔧 Issues:');
     console.log(`   Critical: ${summary.issues.critical}`);
     console.log(`   High: ${summary.issues.high}`);
     console.log(`   Recommendations: ${summary.issues.total_recommendations}`);
 
     if (report.recommendations.length > 0) {
-      console.log(`\n💡 Top Recommendations:`);
+      console.log('\n💡 Top Recommendations:');
       report.recommendations.slice(0, 3).forEach((rec, i) => {
         console.log(`   ${i + 1}. [${rec.priority}] ${rec.action}`);
       });

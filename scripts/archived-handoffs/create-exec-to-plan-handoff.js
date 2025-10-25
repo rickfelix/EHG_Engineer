@@ -6,7 +6,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 async function createHandoff() {
@@ -50,7 +50,7 @@ async function createHandoff() {
       status: 'ready_for_verification',
       
       // 1. Executive Summary (≤200 tokens)
-      executive_summary: `OpenAI Realtime Voice core implementation complete. Delivered WebRTC client, Supabase Edge Functions, and database schema. System achieves <500ms latency with cost tracking under $500/month. Function calling integrated for portfolio queries. Ready for PLAN verification and acceptance testing.`,
+      executive_summary: 'OpenAI Realtime Voice core implementation complete. Delivered WebRTC client, Supabase Edge Functions, and database schema. System achieves <500ms latency with cost tracking under $500/month. Function calling integrated for portfolio queries. Ready for PLAN verification and acceptance testing.',
       
       // 2. Completeness Report
       completeness_report: {

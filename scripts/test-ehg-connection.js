@@ -69,7 +69,7 @@ Supabase: ${this.project.supabase_url}
         console.log(`   🔀 Default branch: ${response.default_branch}`);
         console.log(`   📅 Last updated: ${new Date(response.updated_at).toLocaleDateString()}`);
       } else {
-        console.log(`   ❌ Could not access repository (may be private)`);
+        console.log('   ❌ Could not access repository (may be private)');
       }
     } catch (error) {
       console.log(`   ❌ Error checking repository: ${error.message}`);
@@ -81,7 +81,7 @@ Supabase: ${this.project.supabase_url}
       const { stdout } = await execAsync('git --version');
       console.log(`   ✅ Git installed: ${stdout.trim()}`);
     } catch {
-      console.log(`   ❌ Git CLI not installed`);
+      console.log('   ❌ Git CLI not installed');
     }
     
     // Test 3: Check GitHub CLI
@@ -93,12 +93,12 @@ Supabase: ${this.project.supabase_url}
       // Check authentication
       try {
         await execAsync('gh auth status');
-        console.log(`   ✅ GitHub CLI authenticated`);
+        console.log('   ✅ GitHub CLI authenticated');
       } catch {
-        console.log(`   ⚠️  GitHub CLI not authenticated (run: gh auth login)`);
+        console.log('   ⚠️  GitHub CLI not authenticated (run: gh auth login)');
       }
     } catch {
-      console.log(`   ℹ️  GitHub CLI not installed (optional)`);
+      console.log('   ℹ️  GitHub CLI not installed (optional)');
     }
   }
 
@@ -110,11 +110,11 @@ Supabase: ${this.project.supabase_url}
     try {
       const exists = await this.checkUrl(this.project.supabase_url);
       if (exists) {
-        console.log(`   ✅ Supabase URL is accessible`);
+        console.log('   ✅ Supabase URL is accessible');
         console.log(`   📎 URL: ${this.project.supabase_url}`);
         console.log(`   🆔 Project ID: ${this.project.supabase_project_id}`);
       } else {
-        console.log(`   ⚠️  Supabase URL not responding (may require auth)`);
+        console.log('   ⚠️  Supabase URL not responding (may require auth)');
       }
     } catch (error) {
       console.log(`   ❌ Error checking Supabase: ${error.message}`);
@@ -130,27 +130,27 @@ Supabase: ${this.project.supabase_url}
       try {
         const { stdout: projectsList } = await execAsync('supabase projects list 2>&1', { timeout: 5000 });
         if (projectsList.includes('You need to be logged in')) {
-          console.log(`   ⚠️  Not logged in to Supabase (run: supabase login)`);
+          console.log('   ⚠️  Not logged in to Supabase (run: supabase login)');
         } else {
-          console.log(`   ✅ Logged in to Supabase`);
+          console.log('   ✅ Logged in to Supabase');
         }
       } catch (error) {
         if (error.message.includes('You need to be logged in')) {
-          console.log(`   ⚠️  Not logged in to Supabase (run: supabase login)`);
+          console.log('   ⚠️  Not logged in to Supabase (run: supabase login)');
         } else {
-          console.log(`   ℹ️  Could not check login status`);
+          console.log('   ℹ️  Could not check login status');
         }
       }
     } catch {
-      console.log(`   ❌ Supabase CLI not installed`);
-      console.log(`   💡 Install with: wget -qO- https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz | tar xvz && sudo mv supabase /usr/local/bin/`);
+      console.log('   ❌ Supabase CLI not installed');
+      console.log('   💡 Install with: wget -qO- https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz | tar xvz && sudo mv supabase /usr/local/bin/');
     }
     
     // Test 3: Check if we can connect to the database
     console.log('\n3. Testing database connection...');
-    console.log(`   ℹ️  To test database connection, you need:`);
-    console.log(`      - Supabase service role key or anon key`);
-    console.log(`      - Database password (if using direct connection)`);
+    console.log('   ℹ️  To test database connection, you need:');
+    console.log('      - Supabase service role key or anon key');
+    console.log('      - Database password (if using direct connection)');
   }
 
   async testLocalGit() {
@@ -164,12 +164,12 @@ Supabase: ${this.project.supabase_url}
       // Check remote
       const { stdout: remote } = await execAsync('git remote -v');
       if (remote.includes('rickfelix/ehg')) {
-        console.log(`   ✅ Connected to correct GitHub repository`);
+        console.log('   ✅ Connected to correct GitHub repository');
       } else if (remote) {
-        console.log(`   ⚠️  Connected to different repository:`);
+        console.log('   ⚠️  Connected to different repository:');
         console.log(`      ${remote.split('\n')[0]}`);
       } else {
-        console.log(`   ❌ No remote repository configured`);
+        console.log('   ❌ No remote repository configured');
       }
       
       // Check status
@@ -178,7 +178,7 @@ Supabase: ${this.project.supabase_url}
       if (changes.length > 0) {
         console.log(`   📝 Uncommitted changes: ${changes.length} files`);
       } else {
-        console.log(`   ✅ Working directory clean`);
+        console.log('   ✅ Working directory clean');
       }
       
     } catch (error) {

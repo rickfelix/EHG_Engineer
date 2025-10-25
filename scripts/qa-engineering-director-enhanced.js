@@ -90,7 +90,7 @@ export async function executeQADirector(sd_id, options = {}) {
   console.log(`🎯 QA Engineering Director v2.0 - Starting for ${sd_id}`);
   console.log(`   Target App: ${targetApp}`);
   if (smokeOnly) {
-    console.log(`   ⚡ FAST MODE: Smoke tests only (~60s)`);
+    console.log('   ⚡ FAST MODE: Smoke tests only (~60s)');
   }
   console.log('═══════════════════════════════════════════════════════════\n');
 
@@ -252,7 +252,7 @@ export async function executeQADirector(sd_id, options = {}) {
         };
       }
     } else if (migrationResult.verdict === 'PASS') {
-      console.log(`   ✅ All migrations applied\n`);
+      console.log('   ✅ All migrations applied\n');
     } else {
       console.log(`   ℹ️  No migrations found for ${sd_id}\n`);
     }
@@ -265,9 +265,9 @@ export async function executeQADirector(sd_id, options = {}) {
 
   if (dependencyResult.verdict === 'WARNING') {
     console.log(`   ⚠️  ${dependencyResult.conflicts_count} potential conflict(s) detected`);
-    console.log(`   Recommendations provided in summary\n`);
+    console.log('   Recommendations provided in summary\n');
   } else {
-    console.log(`   ✅ No dependency conflicts\n`);
+    console.log('   ✅ No dependency conflicts\n');
   }
 
   // 1.4: Component Integration Check (if UI SD)
@@ -281,7 +281,7 @@ export async function executeQADirector(sd_id, options = {}) {
 
       if (integrationResult.verdict === 'WARNING') {
         console.log(`   ⚠️  ${integrationResult.warnings_count} component(s) not integrated`);
-        console.log(`   See details in summary\n`);
+        console.log('   See details in summary\n');
       } else {
         console.log(`   ✅ All components integrated (${integrationResult.integrations_found}/${integrationResult.components_checked})\n`);
       }
@@ -320,13 +320,13 @@ export async function executeQADirector(sd_id, options = {}) {
         coverage_requirement: testPlan.e2e_test_strategy.coverage_requirement
       };
 
-      console.log(`   ✅ Test plan generated and stored`);
+      console.log('   ✅ Test plan generated and stored');
       console.log(`   Unit Tests: ${testPlan.unit_test_strategy.test_cases.length} cases`);
       console.log(`   E2E Tests: ${testPlan.e2e_test_strategy.test_cases.length} cases`);
       console.log(`   User Story Coverage: ${testPlan.e2e_test_strategy.user_story_mapping.length} stories\n`);
     } catch (error) {
       console.error(`   ⚠️  Test plan generation failed: ${error.message}`);
-      console.log(`   Continuing with legacy test tier selection...\n`);
+      console.log('   Continuing with legacy test tier selection...\n');
     }
   }
 
@@ -452,7 +452,7 @@ export async function executeQADirector(sd_id, options = {}) {
 
         try {
           // Find smoke test file for this SD
-          const smokeTestFile = `tests/e2e/board-governance.spec.ts`;
+          const smokeTestFile = 'tests/e2e/board-governance.spec.ts';
 
           const output = execSync(`npm run test:e2e -- ${smokeTestFile} --project=mock`, {
             cwd: '/mnt/c/_EHG/ehg',
@@ -469,7 +469,7 @@ export async function executeQADirector(sd_id, options = {}) {
             console.log(`      ❌ E2E tests FAILED (${e2eTestResults.failed} failures)`);
           }
         } catch (error) {
-          console.log(`      ❌ E2E tests FAILED (execution error)`);
+          console.log('      ❌ E2E tests FAILED (execution error)');
           console.log(`      Error: ${error.message}`);
 
           // Show stdout and stderr for debugging

@@ -8,7 +8,7 @@
 import axios from 'axios';
 import WebSocket from 'ws';
 import { createClient } from '@supabase/supabase-js';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 const BASE_URL = 'http://localhost:3000';
@@ -155,7 +155,7 @@ class DashboardUITester {
           console.log(`  ✅ Received message: ${message.type || 'state update'}`);
           this.results.websocket.canReceiveMessages = true;
         } catch (e) {
-          console.log(`  ⚠️  Received non-JSON message`);
+          console.log('  ⚠️  Received non-JSON message');
         }
       });
       
@@ -337,10 +337,10 @@ class DashboardUITester {
         const found = response.data.find(sd => sd.id === testSD.id);
         
         if (found) {
-          console.log(`  ✅ Test SD appears in API (real-time sync working)`);
+          console.log('  ✅ Test SD appears in API (real-time sync working)');
           this.results.realtime.syncWorking = true;
         } else {
-          console.log(`  ⚠️  Test SD not found in API (may need manual refresh)`);
+          console.log('  ⚠️  Test SD not found in API (may need manual refresh)');
           this.results.realtime.syncWorking = false;
         }
         

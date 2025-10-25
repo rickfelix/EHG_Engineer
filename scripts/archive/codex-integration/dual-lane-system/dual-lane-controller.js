@@ -272,7 +272,7 @@ Apply this Codex-generated patch now.`;
    */
   simulateCodexResponse(prompt) {
     return {
-      message: "Codex: Generating read-only artifacts",
+      message: 'Codex: Generating read-only artifacts',
       patch: `--- a/src/example.js
 +++ b/src/example.js
 @@ -1,5 +1,6 @@
@@ -283,7 +283,7 @@ Apply this Codex-generated patch now.`;
    return true;
  }`,
       components: [
-        { name: "example.js", type: "application", version: "1.0.0" }
+        { name: 'example.js', type: 'application', version: '1.0.0' }
       ]
     };
   }
@@ -293,9 +293,9 @@ Apply this Codex-generated patch now.`;
    */
   simulateClaudeResponse(prompt) {
     return {
-      message: "Claude: Applied Codex artifacts",
+      message: 'Claude: Applied Codex artifacts',
       applied: true,
-      files: ["src/example.js"]
+      files: ['src/example.js']
     };
   }
 
@@ -322,13 +322,13 @@ Apply this Codex-generated patch now.`;
 
     // 2. Create SBOM
     const sbom = {
-      bomFormat: "CycloneDX",
-      specVersion: "1.5",
+      bomFormat: 'CycloneDX',
+      specVersion: '1.5',
       serialNumber: `urn:uuid:${timestamp}`,
       version: 1,
       metadata: {
         timestamp: new Date().toISOString(),
-        tools: [{ vendor: "EHG", name: "Codex", version: "1.0.0" }]
+        tools: [{ vendor: 'EHG', name: 'Codex', version: '1.0.0' }]
       },
       components: codexOutput.components || []
     };
@@ -345,17 +345,17 @@ Apply this Codex-generated patch now.`;
 
     // 3. Create attestation
     const attestation = {
-      _type: "https://in-toto.io/Statement/v1",
+      _type: 'https://in-toto.io/Statement/v1',
       subject: [{
         name: `artifact-${timestamp}.tar.gz`,
         digest: { sha256: this.calculateSHA256(JSON.stringify(artifacts)) }
       }],
-      predicateType: "https://slsa.dev/provenance/v0.2",
+      predicateType: 'https://slsa.dev/provenance/v0.2',
       predicate: {
-        builder: { id: "codex-lane" },
-        buildType: "https://ehg.example/codex/v1",
+        builder: { id: 'codex-lane' },
+        buildType: 'https://ehg.example/codex/v1',
         invocation: {
-          configSource: { uri: "git+https://github.com/repo.git", digest: {} },
+          configSource: { uri: 'git+https://github.com/repo.git', digest: {} },
           parameters: { task: task }
         },
         materials: artifacts.map(a => ({
@@ -377,9 +377,9 @@ Apply this Codex-generated patch now.`;
 
     // 4. Create manifest
     const manifest = {
-      version: "1.0.0",
+      version: '1.0.0',
       timestamp: new Date().toISOString(),
-      generator: "codex",
+      generator: 'codex',
       task: task,
       artifacts: artifacts.map(a => ({
         name: a.filename,

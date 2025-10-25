@@ -71,7 +71,7 @@ export class PreExecAnalyzer {
       console.log('\n4️⃣  Discovering relevant files...');
       const prdHints = this.extractPRDHints(prd);
       const discoveredFiles = await fileDiscovery.discover(prdHints);
-      console.log(`   ✅ Discovered:`);
+      console.log('   ✅ Discovered:');
       console.log(`      Primary: ${discoveredFiles.primary.length} files`);
       console.log(`      Tests: ${discoveredFiles.tests.length} files`);
       console.log(`      Configs: ${discoveredFiles.configs.length} files`);
@@ -79,14 +79,14 @@ export class PreExecAnalyzer {
       // Step 5: Analyze dependencies
       console.log('\n5️⃣  Analyzing dependencies...');
       const dependencies = await dependencyAnalyzer.analyze(discoveredFiles.primary);
-      console.log(`   ✅ Analysis complete:`);
+      console.log('   ✅ Analysis complete:');
       console.log(`      Imports: ${dependencies.imports.length}`);
       console.log(`      Circular risks: ${dependencies.circular_risks.length}`);
 
       // Step 6: Recognize patterns
       console.log('\n6️⃣  Recognizing code patterns...');
       const patterns = await patternRecognizer.recognize(discoveredFiles.primary);
-      console.log(`   ✅ Patterns recognized:`);
+      console.log('   ✅ Patterns recognized:');
       console.log(`      Naming: ${patterns.naming_convention}`);
       console.log(`      Architecture: ${patterns.architecture_style}`);
       console.log(`      Utilities: ${patterns.existing_utilities.length} found`);
@@ -94,7 +94,7 @@ export class PreExecAnalyzer {
       // Step 7: Generate guidance
       console.log('\n7️⃣  Generating implementation guidance...');
       const guidance = guidanceGenerator.generate(discoveredFiles, patterns, dependencies);
-      console.log(`   ✅ Guidance generated:`);
+      console.log('   ✅ Guidance generated:');
       console.log(`      Reusable utilities: ${guidance.reusable_utilities.length}`);
       console.log(`      Warnings: ${guidance.avoid_reinventing.length}`);
 

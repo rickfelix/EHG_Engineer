@@ -555,10 +555,10 @@ async function generateAllTests() {
 
   console.log('\n📋 Test Generation Summary:');
   console.log('================================');
-  console.log(`Target Application: EHG (http://localhost:5173)`);
+  console.log('Target Application: EHG (http://localhost:5173)');
   console.log(`Test Files Created: ${testFiles.length}`);
-  console.log(`Test Modules: Authentication, Dashboard, Ventures`);
-  console.log(`Coverage: Forms, Performance, Accessibility, Error Handling`);
+  console.log('Test Modules: Authentication, Dashboard, Ventures');
+  console.log('Coverage: Forms, Performance, Accessibility, Error Handling');
 
   console.log('\n🚀 Next Steps:');
   console.log('1. Install Playwright: cd /mnt/c/_EHG/EHG_Engineer && npm install @playwright/test');

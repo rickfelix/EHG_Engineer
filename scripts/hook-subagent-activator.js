@@ -119,7 +119,7 @@ class HookSubAgentActivator {
       return result;
 
     } catch (error) {
-      console.error(`❌ Sub-agent activation failed:`, error.message);
+      console.error('❌ Sub-agent activation failed:', error.message);
 
       await this.recordActivation(
         subAgentConfig.code,

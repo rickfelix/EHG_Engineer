@@ -167,7 +167,7 @@ function calculateQualityScore(insights, prdAnalysis, subAgents, sd) {
   // Validation: Never return a score below 70 for completed/active SDs
   if (finalScore < 70) {
     console.warn(`⚠️  Calculated quality score (${finalScore}) below minimum threshold`);
-    console.warn(`   Adjusting to minimum: 70`);
+    console.warn('   Adjusting to minimum: 70');
     return 70;
   }
 
@@ -228,8 +228,8 @@ function validateRetrospective(retrospective) {
  * Generate comprehensive retrospective
  */
 async function generateComprehensiveRetrospective(sdId) {
-  console.log(`\n🔍 CONTINUOUS IMPROVEMENT COACH (Enhanced)`);
-  console.log(`═`.repeat(60));
+  console.log('\n🔍 CONTINUOUS IMPROVEMENT COACH (Enhanced)');
+  console.log('═'.repeat(60));
   console.log(`Generating comprehensive retrospective for SD: ${sdId}`);
 
   // Get SD details
@@ -255,7 +255,7 @@ async function generateComprehensiveRetrospective(sdId) {
 
   if (existing && existing.length > 0) {
     console.log(`\n⚠️  Retrospective already exists (ID: ${existing[0].id})`);
-    console.log(`Use enhance-retrospective-sd-<key>.js to update existing retrospectives`);
+    console.log('Use enhance-retrospective-sd-<key>.js to update existing retrospectives');
     return {
       success: true,
       existed: true,
@@ -264,16 +264,16 @@ async function generateComprehensiveRetrospective(sdId) {
   }
 
   // Gather comprehensive data
-  console.log(`\n📊 Analyzing implementation artifacts...`);
+  console.log('\n📊 Analyzing implementation artifacts...');
 
   const handoffInsights = analyzeHandoffs(sd.sd_key);
-  console.log(`   ✅ Analyzed handoff documents`);
+  console.log('   ✅ Analyzed handoff documents');
 
   const prdAnalysis = await analyzePRD(sdId, sd.uuid_id);
-  console.log(`   ✅ Analyzed PRD`);
+  console.log('   ✅ Analyzed PRD');
 
   const subAgentAnalysis = await analyzeSubAgents(sdId);
-  console.log(`   ✅ Analyzed sub-agent executions`);
+  console.log('   ✅ Analyzed sub-agent executions');
 
   // Calculate metrics
   const qualityScore = calculateQualityScore(handoffInsights, prdAnalysis, subAgentAnalysis, sd);
@@ -454,11 +454,11 @@ async function generateComprehensiveRetrospective(sdId) {
   };
 
   // Validate retrospective before insert (SD-KNOWLEDGE-001 Issue #4 prevention)
-  console.log(`\n🔍 Validating retrospective data...`);
+  console.log('\n🔍 Validating retrospective data...');
   const validation = validateRetrospective(retrospective);
 
   if (!validation.valid) {
-    console.error(`\n❌ Retrospective validation failed:`);
+    console.error('\n❌ Retrospective validation failed:');
     validation.errors.forEach((err, idx) => {
       console.error(`   ${idx + 1}. ${err}`);
     });
@@ -477,7 +477,7 @@ async function generateComprehensiveRetrospective(sdId) {
     throw new Error(`Failed to insert retrospective: ${insertError.message}`);
   }
 
-  console.log(`\n✅ Comprehensive retrospective generated!`);
+  console.log('\n✅ Comprehensive retrospective generated!');
   console.log(`   ID: ${inserted[0].id}`);
   console.log(`   Quality Score: ${qualityScore}/100`);
   console.log(`   Team Satisfaction: ${satisfactionScore}/10`);
@@ -488,12 +488,12 @@ async function generateComprehensiveRetrospective(sdId) {
   console.log(`   Status: ${retrospective.status}`);
 
   // Auto-extract patterns to learning history
-  console.log(`\n🔄 AUTO-EXTRACTING PATTERNS TO LEARNING HISTORY...`);
+  console.log('\n🔄 AUTO-EXTRACTING PATTERNS TO LEARNING HISTORY...');
   try {
     const { extractPatternsFromRetrospective } = await import('./auto-extract-patterns-from-retro.js');
     const patternResult = await extractPatternsFromRetrospective(inserted[0].id);
 
-    console.log(`\n✨ Pattern extraction complete!`);
+    console.log('\n✨ Pattern extraction complete!');
     console.log(`   Patterns created: ${patternResult.patterns_created}`);
     console.log(`   Patterns updated: ${patternResult.patterns_updated}`);
     console.log(`   Prevention items: ${patternResult.prevention_items}`);

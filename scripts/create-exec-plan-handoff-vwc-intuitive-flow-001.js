@@ -40,7 +40,7 @@ async function createExecPlanHandoff() {
       validation_passed: true,
       created_by: 'EXEC-AGENT',
 
-      executive_summary: `Checkpoint 1 (100% Complete): Successfully implemented all 4 user stories from SD-VWC-INTUITIVE-FLOW-001 (Venture Wizard User Experience Completion). All code changes committed and pushed (4 commits: 8910edd, f5e9fe1, 846c586, 2be0eea). Implementation quality verified: TypeScript compiles, app running, UI elements functional. Local E2E test failures identified as pre-existing authentication infrastructure issue (not caused by Checkpoint 1 changes). CI/CD pipeline triggered for clean environment validation. Context health: 127k/200k tokens (63.5% - WARNING threshold).`,
+      executive_summary: 'Checkpoint 1 (100% Complete): Successfully implemented all 4 user stories from SD-VWC-INTUITIVE-FLOW-001 (Venture Wizard User Experience Completion). All code changes committed and pushed (4 commits: 8910edd, f5e9fe1, 846c586, 2be0eea). Implementation quality verified: TypeScript compiles, app running, UI elements functional. Local E2E test failures identified as pre-existing authentication infrastructure issue (not caused by Checkpoint 1 changes). CI/CD pipeline triggered for clean environment validation. Context health: 127k/200k tokens (63.5% - WARNING threshold).',
 
       deliverables_manifest: `**Checkpoint 1 Implementation Delivered** (4 user stories complete):
 
@@ -295,7 +295,7 @@ grep -r "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" src/  # 0 results ✅
       }
     };
 
-    console.log(`\n3️⃣  Inserting handoff into database...`);
+    console.log('\n3️⃣  Inserting handoff into database...');
 
     const insertQuery = `
       INSERT INTO sd_phase_handoffs (

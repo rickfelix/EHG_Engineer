@@ -22,7 +22,7 @@ const __dirname = dirname(__filename);
 import fs from 'fs';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 class SDDatabaseSync {

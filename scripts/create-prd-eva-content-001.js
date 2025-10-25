@@ -93,44 +93,44 @@ Current EVA is text-only conversation. Users cannot create or view structured co
     // Store detailed requirements in TEXT fields, structured data in JSONB
     functional_requirements: [
       {
-        id: "FR-1",
-        title: "Database Schema Implementation",
-        backlog_id: "BP-EVA-CONTENT-001",
+        id: 'FR-1',
+        title: 'Database Schema Implementation',
+        backlog_id: 'BP-EVA-CONTENT-001',
         hours: 16,
-        priority: "HIGH",
-        summary: "Create 9 tables via migration file"
+        priority: 'HIGH',
+        summary: 'Create 9 tables via migration file'
       },
       {
-        id: "FR-2",
-        title: "Content Type System",
-        backlog_id: "BP-EVA-CONTENT-002",
+        id: 'FR-2',
+        title: 'Content Type System',
+        backlog_id: 'BP-EVA-CONTENT-002',
         hours: 20,
-        priority: "HIGH",
-        summary: "3 renderers (text, table, chart) + service"
+        priority: 'HIGH',
+        summary: '3 renderers (text, table, chart) + service'
       },
       {
-        id: "FR-3",
-        title: "Presentation Layout Engine",
-        backlog_id: "BP-EVA-CONTENT-004",
+        id: 'FR-3',
+        title: 'Presentation Layout Engine',
+        backlog_id: 'BP-EVA-CONTENT-004',
         hours: 18,
-        priority: "HIGH",
-        summary: "Slide navigation, keyboard shortcuts, responsive"
+        priority: 'HIGH',
+        summary: 'Slide navigation, keyboard shortcuts, responsive'
       },
       {
-        id: "FR-4",
-        title: "EVA Conversation Integration",
-        backlog_id: "BP-EVA-CONTENT-006",
+        id: 'FR-4',
+        title: 'EVA Conversation Integration',
+        backlog_id: 'BP-EVA-CONTENT-006',
         hours: 22,
-        priority: "HIGH",
-        summary: "Content creation via natural language"
+        priority: 'HIGH',
+        summary: 'Content creation via natural language'
       },
       {
-        id: "FR-5",
-        title: "Settings Panel & E2E Testing",
-        backlog_id: "BP-EVA-CONTENT-007",
+        id: 'FR-5',
+        title: 'Settings Panel & E2E Testing',
+        backlog_id: 'BP-EVA-CONTENT-007',
         hours: 16,
-        priority: "MEDIUM",
-        summary: "User preferences + Playwright tests"
+        priority: 'MEDIUM',
+        summary: 'User preferences + Playwright tests'
       }
     ],
 

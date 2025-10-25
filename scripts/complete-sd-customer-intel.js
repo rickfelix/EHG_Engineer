@@ -297,7 +297,7 @@ async function completeSd() {
     }
 
     const sd = sdUpdate.rows[0];
-    console.log(`✅ SD marked as completed`);
+    console.log('✅ SD marked as completed');
     console.log(`   Status: ${sd.status}`);
     console.log(`   Progress: ${sd.progress_percentage}%`);
     console.log(`   Phase: ${sd.current_phase}`);

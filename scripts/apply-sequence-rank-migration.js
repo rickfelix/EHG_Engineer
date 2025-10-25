@@ -10,7 +10,7 @@ const password = process.env.SUPABASE_DB_PASSWORD || 'Fl!M32DaM00n!1';
 
 // Pooler connection (IPv4 compatible) - use aws-1 for EHG_Engineer
 const client = new Client({
-  host: `aws-1-us-east-1.pooler.supabase.com`,
+  host: 'aws-1-us-east-1.pooler.supabase.com',
   port: 5432,
   database: 'postgres',
   user: `postgres.${projectId}`,

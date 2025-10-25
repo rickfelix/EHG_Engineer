@@ -81,7 +81,7 @@ async function checkSDStatusValues() {
     const activeByMetadataCapital = sds.filter(sd => sd.metadata?.Status === 'Active').length;
     const activeByMetadataLower = sds.filter(sd => sd.metadata?.Status === 'active').length;
     
-    console.log(`\nCounts:`);
+    console.log('\nCounts:');
     console.log(`   • status === 'active': ${activeByStatus}`);
     console.log(`   • metadata.Status === 'Active': ${activeByMetadataCapital}`);
     console.log(`   • metadata.Status === 'active': ${activeByMetadataLower}`);

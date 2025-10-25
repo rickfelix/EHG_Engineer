@@ -299,7 +299,7 @@ class SDCompletionValidator {
     // For now, we'll check if the implementation looks substantial
     try {
       const { stdout } = await execAsync(
-        `cd /mnt/c/_EHG/ehg && git diff --stat HEAD~5 HEAD | grep "files changed"`,
+        'cd /mnt/c/_EHG/ehg && git diff --stat HEAD~5 HEAD | grep "files changed"',
         { timeout: 5000 }
       );
 

@@ -55,7 +55,7 @@ async function cleanupLegacySDKeys() {
     console.log('\n⚠️  Records with NULL sd_key:');
     nullKeys.forEach((sd, index) => {
       console.log(`  ${index + 1}. ID: ${sd.id}`);
-      console.log(`     SD Key: (null)`);
+      console.log('     SD Key: (null)');
       console.log(`     Title: ${sd.title}`);
       console.log(`     Status: ${sd.status}`);
       console.log('');

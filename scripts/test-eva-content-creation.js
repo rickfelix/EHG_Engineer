@@ -81,7 +81,7 @@ async function testContentCreation() {
       .single();
 
     if (version1Error) throw version1Error;
-    console.log(`✅ Created version 1\n`);
+    console.log('✅ Created version 1\n');
 
     // TEST 3: Update content (create version 2)
     console.log('📝 TEST 3: Updating content (version 2)...');
@@ -116,7 +116,7 @@ async function testContentCreation() {
       .single();
 
     if (version2Error) throw version2Error;
-    console.log(`✅ Created version 2\n`);
+    console.log('✅ Created version 2\n');
 
     // TEST 4: Create EVA conversation
     console.log('📝 TEST 4: Creating EVA conversation...');
@@ -158,7 +158,7 @@ async function testContentCreation() {
       .single();
 
     if (linkError) throw linkError;
-    console.log(`✅ Linked conversation to content\n`);
+    console.log('✅ Linked conversation to content\n');
 
     // TEST 6: Create layout assignment
     console.log('📝 TEST 6: Creating layout assignment...');
@@ -185,7 +185,7 @@ async function testContentCreation() {
       .single();
 
     if (assignmentError) throw assignmentError;
-    console.log(`✅ Assigned presentation layout\n`);
+    console.log('✅ Assigned presentation layout\n');
 
     // TEST 7: Create metadata entry
     console.log('📝 TEST 7: Creating metadata entry...');
@@ -203,7 +203,7 @@ async function testContentCreation() {
       .single();
 
     if (metadataError) throw metadataError;
-    console.log(`✅ Created metadata entry\n`);
+    console.log('✅ Created metadata entry\n');
 
     // VERIFICATION: Query everything back
     console.log('🔍 VERIFICATION: Querying created items...\n');

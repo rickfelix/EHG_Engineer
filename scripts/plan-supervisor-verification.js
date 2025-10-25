@@ -122,7 +122,7 @@ class PLANSupervisorCLI {
 
     this.tool.on('verification:complete', (results) => {
       if (!options.json) {
-        console.log(`\n✅ Verification complete!`);
+        console.log('\n✅ Verification complete!');
       }
     });
 
@@ -339,7 +339,7 @@ Verifying with all sub-agents...
       const metCount = results.requirements_met?.length || 0;
       const unmetCount = results.requirements_unmet?.length || 0;
       
-      console.log(`\n📋 Requirements:`);
+      console.log('\n📋 Requirements:');
       console.log(`   ✅ Met: ${metCount}/${results.requirements_total}`);
       
       if (unmetCount > 0) {
@@ -351,7 +351,7 @@ Verifying with all sub-agents...
     }
 
     // Sub-agent results
-    console.log(`\n🤖 Sub-Agent Reports:`);
+    console.log('\n🤖 Sub-Agent Reports:');
     
     if (results.sub_agent_results) {
       const agents = Object.entries(results.sub_agent_results)
@@ -375,7 +375,7 @@ Verifying with all sub-agents...
 
     // Critical issues
     if (results.critical_issues?.length > 0) {
-      console.log(`\n🚨 Critical Issues:`);
+      console.log('\n🚨 Critical Issues:');
       results.critical_issues.forEach(issue => {
         console.log(`   - [${issue.agent}] ${issue.issue}`);
       });
@@ -383,7 +383,7 @@ Verifying with all sub-agents...
 
     // Warnings
     if (results.warnings?.length > 0 && options.level >= 2) {
-      console.log(`\n⚠️  Warnings:`);
+      console.log('\n⚠️  Warnings:');
       results.warnings.forEach(warning => {
         console.log(`   - [${warning.agent}] ${warning.warning}`);
       });
@@ -391,7 +391,7 @@ Verifying with all sub-agents...
 
     // Recommendations
     if (results.recommendations?.length > 0 && options.level >= 2) {
-      console.log(`\n💡 Recommendations:`);
+      console.log('\n💡 Recommendations:');
       results.recommendations.forEach(rec => {
         console.log(`   - [${rec.agent}] ${rec.recommendation}`);
       });
@@ -402,12 +402,12 @@ Verifying with all sub-agents...
     console.log(`   └─ ${this.getVerdictExplanation(results)}`);
 
     // Next steps
-    console.log(`\n📌 Next Steps:`);
+    console.log('\n📌 Next Steps:');
     console.log(this.getNextSteps(results));
 
     // Performance metrics (if parallel mode)
     if (results.execution_mode === 'parallel' && results.performance_metrics) {
-      console.log(`\n⚡ Performance Metrics (Parallel Mode):`);
+      console.log('\n⚡ Performance Metrics (Parallel Mode):');
       console.log(`   Total Executions: ${results.performance_metrics.totalExecutions}`);
       console.log(`   Successful: ${results.performance_metrics.successfulExecutions}`);
       console.log(`   Failed: ${results.performance_metrics.failedExecutions}`);

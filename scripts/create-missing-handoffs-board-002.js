@@ -84,7 +84,7 @@ async function createMissingHandoffs() {
          WHERE id = $1`,
         [handoffId]
       );
-      console.log(`   ✅ Accepted`);
+      console.log('   ✅ Accepted');
     }
 
     // Verify total handoffs
@@ -100,7 +100,7 @@ async function createMissingHandoffs() {
     // Recalculate progress
     console.log('\n=== RECALCULATING PROGRESS ===');
     const progressResult = await client.query(
-      `SELECT get_progress_breakdown($1) as breakdown`,
+      'SELECT get_progress_breakdown($1) as breakdown',
       ['SD-BOARD-VISUAL-BUILDER-002']
     );
 

@@ -76,7 +76,7 @@ async function createDocumentationSD() {
     console.log(`Priority: ${data.priority}`);
     console.log(`Status: ${data.status} (blocked until SDs 1-3 complete)`);
     console.log(`Category: ${data.category}`);
-    console.log(`Implementation Order: 4th (LAST)`);
+    console.log('Implementation Order: 4th (LAST)');
     console.log('');
     console.log('🔗 Dependencies:');
     console.log('  - SD-VENTURE-IDEATION-MVP-001');

@@ -117,7 +117,7 @@ async function generatePRDScript() {
   // Write new script
   fs.writeFileSync(scriptPath, template);
 
-  console.log(`\n✅ PRD script created successfully!`);
+  console.log('\n✅ PRD script created successfully!');
   console.log('='.repeat(70));
   console.log(`   File: ${scriptPath}`);
   console.log(`   SD ID: ${sdId}`);

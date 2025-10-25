@@ -71,16 +71,16 @@ async function recordOutcome() {
       found_via_search: true
     });
 
-    console.log(`\n✅ Outcome recorded!`);
+    console.log('\n✅ Outcome recorded!');
     console.log(`   Pattern: ${result.pattern_id}`);
     console.log(`   Total occurrences: ${result.occurrence_count}`);
     console.log(`   Success rate: ${result.success_rate}%`);
 
     if (wasSuccessful) {
-      console.log(`\n🎉 Great! This solution worked. Pattern database updated.`);
+      console.log('\n🎉 Great! This solution worked. Pattern database updated.');
     } else {
-      console.log(`\n⚠️  Solution failed. Try next highest-rated solution.`);
-      console.log(`   Search again: node scripts/search-prior-issues.js "<issue>"`);
+      console.log('\n⚠️  Solution failed. Try next highest-rated solution.');
+      console.log('   Search again: node scripts/search-prior-issues.js "<issue>"');
     }
 
   } catch (error) {

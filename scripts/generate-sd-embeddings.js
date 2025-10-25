@@ -211,7 +211,7 @@ async function main() {
     totalCost += estimate.cost;
   }
 
-  console.log(`💰 Cost Estimate:`);
+  console.log('💰 Cost Estimate:');
   console.log(`   Total tokens: ~${totalTokens.toLocaleString()}`);
   console.log(`   Estimated cost: $${totalCost.toFixed(4)}`);
   console.log('');
@@ -233,13 +233,13 @@ async function main() {
       const text = buildSDEmbeddingText(sd);
 
       if (!text || text.trim().length === 0) {
-        console.log(`   ⚠️  No content to embed - skipping`);
+        console.log('   ⚠️  No content to embed - skipping');
         skipCount++;
         continue;
       }
 
       // Generate embedding
-      console.log(`   🧠 Generating embedding...`);
+      console.log('   🧠 Generating embedding...');
       const embedding = await generateEmbeddingWithRetry(text);
 
       // Update database
@@ -256,7 +256,7 @@ async function main() {
       }
 
       const estimate = estimateCost(text);
-      console.log(`   ✅ Embedding generated and stored`);
+      console.log('   ✅ Embedding generated and stored');
       console.log(`   📊 Tokens: ~${estimate.tokens.toLocaleString()}, Cost: $${estimate.cost.toFixed(6)}`);
 
       successCount++;

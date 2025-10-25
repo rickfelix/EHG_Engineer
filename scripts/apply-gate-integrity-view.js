@@ -76,7 +76,7 @@ async function applyMigration() {
           throw error;
         }
 
-        console.log(`   ✅ Success`);
+        console.log('   ✅ Success');
       } catch (err) {
         console.error(`   ❌ Failed: ${err.message}`);
         throw err;
@@ -110,7 +110,7 @@ async function applyMigration() {
   } catch (error) {
     console.error('\n❌ Migration failed:', error.message);
     console.error('\nTo apply manually:');
-    console.error(`1. psql $DATABASE_URL -f database/migrations/create-gate-integrity-view.sql`);
+    console.error('1. psql $DATABASE_URL -f database/migrations/create-gate-integrity-view.sql');
     console.error('2. Or use Supabase Dashboard SQL Editor');
     process.exit(1);
   }

@@ -309,12 +309,12 @@ Plan: Create remaining modules in future SDs (not blocking for this SD)`,
  * Store handoff in database via direct PostgreSQL connection
  */
 async function storeHandoff(type, sdId, handoffContent) {
-  console.log(`\n╔═══════════════════════════════════════════════════════════════╗`);
-  console.log(`║  Store Phase Handoff via Direct Database Connection         ║`);
-  console.log(`╚═══════════════════════════════════════════════════════════════╝`);
+  console.log('\n╔═══════════════════════════════════════════════════════════════╗');
+  console.log('║  Store Phase Handoff via Direct Database Connection         ║');
+  console.log('╚═══════════════════════════════════════════════════════════════╝');
   console.log(`   Type: ${type}`);
   console.log(`   SD: ${sdId}`);
-  console.log(`   Method: Direct PostgreSQL connection (bypasses RLS)`);
+  console.log('   Method: Direct PostgreSQL connection (bypasses RLS)');
 
   const phases = parseHandoffType(type);
   if (!phases) {
@@ -322,14 +322,14 @@ async function storeHandoff(type, sdId, handoffContent) {
   }
 
   // Connect to EHG_Engineer database using transaction mode
-  console.log(`\n🔌 Connecting to EHG_Engineer database...`);
+  console.log('\n🔌 Connecting to EHG_Engineer database...');
   const client = await createDatabaseClient('engineer', {
     verify: true,
     verbose: true
   });
 
   try {
-    console.log(`\n📝 Preparing handoff data...`);
+    console.log('\n📝 Preparing handoff data...');
 
     // Escape single quotes for SQL
     const escapeSql = (str) => str ? str.replace(/'/g, "''") : '';
@@ -362,8 +362,8 @@ INSERT INTO sd_phase_handoffs (
       script: 'store-handoff-direct.js'
     };
 
-    console.log(`   ✅ Data prepared`);
-    console.log(`\n💾 Inserting handoff into database...`);
+    console.log('   ✅ Data prepared');
+    console.log('\n💾 Inserting handoff into database...');
 
     const result = await client.query(insertSQL, [
       sdId,                                  // $1
@@ -383,10 +383,10 @@ INSERT INTO sd_phase_handoffs (
 
     const handoffId = result.rows[0].id;
 
-    console.log(`   ✅ Handoff stored successfully!`);
+    console.log('   ✅ Handoff stored successfully!');
     console.log(`   ID: ${handoffId}`);
 
-    console.log(`\n🔍 Verifying handoff...`);
+    console.log('\n🔍 Verifying handoff...');
     const verification = await client.query(
       'SELECT id, sd_id, from_phase, to_phase, status, created_at FROM sd_phase_handoffs WHERE id = $1',
       [handoffId]
@@ -394,25 +394,25 @@ INSERT INTO sd_phase_handoffs (
 
     if (verification.rows.length > 0) {
       const record = verification.rows[0];
-      console.log(`   ✅ Verification successful`);
+      console.log('   ✅ Verification successful');
       console.log(`      SD: ${record.sd_id}`);
       console.log(`      Flow: ${record.from_phase} → ${record.to_phase}`);
       console.log(`      Status: ${record.status}`);
       console.log(`      Created: ${record.created_at}`);
     }
 
-    console.log(`\n╔═══════════════════════════════════════════════════════════════╗`);
-    console.log(`║  ✅ HANDOFF CREATED SUCCESSFULLY                            ║`);
-    console.log(`╚═══════════════════════════════════════════════════════════════╝`);
+    console.log('\n╔═══════════════════════════════════════════════════════════════╗');
+    console.log('║  ✅ HANDOFF CREATED SUCCESSFULLY                            ║');
+    console.log('╚═══════════════════════════════════════════════════════════════╝');
 
     return handoffId;
 
   } catch (error) {
-    console.error(`\n❌ Failed to store handoff:`, error.message);
+    console.error('\n❌ Failed to store handoff:', error.message);
     throw error;
   } finally {
     await client.end();
-    console.log(`\n🔌 Database connection closed`);
+    console.log('\n🔌 Database connection closed');
   }
 }
 
@@ -450,9 +450,9 @@ Note: Uses direct PostgreSQL connection to bypass RLS policy restrictions.
 
   // Validate arguments
   if (!type || !sdId) {
-    console.error(`\n❌ Missing required arguments`);
-    console.error(`   Usage: node scripts/store-handoff-direct.js --type <TYPE> --sd-id <SD-ID>`);
-    console.error(`   Run with --help for more information\n`);
+    console.error('\n❌ Missing required arguments');
+    console.error('   Usage: node scripts/store-handoff-direct.js --type <TYPE> --sd-id <SD-ID>');
+    console.error('   Run with --help for more information\n');
     process.exit(1);
   }
 
@@ -468,17 +468,17 @@ Note: Uses direct PostgreSQL connection to bypass RLS policy restrictions.
     // Store via direct database connection
     const handoffId = await storeHandoff(type, sdId, handoffContent);
 
-    console.log(`\n📋 Next Steps:`);
-    console.log(`   1. PLAN agent should review handoff`);
-    console.log(`   2. Execute sub-agent validation suite`);
-    console.log(`   3. Generate PLAN verification verdict`);
-    console.log(`   4. Create PLAN-to-LEAD handoff\n`);
+    console.log('\n📋 Next Steps:');
+    console.log('   1. PLAN agent should review handoff');
+    console.log('   2. Execute sub-agent validation suite');
+    console.log('   3. Generate PLAN verification verdict');
+    console.log('   4. Create PLAN-to-LEAD handoff\n');
 
     process.exit(0);
 
   } catch (error) {
-    console.error(`\n❌ Error:`, error.message);
-    console.error(`\nStack trace:`, error.stack);
+    console.error('\n❌ Error:', error.message);
+    console.error('\nStack trace:', error.stack);
     process.exit(1);
   }
 }

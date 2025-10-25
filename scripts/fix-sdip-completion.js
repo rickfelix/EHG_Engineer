@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createClient } from '@supabase/supabase-js';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

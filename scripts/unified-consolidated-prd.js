@@ -183,7 +183,7 @@ async function generateConsolidatedPRD(sdId, force = false) {
 
     if (existingPRD && !force) {
       console.log(chalk.yellow(`⚠️  PRD already exists for ${sdId}`));
-      console.log(chalk.cyan(`   Use --force to overwrite or --validate-only to check format`));
+      console.log(chalk.cyan('   Use --force to overwrite or --validate-only to check format'));
       return existingPRD;
     }
 
@@ -254,11 +254,11 @@ async function generateConsolidatedPRD(sdId, force = false) {
     }
 
     // Display summary
-    console.log(chalk.cyan(`\n📊 PRD Summary:`));
+    console.log(chalk.cyan('\n📊 PRD Summary:'));
     console.log(`   ID: ${result.id}`);
     console.log(`   User Stories: ${userStories.length}`);
     console.log(`   Backlog Items: ${backlogItems.length}`);
-    console.log(`   Priority Distribution:`, priorityDistribution);
+    console.log('   Priority Distribution:', priorityDistribution);
 
     return result;
 

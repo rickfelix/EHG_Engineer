@@ -29,7 +29,7 @@ async function createPLANExecHandoff() {
     phase: 'implementation',
 
     // 7 Mandatory Elements
-    executive_summary: `Technical implementation of enhanced Venture Detail with comprehensive stage view integration. PRD defines 8 user stories across 4 implementation phases. Target: /mnt/c/_EHG/ehg/src/pages/VentureDetail.tsx and VentureDetailEnhanced.tsx. Build upon existing venture detail components while integrating with 40+ Stage components for seamless stage-by-stage navigation, real-time analytics, and enhanced workflow management.`,
+    executive_summary: 'Technical implementation of enhanced Venture Detail with comprehensive stage view integration. PRD defines 8 user stories across 4 implementation phases. Target: /mnt/c/_EHG/ehg/src/pages/VentureDetail.tsx and VentureDetailEnhanced.tsx. Build upon existing venture detail components while integrating with 40+ Stage components for seamless stage-by-stage navigation, real-time analytics, and enhanced workflow management.',
 
     completeness_report: {
       prd_generated: true,

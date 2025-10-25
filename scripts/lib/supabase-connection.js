@@ -227,10 +227,10 @@ export async function createSupabaseServiceClient(projectKey = 'engineer', optio
   const key = getServiceRoleKey(projectKey);
 
   if (options.verbose) {
-    console.info(`✅ Creating Supabase client with SERVICE_ROLE_KEY`);
+    console.info('✅ Creating Supabase client with SERVICE_ROLE_KEY');
     console.info(`   Project: ${projectKey}`);
     console.info(`   URL: ${url}`);
-    console.info(`   Role: service_role (bypasses RLS)`);
+    console.info('   Role: service_role (bypasses RLS)');
   }
 
   return createClient(url, key, {
@@ -263,10 +263,10 @@ export async function createSupabaseAnonClient(projectKey = 'engineer', options 
   const key = getAnonKey(projectKey);
 
   if (options.verbose) {
-    console.info(`✅ Creating Supabase client with ANON_KEY`);
+    console.info('✅ Creating Supabase client with ANON_KEY');
     console.info(`   Project: ${projectKey}`);
     console.info(`   URL: ${url}`);
-    console.info(`   Role: anon (subject to RLS)`);
+    console.info('   Role: anon (subject to RLS)');
   }
 
   return createClient(url, key, {

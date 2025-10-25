@@ -81,154 +81,154 @@ async function updateSDQUALITY001() {
    - Document test location architecture`,
 
     strategic_objectives: [
-      "Achieve 50% unit test coverage for critical business logic in src/services/, src/utils/, src/hooks/",
-      "Add 40-60 unit test files targeting high-value code paths",
-      "Maintain existing E2E, integration, accessibility, security, and performance test coverage",
-      "Integrate unit test execution into GitHub Actions CI/CD pipeline",
-      "Document multi-application testing architecture (EHG vs EHG_Engineer)",
-      "Create unit testing patterns and examples for team adoption"
+      'Achieve 50% unit test coverage for critical business logic in src/services/, src/utils/, src/hooks/',
+      'Add 40-60 unit test files targeting high-value code paths',
+      'Maintain existing E2E, integration, accessibility, security, and performance test coverage',
+      'Integrate unit test execution into GitHub Actions CI/CD pipeline',
+      'Document multi-application testing architecture (EHG vs EHG_Engineer)',
+      'Create unit testing patterns and examples for team adoption'
     ],
 
     success_criteria: [
-      "Unit test coverage reaches 50% for src/services/, src/utils/, src/hooks/",
-      "40-60 new unit test files added to tests/unit/",
-      "GitHub Actions workflow runs unit tests on every PR",
-      "Coverage reports show clear metrics for unit test coverage",
-      "Existing E2E and integration tests continue to pass",
-      "Multi-application testing architecture documented in CLAUDE.md and docs/TESTING_ARCHITECTURE.md",
-      "Team testing guidelines include unit test patterns and examples"
+      'Unit test coverage reaches 50% for src/services/, src/utils/, src/hooks/',
+      '40-60 new unit test files added to tests/unit/',
+      'GitHub Actions workflow runs unit tests on every PR',
+      'Coverage reports show clear metrics for unit test coverage',
+      'Existing E2E and integration tests continue to pass',
+      'Multi-application testing architecture documented in CLAUDE.md and docs/TESTING_ARCHITECTURE.md',
+      'Team testing guidelines include unit test patterns and examples'
     ],
 
     key_principles: [
-      "Focus on unit tests for business logic, not full test suite overhaul",
-      "Maintain existing E2E, integration, a11y, security, performance tests",
-      "Test critical paths first (services, hooks, utilities)",
-      "Fast feedback loop with Vitest watch mode",
-      "Clear separation between unit tests (fast) and integration/E2E tests (slower)",
-      "Document multi-application architecture to prevent future confusion"
+      'Focus on unit tests for business logic, not full test suite overhaul',
+      'Maintain existing E2E, integration, a11y, security, performance tests',
+      'Test critical paths first (services, hooks, utilities)',
+      'Fast feedback loop with Vitest watch mode',
+      'Clear separation between unit tests (fast) and integration/E2E tests (slower)',
+      'Document multi-application architecture to prevent future confusion'
     ],
 
     implementation_guidelines: [
-      "**PHASE 1: Infrastructure Verification (Week 1)**",
-      "1. Verify Vitest configuration in /mnt/c/_EHG/ehg/vitest.config.ts",
-      "2. Confirm v8 coverage provider and thresholds (80% configured)",
-      "3. Create tests/unit/factories/ for test data generation",
-      "4. Create tests/unit/mocks/ for Supabase and API mocking",
-      "",
-      "**PHASE 2: Services Testing (Week 2)**",
-      "5. Identify critical services in src/services/ (prioritize by usage)",
-      "6. Write unit tests for top 10 services",
-      "7. Mock Supabase client for isolated unit testing",
-      "8. Test error handling and edge cases",
-      "",
-      "**PHASE 3: Hooks & Utilities Testing (Week 3)**",
-      "9. Test custom hooks in src/hooks/ (React Testing Library)",
-      "10. Test utility functions in src/utils/",
-      "11. Test data transformation and validation logic",
-      "12. Achieve 50% coverage milestone",
-      "",
-      "**PHASE 4: Component Logic Testing (Week 4)**",
-      "13. Test complex component logic (not full component rendering)",
-      "14. Test state management patterns",
-      "15. Test API integration logic",
-      "16. Focus on business logic, not UI rendering",
-      "",
-      "**PHASE 5: CI/CD Integration (Week 5)**",
-      "17. Update .github/workflows/ to run unit tests",
-      "18. Add coverage threshold check (50% minimum)",
-      "19. Configure PR comments with coverage diff",
-      "20. Test CI/CD pipeline with sample PR",
-      "",
-      "**PHASE 6: Documentation (Week 6)**",
-      "21. Document unit testing patterns in docs/TESTING_ARCHITECTURE.md",
-      "22. Create example tests for services, hooks, utilities",
-      "23. Update team testing guidelines",
-      "24. Document multi-application architecture (already completed)"
+      '**PHASE 1: Infrastructure Verification (Week 1)**',
+      '1. Verify Vitest configuration in /mnt/c/_EHG/ehg/vitest.config.ts',
+      '2. Confirm v8 coverage provider and thresholds (80% configured)',
+      '3. Create tests/unit/factories/ for test data generation',
+      '4. Create tests/unit/mocks/ for Supabase and API mocking',
+      '',
+      '**PHASE 2: Services Testing (Week 2)**',
+      '5. Identify critical services in src/services/ (prioritize by usage)',
+      '6. Write unit tests for top 10 services',
+      '7. Mock Supabase client for isolated unit testing',
+      '8. Test error handling and edge cases',
+      '',
+      '**PHASE 3: Hooks & Utilities Testing (Week 3)**',
+      '9. Test custom hooks in src/hooks/ (React Testing Library)',
+      '10. Test utility functions in src/utils/',
+      '11. Test data transformation and validation logic',
+      '12. Achieve 50% coverage milestone',
+      '',
+      '**PHASE 4: Component Logic Testing (Week 4)**',
+      '13. Test complex component logic (not full component rendering)',
+      '14. Test state management patterns',
+      '15. Test API integration logic',
+      '16. Focus on business logic, not UI rendering',
+      '',
+      '**PHASE 5: CI/CD Integration (Week 5)**',
+      '17. Update .github/workflows/ to run unit tests',
+      '18. Add coverage threshold check (50% minimum)',
+      '19. Configure PR comments with coverage diff',
+      '20. Test CI/CD pipeline with sample PR',
+      '',
+      '**PHASE 6: Documentation (Week 6)**',
+      '21. Document unit testing patterns in docs/TESTING_ARCHITECTURE.md',
+      '22. Create example tests for services, hooks, utilities',
+      '23. Update team testing guidelines',
+      '24. Document multi-application architecture (already completed)'
     ],
 
     risks: [
       {
-        risk: "Focusing only on unit tests may miss integration issues",
-        probability: "Low",
-        impact: "Low",
-        mitigation: "Maintain existing integration and E2E test suite, only adding unit tests"
+        risk: 'Focusing only on unit tests may miss integration issues',
+        probability: 'Low',
+        impact: 'Low',
+        mitigation: 'Maintain existing integration and E2E test suite, only adding unit tests'
       },
       {
-        risk: "Mocking Supabase client may not match real behavior",
-        probability: "Medium",
-        impact: "Medium",
-        mitigation: "Use integration tests for critical paths, unit tests for business logic isolation"
+        risk: 'Mocking Supabase client may not match real behavior',
+        probability: 'Medium',
+        impact: 'Medium',
+        mitigation: 'Use integration tests for critical paths, unit tests for business logic isolation'
       },
       {
-        risk: "Team may confuse test locations between EHG and EHG_Engineer",
-        probability: "Medium",
-        impact: "Low",
-        mitigation: "Documentation already created (CLAUDE.md, docs/TESTING_ARCHITECTURE.md)"
+        risk: 'Team may confuse test locations between EHG and EHG_Engineer',
+        probability: 'Medium',
+        impact: 'Low',
+        mitigation: 'Documentation already created (CLAUDE.md, docs/TESTING_ARCHITECTURE.md)'
       },
       {
-        risk: "Unit test execution time may slow down development",
-        probability: "Low",
-        impact: "Low",
-        mitigation: "Vitest watch mode is fast (<1s for changed files), full suite <5 minutes target"
+        risk: 'Unit test execution time may slow down development',
+        probability: 'Low',
+        impact: 'Low',
+        mitigation: 'Vitest watch mode is fast (<1s for changed files), full suite <5 minutes target'
       }
     ],
 
     success_metrics: [
       {
-        metric: "Unit Test Coverage",
-        target: "≥50%",
-        measurement: "Lines covered in src/services/, src/utils/, src/hooks/"
+        metric: 'Unit Test Coverage',
+        target: '≥50%',
+        measurement: 'Lines covered in src/services/, src/utils/, src/hooks/'
       },
       {
-        metric: "Unit Test File Count",
-        target: "40-60 files",
-        measurement: "New unit test files in tests/unit/"
+        metric: 'Unit Test File Count',
+        target: '40-60 files',
+        measurement: 'New unit test files in tests/unit/'
       },
       {
-        metric: "Unit Test Execution Time",
-        target: "<5 minutes",
-        measurement: "Total time for npm run test:unit in CI/CD"
+        metric: 'Unit Test Execution Time',
+        target: '<5 minutes',
+        measurement: 'Total time for npm run test:unit in CI/CD'
       },
       {
-        metric: "E2E/Integration Test Stability",
-        target: "100% pass rate",
-        measurement: "Existing tests continue to pass without degradation"
+        metric: 'E2E/Integration Test Stability',
+        target: '100% pass rate',
+        measurement: 'Existing tests continue to pass without degradation'
       }
     ],
 
     metadata: {
-      risk: "low",
-      complexity: "medium",
-      effort_hours: "80-100",
+      risk: 'low',
+      complexity: 'medium',
+      effort_hours: '80-100',
       investigation_findings: {
-        original_claim: "362,538 LOC with 6 test files (0.001% coverage)",
-        actual_state: "63 test files with extensive E2E/integration coverage",
-        actual_gap: "Unit test coverage for business logic (4 unit test files)",
-        root_cause: "Multi-application architecture not documented, tests in wrong location"
+        original_claim: '362,538 LOC with 6 test files (0.001% coverage)',
+        actual_state: '63 test files with extensive E2E/integration coverage',
+        actual_gap: 'Unit test coverage for business logic (4 unit test files)',
+        root_cause: 'Multi-application architecture not documented, tests in wrong location'
       },
       test_locations: {
-        ehg_application: "/mnt/c/_EHG/ehg/tests/",
-        ehg_engineer: "/mnt/c/_EHG/EHG_Engineer/tests/"
+        ehg_application: '/mnt/c/_EHG/ehg/tests/',
+        ehg_engineer: '/mnt/c/_EHG/EHG_Engineer/tests/'
       },
       current_test_coverage: {
         total_test_files: 63,
         unit_test_files: 4,
-        e2e_test_files: "extensive",
-        integration_test_files: "present",
-        a11y_test_files: "present",
-        security_test_files: "present",
-        performance_test_files: "present"
+        e2e_test_files: 'extensive',
+        integration_test_files: 'present',
+        a11y_test_files: 'present',
+        security_test_files: 'present',
+        performance_test_files: 'present'
       },
       target_test_coverage: {
-        unit_test_files: "40-60",
-        unit_coverage_percentage: "50%",
-        focus_areas: ["src/services/", "src/utils/", "src/hooks/"]
+        unit_test_files: '40-60',
+        unit_coverage_percentage: '50%',
+        focus_areas: ['src/services/', 'src/utils/', 'src/hooks/']
       },
       documentation_completed: [
-        "CLAUDE.md Multi-Application Testing Architecture section",
-        "docs/TESTING_ARCHITECTURE.md comprehensive guide",
-        "LEO protocol section added to database",
-        "QA Engineering Director sub-agent context updated"
+        'CLAUDE.md Multi-Application Testing Architecture section',
+        'docs/TESTING_ARCHITECTURE.md comprehensive guide',
+        'LEO protocol section added to database',
+        'QA Engineering Director sub-agent context updated'
       ]
     }
   };

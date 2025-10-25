@@ -25,7 +25,7 @@ stages.forEach(stage => {
   }
   
   // Add progression_mode
-  stage.notes.progression_mode = "Manual → Assisted → Auto (suggested)";
+  stage.notes.progression_mode = 'Manual → Assisted → Auto (suggested)';
 });
 
 // Save updated stages.yaml

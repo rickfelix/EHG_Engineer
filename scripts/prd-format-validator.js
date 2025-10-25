@@ -181,14 +181,14 @@ async function scanAllPRDs() {
     }
   }
 
-  console.log(chalk.cyan(`\n📊 Summary:`));
+  console.log(chalk.cyan('\n📊 Summary:'));
   console.log(`   Valid PRDs: ${validCount}`);
   console.log(`   Invalid PRDs: ${invalidCount}`);
   console.log(`   Total PRDs: ${prds.length}`);
 
   if (invalidPRDs.length > 0) {
-    console.log(chalk.yellow(`\n🔧 To fix invalid PRDs, run:`));
-    console.log(chalk.cyan(`   node scripts/prd-format-validator.js --fix`));
+    console.log(chalk.yellow('\n🔧 To fix invalid PRDs, run:'));
+    console.log(chalk.cyan('   node scripts/prd-format-validator.js --fix'));
   }
 
   return { validCount, invalidCount, invalidPRDs };
@@ -215,7 +215,7 @@ async function fixInvalidPRDs() {
     // Try to convert markdown to JSON
     if (prd.content && prd.content.startsWith('#')) {
       newContent = convertMarkdownToJSON(prd.content, prd.directive_id);
-      console.log(chalk.cyan(`   Converted markdown to JSON format`));
+      console.log(chalk.cyan('   Converted markdown to JSON format'));
     } else {
       // Create minimal valid JSON structure
       newContent = JSON.stringify({
@@ -235,7 +235,7 @@ async function fixInvalidPRDs() {
           }
         ]
       }, null, 2);
-      console.log(chalk.cyan(`   Created minimal valid JSON structure`));
+      console.log(chalk.cyan('   Created minimal valid JSON structure'));
     }
 
     // Update the PRD

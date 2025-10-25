@@ -254,7 +254,7 @@ async function identifyOptimizationOpportunities(sectionsData) {
     }
 
     if (opp.duplicates) {
-      console.log(`   Duplicate phrases found:`);
+      console.log('   Duplicate phrases found:');
       opp.duplicates.slice(0, 3).forEach(d => {
         console.log(`     - "${d.phrase}" (${d.count} occurrences)`);
       });

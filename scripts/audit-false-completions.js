@@ -102,7 +102,7 @@ async function auditRecentCompletions() {
 
         // Check if approved by orchestrator (suspicious)
         if (sd.metadata?.approved_by?.includes('ORCHESTRATOR')) {
-          console.log(chalk.red(`   🚨 SUSPICIOUS: Approved by orchestrator without git evidence`));
+          console.log(chalk.red('   🚨 SUSPICIOUS: Approved by orchestrator without git evidence'));
           suspiciousSDs.push({
             ...sd,
             reason: 'No git commits + orchestrator approval'

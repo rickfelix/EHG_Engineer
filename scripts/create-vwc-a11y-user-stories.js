@@ -266,7 +266,7 @@ async function createUserStories() {
 
   console.log(`Implementation Context: ${storiesWithContext}/${userStories.length} (${contextCoverage.toFixed(0)}%)`);
   console.log(`Acceptance Criteria: ${storiesWithAcceptanceCriteria}/${userStories.length} (${acceptanceCriteriaCoverage.toFixed(0)}%)`);
-  console.log(`BMAD Requirement: ≥80% coverage`);
+  console.log('BMAD Requirement: ≥80% coverage');
 
   const bmadPass = contextCoverage >= 80 && acceptanceCriteriaCoverage >= 80;
   console.log(`Status: ${bmadPass ? '✅ PASS' : '❌ FAIL'}`);

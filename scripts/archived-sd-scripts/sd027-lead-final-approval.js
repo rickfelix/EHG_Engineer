@@ -29,7 +29,7 @@ async function createLEADFinalApproval() {
     approval_date: new Date().toISOString(),
 
     // Executive Assessment
-    executive_summary: `APPROVED: SD-027 Enhanced Venture Detail with Stage View has been successfully implemented and verified. All 8 user stories completed across 4 implementation phases. PLAN supervisor verification achieved 92% confidence with PASS verdict. Production-ready implementation delivers comprehensive stage management capabilities with enhanced navigation, analytics, collaboration tools, and mobile optimization. Strategic objectives fully met with no critical issues identified.`,
+    executive_summary: 'APPROVED: SD-027 Enhanced Venture Detail with Stage View has been successfully implemented and verified. All 8 user stories completed across 4 implementation phases. PLAN supervisor verification achieved 92% confidence with PASS verdict. Production-ready implementation delivers comprehensive stage management capabilities with enhanced navigation, analytics, collaboration tools, and mobile optimization. Strategic objectives fully met with no critical issues identified.',
 
     // Business Impact Assessment
     business_impact_delivered: {

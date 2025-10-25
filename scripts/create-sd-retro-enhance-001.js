@@ -37,13 +37,13 @@ async function createRetrospectiveEnhancementSD() {
     target_application: 'EHG_engineer',
     current_phase: 'IDEATION',
 
-    description: `Enhance retrospective system with 4-layer quality enforcement (database constraints → triggers → application validation → CI/CD gates). Add multi-application context, code traceability, advanced search/aggregation, and semantic search with OpenAI embeddings. Integrates with SD-KNOWLEDGE-001 automated knowledge retrieval to enable intelligent cross-application learning.`,
+    description: 'Enhance retrospective system with 4-layer quality enforcement (database constraints → triggers → application validation → CI/CD gates). Add multi-application context, code traceability, advanced search/aggregation, and semantic search with OpenAI embeddings. Integrates with SD-KNOWLEDGE-001 automated knowledge retrieval to enable intelligent cross-application learning.',
 
-    strategic_intent: `Transform retrospectives from static documents into an active, intelligent knowledge management system that scales across multiple applications (EHG, EHG_engineer, ventures). Enable semantic search for concept-based discovery and structured filtering for precision queries. Establish defense-in-depth quality enforcement following LEO Protocol patterns.`,
+    strategic_intent: 'Transform retrospectives from static documents into an active, intelligent knowledge management system that scales across multiple applications (EHG, EHG_engineer, ventures). Enable semantic search for concept-based discovery and structured filtering for precision queries. Establish defense-in-depth quality enforcement following LEO Protocol patterns.',
 
-    rationale: `Current retrospective system lacks: (1) multi-application context - cannot distinguish EHG vs venture learnings, (2) semantic search - keyword-only limits discovery, (3) code traceability - no link to files/commits/components, (4) enforcement - fields can be skipped. With 97+ retrospectives and growing, these gaps prevent effective knowledge reuse and cross-application learning.`,
+    rationale: 'Current retrospective system lacks: (1) multi-application context - cannot distinguish EHG vs venture learnings, (2) semantic search - keyword-only limits discovery, (3) code traceability - no link to files/commits/components, (4) enforcement - fields can be skipped. With 97+ retrospectives and growing, these gaps prevent effective knowledge reuse and cross-application learning.',
 
-    scope: `Database schema enhancements, trigger creation, application-level validation, CI/CD enforcement, semantic search integration, documentation (10 files), backfill existing records, integration with SD-KNOWLEDGE-001 automated retrieval.`,
+    scope: 'Database schema enhancements, trigger creation, application-level validation, CI/CD enforcement, semantic search integration, documentation (10 files), backfill existing records, integration with SD-KNOWLEDGE-001 automated retrieval.',
 
     key_changes: [
       'Add application context fields: target_application, learning_category, applies_to_all_apps',

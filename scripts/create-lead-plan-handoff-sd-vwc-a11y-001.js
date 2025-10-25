@@ -230,7 +230,7 @@ async function createLeadToPlanHandoff() {
   if (insertError) {
     console.error('❌ Failed to insert handoff record');
     console.error(`   Error: ${insertError.message}`);
-    console.error(`   Details:`, insertError);
+    console.error('   Details:', insertError);
     process.exit(1);
   }
 
@@ -309,9 +309,9 @@ async function createLeadToPlanHandoff() {
   console.log('📊 HANDOFF SUMMARY:');
   console.log(`   Handoff ID: ${handoffId}`);
   console.log(`   SD ID: ${sdId}`);
-  console.log(`   From Phase: LEAD`);
-  console.log(`   To Phase: PLAN`);
-  console.log(`   Status: completed`);
+  console.log('   From Phase: LEAD');
+  console.log('   To Phase: PLAN');
+  console.log('   Status: completed');
   console.log(`   Timestamp: ${verifyHandoff.created_at}`);
   console.log('');
   console.log('📝 NEXT STEPS FOR PLAN PHASE:');

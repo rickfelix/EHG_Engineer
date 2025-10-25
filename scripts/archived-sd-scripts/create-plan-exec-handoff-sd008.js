@@ -185,8 +185,8 @@ async function createPlanExecHandoff() {
 
     console.log(chalk.green('\n✅ PLAN→EXEC Handoff Created:'));
     console.log(`   Handoff ID: ${savedHandoff.id}`);
-    console.log(`   From: PLAN`);
-    console.log(`   To: EXEC`);
+    console.log('   From: PLAN');
+    console.log('   To: EXEC');
     console.log(`   Status: ${savedHandoff.status}`);
 
     // 6. Update SD phase
@@ -200,8 +200,8 @@ async function createPlanExecHandoff() {
 
     console.log(chalk.cyan('\n📋 Handoff Summary:'));
     console.log(`   User Stories: ${content.user_stories?.length || 0}`);
-    console.log(`   Backlog Items: 10`);
-    console.log(`   Priority Distribution:`);
+    console.log('   Backlog Items: 10');
+    console.log('   Priority Distribution:');
 
     const priorities = {};
     content.user_stories?.forEach(story => {

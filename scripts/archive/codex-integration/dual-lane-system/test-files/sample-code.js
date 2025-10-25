@@ -2,8 +2,8 @@
 // This file will be used to test real patch generation
 
 function existingFunction() {
-  console.log("This is the original function");
-  return "original";
+  console.log('This is the original function');
+  return 'original';
 }
 
 function helperFunction(input) {

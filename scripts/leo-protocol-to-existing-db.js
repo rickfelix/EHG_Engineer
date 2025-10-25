@@ -4,7 +4,7 @@
  * Uses strategic_directives_v2 table to store protocol versions
  */
 
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 import fs from 'fs';
 import path from 'path';

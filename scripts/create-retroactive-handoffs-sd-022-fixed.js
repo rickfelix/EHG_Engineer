@@ -384,7 +384,7 @@ async function createHandoffs() {
         console.log(`   Status: ${data[0].status}`);
       }
     } catch (err) {
-      console.error(`❌ Unexpected error:`, err.message);
+      console.error('❌ Unexpected error:', err.message);
     }
   }
 

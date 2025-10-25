@@ -66,7 +66,7 @@ async function executeMigration() {
       }
     }
 
-    console.log(`\n📊 Migration Summary:`);
+    console.log('\n📊 Migration Summary:');
     console.log(`   ✅ Success: ${successCount}`);
     console.log(`   ❌ Errors: ${errorCount}\n`);
 

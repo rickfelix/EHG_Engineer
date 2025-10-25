@@ -5,7 +5,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 async function updateEXECComplete() {
@@ -71,9 +71,9 @@ async function updateEXECComplete() {
     console.log(`Phase: ${data.phase}`);
     console.log(`Progress: ${data.progress}%`);
     console.log('\n📊 Audit Results:');
-    console.log(`- Issues Found: 15 (5 critical)`)
-    console.log(`- Acceptance Criteria: 3/10 passed`);
-    console.log(`- Remediation Time: 13 hours estimated`);
+    console.log('- Issues Found: 15 (5 critical)');
+    console.log('- Acceptance Criteria: 3/10 passed');
+    console.log('- Remediation Time: 13 hours estimated');
     console.log('\n🔄 Handed back to PLAN for verification');
     
   } catch (error) {

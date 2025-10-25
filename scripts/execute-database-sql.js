@@ -10,7 +10,7 @@
  *   node scripts/execute-database-sql.js path/to/schema.sql --engineer # Explicitly uses Engineer DB
  */
 
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 import fs from 'fs/promises';
 import path from 'path';
@@ -178,7 +178,7 @@ async function main() {
 
   // Confirm database selection for safety
   const dbConfig = DATABASES[targetDb];
-  console.log(`\n⚠️  You are about to execute SQL on:`);
+  console.log('\n⚠️  You are about to execute SQL on:');
   console.log(`   ${dbConfig.color}${dbConfig.name}${'\x1b[0m'}`);
   console.log(`   Project: ${dbConfig.projectId}`);
   console.log(`   File: ${sqlFile}\n`);

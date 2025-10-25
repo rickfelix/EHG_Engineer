@@ -72,9 +72,9 @@ async function updateSD045LeadPhase() {
 
   console.log('✅ LEAD phase completed for SD-045!\n');
   console.log('📊 Progress Updated:');
-  console.log(`- Progress: 0% → 20%`);
-  console.log(`- Current Phase: LEAD_PLANNING → PLAN_DESIGN`);
-  console.log(`- Effort Reduction: 95h → 8-12h (92% savings)`);
+  console.log('- Progress: 0% → 20%');
+  console.log('- Current Phase: LEAD_PLANNING → PLAN_DESIGN');
+  console.log('- Effort Reduction: 95h → 8-12h (92% savings)');
   console.log('\n🎯 Strategic Objectives Defined:');
   console.log('  1. Workforce Visibility');
   console.log('  2. Operational Control');

@@ -274,7 +274,7 @@ function buildBacklogItems() {
             priority: priority,
             description_raw: `@${init.category.toLowerCase()} @wave${init.wave}`,
             item_description: init.outcome,
-            my_comments: `Initiative from portfolio health system design`,
+            my_comments: 'Initiative from portfolio health system design',
             stage_number: init.wave,
             phase: 'Planning',
             new_module: init.category === 'EHI' || init.category === 'GATES',

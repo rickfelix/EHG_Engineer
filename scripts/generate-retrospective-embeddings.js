@@ -165,7 +165,7 @@ async function processBatch(retrospectives, progress) {
 
       // Update database
       await updateRetrospectiveEmbedding(retro.id, embedding);
-      console.log(`   ✅ Embedding stored successfully`);
+      console.log('   ✅ Embedding stored successfully');
 
       // Track progress
       progress.processedIds.push(retro.id);

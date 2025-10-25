@@ -82,7 +82,7 @@ export async function storeGateReview(
     });
   
   if (error) {
-    console.error(`❌ Failed to store gate review:`, error.message);
+    console.error('❌ Failed to store gate review:', error.message);
     throw error;
   }
   

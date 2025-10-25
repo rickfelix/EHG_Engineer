@@ -36,14 +36,14 @@ async function convertScript(filePath) {
       [/require\(['"]dotenv['"]\)\.config\([^)]*\);?/g, "import dotenv from 'dotenv';\ndotenv.config();"],
 
       // Convert module.exports
-      [/module\.exports\s*=\s*(\w+);?$/m, "export default $1;"],
-      [/module\.exports\s*=\s*{([^}]+)};?$/m, "export { $1 };"],
-      [/module\.exports\.(\w+)\s*=\s*(.+);?$/gm, "export const $1 = $2;"],
-      [/exports\.(\w+)\s*=\s*(.+);?$/gm, "export const $1 = $2;"],
+      [/module\.exports\s*=\s*(\w+);?$/m, 'export default $1;'],
+      [/module\.exports\s*=\s*{([^}]+)};?$/m, 'export { $1 };'],
+      [/module\.exports\.(\w+)\s*=\s*(.+);?$/gm, 'export const $1 = $2;'],
+      [/exports\.(\w+)\s*=\s*(.+);?$/gm, 'export const $1 = $2;'],
 
       // Convert __dirname and __filename usage
-      [/const\s+__dirname\s*=\s*[^;]+;?/g, ""],
-      [/const\s+__filename\s*=\s*[^;]+;?/g, ""],
+      [/const\s+__dirname\s*=\s*[^;]+;?/g, ''],
+      [/const\s+__filename\s*=\s*[^;]+;?/g, ''],
     ];
 
     // Apply conversions
@@ -56,7 +56,7 @@ async function convertScript(filePath) {
       const imports = content.match(/^import[\s\S]*?;$/gm) || [];
       const lastImportIndex = imports.length > 0 ? content.lastIndexOf(imports[imports.length - 1]) + imports[imports.length - 1].length : 0;
 
-      const esmHelpers = `\nimport { fileURLToPath } from 'url';\nimport { dirname } from 'path';\n\nconst __filename = fileURLToPath(import.meta.url);\nconst __dirname = dirname(__filename);\n`;
+      const esmHelpers = '\nimport { fileURLToPath } from \'url\';\nimport { dirname } from \'path\';\n\nconst __filename = fileURLToPath(import.meta.url);\nconst __dirname = dirname(__filename);\n';
 
       content = content.slice(0, lastImportIndex) + esmHelpers + content.slice(lastImportIndex);
     }

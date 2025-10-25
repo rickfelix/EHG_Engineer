@@ -14,21 +14,21 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 async function completeSD() {
-  console.log(`\n╔═══════════════════════════════════════════════════════════════╗`);
-  console.log(`║  Complete SD-SETTINGS-2025-10-12                             ║`);
-  console.log(`║  Bypass Trigger - All LEO Protocol Requirements Met         ║`);
-  console.log(`╚═══════════════════════════════════════════════════════════════╝`);
+  console.log('\n╔═══════════════════════════════════════════════════════════════╗');
+  console.log('║  Complete SD-SETTINGS-2025-10-12                             ║');
+  console.log('║  Bypass Trigger - All LEO Protocol Requirements Met         ║');
+  console.log('╚═══════════════════════════════════════════════════════════════╝');
 
   const sdId = 'SD-SETTINGS-2025-10-12';
 
-  console.log(`\n🔌 Connecting to EHG_Engineer database...`);
+  console.log('\n🔌 Connecting to EHG_Engineer database...');
   const client = await createDatabaseClient('engineer', {
     verify: true,
     verbose: true
   });
 
   try {
-    console.log(`\n📋 Verifying LEO Protocol Compliance...`);
+    console.log('\n📋 Verifying LEO Protocol Compliance...');
 
     // Check retrospective exists
     const retroCheck = await client.query(
@@ -61,13 +61,13 @@ async function completeSD() {
       console.log(`      ${s.sub_agent_code}: ${s.verdict}`);
     });
 
-    console.log(`\n🔓 Disabling completion trigger...`);
+    console.log('\n🔓 Disabling completion trigger...');
     await client.query(
       'ALTER TABLE strategic_directives_v2 DISABLE TRIGGER sd_status_to_completed_check;'
     );
-    console.log(`   ✅ Trigger disabled`);
+    console.log('   ✅ Trigger disabled');
 
-    console.log(`\n💾 Marking SD as COMPLETED...`);
+    console.log('\n💾 Marking SD as COMPLETED...');
     const now = new Date().toISOString();
     const updateResult = await client.query(`
       UPDATE strategic_directives_v2
@@ -84,7 +84,7 @@ async function completeSD() {
 
     if (updateResult.rows.length > 0) {
       const sd = updateResult.rows[0];
-      console.log(`   ✅ SD Updated Successfully`);
+      console.log('   ✅ SD Updated Successfully');
       console.log(`      ID: ${sd.id}`);
       console.log(`      Title: ${sd.title}`);
       console.log(`      Status: ${sd.status.toUpperCase()}`);
@@ -92,48 +92,48 @@ async function completeSD() {
       console.log(`      Completed: ${new Date(sd.completion_date).toLocaleString()}`);
     }
 
-    console.log(`\n🔒 Re-enabling completion trigger...`);
+    console.log('\n🔒 Re-enabling completion trigger...');
     await client.query(
       'ALTER TABLE strategic_directives_v2 ENABLE TRIGGER sd_status_to_completed_check;'
     );
-    console.log(`   ✅ Trigger re-enabled`);
+    console.log('   ✅ Trigger re-enabled');
 
-    console.log(`\n╔═══════════════════════════════════════════════════════════════╗`);
-    console.log(`║  ✅ SD-SETTINGS-2025-10-12 COMPLETED                        ║`);
-    console.log(`╚═══════════════════════════════════════════════════════════════╝`);
+    console.log('\n╔═══════════════════════════════════════════════════════════════╗');
+    console.log('║  ✅ SD-SETTINGS-2025-10-12 COMPLETED                        ║');
+    console.log('╚═══════════════════════════════════════════════════════════════╝');
 
-    console.log(`\n📊 Final Results:`);
-    console.log(`   • Status: COMPLETED`);
-    console.log(`   • Progress: 100%`);
-    console.log(`   • Critical violations fixed: 11 → 0 (100%)`);
-    console.log(`   • WCAG 2.1 Level AA: ✅ COMPLIANT`);
-    console.log(`   • Git commit: d94cf22`);
-    console.log(`   • CI/CD status: GREEN`);
-    console.log(`   • Retrospective: Generated (6a1679d6-f6a5-4d19-a5b9-71854b489408)`);
-    console.log(`   • Handoffs: 2 (EXEC→PLAN, PLAN→LEAD)`);
-    console.log(`   • Sub-agents: 5 executed`);
+    console.log('\n📊 Final Results:');
+    console.log('   • Status: COMPLETED');
+    console.log('   • Progress: 100%');
+    console.log('   • Critical violations fixed: 11 → 0 (100%)');
+    console.log('   • WCAG 2.1 Level AA: ✅ COMPLIANT');
+    console.log('   • Git commit: d94cf22');
+    console.log('   • CI/CD status: GREEN');
+    console.log('   • Retrospective: Generated (6a1679d6-f6a5-4d19-a5b9-71854b489408)');
+    console.log('   • Handoffs: 2 (EXEC→PLAN, PLAN→LEAD)');
+    console.log('   • Sub-agents: 5 executed');
 
-    console.log(`\n🚀 Ready for deployment!`);
+    console.log('\n🚀 Ready for deployment!');
 
     return true;
 
   } catch (error) {
-    console.error(`\n❌ Failed to complete SD:`, error.message);
+    console.error('\n❌ Failed to complete SD:', error.message);
 
     // Try to re-enable trigger even on error
     try {
       await client.query(
         'ALTER TABLE strategic_directives_v2 ENABLE TRIGGER sd_status_to_completed_check;'
       );
-      console.log(`   ✅ Trigger re-enabled after error`);
+      console.log('   ✅ Trigger re-enabled after error');
     } catch (triggerError) {
-      console.error(`   ⚠️  Could not re-enable trigger:`, triggerError.message);
+      console.error('   ⚠️  Could not re-enable trigger:', triggerError.message);
     }
 
     throw error;
   } finally {
     await client.end();
-    console.log(`\n🔌 Database connection closed\n`);
+    console.log('\n🔌 Database connection closed\n');
   }
 }
 
@@ -141,6 +141,6 @@ async function completeSD() {
 completeSD()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error(`\n❌ Error:`, error.message);
+    console.error('\n❌ Error:', error.message);
     process.exit(1);
   });

@@ -169,6 +169,7 @@ const prd = {
       }
     ],
 
+  // FIX: Renamed from technical_architecture
     system_architecture: // FIX: Renamed from technical_architecture `
 ## System Architecture
 

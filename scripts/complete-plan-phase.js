@@ -7,7 +7,7 @@ import { dirname } from 'path';
 import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 import dotenv from 'dotenv';
-dotenv.config(); });
+dotenv.config();
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,

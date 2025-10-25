@@ -342,33 +342,33 @@ Use Puppeteer MCP to:
 
   // Updated capabilities with MCP additions
   const updatedCapabilities = [
-    "MCP browser automation (Playwright MCP + Puppeteer MCP - PREFERRED)",
-    "Natural language browser control via Claude Code MCP",
-    "Real-time visual verification with human-in-the-loop",
-    "Interactive testing during EXEC implementation",
-    "Professional test case generation from user stories",
-    "Comprehensive E2E testing with Playwright (MANDATORY)",
-    "Pre-test build validation",
-    "Database migration verification",
-    "Component integration checking",
-    "Test infrastructure discovery",
-    "Cross-SD dependency detection",
-    "Automated migration execution",
-    "Testing learnings for continuous improvement",
-    "Dev mode vs preview mode decision logic",
-    "Dual test enforcement (unit + E2E)",
-    "Playwright server lifecycle management"
+    'MCP browser automation (Playwright MCP + Puppeteer MCP - PREFERRED)',
+    'Natural language browser control via Claude Code MCP',
+    'Real-time visual verification with human-in-the-loop',
+    'Interactive testing during EXEC implementation',
+    'Professional test case generation from user stories',
+    'Comprehensive E2E testing with Playwright (MANDATORY)',
+    'Pre-test build validation',
+    'Database migration verification',
+    'Component integration checking',
+    'Test infrastructure discovery',
+    'Cross-SD dependency detection',
+    'Automated migration execution',
+    'Testing learnings for continuous improvement',
+    'Dev mode vs preview mode decision logic',
+    'Dual test enforcement (unit + E2E)',
+    'Playwright server lifecycle management'
   ];
 
   // Update metadata
   const updatedMetadata = {
     ...current.metadata,
-    version: "2.2.0",
+    version: '2.2.0',
     updated_date: new Date().toISOString(),
-    updated_reason: "Added MCP browser automation as PREFERRED testing method",
+    updated_reason: 'Added MCP browser automation as PREFERRED testing method',
     mcp_support: true,
-    mcp_servers: ["playwright", "puppeteer"],
-    enhancement_source: "User request + MCP installation"
+    mcp_servers: ['playwright', 'puppeteer'],
+    enhancement_source: 'User request + MCP installation'
   };
 
   // Update the database

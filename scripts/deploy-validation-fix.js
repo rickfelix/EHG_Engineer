@@ -47,7 +47,7 @@ async function deployFix() {
 
     console.log('\n📊 Progress Breakdown:');
     console.log(`   Total Progress: ${totalProgress}%`);
-    console.log(`   PLAN_verification:`);
+    console.log('   PLAN_verification:');
     console.log(`     - user_stories_validated: ${planVerification.user_stories_validated}`);
     console.log(`     - progress: ${planVerification.progress}/${planVerification.weight}`);
 

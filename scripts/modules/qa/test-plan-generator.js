@@ -486,7 +486,7 @@ async function generatePerformanceTestStrategy(sd, prd, userStories) {
  * @returns {Promise<Object>} Result with test plan ID
  */
 export async function storeTestPlan(testPlan, supabase) {
-  console.log(`\n💾 Storing test plan in database...`);
+  console.log('\n💾 Storing test plan in database...');
 
   const { data, error } = await supabase
     .from('test_plans')

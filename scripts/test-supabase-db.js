@@ -25,7 +25,7 @@ Supabase URL: https://dedlbzhpgkmetvhbkyzq.supabase.co
       const { stdout: whoami } = await execAsync('supabase whoami', { timeout: 5000 });
       console.log(`   ✅ Logged in as: ${whoami.trim()}`);
     } catch (error) {
-      console.log(`   ❌ Not logged in. Please run: supabase login`);
+      console.log('   ❌ Not logged in. Please run: supabase login');
       return;
     }
 
@@ -42,13 +42,13 @@ Supabase URL: https://dedlbzhpgkmetvhbkyzq.supabase.co
       );
       
       if (ehgProject) {
-        console.log(`   ✅ Found EHG project:`);
+        console.log('   ✅ Found EHG project:');
         console.log(`      Name: ${ehgProject.name}`);
         console.log(`      ID: ${ehgProject.id}`);
         console.log(`      Region: ${ehgProject.region}`);
         console.log(`      Status: ${ehgProject.status || 'active'}`);
       } else {
-        console.log(`   ⚠️  EHG project not found in your Supabase account`);
+        console.log('   ⚠️  EHG project not found in your Supabase account');
         console.log(`   Available projects: ${projectList.length}`);
       }
     } catch (error) {
@@ -65,10 +65,10 @@ Supabase URL: https://dedlbzhpgkmetvhbkyzq.supabase.co
       const { stdout: status } = await execAsync('supabase status --output json', { timeout: 5000 });
       const statusData = JSON.parse(status);
       if (statusData.projectRef === 'dedlbzhpgkmetvhbkyzq') {
-        console.log(`   ✅ Already linked to EHG project!`);
+        console.log('   ✅ Already linked to EHG project!');
       }
     } catch {
-      console.log(`   ℹ️  Not currently linked to any project`);
+      console.log('   ℹ️  Not currently linked to any project');
     }
 
     console.log('\n✅ Supabase test complete!');

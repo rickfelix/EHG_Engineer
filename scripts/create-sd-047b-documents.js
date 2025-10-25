@@ -50,7 +50,7 @@ const newSD = {
 - Timeline visualization (separate SD-047A)
 - Advanced OCR/document parsing`,
 
-  strategic_intent: `Eliminate document fragmentation across external tools. Provide single source of truth for venture documentation. Enable teams to find critical documents in seconds vs. minutes. Improve compliance through centralized access control and audit trails.`,
+  strategic_intent: 'Eliminate document fragmentation across external tools. Provide single source of truth for venture documentation. Enable teams to find critical documents in seconds vs. minutes. Improve compliance through centralized access control and audit trails.',
 
   rationale: `**Leverages Existing Infrastructure**:
 - Supabase Storage available for file hosting with CDN

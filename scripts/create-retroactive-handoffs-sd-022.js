@@ -337,7 +337,7 @@ async function createHandoffs() {
         console.log(`✅ Created ${handoff.from_phase}→${handoff.to_phase} handoff`);
       }
     } catch (err) {
-      console.error(`❌ Error:`, err.message);
+      console.error('❌ Error:', err.message);
     }
   }
 

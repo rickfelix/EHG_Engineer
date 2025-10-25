@@ -122,7 +122,7 @@ async function main() {
     console.log(`   Total Progress: ${progress.total_progress}%`);
     console.log(`   Can Complete: ${progress.can_complete}`);
     console.log(`   User Stories Validated: ${updateResult.rowCount}`);
-    console.log(`   Sub-Agent Executions: 2 (DATABASE, RETRO)`);
+    console.log('   Sub-Agent Executions: 2 (DATABASE, RETRO)');
 
     if (progress.total_progress === 100 && progress.can_complete) {
       console.log('\n✅ SD-KNOWLEDGE-001 is ready for completion!');

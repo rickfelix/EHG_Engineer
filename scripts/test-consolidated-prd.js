@@ -90,7 +90,7 @@ async function testPRDGeneration() {
     content.user_stories.forEach(story => {
       priorityCount[story.priority] = (priorityCount[story.priority] || 0) + 1;
     });
-    console.log(`   Priority Distribution:`, priorityCount);
+    console.log('   Priority Distribution:', priorityCount);
 
     console.log(chalk.green('\n✅ Test completed successfully!'));
 

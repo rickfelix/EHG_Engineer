@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createClient } from '@supabase/supabase-js';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -47,7 +47,7 @@ async function checkSDIPTables() {
                 if (error) {
                     console.log(`   ❌ Table not accessible or doesn't exist: ${error.message}`);
                 } else {
-                    console.log(`   ✅ Table exists and accessible`);
+                    console.log('   ✅ Table exists and accessible');
                     
                     // Get count
                     const { count } = await supabase
@@ -58,7 +58,7 @@ async function checkSDIPTables() {
                     console.log(`   📊 Records for SDIP: ${count || 0}`);
                     
                     if (data && data.length > 0) {
-                        console.log(`   🔍 Sample record:`, JSON.stringify(data[0], null, 4));
+                        console.log('   🔍 Sample record:', JSON.stringify(data[0], null, 4));
                     }
                 }
             } catch (tableError) {
@@ -127,7 +127,7 @@ async function checkSDIPTables() {
                 if (error) {
                     console.log(`   ❌ Table not accessible: ${error.message}`);
                 } else {
-                    console.log(`   ✅ Table exists`);
+                    console.log('   ✅ Table exists');
                     
                     // Check for SDIP-related records
                     const { data: sdipRecords } = await supabase

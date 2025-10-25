@@ -52,12 +52,12 @@ async function acceptHandoffVwcA11y001() {
   });
 
   if (error) {
-    console.log(`❌ Failed to accept handoff:`, error.message);
-    console.log(`Error details:`, error);
+    console.log('❌ Failed to accept handoff:', error.message);
+    console.log('Error details:', error);
     return;
   }
 
-  console.log(`✅ Successfully accepted EXEC→PLAN handoff`);
+  console.log('✅ Successfully accepted EXEC→PLAN handoff');
 
   // Verify the update
   const { data: updated, error: verifyError } = await supabase

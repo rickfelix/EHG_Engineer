@@ -83,13 +83,13 @@ async function applyMigration() {
         risks: 'Message loss during broker failure; Increased operational complexity; Learning curve for team',
         dependencies: 'RabbitMQ infrastructure; OTel for observability; Feature flag system',
         acceptance_criteria: [
-          "Durability: broker restart does not lose acked messages",
-          "Idempotency: re-delivery causes no duplicate side-effects",
-          "Latency: p50 publish-consume <100ms in staging",
-          "Reliability: <1% messages to DLQ over 24h soak",
-          "Security: TLS + least-privilege vhost /ehg",
-          "Observability: Traces include event_id and correlation_id",
-          "Rollback: single toggle back to DB-driven flow"
+          'Durability: broker restart does not lose acked messages',
+          'Idempotency: re-delivery causes no duplicate side-effects',
+          'Latency: p50 publish-consume <100ms in staging',
+          'Reliability: <1% messages to DLQ over 24h soak',
+          'Security: TLS + least-privilege vhost /ehg',
+          'Observability: Traces include event_id and correlation_id',
+          'Rollback: single toggle back to DB-driven flow'
         ],
         kpis: {
           p50_latency_ms: 100,

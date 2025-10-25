@@ -4,7 +4,7 @@
  * LEAD Agent final completion script
  */
 
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 import { createClient } from '@supabase/supabase-js';
 

@@ -313,8 +313,8 @@ Replace mockVentures array in VentureGrid.tsx with live Supabase database querie
   console.log('📊 Summary:');
   console.log(`   From: ${handoff.from_agent}`);
   console.log(`   To: ${handoff.to_agent}`);
-  console.log(`   SD: SD-UAT-009`);
-  console.log(`   PRD: PRD-SD-UAT-009`);
+  console.log('   SD: SD-UAT-009');
+  console.log('   PRD: PRD-SD-UAT-009');
   console.log(`   Action Items: ${handoff.action_items.length}`);
   console.log(`   Risks: ${handoff.known_issues_risks.length}`);
   console.log(`   Estimated Time: ${handoff.resource_utilization.estimated_implementation_time}`);

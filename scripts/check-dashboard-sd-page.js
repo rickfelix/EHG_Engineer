@@ -93,7 +93,7 @@ async function checkStrategicDirectivesPage() {
         // Get page title and URL
         const title = await page.title();
         const url = page.url();
-        console.log(`\n📍 Current Page:`);
+        console.log('\n📍 Current Page:');
         console.log(`  Title: ${title}`);
         console.log(`  URL: ${url}`);
         

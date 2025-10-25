@@ -10,7 +10,7 @@ const __dirname = dirname(__filename);
  * Create LEO Protocol Database Tables
  */
 
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 import fs from 'fs';
 import path from 'path';

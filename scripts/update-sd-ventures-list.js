@@ -39,7 +39,7 @@ const updatedSD = {
 - Timeline tab (defer to SD-047A)
 - Documents tab (defer to SD-047B)`,
 
-  strategic_intent: `Simplify venture discovery and management by providing a single, consolidated interface. Reduce cognitive load from navigating multiple disconnected views. Improve user productivity by 30% through faster venture lookup.`,
+  strategic_intent: 'Simplify venture discovery and management by providing a single, consolidated interface. Reduce cognitive load from navigating multiple disconnected views. Improve user productivity by 30% through faster venture lookup.',
 
   rationale: `**Simplicity-First Approach**:
 - Consolidates 3 existing components instead of building new features

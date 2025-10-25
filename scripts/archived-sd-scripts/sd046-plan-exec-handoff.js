@@ -29,7 +29,7 @@ async function createPLANExecHandoff() {
     phase: 'implementation',
 
     // 7 Mandatory Elements
-    executive_summary: `Technical implementation of enhanced Stage 15 Pricing Strategy with advanced analytics, Chairman oversight, and automated intelligence. PRD defines 8 user stories across 4 implementation phases. Target: /mnt/c/_EHG/ehg/src/components/stages/Stage15PricingStrategy.tsx. Build upon existing comprehensive pricing component (374 lines) with incremental enhancements for real-time analytics, executive dashboards, portfolio optimization, and competitive intelligence automation.`,
+    executive_summary: 'Technical implementation of enhanced Stage 15 Pricing Strategy with advanced analytics, Chairman oversight, and automated intelligence. PRD defines 8 user stories across 4 implementation phases. Target: /mnt/c/_EHG/ehg/src/components/stages/Stage15PricingStrategy.tsx. Build upon existing comprehensive pricing component (374 lines) with incremental enhancements for real-time analytics, executive dashboards, portfolio optimization, and competitive intelligence automation.',
 
     completeness_report: {
       prd_generated: true,

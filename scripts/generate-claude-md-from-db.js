@@ -290,8 +290,8 @@ ${subagentParallelExecution}
 
   generateAgentSection(agents) {
     // Compact table format
-    let table = `| Agent | Code | Responsibilities | % Split |\n`;
-    table += `|-------|------|------------------|----------|\n`;
+    let table = '| Agent | Code | Responsibilities | % Split |\n';
+    table += '|-------|------|------------------|----------|\n';
 
     agents.forEach(agent => {
       const responsibilities = agent.responsibilities.substring(0, 80) + (agent.responsibilities.length > 80 ? '...' : '');
@@ -305,8 +305,8 @@ ${subagentParallelExecution}
       table += `| ${agent.name} | ${agent.agent_code} | ${responsibilities} | ${split} |\n`;
     });
 
-    table += `\n**Legend**: P=Planning, I=Implementation, V=Verification, A=Approval\n`;
-    table += `**Total**: EXEC (30%) + LEAD (35%) + PLAN (35%) = 100%`;
+    table += '\n**Legend**: P=Planning, I=Implementation, V=Verification, A=Approval\n';
+    table += '**Total**: EXEC (30%) + LEAD (35%) + PLAN (35%) = 100%';
 
     return table;
   }

@@ -163,7 +163,7 @@ class LEOProtocolSmartQA {
           file: protocol.filename,
           type: 'NOMENCLATURE_VIOLATION',
           severity: 'HIGH',
-          message: `Filename does not follow leo_protocol_vX.Y.Z[_suffix].md pattern`
+          message: 'Filename does not follow leo_protocol_vX.Y.Z[_suffix].md pattern'
         });
       }
 
@@ -268,7 +268,7 @@ class LEOProtocolSmartQA {
           file: protocol.filename,
           type: 'MULTIPLE_ACTIVE_VERSIONS',
           severity: 'CRITICAL',
-          message: `Multiple active versions detected - only one should be active`
+          message: 'Multiple active versions detected - only one should be active'
         });
       }
     }

@@ -29,7 +29,7 @@ async function createHandoff() {
     phase: 'planning',
 
     // 7 Mandatory Elements
-    executive_summary: `Implement comprehensive validation framework for Stage 3 of the venture lifecycle. This includes data validation, business rule enforcement, compliance checks, and quality assurance mechanisms to ensure all ventures meet required standards before progression.`,
+    executive_summary: 'Implement comprehensive validation framework for Stage 3 of the venture lifecycle. This includes data validation, business rule enforcement, compliance checks, and quality assurance mechanisms to ensure all ventures meet required standards before progression.',
 
     completeness_report: {
       requirements_gathered: true,

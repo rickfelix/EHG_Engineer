@@ -582,7 +582,7 @@ class PlaywrightDesignAnalyzer {
         await firstButton.hover({ timeout: 5000 });
         await page.waitForTimeout(100);
       } catch (hoverError) {
-        console.log('   Note: Button hover test skipped (element not visible)')
+        console.log('   Note: Button hover test skipped (element not visible)');
       }
       
       const hoverStyle = await firstButton.evaluate(el => {
@@ -802,73 +802,73 @@ class PlaywrightDesignAnalyzer {
   }
 
   generateMarkdownSummary(results) {
-    let md = `# Directive Lab UI/UX Recommendations\n\n`;
+    let md = '# Directive Lab UI/UX Recommendations\n\n';
     md += `**Analysis Date:** ${results.timestamp}\n\n`;
     
-    md += `## Executive Summary\n\n`;
-    md += `The Directive Lab interface analysis reveals opportunities to improve the end-to-end user experience, `;
-    md += `visual consistency, and mobile responsiveness. Key focus areas include standardizing the component `;
-    md += `system, improving process flow guidance, and ensuring accessibility compliance.\n\n`;
+    md += '## Executive Summary\n\n';
+    md += 'The Directive Lab interface analysis reveals opportunities to improve the end-to-end user experience, ';
+    md += 'visual consistency, and mobile responsiveness. Key focus areas include standardizing the component ';
+    md += 'system, improving process flow guidance, and ensuring accessibility compliance.\n\n';
     
-    md += `## Priority Action Items\n\n`;
+    md += '## Priority Action Items\n\n';
     
     const highPriority = results.recommendations.filter(r => r.priority === 'HIGH');
     const mediumPriority = results.recommendations.filter(r => r.priority === 'MEDIUM');
     const lowPriority = results.recommendations.filter(r => r.priority === 'LOW');
     
     if (highPriority.length > 0) {
-      md += `### 🔴 High Priority\n\n`;
+      md += '### 🔴 High Priority\n\n';
       highPriority.forEach(rec => {
         md += `#### ${rec.title}\n`;
         md += `*${rec.description}*\n\n`;
         rec.actions.forEach(action => {
           md += `- [ ] ${action}\n`;
         });
-        md += `\n`;
+        md += '\n';
       });
     }
     
     if (mediumPriority.length > 0) {
-      md += `### 🟡 Medium Priority\n\n`;
+      md += '### 🟡 Medium Priority\n\n';
       mediumPriority.forEach(rec => {
         md += `#### ${rec.title}\n`;
         md += `*${rec.description}*\n\n`;
         rec.actions.forEach(action => {
           md += `- [ ] ${action}\n`;
         });
-        md += `\n`;
+        md += '\n';
       });
     }
     
     if (lowPriority.length > 0) {
-      md += `### 🟢 Low Priority\n\n`;
+      md += '### 🟢 Low Priority\n\n';
       lowPriority.forEach(rec => {
         md += `#### ${rec.title}\n`;
         md += `*${rec.description}*\n\n`;
         rec.actions.forEach(action => {
           md += `- [ ] ${action}\n`;
         });
-        md += `\n`;
+        md += '\n';
       });
     }
     
-    md += `## Consistency Metrics\n\n`;
+    md += '## Consistency Metrics\n\n';
     md += `- **Colors Used:** ${results.consistency.colors.unique} (Target: 5-8)\n`;
     md += `- **Button Styles:** ${results.consistency.components.buttonVariants} (Target: 3)\n`;
     md += `- **Input Styles:** ${results.consistency.components.inputVariants} (Target: 2)\n`;
     md += `- **Typography Variants:** ${results.consistency.typography.unique} (Target: 4-6)\n\n`;
     
-    md += `## Implementation Estimates\n\n`;
-    md += `- **Immediate Fixes (2-4 hours):** Button standardization, form consistency\n`;
-    md += `- **Short-term (1-2 days):** Mobile navigation, progress indicators\n`;
-    md += `- **Long-term (3-5 days):** Complete design system implementation, accessibility compliance\n\n`;
+    md += '## Implementation Estimates\n\n';
+    md += '- **Immediate Fixes (2-4 hours):** Button standardization, form consistency\n';
+    md += '- **Short-term (1-2 days):** Mobile navigation, progress indicators\n';
+    md += '- **Long-term (3-5 days):** Complete design system implementation, accessibility compliance\n\n';
     
-    md += `## Next Steps\n\n`;
-    md += `1. Review and prioritize recommendations with stakeholders\n`;
-    md += `2. Create design system documentation\n`;
-    md += `3. Implement high-priority fixes\n`;
-    md += `4. Conduct user testing on improved flows\n`;
-    md += `5. Monitor performance and accessibility metrics\n`;
+    md += '## Next Steps\n\n';
+    md += '1. Review and prioritize recommendations with stakeholders\n';
+    md += '2. Create design system documentation\n';
+    md += '3. Implement high-priority fixes\n';
+    md += '4. Conduct user testing on improved flows\n';
+    md += '5. Monitor performance and accessibility metrics\n';
     
     return md;
   }
@@ -878,7 +878,7 @@ class PlaywrightDesignAnalyzer {
 const analyzer = new PlaywrightDesignAnalyzer();
 analyzer.analyze().then(results => {
   console.log('\n✅ Analysis complete!');
-  console.log(`\n📋 Top Recommendations:`);
+  console.log('\n📋 Top Recommendations:');
   
   results.recommendations.slice(0, 3).forEach((rec, i) => {
     console.log(`\n${i + 1}. [${rec.priority}] ${rec.title}`);

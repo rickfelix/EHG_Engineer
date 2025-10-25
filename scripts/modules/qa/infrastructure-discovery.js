@@ -192,7 +192,7 @@ function generateRecommendations(infra) {
       category: 'Authentication',
       message: `✅ Use existing authenticateUser() from ${infra.auth_helpers[0].path}`,
       anti_pattern: '❌ DO NOT write custom auth logic',
-      example: `import { authenticateUser } from '../fixtures/auth';`
+      example: 'import { authenticateUser } from \'../fixtures/auth\';'
     });
   } else {
     recommendations.push({

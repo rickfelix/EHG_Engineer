@@ -64,7 +64,7 @@ async function monitorCI(options = {}) {
       const conclusion = run.conclusion || 'pending';
       
       if (status !== lastStatus) {
-        console.log(`\n📊 CI Status Change:`);
+        console.log('\n📊 CI Status Change:');
         console.log(`   Workflow: ${run.name}`);
         console.log(`   Status: ${getStatusEmoji(status)} ${status}`);
         console.log(`   SHA: ${run.headSha.substring(0, 7)}`);
@@ -73,7 +73,7 @@ async function monitorCI(options = {}) {
 
       // Check if completed
       if (status === 'completed') {
-        console.log(`\n✨ CI Completed!`);
+        console.log('\n✨ CI Completed!');
         console.log(`   Result: ${getConclusionEmoji(conclusion)} ${conclusion}`);
         
         if (conclusion === 'success') {

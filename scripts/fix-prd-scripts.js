@@ -157,6 +157,7 @@ function fixFieldNames(content) {
   // Fix technical_architecture -> system_architecture
   fixed = fixed.replace(
     /technical_architecture:/g,
+  // FIX: Renamed from technical_architecture
     'system_architecture: // FIX: Renamed from technical_architecture'
   );
 

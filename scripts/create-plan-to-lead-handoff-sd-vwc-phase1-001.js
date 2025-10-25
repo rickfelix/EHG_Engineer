@@ -56,7 +56,7 @@ async function createPlanToLeadHandoff() {
 
     const handoffId = randomUUID();
 
-    const executiveSummary = `PLAN verification complete for SD-VWC-PHASE1-001. PRD aligns perfectly with implementation. All requirements met, test coverage exceptional (222%), CI/CD passing. Recommending SD completion.`;
+    const executiveSummary = 'PLAN verification complete for SD-VWC-PHASE1-001. PRD aligns perfectly with implementation. All requirements met, test coverage exceptional (222%), CI/CD passing. Recommending SD completion.';
 
     const deliverablesManifest = `**PRD Verification**:
 - ✅ PRD-VWC-PHASE1-001 validated and complete

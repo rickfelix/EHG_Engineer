@@ -157,7 +157,7 @@ async function testPRReviewsUI() {
   if (passedTests === totalTests) {
     console.log('\n🎉 All tests passed! PR Reviews dashboard is fully functional.');
   } else {
-    console.log(`\n⚠️ Some tests failed. Please review the results above.`);
+    console.log('\n⚠️ Some tests failed. Please review the results above.');
   }
 
   process.exit(passedTests === totalTests ? 0 : 1);

@@ -39,7 +39,7 @@ async function testInfrastructure() {
   try {
     const response = await fetch('http://localhost:3000/api/health');
     TEST_RESULTS.infrastructure.serverRunning = response.ok;
-    console.log(`✅ Server running on port 3000`);
+    console.log('✅ Server running on port 3000');
   } catch (error) {
     TEST_RESULTS.infrastructure.serverRunning = false;
     console.log(`❌ Server not accessible: ${error.message}`);

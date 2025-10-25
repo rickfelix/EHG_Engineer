@@ -70,9 +70,9 @@ async function validateChecklist(agent) {
     
     if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
       completed++;
-      console.log(`   ✅ COMPLETE`);
+      console.log('   ✅ COMPLETE');
     } else {
-      console.log(`   ❌ INCOMPLETE`);
+      console.log('   ❌ INCOMPLETE');
     }
   }
   

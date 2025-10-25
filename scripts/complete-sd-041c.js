@@ -66,10 +66,10 @@ async function completeSD() {
   console.log('\n📊 Final Stats:');
   console.log(`   Status: ${data[0].status}`);
   console.log(`   Completion Date: ${data[0].completion_date}`);
-  console.log(`   Total Time: 14.33 hours (vs 20 estimated)`);
-  console.log(`   Variance: -28% (under budget)`);
-  console.log(`   Acceptance Criteria: 30/30 PASSED (100%)`);
-  console.log(`   Quality Rating: A+`);
+  console.log('   Total Time: 14.33 hours (vs 20 estimated)');
+  console.log('   Variance: -28% (under budget)');
+  console.log('   Acceptance Criteria: 30/30 PASSED (100%)');
+  console.log('   Quality Rating: A+');
   console.log('\n🎉 LEO Protocol Execution Complete!');
   console.log('   LEAD → PLAN → EXEC → PLAN → LEAD ✅');
   console.log('\n📄 Retrospective: retrospectives/SD-041C-COMPLETE.md\n');

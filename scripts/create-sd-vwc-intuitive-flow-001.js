@@ -31,9 +31,9 @@ async function createStrategicDirective() {
     id: 'SD-VWC-INTUITIVE-FLOW-001',
     title: 'Venture Wizard User Experience Completion',
 
-    description: `Complete the "browse-select-create" user experience vision for the EHG Venture Wizard by delivering critical UX enhancements that transform the current 65% implementation into a 90% production-ready flow. This directive addresses the gap between functional implementation and intuitive user experience: while the browse-to-prefill pipeline works technically, users currently face modal interruptions (drawer-only intelligence), missing guidance (no tooltips), visual jarring (no dark mode/skeletons), and trust issues (hardcoded API keys). The completed wizard will provide a smooth, intentional flow where AI insights appear inline during the 5-step journey, disabled buttons explain themselves, loading states feel responsive, and the entire interface respects user accessibility preferences—achieving the vision where "AI gives me a head start, but I'm still in control."`,
+    description: 'Complete the "browse-select-create" user experience vision for the EHG Venture Wizard by delivering critical UX enhancements that transform the current 65% implementation into a 90% production-ready flow. This directive addresses the gap between functional implementation and intuitive user experience: while the browse-to-prefill pipeline works technically, users currently face modal interruptions (drawer-only intelligence), missing guidance (no tooltips), visual jarring (no dark mode/skeletons), and trust issues (hardcoded API keys). The completed wizard will provide a smooth, intentional flow where AI insights appear inline during the 5-step journey, disabled buttons explain themselves, loading states feel responsive, and the entire interface respects user accessibility preferences—achieving the vision where "AI gives me a head start, but I\'m still in control."',
 
-    rationale: `The current Browse Opportunities implementation (SD-VWC-OPPORTUNITY-BRIDGE-001) delivered 90% of core functionality but left critical UX gaps that impact user perception of completeness and trust. Audit findings show: (1) Security issue - hardcoded API keys exposed in client bundle, (2) Intelligence insights only available via drawer modal - breaking wizard flow, (3) No dark mode support - 0% implementation, (4) Partial accessibility - 40% WCAG AA compliance, (5) Missing guidance - disabled buttons don't explain why. These gaps prevent production launch and create friction in the user journey. Addressing these issues aligns with the locked user-facing vision of providing "a smooth, intentional flow" where AI assistance feels integrated, not interruptive.`,
+    rationale: 'The current Browse Opportunities implementation (SD-VWC-OPPORTUNITY-BRIDGE-001) delivered 90% of core functionality but left critical UX gaps that impact user perception of completeness and trust. Audit findings show: (1) Security issue - hardcoded API keys exposed in client bundle, (2) Intelligence insights only available via drawer modal - breaking wizard flow, (3) No dark mode support - 0% implementation, (4) Partial accessibility - 40% WCAG AA compliance, (5) Missing guidance - disabled buttons don\'t explain why. These gaps prevent production launch and create friction in the user journey. Addressing these issues aligns with the locked user-facing vision of providing "a smooth, intentional flow" where AI assistance feels integrated, not interruptive.',
 
     scope: `**IN SCOPE:**
 - P1: Security hardening (remove hardcoded Supabase keys), inline intelligence cards (embed STA/GCIA in Steps 2-3), disabled button tooltips, full dark mode implementation (dashboard + wizard)
@@ -57,7 +57,7 @@ async function createStrategicDirective() {
     target_application: 'EHG',
     current_phase: 'IDEATION',
 
-    strategic_intent: `Transform the Browse Opportunities feature from functional-but-rough (65% vision) into production-ready (90% vision) by addressing UX polish gaps identified in comprehensive audit. Achieve "smooth, intentional flow" user experience where AI intelligence is inline (not modal-based), security is trustworthy (no exposed keys), visual design is polished (dark mode + skeletons), and accessibility is comprehensive (WCAG 2.1 AA compliant).`,
+    strategic_intent: 'Transform the Browse Opportunities feature from functional-but-rough (65% vision) into production-ready (90% vision) by addressing UX polish gaps identified in comprehensive audit. Achieve "smooth, intentional flow" user experience where AI intelligence is inline (not modal-based), security is trustworthy (no exposed keys), visual design is polished (dark mode + skeletons), and accessibility is comprehensive (WCAG 2.1 AA compliant).',
 
     strategic_objectives: [
       '**Security**: Remove 100% of hardcoded API keys from client-side code',
@@ -266,9 +266,9 @@ async function createStrategicDirective() {
     console.log(`Status: ${data.status}`);
     console.log(`Target Application: ${data.target_application}`);
     console.log(`Current Phase: ${data.current_phase}`);
-    console.log(`Parent SD: SD-VWC-OPPORTUNITY-BRIDGE-001`);
-    console.log(`Estimated Effort: 24 hours (3 days)`);
-    console.log(`Vision Alignment: 65% → 90%`);
+    console.log('Parent SD: SD-VWC-OPPORTUNITY-BRIDGE-001');
+    console.log('Estimated Effort: 24 hours (3 days)');
+    console.log('Vision Alignment: 65% → 90%');
     console.log('='.repeat(70));
 
     console.log('\n📋 Next Steps (LEO Protocol will handle):');
@@ -280,7 +280,7 @@ async function createStrategicDirective() {
     return data;
 
   } catch (error) {
-    console.error(`\n❌ Error creating SD:`, error.message);
+    console.error('\n❌ Error creating SD:', error.message);
     if (error.details) console.error('Details:', error.details);
     if (error.hint) console.error('Hint:', error.hint);
     throw error;

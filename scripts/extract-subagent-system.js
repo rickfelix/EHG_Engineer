@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 import { createClient } from '@supabase/supabase-js';
 import { writeFileSync } from 'fs';
@@ -40,7 +40,7 @@ This document provides comprehensive details about all active sub-agents, their 
     content += `| ${sa.name} | ${sa.code} | ${sa.activation_type} | ${sa.priority} | \`${scriptPath}\` |\n`;
   });
 
-  content += `\n## Sub-Agent Details\n\n`;
+  content += '\n## Sub-Agent Details\n\n';
 
   // Add detailed sections for each sub-agent
   subAgents.forEach(sa => {
@@ -86,7 +86,7 @@ This document provides comprehensive details about all active sub-agents, their 
       content += `**Context File**: \`${sa.context_file}\`\n\n`;
     }
 
-    content += `---\n\n`;
+    content += '---\n\n';
   });
 
   content += `## Sub-Agent Activation Process

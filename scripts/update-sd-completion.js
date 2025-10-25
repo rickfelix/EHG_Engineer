@@ -64,17 +64,17 @@ async function updateSDCompletion() {
   // 2. Check allowed status values
   const allowedStatuses = ['draft', 'in_progress', 'active', 'pending_approval', 'completed', 'deferred', 'cancelled'];
 
-  console.log(`\n2. Checking status validity...`);
+  console.log('\n2. Checking status validity...');
   if (!allowedStatuses.includes(currentSD.status)) {
     console.log(`❌ Current status '${currentSD.status}' is NOT in allowed list!`);
     console.log(`   Allowed: ${allowedStatuses.join(', ')}`);
-    console.log(`\n   This is why the update fails - must fix status first.`);
+    console.log('\n   This is why the update fails - must fix status first.');
   } else {
     console.log(`✅ Current status '${currentSD.status}' is valid`);
   }
 
   // 3. Update to completed with 100% progress
-  console.log(`\n3. Updating SD to completed status with 100% progress...`);
+  console.log('\n3. Updating SD to completed status with 100% progress...');
 
   const updateData = {
     status: 'completed',
@@ -94,8 +94,8 @@ async function updateSDCompletion() {
     console.log('\nConstraint check values:');
     console.log(`  Allowed statuses: ${allowedStatuses.join(', ')}`);
     console.log(`  Trying to set: '${updateData.status}'`);
-    console.log(`\nDiagnostic: The error suggests the status constraint is different than expected.`);
-    console.log(`Check the database directly or review the most recent migration.`);
+    console.log('\nDiagnostic: The error suggests the status constraint is different than expected.');
+    console.log('Check the database directly or review the most recent migration.');
     process.exit(1);
   }
 

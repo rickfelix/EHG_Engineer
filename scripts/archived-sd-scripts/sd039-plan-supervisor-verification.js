@@ -256,13 +256,13 @@ async function executePlanSupervisorVerification() {
 
   const pendingStories = userStories.filter(story => !story.implemented);
   if (pendingStories.length > 0) {
-    console.log(`⚠️  Requirements Pending:`);
+    console.log('⚠️  Requirements Pending:');
     pendingStories.forEach(story => {
       console.log(`   • ${story.id}: ${story.title} (${story.priority})`);
     });
   }
 
-  console.log(`\n📋 Sub-Agent Reports:`);
+  console.log('\n📋 Sub-Agent Reports:');
   Object.entries(subAgentVerification).forEach(([agent, result]) => {
     const statusIcon = result.status === 'PASS' ? '✅' : result.status === 'CONDITIONAL' ? '⚠️' : '❌';
     console.log(`${statusIcon} ${agent}: ${result.status} (${result.confidence}%)`);
@@ -272,17 +272,17 @@ async function executePlanSupervisorVerification() {
   });
 
   if (criticalIssues.length > 0) {
-    console.log(`\n🚨 Critical Issues:`);
+    console.log('\n🚨 Critical Issues:');
     criticalIssues.forEach(issue => console.log(`   • ${issue}`));
   }
 
   if (warnings.length > 0) {
-    console.log(`\n⚠️  Warnings:`);
+    console.log('\n⚠️  Warnings:');
     warnings.forEach(warning => console.log(`   • ${warning}`));
   }
 
   if (recommendations.length > 0) {
-    console.log(`\n💡 Recommendations:`);
+    console.log('\n💡 Recommendations:');
     recommendations.forEach(rec => console.log(`   • ${rec}`));
   }
 
@@ -349,7 +349,7 @@ async function executePlanSupervisorVerification() {
 
 // Execute verification
 executePlanSupervisorVerification().then(result => {
-  console.log(`✅ PLAN Supervisor Verification Complete`);
+  console.log('✅ PLAN Supervisor Verification Complete');
   console.log(`Verification ID: ${result.verification_id}`);
   console.log(`Final Verdict: ${result.verdict}`);
   console.log(`Confidence Score: ${result.confidence_score.toFixed(0)}%`);

@@ -28,11 +28,11 @@ async function updatePRD() {
   console.log(`   SD uuid_id: ${sdUuid}`);
 
 const prdUpdate = {
-    executive_summary: `Comprehensive enhancement of EVA (Executive Virtual Assistant) capabilities, consolidating 12 related features to create an intelligent, multi-modal assistant system. Building on the foundation of SD-003A (voice capture and validation), this PRD extends EVA with advanced conversational AI, persistent context management, and comprehensive dashboard features.`,
+    executive_summary: 'Comprehensive enhancement of EVA (Executive Virtual Assistant) capabilities, consolidating 12 related features to create an intelligent, multi-modal assistant system. Building on the foundation of SD-003A (voice capture and validation), this PRD extends EVA with advanced conversational AI, persistent context management, and comprehensive dashboard features.',
 
-    business_context: `The EVA Assistant is critical for user productivity and decision-making support. Current implementation (SD-003A) provides basic voice capture and quality scoring. This consolidated enhancement adds sophisticated AI reasoning, multi-modal inputs, and intelligent assistance features requested across 12 backlog items.`,
+    business_context: 'The EVA Assistant is critical for user productivity and decision-making support. Current implementation (SD-003A) provides basic voice capture and quality scoring. This consolidated enhancement adds sophisticated AI reasoning, multi-modal inputs, and intelligent assistance features requested across 12 backlog items.',
 
-    technical_context: `Leverages OpenAI GPT-4 for advanced reasoning, Whisper API for voice transcription, and React/TypeScript for UI. Builds on existing EVA validation service with new conversation management, context persistence, and dashboard components.`,
+    technical_context: 'Leverages OpenAI GPT-4 for advanced reasoning, Whisper API for voice transcription, and React/TypeScript for UI. Builds on existing EVA validation service with new conversation management, context persistence, and dashboard components.',
 
     functional_requirements: [
       'F1: Advanced conversation engine with GPT-4 integration',

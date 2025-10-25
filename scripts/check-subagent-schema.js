@@ -36,7 +36,7 @@ async function checkSchema() {
 
     // Get a sample row
     console.log('\n📄 Sample sub-agent record:\n');
-    const sampleQuery = `SELECT * FROM leo_sub_agents WHERE code = 'DATABASE' OR name ILIKE '%database%' LIMIT 1;`;
+    const sampleQuery = 'SELECT * FROM leo_sub_agents WHERE code = \'DATABASE\' OR name ILIKE \'%database%\' LIMIT 1;';
     const sampleResult = await client.query(sampleQuery);
 
     if (sampleResult.rows.length > 0) {

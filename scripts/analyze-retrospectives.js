@@ -292,7 +292,7 @@ function analyzeRetrospectives() {
   writeFileSync(outputPath, JSON.stringify(analysis, null, 2));
 
   console.log('✅ Analysis Complete!\n');
-  console.log(`📊 Summary:`);
+  console.log('📊 Summary:');
   console.log(`   Total Retrospectives Analyzed: ${files.length}`);
   console.log(`   Total Trigger Failures: ${totalTriggerFailures}`);
   console.log(`   Total Quality Issues: ${totalQualityIssues}`);

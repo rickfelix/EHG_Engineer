@@ -211,7 +211,7 @@ class PlanToExecVerifier {
 
       if (prdError || !prds || prds.length === 0) {
         console.log(`   ❌ No PRD found with sd_uuid: ${sdUuid}`);
-        console.log(`   PRD Error:`, prdError);
+        console.log('   PRD Error:', prdError);
         return this.rejectHandoff(sdId, 'NO_PRD', 'No PRD found for Strategic Directive');
       }
       

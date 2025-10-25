@@ -72,7 +72,7 @@ async function testInsert() {
     }
 
     // Clean up test record
-    await client.query(`DELETE FROM retrospectives WHERE sd_id = 'TEST-JSONB-001'`);
+    await client.query('DELETE FROM retrospectives WHERE sd_id = \'TEST-JSONB-001\'');
     console.log('\n✅ Test record cleaned up');
 
   } catch (error) {

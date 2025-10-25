@@ -72,8 +72,8 @@ issues.push({
   line: 44,
   description: 'Back button in detail view uses state instead of router',
   cause: 'Using component state for view mode instead of React Router',
-  currentCode: `onClick={() => setViewMode('list')}`,
-  fix: `onClick={() => navigate('/strategic-directives')}`
+  currentCode: 'onClick={() => setViewMode(\'list\')}',
+  fix: 'onClick={() => navigate(\'/strategic-directives\')}'
 });
 
 // Issue 5: Direct URL Access

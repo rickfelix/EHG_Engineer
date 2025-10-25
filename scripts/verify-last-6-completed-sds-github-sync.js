@@ -239,7 +239,7 @@ async function verifySDsGitHubSync() {
       }
 
       if (commits.length === 0) {
-        console.log(`    ⚠️  No commits found on main branch`);
+        console.log('    ⚠️  No commits found on main branch');
         sdResult.repos[repoName] = { commits: [], status: 'no_commits' };
       } else {
         console.log(`    ✅ Found ${commits.length} commit(s) on main branch:`);

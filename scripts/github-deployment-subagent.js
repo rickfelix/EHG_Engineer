@@ -89,8 +89,8 @@ class GitHubDeploymentSubAgent {
       console.log('========================');
       console.log(`✅ ${this.sdId} deployed to production`);
       console.log(`🆔 Deployment ID: ${this.deploymentId}`);
-      console.log(`🌐 GitHub release created`);
-      console.log(`💾 Database updated with deployment metadata`);
+      console.log('🌐 GitHub release created');
+      console.log('💾 Database updated with deployment metadata');
       
       return true;
 
@@ -340,7 +340,7 @@ class GitHubDeploymentSubAgent {
 
         // Add recommendation to restore stash after deployment
         resolution.recommendations.push(
-          `After deployment, restore stashed changes with: git stash pop`
+          'After deployment, restore stashed changes with: git stash pop'
         );
       }
 
@@ -457,7 +457,7 @@ class GitHubDeploymentSubAgent {
       await execAsync(`git tag -a ${releaseTag} -m "Release: ${this.sdId}"`);
       
       console.log('  📤 Pushing to production...');
-      await execAsync(`git push origin main --tags`);
+      await execAsync('git push origin main --tags');
 
       // Create GitHub Release
       console.log('  🎁 Creating GitHub release...');

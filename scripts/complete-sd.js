@@ -21,8 +21,8 @@ const supabase = createClient(
 );
 
 async function completeSD(sdId) {
-  console.log(`\n🎯 COMPLETE STRATEGIC DIRECTIVE`);
-  console.log(`═`.repeat(60));
+  console.log('\n🎯 COMPLETE STRATEGIC DIRECTIVE');
+  console.log('═'.repeat(60));
 
   // Get SD details
   const { data: sd, error: sdError } = await supabase
@@ -42,7 +42,7 @@ async function completeSD(sdId) {
 
   // Step 1: Run required sub-agents
   console.log(`\n${'═'.repeat(60)}`);
-  console.log(`STEP 1: Running Required Sub-Agents`);
+  console.log('STEP 1: Running Required Sub-Agents');
   console.log(`${'═'.repeat(60)}`);
 
   try {
@@ -52,13 +52,13 @@ async function completeSD(sdId) {
     console.log(subagentOutput);
   } catch (error) {
     console.error(`\n❌ Sub-agents failed:\n${error.stdout || error.message}`);
-    console.log(`\n⚠️  Fix errors above before proceeding`);
+    console.log('\n⚠️  Fix errors above before proceeding');
     process.exit(1);
   }
 
   // Step 2: Run approval checklist
   console.log(`\n${'═'.repeat(60)}`);
-  console.log(`STEP 2: Validating Completion Requirements`);
+  console.log('STEP 2: Validating Completion Requirements');
   console.log(`${'═'.repeat(60)}`);
 
   try {
@@ -68,23 +68,23 @@ async function completeSD(sdId) {
     console.log(checklistOutput);
   } catch (error) {
     console.error(`\n❌ Validation failed:\n${error.stdout || error.message}`);
-    console.log(`\n⚠️  SD not ready for approval - fix issues above`);
+    console.log('\n⚠️  SD not ready for approval - fix issues above');
     process.exit(1);
   }
 
   // Step 3: Summary and next steps
   console.log(`\n${'═'.repeat(60)}`);
-  console.log(`✅ SD READY FOR COMPLETION`);
+  console.log('✅ SD READY FOR COMPLETION');
   console.log(`${'═'.repeat(60)}`);
-  console.log(`\n📋 Summary:`);
-  console.log(`   ✅ All required sub-agents executed`);
-  console.log(`   ✅ Retrospective generated`);
-  console.log(`   ✅ DevOps verification complete`);
-  console.log(`   ✅ All validation checks passed`);
-  console.log(`\n🎯 Next Steps:`);
-  console.log(`   1. Review the output above`);
-  console.log(`   2. Mark SD as "completed" in dashboard`);
-  console.log(`   3. Request LEAD approval`);
+  console.log('\n📋 Summary:');
+  console.log('   ✅ All required sub-agents executed');
+  console.log('   ✅ Retrospective generated');
+  console.log('   ✅ DevOps verification complete');
+  console.log('   ✅ All validation checks passed');
+  console.log('\n🎯 Next Steps:');
+  console.log('   1. Review the output above');
+  console.log('   2. Mark SD as "completed" in dashboard');
+  console.log('   3. Request LEAD approval');
   console.log(`\n${sd.sd_key} is ready for final approval! 🎉\n`);
 }
 

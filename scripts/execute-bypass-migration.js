@@ -37,18 +37,18 @@ async function executeSqlMigration() {
         const { data, error } = await supabase.rpc('exec_sql', { sql: stmt });
 
         if (error) {
-          console.error(`❌ Error:`, error.message);
+          console.error('❌ Error:', error.message);
           // Try direct query if RPC fails
           console.log('Trying direct query...');
           const { data: data2, error: error2 } = await supabase.from('_sql').select('*').eq('query', stmt);
           if (error2) {
-            console.error(`❌ Also failed:`, error2.message);
+            console.error('❌ Also failed:', error2.message);
           }
         } else {
-          console.log(`✅ Success`);
+          console.log('✅ Success');
         }
       } catch (err) {
-        console.error(`❌ Exception:`, err.message);
+        console.error('❌ Exception:', err.message);
       }
 
       console.log('');

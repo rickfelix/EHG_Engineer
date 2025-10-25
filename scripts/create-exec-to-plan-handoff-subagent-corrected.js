@@ -370,10 +370,10 @@ async function createHandoff() {
   if (updateError) {
     console.error('⚠️ Warning: Could not update SD progress:', updateError.message);
   } else {
-    console.log(`\n✅ SD-SUBAGENT-IMPROVE-001 updated to PLAN verification phase!`);
-    console.log(`   Status: in_progress`);
-    console.log(`   Phase: verification`);
-    console.log(`   Progress: 100%`);
+    console.log('\n✅ SD-SUBAGENT-IMPROVE-001 updated to PLAN verification phase!');
+    console.log('   Status: in_progress');
+    console.log('   Phase: verification');
+    console.log('   Progress: 100%');
   }
 
   console.log('\n📋 Handoff Summary:');

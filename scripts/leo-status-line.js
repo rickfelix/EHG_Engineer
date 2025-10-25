@@ -435,20 +435,20 @@ class LEOStatusLine {
     console.log(`   Phase: ${this.statusCache.phase || 'None'}`);
     
     if (this.statusCache.lastHandoff) {
-      console.log(`\n🤝 Last Handoff:`);
+      console.log('\n🤝 Last Handoff:');
       console.log(`   From: ${this.statusCache.lastHandoff.from}`);
       console.log(`   To: ${this.statusCache.lastHandoff.to}`);
       console.log(`   Time: ${this.statusCache.lastHandoff.time}`);
     }
     
     if (this.statusCache.visionQA) {
-      console.log(`\n👁️ Vision QA:`);
+      console.log('\n👁️ Vision QA:');
       console.log(`   App ID: ${this.statusCache.visionQA.appId}`);
       console.log(`   Active: ${this.statusCache.visionQA.active}`);
     }
     
     const statusLine = this.formatStatusLine();
-    console.log(`\n📝 Formatted Status Line:`);
+    console.log('\n📝 Formatted Status Line:');
     console.log(`   "${statusLine}"`);
     
     return statusLine;

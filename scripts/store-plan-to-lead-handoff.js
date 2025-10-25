@@ -281,15 +281,15 @@ async function main() {
   const sdId = 'SD-SUBAGENT-IMPROVE-001';
   const type = 'PLAN-to-LEAD';
 
-  console.log(`\n╔═══════════════════════════════════════════════════════════════╗`);
-  console.log(`║  Store PLAN-to-LEAD Handoff                                  ║`);
-  console.log(`╚═══════════════════════════════════════════════════════════════╝`);
+  console.log('\n╔═══════════════════════════════════════════════════════════════╗');
+  console.log('║  Store PLAN-to-LEAD Handoff                                  ║');
+  console.log('╚═══════════════════════════════════════════════════════════════╝');
   console.log(`   SD: ${sdId}`);
   console.log(`   Type: ${type}`);
 
   const handoffContent = generatePlanToLeadHandoff(sdId);
 
-  console.log(`\n🔌 Connecting to EHG_Engineer database...`);
+  console.log('\n🔌 Connecting to EHG_Engineer database...');
   const client = await createDatabaseClient('engineer', {
     verify: true,
     verbose: true
@@ -328,7 +328,7 @@ INSERT INTO sd_phase_handoffs (
       }
     };
 
-    console.log(`\n💾 Inserting handoff into database...`);
+    console.log('\n💾 Inserting handoff into database...');
 
     const result = await client.query(insertSQL, [
       sdId,                                  // $1
@@ -348,10 +348,10 @@ INSERT INTO sd_phase_handoffs (
 
     const handoffId = result.rows[0].id;
 
-    console.log(`   ✅ Handoff stored successfully!`);
+    console.log('   ✅ Handoff stored successfully!');
     console.log(`   ID: ${handoffId}`);
 
-    console.log(`\n🔍 Verifying handoff...`);
+    console.log('\n🔍 Verifying handoff...');
     const verification = await client.query(
       'SELECT id, sd_id, from_phase, to_phase, status, created_at FROM sd_phase_handoffs WHERE id = $1',
       [handoffId]
@@ -359,31 +359,31 @@ INSERT INTO sd_phase_handoffs (
 
     if (verification.rows.length > 0) {
       const record = verification.rows[0];
-      console.log(`   ✅ Verification successful`);
+      console.log('   ✅ Verification successful');
       console.log(`      SD: ${record.sd_id}`);
       console.log(`      Flow: ${record.from_phase} → ${record.to_phase}`);
       console.log(`      Status: ${record.status}`);
       console.log(`      Created: ${record.created_at}`);
     }
 
-    console.log(`\n╔═══════════════════════════════════════════════════════════════╗`);
-    console.log(`║  ✅ PLAN-TO-LEAD HANDOFF CREATED SUCCESSFULLY              ║`);
-    console.log(`╚═══════════════════════════════════════════════════════════════╝`);
+    console.log('\n╔═══════════════════════════════════════════════════════════════╗');
+    console.log('║  ✅ PLAN-TO-LEAD HANDOFF CREATED SUCCESSFULLY              ║');
+    console.log('╚═══════════════════════════════════════════════════════════════╝');
 
-    console.log(`\n📋 Next Steps:`);
-    console.log(`   1. LEAD agent review handoff`);
-    console.log(`   2. LEAD final approval decision`);
-    console.log(`   3. Trigger Continuous Improvement Coach (retrospective)`);
-    console.log(`   4. Mark SD-SUBAGENT-IMPROVE-001 as complete\n`);
+    console.log('\n📋 Next Steps:');
+    console.log('   1. LEAD agent review handoff');
+    console.log('   2. LEAD final approval decision');
+    console.log('   3. Trigger Continuous Improvement Coach (retrospective)');
+    console.log('   4. Mark SD-SUBAGENT-IMPROVE-001 as complete\n');
 
     process.exit(0);
 
   } catch (error) {
-    console.error(`\n❌ Failed to store handoff:`, error.message);
+    console.error('\n❌ Failed to store handoff:', error.message);
     throw error;
   } finally {
     await client.end();
-    console.log(`\n🔌 Database connection closed`);
+    console.log('\n🔌 Database connection closed');
   }
 }
 

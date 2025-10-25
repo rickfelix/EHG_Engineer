@@ -307,7 +307,7 @@ async function createRetroactiveHandoffs() {
          WHERE id = $1`,
         [handoffId]
       );
-      console.log(`   ✅ Accepted (retroactive)`);
+      console.log('   ✅ Accepted (retroactive)');
     }
 
     // Verify total handoffs
@@ -323,7 +323,7 @@ async function createRetroactiveHandoffs() {
     // Update SD progress
     console.log('\n📊 Updating SD progress...');
     const progressResult = await client.query(
-      `SELECT get_progress_breakdown($1) as breakdown`,
+      'SELECT get_progress_breakdown($1) as breakdown',
       ['SD-BOARD-VISUAL-BUILDER-003']
     );
 

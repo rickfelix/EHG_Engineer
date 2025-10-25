@@ -6,7 +6,7 @@
  * PLAN Agent - Technical Requirements with Test Verification
  */
 
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 import { createClient } from '@supabase/supabase-js';
 import { createPRDLink } from '../lib/sd-helpers.js';

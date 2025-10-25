@@ -311,15 +311,15 @@ Remember: You are Codex. Generate the changes, don't apply them.`;
         message: `Codex: Generated patch for ${functionName}`,
         patch: patch,
         components: [
-          { name: "code.js", type: "application", version: "1.0.0" }
+          { name: 'code.js', type: 'application', version: '1.0.0' }
         ],
         taskSpecific: true
       };
     } else {
       return {
-        message: "Claude: Applied Codex artifacts",
+        message: 'Claude: Applied Codex artifacts',
         applied: true,
-        files: ["src/code.js"],
+        files: ['src/code.js'],
         taskSpecific: true
       };
     }
@@ -350,16 +350,16 @@ Remember: You are Codex. Generate the changes, don't apply them.`;
 
     // 2. Create SBOM with task-specific components
     const sbom = {
-      bomFormat: "CycloneDX",
-      specVersion: "1.5",
+      bomFormat: 'CycloneDX',
+      specVersion: '1.5',
       serialNumber: `urn:uuid:${timestamp}`,
       version: 1,
       metadata: {
         timestamp: new Date().toISOString(),
         tools: [{
-          vendor: "EHG",
-          name: "Codex",
-          version: "1.0.0",
+          vendor: 'EHG',
+          name: 'Codex',
+          version: '1.0.0',
           realExecution: this.useRealExecution
         }],
         task: task
@@ -379,20 +379,20 @@ Remember: You are Codex. Generate the changes, don't apply them.`;
 
     // 3. Create attestation
     const attestation = {
-      _type: "https://in-toto.io/Statement/v1",
+      _type: 'https://in-toto.io/Statement/v1',
       subject: [{
         name: `artifact-${timestamp}.tar.gz`,
         digest: { sha256: this.calculateSHA256(JSON.stringify(artifacts)) }
       }],
-      predicateType: "https://slsa.dev/provenance/v0.2",
+      predicateType: 'https://slsa.dev/provenance/v0.2',
       predicate: {
         builder: {
-          id: "codex-lane",
+          id: 'codex-lane',
           realExecution: this.useRealExecution
         },
-        buildType: "https://ehg.example/codex/v1",
+        buildType: 'https://ehg.example/codex/v1',
         invocation: {
-          configSource: { uri: "git+https://github.com/repo.git", digest: {} },
+          configSource: { uri: 'git+https://github.com/repo.git', digest: {} },
           parameters: {
             task: task,
             timestamp: timestamp

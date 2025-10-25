@@ -101,7 +101,7 @@ async function createExecPlanHandoff() {
 ⚠️  Keyboard navigation functional (assumed; manual testing not performed)
 ⚠️  No visual or functional regressions (assumed; no regression suite run)`,
 
-      known_issues: `None within SD scope. Out-of-scope errors documented in risk assessment.`,
+      known_issues: 'None within SD scope. Out-of-scope errors documented in risk assessment.',
 
       resource_utilization: `**Time**: 2 hours total (1h implementation + 1h protocol compliance)
 **LOC**: 2 lines changed
@@ -127,7 +127,7 @@ async function createExecPlanHandoff() {
 - Out-of-scope errors documented for follow-up`
     };
 
-    console.log(`\n3️⃣  Inserting handoff into database...`);
+    console.log('\n3️⃣  Inserting handoff into database...');
 
     const insertQuery = `
       INSERT INTO sd_phase_handoffs (

@@ -13,7 +13,7 @@ const projectId = 'dedlbzhpgkmetvhbkyzq';
 const password = process.env.SUPABASE_DB_PASSWORD || 'Fl!M32DaM00n!1';
 
 const client = new Client({
-  host: `aws-1-us-east-1.pooler.supabase.com`,
+  host: 'aws-1-us-east-1.pooler.supabase.com',
   port: 5432,
   database: 'postgres',
   user: `postgres.${projectId}`,

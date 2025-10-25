@@ -57,16 +57,16 @@ async function queryVWCSDs() {
     console.log(`   Progress: ${sd.progress_percentage}%`);
     console.log(`   Parent SD: ${sd.parent_sd_id || 'None'}`);
     console.log(`   Created: ${sd.created_at}`);
-    console.log(`\n   Description:`);
+    console.log('\n   Description:');
     console.log(`   ${sd.description}`);
 
     if (sd.objective) {
-      console.log(`\n   Objective:`);
+      console.log('\n   Objective:');
       console.log(`   ${sd.objective}`);
     }
 
     if (sd.metadata) {
-      console.log(`\n   Metadata:`);
+      console.log('\n   Metadata:');
       console.log(`   ${JSON.stringify(sd.metadata, null, 2)}`);
     }
 

@@ -31,11 +31,11 @@ async function insertKnowledgeRetrievalSD() {
       status: 'draft',
       category: 'LEO Protocol Infrastructure',
       priority: 'high',
-      description: `Implement automated knowledge retrieval and PRD enrichment pipeline to reduce planning cycle time by 40-50% and improve PRD completeness from 70% to 85%. System combines local retrospective search with Context7 MCP integration for live documentation, creating a self-reinforcing institutional knowledge flywheel.`,
+      description: 'Implement automated knowledge retrieval and PRD enrichment pipeline to reduce planning cycle time by 40-50% and improve PRD completeness from 70% to 85%. System combines local retrospective search with Context7 MCP integration for live documentation, creating a self-reinforcing institutional knowledge flywheel.',
 
-      strategic_intent: `Transform LEO Protocol planning phase from manual research-heavy process to automated, intelligence-augmented workflow. Target outcomes: 578% ROI in 90 days, 1.4 hours/day time savings, 50% reduction in EXEC clarification questions, and establishment of compounding knowledge reuse across all future ventures.`,
+      strategic_intent: 'Transform LEO Protocol planning phase from manual research-heavy process to automated, intelligence-augmented workflow. Target outcomes: 578% ROI in 90 days, 1.4 hours/day time savings, 50% reduction in EXEC clarification questions, and establishment of compounding knowledge reuse across all future ventures.',
 
-      rationale: `Current PLAN phase spends 30-45 minutes per PRD on manual research, resulting in incomplete context (70% completeness), high EXEC clarification rates (5-7 per SD), and lost institutional knowledge from past projects. Analysis shows 40% of SDs suffer from missing implementation context, 30% reinvent existing solutions, and 20% specify deprecated technologies. Automation addresses all three failure modes while building organizational memory that compounds over time.`,
+      rationale: 'Current PLAN phase spends 30-45 minutes per PRD on manual research, resulting in incomplete context (70% completeness), high EXEC clarification rates (5-7 per SD), and lost institutional knowledge from past projects. Analysis shows 40% of SDs suffer from missing implementation context, 30% reinvent existing solutions, and 20% specify deprecated technologies. Automation addresses all three failure modes while building organizational memory that compounds over time.',
 
       scope: `1. Context7 MCP integration for live library documentation
 2. Retrospective semantic search engine for institutional knowledge

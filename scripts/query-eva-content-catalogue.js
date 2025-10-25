@@ -84,7 +84,7 @@ async function queryCatalogue(options = {}) {
         .limit(3);
 
       if (versions && versions.length > 0) {
-        console.log(`   Recent versions:`);
+        console.log('   Recent versions:');
         for (const v of versions) {
           console.log(`     v${v.version_number}: ${v.change_description || 'No description'} (${new Date(v.created_at).toLocaleString()})`);
         }

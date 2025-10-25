@@ -4,7 +4,7 @@
  * LEAD Agent final completion script - Updates leo_progress_v2 table
  */
 
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 import { createClient } from '@supabase/supabase-js';
 
@@ -35,37 +35,37 @@ async function completeSD2025001LeadApproval() {
         plan_verification_progress: 100,   // PLAN verification complete
         lead_approval_progress: 100,       // LEAD approval NOW COMPLETE
         checklists: {
-          "lead": [
-            {"text": "Define strategic objectives", "checked": true},
-            {"text": "Validate business case", "checked": true}
+          'lead': [
+            {'text': 'Define strategic objectives', 'checked': true},
+            {'text': 'Validate business case', 'checked': true}
           ],
-          "plan": [
-            {"text": "Create technical design", "checked": true},
-            {"text": "Activate required sub-agents", "checked": true},
-            {"text": "Performance validation", "checked": true},
-            {"text": "Database validation", "checked": true},
-            {"text": "Testing validation", "checked": true},
-            {"text": "Design validation", "checked": true}
+          'plan': [
+            {'text': 'Create technical design', 'checked': true},
+            {'text': 'Activate required sub-agents', 'checked': true},
+            {'text': 'Performance validation', 'checked': true},
+            {'text': 'Database validation', 'checked': true},
+            {'text': 'Testing validation', 'checked': true},
+            {'text': 'Design validation', 'checked': true}
           ],
-          "exec": [
-            {"text": "Implement voice interface", "checked": true},
-            {"text": "WCAG 2.1 accessibility", "checked": true},
-            {"text": "Mobile optimization", "checked": true},
-            {"text": "Error handling", "checked": true},
-            {"text": "Tutorial system", "checked": true}
+          'exec': [
+            {'text': 'Implement voice interface', 'checked': true},
+            {'text': 'WCAG 2.1 accessibility', 'checked': true},
+            {'text': 'Mobile optimization', 'checked': true},
+            {'text': 'Error handling', 'checked': true},
+            {'text': 'Tutorial system', 'checked': true}
           ],
-          "verification": [
-            {"text": "Performance sub-agent approval", "checked": true},
-            {"text": "Database sub-agent approval", "checked": true},
-            {"text": "Testing sub-agent approval", "checked": true},
-            {"text": "Design sub-agent approval", "checked": true},
-            {"text": "Overall score 8.6/10", "checked": true}
+          'verification': [
+            {'text': 'Performance sub-agent approval', 'checked': true},
+            {'text': 'Database sub-agent approval', 'checked': true},
+            {'text': 'Testing sub-agent approval', 'checked': true},
+            {'text': 'Design sub-agent approval', 'checked': true},
+            {'text': 'Overall score 8.6/10', 'checked': true}
           ],
-          "approval": [
-            {"text": "Review PLAN verification", "checked": true},
-            {"text": "Assess business value (1,118% ROI)", "checked": true},
-            {"text": "Validate risk mitigation", "checked": true},
-            {"text": "Grant deployment authorization", "checked": true}
+          'approval': [
+            {'text': 'Review PLAN verification', 'checked': true},
+            {'text': 'Assess business value (1,118% ROI)', 'checked': true},
+            {'text': 'Validate risk mitigation', 'checked': true},
+            {'text': 'Grant deployment authorization', 'checked': true}
           ]
         },
         updated_by: 'LEAD_AGENT'

@@ -4,7 +4,7 @@
  * Since tables don't exist, we'll create simplified version first
  */
 
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 import { createClient } from '@supabase/supabase-js';
 
@@ -39,7 +39,7 @@ async function testAndCreateTables() {
       
       if (error) {
         console.log(`❌ Table '${table}' does not exist: ${error.message}`);
-        console.log(`   You need to create this table in Supabase Dashboard`);
+        console.log('   You need to create this table in Supabase Dashboard');
       } else {
         console.log(`✅ Table '${table}' exists`);
       }

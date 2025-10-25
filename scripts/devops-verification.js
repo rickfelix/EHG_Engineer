@@ -21,8 +21,8 @@ const supabase = createClient(
 );
 
 async function verifyDevOps(sdId) {
-  console.log(`\n🚀 DEVOPS PLATFORM ARCHITECT`);
-  console.log(`═`.repeat(60));
+  console.log('\n🚀 DEVOPS PLATFORM ARCHITECT');
+  console.log('═'.repeat(60));
   console.log(`Verifying CI/CD for SD: ${sdId}`);
 
   // Get SD details
@@ -47,7 +47,7 @@ async function verifyDevOps(sdId) {
 
   // Check GitHub Actions status (if in EHG repo)
   try {
-    console.log(`\n📊 Checking GitHub Actions...`);
+    console.log('\n📊 Checking GitHub Actions...');
     const { stdout } = await execAsync('cd /mnt/c/_EHG/ehg && gh run list --limit 5 --json conclusion,status,name,createdAt');
     const runs = JSON.parse(stdout);
 
@@ -67,7 +67,7 @@ async function verifyDevOps(sdId) {
 
   // Check git status
   try {
-    console.log(`\n📝 Checking Git status...`);
+    console.log('\n📝 Checking Git status...');
     const { stdout: gitLog } = await execAsync('cd /mnt/c/_EHG/ehg && git log --oneline -1');
     const { stdout: gitStatus } = await execAsync('cd /mnt/c/_EHG/ehg && git status --porcelain');
 

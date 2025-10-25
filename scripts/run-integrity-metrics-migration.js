@@ -38,7 +38,7 @@ async function runMigration() {
       .select('id')
       .limit(1);
 
-    if (testError && testError.message.includes("Could not find the table")) {
+    if (testError && testError.message.includes('Could not find the table')) {
       console.log('⚠️  Table does not exist. Attempting to create...');
 
       // Try using RPC to execute SQL (if the function exists)

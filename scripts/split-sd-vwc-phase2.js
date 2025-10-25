@@ -221,7 +221,7 @@ async function main() {
     // Step 4: Update SD-VWC-PHASE2-001 to cancelled (not rejected - that's not a valid status)
     console.log('\n📋 Step 4: Updating SD-VWC-PHASE2-001 to cancelled status...');
 
-    const cancellationReason = `LEAD Strategic Validation Decision (2025-10-20): This SD bundled 3 unrelated features (PresetSelector, Error Messages, Accessibility) under misleading "Quick Wins" label. Split into 3 independent SDs for better risk isolation and true incremental delivery: SD-VWC-PRESETS-001, SD-VWC-ERRORS-001, SD-VWC-A11Y-001.`;
+    const cancellationReason = 'LEAD Strategic Validation Decision (2025-10-20): This SD bundled 3 unrelated features (PresetSelector, Error Messages, Accessibility) under misleading "Quick Wins" label. Split into 3 independent SDs for better risk isolation and true incremental delivery: SD-VWC-PRESETS-001, SD-VWC-ERRORS-001, SD-VWC-A11Y-001.';
 
     const updateResult = await client.query(`
       UPDATE strategic_directives_v2

@@ -30,15 +30,15 @@ async function markSD046Completed() {
         status: 'completed',
         metadata: {
           ...{
-            "item_count": 2,
-            "page_title": "Stage 15 - Pricing Strategy",
-            "wsjf_score": 40.7,
-            "import_date": "2025-09-11T00:03:52.903Z",
-            "import_run_id": "1f1d72c6-c7b8-406c-9e02-e9e76056133c",
-            "import_source": "ehg_backlog_excel",
-            "import_checksum": "e1304f0400be2e2ccbe079e08ff97bb47ee6529b9904de2f0c5a80ff68593c16",
-            "execution_order_updated_at": "2025-09-23T21:03:40.233Z",
-            "execution_order_updated_by": "WSJF Calculator"
+            'item_count': 2,
+            'page_title': 'Stage 15 - Pricing Strategy',
+            'wsjf_score': 40.7,
+            'import_date': '2025-09-11T00:03:52.903Z',
+            'import_run_id': '1f1d72c6-c7b8-406c-9e02-e9e76056133c',
+            'import_source': 'ehg_backlog_excel',
+            'import_checksum': 'e1304f0400be2e2ccbe079e08ff97bb47ee6529b9904de2f0c5a80ff68593c16',
+            'execution_order_updated_at': '2025-09-23T21:03:40.233Z',
+            'execution_order_updated_by': 'WSJF Calculator'
           },
           completion_date: new Date().toISOString(),
           completion_agent: 'LEAD',

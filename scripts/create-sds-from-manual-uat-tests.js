@@ -116,8 +116,8 @@ async function createSDsFromManualUATTests() {
     }
 
     console.log(chalk.cyan.bold('\n🎉 Batch conversion complete!\n'));
-    console.log(chalk.white(`📍 View created SDs at: http://localhost:3000/dashboard`));
-    console.log(chalk.white(`📊 View UAT tests at: http://localhost:3000/uat\n`));
+    console.log(chalk.white('📍 View created SDs at: http://localhost:3000/dashboard'));
+    console.log(chalk.white('📊 View UAT tests at: http://localhost:3000/uat\n'));
 
   } catch (error) {
     console.error(chalk.red.bold('\n❌ Batch conversion failed:'), error.message);

@@ -15,7 +15,7 @@ async function testDirectAnalysis() {
     apiKey: process.env.OPENAI_API_KEY
   });
   
-  const prompt = "Fix the dark mode toggle in the dashboard that shows dark but displays light";
+  const prompt = 'Fix the dark mode toggle in the dashboard that shows dark but displays light';
   
   const systemPrompt = `You are an AI assistant that analyzes user prompts and selects relevant sub-agents.
 Available sub-agents:
@@ -105,7 +105,7 @@ async function testSimpleAnalysis() {
     apiKey: process.env.OPENAI_API_KEY
   });
   
-  const prompt = "Fix the dark mode toggle in the dashboard that shows dark but displays light";
+  const prompt = 'Fix the dark mode toggle in the dashboard that shows dark but displays light';
   
   try {
     const response = await openai.chat.completions.create({
@@ -132,7 +132,7 @@ Reply with a JSON array of agent codes and confidence scores.`
 function testRuleBasedAnalysis() {
   console.log('\n🧪 Testing Rule-Based Analysis...\n');
   
-  const prompt = "Fix the dark mode toggle in the dashboard that shows dark but displays light";
+  const prompt = 'Fix the dark mode toggle in the dashboard that shows dark but displays light';
   const promptLower = prompt.toLowerCase();
   
   const rules = {

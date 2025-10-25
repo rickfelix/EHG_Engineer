@@ -49,7 +49,7 @@ const newSD = {
 - Venture creation/editing (exists elsewhere)
 - Portfolio-level timeline (future enhancement)`,
 
-  strategic_intent: `Provide executive visibility into venture progress at a glance. Enable data-driven decisions about resource allocation by identifying which ventures are progressing vs. stuck. Reduce manual reporting overhead by 60% through automated milestone tracking.`,
+  strategic_intent: 'Provide executive visibility into venture progress at a glance. Enable data-driven decisions about resource allocation by identifying which ventures are progressing vs. stuck. Reduce manual reporting overhead by 60% through automated milestone tracking.',
 
   rationale: `**Leverages Existing Infrastructure**:
 - gantt-task-react library already installed (used in StrategicInitiativeTracking)

@@ -98,11 +98,11 @@ async function applyPolicies() {
       try {
         console.log(chalk.gray(`   ${i + 1}/${statements.length}: ${preview}`));
         await client.query(stmt);
-        console.log(chalk.green(`      ✓ Success`));
+        console.log(chalk.green('      ✓ Success'));
       } catch (error) {
         // Check if error is benign (e.g., "policy does not exist")
         if (error.message.includes('does not exist') && stmt.includes('DROP POLICY')) {
-          console.log(chalk.yellow(`      ⚠ Policy doesn't exist (skipping)`));
+          console.log(chalk.yellow('      ⚠ Policy doesn\'t exist (skipping)'));
         } else {
           throw new Error(`Statement ${i + 1} failed: ${error.message}\nSQL: ${stmt}`);
         }

@@ -48,7 +48,7 @@ async function applyMigration(migrationName, sqlFilePath) {
     try {
       const result = await client.query(sql);
 
-      console.log(`✅ Migration applied successfully`);
+      console.log('✅ Migration applied successfully');
 
       // Show any notices from the migration (verification output)
       if (result && result.rows) {
@@ -62,14 +62,14 @@ async function applyMigration(migrationName, sqlFilePath) {
   } catch (error) {
     console.error(`❌ Migration failed: ${migrationName}`);
     console.error(`Error: ${error.message}`);
-    console.error(`\nFull error:`, error);
+    console.error('\nFull error:', error);
     return { success: false, migrationName, error: error.message };
   }
 }
 
 async function verifyMigration1() {
   console.log(`\n${'='.repeat(80)}`);
-  console.log(`Verifying Migration 1: Schema Validation Functions`);
+  console.log('Verifying Migration 1: Schema Validation Functions');
   console.log(`${'='.repeat(80)}\n`);
 
   const client = await pool.connect();
@@ -90,7 +90,7 @@ async function verifyMigration1() {
     });
 
     // Test 2: Call get_table_schema
-    console.log(`\nTesting get_table_schema('strategic_directives_v2'):`);
+    console.log('\nTesting get_table_schema(\'strategic_directives_v2\'):');
     const schemaResult = await client.query(`
       SELECT * FROM get_table_schema('strategic_directives_v2') LIMIT 5;
     `);
@@ -100,23 +100,23 @@ async function verifyMigration1() {
     });
 
     // Test 3: Call validate_uuid_format with valid UUID
-    console.log(`\nTesting validate_uuid_format with valid UUID:`);
+    console.log('\nTesting validate_uuid_format with valid UUID:');
     const validUuidResult = await client.query(`
       SELECT validate_uuid_format('550e8400-e29b-41d4-a716-446655440000') as is_valid;
     `);
     console.log(`  Result: ${validUuidResult.rows[0].is_valid} (expected: true)`);
 
     // Test 4: Call validate_uuid_format with invalid UUID
-    console.log(`\nTesting validate_uuid_format with invalid string:`);
+    console.log('\nTesting validate_uuid_format with invalid string:');
     const invalidUuidResult = await client.query(`
       SELECT validate_uuid_format('not-a-uuid-12345') as is_valid;
     `);
     console.log(`  Result: ${invalidUuidResult.rows[0].is_valid} (expected: false)`);
 
-    console.log(`\n✅ Migration 1 verification PASSED`);
+    console.log('\n✅ Migration 1 verification PASSED');
     return true;
   } catch (error) {
-    console.error(`❌ Migration 1 verification FAILED:`, error.message);
+    console.error('❌ Migration 1 verification FAILED:', error.message);
     return false;
   } finally {
     client.release();
@@ -125,7 +125,7 @@ async function verifyMigration1() {
 
 async function verifyMigration2() {
   console.log(`\n${'='.repeat(80)}`);
-  console.log(`Verifying Migration 2: Quality Score Constraint`);
+  console.log('Verifying Migration 2: Quality Score Constraint');
   console.log(`${'='.repeat(80)}\n`);
 
   const client = await pool.connect();
@@ -170,7 +170,7 @@ async function verifyMigration2() {
 
     const dataResult = await client.query(dataQuery);
     const stats = dataResult.rows[0];
-    console.log(`\nData validation:`);
+    console.log('\nData validation:');
     console.log(`  Total retrospectives: ${stats.total_count}`);
     console.log(`  Min quality_score: ${stats.min_score}`);
     console.log(`  Max quality_score: ${stats.max_score}`);
@@ -178,7 +178,7 @@ async function verifyMigration2() {
     console.log(`  Records with NULL: ${stats.null_count}`);
 
     // Test 4: Try to insert invalid quality_score (should fail)
-    console.log(`\nTesting constraint enforcement (should fail):`);
+    console.log('\nTesting constraint enforcement (should fail):');
     try {
       await client.query(`
         INSERT INTO retrospectives (
@@ -191,20 +191,20 @@ async function verifyMigration2() {
           0, 'DRAFT'
         );
       `);
-      console.log(`  ❌ FAILED: quality_score = 0 was allowed (constraint not working)`);
+      console.log('  ❌ FAILED: quality_score = 0 was allowed (constraint not working)');
       return false;
     } catch (error) {
       if (error.message.includes('quality_score') || error.message.includes('constraint') || error.message.includes('check')) {
-        console.log(`  ✅ PASSED: quality_score = 0 correctly rejected`);
+        console.log('  ✅ PASSED: quality_score = 0 correctly rejected');
       } else {
         console.log(`  ⚠️  UNKNOWN: Unexpected error: ${error.message}`);
       }
     }
 
-    console.log(`\n✅ Migration 2 verification PASSED`);
+    console.log('\n✅ Migration 2 verification PASSED');
     return true;
   } catch (error) {
-    console.error(`❌ Migration 2 verification FAILED:`, error.message);
+    console.error('❌ Migration 2 verification FAILED:', error.message);
     return false;
   } finally {
     client.release();
@@ -213,7 +213,7 @@ async function verifyMigration2() {
 
 async function main() {
   console.log(`\n${'='.repeat(80)}`);
-  console.log(`SD-KNOWLEDGE-001 Prevention Infrastructure - Migration Application`);
+  console.log('SD-KNOWLEDGE-001 Prevention Infrastructure - Migration Application');
   console.log(`${'='.repeat(80)}\n`);
 
   const results = [];
@@ -228,7 +228,7 @@ async function main() {
 
     // Test database connection
     const client = await pool.connect();
-    console.log(`✅ Database connection successful`);
+    console.log('✅ Database connection successful');
     client.release();
 
     // Migration 1: Schema Validation Functions
@@ -251,7 +251,7 @@ async function main() {
 
     // Final summary
     console.log(`\n${'='.repeat(80)}`);
-    console.log(`Migration Summary`);
+    console.log('Migration Summary');
     console.log(`${'='.repeat(80)}\n`);
 
     const successCount = results.filter(r => r.success).length;
@@ -270,18 +270,18 @@ async function main() {
     console.log(`Failed: ${failCount}`);
 
     if (failCount === 0) {
-      console.log(`\n✅ ALL MIGRATIONS APPLIED SUCCESSFULLY`);
-      console.log(`\nSD-KNOWLEDGE-001 Prevention Infrastructure is now active:`);
-      console.log(`  1. Schema validation functions available for pre-insert validation`);
-      console.log(`  2. Quality score constraints enforced at database level`);
-      console.log(`  3. Triggers active to prevent invalid data`);
+      console.log('\n✅ ALL MIGRATIONS APPLIED SUCCESSFULLY');
+      console.log('\nSD-KNOWLEDGE-001 Prevention Infrastructure is now active:');
+      console.log('  1. Schema validation functions available for pre-insert validation');
+      console.log('  2. Quality score constraints enforced at database level');
+      console.log('  3. Triggers active to prevent invalid data');
     } else {
-      console.log(`\n❌ SOME MIGRATIONS FAILED - Review errors above`);
+      console.log('\n❌ SOME MIGRATIONS FAILED - Review errors above');
       process.exit(1);
     }
 
   } catch (error) {
-    console.error(`\n❌ Fatal error:`, error);
+    console.error('\n❌ Fatal error:', error);
     process.exit(1);
   } finally {
     await pool.end();

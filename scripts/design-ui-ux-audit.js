@@ -305,11 +305,11 @@ class DesignAudit {
     this.log(`UI Score: ${audit.ui_score} | UX Score: ${audit.ux_score}`, 'blue');
 
     if (audit.backend_detected) {
-      this.log(`⚠️  Backend feature detected`, 'yellow');
+      this.log('⚠️  Backend feature detected', 'yellow');
     }
 
     if (audit.issues.length > 0) {
-      this.log(`\n❌ Issues Found:`, 'red');
+      this.log('\n❌ Issues Found:', 'red');
       audit.issues.forEach(issue => {
         const color = issue.severity === 'CRITICAL' ? 'red' : issue.severity === 'ERROR' ? 'yellow' : 'blue';
         this.log(`  [${issue.severity}] ${issue.message}`, color);
@@ -317,7 +317,7 @@ class DesignAudit {
     }
 
     // UI Checklist Status
-    this.log(`\n✅ UI Checklist:`, 'green');
+    this.log('\n✅ UI Checklist:', 'green');
     Object.entries(audit.ui_checklist).forEach(([key, value]) => {
       const icon = value.present ? '✓' : '✗';
       const color = value.present ? 'green' : 'red';
@@ -325,7 +325,7 @@ class DesignAudit {
     });
 
     // UX Checklist Status
-    this.log(`\n✅ UX Checklist:`, 'green');
+    this.log('\n✅ UX Checklist:', 'green');
     Object.entries(audit.ux_checklist).forEach(([key, value]) => {
       const icon = value.present ? '✓' : '✗';
       const color = value.present ? 'green' : 'red';

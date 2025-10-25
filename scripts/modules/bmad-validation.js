@@ -384,7 +384,7 @@ export async function validateRiskAssessment(sd_id, supabase) {
       };
     } else {
       const risk = riskAssessments[0];
-      console.log(`   ✅ Risk assessment found`);
+      console.log('   ✅ Risk assessment found');
       console.log(`      Overall Risk Score: ${risk.overall_risk_score}/10`);
       console.log(`      Risk Level: ${risk.risk_level}`);
       console.log(`      Verdict: ${risk.verdict}`);

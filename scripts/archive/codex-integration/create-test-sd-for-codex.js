@@ -117,7 +117,7 @@ async function createTestSD() {
     console.log(chalk.cyan('═══════════════════════════════════════════════════════'));
 
     console.log(chalk.green('\nNext Step (PLAN Agent):'));
-    console.log(chalk.white(`  Create PRD from this SD`));
+    console.log(chalk.white('  Create PRD from this SD'));
 
     return data;
 

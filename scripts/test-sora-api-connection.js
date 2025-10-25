@@ -44,7 +44,7 @@ const SORA_API_ENDPOINT = process.env.SORA_API_ENDPOINT ||
 const SORA_API_KEY = process.env.SORA_API_KEY ||
                      process.env.AZURE_OPENAI_API_KEY;
 
-const TEST_PROMPT = "A serene sunset over mountains, cinematic style, peaceful atmosphere";
+const TEST_PROMPT = 'A serene sunset over mountains, cinematic style, peaceful atmosphere';
 const TEST_DURATION = 15; // seconds
 const POLL_INTERVAL_MS = 10000; // 10 seconds
 const MAX_WAIT_TIME_MS = 600000; // 10 minutes

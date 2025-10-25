@@ -62,7 +62,7 @@ async function finalVerification() {
       const id = result.rows[0].id;
       const score = result.rows[0].quality_score;
 
-      await client.query(`DELETE FROM retrospectives WHERE id = $1`, [id]);
+      await client.query('DELETE FROM retrospectives WHERE id = $1', [id]);
 
       if (score >= 70) {
         console.log(`   ✅ PASSED: Quality score = ${score}/100 (meets threshold)\n`);
@@ -96,11 +96,11 @@ async function finalVerification() {
       ]);
 
       // If we get here, it was accepted (BAD)
-      await client.query(`DELETE FROM retrospectives WHERE id = $1`, [result.rows[0].id]);
+      await client.query('DELETE FROM retrospectives WHERE id = $1', [result.rows[0].id]);
       console.log(`   ❌ FAILED: Low-quality content was accepted (score: ${result.rows[0].quality_score})\n`);
     } catch (err) {
       if (err.message.includes('retrospectives_quality_score_check')) {
-        console.log(`   ✅ PASSED: Low-quality content correctly rejected\n`);
+        console.log('   ✅ PASSED: Low-quality content correctly rejected\n');
         passedTests++;
       } else {
         console.log(`   ❌ FAILED: Wrong error: ${err.message}\n`);
@@ -144,7 +144,7 @@ async function finalVerification() {
       const id = result.rows[0].id;
       const score = result.rows[0].quality_score;
 
-      await client.query(`DELETE FROM retrospectives WHERE id = $1`, [id]);
+      await client.query('DELETE FROM retrospectives WHERE id = $1', [id]);
 
       if (score >= 70 && score < 90) {
         console.log(`   ✅ PASSED: Quality score = ${score}/100 (meets threshold with room for improvement)\n`);

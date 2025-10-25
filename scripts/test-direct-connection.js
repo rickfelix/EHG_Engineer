@@ -89,8 +89,8 @@ async function testConnection() {
       console.log(`dbHost: '${config.host}'`);
       console.log(`dbPort: ${config.port}`);
       console.log(`dbUser: '${config.user}'`);
-      console.log(`dbPassword: process.env.SUPABASE_DB_PASSWORD`);
-      console.log(`dbName: 'postgres'\n`);
+      console.log('dbPassword: process.env.SUPABASE_DB_PASSWORD');
+      console.log('dbName: \'postgres\'\n');
       
       return config;
       

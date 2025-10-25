@@ -128,7 +128,7 @@ async function extractPatternsFromImprovements(retro, sdId, sdKey) {
 
     } else {
       // No similar pattern - create new one
-      console.log(`     ✨ Creating new pattern...`);
+      console.log('     ✨ Creating new pattern...');
 
       const newPattern = await kb.createPattern({
         issue_summary: improvement,
@@ -198,8 +198,8 @@ async function extractSuccessPatternsFromAchievements(retro, sdId) {
  * Main extraction function
  */
 async function extractPatternsFromRetrospective(retroId) {
-  console.log(`\n📚 PATTERN EXTRACTION FROM RETROSPECTIVE`);
-  console.log(`═`.repeat(60));
+  console.log('\n📚 PATTERN EXTRACTION FROM RETROSPECTIVE');
+  console.log('═'.repeat(60));
   console.log(`Retrospective ID: ${retroId}\n`);
 
   // Get retrospective details
@@ -228,7 +228,7 @@ async function extractPatternsFromRetrospective(retroId) {
   console.log(`SD Key: ${sdKey}`);
 
   // Extract patterns from improvements
-  console.log(`\n📊 Extracting patterns from improvement items...`);
+  console.log('\n📊 Extracting patterns from improvement items...');
   const improvementPatterns = await extractPatternsFromImprovements(
     retro,
     retro.sd_id,
@@ -236,7 +236,7 @@ async function extractPatternsFromRetrospective(retroId) {
   );
 
   // Extract success patterns
-  console.log(`\n🌟 Extracting success patterns...`);
+  console.log('\n🌟 Extracting success patterns...');
   const successPatterns = await extractSuccessPatternsFromAchievements(
     retro,
     retro.sd_id
@@ -247,7 +247,7 @@ async function extractPatternsFromRetrospective(retroId) {
   const updated = improvementPatterns.filter(p => p.action === 'updated').length;
   const preventions = successPatterns.length;
 
-  console.log(`\n✨ EXTRACTION COMPLETE`);
+  console.log('\n✨ EXTRACTION COMPLETE');
   console.log(`   Patterns created: ${created}`);
   console.log(`   Patterns updated: ${updated}`);
   console.log(`   Prevention items: ${preventions}`);

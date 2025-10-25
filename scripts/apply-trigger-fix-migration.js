@@ -204,12 +204,12 @@ async function getTriggerStatus(client) {
     `);
 
     if (triggers.length > 0) {
-      console.log(`   ✅ Trigger exists: trigger_auto_populate_retrospective_fields`);
+      console.log('   ✅ Trigger exists: trigger_auto_populate_retrospective_fields');
       triggers.forEach(t => {
         console.log(`      - Event: ${t.event_manipulation}, Timing: ${t.action_timing}`);
       });
     } else {
-      console.log(`   ⚠️  Trigger NOT found: trigger_auto_populate_retrospective_fields`);
+      console.log('   ⚠️  Trigger NOT found: trigger_auto_populate_retrospective_fields');
     }
 
     // Check function existence
@@ -221,9 +221,9 @@ async function getTriggerStatus(client) {
     `);
 
     if (functions.length > 0) {
-      console.log(`   ✅ Function exists: auto_populate_retrospective_fields()`);
+      console.log('   ✅ Function exists: auto_populate_retrospective_fields()');
     } else {
-      console.log(`   ⚠️  Function NOT found: auto_populate_retrospective_fields()`);
+      console.log('   ⚠️  Function NOT found: auto_populate_retrospective_fields()');
     }
 
   } catch (error) {

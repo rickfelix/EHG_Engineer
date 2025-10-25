@@ -358,19 +358,19 @@ async function demonstrateEstimation() {
   console.log(`🎯 Confidence: ${Math.round(designTask.confidence * 100)}%`);
   
   if (designTask.comparison) {
-    console.log(`\n📊 Human vs AI Comparison:`);
+    console.log('\n📊 Human vs AI Comparison:');
     console.log(`   Human Estimate: ${designTask.comparison.humanHours} hours`);
     console.log(`   AI Estimate: ${designTask.comparison.aiHours} hours`);
     console.log(`   🚀 Speedup Factor: ${designTask.comparison.speedupFactor}x`);
     console.log(`   💰 Time Saved: ${Math.round(designTask.comparison.timeSaved)} hours`);
   }
 
-  console.log(`\n🔧 Component Breakdown:`);
+  console.log('\n🔧 Component Breakdown:');
   designTask.components.forEach(comp => {
     console.log(`   • ${comp.type}: ${comp.aiHours}h (${comp.speedupFactor}x faster)`);
   });
 
-  console.log(`\n💡 Recommendations:`);
+  console.log('\n💡 Recommendations:');
   designTask.recommendations.forEach(rec => {
     console.log(`   ${rec}`);
   });

@@ -55,13 +55,13 @@ class EnforcedOrchestrator extends LEOProtocolOrchestrator {
 
   // Template-based PRD generation
   async generatePRD(sdId, options = {}) {
-    console.log(chalk.blue(`\n📐 EnforcedOrchestrator: Delegating PRD generation to template system`));
+    console.log(chalk.blue('\n📐 EnforcedOrchestrator: Delegating PRD generation to template system'));
     return await this.prdGenerator.generatePRD(sdId, options);
   }
 
   // Template-based handoff creation
   async createHandoff(fromAgent, toAgent, sdId) {
-    console.log(chalk.blue(`\n🤝 EnforcedOrchestrator: Delegating handoff creation to template system`));
+    console.log(chalk.blue('\n🤝 EnforcedOrchestrator: Delegating handoff creation to template system'));
     return await this.handoffCreator.createHandoff(fromAgent, toAgent, sdId);
   }
 
@@ -197,7 +197,7 @@ class EnforcedOrchestrator extends LEOProtocolOrchestrator {
         console.log(chalk.yellow(`⚠️  Could not update SD status: ${sdError.message}`));
       } else {
         console.log(chalk.green(`✅ ${sdId} marked as completed`));
-        console.log(chalk.gray(`   Status: completed | Working On: false | Progress: 100%`));
+        console.log(chalk.gray('   Status: completed | Working On: false | Progress: 100%'));
       }
 
       // Update associated PRDs
@@ -213,7 +213,7 @@ class EnforcedOrchestrator extends LEOProtocolOrchestrator {
       if (prdError) {
         console.log(chalk.yellow(`⚠️  Could not update PRD status: ${prdError.message}`));
       } else {
-        console.log(chalk.green(`✅ Associated PRDs marked as approved`));
+        console.log(chalk.green('✅ Associated PRDs marked as approved'));
       }
 
     } catch (error) {

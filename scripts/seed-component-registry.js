@@ -577,7 +577,7 @@ async function main() {
     totalCost += estimate.cost;
   }
 
-  console.log(`💰 Cost Estimate:`);
+  console.log('💰 Cost Estimate:');
   console.log(`   Total tokens: ~${totalTokens.toLocaleString()}`);
   console.log(`   Estimated cost: $${totalCost.toFixed(4)}`);
   console.log('');
@@ -614,7 +614,7 @@ async function main() {
       const hasEmbedding = existing?.description_embedding != null;
 
       if (existing && hasEmbedding && !options.force) {
-        console.log(`   ⏭️  Already exists with embedding - skipping`);
+        console.log('   ⏭️  Already exists with embedding - skipping');
         skipCount++;
         continue;
       }
@@ -623,12 +623,12 @@ async function main() {
       const text = buildComponentEmbeddingText(component);
 
       if (!text || text.trim().length === 0) {
-        console.log(`   ⚠️  No content to embed - skipping`);
+        console.log('   ⚠️  No content to embed - skipping');
         skipCount++;
         continue;
       }
 
-      console.log(`   🧠 Generating embedding...`);
+      console.log('   🧠 Generating embedding...');
 
       let embedding = null;
       if (!options.dryRun) {

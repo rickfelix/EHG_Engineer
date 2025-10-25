@@ -6,7 +6,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 async function testRealtimeUpdate() {

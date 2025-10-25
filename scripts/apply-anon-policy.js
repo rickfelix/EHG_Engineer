@@ -48,7 +48,7 @@ async function applyMigration() {
     // Step 1: Drop existing policy if it exists
     console.log('1️⃣  Dropping existing policy (if exists)...');
     try {
-      await client.query(`DROP POLICY IF EXISTS "Allow anon users to read system_health" ON system_health`);
+      await client.query('DROP POLICY IF EXISTS "Allow anon users to read system_health" ON system_health');
       console.log('   ✅ Policy dropped (or did not exist)');
     } catch (err) {
       console.error('   ⚠️  Drop policy warning:', err.message);
@@ -74,7 +74,7 @@ async function applyMigration() {
     console.log('');
     console.log('3️⃣  Granting SELECT to anon role...');
     try {
-      await client.query(`GRANT SELECT ON system_health TO anon`);
+      await client.query('GRANT SELECT ON system_health TO anon');
       console.log('   ✅ SELECT granted to anon');
     } catch (err) {
       console.error('   ❌ Failed to grant SELECT:', err);

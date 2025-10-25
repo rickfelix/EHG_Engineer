@@ -25,15 +25,15 @@ async function markSD027WorkingOn() {
         status: 'working_on',
         metadata: {
           ...{
-            "item_count": 4,
-            "page_title": "Venture Detail (Stage View)",
-            "wsjf_score": 56.45,
-            "import_date": "2025-09-11T00:03:52.902Z",
-            "import_run_id": "1f1d72c6-c7b8-406c-9e02-e9e76056133c",
-            "import_source": "ehg_backlog_excel",
-            "import_checksum": "e1304f0400be2e2ccbe079e08ff97bb47ee6529b9904de2f0c5a80ff68593c16",
-            "execution_order_updated_at": "2025-09-23T21:03:38.798Z",
-            "execution_order_updated_by": "WSJF Calculator"
+            'item_count': 4,
+            'page_title': 'Venture Detail (Stage View)',
+            'wsjf_score': 56.45,
+            'import_date': '2025-09-11T00:03:52.902Z',
+            'import_run_id': '1f1d72c6-c7b8-406c-9e02-e9e76056133c',
+            'import_source': 'ehg_backlog_excel',
+            'import_checksum': 'e1304f0400be2e2ccbe079e08ff97bb47ee6529b9904de2f0c5a80ff68593c16',
+            'execution_order_updated_at': '2025-09-23T21:03:38.798Z',
+            'execution_order_updated_by': 'WSJF Calculator'
           },
           working_on_date: new Date().toISOString(),
           working_on_agent: 'LEAD',

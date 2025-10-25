@@ -6,7 +6,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -229,7 +229,7 @@ async function addVentureWorkflow() {
           console.log(`    ✓ Read content from ${prd.file_path}`);
         }
       } catch (err) {
-        console.log(`    ⚠️  Could not read file, using summary`);
+        console.log('    ⚠️  Could not read file, using summary');
       }
       
       // Prepare PRD data
@@ -275,16 +275,16 @@ async function addVentureWorkflow() {
         .single();
       
       if (existingPRD) {
-        console.log(`    ⚠️  PRD already exists, updating...`);
+        console.log('    ⚠️  PRD already exists, updating...');
         const { error: updateError } = await supabase
           .from('product_requirements_v2')
           .update(prdData)
           .eq('id', prd.id);
         
         if (updateError) {
-          console.log(`    ❌ Error updating PRD:`, updateError.message);
+          console.log('    ❌ Error updating PRD:', updateError.message);
         } else {
-          console.log(`    ✅ PRD updated successfully`);
+          console.log('    ✅ PRD updated successfully');
         }
       } else {
         const { error: insertError } = await supabase
@@ -292,9 +292,9 @@ async function addVentureWorkflow() {
           .insert([prdData]);
         
         if (insertError) {
-          console.log(`    ❌ Error inserting PRD:`, insertError.message);
+          console.log('    ❌ Error inserting PRD:', insertError.message);
         } else {
-          console.log(`    ✅ PRD added successfully`);
+          console.log('    ✅ PRD added successfully');
         }
       }
     }
@@ -303,7 +303,7 @@ async function addVentureWorkflow() {
     console.log('\n📊 Summary:');
     console.log(`  - Strategic Directive: ${ventureSD.id}`);
     console.log(`  - PRDs Added: ${venturePRDs.length}`);
-    console.log(`  - Status: All marked as completed`);
+    console.log('  - Status: All marked as completed');
     console.log('\n✨ You can now view the Venture Workflow in the dashboard');
     
   } catch (error) {

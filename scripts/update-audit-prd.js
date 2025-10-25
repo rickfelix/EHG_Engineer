@@ -6,7 +6,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 async function updateAuditPRD() {
@@ -20,11 +20,11 @@ async function updateAuditPRD() {
   const prdId = 'PRD-SD-DASHBOARD-AUDIT-2025-08-31-A';
   
   const updatedPRD = {
-    executive_summary: `Comprehensive audit of the LEO Protocol Dashboard to identify and remediate critical issues affecting system stability, user experience, security, and data integrity. This PRD defines the technical approach for systematic testing and validation.`,
+    executive_summary: 'Comprehensive audit of the LEO Protocol Dashboard to identify and remediate critical issues affecting system stability, user experience, security, and data integrity. This PRD defines the technical approach for systematic testing and validation.',
     
-    business_context: `The LEO Protocol Dashboard is experiencing issues with progress calculation accuracy, state management, and potential security vulnerabilities. An audit is required to ensure system reliability before broader deployment.`,
+    business_context: 'The LEO Protocol Dashboard is experiencing issues with progress calculation accuracy, state management, and potential security vulnerabilities. An audit is required to ensure system reliability before broader deployment.',
     
-    technical_context: `The dashboard uses React, Node.js, WebSockets, and Supabase. Recent migration to database-first architecture requires validation of data flow and state synchronization.`,
+    technical_context: 'The dashboard uses React, Node.js, WebSockets, and Supabase. Recent migration to database-first architecture requires validation of data flow and state synchronization.',
     
     functional_requirements: [
       'Validate progress calculation accuracy across all LEO Protocol phases',

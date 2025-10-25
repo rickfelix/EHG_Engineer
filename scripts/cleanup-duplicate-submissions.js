@@ -78,8 +78,8 @@ async function cleanupDuplicateSubmissions() {
       }
     }
 
-    console.log(`\n✅ Cleanup complete!`);
-    console.log(`📊 Summary:`);
+    console.log('\n✅ Cleanup complete!');
+    console.log('📊 Summary:');
     console.log(`   - Total submissions before: ${allSubmissions.length}`);
     console.log(`   - Duplicates deleted: ${totalDeleted}`);
     console.log(`   - Submissions remaining: ${allSubmissions.length - totalDeleted}`);

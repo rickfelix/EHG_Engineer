@@ -48,7 +48,7 @@ const prd = {
     category: 'testing',
     priority: 'high',
 
-    executive_summary: `This PRD defines the technical requirements for standardizing mock mode testing patterns across venture workflow E2E tests. The implementation will add mock handlers to 3 test files, create test pattern documentation, and ensure 100% test pass rate in both Playwright projects (mock and flags-on).`,
+    executive_summary: 'This PRD defines the technical requirements for standardizing mock mode testing patterns across venture workflow E2E tests. The implementation will add mock handlers to 3 test files, create test pattern documentation, and ensure 100% test pass rate in both Playwright projects (mock and flags-on).',
 
     plan_checklist: [
       { text: 'PRD created and saved', checked: true },

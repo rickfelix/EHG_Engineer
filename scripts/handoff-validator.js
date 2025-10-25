@@ -10,7 +10,7 @@ import DynamicChecklistGenerator from './dynamic-checklist-generator.js';
 import SubAgentEnforcementSystem from './subagent-enforcement-system.js';
 import fsModule from 'fs';
 const fs = fsModule.promises;
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 class HandoffValidator {
@@ -185,7 +185,7 @@ class HandoffValidator {
     
     // If no checklist exists, generate dynamically
     if (checklist.length === 0) {
-      console.log(`⚠️  No checklist found, generating dynamically...`);
+      console.log('⚠️  No checklist found, generating dynamically...');
       const generator = new DynamicChecklistGenerator();
       const result = await generator.generateChecklists(sdId);
       checklist = result.checklists[agent.toLowerCase()] || [];
@@ -233,7 +233,7 @@ class HandoffValidator {
       });
     }
     
-    console.log(`\n💡 Recommendation:`);
+    console.log('\n💡 Recommendation:');
     console.log(`   ${report.recommendation}`);
     
     console.log('\n' + '═'.repeat(70));
@@ -431,9 +431,9 @@ class HandoffValidator {
         if (remaining <= 10) {
           return `Almost there! Complete ${status.incomplete.length} more checklist items.`;
         } else if (remaining <= 30) {
-          return `Significant checklist work remaining. Focus on critical items first.`;
+          return 'Significant checklist work remaining. Focus on critical items first.';
         } else {
-          return `Major checklist gaps exist. Review requirements and complete core functionality.`;
+          return 'Major checklist gaps exist. Review requirements and complete core functionality.';
         }
       }
     }

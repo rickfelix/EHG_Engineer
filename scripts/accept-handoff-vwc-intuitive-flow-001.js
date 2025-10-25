@@ -55,7 +55,7 @@ async function acceptHandoff() {
       return;
     }
 
-    console.log(`\n3️⃣  Updating handoff status to 'accepted'...`);
+    console.log('\n3️⃣  Updating handoff status to \'accepted\'...');
 
     const acceptanceNotes = `PLAN Supervisor Decision: Option A - Accept with Caveat
 
@@ -100,7 +100,7 @@ async function acceptHandoff() {
     console.log(`   Status: ${updateResult.rows[0].status}`);
     console.log(`   Accepted at: ${updateResult.rows[0].accepted_at}`);
 
-    console.log(`\n4️⃣  Updating SD status...`);
+    console.log('\n4️⃣  Updating SD status...');
 
     const updateSDQuery = `
       UPDATE strategic_directives_v2

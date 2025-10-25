@@ -56,7 +56,7 @@ async function verifyUserStories() {
       console.log(`${sdId}:`);
       console.log(`  Stories: ${sdStories.length}`);
       console.log(`  Total Points: ${points}`);
-      console.log(`  Status Breakdown:`);
+      console.log('  Status Breakdown:');
 
       const statusCounts = sdStories.reduce((acc, s) => {
         acc[s.status] = (acc[s.status] || 0) + 1;
@@ -67,7 +67,7 @@ async function verifyUserStories() {
         console.log(`    - ${status}: ${count}`);
       });
 
-      console.log(`  Priority Breakdown:`);
+      console.log('  Priority Breakdown:');
       const priorityCounts = sdStories.reduce((acc, s) => {
         acc[s.priority] = (acc[s.priority] || 0) + 1;
         return acc;

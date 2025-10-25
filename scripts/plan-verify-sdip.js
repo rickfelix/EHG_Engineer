@@ -10,7 +10,7 @@ const __dirname = dirname(__filename);
  * Verify SDIP implementation meets PRD requirements
  */
 
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 import fs from 'fs';
 import path from 'path';

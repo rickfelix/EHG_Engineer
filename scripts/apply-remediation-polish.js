@@ -96,8 +96,8 @@ async function testPolishMigration() {
         console.log(`PRD ${prd.id}:`);
         console.log(`  Gates 2A-2D: ${gates2Status}`);
         console.log(`  Fields: URL ${prd.target_url ? '✅' : '❌'}, Component ${prd.component_name ? '✅' : '❌'}`);
-        console.log(`  Gate 3: ❌ (Not yet run)`);
-        console.log(`  EXEC Ready: ❌ (Needs Gate 3)\n`);
+        console.log('  Gate 3: ❌ (Not yet run)');
+        console.log('  EXEC Ready: ❌ (Needs Gate 3)\n');
       }
     }
 

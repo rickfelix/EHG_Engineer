@@ -66,7 +66,7 @@ async function queryHighPrioritySDs() {
     console.log('\n' + '='.repeat(100));
 
     // Summary
-    console.log(`\n📋 SUMMARY BY STATUS:`);
+    console.log('\n📋 SUMMARY BY STATUS:');
     for (const [status, sds] of Object.entries(byStatus)) {
       console.log(`   ${status}: ${sds.length}`);
     }

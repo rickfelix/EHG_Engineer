@@ -19,7 +19,7 @@ async function createSD() {
 
 **Affected Components:** 15+ files including AnalyticsDashboard, AudioPlayer, chairman components, AIDocVisualizer, security cards, etc.`,
 
-    rationale: `Multiple SDs added work to feat/SD-VWC-INTUITIVE-FLOW-001 branch without fixing accessibility violations, accumulating 135 jsx-a11y errors. This blocks CI/CD pipeline for all work on the branch, including completed and compliant Checkpoint 3 deliverables. A dedicated SD is needed to systematically address these violations (6-8 hours estimated) rather than expanding CP3 scope by 10x.`,
+    rationale: 'Multiple SDs added work to feat/SD-VWC-INTUITIVE-FLOW-001 branch without fixing accessibility violations, accumulating 135 jsx-a11y errors. This blocks CI/CD pipeline for all work on the branch, including completed and compliant Checkpoint 3 deliverables. A dedicated SD is needed to systematically address these violations (6-8 hours estimated) rather than expanding CP3 scope by 10x.',
 
     scope: `**IN SCOPE:**
 - Fix 1 critical parsing error in AnalyticsDashboard.tsx
@@ -60,8 +60,8 @@ async function createSD() {
   console.log(`   Title: ${sd.title}`);
   console.log(`   Priority: ${sd.priority}`);
   console.log(`   Status: ${sd.status}`);
-  console.log(`   Estimated: 6-8 hours`);
-  console.log(`   Errors to fix: 135 jsx-a11y violations`);
+  console.log('   Estimated: 6-8 hours');
+  console.log('   Errors to fix: 135 jsx-a11y violations');
 }
 
 createSD().catch(console.error);

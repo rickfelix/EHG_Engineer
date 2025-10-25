@@ -128,12 +128,12 @@ class CLAUDEMDGeneratorV3 {
       console.log(`With PLAN phase:  Core (${coreSize}k) + PLAN (${planSize - coreSize}k) = ${planSize}k chars`);
       console.log(`With EXEC phase:  Core (${coreSize}k) + EXEC (${execSize - coreSize}k) = ${execSize}k chars`);
       console.log('\n💾 Context Savings:');
-      console.log(`   Before: 123k chars (old CLAUDE.md)`);
+      console.log('   Before: 123k chars (old CLAUDE.md)');
       console.log(`   After:  ${routerSize + coreSize}k chars (router + core)`);
       console.log(`   Saved:  ${123 - (routerSize + coreSize)}k chars (${Math.round((123 - (routerSize + coreSize)) / 123 * 100)}% reduction)`);
       console.log('='.repeat(60));
 
-      console.log(`\n✅ Multi-file generation complete!`);
+      console.log('\n✅ Multi-file generation complete!');
       console.log(`📄 Protocol: LEO v${protocol.version}`);
       console.log(`📊 Total sections processed: ${Object.values(sections).flat().length}`);
 
@@ -249,8 +249,8 @@ class CLAUDEMDGeneratorV3 {
     // Add agent responsibilities table
     content += `## Agent Responsibilities\n\n${this.generateAgentTable(agents)}\n\n`;
 
-    content += `---\n\n*Generated from database: leo_protocol_sections*\n`;
-    content += `*Context tier: CORE*\n`;
+    content += '---\n\n*Generated from database: leo_protocol_sections*\n';
+    content += '*Context tier: CORE*\n';
     content += `*Protocol: ${protocol.version}*\n`;
 
     return content;
@@ -281,7 +281,7 @@ This file contains:
 `;
 
     // Add core sections first
-    content += `# CORE CONTEXT (Essential)\n\n`;
+    content += '# CORE CONTEXT (Essential)\n\n';
     for (const section of coreSections) {
       content += `## ${section.title}\n\n${section.content}\n\n`;
     }
@@ -292,7 +292,7 @@ This file contains:
       content += `## ${section.title}\n\n${section.content}\n\n`;
     }
 
-    content += `---\n\n*Generated from database: leo_protocol_sections*\n`;
+    content += '---\n\n*Generated from database: leo_protocol_sections*\n';
     content += `*Context tiers: CORE + PHASE_${phaseName}*\n`;
     content += `*Protocol: ${protocol.version}*\n`;
 
@@ -337,8 +337,8 @@ ${section.content}
   }
 
   generateAgentTable(agents) {
-    let table = `| Agent | Code | Responsibilities | % Split |\n`;
-    table += `|-------|------|------------------|----------|\n`;
+    let table = '| Agent | Code | Responsibilities | % Split |\n';
+    table += '|-------|------|------------------|----------|\n';
 
     agents.forEach(agent => {
       const resp = agent.responsibilities.substring(0, 80) + '...';
@@ -352,8 +352,8 @@ ${section.content}
       table += `| ${agent.name} | ${agent.agent_code} | ${resp} | ${split} |\n`;
     });
 
-    table += `\n**Legend**: P=Planning, I=Implementation, V=Verification, A=Approval\n`;
-    table += `**Total**: EXEC (30%) + LEAD (35%) + PLAN (35%) = 100%`;
+    table += '\n**Legend**: P=Planning, I=Implementation, V=Verification, A=Approval\n';
+    table += '**Total**: EXEC (30%) + LEAD (35%) + PLAN (35%) = 100%';
 
     return table;
   }

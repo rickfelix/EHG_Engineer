@@ -193,7 +193,7 @@ async function createRetrospective() {
     console.log(`   Challenges: ${whatNeedsImprovement.length}`);
     console.log(`   Learnings: ${keyLearnings.length}`);
     console.log(`   Action Items: ${actionItems.length}`);
-    console.log(`   Status: PUBLISHED`);
+    console.log('   Status: PUBLISHED');
 
     return {
       success: true,

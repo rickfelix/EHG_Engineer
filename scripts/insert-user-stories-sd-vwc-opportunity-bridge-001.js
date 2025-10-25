@@ -154,7 +154,7 @@ async function insertUserStories() {
     console.log(`  SD ID: ${sdId}`);
     console.log(`  User Stories: ${inserted.length}`);
     console.log(`  Total Story Points: ${userStories.reduce((sum, s) => sum + s.story_points, 0)}`);
-    console.log(`  Priority Breakdown:`);
+    console.log('  Priority Breakdown:');
     console.log(`    - CRITICAL: ${userStories.filter(s => s.priority === 'critical').length} stories`);
     console.log(`    - HIGH: ${userStories.filter(s => s.priority === 'high').length} stories`);
     console.log('\n📋 Inserted User Stories:');

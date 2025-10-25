@@ -73,7 +73,7 @@ async function updateParentMetadata() {
     );
 
     if (updateResult.rows.length === 0) {
-      console.error(`❌ Update failed - no rows returned`);
+      console.error('❌ Update failed - no rows returned');
       process.exit(1);
     }
 

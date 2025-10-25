@@ -124,13 +124,13 @@ async function createAccessibilitySD() {
       }
     };
 
-    console.log(`\n2️⃣  Preparing SD data...`);
+    console.log('\n2️⃣  Preparing SD data...');
     console.log(`   ID: ${sdData.id}`);
     console.log(`   Title: ${sdData.title}`);
     console.log(`   Priority: ${sdData.priority}`);
     console.log(`   Estimated effort: ${sdData.estimated_effort_hours} hour`);
 
-    console.log(`\n3️⃣  Inserting SD into database...`);
+    console.log('\n3️⃣  Inserting SD into database...');
 
     const insertQuery = `
       INSERT INTO strategic_directives_v2 (
@@ -173,7 +173,7 @@ async function createAccessibilitySD() {
     console.log(`   ID: ${result.rows[0].id}`);
     console.log(`   Created: ${result.rows[0].created_at}`);
 
-    console.log(`\n4️⃣  Verifying SD in database...`);
+    console.log('\n4️⃣  Verifying SD in database...');
     const verifyQuery = `
       SELECT id, title, status, current_phase, priority
       FROM strategic_directives_v2

@@ -47,7 +47,7 @@ async function checkConstraint() {
     if (stories.length > 0) {
       const example = stories[0].story_key;
       console.log(`   Example: "${example}"`);
-      console.log(`   Format appears to be: "{SD_ID}:US-{NUMBER}"`);
+      console.log('   Format appears to be: "{SD_ID}:US-{NUMBER}"');
     }
   } else {
     console.log('Constraint definition:', data);

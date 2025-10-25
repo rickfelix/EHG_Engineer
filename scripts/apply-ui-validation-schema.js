@@ -15,7 +15,7 @@ const __dirname = dirname(__filename);
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 async function applyUIValidationSchema() {
@@ -56,7 +56,7 @@ async function applyUIValidationSchema() {
           
           if (error) {
             // If RPC doesn't exist, skip (we'll handle tables differently)
-            console.log(`⚠️  Skipping direct SQL execution (RPC not available)`);
+            console.log('⚠️  Skipping direct SQL execution (RPC not available)');
           } else {
             successCount++;
             console.log(`✅ Executed: ${statement.substring(0, 50)}...`);
@@ -64,7 +64,7 @@ async function applyUIValidationSchema() {
         }
       } catch (error) {
         errorCount++;
-        console.error(`❌ Failed to execute statement:`, error.message);
+        console.error('❌ Failed to execute statement:', error.message);
       }
     }
     

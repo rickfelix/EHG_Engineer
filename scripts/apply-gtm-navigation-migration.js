@@ -56,7 +56,7 @@ async function applyMigration() {
         if (error.message.includes('already exists') ||
             error.message.includes('already enabled') ||
             error.message.includes('duplicate key value violates unique constraint')) {
-          console.log(`   ⚠️  Skipped (already exists)`);
+          console.log('   ⚠️  Skipped (already exists)');
           skipCount++;
         } else {
           console.error(`   ❌ Error: ${error.message.split('\n')[0]}`);
@@ -70,7 +70,7 @@ async function applyMigration() {
 
     // Summary
     console.log(`\n${'='.repeat(70)}`);
-    console.log(`📊 Migration Summary`);
+    console.log('📊 Migration Summary');
     console.log(`${'='.repeat(70)}`);
     console.log(`✅ Successful: ${successCount}`);
     console.log(`⚠️  Skipped: ${skipCount}`);

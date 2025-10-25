@@ -11,7 +11,7 @@ import { createClient } from '@supabase/supabase-js';
 import fsModule from 'fs';
 const fs = fsModule.promises;
 import path from 'path';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 class PLANVerification {

@@ -111,7 +111,7 @@ DOCUMENTATION:
 
 // List all sub-agents
 async function listSubAgents() {
-  console.log(`\n📋 Available Sub-Agents:\n`);
+  console.log('\n📋 Available Sub-Agents:\n');
 
   try {
     const agents = await listAllSubAgents();
@@ -139,10 +139,10 @@ async function listSubAgents() {
       console.log(`      - ${agent.code.padEnd(15)} ${agent.name} (v${version}) [Priority: ${agent.priority}]`);
     });
 
-    console.log(`\n   💡 Tip: Run with --code <CODE> --sd-id <SD-ID> to execute`);
+    console.log('\n   💡 Tip: Run with --code <CODE> --sd-id <SD-ID> to execute');
 
   } catch (error) {
-    console.error(`\n❌ Failed to list sub-agents:`, error.message);
+    console.error('\n❌ Failed to list sub-agents:', error.message);
     process.exit(3);
   }
 }
@@ -165,18 +165,18 @@ async function main() {
 
   // Validate required arguments
   if (!args.code || !args.sdId) {
-    console.error(`\n❌ Error: Missing required arguments`);
-    console.error(`   Required: --code <CODE> --sd-id <SD-ID>`);
-    console.error(`   Run with --help for usage information\n`);
+    console.error('\n❌ Error: Missing required arguments');
+    console.error('   Required: --code <CODE> --sd-id <SD-ID>');
+    console.error('   Run with --help for usage information\n');
     process.exit(5);
   }
 
   // Execute sub-agent
   try {
-    console.log(`\n╔═══════════════════════════════════════════════════════════════╗`);
+    console.log('\n╔═══════════════════════════════════════════════════════════════╗');
     console.log(`║  Executing: ${args.code.padEnd(49)} ║`);
     console.log(`║  SD: ${args.sdId.padEnd(54)} ║`);
-    console.log(`╚═══════════════════════════════════════════════════════════════╝`);
+    console.log('╚═══════════════════════════════════════════════════════════════╝');
 
     const result = await executeSubAgent(args.code, args.sdId, args.options);
 
@@ -211,7 +211,7 @@ async function main() {
 
     // Show recommendations if any
     if (result.recommendations && result.recommendations.length > 0) {
-      console.log(`\n📋 Recommendations:`);
+      console.log('\n📋 Recommendations:');
       result.recommendations.forEach((rec, i) => {
         console.log(`   ${i + 1}. ${rec}`);
       });
@@ -219,7 +219,7 @@ async function main() {
 
     // Show critical issues if any
     if (result.critical_issues && result.critical_issues.length > 0) {
-      console.log(`\n🚨 Critical Issues:`);
+      console.log('\n🚨 Critical Issues:');
       result.critical_issues.forEach((issue, i) => {
         console.log(`   ${i + 1}. ${issue.issue || issue}`);
         if (issue.recommendation) {
@@ -232,15 +232,15 @@ async function main() {
     console.log(`\n💾 Results stored: ${result.stored_result_id}`);
     console.log(`   Query: SELECT * FROM sub_agent_execution_results WHERE id = '${result.stored_result_id}';`);
 
-    console.log(`\n╔═══════════════════════════════════════════════════════════════╗`);
+    console.log('\n╔═══════════════════════════════════════════════════════════════╗');
     console.log(`║  Execution Complete - Exit Code: ${exitCode}                       ║`);
-    console.log(`╚═══════════════════════════════════════════════════════════════╝\n`);
+    console.log('╚═══════════════════════════════════════════════════════════════╝\n');
 
     process.exit(exitCode);
 
   } catch (error) {
-    console.error(`\n💥 Fatal Error:`, error.message);
-    console.error(`\nStack Trace:`, error.stack);
+    console.error('\n💥 Fatal Error:', error.message);
+    console.error('\nStack Trace:', error.stack);
     process.exit(3);
   }
 }

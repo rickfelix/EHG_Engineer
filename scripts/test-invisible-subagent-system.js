@@ -36,7 +36,7 @@ async function testInvisibleSubAgentSystem() {
     console.log('1️⃣ Testing Context Monitor...');
     const contextMonitor = new ContextMonitor(openaiApiKey, projectRoot);
     
-    const testPrompt = "I need to add authentication to my React application with secure login flow";
+    const testPrompt = 'I need to add authentication to my React application with secure login flow';
     const testContext = {
       current_files: ['src/App.jsx', 'src/components/Login.jsx'],
       recent_errors: ['Authentication failed'],

@@ -309,7 +309,7 @@ async function main(): Promise<void> {
   if (allResults.length === 0) {
     console.log('✅ No drift detected. System is compliant with LEO v4.1.2');
   } else {
-    console.log(`\n⚠️  Drift Detection Results:`);
+    console.log('\n⚠️  Drift Detection Results:');
     console.log('━'.repeat(50));
     
     for (const result of allResults) {

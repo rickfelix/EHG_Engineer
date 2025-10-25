@@ -110,7 +110,7 @@ async function createTimelineTracking() {
         if (phase.completed_at) {
           console.log(`   Duration: ${duration_hours.toFixed(1)} hours (${duration_minutes} minutes)`);
         } else {
-          console.log(`   Status: Currently in progress`);
+          console.log('   Status: Currently in progress');
         }
       }
     } else {

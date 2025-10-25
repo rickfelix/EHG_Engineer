@@ -42,7 +42,7 @@ async function moveAIAgents() {
     // Step 1: Get agents from ai_agents table (where they were incorrectly placed)
     console.log('Step 1: Getting AI agents from EHG ai_agents table...');
     const { rows: aiAgents } = await ehgClient.query(
-      `SELECT * FROM ai_agents WHERE agent_type IN ($1, $2, $3)`,
+      'SELECT * FROM ai_agents WHERE agent_type IN ($1, $2, $3)',
       ['PRODUCT', 'RESEARCH_VP', 'FINANCE']
     );
 
@@ -145,7 +145,7 @@ async function moveAIAgents() {
     // Step 3: Remove from ai_agents table
     console.log('Step 3: Removing from EHG ai_agents table...');
     await ehgClient.query(
-      `DELETE FROM ai_agents WHERE agent_type IN ($1, $2, $3)`,
+      'DELETE FROM ai_agents WHERE agent_type IN ($1, $2, $3)',
       ['PRODUCT', 'RESEARCH_VP', 'FINANCE']
     );
     console.log(`✅ Removed ${aiAgents.length} agents from ai_agents\n`);
@@ -175,7 +175,7 @@ async function moveAIAgents() {
 
       console.log(`✅ Removed ${leoAgents.length} agents from leo_sub_agents\n`);
     } else {
-      console.log(`⏩ No agents found in leo_sub_agents (already cleaned up)\n`);
+      console.log('⏩ No agents found in leo_sub_agents (already cleaned up)\n');
     }
 
     // Step 5: Verify
@@ -186,7 +186,7 @@ async function moveAIAgents() {
     );
 
     const { rows: aiCount } = await ehgClient.query(
-      `SELECT id, name, agent_type FROM ai_agents WHERE agent_type IN ($1, $2, $3)`,
+      'SELECT id, name, agent_type FROM ai_agents WHERE agent_type IN ($1, $2, $3)',
       ['PRODUCT', 'RESEARCH_VP', 'FINANCE']
     );
 
@@ -217,8 +217,8 @@ async function moveAIAgents() {
     console.log('='.repeat(70));
     console.log('');
     console.log('Summary:');
-    console.log(`  - Moved 3 AI agents from ai_agents to crewai_agents`);
-    console.log(`  - Cleaned up leo_sub_agents table`);
+    console.log('  - Moved 3 AI agents from ai_agents to crewai_agents');
+    console.log('  - Cleaned up leo_sub_agents table');
     console.log(`  - EHG crewai_agents: ${crewaiCount.length} (Customer-facing AI - UI ready)`);
     console.log(`  - EHG_Engineer leo_sub_agents: ${leoCount.length} (LEO Protocol validation only)`);
     console.log('');

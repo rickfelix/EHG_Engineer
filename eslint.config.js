@@ -6,7 +6,7 @@ export default [
   {
     files: ['**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx'],
     languageOptions: {
-      ecmaVersion: 2021,
+      ecmaVersion: 2022,
       sourceType: 'module',
       globals: {
         console: 'readonly',
@@ -116,8 +116,8 @@ export default [
           allowUncles: false
         }
       ],
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
-      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'no-console': 'off',  // Allow console in CLI tools and scripts
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'semi': ['error', 'always'],
       'quotes': ['error', 'single', { avoidEscape: true }]
     }

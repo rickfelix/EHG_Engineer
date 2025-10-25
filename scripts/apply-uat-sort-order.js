@@ -84,11 +84,11 @@ async function applySortOrder() {
     }
   }
 
-  console.log(`\n======================`);
-  console.log(`Summary:`);
+  console.log('\n======================');
+  console.log('Summary:');
   console.log(`✅ Successfully updated: ${successCount}`);
   console.log(`❌ Errors: ${errorCount}`);
-  console.log(`======================`);
+  console.log('======================');
 
   // Verify the order
   console.log('\n📋 Verifying logical order...\n');

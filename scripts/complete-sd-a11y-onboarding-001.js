@@ -96,7 +96,7 @@ async function completeSdA11yOnboarding() {
 
     const updateResult = await client.query(updateQuery, [sdId]);
 
-    console.log(`\n✅ SD marked as completed`);
+    console.log('\n✅ SD marked as completed');
     console.log(`   ID: ${updateResult.rows[0].id}`);
     console.log(`   Status: ${updateResult.rows[0].status}`);
     console.log(`   Phase: ${updateResult.rows[0].current_phase}`);

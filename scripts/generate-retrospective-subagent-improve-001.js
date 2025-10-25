@@ -271,9 +271,9 @@ const retrospective = {
 };
 
 async function storeRetrospective() {
-  console.log(`\n╔═══════════════════════════════════════════════════════════════╗`);
-  console.log(`║  Generating Retrospective: SD-SUBAGENT-IMPROVE-001          ║`);
-  console.log(`╚═══════════════════════════════════════════════════════════════╝`);
+  console.log('\n╔═══════════════════════════════════════════════════════════════╗');
+  console.log('║  Generating Retrospective: SD-SUBAGENT-IMPROVE-001          ║');
+  console.log('╚═══════════════════════════════════════════════════════════════╝');
 
   try {
     const { data, error } = await supabase
@@ -289,29 +289,29 @@ async function storeRetrospective() {
       throw error;
     }
 
-    console.log(`\n✅ Retrospective stored successfully!`);
+    console.log('\n✅ Retrospective stored successfully!');
     console.log(`   ID: ${data.id}`);
     console.log(`   SD: ${data.sd_id}`);
     console.log(`   Quality Score: ${data.quality_score}/100`);
     console.log(`   Created: ${data.created_at}`);
 
-    console.log(`\n📊 Key Metrics:`);
+    console.log('\n📊 Key Metrics:');
     console.log(`   Quality score: ${retrospective.quality_score}/100`);
     console.log(`   Velocity: ${retrospective.velocity_achieved} hours`);
     console.log(`   Objectives met: ${retrospective.objectives_met ? 'YES' : 'NO'}`);
     console.log(`   Bugs found & resolved: ${retrospective.bugs_resolved}/${retrospective.bugs_found}`);
     console.log(`   Tests added: ${retrospective.tests_added}`);
 
-    console.log(`\n📋 Next Steps:`);
-    console.log(`   1. Review retrospective in dashboard`);
-    console.log(`   2. Mark SD-SUBAGENT-IMPROVE-001 as complete`);
-    console.log(`   3. Update progress to 100%`);
-    console.log(`   4. Celebrate! 🎉\n`);
+    console.log('\n📋 Next Steps:');
+    console.log('   1. Review retrospective in dashboard');
+    console.log('   2. Mark SD-SUBAGENT-IMPROVE-001 as complete');
+    console.log('   3. Update progress to 100%');
+    console.log('   4. Celebrate! 🎉\n');
 
     process.exit(0);
 
   } catch (error) {
-    console.error(`\n❌ Failed to store retrospective:`, error.message);
+    console.error('\n❌ Failed to store retrospective:', error.message);
     process.exit(1);
   }
 }

@@ -112,7 +112,7 @@ async function populateProgress() {
     // 3. Verify progress recalculation
     console.log('\n3. Recalculating progress...');
     const newProgress = await client.query(
-      `SELECT get_progress_breakdown('SD-BOARD-VISUAL-BUILDER-002') as breakdown`
+      'SELECT get_progress_breakdown(\'SD-BOARD-VISUAL-BUILDER-002\') as breakdown'
     );
 
     const breakdown = newProgress.rows[0].breakdown;

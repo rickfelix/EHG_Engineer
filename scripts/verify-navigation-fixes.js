@@ -62,8 +62,8 @@ test('ActiveSDProgress has navigation fix', async () => {
   
   // Check for the fix: custom event emission instead of navigation
   const hasCustomEvent = content.includes("window.dispatchEvent(new CustomEvent('activeSDChanged'");
-  const preventNavigation = content.includes("// Prevent any default navigation behavior") || 
-                            content.includes("return false");
+  const preventNavigation = content.includes('// Prevent any default navigation behavior') || 
+                            content.includes('return false');
   
   return hasCustomEvent || preventNavigation;
 });

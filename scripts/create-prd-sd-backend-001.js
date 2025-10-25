@@ -152,6 +152,7 @@ const PRD_CONTENT = {
   - Multi-page support (auto page break for long reports)
   - Header/footer with company branding`,
 
+  // FIX: Renamed from technical_architecture
   system_architecture: // FIX: Renamed from technical_architecture `**System Architecture Overview**:
 
 ┌─────────────────────────────────────────────────────────────┐

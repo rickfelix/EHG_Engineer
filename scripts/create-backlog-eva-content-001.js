@@ -233,7 +233,7 @@ async function createBacklogItems() {
     }
 
     console.log('\n===================================================');
-    console.log(`✅ Backlog creation complete!`);
+    console.log('✅ Backlog creation complete!');
     console.log(`   Created: ${created}`);
     console.log(`   Updated: ${updated}`);
     console.log(`   Errors: ${errors}`);

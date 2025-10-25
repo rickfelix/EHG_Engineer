@@ -5,7 +5,7 @@
  * Uses the pooler connection string from .env
  */
 
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 import { Client } from 'pg';
 
@@ -100,7 +100,7 @@ async function createTimeline() {
 
     console.log('');
     console.log('📈 Summary:');
-    console.log(`   Queue Time: 48 hours (waiting in backlog)`);
+    console.log('   Queue Time: 48 hours (waiting in backlog)');
     console.log(`   Active Work: ${totalActiveHours.toFixed(2)} hours`);
     console.log(`   Efficiency: ${(totalActiveHours / (totalActiveHours + 48) * 100).toFixed(1)}% active work`);
 

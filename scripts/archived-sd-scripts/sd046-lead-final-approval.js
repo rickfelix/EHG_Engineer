@@ -108,9 +108,9 @@ async function conductLEADFinalApproval() {
   const finalDecision = {
     approval_status: 'APPROVED',
     approval_level: 'FULL_APPROVAL_WITH_RECOMMENDATIONS',
-    strategic_justification: `SD-046 delivers exceptional business value through advanced pricing intelligence and executive oversight capabilities. The enhanced Stage 15 component transforms basic pricing strategy into a comprehensive revenue optimization platform. Implementation quality is high with no critical issues identified.`,
+    strategic_justification: 'SD-046 delivers exceptional business value through advanced pricing intelligence and executive oversight capabilities. The enhanced Stage 15 component transforms basic pricing strategy into a comprehensive revenue optimization platform. Implementation quality is high with no critical issues identified.',
 
-    business_impact_summary: `Enhanced pricing strategy delivers immediate operational value with projected annual revenue impact of $232,500+ through optimization opportunities and competitive intelligence. Chairman-level oversight enables portfolio-wide pricing governance critical for scaling operations.`,
+    business_impact_summary: 'Enhanced pricing strategy delivers immediate operational value with projected annual revenue impact of $232,500+ through optimization opportunities and competitive intelligence. Chairman-level oversight enables portfolio-wide pricing governance critical for scaling operations.',
 
     recommendations_for_future: [
       'Add automated testing for pricing analytics in next iteration',

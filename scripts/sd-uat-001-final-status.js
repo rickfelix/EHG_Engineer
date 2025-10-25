@@ -44,7 +44,7 @@ async function generateFinalReport() {
   console.log(`Priority:        ${sd.priority.toUpperCase()}`);
   console.log(`Current Phase:   ${sd.current_phase}`);
   console.log(`Overall Progress: ${sd.progress}%`);
-  console.log(`Target App:      EHG Application (/mnt/c/_EHG/ehg/)`);
+  console.log('Target App:      EHG Application (/mnt/c/_EHG/ehg/)');
 
   // Check PRD
   const { data: prd } = await supabase

@@ -353,15 +353,15 @@ async function validateMigrations(sdId, options = {}) {
   console.log(`${'='.repeat(60)}\n`);
 
   console.log('VALIDATION MODE:');
-  console.log(`  Phase 1: Static file validation (always)`);
+  console.log('  Phase 1: Static file validation (always)');
   if (verifyDb) {
-    console.log(`  Phase 2: Database verification (enabled)`);
+    console.log('  Phase 2: Database verification (enabled)');
     console.log(`  Target DB: ${targetDb}`);
     if (checkSeedData) {
-      console.log(`  Seed Data Check: enabled`);
+      console.log('  Seed Data Check: enabled');
     }
   } else {
-    console.log(`  Phase 2: Database verification (skipped - use --verify-db to enable)`);
+    console.log('  Phase 2: Database verification (skipped - use --verify-db to enable)');
   }
   console.log('');
 
@@ -382,7 +382,7 @@ async function validateMigrations(sdId, options = {}) {
     };
   }
 
-  console.log(`✅ Database changes detected in PRD`);
+  console.log('✅ Database changes detected in PRD');
   console.log(`   Keywords found: ${dbCheck.mentions.join(', ')}\n`);
 
   // Step 2: Find migration files
@@ -436,7 +436,7 @@ async function validateMigrations(sdId, options = {}) {
     if (syntaxCheck.valid) {
       console.log(`  ✅ Syntax valid (${syntaxCheck.statementCount} statements)`);
     } else {
-      console.log(`  ❌ Syntax issues found:`);
+      console.log('  ❌ Syntax issues found:');
       syntaxCheck.issues.forEach(issue => console.log(`     - ${issue}`));
     }
 
@@ -445,7 +445,7 @@ async function validateMigrations(sdId, options = {}) {
     }
 
     if (patternCheck.warnings.length > 0) {
-      console.log(`  ⚠️  Warnings:`);
+      console.log('  ⚠️  Warnings:');
       patternCheck.warnings.forEach(warning => console.log(`     - ${warning}`));
     }
 
@@ -481,7 +481,7 @@ async function validateMigrations(sdId, options = {}) {
     if (dbVerification.error) {
       console.log(`❌ Database connection error: ${dbVerification.error}\n`);
     } else {
-      console.log(`Database verification complete:\n`);
+      console.log('Database verification complete:\n');
       dbVerification.results.forEach(result => {
         if (result.exists && result.accessible) {
           console.log(`  ✅ ${result.table} - EXISTS and ACCESSIBLE`);
@@ -504,7 +504,7 @@ async function validateMigrations(sdId, options = {}) {
         if (seedDataCheck.error) {
           console.log(`❌ Seed data check error: ${seedDataCheck.error}\n`);
         } else {
-          console.log(`Seed data verification:\n`);
+          console.log('Seed data verification:\n');
           seedDataCheck.results.forEach(result => {
             if (result.hasData) {
               console.log(`  ✅ ${result.table} - ${result.rowCount} rows`);
@@ -519,10 +519,10 @@ async function validateMigrations(sdId, options = {}) {
           if (seedDataCheck.emptyTables.length > 0) {
             console.log(`⚠️  WARNING: ${seedDataCheck.emptyTables.length} table(s) have no data:`);
             console.log(`   ${seedDataCheck.emptyTables.join(', ')}`);
-            console.log(`   This matches the SD-AGENT-PLATFORM-001 pattern:`);
-            console.log(`   - Migration exists ✓`);
-            console.log(`   - Tables created ✓`);
-            console.log(`   - Seed data missing ✗\n`);
+            console.log('   This matches the SD-AGENT-PLATFORM-001 pattern:');
+            console.log('   - Migration exists ✓');
+            console.log('   - Tables created ✓');
+            console.log('   - Seed data missing ✗\n');
           }
         }
       }
@@ -531,7 +531,7 @@ async function validateMigrations(sdId, options = {}) {
 
   // Final Verdict
   console.log(`${'='.repeat(60)}`);
-  console.log(`FINAL VERDICT`);
+  console.log('FINAL VERDICT');
   console.log(`${'='.repeat(60)}\n`);
 
   let finalVerdict, reason;

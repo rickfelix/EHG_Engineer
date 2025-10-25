@@ -258,7 +258,8 @@ const prdContent = {
   },
 
   // Technical Architecture
-  system_architecture: // FIX: Renamed from technical_architecture {
+  // FIX: Renamed from technical_architecture
+  system_architecture: {
     service_layer: {
       file: "src/lib/services/ventureIdeationService.ts",
       exports: [

@@ -24,7 +24,7 @@ async function updateNavigationMaturity() {
     // Verify current state
     console.log('\n2️⃣  Verifying current nav_routes state...');
     const checkResult = await client.query(
-      "SELECT id, path, title, maturity, is_enabled FROM nav_routes WHERE path = $1",
+      'SELECT id, path, title, maturity, is_enabled FROM nav_routes WHERE path = $1',
       ['/chairman-analytics']
     );
 
@@ -50,8 +50,8 @@ async function updateNavigationMaturity() {
 
     // Execute UPDATE
     console.log('\n3️⃣  Executing UPDATE query...');
-    console.log(`   SET maturity = 'complete', updated_at = NOW()`);
-    console.log(`   WHERE path = '/chairman-analytics'`);
+    console.log('   SET maturity = \'complete\', updated_at = NOW()');
+    console.log('   WHERE path = \'/chairman-analytics\'');
 
     const updateResult = await client.query(
       `UPDATE nav_routes
@@ -72,7 +72,7 @@ async function updateNavigationMaturity() {
     // Verify final state
     console.log('\n4️⃣  Verifying updated state...');
     const verifyResult = await client.query(
-      "SELECT id, path, title, maturity, is_enabled, updated_at FROM nav_routes WHERE path = $1",
+      'SELECT id, path, title, maturity, is_enabled, updated_at FROM nav_routes WHERE path = $1',
       ['/chairman-analytics']
     );
 

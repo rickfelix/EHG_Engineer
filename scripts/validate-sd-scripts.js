@@ -186,7 +186,7 @@ async function main() {
       if (result.missing.recommended.length > 0) {
         console.log(`   Minor: Missing ${result.missing.recommended.length} recommended fields: ${result.missing.recommended.join(', ')}`);
       } else {
-        console.log(`   Perfect: All recommended fields present`);
+        console.log('   Perfect: All recommended fields present');
       }
     }
   }
@@ -253,10 +253,10 @@ async function main() {
   }
 
   console.log('\n✅ Validation complete!');
-  console.log(`\nNext steps:`);
-  console.log(`1. Review scripts with missing required fields and update them`);
-  console.log(`2. Add recommended fields to improve LEO Protocol compliance`);
-  console.log(`3. Run this script again to verify improvements`);
+  console.log('\nNext steps:');
+  console.log('1. Review scripts with missing required fields and update them');
+  console.log('2. Add recommended fields to improve LEO Protocol compliance');
+  console.log('3. Run this script again to verify improvements');
 }
 
 main().catch(console.error);

@@ -29,7 +29,7 @@ async function createHandoff() {
     phase: 'planning',
 
     // 7 Mandatory Elements
-    executive_summary: `Implement Stage 35 - GTM Timing Intelligence system for optimizing go-to-market timing decisions in venture development. This system analyzes market conditions, competitive landscape, customer readiness, and internal capability factors to provide intelligent recommendations on optimal launch timing.`,
+    executive_summary: 'Implement Stage 35 - GTM Timing Intelligence system for optimizing go-to-market timing decisions in venture development. This system analyzes market conditions, competitive landscape, customer readiness, and internal capability factors to provide intelligent recommendations on optimal launch timing.',
 
     completeness_report: {
       requirements_gathered: true,

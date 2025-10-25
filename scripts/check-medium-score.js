@@ -14,7 +14,7 @@ async function checkScore() {
 
   try {
     // Temporarily disable constraint to see what score we get
-    await client.query(`ALTER TABLE retrospectives DROP CONSTRAINT retrospectives_quality_score_check`);
+    await client.query('ALTER TABLE retrospectives DROP CONSTRAINT retrospectives_quality_score_check');
 
     const result = await client.query(`
       INSERT INTO retrospectives (
@@ -51,7 +51,7 @@ async function checkScore() {
     console.log('Issues found:', result.rows[0].quality_issues);
 
     // Clean up
-    await client.query(`DELETE FROM retrospectives WHERE id = $1`, [result.rows[0].id]);
+    await client.query('DELETE FROM retrospectives WHERE id = $1', [result.rows[0].id]);
 
     // Re-enable constraint
     await client.query(`

@@ -189,14 +189,14 @@ async function executeMigration(dryRun = true) {
         const archived = await archiveScript(scriptName);
         if (archived) {
           migratedCount++;
-          console.log(chalk.green(`      ✅ Migrated and archived`));
+          console.log(chalk.green('      ✅ Migrated and archived'));
         } else {
           skippedCount++;
-          console.log(chalk.yellow(`      ⚠️  Archive failed - script retained`));
+          console.log(chalk.yellow('      ⚠️  Archive failed - script retained'));
         }
       } else {
         migratedCount++;
-        console.log(chalk.gray(`      📋 Would migrate to template`));
+        console.log(chalk.gray('      📋 Would migrate to template'));
       }
 
     } catch (error) {

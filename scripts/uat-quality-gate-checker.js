@@ -301,13 +301,13 @@ class QualityGateChecker {
     console.log(chalk.bold(`🚪 QUALITY GATE EVALUATION - ${summary.overall_pass ? chalk.green('PASS') : chalk.red('FAIL')}`));
     console.log('='.repeat(80));
 
-    console.log(`\n📊 Summary:`);
+    console.log('\n📊 Summary:');
     console.log(`   Total Gates: ${summary.total_gates}`);
     console.log(`   Passed: ${chalk.green(summary.gates_passed)}`);
     console.log(`   Failed: ${chalk.red(summary.gates_failed)}`);
     console.log(`   Critical Failures: ${chalk.red(summary.critical_failures)}`);
 
-    console.log(`\n🔍 Gate Details:`);
+    console.log('\n🔍 Gate Details:');
     results.forEach(result => {
       const status = result.passed ? chalk.green('✅ PASS') : chalk.red('❌ FAIL');
       const critical = result.critical ? chalk.red('[CRITICAL]') : chalk.yellow('[NON-CRITICAL]');

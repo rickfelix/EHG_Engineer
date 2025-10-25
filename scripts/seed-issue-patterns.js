@@ -21,16 +21,16 @@ const initialPatterns = [
     issue_summary: 'Database schema mismatch between TypeScript interfaces and Supabase tables',
     occurrence_count: 5,
     proven_solutions: [{
-      solution: "Run schema verification before TypeScript interface updates",
+      solution: 'Run schema verification before TypeScript interface updates',
       times_applied: 5,
       times_successful: 5,
       success_rate: 100,
       avg_resolution_time_minutes: 15
     }],
     prevention_checklist: [
-      "Verify database schema before updating TypeScript types",
-      "Run migration before code changes",
-      "Check Supabase dashboard for table structure"
+      'Verify database schema before updating TypeScript types',
+      'Run migration before code changes',
+      'Check Supabase dashboard for table structure'
     ],
     success_rate: 100,
     average_resolution_time: '15 minutes',
@@ -44,16 +44,16 @@ const initialPatterns = [
     issue_summary: 'Test path errors after component rename or refactoring',
     occurrence_count: 3,
     proven_solutions: [{
-      solution: "Update import paths in test files to match new component location",
+      solution: 'Update import paths in test files to match new component location',
       times_applied: 3,
       times_successful: 3,
       success_rate: 100,
       avg_resolution_time_minutes: 10
     }],
     prevention_checklist: [
-      "Update test imports when renaming components",
-      "Use IDE refactoring tools",
-      "Run tests after any file moves"
+      'Update test imports when renaming components',
+      'Use IDE refactoring tools',
+      'Run tests after any file moves'
     ],
     success_rate: 100,
     average_resolution_time: '10 minutes',
@@ -67,16 +67,16 @@ const initialPatterns = [
     issue_summary: 'RLS policy preventing data access even for authenticated users',
     occurrence_count: 3,
     proven_solutions: [{
-      solution: "Add auth.uid() check to RLS policy USING clause",
+      solution: 'Add auth.uid() check to RLS policy USING clause',
       times_applied: 3,
       times_successful: 3,
       success_rate: 100,
       avg_resolution_time_minutes: 20
     }],
     prevention_checklist: [
-      "Verify RLS policies include auth.uid() checks",
-      "Test with authenticated user context",
-      "Check policy applies to correct operations"
+      'Verify RLS policies include auth.uid() checks',
+      'Test with authenticated user context',
+      'Check policy applies to correct operations'
     ],
     success_rate: 100,
     average_resolution_time: '20 minutes',
@@ -90,16 +90,16 @@ const initialPatterns = [
     issue_summary: 'Changes not reflecting after code update - server restart required',
     occurrence_count: 4,
     proven_solutions: [{
-      solution: "Kill dev server, rebuild client, restart server",
+      solution: 'Kill dev server, rebuild client, restart server',
       times_applied: 4,
       times_successful: 4,
       success_rate: 100,
       avg_resolution_time_minutes: 5
     }],
     prevention_checklist: [
-      "Always restart dev server after code changes",
-      "Run npm run build:client for UI changes",
-      "Hard refresh browser (Ctrl+Shift+R)"
+      'Always restart dev server after code changes',
+      'Run npm run build:client for UI changes',
+      'Hard refresh browser (Ctrl+Shift+R)'
     ],
     success_rate: 100,
     average_resolution_time: '5 minutes',
@@ -113,16 +113,16 @@ const initialPatterns = [
     issue_summary: 'Component import errors due to build output path mismatch',
     occurrence_count: 4,
     proven_solutions: [{
-      solution: "Verify build output paths match test expectations in vite.config.js",
+      solution: 'Verify build output paths match test expectations in vite.config.js',
       times_applied: 4,
       times_successful: 4,
       success_rate: 100,
       avg_resolution_time_minutes: 12
     }],
     prevention_checklist: [
-      "Check vite.config.js build output configuration",
-      "Verify dist/ paths are correct",
-      "Rebuild before testing"
+      'Check vite.config.js build output configuration',
+      'Verify dist/ paths are correct',
+      'Rebuild before testing'
     ],
     success_rate: 100,
     average_resolution_time: '12 minutes',
@@ -136,15 +136,15 @@ const initialPatterns = [
     issue_summary: 'Build output directory changed or missing after configuration updates',
     occurrence_count: 2,
     proven_solutions: [{
-      solution: "Verify dist/ path matches server static file configuration",
+      solution: 'Verify dist/ path matches server static file configuration',
       times_applied: 2,
       times_successful: 2,
       success_rate: 100,
       avg_resolution_time_minutes: 15
     }],
     prevention_checklist: [
-      "Document build paths in README",
-      "Keep vite.config.js and server.js paths in sync"
+      'Document build paths in README',
+      'Keep vite.config.js and server.js paths in sync'
     ],
     success_rate: 100,
     average_resolution_time: '15 minutes',
@@ -158,16 +158,16 @@ const initialPatterns = [
     issue_summary: 'Sub-agent not triggering despite matching keyword in context',
     occurrence_count: 3,
     proven_solutions: [{
-      solution: "Verify trigger keyword in leo_sub_agent_triggers table and check activation_type",
+      solution: 'Verify trigger keyword in leo_sub_agent_triggers table and check activation_type',
       times_applied: 3,
       times_successful: 3,
       success_rate: 100,
       avg_resolution_time_minutes: 25
     }],
     prevention_checklist: [
-      "Check trigger keywords in database",
-      "Verify sub-agent is active",
-      "Review activation context requirements"
+      'Check trigger keywords in database',
+      'Verify sub-agent is active',
+      'Review activation context requirements'
     ],
     success_rate: 100,
     average_resolution_time: '25 minutes',
@@ -181,16 +181,16 @@ const initialPatterns = [
     issue_summary: 'CI/CD pipeline failures due to environment variable or dependency issues',
     occurrence_count: 2,
     proven_solutions: [{
-      solution: "Check GitHub Actions secrets and package.json dependencies",
+      solution: 'Check GitHub Actions secrets and package.json dependencies',
       times_applied: 2,
       times_successful: 2,
       success_rate: 100,
       avg_resolution_time_minutes: 30
     }],
     prevention_checklist: [
-      "Verify all required secrets are set in GitHub",
-      "Test locally with same Node version as CI",
-      "Check package-lock.json is committed"
+      'Verify all required secrets are set in GitHub',
+      'Test locally with same Node version as CI',
+      'Check package-lock.json is committed'
     ],
     success_rate: 100,
     average_resolution_time: '30 minutes',
@@ -233,7 +233,7 @@ async function seedPatterns() {
       }
     }
 
-    console.log(`\n📊 Summary:`);
+    console.log('\n📊 Summary:');
     console.log(`  Inserted: ${inserted}`);
     console.log(`  Skipped: ${skipped}`);
     console.log(`  Total: ${initialPatterns.length}`);

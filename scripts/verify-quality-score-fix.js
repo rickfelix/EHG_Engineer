@@ -29,7 +29,7 @@ async function verifyFix() {
       `);
 
       // Clean up
-      await client.query(`DELETE FROM retrospectives WHERE sd_id = 'TEST-VERIFY-001'`);
+      await client.query('DELETE FROM retrospectives WHERE sd_id = \'TEST-VERIFY-001\'');
       console.log('✅ Test 1 PASSED: quality_score = 70 accepted\n');
     } catch (err) {
       console.log(`❌ Test 1 FAILED: quality_score = 70 rejected - ${err.message}\n`);
@@ -51,7 +51,7 @@ async function verifyFix() {
       `);
 
       // Clean up
-      await client.query(`DELETE FROM retrospectives WHERE sd_id = 'TEST-VERIFY-002'`);
+      await client.query('DELETE FROM retrospectives WHERE sd_id = \'TEST-VERIFY-002\'');
       console.log('✅ Test 2 PASSED: quality_score = 100 accepted\n');
     } catch (err) {
       console.log(`❌ Test 2 FAILED: quality_score = 100 rejected - ${err.message}\n`);

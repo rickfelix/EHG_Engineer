@@ -486,15 +486,15 @@ async function addSections() {
       .single();
 
     if (error) {
-      console.error(`   ❌ Error:`, error.message);
+      console.error('   ❌ Error:', error.message);
       if (error.code === '23505') {
-        console.log(`   ⚠️  Section already exists (duplicate key)`);
+        console.log('   ⚠️  Section already exists (duplicate key)');
       }
     } else if (data) {
       const idStr = String(data.id);
       console.log(`   ✅ Added (ID: ${idStr.substring(0, 8)}...)`);
     } else {
-      console.log(`   ⚠️  No data returned (may have been added)`);
+      console.log('   ⚠️  No data returned (may have been added)');
     }
     console.log();
   }

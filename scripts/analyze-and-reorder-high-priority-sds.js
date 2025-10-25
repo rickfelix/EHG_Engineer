@@ -32,7 +32,7 @@ async function analyzeAndReorderSDs() {
     console.log(`Title: ${sd.title}`);
     console.log(`Description: ${sd.description?.substring(0, 200)}${sd.description?.length > 200 ? '...' : ''}`);
     console.log(`Status: ${sd.status}`);
-    console.log(`Metadata:`, sd.metadata ? JSON.stringify(sd.metadata).substring(0, 100) : 'None');
+    console.log('Metadata:', sd.metadata ? JSON.stringify(sd.metadata).substring(0, 100) : 'None');
   });
 
   console.log('\n' + '='.repeat(80));

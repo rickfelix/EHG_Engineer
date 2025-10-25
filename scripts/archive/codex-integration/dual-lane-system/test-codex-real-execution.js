@@ -47,7 +47,7 @@ class CodexRealExecutionTester {
       );
 
       if (result.pid) {
-        this.testResults.passed.push(`✅ Claude process spawned with PID during test`);
+        this.testResults.passed.push('✅ Claude process spawned with PID during test');
         this.testResults.passed.push(`✅ Process completed with exit code: ${result.exitCode}`);
       }
 
@@ -288,7 +288,7 @@ class CodexRealExecutionTester {
     }
 
     // Test with a complex, specific task
-    const complexTask = `Generate a TypeScript interface for a User object with id (number), name (string), email (string), and createdAt (Date)`;
+    const complexTask = 'Generate a TypeScript interface for a User object with id (number), name (string), email (string), and createdAt (Date)';
     const result = await this.controller.runAsCodex(complexTask, { complex: true });
 
     if (result.artifacts && result.artifacts.length > 0) {

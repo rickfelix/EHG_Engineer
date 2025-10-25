@@ -410,7 +410,7 @@ This tool helps LEO Protocol agents determine when Vision QA is required.
     console.log('VISION QA DECISION ANALYSIS');
     console.log('='.repeat(50));
     
-    console.log(`\n📊 Factors Detected:`);
+    console.log('\n📊 Factors Detected:');
     console.log(`- Has UI Components: ${this.factors.hasUI ? '✅' : '❌'}`);
     console.log(`- Customer Facing: ${this.factors.isCustomerFacing ? '✅' : '❌'}`);
     console.log(`- Payment/Auth: ${this.factors.isPaymentAuth ? '✅' : '❌'}`);
@@ -420,17 +420,17 @@ This tool helps LEO Protocol agents determine when Vision QA is required.
     console.log(`- Complexity Level: ${this.factors.complexity}`);
     console.log(`- Risk Level: ${this.factors.riskLevel}`);
 
-    console.log(`\n🎯 Decision:`);
+    console.log('\n🎯 Decision:');
     console.log(`- Recommendation: ${decision.recommendation}`);
     console.log(`- Required: ${decision.required ? 'YES' : 'NO'}`);
     console.log(`- Reason: ${decision.reason}`);
 
     if (decision.config) {
-      console.log(`\n⚙️  Suggested Configuration:`);
+      console.log('\n⚙️  Suggested Configuration:');
       console.log(JSON.stringify(decision.config, null, 2));
     }
 
-    console.log(`\n📝 LEO Protocol Communication Snippet:`);
+    console.log('\n📝 LEO Protocol Communication Snippet:');
     console.log('```markdown');
     console.log(this.generateCommunication(decision, agentRole));
     console.log('```');

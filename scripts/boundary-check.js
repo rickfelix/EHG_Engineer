@@ -7,6 +7,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import readline from 'readline';
 
 class BoundaryChecker {
   constructor() {
@@ -175,8 +176,7 @@ switch (command) {
   case 'validate':
     console.log('\n🔍 Interactive Boundary Validation');
     console.log('Type features to validate (empty line to exit):\n');
-    
-    import readline from 'readline';
+
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout

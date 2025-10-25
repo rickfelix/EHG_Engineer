@@ -147,7 +147,7 @@ async function main() {
       if (insertError.code === '23505') {
         console.log(`   ⚠️  Sub-agent ${agent.agent_type} already exists, skipping...`);
       } else if (insertError.code === '42P01') {
-        console.log(`   ⚠️  sub_agent_execution_results table doesn't exist, skipping sub-agent records`);
+        console.log('   ⚠️  sub_agent_execution_results table doesn\'t exist, skipping sub-agent records');
         break;
       } else {
         console.error(`   ❌ Error inserting ${agent.agent_type}:`, insertError);
@@ -231,7 +231,7 @@ async function main() {
       if (insertError.code === '23505') {
         console.log(`   ⚠️  Deliverable ${deliverable.file_path} already exists, skipping...`);
       } else if (insertError.code === '42P01') {
-        console.log(`   ⚠️  sd_deliverables table doesn't exist, skipping deliverable records`);
+        console.log('   ⚠️  sd_deliverables table doesn\'t exist, skipping deliverable records');
         break;
       } else {
         console.error(`   ❌ Error inserting deliverable ${deliverable.file_path}:`, insertError);

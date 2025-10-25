@@ -59,8 +59,8 @@ function validateSection(sectionName, items, minThreshold, excellentThreshold) {
 }
 
 async function validateRetrospectiveQuality(sdId) {
-  console.log(`\n🔍 RETROSPECTIVE QUALITY VALIDATOR`);
-  console.log(`═`.repeat(60));
+  console.log('\n🔍 RETROSPECTIVE QUALITY VALIDATOR');
+  console.log('═'.repeat(60));
 
   // Get SD details
   const { data: sd, error: sdError } = await supabase
@@ -86,7 +86,7 @@ async function validateRetrospectiveQuality(sdId) {
 
   if (retroError || !retro || retro.length === 0) {
     console.log(`❌ No retrospective found for ${sd.sd_key}`);
-    console.log(`\n📝 Action Required:`);
+    console.log('\n📝 Action Required:');
     console.log(`   Run: node scripts/generate-comprehensive-retrospective.js ${sdId}`);
     process.exit(1);
   }
@@ -124,8 +124,8 @@ async function validateRetrospectiveQuality(sdId) {
     )
   ];
 
-  console.log(`📊 SECTION VALIDATION`);
-  console.log(`═`.repeat(60));
+  console.log('📊 SECTION VALIDATION');
+  console.log('═'.repeat(60));
 
   let allSectionsMeetMin = true;
   let allSectionsExcellent = true;
@@ -141,8 +141,8 @@ async function validateRetrospectiveQuality(sdId) {
   });
 
   // Validate scores
-  console.log(`\n\n📈 SCORE VALIDATION`);
-  console.log(`═`.repeat(60));
+  console.log('\n\n📈 SCORE VALIDATION');
+  console.log('═'.repeat(60));
 
   const qualityScore = retrospective.quality_score || 0;
   const satisfactionScore = retrospective.team_satisfaction || 0;
@@ -154,7 +154,7 @@ async function validateRetrospectiveQuality(sdId) {
   } else if (qualityScore < QUALITY_THRESHOLDS.quality_score_excellent) {
     console.log(`   ✅ Meets minimum, target ${QUALITY_THRESHOLDS.quality_score_excellent} for excellent`);
   } else {
-    console.log(`   ✅ Excellent quality`);
+    console.log('   ✅ Excellent quality');
   }
 
   console.log(`\nTeam Satisfaction: ${satisfactionScore}/10`);
@@ -163,27 +163,27 @@ async function validateRetrospectiveQuality(sdId) {
   } else if (satisfactionScore < QUALITY_THRESHOLDS.team_satisfaction_excellent) {
     console.log(`   ✅ Meets minimum, target ${QUALITY_THRESHOLDS.team_satisfaction_excellent} for excellent`);
   } else {
-    console.log(`   ✅ Excellent satisfaction`);
+    console.log('   ✅ Excellent satisfaction');
   }
 
   // Business value check
-  console.log(`\n\n💼 BUSINESS VALUE`);
-  console.log(`═`.repeat(60));
+  console.log('\n\n💼 BUSINESS VALUE');
+  console.log('═'.repeat(60));
 
   const hasBusinessValue = retrospective.business_value_delivered &&
                           retrospective.business_value_delivered.length > 10;
 
-  console.log(`\nBusiness Value Delivered:`);
+  console.log('\nBusiness Value Delivered:');
   if (hasBusinessValue) {
     console.log(`   ✅ Documented: "${retrospective.business_value_delivered}"`);
   } else {
-    console.log(`   ❌ Missing or generic`);
-    console.log(`   Add specific business value statement`);
+    console.log('   ❌ Missing or generic');
+    console.log('   Add specific business value statement');
   }
 
   // Overall verdict
-  console.log(`\n\n🎯 OVERALL VERDICT`);
-  console.log(`═`.repeat(60));
+  console.log('\n\n🎯 OVERALL VERDICT');
+  console.log('═'.repeat(60));
 
   const overallScore = qualityScore;
   const badge = getBadge(overallScore);
@@ -192,52 +192,52 @@ async function validateRetrospectiveQuality(sdId) {
   console.log(`Quality Score: ${overallScore}/100\n`);
 
   if (overallScore >= 90) {
-    console.log(`✅ Retrospective meets excellent quality standards!`);
-    console.log(`   Ready for LEAD review and archival`);
+    console.log('✅ Retrospective meets excellent quality standards!');
+    console.log('   Ready for LEAD review and archival');
   } else if (overallScore >= 80) {
-    console.log(`✅ Retrospective meets good quality standards`);
-    console.log(`   Optional: Consider enhancements for excellent rating`);
+    console.log('✅ Retrospective meets good quality standards');
+    console.log('   Optional: Consider enhancements for excellent rating');
   } else if (overallScore >= 70) {
-    console.log(`⚠️  Retrospective meets minimum standards`);
-    console.log(`   Recommended: Enhance before final approval`);
+    console.log('⚠️  Retrospective meets minimum standards');
+    console.log('   Recommended: Enhance before final approval');
   } else {
-    console.log(`❌ Retrospective needs improvement`);
-    console.log(`   Required: Enhancement before LEAD approval`);
+    console.log('❌ Retrospective needs improvement');
+    console.log('   Required: Enhancement before LEAD approval');
   }
 
   // Action recommendations
-  console.log(`\n\n📋 RECOMMENDED ACTIONS`);
-  console.log(`═`.repeat(60));
+  console.log('\n\n📋 RECOMMENDED ACTIONS');
+  console.log('═'.repeat(60));
 
   const needsWork = validations.filter(v => !v.meetsMin);
   const canImprove = validations.filter(v => v.meetsMin && !v.isExcellent);
 
   if (needsWork.length > 0) {
-    console.log(`\n🔴 REQUIRED (Below Minimum):`);
+    console.log('\n🔴 REQUIRED (Below Minimum):');
     needsWork.forEach(v => {
       console.log(`   • ${v.section}: ${v.recommendation}`);
     });
   }
 
   if (canImprove.length > 0) {
-    console.log(`\n🟡 OPTIONAL (For Excellent Rating):`);
+    console.log('\n🟡 OPTIONAL (For Excellent Rating):');
     canImprove.forEach(v => {
       console.log(`   • ${v.section}: ${v.recommendation}`);
     });
   }
 
   if (needsWork.length === 0 && canImprove.length === 0) {
-    console.log(`\n✅ No improvements needed - retrospective is excellent!`);
+    console.log('\n✅ No improvements needed - retrospective is excellent!');
   }
 
   if (!hasBusinessValue) {
-    console.log(`\n🟡 ENHANCE:`);
-    console.log(`   • Add specific business value statement`);
+    console.log('\n🟡 ENHANCE:');
+    console.log('   • Add specific business value statement');
   }
 
   if (retrospective.generated_by === 'MANUAL') {
-    console.log(`\n💡 SUGGESTION:`);
-    console.log(`   Retrospective was manually generated (template-based)`);
+    console.log('\n💡 SUGGESTION:');
+    console.log('   Retrospective was manually generated (template-based)');
     console.log(`   Consider running: node scripts/enhance-retrospective-sd-${sd.sd_key.toLowerCase()}.js`);
   }
 

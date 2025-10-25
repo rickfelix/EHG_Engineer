@@ -13,7 +13,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 import { autoTriggerStories } from './modules/auto-trigger-stories.mjs';
 import { getComponentRecommendations, formatForPRD, generateInstallScript } from '../lib/shadcn-semantic-explainable-selector.js';
 dotenv.config();

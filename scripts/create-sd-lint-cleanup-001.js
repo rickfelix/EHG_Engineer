@@ -28,7 +28,7 @@ async function createLintCleanup() {
     id: 'SD-LINT-CLEANUP-001',
     sd_key: 'SD-LINT-CLEANUP-001',
     title: 'Codebase Lint Cleanup - Pre-Existing CI/CD Blockers',
-    description: `Fix 8 a11y errors and 5 React hooks warnings in pre-existing codebase files that are blocking CI/CD pipeline for all SDs. Files affected: chairman/, audio/, analytics/, ai-ceo/, onboarding/ components. These pre-existing issues were identified during SD-E2E-INFRASTRUCTURE-001 and are preventing proper CI/CD verification for all future strategic directives.`,
+    description: 'Fix 8 a11y errors and 5 React hooks warnings in pre-existing codebase files that are blocking CI/CD pipeline for all SDs. Files affected: chairman/, audio/, analytics/, ai-ceo/, onboarding/ components. These pre-existing issues were identified during SD-E2E-INFRASTRUCTURE-001 and are preventing proper CI/CD verification for all future strategic directives.',
     priority: 'high',
     status: 'draft',
     category: 'Optimization',

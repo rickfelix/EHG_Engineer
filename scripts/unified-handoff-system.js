@@ -103,8 +103,8 @@ class UnifiedHandoffSystem {
 
       throw new Error(
         `❌ BLOCKING: Strategic Directive ${sdId} not found in database. ` +
-        `All SDs must exist in strategic_directives_v2 table before work begins. ` +
-        `Create SD first using the LEO Protocol dashboard or create-strategic-directive.js script.`
+        'All SDs must exist in strategic_directives_v2 table before work begins. ' +
+        'Create SD first using the LEO Protocol dashboard or create-strategic-directive.js script.'
       );
     }
 
@@ -126,7 +126,7 @@ class UnifiedHandoffSystem {
     console.log('='.repeat(50));
     console.log(`Type: ${normalizedType}${handoffType !== normalizedType ? ` (normalized from: ${handoffType})` : ''}`);
     console.log(`Strategic Directive: ${sdId}`);
-    console.log(`Options:`, options);
+    console.log('Options:', options);
     console.log('');
 
     try {
@@ -411,11 +411,11 @@ class UnifiedHandoffSystem {
 
       // If target_application is set but doesn't match, warn and fall through to heuristics
       console.warn(`   ⚠️  Unknown target_application value: "${sd.target_application}"`);
-      console.warn(`   Falling back to heuristic detection...`);
+      console.warn('   Falling back to heuristic detection...');
     }
 
     // FALLBACK: Heuristic detection if target_application not set or invalid
-    console.log(`   Repository determined by heuristics (category/keywords)...`);
+    console.log('   Repository determined by heuristics (category/keywords)...');
 
     const engineeringCategories = ['engineering', 'tool', 'infrastructure', 'devops', 'ci-cd'];
     const engineeringKeywords = ['eng/', 'tool/', 'infra/', 'pipeline/', 'build/', 'deploy/'];
@@ -611,7 +611,7 @@ class UnifiedHandoffSystem {
       if (!coverageValidation.passed) {
         console.error('\n❌ E2E TEST COVERAGE INSUFFICIENT');
         console.error(`   Coverage: ${coverageValidation.coverage}%`);
-        console.error(`   Threshold: 50% (UI features should have E2E tests)`);
+        console.error('   Threshold: 50% (UI features should have E2E tests)');
         console.error(`   Unmapped: ${mappingResult.unmatchedStories.length} user stories`);
         console.error('');
         console.error('   REMEDIATION:');
@@ -1186,7 +1186,7 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
         throw insertError;
       }
 
-      console.log(`📄 Handoff artifact created (pending validation)...`);
+      console.log('📄 Handoff artifact created (pending validation)...');
 
       // Update to accepted status (now trigger can validate the existing row)
       const { error: updateError } = await this.supabase
@@ -1204,7 +1204,7 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
         throw updateError;
       }
 
-      console.log(`✅ Handoff accepted and stored in sd_phase_handoffs`);
+      console.log('✅ Handoff accepted and stored in sd_phase_handoffs');
 
     } catch (error) {
       console.error('⚠️  Could not create handoff artifact:', error.message);
@@ -1337,8 +1337,8 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
 
       content.key_decisions = [
         `**Implementation Complete**: ${result.checkedItems || 'All'} items checked`,
-        `**Test Coverage**: Unit + E2E tests passing`,
-        `**Documentation**: Generated and stored`,
+        '**Test Coverage**: Unit + E2E tests passing',
+        '**Documentation**: Generated and stored',
         `**Sub-Agents**: ${result.subAgents?.passed || 'All'} passed`,
         `**BMAD Score**: ${result.bmad_validation?.score || 'Validation passed'}`
       ].join('\n\n');
@@ -1372,11 +1372,11 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
       ].join('\n');
 
       content.key_decisions = [
-        `**Verification Status**: All checks passed`,
+        '**Verification Status**: All checks passed',
         `**Quality Score**: ${result.qualityScore || 100}%`,
         `**User Stories**: ${result.userStories?.validated || 'All'} validated`,
-        `**Test Coverage**: Comprehensive (Unit + E2E)`,
-        `**Documentation**: Quality confirmed`
+        '**Test Coverage**: Comprehensive (Unit + E2E)',
+        '**Documentation**: Quality confirmed'
       ].join('\n\n');
 
       content.known_issues = result.warnings?.join('\n') || 'No issues identified - SD ready for completion';

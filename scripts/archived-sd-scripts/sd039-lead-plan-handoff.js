@@ -29,7 +29,7 @@ async function createHandoff() {
     phase: 'planning',
 
     // 7 Mandatory Elements
-    executive_summary: `Implement comprehensive Chairman Dashboard for executive-level oversight and strategic decision-making. This consolidated dashboard provides senior leadership with real-time visibility into venture performance, strategic initiatives, financial metrics, and operational intelligence across the entire organization.`,
+    executive_summary: 'Implement comprehensive Chairman Dashboard for executive-level oversight and strategic decision-making. This consolidated dashboard provides senior leadership with real-time visibility into venture performance, strategic initiatives, financial metrics, and operational intelligence across the entire organization.',
 
     completeness_report: {
       requirements_gathered: true,

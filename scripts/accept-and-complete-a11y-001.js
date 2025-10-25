@@ -58,11 +58,11 @@ async function completeHandoffs() {
 ✅ PRD: Created (PRD-A11Y-ONBOARDING-001, 3 FR, 1 test scenario)
 ✅ Retrospective: Published (quality score 90/100)
 ✅ Commit: 2960524 pushed to feat/SD-VWC-INTUITIVE-FLOW-001 branch`,
-      key_decisions: `Accept handoff despite CI red - out-of-scope errors documented`,
-      completeness_report: `All SD-A11Y-ONBOARDING-001 scope delivered. CI red due to separate issues.`,
-      known_issues: `CI pipeline red (out-of-scope errors in BoardReporting, ExportConfigurationForm, AnalyticsDashboard)`,
-      resource_utilization: `2 hours total (1h impl + 1h protocol compliance)`,
-      action_items: `LEAD: Accept with caveat, create separate SD(s) for remaining a11y errors`
+      key_decisions: 'Accept handoff despite CI red - out-of-scope errors documented',
+      completeness_report: 'All SD-A11Y-ONBOARDING-001 scope delivered. CI red due to separate issues.',
+      known_issues: 'CI pipeline red (out-of-scope errors in BoardReporting, ExportConfigurationForm, AnalyticsDashboard)',
+      resource_utilization: '2 hours total (1h impl + 1h protocol compliance)',
+      action_items: 'LEAD: Accept with caveat, create separate SD(s) for remaining a11y errors'
     };
 
     const insertQuery = `
@@ -105,7 +105,7 @@ async function completeHandoffs() {
     `;
 
     await client.query(acceptPlanLeadQuery, [insertResult.rows[0].id]);
-    console.log(`✅ PLAN→LEAD handoff accepted`);
+    console.log('✅ PLAN→LEAD handoff accepted');
 
     console.log('\n' + '='.repeat(60));
     console.log('✅ ALL HANDOFFS COMPLETE');

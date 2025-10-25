@@ -3,7 +3,7 @@
  * Add LEO Protocol v4.1.2_database_first to Database
  */
 
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 import { createClient } from '@supabase/supabase-js';
 

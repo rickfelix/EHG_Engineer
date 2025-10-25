@@ -9,7 +9,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 async function cancelStrategicDirective(sdId) {
@@ -49,7 +49,7 @@ async function cancelStrategicDirective(sdId) {
     console.log(`   Created: ${existingSD.created_at}`);
 
     if (existingSD.status === 'cancelled') {
-      console.log(`⚠️  SD is already cancelled`);
+      console.log('⚠️  SD is already cancelled');
       process.exit(0);
     }
 

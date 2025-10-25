@@ -230,7 +230,7 @@ export async function safeBulkInsert(supabase, tableName, dataArray, options = {
           success: false,
           data: [],
           warnings,
-          error: `Warnings detected during bulk validation`,
+          error: 'Warnings detected during bulk validation',
           failedRecords: []
         };
       }
@@ -261,7 +261,7 @@ export async function safeBulkInsert(supabase, tableName, dataArray, options = {
           success: false,
           data: [],
           warnings,
-          error: `Bulk insert appeared to succeed but no data returned`,
+          error: 'Bulk insert appeared to succeed but no data returned',
           failedRecords: []
         };
       }
@@ -305,29 +305,29 @@ function enhanceSupabaseError(error, tableName, data) {
 
   // Add specific guidance for common errors
   if (error.message.includes('invalid input syntax for type uuid')) {
-    message += `\n💡 UUID Type Mismatch Detected!\n`;
-    message += `This is the exact issue from SD-KNOWLEDGE-001.\n`;
-    message += `Fix: Import randomUUID and use it for ID generation:\n`;
-    message += `  import { randomUUID } from 'crypto';\n`;
-    message += `  const id = randomUUID();\n`;
+    message += '\n💡 UUID Type Mismatch Detected!\n';
+    message += 'This is the exact issue from SD-KNOWLEDGE-001.\n';
+    message += 'Fix: Import randomUUID and use it for ID generation:\n';
+    message += '  import { randomUUID } from \'crypto\';\n';
+    message += '  const id = randomUUID();\n';
   }
 
   if (error.message.includes('column') && error.message.includes('does not exist')) {
-    message += `\n💡 Column Not Found!\n`;
-    message += `The column name in your data doesn't match the database schema.\n`;
-    message += `Check for typos or use schema-validator to see available columns.\n`;
+    message += '\n💡 Column Not Found!\n';
+    message += 'The column name in your data doesn\'t match the database schema.\n';
+    message += 'Check for typos or use schema-validator to see available columns.\n';
   }
 
   if (error.message.includes('violates foreign key constraint')) {
-    message += `\n💡 Foreign Key Violation!\n`;
-    message += `The referenced record doesn't exist in the parent table.\n`;
-    message += `Ensure the referenced ID exists before inserting.\n`;
+    message += '\n💡 Foreign Key Violation!\n';
+    message += 'The referenced record doesn\'t exist in the parent table.\n';
+    message += 'Ensure the referenced ID exists before inserting.\n';
   }
 
   if (error.message.includes('violates not-null constraint')) {
-    message += `\n💡 NOT NULL Constraint Violation!\n`;
-    message += `A required field is missing or null.\n`;
-    message += `Check schema for required fields.\n`;
+    message += '\n💡 NOT NULL Constraint Violation!\n';
+    message += 'A required field is missing or null.\n';
+    message += 'Check schema for required fields.\n';
   }
 
   // Add data preview (limit to avoid huge logs)
@@ -353,7 +353,7 @@ function enhanceBulkSupabaseError(error, tableName, recordCount) {
   message += `Error: ${error.message}\n`;
   message += `Code: ${error.code || 'N/A'}\n`;
 
-  message += `\n💡 Tip: Use safeInsert() on each record individually to identify the problematic record.\n`;
+  message += '\n💡 Tip: Use safeInsert() on each record individually to identify the problematic record.\n';
 
   return message;
 }

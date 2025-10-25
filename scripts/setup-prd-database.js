@@ -15,7 +15,7 @@ const __dirname = dirname(__filename);
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 async function setupPRDDatabase() {

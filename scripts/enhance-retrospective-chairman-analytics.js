@@ -28,14 +28,14 @@ async function enhanceRetrospective() {
       .from('retrospectives')
       .update({
         what_needs_improvement: [
-          "GITHUB Actions verification blocked handoff - need better CI/CD validation patterns for database-only changes",
-          "User stories constraint violations prevented creation - table constraints need documentation",
-          "Git commit enforcement gate mismatch for cross-repo database changes - need exception handling"
+          'GITHUB Actions verification blocked handoff - need better CI/CD validation patterns for database-only changes',
+          'User stories constraint violations prevented creation - table constraints need documentation',
+          'Git commit enforcement gate mismatch for cross-repo database changes - need exception handling'
         ],
         improvement_areas: [
-          "Add exception handling for database-only SDs in git commit enforcement gate",
-          "Document user_stories table constraints to prevent future errors",
-          "Improve GITHUB Actions sub-agent to handle database-only changes gracefully"
+          'Add exception handling for database-only SDs in git commit enforcement gate',
+          'Document user_stories table constraints to prevent future errors',
+          'Improve GITHUB Actions sub-agent to handle database-only changes gracefully'
         ],
         objectives_met: true,
         quality_score: 85,

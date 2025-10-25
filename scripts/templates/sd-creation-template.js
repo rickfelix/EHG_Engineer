@@ -56,19 +56,19 @@ async function createStrategicDirective() {
      * description: Detailed description of what this SD accomplishes
      * Should be 2-5 sentences explaining the feature/fix
      */
-    description: `[DETAILED DESCRIPTION HERE - What does this SD accomplish? What problem does it solve?]`,
+    description: '[DETAILED DESCRIPTION HERE - What does this SD accomplish? What problem does it solve?]',
 
     /**
      * rationale: Why is this SD necessary?
      * Should explain the business/technical reason
      */
-    rationale: `[WHY IS THIS NEEDED? What problem exists that this SD will solve?]`,
+    rationale: '[WHY IS THIS NEEDED? What problem exists that this SD will solve?]',
 
     /**
      * scope: What is included and excluded from this SD?
      * Can be a string or object
      */
-    scope: `[SCOPE HERE - What is included? What is excluded? What are the boundaries?]`,
+    scope: '[SCOPE HERE - What is included? What is excluded? What are the boundaries?]',
 
     /**
      * category: Classification of the SD
@@ -115,7 +115,7 @@ async function createStrategicDirective() {
      * strategic_intent: High-level strategic goal
      * Should be 1-2 sentences explaining the strategic purpose
      */
-    strategic_intent: `[STRATEGIC INTENT - What is the high-level strategic goal?]`,
+    strategic_intent: '[STRATEGIC INTENT - What is the high-level strategic goal?]',
 
     /**
      * strategic_objectives: Array of specific objectives
@@ -297,7 +297,7 @@ async function createStrategicDirective() {
     return data;
 
   } catch (error) {
-    console.error(`❌ Error creating SD:`, error.message);
+    console.error('❌ Error creating SD:', error.message);
     if (error.details) console.error('Details:', error.details);
     if (error.hint) console.error('Hint:', error.hint);
     throw error;

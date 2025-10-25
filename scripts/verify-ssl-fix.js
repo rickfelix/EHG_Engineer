@@ -39,13 +39,13 @@ async function verifyFix() {
       await client.connect();
       const result = await client.query('SELECT current_database(), current_user, version()');
       
-      console.log(`   ✅ Connection: SUCCESS`);
+      console.log('   ✅ Connection: SUCCESS');
       console.log(`   ✅ Database: ${result.rows[0].current_database}`);
       console.log(`   ✅ User: ${result.rows[0].current_user}`);
       
       await client.end();
     } catch (error) {
-      console.log(`   ❌ Connection: FAILED`);
+      console.log('   ❌ Connection: FAILED');
       console.log(`   ❌ Error: ${error.message}`);
       allPassed = false;
     }

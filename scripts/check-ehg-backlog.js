@@ -72,7 +72,7 @@ async function checkEHGBacklog() {
     console.log(`   Total rows: ${sdCount}`);
     if (sdBacklog && sdBacklog[0]) {
       const cols = Object.keys(sdBacklog[0]);
-      console.log(`   Columns:`, cols.slice(0, 15).join(', ') + (cols.length > 15 ? '...' : ''));
+      console.log('   Columns:', cols.slice(0, 15).join(', ') + (cols.length > 15 ? '...' : ''));
     }
   }
 

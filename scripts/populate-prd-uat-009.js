@@ -23,7 +23,7 @@ async function populatePRD() {
     status: 'approved',
     priority: 'critical',
 
-    executive_summary: `Replace hardcoded mock data in VentureGrid component with live database queries. Currently displays 6 static ventures; must connect to EHG Supabase database and implement functional search/filter capabilities. Foundation for all venture-related features.`,
+    executive_summary: 'Replace hardcoded mock data in VentureGrid component with live database queries. Currently displays 6 static ventures; must connect to EHG Supabase database and implement functional search/filter capabilities. Foundation for all venture-related features.',
 
     business_context: `**Current Problem**: Venture Portfolio Dashboard uses mock data (mockVentures array), making it impossible to manage real ventures. Search and filter buttons are non-functional, undermining platform credibility.
 

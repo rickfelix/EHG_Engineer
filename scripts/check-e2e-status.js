@@ -29,12 +29,12 @@ async function checkE2EStatus() {
     us.validation_status === 'validated' && us.e2e_test_status === 'passing'
   );
 
-  console.log(`\nBug Analysis:`);
+  console.log('\nBug Analysis:');
   console.log(`Total user stories: ${userStories.length}`);
   console.log(`validation_status = 'validated': ${userStories.filter(us => us.validation_status === 'validated').length}`);
   console.log(`e2e_test_status = 'passing': ${userStories.filter(us => us.e2e_test_status === 'passing').length}`);
   console.log(`BOTH conditions met: ${bothPassing.length}`);
-  console.log(`\n❌ RPC function requires BOTH conditions, but only validation_status is set!`);
+  console.log('\n❌ RPC function requires BOTH conditions, but only validation_status is set!');
 }
 
 checkE2EStatus().catch(console.error);

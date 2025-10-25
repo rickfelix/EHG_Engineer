@@ -106,7 +106,7 @@ class LEOProtocolVersionDetector {
     });
 
     const latest = this.versions[0];
-    console.log(`\n🟢 LATEST VERSION DETECTED:`);
+    console.log('\n🟢 LATEST VERSION DETECTED:');
     console.log(`   Version: ${latest.version}`);
     console.log(`   File: ${latest.filename}`);
     console.log(`   Status: ${latest.status}`);

@@ -5,7 +5,7 @@
  * Directly creates tables without complex migrations
  */
 
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 import pg from 'pg';
 
@@ -103,8 +103,8 @@ async function createTables() {
 
     // Enable RLS
     console.log('Enabling RLS...');
-    await client.query(`ALTER TABLE sub_agent_executions ENABLE ROW LEVEL SECURITY`);
-    await client.query(`ALTER TABLE sub_agent_execution_batches ENABLE ROW LEVEL SECURITY`);
+    await client.query('ALTER TABLE sub_agent_executions ENABLE ROW LEVEL SECURITY');
+    await client.query('ALTER TABLE sub_agent_execution_batches ENABLE ROW LEVEL SECURITY');
     console.log('✅ RLS enabled\n');
 
     // Create policies

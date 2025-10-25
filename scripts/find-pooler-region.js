@@ -56,8 +56,8 @@ async function findPoolerRegion() {
       const client = await pool.connect();
       const result = await client.query('SELECT current_database()');
       
-      console.log(`✅ SUCCESS!`);
-      console.log(`\n🎉 Found working configuration!`);
+      console.log('✅ SUCCESS!');
+      console.log('\n🎉 Found working configuration!');
       console.log('================================');
       console.log(`Region: ${region}`);
       console.log(`Host: ${host}`);
@@ -83,9 +83,9 @@ async function findPoolerRegion() {
       // Update configuration
       console.log('\n📝 Configuration to use:');
       console.log(`dbHost: '${host}'`);
-      console.log(`dbPort: 5432`);
+      console.log('dbPort: 5432');
       console.log(`dbUser: 'postgres.${projectRef}'`);
-      console.log(`dbPassword: process.env.SUPABASE_DB_PASSWORD`);
+      console.log('dbPassword: process.env.SUPABASE_DB_PASSWORD');
       
       return { region, host };
       

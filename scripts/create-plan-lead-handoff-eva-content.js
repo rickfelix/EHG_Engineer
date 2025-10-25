@@ -642,7 +642,7 @@ If approved, create SD-EVA-CONTENT-002:
       handoffData.created_at,
     ]);
 
-    console.log(`✅ PLAN→LEAD handoff created successfully!`);
+    console.log('✅ PLAN→LEAD handoff created successfully!');
     console.log(`   Handoff ID: ${result.rows[0].id}`);
     console.log(`   SD: ${SD_ID}`);
     console.log('');

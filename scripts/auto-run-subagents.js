@@ -56,9 +56,9 @@ async function runSubAgent(agent, script, sdId, sdKey) {
     }
 
     if (result.success) {
-      console.log(`   ✅ Success`);
+      console.log('   ✅ Success');
     } else {
-      console.log(`   ⚠️  Warning: Check output`);
+      console.log('   ⚠️  Warning: Check output');
     }
 
     return { success: true, result };
@@ -69,8 +69,8 @@ async function runSubAgent(agent, script, sdId, sdKey) {
 }
 
 async function autoRunSubAgents(sdId, triggerEvent) {
-  console.log(`\n🚀 AUTO-RUN SUB-AGENTS`);
-  console.log(`═`.repeat(60));
+  console.log('\n🚀 AUTO-RUN SUB-AGENTS');
+  console.log('═'.repeat(60));
   console.log(`Event: ${triggerEvent}`);
   console.log(`SD: ${sdId}`);
 
@@ -125,17 +125,17 @@ async function autoRunSubAgents(sdId, triggerEvent) {
   const succeeded = results.filter(r => r.success).length;
   const failed = results.filter(r => !r.success).length;
 
-  console.log(`\n═`.repeat(60));
-  console.log(`📊 SUMMARY`);
+  console.log('\n═'.repeat(60));
+  console.log('📊 SUMMARY');
   console.log(`   Required: ${required.length}`);
   console.log(`   Succeeded: ${succeeded}`);
   console.log(`   Failed: ${failed}`);
-  console.log(`═`.repeat(60));
+  console.log('═'.repeat(60));
 
   if (failed > 0) {
-    console.log(`\n⚠️  Some sub-agents failed. Review output above.`);
+    console.log('\n⚠️  Some sub-agents failed. Review output above.');
   } else {
-    console.log(`\n✅ All sub-agents completed successfully!`);
+    console.log('\n✅ All sub-agents completed successfully!');
   }
 
   return { required: required.length, succeeded, failed, results };

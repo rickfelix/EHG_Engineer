@@ -256,46 +256,46 @@ class FileTreeGenerator {
     const timestamp = new Date().toISOString();
     const dateStr = new Date().toLocaleString();
 
-    let content = `# Application File Trees\n\n`;
+    let content = '# Application File Trees\n\n';
     content += `**Generated**: ${dateStr}\n`;
-    content += `**Purpose**: Provide EXEC agent with complete directory context to eliminate routing errors\n\n`;
-    content += `---\n\n`;
+    content += '**Purpose**: Provide EXEC agent with complete directory context to eliminate routing errors\n\n';
+    content += '---\n\n';
 
     // EHG_Engineer tree
     content += `## ${engineerTree.label}\n\n`;
     content += `**Path**: \`${engineerTree.path}\`\n`;
-    content += `**Purpose**: LEO Protocol management dashboard\n`;
-    content += `**Database**: dedlbzhpgkmetvhbkyzq (Supabase)\n`;
+    content += '**Purpose**: LEO Protocol management dashboard\n';
+    content += '**Database**: dedlbzhpgkmetvhbkyzq (Supabase)\n';
     content += `**Files**: ${engineerTree.count}\n\n`;
-    content += `\`\`\`\n`;
+    content += '```\n';
     content += engineerTree.tree;
-    content += `\`\`\`\n\n`;
-    content += `---\n\n`;
+    content += '```\n\n';
+    content += '---\n\n';
 
     // EHG app tree
     content += `## ${ehgTree.label}\n\n`;
     content += `**Path**: \`${ehgTree.path}\`\n`;
-    content += `**Purpose**: Customer-facing business application (IMPLEMENTATION TARGET)\n`;
-    content += `**Database**: liapbndqlqxdcgpwntbv (Supabase)\n`;
+    content += '**Purpose**: Customer-facing business application (IMPLEMENTATION TARGET)\n';
+    content += '**Database**: liapbndqlqxdcgpwntbv (Supabase)\n';
     content += `**Files**: ${ehgTree.count}\n\n`;
-    content += `\`\`\`\n`;
+    content += '```\n';
     content += ehgTree.tree;
-    content += `\`\`\`\n\n`;
-    content += `---\n\n`;
+    content += '```\n\n';
+    content += '---\n\n';
 
     // Usage instructions
-    content += `## How to Use These Trees\n\n`;
-    content += `### For EXEC Agent\n`;
-    content += `1. **Before implementing**: Consult these trees to identify correct file paths\n`;
-    content += `2. **Application routing**: Match PRD requirements to correct application\n`;
-    content += `3. **Component location**: Find exact file paths using tree structure\n`;
-    content += `4. **Verification**: Cross-reference \`pwd\` output with tree paths\n\n`;
-    content += `### Critical Distinctions\n`;
-    content += `- **EHG_Engineer**: Dashboard, protocol management (don't implement features here!)\n`;
-    content += `- **EHG App**: All customer features go here\n\n`;
-    content += `### Refresh Strategy\n`;
-    content += `- **Auto-refresh**: Every 4 hours\n`;
-    content += `- **Manual refresh**: \`npm run context:refresh\` or \`node scripts/generate-file-trees.js --force\`\n`;
+    content += '## How to Use These Trees\n\n';
+    content += '### For EXEC Agent\n';
+    content += '1. **Before implementing**: Consult these trees to identify correct file paths\n';
+    content += '2. **Application routing**: Match PRD requirements to correct application\n';
+    content += '3. **Component location**: Find exact file paths using tree structure\n';
+    content += '4. **Verification**: Cross-reference `pwd` output with tree paths\n\n';
+    content += '### Critical Distinctions\n';
+    content += '- **EHG_Engineer**: Dashboard, protocol management (don\'t implement features here!)\n';
+    content += '- **EHG App**: All customer features go here\n\n';
+    content += '### Refresh Strategy\n';
+    content += '- **Auto-refresh**: Every 4 hours\n';
+    content += '- **Manual refresh**: `npm run context:refresh` or `node scripts/generate-file-trees.js --force`\n';
     content += `- **Next refresh**: ${new Date(Date.now() + 4 * 60 * 60 * 1000).toLocaleString()}\n\n`;
 
     // Estimate tokens

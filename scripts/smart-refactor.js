@@ -278,7 +278,7 @@ Integration:
     console.log(`   Files processed: ${results.filesProcessed}`);
     console.log(`   Changes: ${results.changes.length}`);
     console.log(`   Validations: ${results.validationsPassed}/${results.validationsPassed + results.validationsFailed}`);
-    console.log(`\nTo run a real refactoring, use:`);
+    console.log('\nTo run a real refactoring, use:');
     console.log(chalk.cyan('   node scripts/smart-refactor.js --package src/your-file.js --related\n'));
   }
 }

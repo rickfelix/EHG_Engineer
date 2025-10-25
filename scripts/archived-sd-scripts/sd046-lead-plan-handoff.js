@@ -29,7 +29,7 @@ async function createLEADPlanHandoff() {
     phase: 'planning',
 
     // 7 Mandatory Elements
-    executive_summary: `Enhance existing Stage 15 Pricing Strategy component with advanced analytics, Chairman-level oversight, and automated pricing intelligence. Current implementation provides comprehensive pricing capabilities but needs portfolio-wide optimization features, real-time analytics dashboards, and executive-level pricing governance. Focus on incremental enhancement to deliver high-impact pricing optimization tools that drive revenue growth and competitive advantage across all ventures.`,
+    executive_summary: 'Enhance existing Stage 15 Pricing Strategy component with advanced analytics, Chairman-level oversight, and automated pricing intelligence. Current implementation provides comprehensive pricing capabilities but needs portfolio-wide optimization features, real-time analytics dashboards, and executive-level pricing governance. Focus on incremental enhancement to deliver high-impact pricing optimization tools that drive revenue growth and competitive advantage across all ventures.',
 
     completeness_report: {
       current_implementation_analyzed: true,

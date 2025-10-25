@@ -22,7 +22,7 @@ async function createStrategicDirective() {
   const sdData = {
     id: 'SD-UAT-001',
     title: 'Automated UAT Testing Framework',
-    description: `Establish comprehensive automated User Acceptance Testing across the entire EHG platform with deep and broad coverage. This framework will provide intelligent, multi-layered testing that runs autonomously without human intervention, ensuring quality gates are met at ≥85% pass rate.`,
+    description: 'Establish comprehensive automated User Acceptance Testing across the entire EHG platform with deep and broad coverage. This framework will provide intelligent, multi-layered testing that runs autonomously without human intervention, ensuring quality gates are met at ≥85% pass rate.',
 
     status: 'active',
     priority: 'critical', // CRITICAL priority

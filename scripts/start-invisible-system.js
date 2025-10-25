@@ -118,7 +118,7 @@ async function testIntegration() {
   
   // Test prompt analysis
   try {
-    const testPrompt = "Fix the dark mode toggle in the dashboard";
+    const testPrompt = 'Fix the dark mode toggle in the dashboard';
     
     console.log(`\n📝 Test prompt: "${testPrompt}"`);
     
@@ -138,7 +138,7 @@ async function testIntegration() {
     const result = await response.json();
     
     if (result.selected && result.selected.length > 0) {
-      console.log(`\n✅ Sub-agents selected successfully:`);
+      console.log('\n✅ Sub-agents selected successfully:');
       result.selected.forEach(agent => {
         console.log(`   🤖 ${agent.agent_name} (${(agent.confidence * 100).toFixed(0)}% confidence)`);
       });

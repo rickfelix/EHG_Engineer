@@ -49,7 +49,7 @@ async function fix() {
     }
 
     console.log('✅ Context7 entry created successfully');
-    console.log(`   State: closed, Failures: 0`);
+    console.log('   State: closed, Failures: 0');
   } else if (existing.length > 1) {
     console.log('\n⚠️  Multiple rows found! Deleting duplicates...');
     

@@ -40,9 +40,9 @@ class SDValidator {
    * Validate a strategic directive file
    */
   validateFile(filePath) {
-    console.log(`\n╔════════════════════════════════════════════════╗`);
-    console.log(`║     Strategic Directive Validator v1.0        ║`);
-    console.log(`╚════════════════════════════════════════════════╝\n`);
+    console.log('\n╔════════════════════════════════════════════════╗');
+    console.log('║     Strategic Directive Validator v1.0        ║');
+    console.log('╚════════════════════════════════════════════════╝\n');
     
     console.log(`📄 File: ${filePath}\n`);
     
@@ -357,7 +357,7 @@ class SDValidator {
     const hasVisionQA = /Vision QA Status/i.test(content);
     
     if (hasUIWork && !hasVisionQA) {
-      const vqSection = `\n## Vision QA Status\n\n**Status:** REQUIRED\n\n`;
+      const vqSection = '\n## Vision QA Status\n\n**Status:** REQUIRED\n\n';
       const scopeIndex = content.indexOf('## Scope');
       if (scopeIndex > -1) {
         content = content.slice(0, scopeIndex) + vqSection + content.slice(scopeIndex);
@@ -370,7 +370,7 @@ class SDValidator {
       const backupPath = filePath.replace('.md', '.backup.md');
       fs.copyFileSync(filePath, backupPath);
       fs.writeFileSync(filePath, content);
-      console.log(`\n✅ File fixed and saved`);
+      console.log('\n✅ File fixed and saved');
       console.log(`📄 Backup: ${backupPath}`);
       return true;
     } else {

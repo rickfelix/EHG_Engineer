@@ -53,7 +53,7 @@ async function archiveCompletedSDs() {
         console.error(`  Error updating ${id}:`, updateError.message);
       } else {
         console.log(`  ✅ Successfully marked ${id} as completed`);
-        console.log(`     New status: completed`);
+        console.log('     New status: completed');
       }
     }
 

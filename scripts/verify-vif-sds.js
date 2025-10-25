@@ -42,7 +42,7 @@ async function verifyVIFSDs() {
     console.log(`   Priority: ${sd.priority} | Status: ${sd.status}`);
 
     if (sd.metadata?.is_parent) {
-      console.log(`   Parent SD: YES`);
+      console.log('   Parent SD: YES');
       console.log(`   Child SDs: ${sd.metadata.sub_directive_ids?.join(', ')}`);
     } else if (sd.metadata?.parent_sd_id) {
       console.log(`   Parent: ${sd.metadata.parent_sd_id}`);

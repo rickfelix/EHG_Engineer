@@ -109,7 +109,7 @@ async function diagnose() {
       console.log('   Returned ID:', testResult.rows[0].id);
 
       // Clean up test record
-      await client.query(`DELETE FROM retrospectives WHERE sd_id = 'TEST-DIAG-001'`);
+      await client.query('DELETE FROM retrospectives WHERE sd_id = \'TEST-DIAG-001\'');
       console.log('   Test record cleaned up');
     } catch (error) {
       console.log('❌ INSERT FAILED');

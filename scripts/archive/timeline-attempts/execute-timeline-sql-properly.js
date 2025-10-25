@@ -5,7 +5,7 @@
  * Builds DATABASE_URL from Supabase config
  */
 
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 import fs from 'fs/promises';
 import path from 'path';

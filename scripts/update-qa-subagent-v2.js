@@ -94,9 +94,9 @@ async function updateQASubAgent() {
     console.log('📊 Updated Fields:');
     console.log(`   - Capabilities: ${capabilities.length} capabilities`);
     console.log(`   - Script Path: ${data[0].script_path}`);
-    console.log(`   - Version: 2.0.0`);
-    console.log(`   - Modules: 7 intelligence modules`);
-    console.log(`   - Time Savings: 3-4 hours per SD\n`);
+    console.log('   - Version: 2.0.0');
+    console.log('   - Modules: 7 intelligence modules');
+    console.log('   - Time Savings: 3-4 hours per SD\n');
 
     console.log('🎯 New Capabilities:');
     capabilities.forEach((cap, idx) => {

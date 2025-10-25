@@ -32,7 +32,7 @@ async function addValidationRules() {
       rule_name: 'EXEC_URL_VERIFICATION',
       rule_type: 'exec_requirement',
       description: 'EXEC must verify URL accessibility before implementation',
-      validation_query: "SELECT COUNT(*) FROM implementation_verifications WHERE prd_id = $1 AND url_verified = true",
+      validation_query: 'SELECT COUNT(*) FROM implementation_verifications WHERE prd_id = $1 AND url_verified = true',
       error_message: 'EXEC failed to verify target URL before implementation',
       severity: 'critical',
       active: true
@@ -41,7 +41,7 @@ async function addValidationRules() {
       rule_name: 'EXEC_COMPONENT_IDENTIFICATION',
       rule_type: 'exec_requirement',
       description: 'EXEC must identify exact component file path',
-      validation_query: "SELECT COUNT(*) FROM implementation_verifications WHERE prd_id = $1 AND component_path IS NOT NULL",
+      validation_query: 'SELECT COUNT(*) FROM implementation_verifications WHERE prd_id = $1 AND component_path IS NOT NULL',
       error_message: 'EXEC failed to identify target component',
       severity: 'high',
       active: true
@@ -50,7 +50,7 @@ async function addValidationRules() {
       rule_name: 'EXEC_SCREENSHOT_EVIDENCE',
       rule_type: 'exec_requirement',
       description: 'EXEC must capture screenshot before implementation',
-      validation_query: "SELECT COUNT(*) FROM implementation_verifications WHERE prd_id = $1 AND screenshot_path IS NOT NULL",
+      validation_query: 'SELECT COUNT(*) FROM implementation_verifications WHERE prd_id = $1 AND screenshot_path IS NOT NULL',
       error_message: 'EXEC failed to capture pre-implementation screenshot',
       severity: 'medium',
       active: true

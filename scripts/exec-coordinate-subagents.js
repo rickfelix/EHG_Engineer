@@ -49,7 +49,7 @@ async function execAgentCoordinatesSubAgents(prdId) {
     console.log('=' .repeat(60));
     
     if (results.status === 'success') {
-      console.log(`✅ Coordination successful`);
+      console.log('✅ Coordination successful');
       console.log(`   Overall Score: ${results.results.overallScore}/100`);
       console.log(`   Agents Activated: ${results.activatedAgents.join(', ')}`);
       console.log(`   Total Findings: ${results.results.totalFindings}`);

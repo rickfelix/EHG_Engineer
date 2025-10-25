@@ -60,7 +60,7 @@ async function applyMigration() {
             failCount++;
           }
         } else {
-          console.log(`   ✅ Success`);
+          console.log('   ✅ Success');
           successCount++;
         }
       } catch (err) {
@@ -69,7 +69,7 @@ async function applyMigration() {
       }
     }
 
-    console.log(`\n📊 Migration Summary:`);
+    console.log('\n📊 Migration Summary:');
     console.log(`   Success: ${successCount}`);
     console.log(`   Failed: ${failCount}`);
     console.log(`   Total: ${statements.length}\n`);

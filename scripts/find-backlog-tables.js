@@ -40,7 +40,7 @@ async function findBacklogTables() {
         .limit(1);
 
       if (!sampleError && sample && sample.length > 0) {
-        console.log(`   Columns:`, Object.keys(sample[0]).slice(0, 10).join(', '));
+        console.log('   Columns:', Object.keys(sample[0]).slice(0, 10).join(', '));
       }
     }
   }

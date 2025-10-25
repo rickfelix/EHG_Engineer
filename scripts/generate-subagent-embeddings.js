@@ -272,7 +272,7 @@ async function main() {
     : agents;
 
   if (agentsToProcess.length === 0) {
-    console.error(`❌ No agents found matching criteria`);
+    console.error('❌ No agents found matching criteria');
     process.exit(1);
   }
 
@@ -293,7 +293,7 @@ async function main() {
     }
   }
 
-  console.log(`💰 Cost Estimate:`);
+  console.log('💰 Cost Estimate:');
   console.log(`   Total tokens: ~${totalTokens.toLocaleString()}`);
   console.log(`   Estimated cost: $${totalCost.toFixed(4)}`);
   console.log('');
@@ -310,7 +310,7 @@ async function main() {
     const domain = SUB_AGENT_DOMAINS[agent.code];
 
     if (!domain) {
-      console.log(`   ⚠️  No domain description found - skipping`);
+      console.log('   ⚠️  No domain description found - skipping');
       skipCount++;
       continue;
     }
@@ -323,14 +323,14 @@ async function main() {
       .single();
 
     if (existing?.domain_embedding && !force) {
-      console.log(`   ⏭️  Embedding already exists - skipping (use --force to regenerate)`);
+      console.log('   ⏭️  Embedding already exists - skipping (use --force to regenerate)');
       skipCount++;
       continue;
     }
 
     try {
       // Generate embedding
-      console.log(`   🧠 Generating embedding...`);
+      console.log('   🧠 Generating embedding...');
       const embedding = await generateEmbeddingWithRetry(domain);
 
       // Update database
@@ -344,7 +344,7 @@ async function main() {
       }
 
       const estimate = estimateCost(domain);
-      console.log(`   ✅ Embedding generated and stored`);
+      console.log('   ✅ Embedding generated and stored');
       console.log(`   📊 Tokens: ~${estimate.tokens.toLocaleString()}, Cost: $${estimate.cost.toFixed(6)}`);
 
       successCount++;
