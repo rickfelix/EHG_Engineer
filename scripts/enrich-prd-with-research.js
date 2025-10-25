@@ -3,9 +3,11 @@
 /**
  * PRD Auto-Enrichment Pipeline
  * SD-KNOWLEDGE-001: US-003 PRD Auto-Enrichment
+ * Enhanced: SD-LEO-LEARN-001 (Issue Pattern Integration)
  *
  * Automatically enriches user stories with implementation context from:
  * - Local retrospectives (past implementations)
+ * - Issue patterns (known problems & proven solutions)
  * - Context7 MCP (live library documentation)
  *
  * Confidence-Based Gating:
@@ -230,8 +232,26 @@ class PRDEnrichment {
 
           // Extract context from research
           research.results.forEach(result => {
-            if (result.code_snippet) {
-              implementationContext.patterns.push(result.code_snippet.substring(0, 200));
+            // Handle issue pattern results
+            if (result.source === 'issue_patterns') {
+              implementationContext.patterns.push({
+                pattern_id: result.pattern_id,
+                category: result.category,
+                severity: result.severity,
+                issue: result.issue_summary,
+                solution: result.solution,
+                prevention: result.prevention_checklist,
+                occurrence_count: result.occurrence_count,
+                success_rate: result.success_rate
+              });
+            }
+            // Handle retrospective/Context7 results
+            else if (result.code_snippet) {
+              implementationContext.patterns.push({
+                source: result.source || 'retrospective',
+                snippet: result.code_snippet.substring(0, 200),
+                context: result.implementation_context
+              });
             }
           });
 

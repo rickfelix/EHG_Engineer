@@ -20,6 +20,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import CircuitBreaker from './context7-circuit-breaker.js';
+import { IssueKnowledgeBase } from '../lib/learning/issue-knowledge-base.js';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
 
@@ -36,7 +37,7 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({
 }) : null;
 
 const TOKEN_BUDGET_PER_QUERY = 5000;
-const TOKEN_BUDGET_PER_PRD = 15000;
+const _TOKEN_BUDGET_PER_PRD = 15000; // Reserved for future aggregate budget tracking
 const LOCAL_RESULTS_THRESHOLD = 3;
 const CACHE_TTL_HOURS = 24;
 const SEMANTIC_SEARCH_THRESHOLD = 0.7; // 70% similarity minimum
@@ -46,6 +47,7 @@ class KnowledgeRetrieval {
   constructor(sdId) {
     this.sdId = sdId;
     this.circuitBreaker = new CircuitBreaker('context7');
+    this.knowledgeBase = new IssueKnowledgeBase();
     this.totalTokens = 0;
     this.queryStartTime = Date.now();
   }
@@ -72,30 +74,39 @@ class KnowledgeRetrieval {
       }
 
       // Step 1: Local retrospective search
-      const localResults = await this.searchRetrospectives(techStack);
-      console.log(`📚 Local results: ${localResults.length}`);
+      const retrospectiveResults = await this.searchRetrospectives(techStack);
+      console.log(`📚 Retrospective results: ${retrospectiveResults.length}`);
 
-      // Step 2: Check if Context7 fallback needed
+      // Step 2: Issue pattern search
+      const patternResults = await this.searchIssuePatterns(techStack);
+      console.log(`🔍 Pattern results: ${patternResults.length}`);
+
+      // Merge local sources
+      const localResults = [...retrospectiveResults, ...patternResults];
+      console.log(`📊 Combined local results: ${localResults.length}`);
+
+      // Step 3: Check if Context7 fallback needed
       let context7Results = [];
       if (localResults.length < LOCAL_RESULTS_THRESHOLD) {
         console.log(`⚠️  Local results < ${LOCAL_RESULTS_THRESHOLD}, attempting Context7 fallback...`);
         context7Results = await this.searchContext7(techStack);
       }
 
-      // Step 3: Merge and rank results
+      // Step 4: Merge and rank results
       const allResults = [...localResults, ...context7Results];
       const topResults = allResults
         .sort((a, b) => b.confidence_score - a.confidence_score)
         .slice(0, maxResults);
 
       console.log(`\n✅ Research complete: ${topResults.length} results`);
+      console.log(`   Sources: ${retrospectiveResults.length} retrospectives, ${patternResults.length} patterns, ${context7Results.length} Context7`);
       console.log(`   Tokens consumed: ${this.totalTokens}`);
       console.log(`   Execution time: ${Date.now() - this.queryStartTime}ms`);
 
-      // Step 4: Cache results
+      // Step 5: Cache results
       await this.cacheResults(techStack, topResults);
 
-      // Step 5: Audit logging
+      // Step 6: Audit logging
       const queryType = context7Results.length > 0 ? 'hybrid' : 'retrospective';
       const circuitState = await this.circuitBreaker.getStateForLogging();
       await this.logAudit(queryType, topResults.length, this.totalTokens, Date.now() - this.queryStartTime, circuitState);
@@ -291,10 +302,58 @@ class KnowledgeRetrieval {
   }
 
   /**
+   * Search issue patterns for known problems and solutions
+   * SD-LEO-LEARN-001: Proactive learning integration
+   */
+  async searchIssuePatterns(techStack) {
+    console.log(`   🔍 Searching issue patterns for: ${techStack}`);
+
+    try {
+      const patterns = await this.knowledgeBase.search(techStack, {
+        limit: 5,
+        minSuccessRate: 0,
+        includeObsolete: false
+      });
+
+      if (!patterns || patterns.length === 0) {
+        console.log('   ℹ️  No issue patterns found');
+        return [];
+      }
+
+      console.log(`   ✅ Found ${patterns.length} issue patterns`);
+
+      // Transform to standard format
+      return patterns.map(pattern => {
+        const bestSolution = pattern.proven_solutions && pattern.proven_solutions.length > 0
+          ? pattern.proven_solutions.sort((a, b) => (b.success_rate || 0) - (a.success_rate || 0))[0]
+          : null;
+
+        return {
+          source: 'issue_patterns',
+          tech_stack: techStack,
+          pattern_id: pattern.pattern_id,
+          category: pattern.category,
+          severity: pattern.severity,
+          issue_summary: pattern.issue_summary,
+          success_rate: pattern.success_rate,
+          solution: bestSolution?.solution,
+          prevention_checklist: pattern.prevention_checklist || [],
+          confidence_score: pattern.success_rate / 100, // Convert to 0-1 scale
+          occurrence_count: pattern.occurrence_count
+        };
+      });
+
+    } catch (error) {
+      console.error('   ❌ Issue pattern search error:', error.message);
+      return [];
+    }
+  }
+
+  /**
    * Search Context7 MCP for live documentation
    * Target: <10 seconds, circuit breaker protected
    */
-  async searchContext7(techStack) {
+  async searchContext7(_techStack) {
     // Check circuit breaker
     const allowed = await this.circuitBreaker.allowRequest();
     if (!allowed) {
