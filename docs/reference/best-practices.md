@@ -1,6 +1,6 @@
 # Database Migration Validation - Two-Phase Approach
 
-**Generated**: 2025-10-24T11:50:52.784Z
+**Generated**: 2025-10-25T18:16:13.272Z
 **Source**: Database (leo_protocol_sections)
 **Context Tier**: REFERENCE
 

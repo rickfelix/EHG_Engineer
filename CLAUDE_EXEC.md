@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - LEO Protocol EXEC Phase Context
 
-**Generated**: 2025-10-24 7:50:52 AM
+**Generated**: 2025-10-25 2:16:13 PM
 **Protocol**: LEO vv4.2.0_story_gates
 **Purpose**: EXEC phase operations + core context
 
@@ -10,9 +10,9 @@
 
 This file contains:
 1. **Core Context** (9 sections) - Essential for all sessions
-2. **EXEC Phase Context** (9 sections) - Phase-specific operations
+2. **EXEC Phase Context** (10 sections) - Phase-specific operations
 
-**Total Size**: ~54k chars
+**Total Size**: ~60k chars
 
 ---
 
@@ -444,6 +444,30 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 
 **Complete Guide**: See `docs/reference/development-workflow.md`
 
+## Knowledge Retrieval Commands
+
+## 🔍 Knowledge Retrieval (Proactive Learning)
+
+**SD-LEO-LEARN-001: Added 2025-10-25**
+
+```bash
+# Before starting any phase (MANDATORY for EXEC/PLAN, RECOMMENDED for LEAD)
+node scripts/phase-preflight.js --phase <LEAD|PLAN|EXEC> --sd-id <UUID>
+
+# Search for specific issues
+node scripts/search-prior-issues.js "<issue description>"
+
+# Generate fresh knowledge summaries (weekly)
+node scripts/generate-knowledge-summary.js --category <category>
+node scripts/generate-knowledge-summary.js --category all
+
+# View existing summaries
+ls docs/summaries/lessons/*.md
+cat docs/summaries/lessons/database-lessons.md
+```
+
+**Philosophy**: Consult lessons BEFORE encountering issues, not after.
+
 
 ---
 
@@ -633,33 +657,7 @@ node scripts/design-subagent-evaluation.js <SD-ID>
 - Both test types passing
 - CI/CD green
 - Documentation exists in `generated_docs`
-- **Branch lifecycle clean** (see below)
 - Handoff stored in `sd_phase_handoffs`
-
-**Branch Lifecycle Verification** (AUTOMATED):
-The GITHUB sub-agent (DevOps Platform Architect) automatically verifies:
-
-✅ **No uncommitted changes** - All work committed
-- ❌ **BLOCKING**: Uncommitted changes prevent handoff creation
-- Fix: Commit or stash changes before handoff
-
-✅ **No unpushed commits** - Branch synced with remote
-- ⚠️  **WARNING**: Unpushed commits lower confidence to 75%
-- Fix: Push commits to remote before handoff
-
-✅ **Minimal unmerged branches** - Clean branch hygiene
-- ⚠️  **WARNING**: 5+ unmerged branches lower confidence to 80%
-- Fix: Merge or delete stale branches
-
-ℹ️  **Stale branches detected** - Cleanup recommendation
-- Info only: Branches 30+ days old without commits
-- Recommendation: Delete or update stale branches
-
-**Automated Enforcement**:
-- Runs automatically during EXEC→PLAN and PLAN→LEAD handoff creation
-- Results stored in `sub_agent_execution_results` table
-- Critical issues (uncommitted changes) BLOCK handoff
-- Warnings reduce confidence score but don't block
 
 ---
 
@@ -887,6 +885,81 @@ const securityReview = await callSubAgent('security-architect', schema); // Need
 - Reduces total verification time (4 sub-agents in 30s vs. 2min sequential)
 - No context sharing limitations since assessments are independent
 - Each specialist works from fresh context without bias from others
+
+## 🔍 Pre-Implementation Knowledge Retrieval (MANDATORY)
+
+**SD-LEO-LEARN-001: Proactive Learning Integration**
+
+**CRITICAL**: Run BEFORE starting implementation to retrieve relevant historical lessons.
+
+## Step 0: Knowledge Preflight Check
+
+**Run this command before writing any code**:
+
+```bash
+node scripts/phase-preflight.js --phase EXEC --sd-id <SD_UUID>
+```
+
+## What This Does
+
+Queries historical knowledge base for:
+- **Issue patterns** relevant to your SD category
+- **Retrospectives** from similar past work
+- **Proven solutions** with success rates >85%
+- **Common pitfalls** to avoid (success rate <50%)
+- **Prevention checklists** for proactive measures
+
+## How to Use Results
+
+1. **High Success Patterns (✅ ≥85%)**:
+   - Apply proven solutions preemptively
+   - Add to implementation plan before encountering issues
+   - Example: "PAT-004 shows server restart needed after changes → add to workflow"
+
+2. **Moderate Patterns (⚠️ 50-85%)**:
+   - Be aware, prepare contingencies
+   - Document why you chose alternative approach
+   - Example: "PAT-002 test path errors → verify imports carefully"
+
+3. **Low Success Patterns (❌ <50%)**:
+   - Known failure modes, avoid these approaches
+   - Flag in handoff if you must use similar approach
+   - Example: "PAT-007 sub-agent not triggering → use manual invocation"
+
+## Handoff Documentation (MANDATORY)
+
+Add "Patterns Consulted" section to your handoff:
+
+```markdown
+## Patterns Consulted
+
+- PAT-001: Schema mismatch TypeScript/Supabase (Success: 100%, Applied: Yes)
+- PAT-004: Server restart needed for changes (Success: 100%, Applied: Yes)
+- PAT-002: Test path errors after refactor (Success: 100%, Not encountered)
+```
+
+## Why This Matters
+
+- **Prevents repeated mistakes**: 60%+ of issues have been seen before
+- **Saves time**: Apply proven solutions immediately (avg 15-20 min saved)
+- **Builds institutional memory**: Every SD benefits from prior learnings
+- **Reduces rework**: Proactive prevention vs reactive debugging
+
+## Quick Reference
+
+```bash
+# Before starting implementation (MANDATORY)
+node scripts/phase-preflight.js --phase EXEC --sd-id <SD_UUID>
+
+# View detailed pattern info
+node scripts/search-prior-issues.js "<issue description>"
+
+# View knowledge summaries (updated weekly)
+ls docs/summaries/lessons/*.md
+```
+
+**Time Investment**: 30 seconds to run, 2-3 minutes to review
+**Time Saved**: 15-60 minutes of debugging/rework
 
 ## TODO Comment Standard
 

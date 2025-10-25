@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-10-24 7:50:52 AM
+**Generated**: 2025-10-25 2:16:13 PM
 **Protocol**: LEO vv4.2.0_story_gates
 **Purpose**: Essential workflow context for all sessions (15k chars)
 
@@ -431,6 +431,30 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 **Commands**: `pkill -f "node server.js" && npm run build:client && PORT=3000 node server.js`
 
 **Complete Guide**: See `docs/reference/development-workflow.md`
+
+## Knowledge Retrieval Commands
+
+## 🔍 Knowledge Retrieval (Proactive Learning)
+
+**SD-LEO-LEARN-001: Added 2025-10-25**
+
+```bash
+# Before starting any phase (MANDATORY for EXEC/PLAN, RECOMMENDED for LEAD)
+node scripts/phase-preflight.js --phase <LEAD|PLAN|EXEC> --sd-id <UUID>
+
+# Search for specific issues
+node scripts/search-prior-issues.js "<issue description>"
+
+# Generate fresh knowledge summaries (weekly)
+node scripts/generate-knowledge-summary.js --category <category>
+node scripts/generate-knowledge-summary.js --category all
+
+# View existing summaries
+ls docs/summaries/lessons/*.md
+cat docs/summaries/lessons/database-lessons.md
+```
+
+**Philosophy**: Consult lessons BEFORE encountering issues, not after.
 
 ## Agent Responsibilities
 

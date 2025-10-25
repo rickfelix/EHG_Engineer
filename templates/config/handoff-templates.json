@@ -40,7 +40,8 @@
       "key_decisions_rationale",
       "known_issues_risks",
       "resource_utilization",
-      "action_items_for_receiver"
+      "action_items_for_receiver",
+      "patterns_consulted"
     ],
     "template": {
       "executive_summary": "Technical planning complete for {sd_title}. PRD created with {user_story_count} user stories, ready for implementation in {target_app}.",
@@ -51,7 +52,12 @@
         "test_plan_created": true,
         "completion_percentage": 100
       },
+      "patterns_consulted": [
+        "PAT-XXX: [Pattern description] (Success: X%, Applied: Yes/No)",
+        "Run: node scripts/phase-preflight.js --phase PLAN --sd-id {sd_id}"
+      ],
       "action_items_for_receiver": [
+        "Run: node scripts/phase-preflight.js --phase EXEC --sd-id {sd_id}",
         "Navigate to {target_app} for implementation",
         "Review PRD and user stories",
         "Implement based on priority order",
@@ -71,7 +77,8 @@
       "key_decisions_rationale",
       "known_issues_risks",
       "resource_utilization",
-      "action_items_for_receiver"
+      "action_items_for_receiver",
+      "patterns_consulted"
     ],
     "template": {
       "executive_summary": "Implementation complete for {sd_title}. All user stories implemented, tests passing, ready for final verification.",
@@ -82,6 +89,11 @@
         "documentation_updated": true,
         "completion_percentage": 100
       },
+      "patterns_consulted": [
+        "PAT-XXX: [Pattern description] (Success: X%, Applied: Yes/No/Not encountered)",
+        "Example: PAT-001: Schema mismatch (Success: 100%, Applied: Yes)",
+        "Example: PAT-004: Server restart needed (Success: 100%, Applied: Yes)"
+      ],
       "action_items_for_receiver": [
         "Verify all acceptance criteria met",
         "Run performance validation",

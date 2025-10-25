@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - LEO Protocol PLAN Phase Context
 
-**Generated**: 2025-10-24 7:50:52 AM
+**Generated**: 2025-10-25 2:16:13 PM
 **Protocol**: LEO vv4.2.0_story_gates
 **Purpose**: PLAN phase operations + core context
 
@@ -10,9 +10,9 @@
 
 This file contains:
 1. **Core Context** (9 sections) - Essential for all sessions
-2. **PLAN Phase Context** (13 sections) - Phase-specific operations
+2. **PLAN Phase Context** (14 sections) - Phase-specific operations
 
-**Total Size**: ~66k chars
+**Total Size**: ~72k chars
 
 ---
 
@@ -443,6 +443,30 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 **Commands**: `pkill -f "node server.js" && npm run build:client && PORT=3000 node server.js`
 
 **Complete Guide**: See `docs/reference/development-workflow.md`
+
+## Knowledge Retrieval Commands
+
+## 🔍 Knowledge Retrieval (Proactive Learning)
+
+**SD-LEO-LEARN-001: Added 2025-10-25**
+
+```bash
+# Before starting any phase (MANDATORY for EXEC/PLAN, RECOMMENDED for LEAD)
+node scripts/phase-preflight.js --phase <LEAD|PLAN|EXEC> --sd-id <UUID>
+
+# Search for specific issues
+node scripts/search-prior-issues.js "<issue description>"
+
+# Generate fresh knowledge summaries (weekly)
+node scripts/generate-knowledge-summary.js --category <category>
+node scripts/generate-knowledge-summary.js --category all
+
+# View existing summaries
+ls docs/summaries/lessons/*.md
+cat docs/summaries/lessons/database-lessons.md
+```
+
+**Philosophy**: Consult lessons BEFORE encountering issues, not after.
 
 
 ---
@@ -875,6 +899,86 @@ The following constraints enforce process compliance:
 **Over 400 lines**: Generally prohibited. Split into multiple PRs unless exceptional circumstances (emergency hotfix, external dependency forcing bundled changes).
 
 **Key Principle**: If you can split it without creating incomplete/broken intermediate states, you should split it.
+
+## 📚 Automated PRD Enrichment (MANDATORY)
+
+**SD-LEO-LEARN-001: Proactive Learning Integration**
+
+**CRITICAL**: Run BEFORE writing PRD to incorporate historical lessons.
+
+## Step 0: Knowledge Preflight Check
+
+**Run this command before creating PRD**:
+
+```bash
+node scripts/phase-preflight.js --phase PLAN --sd-id <SD_UUID>
+node scripts/enrich-prd-with-research.js <SD_UUID>  # If available
+```
+
+## What This Does
+
+Automatically:
+1. Queries retrospectives for similar SDs
+2. Extracts proven technical approaches
+3. Identifies common pitfalls → adds to "Risks & Mitigations"
+4. Suggests prevention measures → adds to acceptance criteria
+5. Updates user_stories.implementation_context
+
+## How to Use Results
+
+### In PRD "Technical Approach" Section
+- Include proven solutions from high-success patterns
+- Reference historical approaches that worked well
+- Example: "Based on PAT-001 (100% success), we'll verify schema types before..."
+
+### In PRD "Risks & Mitigations" Section
+- Document known pitfalls from retrospectives
+- Add prevention measures from historical failures
+- Example: "Risk: Test path errors after refactor (PAT-002). Mitigation: Verify all imports."
+
+### In PRD "Acceptance Criteria"
+- Include prevention checklist items
+- Add validation steps from proven patterns
+- Example: "[ ] Schema types verified against database (prevents PAT-001)"
+
+## Verification
+
+Verify enrichment appears in PRD's "Reference Materials" section:
+
+```markdown
+## Reference Materials
+
+### Historical Patterns Consulted
+- PAT-001: Schema mismatch TypeScript/Supabase (Success: 100%)
+- SD-SIMILAR-001 Retrospective: Database validation prevented 3 rework cycles
+
+### Prevention Measures Applied
+- Schema verification before implementation
+- Test path validation in acceptance criteria
+```
+
+## Why This Matters
+
+- **Better PRDs**: Incorporate lessons before design, not after errors
+- **Prevents design flaws**: Known pitfalls addressed in planning
+- **Faster implementation**: EXEC has clear prevention guidance
+- **Higher quality**: Proven approaches baked into requirements
+
+## Quick Reference
+
+```bash
+# Before creating PRD (MANDATORY)
+node scripts/phase-preflight.js --phase PLAN --sd-id <SD_UUID>
+
+# Enrich PRD with research (if script exists)
+node scripts/enrich-prd-with-research.js <SD_UUID>
+
+# View category-specific lessons
+cat docs/summaries/lessons/<category>-lessons.md
+```
+
+**Time Investment**: 1-2 minutes
+**Time Saved**: 30-90 minutes of EXEC rework
 
 ## Multi-Application Testing Architecture
 

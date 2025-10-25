@@ -1,6 +1,6 @@
 # Database Trigger Management for Special Cases
 
-**Generated**: 2025-10-24T11:50:52.762Z
+**Generated**: 2025-10-25T18:16:13.260Z
 **Source**: Database (leo_protocol_sections)
 **Context Tier**: REFERENCE
 

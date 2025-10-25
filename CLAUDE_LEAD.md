@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEO Protocol LEAD Phase Context
 
-**Generated**: 2025-10-24 7:50:52 AM
+**Generated**: 2025-10-25 2:16:13 PM
 **Protocol**: LEO vv4.2.0_story_gates
 **Purpose**: LEAD phase operations + core context
 
@@ -10,9 +10,9 @@
 
 This file contains:
 1. **Core Context** (9 sections) - Essential for all sessions
-2. **LEAD Phase Context** (8 sections) - Phase-specific operations
+2. **LEAD Phase Context** (9 sections) - Phase-specific operations
 
-**Total Size**: ~51k chars
+**Total Size**: ~57k chars
 
 ---
 
@@ -444,6 +444,30 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 
 **Complete Guide**: See `docs/reference/development-workflow.md`
 
+## Knowledge Retrieval Commands
+
+## 🔍 Knowledge Retrieval (Proactive Learning)
+
+**SD-LEO-LEARN-001: Added 2025-10-25**
+
+```bash
+# Before starting any phase (MANDATORY for EXEC/PLAN, RECOMMENDED for LEAD)
+node scripts/phase-preflight.js --phase <LEAD|PLAN|EXEC> --sd-id <UUID>
+
+# Search for specific issues
+node scripts/search-prior-issues.js "<issue description>"
+
+# Generate fresh knowledge summaries (weekly)
+node scripts/generate-knowledge-summary.js --category <category>
+node scripts/generate-knowledge-summary.js --category all
+
+# View existing summaries
+ls docs/summaries/lessons/*.md
+cat docs/summaries/lessons/database-lessons.md
+```
+
+**Philosophy**: Consult lessons BEFORE encountering issues, not after.
+
 
 ---
 
@@ -661,6 +685,95 @@ Thorough LEAD pre-approval validation:
 3. Verify each claim against implementation
 4. Reject false claims, document findings
 5. Update SD scope and priority
+
+## 📖 Historical Context Review (RECOMMENDED)
+
+**SD-LEO-LEARN-001: Proactive Learning Integration**
+
+**RECOMMENDED**: Run BEFORE approving SD to review historical context.
+
+## Step 0: Historical Context Check
+
+**Run this command before SD approval**:
+
+```bash
+node scripts/phase-preflight.js --phase LEAD --sd-id <SD_UUID>
+```
+
+## What This Does
+
+Queries historical knowledge base for:
+- **Over-engineering patterns** in this SD category
+- **Similar past SDs** and their outcomes
+- **Complexity indicators** (actual vs estimated time)
+- **Scope creep history** (SDs split due to bloat)
+
+## Red Flags to Watch For
+
+### Over-Engineering Indicators
+- Pattern shows "over-engineering" occurred 2+ times in this category
+- Historical resolution time >5x original estimate
+- Past SDs in category were split due to scope bloat
+- Complexity score disproportionate to business value
+
+### Strategic Concerns
+- Similar SDs had high failure/rework rates
+- Category has pattern of expanding beyond initial scope
+- Technical approach more complex than necessary
+- Dependencies create cascading risks
+
+## How to Use Results
+
+### If Red Flags Found
+1. Apply simplicity-first lens more rigorously
+2. Challenge technical complexity in strategic validation
+3. Request PLAN to simplify approach before approval
+4. Consider phased delivery (MVP first, enhancements later)
+
+### Document in Approval
+Add to approval notes:
+
+```markdown
+## Historical Context Reviewed
+
+Consulted 3 prior retrospectives in [category]:
+- SD-SIMILAR-001: Over-engineered auth (8 weeks → 3 weeks after simplification)
+- SD-SIMILAR-002: Scope expanded 3x during implementation
+- PAT-009: Premature abstraction in [category] (40% success rate)
+
+**Decision**: Approved with simplicity constraints:
+- MVP scope only (defer advanced features to Phase 2)
+- Weekly complexity reviews during PLAN
+- Hard cap: 400 LOC per component
+```
+
+### If No Red Flags
+- Proceed with standard approval process
+- Note historical consultation in approval
+- Builds confidence in strategic decision
+
+## Why This Matters
+
+- **Prevents strategic mistakes**: Learn from past over-engineering
+- **Informed decisions**: Data-driven approval vs intuition
+- **Protects team time**: Avoid repeating known pitfalls
+- **Builds pattern recognition**: Strategic lens improves over time
+
+## Quick Reference
+
+```bash
+# Before SD approval (RECOMMENDED)
+node scripts/phase-preflight.js --phase LEAD --sd-id <SD_UUID>
+
+# Review over-engineering patterns
+node scripts/search-prior-issues.js --category over_engineering --list
+
+# Check category history
+node scripts/search-prior-issues.js "<SD category>" --retrospectives
+```
+
+**Time Investment**: 1-2 minutes
+**Value**: Strategic foresight, prevents month-long mistakes
 
 ## 🛡️ LEAD Pre-Approval Strategic Validation Gate
 
