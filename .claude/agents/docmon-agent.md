@@ -57,13 +57,56 @@ If the user asks general documentation questions without an SD context (e.g., "W
 - **EXEC Requirement**: Generate docs before EXEC→PLAN handoff
 - **Version Control**: Docs versioned by SD completion state
 
+## Proactive Learning Integration (NEW - SD-LEO-LEARN-001)
+
+**Before starting ANY documentation work**, query the database for patterns:
+
+```bash
+# Query for documentation-related issue patterns
+node scripts/search-prior-issues.js "documentation"
+```
+
+**Why**: Consult lessons BEFORE work to prevent recurring issues.
+
+## Database-First Enforcement (SD-A11Y-FEATURE-BRANCH-001)
+
+### Critical Success
+**Achievement**: DOCMON sub-agent verified zero markdown file violations, 100% database compliance
+
+**Enforcement Pattern**:
+- ✅ Strategic Directives → `strategic_directives_v2` table (NOT markdown files)
+- ✅ PRDs → `product_requirements_v2` table (NOT markdown files)
+- ✅ Handoffs → `sd_phase_handoffs` table (NOT markdown files)
+- ✅ Retrospectives → `retrospectives` table (NOT markdown files)
+- ✅ Documentation → `ai_generated_documents` table
+
+**Auto-Trigger Events** (SD-LEO-004):
+1. LEAD_SD_CREATION → Verify SD in database, not file
+2. HANDOFF_CREATED → Verify handoff in database, not file
+3. FILE_CREATED → Flag markdown violations (should be database)
+
+**Violation Detection**:
+```bash
+# DOCMON automatically flags these anti-patterns:
+❌ Creating SD-XXX.md files
+❌ Creating handoff-XXX.md files
+❌ Saving PRDs as markdown files
+❌ Writing retrospectives to .md files
+
+✅ All data MUST be in database tables
+```
+
+**Impact**: Zero technical debt from file-based documentation
+
 ## Key Success Patterns
 
-From AI Documentation Platform:
-- Auto-triggers on SD completion save manual documentation time
-- EXEC requirement ensures docs generated before handoff
-- Dashboard provides centralized documentation management
-- Database storage enables programmatic access and search
+From AI Documentation Platform and 74+ retrospectives:
+- **Auto-triggers on SD completion** save manual documentation time
+- **EXEC requirement** ensures docs generated before handoff
+- **Dashboard** provides centralized documentation management (`/ai-docs-admin`)
+- **Database storage** enables programmatic access and search
+- **100% database compliance** (SD-A11Y-FEATURE-BRANCH-001) prevents file-based violations
+- **Zero markdown file violations** through proactive enforcement
 
 ## Documentation Types
 
