@@ -1,10 +1,6 @@
 name: E2E Test Suite
 
 on:
-  push:
-    branches: [main, staging]
-  pull_request:
-    branches: [main, staging]
   workflow_dispatch:
     inputs:
       environment:
@@ -19,7 +15,6 @@ on:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'staging' }}
 
     steps:
       - name: Checkout code
