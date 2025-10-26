@@ -1,6 +1,6 @@
 name: E2E Tests with Story Verification
 
-on:
+'on':
   push:
     branches: [main, staging, feat/ehg-backlog-import-prd]
   pull_request:
