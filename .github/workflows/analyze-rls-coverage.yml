@@ -1,0 +1,41 @@
+name: Analyze RLS Coverage
+
+on:
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    name: Analyze RLS Policy Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install pg dotenv
+
+      - name: Run RLS coverage analysis
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NODE_TLS_REJECT_UNAUTHORIZED: '0'
+        run: |
+          echo "📊 Running RLS Coverage Analysis..."
+          echo ""
+          node scripts/analyze-rls-coverage.mjs
+
+      - name: Generate report summary
+        run: |
+          echo "## RLS Coverage Analysis Complete ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The analysis has been completed. Review the logs above for details." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "- Review tables with missing RLS" >> $GITHUB_STEP_SUMMARY
+          echo "- Determine if read-only tables are intentional" >> $GITHUB_STEP_SUMMARY
+          echo "- Update RLS verification script if needed" >> $GITHUB_STEP_SUMMARY
