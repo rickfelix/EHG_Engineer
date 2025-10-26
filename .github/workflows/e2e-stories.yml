@@ -54,11 +54,17 @@ jobs:
       - name: Post story verification results
         if: always()
         env:
-          SERVICE_TOKEN: ${{ secrets.SERVICE_TOKEN_STAGING }}
-          STORY_VERIFY_API: ${{ vars.STORY_VERIFY_API }}
+          SERVICE_TOKEN: ${{ secrets.SERVICE_TOKEN_STAGING || secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          STORY_VERIFY_API: ${{ vars.STORY_VERIFY_API || vars.SUPABASE_URL }}
           BUILD_ID: ${{ github.run_id }}-${{ github.run_number }}
           DEPLOY_ENV: ${{ github.event.inputs.environment || 'staging' }}
         run: |
+          # Skip if no service token configured
+          if [ -z "$SERVICE_TOKEN" ]; then
+            echo "⚠️ SERVICE_TOKEN not configured, skipping story verification"
+            exit 0
+          fi
+
           node tools/post-playwright-results.mjs \
             --report artifacts/playwright-report.json \
             --coverage coverage/coverage-summary.json \
