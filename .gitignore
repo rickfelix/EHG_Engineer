@@ -18,3 +18,7 @@ applications/*/codebase/
 applications/*/.env.encrypted
 applications/*/.env.decrypted
 applications/*/.leo-sync/supabase/.temp/
+
+# Auto-generated database optimization files
+database-optimization.sql
+migrations/*_optimize_database.sql
