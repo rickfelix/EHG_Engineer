@@ -22,3 +22,8 @@ applications/*/.leo-sync/supabase/.temp/
 # Auto-generated database optimization files
 database-optimization.sql
 migrations/*_optimize_database.sql
+
+# Test results and reports
+test-results/
+.playwright/
+coverage/
