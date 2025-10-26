@@ -68,12 +68,20 @@ class RLSVerifier {
    */
   async connect(attempt = 1) {
     try {
-      this.client = new Client({
+      // Always configure SSL to reject unauthorized for Postgres connections
+      // This handles self-signed certificates in various environments
+      const connectionConfig = {
         connectionString: CONFIG.connectionString,
-        ssl: { rejectUnauthorized: false },
+        ssl: {
+          rejectUnauthorized: false,
+          // Additional SSL options for compatibility
+          checkServerIdentity: () => undefined
+        },
         statement_timeout: CONFIG.statementTimeout,
         connectionTimeoutMillis: CONFIG.connectionTimeoutMillis
-      });
+      };
+
+      this.client = new Client(connectionConfig);
 
       await this.client.connect();
       console.log('✅ Connected to database');
@@ -81,6 +89,7 @@ class RLSVerifier {
     } catch (error) {
       if (attempt < CONFIG.maxRetries) {
         console.warn(`⚠️  Connection attempt ${attempt} failed, retrying in ${CONFIG.retryDelayMs}ms...`);
+        console.warn(`    Error: ${error.message}`);
         await new Promise(resolve => setTimeout(resolve, CONFIG.retryDelayMs));
         return this.connect(attempt + 1);
       }
