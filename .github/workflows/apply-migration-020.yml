@@ -1,0 +1,79 @@
+name: Apply Migration 020 (RLS Context Learning Tables)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "apply" to confirm migration execution'
+        required: true
+        type: string
+
+jobs:
+  apply-migration:
+    name: Apply Migration 020
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "apply" ]; then
+            echo "❌ Migration cancelled - confirmation not provided"
+            echo "   Please type 'apply' in the confirmation input to proceed"
+            exit 1
+          fi
+          echo "✅ Confirmation validated"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install pg dotenv
+
+      - name: Apply migration 020
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NODE_TLS_REJECT_UNAUTHORIZED: '0'
+        run: |
+          echo "🔧 Applying migration 020: Enable RLS on context learning tables"
+          echo ""
+          echo "Tables to be updated:"
+          echo "  - context_embeddings"
+          echo "  - feedback_events"
+          echo "  - interaction_history"
+          echo "  - learning_configurations"
+          echo "  - user_context_patterns"
+          echo ""
+
+          node scripts/apply-migration-020.mjs
+
+      - name: Verify RLS status
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NODE_TLS_REJECT_UNAUTHORIZED: '0'
+        run: |
+          echo "🔍 Running RLS verification..."
+          node scripts/verify-rls-policies.js
+
+      - name: Summary
+        run: |
+          echo "## Migration 020 Applied ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Tables Updated" >> $GITHUB_STEP_SUMMARY
+          echo "- context_embeddings" >> $GITHUB_STEP_SUMMARY
+          echo "- feedback_events" >> $GITHUB_STEP_SUMMARY
+          echo "- interaction_history" >> $GITHUB_STEP_SUMMARY
+          echo "- learning_configurations" >> $GITHUB_STEP_SUMMARY
+          echo "- user_context_patterns" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Security Policies" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ service_role: Full access" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ authenticated: Read-only access" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ anon: No access (implicit)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "Check the RLS Policy Verification workflow to confirm all tables pass." >> $GITHUB_STEP_SUMMARY
