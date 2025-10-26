@@ -39,7 +39,8 @@ jobs:
           echo "PGSSLMODE=require" >> $GITHUB_ENV
 
       - name: Export ideation reports (read-only)
-        env: { PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }} }
+        env:
+          PGPASSWORD: ${{ secrets.PGPASSWORD_STAGING }}
         run: psql -v ON_ERROR_STOP=1 -f ops/checks/vh_ideation_integrity_staging.sql
 
       - name: Summarize counts
