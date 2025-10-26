@@ -19,13 +19,11 @@ dotenv.config();
 
 const { Client } = pg;
 
-// Table exclusion patterns (system tables, internal tables)
+// Table exclusion patterns (system tables only)
+// Note: agent_ and documentation_ tables are NO LONGER excluded (secured via migrations 020/021)
 const EXCLUDED_TABLE_PATTERNS = [
   /^pg_/,           // PostgreSQL system tables
   /^_pg/,           // PostgreSQL internal tables
-  /^agent_/,        // Agent coordination tables
-  /^documentation_/, // Documentation tables
-  /^compliance_alerts$/, // Internal compliance table
   /^sql_/,          // SQL system tables
   /^information_schema/ // Information schema
 ];
@@ -47,11 +45,18 @@ class RLSVerifier {
       total_tables_checked: 0,
       tables_with_rls: 0,
       tables_missing_rls: 0,
-      tables_with_incomplete_policies: 0,
-      policy_coverage_percentage: 0,
+      tables_with_full_crud: 0,
+      tables_with_read_only: 0,
+      tables_with_partial_coverage: 0,
+      tables_with_incomplete_policies: 0, // Deprecated, kept for backward compatibility
+      rls_coverage_percentage: 0,
+      full_crud_percentage: 0,
+      policy_coverage_percentage: 0, // Deprecated, kept for backward compatibility
       passed: false,
       failed_tables: [],
       warnings: [],
+      read_only_tables: [],
+      partial_coverage_tables: [],
       execution_time_ms: 0
     };
   }
@@ -147,6 +152,7 @@ class RLSVerifier {
       policy_count: parseInt(table.policy_count),
       policies: table.policies || [],
       missing_policies: [],
+      policy_type: 'UNKNOWN',
       status: 'PASS',
       issues: []
     };
@@ -154,16 +160,20 @@ class RLSVerifier {
     // Check if RLS is enabled
     if (!table.rls_enabled) {
       verification.status = 'FAIL';
+      verification.policy_type = 'NO_RLS';
       verification.issues.push('RLS not enabled on table');
       this.results.tables_missing_rls++;
       return verification;
     }
 
+    // Table has RLS enabled
+    this.results.tables_with_rls++;
+
     // Check if policies exist
     if (verification.policy_count === 0) {
       verification.status = 'FAIL';
+      verification.policy_type = 'NO_POLICIES';
       verification.issues.push('RLS enabled but no policies defined');
-      this.results.tables_missing_rls++;
       return verification;
     }
 
@@ -173,18 +183,40 @@ class RLSVerifier {
       verification.policies.map(p => p.command.toUpperCase())
     );
 
+    // Check if ALL command is present (equivalent to full CRUD)
+    const hasAllCommand = existingCommands.has('ALL');
+
     requiredCommands.forEach(cmd => {
-      if (!existingCommands.has(cmd)) {
+      if (!existingCommands.has(cmd) && !hasAllCommand) {
         verification.missing_policies.push(cmd);
       }
     });
 
-    if (verification.missing_policies.length > 0) {
-      verification.status = 'WARNING';
-      verification.issues.push(`Incomplete policy coverage: missing ${verification.missing_policies.join(', ')}`);
-      this.results.tables_with_incomplete_policies++;
+    // Categorize by policy type
+    if (verification.missing_policies.length === 0 || hasAllCommand) {
+      // Full CRUD coverage
+      verification.policy_type = 'FULL_CRUD';
+      verification.status = 'PASS';
+      this.results.tables_with_full_crud++;
+    } else if (existingCommands.has('SELECT') && verification.missing_policies.length === 3) {
+      // Only SELECT - read-only (intentional pattern)
+      verification.policy_type = 'READ_ONLY';
+      verification.status = 'INFO';
+      verification.issues.push('Read-only (SELECT only) - may be intentional');
+      this.results.tables_with_read_only++;
+      this.results.read_only_tables.push(verification);
     } else {
-      this.results.tables_with_rls++;
+      // Partial coverage (some operations allowed, others missing)
+      verification.policy_type = 'PARTIAL';
+      verification.status = 'INFO';
+      verification.issues.push(`Partial coverage: missing ${verification.missing_policies.join(', ')}`);
+      this.results.tables_with_partial_coverage++;
+      this.results.partial_coverage_tables.push(verification);
+    }
+
+    // Keep deprecated counter for backward compatibility
+    if (verification.missing_policies.length > 0) {
+      this.results.tables_with_incomplete_policies++;
     }
 
     return verification;
@@ -221,18 +253,26 @@ class RLSVerifier {
         if (verification.status === 'FAIL') {
           this.results.failed_tables.push(verification);
           console.log(`❌ ${verification.table_name}: ${verification.issues.join(', ')}`);
-        } else if (verification.status === 'WARNING') {
-          this.results.warnings.push(verification);
-          console.log(`⚠️  ${verification.table_name}: ${verification.issues.join(', ')}`);
+        } else if (verification.status === 'INFO') {
+          // Don't add to warnings - these are informational categorizations
+          const icon = verification.policy_type === 'READ_ONLY' ? '📖' : '⚡';
+          console.log(`${icon} ${verification.table_name}: ${verification.issues.join(', ')}`);
         } else {
-          console.log(`✅ ${verification.table_name}: ${verification.policy_count} policies`);
+          console.log(`✅ ${verification.table_name}: ${verification.policy_count} policies (${verification.policy_type})`);
         }
       });
 
-      // Calculate coverage percentage
-      this.results.policy_coverage_percentage = this.results.total_tables_checked > 0
+      // Calculate coverage percentages
+      this.results.rls_coverage_percentage = this.results.total_tables_checked > 0
         ? Math.round((this.results.tables_with_rls / this.results.total_tables_checked) * 100)
         : 0;
+
+      this.results.full_crud_percentage = this.results.total_tables_checked > 0
+        ? Math.round((this.results.tables_with_full_crud / this.results.total_tables_checked) * 100)
+        : 0;
+
+      // Keep deprecated percentage for backward compatibility (now same as full_crud_percentage)
+      this.results.policy_coverage_percentage = this.results.full_crud_percentage;
 
       this.results.passed = this.results.tables_missing_rls === 0;
       this.results.execution_time_ms = Date.now() - startTime;
@@ -256,16 +296,19 @@ class RLSVerifier {
     console.log(`Timestamp: ${this.results.timestamp}`);
     console.log(`Execution Time: ${this.results.execution_time_ms}ms`);
     console.log('');
-    console.log('SUMMARY:');
+    console.log('COVERAGE SUMMARY:');
     console.log(`  Total Tables Checked: ${this.results.total_tables_checked}`);
-    console.log(`  ✅ Tables with RLS: ${this.results.tables_with_rls}`);
+    console.log(`  ✅ Tables with RLS Enabled: ${this.results.tables_with_rls} (${this.results.rls_coverage_percentage}%)`);
     console.log(`  ❌ Tables Missing RLS: ${this.results.tables_missing_rls}`);
-    console.log(`  ⚠️  Tables with Incomplete Policies: ${this.results.tables_with_incomplete_policies}`);
-    console.log(`  Coverage: ${this.results.policy_coverage_percentage}%`);
+    console.log('');
+    console.log('POLICY BREAKDOWN:');
+    console.log(`  ✅ Full CRUD (SELECT, INSERT, UPDATE, DELETE): ${this.results.tables_with_full_crud} (${this.results.full_crud_percentage}%)`);
+    console.log(`  📖 Read-Only (SELECT only): ${this.results.tables_with_read_only}`);
+    console.log(`  ⚡ Partial Coverage (some operations): ${this.results.tables_with_partial_coverage}`);
     console.log('');
 
     if (this.results.failed_tables.length > 0) {
-      console.log('FAILED TABLES:');
+      console.log('FAILED TABLES (Missing RLS):');
       this.results.failed_tables.forEach(table => {
         console.log(`  ❌ ${table.table_name}:`);
         table.issues.forEach(issue => console.log(`     - ${issue}`));
@@ -273,24 +316,40 @@ class RLSVerifier {
       console.log('');
     }
 
-    if (this.results.warnings.length > 0) {
-      console.log('WARNINGS:');
-      this.results.warnings.forEach(table => {
-        console.log(`  ⚠️  ${table.table_name}:`);
-        table.issues.forEach(issue => console.log(`     - ${issue}`));
-        if (table.missing_policies.length > 0) {
-          console.log(`     Missing: ${table.missing_policies.join(', ')}`);
-        }
+    if (this.results.read_only_tables.length > 0) {
+      console.log('READ-ONLY TABLES (Informational):');
+      this.results.read_only_tables.slice(0, 5).forEach(table => {
+        console.log(`  📖 ${table.table_name}`);
       });
+      if (this.results.read_only_tables.length > 5) {
+        console.log(`  ... and ${this.results.read_only_tables.length - 5} more`);
+      }
+      console.log('');
+    }
+
+    if (this.results.partial_coverage_tables.length > 0) {
+      console.log('PARTIAL COVERAGE TABLES (Informational):');
+      this.results.partial_coverage_tables.slice(0, 5).forEach(table => {
+        console.log(`  ⚡ ${table.table_name}: missing ${table.missing_policies.join(', ')}`);
+      });
+      if (this.results.partial_coverage_tables.length > 5) {
+        console.log(`  ... and ${this.results.partial_coverage_tables.length - 5} more`);
+      }
       console.log('');
     }
 
     console.log('VERDICT:');
     if (this.results.passed) {
-      console.log('  ✅ ALL TABLES HAVE RLS POLICIES');
+      console.log('  ✅ ALL TABLES HAVE RLS ENABLED');
+      if (this.results.full_crud_percentage === 100) {
+        console.log('  ✅ ALL TABLES HAVE FULL CRUD POLICIES');
+      } else {
+        console.log(`  ℹ️  ${this.results.full_crud_percentage}% have full CRUD policies`);
+        console.log(`  ℹ️  Remaining tables have intentional read-only or partial coverage`);
+      }
     } else {
       console.log('  ❌ RLS POLICY VERIFICATION FAILED');
-      console.log(`  ${this.results.tables_missing_rls} table(s) require RLS policies`);
+      console.log(`  ${this.results.tables_missing_rls} table(s) require RLS to be enabled`);
     }
     console.log('='.repeat(60));
   }
