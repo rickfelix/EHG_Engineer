@@ -74,6 +74,8 @@ From retrospectives:
 - [ ] Validate claims with actual code inspection (don't trust assumptions)
 - [ ] Identify reusable infrastructure (auth, database patterns, UI components)
 - [ ] Check both EHG and EHG_Engineer codebases
+- [ ] **UI Integration Verification**: Verify UI entry points are connected (buttons, links, navigation)
+- [ ] Test complete user journey from UI entry point (not just component in isolation)
 
 ## Search Patterns
 
@@ -147,8 +149,13 @@ grep -r "function name" /mnt/c/_EHG/ehg/src/lib
 - [ ] **No Scope Creep**: Delivered features = approved features
 - [ ] **Documentation Validation**: All changes documented
 - [ ] **Integration Validation**: New code integrates with existing systems
+- [ ] **UI Integration Verification**: All UI entry points connected and tested
+  - Buttons have event handlers (onClick)
+  - Links have proper navigation (href, router)
+  - User journey tested from entry point → feature → success
+  - E2E tests validate actual UI entry point (not bypassed)
 
-**Blocks**: PLAN→LEAD handoff if required sub-agents missing OR user stories incomplete OR scope mismatches detected
+**Blocks**: PLAN→LEAD handoff if required sub-agents missing OR user stories incomplete OR scope mismatches detected OR UI integration incomplete
 
 **Sub-Agent Coverage Requirements**:
 
@@ -263,6 +270,28 @@ if (missing.length > 0) {
 
 ---
 
+### ❌ Failure Pattern 7: UI Integration Verification Gap
+**Anti-Pattern**: Building component without connecting UI entry points
+**Case**: CreateVentureDialog (2025-10-26) - Dialog fully built but buttons never wired
+**Impact**: Feature 100% complete but inaccessible to users
+**Similar**: Missing Browse Button (2025-10-26) - Entry point lost during refactoring
+**Solution**: MANDATORY UI integration verification before marking feature "done"
+
+**Common Thread**: Backend/component implementation complete, UI integration missing
+- Component built and tested in isolation ✅
+- UI buttons exist but have no onClick handlers ❌
+- User journey never tested from entry point ❌
+
+**Prevention**:
+- [ ] Verify ALL UI entry points connected (buttons have onClick, links have href)
+- [ ] Test complete user journey manually (click button → feature activates)
+- [ ] E2E tests must test actual UI entry point, not bypass it
+- [ ] "Done" = component + integration + accessible via UI + journey tested
+
+**Reference**: `docs/lessons-learned/2025-10-26-disconnected-venture-creation-dialog.md`
+
+---
+
 ## Proactive Invocation Checklist (EXPANDED)
 
 ### LEAD Pre-Approval Phase
@@ -293,6 +322,11 @@ if (missing.length > 0) {
 - [ ] Check for scope creep (extra features not in PRD)
 - [ ] Verify documentation completeness
 - [ ] Confirm integration with existing systems
+- [ ] **UI Integration Verification**: All UI entry points connected and functional
+  - [ ] Buttons have onClick handlers
+  - [ ] Links have proper href/navigation
+  - [ ] Complete user journey tested manually (entry point → feature → success)
+  - [ ] E2E tests validate actual UI entry point (not bypassed)
 
 ---
 

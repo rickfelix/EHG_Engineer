@@ -1,9 +1,10 @@
 # Database Agent Patterns: Comprehensive Reference
 
 **Status**: ACTIVE
-**Last Updated**: 2025-10-24
+**Last Updated**: 2025-10-26
 **Purpose**: Complete guide for database agent invocation, anti-patterns, and best practices
-**Evidence**: 74 retrospectives analyzed, 13 SDs with database agent lessons
+**Evidence**: 74+ retrospectives analyzed, 13+ SDs with database agent lessons, 11 issue patterns
+**Recent Improvements**: SD-LEO-LEARN-001 proactive learning integration
 
 ---
 
@@ -13,10 +14,13 @@
 2. [When to Invoke Database Agent](#when-to-invoke-database-agent)
 3. [How to Invoke Database Agent](#how-to-invoke-database-agent)
 4. [Error Response Protocol](#error-response-protocol)
-5. [Anti-Patterns to Avoid](#anti-patterns-to-avoid)
-6. [Success Patterns](#success-patterns)
-7. [Database Query Best Practices](#database-query-best-practices)
-8. [Quick Reference](#quick-reference)
+5. [Proactive Learning Integration (NEW)](#proactive-learning-integration-new)
+6. [RLS Policy Handling (NEW)](#rls-policy-handling-new)
+7. [Schema Validation Enhancements (NEW)](#schema-validation-enhancements-new)
+8. [Anti-Patterns to Avoid](#anti-patterns-to-avoid)
+9. [Success Patterns](#success-patterns)
+10. [Database Query Best Practices](#database-query-best-practices)
+11. [Quick Reference](#quick-reference)
 
 ---
 
@@ -166,6 +170,355 @@ Follow database agent's guidance exactly
 - Invoke database agent immediately
 - Wait for diagnosis
 - Implement proper solution
+```
+
+---
+
+## Proactive Learning Integration (NEW)
+
+**Added**: 2025-10-26 (SD-LEO-LEARN-001)
+**Impact**: Prevents 2-4 hours of rework by consulting lessons BEFORE encountering issues
+
+### Before Starting ANY Database Work
+
+Query the database for similar patterns and proven solutions:
+
+```bash
+# Search for prior database issues
+node scripts/search-prior-issues.js "database schema mismatch"
+
+# Query issue_patterns table for database category
+node -e "
+import { createDatabaseClient } from './lib/supabase-connection.js';
+(async () => {
+  const client = await createDatabaseClient('engineer', { verify: false });
+  const result = await client.query(\`
+    SELECT pattern_id, issue_summary, proven_solutions, prevention_checklist
+    FROM issue_patterns
+    WHERE category = 'database' AND status = 'active'
+    ORDER BY occurrence_count DESC
+    LIMIT 5
+  \`);
+  console.log('Known Database Patterns:');
+  result.rows.forEach(p => {
+    console.log(\`\n\${p.pattern_id}: \${p.issue_summary}\`);
+    if (p.proven_solutions) {
+      console.log('Proven Solutions:', JSON.stringify(p.proven_solutions, null, 2));
+    }
+    if (p.prevention_checklist) {
+      console.log('Prevention Steps:', JSON.stringify(p.prevention_checklist, null, 2));
+    }
+  });
+  await client.end();
+})();
+"
+```
+
+### Known Database Issue Patterns
+
+**PAT-001: Database Schema Mismatch** (5 occurrences, decreasing trend)
+- **Issue**: TypeScript interfaces don't match Supabase table columns
+- **Proven Solution**: Run schema verification before TypeScript interface updates
+  - Success Rate: 100% (5/5 applications)
+  - Average Resolution Time: 15 minutes
+- **Prevention Checklist**:
+  1. Verify database schema before updating TypeScript types
+  2. Run migration before code changes
+  3. Check Supabase dashboard for table structure
+
+### Integration with Phase Workflow
+
+**LEAD Pre-Approval**:
+```bash
+# Query for database patterns related to SD objective
+node scripts/search-prior-issues.js "$(grep 'objective' SD-ID.txt)"
+```
+
+**PLAN Phase**:
+```bash
+# Query patterns before PRD creation
+node scripts/phase-preflight.js --phase PLAN --sd-id <UUID>
+```
+
+**EXEC Phase**:
+```bash
+# Query patterns before implementation
+node scripts/phase-preflight.js --phase EXEC --sd-id <UUID>
+```
+
+---
+
+## RLS Policy Handling (NEW)
+
+**Added**: 2025-10-26 (SD-GTM-INTEL-DISCOVERY-001)
+**Impact**: Prevents security vulnerabilities and architectural violations
+
+### Understanding RLS Access Levels
+
+| Key Type | Access Level | Use Case | Security Risk |
+|----------|--------------|----------|---------------|
+| **ANON_KEY** | Read-only (SELECT) | Application queries, public access | Low (intended) |
+| **SERVICE_ROLE_KEY** | Full access, bypasses RLS | Admin operations, migrations | **HIGH** if misused |
+| **Supabase Dashboard** | Elevated privileges | Manual SQL execution | Medium (requires login) |
+
+### When RLS Blocks Operations
+
+**Option 1: Design Proper RLS Policy** (✅ PREFERRED)
+
+```sql
+-- Allow authenticated users to insert their own data
+CREATE POLICY insert_own_data ON table_name
+FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+-- Allow authenticated users to read specific records
+CREATE POLICY select_own_data ON table_name
+FOR SELECT TO authenticated
+USING (auth.uid() = user_id);
+
+-- Allow anon users to read public data
+CREATE POLICY select_public ON table_name
+FOR SELECT TO anon
+USING (is_public = true);
+```
+
+**Option 2: Document Blocker + Manual Workaround** (⚠️ ACCEPTABLE)
+
+When SERVICE_ROLE_KEY is not available:
+1. Document RLS constraint in handoff/PR
+2. Provide SQL migration script for manual execution
+3. User executes via Supabase dashboard (elevated privileges)
+4. Mark as CONDITIONAL_PASS with clear completion path
+
+**Example** (SD-GTM-INTEL-DISCOVERY-001):
+- ANON_KEY blocked INSERT to `nav_routes` table
+- Database agent created migration script with INSERT statements
+- User executed manually in Supabase dashboard
+- Result: CONDITIONAL_PASS, work completed
+
+**Option 3: SERVICE_ROLE_KEY in Code** (❌ NEVER DO THIS)
+
+```typescript
+// ❌ WRONG: Bypassing RLS in application code
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY  // SECURITY HOLE!
+);
+
+await supabase.from('sensitive_data').insert(data);
+// Now ALL RLS policies bypassed, no audit trail, security vulnerability
+```
+
+**Why This is Dangerous**:
+- Creates security vulnerabilities
+- Violates principle of least privilege
+- No audit trail for sensitive operations
+- Makes debugging harder (why does this need elevated access?)
+- Future developers may copy this anti-pattern
+
+### RLS Policy Design Patterns
+
+**Pattern 1: User-Owned Resources**
+```sql
+CREATE POLICY manage_own_resources ON resources
+FOR ALL TO authenticated
+USING (auth.uid() = owner_id)
+WITH CHECK (auth.uid() = owner_id);
+```
+
+**Pattern 2: Public Read, Authenticated Write**
+```sql
+CREATE POLICY public_read ON content
+FOR SELECT TO anon
+USING (true);
+
+CREATE POLICY authenticated_write ON content
+FOR INSERT TO authenticated
+WITH CHECK (true);
+```
+
+**Pattern 3: Role-Based Access**
+```sql
+CREATE POLICY admin_access ON sensitive_table
+FOR ALL TO authenticated
+USING (
+  auth.jwt() ->> 'role' = 'admin'
+);
+```
+
+---
+
+## Schema Validation Enhancements (NEW)
+
+**Added**: 2025-10-26 (PAT-001, SD-VWC-PRESETS-001)
+**Impact**: Prevents schema mismatches, trigger failures, and format conflicts
+
+### Pre-Change Validation Checklist
+
+Before ANY database schema changes, run these validations:
+
+#### 1. Verify Existing Schema Structure
+
+```sql
+-- Check table columns and types
+SELECT
+  column_name,
+  data_type,
+  is_nullable,
+  column_default
+FROM information_schema.columns
+WHERE table_name = 'target_table'
+ORDER BY ordinal_position;
+
+-- Check constraints
+SELECT
+  constraint_name,
+  constraint_type
+FROM information_schema.table_constraints
+WHERE table_name = 'target_table';
+
+-- Check foreign keys
+SELECT
+  tc.constraint_name,
+  tc.table_name,
+  kcu.column_name,
+  ccu.table_name AS foreign_table_name,
+  ccu.column_name AS foreign_column_name
+FROM information_schema.table_constraints AS tc
+JOIN information_schema.key_column_usage AS kcu
+  ON tc.constraint_name = kcu.constraint_name
+JOIN information_schema.constraint_column_usage AS ccu
+  ON ccu.constraint_name = tc.constraint_name
+WHERE tc.constraint_type = 'FOREIGN KEY'
+  AND tc.table_name = 'target_table';
+
+-- Check triggers
+SELECT
+  trigger_name,
+  event_manipulation,
+  action_statement
+FROM information_schema.triggers
+WHERE event_object_table = 'target_table';
+```
+
+#### 2. Verify TypeScript Interface Alignment
+
+```bash
+# Find TypeScript interfaces for this table
+grep -r "interface.*TargetTable" src/
+
+# Common column name mismatches to check:
+# - confidence_score (TS) vs confidence (DB)
+# - created_at (TS) vs createdAt (DB)
+# - user_id (TS) vs userId (DB)
+
+# Verify field names match EXACTLY
+```
+
+**Example Mismatch** (SD-AGENT-ADMIN-003):
+- Trigger function referenced `confidence_score` column
+- Actual database column was `confidence`
+- Result: Runtime trigger failures
+
+**Fix**: Always verify column names in information_schema before writing trigger functions
+
+#### 3. Validate JSONB Structure Expectations
+
+```sql
+-- Check JSONB format (object vs array)
+SELECT
+  column_name,
+  data_type,
+  jsonb_typeof(column_name) as jsonb_type,
+  column_name as sample_value
+FROM table_name
+WHERE column_name IS NOT NULL
+LIMIT 1;
+```
+
+**Example Mismatch** (SD-VWC-PRESETS-001):
+- Code expected `exec_checklist` as object: `{ items: [...] }`
+- Database stored as array: `[...]`
+- Result: Runtime errors accessing `exec_checklist.items`
+
+**Fix**: Validate JSONB structure before writing code that accesses nested fields
+
+```javascript
+// Good: Defensive coding for JSONB format
+const checklist = Array.isArray(sdData.exec_checklist)
+  ? { items: sdData.exec_checklist }  // Convert array to object
+  : sdData.exec_checklist;             // Already an object
+```
+
+#### 4. Validate Trigger Function Column References
+
+```sql
+-- Get trigger function source code
+SELECT
+  proname as function_name,
+  prosrc as source_code
+FROM pg_proc
+WHERE proname = 'trigger_function_name';
+
+-- Parse source code for column references
+-- Cross-reference with actual table columns from step 1
+```
+
+**Anti-Pattern** (SD-AGENT-ADMIN-003):
+```sql
+-- Trigger function has stale column reference
+CREATE OR REPLACE FUNCTION update_confidence()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.confidence_score := calculate_score();  -- Column doesn't exist!
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+**Fix**: After schema changes, audit all trigger functions for stale column references
+
+#### 5. Check Case-Sensitive String Comparisons
+
+```bash
+# Find case-sensitive comparisons that might break after normalization
+grep -rn "if.*==.*'EXEC-to-PLAN'" scripts/
+grep -rn "switch.*handoff_type" scripts/
+
+# Should be normalized to lowercase: 'exec_to_plan'
+```
+
+**Example Issue** (SD-VWC-PRESETS-001):
+- Input normalized to lowercase: `handoff_type = 'exec_to_plan'`
+- If-statement still used mixed case: `if (type === 'EXEC-to-PLAN')`
+- Result: Condition never matched, NULL values created
+
+**Fix**: Use automated linter rule to detect case-sensitive string comparisons
+
+```javascript
+// eslint rule suggestion
+{
+  "rules": {
+    "no-mixed-case-handoff-types": "error"
+  }
+}
+```
+
+### Schema Validation Tool Pattern
+
+Create a validation script for systematic checks:
+
+```bash
+# scripts/validate-schema-formats.js
+node scripts/validate-schema-formats.js <table_name>
+
+# Checks performed:
+# 1. JSONB columns: Verify object vs array expectations
+# 2. Array columns: Verify element types
+# 3. Foreign key references: Verify target tables exist
+# 4. NOT NULL constraints: Verify trigger compliance
+# 5. Trigger functions: Verify column references are current
+# 6. TypeScript interfaces: Verify alignment with database schema
 ```
 
 ---
@@ -498,6 +851,31 @@ node lib/sub-agent-executor.js DATABASE <SD-ID>
 - Zero runtime errors
 - **Time Saved**: 1-2 hours debugging
 
+### Pattern 4: Proactive Learning Consultation (NEW)
+
+**Example**: PAT-001
+- Query issue_patterns table BEFORE starting work
+- Apply proven_solutions (100% success rate)
+- Follow prevention_checklist
+- **Time Saved**: 2-4 hours (prevents encountering known issues)
+
+### Pattern 5: RLS Blocker Documentation (NEW)
+
+**Example**: SD-GTM-INTEL-DISCOVERY-001
+- ANON_KEY blocked INSERT to nav_routes
+- Database agent documented blocker instead of bypass
+- Provided SQL migration script for manual execution
+- Result: CONDITIONAL_PASS with clear completion path
+- **Security**: Zero vulnerabilities introduced
+
+### Pattern 6: Schema Format Validation (NEW)
+
+**Example**: SD-VWC-PRESETS-001 (Negative -> Positive)
+- Discovered exec_checklist format mismatch (object vs array)
+- Created validation script for JSONB structure checks
+- Applied defensive coding pattern
+- **Prevention**: Future format mismatches caught early
+
 ---
 
 ## Database Query Best Practices
@@ -708,6 +1086,13 @@ Database task or error? → node lib/sub-agent-executor.js DATABASE <SD-ID>
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2025-10-24 | Initial consolidated version from 3 source files |
+| 1.1.0 | 2025-10-26 | Added proactive learning integration (SD-LEO-LEARN-001) |
+| 1.1.0 | 2025-10-26 | Added RLS policy handling patterns (SD-GTM-INTEL-DISCOVERY-001) |
+| 1.1.0 | 2025-10-26 | Added schema validation enhancements (PAT-001, SD-VWC-PRESETS-001) |
+| 1.1.0 | 2025-10-26 | Added trigger function validation patterns |
+| 1.1.0 | 2025-10-26 | Added schema format validation (object vs array) |
+| 1.1.0 | 2025-10-26 | Updated success patterns with 3 new patterns |
+| 1.1.0 | 2025-10-26 | Evidence updated: 74+ retrospectives, 11 issue patterns analyzed |
 
 ---
 

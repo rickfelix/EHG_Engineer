@@ -138,6 +138,11 @@ find /mnt/c/_EHG/ehg/src/components -name "*ComponentName*"
 - [ ] **No Scope Creep**: Delivered features = approved features (SCOPE LOCK enforcement)
 - [ ] **Documentation Validation**: All changes documented (generated_docs, ADRs)
 - [ ] **Integration Validation**: New code integrates with existing systems
+- [ ] **UI Integration Verification**: All UI entry points connected and tested (NEW)
+  - Buttons have event handlers (onClick)
+  - Links have proper navigation (href, router)
+  - User journey tested from entry point → feature → success
+  - E2E tests validate actual UI entry point (not bypassed)
 
 **Sub-Agent Coverage Requirements**:
 
@@ -171,6 +176,7 @@ node scripts/plan-supervisor-verification.js --prd PRD-ID
 - Scope creep detected → Remove extra features OR create new SD for additions
 - Documentation missing → Complete before handoff
 - Integration failures → Fix before claiming completion
+- **UI integration incomplete** → Connect all UI entry points before claiming feature "done"
 
 **Sub-Agent Validation Example**:
 ```bash
@@ -282,6 +288,11 @@ Validation Agent: [Provides expert guidance on search patterns]
   - ADRs (if architectural decisions made)
   - README updates (if needed)
 - [ ] Confirm integration with existing systems
+- [ ] **UI Integration Verification** (NEW):
+  - [ ] All buttons have event handlers (onClick)
+  - [ ] All links have proper navigation (href, router)
+  - [ ] User journey tested manually from entry point
+  - [ ] E2E tests validate actual UI entry point (not bypassed)
 ```
 
 ---
@@ -421,6 +432,26 @@ node scripts/orchestrate-phase-subagents.js PLAN_VERIFY <SD-ID>
 - **Time Lost**: 2-3 hours creating tests post-hoc
 
 **Lesson**: GATE 2 test infrastructure validation prevents this
+
+---
+
+### Failure 4: UI Integration Verification Gap
+
+**Example**: CreateVentureDialog (2025-10-26)
+- Dialog component fully built (309 LOC) with all features
+- UI buttons existed but had no onClick handlers
+- Feature inaccessible to users despite being 100% complete
+- Similar: Missing Browse Button (2025-10-26) - Entry point lost during refactoring
+- **Time Lost**: Unknown (user-reported, could have been days/weeks undetected)
+
+**Pattern**: Backend/component implementation complete, UI integration missing
+- Component built and tested in isolation ✅
+- UI buttons exist but have no onClick handlers ❌
+- User journey never tested from entry point ❌
+
+**Lesson**: GATE 4 UI integration verification MANDATORY - "Done" = component + integration + accessible via UI + journey tested
+
+**Reference**: `docs/lessons-learned/2025-10-26-disconnected-venture-creation-dialog.md`
 
 ---
 

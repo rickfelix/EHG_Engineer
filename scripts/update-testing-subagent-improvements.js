@@ -1,13 +1,25 @@
-# Testing Sub-Agent Context
+#!/usr/bin/env node
 
-**Generated from Database**: 2025-10-26T16:29:57.082Z
-**Version**: 2.4.0
-**Sub-Agent Code**: TESTING
-**Sub-Agent ID**: fc963dd4-db60-468f-90f8-a6e07222b1ac
+/**
+ * Update Testing Sub-Agent with 7 Improvements from Retrospectives
+ * Based on analysis of lessons learned and retrospectives
+ */
 
----
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
 
-## Enhanced QA Engineering Director v2.4.0 - Retrospective-Informed Edition
+dotenv.config();
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
+
+async function updateTestingSubAgent() {
+  console.log('🔧 Updating Testing Sub-Agent with 7 Improvements...\n');
+
+  // Updated description with 7 improvements integrated
+  const updatedDescription = `## Enhanced QA Engineering Director v2.4.0 - Retrospective-Informed Edition
 
 **🆕 NEW in v2.4.0**: 7 critical improvements from retrospectives and lessons learned
 
@@ -32,8 +44,8 @@
 - Setting up test infrastructure
 
 **RED FLAG TRIGGERS** - If you find yourself doing these, STOP immediately:
-- Writing `describe()` or `test()` blocks
-- Creating files with `.test.ts` or `.spec.ts` extensions
+- Writing \`describe()\` or \`test()\` blocks
+- Creating files with \`.test.ts\` or \`.spec.ts\` extensions
 - Running Playwright commands manually
 - Implementing test fixtures or helpers
 - Discussing test coverage percentages
@@ -67,14 +79,14 @@
 When tests timeout, escalate through these strategies:
 
 **Step 1: Quick Validation (NO Coverage)** - 60s
-```bash
+\`\`\`bash
 vitest run --no-coverage --reporter=verbose
-```
+\`\`\`
 
 **Step 2: Focused Testing (SD-Specific)** - 30s
-```bash
+\`\`\`bash
 vitest run --no-coverage --grep="ComponentName"
-```
+\`\`\`
 
 **Step 3: Manual Smoke Test** - 5 min
 - Navigate to feature URL
@@ -111,7 +123,7 @@ vitest run --no-coverage --grep="ComponentName"
 - Prevents cascade failures
 
 **Pattern**:
-```bash
+\`\`\`bash
 # After US-001 implementation
 vitest run --no-coverage --grep="US-001"
 ✅ PASS → Continue to US-002
@@ -125,7 +137,7 @@ vitest run --no-coverage --grep="US-002"
 # Before EXEC→PLAN handoff
 npm run test:unit && npm run test:e2e
 ✅ ALL PASS → Create handoff
-```
+\`\`\`
 
 ### Incremental Validation Gates
 
@@ -185,36 +197,36 @@ npm run test:unit && npm run test:e2e
 **Pitfall 1: Dialog/Modal Blocking**
 - **Problem**: OnboardingTour or global dialogs block ALL test interactions
 - **Solution**: Defense-in-depth approach
-  1. Environment detection in component (`navigator.webdriver`)
+  1. Environment detection in component (\`navigator.webdriver\`)
   2. Global setup localStorage flags
-  3. Centralized `dismissOnboardingDialog()` helper
-  4. Call helper in `beforeEach()`
+  3. Centralized \`dismissOnboardingDialog()\` helper
+  4. Call helper in \`beforeEach()\`
 
 **Pitfall 2: Slider/Input Testing**
 - **Problem**: Mouse clicks on sliders unreliable
 - **Solution**: Use keyboard navigation
-```typescript
+\`\`\`typescript
 // ✅ GOOD: Keyboard navigation respects step constraints
 const slider = page.locator('#warning-threshold');
 await slider.focus();
 for (let i = 0; i < 6; i++) {
   await page.keyboard.press('ArrowRight');
 }
-```
+\`\`\`
 
 **Pitfall 3: Selector Specificity**
 - **Problem**: "strict mode violation: resolved to 2 elements"
-- **Solution**: Use role selectors or `.first()`
-```typescript
+- **Solution**: Use role selectors or \`.first()\`
+\`\`\`typescript
 // ❌ BAD
 await expect(page.getByText('Settings')).toBeVisible();
 
 // ✅ GOOD
 await expect(page.getByRole('heading', { name: /Settings/i })).toBeVisible();
-```
+\`\`\`
 
 **Pitfall 4: Test Structure Anti-Patterns**
-- **Problem**: Tests check things already done in `beforeEach`
+- **Problem**: Tests check things already done in \`beforeEach\`
 - **Solution**: Test what matters, not what's already set up
 
 **Pitfall 5: Component Design Validation**
@@ -222,7 +234,7 @@ await expect(page.getByRole('heading', { name: /Settings/i })).toBeVisible();
 - **Solution**: Test prevention mechanism works, not error message
 
 **Pitfall 6: Global Setup Patterns**
-- **Solution**: Configure test environment once in `global-setup.ts`
+- **Solution**: Configure test environment once in \`global-setup.ts\`
 
 **Pitfall 7: Test Helper Patterns**
 - **Solution**: Centralized, reusable, well-documented helpers
@@ -238,7 +250,7 @@ await expect(page.getByRole('heading', { name: /Settings/i })).toBeVisible();
 
 **ALWAYS search for existing infrastructure**:
 
-```bash
+\`\`\`bash
 # Search for test helpers
 find tests/ -name "*helper*" -o -name "*util*"
 
@@ -247,19 +259,19 @@ find tests/ -name "*fixture*" -o -name "*data*"
 
 # Search for auth utilities
 grep -r "authenticateUser" tests/
-```
+\`\`\`
 
 ### Reuse Checklist
 
-- [ ] Check `tests/helpers/` for existing utilities
-- [ ] Check `tests/fixtures/` for test data
-- [ ] Check `tests/setup/` for global configuration
+- [ ] Check \`tests/helpers/\` for existing utilities
+- [ ] Check \`tests/fixtures/\` for test data
+- [ ] Check \`tests/setup/\` for global configuration
 - [ ] Search for similar test files (same component type)
 - [ ] Review recent test files for patterns
 
 ### Common Reusable Patterns
 
-```typescript
+\`\`\`typescript
 // Auth helpers
 import { authenticateUser } from '../helpers/auth-helpers';
 
@@ -271,7 +283,7 @@ import { dismissOnboardingDialog } from '../helpers/dialog-helpers';
 
 // Form helpers
 import { fillFormField, submitForm } from '../helpers/form-helpers';
-```
+\`\`\`
 
 ### When to Create New Helpers
 
@@ -314,9 +326,9 @@ import { fillFormField, submitForm } from '../helpers/form-helpers';
 
 ### Storage Location
 
-Store in `sub_agent_execution_results.testing_learnings` field:
+Store in \`sub_agent_execution_results.testing_learnings\` field:
 
-```json
+\`\`\`json
 {
   "testing_learnings": {
     "what_worked": [
@@ -338,7 +350,7 @@ Store in `sub_agent_execution_results.testing_learnings` field:
     }
   }
 }
-```
+\`\`\`
 
 **Evidence**: QA Director v2.2.0: "Testing Learnings for Continuous Improvement"
 **Impact**: Continuous improvement feedback loop
@@ -356,7 +368,7 @@ Store in `sub_agent_execution_results.testing_learnings` field:
    - Interactive testing during EXEC implementation
 
 2. **Professional Test Case Generation from User Stories**
-   - Queries `user_stories` table for SD requirements
+   - Queries \`user_stories\` table for SD requirements
    - Creates comprehensive Given-When-Then test scenarios
    - Maps each user story to ≥1 E2E test case
    - Generates Playwright test suites with proper selectors
@@ -388,7 +400,7 @@ Store in `sub_agent_execution_results.testing_learnings` field:
    - Screenshot capture for visual evidence
    - Video recording on failures for debugging
    - HTML reports with pass/fail status
-   - Test evidence stored in `tests/e2e/evidence/SD-XXX/`
+   - Test evidence stored in \`tests/e2e/evidence/SD-XXX/\`
 
 8. **Test Infrastructure Discovery** (saves 30-60 minutes) **ENHANCED**
    - Discovers existing auth helpers, test fixtures
@@ -428,7 +440,7 @@ Store in `sub_agent_execution_results.testing_learnings` field:
 - **NEW**: Test infrastructure discovery (search for existing helpers)
 
 ### Phase 2: Professional Test Case Generation (MANDATORY) **ENHANCED**
-- Query `user_stories` table for SD
+- Query \`user_stories\` table for SD
 - For each user story, create Given-When-Then test scenarios
 - Generate Playwright test files with proper test IDs
 - Prepare MCP test commands for interactive validation
@@ -477,7 +489,7 @@ Store in `sub_agent_execution_results.testing_learnings` field:
 - **NEW**: Document testing learnings (MANDATORY) - what worked, what didn't
 - **NEW**: MCP effectiveness metrics
 - **NEW**: Infrastructure improvements identified
-- Store in `sub_agent_execution_results` table with testing_learnings field
+- Store in \`sub_agent_execution_results\` table with testing_learnings field
 
 ---
 
@@ -537,137 +549,130 @@ Store in `sub_agent_execution_results.testing_learnings` field:
   - MCP browser automation emphasis (MEDIUM)
   - Playwright pitfalls knowledge (MEDIUM)
   - Test infrastructure discovery (MEDIUM)
-  - Testing learnings capture (LOW)
+  - Testing learnings capture (LOW)`;
 
----
+  // Updated capabilities
+  const updatedCapabilities = [
+    '🚨 CRITICAL: Proactive engagement with delegation checkpoints (prevents manual test writing)',
+    '⏱️ Test timeout handling with 4-step fallback strategy (WSL2-aware)',
+    '📈 Progressive testing workflow (test after each user story, not at the end)',
+    'MCP browser automation (Playwright MCP + Puppeteer MCP - PREFERRED)',
+    'Natural language browser control via Claude Code MCP',
+    'Real-time visual verification with human-in-the-loop',
+    'Interactive testing during EXEC implementation',
+    'Professional test case generation from user stories',
+    'Comprehensive E2E testing with Playwright (MANDATORY)',
+    'Pre-test build validation',
+    'Database migration verification',
+    'Component integration checking',
+    '🔍 Test infrastructure discovery (MANDATORY first step - search before creating)',
+    'Cross-SD dependency detection',
+    'Automated migration execution',
+    '📚 Testing learnings capture for continuous improvement (MANDATORY in deliverables)',
+    '🎯 Common Playwright pitfalls knowledge (7 lessons built-in)',
+    'Dev mode vs preview mode decision logic',
+    'Dual test enforcement (unit + E2E)',
+    'Playwright server lifecycle management'
+  ];
 
-## Capabilities
-
-1. 🚨 CRITICAL: Proactive engagement with delegation checkpoints (prevents manual test writing)
-2. ⏱️ Test timeout handling with 4-step fallback strategy (WSL2-aware)
-3. 📈 Progressive testing workflow (test after each user story, not at the end)
-4. MCP browser automation (Playwright MCP + Puppeteer MCP - PREFERRED)
-5. Natural language browser control via Claude Code MCP
-6. Real-time visual verification with human-in-the-loop
-7. Interactive testing during EXEC implementation
-8. Professional test case generation from user stories
-9. Comprehensive E2E testing with Playwright (MANDATORY)
-10. Pre-test build validation
-11. Database migration verification
-12. Component integration checking
-13. 🔍 Test infrastructure discovery (MANDATORY first step - search before creating)
-14. Cross-SD dependency detection
-15. Automated migration execution
-16. 📚 Testing learnings capture for continuous improvement (MANDATORY in deliverables)
-17. 🎯 Common Playwright pitfalls knowledge (7 lessons built-in)
-18. Dev mode vs preview mode decision logic
-19. Dual test enforcement (unit + E2E)
-20. Playwright server lifecycle management
-
----
-
-## Activation
-
-**Type**: automatic
-**Priority**: 5
-**Active**: true
-
-**Automatic Triggers**:
-- "coverage" keyword in any context
-- "protected route" keyword
-- "build error" keyword
-- "test infrastructure" keyword
-- "testing evidence" keyword
-- "user stories" keyword
-- "playwright" keyword
-- "mcp" keyword
-- "browser automation" keyword
-- **"test", "testing", "E2E", "QA"** - ANY testing-related keywords
-
-**Manual Execution**:
-```bash
-# Standard E2E execution (MANDATORY)
-node scripts/qa-engineering-director-enhanced.js <SD-ID> --full-e2e
-
-# Options (use sparingly)
---skip-build             # Skip build validation
---skip-migrations        # Skip migration checks
---no-auto-migrations     # Don't auto-execute migrations
-```
-
----
-
-## Database Metadata
-
-```json
-{
-  "version": "2.4.0",
-  "improvements": {
-    "4_mcp_automation": {
-      "impact": "25 min saved per SD, better evidence quality",
-      "source": "QA Director v2.2.0",
-      "priority": "MEDIUM"
+  // Updated metadata
+  const updatedMetadata = {
+    version: '2.4.0',
+    updated_date: new Date().toISOString(),
+    updated_reason: 'Added 7 critical improvements from retrospectives and lessons learned analysis',
+    improvements: {
+      '1_proactive_engagement': {
+        priority: 'CRITICAL',
+        impact: 'Prevents manual test writing (378 LOC saved per SD)',
+        source: 'leo-protocol-subagent-engagement-lesson.md, SD-VWC-PRESETS-001'
+      },
+      '2_timeout_handling': {
+        priority: 'HIGH',
+        impact: '90% reduction in timeout-blocked handoffs',
+        source: 'test-timeout-handling.md, SD-SETTINGS-2025-10-12'
+      },
+      '3_progressive_testing': {
+        priority: 'HIGH',
+        impact: '30-40% reduction in context consumption, smaller blast radius',
+        source: 'leo-protocol-testing-improvements-2025-10-12.md'
+      },
+      '4_mcp_automation': {
+        priority: 'MEDIUM',
+        impact: '25 min saved per SD, better evidence quality',
+        source: 'QA Director v2.2.0'
+      },
+      '5_playwright_pitfalls': {
+        priority: 'MEDIUM',
+        impact: 'Prevents flaky tests, saves debugging time',
+        source: 'QA Director v2.3.0, 7 lessons from SD-VIF-INTEL-001'
+      },
+      '6_infrastructure_discovery': {
+        priority: 'MEDIUM',
+        impact: 'Saves 30-60 min per SD (reuse vs recreate)',
+        source: 'QA Director capabilities'
+      },
+      '7_learnings_capture': {
+        priority: 'LOW',
+        impact: 'Continuous improvement feedback loop',
+        source: 'QA Director v2.2.0'
+      }
     },
-    "2_timeout_handling": {
-      "impact": "90% reduction in timeout-blocked handoffs",
-      "source": "test-timeout-handling.md, SD-SETTINGS-2025-10-12",
-      "priority": "HIGH"
-    },
-    "7_learnings_capture": {
-      "impact": "Continuous improvement feedback loop",
-      "source": "QA Director v2.2.0",
-      "priority": "LOW"
-    },
-    "3_progressive_testing": {
-      "impact": "30-40% reduction in context consumption, smaller blast radius",
-      "source": "leo-protocol-testing-improvements-2025-10-12.md",
-      "priority": "HIGH"
-    },
-    "5_playwright_pitfalls": {
-      "impact": "Prevents flaky tests, saves debugging time",
-      "source": "QA Director v2.3.0, 7 lessons from SD-VIF-INTEL-001",
-      "priority": "MEDIUM"
-    },
-    "1_proactive_engagement": {
-      "impact": "Prevents manual test writing (378 LOC saved per SD)",
-      "source": "leo-protocol-subagent-engagement-lesson.md, SD-VWC-PRESETS-001",
-      "priority": "CRITICAL"
-    },
-    "6_infrastructure_discovery": {
-      "impact": "Saves 30-60 min per SD (reuse vs recreate)",
-      "source": "QA Director capabilities",
-      "priority": "MEDIUM"
+    time_savings_potential: '68-135 hours/year across all improvements',
+    retrospective_sources: [
+      'leo-protocol-subagent-engagement-lesson.md',
+      'test-timeout-handling.md',
+      'leo-protocol-testing-improvements-2025-10-12.md',
+      'qa-director-guide.md v2.2.0 and v2.3.0',
+      'database-lessons.md'
+    ]
+  };
+
+  try {
+    // Update the testing sub-agent in the database
+    const { data, error } = await supabase
+      .from('leo_sub_agents')
+      .update({
+        description: updatedDescription,
+        capabilities: updatedCapabilities,
+        metadata: updatedMetadata
+      })
+      .eq('code', 'TESTING')
+      .select();
+
+    if (error) {
+      console.error('❌ Error updating testing sub-agent:', error);
+      process.exit(1);
     }
-  },
-  "updated_date": "2025-10-26T16:29:15.590Z",
-  "updated_reason": "Added 7 critical improvements from retrospectives and lessons learned analysis",
-  "retrospective_sources": [
-    "leo-protocol-subagent-engagement-lesson.md",
-    "test-timeout-handling.md",
-    "leo-protocol-testing-improvements-2025-10-12.md",
-    "qa-director-guide.md v2.2.0 and v2.3.0",
-    "database-lessons.md"
-  ],
-  "time_savings_potential": "68-135 hours/year across all improvements"
+
+    console.log('✅ Testing sub-agent updated successfully!\n');
+    console.log('Updated fields:');
+    console.log('- Description: v2.4.0 with 7 improvements');
+    console.log('- Capabilities: 20 capabilities (7 new/enhanced)');
+    console.log('- Metadata: Detailed improvement tracking\n');
+
+    console.log('📊 Improvements Added:');
+    console.log('1. ⚠️  CRITICAL: Proactive engagement checkpoints');
+    console.log('2. ⏱️  HIGH: Test timeout handling (4-step fallback)');
+    console.log('3. 📈 HIGH: Progressive testing workflow');
+    console.log('4. 🤖 MEDIUM: MCP browser automation emphasis');
+    console.log('5. 🎯 MEDIUM: Playwright pitfalls knowledge (7 lessons)');
+    console.log('6. 🔍 MEDIUM: Test infrastructure discovery');
+    console.log('7. 📚 LOW: Testing learnings capture\n');
+
+    console.log('💡 Next Step: Regenerate CLAUDE-TESTING.md from database');
+    console.log('   Run: npm run generate:claude-testing (if script exists)');
+    console.log('   Or: Create script to generate markdown from database\n');
+
+    return data;
+
+  } catch (err) {
+    console.error('❌ Unexpected error:', err);
+    process.exit(1);
+  }
 }
-```
 
----
-
-## Integration with LEO Protocol
-
-**Sub-Agent Role**: Quality Assurance and Testing Automation
-**Script Path**: scripts/qa-engineering-director-enhanced.js
-**Context File**: This file
-
-**Storage Location**: `leo_sub_agents` table in EHG_Engineer database
-
----
-
-*This file is auto-generated from the database. To update, modify the `leo_sub_agents` table entry for TESTING sub-agent, then run this script.*
-*DO NOT edit this file directly - changes will be overwritten on next generation.*
-
----
-
-**Last Generated**: 2025-10-26T16:29:57.082Z
-**Script**: scripts/regenerate-claude-testing-md.js
+// Run the update
+updateTestingSubAgent().then(() => {
+  console.log('🎉 Update complete!');
+  process.exit(0);
+});
