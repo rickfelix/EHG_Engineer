@@ -34,7 +34,9 @@ jobs:
       - name: Run RLS verification
         id: rls-check
         env:
-          SUPABASE_RLS_AUDITOR_URL: ${{ secrets.SUPABASE_RLS_AUDITOR_URL }}
+          # Use DATABASE_URL if available, otherwise construct from SUPABASE_URL
+          SUPABASE_RLS_AUDITOR_URL: ${{ secrets.DATABASE_URL || secrets.SUPABASE_RLS_AUDITOR_URL }}
+          SUPABASE_POOLER_URL: ${{ secrets.DATABASE_URL }}
         run: |
           set +e # Don't exit on error, we want to capture the output
 

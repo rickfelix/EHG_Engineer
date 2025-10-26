@@ -12,6 +12,9 @@ on:
 jobs:
   uat-tests:
     runs-on: ubuntu-latest
+    # TEMPORARILY DISABLED: Requires EHG repo checkout (line 27-32 commented out)
+    # Re-enable when GH_PAT secret is configured for rickfelix/ehg repo access
+    if: false
 
     strategy:
       matrix:
@@ -19,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout EHG_Engineer (Test Framework)
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: rickfelix/EHG_Engineer
           path: EHG_Engineer
@@ -32,7 +35,7 @@ jobs:
       #     token: ${{ secrets.GH_PAT }}  # Requires PAT with repo access for private repo
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'

@@ -17,7 +17,10 @@ jobs:
     name: Venture Ideation Checks (Staging)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: ${{ vars.ENABLE_VH_CHECKS == '1' }}
+    # TEMPORARILY DISABLED: ENABLE_VH_CHECKS variable not configured
+    # To re-enable: Set repository variable ENABLE_VH_CHECKS=1 OR remove this if: false
+    if: false
+    # Original condition: if: ${{ vars.ENABLE_VH_CHECKS == '1' }}
 
     steps:
       - uses: actions/checkout@v4

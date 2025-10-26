@@ -1,0 +1,41 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - region "Notifications (F8)":
+      - list
+    - region "Notifications alt+T"
+    - generic [ref=e4]:
+      - button "Skip to main content" [ref=e5] [cursor=pointer]
+      - button "Skip to navigation" [ref=e6] [cursor=pointer]
+      - button "Skip to search" [ref=e7] [cursor=pointer]
+    - generic [ref=e9]:
+      - link "EHG Platform" [ref=e11] [cursor=pointer]:
+        - /url: /
+        - img [ref=e12]
+        - generic [ref=e15]: EHG Platform
+      - generic [ref=e16]:
+        - tablist [ref=e17]:
+          - tab "Sign In" [selected] [ref=e18] [cursor=pointer]
+          - tab "Sign Up" [ref=e19] [cursor=pointer]
+        - tabpanel "Sign In" [ref=e20]:
+          - generic [ref=e21]:
+            - generic [ref=e22]:
+              - heading "Welcome Back" [level=3] [ref=e23]
+              - paragraph [ref=e24]: Sign in to your EHG Platform account
+            - generic [ref=e27]:
+              - generic [ref=e28]:
+                - text: Email
+                - textbox "Email" [ref=e29]
+              - generic [ref=e30]:
+                - text: Password
+                - generic [ref=e31]:
+                  - textbox "Password" [ref=e32]
+                  - button [ref=e33] [cursor=pointer]:
+                    - img
+              - button "Sign In" [ref=e34] [cursor=pointer]
+      - link "← Back to home" [ref=e36] [cursor=pointer]:
+        - /url: /
+  - status [ref=e37]
+```
