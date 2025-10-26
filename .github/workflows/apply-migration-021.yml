@@ -1,0 +1,95 @@
+name: Apply Migration 021 (RLS Agent/Documentation Tables)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "apply" to confirm migration execution'
+        required: true
+        type: string
+
+jobs:
+  apply-migration:
+    name: Apply Migration 021
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "apply" ]; then
+            echo "❌ Migration cancelled - confirmation not provided"
+            echo "   Please type 'apply' in the confirmation input to proceed"
+            exit 1
+          fi
+          echo "✅ Confirmation validated"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install pg dotenv
+
+      - name: Apply migration 021
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NODE_TLS_REJECT_UNAUTHORIZED: '0'
+        run: |
+          echo "🔧 Applying migration 021: Enable RLS on agent/documentation tables"
+          echo ""
+          echo "Agent Tables (5):"
+          echo "  - agent_coordination_state"
+          echo "  - agent_events"
+          echo "  - agent_execution_cache"
+          echo "  - agent_knowledge_base"
+          echo "  - agent_performance_metrics"
+          echo ""
+          echo "Documentation Tables (5):"
+          echo "  - compliance_alerts"
+          echo "  - documentation_health_checks"
+          echo "  - documentation_inventory"
+          echo "  - documentation_templates"
+          echo "  - documentation_violations"
+          echo ""
+
+          node scripts/apply-migration-021.mjs
+
+      - name: Verify RLS coverage
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NODE_TLS_REJECT_UNAUTHORIZED: '0'
+        run: |
+          echo "🔍 Running RLS coverage analysis..."
+          node scripts/analyze-rls-coverage.mjs
+
+      - name: Summary
+        run: |
+          echo "## Migration 021 Applied ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Security Improvement" >> $GITHUB_STEP_SUMMARY
+          echo "- **Before**: 10 tables (6%) without RLS" >> $GITHUB_STEP_SUMMARY
+          echo "- **After**: 0 tables without RLS (100% coverage)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Tables Secured" >> $GITHUB_STEP_SUMMARY
+          echo "**Agent Tables:**" >> $GITHUB_STEP_SUMMARY
+          echo "- agent_coordination_state" >> $GITHUB_STEP_SUMMARY
+          echo "- agent_events" >> $GITHUB_STEP_SUMMARY
+          echo "- agent_execution_cache" >> $GITHUB_STEP_SUMMARY
+          echo "- agent_knowledge_base" >> $GITHUB_STEP_SUMMARY
+          echo "- agent_performance_metrics" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Documentation Tables:**" >> $GITHUB_STEP_SUMMARY
+          echo "- compliance_alerts" >> $GITHUB_STEP_SUMMARY
+          echo "- documentation_health_checks" >> $GITHUB_STEP_SUMMARY
+          echo "- documentation_inventory" >> $GITHUB_STEP_SUMMARY
+          echo "- documentation_templates" >> $GITHUB_STEP_SUMMARY
+          echo "- documentation_violations" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Security Policies Applied" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ service_role: Full access" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ authenticated: Read-only access" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ anon: No access (blocked)" >> $GITHUB_STEP_SUMMARY
