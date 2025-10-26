@@ -1,25 +1,11 @@
 name: E2E Tests with Story Verification
 
-'on':
-  push:
-    branches: [main, staging, feat/ehg-backlog-import-prd]
-  pull_request:
-    branches: [main, staging]
+on:
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to test'
-        required: true
-        default: 'staging'
-        type: choice
-        options:
-          - staging
-          - production
 
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'staging' }}
 
     steps:
       - name: Checkout code
