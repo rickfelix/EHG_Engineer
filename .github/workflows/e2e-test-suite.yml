@@ -1,4 +1,4 @@
-name: E2E Tests with Story Verification
+name: E2E Test Suite
 
 on:
   workflow_dispatch:
