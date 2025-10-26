@@ -39,13 +39,7 @@ CREATE TABLE IF NOT EXISTS user_context_patterns (
     
     -- Pattern Metadata
     confidence_threshold DECIMAL(3,2), -- Learned threshold for this pattern
-    priority_weights JSONB, -- Learned priority weights for different agents
-    
-    -- Indexes
-    INDEX idx_pattern_hash (pattern_hash),
-    INDEX idx_user_patterns (user_id, success_rate DESC),
-    INDEX idx_pattern_frequency (frequency_count DESC, success_rate DESC),
-    INDEX idx_pattern_last_seen (last_seen DESC)
+    priority_weights JSONB -- Learned priority weights for different agents
 );
 
 -- Table: interaction_history
@@ -95,13 +89,7 @@ CREATE TABLE IF NOT EXISTS interaction_history (
     
     -- Performance Metrics
     total_processing_time INTEGER, -- End-to-end time
-    cache_hit BOOLEAN NOT NULL DEFAULT false,
-    
-    -- Indexes
-    INDEX idx_interaction_timestamp (interaction_timestamp DESC),
-    INDEX idx_user_interactions (user_id, interaction_timestamp DESC),
-    INDEX idx_pattern_interactions (pattern_matched, interaction_timestamp DESC),
-    INDEX idx_success_analysis (success_count, analysis_method, interaction_timestamp DESC)
+    cache_hit BOOLEAN NOT NULL DEFAULT false
 );
 
 -- Table: agent_performance_metrics
@@ -149,12 +137,9 @@ CREATE TABLE IF NOT EXISTS agent_performance_metrics (
     -- Timestamps
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    
-    -- Constraints and Indexes
-    UNIQUE(agent_code, measurement_date, measurement_window),
-    INDEX idx_agent_performance (agent_code, measurement_date DESC),
-    INDEX idx_agent_success_rate (successful_executions DESC, total_executions DESC),
-    INDEX idx_coordination_success (coordination_success_rate DESC)
+
+    -- Constraints
+    UNIQUE(agent_code, measurement_date, measurement_window)
 );
 
 -- Table: learning_configurations
@@ -199,11 +184,9 @@ CREATE TABLE IF NOT EXISTS learning_configurations (
     -- Timestamps
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    
-    -- Constraints and Indexes
-    UNIQUE(config_scope, scope_id),
-    INDEX idx_config_scope (config_scope, scope_id),
-    INDEX idx_learning_performance (current_success_rate DESC, current_user_satisfaction DESC)
+
+    -- Constraints
+    UNIQUE(config_scope, scope_id)
 );
 
 -- Table: feedback_events
@@ -236,13 +219,7 @@ CREATE TABLE IF NOT EXISTS feedback_events (
     confidence_after DECIMAL(3,2),
     
     -- Metadata
-    feedback_metadata JSONB, -- Additional context-specific data
-    
-    -- Indexes
-    INDEX idx_feedback_timestamp (event_timestamp DESC),
-    INDEX idx_feedback_type (feedback_type, feedback_source),
-    INDEX idx_user_feedback (user_id, event_timestamp DESC),
-    INDEX idx_agent_feedback (specific_agent, feedback_value DESC, event_timestamp DESC)
+    feedback_metadata JSONB -- Additional context-specific data
 );
 
 -- Table: context_embeddings
@@ -272,29 +249,15 @@ CREATE TABLE IF NOT EXISTS context_embeddings (
     
     -- Timestamps
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_matched TIMESTAMPTZ,
-    
-    -- Indexes for vector similarity search
-    INDEX idx_context_embeddings_vector (embedding_vector) USING ivfflat,
-    INDEX idx_context_hash (context_hash),
-    INDEX idx_embedding_performance (avg_match_success DESC, similarity_matches DESC)
+    last_matched TIMESTAMPTZ
 );
 
 -- Views for Learning Analytics
 
 -- View: agent_effectiveness_summary
-CREATE OR REPLACE VIEW agent_effectiveness_summary AS
-SELECT 
-    agent_code,
-    COUNT(*) as total_selections,
-    AVG(selection_confidence) as avg_confidence,
-    AVG(CASE WHEN success_count > 0 THEN 1.0 ELSE 0.0 END) as success_rate,
-    AVG(execution_time_ms) as avg_execution_time,
-    COUNT(DISTINCT pattern_matched) as unique_patterns_triggered
-FROM interaction_history 
-WHERE selected_agents @> jsonb_build_array(jsonb_build_object('agent_code', agent_code))
-GROUP BY agent_code
-ORDER BY success_rate DESC, avg_confidence DESC;
+-- Note: This view requires complex JSONB processing. For now, use direct queries on agent_performance_metrics
+-- CREATE OR REPLACE VIEW agent_effectiveness_summary AS
+-- SELECT ... (commented out due to complexity)
 
 -- View: learning_progress_summary
 CREATE OR REPLACE VIEW learning_progress_summary AS
@@ -342,6 +305,39 @@ COMMENT ON TABLE feedback_events IS 'User feedback events for continuous learnin
 COMMENT ON TABLE context_embeddings IS 'Vector embeddings for semantic similarity matching of contexts';
 
 -- Indexes for performance optimization
-CREATE INDEX IF NOT EXISTS idx_interaction_success_patterns ON interaction_history(success_count, pattern_matched, interaction_timestamp);
+
+-- user_context_patterns indexes
+CREATE INDEX IF NOT EXISTS idx_pattern_hash ON user_context_patterns(pattern_hash);
+CREATE INDEX IF NOT EXISTS idx_user_patterns ON user_context_patterns(user_id, success_rate DESC);
+CREATE INDEX IF NOT EXISTS idx_pattern_frequency ON user_context_patterns(frequency_count DESC, success_rate DESC);
+CREATE INDEX IF NOT EXISTS idx_pattern_last_seen ON user_context_patterns(last_seen DESC);
 CREATE INDEX IF NOT EXISTS idx_pattern_success_rate ON user_context_patterns(success_rate DESC, frequency_count DESC);
-CREATE INDEX IF NOT EXISTS idx_recent_interactions ON interaction_history(interaction_timestamp DESC) WHERE interaction_timestamp > (NOW() - INTERVAL '30 days');
+
+-- interaction_history indexes
+CREATE INDEX IF NOT EXISTS idx_interaction_timestamp ON interaction_history(interaction_timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_user_interactions ON interaction_history(user_id, interaction_timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_pattern_interactions ON interaction_history(pattern_matched, interaction_timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_success_analysis ON interaction_history(success_count, analysis_method, interaction_timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_interaction_success_patterns ON interaction_history(success_count, pattern_matched, interaction_timestamp);
+-- Note: Partial index with NOW() commented out (functions in predicates must be IMMUTABLE)
+-- CREATE INDEX IF NOT EXISTS idx_recent_interactions ON interaction_history(interaction_timestamp DESC) WHERE interaction_timestamp > (NOW() - INTERVAL '30 days');
+
+-- agent_performance_metrics indexes
+CREATE INDEX IF NOT EXISTS idx_agent_performance ON agent_performance_metrics(agent_code, measurement_date DESC);
+CREATE INDEX IF NOT EXISTS idx_agent_success_rate ON agent_performance_metrics(successful_executions DESC, total_executions DESC);
+CREATE INDEX IF NOT EXISTS idx_coordination_success ON agent_performance_metrics(coordination_success_rate DESC);
+
+-- learning_configurations indexes
+CREATE INDEX IF NOT EXISTS idx_config_scope ON learning_configurations(config_scope, scope_id);
+CREATE INDEX IF NOT EXISTS idx_learning_performance ON learning_configurations(current_success_rate DESC, current_user_satisfaction DESC);
+
+-- feedback_events indexes
+CREATE INDEX IF NOT EXISTS idx_feedback_timestamp ON feedback_events(event_timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_feedback_type ON feedback_events(feedback_type, feedback_source);
+CREATE INDEX IF NOT EXISTS idx_user_feedback ON feedback_events(user_id, event_timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_agent_feedback ON feedback_events(specific_agent, feedback_value DESC, event_timestamp DESC);
+
+-- context_embeddings indexes
+CREATE INDEX IF NOT EXISTS idx_context_hash ON context_embeddings(context_hash);
+CREATE INDEX IF NOT EXISTS idx_embedding_performance ON context_embeddings(avg_match_success DESC, similarity_matches DESC);
+CREATE INDEX IF NOT EXISTS idx_context_embeddings_vector ON context_embeddings USING ivfflat (embedding_vector);
