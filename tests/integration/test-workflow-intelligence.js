@@ -226,10 +226,10 @@ function validateAnalysisDepth(analysis) {
   return true;
 }
 
-function validatePatternLearning() {
+async function validatePatternLearning() {
   console.log('\n✓ Test 2: Pattern Learning & Caching');
 
-  const cacheStats = getCacheStats('.workflow-patterns.json');
+  const cacheStats = await getCacheStats('.workflow-patterns.json');
 
   if (!cacheStats) {
     console.log('❌ No cache file created');
