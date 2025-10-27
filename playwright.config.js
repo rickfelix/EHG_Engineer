@@ -112,7 +112,7 @@ export default defineConfig({
   },
 
   // Output directories
-  outputDir: 'test-results/',
+  outputDir: 'test-results/artifacts',
   
   // Metadata for LEO Protocol compliance
   metadata: {

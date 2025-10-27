@@ -14,7 +14,18 @@ export class BaseFactory {
   constructor() {
     this.attributes = {};
     this.createdRecords = [];
-    this.supabase = getSupabaseClient();
+    this._supabase = null; // Lazy-loaded
+  }
+
+  /**
+   * Get Supabase client (lazy-loaded)
+   * @returns {SupabaseClient}
+   */
+  get supabase() {
+    if (!this._supabase) {
+      this._supabase = getSupabaseClient();
+    }
+    return this._supabase;
   }
 
   /**
