@@ -131,6 +131,11 @@ async function createTestData() {
       ],
       system_architecture: 'React + Node.js API',
       acceptance_criteria: ['All workflows validated', 'UX score >= 6.0'],
+      test_scenarios: [
+        'User processes payment successfully',
+        'User deletes account with confirmation',
+        'User views order history'
+      ],
       status: 'draft',
       created_at: new Date().toISOString()
     }, { onConflict: 'id' });
