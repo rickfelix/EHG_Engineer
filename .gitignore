@@ -27,3 +27,4 @@ migrations/*_optimize_database.sql
 test-results/
 .playwright/
 coverage/
+supabase/.temp/
