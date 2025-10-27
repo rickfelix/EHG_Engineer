@@ -249,6 +249,22 @@ class PlanToExecVerifier {
       const completedStories = userStories.filter(s => s.status === 'completed').length;
       console.log(`   📊 Status: ${completedStories}/${userStories.length} completed`);
 
+      // 3b. MANDATORY: Workflow Review Validation (SD-DESIGN-WORKFLOW-REVIEW-001)
+      console.log('\n📋 Checking workflow review analysis...');
+      const workflowReviewResult = await this.validateWorkflowReview(sdId);
+
+      if (!workflowReviewResult.valid) {
+        return this.rejectHandoff(sdId, 'WORKFLOW_REVIEW_FAILED', workflowReviewResult.message, {
+          workflowAnalysis: workflowReviewResult.analysis,
+          requiredActions: workflowReviewResult.requiredActions
+        });
+      }
+
+      console.log(`   ✅ Workflow review passed: ${workflowReviewResult.status}`);
+      if (workflowReviewResult.uxScore !== undefined) {
+        console.log(`   📊 UX Impact Score: ${workflowReviewResult.uxScore}/10`);
+      }
+
       // 4. Validate PRD Quality
       const prdValidator = await this.loadPRDValidator();
       const prdValidation = await prdValidator(prd);
@@ -385,6 +401,109 @@ class PlanToExecVerifier {
   }
   
   /**
+   * Validate workflow review analysis from Design Sub-Agent
+   * Checks for workflow validation status and UX impact score
+   *
+   * @param {string} sdId - Strategic Directive ID
+   * @returns {Promise<Object>} Validation result
+   */
+  async validateWorkflowReview(sdId) {
+    try {
+      // Query sub_agent_execution_results for DESIGN sub-agent workflow analysis
+      const { data: designResults, error } = await this.supabase
+        .from('sub_agent_execution_results')
+        .select('metadata, created_at')
+        .eq('sd_id', sdId)
+        .eq('sub_agent_code', 'DESIGN')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.warn(`   ⚠️  Error querying workflow analysis: ${error.message}`);
+        return {
+          valid: true, // Don't block if query fails
+          status: 'SKIPPED',
+          message: 'Workflow review not available (query error)'
+        };
+      }
+
+      if (!designResults || designResults.length === 0) {
+        console.warn('   ⚠️  No DESIGN sub-agent execution found');
+        return {
+          valid: true, // Don't block if no execution yet
+          status: 'SKIPPED',
+          message: 'Workflow review not yet executed'
+        };
+      }
+
+      const workflowAnalysis = designResults[0].metadata?.workflow_analysis;
+
+      if (!workflowAnalysis) {
+        console.warn('   ⚠️  No workflow_analysis in DESIGN results');
+        return {
+          valid: true, // Don't block if workflow review was skipped
+          status: 'SKIPPED',
+          message: 'Workflow review not performed (no user stories or disabled)'
+        };
+      }
+
+      // Check workflow validation status
+      const status = workflowAnalysis.status;
+      const uxScore = workflowAnalysis.ux_impact_score;
+      const deadEnds = workflowAnalysis.validation_results?.dead_ends || [];
+      const circularFlows = workflowAnalysis.validation_results?.circular_flows || [];
+      const regressions = workflowAnalysis.interaction_impact?.regressions_detected || [];
+
+      // BLOCKING: Workflow validation failed
+      if (status === 'FAIL') {
+        const issues = [];
+        if (deadEnds.length > 0) {
+          issues.push(`${deadEnds.length} dead end(s) detected`);
+        }
+        if (circularFlows.length > 0) {
+          issues.push(`${circularFlows.length} circular flow(s) detected`);
+        }
+        if (uxScore < 6.0) {
+          issues.push(`UX impact score ${uxScore}/10 below minimum 6.0`);
+        }
+
+        return {
+          valid: false,
+          status: 'FAIL',
+          message: `Workflow validation failed: ${issues.join(', ')}`,
+          analysis: workflowAnalysis,
+          requiredActions: workflowAnalysis.recommendations?.filter(r => r.priority === 'CRITICAL') || []
+        };
+      }
+
+      // WARNING: UX score below recommended threshold but not blocking
+      if (uxScore < 6.5 && uxScore >= 6.0) {
+        console.warn(`   ⚠️  UX score ${uxScore}/10 below recommended 6.5 (still passing)`);
+        if (regressions.length > 0) {
+          console.warn(`   ⚠️  ${regressions.length} regression(s) detected - review recommendations`);
+        }
+      }
+
+      // PASS
+      return {
+        valid: true,
+        status: workflowAnalysis.status,
+        uxScore: uxScore,
+        message: 'Workflow validation passed',
+        analysis: workflowAnalysis
+      };
+
+    } catch (error) {
+      console.error(`   ❌ Workflow review validation error: ${error.message}`);
+      return {
+        valid: true, // Don't block on system errors
+        status: 'ERROR',
+        message: `Workflow review validation error: ${error.message}`
+      };
+    }
+  }
+
+  /**
    * Reject handoff and provide improvement guidance
    */
   async rejectHandoff(sdId, reasonCode, message, details = {}) {
@@ -520,6 +639,79 @@ class PlanToExecVerifier {
         ];
         guidance.timeEstimate = '20-30 minutes';
         guidance.instructions = 'PLAN→EXEC handoffs require plan_presentation in metadata per SD-PLAN-PRESENT-001. Include implementation goals, file scope, execution steps, and testing strategy.';
+        break;
+
+      case 'WORKFLOW_REVIEW_FAILED':
+        const workflowAnalysis = details.workflowAnalysis;
+        const requiredActions = details.requiredActions || [];
+
+        guidance.required = requiredActions.map(action =>
+          `[${action.priority}] ${action.action}: ${action.rationale}`
+        );
+
+        if (guidance.required.length === 0) {
+          guidance.required = ['Fix workflow validation issues detected by Design Sub-Agent'];
+        }
+
+        // Count issues across all dimensions
+        const vr = workflowAnalysis?.validation_results || {};
+        const allIssues = [
+          ...(vr.dead_ends || []),
+          ...(vr.circular_flows || []),
+          ...(vr.error_recovery || []),
+          ...(vr.loading_states || []),
+          ...(vr.confirmations || []),
+          ...(vr.form_validation || []),
+          ...(vr.state_management || []),
+          ...(vr.accessibility || [])
+        ];
+        const criticalCount = allIssues.filter(i => i.severity === 'CRITICAL').length;
+        const highCount = allIssues.filter(i => i.severity === 'HIGH').length;
+
+        guidance.actions = [
+          '🎯 RECOMMENDED: Use interactive workflow review CLI',
+          '   → node scripts/review-workflow.js <SD-ID>',
+          '   → Human-in-loop iteration with intelligent recommendations',
+          '   → Automatically applies fixes to user stories',
+          '   → Max 3 iterations with re-analysis after each fix',
+          '',
+          'OR manually fix issues:',
+          `   1. Review ${allIssues.length} workflow issue(s) (${criticalCount} CRITICAL, ${highCount} HIGH)`,
+          '   2. Update user story acceptance_criteria or implementation_context',
+          '   3. Re-run Design Sub-Agent: node lib/sub-agent-executor.js DESIGN <SD-ID> --workflow-review',
+          '   4. Retry PLAN→EXEC handoff'
+        ];
+
+        const issues = [];
+        if (vr.dead_ends?.length > 0) {
+          issues.push(`${vr.dead_ends.length} dead ends`);
+        }
+        if (vr.circular_flows?.length > 0) {
+          issues.push(`${vr.circular_flows.length} circular flows`);
+        }
+        if (criticalCount > 0) {
+          issues.push(`${criticalCount} CRITICAL`);
+        }
+        if (highCount > 0) {
+          issues.push(`${highCount} HIGH`);
+        }
+        if (workflowAnalysis?.ux_impact_score < 6.0) {
+          issues.push(`UX score ${workflowAnalysis.ux_impact_score}/10`);
+        }
+
+        guidance.timeEstimate = criticalCount > 3 ? '1-2 hours' : '30-60 minutes';
+        guidance.instructions = `Workflow validation failed with ${issues.join(', ')}.
+
+RECOMMENDED: node scripts/review-workflow.js <SD-ID>
+
+Interactive tool features:
+- Adaptive analysis depth (DEEP/STANDARD/LIGHT based on story risk)
+- Pattern learning from existing codebase
+- Confidence-based recommendations (≥90%: auto-apply, 60-89%: options, <60%: ask human)
+- Direct user story updates in database
+- Iterative re-analysis (max 3 rounds)
+
+After iteration complete, retry handoff.`;
         break;
 
       default:
