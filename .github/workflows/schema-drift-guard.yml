@@ -1,0 +1,91 @@
+name: Schema Drift Guard
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/ehg_app/**'
+      - 'supabase/ehg_engineer/**'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/ehg_app/**'
+      - 'supabase/ehg_engineer/**'
+
+jobs:
+  check-drift-ehg-app:
+    name: Check EHG App Schema Drift
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+
+      - name: Check for schema drift
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          cd supabase/ehg_app
+
+          # Link to EHG app Supabase project
+          echo "Linking to EHG app project..."
+          supabase link --project-ref liapbndqlqxdcgpwntbv || true
+
+          # Generate diff to detect untracked changes
+          echo "Checking for schema drift..."
+          supabase db diff --schema public > drift.sql
+
+          if [ -s drift.sql ]; then
+            echo "⚠️ Schema drift detected! Untracked changes in database:"
+            echo "============================================"
+            cat drift.sql
+            echo "============================================"
+            echo ""
+            echo "Action required: Create a migration file for these changes."
+            echo "Run: supabase migration new <description>"
+            exit 1
+          fi
+
+          echo "✅ No schema drift detected in EHG app"
+
+  check-drift-ehg-engineer:
+    name: Check EHG_Engineer Schema Drift
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+
+      - name: Check for schema drift
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_ENGINEER }}
+        run: |
+          cd supabase/ehg_engineer
+
+          # Link to EHG_Engineer governance project
+          echo "Linking to EHG_Engineer project..."
+          supabase link --project-ref dedlbzhpgkmetvhbkyzq || true
+
+          # Generate diff to detect untracked changes
+          echo "Checking for schema drift..."
+          supabase db diff --schema public > drift.sql
+
+          if [ -s drift.sql ]; then
+            echo "⚠️ Schema drift detected! Untracked changes in database:"
+            echo "============================================"
+            cat drift.sql
+            echo "============================================"
+            echo ""
+            echo "Action required: Create a migration file for these changes."
+            echo "Run: supabase migration new <description>"
+            exit 1
+          fi
+
+          echo "✅ No schema drift detected in EHG_Engineer"
