@@ -312,7 +312,81 @@ async function verifyCAPA(options) {
 }
 
 /**
- * Check RCA gate status for SD
+ * Check RCA gate status for SD (programmatic - for handoff validation)
+ * @param {string} sdId - Strategic Directive ID
+ * @returns {Promise<{blocked: boolean, blockingRCRs: Array, totalP0P1: number, message: string}>}
+ */
+export async function checkRCAGate(sdId) {
+  if (!sdId) {
+    return {
+      blocked: false,
+      blockingRCRs: [],
+      totalP0P1: 0,
+      message: 'No SD ID provided'
+    };
+  }
+
+  const { data: openRCRs, error } = await supabase
+    .from('root_cause_reports')
+    .select(`
+      id,
+      severity_priority,
+      status,
+      problem_statement,
+      remediation_manifests (
+        id,
+        status,
+        verified_at
+      )
+    `)
+    .eq('sd_id', sdId)
+    .in('status', ['OPEN', 'IN_REVIEW', 'CAPA_PENDING', 'CAPA_APPROVED', 'FIX_IN_PROGRESS'])
+    .in('severity_priority', ['P0', 'P1']);
+
+  if (error) {
+    console.error('❌ Error checking RCA gate:', error.message);
+    return {
+      blocked: false,
+      blockingRCRs: [],
+      totalP0P1: 0,
+      message: `Database error: ${error.message}`,
+      error: true
+    };
+  }
+
+  if (!openRCRs || openRCRs.length === 0) {
+    return {
+      blocked: false,
+      blockingRCRs: [],
+      totalP0P1: 0,
+      message: '0 open P0/P1 RCRs - handoff can proceed'
+    };
+  }
+
+  const blockingRCRs = openRCRs.filter(rcr => {
+    const capa = rcr.remediation_manifests?.[0];
+    return !capa || capa.status !== 'VERIFIED';
+  });
+
+  if (blockingRCRs.length > 0) {
+    return {
+      blocked: true,
+      blockingRCRs: blockingRCRs,
+      totalP0P1: openRCRs.length,
+      message: `${blockingRCRs.length} open P0/P1 RCRs without verified CAPA - handoff BLOCKED`
+    };
+  }
+
+  return {
+    blocked: false,
+    blockingRCRs: [],
+    totalP0P1: openRCRs.length,
+    message: `All ${openRCRs.length} P0/P1 RCRs have verified CAPAs - handoff can proceed`
+  };
+}
+
+/**
+ * Check RCA gate status for SD (CLI - for terminal use)
  */
 async function gateCheck(sdId) {
   if (!sdId) {

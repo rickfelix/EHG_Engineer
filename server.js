@@ -37,6 +37,9 @@ import StoryAgentBootstrap from './src/agents/story-bootstrap.js';
 // Import Directive Enhancement Service
 import { DirectiveEnhancer } from './src/services/directive-enhancer.js';
 
+// Import RCA Monitor Bootstrap (SD-RCA-001)
+import { bootstrapRCAMonitoring, registerRCAShutdownHandlers } from './lib/rca-monitor-bootstrap.js';
+
 // Initialize Express app
 const app = express();
 const server = http.createServer(app);
@@ -402,14 +405,14 @@ app.put('/api/sdip/submissions/:id/step/:stepNumber', async (req, res) => {
           console.log('🤖 Generating intent summary with OpenAI for step 2...');
           const feedback = stepData.feedback || stepData.chairman_input;
           const completion = await openai.chat.completions.create({
-            model: "gpt-3.5-turbo",
+            model: 'gpt-3.5-turbo',
             messages: [
               {
-                role: "system",
-                content: "You are an expert at extracting clear, actionable intent from user feedback. Extract the main intent or goal from the following feedback in 1-2 clear sentences. Focus on what the user wants to achieve or improve."
+                role: 'system',
+                content: 'You are an expert at extracting clear, actionable intent from user feedback. Extract the main intent or goal from the following feedback in 1-2 clear sentences. Focus on what the user wants to achieve or improve.'
               },
               {
-                role: "user",
+                role: 'user',
                 content: feedback
               }
             ],
@@ -833,14 +836,14 @@ app.get('/api/strategic-directives/:sd_id/backlog-summary', async (req, res) => 
       console.log(`   Using context: ${fullContext.substring(0, 200)}...`);
 
       const completion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: 'gpt-3.5-turbo',
         messages: [
           {
-            role: "system",
-            content: "You are an expert technical analyst creating detailed summaries of software development backlogs. Focus on extracting specific technical details, features, and implementation requirements from all available descriptions."
+            role: 'system',
+            content: 'You are an expert technical analyst creating detailed summaries of software development backlogs. Focus on extracting specific technical details, features, and implementation requirements from all available descriptions.'
           },
           {
-            role: "user",
+            role: 'user',
             content: `Analyze this strategic directive with ${backlogItems.length} backlog items:\n\n${fullContext}\n\nCreate exactly 7 sentences that:\n1. Identify the core technical capabilities and specific features being built\n2. Highlight the highest priority items with their implementation details\n3. Describe the technical architecture, technologies, and integration points mentioned\n4. Note specific risks, dependencies, or technical challenges found in descriptions\n5. Summarize expected deliverables and measurable business outcomes\n6. Identify implementation phases, stages, and technical milestones\n7. Assess technical complexity, resource needs, and readiness based on all descriptions\n\nBe specific - mention actual features, technologies, and requirements found in the descriptions.`
           }
         ],
@@ -1646,6 +1649,11 @@ async function startServer() {
     console.log('🎯 STORY Agent initialized');
   }
 
+  // Initialize RCA runtime monitoring (SD-RCA-001)
+  // Auto-triggers for: Sub-agent failures, Test failures, Quality gates, Handoff rejections
+  await bootstrapRCAMonitoring();
+  registerRCAShutdownHandlers();
+
   server.listen(PORT, '0.0.0.0', () => {
     console.log('\n=============================================================');
     console.log('🚀 EHG_Engineer Unified Application Server');
@@ -1653,7 +1661,7 @@ async function startServer() {
     console.log(`📍 Local:            http://localhost:${PORT}`);
     console.log(`📍 Network:          http://0.0.0.0:${PORT}`);
     console.log(`📊 Dashboard:        http://localhost:${PORT}/dashboard`);
-    console.log(`🎙️  EVA Voice:       http://localhost:8080/eva-assistant (EHG App) ✅`);
+    console.log('🎙️  EVA Voice:       http://localhost:8080/eva-assistant (EHG App) ✅');
     console.log('-------------------------------------------------------------');
     console.log(`✅ Database:        ${dbLoader.isConnected ? 'Connected' : 'Not connected'}`);
     console.log(`📋 LEO Protocol:    ${dashboardState.leoProtocol.version}`);

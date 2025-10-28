@@ -8,6 +8,7 @@
 import { createClient } from '@supabase/supabase-js';
 import DynamicChecklistGenerator from './dynamic-checklist-generator.js';
 import SubAgentEnforcementSystem from './subagent-enforcement-system.js';
+import { checkRCAGate } from './root-cause-agent.js';
 import fsModule from 'fs';
 const fs = fsModule.promises;
 import dotenv from 'dotenv';
@@ -95,12 +96,32 @@ class HandoffValidator {
     
     // Check completion
     const isChecklistValid = status.percentage >= threshold;
-    
+
     // NEW: Check sub-agent requirements for this handoff
     const subAgentCheck = await this.validateSubAgentRequirements(handoffKey, sdId);
-    
-    // Overall validity requires both checklist AND sub-agents
-    const isValid = isChecklistValid && subAgentCheck.valid;
+
+    // RCA Gate Check: Block EXEC->PLAN if P0/P1 RCRs without verified CAPAs
+    let rcaGateCheck = { blocked: false, message: 'RCA gate check not applicable' };
+    if (handoffKey === 'EXEC->PLAN') {
+      console.log('\n🔒 Checking RCA Gate for P0/P1 defects...');
+      rcaGateCheck = await checkRCAGate(sdId);
+
+      if (rcaGateCheck.blocked) {
+        console.log('\n❌ RCA Gate: BLOCKED');
+        console.log(`   ${rcaGateCheck.message}`);
+        console.log('\n   Blocking RCR IDs:');
+        for (const rcr of rcaGateCheck.blockingRCRs) {
+          console.log(`   - ${rcr.id} (${rcr.severity_priority}): ${rcr.problem_statement}`);
+        }
+        console.log('\n   ⚠️  HANDOFF CANNOT PROCEED until all P0/P1 RCRs have verified CAPAs');
+        console.log('   Run: npm run rca:capa-verify -- --capa-id <UUID>');
+      } else {
+        console.log(`\n✅ RCA Gate: PASS - ${rcaGateCheck.message}`);
+      }
+    }
+
+    // Overall validity requires checklist, sub-agents, AND RCA gate
+    const isValid = isChecklistValid && subAgentCheck.valid && !rcaGateCheck.blocked;
     
     // Generate comprehensive report
     const report = {
@@ -111,9 +132,16 @@ class HandoffValidator {
       completion: status.percentage,
       threshold,
       details: status.details,
-      blockingItems: [...status.incomplete, ...subAgentCheck.blockingItems],
+      blockingItems: [
+        ...status.incomplete,
+        ...subAgentCheck.blockingItems,
+        ...(rcaGateCheck.blocked ? rcaGateCheck.blockingRCRs.map(rcr =>
+          `RCA Gate: ${rcr.severity_priority} - ${rcr.problem_statement} (RCR ${rcr.id})`
+        ) : [])
+      ],
       subAgentResults: subAgentCheck,
-      recommendation: this.getRecommendation(isValid, status, threshold, subAgentCheck)
+      rcaGateResults: rcaGateCheck,
+      recommendation: this.getRecommendation(isValid, status, threshold, subAgentCheck, rcaGateCheck)
     };
     
     // Display validation result
@@ -398,7 +426,12 @@ class HandoffValidator {
   /**
    * Get recommendation based on validation
    */
-  getRecommendation(isValid, status, threshold, subAgentCheck = null) {
+  getRecommendation(isValid, status, threshold, subAgentCheck = null, rcaGateCheck = null) {
+    // RCA gate blocking takes priority
+    if (rcaGateCheck && rcaGateCheck.blocked) {
+      return `❌ HANDOFF BLOCKED by RCA Gate: ${rcaGateCheck.blockingRCRs.length} P0/P1 defects require verified CAPAs before proceeding. Run \`npm run rca:list -- --sd-id <SD-ID>\` to view blocking RCRs.`;
+    }
+
     if (isValid) {
       // All good - checklist AND sub-agents complete
       let recommendation = '';
@@ -409,7 +442,12 @@ class HandoffValidator {
       } else {
         recommendation = 'Core functionality complete, proceed with handoff.';
       }
-      
+
+      // Add RCA gate pass status
+      if (rcaGateCheck && rcaGateCheck.totalP0P1 > 0) {
+        recommendation += ` ✅ RCA Gate: All ${rcaGateCheck.totalP0P1} P0/P1 RCRs have verified CAPAs.`;
+      }
+
       // Add warnings about recommended sub-agents
       if (subAgentCheck && subAgentCheck.warnings.length > 0) {
         recommendation += ` Note: ${subAgentCheck.warnings.join(', ')} for enhanced quality.`;
