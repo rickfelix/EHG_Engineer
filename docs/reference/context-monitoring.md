@@ -1,6 +1,6 @@
 # Proactive Context Monitoring
 
-**Generated**: 2025-10-25T18:16:13.261Z
+**Generated**: 2025-10-28T21:47:56.039Z
 **Source**: Database (leo_protocol_sections)
 **Context Tier**: REFERENCE
 

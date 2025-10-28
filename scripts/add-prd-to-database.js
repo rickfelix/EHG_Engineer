@@ -186,6 +186,222 @@ This PRD defines the technical requirements and implementation approach for ${sd
     console.log(`✅ ${prdId} added to database successfully!`);
     console.log('Database record:', JSON.stringify(data, null, 2));
 
+    // ═══════════════════════════════════════════════════════════
+    // PHASE 1: DESIGN ANALYSIS (UI/UX workflows → informs user stories)
+    // ═══════════════════════════════════════════════════════════
+    console.log('\n═══════════════════════════════════════════════════');
+    console.log('🎨 PHASE 1: DESIGN ANALYSIS');
+    console.log('═══════════════════════════════════════════════════');
+
+    let designAnalysis = null;
+
+    try {
+      console.log('🔍 Invoking DESIGN sub-agent to analyze UI/UX workflows...\n');
+
+      const { execSync } = await import('child_process');
+
+      // Prepare context for design agent
+      const designPrompt = `Analyze UI/UX design and user workflows for Strategic Directive: ${sdId}
+
+**SD Title**: ${sdData.title || 'N/A'}
+**SD Scope**: ${sdData.scope || 'N/A'}
+**SD Description**: ${sdData.description || 'N/A'}
+**SD Objectives**: ${sdData.strategic_objectives || 'N/A'}
+
+**Task**:
+1. Identify user workflows and interaction patterns
+2. Determine UI components and layouts needed
+3. Analyze user journey and navigation flows
+4. Identify data that users will view/create/edit
+5. Determine what user actions trigger database changes
+
+**Output Format**:
+{
+  "user_workflows": [
+    {
+      "workflow_name": "Workflow 1",
+      "steps": ["step1", "step2"],
+      "user_actions": ["create", "edit", "delete"],
+      "data_displayed": ["field1", "field2"],
+      "data_modified": ["field1", "field2"]
+    }
+  ],
+  "ui_components_needed": ["component1", "component2"],
+  "user_journey": "Description of user flow",
+  "data_requirements": {
+    "fields_to_display": ["field1", "field2"],
+    "fields_to_edit": ["field1"],
+    "relationships": ["parent_entity -> child_entity"]
+  }
+}
+
+Please analyze user workflows and design requirements.`;
+
+      // Write prompt to temp file
+      const fs = await import('fs');
+      const path = await import('path');
+      const designPromptFile = path.join('/tmp', `design-agent-prompt-${Date.now()}.txt`);
+      fs.writeFileSync(designPromptFile, designPrompt);
+
+      console.log('📝 Prompt written to:', designPromptFile);
+      console.log('\n🤖 Executing DESIGN sub-agent...\n');
+
+      // Execute design sub-agent
+      const designOutput = execSync(
+        `node lib/sub-agent-executor.js DESIGN --context-file "${designPromptFile}"`,
+        {
+          encoding: 'utf-8',
+          maxBuffer: 10 * 1024 * 1024,
+          timeout: 120000
+        }
+      );
+
+      console.log('✅ Design analysis complete!\n');
+      console.log('─────────────────────────────────────────────────');
+      console.log(designOutput);
+      console.log('─────────────────────────────────────────────────\n');
+
+      designAnalysis = designOutput;
+
+      // Clean up temp file
+      fs.unlinkSync(designPromptFile);
+
+    } catch (error) {
+      console.warn('⚠️  Design analysis failed:', error.message);
+      console.log('   Continuing with manual design review...\n');
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PHASE 2: DATABASE SCHEMA ANALYSIS (based on design + user stories)
+    // ═══════════════════════════════════════════════════════════
+    console.log('\n═══════════════════════════════════════════════════');
+    console.log('📊 PHASE 2: DATABASE SCHEMA ANALYSIS');
+    console.log('═══════════════════════════════════════════════════');
+
+    try {
+      console.log('🔍 Invoking DATABASE sub-agent to analyze schema and recommend changes...\n');
+
+      const { execSync } = await import('child_process');
+
+      // Prepare context for database agent (including design analysis if available)
+      const dbAgentPrompt = `Analyze database schema for Strategic Directive: ${sdId}
+
+**SD Title**: ${sdData.title || 'N/A'}
+**SD Scope**: ${sdData.scope || 'N/A'}
+**SD Description**: ${sdData.description || 'N/A'}
+**SD Objectives**: ${sdData.strategic_objectives || 'N/A'}
+
+${designAnalysis ? `
+**DESIGN ANALYSIS CONTEXT** (from DESIGN sub-agent):
+${designAnalysis}
+
+Use this design analysis to understand:
+- What data users will view/create/edit (drives table structure)
+- User workflows and actions (drives CRUD requirements)
+- UI component data needs (drives column selection)
+- Data relationships (drives foreign keys and joins)
+` : ''}
+
+**Task**:
+1. Review the EHG_Engineer database schema documentation at docs/reference/schema/engineer/database-schema-overview.md
+2. ${designAnalysis ? 'Based on design analysis, ' : ''}Identify which tables will be affected by this SD
+3. Recommend specific database changes (new tables, new columns, modified columns, new RLS policies)
+4. ${designAnalysis ? 'Ensure schema supports all user workflows identified in design analysis' : 'Provide technical_approach recommendations for database integration'}
+5. List any schema dependencies or constraints to be aware of
+
+**Output Format**:
+{
+  "affected_tables": ["table1", "table2"],
+  "new_tables": [
+    {
+      "name": "table_name",
+      "purpose": "description",
+      "key_columns": ["col1", "col2"]
+    }
+  ],
+  "table_modifications": [
+    {
+      "table": "existing_table",
+      "changes": ["add column x", "modify column y"]
+    }
+  ],
+  "rls_policies_needed": ["policy description 1", "policy description 2"],
+  "technical_approach": "Detailed technical approach for database integration",
+  "dependencies": ["dependency 1", "dependency 2"],
+  "migration_complexity": "LOW|MEDIUM|HIGH",
+  "estimated_migration_lines": 50
+}
+
+Please analyze and provide structured recommendations.`;
+
+      // Write prompt to temp file
+      const fs = await import('fs');
+      const path = await import('path');
+      const promptFile = path.join('/tmp', `db-agent-prompt-${Date.now()}.txt`);
+      fs.writeFileSync(promptFile, dbAgentPrompt);
+
+      console.log('📝 Prompt written to:', promptFile);
+      console.log('\n🤖 Executing DATABASE sub-agent...\n');
+
+      // Execute database sub-agent
+      const dbAgentOutput = execSync(
+        `node lib/sub-agent-executor.js DATABASE --context-file "${promptFile}"`,
+        {
+          encoding: 'utf-8',
+          maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+          timeout: 120000 // 2 minute timeout
+        }
+      );
+
+      console.log('✅ Database sub-agent analysis complete!\n');
+      console.log('─────────────────────────────────────────────────');
+      console.log(dbAgentOutput);
+      console.log('─────────────────────────────────────────────────\n');
+
+      // Parse output to extract recommendations (if structured output available)
+      // For now, we'll store the full output in PRD metadata
+      const { error: updateError } = await supabase
+        .from('product_requirements_v2')
+        .update({
+          metadata: {
+            ...(data.metadata || {}),
+            design_analysis: designAnalysis ? {
+              generated_at: new Date().toISOString(),
+              sd_context: {
+                id: sdId,
+                title: sdData.title,
+                scope: sdData.scope
+              },
+              raw_analysis: designAnalysis.substring(0, 5000) // Store first 5000 chars
+            } : null,
+            database_analysis: {
+              generated_at: new Date().toISOString(),
+              sd_context: {
+                id: sdId,
+                title: sdData.title,
+                scope: sdData.scope
+              },
+              raw_analysis: dbAgentOutput.substring(0, 5000), // Store first 5000 chars
+              design_informed: designAnalysis ? true : false
+            }
+          }
+        })
+        .eq('id', prdId);
+
+      if (updateError) {
+        console.warn('⚠️  Failed to update PRD with analyses:', updateError.message);
+      } else {
+        console.log('✅ PRD updated with design + database schema analyses\n');
+      }
+
+      // Clean up temp file
+      fs.unlinkSync(promptFile);
+
+    } catch (error) {
+      console.warn('⚠️  Database schema analysis failed:', error.message);
+      console.log('   Continuing with manual schema review...\n');
+    }
+
     // Generate semantic component recommendations
     console.log('\n═══════════════════════════════════════════════════');
     console.log('🎨 SEMANTIC COMPONENT RECOMMENDATIONS');

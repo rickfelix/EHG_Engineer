@@ -1,6 +1,6 @@
 # Database-First Enforcement - Expanded
 
-**Generated**: 2025-10-25T18:16:13.266Z
+**Generated**: 2025-10-28T21:47:56.043Z
 **Source**: Database (leo_protocol_sections)
 **Context Tier**: REFERENCE
 

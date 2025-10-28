@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - LEO Protocol EXEC Phase Context
 
-**Generated**: 2025-10-25 2:16:13 PM
+**Generated**: 2025-10-28 5:47:56 PM
 **Protocol**: LEO vv4.2.0_story_gates
 **Purpose**: EXEC phase operations + core context
 
@@ -12,7 +12,7 @@ This file contains:
 1. **Core Context** (9 sections) - Essential for all sessions
 2. **EXEC Phase Context** (10 sections) - Phase-specific operations
 
-**Total Size**: ~60k chars
+**Total Size**: ~66k chars
 
 ---
 
@@ -434,6 +434,22 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 "
 ```
 
+## Database Schema Documentation
+
+### Database Schema Documentation
+
+Auto-generated schema docs provide quick reference without database queries:
+
+**Paths**:
+- EHG_Engineer: `docs/reference/schema/engineer/database-schema-overview.md`
+- EHG App: `docs/reference/schema/ehg/database-schema-overview.md`
+
+**Update**: `npm run schema:docs:engineer` or `npm run schema:docs:ehg`
+
+**PRD Integration**: PRDs stored in `product_requirements_v2` table (NOT markdown).
+Use `add-prd-to-database.js` to create PRDs with schema review prompts.
+
+
 ## 🔧 CRITICAL DEVELOPMENT WORKFLOW
 
 **Development Workflow**: MANDATORY server restart after ANY changes
@@ -443,6 +459,10 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 **Commands**: `pkill -f "node server.js" && npm run build:client && PORT=3000 node server.js`
 
 **Complete Guide**: See `docs/reference/development-workflow.md`
+
+## Test Section
+
+Test content
 
 ## Knowledge Retrieval Commands
 

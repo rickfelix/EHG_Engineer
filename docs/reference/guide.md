@@ -1,6 +1,6 @@
 # Database Migration Pre-Flight Checklist
 
-**Generated**: 2025-10-25T18:16:13.276Z
+**Generated**: 2025-10-28T21:47:56.052Z
 **Source**: Database (leo_protocol_sections)
 **Context Tier**: REFERENCE
 

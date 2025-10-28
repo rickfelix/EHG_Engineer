@@ -1,6 +1,6 @@
 # Validation Failure Patterns to Avoid
 
-**Generated**: 2025-10-25T18:16:13.348Z
+**Generated**: 2025-10-28T21:47:56.142Z
 **Source**: Database (leo_protocol_sections)
 **Context Tier**: REFERENCE
 

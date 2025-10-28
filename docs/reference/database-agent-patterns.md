@@ -1006,6 +1006,135 @@ console.log(`\nView all: http://localhost:3000/retrospectives`);
 
 ---
 
+## PRD Workflow Integration: Design → Database Pattern
+
+**Status**: ACTIVE (since 2025-10-28)
+**Purpose**: Schema-aware PRD creation with design-driven database analysis
+
+### Workflow Sequence
+
+When creating a PRD via `add-prd-to-database.js`, sub-agents are invoked in this order:
+
+```
+1. PRD Creation (basic structure)
+   ↓
+2. DESIGN Sub-Agent (UI/UX workflows analysis)
+   - User interaction patterns
+   - Data display requirements
+   - User actions (CRUD operations)
+   - UI component needs
+   ↓
+3. DATABASE Sub-Agent (schema analysis - DESIGN-INFORMED)
+   - Schema changes needed
+   - Table modifications
+   - RLS policy requirements
+   - Migration complexity
+   ↓
+4. Component Recommendations (Shadcn components)
+   ↓
+5. STORIES Sub-Agent (user story generation)
+```
+
+### Why This Order?
+
+**Design First**:
+- User workflows drive data requirements
+- UI determines what data needs to be stored/displayed
+- User actions determine CRUD operations needed
+
+**Database Second**:
+- Schema changes informed by design analysis
+- Table structure supports identified workflows
+- Columns match data display/edit needs
+- RLS policies align with user permissions from design
+
+### DATABASE Sub-Agent Context
+
+The DATABASE sub-agent receives:
+
+```javascript
+// SD Context
+- Title, scope, description, objectives
+
+// DESIGN Analysis Context (if available)
+- User workflows identified
+- Data fields to display/edit
+- User actions (create/edit/delete)
+- Data relationships from UI
+
+// Schema Documentation
+- docs/reference/schema/engineer/database-schema-overview.md
+- Per-table documentation
+```
+
+### Example Invocation
+
+```bash
+# PRD creation auto-invokes DESIGN → DATABASE → STORIES
+node scripts/add-prd-to-database.js SD-EXAMPLE-001 "Feature PRD"
+
+# Output:
+# ✅ PRD created
+# 🎨 DESIGN analysis complete (user workflows identified)
+# 📊 DATABASE schema recommendations (design-informed)
+# 🎨 Component recommendations
+# 📝 User stories generated
+```
+
+### PRD Metadata Storage
+
+Both analyses stored in `product_requirements_v2.metadata`:
+
+```javascript
+{
+  "design_analysis": {
+    "generated_at": "2025-10-28T...",
+    "sd_context": { "id": "SD-...", "title": "..." },
+    "raw_analysis": "..." // First 5000 chars
+  },
+  "database_analysis": {
+    "generated_at": "2025-10-28T...",
+    "design_informed": true,  // ← Key indicator
+    "raw_analysis": "..."
+  }
+}
+```
+
+### Benefits
+
+1. **Schema matches design**: Database structure supports all identified workflows
+2. **No orphaned columns**: Only fields that UI actually uses
+3. **Proper relationships**: Foreign keys match UI navigation patterns
+4. **RLS alignment**: Policies match user permissions from design
+5. **Reduced rework**: Design-first prevents "we need this column" surprises
+
+### Schema Documentation Access
+
+Database agent has access to auto-generated schema docs:
+
+```
+docs/reference/schema/
+├── engineer/               (EHG_Engineer database)
+│   ├── database-schema-overview.md
+│   └── tables/
+│       ├── strategic_directives_v2.md
+│       ├── product_requirements_v2.md
+│       └── ... (159 tables)
+└── ehg/                   (EHG application database - requires pooler fix)
+    └── ...
+```
+
+**Update Docs**: `npm run schema:docs:engineer` or `npm run schema:docs:ehg`
+
+### Related Documentation
+
+- **DESIGN Sub-Agent**: `.claude/agents/design-agent.md`
+- **DATABASE Sub-Agent**: `.claude/agents/database-agent.md`
+- **STORIES Sub-Agent**: `.claude/agents/stories-agent.md`
+- **Schema Docs**: `CLAUDE_PLAN.md` (Database Schema Documentation Access section)
+
+---
+
 ## Quick Reference
 
 ### Decision Matrix

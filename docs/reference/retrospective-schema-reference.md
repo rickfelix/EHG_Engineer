@@ -1,6 +1,6 @@
 # Retrospective Table Schema Reference
 
-**Generated**: 2025-10-25T18:16:13.258Z
+**Generated**: 2025-10-28T21:47:56.036Z
 **Source**: Database (leo_protocol_sections)
 **Context Tier**: REFERENCE
 

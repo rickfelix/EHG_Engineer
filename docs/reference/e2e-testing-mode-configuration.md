@@ -1,6 +1,6 @@
 # E2E Testing: Dev Mode vs Preview Mode
 
-**Generated**: 2025-10-25T18:16:13.255Z
+**Generated**: 2025-10-28T21:47:56.033Z
 **Source**: Database (leo_protocol_sections)
 **Context Tier**: REFERENCE
 

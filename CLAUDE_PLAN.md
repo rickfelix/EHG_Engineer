@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - LEO Protocol PLAN Phase Context
 
-**Generated**: 2025-10-25 2:16:13 PM
+**Generated**: 2025-10-28 5:47:56 PM
 **Protocol**: LEO vv4.2.0_story_gates
 **Purpose**: PLAN phase operations + core context
 
@@ -10,9 +10,9 @@
 
 This file contains:
 1. **Core Context** (9 sections) - Essential for all sessions
-2. **PLAN Phase Context** (14 sections) - Phase-specific operations
+2. **PLAN Phase Context** (15 sections) - Phase-specific operations
 
-**Total Size**: ~72k chars
+**Total Size**: ~81k chars
 
 ---
 
@@ -434,6 +434,22 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 "
 ```
 
+## Database Schema Documentation
+
+### Database Schema Documentation
+
+Auto-generated schema docs provide quick reference without database queries:
+
+**Paths**:
+- EHG_Engineer: `docs/reference/schema/engineer/database-schema-overview.md`
+- EHG App: `docs/reference/schema/ehg/database-schema-overview.md`
+
+**Update**: `npm run schema:docs:engineer` or `npm run schema:docs:ehg`
+
+**PRD Integration**: PRDs stored in `product_requirements_v2` table (NOT markdown).
+Use `add-prd-to-database.js` to create PRDs with schema review prompts.
+
+
 ## 🔧 CRITICAL DEVELOPMENT WORKFLOW
 
 **Development Workflow**: MANDATORY server restart after ANY changes
@@ -443,6 +459,10 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 **Commands**: `pkill -f "node server.js" && npm run build:client && PORT=3000 node server.js`
 
 **Complete Guide**: See `docs/reference/development-workflow.md`
+
+## Test Section
+
+Test content
 
 ## Knowledge Retrieval Commands
 
@@ -1422,6 +1442,113 @@ The `verify-handoff-plan-to-exec.js` script validates plan_presentation structur
 - **Template Definition:** leo_handoff_templates table, handoff_type = 'plan_presentation'
 - **Validation Logic:** scripts/verify-handoff-plan-to-exec.js (PlanToExecVerifier.validatePlanPresentation)
 - **Test Coverage:** scripts/test-plan-presentation-validation.mjs (5 test scenarios)
+
+
+## Database Schema Documentation Access
+
+## 📊 Database Schema Documentation Access
+
+**Auto-Generated Schema Docs** - Reference documentation from live Supabase databases
+
+### Available Schema Documentation
+
+**EHG_Engineer Database** (Management Dashboard):
+- **Quick Reference**: `docs/reference/schema/engineer/database-schema-overview.md` (~15-20KB)
+- **Detailed Tables**: `docs/reference/schema/engineer/tables/[table_name].md` (2-5KB each)
+- **Coverage**: 159 tables documented
+- **Purpose**: Strategic Directives, PRDs, retrospectives, LEO Protocol configuration
+- **Repository**: /mnt/c/_EHG/EHG_Engineer/
+- **Database**: dedlbzhpgkmetvhbkyzq
+
+**EHG Application Database** (Customer-Facing):
+- **Quick Reference**: `docs/reference/schema/ehg/database-schema-overview.md` (~15-20KB)
+- **Detailed Tables**: `docs/reference/schema/ehg/tables/[table_name].md` (2-5KB each)
+- **Coverage**: ~200 tables (requires pooler credentials to generate)
+- **Purpose**: Customer features, business logic, user-facing functionality
+- **Repository**: /mnt/c/_EHG/ehg/
+- **Database**: liapbndqlqxdcgpwntbv
+
+### When to Use Schema Docs
+
+**MANDATORY during PLAN phase**:
+- Creating PRDs with database changes
+- Validating technical approach
+- Identifying table dependencies
+- Preventing schema conflicts
+
+**PRD Database Integration**:
+PRDs are stored in `product_requirements_v2` table (NOT markdown files). The `add-prd-to-database.js` script prompts for schema review and guides you to populate these fields with schema insights:
+- `technical_approach`: Reference existing tables/columns
+- `database_changes`: List affected tables with schema context
+- `dependencies`: Note table relationships from schema docs
+
+### Regenerating Schema Docs
+
+**Automatic**:
+- CI/CD workflow runs on migration changes (see `.github/workflows/schema-docs-update.yml`)
+- Weekly scheduled runs (Sunday midnight)
+
+**Manual**:
+```bash
+# Engineer database (EHG_Engineer)
+npm run schema:docs:engineer
+
+# EHG application database (requires pooler credentials)
+npm run schema:docs:ehg
+
+# Both databases
+npm run schema:docs:all
+
+# Single table (verbose output)
+npm run schema:docs:table <table_name>
+```
+
+### Integration with PRD Creation Workflow
+
+**Step 1: Review Schema Before PRD**
+```bash
+# Quick check if tables exist
+less docs/reference/schema/engineer/database-schema-overview.md | grep -A 5 "table_name"
+
+# Detailed table review
+cat docs/reference/schema/engineer/tables/strategic_directives_v2.md
+```
+
+**Step 2: Create PRD with Schema Context**
+```bash
+# Script automatically prompts for schema review
+node scripts/add-prd-to-database.js SD-EXAMPLE-001
+# → Detects table names from SD description
+# → Asks: "Have you reviewed schema docs for: strategic_directives_v2, user_stories?"
+# → Guides you to populate technical_approach and database_changes fields
+```
+
+**Step 3: PLAN Agent Validates Schema Awareness**
+- PRD must reference specific tables/columns in `technical_approach`
+- `database_changes` field must list affected tables
+- PLAN→EXEC handoff checks for schema validation
+
+### Critical Reminders
+
+⚠️ **Schema Docs are REFERENCE ONLY**
+- Always query database directly for validation
+- Schema docs may lag behind recent migrations
+- Use as starting point, not source of truth
+
+⚠️ **Application Context Matters**
+- Each schema doc header clearly states application and database
+- NEVER confuse EHG_Engineer tables with EHG tables
+- Check `**Repository**` field to confirm where code changes go
+
+⚠️ **PRD Workflow**
+- PRDs are database records (product_requirements_v2 table)
+- Use `add-prd-to-database.js` script (triggers STORIES sub-agent)
+- Schema insights go in database fields, not markdown
+
+---
+
+*Schema docs generated by: `scripts/generate-schema-docs-from-db.js`*
+*Auto-update workflow: `.github/workflows/schema-docs-update.yml`*
 
 
 ## Visual Documentation Best Practices

@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-10-25 2:16:13 PM
+**Generated**: 2025-10-28 5:47:56 PM
 **Protocol**: LEO vv4.2.0_story_gates
 **Purpose**: Essential workflow context for all sessions (15k chars)
 
@@ -422,6 +422,22 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 "
 ```
 
+## Database Schema Documentation
+
+### Database Schema Documentation
+
+Auto-generated schema docs provide quick reference without database queries:
+
+**Paths**:
+- EHG_Engineer: `docs/reference/schema/engineer/database-schema-overview.md`
+- EHG App: `docs/reference/schema/ehg/database-schema-overview.md`
+
+**Update**: `npm run schema:docs:engineer` or `npm run schema:docs:ehg`
+
+**PRD Integration**: PRDs stored in `product_requirements_v2` table (NOT markdown).
+Use `add-prd-to-database.js` to create PRDs with schema review prompts.
+
+
 ## 🔧 CRITICAL DEVELOPMENT WORKFLOW
 
 **Development Workflow**: MANDATORY server restart after ANY changes
@@ -431,6 +447,10 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 **Commands**: `pkill -f "node server.js" && npm run build:client && PORT=3000 node server.js`
 
 **Complete Guide**: See `docs/reference/development-workflow.md`
+
+## Test Section
+
+Test content
 
 ## Knowledge Retrieval Commands
 
@@ -460,9 +480,6 @@ cat docs/summaries/lessons/database-lessons.md
 
 | Agent | Code | Responsibilities | % Split |
 |-------|------|------------------|----------|
-| Implementation Agent | EXEC | Implementation based on PRD. **CRITICAL: Implementations happen in /mnt/c/_EHG/e... | I:30 = 30% |
-| Strategic Leadership Agent | LEAD | Strategic planning, business objectives, final approval. **SIMPLICITY FIRST (PRE... | P:20 A:15 = 35% |
-| Technical Planning Agent | PLAN | Technical design, PRD creation with comprehensive test plans, pre-automation val... | P:20 V:15 = 35% |
 
 **Legend**: P=Planning, I=Implementation, V=Verification, A=Approval
 **Total**: EXEC (30%) + LEAD (35%) + PLAN (35%) = 100%
