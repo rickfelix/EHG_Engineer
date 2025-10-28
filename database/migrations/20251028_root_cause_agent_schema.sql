@@ -469,7 +469,7 @@ ON CONFLICT (category) DO UPDATE SET
 -- Register RCA Sub-Agent
 INSERT INTO leo_sub_agents (id, name, code, description, capabilities, activation_type, priority, script_path, active)
 VALUES (
-    'root-cause-agent',
+    '6fd0174b-1ad0-470c-b06c-2778a7e9f15c'::uuid,
     'Root Cause Analysis Agent',
     'RCA',
     'Forensic intelligence agent for defect triage, root cause determination, and CAPA generation. Investigates failures across tests, gates, sub-agents, and CI/CD. CORRECTIVE ONLY - does not implement fixes.',
@@ -490,76 +490,116 @@ ON CONFLICT (id) DO UPDATE SET
     active = EXCLUDED.active;
 
 -- RCA Triggers (4-tier system: T1=Critical, T2=High, T3=Medium, T4=Manual)
+-- Delete existing triggers first to avoid duplicates
+DELETE FROM leo_sub_agent_triggers WHERE sub_agent_id = '6fd0174b-1ad0-470c-b06c-2778a7e9f15c'::uuid;
+
 INSERT INTO leo_sub_agent_triggers (sub_agent_id, trigger_phrase, trigger_type, trigger_context, priority, metadata)
 VALUES
     -- T1: Critical (Priority 100)
-    ('root-cause-agent', 'sub_agent_blocked', 'condition', 'sub_agent_results', 100, '{"tier": 1, "severity": "P0", "auto_invoke": true}'::jsonb),
-    ('root-cause-agent', 'ci_pipeline_failure', 'condition', 'ci_cd', 100, '{"tier": 1, "severity": "P0", "consecutive_threshold": 2}'::jsonb),
-    ('root-cause-agent', 'quality_gate_critical', 'threshold', 'gate_reviews', 100, '{"tier": 1, "threshold": 70, "operator": "lt"}'::jsonb),
+    ('6fd0174b-1ad0-470c-b06c-2778a7e9f15c'::uuid, 'sub_agent_blocked', 'pattern', 'sub_agent_results', 100, '{"tier": 1, "severity": "P0", "auto_invoke": true}'::jsonb),
+    ('6fd0174b-1ad0-470c-b06c-2778a7e9f15c'::uuid, 'ci_pipeline_failure', 'pattern', 'ci_cd', 100, '{"tier": 1, "severity": "P0", "consecutive_threshold": 2}'::jsonb),
+    ('6fd0174b-1ad0-470c-b06c-2778a7e9f15c'::uuid, 'quality_gate_critical', 'pattern', 'gate_reviews', 100, '{"tier": 1, "threshold": 70, "operator": "lt"}'::jsonb),
 
     -- T2: High (Priority 90)
-    ('root-cause-agent', 'test_regression', 'condition', 'test_results', 90, '{"tier": 2, "severity": "P1", "failure_threshold": 3}'::jsonb),
-    ('root-cause-agent', 'handoff_rejection', 'condition', 'handoffs', 90, '{"tier": 2, "severity": "P1", "rejection_count": 2}'::jsonb),
-    ('root-cause-agent', 'sub_agent_fail', 'condition', 'sub_agent_results', 85, '{"tier": 2, "severity": "P1", "confidence_threshold": 80}'::jsonb),
+    ('6fd0174b-1ad0-470c-b06c-2778a7e9f15c'::uuid, 'test_regression', 'pattern', 'test_results', 90, '{"tier": 2, "severity": "P1", "failure_threshold": 3}'::jsonb),
+    ('6fd0174b-1ad0-470c-b06c-2778a7e9f15c'::uuid, 'handoff_rejection', 'pattern', 'handoffs', 90, '{"tier": 2, "severity": "P1", "rejection_count": 2}'::jsonb),
+    ('6fd0174b-1ad0-470c-b06c-2778a7e9f15c'::uuid, 'sub_agent_fail', 'pattern', 'sub_agent_results', 85, '{"tier": 2, "severity": "P1", "confidence_threshold": 80}'::jsonb),
 
     -- T3: Medium (Priority 75)
-    ('root-cause-agent', 'quality_degradation', 'threshold', 'retrospectives', 75, '{"tier": 3, "severity": "P2", "score_drop": 15}'::jsonb),
-    ('root-cause-agent', 'pattern_recurrence', 'condition', 'issue_patterns', 70, '{"tier": 3, "severity": "P2", "recurrence_threshold": 3}'::jsonb),
-    ('root-cause-agent', 'performance_regression', 'threshold', 'sub_agent_results', 70, '{"tier": 3, "severity": "P2", "increase_pct": 50}'::jsonb),
+    ('6fd0174b-1ad0-470c-b06c-2778a7e9f15c'::uuid, 'quality_degradation', 'pattern', 'retrospectives', 75, '{"tier": 3, "severity": "P2", "score_drop": 15}'::jsonb),
+    ('6fd0174b-1ad0-470c-b06c-2778a7e9f15c'::uuid, 'pattern_recurrence', 'pattern', 'issue_patterns', 70, '{"tier": 3, "severity": "P2", "recurrence_threshold": 3}'::jsonb),
+    ('6fd0174b-1ad0-470c-b06c-2778a7e9f15c'::uuid, 'performance_regression', 'pattern', 'sub_agent_results', 70, '{"tier": 3, "severity": "P2", "increase_pct": 50}'::jsonb),
 
     -- T4: Manual (Priority 60)
-    ('root-cause-agent', 'diagnose defect', 'keyword', 'any', 60, '{"tier": 4, "severity": "P3", "manual": true}'::jsonb),
-    ('root-cause-agent', 'rca', 'keyword', 'any', 60, '{"tier": 4, "severity": "P3", "manual": true}'::jsonb),
-    ('root-cause-agent', 'root cause', 'keyword', 'any', 60, '{"tier": 4, "severity": "P4", "manual": true}'::jsonb)
-ON CONFLICT (sub_agent_id, trigger_phrase, trigger_context) DO UPDATE SET
-    trigger_type = EXCLUDED.trigger_type,
-    priority = EXCLUDED.priority,
-    metadata = EXCLUDED.metadata;
+    ('6fd0174b-1ad0-470c-b06c-2778a7e9f15c'::uuid, 'diagnose defect', 'keyword', 'any', 60, '{"tier": 4, "severity": "P3", "manual": true}'::jsonb),
+    ('6fd0174b-1ad0-470c-b06c-2778a7e9f15c'::uuid, 'rca', 'keyword', 'any', 60, '{"tier": 4, "severity": "P3", "manual": true}'::jsonb),
+    ('6fd0174b-1ad0-470c-b06c-2778a7e9f15c'::uuid, 'root cause', 'keyword', 'any', 60, '{"tier": 4, "severity": "P4", "manual": true}'::jsonb);
 
 -- Update handoff template for EXEC-to-PLAN-VERIFICATION with RCA fields
-INSERT INTO leo_handoff_templates (from_agent, to_agent, handoff_type, template_structure, required_elements, validation_rules, active, version)
-VALUES (
-    'EXEC',
-    'PLAN',
-    'EXEC-to-PLAN-VERIFICATION',
-    '{
-        "executive_summary": "string",
-        "deliverables_manifest": "string",
-        "key_decisions": "string",
-        "known_issues": "string",
-        "resource_utilization": "string",
-        "action_items": "string",
-        "completeness_report": "string",
-        "rca_integration": {
-            "open_rcr_count": "integer",
-            "blocking_rcr_ids": "uuid[]",
-            "capa_verification_status": "string (ALL_VERIFIED|PENDING|BLOCKED)",
-            "rcr_details": [
-                {
-                    "rcr_id": "uuid",
-                    "capa_id": "uuid",
-                    "severity": "string",
-                    "status": "string",
-                    "verification_plan": "string",
-                    "exit_criteria": "string"
+-- Update or insert EXEC-to-PLAN handoff template with RCA integration
+DO $$
+BEGIN
+    -- Try to update existing template first
+    UPDATE leo_handoff_templates
+    SET template_structure = '{
+            "executive_summary": "string",
+            "deliverables_manifest": "string",
+            "key_decisions": "string",
+            "known_issues": "string",
+            "resource_utilization": "string",
+            "action_items": "string",
+            "completeness_report": "string",
+            "rca_integration": {
+                "open_rcr_count": "integer",
+                "blocking_rcr_ids": "uuid[]",
+                "capa_verification_status": "string (ALL_VERIFIED|PENDING|BLOCKED)",
+                "rcr_details": [
+                    {
+                        "rcr_id": "uuid",
+                        "capa_id": "uuid",
+                        "severity": "string",
+                        "status": "string",
+                        "verification_plan": "string",
+                        "exit_criteria": "string"
+                    }
+                ]
+            }
+        }'::jsonb,
+        required_elements = '["executive_summary", "deliverables_manifest", "key_decisions", "known_issues", "resource_utilization", "action_items", "completeness_report", "rca_integration"]'::jsonb,
+        validation_rules = '{
+            "rca_integration": {
+                "rule": "If open_rcr_count > 0, capa_verification_status must be ALL_VERIFIED to proceed",
+                "blocking_condition": "capa_verification_status != ALL_VERIFIED AND any rcr severity IN (P0, P1)"
+            }
+        }'::jsonb,
+        version = 2
+    WHERE from_agent = 'EXEC'
+      AND to_agent = 'PLAN'
+      AND handoff_type = 'EXEC-to-PLAN-VERIFICATION';
+
+    -- If no rows were updated, insert new one
+    IF NOT FOUND THEN
+        INSERT INTO leo_handoff_templates (from_agent, to_agent, handoff_type, template_structure, required_elements, validation_rules, active, version)
+        VALUES (
+            'EXEC',
+            'PLAN',
+            'EXEC-to-PLAN-VERIFICATION',
+            '{
+                "executive_summary": "string",
+                "deliverables_manifest": "string",
+                "key_decisions": "string",
+                "known_issues": "string",
+                "resource_utilization": "string",
+                "action_items": "string",
+                "completeness_report": "string",
+                "rca_integration": {
+                    "open_rcr_count": "integer",
+                    "blocking_rcr_ids": "uuid[]",
+                    "capa_verification_status": "string (ALL_VERIFIED|PENDING|BLOCKED)",
+                    "rcr_details": [
+                        {
+                            "rcr_id": "uuid",
+                            "capa_id": "uuid",
+                            "severity": "string",
+                            "status": "string",
+                            "verification_plan": "string",
+                            "exit_criteria": "string"
+                        }
+                    ]
                 }
-            ]
-        }
-    }'::jsonb,
-    '["executive_summary", "deliverables_manifest", "key_decisions", "known_issues", "resource_utilization", "action_items", "completeness_report", "rca_integration"]'::jsonb,
-    '{
-        "rca_integration": {
-            "rule": "If open_rcr_count > 0, capa_verification_status must be ALL_VERIFIED to proceed",
-            "blocking_condition": "capa_verification_status != ALL_VERIFIED AND any rcr severity IN (P0, P1)"
-        }
-    }'::jsonb,
-    true,
-    2
-)
-ON CONFLICT (from_agent, to_agent, handoff_type, version) DO UPDATE SET
-    template_structure = EXCLUDED.template_structure,
-    required_elements = EXCLUDED.required_elements,
-    validation_rules = EXCLUDED.validation_rules;
+            }'::jsonb,
+            '["executive_summary", "deliverables_manifest", "key_decisions", "known_issues", "resource_utilization", "action_items", "completeness_report", "rca_integration"]'::jsonb,
+            '{
+                "rca_integration": {
+                    "rule": "If open_rcr_count > 0, capa_verification_status must be ALL_VERIFIED to proceed",
+                    "blocking_condition": "capa_verification_status != ALL_VERIFIED AND any rcr severity IN (P0, P1)"
+                }
+            }'::jsonb,
+            true,
+            2
+        );
+    END IF;
+END $$;
 
 -- ============================================================================
 -- VERIFICATION QUERIES
@@ -576,7 +616,7 @@ BEGIN
     SELECT COUNT(*) INTO rca_agent_count FROM leo_sub_agents WHERE code = 'RCA';
 
     -- Verify RCA triggers registered
-    SELECT COUNT(*) INTO rca_trigger_count FROM leo_sub_agent_triggers WHERE sub_agent_id = 'root-cause-agent';
+    SELECT COUNT(*) INTO rca_trigger_count FROM leo_sub_agent_triggers WHERE sub_agent_id = '6fd0174b-1ad0-470c-b06c-2778a7e9f15c'::uuid;
 
     -- Verify RCA tables created
     SELECT COUNT(*) INTO rca_table_count
@@ -642,7 +682,7 @@ DROP TABLE IF EXISTS root_cause_reports CASCADE;
 DROP TABLE IF EXISTS defect_taxonomy CASCADE;
 
 -- Remove RCA sub-agent triggers
-DELETE FROM leo_sub_agent_triggers WHERE sub_agent_id = 'root-cause-agent';
+DELETE FROM leo_sub_agent_triggers WHERE sub_agent_id = '6fd0174b-1ad0-470c-b06c-2778a7e9f15c'::uuid;
 
 -- Remove RCA sub-agent
 DELETE FROM leo_sub_agents WHERE code = 'RCA';
@@ -692,4 +732,4 @@ COMMIT;
 -- node scripts/root-cause-agent.js status --sd-id <SD-ID>
 -- node scripts/rca-learning-ingestion.js --batch
 -- SELECT * FROM leo_sub_agents WHERE code = 'RCA';
--- SELECT COUNT(*) FROM leo_sub_agent_triggers WHERE sub_agent_id = 'root-cause-agent';
+-- SELECT COUNT(*) FROM leo_sub_agent_triggers WHERE sub_agent_id = '6fd0174b-1ad0-470c-b06c-2778a7e9f15c'::uuid;
