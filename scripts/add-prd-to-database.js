@@ -435,7 +435,7 @@ Please analyze and provide structured recommendations.`;
         });
 
         // Format for PRD
-        const prdComponents = formatForPRD(recommendations);
+        const _prdComponents = formatForPRD(recommendations); // Unused: ui_components fields don't exist in schema
 
         // Update PRD with component recommendations in metadata field
         // NOTE: ui_components and ui_components_summary fields don't exist in schema
