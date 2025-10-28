@@ -30,7 +30,10 @@ import GitBranchVerifier from './verify-git-branch-status.js';
 import { orchestrate } from './orchestrate-phase-subagents.js';
 import { mapE2ETestsToUserStories, validateE2ECoverage } from './modules/handoff/map-e2e-tests-to-stories.js';
 import { extractAndPopulateDeliverables } from './modules/handoff/extract-deliverables-from-prd.js';
-import { validateBMADForPlanToExec, validateBMADForExecToPlan, validateRiskAssessment } from './modules/bmad-validation.js';
+import { validateBMADForPlanToExec, validateBMADForExecToPlan } from './modules/bmad-validation.js';
+import { validateGate1PlanToExec, shouldValidateDesignDatabase } from './modules/design-database-gates-validation.js';
+import { validateGate2ExecToPlan } from './modules/implementation-fidelity-validation.js';
+import { validateGate3PlanToLead } from './modules/traceability-validation.js';
 import { autoValidateUserStories } from './auto-validate-user-stories-on-exec-complete.js';
 import path from 'path';
 import fs from 'fs';
@@ -270,6 +273,44 @@ class UnifiedHandoffSystem {
       }
       console.log('✅ BMAD validation passed (PLAN→EXEC)\n');
 
+      // GATE 1: DESIGN→DATABASE WORKFLOW VALIDATION (CONDITIONAL)
+      // Validates that DESIGN and DATABASE sub-agents executed correctly
+      // Only applies to SDs with both design and database categories
+      if (shouldValidateDesignDatabase(sd)) {
+        console.log('\n🚪 GATE 1: DESIGN→DATABASE Workflow Validation');
+        console.log('-'.repeat(50));
+
+        const gate1Results = await validateGate1PlanToExec(sdId, this.supabase);
+
+        // Store Gate 1 results in handoff metadata
+        handoffData.metadata.gate1_validation = gate1Results;
+
+        if (!gate1Results.passed) {
+          console.error('\n❌ GATE 1 VALIDATION FAILED (DESIGN→DATABASE)');
+          console.error(`   Score: ${gate1Results.score}/${gate1Results.max_score}`);
+          console.error(`   Issues: ${gate1Results.issues.join(', ')}`);
+          console.error('\n   REMEDIATION:');
+          console.error('   1. Run DESIGN sub-agent: node lib/sub-agent-executor.js DESIGN ' + sdId);
+          console.error('   2. Run DATABASE sub-agent: node lib/sub-agent-executor.js DATABASE ' + sdId);
+          console.error('   3. Run STORIES sub-agent: node lib/sub-agent-executor.js STORIES ' + sdId);
+          console.error('   4. Re-run this handoff\n');
+
+          return {
+            success: false,
+            rejected: true,
+            reasonCode: 'GATE1_VALIDATION_FAILED',
+            message: `Gate 1 validation failed - ${gate1Results.issues.join('; ')}`,
+            details: gate1Results
+          };
+        }
+
+        if (gate1Results.warnings.length > 0) {
+          console.log('\n⚠️  GATE 1 VALIDATION WARNINGS:');
+          gate1Results.warnings.forEach(w => console.log(`   • ${w}`));
+        }
+        console.log(`✅ Gate 1 validation passed (${gate1Results.score}/${gate1Results.max_score} points)\n`);
+      }
+
       // GATE 6: BRANCH ENFORCEMENT (BLOCKING)
       // Ensures correct branch exists and is checked out before EXEC work begins
       console.log('\n🔒 GATE 6: Git Branch Enforcement');
@@ -449,7 +490,7 @@ class UnifiedHandoffSystem {
   /**
    * Execute EXEC → PLAN handoff (verification and acceptance)
    */
-  async executeExecToPlan(sdId, options) {
+  async executeExecToPlan(sdId, _options) {
     console.log('🔍 EXEC → PLAN HANDOFF EXECUTION');
     console.log('-'.repeat(30));
 
@@ -509,6 +550,46 @@ class UnifiedHandoffSystem {
 
       console.log('\n✅ BMAD validation passed');
       console.log('-'.repeat(50));
+
+      // GATE 2: IMPLEMENTATION FIDELITY VALIDATION (CONDITIONAL)
+      // Validates that EXEC implemented DESIGN and DATABASE recommendations
+      // Only applies to SDs with both design and database categories
+      if (shouldValidateDesignDatabase(sd)) {
+        console.log('\n🚪 GATE 2: Implementation Fidelity Validation');
+        console.log('-'.repeat(50));
+
+        const gate2Results = await validateGate2ExecToPlan(sdId, this.supabase);
+
+        // Store Gate 2 results in handoff metadata
+        handoffData.metadata.gate2_validation = gate2Results;
+
+        if (!gate2Results.passed) {
+          console.error('\n❌ GATE 2 VALIDATION FAILED (IMPLEMENTATION FIDELITY)');
+          console.error(`   Score: ${gate2Results.score}/${gate2Results.max_score}`);
+          console.error(`   Issues: ${gate2Results.issues.join(', ')}`);
+          console.error('\n   REMEDIATION:');
+          console.error('   Review Gate 2 details to see which recommendations were not implemented:');
+          console.error('   - Design fidelity: UI components, workflows, user actions');
+          console.error('   - Database fidelity: Migrations, RLS policies, schema changes');
+          console.error('   - Data flow: Database queries, form integration, validation');
+          console.error('   - Testing: E2E tests, migration tests, coverage documentation');
+          console.error('   After implementing missing items, re-run this handoff\n');
+
+          return {
+            success: false,
+            rejected: true,
+            reasonCode: 'GATE2_VALIDATION_FAILED',
+            message: `Gate 2 validation failed - ${gate2Results.issues.join('; ')}`,
+            details: gate2Results
+          };
+        }
+
+        if (gate2Results.warnings.length > 0) {
+          console.log('\n⚠️  GATE 2 VALIDATION WARNINGS:');
+          gate2Results.warnings.forEach(w => console.log(`   • ${w}`));
+        }
+        console.log(`✅ Gate 2 validation passed (${gate2Results.score}/${gate2Results.max_score} points)\n`);
+      }
 
       // RCA GATE ENFORCEMENT: Check for open P0/P1 RCRs (SD-RCA-001)
       console.log('\n🔍 Step 1: RCA Gate Validation');
@@ -803,6 +884,69 @@ class UnifiedHandoffSystem {
       console.log('✅ GATE 5: Git status clean, all commits pushed');
       console.log(`   Commits found: ${gitResults.commitCount}`);
       console.log('-'.repeat(50));
+
+      // Load Strategic Directive first to check if Gate 3 applies
+      const { data: sdForGate3 } = await this.supabase
+        .from('strategic_directives_v2')
+        .select('*')
+        .eq('id', sdId)
+        .single();
+
+      if (!sdForGate3) {
+        throw new Error(`Strategic Directive not found: ${sdId}`);
+      }
+
+      // GATE 3: END-TO-END TRACEABILITY VALIDATION (CONDITIONAL)
+      // Validates recommendation adherence and implementation quality
+      // Only applies to SDs with both design and database categories
+      if (shouldValidateDesignDatabase(sdForGate3)) {
+        console.log('\n🚪 GATE 3: End-to-End Traceability Validation');
+        console.log('-'.repeat(50));
+
+        // Fetch Gate 2 results from EXEC→PLAN handoff
+        const { data: execToPlanHandoff } = await this.supabase
+          .from('sd_phase_handoffs')
+          .select('metadata')
+          .eq('sd_id', sdId)
+          .eq('handoff_type', 'EXEC-TO-PLAN')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        const gate2Results = execToPlanHandoff?.[0]?.metadata?.gate2_validation || null;
+
+        const gate3Results = await validateGate3PlanToLead(sdId, this.supabase, gate2Results);
+
+        // Store Gate 3 results (will be saved in handoff metadata later)
+        // Results are already captured in gate3Results and will be saved below
+
+        if (!gate3Results.passed) {
+          console.error('\n❌ GATE 3 VALIDATION FAILED (END-TO-END TRACEABILITY)');
+          console.error(`   Score: ${gate3Results.score}/${gate3Results.max_score}`);
+          console.error(`   Issues: ${gate3Results.issues.join(', ')}`);
+          console.error('\n   REMEDIATION:');
+          console.error('   Review Gate 3 details to see traceability issues:');
+          console.error('   - Recommendation adherence: Did EXEC follow DESIGN/DATABASE recommendations?');
+          console.error('   - Implementation quality: Gate 2 score, test coverage');
+          console.error('   - Traceability mapping: PRD→code, design→UI, database→schema');
+          console.error('   - Sub-agent effectiveness: Execution time, recommendation quality');
+          console.error('   - Lessons captured: Retrospective prep, workflow notes');
+          console.error('   Address issues and re-run this handoff\n');
+
+          return {
+            success: false,
+            rejected: true,
+            reasonCode: 'GATE3_VALIDATION_FAILED',
+            message: `Gate 3 validation failed - ${gate3Results.issues.join('; ')}`,
+            details: gate3Results
+          };
+        }
+
+        if (gate3Results.warnings.length > 0) {
+          console.log('\n⚠️  GATE 3 VALIDATION WARNINGS:');
+          gate3Results.warnings.forEach(w => console.log(`   • ${w}`));
+        }
+        console.log(`✅ Gate 3 validation passed (${gate3Results.score}/${gate3Results.max_score} points)\n`);
+      }
 
       // Load Strategic Directive and PRD
       const { data: sd } = await this.supabase
@@ -1552,7 +1696,7 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
     };
 
     try {
-      const { data, error } = await this.supabase.from('sd_phase_handoffs').insert(execution).select();
+      const { error } = await this.supabase.from('sd_phase_handoffs').insert(execution).select();
       if (error) {
         console.error('❌ Failed to store handoff rejection:', error.message);
         throw error;
