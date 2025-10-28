@@ -81,7 +81,20 @@
     "prepare": "husky",
     "prd:new": "node scripts/generate-prd-script.js",
     "lint": "eslint scripts/ lib/ tools/ --ext .js,.ts",
-    "lint:fix": "eslint scripts/ lib/ tools/ --ext .js,.ts --fix"
+    "lint:fix": "eslint scripts/ lib/ tools/ --ext .js,.ts --fix",
+    "rca:list": "node scripts/root-cause-agent.js list",
+    "rca:view": "node scripts/root-cause-agent.js view",
+    "rca:trigger": "node scripts/root-cause-agent.js trigger",
+    "rca:gate-check": "node scripts/root-cause-agent.js gate-check",
+    "rca:status": "node scripts/root-cause-agent.js status",
+    "rca:capa:generate": "node scripts/root-cause-agent.js capa generate",
+    "rca:capa:approve": "node scripts/root-cause-agent.js capa approve",
+    "rca:capa:update": "node scripts/root-cause-agent.js capa update",
+    "rca:capa:verify": "node scripts/root-cause-agent.js capa verify",
+    "rca:ingest-learnings": "node scripts/rca-learning-ingestion.js --batch",
+    "rca:test:unit": "vitest run tests/unit/rca-*.test.js",
+    "rca:test:integration": "vitest run tests/integration/rca-*.test.js",
+    "rca:test": "npm run rca:test:unit && npm run rca:test:integration"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",

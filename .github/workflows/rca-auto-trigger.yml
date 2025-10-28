@@ -1,0 +1,184 @@
+name: RCA Auto-Trigger
+# SD-RCA-001: Automatically create Root Cause Reports on CI/CD failures
+
+on:
+  workflow_run:
+    workflows: ["Playwright E2E Tests", "LEO Gates", "Story Gate Check"]
+    types:
+      - completed
+
+  # Manual trigger for investigation
+  workflow_dispatch:
+    inputs:
+      sd_id:
+        description: 'Strategic Directive ID'
+        required: true
+        type: string
+      failure_context:
+        description: 'Failure context description'
+        required: true
+        type: string
+
+jobs:
+  detect-failure:
+    name: Detect Failure & Trigger RCA
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'failure' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Extract failure context
+        id: failure_context
+        if: github.event_name == 'workflow_run'
+        run: |
+          WORKFLOW_NAME="${{ github.event.workflow_run.name }}"
+          RUN_ID="${{ github.event.workflow_run.id }}"
+          CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+
+          echo "workflow_name=$WORKFLOW_NAME" >> $GITHUB_OUTPUT
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+          echo "conclusion=$CONCLUSION" >> $GITHUB_OUTPUT
+
+          # Determine trigger tier based on workflow
+          if [[ "$WORKFLOW_NAME" == "LEO Gates" ]]; then
+            echo "tier=1" >> $GITHUB_OUTPUT
+            echo "trigger_source=QUALITY_GATE" >> $GITHUB_OUTPUT
+          elif [[ "$WORKFLOW_NAME" == "Playwright E2E Tests" ]]; then
+            echo "tier=2" >> $GITHUB_OUTPUT
+            echo "trigger_source=TEST_FAILURE" >> $GITHUB_OUTPUT
+          elif [[ "$WORKFLOW_NAME" == "Story Gate Check" ]]; then
+            echo "tier=1" >> $GITHUB_OUTPUT
+            echo "trigger_source=QUALITY_GATE" >> $GITHUB_OUTPUT
+          else
+            echo "tier=2" >> $GITHUB_OUTPUT
+            echo "trigger_source=CI_PIPELINE" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for consecutive failures
+        id: check_consecutive
+        if: github.event_name == 'workflow_run'
+        run: |
+          # Query last 3 runs of this workflow
+          WORKFLOW_ID="${{ github.event.workflow_run.workflow_id }}"
+
+          RECENT_RUNS=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/actions/workflows/${WORKFLOW_ID}/runs?per_page=3" \
+            --jq '.workflow_runs[] | .conclusion')
+
+          FAILURE_COUNT=0
+          while IFS= read -r conclusion; do
+            if [[ "$conclusion" == "failure" ]]; then
+              ((FAILURE_COUNT++))
+            else
+              break
+            fi
+          done <<< "$RECENT_RUNS"
+
+          echo "consecutive_failures=$FAILURE_COUNT" >> $GITHUB_OUTPUT
+
+          # T1 trigger: 2+ consecutive failures
+          if [[ $FAILURE_COUNT -ge 2 ]]; then
+            echo "trigger_rca=true" >> $GITHUB_OUTPUT
+            echo "severity=P0" >> $GITHUB_OUTPUT
+          else
+            echo "trigger_rca=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Download test artifacts
+        if: steps.check_consecutive.outputs.trigger_rca == 'true' || github.event_name == 'workflow_dispatch'
+        uses: actions/download-artifact@v4
+        with:
+          name: playwright-report
+          path: ./rca-artifacts/
+        continue-on-error: true
+
+      - name: Extract test failure details
+        if: steps.check_consecutive.outputs.trigger_rca == 'true' || github.event_name == 'workflow_dispatch'
+        id: extract_failures
+        run: |
+          # Parse Playwright JSON report for failures
+          if [[ -f "./rca-artifacts/test-results.json" ]]; then
+            FAILURES=$(node -e "
+              try {
+                const results = require('./rca-artifacts/test-results.json');
+                const failures = results.suites
+                  .flatMap(s => s.specs || [])
+                  .filter(spec => spec.tests && spec.tests.some(t => t.status === 'failed'))
+                  .map(spec => ({
+                    title: spec.title,
+                    file: spec.file,
+                    error: spec.tests.find(t => t.status === 'failed')?.results?.[0]?.error?.message || 'Unknown'
+                  }));
+                console.log(JSON.stringify(failures));
+              } catch (e) {
+                console.log('[]');
+              }
+            ")
+            echo "failures=$FAILURES" >> $GITHUB_OUTPUT
+          else
+            echo "failures=[]" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Root Cause Report
+        if: steps.check_consecutive.outputs.trigger_rca == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          # Extract SD-ID from branch name or commit message
+          SD_ID=$(git log -1 --pretty=%B | grep -oP 'SD-[A-Z0-9-]+' | head -1 || echo "UNKNOWN")
+
+          echo "Creating RCR for SD: $SD_ID"
+          echo "Trigger source: ${{ steps.failure_context.outputs.trigger_source || 'MANUAL' }}"
+          echo "Tier: ${{ steps.failure_context.outputs.tier || '4' }}"
+
+          node scripts/root-cause-agent.js trigger \
+            --sd-id "$SD_ID" \
+            --problem-statement "CI/CD failure: ${{ steps.failure_context.outputs.workflow_name || inputs.failure_context }}" \
+            --context "Workflow: ${{ steps.failure_context.outputs.workflow_name }}, Run ID: ${{ steps.failure_context.outputs.run_id }}, Consecutive failures: ${{ steps.check_consecutive.outputs.consecutive_failures || '1' }}"
+
+      - name: Post RCA summary to PR
+        if: github.event.pull_request.number && (steps.check_consecutive.outputs.trigger_rca == 'true' || github.event_name == 'workflow_dispatch')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const message = `## ⚠️ Root Cause Analysis Triggered
+
+**Workflow:** ${{ steps.failure_context.outputs.workflow_name }}
+**Run ID:** ${{ steps.failure_context.outputs.run_id }}
+**Consecutive Failures:** ${{ steps.check_consecutive.outputs.consecutive_failures }}
+**Severity:** ${{ steps.check_consecutive.outputs.severity || 'MEDIUM' }}
+
+A Root Cause Report (RCR) has been automatically created for investigation.
+
+**Next Steps:**
+1. Review RCR: \`node scripts/root-cause-agent.js list --sd-id <SD-ID>\`
+2. Investigate failure logs and evidence
+3. Create CAPA manifest: \`node scripts/root-cause-agent.js capa generate --rcr-id <RCR-ID>\`
+4. Fix issue and verify CAPA before proceeding with handoff
+
+**Related Documentation:** docs/reference/root-cause-agent.md
+`;
+
+            github.rest.issues.createComment({
+              issue_number: context.payload.pull_request.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });

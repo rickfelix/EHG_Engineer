@@ -1,0 +1,417 @@
+{
+  "handoff_type": "EXEC_TO_PLAN_VERIFICATION",
+  "from_phase": "EXEC",
+  "to_phase": "PLAN",
+  "description": "Handoff from EXEC to PLAN (Verification) with integrated RCA gate validation",
+  "required_artifacts": {
+    "description": "7 required artifacts for verification handoff",
+    "artifacts": [
+      {
+        "name": "implementation_summary",
+        "type": "JSONB",
+        "required": true,
+        "description": "Summary of implementation work completed",
+        "schema": {
+          "files_changed": "array of file paths",
+          "features_implemented": "array of feature descriptions",
+          "dependencies_added": "array of dependency names and versions",
+          "breaking_changes": "array of breaking change descriptions (empty if none)"
+        }
+      },
+      {
+        "name": "test_results",
+        "type": "JSONB",
+        "required": true,
+        "description": "Unit and E2E test results",
+        "schema": {
+          "unit_tests": {
+            "total": "number",
+            "passed": "number",
+            "failed": "number",
+            "coverage_pct": "number (0-100)"
+          },
+          "e2e_tests": {
+            "total": "number",
+            "passed": "number",
+            "failed": "number",
+            "scenarios": "array of test scenario names"
+          },
+          "test_evidence_url": "URL to Playwright report or test artifacts"
+        }
+      },
+      {
+        "name": "build_verification",
+        "type": "JSONB",
+        "required": true,
+        "description": "Build and compilation verification",
+        "schema": {
+          "build_status": "success|failed",
+          "build_command": "string (npm run build, etc.)",
+          "build_output": "string (truncated output)",
+          "type_errors": "number",
+          "linting_errors": "number",
+          "warnings": "number"
+        }
+      },
+      {
+        "name": "runtime_verification",
+        "type": "JSONB",
+        "required": true,
+        "description": "Runtime server verification",
+        "schema": {
+          "server_started": "boolean",
+          "port": "number",
+          "startup_time_ms": "number",
+          "health_check_passed": "boolean",
+          "console_errors": "array of error messages (empty if none)"
+        }
+      },
+      {
+        "name": "bmad_validation",
+        "type": "JSONB",
+        "required": true,
+        "description": "BMAD (Build, Migrate, Assess, Deploy) validation results",
+        "schema": {
+          "build_passed": "boolean",
+          "migrations_applied": "boolean",
+          "schema_validated": "boolean",
+          "deployment_ready": "boolean",
+          "validation_notes": "string (optional)"
+        }
+      },
+      {
+        "name": "rca_integration",
+        "type": "JSONB",
+        "required": true,
+        "description": "Root Cause Agent gate validation results",
+        "schema": {
+          "gate_status": "PASS|BLOCKED|ERROR",
+          "open_rcr_count": "number",
+          "p0_rcr_count": "number",
+          "p1_rcr_count": "number",
+          "blocking_rcr_ids": "array of UUIDs (empty if gate_status=PASS)",
+          "capa_status_summary": {
+            "verified_count": "number",
+            "pending_count": "number",
+            "not_created_count": "number"
+          },
+          "gate_check_timestamp": "ISO 8601 timestamp",
+          "gate_check_command": "string (CLI command used)"
+        }
+      },
+      {
+        "name": "handoff_checklist",
+        "type": "JSONB",
+        "required": true,
+        "description": "Pre-handoff checklist completion status",
+        "schema": {
+          "all_tests_passing": "boolean",
+          "no_console_errors": "boolean",
+          "build_successful": "boolean",
+          "server_restarts_clean": "boolean",
+          "no_type_errors": "boolean",
+          "documentation_updated": "boolean",
+          "rca_gate_passed": "boolean",
+          "bmad_validated": "boolean"
+        }
+      }
+    ]
+  },
+  "validation_rules": {
+    "description": "Validation rules enforced during handoff creation",
+    "rules": [
+      {
+        "rule_id": "test_pass_rate",
+        "field": "test_results",
+        "condition": "(unit_tests.passed / unit_tests.total) >= 1.0 AND (e2e_tests.passed / e2e_tests.total) >= 1.0",
+        "error_message": "All tests must pass (100% pass rate for both unit and E2E)",
+        "severity": "BLOCKING"
+      },
+      {
+        "rule_id": "build_success",
+        "field": "build_verification",
+        "condition": "build_status === 'success' AND type_errors === 0",
+        "error_message": "Build must succeed with zero type errors",
+        "severity": "BLOCKING"
+      },
+      {
+        "rule_id": "server_health",
+        "field": "runtime_verification",
+        "condition": "server_started === true AND health_check_passed === true AND console_errors.length === 0",
+        "error_message": "Server must start successfully with no console errors",
+        "severity": "BLOCKING"
+      },
+      {
+        "rule_id": "bmad_complete",
+        "field": "bmad_validation",
+        "condition": "build_passed === true AND migrations_applied === true AND schema_validated === true AND deployment_ready === true",
+        "error_message": "BMAD validation must pass all checks",
+        "severity": "BLOCKING"
+      },
+      {
+        "rule_id": "rca_gate_pass",
+        "field": "rca_integration",
+        "condition": "gate_status === 'PASS'",
+        "error_message": "RCA gate must be PASS (no unverified P0/P1 RCRs). Run: node scripts/root-cause-agent.js gate-check --sd-id <SD>",
+        "severity": "BLOCKING"
+      },
+      {
+        "rule_id": "checklist_complete",
+        "field": "handoff_checklist",
+        "condition": "all fields === true",
+        "error_message": "All handoff checklist items must be checked",
+        "severity": "BLOCKING"
+      },
+      {
+        "rule_id": "test_coverage",
+        "field": "test_results",
+        "condition": "unit_tests.coverage_pct >= 80",
+        "error_message": "Unit test coverage should be at least 80%",
+        "severity": "WARNING"
+      }
+    ]
+  },
+  "acceptance_criteria": {
+    "description": "Criteria for handoff acceptance by PLAN agent",
+    "criteria": [
+      {
+        "criterion_id": "implementation_complete",
+        "description": "All PRD acceptance criteria implemented and verified",
+        "verification_method": "PLAN agent reviews implementation_summary.features_implemented against PRD acceptance criteria"
+      },
+      {
+        "criterion_id": "quality_verified",
+        "description": "Test coverage meets or exceeds requirements, all tests passing",
+        "verification_method": "PLAN agent reviews test_results and confirms 100% pass rate + adequate coverage"
+      },
+      {
+        "criterion_id": "no_regressions",
+        "description": "No new defects introduced, existing functionality preserved",
+        "verification_method": "PLAN agent reviews RCA gate status (no new P0/P1 RCRs) and test results"
+      },
+      {
+        "criterion_id": "deployment_ready",
+        "description": "BMAD validation passed, build artifacts ready for deployment",
+        "verification_method": "PLAN agent reviews bmad_validation and build_verification"
+      },
+      {
+        "criterion_id": "documentation_current",
+        "description": "Code comments, README, and operator docs updated as needed",
+        "verification_method": "PLAN agent reviews handoff_checklist.documentation_updated and spot-checks key files"
+      }
+    ]
+  },
+  "rejection_reasons": {
+    "description": "Common reasons for handoff rejection",
+    "reasons": [
+      {
+        "reason_code": "RCA_GATE_BLOCKED",
+        "description": "One or more P0/P1 RCRs exist without verified CAPAs",
+        "remediation": [
+          "Run: node scripts/root-cause-agent.js list --sd-id <SD>",
+          "For each blocking RCR:",
+          "  1. Generate CAPA: node scripts/root-cause-agent.js capa generate --rcr-id <UUID>",
+          "  2. Implement corrective and preventive actions",
+          "  3. Run verification tests",
+          "  4. Verify CAPA: node scripts/root-cause-agent.js capa verify --capa-id <UUID>",
+          "Re-run gate check: node scripts/root-cause-agent.js gate-check --sd-id <SD>",
+          "Retry handoff"
+        ]
+      },
+      {
+        "reason_code": "TEST_FAILURES",
+        "description": "One or more tests failing (unit or E2E)",
+        "remediation": [
+          "Review test failure output in test_results.test_evidence_url",
+          "Fix failing tests or implementation code",
+          "Re-run test suite: npm run test && npm run test:e2e",
+          "Verify 100% pass rate",
+          "Retry handoff"
+        ]
+      },
+      {
+        "reason_code": "BUILD_FAILED",
+        "description": "Build or type checking failed",
+        "remediation": [
+          "Review build_verification.build_output for errors",
+          "Fix type errors: npm run type-check",
+          "Fix linting errors: npm run lint",
+          "Re-run build: npm run build",
+          "Verify build_status=success and type_errors=0",
+          "Retry handoff"
+        ]
+      },
+      {
+        "reason_code": "RUNTIME_ERRORS",
+        "description": "Server failed to start or console errors detected",
+        "remediation": [
+          "Review runtime_verification.console_errors",
+          "Fix runtime issues (missing env vars, dependency issues, etc.)",
+          "Restart server: npm run dev",
+          "Verify health check passes and no console errors",
+          "Retry handoff"
+        ]
+      },
+      {
+        "reason_code": "BMAD_VALIDATION_FAILED",
+        "description": "One or more BMAD checks failed",
+        "remediation": [
+          "Review bmad_validation fields to identify failure",
+          "Build: Ensure npm run build succeeds",
+          "Migrate: Apply pending migrations",
+          "Assess: Validate schema against PRD",
+          "Deploy: Verify deployment artifacts are ready",
+          "Re-run BMAD validation",
+          "Retry handoff"
+        ]
+      },
+      {
+        "reason_code": "INCOMPLETE_IMPLEMENTATION",
+        "description": "Not all PRD acceptance criteria implemented",
+        "remediation": [
+          "Review PRD acceptance criteria",
+          "Compare with implementation_summary.features_implemented",
+          "Implement missing features",
+          "Update implementation_summary",
+          "Retry handoff"
+        ]
+      },
+      {
+        "reason_code": "DOCUMENTATION_INCOMPLETE",
+        "description": "Required documentation not updated",
+        "remediation": [
+          "Update code comments for complex logic",
+          "Update README if new features or commands added",
+          "Update operator docs if workflows changed",
+          "Set handoff_checklist.documentation_updated = true",
+          "Retry handoff"
+        ]
+      }
+    ]
+  },
+  "metadata": {
+    "template_version": "2.0",
+    "created_at": "2025-10-28T00:00:00Z",
+    "last_updated": "2025-10-28T00:00:00Z",
+    "author": "LEO Protocol - RCA Integration",
+    "strategic_directive": "SD-RCA-001",
+    "changelog": [
+      {
+        "version": "2.0",
+        "date": "2025-10-28",
+        "changes": "Added rca_integration artifact and validation rule for RCA gate enforcement"
+      },
+      {
+        "version": "1.0",
+        "date": "2025-10-15",
+        "changes": "Initial EXEC-to-PLAN-VERIFICATION template with 6 artifacts (pre-RCA)"
+      }
+    ]
+  },
+  "usage_example": {
+    "description": "Example handoff creation using this template",
+    "command": "node scripts/unified-handoff-system.js exec-to-plan --sd-id SD-AUTH-001",
+    "required_data": {
+      "implementation_summary": {
+        "files_changed": ["src/components/AuthForm.tsx", "src/lib/auth.ts", "tests/e2e/auth.spec.ts"],
+        "features_implemented": ["Login form with validation", "JWT token management", "Session persistence"],
+        "dependencies_added": ["jsonwebtoken@9.0.0"],
+        "breaking_changes": []
+      },
+      "test_results": {
+        "unit_tests": {
+          "total": 15,
+          "passed": 15,
+          "failed": 0,
+          "coverage_pct": 87
+        },
+        "e2e_tests": {
+          "total": 5,
+          "passed": 5,
+          "failed": 0,
+          "scenarios": ["Login with valid credentials", "Login with invalid password", "Session persistence", "Logout flow", "Token refresh"]
+        },
+        "test_evidence_url": "https://github.com/user/repo/actions/runs/12345"
+      },
+      "build_verification": {
+        "build_status": "success",
+        "build_command": "npm run build",
+        "build_output": "✓ Built in 12.3s\n✓ 245 modules",
+        "type_errors": 0,
+        "linting_errors": 0,
+        "warnings": 2
+      },
+      "runtime_verification": {
+        "server_started": true,
+        "port": 3000,
+        "startup_time_ms": 1250,
+        "health_check_passed": true,
+        "console_errors": []
+      },
+      "bmad_validation": {
+        "build_passed": true,
+        "migrations_applied": true,
+        "schema_validated": true,
+        "deployment_ready": true,
+        "validation_notes": "All BMAD checks passed successfully"
+      },
+      "rca_integration": {
+        "gate_status": "PASS",
+        "open_rcr_count": 0,
+        "p0_rcr_count": 0,
+        "p1_rcr_count": 0,
+        "blocking_rcr_ids": [],
+        "capa_status_summary": {
+          "verified_count": 0,
+          "pending_count": 0,
+          "not_created_count": 0
+        },
+        "gate_check_timestamp": "2025-10-28T15:30:00Z",
+        "gate_check_command": "node scripts/root-cause-agent.js gate-check --sd-id SD-AUTH-001"
+      },
+      "handoff_checklist": {
+        "all_tests_passing": true,
+        "no_console_errors": true,
+        "build_successful": true,
+        "server_restarts_clean": true,
+        "no_type_errors": true,
+        "documentation_updated": true,
+        "rca_gate_passed": true,
+        "bmad_validated": true
+      }
+    },
+    "expected_outcome": "Handoff accepted by PLAN agent, status=accepted"
+  },
+  "troubleshooting": {
+    "description": "Common issues when using this template",
+    "issues": [
+      {
+        "issue": "RCA gate shows BLOCKED but I verified all CAPAs",
+        "diagnosis": [
+          "Check CAPA status field is exactly 'VERIFIED' (not 'IMPLEMENTED')",
+          "Verify RCR status updated to 'RESOLVED'",
+          "Check database trigger update_rcr_on_capa_verified() is active"
+        ],
+        "solution": "Run: node scripts/root-cause-agent.js capa verify --capa-id <UUID> --verification-notes \"<notes>\""
+      },
+      {
+        "issue": "Handoff rejected despite all artifacts provided",
+        "diagnosis": [
+          "Review validation_rules to identify which rule failed",
+          "Check artifact data types match schema",
+          "Verify all required fields are non-null"
+        ],
+        "solution": "Fix the specific validation rule failure and retry handoff"
+      },
+      {
+        "issue": "Cannot create handoff - missing artifacts error",
+        "diagnosis": [
+          "Ensure all 7 required artifacts are provided",
+          "Check artifact names match exactly (case-sensitive)",
+          "Verify JSONB structure matches schema"
+        ],
+        "solution": "Review required_artifacts section and provide all 7 artifacts with correct structure"
+      }
+    ]
+  }
+}

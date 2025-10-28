@@ -510,6 +510,33 @@ class UnifiedHandoffSystem {
       console.log('\n✅ BMAD validation passed');
       console.log('-'.repeat(50));
 
+      // RCA GATE ENFORCEMENT: Check for open P0/P1 RCRs (SD-RCA-001)
+      console.log('\n🔍 Step 1: RCA Gate Validation');
+      console.log('-'.repeat(50));
+
+      const rcaGateResult = await this.validateRCAGateForHandoff(sdId);
+
+      if (!rcaGateResult.gate_status === 'PASS') {
+        console.error('\n❌ RCA GATE BLOCKED');
+        console.error(`   Open P0/P1 RCRs: ${rcaGateResult.open_rcr_count}`);
+        console.error(`   Blocking RCR IDs: ${rcaGateResult.blocking_rcr_ids.join(', ')}`);
+        console.error('');
+        console.error('   REMEDIATION: All P0/P1 RCRs must have verified CAPAs before handoff');
+        console.error('   Run: node scripts/root-cause-agent.js capa verify --capa-id <UUID>');
+
+        return {
+          success: false,
+          rejected: true,
+          reasonCode: 'RCA_GATE_BLOCKED',
+          message: `${rcaGateResult.open_rcr_count} P0/P1 RCRs without verified CAPAs`,
+          details: rcaGateResult,
+          remediation: 'Verify all P0/P1 CAPAs before proceeding with handoff'
+        };
+      }
+
+      console.log('✅ RCA gate passed');
+      console.log('-'.repeat(50));
+
       // Load Strategic Directive and PRD
       const { data: sd } = await this.supabase
         .from('strategic_directives_v2')
@@ -928,6 +955,95 @@ class UnifiedHandoffSystem {
 
     validation.complete = validation.score >= 70 && validation.issues.length === 0;
     return validation;
+  }
+
+  /**
+   * Validate RCA Gate for Handoff
+   * SD-RCA-001: Checks for open P0/P1 RCRs without verified CAPAs
+   *
+   * GATE LOGIC:
+   * - Blocks if any P0/P1 RCR exists without verified CAPA
+   * - Returns PASS if no P0/P1 RCRs or all have verified CAPAs
+   *
+   * @param {string} sdId - Strategic Directive ID
+   * @returns {Object} Gate result with status, open_rcr_count, blocking_rcr_ids
+   */
+  async validateRCAGateForHandoff(sdId) {
+    const { data: openRCRs, error } = await this.supabase
+      .from('root_cause_reports')
+      .select(`
+        id,
+        severity_priority,
+        status,
+        problem_statement,
+        remediation_manifests (
+          id,
+          status,
+          verified_at
+        )
+      `)
+      .eq('sd_id', sdId)
+      .in('status', ['OPEN', 'IN_REVIEW', 'CAPA_PENDING', 'CAPA_APPROVED', 'FIX_IN_PROGRESS'])
+      .in('severity_priority', ['P0', 'P1']);
+
+    if (error) {
+      console.error('⚠️  RCA gate check failed:', error.message);
+      // Non-blocking: Allow handoff to proceed if RCA check fails
+      return {
+        gate_status: 'PASS',
+        open_rcr_count: 0,
+        blocking_rcr_ids: [],
+        capa_verification_status: 'UNKNOWN',
+        error: error.message
+      };
+    }
+
+    if (!openRCRs || openRCRs.length === 0) {
+      return {
+        gate_status: 'PASS',
+        open_rcr_count: 0,
+        blocking_rcr_ids: [],
+        capa_verification_status: 'ALL_VERIFIED',
+        rcr_details: []
+      };
+    }
+
+    // Check which RCRs have verified CAPAs
+    const blockingRCRs = openRCRs.filter(rcr => {
+      const capa = rcr.remediation_manifests?.[0];
+      return !capa || capa.status !== 'VERIFIED';
+    });
+
+    if (blockingRCRs.length > 0) {
+      return {
+        gate_status: 'BLOCKED',
+        open_rcr_count: blockingRCRs.length,
+        blocking_rcr_ids: blockingRCRs.map(r => r.id),
+        capa_verification_status: 'PENDING',
+        rcr_details: blockingRCRs.map(rcr => ({
+          rcr_id: rcr.id,
+          severity: rcr.severity_priority,
+          status: rcr.status,
+          problem_statement: rcr.problem_statement,
+          capa_id: rcr.remediation_manifests?.[0]?.id || null,
+          capa_status: rcr.remediation_manifests?.[0]?.status || 'MISSING'
+        }))
+      };
+    }
+
+    return {
+      gate_status: 'PASS',
+      open_rcr_count: openRCRs.length,
+      blocking_rcr_ids: [],
+      capa_verification_status: 'ALL_VERIFIED',
+      rcr_details: openRCRs.map(rcr => ({
+        rcr_id: rcr.id,
+        severity: rcr.severity_priority,
+        status: rcr.status,
+        capa_id: rcr.remediation_manifests?.[0]?.id,
+        capa_status: 'VERIFIED'
+      }))
+    };
   }
 
   /**
