@@ -1,0 +1,154 @@
+name: Update Schema Documentation
+
+# Automatically regenerate schema documentation when database migrations change
+# or on a weekly schedule to catch any drift
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'database/migrations/**/*.sql'
+      - 'supabase/migrations/**/*.sql'
+
+  schedule:
+    # Run every Sunday at midnight UTC
+    - cron: '0 0 * * 0'
+
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Which database to document'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - engineer
+          - app
+          - both
+
+jobs:
+  update-schema-docs:
+    name: Regenerate Schema Documentation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for proper commit
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set up environment variables
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          EHG_SUPABASE_URL: ${{ secrets.EHG_SUPABASE_URL }}
+          EHG_SUPABASE_ANON_KEY: ${{ secrets.EHG_SUPABASE_ANON_KEY }}
+          EHG_POOLER_URL: ${{ secrets.EHG_POOLER_URL }}
+        run: |
+          echo "Environment variables configured"
+          echo "SUPABASE_URL=${SUPABASE_URL}" >> .env
+          echo "SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}" >> .env
+          echo "SUPABASE_POOLER_URL=${SUPABASE_POOLER_URL}" >> .env
+          echo "EHG_SUPABASE_URL=${EHG_SUPABASE_URL}" >> .env
+          echo "EHG_SUPABASE_ANON_KEY=${EHG_SUPABASE_ANON_KEY}" >> .env
+          echo "EHG_POOLER_URL=${EHG_POOLER_URL}" >> .env
+
+      - name: Generate Engineer database schema docs
+        if: github.event.inputs.target == 'engineer' || github.event.inputs.target == 'both' || github.event.inputs.target == ''
+        run: npm run schema:docs:engineer
+        continue-on-error: false
+
+      - name: Generate EHG app database schema docs
+        if: github.event.inputs.target == 'app' || github.event.inputs.target == 'both' || github.event.inputs.target == ''
+        run: npm run schema:docs:app
+        continue-on-error: true  # EHG app might not be configured yet
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if [[ -n $(git status --porcelain docs/reference/schema/) ]]; then
+            echo "changes=true" >> $GITHUB_OUTPUT
+            echo "Schema documentation has changes"
+          else
+            echo "changes=false" >> $GITHUB_OUTPUT
+            echo "No changes to schema documentation"
+          fi
+
+      - name: Commit and push changes
+        if: steps.check_changes.outputs.changes == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          git add docs/reference/schema/
+
+          # Create commit message
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            COMMIT_MSG="docs(schema): Weekly automatic schema documentation update"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            COMMIT_MSG="docs(schema): Manual schema documentation update (${{ github.event.inputs.target }})"
+          else
+            COMMIT_MSG="docs(schema): Auto-update after migration changes"
+          fi
+
+          git commit -m "$COMMIT_MSG
+
+Auto-generated schema documentation update triggered by:
+- Event: ${{ github.event_name }}
+- Branch: ${{ github.ref_name }}
+- Commit: ${{ github.sha }}
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: GitHub Actions <github-actions[bot]@users.noreply.github.com>"
+
+          git push
+
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## Schema Documentation Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${{ steps.check_changes.outputs.changes }}" == "true" ]]; then
+            echo "✅ Schema documentation was updated and committed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "ℹ️ No changes to schema documentation (already up-to-date)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Triggered by" >> $GITHUB_STEP_SUMMARY
+          echo "- Event: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Branch: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "- Migration files changed" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ github.event_name }}" == "schedule" ]]; then
+            echo "- Weekly scheduled run" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- Manual workflow dispatch" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Comment on PR (if applicable)
+        if: github.event_name == 'push' && github.event.pull_request && steps.check_changes.outputs.changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🤖 **Schema Documentation Auto-Updated**\n\nThe schema documentation has been automatically regenerated based on the latest database migrations.\n\n📚 View updated docs: `docs/reference/schema/`'
+            })

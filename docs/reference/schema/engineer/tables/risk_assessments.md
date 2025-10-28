@@ -1,0 +1,107 @@
+# risk_assessments Table
+
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Database**: dedlbzhpgkmetvhbkyzq
+**Repository**: /mnt/c/_EHG/EHG_Engineer/
+**Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
+**Generated**: 2025-10-28T12:24:22.172Z
+**Rows**: 0
+**RLS**: Enabled (2 policies)
+
+⚠️ **This is a REFERENCE document** - Query database directly for validation
+
+⚠️ **CRITICAL**: This schema is for **EHG_Engineer** database. Implementations go in /mnt/c/_EHG/EHG_Engineer/
+
+---
+
+## Columns (20 total)
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | `uuid` | **NO** | `gen_random_uuid()` | - |
+| sd_id | `text` | **NO** | - | - |
+| assessed_at | `timestamp with time zone` | YES | `now()` | - |
+| assessed_by | `text` | YES | `'RISK'::text` | - |
+| phase | `text` | **NO** | - | - |
+| technical_complexity | `smallint(16)` | YES | - | 1-10 scale: Code complexity, refactoring needs, technical debt |
+| security_risk | `smallint(16)` | YES | - | 1-10 scale: Auth, data exposure, RLS, vulnerabilities |
+| performance_risk | `smallint(16)` | YES | - | 1-10 scale: Query optimization, caching, scaling concerns |
+| integration_risk | `smallint(16)` | YES | - | 1-10 scale: Third-party APIs, service dependencies |
+| data_migration_risk | `smallint(16)` | YES | - | 1-10 scale: Schema changes, data integrity, rollback complexity |
+| ui_ux_risk | `smallint(16)` | YES | - | 1-10 scale: Component complexity, accessibility, responsive design |
+| overall_risk_score | `numeric(4,2)` | YES | - | - |
+| risk_level | `text` | YES | - | - |
+| critical_issues | `jsonb` | YES | `'[]'::jsonb` | - |
+| warnings | `jsonb` | YES | `'[]'::jsonb` | - |
+| recommendations | `jsonb` | YES | `'[]'::jsonb` | - |
+| verdict | `text` | YES | - | - |
+| confidence | `integer(32)` | YES | - | - |
+| created_at | `timestamp with time zone` | YES | `now()` | - |
+| updated_at | `timestamp with time zone` | YES | `now()` | - |
+
+## Constraints
+
+### Primary Key
+- `risk_assessments_pkey`: PRIMARY KEY (id)
+
+### Foreign Keys
+- `risk_assessments_sd_id_fkey`: sd_id → strategic_directives_v2(id)
+
+### Check Constraints
+- `risk_assessments_confidence_check`: CHECK (((confidence >= 0) AND (confidence <= 100)))
+- `risk_assessments_data_migration_risk_check`: CHECK (((data_migration_risk >= 1) AND (data_migration_risk <= 10)))
+- `risk_assessments_integration_risk_check`: CHECK (((integration_risk >= 1) AND (integration_risk <= 10)))
+- `risk_assessments_performance_risk_check`: CHECK (((performance_risk >= 1) AND (performance_risk <= 10)))
+- `risk_assessments_phase_check`: CHECK ((phase = ANY (ARRAY['LEAD_PRE_APPROVAL'::text, 'PLAN_PRD'::text, 'EXEC_IMPL'::text, 'PLAN_VERIFY'::text])))
+- `risk_assessments_risk_level_check`: CHECK ((risk_level = ANY (ARRAY['LOW'::text, 'MEDIUM'::text, 'HIGH'::text, 'CRITICAL'::text])))
+- `risk_assessments_security_risk_check`: CHECK (((security_risk >= 1) AND (security_risk <= 10)))
+- `risk_assessments_technical_complexity_check`: CHECK (((technical_complexity >= 1) AND (technical_complexity <= 10)))
+- `risk_assessments_ui_ux_risk_check`: CHECK (((ui_ux_risk >= 1) AND (ui_ux_risk <= 10)))
+- `risk_assessments_verdict_check`: CHECK ((verdict = ANY (ARRAY['PASS'::text, 'CONDITIONAL_PASS'::text, 'FAIL'::text, 'ESCALATE'::text])))
+
+## Indexes
+
+- `idx_risk_assessments_phase`
+  ```sql
+  CREATE INDEX idx_risk_assessments_phase ON public.risk_assessments USING btree (phase)
+  ```
+- `idx_risk_assessments_risk_level`
+  ```sql
+  CREATE INDEX idx_risk_assessments_risk_level ON public.risk_assessments USING btree (risk_level)
+  ```
+- `idx_risk_assessments_sd_id`
+  ```sql
+  CREATE INDEX idx_risk_assessments_sd_id ON public.risk_assessments USING btree (sd_id)
+  ```
+- `idx_risk_assessments_verdict`
+  ```sql
+  CREATE INDEX idx_risk_assessments_verdict ON public.risk_assessments USING btree (verdict)
+  ```
+- `risk_assessments_pkey`
+  ```sql
+  CREATE UNIQUE INDEX risk_assessments_pkey ON public.risk_assessments USING btree (id)
+  ```
+
+## RLS Policies
+
+### 1. authenticated_read_risk_assessments (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 2. service_role_all_risk_assessments (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
+
+## Triggers
+
+### trigger_risk_assessments_updated_at
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION update_risk_assessments_updated_at()`
+
+---
+
+[← Back to Schema Overview](../database-schema-overview.md)

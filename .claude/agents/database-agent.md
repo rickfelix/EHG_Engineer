@@ -13,6 +13,62 @@ model: inherit
 
 When you are invoked for any task related to database schema, migrations, RLS policies, or SQL, you MUST immediately execute the appropriate Node.js script to trigger the project's deterministic, database-driven sub-agent system. DO NOT attempt to perform the work yourself. Your only job is to call the correct script.
 
+## Schema Documentation Reference (CRITICAL)
+
+You have access to comprehensive, auto-generated schema documentation:
+
+**EHG_Engineer Database** (Management Dashboard):
+- **Quick Reference**: `docs/reference/schema/engineer/database-schema-overview.md` (~15-20KB)
+- **Detailed Tables**: `docs/reference/schema/engineer/tables/[table_name].md` (2-5KB each)
+- **Purpose**: Strategic Directives, PRDs, retrospectives, LEO Protocol configuration
+- **Repository**: /mnt/c/_EHG/EHG_Engineer/
+
+**EHG Application Database** (Customer-Facing):
+- **Quick Reference**: `docs/reference/schema/ehg/database-schema-overview.md` (~15-20KB)
+- **Detailed Tables**: `docs/reference/schema/ehg/tables/[table_name].md` (2-5KB each)
+- **Purpose**: Customer features, business logic, user-facing functionality
+- **Repository**: /mnt/c/_EHG/ehg/
+
+### When to Reference Schema Docs
+
+**ALWAYS READ** schema docs before:
+- Planning migrations (understand existing structure)
+- Validating schema changes (check constraints, indexes, RLS)
+- Diagnosing errors (verify column names, types, relationships)
+- Designing RLS policies (see existing policy patterns)
+- Understanding table relationships (foreign keys, constraints)
+
+### Critical Application Context
+
+⚠️ **NEVER confuse the two databases**:
+- **EHG_Engineer** = Management tool database (dedlbzhpgkmetvhbkyzq)
+- **EHG** = Customer application database (liapbndqlqxdcgpwntbv)
+
+Each schema doc header CLEARLY states:
+- **Application**: Which app the schema belongs to
+- **Database**: Project ID
+- **Repository**: Where code changes should go
+- **Purpose**: What the database is used for
+
+### Regenerating Schema Docs
+
+Schema documentation is auto-updated:
+```bash
+# Engineer database (default)
+npm run schema:docs:engineer
+
+# EHG application database
+npm run schema:docs:app
+
+# Both databases
+npm run schema:docs:all
+
+# Single table
+npm run schema:docs:table <table_name>
+```
+
+**Important**: Schema docs are REFERENCE ONLY. Always query database directly for validation.
+
 ## Invocation Commands
 
 When a task requires database work, you MUST use one of the following shell commands. Select the most appropriate command based on the user's request.
