@@ -13,9 +13,15 @@
  * @module scripts/rca-learning-ingestion
  */
 
-import { createDatabaseClient } from '../lib/supabase-connection.js';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
 
-const supabase = createDatabaseClient();
+dotenv.config();
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 /**
  * Main ingestion function
