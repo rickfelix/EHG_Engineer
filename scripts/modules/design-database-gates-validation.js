@@ -48,6 +48,66 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
     gate_scores: {}
   };
 
+  // ===================================================================
+  // PHASE 1: NON-NEGOTIABLE BLOCKERS (Preflight Checks)
+  // ===================================================================
+  console.log('\n[PHASE 1] Non-Negotiable Blockers...');
+  console.log('-'.repeat(60));
+
+  try {
+    // Verify DESIGN sub-agent executed
+    const { data: designCheck } = await supabase
+      .from('sub_agent_execution_results')
+      .select('id')
+      .eq('sd_id', sd_id)
+      .eq('sub_agent_code', 'DESIGN')
+      .limit(1);
+
+    if (!designCheck || designCheck.length === 0) {
+      validation.issues.push('[PHASE 1] CRITICAL: DESIGN sub-agent not executed');
+      validation.failed_gates.push('DESIGN_EXECUTION');
+      validation.passed = false;
+      console.log('   ❌ DESIGN sub-agent NOT executed - BLOCKING');
+      console.log('   ⚠️  Run: node lib/sub-agent-executor.js DESIGN ' + sd_id);
+      console.log('='.repeat(60));
+      return validation; // Block immediately
+    } else {
+      console.log('   ✅ DESIGN sub-agent executed');
+    }
+
+    // Verify DATABASE sub-agent executed
+    const { data: databaseCheck } = await supabase
+      .from('sub_agent_execution_results')
+      .select('id')
+      .eq('sd_id', sd_id)
+      .eq('sub_agent_code', 'DATABASE')
+      .limit(1);
+
+    if (!databaseCheck || databaseCheck.length === 0) {
+      validation.issues.push('[PHASE 1] CRITICAL: DATABASE sub-agent not executed');
+      validation.failed_gates.push('DATABASE_EXECUTION');
+      validation.passed = false;
+      console.log('   ❌ DATABASE sub-agent NOT executed - BLOCKING');
+      console.log('   ⚠️  Run: node lib/sub-agent-executor.js DATABASE ' + sd_id);
+      console.log('='.repeat(60));
+      return validation; // Block immediately
+    } else {
+      console.log('   ✅ DATABASE sub-agent executed');
+    }
+
+    console.log('   ✅ All Phase 1 blockers passed - proceeding to Phase 2 scoring');
+  } catch (error) {
+    validation.issues.push(`[PHASE 1] Error during preflight checks: ${error.message}`);
+    validation.passed = false;
+    return validation;
+  }
+
+  // ===================================================================
+  // PHASE 2: WEIGHTED SCORING (Negotiable Checks)
+  // ===================================================================
+  console.log('\n[PHASE 2] Weighted Scoring...');
+  console.log('-'.repeat(60));
+
   try {
     // ===================================================================
     // CHECK 1: DESIGN Sub-Agent Execution (20 points - CRITICAL)

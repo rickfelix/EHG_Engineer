@@ -55,9 +55,13 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
   };
 
   // ===================================================================
-  // PREFLIGHT: Application Directory Verification (NON-NEGOTIABLE #10)
+  // PHASE 1: NON-NEGOTIABLE BLOCKERS (Preflight Checks)
   // ===================================================================
-  console.log('\n[PREFLIGHT] Verifying application directory...');
+  console.log('\n[PHASE 1] Non-Negotiable Blockers...');
+  console.log('-'.repeat(60));
+
+  // [PHASE 1-A] Application Directory Verification (NON-NEGOTIABLE #10)
+  console.log('\n[PHASE 1-A] Verifying application directory...');
 
   try {
     const { stdout: gitRoot } = await execAsync('git rev-parse --show-toplevel');
@@ -263,9 +267,17 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
       console.log('   ⚠️  Cannot find commit for stub detection');
     }
   } catch (error) {
-    validation.warnings.push(`[PREFLIGHT] Cannot detect stubbed code: ${error.message}`);
+    validation.warnings.push(`[PHASE 1] Cannot detect stubbed code: ${error.message}`);
     console.log(`   ⚠️  Cannot detect stubbed code: ${error.message}`);
   }
+
+  console.log('   ✅ All Phase 1 blockers passed - proceeding to Phase 2 scoring');
+
+  // ===================================================================
+  // PHASE 2: WEIGHTED SCORING (Negotiable Checks)
+  // ===================================================================
+  console.log('\n[PHASE 2] Weighted Scoring...');
+  console.log('-'.repeat(60));
 
   try {
     // Fetch PRD metadata with DESIGN and DATABASE analyses

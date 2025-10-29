@@ -54,6 +54,59 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
     gate_scores: {}
   };
 
+  // ===================================================================
+  // PHASE 1: NON-NEGOTIABLE BLOCKERS (Preflight Checks)
+  // ===================================================================
+  console.log('\n[PHASE 1] Non-Negotiable Blockers...');
+  console.log('-'.repeat(60));
+
+  try {
+    // Verify Gate 2 (EXEC→PLAN) passed
+    const { data: gate2Handoff } = await supabase
+      .from('sd_phase_handoffs')
+      .select('metadata')
+      .eq('sd_id', sd_id)
+      .eq('handoff_type', 'EXEC-TO-PLAN')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (!gate2Handoff || gate2Handoff.length === 0) {
+      validation.issues.push('[PHASE 1] CRITICAL: Gate 2 (EXEC→PLAN) handoff not found');
+      validation.failed_gates.push('GATE2_HANDOFF');
+      validation.passed = false;
+      console.log('   ❌ Gate 2 handoff not found - BLOCKING');
+      console.log('   ⚠️  EXEC must complete EXEC→PLAN handoff before Gate 3');
+      console.log('='.repeat(60));
+      return validation; // Block immediately
+    }
+
+    const gate2Validation = gate2Handoff[0].metadata?.gate2_validation;
+    if (!gate2Validation || !gate2Validation.passed) {
+      validation.issues.push('[PHASE 1] CRITICAL: Gate 2 validation failed - cannot proceed to Gate 3');
+      validation.failed_gates.push('GATE2_FAILED');
+      validation.passed = false;
+      console.log('   ❌ Gate 2 failed - BLOCKING');
+      console.log(`   ⚠️  Gate 2 score: ${gate2Validation?.score || 'unknown'}/${gate2Validation?.max_score || 100}`);
+      console.log('   ⚠️  Fix Gate 2 issues before proceeding to Gate 3');
+      console.log('='.repeat(60));
+      return validation; // Block immediately
+    } else {
+      console.log(`   ✅ Gate 2 passed (${gate2Validation.score}/${gate2Validation.max_score})`);
+    }
+
+    console.log('   ✅ All Phase 1 blockers passed - proceeding to Phase 2 scoring');
+  } catch (error) {
+    validation.issues.push(`[PHASE 1] Error during preflight checks: ${error.message}`);
+    validation.passed = false;
+    return validation;
+  }
+
+  // ===================================================================
+  // PHASE 2: WEIGHTED SCORING (Negotiable Checks)
+  // ===================================================================
+  console.log('\n[PHASE 2] Weighted Scoring...');
+  console.log('-'.repeat(60));
+
   try {
     // Fetch PRD metadata with DESIGN and DATABASE analyses
     const { data: prdData, error: prdError } = await supabase

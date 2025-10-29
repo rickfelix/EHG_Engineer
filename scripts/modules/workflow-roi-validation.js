@@ -102,9 +102,9 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     }
 
     // ===================================================================
-    // STRATEGIC VALIDATION GATE (NON-NEGOTIABLE #19)
+    // PHASE 1: NON-NEGOTIABLE BLOCKERS (Strategic Validation Gate)
     // ===================================================================
-    console.log('\n[STRATEGIC GATE] LEAD Pre-Approval Questions');
+    console.log('\n[PHASE 1] LEAD Strategic Validation Gate (NON-NEGOTIABLE #19)');
     console.log('-'.repeat(60));
     console.log('⚠️  LEAD MUST answer these 6 strategic questions before approval:\n');
 
@@ -178,6 +178,15 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
       validation.warnings.push(`[STRATEGIC GATE] Cannot analyze implementation size: ${error.message}`);
     }
 
+    console.log('-'.repeat(60));
+
+    // Phase 1 complete - proceeding to Phase 2 scoring
+    console.log('\n   ✅ Phase 1 complete - proceeding to Phase 2 scoring');
+
+    // ===================================================================
+    // PHASE 2: WEIGHTED SCORING (Negotiable Checks)
+    // ===================================================================
+    console.log('\n[PHASE 2] Weighted Scoring...');
     console.log('-'.repeat(60));
 
     // ===================================================================
