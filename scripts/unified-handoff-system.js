@@ -34,6 +34,7 @@ import { validateBMADForPlanToExec, validateBMADForExecToPlan } from './modules/
 import { validateGate1PlanToExec, shouldValidateDesignDatabase } from './modules/design-database-gates-validation.js';
 import { validateGate2ExecToPlan } from './modules/implementation-fidelity-validation.js';
 import { validateGate3PlanToLead } from './modules/traceability-validation.js';
+import { validateGate4LeadFinal } from './modules/workflow-roi-validation.js';
 import { autoValidateUserStories } from './auto-validate-user-stories-on-exec-complete.js';
 import path from 'path';
 import fs from 'fs';
@@ -946,6 +947,61 @@ class UnifiedHandoffSystem {
           gate3Results.warnings.forEach(w => console.log(`   • ${w}`));
         }
         console.log(`✅ Gate 3 validation passed (${gate3Results.score}/${gate3Results.max_score} points)\n`);
+
+        // GATE 4: WORKFLOW ROI & PATTERN EFFECTIVENESS (LEAD FINAL)
+        // Strategic value validation before final SD approval
+        console.log('\n🚪 GATE 4: Workflow ROI & Pattern Effectiveness (LEAD Final)');
+        console.log('-'.repeat(50));
+
+        // Gather all prior gate results for Gate 4
+        const { data: planToExecHandoff } = await this.supabase
+          .from('sd_phase_handoffs')
+          .select('metadata')
+          .eq('sd_id', sdId)
+          .eq('handoff_type', 'PLAN-TO-EXEC')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        const gate1Results = planToExecHandoff?.[0]?.metadata?.gate1_validation || null;
+
+        const allGateResults = {
+          gate1: gate1Results,
+          gate2: gate2Results,
+          gate3: gate3Results
+        };
+
+        const gate4Results = await validateGate4LeadFinal(sdId, this.supabase, allGateResults);
+
+        // Store Gate 4 results in handoff metadata
+        // Will be saved when handoff is created below
+
+        if (!gate4Results.passed) {
+          console.error('\n❌ GATE 4 VALIDATION FAILED (WORKFLOW ROI & PATTERN EFFECTIVENESS)');
+          console.error(`   Score: ${gate4Results.score}/${gate4Results.max_score}`);
+          console.error(`   Issues: ${gate4Results.issues.join(', ')}`);
+          console.error('\n   REMEDIATION:');
+          console.error('   Review Gate 4 details to assess strategic value:');
+          console.error('   - Process adherence: Did workflow follow protocol?');
+          console.error('   - Value delivered: What business value was created?');
+          console.error('   - Pattern effectiveness: Should we repeat this approach?');
+          console.error('   - Executive validation: LEAD sign-off requirements');
+          console.error('   - Strategic questions: Answer 6 LEAD pre-approval questions');
+          console.error('   Address issues and re-run this handoff\n');
+
+          return {
+            success: false,
+            rejected: true,
+            reasonCode: 'GATE4_VALIDATION_FAILED',
+            message: `Gate 4 validation failed - ${gate4Results.issues.join('; ')}`,
+            details: gate4Results
+          };
+        }
+
+        if (gate4Results.warnings.length > 0) {
+          console.log('\n⚠️  GATE 4 VALIDATION WARNINGS:');
+          gate4Results.warnings.forEach(w => console.log(`   • ${w}`));
+        }
+        console.log(`✅ Gate 4 validation passed (${gate4Results.score}/${gate4Results.max_score} points)\n`);
       }
 
       // Load Strategic Directive and PRD
