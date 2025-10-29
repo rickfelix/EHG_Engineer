@@ -9,6 +9,12 @@
  * Part of: SD-DESIGN-DATABASE-VALIDATION-001
  */
 
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { calculateAdaptiveThreshold } from './adaptive-threshold-calculator.js';
+
+const execAsync = promisify(exec);
+
 /**
  * Validate workflow ROI and pattern effectiveness for LEAD final approval
  * Phase-Aware Weighting System (Strategic Value Focus)
@@ -96,6 +102,85 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     }
 
     // ===================================================================
+    // STRATEGIC VALIDATION GATE (NON-NEGOTIABLE #19)
+    // ===================================================================
+    console.log('\n[STRATEGIC GATE] LEAD Pre-Approval Questions');
+    console.log('-'.repeat(60));
+    console.log('⚠️  LEAD MUST answer these 6 strategic questions before approval:\n');
+
+    const strategicQuestions = [
+      '1. Does this solve a real business problem?',
+      '2. Is this the simplest solution?',
+      '3. Are we building what\'s needed vs. what\'s nice-to-have?',
+      '4. Did EXEC over-engineer this?',
+      '5. What\'s the ROI/complexity ratio?',
+      '6. Should this be approved?'
+    ];
+
+    strategicQuestions.forEach(q => console.log(`   ${q}`));
+    console.log('\n' + '-'.repeat(60));
+
+    // Check if LEAD has documented answers to strategic questions
+    try {
+      // Check for LEAD review documentation in handoff metadata
+      const { data: leadHandoff } = await supabase
+        .from('sd_phase_handoffs')
+        .select('metadata, created_at')
+        .eq('sd_id', sd_id)
+        .eq('handoff_type', 'LEAD-FINAL')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (leadHandoff && leadHandoff.length > 0 && leadHandoff[0].metadata?.strategic_review) {
+        console.log('   ✅ LEAD strategic review documented');
+        validation.details.strategic_review_completed = true;
+        validation.details.strategic_review_timestamp = leadHandoff[0].created_at;
+      } else {
+        validation.warnings.push('[STRATEGIC GATE] No documented LEAD strategic review found');
+        console.log('   ⚠️  No documented strategic review - LEAD must answer 6 questions');
+        console.log('   ⚠️  Document answers in handoff metadata: strategic_review field');
+        validation.details.strategic_review_completed = false;
+      }
+    } catch (error) {
+      validation.warnings.push(`[STRATEGIC GATE] Cannot verify strategic review: ${error.message}`);
+      console.log(`   ⚠️  Cannot verify strategic review: ${error.message}`);
+    }
+
+    // Check for over-engineering indicators (assists question #4)
+    try {
+      // Get LOC added in this SD
+      const { stdout: gitLog } = await execAsync(`git log --all --grep="${sd_id}" --format="%H" -n 1`);
+      const commitHash = gitLog.trim();
+
+      if (commitHash) {
+        const { stdout: stats } = await execAsync(`git show ${commitHash} --numstat`);
+        const lines = stats.split('\n');
+        let totalAdded = 0;
+
+        for (const line of lines) {
+          const match = line.match(/^(\d+)\s+(\d+)\s+(.+)$/);
+          if (match) {
+            totalAdded += parseInt(match[1]);
+          }
+        }
+
+        validation.details.loc_added = totalAdded;
+
+        // Flag potential over-engineering (>1000 LOC is a signal for LEAD to review)
+        if (totalAdded > 1000) {
+          validation.warnings.push(`[STRATEGIC GATE] Large implementation (${totalAdded} LOC) - review for over-engineering`);
+          console.log(`   ⚠️  Large implementation: ${totalAdded} LOC added - review question #4`);
+        } else {
+          console.log(`   ✅ Reasonable implementation size: ${totalAdded} LOC added`);
+        }
+      }
+    } catch (error) {
+      validation.warnings.push(`[STRATEGIC GATE] Cannot analyze implementation size: ${error.message}`);
+    }
+
+    console.log('-'.repeat(60));
+
+    // ===================================================================
     // SECTION A: Process Adherence (25 points)
     // ===================================================================
     console.log('\n[A] Process Adherence');
@@ -128,18 +213,37 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     await validateExecutiveApproval(sd_id, gateResults, validation, supabase);
 
     // ===================================================================
-    // FINAL VALIDATION RESULT
+    // FINAL VALIDATION RESULT (with Adaptive Threshold)
     // ===================================================================
     console.log('\n' + '='.repeat(60));
     console.log(`GATE 4 SCORE: ${validation.score}/${validation.max_score} points`);
 
-    if (validation.score >= 80) {
+    // Calculate adaptive threshold based on SD context and all prior gates
+    const priorGateScores = [];
+    if (gateResults.gate1?.score) priorGateScores.push(gateResults.gate1.score);
+    if (gateResults.gate2?.score) priorGateScores.push(gateResults.gate2.score);
+    if (gateResults.gate3?.score) priorGateScores.push(gateResults.gate3.score);
+
+    const thresholdResult = calculateAdaptiveThreshold({
+      sd: { id: sd_id, ...prdData },
+      priorGateScores,
+      patternStats: null, // TODO: fetch from pattern tracking
+      gateNumber: 4
+    });
+
+    validation.details.adaptive_threshold = thresholdResult;
+    const requiredThreshold = thresholdResult.finalThreshold;
+
+    console.log(`\nAdaptive Threshold: ${requiredThreshold.toFixed(1)}%`);
+    console.log(`Reasoning: ${thresholdResult.reasoning}`);
+
+    if (validation.score >= requiredThreshold) {
       validation.passed = true;
-      console.log('✅ GATE 4: PASSED (≥80 points)');
+      console.log(`✅ GATE 4: PASSED (${validation.score} ≥ ${requiredThreshold.toFixed(1)} points)`);
       console.log('\n🎉 ALL VALIDATION GATES COMPLETE - SD READY FOR FINAL APPROVAL');
     } else {
       validation.passed = false;
-      console.log(`❌ GATE 4: FAILED (${validation.score} < 80 points)`);
+      console.log(`❌ GATE 4: FAILED (${validation.score} < ${requiredThreshold.toFixed(1)} points)`);
     }
 
     if (validation.issues.length > 0) {

@@ -14,6 +14,7 @@ import { promisify } from 'util';
 import { existsSync } from 'fs';
 import { readdir, readFile } from 'fs/promises';
 import path from 'path';
+import { calculateAdaptiveThreshold } from './adaptive-threshold-calculator.js';
 
 const execAsync = promisify(exec);
 
@@ -52,6 +53,219 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
     failed_gates: [],
     gate_scores: {}
   };
+
+  // ===================================================================
+  // PREFLIGHT: Application Directory Verification (NON-NEGOTIABLE #10)
+  // ===================================================================
+  console.log('\n[PREFLIGHT] Verifying application directory...');
+
+  try {
+    const { stdout: gitRoot } = await execAsync('git rev-parse --show-toplevel');
+    const workingDirectory = gitRoot.trim();
+
+    // Expected directory: /mnt/c/_EHG/EHG_Engineer
+    const expectedDir = '/mnt/c/_EHG/EHG_Engineer';
+    const wrongDir = '/mnt/c/_EHG/ehg';
+
+    if (workingDirectory === wrongDir) {
+      validation.issues.push('[PREFLIGHT] CRITICAL: EXEC worked in wrong codebase (ehg instead of EHG_Engineer)');
+      validation.failed_gates.push('APP_DIR_VERIFICATION');
+      console.log(`   ❌ Wrong codebase detected: ${workingDirectory}`);
+      console.log(`   ⚠️  Expected: ${expectedDir}`);
+      console.log('   ⚠️  NON-NEGOTIABLE: EXEC must work in correct application directory');
+      validation.passed = false;
+      return validation; // Block immediately - no point validating wrong codebase
+    } else if (workingDirectory === expectedDir) {
+      console.log(`   ✅ Correct application directory verified: ${workingDirectory}`);
+    } else {
+      validation.warnings.push(`[PREFLIGHT] Unexpected working directory: ${workingDirectory}`);
+      console.log(`   ⚠️  Unexpected directory: ${workingDirectory}`);
+    }
+  } catch (error) {
+    validation.warnings.push(`[PREFLIGHT] Cannot verify application directory: ${error.message}`);
+    console.log(`   ⚠️  Cannot verify directory: ${error.message}`);
+  }
+
+  // ===================================================================
+  // PREFLIGHT: Ambiguity Resolution Verification (NON-NEGOTIABLE #11)
+  // ===================================================================
+  console.log('\n[PREFLIGHT] Checking for unresolved ambiguities...');
+
+  try {
+    // Get all changes for this SD
+    const { stdout: gitLog } = await execAsync(`git log --all --grep="${sd_id}" --format="%H" -n 1`);
+    const commitHash = gitLog.trim();
+
+    if (commitHash) {
+      // Get diff of the commit to check for problematic comments
+      const { stdout: diff } = await execAsync(`git show ${commitHash}`);
+
+      // Patterns indicating unresolved ambiguity
+      const ambiguityPatterns = [
+        /TODO:.*\?/gi,           // TODO with question marks
+        /FIXME/gi,               // FIXME comments
+        /HACK/gi,                // HACK comments
+        /not sure/gi,            // "not sure" comments
+        /unclear/gi,             // "unclear" comments
+        /ambiguous/gi,           // "ambiguous" comments
+        /\?\?\?/g,               // Multiple question marks
+        /need to ask/gi,         // "need to ask"
+        /don't know/gi           // "don't know"
+      ];
+
+      const foundAmbiguities = [];
+      for (const pattern of ambiguityPatterns) {
+        const matches = diff.match(pattern);
+        if (matches) {
+          foundAmbiguities.push(...matches);
+        }
+      }
+
+      if (foundAmbiguities.length > 0) {
+        validation.issues.push(`[PREFLIGHT] CRITICAL: Unresolved ambiguities found in code (${foundAmbiguities.length} instances)`);
+        validation.failed_gates.push('AMBIGUITY_RESOLUTION');
+        validation.details.unresolved_ambiguities = foundAmbiguities;
+        console.log(`   ❌ Found ${foundAmbiguities.length} unresolved ambiguity marker(s)`);
+        console.log(`   Examples: ${foundAmbiguities.slice(0, 3).join(', ')}`);
+        console.log('   ⚠️  NON-NEGOTIABLE: All ambiguities must be resolved before handoff');
+        validation.passed = false;
+        return validation; // Block immediately
+      } else {
+        console.log('   ✅ No unresolved ambiguity markers found in implementation');
+      }
+    } else {
+      validation.warnings.push('[PREFLIGHT] Cannot find commit for SD - skipping ambiguity check');
+      console.log('   ⚠️  Cannot find commit for ambiguity verification');
+    }
+  } catch (error) {
+    validation.warnings.push(`[PREFLIGHT] Cannot verify ambiguity resolution: ${error.message}`);
+    console.log(`   ⚠️  Cannot verify ambiguity resolution: ${error.message}`);
+  }
+
+  // ===================================================================
+  // PREFLIGHT: Server Restart Verification (NON-NEGOTIABLE #14)
+  // ===================================================================
+  console.log('\n[PREFLIGHT] Verifying server restart and manual testing...');
+
+  try {
+    // Query TESTING sub-agent to verify server was operational
+    const { data: testingResults, error: testingError } = await supabase
+      .from('sub_agent_execution_results')
+      .select('verdict, metadata, created_at')
+      .eq('sd_id', sd_id)
+      .eq('sub_agent_code', 'TESTING')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (testingError) {
+      validation.warnings.push('[PREFLIGHT] Cannot query TESTING sub-agent for server verification');
+      console.log('   ⚠️  Cannot verify server restart (TESTING query failed)');
+    } else if (!testingResults || testingResults.length === 0) {
+      validation.issues.push('[PREFLIGHT] CRITICAL: No TESTING execution found - cannot verify server was restarted and working');
+      validation.failed_gates.push('SERVER_RESTART_VERIFICATION');
+      console.log('   ❌ TESTING sub-agent not executed - server restart not verified');
+      console.log('   ⚠️  NON-NEGOTIABLE: EXEC must restart server, run tests, and verify implementation works');
+      validation.passed = false;
+      return validation; // Block immediately
+    } else {
+      const testingResult = testingResults[0];
+
+      // If TESTING passed, server must have been running
+      if (testingResult.verdict === 'PASS') {
+        console.log('   ✅ Server verified operational (TESTING sub-agent passed)');
+        console.log(`   ✅ Tests executed at: ${testingResult.created_at}`);
+      } else if (testingResult.verdict === 'BLOCKED') {
+        validation.issues.push('[PREFLIGHT] CRITICAL: TESTING failed - server may not be working correctly');
+        validation.failed_gates.push('SERVER_RESTART_VERIFICATION');
+        console.log('   ❌ TESTING failed - implementation not verified as working');
+        console.log('   ⚠️  NON-NEGOTIABLE: EXEC must ensure server restarts cleanly and tests pass');
+        validation.passed = false;
+        return validation; // Block immediately
+      } else {
+        validation.warnings.push('[PREFLIGHT] TESTING verdict is CONDITIONAL_PASS - server verification incomplete');
+        console.log('   ⚠️  TESTING inconclusive - server restart verification unclear');
+      }
+    }
+  } catch (error) {
+    validation.warnings.push(`[PREFLIGHT] Cannot verify server restart: ${error.message}`);
+    console.log(`   ⚠️  Cannot verify server restart: ${error.message}`);
+  }
+
+  // ===================================================================
+  // PREFLIGHT: Stubbed Code Detection (NON-NEGOTIABLE #20)
+  // ===================================================================
+  console.log('\n[PREFLIGHT] Checking for stubbed/incomplete code...');
+
+  try {
+    // Get all changes for this SD
+    const { stdout: gitLog } = await execAsync(`git log --all --grep="${sd_id}" --format="%H" -n 1`);
+    const commitHash = gitLog.trim();
+
+    if (commitHash) {
+      // Get diff of the commit to check for stubbed code
+      const { stdout: diff } = await execAsync(`git show ${commitHash}`);
+
+      // Patterns indicating stubbed/incomplete code
+      const stubbedCodePatterns = [
+        /throw new Error\(['"]not implemented/gi,
+        /throw new Error\(['"]TODO/gi,
+        /return null;?\s*\/\/\s*TODO/gi,
+        /return undefined;?\s*\/\/\s*TODO/gi,
+        /TODO:\s*implement/gi,
+        /stub(bed)?Function/gi,
+        /placeholder/gi,
+        /temporary implementation/gi,
+        /console\.log\(['"]TODO/gi,
+        /\/\/\s*STUB:/gi,
+        /\/\*\s*STUB\s*\*\//gi,
+        /function\s+\w+\([^)]*\)\s*\{\s*\}/g,  // Empty functions
+        /const\s+\w+\s*=\s*\([^)]*\)\s*=>\s*\{\s*\}/g,  // Empty arrow functions
+        /return\s*\{\s*\};?\s*\/\/\s*(stub|todo|placeholder)/gi
+      ];
+
+      const foundStubs = [];
+      const foundLines = new Set(); // Avoid duplicates
+
+      // Check each pattern
+      for (const pattern of stubbedCodePatterns) {
+        const matches = diff.match(pattern);
+        if (matches) {
+          for (const match of matches) {
+            // Only include added lines (starting with +)
+            const lines = diff.split('\n');
+            for (const line of lines) {
+              if (line.startsWith('+') && line.includes(match.trim())) {
+                const cleanedLine = line.substring(1).trim();
+                if (!foundLines.has(cleanedLine)) {
+                  foundLines.add(cleanedLine);
+                  foundStubs.push(cleanedLine);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (foundStubs.length > 0) {
+        validation.issues.push(`[PREFLIGHT] CRITICAL: Stubbed/incomplete code detected (${foundStubs.length} instances)`);
+        validation.failed_gates.push('STUBBED_CODE_DETECTION');
+        validation.details.stubbed_code = foundStubs;
+        console.log(`   ❌ Found ${foundStubs.length} stubbed/incomplete code pattern(s)`);
+        console.log(`   Examples: ${foundStubs.slice(0, 3).join(' | ')}`);
+        console.log('   ⚠️  NON-NEGOTIABLE: All code must be fully implemented before handoff');
+        validation.passed = false;
+        return validation; // Block immediately
+      } else {
+        console.log('   ✅ No stubbed or incomplete code patterns detected');
+      }
+    } else {
+      validation.warnings.push('[PREFLIGHT] Cannot find commit for SD - skipping stub detection');
+      console.log('   ⚠️  Cannot find commit for stub detection');
+    }
+  } catch (error) {
+    validation.warnings.push(`[PREFLIGHT] Cannot detect stubbed code: ${error.message}`);
+    console.log(`   ⚠️  Cannot detect stubbed code: ${error.message}`);
+  }
 
   try {
     // Fetch PRD metadata with DESIGN and DATABASE analyses
@@ -110,17 +324,44 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
     await validateEnhancedTesting(sd_id, designAnalysis, databaseAnalysis, validation, supabase);
 
     // ===================================================================
-    // FINAL VALIDATION RESULT
+    // FINAL VALIDATION RESULT (with Adaptive Threshold)
     // ===================================================================
     console.log('\n' + '='.repeat(60));
     console.log(`GATE 2 SCORE: ${validation.score}/${validation.max_score} points`);
 
-    if (validation.score >= 80) {
+    // Calculate adaptive threshold based on SD context and Gate 1 performance
+    const { data: gate1Handoff } = await supabase
+      .from('sd_phase_handoffs')
+      .select('metadata')
+      .eq('sd_id', sd_id)
+      .eq('handoff_type', 'PLAN-TO-EXEC')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    const priorGateScores = gate1Handoff?.metadata?.gate1_validation?.score
+      ? [gate1Handoff.metadata.gate1_validation.score]
+      : [];
+
+    const thresholdResult = calculateAdaptiveThreshold({
+      sd: { id: sd_id, ...prdData },
+      priorGateScores,
+      patternStats: null, // TODO: fetch from pattern tracking
+      gateNumber: 2
+    });
+
+    validation.details.adaptive_threshold = thresholdResult;
+    const requiredThreshold = thresholdResult.finalThreshold;
+
+    console.log(`\nAdaptive Threshold: ${requiredThreshold.toFixed(1)}%`);
+    console.log(`Reasoning: ${thresholdResult.reasoning}`);
+
+    if (validation.score >= requiredThreshold) {
       validation.passed = true;
-      console.log('✅ GATE 2: PASSED (≥80 points)');
+      console.log(`✅ GATE 2: PASSED (${validation.score} ≥ ${requiredThreshold.toFixed(1)} points)`);
     } else {
       validation.passed = false;
-      console.log(`❌ GATE 2: FAILED (${validation.score} < 80 points)`);
+      console.log(`❌ GATE 2: FAILED (${validation.score} < ${requiredThreshold.toFixed(1)} points)`);
     }
 
     if (validation.issues.length > 0) {
@@ -586,6 +827,53 @@ async function validateEnhancedTesting(sd_id, designAnalysis, databaseAnalysis, 
     validation.issues.push('[D1] E2E test check failed - cannot verify');
     sectionScore += 0; // No points on error - critical check
     console.log('   ❌ Cannot verify E2E tests - error (0/20)');
+  }
+
+  // D1b: Check TESTING sub-agent for unit test execution & pass status (NON-NEGOTIABLE #9)
+  console.log('\n   [D1b] Unit Tests Executed & Passing (NON-NEGOTIABLE)...');
+
+  try {
+    // Query TESTING sub-agent results
+    const { data: testingResults, error: testingError } = await supabase
+      .from('sub_agent_execution_results')
+      .select('verdict, metadata')
+      .eq('sd_id', sd_id)
+      .eq('sub_agent_code', 'TESTING')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (testingError) {
+      validation.issues.push('[D1b] Cannot query TESTING sub-agent results');
+      console.log('   ❌ Cannot query TESTING results (NON-NEGOTIABLE not verified)');
+    } else if (!testingResults || testingResults.length === 0) {
+      validation.warnings.push('[D1b] TESTING sub-agent has not been executed');
+      console.log('   ⚠️  TESTING sub-agent not executed - cannot verify unit tests');
+    } else {
+      const testingResult = testingResults[0];
+
+      // Check verdict (should be PASS, not CONDITIONAL_PASS or BLOCKED)
+      if (testingResult.verdict === 'PASS') {
+        sectionDetails.unit_tests_verified = true;
+        sectionDetails.testing_verdict = 'PASS';
+        console.log('   ✅ TESTING sub-agent verdict: PASS (unit tests passed)');
+      } else if (testingResult.verdict === 'BLOCKED') {
+        validation.issues.push('[D1b] CRITICAL: TESTING sub-agent verdict is BLOCKED (tests failed or did not run)');
+        sectionDetails.unit_tests_verified = false;
+        sectionDetails.testing_verdict = 'BLOCKED';
+        console.log('   ❌ TESTING verdict: BLOCKED - unit/E2E tests failed (NON-NEGOTIABLE)');
+      } else if (testingResult.verdict === 'CONDITIONAL_PASS') {
+        validation.warnings.push('[D1b] TESTING sub-agent verdict is CONDITIONAL_PASS (tests may not have fully passed)');
+        sectionDetails.unit_tests_verified = false;
+        sectionDetails.testing_verdict = 'CONDITIONAL_PASS';
+        console.log('   ⚠️  TESTING verdict: CONDITIONAL_PASS - review test results');
+      } else {
+        validation.warnings.push(`[D1b] Unexpected TESTING verdict: ${testingResult.verdict}`);
+        console.log(`   ⚠️  TESTING verdict: ${testingResult.verdict}`);
+      }
+    }
+  } catch (error) {
+    validation.warnings.push(`[D1b] Error checking unit tests: ${error.message}`);
+    console.log(`   ⚠️  Error checking unit tests: ${error.message}`);
   }
 
   // D2: Check for database migration tests (2 points - MINOR)

@@ -11,6 +11,7 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { calculateAdaptiveThreshold } from './adaptive-threshold-calculator.js';
 
 const execAsync = promisify(exec);
 
@@ -132,17 +133,46 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
     await validateLessonsCaptured(sd_id, designAnalysis, databaseAnalysis, validation, supabase);
 
     // ===================================================================
-    // FINAL VALIDATION RESULT
+    // FINAL VALIDATION RESULT (with Adaptive Threshold)
     // ===================================================================
     console.log('\n' + '='.repeat(60));
     console.log(`GATE 3 SCORE: ${validation.score}/${validation.max_score} points`);
 
-    if (validation.score >= 80) {
+    // Calculate adaptive threshold based on SD context and Gates 1-2 performance
+    const { data: handoffs } = await supabase
+      .from('sd_phase_handoffs')
+      .select('handoff_type, metadata')
+      .eq('sd_id', sd_id)
+      .in('handoff_type', ['PLAN-TO-EXEC', 'EXEC-TO-PLAN'])
+      .order('created_at', { ascending: false });
+
+    const priorGateScores = [];
+    if (handoffs) {
+      const gate1 = handoffs.find(h => h.handoff_type === 'PLAN-TO-EXEC')?.metadata?.gate1_validation?.score;
+      const gate2 = handoffs.find(h => h.handoff_type === 'EXEC-TO-PLAN')?.metadata?.gate2_validation?.score;
+      if (gate1) priorGateScores.push(gate1);
+      if (gate2) priorGateScores.push(gate2);
+    }
+
+    const thresholdResult = calculateAdaptiveThreshold({
+      sd: { id: sd_id, ...prdData },
+      priorGateScores,
+      patternStats: null, // TODO: fetch from pattern tracking
+      gateNumber: 3
+    });
+
+    validation.details.adaptive_threshold = thresholdResult;
+    const requiredThreshold = thresholdResult.finalThreshold;
+
+    console.log(`\nAdaptive Threshold: ${requiredThreshold.toFixed(1)}%`);
+    console.log(`Reasoning: ${thresholdResult.reasoning}`);
+
+    if (validation.score >= requiredThreshold) {
       validation.passed = true;
-      console.log('✅ GATE 3: PASSED (≥80 points)');
+      console.log(`✅ GATE 3: PASSED (${validation.score} ≥ ${requiredThreshold.toFixed(1)} points)`);
     } else {
       validation.passed = false;
-      console.log(`❌ GATE 3: FAILED (${validation.score} < 80 points)`);
+      console.log(`❌ GATE 3: FAILED (${validation.score} < ${requiredThreshold.toFixed(1)} points)`);
     }
 
     if (validation.issues.length > 0) {

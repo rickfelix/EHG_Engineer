@@ -9,6 +9,8 @@
  * Part of: SD-DESIGN-DATABASE-VALIDATION-001
  */
 
+import { calculateAdaptiveThreshold } from './adaptive-threshold-calculator.js';
+
 /**
  * Validate DESIGN→DATABASE workflow for PLAN→EXEC handoff
  * Phase-Aware Weighting System (Readiness Focus)
@@ -357,17 +359,37 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
     }
 
     // ===================================================================
-    // FINAL VALIDATION RESULT
+    // FINAL VALIDATION RESULT (with Adaptive Threshold)
     // ===================================================================
     console.log('\n' + '='.repeat(60));
     console.log(`GATE 1 SCORE: ${validation.score}/${validation.max_score} points`);
 
-    if (validation.score >= 80) {
+    // Calculate adaptive threshold based on SD context
+    const { data: sdData } = await supabase
+      .from('product_requirements_v2')
+      .select('directive_id, metadata')
+      .eq('directive_id', sd_id)
+      .single();
+
+    const thresholdResult = calculateAdaptiveThreshold({
+      sd: { id: sd_id, ...sdData },
+      priorGateScores: [], // Gate 1 has no prior gates
+      patternStats: null, // TODO: fetch from pattern tracking
+      gateNumber: 1
+    });
+
+    validation.details.adaptive_threshold = thresholdResult;
+    const requiredThreshold = thresholdResult.finalThreshold;
+
+    console.log(`\nAdaptive Threshold: ${requiredThreshold.toFixed(1)}%`);
+    console.log(`Reasoning: ${thresholdResult.reasoning}`);
+
+    if (validation.score >= requiredThreshold) {
       validation.passed = true;
-      console.log('✅ GATE 1: PASSED (≥80 points)');
+      console.log(`✅ GATE 1: PASSED (${validation.score} ≥ ${requiredThreshold.toFixed(1)} points)`);
     } else {
       validation.passed = false;
-      console.log(`❌ GATE 1: FAILED (${validation.score} < 80 points)`);
+      console.log(`❌ GATE 1: FAILED (${validation.score} < ${requiredThreshold.toFixed(1)} points)`);
     }
 
     if (validation.issues.length > 0) {
