@@ -40,8 +40,8 @@ const SPECIAL_MINIMUMS = {
  * @returns {number} Base threshold (70-95)
  */
 function getBaseThreshold(sd) {
-  // Check for risk assessment
-  const riskLevel = sd.risk_level?.toUpperCase() || 'MEDIUM';
+  // Check for risk assessment (can be direct column or in metadata)
+  const riskLevel = (sd.risk_level || sd.metadata?.risk_level || 'MEDIUM').toUpperCase();
 
   return BASE_THRESHOLDS[riskLevel] || BASE_THRESHOLDS.MEDIUM;
 }
@@ -115,12 +115,14 @@ function getMaturityModifier(patternStats) {
 function applySpecialCaseMinimums(sd, calculatedThreshold) {
   let threshold = calculatedThreshold;
 
-  // Check category for special cases
-  const categories = Array.isArray(sd.category) ? sd.category : [sd.category];
-  const categoriesLower = categories.map(c => c?.toLowerCase() || '');
+  // Check category for special cases (handle both direct and metadata.categories)
+  const directCategories = Array.isArray(sd.category) ? sd.category : [sd.category];
+  const metadataCategories = sd.metadata?.categories || [];
+  const allCategories = [...directCategories, ...metadataCategories];
+  const categoriesLower = allCategories.map(c => c?.toLowerCase() || '');
 
-  // Production deployment
-  if (sd.is_production_deployment || categoriesLower.includes('production')) {
+  // Production deployment (check both direct and metadata)
+  if (sd.is_production_deployment || sd.metadata?.is_production_deployment || categoriesLower.includes('production')) {
     threshold = Math.max(threshold, SPECIAL_MINIMUMS.PRODUCTION);
   }
 
@@ -130,7 +132,7 @@ function applySpecialCaseMinimums(sd, calculatedThreshold) {
   }
 
   // Data integrity / database schema
-  if (categoriesLower.includes('database') && sd.complexity === 'CRITICAL') {
+  if (categoriesLower.includes('database') && (sd.complexity === 'CRITICAL' || sd.metadata?.complexity === 'CRITICAL')) {
     threshold = Math.max(threshold, SPECIAL_MINIMUMS.DATA_INTEGRITY);
   }
 
@@ -139,8 +141,8 @@ function applySpecialCaseMinimums(sd, calculatedThreshold) {
     threshold = Math.max(threshold, SPECIAL_MINIMUMS.COMPLIANCE);
   }
 
-  // Emergency hotfix
-  if (sd.is_emergency_hotfix || sd.title?.toLowerCase().includes('hotfix')) {
+  // Emergency hotfix (check both direct and metadata)
+  if (sd.is_emergency_hotfix || sd.metadata?.is_emergency_hotfix || sd.title?.toLowerCase().includes('hotfix')) {
     threshold = Math.max(threshold, SPECIAL_MINIMUMS.EMERGENCY_HOTFIX);
   }
 

@@ -19,14 +19,19 @@
  * @returns {string} Pattern signature for matching
  */
 function extractPatternSignature(sd) {
-  const categories = Array.isArray(sd.category) ? sd.category : [sd.category];
-  const categoriesStr = categories
+  // Extract categories (can be direct column, metadata.categories, or both)
+  const directCategories = Array.isArray(sd.category) ? sd.category : [sd.category];
+  const metadataCategories = sd.metadata?.categories || [];
+  const allCategories = [...directCategories, ...metadataCategories];
+
+  const categoriesStr = allCategories
     .filter(c => c)
     .map(c => c.toLowerCase())
     .sort()
     .join(',');
 
-  const riskLevel = sd.risk_level || 'medium';
+  // Extract risk level (can be direct or in metadata, default to 'medium')
+  const riskLevel = sd.risk_level || sd.metadata?.risk_level || 'medium';
 
   return `${categoriesStr}|${riskLevel.toLowerCase()}`;
 }
@@ -50,10 +55,10 @@ export async function fetchPatternStats(sd, supabase) {
 
     const patternSignature = extractPatternSignature(sd);
 
-    // Query completed SDs with similar pattern
+    // Query completed SDs with similar pattern (include metadata for risk_level/categories)
     const { data: historicalSDs, error } = await supabase
       .from('strategic_directives_v2')
-      .select('id, category, risk_level, status')
+      .select('id, category, risk_level, metadata, status')
       .eq('status', 'completed')
       .limit(100); // Analyze last 100 completed SDs
 
