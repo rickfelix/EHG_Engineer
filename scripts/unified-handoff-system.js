@@ -552,45 +552,51 @@ class UnifiedHandoffSystem {
       console.log('\n✅ BMAD validation passed');
       console.log('-'.repeat(50));
 
-      // GATE 2: IMPLEMENTATION FIDELITY VALIDATION (CONDITIONAL)
-      // Validates that EXEC implemented DESIGN and DATABASE recommendations
-      // Only applies to SDs with both design and database categories
-      if (shouldValidateDesignDatabase(sd)) {
-        console.log('\n🚪 GATE 2: Implementation Fidelity Validation');
-        console.log('-'.repeat(50));
+      // GATE 2: IMPLEMENTATION FIDELITY VALIDATION (UNIVERSAL)
+      // Validates implementation quality for ALL SDs:
+      // - Unit tests executed & passing
+      // - Server restarted & verified
+      // - No stubbed code
+      // - Application directory correct
+      // - Ambiguity resolved
+      // - DESIGN/DATABASE recommendations implemented (if applicable)
+      console.log('\n🚪 GATE 2: Implementation Fidelity Validation');
+      console.log('-'.repeat(50));
 
-        const gate2Results = await validateGate2ExecToPlan(sdId, this.supabase);
+      const gate2Results = await validateGate2ExecToPlan(sdId, this.supabase);
 
-        // Store Gate 2 results in handoff metadata
-        handoffData.metadata.gate2_validation = gate2Results;
+      // Store Gate 2 results in handoff metadata
+      handoffData.metadata.gate2_validation = gate2Results;
 
-        if (!gate2Results.passed) {
-          console.error('\n❌ GATE 2 VALIDATION FAILED (IMPLEMENTATION FIDELITY)');
-          console.error(`   Score: ${gate2Results.score}/${gate2Results.max_score}`);
-          console.error(`   Issues: ${gate2Results.issues.join(', ')}`);
-          console.error('\n   REMEDIATION:');
-          console.error('   Review Gate 2 details to see which recommendations were not implemented:');
-          console.error('   - Design fidelity: UI components, workflows, user actions');
-          console.error('   - Database fidelity: Migrations, RLS policies, schema changes');
-          console.error('   - Data flow: Database queries, form integration, validation');
-          console.error('   - Testing: E2E tests, migration tests, coverage documentation');
-          console.error('   After implementing missing items, re-run this handoff\n');
+      if (!gate2Results.passed) {
+        console.error('\n❌ GATE 2 VALIDATION FAILED (IMPLEMENTATION FIDELITY)');
+        console.error(`   Score: ${gate2Results.score}/${gate2Results.max_score}`);
+        console.error(`   Issues: ${gate2Results.issues.join(', ')}`);
+        console.error('\n   REMEDIATION:');
+        console.error('   Review Gate 2 details to see which requirements were not met:');
+        console.error('   - Testing: Unit tests executed & passing (MANDATORY)');
+        console.error('   - Server restart: Dev server restarted & verified (MANDATORY)');
+        console.error('   - Code quality: No stubbed/incomplete code (MANDATORY)');
+        console.error('   - Directory: Working in correct application (MANDATORY)');
+        console.error('   - Ambiguity: All FIXME/TODO/HACK comments resolved (MANDATORY)');
+        console.error('   - Design fidelity: UI components, workflows, user actions (if applicable)');
+        console.error('   - Database fidelity: Migrations, RLS policies, schema changes (if applicable)');
+        console.error('   After fixing issues, re-run this handoff\n');
 
-          return {
-            success: false,
-            rejected: true,
-            reasonCode: 'GATE2_VALIDATION_FAILED',
-            message: `Gate 2 validation failed - ${gate2Results.issues.join('; ')}`,
-            details: gate2Results
-          };
-        }
-
-        if (gate2Results.warnings.length > 0) {
-          console.log('\n⚠️  GATE 2 VALIDATION WARNINGS:');
-          gate2Results.warnings.forEach(w => console.log(`   • ${w}`));
-        }
-        console.log(`✅ Gate 2 validation passed (${gate2Results.score}/${gate2Results.max_score} points)\n`);
+        return {
+          success: false,
+          rejected: true,
+          reasonCode: 'GATE2_VALIDATION_FAILED',
+          message: `Gate 2 validation failed - ${gate2Results.issues.join('; ')}`,
+          details: gate2Results
+        };
       }
+
+      if (gate2Results.warnings.length > 0) {
+        console.log('\n⚠️  GATE 2 VALIDATION WARNINGS:');
+        gate2Results.warnings.forEach(w => console.log(`   • ${w}`));
+      }
+      console.log(`✅ Gate 2 validation passed (${gate2Results.score}/${gate2Results.max_score} points)\n`);
 
       // RCA GATE ENFORCEMENT: Check for open P0/P1 RCRs (SD-RCA-001)
       console.log('\n🔍 Step 1: RCA Gate Validation');
