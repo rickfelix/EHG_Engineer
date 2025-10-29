@@ -19,12 +19,20 @@ const execAsync = promisify(exec);
 
 /**
  * Validate implementation fidelity for EXEC→PLAN handoff
+ * Phase-Aware Weighting System (Correctness Focus)
  *
  * Checks:
- * A. Design Implementation Fidelity (25 points)
- * B. Database Implementation Fidelity (25 points)
- * C. Data Flow Alignment (25 points)
- * D. Enhanced Testing (25 points)
+ * A. Design Implementation Fidelity (20 points) - MAJOR
+ * B. Database Implementation Fidelity (35 points) - CRITICAL
+ *    - B1: Migration execution (20 pts) - CRITICAL
+ *    - B2-B3: RLS + complexity (10 pts) - MINOR
+ * C. Data Flow Alignment (20 points) - MAJOR
+ * D. Enhanced Testing (25 points) - CRITICAL
+ *    - D1: E2E tests (20 pts) - CRITICAL
+ *    - D2-D3: Other tests (5 pts) - MINOR
+ *
+ * Total: 100 points
+ * Philosophy: Heavy penalty for missing critical items (migrations, E2E tests)
  *
  * @param {string} sd_id - Strategic Directive ID
  * @param {Object} supabase - Supabase client
@@ -139,7 +147,8 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
 }
 
 /**
- * Validate Design Implementation Fidelity (Section A - 25 points)
+ * Validate Design Implementation Fidelity (Section A - 20 points)
+ * Phase-aware weighting: Reduced from 25 to make room for critical database checks
  */
 async function validateDesignFidelity(sd_id, designAnalysis, validation, supabase) {
   if (!designAnalysis) {
@@ -252,23 +261,24 @@ async function validateDesignFidelity(sd_id, designAnalysis, validation, supabas
 }
 
 /**
- * Validate Database Implementation Fidelity (Section B - 25 points)
+ * Validate Database Implementation Fidelity (Section B - 35 points)
+ * Phase-aware weighting: Migration execution is CRITICAL (20 pts)
  */
 async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, supabase) {
   if (!databaseAnalysis) {
     validation.warnings.push('[B] No DATABASE analysis found - skipping database fidelity check');
-    validation.score += 13; // Partial credit if not applicable
-    validation.gate_scores.database_fidelity = 13;
-    console.log('   ⚠️  No DATABASE analysis - partial credit (13/25)');
+    validation.score += 18; // Partial credit if not applicable (50% of 35)
+    validation.gate_scores.database_fidelity = 18;
+    console.log('   ⚠️  No DATABASE analysis - partial credit (18/35)');
     return;
   }
 
   let sectionScore = 0;
   const sectionDetails = {};
 
-  // B1: Check for migration files AND execution (15 points)
-  // 8 points: Migration files created
-  // 7 points: Migrations actually executed
+  // B1: Check for migration files AND execution (25 points)
+  // 5 points: Migration files created
+  // 20 points: Migrations actually executed (CRITICAL - phase-aware weight)
   console.log('\n   [B1] Schema Change Migrations (Creation + Execution)...');
 
   try {
@@ -292,12 +302,12 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
     }
 
     if (migrationFiles.length > 0) {
-      sectionScore += 8; // Award 8 points for files existing
+      sectionScore += 5; // Award 5 points for files existing
       sectionDetails.migration_files = migrationFiles.map(m => `${m.dir}/${m.file}`);
       sectionDetails.migration_count = migrationFiles.length;
-      console.log(`   ✅ Found ${migrationFiles.length} migration file(s) (8/15)`);
+      console.log(`   ✅ Found ${migrationFiles.length} migration file(s) (5/25)`);
 
-      // B1.2: Verify migrations were executed (7 points)
+      // B1.2: Verify migrations were executed (20 points - CRITICAL)
       console.log('   [B1.2] Verifying migration execution...');
 
       try {
@@ -307,10 +317,11 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
           .select('version, name');
 
         if (migrationError) {
-          console.log(`   ⚠️  Cannot query schema_migrations: ${migrationError.message} (3/7)`);
-          sectionScore += 3; // Partial credit if can't verify
+          console.log(`   ⚠️  Cannot query schema_migrations: ${migrationError.message} (0/20)`);
+          sectionScore += 0; // No points if can't verify (critical check)
           sectionDetails.migration_execution_verified = false;
           sectionDetails.migration_execution_error = migrationError.message;
+          validation.issues.push('[B1.2] Cannot verify migration execution - database query failed');
         } else if (executedMigrations && executedMigrations.length > 0) {
           // Extract version/timestamp from migration filenames
           // Typical format: YYYYMMDDHHMMSS_description.sql or similar
@@ -328,38 +339,40 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
           );
 
           if (ourExecutedMigrations.length > 0) {
-            sectionScore += 7;
+            sectionScore += 20;
             sectionDetails.migration_execution_verified = true;
             sectionDetails.executed_migration_count = ourExecutedMigrations.length;
-            console.log(`   ✅ Verified ${ourExecutedMigrations.length}/${migrationFiles.length} migration(s) executed (7/7)`);
+            console.log(`   ✅ Verified ${ourExecutedMigrations.length}/${migrationFiles.length} migration(s) executed (20/20)`);
           } else {
-            // Migration files exist but weren't executed - CRITICAL ISSUE
-            validation.issues.push('[B1.2] Migration files created but NOT EXECUTED in database');
-            sectionScore += 0; // No points - this is a critical failure
+            // Migration files exist but weren't executed - CRITICAL FAILURE
+            validation.issues.push('[B1.2] CRITICAL: Migration files created but NOT EXECUTED in database');
+            sectionScore += 0; // Zero points - this is a critical failure
             sectionDetails.migration_execution_verified = false;
             sectionDetails.executed_migration_count = 0;
-            console.log('   ❌ Migration files exist but NOT EXECUTED (0/7)');
-            console.log('   ⚠️  CRITICAL: Run migrations before EXEC→PLAN handoff');
+            console.log('   ❌ Migration files exist but NOT EXECUTED (0/20)');
+            console.log('   ⚠️  CRITICAL FAILURE: Run migrations before EXEC→PLAN handoff');
           }
         } else {
-          sectionScore += 3; // Partial credit if no migration history
+          sectionScore += 0; // No points if no migration history (critical check)
           sectionDetails.migration_execution_verified = false;
-          console.log('   ⚠️  No migration history found (3/7)');
+          validation.issues.push('[B1.2] No migration execution history found - cannot verify');
+          console.log('   ❌ No migration history found (0/20)');
         }
       } catch (execCheckError) {
-        sectionScore += 3; // Partial credit on error
-        console.log(`   ⚠️  Error checking migration execution: ${execCheckError.message} (3/7)`);
+        sectionScore += 0; // No points on error (critical check)
+        validation.issues.push(`[B1.2] Migration execution check error: ${execCheckError.message}`);
+        console.log(`   ❌ Error checking migration execution: ${execCheckError.message} (0/20)`);
       }
     } else {
       validation.warnings.push('[B1] No migration files found for this SD');
-      sectionScore += 8; // Partial credit (might not need migrations)
+      sectionScore += 13; // Partial credit (might not need migrations) - 13/25 for N/A
       sectionDetails.migration_execution_verified = null; // Not applicable
-      console.log('   ⚠️  No migration files found (8/15)');
+      console.log('   ⚠️  No migration files found - partial credit if N/A (13/25)');
     }
   } catch (error) {
     validation.warnings.push(`[B1] Migration check failed: ${error.message}`);
-    sectionScore += 8; // Partial credit on error
-    console.log('   ⚠️  Cannot verify migrations (8/15)');
+    sectionScore += 0; // No points on error - cannot verify critical check
+    console.log('   ❌ Cannot verify migrations - error (0/25)');
   }
 
   // B2: Check for RLS policies (5 points)
@@ -417,7 +430,7 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
   validation.score += sectionScore;
   validation.gate_scores.database_fidelity = sectionScore;
   validation.details.database_fidelity = sectionDetails;
-  console.log(`\n   Section B Score: ${sectionScore}/25`);
+  console.log(`\n   Section B Score: ${sectionScore}/35`);
 }
 
 /**
@@ -526,15 +539,16 @@ async function validateDataFlowAlignment(sd_id, designAnalysis, databaseAnalysis
 
 /**
  * Validate Enhanced Testing (Section D - 25 points)
+ * Phase-aware weighting: E2E tests are CRITICAL (20 pts increased from 15)
  */
-async function validateEnhancedTesting(sd_id, designAnalysis, databaseAnalysis, validation, _supabase) {
+async function validateEnhancedTesting(sd_id, designAnalysis, databaseAnalysis, validation, supabase) {
   let sectionScore = 0;
   const sectionDetails = {};
 
   console.log('\n   [D] Enhanced Testing...');
 
-  // D1: Check for E2E tests (15 points)
-  console.log('\n   [D1] E2E Test Coverage...');
+  // D1: Check for E2E tests (20 points - CRITICAL)
+  console.log('\n   [D1] E2E Test Coverage & Execution (CRITICAL)...');
 
   try {
     const testDirs = [
@@ -559,22 +573,22 @@ async function validateEnhancedTesting(sd_id, designAnalysis, databaseAnalysis, 
     }
 
     if (testFiles.length > 0) {
-      sectionScore += 15;
+      sectionScore += 20;
       sectionDetails.e2e_tests = testFiles;
       sectionDetails.e2e_test_count = testFiles.length;
-      console.log(`   ✅ Found ${testFiles.length} E2E test file(s)`);
+      console.log(`   ✅ Found ${testFiles.length} E2E test file(s) (20/20)`);
     } else {
-      validation.warnings.push('[D1] No E2E tests found for this SD');
-      sectionScore += 8; // Partial credit
-      console.log('   ⚠️  No E2E tests found (8/15)');
+      validation.issues.push('[D1] CRITICAL: No E2E tests found for this SD');
+      sectionScore += 0; // No points - E2E is MANDATORY
+      console.log('   ❌ No E2E tests found - MANDATORY requirement (0/20)');
     }
   } catch (_error) {
-    validation.warnings.push('[D1] E2E test check failed');
-    sectionScore += 8; // Partial credit on error
-    console.log('   ⚠️  Cannot verify E2E tests (8/15)');
+    validation.issues.push('[D1] E2E test check failed - cannot verify');
+    sectionScore += 0; // No points on error - critical check
+    console.log('   ❌ Cannot verify E2E tests - error (0/20)');
   }
 
-  // D2: Check for database migration tests (5 points)
+  // D2: Check for database migration tests (2 points - MINOR)
   console.log('\n   [D2] Database Migration Tests...');
 
   try {
@@ -586,20 +600,20 @@ async function validateEnhancedTesting(sd_id, designAnalysis, databaseAnalysis, 
     const hasMigrationTests = gitLog.includes('migration') && gitLog.includes('test');
 
     if (hasMigrationTests) {
-      sectionScore += 5;
+      sectionScore += 2;
       sectionDetails.migration_tests_found = true;
-      console.log('   ✅ Migration tests found');
+      console.log('   ✅ Migration tests found (2/2)');
     } else {
       validation.warnings.push('[D2] No migration tests detected');
-      sectionScore += 3; // Partial credit
-      console.log('   ⚠️  No migration tests detected (3/5)');
+      sectionScore += 1; // Partial credit
+      console.log('   ⚠️  No migration tests detected (1/2)');
     }
   } catch (_error) {
-    sectionScore += 3; // Partial credit on error
-    console.log('   ⚠️  Cannot verify migration tests (3/5)');
+    sectionScore += 1; // Partial credit on error
+    console.log('   ⚠️  Cannot verify migration tests (1/2)');
   }
 
-  // D3: Check for test coverage metadata (5 points)
+  // D3: Check for test coverage metadata (3 points - MINOR)
   console.log('\n   [D3] Test Coverage Documentation...');
 
   // Check if EXEC→PLAN handoff mentions test coverage
@@ -618,17 +632,17 @@ async function validateEnhancedTesting(sd_id, designAnalysis, databaseAnalysis, 
                         metadataStr.includes('e2e');
 
     if (hasCoverage) {
-      sectionScore += 5;
+      sectionScore += 3;
       sectionDetails.test_coverage_documented = true;
-      console.log('   ✅ Test coverage documented in handoff');
+      console.log('   ✅ Test coverage documented in handoff (3/3)');
     } else {
       validation.warnings.push('[D3] Test coverage not documented in handoff');
-      sectionScore += 3; // Partial credit
-      console.log('   ⚠️  Test coverage not documented (3/5)');
+      sectionScore += 2; // Partial credit
+      console.log('   ⚠️  Test coverage not documented (2/3)');
     }
   } else {
-    sectionScore += 3; // Partial credit
-    console.log('   ⚠️  No handoff metadata found (3/5)');
+    sectionScore += 2; // Partial credit
+    console.log('   ⚠️  No handoff metadata found (2/3)');
   }
 
   validation.score += sectionScore;

@@ -11,12 +11,20 @@
 
 /**
  * Validate workflow ROI and pattern effectiveness for LEAD final approval
+ * Phase-Aware Weighting System (Strategic Value Focus)
  *
- * Checks:
- * A. Process Adherence (25 points)
- * B. Value Delivered (25 points)
- * C. Pattern Effectiveness (25 points)
- * D. Executive Validation (25 points)
+ * Checks (CRITICAL = 65pts, MAJOR = 25pts, MINOR = 10pts):
+ * A. Process Adherence (10 points) - MINOR
+ *    Process hygiene check (assumed at this stage)
+ * B. Value Delivered (35 points) - CRITICAL
+ *    ROI focus - what business value was created?
+ * C. Pattern Effectiveness (30 points) - CRITICAL
+ *    Strategic pattern assessment - should we repeat this?
+ * D. Executive Validation (25 points) - MAJOR
+ *    LEAD sign-off and governance
+ *
+ * Total: 100 points
+ * Philosophy: LEAD cares about strategic value, not tactical process
  *
  * @param {string} sd_id - Strategic Directive ID
  * @param {Object} supabase - Supabase client
@@ -235,14 +243,17 @@ async function validateProcessAdherence(sd_id, prdData, gateResults, validation,
     console.log('   ⚠️  Execution order not verified (3/5)');
   }
 
-  validation.score += sectionScore;
-  validation.gate_scores.process_adherence = sectionScore;
+  // Scale from 25 to 10 points (MINOR - phase-aware weighting)
+  const scaledScore = Math.round((sectionScore / 25) * 10);
+  validation.score += scaledScore;
+  validation.gate_scores.process_adherence = scaledScore;
   validation.details.process_adherence = sectionDetails;
-  console.log(`\n   Section A Score: ${sectionScore}/25`);
+  console.log(`\n   Section A Score: ${scaledScore}/10 (MINOR - process hygiene)`);
 }
 
 /**
- * Validate Value Delivered (Section B - 25 points)
+ * Validate Value Delivered (Section B - 35 points - CRITICAL)
+ * Phase-aware: LEAD wants to see ROI and business value
  */
 async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, gateResults, validation, _supabase) {
   let sectionScore = 0;
@@ -306,14 +317,17 @@ async function validateValueDelivered(sd_id, designAnalysis, databaseAnalysis, g
     console.log('   ⚠️  Low implementation fidelity (2/5)');
   }
 
-  validation.score += sectionScore;
-  validation.gate_scores.value_delivered = sectionScore;
+  // Scale from 25 to 35 points (CRITICAL - phase-aware weighting)
+  const scaledScore = Math.round((sectionScore / 25) * 35);
+  validation.score += scaledScore;
+  validation.gate_scores.value_delivered = scaledScore;
   validation.details.value_delivered = sectionDetails;
-  console.log(`\n   Section B Score: ${sectionScore}/25`);
+  console.log(`\n   Section B Score: ${scaledScore}/35 (CRITICAL - ROI focus)`);
 }
 
 /**
- * Validate Pattern Effectiveness (Section C - 25 points)
+ * Validate Pattern Effectiveness (Section C - 30 points - CRITICAL)
+ * Phase-aware: Strategic assessment of pattern success
  */
 async function validatePatternEffectiveness(sd_id, gateResults, validation, _supabase) {
   let sectionScore = 0;
@@ -412,14 +426,17 @@ async function validatePatternEffectiveness(sd_id, gateResults, validation, _sup
     console.log('   ⚠️  Cannot calculate ROI (4/7)');
   }
 
-  validation.score += sectionScore;
-  validation.gate_scores.pattern_effectiveness = sectionScore;
+  // Scale from 25 to 30 points (CRITICAL - phase-aware weighting)
+  const scaledScore = Math.round((sectionScore / 25) * 30);
+  validation.score += scaledScore;
+  validation.gate_scores.pattern_effectiveness = scaledScore;
   validation.details.pattern_effectiveness = sectionDetails;
-  console.log(`\n   Section C Score: ${sectionScore}/25`);
+  console.log(`\n   Section C Score: ${scaledScore}/30 (CRITICAL - pattern assessment)`);
 }
 
 /**
- * Validate Executive Approval Requirements (Section D - 25 points)
+ * Validate Executive Approval Requirements (Section D - 25 points - MAJOR)
+ * Phase-aware: Executive governance and sign-off
  */
 async function validateExecutiveApproval(sd_id, gateResults, validation, supabase) {
   let sectionScore = 0;
@@ -503,8 +520,9 @@ async function validateExecutiveApproval(sd_id, gateResults, validation, supabas
     console.log('   ⚠️  Insufficient data for recommendation (3/5)');
   }
 
+  // Keep at 25 points (MAJOR - no scaling needed)
   validation.score += sectionScore;
   validation.gate_scores.executive_validation = sectionScore;
   validation.details.executive_validation = sectionDetails;
-  console.log(`\n   Section D Score: ${sectionScore}/25`);
+  console.log(`\n   Section D Score: ${sectionScore}/25 (MAJOR - executive governance)`);
 }

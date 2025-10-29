@@ -16,13 +16,22 @@ const execAsync = promisify(exec);
 
 /**
  * Validate end-to-end traceability for PLAN→LEAD handoff
+ * Phase-Aware Weighting System (Fidelity Focus)
  *
- * Checks:
- * A. Recommendation Adherence (20 points)
- * B. Implementation Quality (20 points)
- * C. Traceability Mapping (20 points)
- * D. Sub-Agent Effectiveness (20 points)
- * E. Lessons Captured (20 points)
+ * Checks (CRITICAL = 60pts, MAJOR = 25pts, MINOR = 15pts):
+ * A. Recommendation Adherence (30 points) - CRITICAL
+ *    Did EXEC deliver what PLAN designed?
+ * B. Implementation Quality (30 points) - CRITICAL
+ *    Is the work good quality? (uses Gate 2 scores)
+ * C. Traceability Mapping (25 points) - MAJOR
+ *    Can we trace decisions (PRD→code, design→UI, DB→schema)?
+ * D. Sub-Agent Effectiveness (10 points) - MINOR
+ *    Meta-analysis of sub-agent performance
+ * E. Lessons Captured (5 points) - MINOR
+ *    Retrospective preparation
+ *
+ * Total: 100 points
+ * Philosophy: LEAD cares about fidelity, not process meta-analysis
  *
  * @param {string} sd_id - Strategic Directive ID
  * @param {Object} supabase - Supabase client
@@ -218,14 +227,17 @@ async function validateRecommendationAdherence(sd_id, designAnalysis, databaseAn
     console.log('   ⚠️  No database fidelity data available (5/10)');
   }
 
-  validation.score += sectionScore;
-  validation.gate_scores.recommendation_adherence = sectionScore;
+  // Scale from 20 to 30 points (CRITICAL - phase-aware weighting)
+  const scaledScore = Math.round((sectionScore / 20) * 30);
+  validation.score += scaledScore;
+  validation.gate_scores.recommendation_adherence = scaledScore;
   validation.details.recommendation_adherence = sectionDetails;
-  console.log(`\n   Section A Score: ${sectionScore}/20`);
+  console.log(`\n   Section A Score: ${scaledScore}/30 (CRITICAL - fidelity focus)`);
 }
 
 /**
- * Validate Implementation Quality (Section B - 20 points)
+ * Validate Implementation Quality (Section B - 30 points - CRITICAL)
+ * Phase-aware: LEAD cares if work is good quality
  */
 async function validateImplementationQuality(sd_id, gate2Data, validation, supabase) {
   let sectionScore = 0;
@@ -297,14 +309,17 @@ async function validateImplementationQuality(sd_id, gate2Data, validation, supab
     console.log('   ⚠️  No EXEC→PLAN handoff found (5/10)');
   }
 
-  validation.score += sectionScore;
-  validation.gate_scores.implementation_quality = sectionScore;
+  // Scale from 20 to 30 points (CRITICAL - phase-aware weighting)
+  const scaledScore = Math.round((sectionScore / 20) * 30);
+  validation.score += scaledScore;
+  validation.gate_scores.implementation_quality = scaledScore;
   validation.details.implementation_quality = sectionDetails;
-  console.log(`\n   Section B Score: ${sectionScore}/20`);
+  console.log(`\n   Section B Score: ${scaledScore}/30 (CRITICAL - quality focus)`);
 }
 
 /**
- * Validate Traceability Mapping (Section C - 20 points)
+ * Validate Traceability Mapping (Section C - 25 points - MAJOR)
+ * Phase-aware: Traceability important but not critical
  */
 async function validateTraceabilityMapping(sd_id, designAnalysis, databaseAnalysis, validation, _supabase) {
   let sectionScore = 0;
@@ -413,14 +428,17 @@ async function validateTraceabilityMapping(sd_id, designAnalysis, databaseAnalys
     console.log('   ⚠️  No database analysis to trace (3/6)');
   }
 
-  validation.score += sectionScore;
-  validation.gate_scores.traceability_mapping = sectionScore;
+  // Scale from 20 to 25 points (MAJOR - phase-aware weighting)
+  const scaledScore = Math.round((sectionScore / 20) * 25);
+  validation.score += scaledScore;
+  validation.gate_scores.traceability_mapping = scaledScore;
   validation.details.traceability_mapping = sectionDetails;
-  console.log(`\n   Section C Score: ${sectionScore}/20`);
+  console.log(`\n   Section C Score: ${scaledScore}/25 (MAJOR - traceability)`);
 }
 
 /**
- * Validate Sub-Agent Effectiveness (Section D - 20 points)
+ * Validate Sub-Agent Effectiveness (Section D - 10 points - MINOR)
+ * Phase-aware: Meta-analysis less important than actual results
  */
 async function validateSubAgentEffectiveness(sd_id, validation, supabase) {
   let sectionScore = 0;
@@ -499,14 +517,17 @@ async function validateSubAgentEffectiveness(sd_id, validation, supabase) {
     console.log('   ⚠️  No sub-agent data to assess (5/10)');
   }
 
-  validation.score += sectionScore;
-  validation.gate_scores.sub_agent_effectiveness = sectionScore;
+  // Scale from 20 to 10 points (MINOR - phase-aware weighting)
+  const scaledScore = Math.round((sectionScore / 20) * 10);
+  validation.score += scaledScore;
+  validation.gate_scores.sub_agent_effectiveness = scaledScore;
   validation.details.sub_agent_effectiveness = sectionDetails;
-  console.log(`\n   Section D Score: ${sectionScore}/20`);
+  console.log(`\n   Section D Score: ${scaledScore}/10 (MINOR - meta-analysis)`);
 }
 
 /**
- * Validate Lessons Captured (Section E - 20 points)
+ * Validate Lessons Captured (Section E - 5 points - MINOR)
+ * Phase-aware: Retrospective prep least important at handoff
  */
 async function validateLessonsCaptured(sd_id, designAnalysis, databaseAnalysis, validation, supabase) {
   let sectionScore = 0;
@@ -581,8 +602,10 @@ async function validateLessonsCaptured(sd_id, designAnalysis, databaseAnalysis, 
     console.log('   ⚠️  No EXEC→PLAN handoff to assess (5/10)');
   }
 
-  validation.score += sectionScore;
-  validation.gate_scores.lessons_captured = sectionScore;
+  // Scale from 20 to 5 points (MINOR - phase-aware weighting)
+  const scaledScore = Math.round((sectionScore / 20) * 5);
+  validation.score += scaledScore;
+  validation.gate_scores.lessons_captured = scaledScore;
   validation.details.lessons_captured = sectionDetails;
-  console.log(`\n   Section E Score: ${sectionScore}/20`);
+  console.log(`\n   Section E Score: ${scaledScore}/5 (MINOR - retrospective prep)`);
 }
