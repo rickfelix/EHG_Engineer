@@ -804,6 +804,10 @@ class UnifiedHandoffSystem {
     console.log('🔍 PLAN → LEAD HANDOFF EXECUTION');
     console.log('-'.repeat(30));
 
+    // Initialize gate validation results (will be populated if validation runs)
+    let gate3Results = null;
+    let gate4Results = null;
+
     try {
       // SUB-AGENT ORCHESTRATION: Run required sub-agents for LEAD_FINAL phase
       console.log('\n🤖 Step 0: Sub-Agent Orchestration (LEAD_FINAL phase)');
@@ -915,7 +919,7 @@ class UnifiedHandoffSystem {
 
         const gate2Results = execToPlanHandoff?.[0]?.metadata?.gate2_validation || null;
 
-        const gate3Results = await validateGate3PlanToLead(sdId, this.supabase, gate2Results);
+        gate3Results = await validateGate3PlanToLead(sdId, this.supabase, gate2Results);
 
         // Store Gate 3 results (will be saved in handoff metadata later)
         // Results are already captured in gate3Results and will be saved below
@@ -970,7 +974,7 @@ class UnifiedHandoffSystem {
           gate3: gate3Results
         };
 
-        const gate4Results = await validateGate4LeadFinal(sdId, this.supabase, allGateResults);
+        gate4Results = await validateGate4LeadFinal(sdId, this.supabase, allGateResults);
 
         // Store Gate 4 results in handoff metadata
         // Will be saved when handoff is created below
@@ -1070,7 +1074,9 @@ class UnifiedHandoffSystem {
             ...prd.metadata,
             plan_handoff: {
               handoff_id: handoffId,
-                      validation: planValidation
+              validation: planValidation,
+              gate3_validation: gate3Results || null,
+              gate4_validation: gate4Results || null
             }
           }
         })

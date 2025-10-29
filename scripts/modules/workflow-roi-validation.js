@@ -12,6 +12,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { calculateAdaptiveThreshold } from './adaptive-threshold-calculator.js';
+import { getPatternStats } from './pattern-tracking.js';
 
 const execAsync = promisify(exec);
 
@@ -233,10 +234,20 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     if (gateResults.gate2?.score) priorGateScores.push(gateResults.gate2.score);
     if (gateResults.gate3?.score) priorGateScores.push(gateResults.gate3.score);
 
+    // Fetch SD data for pattern tracking
+    const { data: sdData } = await supabase
+      .from('strategic_directives_v2')
+      .select('*')
+      .eq('id', sd_id)
+      .single();
+
+    // Fetch pattern statistics for maturity bonus
+    const patternStats = await getPatternStats(sdData, supabase);
+
     const thresholdResult = calculateAdaptiveThreshold({
-      sd: { id: sd_id, ...prdData },
+      sd: sdData,
       priorGateScores,
-      patternStats: null, // TODO: fetch from pattern tracking
+      patternStats,
       gateNumber: 4
     });
 

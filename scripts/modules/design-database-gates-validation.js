@@ -10,6 +10,7 @@
  */
 
 import { calculateAdaptiveThreshold } from './adaptive-threshold-calculator.js';
+import { getPatternStats } from './pattern-tracking.js';
 
 /**
  * Validate DESIGN→DATABASE workflow for PLAN→EXEC handoff
@@ -426,15 +427,18 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
 
     // Calculate adaptive threshold based on SD context
     const { data: sdData } = await supabase
-      .from('product_requirements_v2')
-      .select('directive_id, metadata')
-      .eq('directive_id', sd_id)
+      .from('strategic_directives_v2')
+      .select('*')
+      .eq('id', sd_id)
       .single();
 
+    // Fetch pattern statistics for maturity bonus
+    const patternStats = await getPatternStats(sdData, supabase);
+
     const thresholdResult = calculateAdaptiveThreshold({
-      sd: { id: sd_id, ...sdData },
+      sd: sdData,
       priorGateScores: [], // Gate 1 has no prior gates
-      patternStats: null, // TODO: fetch from pattern tracking
+      patternStats,
       gateNumber: 1
     });
 
