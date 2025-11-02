@@ -28,3 +28,6 @@ test-results/
 .playwright/
 coverage/
 supabase/.temp/
+
+# Process ID files
+.pids/
