@@ -1,0 +1,98 @@
+{
+  "CLAUDE.md": {
+    "description": "Minimal router file (~5-10k chars) - tells agents which files to load",
+    "sections": [
+      "file_warning",
+      "smart_router",
+      "session_prologue"
+    ]
+  },
+  "CLAUDE_CORE.md": {
+    "description": "Essential context for ALL sessions (~15-20k chars)",
+    "sections": [
+      "application_architecture",
+      "execution_philosophy",
+      "git_commit_guidelines",
+      "pr_size_guidelines",
+      "communication_context",
+      "parallel_execution",
+      "development_workflow",
+      "database_first_enforcement_expanded",
+      "supabase_operations"
+    ]
+  },
+  "CLAUDE_LEAD.md": {
+    "description": "LEAD phase operations (~25-30k chars)",
+    "sections": [
+      "lead_operations",
+      "directive_submission_review",
+      "lead_code_review_requirement",
+      "simplicity_first_enforcement",
+      "lead_pre_approval_simplicity_gate",
+      "sd_evaluation",
+      "knowledge_retrieval"
+    ]
+  },
+  "CLAUDE_PLAN.md": {
+    "description": "PLAN phase operations (~30-35k chars)",
+    "sections": [
+      "PHASE_2_PLANNING",
+      "plan_pre_exec_checklist",
+      "testing_tier_strategy",
+      "testing_tier_strategy_updated",
+      "plan_cicd_verification",
+      "plan_visual_documentation_examples",
+      "plan_presentation_template",
+      "PHASE_4_VERIFICATION",
+      "bmad_enhancements",
+      "design_database_validation_gates",
+      "qa_engineering_enhanced",
+      "schema_documentation_access",
+      "schema_documentation_reference",
+      "database_schema_overview"
+    ]
+  },
+  "CLAUDE_EXEC.md": {
+    "description": "EXEC phase operations (~20-25k chars)",
+    "sections": [
+      "exec_implementation_requirements",
+      "exec_component_sizing_guidelines",
+      "exec_todo_comment_standard",
+      "exec_dual_test_requirement",
+      "exec_edge_case_testing_checklist",
+      "testing_tools",
+      "e2e_testing_mode_configuration"
+    ]
+  },
+  "SHARED": {
+    "description": "Sections that appear in multiple files or are general reference",
+    "sections": [
+      "strategic_directive_execution_protocol",
+      "five_phase_workflow",
+      "context_management_upfront",
+      "database",
+      "guideline",
+      "knowledge_retrieval",
+      "subagent_parallel_execution",
+      "multi_application_testing_architecture",
+      "quick_reference",
+      "process",
+      "context_monitoring",
+      "database_query_best_practices",
+      "sub_agent_compression",
+      "unified_handoff_system",
+      "best_practices",
+      "guide",
+      "test_section",
+      "handoff-rls-bypass-pattern",
+      "retrospective-schema-reference",
+      "trigger-disable-pattern",
+      "documentation_platform",
+      "agents",
+      "handoffs",
+      "subagents",
+      "sub_agents",
+      "quick-reference"
+    ]
+  }
+}
