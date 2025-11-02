@@ -1,577 +1,10 @@
-# CLAUDE_PLAN.md - LEO Protocol PLAN Phase Context
+# CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-10-28 5:47:56 PM
-**Protocol**: LEO vv4.2.0_story_gates
-**Purpose**: PLAN phase operations + core context
-
----
-
-## 📋 What's Included
-
-This file contains:
-1. **Core Context** (9 sections) - Essential for all sessions
-2. **PLAN Phase Context** (15 sections) - Phase-specific operations
-
-**Total Size**: ~81k chars
+**Generated**: 2025-10-30 4:55:07 AM
+**Protocol**: LEO v4.2.0_story_gates
+**Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
 ---
-
-# CORE CONTEXT (Essential)
-
-## Session Prologue (Short)
-
-1. **Follow LEAD→PLAN→EXEC** - Target ≥85% gate pass rate
-2. **Use sub-agents** - Architect, QA, Reviewer - summarize outputs
-3. **Database-first** - No markdown files as source of truth
-4. **USE PROCESS SCRIPTS** - ⚠️ NEVER bypass add-prd-to-database.js, unified-handoff-system.js ⚠️
-5. **Small PRs** - Target ≤100 lines, max 400 with justification
-6. **Priority-first** - Use `npm run prio:top3` to justify work
-
-*For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
-
-## 🏗️ Application Architecture - CRITICAL CONTEXT
-
-### Two Distinct Applications:
-1. **EHG_Engineer** (Management Dashboard) - WHERE YOU ARE NOW
-   - **Path**: `/mnt/c/_EHG/EHG_Engineer/`
-   - **Purpose**: LEO Protocol dashboard for managing Strategic Directives & PRDs
-   - **Database**: dedlbzhpgkmetvhbkyzq (Supabase)
-   - **GitHub**: https://github.com/rickfelix/EHG_Engineer.git
-   - **Port**: 3000-3001
-   - **Role**: MANAGEMENT TOOL ONLY - no customer features here!
-
-2. **EHG** (Business Application) - IMPLEMENTATION TARGET
-   - **Path**: `/mnt/c/_EHG/ehg/`
-   - **Purpose**: The actual customer-facing business application
-   - **Database**: liapbndqlqxdcgpwntbv (Supabase)
-   - **GitHub**: https://github.com/rickfelix/ehg.git
-   - **Built with**: Vite + React + Shadcn + TypeScript
-   - **Role**: WHERE ALL FEATURES GET IMPLEMENTED
-
-### ⚠️ CRITICAL: During EXEC Phase Implementation
-1. **Read PRD** from EHG_Engineer database
-2. **Navigate** to `/mnt/c/_EHG/ehg/` for implementation
-3. **Make code changes** in EHG application (NOT in EHG_Engineer!)
-4. **Push changes** to EHG's GitHub repo: `rickfelix/ehg.git`
-5. **Track progress** in EHG_Engineer dashboard
-
-### 🔄 Workflow Relationship
-```
-EHG_Engineer (Management)          EHG App (Implementation)
-├── Strategic Directives     →     Features implemented here
-├── PRDs                     →     Code changes made here
-├── Progress Tracking        ←     Results verified from here
-└── Dashboard Views          ←     No changes here!
-```
-
-## Execution Philosophy
-
-## 🧠 EXECUTION PHILOSOPHY (Read First!)
-
-These principles override default behavior and must be internalized before starting work:
-
-### Quality-First (PARAMOUNT)
-**Get it right, not fast.** Correctness and completeness are MORE IMPORTANT than speed.
-- Take the time needed to understand requirements fully
-- Verify BEFORE implementing, test BEFORE claiming completion
-- 2-4 hours of careful implementation beats 6-12 hours of rework
-- If rushing leads to mistakes, you haven't saved time - you've wasted it
-- "Done right" > "Done fast" - ALWAYS
-
-### Testing-First (MANDATORY)
-**Build confidence through comprehensive testing.**
-- E2E testing is MANDATORY, not optional
-- 30-60 minute investment saves 4-6 hours of rework
-- 100% user story coverage required
-- Both unit tests AND E2E tests must pass
-- Tests are not overhead - they ARE the work
-
-### Database-First (REQUIRED)
-**Zero markdown files.** Database tables are single source of truth.
-- SDs → `strategic_directives_v2`
-- PRDs → `product_requirements_v2`
-- Handoffs → `sd_phase_handoffs`
-- Retrospectives → `retrospectives`
-- Sub-agent results → `sub_agent_execution_results`
-
-### Validation-First (GATEKEEPING)
-**Thorough validation BEFORE approval, full commitment AFTER.**
-- LEAD validates: Real problem? Feasible solution? Resources available?
-- After LEAD approval: SCOPE LOCK - deliver what was approved
-- Exception: Critical blocker + human approval + new SD for deferred work
-
-### Context-Aware (PROACTIVE)
-**Monitor token usage proactively throughout execution.**
-- Report context health in EVERY handoff
-- HEALTHY (<70%), WARNING (70-90%), CRITICAL (90-95%), EMERGENCY (>95%)
-- Use `/context-compact` when approaching WARNING threshold
-
-### Application-Aware (VERIFICATION)
-**Verify directory BEFORE writing ANY code.**
-- `cd /mnt/c/_EHG/ehg && pwd` for customer features
-- `git remote -v` to confirm correct repository
-- Wrong directory = STOP immediately
-
-### Evidence-Based (PROOF REQUIRED)
-**Screenshot, test, verify. Claims without evidence are rejected.**
-- Screenshot BEFORE and AFTER changes
-- Test results with pass/fail counts
-- CI/CD pipeline status (green checks required)
-- Sub-agent verification results in database
-
-**REMEMBER**: The goal is NOT to complete SDs quickly. The goal is to complete SDs CORRECTLY. A properly implemented SD that takes 8 hours is infinitely better than a rushed implementation that takes 4 hours but requires 6 hours of fixes.
-
-
-## 🔄 Git Commit Guidelines
-
-**Git Commit Guidelines**: `<type>(<SD-ID>): <subject>` format MANDATORY
-
-**Required**: Type (feat/fix/docs/etc), SD-ID scope, imperative subject, AI attribution in footer
-**Timing**: After checklist items, before context switches, at logical breakpoints
-**Branch Strategy**: `eng/` prefix for EHG_Engineer, standard prefixes for EHG app features
-**Size**: <100 lines ideal, <200 max
-
-**Full Guidelines**: See `docs/03_protocols_and_standards/leo_git_commit_guidelines_v4.2.0.md`
-
-## Database Operations - One Table at a Time
-
-### REQUIRED: Database Operations Only
-
-**⚠️ CRITICAL: One Table at a Time**
-- When manipulating Supabase tables, **ALWAYS operate on ONE table at a time**
-- Batch operations across multiple tables often fail or cause inconsistencies
-- Complete each table operation fully before moving to the next table
-- Verify success after each table operation before proceeding
-
-**Strategic Directives**:
-- ✅ Create in `strategic_directives_v2` table
-- ✅ Use `scripts/create-strategic-directive.js` or dashboard
-- ✅ ALL SD data must be in database, not files
-- ✅ **One SD insertion at a time** - verify before next
-
-**PRDs (Product Requirements)**:
-- ✅ Create in `product_requirements_v2` table
-- ✅ Use `scripts/add-prd-to-database.js`
-- ✅ Link to SD via `strategic_directive_id` foreign key
-- ✅ **One PRD insertion at a time** - verify before next
-
-**Retrospectives**:
-- ✅ Create in `retrospectives` table
-- ✅ Use `scripts/generate-comprehensive-retrospective.js`
-- ✅ Trigger: Continuous Improvement Coach sub-agent
-- ✅ Link to SD via `sd_id` foreign key
-- ✅ **One retrospective at a time** - verify before next
-
-**Handoffs**:
-- ✅ Store in handoff tracking tables
-- ✅ 7-element structure required
-- ✅ Link to SD and phase
-- ✅ **One handoff at a time** - verify before next
-
-**Progress & Verification**:
-- ✅ Update database fields directly
-- ✅ Store verification results in database
-- ✅ Track in real-time via dashboard
-- ✅ **One record update at a time** - verify before next
-
-## 📊 Communication & Context
-
-### Communication Style
-
-**Brief by Default**: Responses should be concise and action-oriented unless the user explicitly requests detailed explanations.
-
-**When to be Brief** (default):
-- Status updates and progress reports
-- Acknowledging commands or requests
-- Confirming successful operations
-- Error messages (summary + fix)
-- Tool invocation descriptions
-
-**When to be Verbose** (only if requested):
-- User asks "explain in detail"
-- User requests "comprehensive" or "thorough" analysis
-- Teaching or knowledge transfer scenarios
-- Complex debugging requiring full context
-- Documentation generation
-
-**Examples**:
-
-| Context | ❌ Verbose (unnecessary) | ✅ Brief (preferred) |
-|---------|------------------------|---------------------|
-| File created | "I have successfully created the file at the specified path with all the requested content..." | "File created: path/to/file.md" |
-| Test passed | "The test suite has been executed and all tests have passed successfully with 100% coverage..." | "✅ Tests passed (100% coverage)" |
-| Next step | "Now I will proceed to the next step which involves updating the database schema..." | "Updating database schema..." |
-
-### Context Economy Rules
-
-**Core Principles**:
-- **Response Budget**: ≤500 tokens default (unless complexity requires more)
-- **Summarize > Paste**: Reference paths/links instead of full content
-- **Fetch-on-Demand**: Name files first, retrieve only needed parts
-- **Running Summaries**: Keep condensed handoff/PR descriptions
-
-### Best Practices
-
-**Efficient Context Usage**:
-- **Quote selectively**: Show only relevant lines with context
-- **Use file:line references**: `src/component.js:42-58` instead of full file
-- **Batch related reads**: Minimize round-trips when exploring
-- **Archive verbosity**: Move details to handoffs/database, not conversation
-
-### Examples
-
-| ❌ Inefficient | ✅ Efficient |
-|----------------|--------------|
-| Paste entire 500-line file | Quote lines 42-58 with `...` markers |
-| Read file multiple times | Batch read relevant sections once |
-| Repeat full error in response | Summarize error + reference line |
-| Include all test output | Show failed tests + counts only |
-
-### 🔄 MANDATORY: Server Restart Protocol
-After ANY code changes:
-1. **Kill the dev server**: `kill [PID]` or Ctrl+C
-2. **Restart the server**: `npm run dev` or appropriate command
-3. **Wait for ready message**: Confirm server is fully started
-4. **Hard refresh browser**: Ctrl+Shift+R / Cmd+Shift+R
-5. **Verify changes are live**: Test the new functionality
-
-**WHY**: Dev servers may cache components, especially new files. Hot reload is NOT always reliable.
-
-## Parallel Execution
-
-**When to Use**: Modern AI supports parallel tool execution for independent operations. Use conservatively.
-
-**Safe for Parallel Execution**:
-- ✅ Reading multiple independent files for analysis
-- ✅ Running multiple independent database queries
-- ✅ Executing multiple read-only Git commands (status, log, diff)
-- ✅ Multiple WebFetch calls to different URLs
-- ✅ Batch file searches (multiple Glob operations)
-
-**NOT Safe for Parallel Execution**:
-- ❌ Write operations (Edit, Write tools)
-- ❌ Database mutations (INSERT, UPDATE, DELETE)
-- ❌ Any operations where order matters
-- ❌ Operations that depend on each other's results
-- ❌ Git operations that modify state (commit, push, merge)
-
-**Critical Constraint**: Context sharing between parallel operations is limited. Each operation receives the same initial context but cannot see other parallel operations' results until they all complete.
-
-**Example Use Case**:
-```
-"Read the following 3 files for analysis:"
-- Read src/component.tsx
-- Read src/types.ts
-- Read tests/component.test.tsx
-```
-
-**Anti-Pattern**:
-```
-"Read file A, then based on what you find, read file B"
-(Must be sequential - second read depends on first)
-```
-
-## Quick Reference
-
-## 📋 QUICK REFERENCE
-
-### Component Sizing
-
-| Lines of Code | Action | Rationale |
-|---------------|--------|-----------|
-| <200 | Consider combining | Too granular |
-| **300-600** | ✅ **OPTIMAL** | Sweet spot for testing & maintenance |
-| >800 | **MUST split** | Too complex, hard to test |
-
-### Git Commits (Conventional Commits)
-
-**Format**: `<type>(<SD-ID>): <subject>`
-
-```bash
-git commit -m "feat(SD-XXX): Brief description
-
-Detailed explanation of changes.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-```
-
-**Types**: feat, fix, docs, refactor, test, chore, perf
-
-### Server Restart (After ANY Changes)
-
-```bash
-# Kill
-pkill -f "node server.js"
-
-# Build (if UI changes)
-npm run build:client
-
-# Restart
-PORT=3000 node server.js
-
-# Hard refresh browser
-# Ctrl+Shift+R (Windows) / Cmd+Shift+R (Mac)
-```
-
-### Parallel Execution (Save Time)
-
-**When Safe**:
-- ✅ Multiple independent file reads
-- ✅ Multiple database queries (read-only)
-- ✅ Sub-agent execution (different domains)
-
-**NOT Safe**:
-- ❌ Write operations
-- ❌ Database mutations
-- ❌ Sequential dependencies
-
-**Example**:
-```bash
-# LEAD Pre-Approval: 4 sub-agents in parallel
-node scripts/systems-analyst-codebase-audit.js <SD-ID> &
-node scripts/database-architect-schema-review.js <SD-ID> &
-node scripts/security-architect-assessment.js <SD-ID> &
-node scripts/design-subagent-evaluation.js <SD-ID> &
-wait
-
-# Reduces time from 2 minutes sequential to 30 seconds parallel
-```
-
-### Context Efficiency Patterns
-
-```javascript
-// ❌ Inefficient
-const { data } = await supabase.from('table').select('*');
-console.log(data); // Dumps full JSON
-
-// ✅ Efficient
-const { data } = await supabase
-  .from('table')
-  .select('id, title, status')
-  .limit(5);
-console.log(`Found ${data.length} items`);
-```
-
-### Database Operations (One at a Time)
-
-**CRITICAL**: When manipulating Supabase tables, operate on ONE table at a time.
-
-```javascript
-// ❌ Bad: Batch across tables
-await Promise.all([
-  supabase.from('table1').insert(data1),
-  supabase.from('table2').insert(data2)
-]);
-
-// ✅ Good: Sequential, one table at a time
-await supabase.from('table1').insert(data1);
-// Verify success
-await supabase.from('table2').insert(data2);
-// Verify success
-```
-
-### Sub-Agent Orchestration
-
-**Automated** (preferred):
-```bash
-# Orchestrator runs all required sub-agents for phase
-node scripts/orchestrate-phase-subagents.js <PHASE> <SD-ID>
-
-# Phases: LEAD_PRE_APPROVAL, PLAN_PRD, EXEC_IMPL, PLAN_VERIFY, LEAD_FINAL
-```
-
-**Manual** (if needed):
-```bash
-# QA Director
-node scripts/qa-engineering-director-enhanced.js <SD-ID> --full-e2e
-
-# GitHub Actions
-node scripts/github-actions-verifier.js <SD-ID>
-
-# Database Architect
-node scripts/database-architect-schema-review.js <SD-ID>
-```
-
-### Testing Commands
-
-```bash
-# Unit tests (business logic)
-npm run test:unit
-
-# E2E tests (user flows)
-npm run test:e2e
-
-# Both (MANDATORY before EXEC→PLAN handoff)
-npm run test:unit && npm run test:e2e
-```
-
-### Handoff Creation
-
-```bash
-# Unified handoff system (with auto sub-agent orchestration)
-node scripts/unified-handoff-system.js execute <TYPE> <SD-ID>
-
-# Types:
-# - LEAD-to-PLAN
-# - PLAN-to-EXEC
-# - EXEC-to-PLAN (auto-runs PLAN_VERIFY sub-agents)
-# - PLAN-to-LEAD (auto-runs LEAD_FINAL sub-agents)
-```
-
-### Progress Verification
-
-```bash
-# Check progress breakdown
-node -e "
-const { createClient } = require('@supabase/supabase-js');
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-(async () => {
-  const { data } = await supabase.rpc('get_progress_breakdown', { sd_id_param: 'SD-XXX' });
-  console.log(JSON.stringify(data, null, 2));
-})();
-"
-```
-
-## Database Schema Documentation
-
-### Database Schema Documentation
-
-Auto-generated schema docs provide quick reference without database queries:
-
-**Paths**:
-- EHG_Engineer: `docs/reference/schema/engineer/database-schema-overview.md`
-- EHG App: `docs/reference/schema/ehg/database-schema-overview.md`
-
-**Update**: `npm run schema:docs:engineer` or `npm run schema:docs:ehg`
-
-**PRD Integration**: PRDs stored in `product_requirements_v2` table (NOT markdown).
-Use `add-prd-to-database.js` to create PRDs with schema review prompts.
-
-
-## 🔧 CRITICAL DEVELOPMENT WORKFLOW
-
-**Development Workflow**: MANDATORY server restart after ANY changes
-
-**Steps**: Kill server → Build client (`npm run build:client`) → Restart server → Hard refresh browser
-**Why**: No hot-reloading configured, dist/ serves compiled files
-**Commands**: `pkill -f "node server.js" && npm run build:client && PORT=3000 node server.js`
-
-**Complete Guide**: See `docs/reference/development-workflow.md`
-
-## Test Section
-
-Test content
-
-## Knowledge Retrieval Commands
-
-## 🔍 Knowledge Retrieval (Proactive Learning)
-
-**SD-LEO-LEARN-001: Added 2025-10-25**
-
-```bash
-# Before starting any phase (MANDATORY for EXEC/PLAN, RECOMMENDED for LEAD)
-node scripts/phase-preflight.js --phase <LEAD|PLAN|EXEC> --sd-id <UUID>
-
-# Search for specific issues
-node scripts/search-prior-issues.js "<issue description>"
-
-# Generate fresh knowledge summaries (weekly)
-node scripts/generate-knowledge-summary.js --category <category>
-node scripts/generate-knowledge-summary.js --category all
-
-# View existing summaries
-ls docs/summaries/lessons/*.md
-cat docs/summaries/lessons/database-lessons.md
-```
-
-**Philosophy**: Consult lessons BEFORE encountering issues, not after.
-
-
----
-
-# PLAN PHASE CONTEXT
-
-## Context Management Throughout Execution
-
-## 🧠 CONTEXT MANAGEMENT (Throughout Execution)
-
-**Token Budget**: 200,000 tokens
-
-### Status Thresholds
-
-| Status | Range | Percentage | Action |
-|--------|-------|------------|--------|
-| 🟢 HEALTHY | 0-140K | 0-70% | Continue normally |
-| 🟡 WARNING | 140K-180K | 70-90% | Consider `/context-compact` |
-| 🔴 CRITICAL | 180K-190K | 90-95% | MUST compact before handoff |
-| 🚨 EMERGENCY | >190K | >95% | BLOCKED - force handoff |
-
-### Report in EVERY Handoff
-
-**Mandatory section in all handoffs**:
-```markdown
-## Context Health
-**Current Usage**: X tokens (Y% of 200K budget)
-**Status**: HEALTHY/WARNING/CRITICAL
-**Recommendation**: [action if needed]
-**Compaction Needed**: YES/NO
-```
-
-### Efficiency Rules
-
-**Always apply these practices**:
-
-1. **Select specific columns** (not `SELECT *`)
-   ```javascript
-   // ❌ Bad
-   .select('*')
-
-   // ✅ Good
-   .select('id, title, status, priority')
-   ```
-
-2. **Limit results** for large datasets
-   ```javascript
-   .limit(5)  // For summaries
-   .limit(50) // For dashboards
-   ```
-
-3. **Summarize, don't dump**
-   ```javascript
-   // ❌ Bad: Full JSON dump
-   console.log(results);
-
-   // ✅ Good: Summary
-   console.log(`Found ${results.length} tests: ${passed} passed, ${failed} failed`);
-   ```
-
-4. **Use Read tool with offset/limit** for large files
-   ```javascript
-   Read('file.js', { offset: 100, limit: 50 })
-   ```
-
-5. **Compress sub-agent reports** (3-tier system)
-   - TIER 1 (CRITICAL): Full detail for blockers
-   - TIER 2 (IMPORTANT): Structured summary for warnings
-   - TIER 3 (INFORMATIONAL): One-line for passing checks
-
-### Expected Impact
-
-Applying these rules: **90-98% token reduction per query**
-
-### Compaction Command
-
-When WARNING or CRITICAL:
-```bash
-/context-compact [focus area]
-```
-
-Example:
-```bash
-/context-compact database-schema
-```
 
 ## Deferred Work Management
 
@@ -795,220 +228,54 @@ A: Use 'PHASE_2_PLANNING' (belongs in PLAN phase guidance)
 
 
 
-## ⚠️ Mandatory Process Scripts
+## Stubbed/Mocked Code Detection
 
-## ⚠️ MANDATORY PROCESS SCRIPTS
 
-**CRITICAL**: Bypassing these scripts will cause handoff failures and data quality issues.
+**CRITICAL: Stubbed/Mocked Code Detection** (MANDATORY):
 
-### Required Scripts by Phase
+Before PLAN→LEAD handoff, MUST verify NO stubbed/mocked code in production files:
 
-**PLAN Phase - PRD Creation**:
+**Check For** (BLOCKING if found):
 ```bash
-# ALWAYS use this script to create PRDs
-node scripts/add-prd-to-database.js <SD-ID> [PRD-Title]
+# 1. TEST_MODE flags in production code
+grep -r "TEST_MODE.*true\|NODE_ENV.*test" lib/ src/ --exclude-dir=test
 
-# Example:
-node scripts/add-prd-to-database.js SD-EXPORT-001 "Export Feature PRD"
+# 2. Mock/stub patterns
+grep -r "MOCK:\|STUB:\|TODO:\|PLACEHOLDER:\|DUMMY:" lib/ src/ --exclude-dir=test
+
+# 3. Commented-out implementations
+grep -r "// REAL IMPLEMENTATION\|// TODO: Implement" lib/ src/ --exclude-dir=test
+
+# 4. Mock return values without logic
+grep -r "return.*mock.*result\|return.*dummy" lib/ src/ --exclude-dir=test
 ```
 
-**Why mandatory:**
-- Auto-triggers Product Requirements Expert (STORIES sub-agent)
-- Generates user stories WITH implementation context
-- Validates PRD schema and completeness
-- Creates proper audit trail
+**Acceptable Patterns** ✅:
+- `TEST_MODE` in test files (`tests/`, `*.test.js`, `*.spec.js`)
+- TODO comments with SD references for future work: `// TODO (SD-XXX): Implement caching`
+- Feature flags with proper configuration: `if (config.enableFeature)`
 
-**If you bypass:** PLAN→EXEC handoff will fail due to missing implementation context.
+**BLOCKING Patterns** ❌:
+- `const TEST_MODE = process.env.TEST_MODE === 'true'` in production code
+- `return { verdict: 'PASS' }` without actual logic
+- `console.log('MOCK: Using dummy data')`
+- Empty function bodies: `function execute() { /* TODO */ }`
+- Commented-out real implementations
 
----
-
-**All Phases - Handoff Creation**:
+**Verification Script**:
 ```bash
-# ALWAYS use unified handoff system
-node scripts/unified-handoff-system.js execute <TYPE> <SD-ID>
-
-# Types: LEAD-to-PLAN, PLAN-to-EXEC, EXEC-to-PLAN, PLAN-to-LEAD
+# Create verification script
+node scripts/detect-stubbed-code.js <SD-ID>
 ```
 
-**Why mandatory:**
-- Runs validation gates (BMAD, Git branch enforcement)
-- Triggers required sub-agents automatically
-- Ensures 7-element handoff structure
-- Enforces quality standards
+**Manual Code Review**:
+- Read all modified files from git diff
+- Verify implementations are complete
+- Check for placeholder comments
+- Validate TEST_MODE usage is test-only
 
-**If you bypass:** Phase transitions will be blocked by database constraints.
+**Exit Requirement**: Zero stubbed code in production files, OR documented in "Known Issues" with follow-up SD created.
 
----
-
-### ❌ NEVER Do This
-
-```javascript
-// ❌ WRONG: Direct database insert
-const { data, error } = await supabase
-  .from('product_requirements_v2')
-  .insert({ title: 'My PRD', ... });
-
-// ❌ WRONG: Manual user story creation
-const { data, error } = await supabase
-  .from('user_stories')
-  .insert({ title: 'My Story', ... });
-```
-
-**Why this fails:**
-- Bypasses STORIES sub-agent (no implementation context)
-- Bypasses validation gates
-- Missing required structured data
-- Breaks audit trail
-- **Database constraints will block invalid inserts**
-
----
-
-### ✅ Always Do This
-
-```bash
-# ✅ CORRECT: Use process scripts
-node scripts/add-prd-to-database.js SD-XXX "PRD Title"
-# → Auto-triggers STORIES sub-agent
-# → Generates user stories with context
-# → Validates all required fields
-
-node scripts/unified-handoff-system.js execute PLAN-to-EXEC SD-XXX
-# → Runs BMAD validation
-# → Enforces git branch
-# → Triggers required sub-agents
-```
-
----
-
-### Database Enforcement
-
-The following constraints enforce process compliance:
-
-- `product_requirements_v2.functional_requirements` must have ≥3 items
-- `product_requirements_v2.test_scenarios` must have ≥1 item  
-- `product_requirements_v2.acceptance_criteria` must have ≥1 item
-- `user_stories.implementation_context` must be populated (not NULL, not empty)
-
-**Attempting to bypass scripts will result in database constraint violations.**
-
-## PR Size Guidelines
-
-**Philosophy**: Balance AI capability with human review capacity. Modern AI can handle larger changes, but humans still need to review them.
-
-**Three Tiers**:
-
-1. **≤100 lines (Sweet Spot)** - No justification needed
-   - Simple bug fixes
-   - Single feature additions
-   - Configuration changes
-   - Documentation updates
-
-2. **101-200 lines (Acceptable)** - Brief justification in PR description
-   - Multi-component features
-   - Refactoring with tests
-   - Database migrations with updates
-   - Example: "Adds authentication UI (3 components) + tests"
-
-3. **201-400 lines (Requires Strong Justification)** - Detailed rationale required
-   - Complex features that cannot be reasonably split
-   - Large refactorings with extensive test coverage
-   - Third-party integrations with configuration
-   - Must explain why splitting would create more risk/complexity
-   - Example: "OAuth integration requires provider config, UI flows, session management, and error handling as atomic unit"
-
-**Over 400 lines**: Generally prohibited. Split into multiple PRs unless exceptional circumstances (emergency hotfix, external dependency forcing bundled changes).
-
-**Key Principle**: If you can split it without creating incomplete/broken intermediate states, you should split it.
-
-## 📚 Automated PRD Enrichment (MANDATORY)
-
-**SD-LEO-LEARN-001: Proactive Learning Integration**
-
-**CRITICAL**: Run BEFORE writing PRD to incorporate historical lessons.
-
-## Step 0: Knowledge Preflight Check
-
-**Run this command before creating PRD**:
-
-```bash
-node scripts/phase-preflight.js --phase PLAN --sd-id <SD_UUID>
-node scripts/enrich-prd-with-research.js <SD_UUID>  # If available
-```
-
-## What This Does
-
-Automatically:
-1. Queries retrospectives for similar SDs
-2. Extracts proven technical approaches
-3. Identifies common pitfalls → adds to "Risks & Mitigations"
-4. Suggests prevention measures → adds to acceptance criteria
-5. Updates user_stories.implementation_context
-
-## How to Use Results
-
-### In PRD "Technical Approach" Section
-- Include proven solutions from high-success patterns
-- Reference historical approaches that worked well
-- Example: "Based on PAT-001 (100% success), we'll verify schema types before..."
-
-### In PRD "Risks & Mitigations" Section
-- Document known pitfalls from retrospectives
-- Add prevention measures from historical failures
-- Example: "Risk: Test path errors after refactor (PAT-002). Mitigation: Verify all imports."
-
-### In PRD "Acceptance Criteria"
-- Include prevention checklist items
-- Add validation steps from proven patterns
-- Example: "[ ] Schema types verified against database (prevents PAT-001)"
-
-## Verification
-
-Verify enrichment appears in PRD's "Reference Materials" section:
-
-```markdown
-## Reference Materials
-
-### Historical Patterns Consulted
-- PAT-001: Schema mismatch TypeScript/Supabase (Success: 100%)
-- SD-SIMILAR-001 Retrospective: Database validation prevented 3 rework cycles
-
-### Prevention Measures Applied
-- Schema verification before implementation
-- Test path validation in acceptance criteria
-```
-
-## Why This Matters
-
-- **Better PRDs**: Incorporate lessons before design, not after errors
-- **Prevents design flaws**: Known pitfalls addressed in planning
-- **Faster implementation**: EXEC has clear prevention guidance
-- **Higher quality**: Proven approaches baked into requirements
-
-## Quick Reference
-
-```bash
-# Before creating PRD (MANDATORY)
-node scripts/phase-preflight.js --phase PLAN --sd-id <SD_UUID>
-
-# Enrich PRD with research (if script exists)
-node scripts/enrich-prd-with-research.js <SD_UUID>
-
-# View category-specific lessons
-cat docs/summaries/lessons/<category>-lessons.md
-```
-
-**Time Investment**: 1-2 minutes
-**Time Saved**: 30-90 minutes of EXEC rework
-
-## Multi-Application Testing Architecture
-
-**Multi-App Testing**: Two independent test suites (EHG_Engineer + EHG app).
-
-**CRITICAL**: Determine target app from SD context before running tests
-- **EHG_Engineer**: Vitest + Jest (50% coverage)
-- **EHG**: Vitest (unit) + Playwright (E2E)
-
-**Full Guide**: See `docs/reference/multi-app-testing.md`
 
 ## Enhanced QA Engineering Director v2.0 - Testing-First Edition
 
@@ -1026,6 +293,22 @@ cat docs/summaries/lessons/<category>-lessons.md
 **Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
 
 **Full Guide**: See `docs/reference/qa-director-guide.md`
+
+## Database Schema Documentation
+
+### Database Schema Documentation
+
+Auto-generated schema docs provide quick reference without database queries:
+
+**Paths**:
+- EHG_Engineer: `docs/reference/schema/engineer/database-schema-overview.md`
+- EHG App: `docs/reference/schema/ehg/database-schema-overview.md`
+
+**Update**: `npm run schema:docs:engineer` or `npm run schema:docs:ehg`
+
+**PRD Integration**: PRDs stored in `product_requirements_v2` table (NOT markdown).
+Use `add-prd-to-database.js` to create PRDs with schema review prompts.
+
 
 ## PLAN Pre-EXEC Checklist
 
@@ -1094,27 +377,6 @@ Before creating PLAN→EXEC handoff, PLAN agent MUST verify:
 
 **From SD-UAT-020**:
 > "Created 100+ test checklist but didn't execute manually. Time spent on unused documentation."
-
-## Component Sizing Guidelines
-
-## Component Sizing Guidelines
-
-**Evidence from Retrospectives**: Proven pattern in SD-UAT-020 and SD-008.
-
-### Optimal Component Size: 300-600 Lines
-
-**Success Pattern** (SD-UAT-020):
-> "Split settings into three focused components. Each ~500 lines. Easy to test and maintain."
-
-### Sizing Rules
-
-| Lines of Code | Action | Rationale |
-|---------------|--------|-----------|
-| **<200** | Consider combining | Too granular |
-| **300-600** | ✅ **OPTIMAL** | Sweet spot |
-| **>800** | **MUST split** | Too complex |
-
-## 🔬 BMAD Method Enhancements
 
 ## 🔬 BMAD Method Enhancements
 
@@ -1270,6 +532,443 @@ cat docs/EXEC_CONTEXT.md
 *BMAD Method: Build-Measure-Adapt-Document*
 
 
+## DESIGN→DATABASE Validation Gates
+
+The LEO Protocol enforces the DESIGN→DATABASE workflow pattern through 4 mandatory validation gates that ensure:
+1. Sub-agent execution completeness (PLAN→EXEC)
+2. Implementation fidelity to recommendations (EXEC→PLAN)
+3. End-to-end traceability (PLAN→LEAD)
+4. Workflow ROI and pattern effectiveness (LEAD Final)
+
+**Passing Score**: ≥80 points (out of 100) required for each gate
+
+---
+
+### Gate 1: PLAN→EXEC Handoff (Pre-Implementation)
+
+**When**: After PRD creation, before EXEC starts implementation
+**Purpose**: Verify planning is complete and recommendations exist
+**Script**: `scripts/modules/design-database-gates-validation.js`
+**Integration Point**: `unified-handoff-system.js` line ~271 (after BMAD validation)
+
+**9 Validation Checks** (11 points each + 1 buffer = 100 points):
+
+1. **DESIGN Sub-Agent Executed** (11 points)
+   - Queries: `sub_agent_execution_results` table
+   - Checks: `sub_agent_name = 'DESIGN'` AND `status = 'SUCCESS'`
+
+2. **DATABASE Sub-Agent Executed** (11 points)
+   - Queries: `sub_agent_execution_results` table
+   - Checks: `sub_agent_name = 'DATABASE'` AND `status = 'SUCCESS'`
+
+3. **DATABASE Informed by DESIGN** (11 points)
+   - Queries: `product_requirements_v2.metadata.database_analysis.design_informed`
+   - Checks: `design_informed = true`
+
+4. **STORIES Sub-Agent Executed** (11 points)
+   - Queries: `sub_agent_execution_results` table
+   - Checks: `sub_agent_name = 'STORIES'` AND `status = 'SUCCESS'`
+
+5. **Schema Documentation Consulted** (11 points)
+   - Analyzes: `database_analysis.analysis` text
+   - Checks: References to `docs/reference/schema/`
+
+6. **PRD Metadata Complete** (11 points)
+   - Checks: Both `design_analysis` AND `database_analysis` exist in PRD metadata
+
+7. **Sub-Agent Execution Order** (11 points)
+   - Validates: DESIGN timestamp < DATABASE timestamp < STORIES timestamp
+
+8. **PRD Created Via Script** (11 points)
+   - Detects: `add-prd-to-database.js` metadata signature
+
+9. **User Stories Context Coverage** (12 points)
+   - Calculates: % of stories with `implementation_context`
+   - Threshold: ≥80% coverage required
+
+**Conditional Execution**:
+- Only validates SDs with BOTH `design` AND `database` categories
+- OR scope contains both "UI" AND "database" keywords
+- Use: `shouldValidateDesignDatabase(sd)` helper function
+
+---
+
+### Gate 2: EXEC→PLAN Handoff (Post-Implementation)
+
+**When**: After EXEC completes implementation, before PLAN verification
+**Purpose**: Verify EXEC actually implemented DESIGN/DATABASE recommendations
+**Script**: `scripts/modules/implementation-fidelity-validation.js`
+**Integration Point**: `unified-handoff-system.js` line ~486 (after BMAD validation)
+
+**4 Validation Sections** (25 points each = 100 points):
+
+#### A. Design Implementation Fidelity (25 points)
+
+- **A1: UI Components** (10 points)
+  - Git analysis: `git log --all --grep="SD-XXX" --name-only`
+  - Checks: Component files (.tsx, .jsx) committed
+
+- **A2: Workflows** (10 points)
+  - Queries: EXEC→PLAN handoff deliverables
+  - Checks: Workflow implementation mentioned
+
+- **A3: User Actions** (5 points)
+  - Git analysis: `git log --all --grep="SD-XXX" --patch`
+  - Checks: CRUD operations in code changes
+
+#### B. Database Implementation Fidelity (25 points)
+
+- **B1: Migrations** (15 points)
+  - Scans: `database/migrations`, `supabase/migrations`
+  - Checks: Migration files exist for SD
+
+- **B2: RLS Policies** (5 points)
+  - Git analysis: Checks for CREATE POLICY statements
+
+- **B3: Migration Complexity** (5 points)
+  - Reads: Migration file line count
+  - Compares: To DATABASE analysis estimate (optional)
+
+#### C. Data Flow Alignment (25 points)
+
+- **C1: Database Queries** (10 points)
+  - Git analysis: Checks for .select(), .insert(), .update(), .from()
+
+- **C2: Form/UI Integration** (10 points)
+  - Git analysis: Checks for useState, useForm, onSubmit, <form>, Input, Button
+
+- **C3: Data Validation** (5 points)
+  - Git analysis: Checks for zod, validate, schema, .required()
+
+#### D. Enhanced Testing (25 points)
+
+- **D1: E2E Tests** (15 points)
+  - Scans: `tests/e2e`, `tests/integration`, `playwright/tests`
+  - Checks: Test files exist for SD
+
+- **D2: Migration Tests** (5 points)
+  - Git analysis: Checks for migration + test file mentions
+
+- **D3: Coverage Documentation** (5 points)
+  - Queries: EXEC→PLAN handoff metadata
+  - Checks: Test coverage documented
+
+**Why This Gate Matters**:
+This is the MOST CRITICAL gate - ensures recommendations weren't just generated but actually implemented. Without this, EXEC could ignore all recommendations.
+
+---
+
+### Gate 3: PLAN→LEAD Handoff (Pre-Final Approval)
+
+**When**: After PLAN verification, before LEAD final approval
+**Purpose**: Verify end-to-end alignment from design through implementation
+**Script**: `scripts/modules/traceability-validation.js`
+**Integration Point**: `unified-handoff-system.js` line ~726 (PLAN→LEAD validation)
+
+**5 Validation Sections** (20 points each = 100 points):
+
+#### A. Recommendation Adherence (20 points)
+
+- **A1: Design Adherence** (10 points)
+  - Calculates: (Gate 2 design_fidelity / 25) × 100%
+  - Thresholds: ≥80% = 10pts, ≥60% = 7pts, <60% = 4pts
+
+- **A2: Database Adherence** (10 points)
+  - Calculates: (Gate 2 database_fidelity / 25) × 100%
+  - Thresholds: ≥80% = 10pts, ≥60% = 7pts, <60% = 4pts
+
+#### B. Implementation Quality (20 points)
+
+- **B1: Gate 2 Score** (10 points)
+  - Checks: Overall Gate 2 validation score
+  - Thresholds: ≥90 = 10pts, ≥80 = 8pts, ≥70 = 6pts
+
+- **B2: Test Coverage** (10 points)
+  - Queries: EXEC→PLAN handoff metadata
+  - Checks: Test coverage documented
+
+#### C. Traceability Mapping (20 points)
+
+- **C1: PRD → Implementation** (7 points)
+  - Git analysis: Commits referencing SD ID
+
+- **C2: Design → Code** (7 points)
+  - Queries: Deliverables mention design/UI/components
+
+- **C3: Database → Schema** (6 points)
+  - Queries: Deliverables mention database/migration/schema/table
+
+#### D. Sub-Agent Effectiveness (20 points)
+
+- **D1: Execution Metrics** (10 points)
+  - Queries: `sub_agent_execution_results`
+  - Checks: All 3 sub-agents (DESIGN, DATABASE, STORIES) executed
+
+- **D2: Recommendation Quality** (10 points)
+  - Checks: Sub-agent results have substantial output (>500 chars)
+
+#### E. Lessons Captured (20 points)
+
+- **E1: Retrospective Prep** (10 points)
+  - Queries: PLAN→LEAD handoff metadata
+  - Checks: Mentions "lesson", "retrospective", "improvement"
+
+- **E2: Workflow Effectiveness** (10 points)
+  - Queries: EXEC→PLAN handoff metadata
+  - Checks: Mentions "workflow", "process", "pattern"
+
+---
+
+### Gate 4: LEAD Final Approval (Pre-Completion)
+
+**When**: Before marking SD as complete
+**Purpose**: Executive oversight of design-to-implementation alignment
+**Script**: `scripts/modules/workflow-roi-validation.js`
+**Integration Point**: `unified-handoff-system.js` (LEAD final approval)
+
+**4 Validation Sections** (25 points each = 100 points):
+
+#### A. Process Adherence (25 points)
+
+- **A1: PRD Created Via Script** (5 points)
+  - Checks: `metadata.created_via_script` OR sub-agent analyses exist
+
+- **A2: Design Analysis Completed** (5 points)
+  - Checks: `metadata.design_analysis` exists
+
+- **A3: Database Analysis Completed** (5 points)
+  - Checks: `metadata.database_analysis` exists
+
+- **A4: Design-Informed Database** (5 points)
+  - Checks: `metadata.database_analysis.design_informed = true`
+
+- **A5: Proper Workflow Order** (5 points)
+  - Checks: Gate 1 validated execution order (DESIGN→DATABASE→STORIES)
+
+#### B. Value Delivered (25 points)
+
+- **B1: Time Efficiency** (10 points)
+  - Checks: Sub-agent execution time from Gate 3
+  - Thresholds: <15min = 10pts, <30min = 7pts, ≥30min = 5pts
+
+- **B2: Recommendation Quality** (10 points)
+  - Checks: Gate 3 validated substantial recommendations
+
+- **B3: Implementation Fidelity** (5 points)
+  - Checks: Gate 2 score ≥80 = 5pts, ≥70 = 3pts, <70 = 2pts
+
+#### C. Pattern Effectiveness (25 points)
+
+- **C1: Gate 1 Performance** (6 points)
+  - Thresholds: ≥90 = 6pts, ≥80 = 5pts, <80 = 3pts
+
+- **C2: Gate 2 Performance** (6 points)
+  - Thresholds: ≥90 = 6pts, ≥80 = 5pts, <80 = 3pts
+
+- **C3: Gate 3 Performance** (6 points)
+  - Thresholds: ≥90 = 6pts, ≥80 = 5pts, <80 = 3pts
+
+- **C4: Overall Pattern ROI** (7 points)
+  - Calculates: Average of Gate 1-3 scores
+  - Thresholds: ≥90 = 7pts ("EXCELLENT - Continue pattern"), ≥80 = 6pts ("GOOD - Continue"), ≥70 = 4pts ("ACCEPTABLE - Monitor")
+
+#### D. Executive Validation (25 points)
+
+- **D1: All Gates Passed** (10 points)
+  - Checks: Gate 1, 2, 3 all passed (score ≥80)
+  - Scoring: 3/3 = 10pts, 2/3 = 6pts, 1/3 = 3pts, 0/3 = 0pts
+
+- **D2: Quality Thresholds** (10 points)
+  - Queries: `sd_retrospectives` table
+  - Checks: Retrospective exists
+
+- **D3: Pattern Recommendation** (5 points)
+  - Based on avg gate score:
+    - ≥80: "CONTINUE - Pattern is effective"
+    - ≥70: "MONITOR - Pattern needs improvement"
+    - <70: "REVIEW - Pattern may need adjustment"
+
+---
+
+### Integration with Unified Handoff System
+
+**File**: `scripts/unified-handoff-system.js`
+
+#### Integration Points:
+
+1. **Gate 1 (PLAN→EXEC)** - After line 271
+   ```javascript
+   // After BMAD validation
+   if (shouldValidateDesignDatabase(sd)) {
+     const gate1 = await validateGate1PlanToExec(sd.id, supabase);
+     handoff.metadata.gate1_validation = gate1;
+
+     if (!gate1.passed) {
+       throw new Error(`Gate 1 validation failed: ${gate1.score}/100 points`);
+     }
+   }
+   ```
+
+2. **Gate 2 (EXEC→PLAN)** - After line 486
+   ```javascript
+   // After BMAD validation
+   if (shouldValidateDesignDatabase(sd)) {
+     const gate2 = await validateGate2ExecToPlan(sd.id, supabase);
+     handoff.metadata.gate2_validation = gate2;
+
+     if (!gate2.passed) {
+       throw new Error(`Gate 2 validation failed: ${gate2.score}/100 points`);
+     }
+   }
+   ```
+
+3. **Gate 3 (PLAN→LEAD)** - After line 726
+   ```javascript
+   // During PLAN→LEAD handoff
+   if (shouldValidateDesignDatabase(sd)) {
+     const gate3 = await validateGate3PlanToLead(sd.id, supabase, gate2Results);
+     handoff.metadata.gate3_validation = gate3;
+
+     if (!gate3.passed) {
+       throw new Error(`Gate 3 validation failed: ${gate3.score}/100 points`);
+     }
+   }
+   ```
+
+4. **Gate 4 (LEAD Final)** - Before final approval
+   ```javascript
+   // Before marking SD complete
+   if (shouldValidateDesignDatabase(sd)) {
+     const allGates = { gate1, gate2, gate3 };
+     const gate4 = await validateGate4LeadFinal(sd.id, supabase, allGates);
+
+     if (!gate4.passed) {
+       throw new Error(`Gate 4 validation failed: ${gate4.score}/100 points`);
+     }
+   }
+   ```
+
+---
+
+### Validation Flow Diagram
+
+```
+PRD Creation (add-prd-to-database.js)
+    ↓
+    ├─ DESIGN sub-agent → analysis
+    ├─ DATABASE sub-agent → analysis (informed by DESIGN)
+    └─ STORIES sub-agent → user stories
+    ↓
+🚪 GATE 1: PLAN→EXEC Handoff
+    ├─ ✅ All sub-agents executed?
+    ├─ ✅ Execution order correct?
+    ├─ ✅ Schema docs consulted?
+    └─ ✅ PRD metadata complete?
+    ↓
+EXEC Implementation
+    ├─ Implement UI components (per DESIGN)
+    ├─ Create migrations (per DATABASE)
+    ├─ Write E2E tests
+    └─ Commit with SD ID
+    ↓
+🚪 GATE 2: EXEC→PLAN Handoff
+    ├─ ✅ Components match DESIGN?
+    ├─ ✅ Migrations match DATABASE?
+    ├─ ✅ Data flow aligned?
+    └─ ✅ Tests comprehensive?
+    ↓
+PLAN Verification
+    ↓
+🚪 GATE 3: PLAN→LEAD Handoff
+    ├─ ✅ Recommendations followed?
+    ├─ ✅ Implementation quality high?
+    ├─ ✅ End-to-end traceability?
+    └─ ✅ Lessons captured?
+    ↓
+🚪 GATE 4: LEAD Final Approval
+    ├─ ✅ All gates passed?
+    ├─ ✅ Value delivered?
+    ├─ ✅ Pattern effective?
+    └─ ✅ Quality thresholds met?
+    ↓
+SD Complete ✅
+```
+
+---
+
+### Standalone Validation Scripts
+
+For manual validation outside handoff flow:
+
+```bash
+# Validate Gate 1 (PLAN→EXEC)
+node scripts/validate-gate1.js --sd=SD-XXX-001
+
+# Validate Gate 2 (EXEC→PLAN)
+node scripts/validate-gate2.js --sd=SD-XXX-001
+
+# Validate Gate 3 (PLAN→LEAD)
+node scripts/validate-gate3.js --sd=SD-XXX-001
+
+# Validate Gate 4 (LEAD Final)
+node scripts/validate-gate4.js --sd=SD-XXX-001
+
+# Validate all gates
+node scripts/validate-all-gates.js --sd=SD-XXX-001
+```
+
+---
+
+### When Gates Don't Apply
+
+**Conditional Execution Helper**:
+```javascript
+export function shouldValidateDesignDatabase(sd) {
+  const hasDesignCategory = sd.category?.includes('design');
+  const hasDatabaseCategory = sd.category?.includes('database');
+
+  const hasUIKeywords = (sd.scope || '').toLowerCase().includes('ui');
+  const hasDatabaseKeywords = (sd.scope || '').toLowerCase().includes('database');
+
+  return (hasDesignCategory && hasDatabaseCategory) ||
+         (hasUIKeywords && hasDatabaseKeywords);
+}
+```
+
+**Behavior**:
+- If validation doesn't apply: Returns `{ passed: true, score: 100, warnings: ['Not applicable'] }`
+- If validation applies but fails: Returns `{ passed: false, score: <score>, issues: [...] }`
+- If validation applies and passes: Returns `{ passed: true, score: ≥80, details: {...} }`
+
+---
+
+### Gate Results Storage
+
+All gate results are stored in handoff metadata:
+
+```javascript
+{
+  handoff_type: "PLAN-TO-EXEC",
+  metadata: {
+    gate1_validation: {
+      passed: true,
+      score: 92,
+      max_score: 100,
+      issues: [],
+      warnings: [],
+      details: { ... },
+      gate_scores: { ... }
+    }
+  }
+}
+```
+
+This enables:
+1. **Traceability**: Full audit trail of validation results
+2. **Retrospectives**: Quality analysis for continuous improvement
+3. **Cascading**: Gate 3 uses Gate 2 results, Gate 4 uses all previous results
+4. **Debugging**: Detailed failure information for each gate
+
 ## CI/CD Pipeline Verification
 
 ## CI/CD Pipeline Verification (MANDATORY)
@@ -1284,8 +983,6 @@ cat docs/EXEC_CONTEXT.md
 2. Trigger DevOps sub-agent to verify pipeline status
 3. Document CI/CD status in PLAN→LEAD handoff
 4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
-
-## Pre-Implementation Plan Presentation Template
 
 ## Pre-Implementation Plan Presentation Template
 
@@ -1444,6 +1141,158 @@ The `verify-handoff-plan-to-exec.js` script validates plan_presentation structur
 - **Test Coverage:** scripts/test-plan-presentation-validation.mjs (5 test scenarios)
 
 
+## Database Schema Overview
+
+### Core Tables
+- `leo_protocols` - Protocol versions and content
+- `leo_protocol_sections` - Modular protocol sections
+- `leo_agents` - Agent definitions and percentages
+- `leo_handoff_templates` - Standardized handoffs
+- `leo_sub_agents` - Sub-agent definitions
+- `leo_sub_agent_triggers` - Activation rules
+- `leo_validation_rules` - Protocol validation
+
+### Key Queries
+
+**Get Current Protocol**:
+```sql
+SELECT * FROM leo_protocols WHERE status = 'active';
+```
+
+**Check Sub-Agent Triggers**:
+```sql
+SELECT sa.*, t.*
+FROM leo_sub_agents sa
+JOIN leo_sub_agent_triggers t ON sa.id = t.sub_agent_id
+WHERE t.trigger_phrase ILIKE '%keyword%';
+```
+
+**Get Handoff Template**:
+```sql
+SELECT * FROM leo_handoff_templates
+WHERE from_agent = 'EXEC' AND to_agent = 'PLAN';
+```
+
+## API Endpoints (Database-Backed)
+
+- `GET /api/leo/current` - Current active protocol
+- `GET /api/leo/agents` - All agents with percentages
+- `GET /api/leo/sub-agents` - Active sub-agents with triggers
+- `GET /api/leo/handoffs/:from/:to` - Handoff template
+- `POST /api/leo/validate` - Validate against rules
+
+## Key Scripts (Database-Aware)
+
+- `get-latest-leo-protocol-from-db.js` - Get version from database
+- `generate-claude-md-from-db.js` - Generate this file
+- `migrate-leo-protocols-to-database.js` - Migration tool
+- `activate-sub-agents-from-db.js` - Check database triggers
+
+## Compliance Tools
+
+All tools now query database instead of files:
+
+### 1. Version Check
+```bash
+node scripts/get-latest-leo-protocol-from-db.js
+```
+
+### 2. Update CLAUDE.md
+```bash
+node scripts/generate-claude-md-from-db.js
+```
+
+### 3. Validate Handoff
+```bash
+node scripts/leo-checklist-db.js [agent-name]
+```
+
+## 🔍 PLAN Supervisor Verification
+
+### Overview
+PLAN agent now includes supervisor capabilities for final "done done" verification:
+- Queries ALL sub-agents for their verification results
+- Ensures all requirements are truly met
+- Resolves conflicts between sub-agent reports
+- Provides confidence scoring and clear pass/fail verdict
+
+### Activation
+Trigger PLAN supervisor verification via:
+- **Command**: `/leo-verify [what to check]`
+- **Script**: `node scripts/plan-supervisor-verification.js --prd PRD-ID`
+- **Automatic**: When testing phase completes
+
+### Verification Process
+1. **Read-Only Access**: Queries existing sub-agent results (no re-execution)
+2. **Summary-First**: Prevents context explosion with tiered reporting
+3. **Conflict Resolution**: Priority-based rules (Security > Database > Testing)
+4. **Circuit Breakers**: Graceful handling of sub-agent failures
+5. **Maximum 3 Iterations**: Prevents infinite verification loops
+
+### Verdicts
+- **PASS**: All requirements met, high confidence (≥85%)
+- **FAIL**: Critical issues or unmet requirements
+- **CONDITIONAL_PASS**: Minor issues, needs LEAD review
+- **ESCALATE**: Cannot reach consensus, needs LEAD intervention
+
+## Dashboard Integration
+
+Dashboard automatically connects to database:
+- Real-time protocol updates via Supabase subscriptions
+- Version detection from `leo_protocols` table
+- Sub-agent status from `leo_sub_agents` table
+- PLAN supervisor verification status
+- No file scanning needed
+
+## Important Notes
+
+1. **Database is Source of Truth** - Files are deprecated
+2. **Real-time Updates** - Changes reflect immediately
+3. **No Version Conflicts** - Single active version enforced
+4. **Audit Trail** - All changes tracked in database
+5. **WebSocket Updates** - Dashboard stays synchronized
+6. **PLAN Supervisor** - Final verification before LEAD approval
+
+## Testing Tier Strategy (Updated)
+
+
+## Testing Requirements - Dual Test Execution (UPDATED)
+
+**Philosophy**: Comprehensive testing = Unit tests (logic) + E2E tests (user experience)
+
+### Tier 1: Smoke Tests (MANDATORY) ✅
+- **Requirement**: BOTH unit tests AND E2E tests must pass
+- **Commands**:
+  - Unit: `npm run test:unit` (Vitest - business logic)
+  - E2E: `npm run test:e2e` (Playwright - user flows)
+- **Approval**: **BOTH test types REQUIRED for PLAN→LEAD approval**
+- **Execution Time**: Combined <5 minutes for smoke-level tests
+- **Coverage**:
+  - Unit: Service layer, business logic, utilities
+  - E2E: Critical user paths, authentication, navigation
+
+### Tier 2: Comprehensive Testing (RECOMMENDED) 📋
+- **Requirement**: Full test suite with deep coverage
+- **Commands**:
+  - Unit: `npm run test:unit:coverage` (50%+ coverage target)
+  - E2E: All Playwright tests (30-50 scenarios)
+  - Integration: `npm run test:integration`
+  - A11y: `npm run test:a11y`
+- **Approval**: Nice to have, **NOT blocking** but highly recommended
+- **Timing**: Can be refined post-deployment
+
+### Tier 3: Manual Testing (SITUATIONAL) 🔍
+- **UI changes**: Visual regression testing
+- **Complex flows**: Multi-step wizards, payment flows
+- **Edge cases**: Rare scenarios not covered by automation
+
+### ⚠️ What Changed (From Protocol Enhancement)
+**Before**: "Tier 1 = 3-5 tests, <60s" (ambiguous - which tests?)
+**After**: "Tier 1 = Unit tests + E2E tests (explicit frameworks, explicit commands)"
+
+**Lesson Learned**: SD-AGENT-ADMIN-002 testing oversight (ran E2E only, missed unit test failures)
+
+
 ## Database Schema Documentation Access
 
 ## 📊 Database Schema Documentation Access
@@ -1553,8 +1402,6 @@ node scripts/add-prd-to-database.js SD-EXAMPLE-001
 
 ## Visual Documentation Best Practices
 
-## Visual Documentation Best Practices
-
 When creating PRDs and technical specifications, consider adding:
 
 ### Architecture Diagrams (Mermaid)
@@ -1598,8 +1445,16 @@ sequenceDiagram
 - State transitions → State diagram
 - System architecture → Component diagram
 
+## Handoff Templates
+
+No templates in database
+
+## Validation Rules
+
+No validation rules in database
+
 ---
 
-*Generated from database: leo_protocol_sections*
-*Context tiers: CORE + PHASE_PLAN*
-*Protocol: v4.2.0_story_gates*
+*Generated from database: 2025-10-30*
+*Protocol Version: v4.2.0_story_gates*
+*Load when: User mentions PLAN, PRD, validation, or testing strategy*

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Generate CLAUDE.md Dynamically from Database (V2 - Pure Database-Driven)
- * All content comes from database, script only handles formatting
+ * Generate Modular CLAUDE Files from Database (V3 - Router Architecture)
+ * Creates 5 files: CLAUDE.md (router), CLAUDE_CORE.md, CLAUDE_LEAD.md, CLAUDE_PLAN.md, CLAUDE_EXEC.md
  */
 
 import dotenv from 'dotenv';
@@ -20,21 +20,34 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('❌ Missing Supabase credentials');
-  console.log('⚠️ CLAUDE.md will not be updated');
+  console.log('⚠️ CLAUDE files will not be updated');
   process.exit(1);
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-class CLAUDEMDGeneratorV2 {
+class CLAUDEMDGeneratorV3 {
   constructor() {
-    this.outputPath = path.join(__dirname, '..', 'CLAUDE.md');
+    this.baseDir = path.join(__dirname, '..');
+    this.mappingPath = path.join(__dirname, 'section-file-mapping.json');
+    this.fileMapping = null;
+  }
+
+  loadMapping() {
+    if (!fs.existsSync(this.mappingPath)) {
+      throw new Error(`Mapping file not found: ${this.mappingPath}`);
+    }
+    this.fileMapping = JSON.parse(fs.readFileSync(this.mappingPath, 'utf-8'));
+    console.log('✅ Loaded section-to-file mapping');
   }
 
   async generate() {
-    console.log('🔄 Generating CLAUDE.md from database (V2 - Pure DB)...\n');
+    console.log('🔄 Generating modular CLAUDE files from database (V3 - Router Architecture)...\n');
 
     try {
+      // Load mapping
+      this.loadMapping();
+
       // Fetch all required data
       const protocol = await this.getActiveProtocol();
       const agents = await this.getAgents();
@@ -42,29 +55,46 @@ class CLAUDEMDGeneratorV2 {
       const handoffTemplates = await this.getHandoffTemplates();
       const validationRules = await this.getValidationRules();
 
-      // Generate CLAUDE.md content
-      const content = this.generateContent({
+      const data = {
         protocol,
         agents,
         subAgents,
         handoffTemplates,
         validationRules
-      });
+      };
 
-      // Write to file
-      fs.writeFileSync(this.outputPath, content);
+      // Generate each file
+      console.log('📝 Generating files...\n');
 
-      console.log('✅ CLAUDE.md generated successfully!');
-      console.log(`📄 Version: LEO Protocol v${protocol.version}`);
-      console.log(`📊 Sub-agents documented: ${subAgents.length}`);
+      this.generateFile('CLAUDE.md', data, this.generateRouter.bind(this));
+      this.generateFile('CLAUDE_CORE.md', data, this.generateCore.bind(this));
+      this.generateFile('CLAUDE_LEAD.md', data, this.generateLead.bind(this));
+      this.generateFile('CLAUDE_PLAN.md', data, this.generatePlan.bind(this));
+      this.generateFile('CLAUDE_EXEC.md', data, this.generateExec.bind(this));
+
+      console.log('\n✅ All CLAUDE files generated successfully!');
+      console.log(`📄 Protocol Version: LEO v${protocol.version}`);
+      console.log(`📊 Sub-agents: ${subAgents.length}`);
       console.log(`📋 Handoff templates: ${handoffTemplates.length}`);
       console.log(`📚 Protocol sections: ${protocol.sections.length}`);
-      console.log('\n🎯 CLAUDE.md is now synchronized with database!');
+      console.log('\n🎯 Router architecture implemented!');
+      console.log('   → Initial context load: ~18k chars (9% of 200k budget)');
+      console.log('   → Down from: 173k chars (87% of budget)');
 
     } catch (error) {
       console.error('❌ Generation failed:', error);
       process.exit(1);
     }
+  }
+
+  generateFile(filename, data, generatorFn) {
+    const filePath = path.join(this.baseDir, filename);
+    const content = generatorFn(data);
+    fs.writeFileSync(filePath, content);
+
+    const size = (content.length / 1024).toFixed(1);
+    const charCount = content.length;
+    console.log(`   ✓ ${filename.padEnd(20)} ${size.padStart(6)} KB (${charCount} chars)`);
   }
 
   async getActiveProtocol() {
@@ -78,7 +108,7 @@ class CLAUDEMDGeneratorV2 {
       throw new Error('No active protocol found in database');
     }
 
-    // Also get sections (ordered)
+    // Get sections (ordered)
     const { data: sections } = await supabase
       .from('leo_protocol_sections')
       .select('*')
@@ -129,100 +159,85 @@ class CLAUDEMDGeneratorV2 {
     return data || [];
   }
 
-  getSectionByType(sections, type) {
-    const section = sections.find(s => s.section_type === type);
-    return section ? `## ${section.title}\n\n${section.content}\n` : '';
+  getSectionsByMapping(sections, fileKey) {
+    const mappedTypes = this.fileMapping[fileKey]?.sections || [];
+    return sections.filter(s => mappedTypes.includes(s.section_type));
   }
 
-  generateContent({ protocol, agents, subAgents, handoffTemplates, validationRules }) {
+  formatSection(section) {
+    // Remove duplicate header if content already starts with ## Title
+    let content = section.content;
+    const headerPattern = new RegExp(`^##\\s+${section.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\n`, 'i');
+    content = content.replace(headerPattern, '');
+    return `## ${section.title}\n\n${content}`;
+  }
+
+  getMetadata(protocol) {
     const today = new Date().toISOString().split('T')[0];
-    const sections = protocol.sections || [];
+    const time = new Date().toLocaleTimeString();
+    return { today, time, protocol };
+  }
 
-    // Get all sections from database
-    const fileWarning = this.getSectionByType(sections, 'file_warning');
-    const sessionPrologue = this.getSectionByType(sections, 'session_prologue');
-    const applicationArchitecture = this.getSectionByType(sections, 'application_architecture');
-    const execImplementationRequirements = this.getSectionByType(sections, 'exec_implementation_requirements');
-    const gitCommitGuidelines = this.getSectionByType(sections, 'git_commit_guidelines');
-    const prSizeGuidelines = this.getSectionByType(sections, 'pr_size_guidelines');
-    const communicationContext = this.getSectionByType(sections, 'communication_context');
-    const parallelExecution = this.getSectionByType(sections, 'parallel_execution');
-    const subagentParallelExecution = this.getSectionByType(sections, 'subagent_parallel_execution');
-    const leadOperations = this.getSectionByType(sections, 'lead_operations');
-    const directiveSubmissionReview = this.getSectionByType(sections, 'directive_submission_review');
-    const databaseMigrationValidation = this.getSectionByType(sections, 'database_migration_validation');
-    const unifiedHandoffSystem = this.getSectionByType(sections, 'unified_handoff_system');
-    const databaseSchemaOverview = this.getSectionByType(sections, 'database_schema_overview');
-    const supabaseOperations = this.getSectionByType(sections, 'supabase_operations');
-    const developmentWorkflow = this.getSectionByType(sections, 'development_workflow');
+  generateRouter(data) {
+    const { protocol } = data;
+    const sections = protocol.sections;
+    const { today, time } = this.getMetadata(protocol);
 
-    // Get other database-backed sections (dynamic content)
-    const protocolSections = sections
-      .filter(section => ![
-        'file_warning', 'session_prologue', 'application_architecture',
-        'exec_implementation_requirements', 'git_commit_guidelines', 'pr_size_guidelines',
-        'communication_context', 'parallel_execution', 'subagent_parallel_execution',
-        'lead_operations', 'directive_submission_review', 'database_migration_validation',
-        'unified_handoff_system', 'database_schema_overview', 'supabase_operations',
-        'development_workflow'
-      ].includes(section.section_type))
-      .map(section => {
-        // Remove leading markdown header from content if it matches title
-        let content = section.content;
-        const headerPattern = new RegExp(`^##\\s+${section.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\n`, 'i');
-        content = content.replace(headerPattern, '');
-        return `## ${section.title}\n\n${content}`;
-      })
-      .join('\n\n');
+    // Get router-specific sections
+    const fileWarning = sections.find(s => s.section_type === 'file_warning');
+    const smartRouter = sections.find(s => s.section_type === 'smart_router');
+    const sessionPrologue = sections.find(s => s.section_type === 'session_prologue');
 
-    return `# CLAUDE.md - LEO Protocol Workflow Guide for AI Agents
+    return `# CLAUDE.md - LEO Protocol Context Router
 
-${fileWarning}
+${fileWarning ? fileWarning.content : '⚠️ DO NOT EDIT THIS FILE DIRECTLY - Generated from database'}
 
-${sessionPrologue}
-
-${applicationArchitecture}
+${sessionPrologue ? this.formatSection(sessionPrologue) : ''}
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: ${today} ${new Date().toLocaleTimeString()}
+**Last Generated**: ${today} ${time}
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run \`node scripts/generate-claude-md-from-db.js\` anytime
 
-## 🟢 CURRENT LEO PROTOCOL VERSION: v${protocol.version}
+## 🟢 CURRENT LEO PROTOCOL VERSION: ${protocol.version}
 
 **CRITICAL**: This is the ACTIVE version from database
 **ID**: ${protocol.id}
 **Status**: ${protocol.status.toUpperCase()}
 **Title**: ${protocol.title}
 
-### 📅 Protocol Management
+${smartRouter ? smartRouter.content : '## Context Router\n\n**Load Strategy**: Read CLAUDE_CORE.md first, then phase-specific files as needed.'}
 
-**Database-First Architecture**:
-- Protocol stored in \`leo_protocols\` table
-- Sub-agents in \`leo_sub_agents\` table
-- Handoffs in \`leo_handoff_templates\` table
-- Single source of truth - no file conflicts
+---
 
-**To update protocol version**:
-\`\`\`sql
--- Only via database operations
-UPDATE leo_protocols SET status = 'active' WHERE version = 'new_version';
-UPDATE leo_protocols SET status = 'superseded' WHERE version != 'new_version';
-\`\`\`
+*Router generated from database: ${today}*
+*Protocol Version: ${protocol.version}*
+*Part of LEO Protocol router architecture*
+`;
+  }
+
+  generateCore(data) {
+    const { protocol, agents } = data;
+    const sections = protocol.sections;
+    const { today, time } = this.getMetadata(protocol);
+
+    // Get core sections
+    const coreSections = this.getSectionsByMapping(sections, 'CLAUDE_CORE.md');
+    const coreContent = coreSections.map(s => this.formatSection(s)).join('\n\n');
+
+    return `# CLAUDE_CORE.md - LEO Protocol Core Context
+
+**Generated**: ${today} ${time}
+**Protocol**: LEO ${protocol.version}
+**Purpose**: Essential workflow context for all sessions (15-20k chars)
+
+---
+
+${coreContent}
 
 ## Agent Responsibilities
 
 ${this.generateAgentSection(agents)}
-
-${execImplementationRequirements}
-
-${gitCommitGuidelines}
-
-${prSizeGuidelines}
-
-${communicationContext}
-
-${parallelExecution}
 
 ## Progress Calculation
 
@@ -230,66 +245,104 @@ ${parallelExecution}
 Total = ${agents.map(a => `${a.agent_code}: ${a.total_percentage}%`).join(' + ')} = 100%
 \`\`\`
 
-${leadOperations}
+---
 
-${directiveSubmissionReview}
+*Generated from database: ${today}*
+*Protocol Version: ${protocol.version}*
+*Load this file first in all sessions*
+`;
+  }
 
-${databaseMigrationValidation}
+  generateLead(data) {
+    const { protocol } = data;
+    const sections = protocol.sections;
+    const { today, time } = this.getMetadata(protocol);
 
-${protocolSections}
+    // Get LEAD sections
+    const leadSections = this.getSectionsByMapping(sections, 'CLAUDE_LEAD.md');
+    const leadContent = leadSections.map(s => this.formatSection(s)).join('\n\n');
 
-## Mandatory Handoff Requirements
+    return `# CLAUDE_LEAD.md - LEAD Phase Operations
 
-Every handoff MUST include these 7 elements:
-${handoffTemplates.length > 0 ? handoffTemplates[0].template_structure.sections.map((s, i) => `${i+1}. ${s}`).join('\n') : '(Loading from database...)'}
-
-Missing ANY element = AUTOMATIC REJECTION
-
-${unifiedHandoffSystem}
-
-## Sub-Agent System (Database-Driven)
-
-**Active Sub-Agents**: ${subAgents.length} specialist agents for validation, testing, security, and quality
-
-| Code | Name | Priority | Auto-Trigger |
-|------|------|----------|--------------|
-${subAgents.map(sa => `| ${sa.code} | ${sa.name} | ${sa.priority} | ${sa.activation_type === 'automatic' ? '✅' : '❌'} |`).join('\n')}
-
-**Quick Reference**:
-- **High Priority** (90+): DOCMON, GITHUB, UAT
-- **Quality Gates** (70-85): RETRO, DESIGN
-- **Validation** (0-10): SECURITY, DATABASE, TESTING, PERFORMANCE, VALIDATION
-
-**Activation**: Sub-agents trigger automatically on keywords/events. Query \`leo_sub_agent_triggers\` for complete trigger list.
-
-**Complete Documentation**: See \`docs/reference/sub-agent-system.md\` for full details, triggers, and activation patterns
-
-### Handoff Templates
-
-${this.generateHandoffTemplates(handoffTemplates)}
-
-## Validation Rules (From Database)
-
-${this.generateValidationRules(validationRules)}
-
-${databaseSchemaOverview}
-
-${supabaseOperations}
-
-${developmentWorkflow}
-
-${subagentParallelExecution}
+**Generated**: ${today} ${time}
+**Protocol**: LEO ${protocol.version}
+**Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
 ---
 
-*Generated from Database: ${today}*
-*Protocol Version: v${protocol.version}*
-*Database-First Architecture: ACTIVE*
+${leadContent}
+
+---
+
+*Generated from database: ${today}*
+*Protocol Version: ${protocol.version}*
+*Load when: User mentions LEAD, approval, strategic validation, or over-engineering*
+`;
+  }
+
+  generatePlan(data) {
+    const { protocol, handoffTemplates, validationRules } = data;
+    const sections = protocol.sections;
+    const { today, time } = this.getMetadata(protocol);
+
+    // Get PLAN sections
+    const planSections = this.getSectionsByMapping(sections, 'CLAUDE_PLAN.md');
+    const planContent = planSections.map(s => this.formatSection(s)).join('\n\n');
+
+    return `# CLAUDE_PLAN.md - PLAN Phase Operations
+
+**Generated**: ${today} ${time}
+**Protocol**: LEO ${protocol.version}
+**Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
+
+---
+
+${planContent}
+
+## Handoff Templates
+
+${this.generateHandoffTemplates(handoffTemplates)}
+
+## Validation Rules
+
+${this.generateValidationRules(validationRules)}
+
+---
+
+*Generated from database: ${today}*
+*Protocol Version: ${protocol.version}*
+*Load when: User mentions PLAN, PRD, validation, or testing strategy*
+`;
+  }
+
+  generateExec(data) {
+    const { protocol } = data;
+    const sections = protocol.sections;
+    const { today, time } = this.getMetadata(protocol);
+
+    // Get EXEC sections
+    const execSections = this.getSectionsByMapping(sections, 'CLAUDE_EXEC.md');
+    const execContent = execSections.map(s => this.formatSection(s)).join('\n\n');
+
+    return `# CLAUDE_EXEC.md - EXEC Phase Operations
+
+**Generated**: ${today} ${time}
+**Protocol**: LEO ${protocol.version}
+**Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
+
+---
+
+${execContent}
+
+---
+
+*Generated from database: ${today}*
+*Protocol Version: ${protocol.version}*
+*Load when: User mentions EXEC, implementation, coding, or testing*
 `;
   }
 
   generateAgentSection(agents) {
-    // Compact table format
     let table = '| Agent | Code | Responsibilities | % Split |\n';
     table += '|-------|------|------------------|----------|\n';
 
@@ -309,83 +362,6 @@ ${subagentParallelExecution}
     table += '**Total**: EXEC (30%) + LEAD (35%) + PLAN (35%) = 100%';
 
     return table;
-  }
-
-  extractBriefDescription(fullDescription) {
-    if (!fullDescription) return 'No description available';
-
-    // Remove markdown headers, bullet points, and code blocks from beginning
-    let cleanDesc = fullDescription
-      .replace(/^#+\s+.+$/gm, '') // Remove markdown headers
-      .replace(/^-\s+/gm, '')       // Remove bullet points
-      .replace(/^```[\s\S]*?```/gm, '') // Remove code blocks
-      .replace(/^\*\*/gm, '')       // Remove bold markers at start
-      .trim();
-
-    // Extract first 1-2 sentences (up to ~150 chars or 2 periods)
-    const sentences = cleanDesc
-      .split(/\.[\s\n]/)
-      .filter(s => s.trim().length > 0 && !s.trim().startsWith('#'));
-
-    if (sentences.length === 0) return 'No description available';
-
-    // Take first sentence, or first two if first is very short
-    let brief = sentences[0].trim();
-    if (brief.length < 50 && sentences.length > 1) {
-      brief += '. ' + sentences[1].trim();
-    }
-
-    // Clean up any remaining markdown
-    brief = brief.replace(/\*\*/g, ''); // Remove bold
-    brief = brief.replace(/\*/g, '');   // Remove italics
-
-    // Ensure it ends with a period
-    if (!brief.endsWith('.')) brief += '.';
-
-    // Limit to ~150 chars
-    if (brief.length > 150) {
-      brief = brief.substring(0, 147) + '...';
-    }
-
-    return brief;
-  }
-
-  generateSubAgentListWithDescriptions(subAgents) {
-    return subAgents.map(sa => {
-      const briefDesc = this.extractBriefDescription(sa.description);
-      return `| ${sa.name} | ${sa.code} | ${sa.activation_type} | ${sa.priority} |\n  ${briefDesc}`;
-    }).join('\n');
-  }
-
-  generateSubAgentTriggers(subAgents) {
-    const triggers = [];
-
-    for (const sa of subAgents) {
-      if (sa.triggers && sa.triggers.length > 0) {
-        // Get unique trigger types and sample keywords
-        const keywordTriggers = sa.triggers.filter(t => t.trigger_type === 'keyword');
-        const eventTriggers = sa.triggers.filter(t => t.trigger_type === 'event');
-
-        // Show count and samples only
-        const parts = [];
-        if (keywordTriggers.length > 0) {
-          const samples = keywordTriggers.slice(0, 3).map(t => `"${t.trigger_phrase}"`).join(', ');
-          const more = keywordTriggers.length > 3 ? ` + ${keywordTriggers.length - 3} more` : '';
-          parts.push(`${keywordTriggers.length} keywords (${samples}${more})`);
-        }
-        if (eventTriggers.length > 0) {
-          const samples = eventTriggers.slice(0, 2).map(t => t.trigger_phrase).join(', ');
-          const more = eventTriggers.length > 2 ? ` + ${eventTriggers.length - 2} more` : '';
-          parts.push(`${eventTriggers.length} events (${samples}${more})`);
-        }
-
-        triggers.push(`- **${sa.name}**: ${parts.join('; ')}`);
-      }
-    }
-
-    return triggers.length > 0
-      ? `**Quick Reference** (complete list in database):\n${triggers.join('\n')}`
-      : 'No triggers defined in database';
   }
 
   generateHandoffTemplates(templates) {
@@ -410,12 +386,12 @@ Required: ${t.required_elements ? t.required_elements.join(', ') : 'None'}
 }
 
 // Export for use in other scripts
-export { CLAUDEMDGeneratorV2 };
+export { CLAUDEMDGeneratorV3 };
 
 // Run if called directly
 if (import.meta.url === `file://${process.argv[1]}`) {
   async function main() {
-    const generator = new CLAUDEMDGeneratorV2();
+    const generator = new CLAUDEMDGeneratorV3();
     await generator.generate();
   }
 

@@ -1,21 +1,10 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-10-28 5:47:56 PM
-**Protocol**: LEO vv4.2.0_story_gates
-**Purpose**: Essential workflow context for all sessions (15k chars)
+**Generated**: 2025-10-30 4:55:07 AM
+**Protocol**: LEO v4.2.0_story_gates
+**Purpose**: Essential workflow context for all sessions (15-20k chars)
 
 ---
-
-## Session Prologue (Short)
-
-1. **Follow LEAD→PLAN→EXEC** - Target ≥85% gate pass rate
-2. **Use sub-agents** - Architect, QA, Reviewer - summarize outputs
-3. **Database-first** - No markdown files as source of truth
-4. **USE PROCESS SCRIPTS** - ⚠️ NEVER bypass add-prd-to-database.js, unified-handoff-system.js ⚠️
-5. **Small PRs** - Target ≤100 lines, max 400 with justification
-6. **Priority-first** - Use `npm run prio:top3` to justify work
-
-*For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
 
 ## 🏗️ Application Architecture - CRITICAL CONTEXT
 
@@ -121,47 +110,6 @@ These principles override default behavior and must be internalized before start
 
 **Full Guidelines**: See `docs/03_protocols_and_standards/leo_git_commit_guidelines_v4.2.0.md`
 
-## Database Operations - One Table at a Time
-
-### REQUIRED: Database Operations Only
-
-**⚠️ CRITICAL: One Table at a Time**
-- When manipulating Supabase tables, **ALWAYS operate on ONE table at a time**
-- Batch operations across multiple tables often fail or cause inconsistencies
-- Complete each table operation fully before moving to the next table
-- Verify success after each table operation before proceeding
-
-**Strategic Directives**:
-- ✅ Create in `strategic_directives_v2` table
-- ✅ Use `scripts/create-strategic-directive.js` or dashboard
-- ✅ ALL SD data must be in database, not files
-- ✅ **One SD insertion at a time** - verify before next
-
-**PRDs (Product Requirements)**:
-- ✅ Create in `product_requirements_v2` table
-- ✅ Use `scripts/add-prd-to-database.js`
-- ✅ Link to SD via `strategic_directive_id` foreign key
-- ✅ **One PRD insertion at a time** - verify before next
-
-**Retrospectives**:
-- ✅ Create in `retrospectives` table
-- ✅ Use `scripts/generate-comprehensive-retrospective.js`
-- ✅ Trigger: Continuous Improvement Coach sub-agent
-- ✅ Link to SD via `sd_id` foreign key
-- ✅ **One retrospective at a time** - verify before next
-
-**Handoffs**:
-- ✅ Store in handoff tracking tables
-- ✅ 7-element structure required
-- ✅ Link to SD and phase
-- ✅ **One handoff at a time** - verify before next
-
-**Progress & Verification**:
-- ✅ Update database fields directly
-- ✅ Store verification results in database
-- ✅ Track in real-time via dashboard
-- ✅ **One record update at a time** - verify before next
-
 ## 📊 Communication & Context
 
 ### Communication Style
@@ -225,6 +173,35 @@ After ANY code changes:
 
 **WHY**: Dev servers may cache components, especially new files. Hot reload is NOT always reliable.
 
+## PR Size Guidelines
+
+**Philosophy**: Balance AI capability with human review capacity. Modern AI can handle larger changes, but humans still need to review them.
+
+**Three Tiers**:
+
+1. **≤100 lines (Sweet Spot)** - No justification needed
+   - Simple bug fixes
+   - Single feature additions
+   - Configuration changes
+   - Documentation updates
+
+2. **101-200 lines (Acceptable)** - Brief justification in PR description
+   - Multi-component features
+   - Refactoring with tests
+   - Database migrations with updates
+   - Example: "Adds authentication UI (3 components) + tests"
+
+3. **201-400 lines (Requires Strong Justification)** - Detailed rationale required
+   - Complex features that cannot be reasonably split
+   - Large refactorings with extensive test coverage
+   - Third-party integrations with configuration
+   - Must explain why splitting would create more risk/complexity
+   - Example: "OAuth integration requires provider config, UI flows, session management, and error handling as atomic unit"
+
+**Over 400 lines**: Generally prohibited. Split into multiple PRs unless exceptional circumstances (emergency hotfix, external dependency forcing bundled changes).
+
+**Key Principle**: If you can split it without creating incomplete/broken intermediate states, you should split it.
+
 ## Parallel Execution
 
 **When to Use**: Modern AI supports parallel tool execution for independent operations. Use conservatively.
@@ -259,184 +236,42 @@ After ANY code changes:
 (Must be sequential - second read depends on first)
 ```
 
-## Quick Reference
+## Database-First Enforcement - Expanded
 
-## 📋 QUICK REFERENCE
+**Database-First Enforcement (MANDATORY)**:
 
-### Component Sizing
+**❌ NEVER create**: Strategic Directive files, PRD files, Retrospective files, Handoff documents, Verification reports
 
-| Lines of Code | Action | Rationale |
-|---------------|--------|-----------|
-| <200 | Consider combining | Too granular |
-| **300-600** | ✅ **OPTIMAL** | Sweet spot for testing & maintenance |
-| >800 | **MUST split** | Too complex, hard to test |
+**✅ REQUIRED**: All data in database tables only
+- SDs → `strategic_directives_v2`
+- PRDs → `product_requirements_v2`
+- Retrospectives → `retrospectives`
+- Handoffs → `sd_phase_handoffs`
 
-### Git Commits (Conventional Commits)
+**Why**: Single source of truth, real-time updates, automated tracking, no file sync issues
 
-**Format**: `<type>(<SD-ID>): <subject>`
+**Verification**: `find . -name "SD-*.md" -o -name "PRD-*.md"` should return ONLY legacy files
 
+## 🗄️ Supabase Database Operations
+
+### Connection Details
+- **Project URL**: https://dedlbzhpgkmetvhbkyzq.supabase.co
+- **Project ID**: dedlbzhpgkmetvhbkyzq
+- **Connection**: Via Supabase client using environment variables
+
+### Environment Variables Required
 ```bash
-git commit -m "feat(SD-XXX): Brief description
+# For EHG application (liapbndqlqxdcgpwntbv)
+EHG_SUPABASE_URL=https://liapbndqlqxdcgpwntbv.supabase.co
+EHG_SUPABASE_ANON_KEY=[anon-key]
+EHG_POOLER_URL=postgresql://postgres.liapbndqlqxdcgpwntbv:[password]@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
 
-Detailed explanation of changes.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+# For EHG_Engineer (dedlbzhpgkmetvhbkyzq)
+SUPABASE_URL=https://dedlbzhpgkmetvhbkyzq.supabase.co
+SUPABASE_ANON_KEY=[anon-key]
+SUPABASE_POOLER_URL=postgresql://postgres.dedlbzhpgkmetvhbkyzq:[password]@aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
+SUPABASE_DB_PASSWORD=Fl!M32DaM00n!1
 ```
-
-**Types**: feat, fix, docs, refactor, test, chore, perf
-
-### Server Restart (After ANY Changes)
-
-```bash
-# Kill
-pkill -f "node server.js"
-
-# Build (if UI changes)
-npm run build:client
-
-# Restart
-PORT=3000 node server.js
-
-# Hard refresh browser
-# Ctrl+Shift+R (Windows) / Cmd+Shift+R (Mac)
-```
-
-### Parallel Execution (Save Time)
-
-**When Safe**:
-- ✅ Multiple independent file reads
-- ✅ Multiple database queries (read-only)
-- ✅ Sub-agent execution (different domains)
-
-**NOT Safe**:
-- ❌ Write operations
-- ❌ Database mutations
-- ❌ Sequential dependencies
-
-**Example**:
-```bash
-# LEAD Pre-Approval: 4 sub-agents in parallel
-node scripts/systems-analyst-codebase-audit.js <SD-ID> &
-node scripts/database-architect-schema-review.js <SD-ID> &
-node scripts/security-architect-assessment.js <SD-ID> &
-node scripts/design-subagent-evaluation.js <SD-ID> &
-wait
-
-# Reduces time from 2 minutes sequential to 30 seconds parallel
-```
-
-### Context Efficiency Patterns
-
-```javascript
-// ❌ Inefficient
-const { data } = await supabase.from('table').select('*');
-console.log(data); // Dumps full JSON
-
-// ✅ Efficient
-const { data } = await supabase
-  .from('table')
-  .select('id, title, status')
-  .limit(5);
-console.log(`Found ${data.length} items`);
-```
-
-### Database Operations (One at a Time)
-
-**CRITICAL**: When manipulating Supabase tables, operate on ONE table at a time.
-
-```javascript
-// ❌ Bad: Batch across tables
-await Promise.all([
-  supabase.from('table1').insert(data1),
-  supabase.from('table2').insert(data2)
-]);
-
-// ✅ Good: Sequential, one table at a time
-await supabase.from('table1').insert(data1);
-// Verify success
-await supabase.from('table2').insert(data2);
-// Verify success
-```
-
-### Sub-Agent Orchestration
-
-**Automated** (preferred):
-```bash
-# Orchestrator runs all required sub-agents for phase
-node scripts/orchestrate-phase-subagents.js <PHASE> <SD-ID>
-
-# Phases: LEAD_PRE_APPROVAL, PLAN_PRD, EXEC_IMPL, PLAN_VERIFY, LEAD_FINAL
-```
-
-**Manual** (if needed):
-```bash
-# QA Director
-node scripts/qa-engineering-director-enhanced.js <SD-ID> --full-e2e
-
-# GitHub Actions
-node scripts/github-actions-verifier.js <SD-ID>
-
-# Database Architect
-node scripts/database-architect-schema-review.js <SD-ID>
-```
-
-### Testing Commands
-
-```bash
-# Unit tests (business logic)
-npm run test:unit
-
-# E2E tests (user flows)
-npm run test:e2e
-
-# Both (MANDATORY before EXEC→PLAN handoff)
-npm run test:unit && npm run test:e2e
-```
-
-### Handoff Creation
-
-```bash
-# Unified handoff system (with auto sub-agent orchestration)
-node scripts/unified-handoff-system.js execute <TYPE> <SD-ID>
-
-# Types:
-# - LEAD-to-PLAN
-# - PLAN-to-EXEC
-# - EXEC-to-PLAN (auto-runs PLAN_VERIFY sub-agents)
-# - PLAN-to-LEAD (auto-runs LEAD_FINAL sub-agents)
-```
-
-### Progress Verification
-
-```bash
-# Check progress breakdown
-node -e "
-const { createClient } = require('@supabase/supabase-js');
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-(async () => {
-  const { data } = await supabase.rpc('get_progress_breakdown', { sd_id_param: 'SD-XXX' });
-  console.log(JSON.stringify(data, null, 2));
-})();
-"
-```
-
-## Database Schema Documentation
-
-### Database Schema Documentation
-
-Auto-generated schema docs provide quick reference without database queries:
-
-**Paths**:
-- EHG_Engineer: `docs/reference/schema/engineer/database-schema-overview.md`
-- EHG App: `docs/reference/schema/ehg/database-schema-overview.md`
-
-**Update**: `npm run schema:docs:engineer` or `npm run schema:docs:ehg`
-
-**PRD Integration**: PRDs stored in `product_requirements_v2` table (NOT markdown).
-Use `add-prd-to-database.js` to create PRDs with schema review prompts.
-
 
 ## 🔧 CRITICAL DEVELOPMENT WORKFLOW
 
@@ -448,34 +283,6 @@ Use `add-prd-to-database.js` to create PRDs with schema review prompts.
 
 **Complete Guide**: See `docs/reference/development-workflow.md`
 
-## Test Section
-
-Test content
-
-## Knowledge Retrieval Commands
-
-## 🔍 Knowledge Retrieval (Proactive Learning)
-
-**SD-LEO-LEARN-001: Added 2025-10-25**
-
-```bash
-# Before starting any phase (MANDATORY for EXEC/PLAN, RECOMMENDED for LEAD)
-node scripts/phase-preflight.js --phase <LEAD|PLAN|EXEC> --sd-id <UUID>
-
-# Search for specific issues
-node scripts/search-prior-issues.js "<issue description>"
-
-# Generate fresh knowledge summaries (weekly)
-node scripts/generate-knowledge-summary.js --category <category>
-node scripts/generate-knowledge-summary.js --category all
-
-# View existing summaries
-ls docs/summaries/lessons/*.md
-cat docs/summaries/lessons/database-lessons.md
-```
-
-**Philosophy**: Consult lessons BEFORE encountering issues, not after.
-
 ## Agent Responsibilities
 
 | Agent | Code | Responsibilities | % Split |
@@ -484,8 +291,14 @@ cat docs/summaries/lessons/database-lessons.md
 **Legend**: P=Planning, I=Implementation, V=Verification, A=Approval
 **Total**: EXEC (30%) + LEAD (35%) + PLAN (35%) = 100%
 
+## Progress Calculation
+
+```
+Total =  = 100%
+```
+
 ---
 
-*Generated from database: leo_protocol_sections*
-*Context tier: CORE*
-*Protocol: v4.2.0_story_gates*
+*Generated from database: 2025-10-30*
+*Protocol Version: v4.2.0_story_gates*
+*Load this file first in all sessions*
