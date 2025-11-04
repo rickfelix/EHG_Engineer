@@ -15,14 +15,19 @@ BLUE='\033[0;34m'
 MAGENTA='\033[0;35m'
 NC='\033[0m' # No Color
 
-# Enhanced safety thresholds
+# Enhanced safety thresholds (WSL-optimized)
 MIN_FREE_MEMORY_MB=500
+MIN_FREE_MEMORY_CRITICAL_MB=300  # Critical threshold
 MIN_INOTIFY_WATCHES=100000
+MIN_DISK_SPACE_MB=1000  # Minimum free disk space
+MIN_INODES_FREE=10000  # Minimum free inodes
 STARTUP_DELAY=5  # Delay between server starts
 SHUTDOWN_GRACE_PERIOD=5  # Increased from 3s
 OPERATION_TIMEOUT=30  # Max time for any single operation
 RESTART_COOLDOWN=10  # Delay between stop and start phases
 WSL_HEALTH_CHECK_INTERVAL=2  # Check WSL health every 2s during operations
+MAX_WSL_HEALTH_FAILURES=3  # Max consecutive WSL health check failures before abort
+WSL_RECOVERY_DELAY=3  # Extra delay after detecting WSL stress
 
 # Directories
 ENGINEER_DIR="/mnt/c/_EHG/EHG_Engineer"
@@ -73,45 +78,149 @@ acquire_lock() {
     trap "rm -f $LOCK_FILE" EXIT
 }
 
-# Function to check WSL health (detect if WSL is becoming unstable)
+# Function to check WSL health (ENHANCED - comprehensive diagnostics)
 check_wsl_health() {
+    local verbose=${1:-false}
     local test_file="/tmp/.wsl-health-$$"
+    local health_issues=0
 
-    # Try to write and read a file - if this fails, WSL is unstable
+    # Test 1: Filesystem I/O responsiveness
     if ! echo "test" > "$test_file" 2>/dev/null; then
-        log "ERROR" "${RED}❌ WSL filesystem unresponsive!${NC}"
-        return 1
+        log "ERROR" "${RED}❌ WSL filesystem write unresponsive!${NC}"
+        health_issues=$((health_issues + 1))
     fi
 
     if ! cat "$test_file" > /dev/null 2>&1; then
         log "ERROR" "${RED}❌ WSL filesystem read failure!${NC}"
+        health_issues=$((health_issues + 1))
+    fi
+    rm -f "$test_file" 2>/dev/null
+
+    # Test 2: /proc filesystem accessibility (critical for WSL)
+    if ! cat /proc/meminfo > /dev/null 2>&1; then
+        log "ERROR" "${RED}❌ WSL /proc filesystem unresponsive!${NC}"
+        health_issues=$((health_issues + 1))
+    fi
+
+    # Test 3: Check for zombie processes (indicator of WSL stress)
+    local zombie_count=$(ps aux | awk '{if ($8=="Z") print $0}' | wc -l 2>/dev/null || echo "0")
+    if [ "$zombie_count" -gt 10 ]; then
+        log "WARN" "${YELLOW}⚠️  High zombie process count: $zombie_count (WSL may be under stress)${NC}"
+        if [ "$zombie_count" -gt 50 ]; then
+            log "ERROR" "${RED}❌ Critical zombie process count: $zombie_count${NC}"
+            health_issues=$((health_issues + 1))
+        fi
+    fi
+
+    # Test 4: Memory pressure check
+    local mem_available=$(grep MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}')
+    if [ -n "$mem_available" ]; then
+        local mem_available_mb=$((mem_available / 1024))
+        if [ "$mem_available_mb" -lt "$MIN_FREE_MEMORY_CRITICAL_MB" ]; then
+            log "ERROR" "${RED}❌ Critical memory pressure: ${mem_available_mb}MB available${NC}"
+            health_issues=$((health_issues + 1))
+        elif [ "$verbose" = true ] && [ "$mem_available_mb" -lt "$MIN_FREE_MEMORY_MB" ]; then
+            log "WARN" "${YELLOW}⚠️  Low memory: ${mem_available_mb}MB available${NC}"
+        fi
+    fi
+
+    # Test 5: Disk space check on /tmp (WSL temp operations)
+    local tmp_free=$(df /tmp 2>/dev/null | awk 'NR==2 {print $4}')
+    if [ -n "$tmp_free" ] && [ "$tmp_free" -lt "$MIN_DISK_SPACE_MB" ]; then
+        log "WARN" "${YELLOW}⚠️  Low disk space in /tmp: $tmp_free KB${NC}"
+    fi
+
+    # Test 6: Check for /mnt/c accessibility (critical for cross-platform operations)
+    if ! ls /mnt/c > /dev/null 2>&1; then
+        log "ERROR" "${RED}❌ /mnt/c inaccessible! WSL bridge may be down${NC}"
+        health_issues=$((health_issues + 1))
+    fi
+
+    # Test 7: Inode availability check
+    local inodes_free=$(df -i /tmp 2>/dev/null | awk 'NR==2 {print $4}')
+    if [ -n "$inodes_free" ] && [ "$inodes_free" -lt "$MIN_INODES_FREE" ]; then
+        log "WARN" "${YELLOW}⚠️  Low inodes available: $inodes_free${NC}"
+    fi
+
+    if [ $health_issues -gt 0 ]; then
+        log "ERROR" "${RED}❌ WSL health check failed with $health_issues issue(s)${NC}"
+        log "ERROR" "${YELLOW}   Consider: wsl --shutdown (from PowerShell) to reset WSL${NC}"
         return 1
     fi
 
-    rm -f "$test_file"
+    if [ "$verbose" = true ]; then
+        log "INFO" "${GREEN}✅ WSL health check passed (all systems nominal)${NC}"
+    fi
+
     return 0
 }
 
-# Function to run command with timeout
+# Function to monitor WSL health continuously during an operation
+monitor_wsl_during_operation() {
+    local operation_name=$1
+    local max_duration=${2:-30}
+    local check_interval=${3:-$WSL_HEALTH_CHECK_INTERVAL}
+
+    local elapsed=0
+    local consecutive_failures=0
+
+    while [ $elapsed -lt $max_duration ]; do
+        if ! check_wsl_health false; then
+            consecutive_failures=$((consecutive_failures + 1))
+            log "WARN" "${YELLOW}⚠️  WSL health issue during $operation_name (failure $consecutive_failures/$MAX_WSL_HEALTH_FAILURES)${NC}"
+
+            if [ $consecutive_failures -ge $MAX_WSL_HEALTH_FAILURES ]; then
+                log "ERROR" "${RED}❌ WSL became critically unstable during $operation_name${NC}"
+                log "ERROR" "${YELLOW}   Recommend: wsl --shutdown and retry${NC}"
+                return 1
+            fi
+
+            # Give WSL extra time to recover
+            log "INFO" "${YELLOW}   Pausing ${WSL_RECOVERY_DELAY}s for WSL recovery...${NC}"
+            sleep $WSL_RECOVERY_DELAY
+        else
+            consecutive_failures=0  # Reset on success
+        fi
+
+        sleep $check_interval
+        elapsed=$((elapsed + check_interval))
+    done
+
+    return 0
+}
+
+# Function to run command with timeout and WSL monitoring
 run_with_timeout() {
     local timeout=$1
     shift
     local cmd="$@"
 
-    log "DEBUG" "${BLUE}Running: $cmd (timeout: ${timeout}s)${NC}"
+    log "DEBUG" "${BLUE}Running: $cmd (timeout: ${timeout}s, WSL-monitored)${NC}"
 
     # Run command in background
     eval "$cmd" &
     local pid=$!
 
-    # Wait with timeout
+    # Wait with timeout and WSL health monitoring
     local elapsed=0
+    local last_health_check=0
     while [ $elapsed -lt $timeout ]; do
         if ! ps -p $pid > /dev/null 2>&1; then
             # Process completed
             wait $pid 2>/dev/null
             return $?
         fi
+
+        # Periodic WSL health checks during long operations
+        if [ $((elapsed - last_health_check)) -ge $WSL_HEALTH_CHECK_INTERVAL ]; then
+            if ! check_wsl_health false; then
+                log "ERROR" "${RED}❌ WSL health degraded during operation${NC}"
+                kill -9 $pid 2>/dev/null || true
+                return 125  # WSL failure exit code
+            fi
+            last_health_check=$elapsed
+        fi
+
         sleep 1
         elapsed=$((elapsed + 1))
     done
@@ -120,6 +229,83 @@ run_with_timeout() {
     log "ERROR" "${RED}⚠️  Operation timed out after ${timeout}s${NC}"
     kill -9 $pid 2>/dev/null || true
     return 124  # Timeout exit code
+}
+
+# Function for comprehensive pre-flight WSL diagnostics
+wsl_preflight_diagnostics() {
+    log "INFO" "${BLUE}🔍 Running comprehensive WSL pre-flight diagnostics...${NC}"
+    echo "=================================="
+
+    local warnings=0
+    local errors=0
+
+    # Check 1: WSL version detection
+    if command -v wsl.exe >/dev/null 2>&1; then
+        log "INFO" "${GREEN}✅ WSL command accessible${NC}"
+    else
+        log "WARN" "${YELLOW}⚠️  Cannot detect WSL version (wsl.exe not in PATH)${NC}"
+        warnings=$((warnings + 1))
+    fi
+
+    # Check 2: Comprehensive WSL health
+    if check_wsl_health true; then
+        log "INFO" "${GREEN}✅ WSL health check passed${NC}"
+    else
+        log "ERROR" "${RED}❌ WSL health check failed${NC}"
+        errors=$((errors + 1))
+    fi
+
+    # Check 3: Check for high system load
+    local load_avg=$(cat /proc/loadavg 2>/dev/null | awk '{print $1}')
+    local cpu_count=$(nproc 2>/dev/null || echo "4")
+    if [ -n "$load_avg" ]; then
+        # Compare load to CPU count (simplified check)
+        local load_int=${load_avg%.*}
+        if [ "$load_int" -gt "$((cpu_count * 2))" ]; then
+            log "WARN" "${YELLOW}⚠️  High system load: $load_avg (CPUs: $cpu_count)${NC}"
+            log "WARN" "${YELLOW}   Starting servers may be slower than usual${NC}"
+            warnings=$((warnings + 1))
+        else
+            log "INFO" "${GREEN}✅ System load: $load_avg (CPUs: $cpu_count)${NC}"
+        fi
+    fi
+
+    # Check 4: Network connectivity (Windows bridge)
+    if ping -c 1 -W 2 8.8.8.8 > /dev/null 2>&1; then
+        log "INFO" "${GREEN}✅ Network connectivity verified${NC}"
+    else
+        log "WARN" "${YELLOW}⚠️  Network connectivity issue detected${NC}"
+        warnings=$((warnings + 1))
+    fi
+
+    # Check 5: Critical directories exist and are writable
+    for dir in "$ENGINEER_DIR" "$APP_DIR" "$AGENT_DIR"; do
+        if [ -d "$dir" ] && [ -w "$dir" ]; then
+            log "INFO" "${GREEN}✅ Directory accessible: $dir${NC}"
+        else
+            log "ERROR" "${RED}❌ Directory not accessible or not writable: $dir${NC}"
+            errors=$((errors + 1))
+        fi
+    done
+
+    echo "=================================="
+
+    if [ $errors -gt 0 ]; then
+        log "ERROR" "${RED}❌ Pre-flight diagnostics failed with $errors error(s)${NC}"
+        return 1
+    elif [ $warnings -gt 0 ]; then
+        log "WARN" "${YELLOW}⚠️  Pre-flight diagnostics completed with $warnings warning(s)${NC}"
+        read -p "Continue anyway? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log "INFO" "Aborted by user"
+            return 1
+        fi
+    else
+        log "INFO" "${GREEN}✅ All pre-flight diagnostics passed${NC}"
+    fi
+
+    return 0
 }
 
 # Function to check available memory
@@ -524,32 +710,55 @@ status() {
     check_status "$AGENT_PID" 8000 "Agent Platform (8000)"
     echo "=================================="
 
-    # Show WSL health
-    if check_wsl_health; then
-        log "INFO" "${GREEN}✅ WSL Health: Responsive${NC}"
+    # Show comprehensive WSL health (verbose mode)
+    log "INFO" "${BLUE}🔍 WSL Health Status:${NC}"
+    if check_wsl_health true; then
+        log "INFO" "${GREEN}✅ WSL Health: All systems nominal${NC}"
     else
-        log "ERROR" "${RED}❌ WSL Health: Unresponsive${NC}"
+        log "ERROR" "${RED}❌ WSL Health: Issues detected (see above)${NC}"
     fi
 
-    # Show memory
+    # Show memory with pressure indication
     local free_mem=$(free -m | awk '/^Mem:/{print $7}')
-    log "INFO" "${BLUE}📊 Available Memory: ${free_mem}MB${NC}"
+    if [ "$free_mem" -lt "$MIN_FREE_MEMORY_CRITICAL_MB" ]; then
+        log "INFO" "${RED}📊 Available Memory: ${free_mem}MB (CRITICAL)${NC}"
+    elif [ "$free_mem" -lt "$MIN_FREE_MEMORY_MB" ]; then
+        log "INFO" "${YELLOW}📊 Available Memory: ${free_mem}MB (LOW)${NC}"
+    else
+        log "INFO" "${GREEN}📊 Available Memory: ${free_mem}MB${NC}"
+    fi
+
+    # Show zombie process count
+    local zombie_count=$(ps aux | awk '{if ($8=="Z") print $0}' | wc -l 2>/dev/null || echo "0")
+    if [ "$zombie_count" -gt 0 ]; then
+        log "INFO" "${YELLOW}🧟 Zombie Processes: $zombie_count${NC}"
+    fi
 }
 
-# Function to start all servers (ENHANCED)
+# Function to start all servers (ENHANCED WITH WSL PRE-FLIGHT)
 start_all() {
-    log "INFO" "${BLUE}🚀 Starting LEO Stack...${NC}"
+    log "INFO" "${BLUE}🚀 Starting LEO Stack with WSL-sensitive mode...${NC}"
     echo "=================================="
 
-    # Resource checks before starting
-    log "INFO" "${BLUE}Running pre-start checks...${NC}"
+    # ENHANCED: Comprehensive pre-flight diagnostics
+    if ! wsl_preflight_diagnostics; then
+        log "ERROR" "${RED}Pre-flight diagnostics failed - aborting for safety${NC}"
+        return 1
+    fi
+
+    # Additional resource checks
+    log "INFO" "${BLUE}Running additional resource checks...${NC}"
     check_memory
     check_inotify
-    check_wsl_health || { log "ERROR" "${RED}WSL is unresponsive!${NC}"; return 1; }
     echo "=================================="
 
-    # Clean up any duplicate processes
+    # Clean up any duplicate processes (with WSL monitoring)
+    log "INFO" "${BLUE}Cleaning ports with WSL health monitoring...${NC}"
     clean_all_ports || { log "ERROR" "${RED}Port cleanup failed!${NC}"; return 1; }
+
+    # Brief pause after cleanup to let WSL stabilize
+    log "INFO" "${YELLOW}Allowing ${WSL_RECOVERY_DELAY}s for WSL to stabilize after cleanup...${NC}"
+    sleep $WSL_RECOVERY_DELAY
 
     # Start servers sequentially with delays to reduce memory spike
     log "INFO" "${BLUE}Starting servers sequentially (${STARTUP_DELAY}s delay between each)...${NC}"
@@ -706,15 +915,34 @@ case "${1:-}" in
         echo ""
         log "INFO" "${BLUE}Current session log: $LOG_FILE${NC}"
         ;;
+    diagnostics|diag)
+        log "INFO" "${BLUE}🔍 Running WSL diagnostics...${NC}"
+        wsl_preflight_diagnostics
+        ;;
+    health)
+        log "INFO" "${BLUE}🏥 Checking WSL health...${NC}"
+        if check_wsl_health true; then
+            log "INFO" "${GREEN}✅ WSL is healthy${NC}"
+        else
+            log "ERROR" "${RED}❌ WSL health issues detected${NC}"
+            exit 1
+        fi
+        ;;
     *)
-        echo "Usage: $0 {start|stop|restart|status|clean|emergency|start-engineer|start-app|start-agent|logs}"
+        echo "Usage: $0 {start|stop|restart|status|clean|emergency|diagnostics|health|start-*|logs}"
         echo ""
-        echo "Commands:"
-        echo "  start            - Check resources, clean ports & start all servers sequentially"
+        echo "Primary Commands:"
+        echo "  start            - WSL-safe startup with comprehensive pre-flight diagnostics"
         echo "  stop             - Gracefully stop all servers (SIGTERM → SIGKILL with WSL monitoring)"
         echo "  restart          - SAFE restart: stop → ${RESTART_COOLDOWN}s cooldown → verify → start"
-        echo "  status           - Show server status and WSL health"
-        echo "  clean            - Clean up duplicate processes on all ports"
+        echo "  status           - Show server status with comprehensive WSL health report"
+        echo "  clean            - Clean up duplicate processes on all ports (WSL-monitored)"
+        echo ""
+        echo "WSL-Specific Commands:"
+        echo "  diagnostics|diag - Run comprehensive WSL pre-flight diagnostics"
+        echo "  health           - Quick WSL health check (7 tests)"
+        echo ""
+        echo "Advanced Commands:"
         echo "  emergency        - FORCE kill all node/npm/uvicorn processes (last resort)"
         echo "  start-engineer   - Clean & start only EHG_Engineer (3000)"
         echo "  start-app        - Clean & start only EHG App (8080)"
@@ -722,36 +950,49 @@ case "${1:-}" in
         echo "  logs             - Show recent log files"
         echo ""
         echo "Servers:"
-        echo "  Port 3000 - EHG_Engineer (LEO Protocol Framework)"
-        echo "  Port 8080 - EHG App (Frontend/UI)"
-        echo "  Port 8000 - Agent Platform (Research Backend)"
+        echo "  Port 3000 - EHG_Engineer (LEO Protocol Framework & Backend API)"
+        echo "  Port 8080 - EHG App (Frontend UI with Vite)"
+        echo "  Port 8000 - Agent Platform (AI Research Backend)"
         echo ""
-        echo "Enhanced Safety Features:"
-        echo "  ✓ Memory checks before startup (warns if <500MB free)"
-        echo "  ✓ File watcher limit validation"
-        echo "  ✓ Process tree cleanup (kills child processes)"
-        echo "  ✓ WSL health monitoring during operations"
-        echo "  ✓ Graceful shutdown (${SHUTDOWN_GRACE_PERIOD}s SIGTERM grace period)"
+        echo "🛡️  WSL-Sensitive Protection Features:"
+        echo "  ✓ 7-point comprehensive health monitoring"
+        echo "    • Filesystem I/O responsiveness"
+        echo "    • /proc filesystem accessibility"
+        echo "    • Zombie process detection (stress indicator)"
+        echo "    • Memory pressure monitoring (critical <${MIN_FREE_MEMORY_CRITICAL_MB}MB)"
+        echo "    • Disk space validation (min ${MIN_DISK_SPACE_MB}MB)"
+        echo "    • /mnt/c bridge accessibility"
+        echo "    • Inode availability (min ${MIN_INODES_FREE})"
+        echo "  ✓ Pre-flight diagnostics before operations"
+        echo "  ✓ Continuous WSL monitoring during critical operations"
+        echo "  ✓ Automatic recovery delays (${WSL_RECOVERY_DELAY}s) on WSL stress"
+        echo "  ✓ Process tree cleanup (eliminates orphaned processes)"
+        echo "  ✓ Graceful shutdown with WSL validation (${SHUTDOWN_GRACE_PERIOD}s grace period)"
         echo "  ✓ Sequential startup (${STARTUP_DELAY}s delay between servers)"
-        echo "  ✓ Restart cooldown (${RESTART_COOLDOWN}s stabilization period)"
-        echo "  ✓ Operation timeout protection (${OPERATION_TIMEOUT}s max)"
-        echo "  ✓ Concurrent operation lock"
+        echo "  ✓ Extended restart cooldown (${RESTART_COOLDOWN}s WSL stabilization)"
+        echo "  ✓ Operation timeout protection (${OPERATION_TIMEOUT}s max per operation)"
+        echo "  ✓ Concurrent operation lock (prevents race conditions)"
+        echo "  ✓ System load and network connectivity checks"
         echo "  ✓ Detailed logging to $LOG_DIR"
-        echo "  ✓ Emergency cleanup mode"
         echo ""
-        echo "WSL2 Crash Prevention:"
-        echo "  - Process tree cleanup ensures no orphaned processes"
-        echo "  - WSL health checks detect filesystem issues early"
-        echo "  - Longer cooldown prevents memory pressure"
-        echo "  - All output logged (not hidden in /dev/null)"
-        echo "  - Lock file prevents concurrent operations"
+        echo "🚨 If WSL Becomes Unstable:"
+        echo "  1. Try: bash $0 emergency  (force cleanup)"
+        echo "  2. Then: wsl --shutdown     (from PowerShell - resets WSL)"
+        echo "  3. Wait 10 seconds for WSL to fully shut down"
+        echo "  4. Then: bash $0 start      (fresh start)"
         echo ""
-        echo "WSL2 Configuration:"
-        echo "  If WSL crashes, increase memory in .wslconfig:"
-        echo "  C:\\Users\\<YourUsername>\\.wslconfig"
-        echo "  [wsl2]"
-        echo "  memory=8GB"
-        echo "  processors=4"
+        echo "⚙️  WSL2 Configuration (if crashes persist):"
+        echo "  Edit: C:\\Users\\<YourUsername>\\.wslconfig"
+        echo "  Add:"
+        echo "    [wsl2]"
+        echo "    memory=8GB"
+        echo "    processors=4"
+        echo "    swap=2GB"
+        echo ""
+        echo "📊 Monitoring Thresholds:"
+        echo "  Memory: Warning <${MIN_FREE_MEMORY_MB}MB, Critical <${MIN_FREE_MEMORY_CRITICAL_MB}MB"
+        echo "  Zombies: Warning >10, Critical >50"
+        echo "  Health: Auto-abort after ${MAX_WSL_HEALTH_FAILURES} consecutive failures"
         exit 1
         ;;
 esac

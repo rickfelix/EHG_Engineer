@@ -4,6 +4,8 @@
  * Extracted from database-loader.js - NO BEHAVIOR CHANGES
  */
 
+import crypto from 'crypto';
+
 class SubmissionsManager {
   constructor(connectionManager) {
     this.connectionManager = connectionManager;

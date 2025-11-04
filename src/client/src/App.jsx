@@ -168,6 +168,24 @@ function App() {
     }
   };
 
+  const updateSDPriority = (sdId, newPriority) => {
+    // Update local state immediately for better UX
+    setState(prevState => ({
+      ...prevState,
+      strategicDirectives: prevState.strategicDirectives.map(sd =>
+        sd.id === sdId ? { ...sd, priority: newPriority } : sd
+      )
+    }));
+
+    // Send to server to persist in database
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'updateSDPriority',
+        data: { sdId, priority: newPriority }
+      }));
+    }
+  };
+
   return (
     <Router>
       <Routes>
@@ -199,6 +217,7 @@ function App() {
                 onUpdateChecklist={updateChecklist}
                 onSetActiveSD={setActiveSD}
                 onUpdateStatus={updateSDStatus}
+                onUpdatePriority={updateSDPriority}
                 currentSD={state.leoProtocol?.currentSD}
                 isCompact={isCompactMode}
                 onRefresh={refreshData}
@@ -214,6 +233,7 @@ function App() {
                   onUpdateChecklist={updateChecklist}
                   onSetActiveSD={setActiveSD}
                   onUpdateStatus={updateSDStatus}
+                  onUpdatePriority={updateSDPriority}
                   currentSD={state.leoProtocol?.currentSD}
                   isCompact={isCompactMode}
                   onRefresh={refreshData}
@@ -228,6 +248,7 @@ function App() {
                   onUpdateChecklist={updateChecklist}
                   onSetActiveSD={setActiveSD}
                   onUpdateStatus={updateSDStatus}
+                  onUpdatePriority={updateSDPriority}
                   currentSD={state.leoProtocol?.currentSD}
                   isCompact={isCompactMode}
                   detailMode={true}

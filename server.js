@@ -281,6 +281,31 @@ wss.on('connection', (ws) => {
           // Broadcast the updated state to all clients
           broadcastUpdate('state', dashboardState);
         }
+      } else if (msg.type === 'updateSDPriority') {
+        const { sdId, priority } = msg.data;
+        console.log(`🎯 Updating SD ${sdId} priority to: ${priority}`);
+
+        // Update in database
+        const { error } = await dbLoader.supabase
+          .from('strategic_directives_v2')
+          .update({ priority })
+          .eq('id', sdId);
+
+        if (error) {
+          console.error('❌ Error updating SD priority:', error);
+          ws.send(JSON.stringify({
+            type: 'error',
+            message: `Failed to update priority: ${error.message}`
+          }));
+        } else {
+          console.log(`✅ Successfully updated ${sdId} priority to ${priority}`);
+
+          // Reload strategic directives to broadcast update to all clients
+          dashboardState.strategicDirectives = await dbLoader.loadStrategicDirectives();
+
+          // Broadcast the updated state to all clients
+          broadcastUpdate('state', dashboardState);
+        }
       }
     } catch (error) {
       console.error('WebSocket message error:', error);
@@ -1001,14 +1026,15 @@ app.post('/api/sdip/create-strategic-directive', async (req, res) => {
     const questions = submission.questions || [];
 
     // Create Strategic Directive data using enhanced intelligence
+    const rawTitle = enhancedSD.title || submission.intent_summary || 'Strategic Initiative';
     const sdData = {
       id: sdId,
       sd_key: sdId, // Required field - same as id
-      title: enhancedSD.title || submission.intent_summary || 'Strategic Initiative',
+      title: rawTitle.substring(0, 500), // Truncate to database limit
       description: submission.final_summary || submission.intent_summary || submission.chairman_input || '',
       status: 'active',
       category: 'strategic_initiative',
-      priority: priority || 'medium',
+      priority: priority || 'high',
       rationale: enhancedSD.rationale || submission.chairman_input || '',
       scope: 'Application Enhancement',
       key_changes: enhancedSD.key_constraints || [],

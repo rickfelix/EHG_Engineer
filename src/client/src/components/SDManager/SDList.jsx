@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   FileText,
@@ -44,6 +44,7 @@ function SDList({
   currentSD,
   onSetActiveSD,
   onUpdateStatus,
+  onUpdatePriority,
   isCompact = false
 }) {
   const navigate = useNavigate();
@@ -53,6 +54,19 @@ function SDList({
   const [loadingSummaries, setLoadingSummaries] = useState(new Set());
   const [collapsedBacklogSections, setCollapsedBacklogSections] = useState(new Set());
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(null);
+  const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(null);
+
+  // Close priority dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (priorityDropdownOpen && !event.target.closest('.priority-dropdown-container')) {
+        setPriorityDropdownOpen(null);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [priorityDropdownOpen]);
 
   const toggleExpand = (sdId) => {
     setExpandedSD(expandedSD === sdId ? null : sdId);
@@ -92,6 +106,23 @@ function SDList({
       case 'low': return 'border-l-4 border-l-gray-400';
       default: return 'border-l-4 border-l-gray-300';
     }
+  };
+
+  const getPriorityBadgeColor = (priority) => {
+    switch(priority?.toLowerCase()) {
+      case 'critical': return 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700';
+      case 'high': return 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 border border-orange-300 dark:border-orange-700';
+      case 'medium': return 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700';
+      case 'low': return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600';
+      default: return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+    }
+  };
+
+  const updatePriority = (sdId, newPriority) => {
+    if (onUpdatePriority) {
+      onUpdatePriority(sdId, newPriority);
+    }
+    setPriorityDropdownOpen(null);
   };
 
   const getProgressBarGradient = (progress) => {
@@ -376,14 +407,53 @@ function SDList({
                     </span>
                   </button>
 
-                  {/* Priority */}
+                  {/* Priority - Clickable Badge */}
                   {(sd.priority || sd.rolled_triage) && (
-                    <span className={`${isCompact ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-xs'} font-medium rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300`}>
-                      {isCompact ?
-                        (sd.priority?.[0]?.toUpperCase() || sd.rolled_triage?.[0]) :
-                        `${sd.priority || sd.rolled_triage}`
-                      }
-                    </span>
+                    <div className="relative priority-dropdown-container">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPriorityDropdownOpen(priorityDropdownOpen === sd.id ? null : sd.id);
+                        }}
+                        className={`${isCompact ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-xs'} font-medium rounded cursor-pointer transition-all hover:shadow-md ${getPriorityBadgeColor(sd.priority || sd.rolled_triage)}`}
+                        title="Click to change priority"
+                      >
+                        {isCompact ?
+                          (sd.priority?.[0]?.toUpperCase() || sd.rolled_triage?.[0]) :
+                          `${sd.priority || sd.rolled_triage}`
+                        }
+                      </button>
+
+                      {/* Priority Dropdown */}
+                      {priorityDropdownOpen === sd.id && (
+                        <div
+                          className="absolute z-[9999] mt-1 left-0 w-32 rounded-md shadow-xl bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 border-2 border-gray-200 dark:border-gray-700"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="py-1">
+                            {['critical', 'high', 'medium', 'low'].map((priority) => (
+                              <button
+                                key={priority}
+                                onClick={() => updatePriority(sd.id, priority)}
+                                className={`block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                                  (sd.priority || sd.rolled_triage)?.toLowerCase() === priority
+                                    ? 'font-bold bg-gray-50 dark:bg-gray-700'
+                                    : ''
+                                }`}
+                              >
+                                <span className={`inline-block w-2 h-2 rounded-full mr-2 ${
+                                  priority === 'critical' ? 'bg-red-500' :
+                                  priority === 'high' ? 'bg-orange-500' :
+                                  priority === 'medium' ? 'bg-yellow-500' :
+                                  'bg-gray-400'
+                                }`}></span>
+                                {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   {/* Category */}

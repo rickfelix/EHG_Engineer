@@ -27,7 +27,8 @@ function SDManager({
   isCompact,
   detailMode,
   onRefresh,
-  onUpdateStatus
+  onUpdateStatus,
+  onUpdatePriority
 }) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -332,6 +333,7 @@ function SDManager({
         currentSD={currentSD}
         onSetActiveSD={onSetActiveSD}
         onUpdateStatus={onUpdateStatus}
+        onUpdatePriority={onUpdatePriority}
         isCompact={isCompact}
       />
     </div>

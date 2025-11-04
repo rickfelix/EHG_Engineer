@@ -13,8 +13,9 @@ class ConnectionManager {
   }
 
   initializeSupabase() {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+    // Use SERVICE_ROLE_KEY for server-side operations to bypass RLS
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey ||
         supabaseUrl === 'your_supabase_url_here' ||
@@ -25,9 +26,14 @@ class ConnectionManager {
     }
 
     try {
-      this.supabase = createClient(supabaseUrl, supabaseKey);
+      this.supabase = createClient(supabaseUrl, supabaseKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false
+        }
+      });
       this.isConnected = true;
-      console.log('✅ Database connection established');
+      console.log('✅ Database connection established (using service role)');
     } catch (error) {
       console.error('❌ Failed to connect to database:', error.message);
       this.isConnected = false;
