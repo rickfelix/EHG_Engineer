@@ -466,15 +466,16 @@ async function validateDesignFidelity(sd_id, designAnalysis, validation, supabas
   // A1: Check for UI component implementation (10 points)
   console.log('\n   [A1] UI Components Implementation...');
 
-  // Look for component files in git commits
+  // Look for component files in git commits (use detected repo)
   try {
+    const implementationRepo = await detectImplementationRepo(sd_id);
     const { stdout: gitLog } = await execAsync(
-      `git log --all --grep="${sd_id}" --name-only --pretty=format:""`,
-      { cwd: process.cwd(), timeout: 10000 }
+      `git -C "${implementationRepo}" log --all --grep="${sd_id}" --name-only --pretty=format:""`,
+      { timeout: 10000 }
     );
 
     const componentFiles = gitLog.split('\n')
-      .filter(f => f.match(/\.(tsx?|jsx?)$/) && f.includes('component'))
+      .filter(f => f.match(/\.(tsx?|jsx?)$/) && (f.includes('component') || f.includes('Component') || f.includes('src/')))
       .filter(Boolean);
 
     if (componentFiles.length > 0) {
