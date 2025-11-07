@@ -12,8 +12,7 @@
 | Data Readiness | 3 | Input/output defined but data flow unclear |
 | Security/Compliance | 2 | Standard security requirements |
 | UX/Customer Signal | 1 | No customer touchpoint |
-| Recursion Readiness | 3 | Triggers MKT-001/RESOURCE-001 |
-| **Overall** | **3.1** | Functional but needs optimization |
+| **Overall** | **2.9** | Functional but needs optimization |
 
 ## Strengths
 - Clear ownership (LEAD)
@@ -25,83 +24,6 @@
 - Unclear rollback procedures
 - Missing specific tool integrations
 - No explicit error handling
-
-## Recursive Workflow Behavior (SD-VENTURE-UNIFICATION-001)
-
-### Intelligent Dependency-Driven Recursion
-This stage participates in the unified venture creation system where gap analysis can reveal market opportunity mismatches or capability deficiencies, triggering recursion to adjust upstream assumptions.
-
-### Recursion Triggers FROM This Stage
-
-| Target Stage | Trigger Type | Condition | Severity | Auto-Execute? | Reason |
-|--------------|--------------|-----------|----------|---------------|--------|
-| Stage 7 | RESOURCE-001 | Capability gap exceeds team capacity | MEDIUM | Advisory | Gap analysis reveals skills/resources not in comprehensive plan, need resource planning update |
-| Stage 4 | MKT-001 | Market opportunity smaller than validated | MEDIUM | Advisory | Opportunity modeling reveals market size overestimated, need competitive analysis update |
-| Stage 3 | MKT-001 | Solution doesn't address identified gaps | HIGH | Needs approval | Gap analysis shows solution misalignment with market needs, requires validation rework |
-
-### Recursion Thresholds
-
-| Metric | Threshold | Target Stage | Severity | Action |
-|--------|-----------|--------------|----------|--------|
-| Capability gap score | > 60/100 | Stage 7 | MEDIUM | Update resource planning |
-| Market opportunity delta | > 40% smaller than estimated | Stage 4 | HIGH | Re-assess competitive landscape |
-| Solution-gap alignment | < 50/100 | Stage 3 | HIGH | Re-validate solution approach |
-| Unaddressed critical gaps | ≥ 3 | Stage 3 | HIGH | Fundamental solution reassessment |
-
-### Recursion Triggers That May RETURN TO This Stage
-
-| From Stage | Trigger Type | Condition | Severity | Reason |
-|------------|--------------|-----------|----------|--------|
-| Stage 10 | TECH-001 | Technical capabilities identified that change gap assessment | MEDIUM | Need updated gap analysis with technical capabilities |
-| Stage 22 | MKT-001 | Development feedback reveals additional market gaps | LOW | Refresh gap analysis with real-world feedback |
-
-### Loop Prevention
-- **Max recursions**: 3 returns from Stage 9 per venture
-- **Escalation**: After 3rd recursion, Chairman must decide:
-  - Accept gaps and proceed with limited capabilities
-  - Pivot to address different market gaps
-  - Kill venture (capability gaps too large)
-  - Acquire capabilities to close gaps
-- **Tracking**: Each recursion logs gap matrix snapshot for pattern analysis
-
-### Chairman Controls
-- **HIGH severity** (large market opportunity delta, solution-gap misalignment):
-  - Requires Chairman approval before recursion
-  - Review panel shows:
-    - Gap analysis matrix
-    - Market opportunity sizing
-    - Capability assessment
-  - Can choose to:
-    - Approve recursion
-    - Accept gaps and proceed
-    - Pivot to different market segment
-    - Allocate resources to close gaps
-- **Override capability**: Chairman can:
-  - Skip recursion if strategic reasons exist
-  - Approve ventures with known capability gaps
-  - Modify gap thresholds by industry
-
-### Performance Requirements
-- **Gap analysis**: <3 seconds for comprehensive assessment
-- **Recursion detection**: <100ms after analysis complete
-- **Database logging**: Async, stores gap matrix snapshots
-
-### UI/UX Implications
-- **Gap Analysis Dashboard**:
-  - Capability Gap Score: Green (<30), Yellow (30-60), Red (>60)
-  - Market Opportunity Alignment: % of original estimate
-  - Solution-Gap Fit: Green (>70), Yellow (50-70), Red (<50)
-  - Critical Unaddressed Gaps: Count with details
-- **Recursion Warning**: "Gap analysis identified {count} critical misalignments. Review recommended."
-- **Comparison View**: Gap matrix before/after recursion
-
-### Integration Points
-- **Stage 7 (Planning)**: Recursion target for capability gaps
-- **Stage 4 (Competitive Intelligence)**: Recursion target for market sizing
-- **Stage 3 (Validation)**: Recursion target for solution alignment
-- **MKT-001, RESOURCE-001 triggers**: Gap validation framework
-- **recursionEngine.ts**: Central orchestration
-- **recursion_events table**: Log all gap assessment decisions
 
 ## Specific Improvements
 

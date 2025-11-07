@@ -12,8 +12,7 @@
 | Data Readiness | 3 | Input/output defined but data flow unclear |
 | Security/Compliance | 2 | Standard security requirements |
 | UX/Customer Signal | 1 | No customer touchpoint |
-| Recursion Readiness | 2 | Generic recursion support pending |
-| **Overall** | **2.9** | Functional but needs optimization |
+| **Overall** | **3.0** | Functional but needs optimization |
 
 ## Strengths
 - Clear ownership (EXEC)
@@ -26,33 +25,6 @@
 - Missing specific tool integrations
 - No explicit error handling
 
-## Recursive Workflow Behavior (SD-VENTURE-UNIFICATION-001)
-
-### Status
-⚠️ **Recursion mappings pending**: As part of Phase 2-3 implementation of SD-VENTURE-UNIFICATION-001, this stage will be analyzed for potential recursion triggers. The system supports "20-25 recursion scenarios" across all 40 stages.
-
-### Potential Recursion Triggers
-This stage may participate in recursion for:
-- **RISK-001**: Risk assessment threshold violations
-- **RESOURCE-001**: Resource availability issues
-- **TIMELINE-001**: Timeline constraint violations
-- **QUALITY-001**: Quality standard violations
-- **COMPLIANCE-001**: Regulatory compliance issues
-- **CUSTOM**: Custom business logic triggers
-
-### Database Tracking
-All recursion events will be logged in the `recursion_events` table with:
-- `from_stage` and `to_stage` (constraint: to_stage < from_stage)
-- `trigger_type` (one of 9 enum values)
-- `threshold_severity` (CRITICAL/HIGH/MEDIUM/LOW)
-- `chairman_approved` (null/true/false for approval workflow)
-- `recursion_count_for_stage` (for loop prevention)
-
-### Documentation Reference
-Full recursion logic will be documented in:
-- `/mnt/c/_EHG/ehg/src/services/recursionEngine.ts`
-- Database table: `recursion_events`
-- Architecture doc: `docs/architecture/SD-VENTURE-UNIFICATION-001-database-migration-plan.md`
 
 ## Specific Improvements
 

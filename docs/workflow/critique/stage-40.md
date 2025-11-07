@@ -12,7 +12,8 @@
 | Data Readiness | 3 | Input/output defined but data flow unclear |
 | Security/Compliance | 2 | Standard security requirements |
 | UX/Customer Signal | 1 | No customer touchpoint |
-| **Overall** | **3.0** | Functional but needs optimization |
+| Recursion Readiness | 2 | Generic recursion support pending |
+| **Overall** | **2.9** | Functional but needs optimization |
 
 ## Strengths
 - Clear ownership (Chairman)
