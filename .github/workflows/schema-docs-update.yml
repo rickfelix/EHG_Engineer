@@ -94,25 +94,24 @@ jobs:
 
           git add docs/reference/schema/
 
-          # Create commit message
+          # Create commit message based on trigger
           if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            COMMIT_MSG="docs(schema): Weekly automatic schema documentation update"
+            COMMIT_TITLE="docs(schema): Weekly automatic schema documentation update"
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            COMMIT_MSG="docs(schema): Manual schema documentation update (${{ github.event.inputs.target }})"
+            COMMIT_TITLE="docs(schema): Manual schema documentation update (${{ github.event.inputs.target }})"
           else
-            COMMIT_MSG="docs(schema): Auto-update after migration changes"
+            COMMIT_TITLE="docs(schema): Auto-update after migration changes"
           fi
 
-          git commit -m "$COMMIT_MSG
+          # Build commit message with proper formatting
+          git commit -m "${COMMIT_TITLE}" -m "Auto-generated schema documentation update triggered by:
+          - Event: ${{ github.event_name }}
+          - Branch: ${{ github.ref_name }}
+          - Commit: ${{ github.sha }}
 
-Auto-generated schema documentation update triggered by:
-- Event: ${{ github.event_name }}
-- Branch: ${{ github.ref_name }}
-- Commit: ${{ github.sha }}
+          🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: GitHub Actions <github-actions[bot]@users.noreply.github.com>"
+          Co-Authored-By: GitHub Actions <github-actions[bot]@users.noreply.github.com>"
 
           git push
 

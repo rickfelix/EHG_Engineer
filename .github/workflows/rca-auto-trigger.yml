@@ -158,23 +158,30 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const message = `## ⚠️ Root Cause Analysis Triggered
+            // Build message using array to avoid YAML asterisk interpretation issues
+            const workflowName = '${{ steps.failure_context.outputs.workflow_name }}';
+            const runId = '${{ steps.failure_context.outputs.run_id }}';
+            const consecutiveFailures = '${{ steps.check_consecutive.outputs.consecutive_failures }}';
+            const severity = '${{ steps.check_consecutive.outputs.severity || 'MEDIUM' }}';
 
-**Workflow:** ${{ steps.failure_context.outputs.workflow_name }}
-**Run ID:** ${{ steps.failure_context.outputs.run_id }}
-**Consecutive Failures:** ${{ steps.check_consecutive.outputs.consecutive_failures }}
-**Severity:** ${{ steps.check_consecutive.outputs.severity || 'MEDIUM' }}
-
-A Root Cause Report (RCR) has been automatically created for investigation.
-
-**Next Steps:**
-1. Review RCR: \`node scripts/root-cause-agent.js list --sd-id <SD-ID>\`
-2. Investigate failure logs and evidence
-3. Create CAPA manifest: \`node scripts/root-cause-agent.js capa generate --rcr-id <RCR-ID>\`
-4. Fix issue and verify CAPA before proceeding with handoff
-
-**Related Documentation:** docs/reference/root-cause-agent.md
-`;
+            const message = [
+              '## ⚠️ Root Cause Analysis Triggered',
+              '',
+              '**Workflow:** ' + workflowName,
+              '**Run ID:** ' + runId,
+              '**Consecutive Failures:** ' + consecutiveFailures,
+              '**Severity:** ' + severity,
+              '',
+              'A Root Cause Report (RCR) has been automatically created for investigation.',
+              '',
+              '**Next Steps:**',
+              '1. Review RCR: `node scripts/root-cause-agent.js list --sd-id <SD-ID>`',
+              '2. Investigate failure logs and evidence',
+              '3. Create CAPA manifest: `node scripts/root-cause-agent.js capa generate --rcr-id <RCR-ID>`',
+              '4. Fix issue and verify CAPA before proceeding with handoff',
+              '',
+              '**Related Documentation:** docs/reference/root-cause-agent.md'
+            ].join('\n');
 
             github.rest.issues.createComment({
               issue_number: context.payload.pull_request.number,
