@@ -44,6 +44,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { createDatabaseClient } from '../lib/supabase-connection.js';
+import { createSupabaseServiceClient } from './lib/supabase-connection.js';
 import { executeSubAgent as realExecuteSubAgent } from '../lib/sub-agent-executor.js';
 import { selectSubAgents, selectSubAgentsHybrid } from '../lib/context-aware-sub-agent-selector.js';
 import { safeInsert, generateUUID } from './modules/safe-insert.js';
@@ -51,10 +52,8 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
+// Use service role key to bypass RLS policies for orchestration operations
+const supabase = await createSupabaseServiceClient('engineer', { verbose: false });
 
 // Phase to sub-agent mapping (loaded from database, this is fallback)
 const PHASE_SUBAGENT_MAP = {

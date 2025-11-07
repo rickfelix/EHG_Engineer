@@ -45,7 +45,7 @@ class UnifiedHandoffSystem {
   constructor() {
     this.supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     );
     
     this.handoffValidator = new HandoffValidator();
@@ -203,20 +203,36 @@ class UnifiedHandoffSystem {
    */
   async loadHandoffTemplate(handoffType) {
     const [fromAgent, , toAgent] = handoffType.split('-');
-    
-    const { data: template, error } = await this.supabase
+
+    // Query without .single() first to handle multiple templates
+    const { data: templates, error } = await this.supabase
       .from('leo_handoff_templates')
       .select('*')
       .eq('from_agent', fromAgent)
       .eq('to_agent', toAgent)
-      .single();
-      
+      .eq('active', true)
+      .order('version', { ascending: false })
+      .order('created_at', { ascending: false });
+
     if (error) {
-      console.warn(`⚠️  Template not found: ${handoffType} - ${error.message}`);
+      console.warn(`⚠️  Template query error: ${handoffType} - ${error.message}`);
       return null;
     }
-    
-    console.log(`📋 Template loaded: ${template.name}`);
+
+    if (!templates || templates.length === 0) {
+      console.warn(`⚠️  No template found for: ${handoffType} (from=${fromAgent}, to=${toAgent})`);
+      return null;
+    }
+
+    // Take the most recent active template (highest version, latest created_at)
+    const template = templates[0];
+
+    if (templates.length > 1) {
+      console.log(`📋 Multiple templates found for ${handoffType}, using latest: ${template.handoff_type} (v${template.version || 1})`);
+    } else {
+      console.log(`📋 Template loaded: ${template.handoff_type} (v${template.version || 1})`);
+    }
+
     return template;
   }
 
@@ -273,6 +289,15 @@ class UnifiedHandoffSystem {
         bmadPlanToExec.warnings.forEach(w => console.log(`   • ${w}`));
       }
       console.log('✅ BMAD validation passed (PLAN→EXEC)\n');
+
+      // Initialize handoff data object
+      const handoffData = {
+        metadata: {
+          bmad_validation: bmadPlanToExec,
+          gates: {}
+        },
+        validation_results: {}
+      };
 
       // GATE 1: DESIGN→DATABASE WORKFLOW VALIDATION (CONDITIONAL)
       // Validates that DESIGN and DATABASE sub-agents executed correctly
@@ -551,6 +576,16 @@ class UnifiedHandoffSystem {
 
       console.log('\n✅ BMAD validation passed');
       console.log('-'.repeat(50));
+
+      // Initialize handoff data object
+      const handoffData = {
+        metadata: {
+          bmad_validation: bmadValidation,
+          sub_agent_orchestration: orchestrationResult,
+          gates: {}
+        },
+        validation_results: {}
+      };
 
       // GATE 2: IMPLEMENTATION FIDELITY VALIDATION (UNIVERSAL)
       // Validates implementation quality for ALL SDs:
