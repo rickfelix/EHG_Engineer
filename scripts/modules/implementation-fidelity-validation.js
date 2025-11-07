@@ -20,6 +20,43 @@ import { getPatternStats } from './pattern-tracking.js';
 const execAsync = promisify(exec);
 
 /**
+ * Detect which repository contains the implementation for this SD
+ * Returns the root path of the implementation repository
+ *
+ * Strategy:
+ * 1. Check if SD has commits in /mnt/c/_EHG/ehg (application repo)
+ * 2. If not found, default to /mnt/c/_EHG/EHG_Engineer (governance repo)
+ *
+ * @param {string} sd_id - Strategic Directive ID
+ * @returns {Promise<string>} - Root path of implementation repository
+ */
+async function detectImplementationRepo(sd_id) {
+  const repos = [
+    '/mnt/c/_EHG/ehg',           // Application repo (priority)
+    '/mnt/c/_EHG/EHG_Engineer'   // Governance repo (fallback)
+  ];
+
+  for (const repo of repos) {
+    try {
+      // Check if this repo has commits for this SD
+      const { stdout } = await execAsync(`git -C "${repo}" log --all --grep="${sd_id}" --format="%H" -n 1 2>/dev/null || echo ""`);
+      if (stdout.trim()) {
+        console.log(`   💡 Implementation detected in: ${repo}`);
+        return repo;
+      }
+    } catch (_error) {
+      // Repo might not exist or not accessible, continue to next
+      continue;
+    }
+  }
+
+  // Default to current working directory if no commits found
+  const cwd = process.cwd();
+  console.log(`   ⚠️  No SD commits found in known repos, using current directory: ${cwd}`);
+  return cwd;
+}
+
+/**
  * Validate implementation fidelity for EXEC→PLAN handoff
  * Phase-Aware Weighting System (Correctness Focus)
  *
@@ -815,24 +852,32 @@ async function validateEnhancedTesting(sd_id, designAnalysis, databaseAnalysis, 
   console.log('\n   [D1] E2E Test Coverage & Execution (CRITICAL)...');
 
   try {
+    // Detect which repository contains the implementation
+    const implementationRepo = await detectImplementationRepo(sd_id);
+
     const testDirs = [
       'tests/e2e',
       'tests/integration',
+      'tests/unit',        // Also check unit tests
       'e2e',
       'playwright/tests'
     ];
 
     let testFiles = [];
     for (const dir of testDirs) {
-      const fullPath = path.join(process.cwd(), dir);
+      const fullPath = path.join(implementationRepo, dir);
       if (existsSync(fullPath)) {
         const files = await readdir(fullPath, { recursive: true });
         const sdTests = files.filter(f =>
           typeof f === 'string' &&
           (f.includes(sd_id.toLowerCase()) ||
-           f.includes(sd_id.replace('SD-', '').toLowerCase()))
+           f.includes(sd_id.replace('SD-', '').toLowerCase()) ||
+           f.endsWith('.test.ts') ||
+           f.endsWith('.test.js') ||
+           f.endsWith('.spec.ts') ||
+           f.endsWith('.spec.js'))
         );
-        testFiles.push(...sdTests);
+        testFiles.push(...sdTests.map(f => path.join(dir, f)));
       }
     }
 
