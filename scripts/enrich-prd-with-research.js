@@ -118,7 +118,10 @@ class PRDEnrichment {
     // Extract from functional requirements
     if (Array.isArray(prd.functional_requirements)) {
       prd.functional_requirements.forEach(req => {
-        const keywords = this.extractKeywords(req);
+        // Convert requirement object to text
+        const reqText = typeof req === 'string' ? req :
+                       (req.requirement || req.description || req.title || JSON.stringify(req));
+        const keywords = this.extractKeywords(reqText);
         keywords.forEach(k => techStacks.add(k));
       });
     }
@@ -126,7 +129,10 @@ class PRDEnrichment {
     // Extract from technical requirements
     if (Array.isArray(prd.technical_requirements)) {
       prd.technical_requirements.forEach(req => {
-        const keywords = this.extractKeywords(req);
+        // Convert requirement object to text
+        const reqText = typeof req === 'string' ? req :
+                       (req.requirement || req.description || req.title || JSON.stringify(req));
+        const keywords = this.extractKeywords(reqText);
         keywords.forEach(k => techStacks.add(k));
       });
     }

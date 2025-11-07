@@ -1,41 +1,49 @@
-#!/usr/bin/env node
-
-import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
-dotenv.config();
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const { data, error } = await supabase
-  .from('sd_phase_handoffs')
-  .select('*')
-  .limit(1);
+(async () => {
+  console.log('Using database:', process.env.SUPABASE_URL);
 
-if (error) {
-  console.error('❌ Table may not exist:', error.message);
-} else if (data && data.length > 0) {
-  console.log('sd_phase_handoffs columns:');
-  Object.keys(data[0]).sort().forEach(col => {
-    console.log(`  - ${col}`);
-  });
-  
-  // Now query for SD-KNOWLEDGE-001
-  const { data: handoffs } = await supabase
+  // First verify SD exists
+  const { data: sd, error: sdErr } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, sd_key, title, status')
+    .eq('sd_key', 'SD-RECURSION-AI-001')
+    .maybeSingle();
+
+  if (sdErr) {
+    console.error('❌ SD query error:', sdErr.message);
+    process.exit(1);
+  }
+
+  if (!sd) {
+    console.error('❌ SD not found: SD-RECURSION-AI-001');
+    process.exit(1);
+  }
+
+  console.log('✅ SD found:', { id: sd.id, status: sd.status });
+
+  // Get sample handoff to see schema
+  const { data: sample, error } = await supabase
     .from('sd_phase_handoffs')
     .select('*')
-    .eq('sd_id', 'SD-KNOWLEDGE-001');
-    
-  console.log(`\nFound ${handoffs?.length || 0} handoff(s) for SD-KNOWLEDGE-001`);
-  if (handoffs && handoffs.length > 0) {
-    handoffs.forEach((h, idx) => {
-      console.log(`\n${idx + 1}. ${h.handoff_type || 'unknown'}`);
-      console.log(`   ID: ${h.id}`);
-      console.log(`   Status: ${h.status}`);
+    .limit(1);
+
+  if (error) {
+    console.error('❌ Handoff query error:', error.message);
+  } else if (sample && sample.length > 0) {
+    console.log('\n✅ sd_phase_handoffs columns:');
+    Object.keys(sample[0]).sort().forEach(col => {
+      const value = sample[0][col];
+      const type = value === null ? 'null' : typeof value;
+      console.log('  - ' + col + ': ' + type);
     });
+  } else {
+    console.log('⚠️ No handoff records exist yet');
   }
-} else {
-  console.log('Table exists but is empty');
-}
+})();

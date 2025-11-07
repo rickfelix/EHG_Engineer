@@ -55,10 +55,11 @@ export async function fetchPatternStats(sd, supabase) {
 
     const patternSignature = extractPatternSignature(sd);
 
-    // Query completed SDs with similar pattern (include metadata for risk_level/categories)
+    // Query completed SDs with similar pattern
+    // NOTE: risk_level is NOT a column - it's accessed via metadata in extractPatternSignature
     const { data: historicalSDs, error } = await supabase
       .from('strategic_directives_v2')
-      .select('id, category, risk_level, metadata, status')
+      .select('id, category, metadata, status')
       .eq('status', 'completed')
       .limit(100); // Analyze last 100 completed SDs
 

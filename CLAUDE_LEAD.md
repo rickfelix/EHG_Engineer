@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2025-10-30 4:55:07 AM
+**Generated**: 2025-11-07 6:39:28 AM
 **Protocol**: LEO v4.2.0_story_gates
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
@@ -125,21 +125,6 @@ cat docs/summaries/lessons/<category>-lessons.md
 **Time Investment**: 1-2 minutes
 **Time Saved**: 30-90 minutes of EXEC rework
 
-## 6-Step SD Evaluation Checklist
-
-**6-Step SD Evaluation Checklist (MANDATORY for LEAD & PLAN)**:
-
-1. Query `strategic_directives_v2` for SD metadata
-2. Query `product_requirements_v2` for existing PRD
-3. **Query `sd_backlog_map` for linked backlog items** ← CRITICAL
-4. Search codebase for existing infrastructure
-5. Identify gaps between backlog requirements and existing code
-6. **Execute QA smoke tests** ← NEW (verify tests run before approval)
-
-**Backlog Review Requirements**: Review backlog_title, item_description, extras.Description_1 for each item
-
-**Complete Checklist**: See `docs/reference/sd-evaluation-checklist.md`
-
 ## 🔍 Pre-Implementation Knowledge Retrieval (MANDATORY)
 
 **SD-LEO-LEARN-001: Proactive Learning Integration**
@@ -214,6 +199,21 @@ ls docs/summaries/lessons/*.md
 
 **Time Investment**: 30 seconds to run, 2-3 minutes to review
 **Time Saved**: 15-60 minutes of debugging/rework
+
+## 6-Step SD Evaluation Checklist
+
+**6-Step SD Evaluation Checklist (MANDATORY for LEAD & PLAN)**:
+
+1. Query `strategic_directives_v2` for SD metadata
+2. Query `product_requirements_v2` for existing PRD
+3. **Query `sd_backlog_map` for linked backlog items** ← CRITICAL
+4. Search codebase for existing infrastructure
+5. Identify gaps between backlog requirements and existing code
+6. **Execute QA smoke tests** ← NEW (verify tests run before approval)
+
+**Backlog Review Requirements**: Review backlog_title, item_description, extras.Description_1 for each item
+
+**Complete Checklist**: See `docs/reference/sd-evaluation-checklist.md`
 
 ## Quality Validation Examples
 
@@ -400,6 +400,6 @@ LEAD MUST answer these questions BEFORE approval:
 
 ---
 
-*Generated from database: 2025-10-30*
+*Generated from database: 2025-11-07*
 *Protocol Version: v4.2.0_story_gates*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

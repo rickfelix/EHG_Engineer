@@ -23,7 +23,7 @@ See documentation for table structure: `database/schema/007_leo_protocol_schema_
 *For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-10-30 4:55:07 AM
+**Last Generated**: 2025-11-07 6:39:28 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -242,6 +242,6 @@ Proceed with: EXEC pre-implementation checklist, dual testing
 
 ---
 
-*Router generated from database: 2025-10-30*
+*Router generated from database: 2025-11-07*
 *Protocol Version: v4.2.0_story_gates*
 *Part of LEO Protocol router architecture*

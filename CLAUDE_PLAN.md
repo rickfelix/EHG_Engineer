@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-10-30 4:55:07 AM
+**Generated**: 2025-11-07 6:39:28 AM
 **Protocol**: LEO v4.2.0_story_gates
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -532,6 +532,21 @@ cat docs/EXEC_CONTEXT.md
 *BMAD Method: Build-Measure-Adapt-Document*
 
 
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
+
 ## DESIGN→DATABASE Validation Gates
 
 The LEO Protocol enforces the DESIGN→DATABASE workflow pattern through 4 mandatory validation gates that ensure:
@@ -968,21 +983,6 @@ This enables:
 2. **Retrospectives**: Quality analysis for continuous improvement
 3. **Cascading**: Gate 3 uses Gate 2 results, Gate 4 uses all previous results
 4. **Debugging**: Detailed failure information for each gate
-
-## CI/CD Pipeline Verification
-
-## CI/CD Pipeline Verification (MANDATORY)
-
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
-
-### Verification Process
-
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
-
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## Pre-Implementation Plan Presentation Template
 
@@ -1455,6 +1455,6 @@ No validation rules in database
 
 ---
 
-*Generated from database: 2025-10-30*
+*Generated from database: 2025-11-07*
 *Protocol Version: v4.2.0_story_gates*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

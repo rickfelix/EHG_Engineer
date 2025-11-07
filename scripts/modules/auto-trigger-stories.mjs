@@ -229,7 +229,7 @@ async function generateUserStoriesFromPRD(prd, sdId, prdId) {
       priority: priority,
       status: 'ready',
       acceptance_criteria: fr.acceptance_criteria || [],
-      implementation_context: fr.description || '',
+      implementation_context: fr.description || fr.requirement || 'Implementation details to be defined during EXEC phase',
       technical_notes: fr.rationale || '',
       created_by: 'PRODUCT_REQUIREMENTS_EXPERT'
     };

@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-10-30 4:55:07 AM
+**Generated**: 2025-11-07 6:39:28 AM
 **Protocol**: LEO v4.2.0_story_gates
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -299,6 +299,6 @@ Total =  = 100%
 
 ---
 
-*Generated from database: 2025-10-30*
+*Generated from database: 2025-11-07*
 *Protocol Version: v4.2.0_story_gates*
 *Load this file first in all sessions*

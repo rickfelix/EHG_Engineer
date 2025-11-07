@@ -1,24 +1,51 @@
-#!/usr/bin/env node
-import { createDatabaseClient } from './lib/supabase-connection.js';
+import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
 
-async function checkSchema() {
-  const client = await createDatabaseClient('engineer', { verbose: false });
+dotenv.config();
 
-  try {
-    const result = await client.query(`
-      SELECT column_name, data_type, is_nullable, column_default
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-      AND table_name = 'sd_phase_handoffs'
-      ORDER BY ordinal_position;
-    `);
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
-    console.log('\n📊 sd_phase_handoffs table schema:\n');
-    console.table(result.rows);
+(async () => {
+  console.log('Using database:', process.env.SUPABASE_URL);
 
-  } finally {
-    await client.end();
+  // First verify SD exists
+  const { data: sd, error: sdErr } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, sd_key, title, status')
+    .eq('sd_key', 'SD-RECURSION-AI-001')
+    .maybeSingle();
+
+  if (sdErr) {
+    console.error('❌ SD query error:', sdErr.message);
+    process.exit(1);
   }
-}
 
-checkSchema().catch(console.error);
+  if (!sd) {
+    console.error('❌ SD not found: SD-RECURSION-AI-001');
+    process.exit(1);
+  }
+
+  console.log('✅ SD found:', { id: sd.id, status: sd.status });
+
+  // Get sample handoff to see schema
+  const { data: sample, error } = await supabase
+    .from('sd_phase_handoffs')
+    .select('*')
+    .limit(1);
+
+  if (error) {
+    console.error('❌ Handoff query error:', error.message);
+  } else if (sample && sample.length > 0) {
+    console.log('\n✅ sd_phase_handoffs columns:');
+    Object.keys(sample[0]).sort().forEach(col => {
+      const value = sample[0][col];
+      const type = value === null ? 'null' : typeof value;
+      console.log('  - ' + col + ': ' + type);
+    });
+  } else {
+    console.log('⚠️ No handoff records exist yet');
+  }
+})();
