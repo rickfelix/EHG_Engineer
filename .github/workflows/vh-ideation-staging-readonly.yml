@@ -17,10 +17,8 @@ jobs:
     name: Venture Ideation Checks (Staging)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # TEMPORARILY DISABLED: ENABLE_VH_CHECKS variable not configured
-    # To re-enable: Set repository variable ENABLE_VH_CHECKS=1 OR remove this if: false
-    if: false
-    # Original condition: if: ${{ vars.ENABLE_VH_CHECKS == '1' }}
+    # Re-enabled 2025-11-07: Workflow runs on schedule/manual trigger
+    # Original condition used ENABLE_VH_CHECKS variable, now runs unconditionally
 
     steps:
       - uses: actions/checkout@v4
