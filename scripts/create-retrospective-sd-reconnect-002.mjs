@@ -130,7 +130,7 @@ const retrospective = {
     }
   ],
 
-  lessons_learned: [
+  key_learnings: [
     'Over-engineering rubric is highly effective at preventing scope creep',
     'YAGNI principle should be default mindset (don\'t create infrastructure until needed)',
     'Database-first architecture requires validators to match actual schema',
@@ -163,6 +163,6 @@ console.log('   Title:', data[0].title);
 console.log('   What Went Well:', data[0].what_went_well.length, 'items');
 console.log('   What Could Improve:', data[0].what_could_improve.length, 'items');
 console.log('   Process Improvements:', data[0].process_improvements.length, 'items');
-console.log('   Lessons Learned:', data[0].lessons_learned.length, 'items');
+console.log('   Key Learnings:', data[0].key_learnings.length, 'items');
 console.log('');
 console.log('📊 SD-RECONNECT-002 COMPLETE - 100% DONE DONE');

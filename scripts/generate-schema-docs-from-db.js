@@ -624,7 +624,7 @@ const { data, error } = await supabase
 // Get high-quality retrospectives (score >= 85)
 const { data, error } = await supabase
   .from('retrospectives')
-  .select('sd_id, quality_score, lessons_learned')
+  .select('sd_id, quality_score, key_learnings')
   .gte('quality_score', 85)
   .order('quality_score', { ascending: false });
 \`\`\`

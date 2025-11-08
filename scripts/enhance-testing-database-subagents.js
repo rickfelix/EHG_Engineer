@@ -205,7 +205,7 @@ const enhancements = {
         'Deferred testing leads to unknown runtime behavior',
         'Ambiguous "smoke tests" allowed E2E-only execution'
       ],
-      lessons_learned: [
+      key_learnings: [
         'Dev mode (5173) over preview mode (4173) for E2E tests',
         'Dual test execution (unit + E2E) must be explicit',
         'Playwright webServer config with reuseExistingServer: true'
@@ -373,7 +373,7 @@ documentation_author UUID,  -- FK to auth.users removed
         'SDs approved without backlog validation = scope creep',
         'Cross-schema foreign keys cause migration failures'
       ],
-      lessons_learned: [
+      key_learnings: [
         'Always verify trigger functions match current schema before migrations',
         'Agent migrations belong in EHG app, not EHG_Engineer',
         'Seed data can fail silently - always validate with --check-seed-data',
@@ -423,7 +423,7 @@ async function enhanceSubAgents() {
       console.log(`   Capabilities: ${enhancement.capabilities.length} items`);
       console.log(`   Success patterns: ${enhancement.metadata.success_patterns?.length || 0}`);
       console.log(`   Failure patterns: ${enhancement.metadata.failure_patterns?.length || 0}`);
-      console.log(`   Lessons learned: ${enhancement.metadata.lessons_learned?.length || 0}`);
+      console.log(`   Lessons learned: ${enhancement.metadata.key_learnings?.length || 0}`);
     }
   }
 

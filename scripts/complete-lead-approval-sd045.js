@@ -50,7 +50,7 @@ async function completeLeadApproval() {
       '📝 Could have identified PredictiveInsightsEngine.tsx issues earlier'
     ],
 
-    lessons_learned: [
+    key_learnings: [
       {
         lesson: 'Infrastructure audit is critical before estimation',
         context: 'Discovered 90% reusable code, changed 95h → 8h',
@@ -415,7 +415,7 @@ async function completeLeadApproval() {
   console.log('- Category: exceptional_success');
   console.log('- Successes: 10 items documented');
   console.log('- Improvements: 5 items identified');
-  console.log('- Lessons Learned: 5 high-impact lessons');
+  console.log('- Key Learnings: 5 high-impact lessons');
   console.log('- Action Items: 5 follow-up tasks');
   console.log('- Pattern Successes: 4 reusable patterns');
 

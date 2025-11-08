@@ -73,8 +73,8 @@ const retrospective = {
     }
   ],
 
-  // What Went Wrong
-  what_went_wrong: [
+  // What Needs Improvement
+  what_needs_improvement: [
     {
       item: 'Premature LEAD Approval Without Testing',
       details: 'LEAD agent approved SD as COMPLETED without executing the mandatory manual testing specified in PLAN→LEAD handoff action items. This violated LEO Protocol v4.2.0 requirements.',
@@ -105,8 +105,8 @@ const retrospective = {
     }
   ],
 
-  // Lessons Learned
-  lessons_learned: [
+  // Key Learnings
+  key_learnings: [
     {
       lesson: 'LEAD Must Validate Action Items Before Approval',
       description: 'LEAD agent MUST explicitly check that all action items from PLAN→LEAD handoff are completed with evidence before marking SD as COMPLETED.',
@@ -238,9 +238,9 @@ console.log(`   Components: ${retrospective.metrics.components_created}`);
 console.log(`   Test Pass Rate: ${retrospective.metrics.test_pass_rate}`);
 console.log(`   Protocol Grade: ${retrospective.protocol_adherence.overall_grade}\n`);
 
-console.log('🎓 Lessons Learned: ${retrospective.lessons_learned.length}');
+console.log('🎓 Key Learnings: ${retrospective.key_learnings.length}');
 console.log('✅ What Went Well: ${retrospective.what_went_well.length}');
-console.log('⚠️  What Went Wrong: ${retrospective.what_went_wrong.length}');
+console.log('⚠️  What Needs Improvement: ${retrospective.what_needs_improvement.length}');
 console.log('📋 Action Items: ${retrospective.action_items.length}\n');
 
 console.log('🎉 SD-RECONNECT-011 is now DONE DONE!\n');

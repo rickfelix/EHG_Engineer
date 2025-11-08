@@ -138,7 +138,7 @@ Use direct connection bypass when:
 **CORRECT NAMES** (use these):
 \`\`\`javascript
 {
-  key_learnings: string,           // NOT lessons_learned
+  key_learnings: string,           // NOT key_learnings
   what_needs_improvement: string,  // NOT what_did_not_work_well
   improvement_areas: array,        // NOT protocol_improvements (array, not string)
   description: string,             // NOT technical_innovations
@@ -271,7 +271,7 @@ console.log('Allowed status:', allowedStatus);
 
 | Error | Fix |
 |-------|-----|
-| Column "lessons_learned" not found | Use \`key_learnings\` |
+| Column "key_learnings" not found | Use \`key_learnings\` |
 | Malformed array literal | Remove JSON.stringify() |
 | Invalid boolean "5" | Use true/false |
 | team_satisfaction_check violation | Use 1-10 scale |

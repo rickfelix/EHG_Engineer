@@ -36,7 +36,7 @@ async function completeSD() {
         database_tables: 6,
         quality_rating: 'A+',
         retrospective_file: 'retrospectives/SD-041C-COMPLETE.md',
-        lessons_learned: [
+        key_learnings: [
           'Table name conflict resolution (documented in CLAUDE.md)',
           'Security-first HMAC validation with timing-safe comparison',
           'Cost transparency through token-level tracking',

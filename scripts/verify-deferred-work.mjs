@@ -62,7 +62,7 @@ async function main() {
     // Check retrospective for learnings about deferred work
     console.log('\n3. Checking retrospective...\n');
     const retro = await client.query(`
-      SELECT lessons_learned, what_went_well, what_went_poorly
+      SELECT key_learnings, what_went_well, what_went_poorly
       FROM retrospectives
       WHERE sd_id = $1
       ORDER BY created_at DESC
@@ -70,7 +70,7 @@ async function main() {
     `, [sdId]);
 
     if (retro.rows.length > 0) {
-      const lessons = retro.rows[0].lessons_learned;
+      const lessons = retro.rows[0].key_learnings;
       if (Array.isArray(lessons)) {
         lessons.forEach(lesson => {
           if (lesson.includes('defer') || lesson.includes('E2E') || lesson.includes('test')) {

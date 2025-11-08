@@ -47,7 +47,7 @@ node scripts/validate-migration-files.js <SD-ID> --verify-db --check-seed-data
 - Boolean fields: true/false, NOT integers
 
 **Common Errors**:
-- Column "lessons_learned" not found → Use \`key_learnings\`
+- Column "key_learnings" not found → Use \`key_learnings\`
 - Malformed array literal → Remove JSON.stringify()
 - team_satisfaction_check violation → Use 1-10 scale
 

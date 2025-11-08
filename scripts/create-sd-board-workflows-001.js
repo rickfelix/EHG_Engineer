@@ -465,7 +465,7 @@ class BoardWeeklyMeetingFlow(Flow):
           'Integrate workflow executions with LEO Protocol phases',
           'Connect board governance to investment tracking'
         ],
-        lessons_learned_capture: {
+        key_learnings_capture: {
           purpose: 'Capture MVP learnings for future iterations',
           mechanisms: [
             'Post-MVP retrospective (stored in retrospectives table)',
