@@ -113,7 +113,7 @@ async function main() {
           'Database-First Handoff Pattern - Zero handoff failures'
         ],
 
-        what_went_wrong: [
+        what_needs_improvement: [
           'Pre-Existing Issue Impact Underestimated - 3-4 hours confusion about SD vs project scope',
           'Mock Pattern Discovery Through Trial-and-Error - 2-3 hours inefficient iteration',
           'ESLint Configuration Gaps - 1-2 hours rework',
@@ -121,7 +121,7 @@ async function main() {
           'Test Infrastructure Health Visibility Gap - 51 pre-existing failures with unknown timelines'
         ],
 
-        lessons_learned: [
+        key_learnings: [
           'Test Health Baseline is Non-Negotiable - Run full test suite BEFORE SD starts',
           'Mock Patterns are Force Multipliers - 2-3 hours savings per service',
           'Scope Boundaries Prevent Scope Creep - Document vs fix saves 4-8 hours',

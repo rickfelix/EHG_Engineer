@@ -101,7 +101,12 @@
     "rca:ingest-learnings": "node scripts/rca-learning-ingestion.js --batch",
     "rca:test:unit": "vitest run tests/unit/rca-*.test.js",
     "rca:test:integration": "vitest run tests/integration/rca-*.test.js",
-    "rca:test": "npm run rca:test:unit && npm run rca:test:integration"
+    "rca:test": "npm run rca:test:unit && npm run rca:test:integration",
+    "docs:bg-scripts": "node scripts/generate-workflow-docs.js --target scripts",
+    "docs:bg-agents": "node scripts/generate-workflow-docs.js --target lib/agents",
+    "docs:bg-compliance": "node lib/sub-agent-executor.js DOCMON",
+    "docs:bg-health": "node lib/agents/documentation-sub-agent.js --scope ehg-engineer",
+    "docs:bg-all": "npm run docs:bg-scripts && npm run docs:bg-agents && npm run docs:bg-health"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",

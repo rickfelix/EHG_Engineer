@@ -41,7 +41,7 @@ const retrospective = {
     'Estimated 14 files but found only 8 (estimation accuracy: 57%)'
   ],
 
-  lessons_learned: [
+  key_learnings: [
     'Over-engineering rubric is effective: prevented weeks of speculative work',
     'Audit-only scopes need different validator logic than implementation scopes',
     'Template hooks should be built when pain points emerge, not speculatively (YAGNI)',
@@ -98,7 +98,7 @@ console.log('\n📝 Retrospective Created:');
 console.log('   Title:', retrospective.title);
 console.log('   Went Well:', retrospective.what_went_well.length, 'items');
 console.log('   Could Improve:', retrospective.what_could_improve.length, 'items');
-console.log('   Lessons:', retrospective.lessons_learned.length, 'items');
+console.log('   Lessons:', retrospective.key_learnings.length, 'items');
 console.log('   Action Items:', retrospective.action_items.length, 'items');
 
 // Try to store retrospective

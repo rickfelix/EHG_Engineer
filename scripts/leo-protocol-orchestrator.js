@@ -520,7 +520,7 @@ class LEOProtocolOrchestrator {
       sd_id: sdId,
       session_id: this.executionState.sessionId,
       completed_at: new Date(),
-      lessons_learned: [],
+      key_learnings: [],
       improvements: [],
       successes: []
     };
@@ -533,7 +533,7 @@ class LEOProtocolOrchestrator {
       default: 'Process followed successfully'
     }]);
 
-    retrospective.lessons_learned.push(lessons);
+    retrospective.key_learnings.push(lessons);
 
     // Store in database
     await this.supabase

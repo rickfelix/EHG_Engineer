@@ -58,8 +58,8 @@ const retrospective = {
     }
   },
 
-  // Critical Lessons Learned
-  lessons_learned: {
+  // Critical Key Learnings
+  key_learnings: {
     lesson_1_manual_vs_tool: {
       title: 'Manual Assessment ≠ Sub-Agent Execution',
       what_we_learned: 'Manually creating sub-agent results based on code review is NOT the same as running the actual sub-agent tool',
@@ -264,7 +264,7 @@ async function storeTestingRetrospective() {
         summary: 'Identified critical gap: Sub-agent tools must be executed, not simulated. Testing should be integrated into EXEC phase.',
         achievements: ['Discovered manual simulation anti-pattern', 'Found 52 test files in infrastructure', 'Executed actual QA sub-agent tool'],
         challenges: ['0% test coverage for 1,712 LOC implementation', 'Deferred tests never executed', 'QA triggered too late'],
-        learnings: Object.values(retrospective.lessons_learned).map(l => l.title),
+        learnings: Object.values(retrospective.key_learnings).map(l => l.title),
         action_items: Object.values(retrospective.process_improvements).map(i => ({
           action: i.title,
           priority: i.priority,
@@ -295,7 +295,7 @@ async function storeTestingRetrospective() {
   console.log('='.repeat(80));
 
   console.log('\n🔍 KEY LESSONS LEARNED:');
-  Object.values(retrospective.lessons_learned).forEach((lesson, i) => {
+  Object.values(retrospective.key_learnings).forEach((lesson, i) => {
     console.log(`\n${i + 1}. ${lesson.title}`);
     console.log(`   Learning: ${lesson.what_we_learned}`);
     console.log(`   Impact: ${lesson.impact}`);

@@ -62,9 +62,9 @@ describe('KnowledgeRetrieval', () => {
       const mockRetros = [
         {
           sd_id: 'SD-OLD-001',
-          lessons_learned: 'OAuth implementation worked well',
+          key_learnings: 'OAuth implementation worked well',
           what_went_well: 'Easy integration',
-          what_went_wrong: null,
+          what_needs_improvement: null,
           tech_stack: 'OAuth 2.0'
         }
       ];
@@ -104,9 +104,9 @@ describe('KnowledgeRetrieval', () => {
       const mockRetros = [
         {
           sd_id: 'SD-OLD-001',
-          lessons_learned: 'Test lesson',
+          key_learnings: 'Test lesson',
           what_went_well: 'Good things',
-          what_went_wrong: 'Bad things',
+          what_needs_improvement: 'Bad things',
           tech_stack: 'React'
         }
       ];
@@ -208,7 +208,7 @@ describe('KnowledgeRetrieval', () => {
     });
 
     test('should cache new results with 24-hour TTL', async () => {
-      const mockRetros = [{ sd_id: 'SD-001', lessons_learned: 'Test', tech_stack: 'Vue' }];
+      const mockRetros = [{ sd_id: 'SD-001', key_learnings: 'Test', tech_stack: 'Vue' }];
 
       mockSupabase.limit.mockResolvedValue({ data: mockRetros, error: null });
       mockSupabase.gt.mockResolvedValue({ data: null, error: null }); // No cache
@@ -289,7 +289,7 @@ describe('KnowledgeRetrieval', () => {
     test('should return top 5 results sorted by confidence', async () => {
       const mockRetros = Array(10).fill(null).map((_, i) => ({
         sd_id: `SD-${i}`,
-        lessons_learned: `Lesson ${i}`,
+        key_learnings: `Lesson ${i}`,
         tech_stack: 'Test'
       }));
 

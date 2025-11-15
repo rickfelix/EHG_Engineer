@@ -91,7 +91,7 @@ export async function validateRetrospective(retro) {
   // Field Name Validation (Common Mistakes)
   // ============================================================================
   const fieldMapping = {
-    'lessons_learned': 'key_learnings',
+    'key_learnings': 'key_learnings',
     'what_did_not_work_well': 'what_needs_improvement',
     'protocol_improvements': 'improvement_areas',
     'technical_innovations': 'description',

@@ -174,7 +174,7 @@ async function generateRetrospective() {
       performance_impact: 'Page load <2s (met target), 84.7% reuse (exceeded target)',
 
       // Additional context
-      lessons_learned_details: {
+      key_learnings_details: {
         protocol_gap_discovery: 'User story validation was missing from LEO Protocol enforcement',
         root_cause: 'Implementation-first workflow allowed skipping Product Requirements Expert',
         immediate_fix: 'Retroactive user story creation (6 stories from E2E tests)',

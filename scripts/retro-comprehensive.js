@@ -174,7 +174,7 @@ async function generateComprehensiveRetrospective() {
       }
     ],
 
-    lessons_learned: [
+    key_learnings: [
       {
         lesson: 'Template-first approach eliminates proliferation',
         category: 'Architecture',

@@ -54,7 +54,7 @@ async function createRetrospective() {
       'No error boundary for API failures implemented yet'
     ],
 
-    lessons_learned: [
+    key_learnings: [
       'Vite requires VITE_ prefix for environment variables to be exposed to client',
       'React Context must wrap components before hooks can be used',
       'localStorage is sufficient for conversation persistence in Phase 1',
@@ -140,8 +140,8 @@ async function createRetrospective() {
   console.log('\n🔧 What Could Improve:');
   retrospective.what_could_improve.forEach(item => console.log(`  ⚠️ ${item}`));
 
-  console.log('\n💡 Lessons Learned:');
-  retrospective.lessons_learned.forEach(item => console.log(`  📚 ${item}`));
+  console.log('\n💡 Key Learnings:');
+  retrospective.key_learnings.forEach(item => console.log(`  📚 ${item}`));
 
   console.log('\n📋 Action Items for Phase 2:');
   retrospective.action_items.forEach(item => console.log(`  ▶️ ${item}`));

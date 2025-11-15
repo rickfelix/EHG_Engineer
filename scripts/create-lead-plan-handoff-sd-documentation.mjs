@@ -139,7 +139,7 @@ const handoff = {
       bugs_fixed: 2,
       claude_md_regenerations: 1
     },
-    lessons_learned: [
+    key_learnings: [
       'Database sub-agent pattern: Read docs first, use established scripts',
       'CLAUDE.md is auto-generated: Update leo_protocol_sections table',
       'Validation bugs can cascade: Both scoring and trigger needed fixing',

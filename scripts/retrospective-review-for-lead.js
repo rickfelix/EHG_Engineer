@@ -49,7 +49,7 @@ async function reviewRetrospectives(sdId, options = {}) {
   const results = {
     sd_id: sdId,
     timestamp: new Date().toISOString(),
-    lessons_learned: [],
+    key_learnings: [],
     success_patterns: [],
     failure_patterns: [],
     risk_mitigations: [],
@@ -113,8 +113,8 @@ async function reviewRetrospectives(sdId, options = {}) {
     // 4. EXTRACT LESSONS LEARNED
     // ============================================
     console.log('\n💡 Step 4: Extracting lessons learned...');
-    results.lessons_learned = extractLessonsLearned(retrospectives);
-    console.log(`   ✓ Extracted ${results.lessons_learned.length} lessons`);
+    results.key_learnings = extractLessonsLearned(retrospectives);
+    console.log(`   ✓ Extracted ${results.key_learnings.length} lessons`);
 
     // ============================================
     // 5. IDENTIFY SUCCESS PATTERNS
@@ -163,7 +163,7 @@ async function reviewRetrospectives(sdId, options = {}) {
     console.log('═'.repeat(60));
     console.log(`Similar SDs Analyzed: ${similarSDs.length}`);
     console.log(`Retrospectives Reviewed: ${retrospectives?.length || 0}`);
-    console.log(`Lessons Learned: ${results.lessons_learned.length}`);
+    console.log(`Key Learnings: ${results.key_learnings.length}`);
     console.log(`Success Patterns: ${results.success_patterns.length}`);
     console.log(`Failure Patterns: ${results.failure_patterns.length}`);
     console.log(`Risk Mitigations: ${results.risk_mitigations.length}`);

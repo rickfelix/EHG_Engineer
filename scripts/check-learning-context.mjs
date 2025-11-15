@@ -14,7 +14,7 @@ console.log('🧠 Learning Context Review: SD-RECURSION-AI-001\n');
 console.log('📚 Retrospectives - Infrastructure & API patterns:');
 const { data: retros } = await supabase
   .from('retrospectives')
-  .select('sd_id, what_went_well, what_went_wrong, lessons_learned, quality_score')
+  .select('sd_id, what_went_well, what_needs_improvement, key_learnings, quality_score')
   .or('category.eq.infrastructure,category.eq.api')
   .order('quality_score', { ascending: false })
   .limit(3);
@@ -22,7 +22,7 @@ const { data: retros } = await supabase
 if (retros && retros.length > 0) {
   retros.forEach((r, i) => {
     console.log('\n' + (i + 1) + '. ' + r.sd_id + ' (Quality: ' + r.quality_score + ')');
-    console.log('   Lessons:', r.lessons_learned?.slice(0, 2));
+    console.log('   Learnings:', r.key_learnings?.slice(0, 2));
   });
 } else {
   console.log('   No infrastructure retrospectives found');

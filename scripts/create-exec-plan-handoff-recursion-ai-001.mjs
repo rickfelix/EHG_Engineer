@@ -49,7 +49,7 @@ Ready for PLAN comprehensive verification.`,
     implementation_complete: true,
     testing_complete: true,
     architecture_documented: true,
-    lessons_learned_applied: true,
+    key_learnings_applied: true,
 
     deliverables_status: {
       phase_1_services: '3/3 complete (1,296 LOC)',
@@ -109,7 +109,7 @@ Ready for PLAN comprehensive verification.`,
       code_reuse_percentage: 40,
       architecture_decisions_documented: 1,
       sub_agents_engaged: 3,
-      lessons_learned_applied: 'prevention-implementation-COMPLETE.md',
+      key_learnings_applied: 'prevention-implementation-COMPLETE.md',
       leo_protocol_version: 'v4.3.0'
     }
   },
@@ -434,7 +434,7 @@ Ready for PLAN comprehensive verification.`,
     },
 
     test_quality_metrics: {
-      lessons_learned_applied: true,
+      key_learnings_applied: true,
       comprehensive_coverage: true,
       deterministic_tests: 'Attempted (some flaky issues)',
       performance: '<2 minutes target for unit tests',
@@ -471,7 +471,7 @@ Ready for PLAN comprehensive verification.`,
       efficiency_gain: '90% time savings (reuse + early delivery)'
     },
 
-    lessons_learned: [
+    key_learnings: [
       'Testing-first: Create tests immediately after implementation (Phase 2 pattern)',
       'Delegation-first: Use specialized agents for testing and UI (LEO Protocol v4.3.0)',
       'Learning-first: Consult retrospectives before implementation (prevention-implementation-COMPLETE.md)',

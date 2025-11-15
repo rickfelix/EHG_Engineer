@@ -151,7 +151,7 @@ async function createPlanLeadHandoff() {
    - Status: No retrospective created yet
    - Resolution: Generate retrospective before LEAD final approval
    - Script: node scripts/generate-comprehensive-retrospective.js SD-VENTURE-UNIFICATION-001
-   - Quality requirement: ≥70 score (what_went_well, what_went_wrong, lessons_learned)
+   - Quality requirement: ≥70 score (what_went_well, what_needs_improvement, key_learnings)
 
 **Risks**:
 

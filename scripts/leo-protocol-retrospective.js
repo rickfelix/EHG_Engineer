@@ -110,7 +110,7 @@ async function generateRetrospective() {
       'FUTURE: Consider sub-agent activation improvements'
     ],
 
-    lessons_learned: [
+    key_learnings: [
       'Automation tools exist but need enforcement to be used',
       'Small issues (module warnings) have big impact on productivity',
       'Manual processes lead to inconsistency and errors',
@@ -166,7 +166,7 @@ async function generateRetrospective() {
   retrospective.recommendations.forEach(rec => console.log(`  • ${rec}`));
 
   console.log('\n📚 LESSONS LEARNED');
-  retrospective.lessons_learned.forEach(lesson => console.log(`  • ${lesson}`));
+  retrospective.key_learnings.forEach(lesson => console.log(`  • ${lesson}`));
 
   console.log('\n🎯 NEXT STEPS');
   retrospective.next_steps.forEach((step, i) => console.log(`  ${i+1}. ${step}`));

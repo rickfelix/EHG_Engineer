@@ -235,7 +235,7 @@ Ready for PLAN verification phase.`,
 
     open_questions: [],
 
-    lessons_learned: [
+    key_learnings: [
       {
         lesson: 'User stories must be created BEFORE implementation',
         impact: 'Protocol gap identified and fixed',

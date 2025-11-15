@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Update STORIES Sub-Agent with 5 Improvements from Lessons Learned
+ * Update STORIES Sub-Agent with 5 Improvements from Key Learnings
  * Based on analysis of user story validation gaps, E2E test mapping issues, and quality patterns
  */
 
@@ -18,7 +18,7 @@ const supabase = createClient(
 async function updateStoriesSubAgent() {
   console.log('🔧 Updating STORIES Sub-Agent with 5 Improvements...\n');
 
-  const updatedDescription = `## User Story Context Engineering v2.0.0 - Lessons Learned Edition
+  const updatedDescription = `## User Story Context Engineering v2.0.0 - Key Learnings Edition
 
 **🆕 NEW in v2.0.0**: 5 critical improvements from lessons learned and root cause analyses
 
@@ -443,7 +443,7 @@ function validateINVESTCriteria(userStory) {
 
 ---
 
-## Lessons Learned Integration
+## Key Learnings Integration
 
 **Success Patterns**:
 - **US-XXX Naming Convention**: Made retrospective mapping possible (Improvement #1)
@@ -495,7 +495,7 @@ function validateINVESTCriteria(userStory) {
 ## Version History
 
 - **v1.0.0**: Initial BMAD enhancement - Context engineering fields
-- **v2.0.0** (2025-10-26): Lessons Learned Edition - 5 critical improvements from user story validation gaps, E2E test mapping issues, and quality analysis
+- **v2.0.0** (2025-10-26): Key Learnings Edition - 5 critical improvements from user story validation gaps, E2E test mapping issues, and quality analysis
 
 ---
 
@@ -552,7 +552,7 @@ function validateINVESTCriteria(userStory) {
         tools_to_create: ['scripts/enrich-user-story-context.js']
       }
     },
-    lessons_learned_sources: [
+    key_learnings_sources: [
       'user-story-validation-gap.md: SD-TEST-MOCK-001 (30 min debugging, progress blocked)',
       'ROOT_CAUSE_USER_STORY_MAPPING_GAP.md: SD-VIF-INTEL-001 (26 unmapped stories, CRITICAL gap)',
       'validation-agent-proactive-gates.md: SD-EVA-MEETING-001 (user story validation requirements)',
