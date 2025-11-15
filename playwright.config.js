@@ -87,8 +87,8 @@ export default defineConfig({
   // For EHG app UAT tests, use playwright-uat.config.js instead
   webServer: [
     {
-      command: 'cd lib/dashboard && node server.js',
-      port: 3456,
+      command: 'cd src/client && npm run dev',
+      port: 8080,
       reuseExistingServer: !process.env.CI,
       timeout: 30000,
     }
