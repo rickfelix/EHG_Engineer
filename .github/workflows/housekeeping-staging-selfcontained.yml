@@ -40,7 +40,7 @@ jobs:
       - name: Node version (for dbexec bundle)
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Write .env.staging for CI
         run: |
