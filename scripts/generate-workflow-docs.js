@@ -1,12 +1,12 @@
+#!/usr/bin/env node
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-#!/usr/bin/env node
 
-
-
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 
 // Load stages data
@@ -899,38 +899,38 @@ Comprehensive analysis and optimization of the 40-stage venture workflow for max
   // GPT-5 prompt for overall
   const gpt5OverallPath = path.join(researchDir, 'overall_prompt_gpt5.json');
   const gpt5OverallPrompt = {
-    objective: "Critique and optimize the EHG 40-stage venture workflow for maximum efficiency and success rate",
+    objective: 'Critique and optimize the EHG 40-stage venture workflow for maximum efficiency and success rate',
     inputs: {
-      stages_yaml_path: "/docs/workflow/stages.yaml",
-      sop_index: "/docs/workflow/SOP_INDEX.md",
-      overview_diagram: "/docs/stages/overview.mmd",
-      prd_crosswalk: "/docs/workflow/prd_crosswalk.csv"
+      stages_yaml_path: '/docs/workflow/stages.yaml',
+      sop_index: '/docs/workflow/SOP_INDEX.md',
+      overview_diagram: '/docs/stages/overview.mmd',
+      prd_crosswalk: '/docs/workflow/prd_crosswalk.csv'
     },
     tasks: [
-      "Identify missing gates and circular dependencies",
-      "Benchmark against industry best practices for venture studios",
-      "Propose 80/20 improvements with expected impact",
-      "Design optimal automation strategy",
-      "Create success prediction model",
-      "Define parallel execution opportunities"
+      'Identify missing gates and circular dependencies',
+      'Benchmark against industry best practices for venture studios',
+      'Propose 80/20 improvements with expected impact',
+      'Design optimal automation strategy',
+      'Create success prediction model',
+      'Define parallel execution opportunities'
     ],
     deliverables: [
-      "/docs/research/outputs/overall_findings.md",
-      "/docs/research/outputs/overall_recommendations.md",
-      "/docs/research/outputs/overall_automation_blueprint.md",
-      "/docs/research/outputs/overall_risk_matrix.md"
+      '/docs/research/outputs/overall_findings.md',
+      '/docs/research/outputs/overall_recommendations.md',
+      '/docs/research/outputs/overall_automation_blueprint.md',
+      '/docs/research/outputs/overall_risk_matrix.md'
     ],
     constraints: {
       maintain_quality: true,
-      preserve_gates: ["Stage 3 Kill/Revise/Proceed", "Stage 30 Production", "Stage 40 Exit"],
+      preserve_gates: ['Stage 3 Kill/Revise/Proceed', 'Stage 30 Production', 'Stage 40 Exit'],
       respect_dependencies: true,
-      consider_resources: ["4 AI agents", "Chairman oversight", "Limited budget"]
+      consider_resources: ['4 AI agents', 'Chairman oversight', 'Limited budget']
     },
     evaluation_criteria: {
-      cycle_time_reduction: "Target 40%+ reduction",
-      automation_coverage: "Target 80%+ automation",
-      success_prediction: "Target 75%+ accuracy by stage 10",
-      risk_mitigation: "Address top 10 failure modes"
+      cycle_time_reduction: 'Target 40%+ reduction',
+      automation_coverage: 'Target 80%+ automation',
+      success_prediction: 'Target 75%+ accuracy by stage 10',
+      risk_mitigation: 'Address top 10 failure modes'
     }
   };
   
@@ -941,8 +941,8 @@ Comprehensive analysis and optimization of the 40-stage venture workflow for max
   const geminiOverallPrompt = {
     ...gpt5OverallPrompt,
     gemini_specific: {
-      reasoning_mode: "analytical",
-      response_format: "structured",
+      reasoning_mode: 'analytical',
+      response_format: 'structured',
       confidence_threshold: 0.8,
       include_alternatives: true
     }
@@ -1000,11 +1000,11 @@ ${stage.description}
         critique_path: `/docs/workflow/critique/stage-${String(stage.id).padStart(2, '0')}.md`
       },
       tasks: [
-        "Analyze necessity and potential for combination/elimination",
-        "Identify specific automation opportunities",
-        "Define concrete success metrics with thresholds",
-        "Design comprehensive rollback procedures",
-        "Optimize dependencies and data flow"
+        'Analyze necessity and potential for combination/elimination',
+        'Identify specific automation opportunities',
+        'Define concrete success metrics with thresholds',
+        'Design comprehensive rollback procedures',
+        'Optimize dependencies and data flow'
       ],
       deliverables: [
         `/docs/research/outputs/stage_${String(stage.id).padStart(2, '0')}_findings.md`,
@@ -1019,7 +1019,7 @@ ${stage.description}
     const geminiPrompt = {
       ...gpt5Prompt,
       gemini_specific: {
-        focus: "practical_implementation",
+        focus: 'practical_implementation',
         include_code_samples: true,
         suggest_tools: true
       }

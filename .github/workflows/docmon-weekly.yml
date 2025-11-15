@@ -1,0 +1,218 @@
+name: DOCMON Weekly Documentation Drift Check
+
+on:
+  schedule:
+    # Run every Monday at 10 AM UTC (after PRD audit at 9 AM)
+    - cron: '0 10 * * 1'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  documentation-drift-check:
+    name: Check Documentation Drift
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run DOCMON compliance check
+        id: docmon
+        run: |
+          # Run DOCMON and capture output
+          node -e "
+          import('./lib/sub-agents/docmon.js').then(async (module) => {
+            const result = await module.execute('AUTOMATED-WEEKLY-SCAN', { code: 'DOCMON' }, {});
+
+            // Write full results to file
+            const fs = require('fs');
+            fs.writeFileSync('docmon-report.json', JSON.stringify(result, null, 2));
+
+            // Create human-readable report
+            let report = '# DOCMON Weekly Report\n\n';
+            report += \`**Verdict:** \${result.verdict}\n\`;
+            report += \`**Confidence:** \${result.confidence}%\n\`;
+            report += \`**Total Violations:** \${result.critical_issues.length}\n\n\`;
+
+            if (result.critical_issues.length > 0) {
+              report += '## Critical Issues\n\n';
+              result.critical_issues.forEach((issue, idx) => {
+                report += \`### \${idx + 1}. \${issue.issue}\n\n\`;
+                report += \`**Severity:** \${issue.severity}\n\`;
+                report += \`**Recommendation:** \${issue.recommendation}\n\n\`;
+                if (issue.files && issue.files.length > 0) {
+                  report += '**Files:**\n';
+                  issue.files.forEach(file => {
+                    report += \`- \${file}\n\`;
+                  });
+                  report += '\n';
+                }
+              });
+            }
+
+            if (result.recommendations && result.recommendations.length > 0) {
+              report += '## Recommendations\n\n';
+              result.recommendations.forEach(rec => {
+                report += \`- \${rec}\n\`;
+              });
+              report += '\n';
+            }
+
+            fs.writeFileSync('docmon-report.md', report);
+
+            // Set environment variable if violations found
+            if (result.verdict === 'BLOCKED') {
+              console.log('DRIFT_DETECTED=true');
+            }
+
+            // Exit with error if blocked
+            process.exit(result.verdict === 'BLOCKED' ? 1 : 0);
+          }).catch(err => {
+            console.error('Error:', err.message);
+            process.exit(1);
+          });
+          " || echo "DRIFT_DETECTED=true" >> $GITHUB_ENV
+
+      - name: Upload DOCMON reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docmon-weekly-report-${{ github.run_number }}
+          path: |
+            docmon-report.json
+            docmon-report.md
+          retention-days: 30
+
+      - name: Create issue if drift detected
+        if: env.DRIFT_DETECTED == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Read the markdown report
+            let reportMd = '';
+            try {
+              reportMd = fs.readFileSync('docmon-report.md', 'utf8');
+            } catch (err) {
+              reportMd = 'Failed to read detailed report. Check workflow artifacts.';
+            }
+
+            // Read JSON for structured data
+            let reportJson = {};
+            try {
+              reportJson = JSON.parse(fs.readFileSync('docmon-report.json', 'utf8'));
+            } catch (err) {
+              console.log('Could not parse JSON report');
+            }
+
+            const issueBody = [
+              '## DOCMON: Documentation Drift Detected',
+              '',
+              'The automated weekly DOCMON scan found database-first architecture violations.',
+              '',
+              reportMd,
+              '',
+              '## Action Required',
+              '',
+              '### For Strategic Directive Markdown Files:',
+              '```bash',
+              'npm run leo:new',
+              '# Or: node scripts/create-strategic-directive.js',
+              '```',
+              '',
+              '### For PRD Markdown Files:',
+              '```bash',
+              'node scripts/add-prd-to-database.js',
+              '```',
+              '',
+              '### For Handoff Markdown Files:',
+              '```bash',
+              'node scripts/unified-handoff-system.js',
+              '```',
+              '',
+              '### After Migrating to Database:',
+              '```bash',
+              '# Delete the markdown files',
+              'git rm <file>',
+              'git commit -m "chore: migrate to database-first architecture"',
+              '```',
+              '',
+              '## Why This Matters',
+              '',
+              'Database-first architecture ensures:',
+              '- Single source of truth',
+              '- Consistent data structure',
+              '- Query capabilities',
+              '- Audit trail',
+              '- Integration with LEO Protocol workflows',
+              '',
+              '📚 **Documentation:** See `docs/reference/database-agent-patterns.md`',
+              '',
+              `🔗 **Workflow Run:** [View Details](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+              '',
+              '---',
+              '**Auto-generated by DOCMON weekly workflow**'
+            ].join('\n');
+
+            // Check for existing open DOCMON issues
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'automated,documentation,docmon',
+              per_page: 5
+            });
+
+            if (existingIssues.data.length > 0) {
+              // Update existing issue with new comment
+              const existingIssue = existingIssues.data[0];
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: [
+                  `## Weekly Update: ${new Date().toISOString().split('T')[0]}`,
+                  '',
+                  reportMd,
+                  '',
+                  `🔗 **Workflow Run:** [View Details](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`
+                ].join('\n')
+              });
+
+              console.log(`Updated existing issue #${existingIssue.number}`);
+            } else {
+              // Create new issue
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '⚠️ DOCMON: Documentation Drift Detected',
+                body: issueBody,
+                labels: ['automated', 'documentation', 'tech-debt', 'high-priority', 'docmon']
+              });
+
+              console.log('Created new DOCMON issue');
+            }
+
+      - name: Post summary
+        if: always()
+        run: |
+          echo "## DOCMON Weekly Check Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f docmon-report.md ]; then
+            cat docmon-report.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ No drift detected - database-first architecture maintained!" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 **Artifacts:** Reports uploaded for 30 days" >> $GITHUB_STEP_SUMMARY
