@@ -15,13 +15,33 @@ const rl = readline.createInterface({
 
 // Model profiles with characteristics
 const modelProfiles = {
-  'gpt-5': {
+  'gpt-5.1': {
     provider: 'openai',
-    name: 'GPT-5 Flagship',
-    strengths: ['Highest accuracy', 'Complex reasoning', 'Latest capabilities'],
+    name: 'GPT-5.1 Thinking',
+    strengths: ['Highest accuracy', 'Advanced reasoning', 'Adaptive thinking'],
     weaknesses: ['Higher cost', 'Slower response time'],
     bestFor: 'Critical test paths, complex UI flows, final validation',
     costRating: '$$$$',
+    speedRating: '⚡⚡',
+    accuracyRating: '⭐⭐⭐⭐⭐'
+  },
+  'gpt-5.1-chat-latest': {
+    provider: 'openai',
+    name: 'GPT-5.1 Instant',
+    strengths: ['Fast', 'Intelligent', 'Good balance', 'Latest model'],
+    weaknesses: ['Slightly higher cost than older models'],
+    bestFor: 'Regular testing, CI/CD pipelines, most use cases',
+    costRating: '$',
+    speedRating: '⚡⚡⚡⚡',
+    accuracyRating: '⭐⭐⭐⭐⭐'
+  },
+  'gpt-5-pro': {
+    provider: 'openai',
+    name: 'GPT-5 Pro',
+    strengths: ['Highest tier performance', 'Complex reasoning'],
+    weaknesses: ['Highest cost'],
+    bestFor: 'Mission-critical testing, production validation',
+    costRating: '$$$$$',
     speedRating: '⚡⚡',
     accuracyRating: '⭐⭐⭐⭐⭐'
   },
@@ -30,8 +50,8 @@ const modelProfiles = {
     name: 'GPT-5 Mini',
     strengths: ['Good balance', 'Fast responses', 'Cost-effective'],
     weaknesses: ['Less capable on complex tasks'],
-    bestFor: 'Regular testing, CI/CD pipelines, most use cases',
-    costRating: '$',
+    bestFor: 'Regular testing, development testing',
+    costRating: '$$',
     speedRating: '⚡⚡⚡⚡',
     accuracyRating: '⭐⭐⭐⭐'
   },
@@ -75,58 +95,48 @@ const modelProfiles = {
     speedRating: '⚡⚡⚡⚡',
     accuracyRating: '⭐⭐⭐'
   },
-  'claude-sonnet-4': {
+  'claude-sonnet-4-5': {
     provider: 'anthropic',
-    name: 'Claude Sonnet 4',
-    strengths: ['Excellent reasoning', 'Good at edge cases', 'Detailed analysis'],
+    name: 'Claude Sonnet 4.5',
+    strengths: ['Best coding model', 'Excellent at building agents', 'Great with computers'],
     weaknesses: ['Higher cost', 'Requires Anthropic API'],
-    bestFor: 'Complex debugging, accessibility testing, detailed reports',
-    costRating: '$$$$',
-    speedRating: '⚡⚡',
+    bestFor: 'Complex debugging, accessibility testing, agentic workflows',
+    costRating: '$$$',
+    speedRating: '⚡⚡⚡',
     accuracyRating: '⭐⭐⭐⭐⭐'
   },
-  'claude-sonnet-3.7': {
+  'claude-haiku-4-5': {
     provider: 'anthropic',
-    name: 'Claude Sonnet 3.7',
-    strengths: ['Balanced performance', 'Good reasoning', 'Reliable'],
-    weaknesses: ['Medium cost'],
-    bestFor: 'General testing, good alternative to GPT',
-    costRating: '$$',
-    speedRating: '⚡⚡⚡',
+    name: 'Claude Haiku 4.5',
+    strengths: ['Sonnet-4 coding performance', 'Very fast', '1/3 the cost', '2x speed'],
+    weaknesses: ['Smaller context than Sonnet'],
+    bestFor: 'Real-time assistants, customer support, parallel sub-agents',
+    costRating: '$',
+    speedRating: '⚡⚡⚡⚡⚡',
     accuracyRating: '⭐⭐⭐⭐'
   },
-  'claude-opus-4': {
+  'claude-opus-4-1': {
     provider: 'anthropic',
-    name: 'Claude Opus 4',
-    strengths: ['Best reasoning', 'Handles ambiguity well', 'Thorough'],
+    name: 'Claude Opus 4.1',
+    strengths: ['Best reasoning', 'Agentic tasks', 'Real-world coding'],
     weaknesses: ['Highest cost', 'Slower'],
     bestFor: 'Complex analysis, critical systems, regulatory compliance',
     costRating: '$$$$$',
-    speedRating: '⚡',
+    speedRating: '⚡⚡',
     accuracyRating: '⭐⭐⭐⭐⭐'
-  },
-  'claude-haiku-3': {
-    provider: 'anthropic',
-    name: 'Claude Haiku 3',
-    strengths: ['Very affordable', 'Fast', 'Good for simple tasks'],
-    weaknesses: ['Basic capabilities only'],
-    bestFor: 'Simple validation, high-volume testing',
-    costRating: '¢',
-    speedRating: '⚡⚡⚡⚡⚡',
-    accuracyRating: '⭐⭐⭐'
   }
 };
 
 // Test scenarios to model mapping
 const scenarioRecommendations = {
-  'smoke-test': ['gpt-5-nano', 'claude-haiku-3', 'gpt-4o-mini'],
-  'regression': ['gpt-5-mini', 'claude-sonnet-3.7', 'gpt-4.1'],
-  'critical-path': ['gpt-5', 'claude-opus-4', 'claude-sonnet-4'],
-  'accessibility': ['claude-sonnet-4', 'claude-sonnet-3.7', 'gpt-5'],
+  'smoke-test': ['gpt-5-nano', 'claude-haiku-4-5', 'gpt-4o-mini'],
+  'regression': ['gpt-5-mini', 'claude-haiku-4-5', 'gpt-4.1'],
+  'critical-path': ['gpt-5.1', 'claude-opus-4-1', 'claude-sonnet-4-5'],
+  'accessibility': ['claude-sonnet-4-5', 'gpt-5.1', 'claude-haiku-4-5'],
   'performance': ['gpt-5-mini', 'gpt-4o-mini', 'gpt-5-nano'],
-  'visual-bugs': ['gpt-5', 'gpt-4o', 'claude-sonnet-4'],
-  'ci-cd': ['gpt-5-mini', 'gpt-5-nano', 'claude-haiku-3'],
-  'development': ['gpt-5-mini', 'gpt-4o-mini', 'claude-sonnet-3.7']
+  'visual-bugs': ['gpt-5.1', 'gpt-4o', 'claude-sonnet-4-5'],
+  'ci-cd': ['gpt-5-mini', 'gpt-5-nano', 'claude-haiku-4-5'],
+  'development': ['gpt-5-mini', 'gpt-4o-mini', 'claude-haiku-4-5']
 };
 
 /**

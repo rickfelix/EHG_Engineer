@@ -29,7 +29,7 @@ const supabase = createClient(
 class UATToSDConverter {
   constructor() {
     this.conversionId = `UAT-SD-${Date.now()}`;
-    this.model = 'gpt-4-turbo-preview';
+    this.model = 'gpt-5.1-chat-latest';
   }
 
   /**

@@ -430,7 +430,7 @@ app.put('/api/sdip/submissions/:id/step/:stepNumber', async (req, res) => {
           console.log('🤖 Generating intent summary with OpenAI for step 2...');
           const feedback = stepData.feedback || stepData.chairman_input;
           const completion = await openai.chat.completions.create({
-            model: 'gpt-3.5-turbo',
+            model: 'gpt-5.1-chat-latest',
             messages: [
               {
                 role: 'system',
@@ -861,7 +861,7 @@ app.get('/api/strategic-directives/:sd_id/backlog-summary', async (req, res) => 
       console.log(`   Using context: ${fullContext.substring(0, 200)}...`);
 
       const completion = await openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-5.1-chat-latest',
         messages: [
           {
             role: 'system',

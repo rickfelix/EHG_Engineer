@@ -232,8 +232,8 @@ CREATE TABLE IF NOT EXISTS context_embeddings (
     interaction_id UUID REFERENCES interaction_history(id) ON DELETE CASCADE,
     
     -- Embedding Data
-    embedding_vector VECTOR(384), -- OpenAI embedding dimension (adjust as needed)
-    embedding_model VARCHAR(100) NOT NULL DEFAULT 'text-embedding-ada-002',
+    embedding_vector VECTOR(1536), -- OpenAI text-embedding-3-small dimension
+    embedding_model VARCHAR(100) NOT NULL DEFAULT 'text-embedding-3-small',
     
     -- Context Metadata
     context_type VARCHAR(50) NOT NULL, -- prompt, file, git, error, project

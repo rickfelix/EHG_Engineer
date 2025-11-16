@@ -185,7 +185,7 @@ export const EVAVoiceAssistant: React.FC<EVAVoiceAssistantProps> = ({
           body: {
             userId,
             sessionConfig: {
-              model: 'gpt-4o-realtime-preview-2024-12-17',
+              model: 'gpt-realtime',
               voice: 'alloy',
               instructions: `You are EVA, a professional portfolio assistant.
                 Help users understand their investments and make informed decisions.

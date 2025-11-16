@@ -78,7 +78,7 @@ async function testSetup() {
       console.log('\nTesting Anthropic connection...');
       const anthropicClient = new MultimodalClient({
         provider: 'anthropic',
-        model: 'claude-haiku-3', // Use cheapest model for testing
+        model: 'claude-haiku-4-5', // Use fast, affordable model for testing
         apiKey: process.env.ANTHROPIC_API_KEY
       });
       

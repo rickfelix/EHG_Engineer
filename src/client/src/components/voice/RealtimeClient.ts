@@ -127,8 +127,8 @@ export class RealtimeClient extends EventEmitter {
   private async connectWebSocket(): Promise<void> {
     return new Promise((resolve, reject) => {
       // Use the client_secret from session for authentication
-      const wsUrl = `wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17`;
-      
+      const wsUrl = 'wss://api.openai.com/v1/realtime?model=gpt-realtime';
+
       this.ws = new WebSocket(wsUrl, {
         headers: {
           'Authorization': `Bearer ${this.config.session.client_secret}`,
