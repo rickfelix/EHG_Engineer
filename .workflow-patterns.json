@@ -2,7 +2,7 @@
   "error_recovery": [
     {
       "pattern": "ErrorBoundary / try-catch",
-      "count": 63,
+      "count": 70,
       "confidence": "high",
       "examples": [
         "src/components/error/ComponentErrorBoundary.tsx:import { ErrorBoundary } from './ErrorBoundary';",
@@ -14,14 +14,14 @@
   "confirmation_modals": [
     {
       "pattern": "Confirmation Dialog",
-      "count": 279,
+      "count": 342,
       "confidence": "high"
     }
   ],
   "form_validation": [
     {
       "pattern": "Form validation (zod)",
-      "count": 48,
+      "count": 70,
       "library": "zod",
       "confidence": "high"
     }
@@ -29,16 +29,16 @@
   "loading_patterns": [
     {
       "pattern": "Loading states (isLoading, Skeleton)",
-      "count": 1311,
+      "count": 1402,
       "confidence": "high"
     }
   ],
   "navigation": [
     {
       "pattern": "Programmatic navigation",
-      "count": 155,
+      "count": 173,
       "confidence": "high"
     }
   ],
-  "last_scan": "2025-10-27T15:21:28.370Z"
+  "last_scan": "2025-11-15T23:37:40.489Z"
 }

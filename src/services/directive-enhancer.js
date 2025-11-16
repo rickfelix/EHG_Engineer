@@ -84,10 +84,10 @@ export class DirectiveEnhancer {
    */
   async extractIntent(chairmanInput) {
     const completion = await this.openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: 'gpt-5.1-chat-latest',
       messages: [
         {
-          role: "system",
+          role: 'system',
           content: `Extract a focused intent statement from the chairman's feedback. Requirements:
 - Maximum 80 words
 - Intent-first: focus on WHAT and WHY, not HOW
@@ -98,7 +98,7 @@ Example good intent: "Enable users to export analytics reports as PDF/Excel to s
 Example bad intent: "Build a comprehensive reporting system with dashboards, filters, charts, and multiple export formats..."`
         },
         {
-          role: "user",
+          role: 'user',
           content: chairmanInput
         }
       ],
@@ -115,10 +115,10 @@ Example bad intent: "Build a comprehensive reporting system with dashboards, fil
    */
   async generateDecisionQuestions(intent, chairmanInput) {
     const completion = await this.openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: 'gpt-5.1-chat-latest',
       messages: [
         {
-          role: "system",
+          role: 'system',
           content: `Generate exactly 5 decision-shaping questions for this intent. Each question must:
 1. Be specific to THIS intent (not generic)
 2. Have answers that would materially change the implementation approach
@@ -144,13 +144,13 @@ Format as JSON object with a "questions" array:
 Focus on: architecture choices, data decisions, integration boundaries, acceptance criteria, performance thresholds.`
         },
         {
-          role: "user",
+          role: 'user',
           content: `Intent: ${intent}\n\nOriginal feedback: ${chairmanInput.substring(0, 500)}`
         }
       ],
       temperature: 0.4,
       max_tokens: 600,
-      response_format: { type: "json_object" }
+      response_format: { type: 'json_object' }
     });
 
     try {
@@ -182,10 +182,10 @@ Focus on: architecture choices, data decisions, integration boundaries, acceptan
     }
 
     const completion = await this.openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: 'gpt-5.1-chat-latest',
       messages: [
         {
-          role: "system",
+          role: 'system',
           content: `Create a comprehensive Strategic Directive description (200-300 words) that:
 
 1. Starts with the concise intent statement (provided below)
@@ -202,7 +202,7 @@ Structure:
 Keep it concise but comprehensive. Focus on decisions that materially change implementation approach.`
         },
         {
-          role: "user",
+          role: 'user',
           content: `Intent (80 words): ${intent}
 
 Decision Questions to Answer:
@@ -380,10 +380,10 @@ Generate comprehensive description (200-300 words, flowing paragraphs, NO Q&A fo
    */
   async prepareDatabaseReadySD(intent, questions, codebaseFindings, chairmanInput) {
     const completion = await this.openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: 'gpt-5.1-chat-latest',
       messages: [
         {
-          role: "system",
+          role: 'system',
           content: `Create a concise, database-ready Strategic Directive structure. Keep it LEAN - only include elements that directly support the intent. Format as JSON:
 {
   "title": "Clear, outcome-focused title (≤60 chars)",
@@ -402,7 +402,7 @@ Generate comprehensive description (200-300 words, flowing paragraphs, NO Q&A fo
 Focus on: measurable outcomes, real constraints, actual risks. Skip security/performance/accessibility unless REQUIRED by the intent.`
         },
         {
-          role: "user",
+          role: 'user',
           content: `Intent: ${intent}
 
 Codebase findings: ${JSON.stringify(codebaseFindings, null, 2)}
@@ -414,7 +414,7 @@ Generate database-ready SD structure (JSON only, no markdown).`
       ],
       temperature: 0.3,
       max_tokens: 800,
-      response_format: { type: "json_object" }
+      response_format: { type: 'json_object' }
     });
 
     try {

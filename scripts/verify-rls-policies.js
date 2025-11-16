@@ -345,7 +345,7 @@ class RLSVerifier {
         console.log('  ✅ ALL TABLES HAVE FULL CRUD POLICIES');
       } else {
         console.log(`  ℹ️  ${this.results.full_crud_percentage}% have full CRUD policies`);
-        console.log(`  ℹ️  Remaining tables have intentional read-only or partial coverage`);
+        console.log('  ℹ️  Remaining tables have intentional read-only or partial coverage');
       }
     } else {
       console.log('  ❌ RLS POLICY VERIFICATION FAILED');

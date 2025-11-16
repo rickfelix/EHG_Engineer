@@ -41,7 +41,7 @@ Consider:
     console.log('📤 Sending to OpenAI...\n');
     
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo', // Using 3.5 for faster response
+      model: 'gpt-5.1-chat-latest', // Using GPT-5.1 Instant for fast, intelligent response
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
@@ -109,7 +109,7 @@ async function testSimpleAnalysis() {
   
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-5.1-chat-latest',
       messages: [{
         role: 'user',
         content: `Which sub-agents would be relevant for this task: "${prompt}"
