@@ -11,7 +11,9 @@
 
 **Original Claim**: Stage 1 (Draft Idea) documented as "✅ Implemented" (Phase 1 complete per PRD crosswalk)
 
-**Actual Status**: 🚧 **Partially Implemented (~70% complete)**
+**Actual Status**: 🚧 **Partially Implemented (~85% complete after descoping voice recording)**
+
+**Update (2025-11-19)**: Voice recording descoped from Stage 1 requirements. Percentage updated from ~70% to ~85%.
 
 **Verdict**: Documentation claims were **overstated**. While significant functionality exists and is operational, critical documented features are missing and architectural decisions differ from specifications.
 
@@ -24,52 +26,41 @@
 | **Substage 1.1** | Idea Brief Creation | ✅ Fully Implemented | 100% |
 | **Substage 1.2** | Assumption Listing | ❌ Not Found | 0% |
 | **Substage 1.3** | Success Criteria | ❌ Not Found | 0% |
-| **Voice Recording** | Input method | ⚠️ Exists but not integrated | 50% |
-| **Field Validation** | Character limits | ✅ Frontend + DB, ❌ API | 85% |
+| **Voice Recording** | Input method | 🔕 DESCOPED (exists elsewhere) | N/A |
+| **Field Validation** | Character limits | ✅ Frontend + DB + API | 100% |
 | **Quality Scoring** | Idea quality score | ✅ Fully Implemented | 100% |
 | **Database Schema** | Tables and fields | ✅ Fully Implemented | 100% |
 | **UI Components** | Form interface | ✅ Fully Implemented | 100% |
-| **API Endpoints** | Creation endpoints | ✅ Operational | 95% |
+| **API Endpoints** | Creation endpoints | ✅ Operational | 100% |
 | **Tests** | E2E coverage | ✅ Exists | 90% |
-| **Overall** | | 🚧 Partial | **~70%** |
+| **Overall** | | 🚧 Partial | **~85%** |
 
 ---
 
 ## Detailed Gap Analysis
 
-### 1. Voice Recording Integration Gap
+### 1. Voice Recording Integration - 🔕 DESCOPED
 
-**Documented Claim**:
-- "Voice recording" listed as primary input (docs/workflow/dossiers/stage-01/01_overview.md:48)
-- "User provides description (20-2000 chars) via UI or voice" (docs/workflow/dossiers/stage-01/05_professional-sop.md:22)
+**Status**: DESCOPED from Stage 1 requirements (2025-11-19)
 
-**Actual Implementation**:
-- ✅ VoiceRecorder component exists: `/mnt/c/_EHG/ehg/src/components/chairman/feedback/VoiceRecorder.tsx` (66 lines)
+**Rationale**:
+- Text input is sufficient for Stage 1 idea capture
+- VoiceRecorder component exists and is actively used in Chairman Feedback system
+- No need to duplicate functionality across multiple workflows
+- Stage 1 can remain focused on core text-based input
+
+**Implementation Available Elsewhere**:
+- ✅ VoiceRecorder component: `/mnt/c/_EHG/ehg/src/components/chairman/feedback/VoiceRecorder.tsx` (66 lines)
 - ✅ Transcription API operational: `/mnt/c/_EHG/ehg/src/app/api/transcribe/route.ts` (OpenAI Whisper)
 - ✅ Database fields exist: `title_voice_url`, `description_voice_url` in `ideas` table
-- ❌ NOT integrated into Stage1DraftIdea component (main workflow)
-- ❌ VoiceRecorder only used in Chairman Feedback system (separate path)
+- ✅ Used in Chairman Feedback workflow
 
-**Evidence**:
-```typescript
-// Stage1DraftIdea.tsx - NO voice recording integration found
-// Lines 199-234: Only text input fields for title and description
-<Input value={title} onChange={(e) => setTitle(e.target.value)} />
-<Textarea value={description} onChange={(e) => setDescription(e.target.value)} />
-```
+**Code Preserved**: All voice recording code remains intact and functional for other use cases.
 
-**Gap Impact**: **HIGH**
-- Users cannot record voice input in main Stage 1 workflow as documented
-- Documentation misleads stakeholders about feature availability
-- Two separate code paths exist for idea capture (Chairman vs. Venture)
-
-**Remediation**:
-1. Integrate VoiceRecorder component into Stage1DraftIdea.tsx
-2. Add voice-to-text button next to title/description fields
-3. Wire up transcription API calls
-4. Update UI to show voice recording status
-
-**Estimated Effort**: 2-3 days (30-50 LOC integration code)
+**Documentation Updated**:
+- Removed "Voice recording" from Stage 1 inputs list
+- Updated maturity percentage from ~70% to ~85%
+- Marked as descoped feature rather than missing implementation
 
 ---
 
@@ -277,23 +268,28 @@ CREATE TABLE ventures (
 
 ### Immediate Actions (High Priority)
 
-1. **Update Maturity Status** ✅ COMPLETED
+1. **Update Maturity Status** ✅ COMPLETED (2025-11-18)
    - Changed from "✅ Implemented" to "🚧 Partially Implemented (~70%)"
    - Files updated: 01_overview.md, 05_professional-sop.md, 01-draft-idea.md
 
-2. **Document Alternative Implementation**
-   - Explain Strategic Context fields replace Assumptions/Success Criteria
-   - Justify automated quality scoring vs manual metrics
+2. **Add API Validation** ✅ COMPLETED (2025-11-19)
+   - Added character limit checks to ventures/create endpoint
+   - PR: https://github.com/rickfelix/ehg/pull/20
 
-3. **Add API Validation** (Quick Fix - 1 hour)
-   - Add character limit checks to ventures/create endpoint
-   - Estimated: 10-15 LOC
+3. **Descope Voice Recording** ✅ COMPLETED (2025-11-19)
+   - Removed from Stage 1 requirements
+   - Updated maturity to ~85%
+   - Component preserved for use in Chairman Feedback
+
+4. **Document Alternative Implementation** ✅ COMPLETED
+   - Explained Strategic Context fields replace Assumptions/Success Criteria
+   - Justified automated quality scoring vs manual metrics
 
 ### Short-Term Actions (Next Sprint)
 
-4. **Integrate Voice Recording** (2-3 days)
-   - Wire VoiceRecorder into Stage1DraftIdea component
-   - Enable voice-to-text for title and description
+5. **~~Integrate Voice Recording~~** DESCOPED
+   - Voice recording is not required for Stage 1
+   - Component remains available in Chairman Feedback system
 
 5. **Update E2E Tests** (2-3 hours)
    - Remove phantom field tests (assumptions, success criteria)
@@ -320,7 +316,7 @@ CREATE TABLE ventures (
 
 | File | Change | Status |
 |------|--------|--------|
-| `docs/workflow/dossiers/stage-01/01_overview.md` | Updated maturity from "✅ Implemented" to "🚧 Partially Implemented (~70%)" | ✅ Done |
+| `docs/workflow/dossiers/stage-01/01_overview.md` | Updated maturity from "✅ Implemented" to "🚧 Partially Implemented (~85% after descoping)" | ✅ Done |
 | `docs/workflow/dossiers/stage-01/01_overview.md` | Added Implementation Gaps section with breakdown | ✅ Done |
 | `docs/workflow/dossiers/stage-01/05_professional-sop.md` | Marked substages 1.1 ✅, 1.2 ❌, 1.3 ❌ | ✅ Done |
 | `docs/workflow/dossiers/stage-01/05_professional-sop.md` | Added implementation status notes | ✅ Done |
@@ -332,8 +328,9 @@ CREATE TABLE ventures (
 ## Stakeholder Impact
 
 **For Product Managers**:
-- Stage 1 is functional and production-ready for core workflow (70%)
-- Missing features (voice integration, assumptions) can be prioritized for future sprints
+- Stage 1 is functional and production-ready for core workflow (~85%)
+- Voice recording descoped (available in Chairman Feedback)
+- Missing features (assumptions, success criteria) can be prioritized for future sprints
 - Current implementation differs from spec but provides equal value through Strategic Context
 
 **For Developers**:
@@ -343,14 +340,14 @@ CREATE TABLE ventures (
 
 **For Users**:
 - Core functionality available (idea capture, validation, quality scoring)
-- Voice recording not yet available in main workflow (workaround: use Chairman Feedback)
+- Text input is the primary method for Stage 1 (voice recording available in Chairman Feedback)
 - Alternative strategic context fields provide value
 
 ---
 
 ## Conclusion
 
-**The "✅ Implemented" claim was premature**. While Stage 1 has substantial working code (~70% complete), critical documented features are missing or differ significantly from specifications.
+**The "✅ Implemented" claim was premature**. While Stage 1 has substantial working code (~85% complete after descoping voice recording), some documented features are missing or differ significantly from specifications.
 
 **Corrective Actions Completed**:
 - Documentation updated to reflect actual state

@@ -27,12 +27,12 @@
 **Depends On**: None (entry point)
 **Next Stage**: 2 (AI Review)
 
-Stage 1 captures raw venture ideas through voice recording or text input with AI assistance. Chairman provides feedback. This is the entry point to the 40-stage workflow.
+Stage 1 captures raw venture ideas through text input with AI assistance. Chairman provides feedback. This is the entry point to the 40-stage workflow.
 
-**Maturity**: 🚧 Partially Implemented (~70% complete - see Implementation Gaps section below)
+**Maturity**: 🚧 Partially Implemented (~85% complete - see Implementation Gaps section below)
 **Automation Level**: Manual → Assisted (from stages.yaml notes)
 **Critical Path**: Yes (entry point blocks all downstream stages)
-**Implementation Notes**: Core features complete in EHG app; voice recording exists but not integrated into main workflow; substages 1.2-1.3 not implemented as documented
+**Implementation Notes**: Core features complete in EHG app; substages 1.2-1.3 not implemented as documented
 
 **Key Metrics**: Idea quality score, Validation completeness, Time to capture
 **Primary Exit Gates**: Title validated (3-120 chars), Description validated (20-2000 chars), Category assigned
@@ -46,7 +46,7 @@ Stage 1 captures raw venture ideas through voice recording or text input with AI
 | **ID** | 1 |
 | **Dependencies** | None |
 | **Substages** | 3 documented (1.1 Idea Brief ✅, 1.2 Assumptions ❌, 1.3 Success Criteria ❌) |
-| **Inputs** | Voice recording (exists but not integrated), Text input ✅, Chairman feedback ✅ |
+| **Inputs** | Text input ✅, Chairman feedback ✅ |
 | **Outputs** | Structured idea document, Initial validation, Risk assessment |
 | **Overall Score** | 3.4/5.0 (from critique) |
 | **Recursion Support** | ❌ None |
@@ -95,21 +95,21 @@ ls /mnt/c/_EHG/ehg/agent-platform/app/crews/
 
 ## Implementation Gaps
 
-**What IS Implemented** (~70% complete):
+**What IS Implemented** (~85% complete):
 - ✅ Core idea capture form (title, description, category) - `/mnt/c/_EHG/ehg/src/components/stages/Stage1DraftIdea.tsx`
 - ✅ Comprehensive quality scoring algorithm (100-point scale) - `/mnt/c/_EHG/ehg/src/services/evaValidation.ts`
 - ✅ Database schema with validation constraints - `ideas` and `ventures` tables
 - ✅ Frontend validation logic (3-120 chars title, 20-2000 chars description)
 - ✅ API endpoints for venture creation
-- ✅ Voice recording component (standalone) - `/mnt/c/_EHG/ehg/src/components/chairman/feedback/VoiceRecorder.tsx`
-- ✅ Transcription service (OpenAI Whisper) - `/mnt/c/_EHG/ehg/src/app/api/transcribe/route.ts`
+- ✅ API-level character validation (completed)
 - ✅ E2E test coverage
 
-**What is NOT Implemented** (~30% missing):
-- ❌ Voice recording integrated into main Stage 1 workflow (exists but not connected)
+**What is NOT Implemented** (~15% missing):
 - ❌ Substage 1.2 (Assumptions) fields in UI
 - ❌ Substage 1.3 (Success Criteria) fields in UI
-- ❌ API-level character validation (only frontend/DB enforce limits)
+
+**Descoped Features**:
+- 🔕 Voice recording for Stage 1 (component exists and is used in Chairman Feedback, but not required for Stage 1)
 
 **Alternative Implementation**: Strategic Context fields implemented instead of Assumptions/Success Criteria (Vision Alignment slider, Strategic Focus selection, Performance Drive Phase).
 
