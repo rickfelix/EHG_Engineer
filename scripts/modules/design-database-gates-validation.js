@@ -492,14 +492,14 @@ export function shouldValidateDesignDatabase(sd) {
   const hasDesignCategory = sd.category?.includes('design');
   const hasDatabaseCategory = sd.category?.includes('database');
 
-  // Check scope/description for keywords
+  // Check scope/description for keywords (word boundary regex to avoid false positives)
   const scope = (sd.scope || '').toLowerCase();
   const description = (sd.description || '').toLowerCase();
 
-  const hasUIKeywords = scope.includes('ui') || scope.includes('ux') ||
-                        description.includes('ui') || description.includes('component');
-  const hasDatabaseKeywords = scope.includes('database') || scope.includes('schema') ||
-                              description.includes('database') || description.includes('table');
+  const hasUIKeywords = /\b(ui|ux|component)\b/i.test(scope) ||
+                        /\b(ui|ux|component)\b/i.test(description);
+  const hasDatabaseKeywords = /\b(database|schema|table)\b/i.test(scope) ||
+                              /\b(database|schema|table)\b/i.test(description);
 
   return (hasDesignCategory && hasDatabaseCategory) ||
          (hasUIKeywords && hasDatabaseKeywords);
