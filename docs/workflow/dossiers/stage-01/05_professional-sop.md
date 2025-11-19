@@ -19,9 +19,9 @@
 
 **Procedure**:
 1. User provides title (3-120 chars) via UI
-2. User provides description (20-2000 chars) via UI ~~or voice~~ *(voice recording exists but not integrated into main workflow)*
+2. User provides description (20-2000 chars) via UI
 3. User selects category from predefined list
-4. System validates all fields meet criteria (frontend + database validation)
+4. System validates all fields meet criteria (frontend + database + API validation)
 
 **Implementation**: `/mnt/c/_EHG/ehg/src/components/stages/Stage1DraftIdea.tsx` (lines 199-283)
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:25-30
