@@ -39,8 +39,8 @@
 Manual (default). System learns from Chairman feedback over time to suggest Auto.
 
 ## Metric -> Action Map (examples)
-- Idea completeness > ${thresholds.stage1.idea_completeness_min} -> **Advance**
-- Validation score > ${thresholds.stage1.validation_score_min} -> **Proceed to AI review**
+- Idea completeness > 70% -> **Advance**
+- Validation score > 80% -> **Proceed to AI review**
 - Title/description validation failed -> **Remediate**
 
 ## Data Flow (contract skeleton)
@@ -54,8 +54,8 @@ Manual (default). System learns from Chairman feedback over time to suggest Auto
 
 ## Tooling & Integrations
 - **Primary Tools**: EVA Assistant, Voice Interface
-- **APIs**: TODO: Speech-to-text API, Natural language processing
-- **External Services**: TODO: Supabase for storage
+- **APIs**: Web Speech API (browser-native), OpenAI API for natural language processing
+- **External Services**: Supabase for venture data storage and validation
 
 ## Error Handling
 - Voice transcription failures → Fall back to text input
@@ -68,14 +68,17 @@ Manual (default). System learns from Chairman feedback over time to suggest Auto
 - Time to capture
 
 ## Risks & Mitigations
-- **Primary Risk**: TBD
-- **Mitigation Strategy**: TBD
-- **Fallback Plan**: TBD
+- **Primary Risk**: Process delays due to unclear validation criteria or incomplete idea capture
+- **Mitigation Strategy**: Clear success criteria defined in Exit Gate; structured templates for idea capture
+- **Fallback Plan**: Manual Chairman review and clarification; iterative refinement of incomplete ideas
 
 ## Failure Modes & Recovery
-- **Common Failures**: TBD
-- **Recovery Steps**: TBD
-- **Rollback Procedure**: TBD
+- **Common Failures**: Voice transcription errors; incomplete description (< 20 chars); missing category assignment; validation timeout
+- **Recovery Steps**:
+  - Voice transcription failure → Automatically fall back to text input
+  - Incomplete data → Prompt Chairman with specific missing fields
+  - Validation timeout → Retry validation with exponential backoff (max 3 attempts)
+- **Rollback Procedure**: Clear captured idea data from database; reset validation flags; notify Chairman of rollback reason (see "Rollback" section above)
 
 ## Security/Compliance Considerations
 - **Data Security**: Standard EHG data protection policies apply
@@ -83,6 +86,6 @@ Manual (default). System learns from Chairman feedback over time to suggest Auto
 - **Audit Trail**: All decisions and changes logged
 
 ## Notes / Open Questions
-- TODO: Map to specific PRD implementations
-- TODO: Define specific tool integrations
-- TODO: Establish concrete metrics and thresholds
+- PRD mapping: Stage 1 is currently pre-PRD phase; PRD creation begins in Stage 2 (AI Review)
+- Tool integrations defined above in "Tooling & Integrations" section
+- Metrics thresholds established in "Metric -> Action Map" section
