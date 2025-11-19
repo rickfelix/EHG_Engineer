@@ -10,7 +10,7 @@
 
 ## Execution Steps
 
-### Substage 1.1: Idea Brief Creation
+### Substage 1.1: Idea Brief Creation ✅ IMPLEMENTED
 
 **Done When**:
 - Title captured
@@ -19,35 +19,44 @@
 
 **Procedure**:
 1. User provides title (3-120 chars) via UI
-2. User provides description (20-2000 chars) via UI or voice
+2. User provides description (20-2000 chars) via UI ~~or voice~~ *(voice recording exists but not integrated into main workflow)*
 3. User selects category from predefined list
-4. System validates all fields meet criteria
+4. System validates all fields meet criteria (frontend + database validation)
 
+**Implementation**: `/mnt/c/_EHG/ehg/src/components/stages/Stage1DraftIdea.tsx` (lines 199-283)
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:25-30
 
-### Substage 1.2: Assumption Listing
+### Substage 1.2: Assumption Listing ❌ NOT IMPLEMENTED
 
 **Done When**:
 - Key assumptions documented
 - Risk factors identified
 
-**Procedure**:
+**Procedure** (AS DOCUMENTED):
 1. User documents key assumptions about market, product, execution
 2. System prompts for risk identification
 3. User lists potential risk factors
 
+**Implementation Status**: NOT found in actual UI component (Stage1DraftIdea.tsx). No "assumptions" or "risk factors" input fields exist.
+
+**Alternative**: Strategic Context fields implemented instead (Vision Alignment slider, Strategic Focus badges, Performance Drive Phase selection).
+
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:31-35
 
-### Substage 1.3: Initial Success Criteria
+### Substage 1.3: Initial Success Criteria ❌ NOT IMPLEMENTED
 
 **Done When**:
 - Success metrics defined
 - Validation rules applied
 
-**Procedure**:
+**Procedure** (AS DOCUMENTED):
 1. User defines success metrics (quantitative if possible)
 2. System applies validation rules to criteria
 3. Criteria stored in venture record
+
+**Implementation Status**: NOT found in actual UI component (Stage1DraftIdea.tsx). No "success metrics" or "success criteria" input fields exist.
+
+**Alternative**: System generates EVA quality score (0-100) based on automated analysis of title, description, and strategic context.
 
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:36-40
 

@@ -85,7 +85,30 @@ Manual (default). System learns from Chairman feedback over time to suggest Auto
 - **Compliance**: SOX, GDPR where applicable
 - **Audit Trail**: All decisions and changes logged
 
+## Implementation Status
+
+**Maturity**: 🚧 Partially Implemented (~70% complete)
+
+**What IS Implemented**:
+- ✅ Substage 1.1 (Idea Brief Creation) - Core form with title, description, category
+- ✅ Quality scoring algorithm (EVA) - 100-point scale with detailed feedback
+- ✅ Field validation (frontend + database) - Title (3-120), Description (20-2000)
+- ✅ Voice recording component exists - Standalone VoiceRecorder component functional
+- ✅ Transcription service - OpenAI Whisper API integration complete
+- ✅ API endpoints - Venture creation endpoints operational
+
+**What is NOT Implemented**:
+- ❌ Substage 1.2 (Assumption Listing) - No assumptions/risk factors fields in UI
+- ❌ Substage 1.3 (Success Criteria) - No success metrics input fields in UI
+- ❌ Voice integration into main workflow - VoiceRecorder not connected to Stage1DraftIdea component
+- ❌ API-level validation - Character limits only enforced in frontend and database
+
+**Alternative Implementation**: Strategic Context fields (Vision Alignment, Strategic Focus, Performance Drive Phase) implemented instead of documented substages 1.2-1.3.
+
+**Implementation Location**: `/mnt/c/_EHG/ehg/src/components/stages/Stage1DraftIdea.tsx` (EHG repository)
+
 ## Notes / Open Questions
 - PRD mapping: Stage 1 is currently pre-PRD phase; PRD creation begins in Stage 2 (AI Review)
 - Tool integrations defined above in "Tooling & Integrations" section
 - Metrics thresholds established in "Metric -> Action Map" section
+- For detailed gap analysis, see `docs/workflow/dossiers/stage-01/implementation-gaps.md`
