@@ -38,7 +38,7 @@ const stories = [
     ],
     story_points: 8,
     priority: 'critical',
-    status: 'pending',
+    status: 'ready',
     phase: 1,
     implementation_context: 'Phase 1. Build RecursionAPIController (400 LOC). Use Express for REST, Apollo Server for GraphQL. Redis caching for threshold lookups (<10ms target). Reference existing recursionEngine.ts (450 LOC) for business logic.'
   },
@@ -57,7 +57,7 @@ const stories = [
     ],
     story_points: 5,
     priority: 'high',
-    status: 'pending',
+    status: 'ready',
     phase: 1,
     implementation_context: 'Phase 1. Build BatchValidationService (300 LOC). Use Promise.all() for parallel evaluation. Handle errors individually (partial success). Return summary: { results: [], summary: { passed: N, failed: M } }.'
   },
@@ -76,7 +76,7 @@ const stories = [
     ],
     story_points: 13,
     priority: 'high',
-    status: 'pending',
+    status: 'ready',
     phase: 2,
     implementation_context: 'Phase 2. Build LLMAdvisoryEngine (400 LOC). Abstraction layer supports multiple providers. Use embeddings for semantic pattern matching. Store in llm_recommendations table. Implement fallback mechanism (rule-based) for LLM downtime.'
   },
@@ -95,7 +95,7 @@ const stories = [
     ],
     story_points: 8,
     priority: 'medium',
-    status: 'pending',
+    status: 'ready',
     phase: 2,
     implementation_context: 'Phase 2. Build PatternRecognitionService (200 LOC). Use vector embeddings for semantic matching. Query historical recursion_events for similar scenarios. Update patterns based on Chairman override outcomes.'
   },
@@ -114,7 +114,7 @@ const stories = [
     ],
     story_points: 8,
     priority: 'high',
-    status: 'pending',
+    status: 'ready',
     phase: 3,
     implementation_context: 'Phase 3. Build AgentHandoffProtocol (300 LOC) and CoordinationOrchestrator (300 LOC). Define Zod schemas for validation. Implement FSM for state transitions. Create rollback mechanism (restore previous state if agent fails).'
   },
@@ -133,7 +133,7 @@ const stories = [
     ],
     story_points: 8,
     priority: 'medium',
-    status: 'pending',
+    status: 'ready',
     phase: 4,
     implementation_context: 'Phase 4. Build ChairmanOverrideInterface (400 LOC). Use React + Shadcn (existing EHG stack). Desktop-first design (no mobile). Capture structured rationale: { decision: enum, reasoning: text, context: {} }. Reuse RecursionHistoryPanel (483 LOC existing).'
   },
@@ -152,7 +152,7 @@ const stories = [
     ],
     story_points: 5,
     priority: 'medium',
-    status: 'pending',
+    status: 'ready',
     phase: 4,
     implementation_context: 'Phase 4. Build LearningFeedbackLoop (200 LOC). Extract patterns from chairman_overrides.rationale. Track outcomes in chairman_overrides.outcome field. Schedule periodic LLM retraining (batch job). Measure accuracy improvement over time.'
   },
@@ -171,7 +171,7 @@ const stories = [
     ],
     story_points: 5,
     priority: 'low',
-    status: 'pending',
+    status: 'ready',
     phase: 1,
     implementation_context: 'Phase 1. Build AdaptiveThresholdManager (200 LOC). Store industry-specific configs in metadata. Expose /api/thresholds/configure endpoint (Chairman only). Default thresholds: FinTech 18%, Hardware 12%, Software 15%.'
   },
@@ -190,7 +190,7 @@ const stories = [
     ],
     story_points: 3,
     priority: 'low',
-    status: 'pending',
+    status: 'ready',
     phase: 4,
     implementation_context: 'Phase 4. Build ChairmanDashboard (100 LOC wrapper). Reuse existing RecursionHistoryPanel (483 LOC). Add tabs: Analytics (metrics), Calibration (override history), Settings (threshold config). Use Shadcn Tabs component.'
   },
@@ -209,7 +209,7 @@ const stories = [
     ],
     story_points: 3,
     priority: 'high',
-    status: 'pending',
+    status: 'ready',
     phase: 1,
     implementation_context: 'Phase 1. Add unification_version check in recursionEngine.ts. If legacy, skip API validation (use existing UI logic). E2E test: Create legacy venture, verify UI workflow unchanged. Migration guide: Document how to transition venture from legacy to unified.'
   }

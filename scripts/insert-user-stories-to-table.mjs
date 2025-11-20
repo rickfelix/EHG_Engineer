@@ -49,7 +49,11 @@ const userStoryRecords = prd.backlog_items.map((story, index) => {
     user_role: user_role,
     user_want: user_want,
     user_benefit: user_benefit,
+    implementation_context: JSON.stringify({ approach: "See user story details", technical_details: [], files_to_modify: [], dependencies: [] }),
+
     story_points: story.story_points,
+    implementation_context: JSON.stringify({ approach: "See user story details", technical_details: [], files_to_modify: [], dependencies: [] }),
+
     priority: story.priority,
     status: 'ready',
     sprint: `Sprint ${story.sprint}`,

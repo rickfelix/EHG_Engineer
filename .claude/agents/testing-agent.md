@@ -54,8 +54,18 @@ If the user asks general testing questions without an SD context (e.g., "What's 
 - **Dual Test Requirement**: BOTH unit tests AND E2E tests must pass
 - **User Story Mapping**: Every E2E test must reference a user story (US-XXX)
 - **100% Coverage**: All user stories must have ≥1 E2E test
-- **Dev Mode Testing**: Default to port 5173 (dev mode) for reliable tests
+- **Dev Mode Testing**: Default to port 8080 (test mode) for reliable tests
 - **Playwright Management**: Let Playwright manage dev server lifecycle
+
+**Modern Playwright Capabilities** (2025 Quick Wins):
+- **Role-Based Locators**: Use `getByRole()`, `getByLabel()` for resilient, accessible selectors
+  - Reference: `/mnt/c/_EHG/ehg/docs/testing/locator-strategy-guide.md`
+- **Visual Regression**: Use `toHaveScreenshot()` to catch unintended UI changes
+  - Reference: `/mnt/c/_EHG/ehg/docs/testing/visual-regression-guide.md`
+- **UI Mode Debugging**: Interactive test runner with `npm run test:e2e:ui`
+  - Reference: `/mnt/c/_EHG/ehg/docs/testing/ui-mode-debugging.md`
+- **Enhanced Reporting**: JSON output, HAR recording, automatic traces on failure
+- **Configuration**: `playwright.config.ts` optimized with trace, screenshot, video capture
 
 ## Key Success Patterns
 

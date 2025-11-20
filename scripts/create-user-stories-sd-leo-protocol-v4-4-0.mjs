@@ -38,8 +38,12 @@ async function createUserStories() {
         'Existing records default to prospective mode',
         'Migration script runs successfully without errors'
       ],
-      status: 'pending',
+      status: 'ready',
+      implementation_context: JSON.stringify({ approach: "See user story details", technical_details: [], files_to_modify: [], dependencies: [] }),
+
       priority: 'high',
+      implementation_context: JSON.stringify({ approach: "See user story details", technical_details: [], files_to_modify: [], dependencies: [] }),
+
       story_points: 1,
       phase: 'Phase 1: Database Migration',
       dependencies: [],
@@ -57,7 +61,9 @@ async function createUserStories() {
         'Database constraint ensures conditions array not empty for CONDITIONAL_PASS',
         'Migration preserves existing verdict data'
       ],
-      status: 'pending',
+      status: 'ready',
+      implementation_context: JSON.stringify({ approach: "See user story details", technical_details: [], files_to_modify: [], dependencies: [] }),
+
       priority: 'high',
       estimated_effort_hours: 0.5,
       phase: 'Phase 1: Database Migration',
@@ -79,7 +85,9 @@ async function createUserStories() {
         'Audit trail logs validation mode used',
         'Mode detection based on SD status (active/in_progress = prospective, completed = retrospective)'
       ],
-      status: 'pending',
+      status: 'ready',
+      implementation_context: JSON.stringify({ approach: "See user story details", technical_details: [], files_to_modify: [], dependencies: [] }),
+
       priority: 'high',
       estimated_effort_hours: 1,
       phase: 'Phase 2: Sub-Agent Updates',
@@ -99,7 +107,9 @@ async function createUserStories() {
         'Conditions array empty if no new files, else recommends cleanup',
         'File detection logic uses git status + timestamps'
       ],
-      status: 'pending',
+      status: 'ready',
+      implementation_context: JSON.stringify({ approach: "See user story details", technical_details: [], files_to_modify: [], dependencies: [] }),
+
       priority: 'high',
       estimated_effort_hours: 1,
       phase: 'Phase 2: Sub-Agent Updates',
@@ -119,7 +129,9 @@ async function createUserStories() {
         'Verification checks PR merge commit exists',
         'Working directory check skipped in retrospective mode'
       ],
-      status: 'pending',
+      status: 'ready',
+      implementation_context: JSON.stringify({ approach: "See user story details", technical_details: [], files_to_modify: [], dependencies: [] }),
+
       priority: 'high',
       estimated_effort_hours: 1,
       phase: 'Phase 2: Sub-Agent Updates',
@@ -139,7 +151,9 @@ async function createUserStories() {
         'Conditions array recommends updating PRD post-delivery',
         'Implementation check uses PR metadata + commit history'
       ],
-      status: 'pending',
+      status: 'ready',
+      implementation_context: JSON.stringify({ approach: "See user story details", technical_details: [], files_to_modify: [], dependencies: [] }),
+
       priority: 'high',
       estimated_effort_hours: 1,
       phase: 'Phase 2: Sub-Agent Updates',
@@ -159,7 +173,9 @@ async function createUserStories() {
         'Audit trail consistent with other sub-agents',
         'No behavioral changes (already passing in both modes)'
       ],
-      status: 'pending',
+      status: 'ready',
+      implementation_context: JSON.stringify({ approach: "See user story details", technical_details: [], files_to_modify: [], dependencies: [] }),
+
       priority: 'medium',
       estimated_effort_hours: 0.5,
       phase: 'Phase 2: Sub-Agent Updates',
@@ -181,7 +197,9 @@ async function createUserStories() {
         'Backward compatible (existing PASS verdicts still work)',
         'Progress correctly calculated for mixed PASS/CONDITIONAL_PASS results'
       ],
-      status: 'pending',
+      status: 'ready',
+      implementation_context: JSON.stringify({ approach: "See user story details", technical_details: [], files_to_modify: [], dependencies: [] }),
+
       priority: 'high',
       estimated_effort_hours: 1,
       phase: 'Phase 3: Progress Calculation',
@@ -210,7 +228,9 @@ async function createUserStories() {
         'Includes audit trail requirements and review process',
         'Linked from main protocol documentation'
       ],
-      status: 'pending',
+      status: 'ready',
+      implementation_context: JSON.stringify({ approach: "See user story details", technical_details: [], files_to_modify: [], dependencies: [] }),
+
       priority: 'medium',
       estimated_effort_hours: 1,
       phase: 'Phase 4: Documentation & Testing',
@@ -231,7 +251,9 @@ async function createUserStories() {
         'Test edge cases (mixed PASS/CONDITIONAL_PASS, all CONDITIONAL_PASS)',
         'All tests passing (unit + integration)'
       ],
-      status: 'pending',
+      status: 'ready',
+      implementation_context: JSON.stringify({ approach: "See user story details", technical_details: [], files_to_modify: [], dependencies: [] }),
+
       priority: 'high',
       estimated_effort_hours: 1.5,
       phase: 'Phase 4: Documentation & Testing',
@@ -251,7 +273,9 @@ async function createUserStories() {
         'Rollback plan documented and tested',
         'Performance impact minimal (<5ms query overhead)'
       ],
-      status: 'pending',
+      status: 'ready',
+      implementation_context: JSON.stringify({ approach: "See user story details", technical_details: [], files_to_modify: [], dependencies: [] }),
+
       priority: 'high',
       estimated_effort_hours: 1,
       phase: 'Phase 4: Documentation & Testing',
@@ -285,6 +309,8 @@ async function createUserStories() {
         description: story.description,
         acceptance_criteria: story.acceptance_criteria,
         status: story.status,
+        implementation_context: JSON.stringify({ approach: "See user story details", technical_details: [], files_to_modify: [], dependencies: [] }),
+
         priority: story.priority,
         estimated_effort_hours: story.estimated_effort_hours,
         metadata: {

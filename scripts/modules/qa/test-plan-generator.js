@@ -17,7 +17,7 @@
  * 4. Performance Test Strategy (load, response time, scalability)
  */
 
-import { createDatabaseClient } from '../../lib/supabase-connection.js';
+// Removed unused import: createDatabaseClient
 
 /**
  * Generate comprehensive test plan for SD
@@ -27,7 +27,7 @@ import { createDatabaseClient } from '../../lib/supabase-connection.js';
  * @param {Object} options - Generation options
  * @returns {Promise<Object>} Test plan with all strategies
  */
-export async function generateTestPlan(sd_id, supabase, options = {}) {
+export async function generateTestPlan(sd_id, supabase, _options = {}) {
   console.log(`📋 Generating comprehensive test plan for ${sd_id}...`);
 
   // ================================================
@@ -271,8 +271,25 @@ async function generateE2ETestStrategy(sd, prd, userStories) {
     priority: 'CRITICAL',
     user_actions: ['Load application', 'Navigate to main sections', 'Verify no console errors'],
     expected_outcomes: ['All pages load', 'Navigation works', 'No errors in console'],
+    locator_strategy: 'role-based (getByRole, getByLabel)',
     estimated_duration_seconds: 90
   });
+
+  // Visual regression test for UI changes
+  if (isUISD(sd)) {
+    testCases.push({
+      id: 'E2E-VISUAL-001',
+      name: 'Visual regression baseline verification',
+      description: 'Capture and compare screenshots of critical UI components',
+      type: 'visual_regression',
+      priority: 'MEDIUM',
+      user_actions: ['Navigate to main pages', 'Capture screenshots', 'Compare with baseline'],
+      expected_outcomes: ['Screenshots match baseline', 'No unintended visual changes'],
+      locator_strategy: 'role-based + toHaveScreenshot()',
+      playwright_features: ['toHaveScreenshot()', 'animations: disabled', 'mask dynamic content'],
+      estimated_duration_seconds: 120
+    });
+  }
 
   return {
     test_cases: testCases,
@@ -280,7 +297,33 @@ async function generateE2ETestStrategy(sd, prd, userStories) {
     scenarios: extractScenarios(sd, prd),
     frameworks: ['playwright', '@playwright/test'],
     browser_matrix: ['chromium', 'firefox', 'webkit'],
-    execution_order: ['smoke', 'authentication', 'user_story', 'edge_case'],
+    execution_order: ['smoke', 'authentication', 'user_story', 'visual_regression', 'edge_case'],
+    locator_guidelines: {
+      priority_hierarchy: ['getByRole()', 'getByLabel()', 'getByTestId()', 'getByText()', 'CSS selectors (last resort)'],
+      best_practices: [
+        'Use role-based locators for accessibility and resilience',
+        'Avoid text-based regex locators (brittle)',
+        'Add data-testid for complex components',
+        'Test locators work with Radix UI/Shadcn components',
+        'Reference: docs/testing/locator-strategy-guide.md'
+      ]
+    },
+    visual_regression: {
+      enabled: isUISD(sd),
+      strategy: 'toHaveScreenshot() for critical pages',
+      baseline_storage: 'tests/e2e/__screenshots__/',
+      configuration: {
+        animations: 'disabled',
+        maxDiffPixels: 100,
+        mask_dynamic_content: true
+      },
+      reference: 'docs/testing/visual-regression-guide.md'
+    },
+    debugging_tools: {
+      ui_mode: 'npm run test:e2e:ui (interactive test runner)',
+      trace_viewer: 'Automatic trace capture on failure',
+      reference: 'docs/testing/ui-mode-debugging.md'
+    },
     total_estimated_duration_seconds: testCases.reduce((sum, tc) => sum + (tc.estimated_duration_seconds || 0), 0),
     coverage_requirement: '100% user story mapping (≥1 E2E test per story)'
   };
@@ -292,7 +335,7 @@ async function generateE2ETestStrategy(sd, prd, userStories) {
  * Focus: API integrations, database operations, third-party services
  * Coverage: All external dependencies
  */
-async function generateIntegrationTestStrategy(sd, prd, userStories) {
+async function generateIntegrationTestStrategy(sd, _prd, _userStories) {
   const testCases = [];
   const dependencies = [];
 
@@ -386,7 +429,7 @@ async function generateIntegrationTestStrategy(sd, prd, userStories) {
  * Focus: Load time, response time, scalability
  * Coverage: Critical paths and high-traffic endpoints
  */
-async function generatePerformanceTestStrategy(sd, prd, userStories) {
+async function generatePerformanceTestStrategy(sd, _prd, _userStories) {
   const testCases = [];
   const benchmarks = [];
 

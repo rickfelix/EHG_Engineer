@@ -15,11 +15,12 @@ dotenv.config();
 
 // Support both NEXT_PUBLIC_ and standard environment variable names
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Use service role key for administrative operations (retrospective generation)
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('❌ Supabase credentials not configured');
-  console.error('Required: SUPABASE_URL and SUPABASE_ANON_KEY (or NEXT_PUBLIC_* variants)');
+  console.error('Required: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY fallback)');
   process.exit(1);
 }
 
