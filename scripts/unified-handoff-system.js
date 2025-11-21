@@ -1080,7 +1080,7 @@ class UnifiedHandoffSystem {
       const prd = prds[0];
 
       // Validate PLAN verification is complete
-      const planValidation = this.validatePlanVerification(prd, sd);
+      const planValidation = await this.validatePlanVerification(prd, sd);
 
       console.log('📊 PLAN Verification Results:');
       console.log('   Score:', planValidation.score);
@@ -1157,7 +1157,7 @@ class UnifiedHandoffSystem {
   /**
    * Validate PLAN verification completeness
    */
-  validatePlanVerification(prd, sd) {
+  async validatePlanVerification(prd, sd) {
     const validation = {
       complete: false,
       score: 0,
@@ -1172,11 +1172,22 @@ class UnifiedHandoffSystem {
       validation.issues.push(`PRD status is '${prd.status}', expected 'verification' or 'completed'`);
     }
 
-    // Check EXEC handoff exists in metadata
-    if (prd.metadata?.exec_handoff) {
+    // Check EXEC→PLAN handoff exists in sd_phase_handoffs table
+    const { data: execHandoff, error: handoffError } = await this.supabase
+      .from('sd_phase_handoffs')
+      .select('id, status')
+      .eq('sd_id', sd.id)
+      .eq('handoff_type', 'EXEC-TO-PLAN')
+      .eq('status', 'accepted')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (handoffError) {
+      validation.warnings.push(`Error checking EXEC→PLAN handoff: ${handoffError.message}`);
+    } else if (execHandoff && execHandoff.length > 0) {
       validation.score += 20;
     } else {
-      validation.issues.push('No EXEC→PLAN handoff found in metadata');
+      validation.issues.push('No EXEC→PLAN handoff found in sd_phase_handoffs table');
     }
 
     // Check sub-agent verification results (should be in metadata)
@@ -1520,9 +1531,13 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
         handoff_type: handoffType,
         status: 'pending_acceptance', // Insert as pending first to avoid trigger bug
         ...handoffArtifact,
+        // Store validation results at top-level for audit trail
+        validation_score: result.qualityScore || 100,
+        validation_passed: result.success !== false, // Default to true if not explicitly false
+        validation_details: result.validation || {},
         metadata: {
           execution_id: executionId,
-          quality_score: result.qualityScore || 100,
+          quality_score: result.qualityScore || 100, // Keep for backward compatibility
           created_via: 'unified-handoff-system',
           sub_agent_count: subAgentResults?.length || 0
         },

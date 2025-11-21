@@ -345,12 +345,27 @@ class PlanToExecVerifier {
       
       console.log('\\n🚀 EXEC PHASE AUTHORIZED');
       console.log('PRD handed off to EXEC agent for implementation');
-      
+
       return {
         success: true,
         executionId: execution.id,
         prdId: prd.id,
-        qualityScore: prdValidation.percentage || prdValidation.score
+        qualityScore: prdValidation.percentage || prdValidation.score,
+        // Enhanced validation breakdown for audit trail
+        validation: {
+          prd: prdValidation,
+          userStories: {
+            count: userStories.length,
+            completed: completedStories,
+            verified: true,
+            stories: userStories.map(s => ({ key: s.story_key, title: s.title, status: s.status }))
+          },
+          workflowReview: workflowReviewResult,
+          planPresentation: planPresentationValidation || null,
+          handoffDocument: handoffValidation || null,
+          timestamp: new Date().toISOString(),
+          verifier: 'verify-handoff-plan-to-exec.js'
+        }
       };
       
     } catch (error) {
