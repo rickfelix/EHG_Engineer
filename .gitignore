@@ -31,3 +31,18 @@ supabase/.temp/
 
 # Process ID files
 .pids/
+
+# One-off debugging and query scripts (temporary investigation tools)
+query-*.cjs
+create-auth-lesson-learned*.cjs
+reset-test-user-password.cjs
+
+# One-off SD creation scripts (use process scripts instead)
+scripts/create-prd-sd-*.js
+scripts/create-prd-sd-*.mjs
+scripts/create-user-stories-sd-*.mjs
+scripts/create-sd-*.js
+scripts/complete-*-sd.mjs
+scripts/check-*-venture-*.mjs
+scripts/create-*-venture-*.mjs
+scripts/delete-orphan-*.mjs
