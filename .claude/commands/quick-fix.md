@@ -29,7 +29,7 @@ Read file: docs/quick-fix-protocol.md
 **After reading the protocol, confirm you understand:**
 1. Compliance rubric is mandatory (cannot skip)
 2. Tests must actually run (cannot assume)
-3. PR always required (no direct merge)
+3. PR created with auto-merge enabled (merges when CI passes)
 4. User approval needed for commit/push
 5. Auto-refinement limited to 3 attempts
 6. Specialist sub-agents invoked intelligently
@@ -118,9 +118,14 @@ If qualified for quick-fix:
    - Manually test the fix
    - Confirm issue is resolved
 
-## Step 5: Complete & Create PR
+## Step 5: Complete, Create PR & Auto-Merge
 
 ```bash
+# Create and automatically merge PR
+gh pr create --title "fix(QF-YYYYMMDD-NNN): [description]" --body "[summary]"
+gh pr merge --auto --squash  # Auto-merge when checks pass
+
+# Complete the quick-fix record
 node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN \
   --pr-url https://github.com/.../pull/123
 ```
@@ -129,7 +134,7 @@ node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN \
 - ✅ Both unit and E2E tests passing
 - ✅ UAT verified (manual confirmation)
 - ✅ Actual LOC ≤ 50 (hard cap)
-- ✅ PR created (always required)
+- ✅ PR created and auto-merge enabled
 
 ## Auto-Escalation Triggers
 
@@ -147,7 +152,7 @@ Quick-fix will auto-escalate to full SD if:
 - Dual test requirement (unit + E2E smoke tests)
 - Server restart verification
 - Manual UAT confirmation
-- PR creation (no direct merge)
+- PR creation with auto-merge (merges when CI checks pass)
 - Database-first tracking
 
 **Not required for quick-fixes:**
