@@ -43,7 +43,7 @@ and willingness-to-pay models without conducting live customer interviews. Your
 research informs product strategy, pricing, and go-to-market approaches.`,
 
   tools: [],  // Will add web scraping tools in future iterations
-  llm_model: 'gpt-4-turbo-preview',
+  llm_model: 'gpt-5.1-chat-latest',
   max_tokens: 4000,
   temperature: 0.7,
   max_iterations: 15,  // Higher iteration count for multi-task agent
