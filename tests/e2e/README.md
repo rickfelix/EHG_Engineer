@@ -291,6 +291,29 @@ test('should create venture', async ({ page }, testInfo) => {
 });
 ```
 
+### 7. Follow Selector Guidelines (CRITICAL)
+
+For maintainable, reliable tests, follow the selector best practices documented in:
+
+**[SELECTOR-GUIDELINES.md](./SELECTOR-GUIDELINES.md)**
+
+**Key Principles**:
+- Prefer `data-testid` over text-based selectors
+- Avoid case-insensitive regex in selectors (`/pattern/i`)
+- Use ARIA roles for standard UI components
+- Never use `.first()` as a workaround for ambiguous selectors
+
+**Common Anti-Patterns to Avoid**:
+
+| Avoid | Use Instead |
+|-------|-------------|
+| `button:has-text("Save")` | `[data-testid="save-btn"]` |
+| `locator('h1')` | `[data-testid="page-heading"]` |
+| `.locator(...).first()` | Add specific data-testid |
+| `/ventures/i` regex | Exact text match |
+
+Run `npm run lint:e2e` to check for selector violations.
+
 ## Troubleshooting
 
 ### Issue: "Error: page.goto: net::ERR_CONNECTION_REFUSED"

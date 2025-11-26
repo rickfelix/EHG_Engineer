@@ -1,6 +1,8 @@
 import boundaries from 'eslint-plugin-boundaries';
 import typescriptEslint from '@typescript-eslint/eslint-plugin';
 import typescriptParser from '@typescript-eslint/parser';
+import playwright from 'eslint-plugin-playwright';
+import playwrightSelectors from './tools/eslint-rules/playwright-selectors/index.js';
 
 export default [
   {
@@ -144,6 +146,48 @@ export default [
     files: ['tools/gates/*.ts'],
     rules: {
       'no-process-exit': 'off'
+    }
+  },
+  // E2E Test files - Playwright selector best practices
+  // See tests/e2e/SELECTOR-GUIDELINES.md for documentation
+  {
+    files: ['tests/e2e/**/*.js', 'tests/e2e/**/*.ts', 'tests/e2e/**/*.spec.js', 'tests/e2e/**/*.spec.ts'],
+    languageOptions: {
+      globals: {
+        test: 'readonly',
+        expect: 'readonly',
+        page: 'readonly',
+        browser: 'readonly',
+        context: 'readonly',
+        describe: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly'
+      }
+    },
+    plugins: {
+      playwright,
+      'playwright-selectors': playwrightSelectors
+    },
+    rules: {
+      // eslint-plugin-playwright recommended rules
+      ...playwright.configs['flat/recommended'].rules,
+
+      // Additional Playwright rules
+      'playwright/no-networkidle': 'warn',              // networkidle is flaky
+      'playwright/no-wait-for-timeout': 'warn',         // Prefer explicit waits
+      'playwright/no-force-option': 'warn',             // Force clicks hide real issues
+      'playwright/prefer-web-first-assertions': 'error', // Use auto-retrying assertions
+      'playwright/missing-playwright-await': 'error',    // Must await Playwright methods
+      'playwright/no-focused-test': 'error',            // No .only in committed code
+      'playwright/no-skipped-test': 'warn',             // Warn about .skip
+      'playwright/expect-expect': 'warn',               // Tests should have assertions
+
+      // Custom selector rules - see tests/e2e/SELECTOR-GUIDELINES.md
+      'playwright-selectors/no-case-insensitive-regex': 'error',  // Catches /pattern/i
+      'playwright-selectors/no-ambiguous-locators': 'warn',       // Catches page.locator('button')
+      'playwright-selectors/require-locator-specificity': 'warn'  // Catches compound selectors
     }
   }
 ];

@@ -569,6 +569,17 @@ const budgetSection = page.locator('[data-testid="budget-section"]');
 await expect(budgetSection.getByText('Monthly Budget Limit')).toBeVisible();
 ```
 
+> **Complete Selector Guidelines**: For comprehensive selector best practices,
+> naming conventions, and migration patterns, see:
+> [`tests/e2e/SELECTOR-GUIDELINES.md`](../../tests/e2e/SELECTOR-GUIDELINES.md)
+>
+> This guide provides:
+> - Full selector priority hierarchy (4 tiers)
+> - data-testid naming conventions
+> - Before/after refactoring examples
+> - Anti-pattern catalog with alternatives
+> - ESLint rules for automated enforcement
+
 ---
 
 ### Lesson 4: Test Structure Anti-Patterns
