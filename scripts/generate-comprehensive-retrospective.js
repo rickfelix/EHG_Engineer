@@ -4,6 +4,9 @@
  * COMPREHENSIVE RETROSPECTIVE GENERATOR
  * Enhanced version that analyzes handoffs, PRDs, and implementation details
  * to generate detailed, meaningful retrospectives
+ *
+ * SECURITY: Requires SERVICE_ROLE_KEY for INSERT operations (RLS bypass)
+ * @see database/migrations/document_retrospectives_rls_analysis.sql
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -15,13 +18,38 @@ dotenv.config();
 
 // Support both NEXT_PUBLIC_ and standard environment variable names
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-// Use service role key for administrative operations (retrospective generation)
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+// CRITICAL: Retrospective INSERT requires SERVICE_ROLE_KEY (bypasses RLS)
+// ANON_KEY only has SELECT access and will fail with RLS policy violation
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('❌ Supabase credentials not configured');
-  console.error('Required: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY fallback)');
+  console.error('');
+  console.error('REQUIRED ENVIRONMENT VARIABLES:');
+  console.error('  • SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL)');
+  console.error('  • SUPABASE_SERVICE_ROLE_KEY (or NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY)');
+  console.error('');
+  console.error('WHY SERVICE_ROLE_KEY IS REQUIRED:');
+  console.error('  Retrospective generation performs INSERT operations on the retrospectives table.');
+  console.error('  RLS policies restrict INSERT to service_role (authenticated users cannot INSERT).');
+  console.error('  ANON_KEY only has SELECT access and will fail with:');
+  console.error('    "new row violates row-level security policy for table \\"retrospectives\\""');
+  console.error('');
+  console.error('REMEDIATION:');
+  console.error('  1. Add SUPABASE_SERVICE_ROLE_KEY to .env file');
+  console.error('  2. Get key from Supabase Dashboard > Settings > API > service_role key');
+  console.error('  3. DO NOT commit .env file to git');
+  console.error('');
   process.exit(1);
+}
+
+// Verify we have SERVICE_ROLE_KEY (not ANON_KEY)
+if (supabaseKey.length < 100 || !supabaseKey.includes('eyJ')) {
+  console.error('⚠️  WARNING: Supabase key looks invalid or too short');
+  console.error('   SERVICE_ROLE_KEY should be a JWT token (starts with "eyJ", length ~200+ chars)');
+  console.error('   Current key length:', supabaseKey.length);
+  console.error('');
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -482,6 +510,22 @@ async function generateComprehensiveRetrospective(sdId) {
     .select();
 
   if (insertError) {
+    // Enhanced error handling for RLS issues
+    if (insertError.code === '42501' && insertError.message.includes('row-level security')) {
+      console.error('\n❌ RLS POLICY VIOLATION');
+      console.error('   The INSERT operation was blocked by Row-Level Security policies.');
+      console.error('');
+      console.error('   CAUSE: Using ANON_KEY instead of SERVICE_ROLE_KEY');
+      console.error('   ANON_KEY only has SELECT access to retrospectives table.');
+      console.error('');
+      console.error('   REMEDIATION:');
+      console.error('   1. Ensure SUPABASE_SERVICE_ROLE_KEY is set in .env');
+      console.error('   2. Restart the script');
+      console.error('');
+      console.error('   See: database/migrations/document_retrospectives_rls_analysis.sql');
+      throw new Error('RLS policy violation - SERVICE_ROLE_KEY required');
+    }
+
     throw new Error(`Failed to insert retrospective: ${insertError.message}`);
   }
 
