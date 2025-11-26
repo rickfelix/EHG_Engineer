@@ -11,6 +11,7 @@
     "description": "Essential context for ALL sessions (~15-20k chars)",
     "sections": [
       "application_architecture",
+      "session_verification",
       "execution_philosophy",
       "git_commit_guidelines",
       "pr_size_guidelines",
@@ -18,7 +19,8 @@
       "parallel_execution",
       "development_workflow",
       "database_first_enforcement_expanded",
-      "supabase_operations"
+      "supabase_operations",
+      "database_column_reference"
     ]
   },
   "CLAUDE_LEAD.md": {
@@ -56,6 +58,7 @@
     "description": "EXEC phase operations (~20-25k chars)",
     "sections": [
       "exec_implementation_requirements",
+      "exec_requirement",
       "exec_component_sizing_guidelines",
       "exec_todo_comment_standard",
       "exec_dual_test_requirement",

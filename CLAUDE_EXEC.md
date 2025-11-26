@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2025-11-07 6:39:28 AM
+**Generated**: 2025-11-26 6:24:18 PM
 **Protocol**: LEO v4.2.0_story_gates
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
@@ -87,6 +87,82 @@ Before writing ANY code, EXEC MUST:
 - ❌ Not restarting dev servers after changes
 - ❌ **CRITICAL**: Creating files for PRDs, handoffs, or documentation
 - ❌ **CRITICAL**: Proceeding with implementation when requirements are ambiguous
+
+## 📦 Database-First Progress Tracking (MANDATORY)
+
+### ⚠️ CRITICAL: Update Tracking Tables During Implementation
+
+**Root Cause of SD Completion Failures**: Work gets done but database tracking records aren't updated. The `enforce_sd_completion_protocol` trigger validates ALL tracking records before allowing SD completion.
+
+**Evidence**: SD-FOUND-DATA-004 blocked at 55% despite complete implementation because:
+- 4 user stories remained `pending` instead of `validated`
+- 7 deliverables remained `pending` instead of `completed`
+- Missing sub-agent execution results
+
+### Required Database Updates During EXEC
+
+#### 1. Update Deliverables as Work Completes
+```javascript
+// After completing each deliverable item:
+await supabase
+  .from('sd_scope_deliverables')
+  .update({
+    completion_status: 'completed',
+    completion_evidence: 'Brief description of what was done',
+    updated_at: new Date().toISOString()
+  })
+  .eq('sd_id', 'SD-XXX-YYY')
+  .eq('deliverable_name', 'Name of completed item');
+```
+
+**When to update**: After each major implementation milestone (component created, tests written, API implemented, etc.)
+
+#### 2. Validate User Stories as Acceptance Criteria Met
+```javascript
+// After meeting acceptance criteria for a user story:
+await supabase
+  .from('user_stories')
+  .update({
+    validation_status: 'validated',
+    updated_at: new Date().toISOString()
+  })
+  .eq('sd_id', 'SD-XXX-YYY')
+  .eq('story_key', 'US-XXX');
+```
+
+**When to update**: After tests pass that cover the user story's acceptance criteria
+
+#### 3. Record Sub-Agent Verification Results
+```javascript
+// After completing implementation verification:
+await supabase
+  .from('sub_agent_execution_results')
+  .insert({
+    sd_id: 'SD-XXX-YYY',
+    sub_agent_code: 'QA',  // or ARCHITECT, SECURITY, TESTING, DOCMON
+    sub_agent_name: 'QA Sub-Agent',
+    verdict: 'PASS',
+    confidence: 95,
+    detailed_analysis: 'Implementation verified: [summary]',
+    validation_mode: 'prospective'
+  });
+```
+
+### EXEC Progress Tracking Checklist
+```markdown
+## Database Tracking Checklist
+- [ ] Deliverables exist in `sd_scope_deliverables` (auto-created by PLAN→EXEC)
+- [ ] User stories exist in `user_stories` (created during PLAN)
+- [ ] As each deliverable completes → Update `completion_status = 'completed'`
+- [ ] As each user story is validated → Update `validation_status = 'validated'`
+- [ ] Before EXEC→PLAN handoff → Verify ALL tracking records updated
+```
+
+### Why This Matters
+- **Trigger Validation**: `enforce_sd_completion_protocol` checks ALL tracking tables
+- **Progress Calculation**: `get_progress_breakdown()` calculates % from tracking records
+- **Blocking Issue**: SD cannot be marked complete if tracking records show incomplete work
+- **Prevention**: Update records AS work happens, not after
 
 ## Component Sizing Guidelines
 
@@ -295,6 +371,6 @@ When implementing tests, ensure coverage for:
 
 ---
 
-*Generated from database: 2025-11-07*
+*Generated from database: 2025-11-26*
 *Protocol Version: v4.2.0_story_gates*
 *Load when: User mentions EXEC, implementation, coding, or testing*
