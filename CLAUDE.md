@@ -23,16 +23,16 @@ See documentation for table structure: `database/schema/007_leo_protocol_schema_
 *For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-11-27 7:28:24 AM
+**Last Generated**: 2025-11-27 7:40:41 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
-## 🟢 CURRENT LEO PROTOCOL VERSION: 4.3.1
+## 🟢 CURRENT LEO PROTOCOL VERSION: 4.3.2
 
 **CRITICAL**: This is the ACTIVE version from database
 **ID**: leo-v4-3-1-hardening
 **Status**: ACTIVE
-**Title**: LEO Protocol v4.3.1 - Hardening & Constraint Documentation
+**Title**: LEO Protocol v4.3.2 - Automation & RLS Fix
 
 # CLAUDE.md - LEO Protocol Context Router
 
@@ -243,5 +243,5 @@ Proceed with: EXEC pre-implementation checklist, dual testing
 ---
 
 *Router generated from database: 2025-11-27*
-*Protocol Version: 4.3.1*
+*Protocol Version: 4.3.2*
 *Part of LEO Protocol router architecture*

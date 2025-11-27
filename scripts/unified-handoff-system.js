@@ -61,6 +61,149 @@ class UnifiedHandoffSystem {
       'EXEC-TO-PLAN',
       'PLAN-TO-LEAD'
     ];
+
+    // Cache for schema constraints (loaded once per session)
+    this.constraintsCache = null;
+    this.constraintsCacheExpiry = 0;
+  }
+
+  /**
+   * PRE-VALIDATION GATE (SD-LEO-4-3-1-HARDENING)
+   *
+   * Validates data against database CHECK constraints BEFORE attempting insert.
+   * This prevents cryptic constraint violation errors by providing clear guidance.
+   *
+   * @param {string} tableName - Target table name (e.g., 'user_stories', 'strategic_directives_v2')
+   * @param {object} data - Data object to validate
+   * @returns {object} { valid: boolean, errors: array, hints: array }
+   */
+  async preValidateHandoffData(tableName, data) {
+    const result = { valid: true, errors: [], hints: [] };
+
+    try {
+      // Load constraints from leo_schema_constraints (with caching)
+      const constraints = await this.loadSchemaConstraints(tableName);
+
+      if (!constraints || constraints.length === 0) {
+        // No constraints defined for this table - pass through
+        return result;
+      }
+
+      console.log(`🔍 Pre-validating ${Object.keys(data).length} fields against ${constraints.length} constraints for ${tableName}`);
+
+      for (const constraint of constraints) {
+        const fieldValue = data[constraint.column_name];
+
+        // Skip if field not in data (might be optional)
+        if (fieldValue === undefined) {
+          continue;
+        }
+
+        // Validate based on constraint type
+        switch (constraint.constraint_type) {
+          case 'check':
+          case 'enum':
+            if (constraint.valid_values && Array.isArray(constraint.valid_values)) {
+              if (!constraint.valid_values.includes(fieldValue)) {
+                result.valid = false;
+                result.errors.push({
+                  field: constraint.column_name,
+                  value: fieldValue,
+                  constraint: constraint.constraint_type,
+                  message: `Invalid value '${fieldValue}' for ${constraint.column_name}`,
+                  validValues: constraint.valid_values
+                });
+                if (constraint.remediation_hint) {
+                  result.hints.push(constraint.remediation_hint);
+                }
+              }
+            }
+            break;
+
+          case 'not_null':
+            if (fieldValue === null || fieldValue === '') {
+              result.valid = false;
+              result.errors.push({
+                field: constraint.column_name,
+                value: fieldValue,
+                constraint: 'not_null',
+                message: `${constraint.column_name} cannot be null or empty`
+              });
+              if (constraint.remediation_hint) {
+                result.hints.push(constraint.remediation_hint);
+              }
+            }
+            break;
+
+          // Add more constraint types as needed
+        }
+      }
+
+      if (!result.valid) {
+        console.error('');
+        console.error('❌ PRE-VALIDATION FAILED');
+        console.error('='.repeat(60));
+        console.error(`   Table: ${tableName}`);
+        console.error(`   Errors: ${result.errors.length}`);
+        console.error('');
+        result.errors.forEach((err, idx) => {
+          console.error(`   ${idx + 1}. ${err.field}: ${err.message}`);
+          if (err.validValues) {
+            console.error(`      Valid values: ${err.validValues.join(', ')}`);
+          }
+        });
+        if (result.hints.length > 0) {
+          console.error('');
+          console.error('   HINTS:');
+          result.hints.forEach(hint => console.error(`   - ${hint}`));
+        }
+        console.error('='.repeat(60));
+      } else {
+        console.log(`✅ Pre-validation passed for ${tableName}`);
+      }
+
+    } catch (error) {
+      // Don't block on constraint loading errors - log and continue
+      console.warn(`⚠️  Could not load constraints for ${tableName}: ${error.message}`);
+      // Return valid to allow the operation to proceed (constraint check is best-effort)
+    }
+
+    return result;
+  }
+
+  /**
+   * Load schema constraints from leo_schema_constraints table
+   * Uses caching to avoid repeated database queries
+   */
+  async loadSchemaConstraints(tableName) {
+    const now = Date.now();
+    const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache
+
+    // Check if cache is still valid
+    if (this.constraintsCache && now < this.constraintsCacheExpiry) {
+      return this.constraintsCache.filter(c => c.table_name === tableName);
+    }
+
+    // Load fresh constraints
+    const { data, error } = await this.supabase
+      .from('leo_schema_constraints')
+      .select('*')
+      .order('table_name');
+
+    if (error) {
+      // Table might not exist yet (pre-migration)
+      if (error.code === '42P01') {
+        console.log('ℹ️  leo_schema_constraints table not yet created - skipping pre-validation');
+        return [];
+      }
+      throw error;
+    }
+
+    // Update cache
+    this.constraintsCache = data || [];
+    this.constraintsCacheExpiry = now + CACHE_TTL_MS;
+
+    return this.constraintsCache.filter(c => c.table_name === tableName);
   }
 
   /**
@@ -1469,6 +1612,12 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
     };
 
     try {
+      // PRE-VALIDATION: Check execution data against constraints (SD-LEO-4-3-1-HARDENING)
+      const preValidation = await this.preValidateHandoffData('leo_handoff_executions', execution);
+      if (!preValidation.valid) {
+        throw new Error(`Pre-validation failed for leo_handoff_executions: ${preValidation.errors.map(e => e.message).join('; ')}`);
+      }
+
       const { data, error} = await this.supabase.from('leo_handoff_executions').insert(execution).select();
       if (error) {
         console.error('❌ Failed to store handoff execution:', error.message);
@@ -1553,6 +1702,13 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
       console.log('  5. resource_utilization:', handoffRecord.resource_utilization ? 'SET' : 'NULL', `(${handoffRecord.resource_utilization?.length || 0} chars)`);
       console.log('  6. action_items:', handoffRecord.action_items ? 'SET' : 'NULL', `(${handoffRecord.action_items?.length || 0} chars)`);
       console.log('  7. completeness_report:', handoffRecord.completeness_report ? 'SET' : 'NULL', `(${handoffRecord.completeness_report?.length || 0} chars)`);
+
+      // PRE-VALIDATION: Check handoff data against constraints (SD-LEO-4-3-1-HARDENING)
+      const preValidation = await this.preValidateHandoffData('sd_phase_handoffs', handoffRecord);
+      if (!preValidation.valid) {
+        console.error('❌ Handoff artifact pre-validation failed');
+        throw new Error(`Pre-validation failed for sd_phase_handoffs: ${preValidation.errors.map(e => e.message).join('; ')}`);
+      }
 
       // Insert with pending status (trigger bug workaround: validation queries table, but row doesn't exist yet on INSERT)
       const { error: insertError } = await this.supabase
@@ -1814,6 +1970,20 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
     };
 
     try {
+      // PRE-VALIDATION: Check rejection data against constraints (SD-LEO-4-3-1-HARDENING)
+      const preValidation = await this.preValidateHandoffData('sd_phase_handoffs', execution);
+      if (!preValidation.valid) {
+        console.warn('⚠️  Pre-validation failed for rejection record, attempting with modified data');
+        // For rejections, try to fix common issues rather than blocking
+        preValidation.errors.forEach(err => {
+          if (err.validValues && err.validValues.length > 0) {
+            // Use first valid value as fallback
+            execution[err.field] = err.validValues[0];
+            console.log(`   Fixed ${err.field}: ${err.value} → ${err.validValues[0]}`);
+          }
+        });
+      }
+
       const { error } = await this.supabase.from('sd_phase_handoffs').insert(execution).select();
       if (error) {
         console.error('❌ Failed to store handoff rejection:', error.message);

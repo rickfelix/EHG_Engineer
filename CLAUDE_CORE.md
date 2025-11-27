@@ -1,7 +1,7 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-11-27 7:28:24 AM
-**Protocol**: LEO 4.3.1
+**Generated**: 2025-11-27 7:40:41 AM
+**Protocol**: LEO 4.3.2
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
 ---
@@ -398,5 +398,5 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 ---
 
 *Generated from database: 2025-11-27*
-*Protocol Version: 4.3.1*
+*Protocol Version: 4.3.2*
 *Load this file first in all sessions*

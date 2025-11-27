@@ -1,7 +1,7 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2025-11-27 7:28:24 AM
-**Protocol**: LEO 4.3.1
+**Generated**: 2025-11-27 7:40:41 AM
+**Protocol**: LEO 4.3.2
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
 ---
@@ -402,9 +402,9 @@ When implementing tests, ensure coverage for:
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
+| `from_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
 | `to_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
 | `status` | pending_acceptance, accepted, rejected | Use one of: pending_acceptance, accepted, rejected |
-| `from_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
 
 ### sd_scope_deliverables
 
@@ -429,9 +429,9 @@ When implementing tests, ensure coverage for:
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `e2e_test_status` | not_created, created, passing, failing, skipped | Use one of: not_created, created, passing, failing, skipped |
 | `status` | draft, completed, in_progress, ready | Use one of: draft, completed, in_progress, ready. NOT "approved" - that is not a valid value. |
 | `validation_status` | pending, in_progress, validated, failed, skipped | Use one of: pending, in_progress, validated, failed, skipped |
+| `e2e_test_status` | not_created, created, passing, failing, skipped | Use one of: not_created, created, passing, failing, skipped |
 
 
 
@@ -540,5 +540,5 @@ Verifies LEAD to PLAN handoff requirements are met before allowing transition.
 ---
 
 *Generated from database: 2025-11-27*
-*Protocol Version: 4.3.1*
+*Protocol Version: 4.3.2*
 *Load when: User mentions EXEC, implementation, coding, or testing*

@@ -160,9 +160,17 @@ class LEOAutoInit {
         .from('leo_agents')
         .select('*')
         .order('agent_code');
-      
+
+      // Get protocol sections (required for generateRouter)
+      const { data: sections } = await this.supabase
+        .from('leo_protocol_sections')
+        .select('*')
+        .eq('protocol_id', data.id)
+        .order('order_index');
+
       return {
         ...data,
+        sections: sections || [],
         subAgents: subAgents || [],
         handoffTemplates: handoffTemplates || [],
         agents: agents || []
@@ -173,18 +181,27 @@ class LEOAutoInit {
   }
   
   async generateClaudeMd(protocol) {
-    const { CLAUDEMDGenerator } = await import('./generate-claude-md-from-db.js');
-    const generator = new CLAUDEMDGenerator();
-    
-    // Use the generator's method but with our fetched data
-    const content = generator.generateContent({
-      protocol,
-      agents: protocol.agents,
-      subAgents: protocol.subAgents,
-      handoffTemplates: protocol.handoffTemplates,
+    const { CLAUDEMDGeneratorV3 } = await import('./generate-claude-md-from-db.js');
+    const generator = new CLAUDEMDGeneratorV3();
+
+    // Load the section mapping required by the generator
+    generator.loadMapping();
+
+    // Prepare data structure expected by generator methods
+    const data = {
+      protocol: {
+        ...protocol,
+        sections: protocol.sections || []
+      },
+      agents: protocol.agents || [],
+      subAgents: protocol.subAgents || [],
+      handoffTemplates: protocol.handoffTemplates || [],
       validationRules: []
-    });
-    
+    };
+
+    // Generate the router content (CLAUDE.md)
+    const content = generator.generateRouter(data);
+
     fs.writeFileSync(CLAUDE_MD_PATH, content);
   }
   
