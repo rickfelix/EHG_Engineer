@@ -1,31 +1,40 @@
 /**
- * Auto-Complete Deliverables Module (v3.0 - Double-Check Automation)
+ * Auto-Complete Deliverables Module (v3.1 - Database Trigger Primary)
  * Part of LEO Protocol Intelligent Completion System
  *
- * PURPOSE: Prevents SD completion blocking by intelligently synchronizing
- * the sd_scope_deliverables table when handoffs are accepted.
+ * PURPOSE: Provides verification layer for sd_scope_deliverables auto-completion.
+ * The PRIMARY auto-completion mechanism is now a DATABASE TRIGGER that fires when
+ * EXEC-TO-PLAN handoffs are accepted (see: auto_complete_deliverables_on_handoff.sql).
  *
  * ROOT CAUSE FIXED: SD-IDEATION-STAGE2-001 was blocked at 70% progress because
  * deliverables in sd_scope_deliverables remained 'pending' even after EXEC work
  * was completed. The progress breakdown function checks this table for EXEC_implementation
  * phase completion (30% weight).
  *
- * INTELLIGENT BEHAVIOR (v3.0 - FULLY AUTOMATED):
- * 1. When EXEC-TO-PLAN handoff is accepted, VERIFY deliverables before completing
- * 2. Maps deliverable types to verifiable evidence (commits, tests, PRD checklist)
- * 3. For low-confidence items: DOUBLE-CHECK via secondary verification sources
- * 4. Uses cascading verification: Primary → Secondary → Fallback sources
- * 5. NO manual review required - system auto-resolves all deliverables
- * 6. Maintains full audit trail for compliance
+ * ARCHITECTURE (v3.1):
+ * - DATABASE TRIGGER (100% confidence): Fires on EXEC-TO-PLAN handoff acceptance
+ *   → This is the PRIMARY mechanism, runs at database level with SECURITY DEFINER
+ *   → See: database/migrations/auto_complete_deliverables_on_handoff.sql
  *
- * ANTI-HALLUCINATION SAFEGUARDS (AUTOMATED):
+ * - JS MODULE (this file): Secondary verification layer for enhanced confidence
+ *   → Called from unified-handoff-system.js for additional verification
+ *   → Provides cascading verification with multiple trust tiers
+ *   → Used for pre-handoff checks and verification auditing
+ *
+ * INTELLIGENT BEHAVIOR (v3.1):
+ * 1. Database trigger auto-completes at 100% confidence on handoff acceptance
+ * 2. JS module provides VERIFICATION ONLY (no low-confidence auto-completion)
+ * 3. Maps deliverable types to verifiable evidence (commits, tests, PRD checklist)
+ * 4. Cascading verification: Primary → Secondary → Fallback sources
+ * 5. Maintains full audit trail for compliance
+ *
+ * ANTI-HALLUCINATION SAFEGUARDS:
  * - Cross-references PRD exec_checklist items with deliverables
  * - Verifies test deliverables against sub-agent TESTING results
  * - Checks database deliverables against DATABASE sub-agent results
- * - Double-checks unverified items with secondary sources (git commits, file existence)
- * - Falls back to "handoff acceptance + PRD status" as ultimate trust signal
+ * - Database trigger provides 100% confidence (handoff acceptance = work verified)
  *
- * INTEGRATION POINT: Called from unified-handoff-system.js after handoff acceptance
+ * INTEGRATION POINT: Called from unified-handoff-system.js for verification audit
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -264,11 +273,7 @@ function verifyDeliverable(deliverable, evidence) {
   };
 
   const sourceConfig = VERIFICATION_SOURCES[deliverable.deliverable_type] || VERIFICATION_SOURCES['other'];
-  const allSources = [
-    ...(sourceConfig.primary || []),
-    ...(sourceConfig.secondary || []),
-    ...(sourceConfig.fallback || [])
-  ];
+  // Note: allSources was used for debugging, removed to satisfy ESLint
 
   // PASS 1: Check PRIMARY sources
   result.cascadeLog.push('PASS 1: Checking primary sources...');
@@ -355,20 +360,26 @@ function verifyDeliverable(deliverable, evidence) {
     return result;
   }
 
-  // If we get here, no verification possible but we still complete
-  // because sd_scope_deliverables should sync with actual work done
-  result.cascadeLog.push('⚠️ No verification sources matched, but deliverable will be completed with low confidence');
-  result.verified = true; // Always verify to prevent blocking
-  result.confidence = 50;
-  result.tier = 'AUTO_COMPLETE_UNVERIFIED';
-  result.sources.push('AUTO_SYNC');
+  // v3.1: If we get here, don't auto-complete with low confidence
+  // The DATABASE TRIGGER handles this case with 100% confidence
+  // (trigger fires on handoff acceptance, which is the ultimate trust signal)
+  result.cascadeLog.push('ℹ️  No JS verification sources matched - database trigger will handle completion');
+  result.cascadeLog.push('    See: database/migrations/auto_complete_deliverables_on_handoff.sql');
+  result.verified = false;
+  result.confidence = 0;
+  result.tier = 'DEFERRED_TO_TRIGGER';
+  result.sources.push('DATABASE_TRIGGER');
 
   return result;
 }
 
 /**
- * Auto-complete deliverables with cascading verification (v3.0)
- * FULLY AUTOMATED - No manual review required
+ * Auto-complete deliverables with cascading verification (v3.1)
+ *
+ * NOTE: The PRIMARY auto-completion mechanism is now a DATABASE TRIGGER
+ * (see: database/migrations/auto_complete_deliverables_on_handoff.sql)
+ * This JS function provides VERIFICATION ONLY for higher-confidence tiers.
+ * Low-confidence cases are deferred to the database trigger.
  *
  * @param {string} sdId - Strategic Directive ID
  * @param {object} options - Configuration options
@@ -384,13 +395,14 @@ export async function autoCompleteDeliverables(sdId, options = {}) {
   const result = {
     success: true,
     completed: [],
+    deferredToTrigger: [], // v3.1: Track items deferred to database trigger
     tierBreakdown: {
       TIER_1_FULL_VERIFICATION: 0,
       TIER_2_SECONDARY_VERIFICATION: 0,
       TIER_3_FALLBACK_TRUST: 0,
       TIER_4_HANDOFF_OVERRIDE: 0,
       HANDOFF_TRUST: 0,
-      AUTO_COMPLETE_UNVERIFIED: 0
+      DEFERRED_TO_TRIGGER: 0 // v3.1: Replaced AUTO_COMPLETE_UNVERIFIED
     },
     doubleCheckedCount: 0,
     errors: [],
@@ -398,7 +410,7 @@ export async function autoCompleteDeliverables(sdId, options = {}) {
   };
 
   try {
-    console.log(`\n🔍 Auto-completing deliverables for ${sdId} (v3.0 - Cascading Verification)...`);
+    console.log(`\n🔍 Auto-completing deliverables for ${sdId} (v3.1 - Database Trigger Primary)...`);
 
     // Step 1: Gather verification evidence from ALL sources
     console.log('  📊 Gathering verification evidence from all sources...');
@@ -467,7 +479,21 @@ export async function autoCompleteDeliverables(sdId, options = {}) {
         result.doubleCheckedCount++;
       }
 
-      // v3.0: ALL deliverables are completed (no manual review needed)
+      // v3.1: Only complete if JS verification succeeded
+      // DEFERRED_TO_TRIGGER items are handled by the database trigger
+      if (verification.tier === 'DEFERRED_TO_TRIGGER') {
+        // Don't update - database trigger will handle on handoff acceptance
+        result.deferredToTrigger.push({
+          name: d.deliverable_name,
+          type: d.deliverable_type,
+          reason: 'No JS verification sources matched'
+        });
+        console.log(`  ⏳ ${d.deliverable_name}`);
+        console.log('      Deferred to database trigger (will complete on handoff acceptance)');
+        continue;
+      }
+
+      // Verified by JS module - update with verification details
       const { error: updateError } = await supabase
         .from('sd_scope_deliverables')
         .update({
@@ -475,14 +501,14 @@ export async function autoCompleteDeliverables(sdId, options = {}) {
           verified_by: verifiedBy,
           verified_at: new Date().toISOString(),
           completion_evidence: `Verified via: ${verification.sources.join(', ')} [${verification.tier}]`,
-          completion_notes: `Auto-completed (v3.0) with ${verification.confidence.toFixed(0)}% confidence via ${verification.tier}. ${verification.doubleChecked ? 'Double-checked with secondary sources.' : ''}`,
+          completion_notes: `Auto-completed (v3.1) with ${verification.confidence.toFixed(0)}% confidence via ${verification.tier}. ${verification.doubleChecked ? 'Double-checked with secondary sources.' : ''}`,
           updated_at: new Date().toISOString(),
           metadata: {
             auto_completed: true,
             auto_completed_at: new Date().toISOString(),
             handoff_id: handoffId,
             verification: {
-              version: '3.0',
+              version: '3.1',
               tier: verification.tier,
               confidence: verification.confidence,
               sources: verification.sources,
@@ -511,7 +537,7 @@ export async function autoCompleteDeliverables(sdId, options = {}) {
           'TIER_3_FALLBACK_TRUST': '🟠',
           'TIER_4_HANDOFF_OVERRIDE': '🔵',
           'HANDOFF_TRUST': '🔵',
-          'AUTO_COMPLETE_UNVERIFIED': '⚪'
+          'DEFERRED_TO_TRIGGER': '⏳'
         }[verification.tier] || '⚪';
 
         console.log(`  ${tierEmoji} ${d.deliverable_name}`);
@@ -524,8 +550,9 @@ export async function autoCompleteDeliverables(sdId, options = {}) {
     }
 
     // Step 4: Summary
-    console.log('\n📊 Completion Summary (v3.0 - Fully Automated):');
-    console.log(`  ✅ Completed: ${result.completed.length}/${deliverables.length} deliverables`);
+    console.log('\n📊 Completion Summary (v3.1 - Database Trigger Primary):');
+    console.log(`  ✅ Completed by JS: ${result.completed.length}/${deliverables.length} deliverables`);
+    console.log(`  ⏳ Deferred to trigger: ${result.deferredToTrigger.length} deliverables`);
     console.log(`  🔄 Double-checked: ${result.doubleCheckedCount} deliverables`);
     console.log(`  ❌ Errors: ${result.errors.length}`);
     console.log('\n  📈 Tier Breakdown:');
@@ -533,6 +560,10 @@ export async function autoCompleteDeliverables(sdId, options = {}) {
       if (count > 0) {
         console.log(`      ${tier}: ${count}`);
       }
+    }
+    if (result.deferredToTrigger.length > 0) {
+      console.log('\n  ℹ️  Deferred items will be completed by database trigger on handoff acceptance');
+      console.log('     See: database/migrations/auto_complete_deliverables_on_handoff.sql');
     }
 
     // Verify the progress breakdown was updated
