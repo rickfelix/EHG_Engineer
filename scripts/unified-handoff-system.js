@@ -36,6 +36,7 @@ import { validateGate2ExecToPlan } from './modules/implementation-fidelity-valid
 import { validateGate3PlanToLead } from './modules/traceability-validation.js';
 import { validateGate4LeadFinal } from './modules/workflow-roi-validation.js';
 import { autoValidateUserStories } from './auto-validate-user-stories-on-exec-complete.js';
+import { autoCompleteDeliverables, checkDeliverablesNeedCompletion } from './modules/handoff/auto-complete-deliverables.js';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
