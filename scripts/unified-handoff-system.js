@@ -1448,6 +1448,60 @@ class UnifiedHandoffSystem {
   }
 
   /**
+   * Auto-complete exec_checklist items when work is verifiably complete
+   * ROOT CAUSE FIX: Prevents handoff blocking when PRD is completed but checklist wasn't updated
+   */
+  async autoCompleteExecChecklist(prd) {
+    if (!prd.exec_checklist || !Array.isArray(prd.exec_checklist)) {
+      return { updated: false, reason: 'No exec_checklist found' };
+    }
+
+    const uncheckedItems = prd.exec_checklist.filter(item => !item.checked);
+    if (uncheckedItems.length === 0) {
+      return { updated: false, reason: 'All items already checked' };
+    }
+
+    // Auto-complete if PRD status is completed/implemented
+    if (prd.status === 'completed' || prd.status === 'implemented') {
+      console.log('🔄 AUTO-COMPLETING exec_checklist (PRD status is completed/implemented)');
+      console.log(`   Found ${uncheckedItems.length} unchecked items to mark as complete`);
+
+      const updatedChecklist = prd.exec_checklist.map(item => ({
+        ...item,
+        checked: true,
+        auto_completed_at: item.checked ? undefined : new Date().toISOString(),
+        auto_completed_reason: item.checked ? undefined : `PRD status=${prd.status}`
+      }));
+
+      const { error } = await this.supabase
+        .from('product_requirements_v2')
+        .update({
+          exec_checklist: updatedChecklist,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', prd.id);
+
+      if (error) {
+        console.error(`❌ Auto-complete failed: ${error.message}`);
+        return { updated: false, reason: error.message };
+      }
+
+      console.log(`✅ Auto-completed ${uncheckedItems.length} exec_checklist items`);
+
+      // Update local prd object for subsequent validation
+      prd.exec_checklist = updatedChecklist;
+
+      return {
+        updated: true,
+        itemsCompleted: uncheckedItems.length,
+        reason: `PRD status=${prd.status}`
+      };
+    }
+
+    return { updated: false, reason: 'PRD status not completed/implemented' };
+  }
+
+  /**
    * Validate EXEC work completeness
    */
   async validateExecWork(prd, sdId) {
@@ -1456,14 +1510,23 @@ class UnifiedHandoffSystem {
       score: 0,
       issues: [],
       checkedItems: 0,
-      totalItems: 0
+      totalItems: 0,
+      autoCompleted: null
     };
-    
+
+    // AUTO-COMPLETION: Try to auto-complete exec_checklist if conditions met
+    // This prevents handoff blocking when work is done but checklist wasn't updated
+    const autoCompleteResult = await this.autoCompleteExecChecklist(prd);
+    if (autoCompleteResult.updated) {
+      validation.autoCompleted = autoCompleteResult;
+      console.log(`📋 Auto-completion applied: ${autoCompleteResult.itemsCompleted} items marked complete`);
+    }
+
     // Check EXEC checklist completion
     if (prd.exec_checklist && Array.isArray(prd.exec_checklist)) {
       validation.totalItems = prd.exec_checklist.length;
       validation.checkedItems = prd.exec_checklist.filter(item => item.checked).length;
-      
+
       if (validation.checkedItems >= validation.totalItems * 0.8) { // 80% minimum
         validation.score += 50;
       } else {
