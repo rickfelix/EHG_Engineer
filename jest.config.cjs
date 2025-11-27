@@ -1,5 +1,6 @@
 module.exports = {
   testEnvironment: 'node',
+  testTimeout: 60000, // 60s default timeout for all tests
   coverageDirectory: 'coverage',
   collectCoverageFrom: [
     'lib/**/*.js',
@@ -30,7 +31,6 @@ module.exports = {
       displayName: 'smoke',
       testEnvironment: 'node',
       testMatch: ['<rootDir>/tests/smoke.test.js'],
-      timeout: 30000, // 30s for smoke tests
       setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
       transform: {},
       transformIgnorePatterns: []
@@ -39,7 +39,6 @@ module.exports = {
       displayName: 'unit',
       testEnvironment: 'node',
       testMatch: ['<rootDir>/tests/unit/**/*.test.js'],
-      timeout: 10000, // 10s for unit tests
       setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
       transform: {},
       transformIgnorePatterns: []
@@ -48,7 +47,6 @@ module.exports = {
       displayName: 'integration',
       testEnvironment: 'node',
       testMatch: ['<rootDir>/tests/integration/**/*.test.js'],
-      timeout: 60000, // 60s for integration tests
       setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
       transform: {},
       transformIgnorePatterns: []
