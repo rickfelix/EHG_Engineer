@@ -104,7 +104,7 @@ class LEOAutoInit {
             }
           }
         }
-      } catch (e) {
+      } catch {
         // Cache is invalid, needs update
       }
     }
@@ -118,7 +118,7 @@ class LEOAutoInit {
         const cache = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
         return cache.version;
       }
-    } catch (e) {
+    } catch {
       // Ignore cache errors
     }
     return 'unknown';
@@ -175,11 +175,11 @@ class LEOAutoInit {
         handoffTemplates: handoffTemplates || [],
         agents: agents || []
       };
-    } catch (error) {
+    } catch {
       return null;
     }
   }
-  
+
   async generateClaudeMd(protocol) {
     const { CLAUDEMDGeneratorV3 } = await import('./generate-claude-md-from-db.js');
     const generator = new CLAUDEMDGeneratorV3();

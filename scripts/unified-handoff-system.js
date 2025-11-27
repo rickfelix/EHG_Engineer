@@ -1618,7 +1618,7 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
         throw new Error(`Pre-validation failed for leo_handoff_executions: ${preValidation.errors.map(e => e.message).join('; ')}`);
       }
 
-      const { data, error} = await this.supabase.from('leo_handoff_executions').insert(execution).select();
+      const { data: _data, error} = await this.supabase.from('leo_handoff_executions').insert(execution).select();
       if (error) {
         console.error('❌ Failed to store handoff execution:', error.message);
         console.error('   Details:', error);
@@ -1750,7 +1750,7 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
    * Build 7-element handoff content based on handoff type
    */
   buildHandoffContent(handoffType, sd, result, subAgentResults) {
-    const [fromPhase, , toPhase] = handoffType.split('-');
+    const [fromPhase, , _toPhase] = handoffType.split('-');
 
     // Base content structure
     const content = {
@@ -2031,7 +2031,7 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
     };
 
     try {
-      const { data, error} = await this.supabase.from('leo_handoff_executions').insert(execution).select();
+      const { data: _data2, error} = await this.supabase.from('leo_handoff_executions').insert(execution).select();
       if (error) {
         console.error('❌ Failed to store system error:', error.message);
       }
