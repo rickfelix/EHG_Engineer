@@ -1,7 +1,7 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-11-07 6:39:28 AM
-**Protocol**: LEO v4.2.0_story_gates
+**Generated**: 2025-11-27 7:28:24 AM
+**Protocol**: LEO 4.3.1
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
 ---
@@ -532,21 +532,6 @@ cat docs/EXEC_CONTEXT.md
 *BMAD Method: Build-Measure-Adapt-Document*
 
 
-## CI/CD Pipeline Verification
-
-## CI/CD Pipeline Verification (MANDATORY)
-
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
-
-### Verification Process
-
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
-
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
-
 ## DESIGN→DATABASE Validation Gates
 
 The LEO Protocol enforces the DESIGN→DATABASE workflow pattern through 4 mandatory validation gates that ensure:
@@ -983,6 +968,21 @@ This enables:
 2. **Retrospectives**: Quality analysis for continuous improvement
 3. **Cascading**: Gate 3 uses Gate 2 results, Gate 4 uses all previous results
 4. **Debugging**: Detailed failure information for each gate
+
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## Pre-Implementation Plan Presentation Template
 
@@ -1447,14 +1447,92 @@ sequenceDiagram
 
 ## Handoff Templates
 
-No templates in database
+
+#### PLAN → EXEC (plan_presentation)
+Elements: [object Object], [object Object], [object Object], [object Object], [object Object]
+Required: goal_summary present and ≤300 chars, file_scope has at least one of: create, modify, delete, execution_plan has ≥1 step, testing_strategy has both unit_tests and e2e_tests defined
+
+
+#### EXEC → PLAN (EXEC-to-PLAN-VERIFICATION)
+Elements: Not defined
+Required: executive_summary, deliverables_manifest, key_decisions, known_issues, resource_utilization, action_items, completeness_report, rca_integration
+
+
+#### LEAD → PLAN (strategic_to_technical)
+Elements: Executive Summary, Completeness Report, Deliverables Manifest, Key Decisions & Rationale, Known Issues & Risks, Resource Utilization, Action Items for Receiver
+Required: [object Object], [object Object], [object Object]
+
+
+#### PLAN → LEAD (verification_to_approval)
+Elements: Executive Summary, Completeness Report, Deliverables Manifest, Key Decisions & Rationale, Known Issues & Risks, Resource Utilization, Action Items for Receiver
+Required: [object Object], [object Object], [object Object]
+
+
+#### EXEC → PLAN (implementation_to_verification)
+Elements: Executive Summary, Completeness Report, Deliverables Manifest, Key Decisions & Rationale, Known Issues & Risks, Resource Utilization, Action Items for Receiver
+Required: [object Object], [object Object], [object Object], [object Object], [object Object], [object Object]
+
 
 ## Validation Rules
 
-No validation rules in database
+
+- **hasADR** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **hasInterfaces** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **hasTechDesign** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **designArtifacts** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **dbSchemaReady** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **securityScanClean** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **riskSpikesClosed** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **nfrBudgetsPresent** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **coverageTargetSet** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **testPlanMatrices** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **supervisorChecklistPass** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
 
 ---
 
-*Generated from database: 2025-11-07*
-*Protocol Version: v4.2.0_story_gates*
+*Generated from database: 2025-11-27*
+*Protocol Version: 4.3.1*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

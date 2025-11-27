@@ -54,13 +54,15 @@ let supabaseUrl, supabaseKey, poolerUrl, databaseTarget;
 if (isEHGApp) {
   // EHG Application database
   supabaseUrl = process.env.EHG_SUPABASE_URL;
-  supabaseKey = process.env.EHG_SUPABASE_ANON_KEY;
+  // Use service role key for full access to all tables (anon key blocked by RLS on some tables)
+  supabaseKey = process.env.EHG_SUPABASE_SERVICE_ROLE_KEY || process.env.EHG_SUPABASE_ANON_KEY;
   poolerUrl = process.env.EHG_POOLER_URL;
   databaseTarget = 'ehg';
 } else {
   // EHG_Engineer database (default)
   supabaseUrl = process.env.SUPABASE_URL;
-  supabaseKey = process.env.SUPABASE_ANON_KEY;
+  // Use service role key for full access to LEO tables (anon key blocked by RLS on some tables)
+  supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
   poolerUrl = process.env.SUPABASE_POOLER_URL;
   databaseTarget = 'engineer';
 }

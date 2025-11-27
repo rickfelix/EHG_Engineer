@@ -1,0 +1,102 @@
+name: LEO KB Refresh
+
+on:
+  # Run on push to main when LEO tables are modified
+  push:
+    branches: [main]
+    paths:
+      - 'database/migrations/*.sql'
+      - 'scripts/generate-claude-md-from-db.js'
+      - 'scripts/section-file-mapping.json'
+
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force regenerate even if versions match'
+        required: false
+        default: 'false'
+        type: boolean
+
+  # Scheduled check (daily at 6 AM UTC)
+  schedule:
+    - cron: '0 6 * * *'
+
+jobs:
+  check-and-refresh:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check LEO version consistency
+        id: version-check
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set +e
+          node scripts/check-leo-version.js
+          EXIT_CODE=$?
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "version_drift=false" >> $GITHUB_OUTPUT
+          else
+            echo "version_drift=true" >> $GITHUB_OUTPUT
+          fi
+          exit 0
+
+      - name: Regenerate CLAUDE files
+        if: steps.version-check.outputs.version_drift == 'true' || github.event.inputs.force == 'true'
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "🔄 Regenerating CLAUDE files..."
+          node scripts/generate-claude-md-from-db.js
+
+          echo "🔍 Verifying regeneration..."
+          node scripts/check-leo-version.js
+
+      - name: Check for changes
+        id: git-check
+        run: |
+          git diff --exit-code CLAUDE*.md || echo "changes=true" >> $GITHUB_OUTPUT
+
+      - name: Commit and push changes
+        if: steps.git-check.outputs.changes == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add CLAUDE*.md
+          git commit -m "chore(leo): Auto-refresh CLAUDE files from database
+
+          🤖 Generated with LEO Protocol KB refresh automation
+
+          Triggered by: ${{ github.event_name }}
+          Workflow: ${{ github.workflow }}"
+          git push
+
+      - name: Summary
+        run: |
+          echo "## LEO KB Refresh Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.version-check.outputs.version_drift }}" == "true" ]; then
+            echo "⚠️ Version drift detected and fixed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ All versions consistent" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ "${{ steps.git-check.outputs.changes }}" == "true" ]; then
+            echo "📝 CLAUDE files updated and committed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "📄 No changes to CLAUDE files" >> $GITHUB_STEP_SUMMARY
+          fi

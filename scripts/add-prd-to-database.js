@@ -22,7 +22,8 @@ async function addPRDToDatabase(sdId, prdTitle) {
   console.log(`📋 Adding PRD for ${sdId} to database...\n`);
   
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  // Use service role key for full access to LEO tables (anon key blocked by RLS on some tables)
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
   if (!supabaseUrl || !supabaseKey) {
     console.log('❌ Missing Supabase credentials in .env file');

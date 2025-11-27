@@ -16,7 +16,8 @@ const __dirname = path.dirname(__filename);
 dotenv.config();
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Use service role key for full access to LEO tables (anon key blocked by RLS)
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('❌ Missing Supabase credentials');
@@ -54,13 +55,17 @@ class CLAUDEMDGeneratorV3 {
       const subAgents = await this.getSubAgents();
       const handoffTemplates = await this.getHandoffTemplates();
       const validationRules = await this.getValidationRules();
+      const schemaConstraints = await this.getSchemaConstraints();
+      const processScripts = await this.getProcessScripts();
 
       const data = {
         protocol,
         agents,
         subAgents,
         handoffTemplates,
-        validationRules
+        validationRules,
+        schemaConstraints,
+        processScripts
       };
 
       // Generate each file
@@ -159,6 +164,35 @@ class CLAUDEMDGeneratorV3 {
     return data || [];
   }
 
+  async getSchemaConstraints() {
+    const { data, error } = await supabase
+      .from('leo_schema_constraints')
+      .select('*')
+      .order('table_name');
+
+    if (error) {
+      console.warn('⚠️  Could not load schema constraints (table may not exist yet)');
+      return [];
+    }
+
+    return data || [];
+  }
+
+  async getProcessScripts() {
+    const { data, error } = await supabase
+      .from('leo_process_scripts')
+      .select('*')
+      .eq('active', true)
+      .order('category');
+
+    if (error) {
+      console.warn('⚠️  Could not load process scripts (table may not exist yet)');
+      return [];
+    }
+
+    return data || [];
+  }
+
   getSectionsByMapping(sections, fileKey) {
     const mappedTypes = this.fileMapping[fileKey]?.sections || [];
     return sections.filter(s => mappedTypes.includes(s.section_type));
@@ -217,13 +251,16 @@ ${smartRouter ? smartRouter.content : '## Context Router\n\n**Load Strategy**: R
   }
 
   generateCore(data) {
-    const { protocol, agents } = data;
+    const { protocol, agents, subAgents } = data;
     const sections = protocol.sections;
     const { today, time } = this.getMetadata(protocol);
 
     // Get core sections
     const coreSections = this.getSectionsByMapping(sections, 'CLAUDE_CORE.md');
     const coreContent = coreSections.map(s => this.formatSection(s)).join('\n\n');
+
+    // Generate sub-agent reference
+    const subAgentSection = this.generateSubAgentSection(subAgents);
 
     return `# CLAUDE_CORE.md - LEO Protocol Core Context
 
@@ -244,6 +281,8 @@ ${this.generateAgentSection(agents)}
 \`\`\`
 Total = ${agents.map(a => `${a.agent_code}: ${a.total_percentage}%`).join(' + ')} = 100%
 \`\`\`
+
+${subAgentSection}
 
 ---
 
@@ -316,13 +355,19 @@ ${this.generateValidationRules(validationRules)}
   }
 
   generateExec(data) {
-    const { protocol } = data;
+    const { protocol, schemaConstraints, processScripts } = data;
     const sections = protocol.sections;
     const { today, time } = this.getMetadata(protocol);
 
     // Get EXEC sections
     const execSections = this.getSectionsByMapping(sections, 'CLAUDE_EXEC.md');
     const execContent = execSections.map(s => this.formatSection(s)).join('\n\n');
+
+    // Generate schema constraints section
+    const constraintsSection = this.generateSchemaConstraintsSection(schemaConstraints);
+
+    // Generate process scripts section
+    const scriptsSection = this.generateProcessScriptsSection(processScripts);
 
     return `# CLAUDE_EXEC.md - EXEC Phase Operations
 
@@ -334,12 +379,98 @@ ${this.generateValidationRules(validationRules)}
 
 ${execContent}
 
+${constraintsSection}
+
+${scriptsSection}
+
 ---
 
 *Generated from database: ${today}*
 *Protocol Version: ${protocol.version}*
 *Load when: User mentions EXEC, implementation, coding, or testing*
 `;
+  }
+
+  generateSchemaConstraintsSection(constraints) {
+    if (!constraints || constraints.length === 0) {
+      return '';
+    }
+
+    let section = `## Database Schema Constraints Reference
+
+**CRITICAL**: These constraints are enforced by the database. Agents MUST use valid values to avoid insert failures.
+
+`;
+
+    // Group by table
+    const byTable = {};
+    constraints.forEach(c => {
+      if (!byTable[c.table_name]) byTable[c.table_name] = [];
+      byTable[c.table_name].push(c);
+    });
+
+    for (const [table, cols] of Object.entries(byTable)) {
+      section += `### ${table}\n\n`;
+      section += '| Column | Valid Values | Hint |\n';
+      section += '|--------|--------------|------|\n';
+
+      cols.forEach(c => {
+        const values = c.valid_values ? JSON.parse(JSON.stringify(c.valid_values)).join(', ') : 'N/A';
+        section += `| \`${c.column_name}\` | ${values} | ${c.remediation_hint || ''} |\n`;
+      });
+
+      section += '\n';
+    }
+
+    return section;
+  }
+
+  generateProcessScriptsSection(scripts) {
+    if (!scripts || scripts.length === 0) {
+      return '';
+    }
+
+    let section = `## LEO Process Scripts Reference
+
+**Usage**: All scripts use positional arguments unless noted otherwise.
+
+`;
+
+    // Group by category
+    const byCategory = {};
+    scripts.forEach(s => {
+      const cat = s.category || 'other';
+      if (!byCategory[cat]) byCategory[cat] = [];
+      byCategory[cat].push(s);
+    });
+
+    for (const [category, categoryScripts] of Object.entries(byCategory)) {
+      section += `### ${category.charAt(0).toUpperCase() + category.slice(1)} Scripts\n\n`;
+
+      categoryScripts.forEach(s => {
+        section += `#### ${s.script_name}\n`;
+        section += `${s.description}\n\n`;
+        section += `**Usage**: \`${s.usage_pattern}\`\n\n`;
+
+        if (s.examples && s.examples.length > 0) {
+          section += '**Examples**:\n';
+          s.examples.forEach(ex => {
+            section += `- \`${ex.command}\`\n`;
+          });
+          section += '\n';
+        }
+
+        if (s.common_errors && s.common_errors.length > 0) {
+          section += '**Common Errors**:\n';
+          s.common_errors.forEach(err => {
+            section += `- Pattern: \`${err.error_pattern}\` → Fix: ${err.fix}\n`;
+          });
+          section += '\n';
+        }
+      });
+    }
+
+    return section;
   }
 
   generateAgentSection(agents) {
@@ -362,6 +493,33 @@ ${execContent}
     table += '**Total**: EXEC (30%) + LEAD (35%) + PLAN (35%) = 100%';
 
     return table;
+  }
+
+  generateSubAgentSection(subAgents) {
+    if (!subAgents || subAgents.length === 0) {
+      return '';
+    }
+
+    let section = `## Available Sub-Agents
+
+**Usage**: Invoke sub-agents using the Task tool with matching subagent_type.
+
+| Sub-Agent | Trigger Keywords | Priority | Description |
+|-----------|------------------|----------|-------------|
+`;
+
+    subAgents.forEach(sa => {
+      // Extract trigger_phrase from triggers array (from leo_sub_agent_triggers table)
+      const triggers = sa.triggers?.map(t => t.trigger_phrase).filter(Boolean).join(', ') || 'N/A';
+      const desc = sa.description?.substring(0, 60) + (sa.description?.length > 60 ? '...' : '') || 'N/A';
+      section += `| ${sa.name} | ${triggers.substring(0, 40)} | ${sa.priority || 'N/A'} | ${desc} |\n`;
+    });
+
+    section += `
+**Note**: Sub-agent results MUST be persisted to \`sub_agent_execution_results\` table.
+`;
+
+    return section;
   }
 
   generateHandoffTemplates(templates) {

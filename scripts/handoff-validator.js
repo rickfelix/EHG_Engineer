@@ -16,9 +16,10 @@ dotenv.config();
 
 class HandoffValidator {
   constructor() {
+    // Use service role key for full access to LEO tables (anon key blocked by RLS on some tables)
     this.supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     );
     
     this.subAgentEnforcer = new SubAgentEnforcementSystem();

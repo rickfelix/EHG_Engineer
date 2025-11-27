@@ -14,9 +14,10 @@ dotenv.config();
 
 class SubAgentEnforcementSystem {
   constructor() {
+    // Use service role key for full access to LEO tables (anon key blocked by RLS on some tables)
     this.supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     );
     
     // Define ALL sub-agent triggers based on LEO Protocol
@@ -538,17 +539,141 @@ class SubAgentEnforcementSystem {
   }
 
   /**
-   * Get list of used sub-agents for an SD
+   * Get list of used sub-agents for an SD (from activations table - legacy)
    */
   async getUsedSubAgents(sdId) {
     const { data } = await this.supabase
       .from('subagent_activations')
       .select('agent_type')
       .eq('sd_id', sdId);
-    
+
     if (!data) return [];
-    
+
     return [...new Set(data.map(d => d.agent_type))];
+  }
+
+  /**
+   * Get sub-agent execution results from database
+   * This is the SOURCE OF TRUTH for sub-agent execution verification
+   * SD-LEO-4-3-2-AUTOMATION: Enforce persistence
+   */
+  async getSubAgentExecutionResults(sdId) {
+    const { data, error } = await this.supabase
+      .from('sub_agent_execution_results')
+      .select('sub_agent_code, verdict, execution_time, created_at')
+      .eq('sd_id', sdId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn(`⚠️  Could not fetch sub-agent results: ${error.message}`);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Verify sub-agent results exist in database (SOURCE OF TRUTH)
+   * Returns which required sub-agents have persisted results
+   * SD-LEO-4-3-2-AUTOMATION: Database-first enforcement
+   */
+  async verifySubAgentResultsExist(sdId, requiredSubAgents) {
+    console.log('\n🔍 Verifying sub-agent results in database...');
+
+    const results = await this.getSubAgentExecutionResults(sdId);
+    const persistedCodes = new Set(results.map(r => r.sub_agent_code?.toUpperCase()));
+
+    const verification = {
+      verified: [],
+      missing: [],
+      results: results
+    };
+
+    for (const agentName of requiredSubAgents) {
+      // Map agent name to code (e.g., "Testing" -> "TESTING")
+      const agentCode = agentName.toUpperCase();
+
+      if (persistedCodes.has(agentCode)) {
+        verification.verified.push(agentName);
+        const latestResult = results.find(r => r.sub_agent_code?.toUpperCase() === agentCode);
+        console.log(`   ✅ ${agentName}: ${latestResult?.verdict || 'PASS'} (${new Date(latestResult?.created_at).toLocaleDateString()})`);
+      } else {
+        verification.missing.push(agentName);
+        console.log(`   ❌ ${agentName}: No persisted results found`);
+      }
+    }
+
+    return verification;
+  }
+
+  /**
+   * Enhanced enforcement with database verification
+   * SD-LEO-4-3-2-AUTOMATION: Enforce results persistence
+   */
+  async enforceSubAgentsWithVerification(sdId, phase) {
+    console.log('═'.repeat(70));
+    console.log('SUB-AGENT ENFORCEMENT CHECK (WITH DATABASE VERIFICATION)');
+    console.log('═'.repeat(70));
+    console.log(`\nSD: ${sdId}`);
+    console.log(`Phase: ${phase}\n`);
+
+    // Step 1: Analyze what sub-agents are required
+    const analysis = await this.analyzeContext(sdId, phase);
+
+    // Step 2: Verify results exist in database (SOURCE OF TRUTH)
+    const verification = await this.verifySubAgentResultsExist(sdId, analysis.requiredSubAgents);
+
+    // Display results
+    console.log('\n📋 Required Sub-Agents:');
+    if (analysis.requiredSubAgents.length === 0) {
+      console.log('  None detected');
+    } else {
+      for (const agent of analysis.requiredSubAgents) {
+        const verified = verification.verified.includes(agent);
+        const status = verified ? '✅' : '❌';
+        console.log(`  ${status} ${agent}`);
+
+        // Show why it was triggered
+        const triggers = analysis.detectedTriggers[agent];
+        if (triggers) {
+          for (const trigger of triggers) {
+            console.log(`      ↳ ${trigger.description}`);
+          }
+        }
+      }
+    }
+
+    console.log('\n📊 Enforcement Result:');
+
+    if (verification.missing.length === 0) {
+      console.log('  ✅ All required sub-agents have persisted results in database');
+      return {
+        valid: true,
+        requiredSubAgents: analysis.requiredSubAgents,
+        verifiedSubAgents: verification.verified,
+        missingSubAgents: []
+      };
+    } else {
+      console.log('  ❌ Missing persisted results for:');
+      for (const agent of verification.missing) {
+        console.log(`     • ${agent}: ${this.subAgentTriggers[agent]?.description || 'Required sub-agent'}`);
+      }
+
+      console.log('\n⚠️  HANDOFF BLOCKED');
+      console.log('   Sub-agent results MUST be persisted to database before proceeding.');
+      console.log('\n   To execute and persist sub-agent results:');
+      for (const agent of verification.missing) {
+        console.log(`   node lib/sub-agent-executor.js ${agent.toUpperCase()} ${sdId}`);
+      }
+
+      return {
+        valid: false,
+        requiredSubAgents: analysis.requiredSubAgents,
+        verifiedSubAgents: verification.verified,
+        missingSubAgents: verification.missing,
+        detectedTriggers: analysis.detectedTriggers
+      };
+    }
   }
 
   /**
@@ -588,25 +713,40 @@ ${result.missingSubAgents.map(agent => `1. ${agent}`).join('\n')}
 // Main execution
 async function main() {
   const enforcer = new SubAgentEnforcementSystem();
-  
+
   // Parse command line arguments
-  const [,, sdId, phase, ...usedAgents] = process.argv;
-  
+  const args = process.argv.slice(2);
+  const verifyMode = args.includes('--verify');
+  const filteredArgs = args.filter(a => a !== '--verify');
+  const [sdId, phase, ...usedAgents] = filteredArgs;
+
   if (!sdId || !phase) {
-    console.log('Usage: node subagent-enforcement-system.js SD_ID PHASE [USED_AGENTS...]');
-    console.log('Example: node subagent-enforcement-system.js SD-2025-001 PLAN_VERIFICATION Testing Security');
+    console.log('Usage: node subagent-enforcement-system.js SD_ID PHASE [OPTIONS] [USED_AGENTS...]');
+    console.log('');
+    console.log('Options:');
+    console.log('  --verify    Verify results exist in sub_agent_execution_results table (database-first)');
+    console.log('');
+    console.log('Examples:');
+    console.log('  node subagent-enforcement-system.js SD-2025-001 PLAN_VERIFICATION Testing Security');
+    console.log('  node subagent-enforcement-system.js SD-2025-001 EXEC_COMPLETE --verify');
     process.exit(1);
   }
-  
-  // Check enforcement
-  const result = await enforcer.enforceSubAgents(sdId, phase, usedAgents);
-  
+
+  // Check enforcement - use database verification mode if specified
+  let result;
+  if (verifyMode) {
+    console.log('📊 Using DATABASE VERIFICATION mode (SD-LEO-4-3-2-AUTOMATION)');
+    result = await enforcer.enforceSubAgentsWithVerification(sdId, phase);
+  } else {
+    result = await enforcer.enforceSubAgents(sdId, phase, usedAgents);
+  }
+
   // Save report
   const report = enforcer.generateReport({ ...result, sdId, phase });
   const reportPath = path.join(process.cwd(), 'docs', `SUBAGENT_ENFORCEMENT_${sdId}_${Date.now()}.md`);
   await fs.writeFile(reportPath, report);
   console.log(`\n📄 Report saved to: ${reportPath}`);
-  
+
   // Exit with appropriate code
   process.exit(result.valid ? 0 : 1);
 }

@@ -1,7 +1,7 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2025-11-26 6:24:18 PM
-**Protocol**: LEO v4.2.0_story_gates
+**Generated**: 2025-11-27 7:28:24 AM
+**Protocol**: LEO 4.3.1
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
 ---
@@ -369,8 +369,176 @@ When implementing tests, ensure coverage for:
 - [ ] State rollback on error
 - [ ] Partial success scenarios
 
+## Database Schema Constraints Reference
+
+**CRITICAL**: These constraints are enforced by the database. Agents MUST use valid values to avoid insert failures.
+
+### leo_handoff_executions
+
+| Column | Valid Values | Hint |
+|--------|--------------|------|
+| `status` | pending, accepted, rejected, failed | Use one of: pending, accepted, rejected, failed |
+
+### leo_protocols
+
+| Column | Valid Values | Hint |
+|--------|--------------|------|
+| `status` | active, superseded, draft, deprecated | Use one of: active, superseded, draft, deprecated. Only ONE protocol can be "active" at a time. |
+
+### product_requirements_v2
+
+| Column | Valid Values | Hint |
+|--------|--------------|------|
+| `status` | draft, planning, in_progress, testing, approved, completed, archived | Use one of: draft, planning, in_progress, testing, approved, completed, archived |
+
+### sd_backlog_map
+
+| Column | Valid Values | Hint |
+|--------|--------------|------|
+| `item_type` | epic, story, task | Use one of: epic, story, task |
+| `verification_status` | not_run, failing, passing | Use one of: not_run, failing, passing |
+
+### sd_phase_handoffs
+
+| Column | Valid Values | Hint |
+|--------|--------------|------|
+| `to_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
+| `status` | pending_acceptance, accepted, rejected | Use one of: pending_acceptance, accepted, rejected |
+| `from_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
+
+### sd_scope_deliverables
+
+| Column | Valid Values | Hint |
+|--------|--------------|------|
+| `completion_status` | pending, in_progress, completed, blocked, cancelled | Use one of: pending, in_progress, completed, blocked, cancelled |
+
+### strategic_directives_v2
+
+| Column | Valid Values | Hint |
+|--------|--------------|------|
+| `status` | draft, lead_review, plan_active, exec_active, completed, on_hold, cancelled | Use one of: draft, lead_review, plan_active, exec_active, completed, on_hold, cancelled |
+| `priority` | critical, high, medium, low | Use one of: critical, high, medium, low |
+
+### sub_agent_execution_results
+
+| Column | Valid Values | Hint |
+|--------|--------------|------|
+| `status` | pending, running, completed, failed, skipped | Use one of: pending, running, completed, failed, skipped |
+
+### user_stories
+
+| Column | Valid Values | Hint |
+|--------|--------------|------|
+| `e2e_test_status` | not_created, created, passing, failing, skipped | Use one of: not_created, created, passing, failing, skipped |
+| `status` | draft, completed, in_progress, ready | Use one of: draft, completed, in_progress, ready. NOT "approved" - that is not a valid value. |
+| `validation_status` | pending, in_progress, validated, failed, skipped | Use one of: pending, in_progress, validated, failed, skipped |
+
+
+
+## LEO Process Scripts Reference
+
+**Usage**: All scripts use positional arguments unless noted otherwise.
+
+### Generation Scripts
+
+#### generate-claude-md-from-db.js
+Generates modular CLAUDE files (CLAUDE.md, CLAUDE_CORE.md, CLAUDE_LEAD.md, CLAUDE_PLAN.md, CLAUDE_EXEC.md) from database tables.
+
+**Usage**: `node scripts/generate-claude-md-from-db.js`
+
+**Examples**:
+- `node scripts/generate-claude-md-from-db.js`
+
+**Common Errors**:
+- Pattern: `No active protocol found` → Fix: Ensure one protocol has status=active in leo_protocols table
+
+### Handoff Scripts
+
+#### unified-handoff-system.js
+Unified LEO Protocol handoff execution system. Handles all handoff types with database-driven templates and validation.
+
+**Usage**: `node scripts/unified-handoff-system.js <command> [TYPE] [SD-ID] [PRD-ID]`
+
+**Examples**:
+- `node scripts/unified-handoff-system.js execute LEAD-TO-PLAN SD-IDEATION-STAGE1-001`
+- `node scripts/unified-handoff-system.js execute PLAN-TO-EXEC SD-IDEATION-STAGE1-001 PRD-IDEATION-001`
+- `node scripts/unified-handoff-system.js list SD-IDEATION-STAGE1-001`
+- `node scripts/unified-handoff-system.js stats`
+
+**Common Errors**:
+- Pattern: `--type.*not recognized` → Fix: Use positional: execute TYPE SD-ID, not --type TYPE
+- Pattern: `Strategic Directive.*not found` → Fix: Create SD first using LEO Protocol dashboard or create-strategic-directive.js
+
+### Migration Scripts
+
+#### run-sql-migration.js
+Executes SQL migration files against the database. Handles statement splitting and error reporting.
+
+**Usage**: `node scripts/run-sql-migration.js <migration-file-path>`
+
+**Examples**:
+- `node scripts/run-sql-migration.js database/migrations/20251127_leo_v432.sql`
+
+**Common Errors**:
+- Pattern: `relation .* does not exist` → Fix: Check table names and run migrations in order
+
+### Prd Scripts
+
+#### add-prd-to-database.js
+Adds a Product Requirements Document to the database with proper schema validation.
+
+**Usage**: `node scripts/add-prd-to-database.js --sd-id <SD-ID> --title <title> [options]`
+
+**Examples**:
+- `node scripts/add-prd-to-database.js --sd-id SD-IDEATION-STAGE1-001 --title "Stage 1 Implementation"`
+
+### Utility Scripts
+
+#### insert-leo-v431-protocol.js
+Inserts a new LEO protocol version and copies sections from previous version.
+
+**Usage**: `node scripts/insert-leo-v431-protocol.js`
+
+**Examples**:
+- `node scripts/insert-leo-v431-protocol.js`
+
+**Common Errors**:
+- Pattern: `violates check constraint.*status` → Fix: Use valid status: active, superseded, draft, deprecated
+
+### Validation Scripts
+
+#### check-leo-version.js
+Verifies version consistency between CLAUDE*.md files and database. Use --fix to auto-regenerate.
+
+**Usage**: `node scripts/check-leo-version.js [--fix]`
+
+**Examples**:
+- `node scripts/check-leo-version.js`
+- `node scripts/check-leo-version.js --fix`
+
+**Common Errors**:
+- Pattern: `No active protocol found` → Fix: Ensure leo_protocols has exactly one active record
+
+#### verify-handoff-plan-to-exec.js
+Verifies PLAN to EXEC handoff requirements including PRD completeness and sub-agent validations.
+
+**Usage**: `node scripts/verify-handoff-plan-to-exec.js <SD-ID> [PRD-ID]`
+
+**Examples**:
+- `node scripts/verify-handoff-plan-to-exec.js SD-IDEATION-STAGE1-001`
+
+#### verify-handoff-lead-to-plan.js
+Verifies LEAD to PLAN handoff requirements are met before allowing transition.
+
+**Usage**: `node scripts/verify-handoff-lead-to-plan.js <SD-ID>`
+
+**Examples**:
+- `node scripts/verify-handoff-lead-to-plan.js SD-IDEATION-STAGE1-001`
+
+
+
 ---
 
-*Generated from database: 2025-11-26*
-*Protocol Version: v4.2.0_story_gates*
+*Generated from database: 2025-11-27*
+*Protocol Version: 4.3.1*
 *Load when: User mentions EXEC, implementation, coding, or testing*

@@ -1,7 +1,7 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-11-07 6:39:28 AM
-**Protocol**: LEO v4.2.0_story_gates
+**Generated**: 2025-11-27 7:28:24 AM
+**Protocol**: LEO 4.3.1
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
 ---
@@ -40,6 +40,41 @@ EHG_Engineer (Management)          EHG App (Implementation)
 ├── Progress Tracking        ←     Results verified from here
 └── Dashboard Views          ←     No changes here!
 ```
+
+## 🔍 Session Start Verification (MANDATORY)
+
+**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
+
+### Before Starting ANY SD Work:
+```
+[ ] Query database to confirm SD exists
+[ ] Verify SD status and current_phase  
+[ ] Check for existing PRD if phase > LEAD
+[ ] Check for existing handoffs
+[ ] Document: "Verified SD [title] exists, status=[X], phase=[Y]"
+```
+
+### Verification Queries:
+```sql
+-- Find SD by title
+SELECT legacy_id, title, status, current_phase, progress 
+FROM strategic_directives_v2 
+WHERE title ILIKE '%[keyword]%' AND is_active = true;
+
+-- Check PRD exists
+SELECT prd_id, status FROM product_requirements_v2 WHERE sd_id = '[SD-ID]';
+
+-- Check handoffs exist
+SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID]';
+```
+
+### Why This Matters:
+- Session summaries describe *context*, not *state*
+- AI can hallucinate successful database operations
+- Database is the ONLY source of truth
+- If records don't exist, CREATE them before proceeding
+
+**Pattern Reference**: PAT-SESS-VER-001
 
 ## Execution Philosophy
 
@@ -283,10 +318,38 @@ SUPABASE_DB_PASSWORD=Fl!M32DaM00n!1
 
 **Complete Guide**: See `docs/reference/development-workflow.md`
 
+## 📊 Database Column Quick Reference
+
+### Priority Column (strategic_directives_v2)
+**Type**: STRING (not integer!)
+**Valid Values**: 'critical', 'high', 'medium', 'low'
+
+**Correct Usage**:
+```javascript
+// Filter by priority
+.in('priority', ['critical', 'high'])
+
+// Display priority
+console.log(sd.priority.toUpperCase()) // 'CRITICAL'
+```
+
+**Wrong Usage** (will silently fail):
+```javascript
+// DON'T DO THIS - compares string to integer
+.in('priority', [1, 2])  // Returns empty!
+sd.priority === 1 ? 'CRITICAL' : 'LOW'  // Always 'LOW'!
+```
+
+**Pattern Reference**: PAT-DATA-TYPE-001
+
+
 ## Agent Responsibilities
 
 | Agent | Code | Responsibilities | % Split |
 |-------|------|------------------|----------|
+| Implementation Agent | EXEC | Implementation based on PRD. **CRITICAL: Implementations happen in /mnt/c/_EHG/e... | I:30 = 30% |
+| Strategic Leadership Agent | LEAD | Strategic planning, business objectives, final approval. **SIMPLICITY FIRST (PRE... | P:20 A:15 = 35% |
+| Technical Planning Agent | PLAN | Technical design, PRD creation with comprehensive test plans, pre-automation val... | P:20 V:15 = 35% |
 
 **Legend**: P=Planning, I=Implementation, V=Verification, A=Approval
 **Total**: EXEC (30%) + LEAD (35%) + PLAN (35%) = 100%
@@ -294,11 +357,46 @@ SUPABASE_DB_PASSWORD=Fl!M32DaM00n!1
 ## Progress Calculation
 
 ```
-Total =  = 100%
+Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 ```
+
+## Available Sub-Agents
+
+**Usage**: Invoke sub-agents using the Task tool with matching subagent_type.
+
+| Sub-Agent | Trigger Keywords | Priority | Description |
+|-----------|------------------|----------|-------------|
+| Information Architecture Lead | LEAD_SD_CREATION, LEAD_HANDOFF_CREATION, | 95 | ## Information Architecture Lead v3.0.0 - Database-First Enf... |
+| Quick-Fix Orchestrator ("LEO Lite" Field Medic) | N/A | 95 | Lightweight triage and resolution for small UAT-discovered i... |
+| Root Cause Analysis Agent | sub_agent_blocked, ci_pipeline_failure,  | 95 | Forensic intelligence agent for defect triage, root cause de... |
+| UAT Test Executor | uat test, execute test, run uat, test ex | 90 | Interactive UAT test execution guide for manual testing work... |
+| DevOps Platform Architect | EXEC_IMPLEMENTATION_COMPLETE, create pul | 90 | # DevOps Platform Architect Sub-Agent
+
+**Identity**: You are... |
+| Continuous Improvement Coach | LEAD_APPROVAL_COMPLETE, LEAD_REJECTION,  | 85 | ## Continuous Improvement Coach v4.0.0 - Quality-First Editi... |
+| API Architecture Sub-Agent | API, REST, RESTful, GraphQL, endpoint, r | 75 | ## API Sub-Agent v1.0.0
+
+**Mission**: REST/GraphQL endpoint ... |
+| Senior Design Sub-Agent | component, visual, design system, stylin | 70 | ## Senior Design Sub-Agent v6.0.0 - Lessons Learned Edition
+... |
+| Dependency Management Sub-Agent | dependency, dependencies, npm, yarn, pnp | 70 | # Dependency Management Specialist Sub-Agent
+
+**Identity**: ... |
+| User Story Context Engineering Sub-Agent | user story, user stories, acceptance cri | 50 | ## User Story Context Engineering v2.0.0 - Lessons Learned E... |
+| Risk Assessment Sub-Agent | high risk, complex, refactor, migration, | 8 | ## Risk Assessment Sub-Agent v1.0.0
+
+**BMAD Enhancement**: M... |
+| Chief Security Architect | authentication, security | 7 | Former NSA security architect with 25 years experience secur... |
+| Principal Database Architect | schema, migration, EXEC_IMPLEMENTATION_C | 6 | ## Principal Database Architect v2.0.0 - Lessons Learned Edi... |
+| QA Engineering Director | coverage, protected route, build error,  | 5 | ## Enhanced QA Engineering Director v2.4.0 - Retrospective-I... |
+| Performance Engineering Lead | optimization | 4 | Performance engineering lead with 20+ years optimizing high-... |
+| Principal Systems Analyst | existing implementation, duplicate, conf | N/A | ## Principal Systems Analyst v3.0.0 - Retrospective-Informed... |
+
+**Note**: Sub-agent results MUST be persisted to `sub_agent_execution_results` table.
+
 
 ---
 
-*Generated from database: 2025-11-07*
-*Protocol Version: v4.2.0_story_gates*
+*Generated from database: 2025-11-27*
+*Protocol Version: 4.3.1*
 *Load this file first in all sessions*
