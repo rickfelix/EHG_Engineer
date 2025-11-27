@@ -118,23 +118,25 @@ If qualified for quick-fix:
    - Manually test the fix
    - Confirm issue is resolved
 
-## Step 5: Complete, Create PR & Auto-Merge
+## Step 5: Complete & Create PR (Review Required)
 
 ```bash
-# Create and automatically merge PR
+# Create PR (do NOT auto-merge - code review required)
 gh pr create --title "fix(QF-YYYYMMDD-NNN): [description]" --body "[summary]"
-gh pr merge --auto --squash  # Auto-merge when checks pass
 
 # Complete the quick-fix record
 node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN \
   --pr-url https://github.com/.../pull/123
 ```
 
+**⚠️ IMPORTANT: No Auto-Merge**
+Quick-fixes require code review before merge. This maintains quality standards.
+
 **Requirements for completion:**
 - ✅ Both unit and E2E tests passing
 - ✅ UAT verified (manual confirmation)
 - ✅ Actual LOC ≤ 50 (hard cap)
-- ✅ PR created and auto-merge enabled
+- ✅ PR created and awaiting review (NOT auto-merged)
 
 ## Auto-Escalation Triggers
 
@@ -152,8 +154,10 @@ Quick-fix will auto-escalate to full SD if:
 - Dual test requirement (unit + E2E smoke tests)
 - Server restart verification
 - Manual UAT confirmation
-- PR creation with auto-merge (merges when CI checks pass)
+- PR creation with code review (NO auto-merge)
 - Database-first tracking
+- RCA pattern detection (escalates systemic issues)
+- Console error baseline capture
 
 **Not required for quick-fixes:**
 - LEAD approval

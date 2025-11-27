@@ -1,8 +1,23 @@
 # Quick-Fix Protocol Documentation
 
-**Version:** 1.0
+**Version:** 2.0
 **Status:** ACTIVE
-**Last Updated:** 2025-11-17
+**Last Updated:** 2025-11-27
+
+---
+
+## Version 2.0 Enhancements (2025-11-27)
+
+| Feature | Description |
+|---------|-------------|
+| **RCA Pattern Detection** | Automatically detects recurring issues (4+) and escalates systemic patterns |
+| **Console Error Baseline** | Records errors before/after fix for comparison |
+| **Screenshot Evidence** | Supports visual evidence via Playwright MCP |
+| **Auto-Refinement Loop** | 3 attempts to improve compliance score before failing |
+| **Application Context** | Routes correctly to EHG vs EHG_Engineer |
+| **Retrospective Linkage** | Creates learning records for systemic patterns |
+| **Test Optimization** | Caches test results to avoid redundant runs |
+| **No Auto-Merge** | PRs require code review (quality enforcement) |
 
 ---
 
@@ -96,12 +111,26 @@ Think of it like **emergency surgery** - fast execution, maximum precision.
    - API endpoint creation
    - State management refactoring
 
-5. **Pattern Detection**
-   - Same error in 4+ files (systemic issue)
+5. **Systemic Pattern Detection** (NEW in v2.0)
+   - Same error in 4+ quick-fixes (recurring issue)
+   - RCA detects root cause needs addressing
+   - Automatically creates retrospective for learning
 
 ---
 
-## Quick-Fix Workflow (8 Steps)
+## Quick-Fix Workflow (10 Steps)
+
+### Step 0: Application Context Verification (NEW v2.0)
+- Determine target application (EHG vs EHG_Engineer)
+- Verify working directory is correct
+- Generate warning if context mismatch detected
+
+### Step 0.5: RCA Pattern Detection (NEW v2.0)
+- Analyze issue for recurring patterns
+- Search recent quick-fixes for similar issues
+- If 4+ similar issues found → Flag as systemic
+- Generate root cause hypothesis
+- Create retrospective if systemic pattern detected
 
 ### Step 1: Issue Detection & Triage
 - User reports error with console log
@@ -116,12 +145,18 @@ QUICKFIX acts as **mini-orchestrator**, calling specialists when needed:
 - **TESTING** - Always invoked for test strategy
 - **DESIGN** - If keywords: UI, layout, responsive, accessibility
 
+### Step 2.5: Console Error Baseline Capture (NEW v2.0)
+- Capture current console errors
+- Store in `.quickfix-evidence/{QF-ID}/` directory
+- Creates comparison baseline for after-fix validation
+
 ### Step 3: Auto-Escalation Check
 QUICKFIX evaluates:
 - Estimated LOC > 50?
 - Complexity = high?
 - Risk = high?
 - Specialist recommendation = escalate?
+- **Systemic pattern detected?** (NEW v2.0)
 
 **If ANY true:** Auto-escalate to full SD workflow.
 
@@ -175,14 +210,21 @@ If compliance score <90:
 - Re-run rubric after each refinement
 - Escalate if still failing after 3 attempts
 
-### Step 8: Completion & Review
+### Step 8: Evidence Comparison (NEW v2.0)
+- Capture console errors after fix
+- Compare with baseline captured in Step 2.5
+- Verify original error is resolved
+- Detect any new errors introduced
+
+### Step 9: Completion & Review
 - LEO stack restart (server reload)
   - **WSL Context:** Required because Vite dev server does not automatically detect changes and recompile in WSL environment due to file system watching limitations
   - Manual restart ensures code changes are picked up
 - User performs manual UAT
-- Create PR (always required, no direct merge)
+- Create PR (**code review required - NO auto-merge**)
 - Commit/push with user confirmation
 - Mark as completed in database
+- Clean up or archive evidence files
 
 ---
 

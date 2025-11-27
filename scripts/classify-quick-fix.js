@@ -19,6 +19,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { analyzePatterns, createPatternRetrospective } from '../lib/utils/quickfix-rca-integration.js';
 
 dotenv.config();
 
@@ -173,6 +174,35 @@ async function classifyQuickFix(qfId, options = {}) {
       pass: true,
       rule: 'Severity Gate',
       message: `Severity "${qf.severity}" acceptable for quick-fix`
+    });
+  }
+
+  // Check 5: RCA Pattern Detection (NEW)
+  console.log('\n🔍 Running Root Cause Analysis...\n');
+
+  const patternAnalysis = await analyzePatterns({
+    title: qf.title,
+    description: qf.description,
+    consoleError: qf.actual_behavior,
+    type: qf.type
+  });
+
+  if (patternAnalysis.isSystemic) {
+    checks.push({
+      pass: false,
+      rule: 'RCA Pattern Detection',
+      message: patternAnalysis.escalationReason
+    });
+    qualifies = false;
+
+    // Create retrospective for systemic pattern
+    console.log('\n📝 Creating pattern retrospective...');
+    await createPatternRetrospective(qfId, patternAnalysis);
+  } else {
+    checks.push({
+      pass: true,
+      rule: 'RCA Pattern Detection',
+      message: `No systemic pattern detected (${patternAnalysis.similarIssuesCount} similar issues found)`
     });
   }
 
