@@ -20,7 +20,8 @@
       "development_workflow",
       "database_first_enforcement_expanded",
       "supabase_operations",
-      "database_column_reference"
+      "database_column_reference",
+      "pattern_search_guide"
     ]
   },
   "CLAUDE_LEAD.md": {

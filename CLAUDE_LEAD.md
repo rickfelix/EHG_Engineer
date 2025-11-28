@@ -1,10 +1,54 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2025-11-27 7:40:41 AM
+**Generated**: 2025-11-28 8:28:02 AM
 **Protocol**: LEO 4.3.2
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
 ---
+
+## SD to Quick Fix Reverse Rubric (LEO v4.3.3)
+
+## SD to Quick Fix Reverse Rubric
+
+**Purpose**: Evaluate if an incoming SD should be downgraded to Quick Fix workflow.
+
+**Why**: Quick Fix to SD escalation exists, but reverse does not. 7+ QA-category SDs went through full LEAD-PLAN-EXEC workflow unnecessarily.
+
+### Downgrade Criteria (ALL must be true)
+
+| Criterion | Check |
+|-----------|-------|
+| Category | quality_assurance, documentation, or bug_fix |
+| Scope | Estimated LOC 50 or less OR no code changes (verification only) |
+| Complexity | No architectural decisions needed |
+| PRD | No PRD required (validation/verification task) |
+| Duration | Single session completion expected |
+| Risk | Low risk (no auth, schema, security, migration) |
+
+### Anti-Criteria (ANY blocks downgrade)
+
+- Contains: migration, schema change, auth, security, RLS
+- Severity is critical
+- Multiple files changed (more than 3)
+- Requires sub-agent validation (DATABASE, SECURITY)
+
+### LEAD Agent Action
+
+When reviewing a new SD that matches ALL downgrade criteria, suggest:
+
+This SD qualifies for Quick Fix workflow.
+- Category: quality_assurance
+- Estimated scope: 50 LOC or less / verification only
+
+Consider using /quick-fix to reduce overhead.
+- Quick Fix skips: LEAD approval, PRD, sub-agents, full validation gates
+- Quick Fix keeps: Dual tests, server restart, UAT, PR creation
+
+### Reference
+
+- Quick Fix escalation: .claude/commands/quick-fix.md lines 139-148
+- Evidence: SD-E2E-VENTURE-CHUNKS-001 (QA SD with 5+ rejection cycles)
+- Pattern: 7 QA-category SDs went through full workflow
 
 ## 🎯 LEAD Agent Operations
 
@@ -400,6 +444,6 @@ LEAD MUST answer these questions BEFORE approval:
 
 ---
 
-*Generated from database: 2025-11-27*
+*Generated from database: 2025-11-28*
 *Protocol Version: 4.3.2*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

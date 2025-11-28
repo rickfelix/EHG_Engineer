@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-11-27 7:40:41 AM
+**Generated**: 2025-11-28 8:28:02 AM
 **Protocol**: LEO 4.3.2
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -271,6 +271,36 @@ After ANY code changes:
 (Must be sequential - second read depends on first)
 ```
 
+## 🔍 Issue Pattern Search (Knowledge Base)
+
+Before implementing fixes for recurring issues, search the pattern database:
+
+```bash
+# Search for similar patterns
+npm run pattern:resolve  # Shows active patterns
+
+# Use knowledge base search in code
+import { IssueKnowledgeBase } from './lib/learning/issue-knowledge-base.js';
+const kb = new IssueKnowledgeBase();
+const patterns = await kb.search('RLS policy blocking', { category: 'database' });
+```
+
+**Pattern Types:**
+- `database` - Schema, migrations, RLS, queries
+- `testing` - E2E, unit tests, coverage
+- `security` - Auth, permissions, tokens
+- `build` - Vite, compilation, bundles
+- `deployment` - CI/CD, GitHub Actions
+- `protocol` - LEO handoffs, sub-agents
+
+**Resolution Workflow:**
+1. Search patterns BEFORE implementing fix
+2. If found: apply proven_solutions, update occurrence_count
+3. If new: create pattern after resolution via retrospective
+4. Mark resolved: `npm run pattern:resolve PAT-XXX "Resolution notes"`
+
+**Weekly Maintenance:** `npm run pattern:maintenance`
+
 ## Database-First Enforcement - Expanded
 
 **Database-First Enforcement (MANDATORY)**:
@@ -343,6 +373,107 @@ sd.priority === 1 ? 'CRITICAL' : 'LOW'  // Always 'LOW'!
 **Pattern Reference**: PAT-DATA-TYPE-001
 
 
+## 🔥 Hot Issue Patterns (Auto-Updated)
+
+**CRITICAL**: These are active patterns detected from retrospectives. Review before starting work.
+
+| Pattern ID | Category | Severity | Count | Trend | Top Solution |
+|------------|----------|----------|-------|-------|--------------|
+| PAT-003 | security | 🟠 high | 3 | 📉 | Add auth.uid() check to RLS policy USING |
+| PAT-008 | deployment | 🟠 high | 2 | ➡️ | Check GitHub Actions secrets and package |
+| PAT-AUTH-PW-001 | testing | 🟠 high | 2 | ➡️ | Use Supabase Admin API with service_role |
+| PAT-DB-VACUUM-001 | database | 🟠 high | 1 | ➡️ | Run VACUUM FULL to reclaim space and reb |
+| PAT-RECURSION-001 | testing | 🟠 high | 1 | ➡️ | Establish baseline test/lint state befor |
+
+### Prevention Checklists
+
+**security**:
+- [ ] Verify RLS policies include auth.uid() checks
+- [ ] Test with authenticated user context
+- [ ] Check policy applies to correct operations
+
+**deployment**:
+- [ ] Verify all required secrets are set in GitHub
+- [ ] Test locally with same Node version as CI
+- [ ] Check package-lock.json is committed
+
+**testing**:
+- [ ] Store service_role key in .env file for programmatic user management
+- [ ] Add verify-test-user.cjs script to test suite for authentication validation
+- [ ] Run authentication verification BEFORE running E2E tests
+
+**database**:
+- [ ] Monitor pg_stat_user_tables for dead row ratios
+- [ ] Set aggressive autovacuum on high-write tables (5% threshold)
+- [ ] VACUUM before dead rows exceed 10% of live rows
+
+
+*Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
+
+
+## 📝 Recent Lessons (Last 30 Days)
+
+**From Published Retrospectives** - Apply these learnings proactively.
+
+### 1. Critical Test Coverage Investment - Comprehensive Retrospective ⭐
+**Category**: TESTING_STRATEGY | **Date**: 11/15/2025 | **Score**: 100
+
+**Key Improvements**:
+- Initial schema validation - should consult database-agent earlier
+- Test data setup required manual fixes despite testing-agent generation
+
+**Action Items**:
+- [ ] Create /docs/reference/database-constraints-testing.md with all constraint patte...
+- [ ] Update testing-agent prompts to include database constraint patterns
+
+### 2. Playwright Authentication Troubleshooting - Password Reset Solution ⭐
+**Category**: APPLICATION_ISSUE | **Date**: 11/19/2025 | **Score**: 100
+
+**Key Improvements**:
+- Initial confusion about which service_role key to use (EHG vs EHG_Engineer)
+- Multiple attempts with invalid service_role key before getting correct one
+
+**Action Items**:
+- [ ] Add reset-password.cjs script to EHG repository for future use
+- [ ] Document Supabase Admin API authentication troubleshooting in testing guide
+
+### 3. SD-VENTURE-UNIFICATION-001 Phase 3 (EXEC) - Comprehensive Implementation Retrospective ⭐
+**Category**: PROCESS_IMPROVEMENT | **Date**: 11/3/2025 | **Score**: 100
+
+**Key Improvements**:
+- Manual test creation wasted 2-3 hours instead of delegating to testing-agent (LEO v4.3.0 gap)
+- Zero consultation of retrospectives before implementation (research_confidence_score = 0.00)
+
+**Action Items**:
+- [ ] MANDATE testing-agent delegation for all test creation tasks (saves 2-3 hours pe...
+- [ ] Add automated-knowledge-retrieval.js to EXEC pre-flight checklist (v4.3.0 compli...
+
+### 4. SD-STAGE4-AI-FIRST-UX-001 Comprehensive Retrospective ⭐
+**Category**: APPLICATION_ISSUE | **Date**: 11/15/2025 | **Score**: 100
+
+**Key Improvements**:
+- Unit test timeouts: 11/18 tests timing out (vitest async)
+- E2E test infrastructure: 28/32 failures (mock API config)
+
+**Action Items**:
+- [ ] Create SD-TESTING-INFRASTRUCTURE-FIX-001 for unit test timeout resolution
+- [ ] Fix E2E mock API configuration (28/32 test failures)
+
+### 5. SD-RECURSION-AI-001: Recursive Stage Refinement & LLM Intelligence Integration ⭐
+**Category**: PROCESS_IMPROVEMENT | **Date**: 11/4/2025 | **Score**: 90
+
+**Key Improvements**:
+- Test health visibility before starting
+- ESLint baseline establishment
+
+**Action Items**:
+- [ ] Add pre-SD test health check to PLAN phase
+- [ ] Create ESLint baseline snapshot tool
+
+
+*Lessons auto-generated from `retrospectives` table. Query for full details.*
+
+
 ## Agent Responsibilities
 
 | Agent | Code | Responsibilities | % Split |
@@ -386,7 +517,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 | Risk Assessment Sub-Agent | high risk, complex, refactor, migration, | 8 | ## Risk Assessment Sub-Agent v1.0.0
 
 **BMAD Enhancement**: M... |
-| Chief Security Architect | authentication, security | 7 | Former NSA security architect with 25 years experience secur... |
+| Chief Security Architect | authentication, security, security auth  | 7 | Former NSA security architect with 25 years experience secur... |
 | Principal Database Architect | schema, migration, EXEC_IMPLEMENTATION_C | 6 | ## Principal Database Architect v2.0.0 - Lessons Learned Edi... |
 | QA Engineering Director | coverage, protected route, build error,  | 5 | ## Enhanced QA Engineering Director v2.4.0 - Retrospective-I... |
 | Performance Engineering Lead | optimization | 4 | Performance engineering lead with 20+ years optimizing high-... |
@@ -397,6 +528,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ---
 
-*Generated from database: 2025-11-27*
+*Generated from database: 2025-11-28*
 *Protocol Version: 4.3.2*
+*Includes: Hot Patterns (5) + Recent Lessons (5)*
 *Load this file first in all sessions*

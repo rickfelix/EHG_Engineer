@@ -116,7 +116,19 @@
     "docs:bg-agents": "node scripts/generate-workflow-docs.js --target lib/agents",
     "docs:bg-compliance": "node lib/sub-agent-executor.js DOCMON",
     "docs:bg-health": "node lib/agents/documentation-sub-agent.js --scope ehg-engineer",
-    "docs:bg-all": "npm run docs:bg-scripts && npm run docs:bg-agents && npm run docs:bg-health"
+    "docs:bg-all": "npm run docs:bg-scripts && npm run docs:bg-agents && npm run docs:bg-health",
+    "pattern:resolve": "node scripts/resolve-pattern.js",
+    "pattern:stale": "node scripts/detect-stale-patterns.js",
+    "pattern:stale:dry": "node scripts/detect-stale-patterns.js --dry-run",
+    "pattern:ingest": "node scripts/ingest-lessons-learned-markdown.js",
+    "pattern:ingest:dry": "node scripts/ingest-lessons-learned-markdown.js --dry-run",
+    "pattern:sync": "node scripts/sync-pattern-triggers.js",
+    "pattern:sync:dry": "node scripts/sync-pattern-triggers.js --dry-run",
+    "pattern:extract": "node scripts/auto-extract-patterns-from-retro.js",
+    "pattern:backfill": "node scripts/backfill-pattern-subagents.js",
+    "pattern:backfill:dry": "node scripts/backfill-pattern-subagents.js --dry-run",
+    "pattern:maintenance": "node scripts/pattern-maintenance.js",
+    "pattern:maintenance:dry": "node scripts/pattern-maintenance.js --dry-run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",

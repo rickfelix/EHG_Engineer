@@ -6,6 +6,10 @@
  *
  * Triggered by: Continuous Improvement Coach after generating retrospective
  * Purpose: Ensure all learnings are captured in searchable pattern database
+ *
+ * LEO Protocol v4.3.2 Enhancement:
+ * - Auto-populates related_sub_agents based on category
+ * - Adds resolution_date and resolution_notes support
  */
 
 import { IssueKnowledgeBase } from '../lib/learning/issue-knowledge-base.js';
@@ -20,6 +24,32 @@ const supabase = createClient(
 );
 
 const kb = new IssueKnowledgeBase();
+
+/**
+ * Category to sub-agent mapping (LEO Protocol v4.3.2)
+ * Used to auto-populate related_sub_agents when patterns are created
+ */
+const CATEGORY_SUBAGENT_MAPPING = {
+  database: ['DATABASE', 'SECURITY'],
+  testing: ['TESTING', 'UAT'],
+  build: ['GITHUB', 'DEPENDENCY'],
+  deployment: ['GITHUB', 'DEPENDENCY'],
+  security: ['SECURITY', 'DATABASE'],
+  protocol: ['RETRO', 'DOCMON', 'VALIDATION'],
+  code_structure: ['VALIDATION', 'DESIGN'],
+  performance: ['PERFORMANCE', 'DATABASE'],
+  over_engineering: ['VALIDATION', 'DESIGN'],
+  api: ['API', 'SECURITY'],
+  ui: ['DESIGN', 'UAT'],
+  general: ['VALIDATION']
+};
+
+/**
+ * Get related sub-agents for a category
+ */
+function getRelatedSubAgents(category) {
+  return CATEGORY_SUBAGENT_MAPPING[category] || ['VALIDATION'];
+}
 
 /**
  * Categorize an issue based on keywords
@@ -130,19 +160,25 @@ async function extractPatternsFromImprovements(retro, sdId, sdKey) {
       // No similar pattern - create new one
       console.log('     ✨ Creating new pattern...');
 
+      // LEO Protocol v4.3.2: Auto-populate related_sub_agents
+      const relatedSubAgents = getRelatedSubAgents(category);
+      console.log(`     📎 Related sub-agents: ${relatedSubAgents.join(', ')}`);
+
       const newPattern = await kb.createPattern({
         issue_summary: improvement,
         category: category,
         severity: severity,
         sd_id: sdId,
         solution: retro.action_items.length > 0 ? retro.action_items[0] : null,
-        resolution_time_minutes: null
+        resolution_time_minutes: null,
+        related_sub_agents: relatedSubAgents
       });
 
       patterns.push({
         action: 'created',
         pattern_id: newPattern.pattern_id,
-        issue: improvement
+        issue: improvement,
+        related_sub_agents: relatedSubAgents
       });
 
       console.log(`     ✅ Created pattern: ${newPattern.pattern_id}`);

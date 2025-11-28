@@ -58,6 +58,10 @@ class CLAUDEMDGeneratorV3 {
       const schemaConstraints = await this.getSchemaConstraints();
       const processScripts = await this.getProcessScripts();
 
+      // LEO Protocol v4.3.2 Enhancement: Fetch operational intelligence
+      const hotPatterns = await this.getHotPatterns(5);
+      const recentRetrospectives = await this.getRecentRetrospectives(30, 5);
+
       const data = {
         protocol,
         agents,
@@ -65,7 +69,9 @@ class CLAUDEMDGeneratorV3 {
         handoffTemplates,
         validationRules,
         schemaConstraints,
-        processScripts
+        processScripts,
+        hotPatterns,
+        recentRetrospectives
       };
 
       // Generate each file
@@ -82,9 +88,12 @@ class CLAUDEMDGeneratorV3 {
       console.log(`📊 Sub-agents: ${subAgents.length}`);
       console.log(`📋 Handoff templates: ${handoffTemplates.length}`);
       console.log(`📚 Protocol sections: ${protocol.sections.length}`);
+      console.log(`🔥 Hot patterns: ${hotPatterns.length}`);
+      console.log(`📝 Recent retrospectives: ${recentRetrospectives.length}`);
       console.log('\n🎯 Router architecture implemented!');
       console.log('   → Initial context load: ~18k chars (9% of 200k budget)');
       console.log('   → Down from: 173k chars (87% of budget)');
+      console.log('   → Now includes: operational intelligence (patterns + lessons)');
 
     } catch (error) {
       console.error('❌ Generation failed:', error);
@@ -193,6 +202,51 @@ class CLAUDEMDGeneratorV3 {
     return data || [];
   }
 
+  /**
+   * Fetch hot issue patterns - active patterns with high occurrence or increasing trend
+   * Part of LEO Protocol v4.3.2 enhancement for proactive knowledge surfacing
+   */
+  async getHotPatterns(limit = 5) {
+    const { data, error } = await supabase
+      .from('issue_patterns')
+      .select('*')
+      .eq('status', 'active')
+      .or('trend.eq.increasing,severity.eq.critical,severity.eq.high')
+      .order('occurrence_count', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.warn('⚠️  Could not load issue patterns (table may not exist yet)');
+      return [];
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Fetch recent published retrospectives for lessons learned
+   * Part of LEO Protocol v4.3.2 enhancement for proactive knowledge surfacing
+   */
+  async getRecentRetrospectives(days = 30, limit = 5) {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const { data, error } = await supabase
+      .from('retrospectives')
+      .select('id, sd_id, title, what_needs_improvement, action_items, learning_category, quality_score, conducted_date')
+      .gte('conducted_date', since.toISOString())
+      .eq('status', 'PUBLISHED')
+      .order('quality_score', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.warn('⚠️  Could not load retrospectives (table may not exist yet)');
+      return [];
+    }
+
+    return data || [];
+  }
+
   getSectionsByMapping(sections, fileKey) {
     const mappedTypes = this.fileMapping[fileKey]?.sections || [];
     return sections.filter(s => mappedTypes.includes(s.section_type));
@@ -251,7 +305,7 @@ ${smartRouter ? smartRouter.content : '## Context Router\n\n**Load Strategy**: R
   }
 
   generateCore(data) {
-    const { protocol, agents, subAgents } = data;
+    const { protocol, agents, subAgents, hotPatterns, recentRetrospectives } = data;
     const sections = protocol.sections;
     const { today, time } = this.getMetadata(protocol);
 
@@ -262,6 +316,10 @@ ${smartRouter ? smartRouter.content : '## Context Router\n\n**Load Strategy**: R
     // Generate sub-agent reference
     const subAgentSection = this.generateSubAgentSection(subAgents);
 
+    // LEO Protocol v4.3.2 Enhancement: Operational intelligence sections
+    const hotPatternsSection = this.generateHotPatternsSection(hotPatterns);
+    const recentLessonsSection = this.generateRecentLessonsSection(recentRetrospectives);
+
     return `# CLAUDE_CORE.md - LEO Protocol Core Context
 
 **Generated**: ${today} ${time}
@@ -271,6 +329,10 @@ ${smartRouter ? smartRouter.content : '## Context Router\n\n**Load Strategy**: R
 ---
 
 ${coreContent}
+
+${hotPatternsSection}
+
+${recentLessonsSection}
 
 ## Agent Responsibilities
 
@@ -288,6 +350,7 @@ ${subAgentSection}
 
 *Generated from database: ${today}*
 *Protocol Version: ${protocol.version}*
+*Includes: Hot Patterns (${hotPatterns?.length || 0}) + Recent Lessons (${recentRetrospectives?.length || 0})*
 *Load this file first in all sessions*
 `;
   }
@@ -469,6 +532,133 @@ ${scriptsSection}
         }
       });
     }
+
+    return section;
+  }
+
+  /**
+   * Generate Hot Issue Patterns section for CLAUDE_CORE.md
+   * Shows active patterns with high occurrence or critical severity
+   */
+  generateHotPatternsSection(patterns) {
+    if (!patterns || patterns.length === 0) {
+      return '';
+    }
+
+    let section = `## 🔥 Hot Issue Patterns (Auto-Updated)
+
+**CRITICAL**: These are active patterns detected from retrospectives. Review before starting work.
+
+| Pattern ID | Category | Severity | Count | Trend | Top Solution |
+|------------|----------|----------|-------|-------|--------------|
+`;
+
+    patterns.forEach(p => {
+      const topSolution = p.proven_solutions && p.proven_solutions.length > 0
+        ? (p.proven_solutions[0].solution || p.proven_solutions[0].method || 'See details').substring(0, 40)
+        : 'N/A';
+      const trendIcon = p.trend === 'increasing' ? '📈' : p.trend === 'decreasing' ? '📉' : '➡️';
+      const severityIcon = p.severity === 'critical' ? '🔴' : p.severity === 'high' ? '🟠' : p.severity === 'medium' ? '🟡' : '🟢';
+
+      section += `| ${p.pattern_id} | ${p.category} | ${severityIcon} ${p.severity} | ${p.occurrence_count} | ${trendIcon} | ${topSolution} |\n`;
+    });
+
+    section += `
+### Prevention Checklists
+
+`;
+
+    // Group patterns by category and show prevention checklists
+    const byCategory = {};
+    patterns.forEach(p => {
+      if (p.prevention_checklist && p.prevention_checklist.length > 0) {
+        const cat = p.category || 'general';
+        if (!byCategory[cat]) byCategory[cat] = [];
+        byCategory[cat].push(...p.prevention_checklist.slice(0, 3));
+      }
+    });
+
+    for (const [category, items] of Object.entries(byCategory)) {
+      section += `**${category}**:\n`;
+      const uniqueItems = [...new Set(items)].slice(0, 3);
+      uniqueItems.forEach(item => {
+        section += `- [ ] ${item}\n`;
+      });
+      section += '\n';
+    }
+
+    section += `
+*Patterns auto-updated from \`issue_patterns\` table. Use \`npm run pattern:resolve PAT-XXX\` to mark resolved.*
+`;
+
+    return section;
+  }
+
+  /**
+   * Generate Recent Lessons section for CLAUDE_CORE.md
+   * Shows top lessons from published retrospectives in last 30 days
+   */
+  generateRecentLessonsSection(retrospectives) {
+    if (!retrospectives || retrospectives.length === 0) {
+      return '';
+    }
+
+    let section = `## 📝 Recent Lessons (Last 30 Days)
+
+**From Published Retrospectives** - Apply these learnings proactively.
+
+`;
+
+    retrospectives.forEach((r, idx) => {
+      const date = r.conducted_date ? new Date(r.conducted_date).toLocaleDateString() : 'N/A';
+      const category = r.learning_category || 'GENERAL';
+      const qualityBadge = r.quality_score >= 80 ? '⭐' : '';
+
+      section += `### ${idx + 1}. ${r.title || r.sd_id || 'Untitled'} ${qualityBadge}\n`;
+      section += `**Category**: ${category} | **Date**: ${date} | **Score**: ${r.quality_score || 'N/A'}\n\n`;
+
+      // Show improvements if available
+      if (r.what_needs_improvement && Array.isArray(r.what_needs_improvement)) {
+        const improvements = r.what_needs_improvement.slice(0, 2);
+        if (improvements.length > 0) {
+          section += '**Key Improvements**:\n';
+          improvements.forEach(item => {
+            const text = typeof item === 'string' ? item : (item.description || item.item || JSON.stringify(item));
+            section += `- ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}\n`;
+          });
+          section += '\n';
+        }
+      }
+
+      // Show action items if available
+      if (r.action_items && Array.isArray(r.action_items)) {
+        const actions = r.action_items.slice(0, 2);
+        if (actions.length > 0) {
+          section += '**Action Items**:\n';
+          actions.forEach(item => {
+            // Handle various action item formats
+            let text;
+            if (typeof item === 'string') {
+              text = item;
+            } else if (item.text) {
+              text = item.text;
+            } else if (item.action) {
+              text = item.action;
+            } else if (item.description) {
+              text = item.description;
+            } else {
+              text = Object.values(item).find(v => typeof v === 'string') || 'See details';
+            }
+            section += `- [ ] ${text.substring(0, 80)}${text.length > 80 ? '...' : ''}\n`;
+          });
+          section += '\n';
+        }
+      }
+    });
+
+    section += `
+*Lessons auto-generated from \`retrospectives\` table. Query for full details.*
+`;
 
     return section;
   }
