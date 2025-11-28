@@ -68,6 +68,7 @@
       "exec_component_sizing_guidelines",
       "exec_todo_comment_standard",
       "exec_dual_test_requirement",
+      "exec_completion_merge_requirement",
       "branch_hygiene_gate",
       "exec_ui_parity_verification",
       "exec_edge_case_testing_checklist",

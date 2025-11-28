@@ -118,7 +118,7 @@ Think of it like **emergency surgery** - fast execution, maximum precision.
 
 ---
 
-## Quick-Fix Workflow (10 Steps)
+## Quick-Fix Workflow (11 Steps)
 
 ### Step 0: Application Context Verification (NEW v2.0)
 - Determine target application (EHG vs EHG_Engineer)
@@ -225,6 +225,16 @@ If compliance score <90:
 - Commit/push with user confirmation
 - Mark as completed in database
 - Clean up or archive evidence files
+
+### Step 10: Merge to Main (MANDATORY)
+After completion, the fix MUST be merged to main:
+- Verify CI/CD passes on the PR
+- Merge via `gh pr merge --merge --delete-branch` (preferred)
+- Or local merge: `git checkout main && git merge --no-ff <branch> && git push`
+- Delete the feature branch after merge
+- Confirm with `git log --oneline -5` on main
+
+**Note:** The `complete-quick-fix.js` script now prompts for merge at the end.
 
 ---
 
@@ -439,6 +449,7 @@ A Quick-Fix is successful when:
 5. ✅ **PR created** - Code review opportunity provided
 6. ✅ **Within scope** - Actual LOC ≤50
 7. ✅ **Properly classified** - Not an escalation case
+8. ✅ **Merged to main** - Feature branch merged and deleted
 
 ---
 

@@ -733,10 +733,89 @@ Co-Authored-By: Claude <noreply@anthropic.com>`;
   }
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
-  console.log('📍 Next steps:');
-  console.log('   1. Await PR review and approval');
-  console.log('   2. Merge PR once approved');
-  console.log(`   3. Delete branch: git branch -d quick-fix/${qfId}\n`);
+  // Merge to Main (MANDATORY)
+  console.log('🔀 Merge to Main\n');
+
+  try {
+    const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8' }).trim();
+
+    // Check if PR is mergeable (CI passed)
+    if (prUrl) {
+      console.log('   Checking PR status...');
+      try {
+        const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
+        if (prNumber) {
+          const prStatus = execSync(`gh pr view ${prNumber} --json mergeable,statusCheckRollup`, { encoding: 'utf-8' });
+          const prData = JSON.parse(prStatus);
+
+          if (prData.mergeable === 'MERGEABLE') {
+            console.log('   ✅ PR is mergeable');
+          } else if (prData.mergeable === 'CONFLICTING') {
+            console.log('   ⚠️  PR has merge conflicts. Resolve before merging.');
+          }
+        }
+      } catch (prCheckErr) {
+        console.log(`   ⚠️  Could not check PR status: ${prCheckErr.message}`);
+      }
+    }
+
+    const shouldMerge = await prompt('   Merge to main now? (yes/no): ');
+
+    if (shouldMerge.toLowerCase().startsWith('y')) {
+      console.log('\n   🔀 Merging to main...');
+
+      // Option 1: Use gh CLI to merge PR (preferred - uses GitHub's merge)
+      if (prUrl) {
+        try {
+          const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
+          if (prNumber) {
+            execSync(`gh pr merge ${prNumber} --merge --delete-branch`, { stdio: 'inherit' });
+            console.log('   ✅ PR merged and branch deleted via GitHub\n');
+          }
+        } catch (ghMergeErr) {
+          console.log(`   ⚠️  GitHub merge failed: ${ghMergeErr.message}`);
+          console.log('   Attempting local merge...\n');
+
+          // Option 2: Local merge fallback
+          execSync('git checkout main', { stdio: 'inherit' });
+          execSync('git pull origin main', { stdio: 'inherit' });
+          execSync(`git merge --no-ff ${currentBranch} -m "Merge quick-fix/${qfId}: ${qf.title}"`, { stdio: 'inherit' });
+          execSync('git push origin main', { stdio: 'inherit' });
+          console.log('   ✅ Merged to main locally\n');
+
+          // Delete the feature branch
+          execSync(`git branch -d ${currentBranch}`, { stdio: 'pipe' });
+          execSync(`git push origin --delete ${currentBranch}`, { stdio: 'pipe' });
+          console.log(`   ✅ Deleted branch: ${currentBranch}\n`);
+        }
+      } else {
+        // No PR URL - do local merge
+        execSync('git checkout main', { stdio: 'inherit' });
+        execSync('git pull origin main', { stdio: 'inherit' });
+        execSync(`git merge --no-ff ${currentBranch} -m "Merge quick-fix/${qfId}: ${qf.title}"`, { stdio: 'inherit' });
+        execSync('git push origin main', { stdio: 'inherit' });
+        console.log('   ✅ Merged to main\n');
+
+        // Delete the feature branch
+        execSync(`git branch -d ${currentBranch}`, { stdio: 'pipe' });
+        execSync(`git push origin --delete ${currentBranch}`, { stdio: 'pipe' });
+        console.log(`   ✅ Deleted branch: ${currentBranch}\n`);
+      }
+    } else {
+      console.log('\n   ⚠️  Not merged. Remember to merge to main when ready:');
+      if (prUrl) {
+        console.log('      gh pr merge --merge --delete-branch');
+      } else {
+        console.log('      git checkout main && git merge --no-ff <branch> && git push origin main');
+      }
+      console.log();
+    }
+  } catch (mergeErr) {
+    console.log(`   ⚠️  Merge process error: ${mergeErr.message}`);
+    console.log('   You can merge manually when ready.\n');
+  }
+
+  console.log('📍 Quick-Fix Complete!\n');
 
   return qf;
 }
