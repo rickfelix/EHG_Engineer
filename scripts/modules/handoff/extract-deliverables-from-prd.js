@@ -7,6 +7,11 @@
  *
  * ROOT CAUSE FIX: Addresses systemic gap where deliverables were documented in
  * PRD but not tracked in database, causing EXEC→PLAN handoff failures.
+ *
+ * ENHANCEMENT (SD-DELIVERABLES-V2-001 Phase 2):
+ * - Priority source: exec_checklist with user_story_ids for linking
+ * - Links deliverables to user stories via user_story_id FK
+ * - Enables bi-directional sync between stories and deliverables
  */
 
 /**
@@ -50,9 +55,31 @@ export async function extractAndPopulateDeliverables(sdId, prd, supabase, option
 
     const deliverables = [];
 
-    // Option 1: Extract from exec_checklist (if it's an array)
+    // Build user story lookup map for ID resolution
+    const storyKeyToId = new Map();
+    const { data: userStories } = await supabase
+      .from('user_stories')
+      .select('id, story_key')
+      .eq('sd_id', sdId);
+
+    if (userStories) {
+      userStories.forEach(s => storyKeyToId.set(s.story_key, s.id));
+    }
+
+    // PRIORITY: Extract from exec_checklist with user_story_ids (SD-DELIVERABLES-V2-001 Phase 2)
     if (prd.exec_checklist && Array.isArray(prd.exec_checklist)) {
+      let linkedCount = 0;
+
       prd.exec_checklist.forEach((item, index) => {
+        // Resolve user_story_id from user_story_ids array
+        let userStoryId = null;
+        if (item.user_story_ids && Array.isArray(item.user_story_ids) && item.user_story_ids.length > 0) {
+          // Use first story key to resolve ID
+          const storyKey = item.user_story_ids[0];
+          userStoryId = storyKeyToId.get(storyKey) || null;
+          if (userStoryId) linkedCount++;
+        }
+
         deliverables.push({
           sd_id: sdId,
           deliverable_type: inferDeliverableType(item.text),
@@ -61,12 +88,21 @@ export async function extractAndPopulateDeliverables(sdId, prd, supabase, option
           extracted_from: 'prd',
           priority: 'required',
           completion_status: item.checked ? 'completed' : 'pending',
-          completion_evidence: item.evidence || null
+          completion_evidence: item.evidence || null,
+          user_story_id: userStoryId,
+          metadata: item.user_story_ids && item.user_story_ids.length > 1
+            ? { linked_stories: item.user_story_ids }
+            : {}
         });
       });
 
       if (!silent) {
         console.log(`   Extracted ${deliverables.length} deliverables from exec_checklist`);
+        if (linkedCount > 0) {
+          console.log(`   ✅ ${linkedCount}/${deliverables.length} linked to user stories (Phase 2)`);
+        } else if (deliverables.length > 0) {
+          console.log('   ⚠️  No user_story_ids in exec_checklist - consider updating PRD');
+        }
       }
     }
 
@@ -121,15 +157,16 @@ export async function extractAndPopulateDeliverables(sdId, prd, supabase, option
     }
 
     // Option 4: Extract from user stories (if no other source found)
+    // Enhanced for SD-DELIVERABLES-V2-001: Links deliverables directly to user stories
     if (deliverables.length === 0) {
-      const { data: userStories } = await supabase
+      const { data: storiesForExtract } = await supabase
         .from('user_stories')
-        .select('story_key, title, priority')
+        .select('id, story_key, title, priority')
         .eq('sd_id', sdId)
         .limit(10); // Max 10 to avoid over-extraction
 
-      if (userStories && userStories.length > 0) {
-        userStories.forEach(story => {
+      if (storiesForExtract && storiesForExtract.length > 0) {
+        storiesForExtract.forEach(story => {
           deliverables.push({
             sd_id: sdId,
             deliverable_type: inferDeliverableType(story.title),
@@ -137,12 +174,14 @@ export async function extractAndPopulateDeliverables(sdId, prd, supabase, option
             description: `User story: ${story.story_key}`,
             extracted_from: 'user_stories',
             priority: story.priority === 'high' || story.priority === 'critical' ? 'required' : 'required',
-            completion_status: 'pending'
+            completion_status: 'pending',
+            user_story_id: story.id // Direct link for bi-directional sync
           });
         });
 
         if (!silent) {
           console.log(`   Extracted ${deliverables.length} deliverables from user stories`);
+          console.log(`   ✅ All ${deliverables.length} linked to user stories (Phase 2)`);
         }
       }
     }
