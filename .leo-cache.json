@@ -1,6 +1,6 @@
 {
-  "version": "v4.2.0_story_gates",
-  "timestamp": "2025-11-26T18:20:17.158Z",
-  "contentHash": "24f72b39d96c945d598c872addaef55f",
-  "protocolId": "leo-v4-2-0-story-gates"
+  "version": "4.3.2",
+  "timestamp": "2025-11-28T12:38:43.230Z",
+  "contentHash": "20e71393772c2d28719a0261fe72fa69",
+  "protocolId": "leo-v4-3-1-hardening"
 }

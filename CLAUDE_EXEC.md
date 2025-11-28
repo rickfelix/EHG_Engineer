@@ -1,7 +1,7 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2025-11-28 9:22:26 AM
-**Protocol**: LEO 4.3.2
+**Generated**: 2025-11-28 2:22:26 PM
+**Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
 ---
@@ -90,79 +90,79 @@ Before writing ANY code, EXEC MUST:
 
 ## 📦 Database-First Progress Tracking (MANDATORY)
 
-### ⚠️ CRITICAL: Update Tracking Tables During Implementation
+### ✅ AUTOMATED TRACKING (SD-DELIVERABLES-V2-001)
 
-**Root Cause of SD Completion Failures**: Work gets done but database tracking records aren't updated. The `enforce_sd_completion_protocol` trigger validates ALL tracking records before allowing SD completion.
+**As of v2.0**, deliverable tracking is now **FULLY AUTOMATED** via database triggers and sync mechanisms. Manual updates are **no longer required** in most cases.
 
-**Evidence**: SD-FOUND-DATA-004 blocked at 55% despite complete implementation because:
-- 4 user stories remained `pending` instead of `validated`
-- 7 deliverables remained `pending` instead of `completed`
-- Missing sub-agent execution results
+### How Automated Tracking Works
 
-### Required Database Updates During EXEC
+#### 1. Bi-Directional Sync Triggers
+- **User Story → Deliverable**: When user story `validation_status` changes to `validated`, linked deliverables auto-complete
+- **Deliverable → User Story**: When all linked deliverables complete, user stories update via trigger
+- **Loop Prevention**: `pg_trigger_depth()` prevents infinite trigger loops
 
-#### 1. Update Deliverables as Work Completes
+#### 2. Sub-Agent Result Triggers  
+Sub-agent PASS verdicts auto-complete matching deliverables:
+| Sub-Agent | Auto-Completes |
+|-----------|----------------|
+| TESTING   | test deliverables |
+| DATABASE  | database, migration deliverables |
+| DESIGN    | ui_feature deliverables |
+| SECURITY  | api, integration deliverables |
+| QA        | test deliverables |
+
+#### 3. Git Sync (Optional)
+Run `node scripts/sync-deliverables-from-git.js <SD-ID>` to match git commits to deliverables.
+
+#### 4. 100% Confidence Auto-Complete
+Deliverables with `confidence_score >= 100` are auto-completed by database trigger.
+
+### When Manual Updates Are Still Needed
+
+Manual updates only required when:
+- Deliverable isn't linked to a user story
+- No sub-agent verification exists
+- Work completed outside normal triggers
+
 ```javascript
-// After completing each deliverable item:
+// Only if automated tracking missed a deliverable:
 await supabase
   .from('sd_scope_deliverables')
   .update({
     completion_status: 'completed',
-    completion_evidence: 'Brief description of what was done',
-    updated_at: new Date().toISOString()
+    completion_evidence: 'Manual: description of work',
+    verified_by: 'EXEC',
+    verified_at: new Date().toISOString()
   })
   .eq('sd_id', 'SD-XXX-YYY')
-  .eq('deliverable_name', 'Name of completed item');
+  .eq('deliverable_name', 'Name');
 ```
 
-**When to update**: After each major implementation milestone (component created, tests written, API implemented, etc.)
+### Verification Functions
 
-#### 2. Validate User Stories as Acceptance Criteria Met
-```javascript
-// After meeting acceptance criteria for a user story:
-await supabase
-  .from('user_stories')
-  .update({
-    validation_status: 'validated',
-    updated_at: new Date().toISOString()
-  })
-  .eq('sd_id', 'SD-XXX-YYY')
-  .eq('story_key', 'US-XXX');
+```sql
+-- Check deliverable status before handoff
+SELECT * FROM get_deliverable_verification_report('SD-XXX-YYY');
+
+-- Enhanced progress with real-time tracking  
+SELECT * FROM get_progress_breakdown_v2('SD-XXX-YYY');
+
+-- Parent SD with child rollup
+SELECT * FROM get_parent_sd_progress_with_children('SD-PARENT-001');
 ```
 
-**When to update**: After tests pass that cover the user story's acceptance criteria
+### Handoff Verification Gate
 
-#### 3. Record Sub-Agent Verification Results
-```javascript
-// After completing implementation verification:
-await supabase
-  .from('sub_agent_execution_results')
-  .insert({
-    sd_id: 'SD-XXX-YYY',
-    sub_agent_code: 'QA',  // or ARCHITECT, SECURITY, TESTING, DOCMON
-    sub_agent_name: 'QA Sub-Agent',
-    verdict: 'PASS',
-    confidence: 95,
-    detailed_analysis: 'Implementation verified: [summary]',
-    validation_mode: 'prospective'
-  });
-```
-
-### EXEC Progress Tracking Checklist
-```markdown
-## Database Tracking Checklist
-- [ ] Deliverables exist in `sd_scope_deliverables` (auto-created by PLAN→EXEC)
-- [ ] User stories exist in `user_stories` (created during PLAN)
-- [ ] As each deliverable completes → Update `completion_status = 'completed'`
-- [ ] As each user story is validated → Update `validation_status = 'validated'`
-- [ ] Before EXEC→PLAN handoff → Verify ALL tracking records updated
-```
+EXEC→PLAN handoffs now have **intelligent verification**:
+- **100%**: PASS - all deliverables complete
+- **80-99%**: PASS_WITH_WARNING - shows incomplete items
+- **<80%**: BLOCKED - recorded in metadata, requires completion
 
 ### Why This Matters
-- **Trigger Validation**: `enforce_sd_completion_protocol` checks ALL tracking tables
-- **Progress Calculation**: `get_progress_breakdown()` calculates % from tracking records
-- **Blocking Issue**: SD cannot be marked complete if tracking records show incomplete work
-- **Prevention**: Update records AS work happens, not after
+- **Zero Manual Overhead**: Triggers handle tracking automatically
+- **Real-Time Progress**: `get_progress_breakdown_v2()` shows incremental EXEC progress
+- **Evidence-Based Completion**: All completions require evidence/commit hash
+- **Verification Gate**: Prevents premature handoffs
 
 ## Component Sizing Guidelines
 
@@ -253,6 +253,157 @@ npm run test:e2e
 - **SD-EXPORT-001**: 30-minute gap between marking "complete" and discovering tests weren't run
 - **SD-EVA-MEETING-002**: 67% E2E failure rate revealed only when tests finally executed
 - **Impact**: Testing enforcement prevents claiming "done" without proof
+
+## ✅ EXEC UI Parity Verification Checklist
+
+**Added in LEO v4.3.3** - MANDATORY before marking implementation complete
+
+### Pre-Completion Checklist
+
+Before marking any backend implementation as complete, verify:
+
+#### 1. Data Contract Mapping
+```
+For each field in output contract:
+  ├── [ ] Field has corresponding UI component
+  ├── [ ] Component displays actual value (not derived)
+  └── [ ] Component handles loading/error states
+```
+
+#### 2. Stage Output Visibility
+```
+For stage implementations:
+  ├── [ ] StageOutputViewer component exists
+  ├── [ ] Key findings displayed in list format
+  ├── [ ] Recommendations are actionable
+  ├── [ ] Score breakdown is visible
+  └── [ ] Confidence indicators shown
+```
+
+#### 3. User Accessibility
+```
+For all features:
+  ├── [ ] User can navigate to view outputs
+  ├── [ ] No hidden data (no "check logs" or "query DB")
+  ├── [ ] Loading states indicate progress
+  └── [ ] Error states are informative
+```
+
+### Integration with Dual Test Requirement
+
+The existing dual test requirement (Unit + E2E) is extended:
+
+| Test Type | Original | With UI Parity |
+|-----------|----------|----------------|
+| Unit | Backend logic | Backend logic |
+| E2E | Feature works | Feature works AND is visible |
+
+**E2E tests MUST now verify:**
+1. Feature functionality (existing)
+2. Output visibility in UI (NEW)
+3. Data displayed matches backend (NEW)
+
+### Handoff Modification
+
+Update implementation handoff to include:
+```
+UI Parity Status:
+- Backend Fields: X
+- Fields with UI: Y
+- Coverage: Y/X (Z%)
+- Missing: [list]
+- Gate 2.5 Status: PASS/FAIL
+```
+
+## 🌿 Branch Hygiene Gate (MANDATORY)
+
+## Branch Hygiene Gate (MANDATORY)
+
+**Evidence from Retrospectives**: SD-STAGE4-UX-EDGE-CASES-001 revealed a feature branch with 14 commits, 450 files, and 13 days of divergence became unsalvageable due to accumulated unrelated changes.
+
+### MANDATORY Before PLAN-TO-EXEC Handoff
+
+EXEC MUST verify these branch hygiene requirements BEFORE starting implementation:
+
+### 1. Branch Freshness (≤7 Days Stale)
+
+```bash
+# Check days since branch diverged from main
+git log main..HEAD --oneline | wc -l  # Should be reasonable
+git log --oneline main..HEAD --format="%ar" | tail -1  # Check age
+```
+
+**Threshold**: Feature branch must be ≤7 days stale at PLAN-TO-EXEC handoff
+**Action**: If exceeded, rebase or merge main before proceeding
+
+### 2. Single-SD Branch Rule (No Mixing)
+
+```bash
+# All commits should reference the same SD-ID
+git log main..HEAD --oneline | grep -E "SD-[A-Z0-9-]+"
+```
+
+**Rule**: One SD per branch - no mixing unrelated work
+**Anti-Pattern**: "Kitchen sink" branches that accumulate work from multiple SDs
+**Action**: If multiple SDs detected, create separate branches
+
+### 3. Merge Main at Phase Transitions
+
+**At PLAN-TO-EXEC**:
+```bash
+git fetch origin main
+git merge origin/main --no-edit  # Or rebase if preferred
+```
+
+**Rule**: Sync with main at each phase transition (LEAD→PLAN, PLAN→EXEC, EXEC→PLAN)
+**Benefit**: Catches conflicts early, prevents accumulation
+
+### 4. Maximum Branch Lifetime (14 Days)
+
+| Age | Action |
+|-----|--------|
+| 0-7 days | ✅ Proceed normally |
+| 7-10 days | ⚠️ Warning - sync with main |
+| 10-14 days | 🔴 Must sync before any handoff |
+| >14 days | ❌ Create fresh branch, cherry-pick changes |
+
+### Branch Health Check Script
+
+```bash
+# Quick branch health check
+echo "=== Branch Health Check ==="
+DIVERGE_COMMIT=$(git merge-base main HEAD)
+DAYS_OLD=$(( ( $(date +%s) - $(git log -1 --format=%ct $DIVERGE_COMMIT) ) / 86400 ))
+COMMIT_COUNT=$(git rev-list --count main..HEAD 2>/dev/null || echo 0)
+FILE_COUNT=$(git diff --name-only main...HEAD 2>/dev/null | wc -l || echo 0)
+
+echo "Days since divergence: $DAYS_OLD"
+echo "Commits on branch: $COMMIT_COUNT"
+echo "Files changed: $FILE_COUNT"
+
+if [ $DAYS_OLD -gt 7 ]; then
+  echo "⚠️ WARNING: Branch is stale (>7 days). Sync with main before EXEC."
+fi
+if [ $FILE_COUNT -gt 100 ]; then
+  echo "⚠️ WARNING: Many files changed (>100). Consider splitting work."
+fi
+```
+
+### Why This Matters
+
+- **Prevents unsalvageable branches**: 13-day divergence = 450 file conflicts
+- **Isolates SD work**: One SD per branch = clean merges and rollbacks
+- **Catches conflicts early**: Regular syncing = smaller conflict resolution
+- **Maintains velocity**: Fresh branches = fast PRs and reviews
+
+### EXEC Agent Action
+
+When starting implementation:
+1. Run branch health check
+2. If >7 days stale → merge main first
+3. If multiple SDs detected → split branches
+4. If >100 files changed → assess scope creep
+5. Document branch health in handoff notes
 
 ## E2E Testing: Dev Mode vs Preview Mode
 
@@ -540,5 +691,5 @@ Verifies LEAD to PLAN handoff requirements are met before allowing transition.
 ---
 
 *Generated from database: 2025-11-28*
-*Protocol Version: 4.3.2*
+*Protocol Version: 4.3.3*
 *Load when: User mentions EXEC, implementation, coding, or testing*

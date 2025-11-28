@@ -1,7 +1,7 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2025-11-28 9:22:26 AM
-**Protocol**: LEO 4.3.2
+**Generated**: 2025-11-28 2:22:26 PM
+**Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
 ---
@@ -32,6 +32,42 @@
 - Multiple files changed (more than 3)
 - Requires sub-agent validation (DATABASE, SECURITY)
 
+### SD Type Classification (NEW - LEO v4.3.3)
+
+**IMPORTANT**: If SD is NOT a code change, set `sd_type` appropriately:
+
+| sd_type | Description | Validation Requirements |
+|---------|-------------|------------------------|
+| `feature` | UI/UX, customer-facing features | Full (TESTING, GITHUB, DOCMON, etc.) |
+| `infrastructure` | CI/CD, tooling, protocols | Reduced (DOCMON, STORIES, GITHUB) |
+| `database` | Schema migrations | Full + DATABASE sub-agent |
+| `security` | Auth, RLS, permissions | Full + SECURITY sub-agent |
+| `documentation` | Docs only, no code changes | Minimal (DOCMON, STORIES only) |
+
+**Auto-Detection**: The system auto-detects sd_type at PRD creation based on:
+- SD title/scope keywords
+- Category field
+- Functional requirements analysis
+
+**Manual Override**: If auto-detection fails, manually set sd_type:
+```sql
+UPDATE strategic_directives_v2 SET sd_type = 'documentation' WHERE id = 'SD-XXX';
+```
+
+### Documentation-Only SD Handling
+
+When reviewing an SD that involves **NO CODE CHANGES** (e.g., file migration, cleanup, audit):
+
+1. **Set sd_type = 'documentation'** before PLAN phase
+2. **Skip TESTING/GITHUB** sub-agents automatically
+3. **Require only**: DOCMON pass + Retrospective
+
+**Detection Keywords** (trigger documentation-only classification):
+- "cleanup", "migrate markdown", "archive", "audit", "report"
+- "documentation only", "no code changes", "verification only"
+
+**Example SD-TECH-DEBT-DOCS-001**: Migration of 34 legacy markdown files was blocked by TESTING sub-agent because sd_type was not set to 'documentation'.
+
 ### LEAD Agent Action
 
 When reviewing a new SD that matches ALL downgrade criteria, suggest:
@@ -44,10 +80,16 @@ Consider using /quick-fix to reduce overhead.
 - Quick Fix skips: LEAD approval, PRD, sub-agents, full validation gates
 - Quick Fix keeps: Dual tests, server restart, UAT, PR creation
 
+**For Documentation-Only SDs** (not Quick Fix eligible due to scope):
+1. Proceed with full SD workflow
+2. Set `sd_type = 'documentation'` in database
+3. TESTING/GITHUB validation will be automatically skipped
+
 ### Reference
 
 - Quick Fix escalation: .claude/commands/quick-fix.md lines 139-148
-- Evidence: SD-E2E-VENTURE-CHUNKS-001 (QA SD with 5+ rejection cycles)
+- SD Type validation: lib/utils/sd-type-validation.js
+- Evidence: SD-TECH-DEBT-DOCS-001 (documentation SD blocked by code-centric validation)
 - Pattern: 7 QA-category SDs went through full workflow
 
 ## 🎯 LEAD Agent Operations
@@ -88,6 +130,47 @@ node scripts/lead-review-submissions.js
 - Failed → Archive/remediate
 
 **Complete Process**: See `docs/reference/directive-submission-review.md`
+
+## 🔍 Strategic Validation Question 7: UI Inspectability
+
+## Strategic Validation Question 7: UI Inspectability
+
+**Added in LEO v4.3.3** - Part of LEAD Pre-Approval Gate
+
+### The Question
+> "Can users see and interpret the outputs this feature produces?"
+
+### Evaluation Criteria
+
+| Rating | Criteria |
+|--------|----------|
+| ✅ YES | All backend outputs have corresponding UI components, users can view/act on data |
+| ⚠️ PARTIAL | Some outputs visible, others require DB queries or logs to access |
+| ❌ NO | Backend works but outputs are not visible in UI |
+
+### LEAD Agent Actions
+
+**If YES**: Proceed with approval
+**If PARTIAL**:
+- Require UI component list in PRD
+- Add "UI Coverage" acceptance criteria
+- May approve with explicit UI backfill task
+
+**If NO**:
+- Block approval until UI representation plan is documented
+- Either expand SD scope to include UI OR
+- Create linked child SD for UI implementation
+
+### Integration with 6-Question Gate
+
+This question is MANDATORY for all SDs that produce user-facing data. It should be evaluated alongside:
+1. Is this minimal scope?
+2. Does it fit the current phase?
+3. Are there simpler alternatives?
+4. What is the maintenance cost?
+5. Does it follow existing patterns?
+6. Is it required for the stated goal?
+**7. Can users see and interpret the outputs?** ← NEW
 
 ## 📚 Automated PRD Enrichment (MANDATORY)
 
@@ -445,5 +528,5 @@ LEAD MUST answer these questions BEFORE approval:
 ---
 
 *Generated from database: 2025-11-28*
-*Protocol Version: 4.3.2*
+*Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

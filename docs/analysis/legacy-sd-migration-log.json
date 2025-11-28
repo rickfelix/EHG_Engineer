@@ -1,0 +1,60 @@
+{
+  "startTime": "2025-11-28T15:46:34.775Z",
+  "dryRun": false,
+  "archivedDirectories": [],
+  "archivedFiles": [],
+  "migratedToDatabase": [
+    {
+      "source": "docs/lessons-learned-database-agent-rls-policy-chain.md",
+      "targetTable": "retrospectives",
+      "contentType": "lessons_learned",
+      "title": "Lessons Learned: Database Agent RLS Policy Chain Resolution",
+      "dbId": "77be8bd6-6fb7-4605-98b5-17b91c58f85b",
+      "archivedTo": "/mnt/c/_EHG/EHG_Engineer/.git/archived-markdown/lessons-learned/lessons-learned-database-agent-rls-policy-chain.md"
+    },
+    {
+      "source": "docs/lessons-learned/QF-20251120-702-python-none-strip-error.md",
+      "targetTable": "retrospectives",
+      "contentType": "quick_fix_lesson",
+      "title": "Lessons Learned: Python None Values Causing .strip() Failures",
+      "dbId": "b2d23603-11e6-4944-ab0d-4f2e6f193b52",
+      "archivedTo": "/mnt/c/_EHG/EHG_Engineer/.git/archived-markdown/lessons-learned/QF-20251120-702-python-none-strip-error.md"
+    },
+    {
+      "source": "docs/lessons-learned/always-check-existing-patterns-first.md",
+      "targetTable": "retrospectives",
+      "contentType": "pattern_lesson",
+      "title": "Lesson Learned: Always Check Existing Code Patterns First",
+      "dbId": "5495e18f-ec2d-4bd4-a372-b4ca77f5f649",
+      "archivedTo": "/mnt/c/_EHG/EHG_Engineer/.git/archived-markdown/lessons-learned/always-check-existing-patterns-first.md"
+    },
+    {
+      "source": "docs/lessons-learned/user-story-validation-gap.md",
+      "targetTable": "retrospectives",
+      "contentType": "validation_lesson",
+      "title": "Lesson Learned: User Story Validation Gap",
+      "dbId": "30146fa7-128a-440e-845f-38a085219765",
+      "archivedTo": "/mnt/c/_EHG/EHG_Engineer/.git/archived-markdown/lessons-learned/user-story-validation-gap.md"
+    },
+    {
+      "source": "docs/lessons-learned/user-story-validation-monitoring.md",
+      "targetTable": "retrospectives",
+      "contentType": "monitoring_lesson",
+      "title": "User Story Auto-Validation Monitoring Checklist",
+      "dbId": "9d5daf26-3b84-4631-b95b-4edbf86ef3bd",
+      "archivedTo": "/mnt/c/_EHG/EHG_Engineer/.git/archived-markdown/lessons-learned/user-story-validation-monitoring.md"
+    }
+  ],
+  "errors": [],
+  "skipped": [
+    {
+      "path": "docs/strategic-directives/SD-CREWAI-ARCHITECTURE-001",
+      "reason": "not_found"
+    },
+    {
+      "path": "docs/strategic_directives/SD-CREWAI-COMPETITIVE-INTELLIGENCE-001",
+      "reason": "not_found"
+    }
+  ],
+  "endTime": "2025-11-28T15:46:35.136Z"
+}
