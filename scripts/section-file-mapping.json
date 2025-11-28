@@ -12,7 +12,10 @@
     "sections": [
       "application_architecture",
       "session_verification",
+      "session_verification_quick_start",
       "execution_philosophy",
+      "ui_parity_requirement",
+      "stage_7_hard_block",
       "git_commit_guidelines",
       "pr_size_guidelines",
       "communication_context",
@@ -29,6 +32,7 @@
     "sections": [
       "lead_operations",
       "directive_submission_review",
+      "lead_strategic_validation_q7",
       "lead_code_review_requirement",
       "simplicity_first_enforcement",
       "lead_pre_approval_simplicity_gate",
@@ -49,6 +53,7 @@
       "PHASE_4_VERIFICATION",
       "bmad_enhancements",
       "design_database_validation_gates",
+      "gate_2_5_human_inspectability",
       "qa_engineering_enhanced",
       "schema_documentation_access",
       "schema_documentation_reference",
@@ -63,6 +68,8 @@
       "exec_component_sizing_guidelines",
       "exec_todo_comment_standard",
       "exec_dual_test_requirement",
+      "branch_hygiene_gate",
+      "exec_ui_parity_verification",
       "exec_edge_case_testing_checklist",
       "testing_tools",
       "e2e_testing_mode_configuration"

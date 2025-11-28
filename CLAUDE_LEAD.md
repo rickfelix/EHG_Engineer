@@ -1,7 +1,7 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2025-11-28 11:18:02 AM
-**Protocol**: LEO 4.3.2
+**Generated**: 2025-11-28 2:22:26 PM
+**Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
 ---
@@ -130,6 +130,47 @@ node scripts/lead-review-submissions.js
 - Failed → Archive/remediate
 
 **Complete Process**: See `docs/reference/directive-submission-review.md`
+
+## 🔍 Strategic Validation Question 7: UI Inspectability
+
+## Strategic Validation Question 7: UI Inspectability
+
+**Added in LEO v4.3.3** - Part of LEAD Pre-Approval Gate
+
+### The Question
+> "Can users see and interpret the outputs this feature produces?"
+
+### Evaluation Criteria
+
+| Rating | Criteria |
+|--------|----------|
+| ✅ YES | All backend outputs have corresponding UI components, users can view/act on data |
+| ⚠️ PARTIAL | Some outputs visible, others require DB queries or logs to access |
+| ❌ NO | Backend works but outputs are not visible in UI |
+
+### LEAD Agent Actions
+
+**If YES**: Proceed with approval
+**If PARTIAL**:
+- Require UI component list in PRD
+- Add "UI Coverage" acceptance criteria
+- May approve with explicit UI backfill task
+
+**If NO**:
+- Block approval until UI representation plan is documented
+- Either expand SD scope to include UI OR
+- Create linked child SD for UI implementation
+
+### Integration with 6-Question Gate
+
+This question is MANDATORY for all SDs that produce user-facing data. It should be evaluated alongside:
+1. Is this minimal scope?
+2. Does it fit the current phase?
+3. Are there simpler alternatives?
+4. What is the maintenance cost?
+5. Does it follow existing patterns?
+6. Is it required for the stated goal?
+**7. Can users see and interpret the outputs?** ← NEW
 
 ## 📚 Automated PRD Enrichment (MANDATORY)
 
@@ -487,5 +528,5 @@ LEAD MUST answer these questions BEFORE approval:
 ---
 
 *Generated from database: 2025-11-28*
-*Protocol Version: 4.3.2*
+*Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

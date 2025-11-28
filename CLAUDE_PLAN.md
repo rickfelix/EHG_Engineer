@@ -1,7 +1,7 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-11-28 11:18:02 AM
-**Protocol**: LEO 4.3.2
+**Generated**: 2025-11-28 2:22:26 PM
+**Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
 ---
@@ -532,6 +532,21 @@ cat docs/EXEC_CONTEXT.md
 *BMAD Method: Build-Measure-Adapt-Document*
 
 
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
+
 ## DESIGN→DATABASE Validation Gates
 
 The LEO Protocol enforces the DESIGN→DATABASE workflow pattern through 4 mandatory validation gates that ensure:
@@ -969,20 +984,61 @@ This enables:
 3. **Cascading**: Gate 3 uses Gate 2 results, Gate 4 uses all previous results
 4. **Debugging**: Detailed failure information for each gate
 
-## CI/CD Pipeline Verification
+## 🚪 Gate 2.5: Human Inspectability Validation
 
-## CI/CD Pipeline Verification (MANDATORY)
+**Position**: Between Gate 2 (EXEC → PLAN Handback) and Gate 3 (PLAN → LEAD)
 
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+### Purpose
+Verify that all backend functionality has corresponding UI representation before marking implementation complete.
 
-### Verification Process
+### Gate Checklist
 
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+#### Data Contract Coverage
+- [ ] All `stageX_data` fields mapped to UI components
+- [ ] Score values displayed (not just derived states)
+- [ ] Confidence indicators visible
+- [ ] Timestamps/metadata accessible
 
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
+#### Component Verification
+- [ ] Stage output viewer exists for this stage
+- [ ] Key findings panel displays all findings
+- [ ] Recommendations are actionable
+- [ ] Red flags are highlighted
+
+#### User Journey Validation
+- [ ] User can navigate to view outputs
+- [ ] Data is presented in human-readable format
+- [ ] No "hidden" data requiring DB queries
+- [ ] Export/sharing capability exists (if required)
+
+### Scoring
+
+| Score | Criteria |
+|-------|----------|
+| 100% | All backend fields have UI representation |
+| 80% | Core fields visible, minor fields may require expansion |
+| 60% | Major fields visible, some data requires logs/DB |
+| <60% | BLOCKING - Significant UI gaps |
+
+### Enforcement
+
+**Minimum Score**: 80% to pass Gate 2.5
+**Blocking Condition**: Score <80% blocks progression to Gate 3
+
+### Handoff Template Addition
+
+When creating EXEC → PLAN handoff, include:
+```json
+{
+  "ui_coverage": {
+    "total_backend_fields": "<count>",
+    "fields_with_ui": "<count>",
+    "coverage_percentage": "<percent>",
+    "missing_components": ["<list>"],
+    "gate_2_5_status": "PASS|FAIL"
+  }
+}
+```
 
 ## Pre-Implementation Plan Presentation Template
 
@@ -1534,5 +1590,5 @@ Required: [object Object], [object Object], [object Object], [object Object], [o
 ---
 
 *Generated from database: 2025-11-28*
-*Protocol Version: 4.3.2*
+*Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

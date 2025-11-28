@@ -1,7 +1,7 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-11-28 11:18:02 AM
-**Protocol**: LEO 4.3.2
+**Generated**: 2025-11-28 2:22:26 PM
+**Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
 ---
@@ -40,6 +40,173 @@ EHG_Engineer (Management)          EHG App (Implementation)
 ├── Progress Tracking        ←     Results verified from here
 └── Dashboard Views          ←     No changes here!
 ```
+
+## 🚀 Session Verification & Quick Start (MANDATORY)
+
+**Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify, then act.
+
+---
+
+### STEP 1: Verify SD State
+
+```sql
+-- Find SD and determine current state
+SELECT id, title, status, current_phase, sd_type, progress
+FROM strategic_directives_v2
+WHERE id = 'SD-XXX' OR title ILIKE '%keyword%';
+
+-- Check for PRD
+SELECT id, status, progress FROM product_requirements_v2 WHERE sd_id = 'SD-XXX';
+
+-- Check for user stories
+SELECT COUNT(*) FROM user_stories WHERE sd_id = 'SD-XXX';
+```
+
+**Document**: "Verified SD [title] exists, status=[X], phase=[Y], PRD=[exists/missing]"
+
+---
+
+### STEP 2: Quick Start Decision Tree
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    LEO PROTOCOL QUICK START                     │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+               What did verification find?
+                              │
+          ┌───────────────────┼───────────────────┐
+          ▼                   ▼                   ▼
+    ┌──────────┐        ┌──────────┐        ┌──────────┐
+    │ No SD    │        │ SD in    │        │ SD in    │
+    │ Found    │        │ LEAD     │        │ PLAN/EXEC│
+    └──────────┘        └──────────┘        └──────────┘
+          │                   │                   │
+          ▼                   ▼                   ▼
+   Create SD first      See LEAD Flow      See PLAN/EXEC Flow
+```
+
+---
+
+### LEAD Phase Flow (current_phase = 'LEAD')
+
+```
+1. Run: npm run prio:top3          # Is this work justified?
+   ├── SD in top 3? → Proceed
+   └── Not in top 3? → Consider deferring or /quick-fix
+
+2. Read CLAUDE_LEAD.md             # Strategic validation
+
+3. SD Type determines validation:
+   ├── feature        → Full (TESTING, SECURITY, DESIGN, DATABASE)
+   ├── infrastructure → Reduced (DOCMON, STORIES, GITHUB)
+   ├── database       → Full + DATABASE sub-agent required
+   ├── security       → Full + SECURITY sub-agent required
+   └── documentation  → Minimal (DOCMON, STORIES only)
+
+4. Create PRD:
+   node scripts/add-prd-to-database.js SD-XXX "Title"
+
+   This auto-triggers:
+   ✓ PRD record creation
+   ✓ STORIES sub-agent
+   ✓ sd_type detection
+   ✓ Component recommendations
+```
+
+---
+
+### PLAN Phase Flow (current_phase = 'PLAN')
+
+```
+Check PRD & Stories:
+├── No PRD? → Create PRD first (see LEAD flow)
+├── PRD exists, no stories? → STORIES sub-agent runs auto, or create manually
+└── PRD + Stories exist? → READY FOR EXEC!
+
+Ready for EXEC means:
+1. Navigate to /mnt/c/_EHG/ehg/    # Implementation target
+2. Read PRD requirements
+3. Implement features
+4. Write tests as you go
+5. Commit with SD-ID
+```
+
+---
+
+### EXEC Phase Flow (current_phase = 'EXEC')
+
+```
+JUST IMPLEMENT!
+
+1. cd /mnt/c/_EHG/ehg/             # Navigate to impl target
+2. Read PRD & reference docs        # Understand requirements
+3. Write code                       # THE ACTUAL WORK
+4. npm run test:unit                # Unit tests
+5. npm run test:e2e                 # E2E tests (MANDATORY)
+6. git commit -m "SD-XXX: ..."      # Track the change
+
+After implementation complete:
+node scripts/unified-handoff-system.js --type EXEC-TO-PLAN --sd SD-XXX
+```
+
+---
+
+### Scripts Reference
+
+**Run Directly (CLI):**
+- `node scripts/add-prd-to-database.js SD-XXX "Title"` → Creates PRD
+- `node scripts/unified-handoff-system.js --type X --sd Y` → Handoffs
+- `npm run prio:top3` → Priority ranking
+- `npm run leo:generate` → Regenerate CLAUDE files
+- `npm run test:unit / test:e2e` → Tests
+
+**DO NOT Run Directly (Libraries):**
+- `lib/sub-agent-executor.js` → Library, not CLI
+- `scripts/phase-preflight.js` → May fail with UUID mismatch
+
+**Runs Automatically:**
+- Sub-agents → Triggered by PRD creation and handoffs
+- Validation gates → Triggered by unified-handoff-system.js
+
+---
+
+### Fast-Track Rules
+
+| Situation | Skip | Keep |
+|-----------|------|------|
+| PRD exists with clear requirements | Sub-agent enrichment | Implement + Test |
+| Reference doc exists (e.g., UI Report) | PRD rewrite | Read & implement |
+| Small fix (<50 LOC) | Full SD workflow | Use /quick-fix |
+| EXEC phase already | LEAD/PLAN re-validation | Just implement |
+
+---
+
+### Minimum Viable Workflow
+
+```
+1. npm run prio:top3                    # Confirm priority
+2. Query SD: status, phase, PRD         # Know starting point
+3. If no PRD: add-prd-to-database.js    # Create PRD
+4. cd /mnt/c/_EHG/ehg                   # Navigate to impl target
+5. IMPLEMENT THE FEATURE                # THE ACTUAL WORK
+6. npm run test:unit && test:e2e        # Verify it works
+7. git commit with SD-ID                # Track the change
+8. Create handoff (if phase complete)   # Document completion
+```
+
+**The goal is IMPLEMENTATION, not PROCESS COMPLIANCE.**
+
+---
+
+### Why This Matters
+- Session summaries describe *context*, not *state*
+- AI can hallucinate successful database operations
+- Database is the ONLY source of truth
+- Clear next-step guidance prevents process confusion
+
+**Pattern Reference**: PAT-SESS-VER-001, PAT-QUICK-START-001
 
 ## 🔍 Session Start Verification (MANDATORY)
 
@@ -133,6 +300,84 @@ These principles override default behavior and must be internalized before start
 
 **REMEMBER**: The goal is NOT to complete SDs quickly. The goal is to complete SDs CORRECTLY. A properly implemented SD that takes 8 hours is infinitely better than a rushed implementation that takes 4 hours but requires 6 hours of fixes.
 
+
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
+
+## 🚫 Stage 7 Hard Block: UI Coverage Prerequisite
+
+**Effective**: LEO v4.3.3
+**Scope**: IDEATION Pipeline (Stages 1-40)
+
+### Block Condition
+
+Stage 7 (Strategy Formulation) CANNOT begin until:
+- Stages 1-6 achieve ≥80% UI coverage
+- UI Parity backfill SD is completed or in-progress
+
+### Rationale
+
+Strategy Formulation (Stage 7) relies on human review of all prior stage outputs. If those outputs are not visible in the UI, stakeholders cannot:
+1. Verify stage findings before strategic decisions
+2. Review confidence levels across stages
+3. Understand the full GO/NO_GO/REVISE rationale
+4. Export or share findings with external stakeholders
+
+### Verification Before Stage 7
+
+```
+STAGE 7 PRE-REQUISITES:
+├── [ ] Stage 1-6 backend complete (existing)
+├── [ ] Stage 1-6 tests passing (existing)
+├── [ ] Stage 1-6 UI coverage ≥80% (NEW)
+│   ├── Stage 1: __% coverage
+│   ├── Stage 2: __% coverage
+│   ├── Stage 3: __% coverage
+│   ├── Stage 4: __% coverage
+│   ├── Stage 5: __% coverage
+│   └── Stage 6: __% coverage
+└── [ ] UI Parity backfill SD status: ________
+```
+
+### Exception Process
+
+To request an exception to this block:
+1. Document business justification
+2. Create explicit UI backfill SD with timeline
+3. Get LEAD approval with acknowledged technical debt
+4. Mark Stage 7 SD with `ui_debt_acknowledged: true`
+
+**No exceptions without explicit LEAD approval.**
 
 ## 🔄 Git Commit Guidelines
 
@@ -594,6 +839,6 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 ---
 
 *Generated from database: 2025-11-28*
-*Protocol Version: 4.3.2*
+*Protocol Version: 4.3.3*
 *Includes: Hot Patterns (5) + Recent Lessons (5)*
 *Load this file first in all sessions*
