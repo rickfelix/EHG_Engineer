@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-11-28 8:28:02 AM
+**Generated**: 2025-11-28 8:51:40 AM
 **Protocol**: LEO 4.3.2
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -382,8 +382,8 @@ sd.priority === 1 ? 'CRITICAL' : 'LOW'  // Always 'LOW'!
 | PAT-003 | security | 🟠 high | 3 | 📉 | Add auth.uid() check to RLS policy USING |
 | PAT-008 | deployment | 🟠 high | 2 | ➡️ | Check GitHub Actions secrets and package |
 | PAT-AUTH-PW-001 | testing | 🟠 high | 2 | ➡️ | Use Supabase Admin API with service_role |
-| PAT-DB-VACUUM-001 | database | 🟠 high | 1 | ➡️ | Run VACUUM FULL to reclaim space and reb |
-| PAT-RECURSION-001 | testing | 🟠 high | 1 | ➡️ | Establish baseline test/lint state befor |
+| PAT-E2E-UI-001 | testing | 🟠 high | 1 | ➡️ | Verify UI exists before writing E2E test |
+| PAT-INTEG-GAP-001 | implementation | 🟠 high | 1 | ➡️ | Verify end-to-end flow manually before c |
 
 ### Prevention Checklists
 
@@ -402,10 +402,10 @@ sd.priority === 1 ? 'CRITICAL' : 'LOW'  // Always 'LOW'!
 - [ ] Add verify-test-user.cjs script to test suite for authentication validation
 - [ ] Run authentication verification BEFORE running E2E tests
 
-**database**:
-- [ ] Monitor pg_stat_user_tables for dead row ratios
-- [ ] Set aggressive autovacuum on high-write tables (5% threshold)
-- [ ] VACUUM before dead rows exceed 10% of live rows
+**implementation**:
+- [ ] Include UI verification checkpoint in EXEC phase
+- [ ] Trace full stack before marking FR complete
+- [ ] Manual smoke test before E2E automation
 
 
 *Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
