@@ -554,6 +554,36 @@ async function generateComprehensiveRetrospective(sdId) {
     console.warn(`   You can run manually: node scripts/auto-extract-patterns-from-retro.js ${inserted[0].id}`);
   }
 
+  // Check for patterns exceeding alert thresholds and auto-create SDs
+  console.log('\n🚨 CHECKING PATTERN ALERT THRESHOLDS...');
+  try {
+    const { spawn } = await import('child_process');
+    const alertProcess = spawn('node', ['scripts/pattern-alert-sd-creator.js'], {
+      cwd: process.cwd(),
+      stdio: 'pipe'
+    });
+
+    let alertOutput = '';
+    alertProcess.stdout.on('data', (data) => { alertOutput += data.toString(); });
+    alertProcess.stderr.on('data', (data) => { alertOutput += data.toString(); });
+
+    await new Promise((resolve) => alertProcess.on('close', resolve));
+
+    // Extract key stats from output
+    const createdMatch = alertOutput.match(/SDs created:\s*(\d+)/);
+    const sdsCreated = createdMatch ? parseInt(createdMatch[1]) : 0;
+
+    if (sdsCreated > 0) {
+      console.log(`   🔴 ${sdsCreated} CRITICAL Strategic Directive(s) auto-created!`);
+      console.log('   Review with: npm run prio:top3');
+    } else {
+      console.log('   ✅ No patterns exceed alert thresholds');
+    }
+  } catch (error) {
+    console.warn(`\n⚠️  Pattern alert check failed (non-fatal): ${error.message}`);
+    console.warn('   You can run manually: npm run pattern:alert');
+  }
+
   return {
     success: true,
     retrospective_id: inserted[0].id,
