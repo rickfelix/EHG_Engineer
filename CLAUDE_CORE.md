@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-11-28 8:51:40 AM
+**Generated**: 2025-11-28 9:22:26 AM
 **Protocol**: LEO 4.3.2
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -273,33 +273,98 @@ After ANY code changes:
 
 ## 🔍 Issue Pattern Search (Knowledge Base)
 
-Before implementing fixes for recurring issues, search the pattern database:
+Before implementing fixes or designing features, search the pattern database for known issues and proven solutions.
+
+### When to Search Patterns
+
+**PLAN Phase:**
+- Before schema changes: Search `category: 'database'`
+- Before auth/security work: Search `category: 'security'`
+- Before designing new features: Search for related architecture patterns
+
+**EXEC Phase:**
+- Before implementing: Search for known issues in affected areas
+- Before testing: Search `category: 'testing'` for common pitfalls
+- When hitting errors: Search error message keywords
+
+**Retrospective:** Automatic extraction - no manual search needed
+
+---
+
+### CLI Commands (Quick Lookups)
 
 ```bash
-# Search for similar patterns
-npm run pattern:resolve  # Shows active patterns
+# View active patterns
+npm run pattern:alert:dry          # Shows patterns near thresholds
 
-# Use knowledge base search in code
-import { IssueKnowledgeBase } from './lib/learning/issue-knowledge-base.js';
-const kb = new IssueKnowledgeBase();
-const patterns = await kb.search('RLS policy blocking', { category: 'database' });
+# Check maintenance status
+npm run pattern:maintenance:dry    # Preview all maintenance tasks
+
+# Resolve a pattern
+npm run pattern:resolve PAT-XXX "Fixed by implementing XYZ"
+
+# Full documentation
+cat docs/reference/pattern-lifecycle.md
 ```
 
-**Pattern Types:**
-- `database` - Schema, migrations, RLS, queries
-- `testing` - E2E, unit tests, coverage
-- `security` - Auth, permissions, tokens
-- `build` - Vite, compilation, bundles
-- `deployment` - CI/CD, GitHub Actions
-- `protocol` - LEO handoffs, sub-agents
+---
 
-**Resolution Workflow:**
-1. Search patterns BEFORE implementing fix
-2. If found: apply proven_solutions, update occurrence_count
-3. If new: create pattern after resolution via retrospective
-4. Mark resolved: `npm run pattern:resolve PAT-XXX "Resolution notes"`
+### Programmatic API (For Integration)
 
-**Weekly Maintenance:** `npm run pattern:maintenance`
+```javascript
+import { IssueKnowledgeBase } from './lib/learning/issue-knowledge-base.js';
+const kb = new IssueKnowledgeBase();
+
+// Search by category (most common)
+const dbPatterns = await kb.search('', { category: 'database' });
+
+// Search by keyword + category
+const rlsPatterns = await kb.search('RLS policy', { category: 'security' });
+
+// Get specific pattern with solutions
+const pattern = await kb.getPattern('PAT-003');
+const solution = await kb.getSolution('PAT-003');
+// Returns: { recommended: {...}, alternatives: [...], prevention_checklist: [...] }
+```
+
+---
+
+### Category → Sub-Agent Mapping
+
+| Category | Sub-Agents | Trigger On |
+|----------|------------|------------|
+| database | DATABASE, SECURITY | Schema, RLS, migrations |
+| testing | TESTING, UAT | Test failures, coverage |
+| security | SECURITY, DATABASE | Auth, tokens, permissions |
+| deployment | GITHUB, DEPENDENCY | CI/CD, pipeline issues |
+| build | GITHUB, DEPENDENCY | Vite, compilation |
+| protocol | RETRO, DOCMON, VALIDATION | LEO handoffs, phases |
+| performance | PERFORMANCE, DATABASE | Latency, slow queries |
+
+---
+
+### Acting on Search Results
+
+**When pattern found:**
+1. Check `proven_solutions` - apply highest `success_rate` solution first
+2. Review `prevention_checklist` - add items to your implementation checklist
+3. Pattern `occurrence_count` auto-updates via retrospective if issue recurs
+
+**When no pattern found:**
+1. Proceed with implementation
+2. Document learnings in retrospective
+3. Pattern will be auto-extracted for future reference
+
+---
+
+### Thresholds for Auto-SD Creation
+
+Patterns exceeding these thresholds auto-create CRITICAL SDs:
+- **Critical severity**: 5+ occurrences
+- **High severity**: 7+ occurrences
+- **Increasing trend**: 4+ occurrences
+
+**Weekly Maintenance:** `npm run pattern:maintenance` (also runs via GitHub Action)
 
 ## Database-First Enforcement - Expanded
 
@@ -380,8 +445,8 @@ sd.priority === 1 ? 'CRITICAL' : 'LOW'  // Always 'LOW'!
 | Pattern ID | Category | Severity | Count | Trend | Top Solution |
 |------------|----------|----------|-------|-------|--------------|
 | PAT-003 | security | 🟠 high | 3 | 📉 | Add auth.uid() check to RLS policy USING |
-| PAT-008 | deployment | 🟠 high | 2 | ➡️ | Check GitHub Actions secrets and package |
 | PAT-AUTH-PW-001 | testing | 🟠 high | 2 | ➡️ | Use Supabase Admin API with service_role |
+| PAT-008 | deployment | 🟠 high | 2 | ➡️ | Check GitHub Actions secrets and package |
 | PAT-E2E-UI-001 | testing | 🟠 high | 1 | ➡️ | Verify UI exists before writing E2E test |
 | PAT-INTEG-GAP-001 | implementation | 🟠 high | 1 | ➡️ | Verify end-to-end flow manually before c |
 
@@ -392,15 +457,15 @@ sd.priority === 1 ? 'CRITICAL' : 'LOW'  // Always 'LOW'!
 - [ ] Test with authenticated user context
 - [ ] Check policy applies to correct operations
 
-**deployment**:
-- [ ] Verify all required secrets are set in GitHub
-- [ ] Test locally with same Node version as CI
-- [ ] Check package-lock.json is committed
-
 **testing**:
 - [ ] Store service_role key in .env file for programmatic user management
 - [ ] Add verify-test-user.cjs script to test suite for authentication validation
 - [ ] Run authentication verification BEFORE running E2E tests
+
+**deployment**:
+- [ ] Verify all required secrets are set in GitHub
+- [ ] Test locally with same Node version as CI
+- [ ] Check package-lock.json is committed
 
 **implementation**:
 - [ ] Include UI verification checkpoint in EXEC phase
