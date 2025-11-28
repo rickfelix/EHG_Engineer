@@ -35,6 +35,11 @@ import { validateGate1PlanToExec, shouldValidateDesignDatabase } from './modules
 import { validateGate2ExecToPlan } from './modules/implementation-fidelity-validation.js';
 import { validateGate3PlanToLead } from './modules/traceability-validation.js';
 import { validateGate4LeadFinal } from './modules/workflow-roi-validation.js';
+import {
+  shouldSkipCodeValidation,
+  getValidationRequirements,
+  logSdTypeValidationMode
+} from '../lib/utils/sd-type-validation.js';
 import { autoValidateUserStories } from './auto-validate-user-stories-on-exec-complete.js';
 import { autoCompleteDeliverables, checkDeliverablesNeedCompletion } from './modules/handoff/auto-complete-deliverables.js';
 import path from 'path';
@@ -659,13 +664,33 @@ class UnifiedHandoffSystem {
 
   /**
    * Execute EXEC → PLAN handoff (verification and acceptance)
+   * SD-TECH-DEBT-DOCS-001: Now sd_type-aware for documentation-only SDs
    */
   async executeExecToPlan(sdId, _options) {
     console.log('🔍 EXEC → PLAN HANDOFF EXECUTION');
     console.log('-'.repeat(30));
 
     try {
+      // SD-TECH-DEBT-DOCS-001: Check sd_type before orchestration
+      const { data: sdTypeCheck } = await this.supabase
+        .from('strategic_directives_v2')
+        .select('id, title, sd_type, scope, category')
+        .eq('id', sdId)
+        .single();
+
+      if (sdTypeCheck) {
+        const validationReqs = getValidationRequirements(sdTypeCheck);
+        console.log(`\n📋 SD Type: ${sdTypeCheck.sd_type || 'feature (default)'}`);
+
+        if (validationReqs.skipCodeValidation) {
+          console.log('   ✅ DOCUMENTATION-ONLY SD DETECTED');
+          console.log('   → TESTING/GITHUB validation will be SKIPPED');
+          console.log(`   → Reason: ${validationReqs.reason}`);
+        }
+      }
+
       // SUB-AGENT ORCHESTRATION: Run required sub-agents for PLAN_VERIFY phase
+      // NOTE: orchestrate() is now sd_type-aware and will skip TESTING/GITHUB for documentation SDs
       console.log('\n🤖 Step 0: Sub-Agent Orchestration (PLAN_VERIFY phase)');
       console.log('-'.repeat(50));
 

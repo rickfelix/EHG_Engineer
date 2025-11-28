@@ -23,7 +23,7 @@ See documentation for table structure: `database/schema/007_leo_protocol_schema_
 *For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-11-28 9:22:26 AM
+**Last Generated**: 2025-11-28 11:18:02 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 

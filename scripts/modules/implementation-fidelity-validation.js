@@ -16,6 +16,10 @@ import { readdir, readFile } from 'fs/promises';
 import path from 'path';
 import { calculateAdaptiveThreshold } from './adaptive-threshold-calculator.js';
 import { getPatternStats } from './pattern-tracking.js';
+import {
+  shouldSkipCodeValidation,
+  getValidationRequirements
+} from '../../lib/utils/sd-type-validation.js';
 
 const execAsync = promisify(exec);
 
@@ -91,6 +95,39 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
     failed_gates: [],
     gate_scores: {}
   };
+
+  // SD-TECH-DEBT-DOCS-001: Check if this is a documentation-only SD
+  // Documentation-only SDs skip implementation fidelity validation
+  try {
+    const { data: sd } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, title, sd_type, scope, category')
+      .eq('id', sd_id)
+      .single();
+
+    if (sd && shouldSkipCodeValidation(sd)) {
+      const validationReqs = getValidationRequirements(sd);
+      console.log(`\n   ✅ DOCUMENTATION-ONLY SD DETECTED (sd_type=${sd.sd_type || 'detected'})`);
+      console.log(`      Reason: ${validationReqs.reason}`);
+      console.log('      SKIPPING implementation fidelity validation');
+      console.log('      (No code changes to validate)\n');
+
+      // Return passing validation for documentation-only SDs
+      validation.passed = true;
+      validation.score = 100;
+      validation.details.sd_type_bypass = {
+        sd_type: sd.sd_type,
+        reason: 'Documentation-only SD - no code implementation to validate',
+        skipped_checks: ['testing', 'server_restart', 'code_quality', 'design_fidelity', 'database_fidelity']
+      };
+      validation.warnings.push('Gate 2 validation skipped for documentation-only SD');
+
+      return validation;
+    }
+  } catch (error) {
+    console.log(`   ⚠️  Could not check sd_type: ${error.message}`);
+    // Continue with standard validation if we can't check sd_type
+  }
 
   // ===================================================================
   // PHASE 1: NON-NEGOTIABLE BLOCKERS (Preflight Checks)

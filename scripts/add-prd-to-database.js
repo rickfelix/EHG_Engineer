@@ -16,6 +16,11 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { autoTriggerStories } from './modules/auto-trigger-stories.mjs';
 import { getComponentRecommendations, formatForPRD, generateInstallScript } from '../lib/shadcn-semantic-explainable-selector.js';
+import {
+  autoDetectSdType,
+  shouldSkipCodeValidation,
+  getValidationRequirements
+} from '../lib/utils/sd-type-validation.js';
 dotenv.config();
 
 async function addPRDToDatabase(sdId, prdTitle) {
@@ -75,10 +80,10 @@ CREATE TABLE IF NOT EXISTS product_requirements_v2 (
     }
 
     // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
-    // Also fetch SD metadata for component recommendations
+    // Also fetch SD metadata for component recommendations and sd_type detection
     const { data: sdData, error: sdError } = await supabase
       .from('strategic_directives_v2')
-      .select('uuid_id, scope, description, strategic_objectives, title')
+      .select('uuid_id, scope, description, strategic_objectives, title, sd_type, category')
       .eq('id', sdId)
       .single();
 
@@ -90,6 +95,50 @@ CREATE TABLE IF NOT EXISTS product_requirements_v2 (
 
     const sdUuid = sdData.uuid_id;
     console.log(`   SD uuid_id: ${sdUuid}`);
+
+    // SD-TECH-DEBT-DOCS-001: Auto-detect sd_type and warn if documentation-only
+    const typeDetection = autoDetectSdType(sdData);
+    const currentSdType = sdData.sd_type || 'feature';
+
+    console.log(`   SD Type (current): ${currentSdType}`);
+    console.log(`   SD Type (detected): ${typeDetection.sd_type} (${typeDetection.confidence}% confidence)`);
+
+    // Check for sd_type mismatch
+    if (typeDetection.detected && typeDetection.sd_type !== currentSdType && typeDetection.confidence >= 70) {
+      console.log('\n   ⚠️  SD TYPE MISMATCH DETECTED');
+      console.log(`      Current: ${currentSdType}`);
+      console.log(`      Detected: ${typeDetection.sd_type}`);
+      console.log(`      Reason: ${typeDetection.reason}`);
+
+      // Auto-update sd_type if confidence is high enough
+      if (typeDetection.confidence >= 80) {
+        console.log(`\n   🔄 Auto-updating sd_type to '${typeDetection.sd_type}'...`);
+        const { error: updateError } = await supabase
+          .from('strategic_directives_v2')
+          .update({ sd_type: typeDetection.sd_type })
+          .eq('id', sdId);
+
+        if (updateError) {
+          console.log(`   ⚠️  Failed to update sd_type: ${updateError.message}`);
+        } else {
+          console.log(`   ✅ Updated sd_type to '${typeDetection.sd_type}'`);
+          sdData.sd_type = typeDetection.sd_type;  // Update local reference
+        }
+      } else {
+        console.log('\n   💡 Consider manually setting sd_type:');
+        console.log(`      UPDATE strategic_directives_v2 SET sd_type = '${typeDetection.sd_type}' WHERE id = '${sdId}';`);
+      }
+    }
+
+    // Warn if documentation-only SD is going through full workflow
+    const validationReqs = getValidationRequirements(sdData);
+    if (validationReqs.skipCodeValidation) {
+      console.log('\n   ⚠️  DOCUMENTATION-ONLY SD DETECTED');
+      console.log('      This SD does NOT require code validation (TESTING/GITHUB)');
+      console.log(`      Reason: ${validationReqs.reason}`);
+      console.log('\n   💡 Consider using Quick Fix workflow for documentation-only tasks:');
+      console.log('      /quick-fix [describe the documentation task]');
+    }
 
     // Create PRD entry
     const { data, error } = await supabase

@@ -48,6 +48,12 @@ import { createSupabaseServiceClient } from './lib/supabase-connection.js';
 import { executeSubAgent as realExecuteSubAgent } from '../lib/sub-agent-executor.js';
 import { selectSubAgents, selectSubAgentsHybrid } from '../lib/context-aware-sub-agent-selector.js';
 import { safeInsert, generateUUID } from './modules/safe-insert.js';
+import {
+  shouldSkipCodeValidation,
+  getValidationRequirements,
+  getPlanVerifySubAgents,
+  logSdTypeValidationMode
+} from '../lib/utils/sd-type-validation.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -56,12 +62,26 @@ dotenv.config();
 const supabase = await createSupabaseServiceClient('engineer', { verbose: false });
 
 // Phase to sub-agent mapping (loaded from database, this is fallback)
+// NOTE: PLAN_VERIFY is now DYNAMIC based on sd_type - see getPhaseSubAgentsForSd()
 const PHASE_SUBAGENT_MAP = {
   LEAD_PRE_APPROVAL: ['VALIDATION', 'DATABASE', 'SECURITY', 'DESIGN', 'RISK'],
   PLAN_PRD: ['DATABASE', 'STORIES', 'RISK'],
   EXEC_IMPL: [], // EXEC does the work, no sub-agents
   PLAN_VERIFY: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'API', 'DEPENDENCY'],
   LEAD_FINAL: ['RETRO']
+};
+
+// SD type-aware PLAN_VERIFY mapping (SD-TECH-DEBT-DOCS-001 resilience improvement)
+// Documentation/infrastructure SDs skip TESTING and GITHUB sub-agents
+const PLAN_VERIFY_BY_SD_TYPE = {
+  // Full validation for code-impacting SDs
+  feature: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'API', 'DEPENDENCY'],
+  database: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY'],
+  security: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY'],
+
+  // Reduced validation for non-code SDs (skip TESTING, GITHUB)
+  documentation: ['DOCMON', 'STORIES'],
+  infrastructure: ['DOCMON', 'STORIES', 'GITHUB']  // Infrastructure keeps GITHUB for CI/CD validation
 };
 
 /**
@@ -106,19 +126,85 @@ async function getPhaseSubAgents(phase) {
 }
 
 /**
+ * Get phase sub-agents with SD type awareness
+ * SD-TECH-DEBT-DOCS-001: Documentation-only SDs skip TESTING/GITHUB
+ *
+ * @param {string} phase - Phase name
+ * @param {Object} sd - Strategic Directive object
+ * @returns {Promise<Object[]>} Filtered sub-agents
+ */
+async function getPhaseSubAgentsForSd(phase, sd) {
+  const { data, error } = await supabase
+    .from('leo_sub_agents')
+    .select('*')
+    .eq('active', true)
+    .order('priority', { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to query sub-agents: ${error.message}`);
+  }
+
+  // For PLAN_VERIFY, use sd_type-aware mapping
+  let phaseAgentCodes;
+  if (phase === 'PLAN_VERIFY') {
+    const sdType = sd.sd_type || 'feature';
+    const skipCode = shouldSkipCodeValidation(sd);
+
+    if (skipCode) {
+      // Use reduced validation for documentation/non-code SDs
+      phaseAgentCodes = PLAN_VERIFY_BY_SD_TYPE[sdType] || PLAN_VERIFY_BY_SD_TYPE.documentation;
+      console.log(`   📋 SD Type: ${sdType} (skip code validation: YES)`);
+      console.log(`   📋 Using reduced PLAN_VERIFY sub-agents: ${phaseAgentCodes.join(', ')}`);
+    } else {
+      // Use full validation for code-impacting SDs
+      phaseAgentCodes = PLAN_VERIFY_BY_SD_TYPE[sdType] || PHASE_SUBAGENT_MAP[phase];
+      console.log(`   📋 SD Type: ${sdType} (skip code validation: NO)`);
+      console.log(`   📋 Using full PLAN_VERIFY sub-agents: ${phaseAgentCodes.join(', ')}`);
+    }
+  } else {
+    // For other phases, use standard mapping
+    phaseAgentCodes = PHASE_SUBAGENT_MAP[phase] || [];
+  }
+
+  // Filter sub-agents by codes defined for this phase
+  return data.filter(sa => {
+    const code = sa.code || sa.sub_agent_code;
+    return phaseAgentCodes.includes(code);
+  });
+}
+
+/**
  * Check if sub-agent is required based on SD scope
  * PHASE 4 ENHANCEMENT: Now uses hybrid semantic + keyword matching
+ * SD-TECH-DEBT-DOCS-001: Now sd_type-aware for PLAN_VERIFY phase
  */
 async function isSubAgentRequired(subAgent, sd, phase) {
   const code = subAgent.sub_agent_code || subAgent.code;
 
+  // SD-TECH-DEBT-DOCS-001: Check if this is a non-code SD
+  const skipCodeValidation = shouldSkipCodeValidation(sd);
+
   // Always required sub-agents per phase (MANDATORY regardless of content)
+  // NOTE: For PLAN_VERIFY, this is NOW SD_TYPE-AWARE
   const alwaysRequired = {
-    LEAD_PRE_APPROVAL: ['RISK', 'VALIDATION', 'SECURITY', 'DATABASE', 'DESIGN'], // Risk assessment, duplicate check, security review, database validation, design review for ALL SDs
-    PLAN_PRD: ['DATABASE', 'STORIES', 'RISK'], // Database schema validation, user story generation, risk assessment for ALL PRDs
-    PLAN_VERIFY: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE'], // Tests, CI/CD, documentation, story verification, database verification for ALL implementations
-    LEAD_FINAL: ['RETRO'] // Retrospective for continuous improvement
+    LEAD_PRE_APPROVAL: ['RISK', 'VALIDATION', 'SECURITY', 'DATABASE', 'DESIGN'],
+    PLAN_PRD: ['DATABASE', 'STORIES', 'RISK'],
+    // PLAN_VERIFY is now dynamic based on sd_type
+    PLAN_VERIFY: skipCodeValidation
+      ? ['DOCMON', 'STORIES']  // Documentation-only SDs: skip TESTING, GITHUB
+      : ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE'],
+    LEAD_FINAL: ['RETRO']
   };
+
+  // Check if sub-agent should be SKIPPED for documentation-only SDs
+  if (skipCodeValidation && phase === 'PLAN_VERIFY') {
+    if (['TESTING', 'GITHUB'].includes(code)) {
+      return {
+        required: false,
+        reason: `Skipped for documentation-only SD (sd_type=${sd.sd_type || 'detected'})`
+      };
+    }
+  }
 
   if (alwaysRequired[phase]?.includes(code)) {
     return { required: true, reason: 'Always required for this phase' };
@@ -484,10 +570,19 @@ async function orchestrate(phase, sdId) {
     console.log(`   Title: ${sd.title}`);
     console.log(`   Scope: ${(sd.scope || '').substring(0, 80)}...`);
     console.log(`   Priority: ${sd.priority}`);
+    console.log(`   SD Type: ${sd.sd_type || 'feature (default)'}`);
 
-    // Step 2: Get phase sub-agents from database
-    console.log('\n🔍 Step 2: Querying sub-agents for phase...');
-    const phaseSubAgents = await getPhaseSubAgents(phase);
+    // SD-TECH-DEBT-DOCS-001: Log sd_type validation mode
+    const validationReqs = getValidationRequirements(sd);
+    if (validationReqs.skipCodeValidation) {
+      console.log('\n   ℹ️  DOCUMENTATION-ONLY SD DETECTED');
+      console.log(`      Reason: ${validationReqs.reason}`);
+      console.log('      TESTING/GITHUB validation will be SKIPPED');
+    }
+
+    // Step 2: Get phase sub-agents from database (SD-TYPE AWARE)
+    console.log('\n🔍 Step 2: Querying sub-agents for phase (sd_type-aware)...');
+    const phaseSubAgents = await getPhaseSubAgentsForSd(phase, sd);
     console.log(`   Found ${phaseSubAgents.length} sub-agents registered for ${phase}`);
 
     // Step 3: Filter required sub-agents based on SD scope
@@ -626,4 +721,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 // Export for use in other scripts
-export { orchestrate, getPhaseSubAgents, isSubAgentRequired };
+export { orchestrate, getPhaseSubAgents, getPhaseSubAgentsForSd, isSubAgentRequired };
