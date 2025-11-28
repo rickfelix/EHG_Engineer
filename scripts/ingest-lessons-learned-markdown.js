@@ -250,27 +250,32 @@ function determineSeverity(content) {
 
 /**
  * Generate next pattern ID
+ * Uses PAT-MD prefix for markdown-ingested patterns to avoid conflicts
  */
-async function getNextPatternId(prefix = 'PAT') {
-  const { data } = await supabase
+async function getNextPatternId(prefix = 'PAT-MD') {
+  // Get the highest numbered pattern with this prefix
+  const { data: patterns } = await supabase
     .from('issue_patterns')
     .select('pattern_id')
     .like('pattern_id', `${prefix}-%`)
     .order('pattern_id', { ascending: false })
-    .limit(1)
-    .single();
+    .limit(10);
 
-  if (!data) {
+  if (!patterns || patterns.length === 0) {
     return `${prefix}-001`;
   }
 
-  const match = data.pattern_id.match(new RegExp(`${prefix}-(\\d+)`));
-  if (match) {
-    const nextNum = parseInt(match[1]) + 1;
-    return `${prefix}-${String(nextNum).padStart(3, '0')}`;
+  // Find highest number
+  let maxNum = 0;
+  for (const p of patterns) {
+    const match = p.pattern_id.match(new RegExp(`${prefix}-(\\d+)`));
+    if (match) {
+      const num = parseInt(match[1]);
+      if (num > maxNum) maxNum = num;
+    }
   }
 
-  return `${prefix}-001`;
+  return `${prefix}-${String(maxNum + 1).padStart(3, '0')}`;
 }
 
 /**
@@ -300,7 +305,7 @@ async function createPatternFromMarkdown(parsed, dryRun = false) {
   const preventionChecklist = parsed.prevention.slice(0, 5);
 
   const pattern = {
-    pattern_id: await getNextPatternId('PAT'),
+    pattern_id: await getNextPatternId('PAT-MD'),
     category,
     severity,
     issue_summary: issueSummary.substring(0, 500),
