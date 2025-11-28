@@ -167,7 +167,7 @@ function parseMarkdownFile(filePath) {
           if (items) {
             result.prevention.push(...items.map(i => i.replace(/"/g, '').trim()));
           }
-        } catch (e) {
+        } catch {
           // Ignore parse errors
         }
       } else {
@@ -293,7 +293,7 @@ async function createPatternFromMarkdown(parsed, dryRun = false) {
     : parsed.title;
 
   // Format proven solutions
-  const provenSolutions = parsed.solutions.slice(0, 3).map((sol, idx) => ({
+  const provenSolutions = parsed.solutions.slice(0, 3).map((sol) => ({
     solution: sol,
     method: `From ${parsed.fileName}`,
     success_rate: 100,

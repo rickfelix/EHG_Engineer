@@ -61,6 +61,23 @@ const CONFIG = {
     build: 'devops-team',
     performance: 'platform-team',
     protocol: 'leo-maintainers'
+  },
+
+  // Pattern category to SD category mapping
+  PATTERN_TO_SD_CATEGORY: {
+    database: 'Technical Debt',
+    security: 'security',
+    testing: 'quality_assurance',
+    deployment: 'infrastructure',
+    build: 'Technical Debt',
+    performance: 'Performance',
+    protocol: 'Process Improvement',
+    code_structure: 'Code Quality',
+    code_quality: 'Code Quality',
+    general: 'Technical Debt',
+    implementation: 'Technical Debt',
+    process: 'Process Improvement',
+    query: 'Technical Debt'
   }
 };
 
@@ -161,6 +178,7 @@ async function createSDForPattern(pattern) {
 
   const sdKey = await generateSDKey(pattern.category);
   const suggestedTeam = CONFIG.CATEGORY_TEAMS[pattern.category] || 'engineering';
+  const sdCategory = CONFIG.PATTERN_TO_SD_CATEGORY[pattern.category] || 'Technical Debt';
 
   // Build SD description with context
   const provenSolutionsSummary = pattern.proven_solutions?.length > 0
@@ -175,6 +193,7 @@ async function createSDForPattern(pattern) {
     id: uuidv4(),
     sd_key: sdKey,
     title: `[${pattern.pattern_id}] Resolve Root Cause: ${pattern.issue_summary.substring(0, 100)}`,
+    category: sdCategory,
     description: `## Auto-Generated from Issue Pattern
 
 **Pattern ID:** ${pattern.pattern_id}
@@ -215,6 +234,8 @@ ${suggestedTeam}
 *Pattern last seen: ${pattern.last_seen_sd_id || 'Unknown'}*`,
     status: CONFIG.SD_STATUS,
     priority: CONFIG.SD_PRIORITY,
+    rationale: `This pattern has occurred ${pattern.occurrence_count} times with ${pattern.severity} severity. Recurring issues indicate a systemic problem requiring root cause resolution.`,
+    scope: `Pattern Category: ${pattern.category}`,
     created_at: new Date().toISOString(),
     metadata: {
       source: 'pattern-alert-sd-creator',
