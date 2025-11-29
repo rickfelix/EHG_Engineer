@@ -12,7 +12,7 @@
  *   node scripts/db-validate/type-generator.js [--project=engineer|ehg] [--force] [--check]
  */
 
-import { execSync, spawn } from 'child_process';
+import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
