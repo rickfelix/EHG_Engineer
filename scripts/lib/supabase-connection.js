@@ -25,15 +25,19 @@ const { Client } = pg;
 
 /**
  * Database configuration for different projects
+ *
+ * NOTE: As of SD-ARCH-EHG-006 (2025-11-30), both EHG and EHG_Engineer
+ * now use the CONSOLIDATED database (dedlbzhpgkmetvhbkyzq).
+ * The old EHG database (liapbndqlqxdcgpwntbv) is deprecated.
  */
 export const DB_CONFIGS = {
-  // EHG Application (customer-facing)
+  // EHG Application (customer-facing) - NOW USES CONSOLIDATED DATABASE
   ehg: {
-    projectId: 'liapbndqlqxdcgpwntbv',
+    projectId: 'dedlbzhpgkmetvhbkyzq',  // MIGRATED from liapbndqlqxdcgpwntbv (SD-ARCH-EHG-006)
     region: 'aws-1-us-east-1',
     port: 5432,
     database: 'postgres',
-    description: 'EHG Application Database (Business App)',
+    description: 'EHG Consolidated Database (Business App + Governance)',
   },
 
   // EHG_Engineer Application (management dashboard)
@@ -42,7 +46,19 @@ export const DB_CONFIGS = {
     region: 'aws-1-us-east-1',
     port: 5432,
     database: 'postgres',
-    description: 'EHG_Engineer Database (LEO Protocol Dashboard)',
+    description: 'EHG Consolidated Database (LEO Protocol + Business App)',
+  },
+
+  // DEPRECATED: Old EHG database - kept for reference only
+  ehg_legacy: {
+    projectId: 'liapbndqlqxdcgpwntbv',
+    region: 'aws-0-us-east-1',
+    port: 5432,
+    database: 'postgres',
+    description: 'DEPRECATED: Old EHG Database (migrated to consolidated)',
+    deprecated: true,
+    deprecatedAt: '2025-11-30',
+    migratedTo: 'dedlbzhpgkmetvhbkyzq',
   }
 };
 
