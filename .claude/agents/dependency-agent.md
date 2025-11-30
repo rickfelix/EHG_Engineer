@@ -40,6 +40,24 @@ node scripts/orchestrate-phase-subagents.js PLAN_VERIFY <SD-ID>
 
 ---
 
+## Skill Integration (Claude Code Skills)
+
+This agent works with companion **Claude Code Skills** for creative guidance. Skills provide guidance BEFORE implementation, this agent validates AFTER implementation.
+
+### Available Dependency Skills (Personal: ~/.claude/skills/)
+
+| Skill | Purpose | Invoke When | Issues Addressed |
+|-------|---------|-------------|------------------|
+| `dependency-security` | CVE handling, npm audit | Addressing vulnerabilities | PAT-008 |
+| `npm-patterns` | Package management, overrides | Managing dependencies, conflicts | Lock file issues |
+
+### Agent-Skill Workflow
+1. **Creative Phase**: Model invokes skills for dependency patterns (how to handle CVEs, overrides)
+2. **Implementation**: Model applies security patches based on skill patterns
+3. **Validation Phase**: This agent validates security compliance (are vulnerabilities fixed?)
+
+---
+
 ## 🚨 Issue Pattern from Database: PAT-008
 
 **Pattern**: CI/CD pipeline failures due to environment variable or dependency issues

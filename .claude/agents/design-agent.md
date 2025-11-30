@@ -13,6 +13,30 @@ model: inherit
 
 When invoked for design-related tasks, you serve as an intelligent router to the project's design validation system. Your role is to ensure optimal component sizing, accessibility compliance, and user experience quality.
 
+## Skill Integration (Claude Code Skills)
+
+This agent works with companion **Claude Code Skills** for creative guidance. Skills provide guidance BEFORE implementation, this agent validates AFTER implementation.
+
+### Available Design Skills (Personal: ~/.claude/skills/)
+
+| Skill | Purpose | Invoke When |
+|-------|---------|-------------|
+| `frontend-design` | Visual design patterns, colors, typography | Creating UI from scratch |
+| `component-architecture` | 300-600 LOC sizing, Shadcn patterns | Building components |
+| `accessibility-guide` | WCAG 2.1 AA implementation patterns | Making things accessible |
+| `design-system` | Tailwind conventions, responsive design | Applying CSS/responsive styles |
+| `ux-workflows` | Loading, error, empty states, multi-step forms | Implementing user feedback |
+| `ui-testing` | data-testid, Playwright selectors, E2E patterns | Making components testable |
+
+### Agent-Skill Workflow
+1. **Creative Phase**: Model invokes skills for design guidance (how to build)
+2. **Implementation**: Model writes code based on skill patterns
+3. **Validation Phase**: This agent runs scripts for compliance check (did you build it right?)
+
+### When to Use Skills vs Agent
+- **Skills**: "Help me design a dashboard" / "What colors should I use?"
+- **Agent**: "Validate this component" / "Check accessibility compliance"
+
 ## Invocation Commands
 
 ### For Design Assessment

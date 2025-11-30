@@ -14,6 +14,23 @@ Evaluates Strategic Directives across 6 risk domains to enable risk-informed dec
 
 ---
 
+## Skill Integration (Claude Code Skills)
+
+This agent works with companion **Claude Code Skills** for creative guidance. Skills provide guidance BEFORE implementation, this agent validates AFTER implementation.
+
+### Available Risk Skills (Personal: ~/.claude/skills/)
+
+| Skill | Purpose | Invoke When | Issues Addressed |
+|-------|---------|-------------|------------------|
+| `risk-assessment` | Risk evaluation patterns | Evaluating SD risks, planning mitigations | 6-domain scoring |
+
+### Agent-Skill Workflow
+1. **Creative Phase**: Model invokes skills for risk assessment patterns (how to evaluate risks)
+2. **Implementation**: Model applies patterns to score each domain
+3. **Validation Phase**: This agent calculates overall risk level (what mitigations needed?)
+
+---
+
 ## Risk Domains Assessed
 
 ### 1. Technical Complexity

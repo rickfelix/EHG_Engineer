@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-11-30 11:10:03 PM
+**Generated**: 2025-11-30 12:38:06 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -41,27 +41,6 @@ EHG_Engineer (Management)          EHG App (Implementation)
 └── Dashboard Views          ←     No changes here!
 ```
 
-## 🚀 Session Verification & Quick Start (MANDATORY)
-
-## Session Start Checklist
-
-### Required Verification
-1. **Check Priority**: `npm run prio:top3`
-2. **Git Status**: Clean working directory?
-3. **Context Load**: CLAUDE_CORE.md + phase file
-
-### Before Starting Work
-- Verify SD is in correct phase
-- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
-- Review recent handoffs if continuing
-
-### Key Commands
-| Command | Purpose |
-|---------|---------|
-| `npm run prio:top3` | Top priority SDs |
-| `git status` | Working tree status |
-| `npm run handoff:latest` | Latest handoff |
-
 ## 🔍 Session Start Verification (MANDATORY)
 
 **Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
@@ -96,6 +75,27 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 - If records don't exist, CREATE them before proceeding
 
 **Pattern Reference**: PAT-SESS-VER-001
+
+## 🚀 Session Verification & Quick Start (MANDATORY)
+
+## Session Start Checklist
+
+### Required Verification
+1. **Check Priority**: `npm run prio:top3`
+2. **Git Status**: Clean working directory?
+3. **Context Load**: CLAUDE_CORE.md + phase file
+
+### Before Starting Work
+- Verify SD is in correct phase
+- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
+- Review recent handoffs if continuing
+
+### Key Commands
+| Command | Purpose |
+|---------|---------|
+| `npm run prio:top3` | Top priority SDs |
+| `git status` | Working tree status |
+| `npm run handoff:latest` | Latest handoff |
 
 ## Execution Philosophy
 
@@ -187,6 +187,98 @@ Before marking any stage/feature as complete:
 - [ ] Recommendations are actionable in the UI
 
 **BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
+
+## 🎯 Skill Integration (Claude Code Skills)
+
+**Skills complement the LEO Protocol by providing pattern guidance BEFORE implementation.**
+
+### Skill-Agent Relationship
+| Phase | Component | Role |
+|-------|-----------|------|
+| Creative | Skills (~/.claude/skills/) | How to build (patterns, best practices) |
+| Validation | Sub-Agents (.claude/agents/) | Did you build it right (verification) |
+
+### 🔗 LEO Protocol Skill Chains (NEW)
+
+**Master Skill**: `leo-skill-chains` - Orchestrates skill invocation order per phase
+
+#### Phase Chains
+| Phase | Chain | Purpose |
+|-------|-------|---------|
+| **LEAD** | session-verification → duplicate-detection → scope-validation → sd-classification → risk-assessment | Validate and approve SD |
+| **PLAN** | session-verification → user-story-writing → codebase-search → [feature chains] → e2e-patterns → technical-writing | Create PRD |
+| **EXEC** | git-workflow → baseline-testing → [implementation chains] → e2e-patterns → integration-verification → git-workflow | Implement and test |
+| **VERIFY** | e2e-ui-verification → integration-verification → refactoring-safety → production-readiness | Verify before handoff |
+| **DONE** | leo-completion → retrospective-patterns → context-management | Complete SD |
+
+#### Feature-Type Chains (EXEC Phase)
+| Feature Type | Chain |
+|--------------|-------|
+| **UI Feature** | frontend-design → component-architecture → state-management → error-handling → accessibility-guide |
+| **Database** | schema-design → migration-safety → rls-patterns → supabase-patterns → database-maintenance |
+| **API** | rest-api-design → api-error-handling → input-validation |
+| **Testing** | baseline-testing → e2e-ui-verification → e2e-patterns → test-selectors → playwright-auth |
+
+### Available Skill Categories
+| Category | Skills | Invoke When |
+|----------|--------|-------------|
+| Design | frontend-design, component-architecture, accessibility-guide, design-system, ux-workflows, ui-testing | Creating UI components |
+| Database | schema-design, rls-patterns, migration-safety, supabase-patterns, database-maintenance | Database changes |
+| Security | auth-patterns, input-validation, secret-management, access-control | Security features |
+| Testing | e2e-patterns, test-selectors, test-fixtures, test-debugging, playwright-auth, baseline-testing, e2e-ui-verification | Writing tests |
+| API | rest-api-design, api-documentation, api-error-handling | API design and implementation |
+| Performance | query-optimization, react-performance, memory-management, bundle-optimization, production-readiness | Performance optimization |
+| CI/CD | cicd-patterns, refactoring-safety, build-paths, git-workflow | GitHub Actions, git, deployments |
+| Dependencies | dependency-security, npm-patterns | Package management, CVE handling |
+| Documentation | technical-writing | Documentation standards |
+| Validation | duplicate-detection, codebase-search, scope-validation, ui-integration-check, integration-verification, session-verification, sub-agent-triggers, sd-classification | Codebase validation |
+| LEO Protocol | leo-skill-chains, leo-completion, retrospective-patterns, risk-assessment, user-story-writing, uat-execution | LEO workflow support |
+| Frontend State | state-management, error-handling | React state, error handling |
+| Context | context-management | Token usage, session management |
+
+### Enhanced Skill Features
+Skills now include:
+- **related-skills**: Cross-references to related skills for discovery
+- **chain-position**: Where in LEO Protocol workflow the skill applies
+- **derived-from**: Issue patterns that inspired the skill (with occurrence counts)
+- **priority**: critical/high/medium based on usage frequency
+
+### Top 5 Most-Used Sub-Agent Skills (by execution count)
+| Rank | Sub-Agent | Executions | Primary Skills |
+|------|-----------|------------|----------------|
+| 1 | DOCMON | 200 | technical-writing, api-documentation |
+| 2 | STORIES | 199 | user-story-writing, scope-validation |
+| 3 | DATABASE | 184 | schema-design, migration-safety, rls-patterns, database-maintenance |
+| 4 | GITHUB | 176 | git-workflow, refactoring-safety, cicd-patterns, build-paths |
+| 5 | TESTING | 149 | e2e-patterns, test-selectors, playwright-auth, baseline-testing |
+
+### Skill-Agent Mapping
+| Sub-Agent | Associated Skills | Issue Patterns Addressed |
+|-----------|-------------------|-------------------------|
+| DESIGN | frontend-design, component-architecture, accessibility-guide, design-system, ux-workflows, ui-testing | UI/UX patterns |
+| DATABASE | schema-design, rls-patterns, migration-safety, supabase-patterns, database-maintenance | PAT-001, PAT-003, PAT-DB-VACUUM-001 |
+| SECURITY | auth-patterns, input-validation, secret-management, access-control | Security patterns |
+| TESTING | e2e-patterns, test-selectors, test-fixtures, test-debugging, playwright-auth, baseline-testing, e2e-ui-verification, sd-classification | PAT-AUTH-PW-001, PAT-RECURSION-001, PAT-E2E-UI-001 |
+| VALIDATION | duplicate-detection, codebase-search, scope-validation, ui-integration-check, integration-verification, session-verification, sub-agent-triggers, leo-completion | PAT-SESS-VER-001, PAT-INTEG-GAP-001, PAT-007 |
+| PERFORMANCE | query-optimization, react-performance, memory-management, bundle-optimization, production-readiness | Performance patterns |
+| API | rest-api-design, api-documentation, api-error-handling | API patterns |
+| GITHUB | refactoring-safety, cicd-patterns, build-paths, git-workflow | PAT-002, PAT-008, PAT-005, PAT-006 |
+| DEPENDENCY | dependency-security, npm-patterns | CVE handling |
+| DOCMON | technical-writing | Documentation compliance |
+| RISK | risk-assessment | Risk evaluation |
+| UAT | uat-execution | UAT validation |
+| STORIES | user-story-writing | User story structure |
+| RETRO | retrospective-patterns | Quality retrospectives |
+
+### Skill Location
+- **Personal skills**: ~/.claude/skills/ (portable across projects)
+- **Project skills**: .claude/skills/ (project-specific)
+- **Skill Index**: ~/.claude/skills/SKILL-INDEX.md (quick reference with phase chains)
+- **Master Chain Skill**: ~/.claude/skills/leo-skill-chains/SKILL.md
+
+**Total Skills**: 54 skills covering all 14 sub-agents + 1 master chain skill
+
+**Reference**: Skills were created from issue_patterns and retrospectives to encode proven solutions.
 
 ## 🚫 Stage 7 Hard Block: UI Coverage Prerequisite
 
@@ -623,16 +715,16 @@ sd.priority === 1 ? 'CRITICAL' : 'LOW'  // Always 'LOW'!
 - [ ] Create SD-TESTING-INFRASTRUCTURE-FIX-001 for unit test timeout resolution
 - [ ] Fix E2E mock API configuration (28/32 test failures)
 
-### 5. SD-RECURSION-AI-001: Recursive Stage Refinement & LLM Intelligence Integration ⭐
-**Category**: PROCESS_IMPROVEMENT | **Date**: 11/4/2025 | **Score**: 90
+### 5. SD-ARCH-EHG-003: Stage Data Contracts & LEO Supervision Policies ⭐
+**Category**: DATABASE_SCHEMA | **Date**: 11/30/2025 | **Score**: 92
 
 **Key Improvements**:
-- Test health visibility before starting
-- ESLint baseline establishment
+- SECURITY sub-agent score was 62% (conditional) - could have addressed earlier
+- Could have added audit triggers (recommended but not blocking)
 
 **Action Items**:
-- [ ] Add pre-SD test health check to PLAN phase
-- [ ] Create ESLint baseline snapshot tool
+- [ ] Monitor GIN index usage
+- [ ] Consider audit triggers
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*

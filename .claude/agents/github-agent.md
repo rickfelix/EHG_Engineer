@@ -53,6 +53,25 @@ node scripts/orchestrate-phase-subagents.js PLAN_VERIFY <SD-ID>
 
 ---
 
+## Skill Integration (Claude Code Skills)
+
+This agent works with companion **Claude Code Skills** for creative guidance. Skills provide guidance BEFORE implementation, this agent validates AFTER implementation.
+
+### Available GitHub/CI Skills (Personal: ~/.claude/skills/)
+
+| Skill | Purpose | Invoke When | Issues Addressed |
+|-------|---------|-------------|------------------|
+| `refactoring-safety` | Safe refactoring patterns | Renaming components, moving files, restructuring | PAT-002, Browse Button incident |
+| `cicd-patterns` | CI/CD and GitHub Actions | Creating workflows, fixing pipelines | PAT-008 |
+| `build-paths` | Vite/server path configuration | Build output missing, import errors | PAT-005, PAT-006 |
+
+### Agent-Skill Workflow
+1. **Creative Phase**: Model invokes skills for refactoring/CI patterns (how to restructure safely)
+2. **Implementation**: Model applies patterns based on skill guidance
+3. **Validation Phase**: This agent runs safety checklists (are features preserved?)
+
+---
+
 ## 🚨 CRITICAL: Refactoring Safety Protocol (NEW)
 
 **Evidence**: 2 critical incidents in 48 hours (2025-10-26)

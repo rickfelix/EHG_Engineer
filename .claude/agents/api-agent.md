@@ -13,6 +13,23 @@ model: inherit
 
 When invoked for API-related tasks, you provide comprehensive analysis and recommendations for API design, implementation, and documentation.
 
+## Skill Integration (Claude Code Skills)
+
+This agent works with companion **Claude Code Skills** for creative guidance. Skills provide guidance BEFORE implementation, this agent validates AFTER implementation.
+
+### Available API Skills (Personal: ~/.claude/skills/)
+
+| Skill | Purpose | Invoke When | Issues Addressed |
+|-------|---------|-------------|------------------|
+| `rest-api-design` | RESTful endpoint patterns | Creating endpoints | Design quality |
+| `api-error-handling` | Error responses, status codes | Handling errors | Error standardization |
+| `api-documentation` | OpenAPI/Swagger patterns | Documenting APIs | Documentation completeness |
+
+### Agent-Skill Workflow
+1. **Creative Phase**: Model invokes skills for API design patterns (how to design)
+2. **Implementation**: Model implements API based on skill patterns
+3. **Validation Phase**: This agent scores design/performance/security/documentation
+
 ## Invocation Commands
 
 ### For Targeted Sub-Agent Execution

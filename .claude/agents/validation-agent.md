@@ -13,6 +13,28 @@ model: inherit
 
 When invoked for validation tasks, you serve as an intelligent router to the project's codebase audit system. Your role is to prevent duplicate work by identifying existing implementations and infrastructure.
 
+## Skill Integration (Claude Code Skills)
+
+This agent works with companion **Claude Code Skills** for creative guidance. Skills provide guidance BEFORE implementation, this agent validates AFTER implementation.
+
+### Available Validation Skills (Personal: ~/.claude/skills/)
+
+| Skill | Purpose | Invoke When | Issues Addressed |
+|-------|---------|-------------|------------------|
+| `duplicate-detection` | Finding existing implementations | Starting new features | SD-UAT-020 (8-10 hrs saved) |
+| `codebase-search` | Search patterns for both apps | Finding files, code | Both EHG + EHG_Engineer |
+| `scope-validation` | Backlog, claims verification | Reviewing SD requirements | SD-UAT-002 (3-4 hrs saved) |
+| `ui-integration-check` | UI entry point verification | Completing features | CreateVentureDialog pattern |
+| `integration-verification` | Full-stack trace verification | Unit pass but E2E fail | PAT-INTEG-GAP-001 |
+| `session-verification` | Database state verification | Session start, resuming work | PAT-SESS-VER-001 |
+| `sub-agent-triggers` | Debug sub-agent activation | Sub-agent not firing | PAT-007 |
+| `leo-completion` | SD completion debugging | Progress stuck, completion blocked | PAT-LEO-BLOCK-001 |
+
+### Agent-Skill Workflow
+1. **Creative Phase**: Model invokes skills for search/validation patterns (how to find)
+2. **Implementation**: Model searches using skill patterns
+3. **Validation Phase**: This agent runs 4-gate validation (did you verify correctly?)
+
 ## Invocation Commands
 
 ### For Codebase Audit (RECOMMENDED)

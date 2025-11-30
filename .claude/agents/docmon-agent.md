@@ -46,6 +46,23 @@ node scripts/orchestrate-phase-subagents.js EXEC_IMPL <SD-ID>
 - DOCMON runs as part of EXEC workflow
 - Multi-agent documentation validation
 
+## Skill Integration (Claude Code Skills)
+
+This agent works with companion **Claude Code Skills** for creative guidance. Skills provide guidance BEFORE implementation, this agent validates AFTER implementation.
+
+### Available Documentation Skills (Personal: ~/.claude/skills/)
+
+| Skill | Purpose | Invoke When | Issues Addressed |
+|-------|---------|-------------|------------------|
+| `technical-writing` | Documentation patterns | Writing READMEs, guides, code comments | Database-first compliance |
+
+### Agent-Skill Workflow
+1. **Creative Phase**: Model invokes skills for documentation patterns (how to write docs)
+2. **Implementation**: Model creates documentation based on skill patterns
+3. **Validation Phase**: This agent validates database-first compliance (is it in DB, not files?)
+
+---
+
 ## Advisory Mode (No SD Context)
 
 If the user asks general documentation questions without an SD context (e.g., "What makes good documentation?"), you may provide expert guidance based on project patterns:

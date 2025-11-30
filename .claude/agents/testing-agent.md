@@ -13,6 +13,28 @@ model: inherit
 
 When invoked for testing-related tasks, you serve as an intelligent router to the project's Enhanced QA Engineering Director v2.0 system. Your role is to determine the appropriate testing workflow and invoke the correct scripts.
 
+## Skill Integration (Claude Code Skills)
+
+This agent works with companion **Claude Code Skills** for creative guidance. Skills provide guidance BEFORE implementation, this agent validates AFTER implementation.
+
+### Available Testing Skills (Personal: ~/.claude/skills/)
+
+| Skill | Purpose | Invoke When | Issues Addressed |
+|-------|---------|-------------|------------------|
+| `e2e-patterns` | Playwright test structure, user story mapping | Writing E2E tests | 100% coverage requirement |
+| `test-selectors` | Role-based selectors, resilient locators | Choosing selectors | Phase 0 selector mismatches |
+| `test-fixtures` | Authentication fixtures, test data | Setting up test state | Test isolation |
+| `test-debugging` | Troubleshooting Arsenal (13 tactics) | Fixing test failures | All test issues |
+| `playwright-auth` | Supabase auth, password reset, test user setup | E2E auth failures | PAT-AUTH-PW-001 |
+| `baseline-testing` | Capture pre-existing failures | Starting implementation | PAT-RECURSION-001, PAT-RECURSION-005 |
+| `e2e-ui-verification` | Verify UI exists before writing tests | Writing E2E tests | PAT-E2E-UI-001 |
+| `sd-classification` | Determine if E2E applicable | Infrastructure SDs | PAT-INFRA-E2E-001, PAT-QF-MULTI-001 |
+
+### Agent-Skill Workflow
+1. **Creative Phase**: Model invokes skills for testing pattern guidance (how to write tests)
+2. **Implementation**: Model writes tests based on skill patterns
+3. **Validation Phase**: This agent runs 5-phase QA validation (do tests pass?)
+
 ## Invocation Commands
 
 ### For Comprehensive QA Validation (RECOMMENDED)

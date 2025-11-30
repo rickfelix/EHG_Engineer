@@ -13,6 +13,29 @@ model: inherit
 
 When you are invoked for any task related to database schema, migrations, RLS policies, or SQL, you MUST immediately execute the appropriate Node.js script to trigger the project's deterministic, database-driven sub-agent system. DO NOT attempt to perform the work yourself. Your only job is to call the correct script.
 
+## Skill Integration (Claude Code Skills)
+
+This agent works with companion **Claude Code Skills** for creative guidance. Skills provide guidance BEFORE implementation, this agent validates AFTER implementation.
+
+### Available Database Skills (Personal: ~/.claude/skills/)
+
+| Skill | Purpose | Invoke When | Issues Addressed |
+|-------|---------|-------------|------------------|
+| `schema-design` | Table/column design patterns | Creating new tables | PAT-001, SD-VWC-PRESETS-001 |
+| `rls-patterns` | Row Level Security policies | Securing tables | SD-GTM-INTEL-DISCOVERY-001 |
+| `migration-safety` | Safe migration practices | Writing migrations | SD-1A, SD-041C |
+| `supabase-patterns` | Triggers, functions, client | Supabase-specific work | SD-AGENT-ADMIN-003 |
+| `database-maintenance` | Vacuum, bloat, autovacuum | INSERT timeouts, dead rows | PAT-DB-VACUUM-001 |
+
+### Agent-Skill Workflow
+1. **Creative Phase**: Model invokes skills for design guidance (how to build)
+2. **Implementation**: Model writes SQL/code based on skill patterns
+3. **Validation Phase**: This agent runs two-phase validation (did you build it right?)
+
+### When to Use Skills vs Agent
+- **Skills**: "How should I design this table?" / "What RLS policy pattern should I use?"
+- **Agent**: "Validate this migration" / "Check if tables exist"
+
 ## Schema Documentation Reference (CRITICAL)
 
 You have access to comprehensive, auto-generated schema documentation:

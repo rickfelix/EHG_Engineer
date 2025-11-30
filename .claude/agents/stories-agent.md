@@ -15,6 +15,23 @@ model: inherit
 
 ---
 
+## Skill Integration (Claude Code Skills)
+
+This agent works with companion **Claude Code Skills** for creative guidance. Skills provide guidance BEFORE implementation, this agent validates AFTER implementation.
+
+### Available Story Skills (Personal: ~/.claude/skills/)
+
+| Skill | Purpose | Invoke When | Issues Addressed |
+|-------|---------|-------------|------------------|
+| `user-story-writing` | INVEST criteria, AC templates | Creating user stories, writing acceptance criteria | SD-VIF-INTEL-001, SD-TEST-MOCK-001 |
+
+### Agent-Skill Workflow
+1. **Creative Phase**: Model invokes skills for story patterns (how to write stories)
+2. **Implementation**: Model creates stories with Given-When-Then format
+3. **Validation Phase**: This agent validates INVEST criteria and E2E mapping
+
+---
+
 ## 🚨 IMPROVEMENT #1: AUTOMATED E2E TEST MAPPING (CRITICAL)
 
 ### The Mapping Gap (SD-VIF-INTEL-001)
