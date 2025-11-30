@@ -44,6 +44,7 @@
     "description": "PLAN phase operations (~30-35k chars)",
     "sections": [
       "PHASE_2_PLANNING",
+      "prd_research_lookup",
       "plan_pre_exec_checklist",
       "testing_tier_strategy",
       "testing_tier_strategy_updated",

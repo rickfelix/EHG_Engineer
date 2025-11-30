@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-11-28 3:35:41 PM
+**Generated**: 2025-11-30 11:10:03 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -8,225 +8,27 @@
 
 ## Deferred Work Management
 
+### What Gets Deferred
+- Technical debt discovered during implementation
+- Edge cases not critical for MVP
+- Performance optimizations for later
+- Nice-to-have features
 
-## Deferred Work Management
-
-**Purpose**: Prevent losing track of work when reducing SD scope
-
-**Root Cause** (SD-VENTURE-BACKEND-002 Lesson):
-When SD-VENTURE-IDEATION-MVP-001's backend scope was deferred, no child SD was created immediately. Work was completed 6 months later but without tracking, requiring extensive backfill to restore LEO Protocol compliance.
-
-**The Problem**:
-- LEAD approves SD with 100 story points
-- During PLAN, team realizes 40 points should be deferred
-- PRD created with 60 points, work proceeds
-- Deferred 40 points forgotten → completed later without tracking → backfill nightmare
-
----
-
-### MANDATORY PROCESS: Create Child SD Immediately
-
-**WHEN**: During PLAN phase, if any work is removed/deferred from approved scope
-
-**REQUIRED ACTION**:
-1. **Create child SD BEFORE finalizing PRD**
-2. **Transfer user stories** to child SD
-3. **Document relationship** in both SDs
-4. **Set priority** based on criticality
-5. **Link PRDs** (parent PRD references child SD)
-
----
-
-### Example Workflow
-
-**Scenario**: SD-VENTURE-MVP-001 approved for 10 user stories (100 points)
-
-**PLAN discovers**: Stories 6-10 (40 points) are backend-only, can be deferred
-
-**CORRECT Process** ✅:
-
-```bash
-# 1. Create child SD immediately
-INSERT INTO strategic_directives_v2 (
-  id, title, description, priority, status,
-  parent_directive_id, relationship_type
-) VALUES (
-  'SD-VENTURE-BACKEND-001',
-  'Venture Backend Implementation',
-  'Deferred backend work from SD-VENTURE-MVP-001',
-  'high',           -- Set based on business need
-  'approved',       -- Already approved via parent
-  'SD-VENTURE-MVP-001',
-  'deferred_scope'
-);
-
-# 2. Transfer user stories to child SD
-UPDATE user_stories
-SET sd_id = 'SD-VENTURE-BACKEND-001'
-WHERE sd_id = 'SD-VENTURE-MVP-001'
-AND id IN ('US-006', 'US-007', 'US-008', 'US-009', 'US-010');
-
-# 3. Update parent PRD to document deferral
-UPDATE product_requirements_v2
-SET metadata = metadata || jsonb_build_object(
-  'scope_reductions', jsonb_build_array(
-    jsonb_build_object(
-      'deferred_to', 'SD-VENTURE-BACKEND-001',
-      'user_stories', ARRAY['US-006', 'US-007', 'US-008', 'US-009', 'US-010'],
-      'story_points', 40,
-      'reason', 'Backend implementation deferred to separate sprint',
-      'deferred_at', NOW()
-    )
-  )
-)
-WHERE id = 'PRD-VENTURE-MVP-001';
-
-# 4. Create child PRD immediately (or mark as TODO)
--- Option A: Create minimal PRD now
-INSERT INTO product_requirements_v2 (
-  id, sd_uuid, title, status, progress,
-  deferred_from
-) VALUES (
-  'PRD-VENTURE-BACKEND-001',
-  (SELECT uuid_id FROM strategic_directives_v2 WHERE id = 'SD-VENTURE-BACKEND-001'),
-  'Venture Backend Implementation',
-  'planning',  -- Will be worked on later
-  0,
-  'PRD-VENTURE-MVP-001'
-);
-
--- Option B: Add TODO to parent SD notes
--- "TODO: Create PRD-VENTURE-BACKEND-001 when ready to start backend work"
+### Creating Deferred Items
+```sql
+INSERT INTO deferred_work (sd_id, title, reason, priority)
+VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
 ```
 
----
+### Tracking
+- Deferred items linked to parent SD
+- Reviewed during retrospective
+- May become new SDs if significant
 
-### Backfill Process (If Child SD Was Not Created)
-
-**Scenario**: Work completed without tracking (like SD-VENTURE-BACKEND-002)
-
-**Required Steps**:
-
-1. **Create SD record**
-   - Use historical commit data for dates
-   - Set status: 'completed'
-
-2. **Create PRD**
-   - Set status: 'implemented' (not 'planning')
-   - Set progress: 100
-
-3. **Create user stories**
-   - Extract from git commits
-   - Set verification_status: 'passing' or 'validated'
-   - Put in BOTH user_stories AND sd_backlog_map tables
-
-4. **Create deliverables**
-   - Extract from git history
-   - Map to valid deliverable_types: api, test, documentation, migration
-   - Mark all as completion_status: 'completed'
-
-5. **Create handoffs**
-   - EXEC→PLAN: Implementation summary
-   - PLAN→LEAD: Verification summary
-   - Use manual creation (validation gates not suitable for backfill)
-
-6. **Create retrospective**
-   - Document lessons learned
-   - Note: "Tracking backfilled retroactively"
-
-7. **Mark SD complete**
-   - Fix any blocking issues first
-   - Ensure all progress gates pass
-
-**Backfill Scripts Created**: See /scripts/create-*-venture-backend-002-*.mjs
-
----
-
-### Checklist: Scope Reduction Decision Point
-
-Use this during PLAN phase when considering scope changes:
-
-- [ ] **Identify deferred work**: Which user stories/deliverables are being removed?
-- [ ] **Assess criticality**: Is this work needed eventually? (If yes → child SD required)
-- [ ] **Create child SD**: Don't defer this step! Create the SD now.
-- [ ] **Transfer user stories**: Move them to child SD immediately
-- [ ] **Set priority**: high/medium/low based on business need
-- [ ] **Document relationship**: Update parent PRD metadata
-- [ ] **Create child PRD** (minimal) OR add TODO to parent notes
-- [ ] **Notify LEAD**: "Scope reduced, child SD created: SD-XXX"
-
----
-
-### Red Flags (Lessons from SD-VENTURE-BACKEND-002)
-
-❌ **"We'll create the SD later when we work on it"**
-   - Result: Work gets forgotten or done without tracking
-
-❌ **"Let's just note it in the parent PRD description"**
-   - Result: No tracking, no progress visibility, no reminders
-
-❌ **"It's only 3 user stories, not worth a separate SD"**
-   - Result: Those 3 stories = 25 deliverables, 4 commits, 2 handoffs to backfill
-
-✅ **"Scope changed, creating child SD now"**
-   - Result: Work tracked from day 1, no backfill needed
-
----
-
-### Documentation Updates
-
-This section added to LEO Protocol based on:
-- **Incident**: SD-VENTURE-BACKEND-002 backfill (Oct 19, 2025)
-- **Root Cause**: Child SD not created when backend scope deferred
-- **Solution**: Mandatory child SD creation at scope reduction point
-- **Prevention**: PLAN checklist enforcement, LEAD verification
-
-**Related Sections**:
-- Phase 2 (PLAN Pre-EXEC Checklist): Added scope reduction check
-- Phase 4 (LEAD Verification): Verify child SDs created for deferrals
-- Retrospective Templates: Include "Deferred work management" assessment
-
----
-
-### Integration with Existing Workflow
-
-**PLAN Agent** must now:
-1. Check for scope reductions during PRD creation
-2. Create child SDs for any deferred work
-3. Document relationship in metadata
-4. Report to LEAD in PLAN→LEAD handoff
-
-**LEAD Agent** must verify:
-- Any scope reduction has corresponding child SD
-- Child SD has appropriate priority
-- Parent-child relationship documented
-- User stories transferred correctly
-
-**Progress Tracking**:
-- Parent SD progress: Based on reduced scope (60 points)
-- Child SD progress: Tracked independently (40 points)
-- Portfolio view: Shows both SDs with relationship
-
----
-
-### FAQ
-
-**Q: What if we're not sure the deferred work will ever be done?**
-A: Create the child SD with priority: 'low'. Better to have it and not need it than lose track of potential work.
-
-**Q: Can we combine multiple deferrals into one child SD?**
-A: Yes, if they're related. Example: "SD-VENTURE-FUTURE-ENHANCEMENTS" for all nice-to-have features.
-
-**Q: What if the deferred work changes significantly later?**
-A: Update the child SD's PRD when you start working on it. The SD serves as a placeholder until then.
-
-**Q: Do we need a full PRD for the child SD immediately?**
-A: Minimal PRD is acceptable. At minimum: title, description, deferred_from reference. Full PRD created when work begins.
-
-**Q: What section_type for database?**
-A: Use 'PHASE_2_PLANNING' (belongs in PLAN phase guidance)
-
-
+### Rules
+- Document WHY deferred, not just WHAT
+- Set realistic priority (critical items shouldn't be deferred)
+- Max 5 deferred items per SD
 
 ## Stubbed/Mocked Code Detection
 
@@ -380,156 +182,127 @@ Before creating PLAN→EXEC handoff, PLAN agent MUST verify:
 
 ## 🔬 BMAD Method Enhancements
 
-**BMAD** (Build-Measure-Adapt-Document) Method principles integrated into LEO Protocol to reduce context consumption, improve implementation quality, and enable early error detection.
+## BMAD Enhancements
 
-### Core Principles
+### 6 Key Improvements
+1. **Unified Handoff System** - All handoffs via `unified-handoff-system.js`
+2. **Database-First PRDs** - PRDs stored in database, not markdown
+3. **Validation Gates** - 4-gate validation before EXEC
+4. **Progress Tracking** - Automatic progress % calculation
+5. **Context Management** - Proactive monitoring, compression strategies
+6. **Sub-Agent Compression** - 3-tier output reduction
 
-1. **Dev Agents Must Be Lean**: Minimize context consumption throughout workflow
-2. **Natural Language First**: Reduce code-heavy implementation guidance
-3. **Context-Engineered Stories**: Front-load implementation details to reduce EXEC confusion
-4. **Risk Assessment**: Multi-domain analysis during LEAD_PRE_APPROVAL
-5. **Mid-Development Quality Gates**: Checkpoint pattern for large SDs
-6. **Early Validation**: Catch issues at gates, not during final testing
-
----
-
-### Six BMAD Enhancements
-
-**1. Risk Assessment Sub-Agent (RISK)**
-- **Phase**: LEAD_PRE_APPROVAL (mandatory for all SDs)
-- **Purpose**: Multi-domain risk scoring before approval
-- **Domains**: Technical Complexity (1-10), Security Risk (1-10), Performance Risk (1-10), Integration Risk (1-10), Data Migration Risk (1-10), UI/UX Risk (1-10)
-- **Storage**: risk_assessments table
-- **Script**: node lib/sub-agent-executor.js RISK SD-ID
-- **Benefit**: Early risk identification prevents 4-6 hours rework per SD
-
-**2. User Story Context Engineering (STORIES)**
-- **Phase**: PLAN_PRD (after PRD creation, before EXEC)
-- **Purpose**: Hyper-detailed implementation context for each user story
-- **Fields Added**: implementation_context, architecture_references, example_code_patterns, testing_scenarios
-- **Storage**: user_stories table columns
-- **Script**: node lib/sub-agent-executor.js STORIES SD-ID
-- **Benefit**: Reduces EXEC confusion by 30-40% through front-loaded guidance
-- **Validation**: PLAN→EXEC handoff checks for ≥80% coverage
-
-**3. Retrospective Review for LEAD**
-- **Phase**: LEAD_PRE_APPROVAL (before approving new SDs)
-- **Purpose**: Learn from similar completed SDs
-- **Analysis**: Success patterns, failure patterns, effort adjustments, risk mitigations
-- **Storage**: Queries retrospectives table
-- **Script**: node scripts/retrospective-review-for-lead.js SD-ID
-- **Benefit**: Informed decision-making based on historical data
-
-**4. Checkpoint Pattern Generator**
-- **Phase**: PLAN_PRD (for SDs with >8 user stories)
-- **Purpose**: Break large SDs into 3-4 manageable checkpoints
-- **Benefits**: 30-40% context reduction, 50% faster debugging, early error detection
-- **Storage**: strategic_directives_v2.checkpoint_plan (JSONB)
-- **Script**: node scripts/generate-checkpoint-plan.js SD-ID
-- **Validation**: PLAN→EXEC handoff requires checkpoint plan for large SDs
-
-**5. Test Architecture Phase Enhancement**
-- **Phase**: PLAN_PRD and PLAN_VERIFY (QA Director integration)
-- **Purpose**: Structured test planning with 4 strategies
-- **Strategies**: Unit (business logic), E2E (user flows), Integration (APIs/DB), Performance (benchmarks)
-- **Storage**: test_plans table
-- **Script**: QA Director auto-generates during PLAN phase
-- **Benefit**: 100% user story → E2E test mapping enforced
-- **Validation**: EXEC→PLAN handoff checks test plan existence and coverage
-
-**6. Lean EXEC_CONTEXT.md**
-- **Phase**: EXEC_IMPLEMENTATION (context optimization)
-- **Purpose**: Reduced CLAUDE.md for EXEC agents (~500 lines vs 5000+)
-- **Content**: EXEC-specific guidance only (no LEAD/PLAN operations)
-- **Location**: docs/EXEC_CONTEXT.md
-- **Benefit**: 90% context reduction during EXEC phase
-
----
-
-### Validation Gates Integration
-
-**PLAN→EXEC Handoff**:
-- ✅ User story context engineering (≥80% coverage)
-- ✅ Checkpoint plan (if SD has >8 stories)
-- ✅ Risk assessment exists
-
-**EXEC→PLAN Handoff**:
-- ✅ Test plan generated (unit + E2E strategies)
-- ✅ User story → E2E mapping (100% requirement)
-- ✅ Test plan stored in database
-
-**Validation Script**: scripts/modules/bmad-validation.js
-**Integration**: Automatic via unified-handoff-system.js
-
----
-
-### Quick Reference: BMAD Scripts
-
+### Using Handoff System
 ```bash
-# 1. Risk Assessment (LEAD_PRE_APPROVAL)
-node lib/sub-agent-executor.js RISK SD-ID
-
-# 2. User Story Context Engineering (PLAN_PRD)
-node lib/sub-agent-executor.js STORIES SD-ID
-
-# 3. Retrospective Review (LEAD_PRE_APPROVAL)
-node scripts/retrospective-review-for-lead.js SD-ID
-
-# 4. Checkpoint Plan (PLAN_PRD, if >8 stories)
-node scripts/generate-checkpoint-plan.js SD-ID
-
-# 5. Test Architecture (PLAN_VERIFY, automatic)
-node scripts/qa-engineering-director-enhanced.js SD-ID
-
-# 6. Lean EXEC Context (reference during EXEC)
-cat docs/EXEC_CONTEXT.md
+node scripts/unified-handoff-system.js create "{message}"
 ```
 
----
+### PRD Creation
+```bash
+node scripts/add-prd-to-database.js {SD-ID}
+```
 
-### Expected Impact
+### Never Bypass
+- ⚠️ Always use process scripts
+- ⚠️ Never create PRDs as markdown files
+- ⚠️ Never skip validation gates
 
-**Context Consumption**:
-- User story context engineering: 30-40% reduction in EXEC confusion
-- Checkpoint pattern: 30-40% reduction in total context per large SD
-- Lean EXEC_CONTEXT.md: 90% reduction during EXEC phase
+## Research Lookup Before PRD Creation
 
-**Time Savings**:
-- Risk assessment: 4-6 hours saved per SD (early issue detection)
-- Test architecture: 2-3 hours saved per SD (structured planning)
-- Retrospective review: Informed decisions prevent 3-4 hours unnecessary work
+## Research Lookup Before PRD Creation (MANDATORY)
 
-**Quality Improvements**:
-- Early validation gates catch issues before late-stage rework
-- Structured test planning ensures 100% user story coverage
-- Context engineering reduces implementation ambiguity
+**CRITICAL**: Before creating any PRD, check if research has been completed for the SD.
 
----
+### Research Directory Structure
 
-### Database Schema Additions
+```
+docs/research/outputs/
+├── index.json                    # Master index of all research
+├── SD-RESEARCH-106/
+│   ├── index.json                # SD-specific index with prd_generation_notes
+│   ├── leo-protocol-v5x-summary.md
+│   └── ...
+├── SD-RESEARCH-107/
+│   └── ...
+└── SD-RESEARCH-108/
+    └── ...
+```
 
-**New Tables**:
-- risk_assessments: Risk scoring across 6 domains
-- test_plans: Structured test strategies (4 types)
+### Lookup Process (Step 0 of PRD Creation)
 
-**Enhanced Tables**:
-- user_stories: Added implementation_context, architecture_references, example_code_patterns, testing_scenarios
-- strategic_directives_v2: Added checkpoint_plan (JSONB)
+1. **Check master index**:
+   ```bash
+   cat docs/research/outputs/index.json | jq '.strategic_directives[] | select(.sd_id == "SD-YOUR-ID")'
+   ```
 
-**Sub-Agents**:
-- leo_sub_agents: Added RISK (code: 'RISK', priority: 8)
-- leo_sub_agents: Added STORIES (code: 'STORIES', priority: 50)
+2. **If research exists**, read SD-specific index:
+   ```bash
+   cat docs/research/outputs/{SD-ID}/index.json
+   ```
 
----
+3. **Extract prd_generation_notes** (MUST be incorporated into PRD):
+   ```bash
+   cat docs/research/outputs/{SD-ID}/index.json | jq '.prd_generation_notes'
+   ```
 
-### Further Reading
+4. **Read summary files** for detailed findings:
+   ```bash
+   cat docs/research/outputs/{SD-ID}/*.md
+   ```
 
-- **BMAD Principles**: See retrospectives from SD-UAT-002, SD-UAT-020, SD-EXPORT-001
-- **Implementation Guide**: docs/bmad-implementation-guide.md
-- **Validation Gates**: docs/reference/handoff-validation.md
+### index.json Structure
 
-*Last Updated: 2025-10-12*
-*BMAD Method: Build-Measure-Adapt-Document*
+```json
+{
+  "sd_id": "SD-RESEARCH-106",
+  "sd_title": "LEO Protocol Evolution to v5.x",
+  "research_status": "complete",
+  "documents": [
+    {
+      "title": "Document Title",
+      "filename": "Original.pdf",
+      "pages": 18,
+      "relevance": "primary|supporting|reference",
+      "summary_file": "summary-file.md",
+      "key_sections": ["Section 1", "Section 2"],
+      "key_decisions": ["Decision 1", "Decision 2"]
+    }
+  ],
+  "prd_generation_notes": [
+    "Note 1 - MUST be in PRD",
+    "Note 2 - MUST be in PRD"
+  ],
+  "cross_references": {
+    "SD-OTHER-001": "How this SD relates"
+  }
+}
+```
+
+### Integration with PRD Creation
+
+> **WARNING**: If research exists but is not referenced in PRD, the PRD is incomplete.
+
+When research is found:
+1. Add `prd_generation_notes` to PRD's `technical_approach` field
+2. Reference key decisions in `implementation_plan`
+3. Include cross_references in `dependencies` field
+4. Link to summary files in PRD metadata
+
+### Example PRD Creation Flow
+
+```bash
+# Step 0: Research lookup
+cat docs/research/outputs/index.json | jq '.strategic_directives[] | select(.sd_id == "SD-RESEARCH-106")'
+# → research_status: "complete"
+
+cat docs/research/outputs/SD-RESEARCH-106/index.json | jq '.prd_generation_notes'
+# → ["Reference Temporal.io TypeScript SDK documentation", ...]
+
+# Step 1: Schema review (existing process)
+# Step 2: PRD creation with research incorporated
+node scripts/add-prd-to-database.js SD-RESEARCH-106
+# → PRD includes research findings in technical_approach
+```
 
 
 ## CI/CD Pipeline Verification
@@ -549,440 +322,55 @@ cat docs/EXEC_CONTEXT.md
 
 ## DESIGN→DATABASE Validation Gates
 
-The LEO Protocol enforces the DESIGN→DATABASE workflow pattern through 4 mandatory validation gates that ensure:
-1. Sub-agent execution completeness (PLAN→EXEC)
-2. Implementation fidelity to recommendations (EXEC→PLAN)
-3. End-to-end traceability (PLAN→LEAD)
-4. Workflow ROI and pattern effectiveness (LEAD Final)
+**4 mandatory gates ensuring sub-agent execution and implementation fidelity.**
+
+| Gate | When | Purpose | Pass Score |
+|------|------|---------|------------|
+| 1. PLAN→EXEC | After PRD, before EXEC | Verify planning complete | ≥80/100 |
+| 2. EXEC→PLAN | After EXEC, before verification | Verify implementation fidelity | ≥80/100 |
+| 2.5 Human | After Gate 2 | Manual verification | Checkbox |
+| 3. Final | LEAD closure | Traceability audit | ≥80/100 |
+
+### Gate 1: PLAN→EXEC (Pre-Implementation)
+
+**9 Checks** (11 pts each):
+1. DESIGN sub-agent executed (`sub_agent_execution_results`)
+2. DATABASE sub-agent executed
+3. DATABASE informed by DESIGN (`metadata.database_analysis.design_informed`)
+4. STORIES sub-agent executed
+5. Schema docs consulted (`docs/reference/schema/`)
+6. PRD metadata complete (design + database analysis)
+7. Sub-agent execution order (DESIGN < DATABASE < STORIES)
+8. PRD created via `add-prd-to-database.js`
+9. User stories have implementation_context (≥80%)
+
+**Conditional**: Only for SDs with `design` AND `database` categories.
+
+### Gate 2: EXEC→PLAN (Post-Implementation)
+
+**4 Sections** (25 pts each):
+- **A. Design Fidelity**: UI components committed, workflows match
+- **B. Database Fidelity**: Schema changes match analysis
+- **C. Traceability**: Commits reference SD-XXX
+- **D. Quality**: Tests exist, no TODO/FIXME in critical paths
+
+### Gate 2.5: Human Inspectability
+
+Manual verification after Gate 2:
+- [ ] Design alignment verified visually
+- [ ] Database changes reviewed
+- [ ] No magic numbers/hardcoded values
+- [ ] Error handling present
+
+### Gate 3: LEAD Final Approval
+
+Retroactive audit at SD closure:
+- Recommendation adoption rate
+- Deviation documentation
+- Pattern effectiveness tracking
+
+**Reference**: `scripts/modules/design-database-gates-validation.js`
 
-**Passing Score**: ≥80 points (out of 100) required for each gate
-
----
-
-### Gate 1: PLAN→EXEC Handoff (Pre-Implementation)
-
-**When**: After PRD creation, before EXEC starts implementation
-**Purpose**: Verify planning is complete and recommendations exist
-**Script**: `scripts/modules/design-database-gates-validation.js`
-**Integration Point**: `unified-handoff-system.js` line ~271 (after BMAD validation)
-
-**9 Validation Checks** (11 points each + 1 buffer = 100 points):
-
-1. **DESIGN Sub-Agent Executed** (11 points)
-   - Queries: `sub_agent_execution_results` table
-   - Checks: `sub_agent_name = 'DESIGN'` AND `status = 'SUCCESS'`
-
-2. **DATABASE Sub-Agent Executed** (11 points)
-   - Queries: `sub_agent_execution_results` table
-   - Checks: `sub_agent_name = 'DATABASE'` AND `status = 'SUCCESS'`
-
-3. **DATABASE Informed by DESIGN** (11 points)
-   - Queries: `product_requirements_v2.metadata.database_analysis.design_informed`
-   - Checks: `design_informed = true`
-
-4. **STORIES Sub-Agent Executed** (11 points)
-   - Queries: `sub_agent_execution_results` table
-   - Checks: `sub_agent_name = 'STORIES'` AND `status = 'SUCCESS'`
-
-5. **Schema Documentation Consulted** (11 points)
-   - Analyzes: `database_analysis.analysis` text
-   - Checks: References to `docs/reference/schema/`
-
-6. **PRD Metadata Complete** (11 points)
-   - Checks: Both `design_analysis` AND `database_analysis` exist in PRD metadata
-
-7. **Sub-Agent Execution Order** (11 points)
-   - Validates: DESIGN timestamp < DATABASE timestamp < STORIES timestamp
-
-8. **PRD Created Via Script** (11 points)
-   - Detects: `add-prd-to-database.js` metadata signature
-
-9. **User Stories Context Coverage** (12 points)
-   - Calculates: % of stories with `implementation_context`
-   - Threshold: ≥80% coverage required
-
-**Conditional Execution**:
-- Only validates SDs with BOTH `design` AND `database` categories
-- OR scope contains both "UI" AND "database" keywords
-- Use: `shouldValidateDesignDatabase(sd)` helper function
-
----
-
-### Gate 2: EXEC→PLAN Handoff (Post-Implementation)
-
-**When**: After EXEC completes implementation, before PLAN verification
-**Purpose**: Verify EXEC actually implemented DESIGN/DATABASE recommendations
-**Script**: `scripts/modules/implementation-fidelity-validation.js`
-**Integration Point**: `unified-handoff-system.js` line ~486 (after BMAD validation)
-
-**4 Validation Sections** (25 points each = 100 points):
-
-#### A. Design Implementation Fidelity (25 points)
-
-- **A1: UI Components** (10 points)
-  - Git analysis: `git log --all --grep="SD-XXX" --name-only`
-  - Checks: Component files (.tsx, .jsx) committed
-
-- **A2: Workflows** (10 points)
-  - Queries: EXEC→PLAN handoff deliverables
-  - Checks: Workflow implementation mentioned
-
-- **A3: User Actions** (5 points)
-  - Git analysis: `git log --all --grep="SD-XXX" --patch`
-  - Checks: CRUD operations in code changes
-
-#### B. Database Implementation Fidelity (25 points)
-
-- **B1: Migrations** (15 points)
-  - Scans: `database/migrations`, `supabase/migrations`
-  - Checks: Migration files exist for SD
-
-- **B2: RLS Policies** (5 points)
-  - Git analysis: Checks for CREATE POLICY statements
-
-- **B3: Migration Complexity** (5 points)
-  - Reads: Migration file line count
-  - Compares: To DATABASE analysis estimate (optional)
-
-#### C. Data Flow Alignment (25 points)
-
-- **C1: Database Queries** (10 points)
-  - Git analysis: Checks for .select(), .insert(), .update(), .from()
-
-- **C2: Form/UI Integration** (10 points)
-  - Git analysis: Checks for useState, useForm, onSubmit, <form>, Input, Button
-
-- **C3: Data Validation** (5 points)
-  - Git analysis: Checks for zod, validate, schema, .required()
-
-#### D. Enhanced Testing (25 points)
-
-- **D1: E2E Tests** (15 points)
-  - Scans: `tests/e2e`, `tests/integration`, `playwright/tests`
-  - Checks: Test files exist for SD
-
-- **D2: Migration Tests** (5 points)
-  - Git analysis: Checks for migration + test file mentions
-
-- **D3: Coverage Documentation** (5 points)
-  - Queries: EXEC→PLAN handoff metadata
-  - Checks: Test coverage documented
-
-**Why This Gate Matters**:
-This is the MOST CRITICAL gate - ensures recommendations weren't just generated but actually implemented. Without this, EXEC could ignore all recommendations.
-
----
-
-### Gate 3: PLAN→LEAD Handoff (Pre-Final Approval)
-
-**When**: After PLAN verification, before LEAD final approval
-**Purpose**: Verify end-to-end alignment from design through implementation
-**Script**: `scripts/modules/traceability-validation.js`
-**Integration Point**: `unified-handoff-system.js` line ~726 (PLAN→LEAD validation)
-
-**5 Validation Sections** (20 points each = 100 points):
-
-#### A. Recommendation Adherence (20 points)
-
-- **A1: Design Adherence** (10 points)
-  - Calculates: (Gate 2 design_fidelity / 25) × 100%
-  - Thresholds: ≥80% = 10pts, ≥60% = 7pts, <60% = 4pts
-
-- **A2: Database Adherence** (10 points)
-  - Calculates: (Gate 2 database_fidelity / 25) × 100%
-  - Thresholds: ≥80% = 10pts, ≥60% = 7pts, <60% = 4pts
-
-#### B. Implementation Quality (20 points)
-
-- **B1: Gate 2 Score** (10 points)
-  - Checks: Overall Gate 2 validation score
-  - Thresholds: ≥90 = 10pts, ≥80 = 8pts, ≥70 = 6pts
-
-- **B2: Test Coverage** (10 points)
-  - Queries: EXEC→PLAN handoff metadata
-  - Checks: Test coverage documented
-
-#### C. Traceability Mapping (20 points)
-
-- **C1: PRD → Implementation** (7 points)
-  - Git analysis: Commits referencing SD ID
-
-- **C2: Design → Code** (7 points)
-  - Queries: Deliverables mention design/UI/components
-
-- **C3: Database → Schema** (6 points)
-  - Queries: Deliverables mention database/migration/schema/table
-
-#### D. Sub-Agent Effectiveness (20 points)
-
-- **D1: Execution Metrics** (10 points)
-  - Queries: `sub_agent_execution_results`
-  - Checks: All 3 sub-agents (DESIGN, DATABASE, STORIES) executed
-
-- **D2: Recommendation Quality** (10 points)
-  - Checks: Sub-agent results have substantial output (>500 chars)
-
-#### E. Lessons Captured (20 points)
-
-- **E1: Retrospective Prep** (10 points)
-  - Queries: PLAN→LEAD handoff metadata
-  - Checks: Mentions "lesson", "retrospective", "improvement"
-
-- **E2: Workflow Effectiveness** (10 points)
-  - Queries: EXEC→PLAN handoff metadata
-  - Checks: Mentions "workflow", "process", "pattern"
-
----
-
-### Gate 4: LEAD Final Approval (Pre-Completion)
-
-**When**: Before marking SD as complete
-**Purpose**: Executive oversight of design-to-implementation alignment
-**Script**: `scripts/modules/workflow-roi-validation.js`
-**Integration Point**: `unified-handoff-system.js` (LEAD final approval)
-
-**4 Validation Sections** (25 points each = 100 points):
-
-#### A. Process Adherence (25 points)
-
-- **A1: PRD Created Via Script** (5 points)
-  - Checks: `metadata.created_via_script` OR sub-agent analyses exist
-
-- **A2: Design Analysis Completed** (5 points)
-  - Checks: `metadata.design_analysis` exists
-
-- **A3: Database Analysis Completed** (5 points)
-  - Checks: `metadata.database_analysis` exists
-
-- **A4: Design-Informed Database** (5 points)
-  - Checks: `metadata.database_analysis.design_informed = true`
-
-- **A5: Proper Workflow Order** (5 points)
-  - Checks: Gate 1 validated execution order (DESIGN→DATABASE→STORIES)
-
-#### B. Value Delivered (25 points)
-
-- **B1: Time Efficiency** (10 points)
-  - Checks: Sub-agent execution time from Gate 3
-  - Thresholds: <15min = 10pts, <30min = 7pts, ≥30min = 5pts
-
-- **B2: Recommendation Quality** (10 points)
-  - Checks: Gate 3 validated substantial recommendations
-
-- **B3: Implementation Fidelity** (5 points)
-  - Checks: Gate 2 score ≥80 = 5pts, ≥70 = 3pts, <70 = 2pts
-
-#### C. Pattern Effectiveness (25 points)
-
-- **C1: Gate 1 Performance** (6 points)
-  - Thresholds: ≥90 = 6pts, ≥80 = 5pts, <80 = 3pts
-
-- **C2: Gate 2 Performance** (6 points)
-  - Thresholds: ≥90 = 6pts, ≥80 = 5pts, <80 = 3pts
-
-- **C3: Gate 3 Performance** (6 points)
-  - Thresholds: ≥90 = 6pts, ≥80 = 5pts, <80 = 3pts
-
-- **C4: Overall Pattern ROI** (7 points)
-  - Calculates: Average of Gate 1-3 scores
-  - Thresholds: ≥90 = 7pts ("EXCELLENT - Continue pattern"), ≥80 = 6pts ("GOOD - Continue"), ≥70 = 4pts ("ACCEPTABLE - Monitor")
-
-#### D. Executive Validation (25 points)
-
-- **D1: All Gates Passed** (10 points)
-  - Checks: Gate 1, 2, 3 all passed (score ≥80)
-  - Scoring: 3/3 = 10pts, 2/3 = 6pts, 1/3 = 3pts, 0/3 = 0pts
-
-- **D2: Quality Thresholds** (10 points)
-  - Queries: `sd_retrospectives` table
-  - Checks: Retrospective exists
-
-- **D3: Pattern Recommendation** (5 points)
-  - Based on avg gate score:
-    - ≥80: "CONTINUE - Pattern is effective"
-    - ≥70: "MONITOR - Pattern needs improvement"
-    - <70: "REVIEW - Pattern may need adjustment"
-
----
-
-### Integration with Unified Handoff System
-
-**File**: `scripts/unified-handoff-system.js`
-
-#### Integration Points:
-
-1. **Gate 1 (PLAN→EXEC)** - After line 271
-   ```javascript
-   // After BMAD validation
-   if (shouldValidateDesignDatabase(sd)) {
-     const gate1 = await validateGate1PlanToExec(sd.id, supabase);
-     handoff.metadata.gate1_validation = gate1;
-
-     if (!gate1.passed) {
-       throw new Error(`Gate 1 validation failed: ${gate1.score}/100 points`);
-     }
-   }
-   ```
-
-2. **Gate 2 (EXEC→PLAN)** - After line 486
-   ```javascript
-   // After BMAD validation
-   if (shouldValidateDesignDatabase(sd)) {
-     const gate2 = await validateGate2ExecToPlan(sd.id, supabase);
-     handoff.metadata.gate2_validation = gate2;
-
-     if (!gate2.passed) {
-       throw new Error(`Gate 2 validation failed: ${gate2.score}/100 points`);
-     }
-   }
-   ```
-
-3. **Gate 3 (PLAN→LEAD)** - After line 726
-   ```javascript
-   // During PLAN→LEAD handoff
-   if (shouldValidateDesignDatabase(sd)) {
-     const gate3 = await validateGate3PlanToLead(sd.id, supabase, gate2Results);
-     handoff.metadata.gate3_validation = gate3;
-
-     if (!gate3.passed) {
-       throw new Error(`Gate 3 validation failed: ${gate3.score}/100 points`);
-     }
-   }
-   ```
-
-4. **Gate 4 (LEAD Final)** - Before final approval
-   ```javascript
-   // Before marking SD complete
-   if (shouldValidateDesignDatabase(sd)) {
-     const allGates = { gate1, gate2, gate3 };
-     const gate4 = await validateGate4LeadFinal(sd.id, supabase, allGates);
-
-     if (!gate4.passed) {
-       throw new Error(`Gate 4 validation failed: ${gate4.score}/100 points`);
-     }
-   }
-   ```
-
----
-
-### Validation Flow Diagram
-
-```
-PRD Creation (add-prd-to-database.js)
-    ↓
-    ├─ DESIGN sub-agent → analysis
-    ├─ DATABASE sub-agent → analysis (informed by DESIGN)
-    └─ STORIES sub-agent → user stories
-    ↓
-🚪 GATE 1: PLAN→EXEC Handoff
-    ├─ ✅ All sub-agents executed?
-    ├─ ✅ Execution order correct?
-    ├─ ✅ Schema docs consulted?
-    └─ ✅ PRD metadata complete?
-    ↓
-EXEC Implementation
-    ├─ Implement UI components (per DESIGN)
-    ├─ Create migrations (per DATABASE)
-    ├─ Write E2E tests
-    └─ Commit with SD ID
-    ↓
-🚪 GATE 2: EXEC→PLAN Handoff
-    ├─ ✅ Components match DESIGN?
-    ├─ ✅ Migrations match DATABASE?
-    ├─ ✅ Data flow aligned?
-    └─ ✅ Tests comprehensive?
-    ↓
-PLAN Verification
-    ↓
-🚪 GATE 3: PLAN→LEAD Handoff
-    ├─ ✅ Recommendations followed?
-    ├─ ✅ Implementation quality high?
-    ├─ ✅ End-to-end traceability?
-    └─ ✅ Lessons captured?
-    ↓
-🚪 GATE 4: LEAD Final Approval
-    ├─ ✅ All gates passed?
-    ├─ ✅ Value delivered?
-    ├─ ✅ Pattern effective?
-    └─ ✅ Quality thresholds met?
-    ↓
-SD Complete ✅
-```
-
----
-
-### Standalone Validation Scripts
-
-For manual validation outside handoff flow:
-
-```bash
-# Validate Gate 1 (PLAN→EXEC)
-node scripts/validate-gate1.js --sd=SD-XXX-001
-
-# Validate Gate 2 (EXEC→PLAN)
-node scripts/validate-gate2.js --sd=SD-XXX-001
-
-# Validate Gate 3 (PLAN→LEAD)
-node scripts/validate-gate3.js --sd=SD-XXX-001
-
-# Validate Gate 4 (LEAD Final)
-node scripts/validate-gate4.js --sd=SD-XXX-001
-
-# Validate all gates
-node scripts/validate-all-gates.js --sd=SD-XXX-001
-```
-
----
-
-### When Gates Don't Apply
-
-**Conditional Execution Helper**:
-```javascript
-export function shouldValidateDesignDatabase(sd) {
-  const hasDesignCategory = sd.category?.includes('design');
-  const hasDatabaseCategory = sd.category?.includes('database');
-
-  const hasUIKeywords = (sd.scope || '').toLowerCase().includes('ui');
-  const hasDatabaseKeywords = (sd.scope || '').toLowerCase().includes('database');
-
-  return (hasDesignCategory && hasDatabaseCategory) ||
-         (hasUIKeywords && hasDatabaseKeywords);
-}
-```
-
-**Behavior**:
-- If validation doesn't apply: Returns `{ passed: true, score: 100, warnings: ['Not applicable'] }`
-- If validation applies but fails: Returns `{ passed: false, score: <score>, issues: [...] }`
-- If validation applies and passes: Returns `{ passed: true, score: ≥80, details: {...} }`
-
----
-
-### Gate Results Storage
-
-All gate results are stored in handoff metadata:
-
-```javascript
-{
-  handoff_type: "PLAN-TO-EXEC",
-  metadata: {
-    gate1_validation: {
-      passed: true,
-      score: 92,
-      max_score: 100,
-      issues: [],
-      warnings: [],
-      details: { ... },
-      gate_scores: { ... }
-    }
-  }
-}
-```
-
-This enables:
-1. **Traceability**: Full audit trail of validation results
-2. **Retrospectives**: Quality analysis for continuous improvement
-3. **Cascading**: Gate 3 uses Gate 2 results, Gate 4 uses all previous results
-4. **Debugging**: Detailed failure information for each gate
 
 ## 🚪 Gate 2.5: Human Inspectability Validation
 
@@ -1042,160 +430,39 @@ When creating EXEC → PLAN handoff, include:
 
 ## Pre-Implementation Plan Presentation Template
 
-**SD-PLAN-PRESENT-001** | **Template Type:** plan_presentation | **Phase:** PLAN → EXEC
+## Plan Presentation Template
 
-### Purpose
+### Required Sections
+1. **Summary**: 2-3 sentences on what/why
+2. **Technical Approach**: How it will be implemented
+3. **Database Changes**: Schema modifications (if any)
+4. **Testing Strategy**: Unit + E2E approach
+5. **Risk Assessment**: Potential issues + mitigations
 
-The `plan_presentation` template standardizes PLAN→EXEC handoffs by providing structured implementation guidance to the EXEC agent. This template reduces EXEC confusion from 15-20 minutes to <5 minutes by clearly communicating:
+### Format
+```markdown
+# PRD: {SD-ID} - {Title}
 
-- **What** will be implemented (goal_summary)
-- **Where** changes will occur (file_scope)
-- **How** to implement step-by-step (execution_plan)
-- **Dependencies** and impacts (dependency_impacts)
-- **Testing approach** (testing_strategy)
+## Summary
+[What and why in 2-3 sentences]
 
-### Template Structure
+## Technical Approach
+- Implementation method
+- Key decisions
 
-All plan_presentation objects must be included in the `metadata.plan_presentation` field of PLAN→EXEC handoffs.
+## Database Changes
+- Tables affected
+- Migration required? (Y/N)
 
-#### Required Fields
+## Testing Strategy
+- Unit: [scope]
+- E2E: [key flows]
 
-1. **goal_summary** (string, ≤300 chars, required)
-   - Brief 2-3 sentence summary of implementation goals
-   - Focus on "what" and "why", not "how"
-   - Example: `"Add plan_presentation template to leo_handoff_templates table with JSONB validation structure. Enhance unified-handoff-system.js with validation logic (~50 LOC). Reduce EXEC confusion from 15-20 min to <5 min."`
-
-2. **file_scope** (object, required)
-   - Lists files to create, modify, or delete
-   - At least one category must have ≥1 file
-   - Structure:
-     ```json
-     {
-       "create": ["path/to/new-file.js"],
-       "modify": ["path/to/existing-file.js"],
-       "delete": ["path/to/deprecated-file.js"]
-     }
-     ```
-
-3. **execution_plan** (array, required, ≥1 step)
-   - Step-by-step implementation sequence
-   - Each step includes: step number, action description, affected files
-   - Structure:
-     ```json
-     [
-       {
-         "step": 1,
-         "action": "Add validatePlanPresentation() method to PlanToExecVerifier class",
-         "files": ["scripts/verify-handoff-plan-to-exec.js"]
-       },
-       {
-         "step": 2,
-         "action": "Integrate validation into verifyHandoff() method",
-         "files": ["scripts/verify-handoff-plan-to-exec.js"]
-       }
-     ]
-     ```
-
-4. **testing_strategy** (object, required)
-   - Specifies unit test and E2E test approaches
-   - Both unit_tests and e2e_tests fields required
-   - Structure:
-     ```json
-     {
-       "unit_tests": "Test validatePlanPresentation() with valid, missing, and invalid structures",
-       "e2e_tests": "Create PLAN→EXEC handoff and verify validation enforcement",
-       "verification_steps": [
-         "Run test script with 3 scenarios",
-         "Verify validation passes for complete plan_presentation"
-       ]
-     }
-     ```
-
-#### Optional Fields
-
-5. **dependency_impacts** (object, optional)
-   - Documents dependencies and their impacts
-   - Structure:
-     ```json
-     {
-       "npm_packages": ["react-hook-form", "zod"],
-       "internal_modules": ["handoff-validator.js"],
-       "database_changes": "None (reads from leo_handoff_templates)"
-     }
-     ```
-
-### Validation Rules
-
-The `verify-handoff-plan-to-exec.js` script validates plan_presentation structure:
-
-- ✅ `goal_summary` present and ≤300 characters
-- ✅ `file_scope` has at least one of: create, modify, delete
-- ✅ `execution_plan` has ≥1 step
-- ✅ `testing_strategy` has both `unit_tests` and `e2e_tests` defined
-
-**Validation Enforcement:** PLAN→EXEC handoffs are rejected if plan_presentation is missing or invalid.
-
-### Complete Example
-
-```json
-{
-  "metadata": {
-    "plan_presentation": {
-      "goal_summary": "Add plan_presentation template to leo_handoff_templates table with JSONB validation structure. Enhance unified-handoff-system.js with validation logic (~50 LOC). Reduce EXEC confusion from 15-20 min to <5 min.",
-      "file_scope": {
-        "create": [],
-        "modify": ["scripts/verify-handoff-plan-to-exec.js"],
-        "delete": []
-      },
-      "execution_plan": [
-        {
-          "step": 1,
-          "action": "Add validatePlanPresentation() method to PlanToExecVerifier class",
-          "files": ["scripts/verify-handoff-plan-to-exec.js"]
-        },
-        {
-          "step": 2,
-          "action": "Integrate validation into verifyHandoff() method",
-          "files": ["scripts/verify-handoff-plan-to-exec.js"]
-        },
-        {
-          "step": 3,
-          "action": "Add PLAN_PRESENTATION_INVALID rejection handler",
-          "files": ["scripts/verify-handoff-plan-to-exec.js"]
-        }
-      ],
-      "dependency_impacts": {
-        "npm_packages": [],
-        "internal_modules": ["handoff-validator.js"],
-        "database_changes": "None (reads from leo_handoff_templates)"
-      },
-      "testing_strategy": {
-        "unit_tests": "Test validatePlanPresentation() with valid, missing, and invalid structures",
-        "e2e_tests": "Create PLAN→EXEC handoff and verify validation enforcement",
-        "verification_steps": [
-          "Run test script with 3 scenarios (TS1, TS2, TS3)",
-          "Verify validation passes for complete plan_presentation",
-          "Verify validation fails with clear errors for incomplete/invalid structures"
-        ]
-      }
-    }
-  }
-}
+## Risks
+| Risk | Mitigation |
+|------|------------|
+| ... | ... |
 ```
-
-### Benefits
-
-- **Reduced Confusion:** EXEC spends <5 min understanding implementation (vs 15-20 min)
-- **Consistent Handoffs:** All PLAN→EXEC handoffs follow same structure
-- **Auditability:** Implementation decisions queryable via metadata
-- **Quality Gate:** Invalid handoffs rejected before EXEC phase begins
-
-### Related Documentation
-
-- **Template Definition:** leo_handoff_templates table, handoff_type = 'plan_presentation'
-- **Validation Logic:** scripts/verify-handoff-plan-to-exec.js (PlanToExecVerifier.validatePlanPresentation)
-- **Test Coverage:** scripts/test-plan-presentation-validation.mjs (5 test scenarios)
-
 
 ## Database Schema Overview
 
@@ -1351,110 +618,29 @@ Dashboard automatically connects to database:
 
 ## Database Schema Documentation Access
 
-## 📊 Database Schema Documentation Access
+## Schema Documentation Access
 
-**Auto-Generated Schema Docs** - Reference documentation from live Supabase databases
+### Quick Reference
+- **Full schema**: `database/schema/` directory
+- **Views**: `v_sd_*` prefix for SD views
+- **RLS**: `database/schema/010_rls_policies.sql`
 
-### Available Schema Documentation
+### Key Tables
+| Table | Purpose |
+|-------|---------|
+| strategic_directives | SDs and their metadata |
+| prds | PRD content and status |
+| retrospectives | Completion retrospectives |
+| deferred_work | Deferred items |
 
-**EHG_Engineer Database** (Management Dashboard):
-- **Quick Reference**: `docs/reference/schema/engineer/database-schema-overview.md` (~15-20KB)
-- **Detailed Tables**: `docs/reference/schema/engineer/tables/[table_name].md` (2-5KB each)
-- **Coverage**: 159 tables documented
-- **Purpose**: Strategic Directives, PRDs, retrospectives, LEO Protocol configuration
-- **Repository**: /mnt/c/_EHG/EHG_Engineer/
-- **Database**: dedlbzhpgkmetvhbkyzq
+### Querying Schema
+```sql
+-- List tables
+SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';
 
-**EHG Application Database** (Customer-Facing):
-- **Quick Reference**: `docs/reference/schema/ehg/database-schema-overview.md` (~15-20KB)
-- **Detailed Tables**: `docs/reference/schema/ehg/tables/[table_name].md` (2-5KB each)
-- **Coverage**: ~200 tables (requires pooler credentials to generate)
-- **Purpose**: Customer features, business logic, user-facing functionality
-- **Repository**: /mnt/c/_EHG/ehg/
-- **Database**: liapbndqlqxdcgpwntbv
-
-### When to Use Schema Docs
-
-**MANDATORY during PLAN phase**:
-- Creating PRDs with database changes
-- Validating technical approach
-- Identifying table dependencies
-- Preventing schema conflicts
-
-**PRD Database Integration**:
-PRDs are stored in `product_requirements_v2` table (NOT markdown files). The `add-prd-to-database.js` script prompts for schema review and guides you to populate these fields with schema insights:
-- `technical_approach`: Reference existing tables/columns
-- `database_changes`: List affected tables with schema context
-- `dependencies`: Note table relationships from schema docs
-
-### Regenerating Schema Docs
-
-**Automatic**:
-- CI/CD workflow runs on migration changes (see `.github/workflows/schema-docs-update.yml`)
-- Weekly scheduled runs (Sunday midnight)
-
-**Manual**:
-```bash
-# Engineer database (EHG_Engineer)
-npm run schema:docs:engineer
-
-# EHG application database (requires pooler credentials)
-npm run schema:docs:ehg
-
-# Both databases
-npm run schema:docs:all
-
-# Single table (verbose output)
-npm run schema:docs:table <table_name>
+-- Table columns
+SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'strategic_directives';
 ```
-
-### Integration with PRD Creation Workflow
-
-**Step 1: Review Schema Before PRD**
-```bash
-# Quick check if tables exist
-less docs/reference/schema/engineer/database-schema-overview.md | grep -A 5 "table_name"
-
-# Detailed table review
-cat docs/reference/schema/engineer/tables/strategic_directives_v2.md
-```
-
-**Step 2: Create PRD with Schema Context**
-```bash
-# Script automatically prompts for schema review
-node scripts/add-prd-to-database.js SD-EXAMPLE-001
-# → Detects table names from SD description
-# → Asks: "Have you reviewed schema docs for: strategic_directives_v2, user_stories?"
-# → Guides you to populate technical_approach and database_changes fields
-```
-
-**Step 3: PLAN Agent Validates Schema Awareness**
-- PRD must reference specific tables/columns in `technical_approach`
-- `database_changes` field must list affected tables
-- PLAN→EXEC handoff checks for schema validation
-
-### Critical Reminders
-
-⚠️ **Schema Docs are REFERENCE ONLY**
-- Always query database directly for validation
-- Schema docs may lag behind recent migrations
-- Use as starting point, not source of truth
-
-⚠️ **Application Context Matters**
-- Each schema doc header clearly states application and database
-- NEVER confuse EHG_Engineer tables with EHG tables
-- Check `**Repository**` field to confirm where code changes go
-
-⚠️ **PRD Workflow**
-- PRDs are database records (product_requirements_v2 table)
-- Use `add-prd-to-database.js` script (triggers STORIES sub-agent)
-- Schema insights go in database fields, not markdown
-
----
-
-*Schema docs generated by: `scripts/generate-schema-docs-from-db.js`*
-*Auto-update workflow: `.github/workflows/schema-docs-update.yml`*
-
 
 ## Visual Documentation Best Practices
 
@@ -1589,6 +775,6 @@ Required: [object Object], [object Object], [object Object], [object Object], [o
 
 ---
 
-*Generated from database: 2025-11-28*
+*Generated from database: 2025-11-30*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*
