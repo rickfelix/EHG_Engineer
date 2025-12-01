@@ -13,6 +13,7 @@
       "application_architecture",
       "session_verification",
       "session_verification_quick_start",
+      "builtin_agent_integration",
       "execution_philosophy",
       "skill_integration",
       "ui_parity_requirement",
@@ -32,6 +33,7 @@
     "description": "LEAD phase operations (~25-30k chars)",
     "sections": [
       "lead_operations",
+      "lead_explore_integration",
       "directive_submission_review",
       "lead_strategic_validation_q7",
       "lead_code_review_requirement",
@@ -45,6 +47,7 @@
     "description": "PLAN phase operations (~30-35k chars)",
     "sections": [
       "PHASE_2_PLANNING",
+      "plan_multi_perspective",
       "prd_research_lookup",
       "plan_pre_exec_checklist",
       "testing_tier_strategy",
@@ -53,6 +56,7 @@
       "plan_visual_documentation_examples",
       "plan_presentation_template",
       "PHASE_4_VERIFICATION",
+      "plan_verify_explore",
       "bmad_enhancements",
       "design_database_validation_gates",
       "gate_2_5_human_inspectability",
@@ -66,6 +70,7 @@
     "description": "EXEC phase operations (~20-25k chars)",
     "sections": [
       "exec_implementation_requirements",
+      "exec_skill_integration",
       "exec_requirement",
       "exec_component_sizing_guidelines",
       "exec_todo_comment_standard",

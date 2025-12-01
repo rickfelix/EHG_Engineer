@@ -1,10 +1,79 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-11-30 12:38:06 PM
+**Generated**: 2025-12-01 6:34:54 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
 ---
+
+## 🎯 Multi-Perspective Planning
+
+## Multi-Perspective Planning
+
+### When to Use Plan Agents
+
+Before creating a PRD, consider launching multiple `Plan` agents to explore different approaches:
+
+**Use Plan agents when**:
+- Multiple valid architectures exist
+- Trade-offs between simplicity/performance/extensibility
+- Uncertain about best approach
+- Complex feature with many moving parts
+
+**Skip Plan agents when**:
+- Approach is obvious
+- Small, well-scoped changes
+- Following established patterns exactly
+- Trivial bug fixes
+
+### Pattern: Perspectives → Selection → PRD
+
+**Step 1: Launch Plan Agents (Parallel)**
+```
+Task(subagent_type="Plan", prompt="Design from SIMPLICITY perspective: What is the minimal viable approach that solves the problem with the least complexity?")
+
+Task(subagent_type="Plan", prompt="Design from EXISTING PATTERNS perspective: How can we reuse existing infrastructure, components, and patterns already in the codebase?")
+
+Task(subagent_type="Plan", prompt="Design from EXTENSIBILITY perspective: What design would best support future enhancements while avoiding over-engineering?")
+```
+
+**Step 2: Present Options to Human**
+- Summarize each perspective (key trade-offs)
+- Highlight pros/cons
+- Recommend one approach with rationale
+
+**Step 3: Human Selects Approach**
+
+**Step 4: Create PRD Based on Selection**
+```bash
+node scripts/add-prd-to-database.js --sd-id=<SD-ID>
+```
+
+**Step 5: Validate PRD**
+```bash
+node lib/sub-agent-executor.js DATABASE <SD-ID>
+node lib/sub-agent-executor.js DESIGN <SD-ID>
+```
+
+### Perspective Examples by Task Type
+
+| Task Type | Perspective 1 | Perspective 2 | Perspective 3 |
+|-----------|--------------|--------------|--------------|
+| New feature | Simplicity | Performance | Maintainability |
+| Bug fix | Root cause fix | Quick workaround | Prevention strategy |
+| Refactoring | Minimal change | Clean architecture | Gradual migration |
+| UI work | User experience | Developer experience | Accessibility |
+| API design | RESTful purity | Client convenience | Backwards compatibility |
+| Database | Normalized schema | Query performance | Migration safety |
+
+### Quality Over Quantity
+
+Launch 1-3 Plan agents based on complexity:
+- **1 agent**: Approach is mostly clear, want sanity check
+- **2 agents**: Genuine trade-off between two approaches
+- **3 agents**: Complex decision with multiple valid paths
+
+Do NOT launch 3 agents for every task—that wastes time on simple decisions.
 
 ## Deferred Work Management
 
@@ -96,6 +165,77 @@ node scripts/detect-stubbed-code.js <SD-ID>
 
 **Full Guide**: See `docs/reference/qa-director-guide.md`
 
+## ✅ Scope Verification with Explore (PLAN_VERIFY)
+
+## Scope Verification with Explore
+
+### Pattern: Explore → Compare → Validate
+
+After EXEC completes, use Explore agent to verify implementation matches plan BEFORE running formal validation:
+
+**Step 1: Launch Explore Agent**
+```
+Task(subagent_type="Explore", prompt="What files were modified for SD-XXX? List all changed files and compare to the PRD scope. Flag any changes outside the expected scope.")
+```
+
+**Step 2: Compare to Plan/PRD**
+- Files modified match PRD scope?
+- Any unexpected changes outside scope?
+- Any PRD requirements not addressed?
+- Any TODO comments left unresolved?
+
+**Step 3: Flag Deviations**
+- **Scope creep detected** → Document and discuss with human before proceeding
+- **Missing requirements** → Complete before validation
+- **Unintended changes** → Revert or justify
+
+**Step 4: Run Formal Validation**
+```bash
+node scripts/qa-engineering-director-enhanced.js <SD-ID> --full-e2e
+node scripts/github-actions-verifier.js <SD-ID>
+```
+
+### Why Explore Before Validation?
+
+| Without Explore First | With Explore First |
+|-----------------------|-------------------|
+| E2E tests run on wrong/extra code | Scope verified before testing |
+| Validation fails late with unclear cause | Deviations caught early |
+| Wasted CI/CD cycles | Faster feedback loop |
+| Scope creep goes unnoticed | Changes documented explicitly |
+
+### Explore Questions for PLAN_VERIFY
+
+Use these prompts to verify scope compliance:
+
+1. **File inventory**: "List all files modified since EXEC started for this SD"
+2. **Scope check**: "Which of these changes are outside the PRD scope?"
+3. **Completeness check**: "Are there any PRD requirements not yet addressed?"
+4. **Code quality**: "Are there any TODO comments or incomplete implementations?"
+5. **Test coverage**: "Do the test files cover all PRD requirements?"
+
+### Example Verification Flow
+
+```
+Claude: "EXEC is complete. Let me verify scope compliance before formal validation."
+
+Task(subagent_type="Explore", prompt="List all files modified for SD-AUTH-001 and compare to PRD scope")
+
+[Explore returns:
+- Modified: src/auth/login.tsx (in scope)
+- Modified: src/auth/session.ts (in scope)
+- Modified: src/utils/helpers.ts (NOT in PRD)
+- Created: tests/auth.spec.ts (in scope)]
+
+Claude: "Found one file modified outside PRD scope: src/utils/helpers.ts.
+This change [describe]. Options:
+1. Keep change (document as necessary dependency)
+2. Revert change (not needed for this SD)
+3. Create follow-up SD for this change
+
+Which do you prefer?"
+```
+
 ## Database Schema Documentation
 
 ### Database Schema Documentation
@@ -179,33 +319,6 @@ Before creating PLAN→EXEC handoff, PLAN agent MUST verify:
 
 **From SD-UAT-020**:
 > "Created 100+ test checklist but didn't execute manually. Time spent on unused documentation."
-
-## 🔬 BMAD Method Enhancements
-
-## BMAD Enhancements
-
-### 6 Key Improvements
-1. **Unified Handoff System** - All handoffs via `unified-handoff-system.js`
-2. **Database-First PRDs** - PRDs stored in database, not markdown
-3. **Validation Gates** - 4-gate validation before EXEC
-4. **Progress Tracking** - Automatic progress % calculation
-5. **Context Management** - Proactive monitoring, compression strategies
-6. **Sub-Agent Compression** - 3-tier output reduction
-
-### Using Handoff System
-```bash
-node scripts/unified-handoff-system.js create "{message}"
-```
-
-### PRD Creation
-```bash
-node scripts/add-prd-to-database.js {SD-ID}
-```
-
-### Never Bypass
-- ⚠️ Always use process scripts
-- ⚠️ Never create PRDs as markdown files
-- ⚠️ Never skip validation gates
 
 ## Research Lookup Before PRD Creation
 
@@ -305,20 +418,32 @@ node scripts/add-prd-to-database.js SD-RESEARCH-106
 ```
 
 
-## CI/CD Pipeline Verification
+## 🔬 BMAD Method Enhancements
 
-## CI/CD Pipeline Verification (MANDATORY)
+## BMAD Enhancements
 
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+### 6 Key Improvements
+1. **Unified Handoff System** - All handoffs via `unified-handoff-system.js`
+2. **Database-First PRDs** - PRDs stored in database, not markdown
+3. **Validation Gates** - 4-gate validation before EXEC
+4. **Progress Tracking** - Automatic progress % calculation
+5. **Context Management** - Proactive monitoring, compression strategies
+6. **Sub-Agent Compression** - 3-tier output reduction
 
-### Verification Process
+### Using Handoff System
+```bash
+node scripts/unified-handoff-system.js create "{message}"
+```
 
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+### PRD Creation
+```bash
+node scripts/add-prd-to-database.js {SD-ID}
+```
 
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
+### Never Bypass
+- ⚠️ Always use process scripts
+- ⚠️ Never create PRDs as markdown files
+- ⚠️ Never skip validation gates
 
 ## DESIGN→DATABASE Validation Gates
 
@@ -371,6 +496,21 @@ Retroactive audit at SD closure:
 
 **Reference**: `scripts/modules/design-database-gates-validation.js`
 
+
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## 🚪 Gate 2.5: Human Inspectability Validation
 
@@ -775,6 +915,6 @@ Required: [object Object], [object Object], [object Object], [object Object], [o
 
 ---
 
-*Generated from database: 2025-11-30*
+*Generated from database: 2025-12-01*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

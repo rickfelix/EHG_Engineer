@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2025-11-30 12:38:06 PM
+**Generated**: 2025-12-01 6:34:54 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
@@ -87,6 +87,83 @@ Before writing ANY code, EXEC MUST:
 - ❌ Not restarting dev servers after changes
 - ❌ **CRITICAL**: Creating files for PRDs, handoffs, or documentation
 - ❌ **CRITICAL**: Proceeding with implementation when requirements are ambiguous
+
+## 📚 Skill Integration (EXEC Phase)
+
+## Skill Integration During EXEC
+
+### When to Invoke Skills
+
+During EXEC, invoke Skills for creative guidance on HOW to implement:
+
+| Task | Invoke Skill | What It Provides |
+|------|-------------|------------------|
+| Creating database table | `skill: "schema-design"` | Column types, constraints, naming conventions |
+| Writing RLS policy | `skill: "rls-patterns"` | Policy templates, common patterns |
+| Building React component | `skill: "component-architecture"` | 300-600 LOC sizing, Shadcn patterns |
+| Writing E2E test | `skill: "e2e-patterns"` | Playwright structure, user story mapping |
+| Handling authentication | `skill: "auth-patterns"` | Supabase Auth patterns, session management |
+| Error handling | `skill: "error-handling"` | Unified error patterns, user feedback |
+| API endpoints | `skill: "rest-api-design"` | RESTful patterns, status codes |
+
+### Skill Invocation
+
+```
+skill: "schema-design"
+```
+
+Skills provide patterns, templates, and examples. Apply them to your specific implementation.
+
+### Skills vs Sub-Agents in EXEC
+
+| Layer | When | Purpose | Example |
+|-------|------|---------|---------|
+| **Skills** | During implementation | Pattern guidance (creative) | "How do I structure this component?" |
+| **Sub-agents** | After implementation | Validation (verification) | "Is this migration safe?" |
+
+**Do NOT** invoke sub-agents during EXEC implementation. Save validation for PLAN_VERIFY phase.
+
+### Common Skill Chains by Task
+
+| Implementation Task | Skill Chain (invoke in order) |
+|--------------------|-------------------------------|
+| New database feature | `schema-design` → `rls-patterns` → `migration-safety` |
+| New UI component | `component-architecture` → `design-system` → `ui-testing` |
+| New API endpoint | `rest-api-design` → `api-error-handling` → `input-validation` |
+| Authentication flow | `auth-patterns` → `access-control` → `secret-management` |
+| E2E test suite | `e2e-patterns` → `test-selectors` → `test-fixtures` |
+| Performance work | `query-optimization` → `react-performance` → `bundle-optimization` |
+
+### Skill Selection Guide
+
+**Database work**:
+- `schema-design` - Table structure, relationships
+- `rls-patterns` - Row Level Security
+- `migration-safety` - Safe migration practices
+- `supabase-patterns` - Triggers, functions
+
+**Frontend work**:
+- `component-architecture` - Component sizing, structure
+- `design-system` - Tailwind, styling conventions
+- `frontend-design` - EHG design system specifics
+- `accessibility-guide` - WCAG 2.1 AA patterns
+
+**Testing work**:
+- `e2e-patterns` - Playwright structure
+- `test-selectors` - Resilient locators
+- `test-fixtures` - Auth fixtures, test data
+- `test-debugging` - Troubleshooting Arsenal
+
+**Security work**:
+- `auth-patterns` - Authentication flows
+- `input-validation` - XSS, SQL injection prevention
+- `access-control` - RBAC, route protection
+
+### Remember
+
+Skills are for **creative guidance** (how to build).
+Sub-agents are for **validation** (did you build it right).
+Use skills during EXEC, save sub-agents for PLAN_VERIFY.
 
 ## 📦 Database-First Progress Tracking (MANDATORY)
 
@@ -770,6 +847,6 @@ Verifies LEAD to PLAN handoff requirements are met before allowing transition.
 
 ---
 
-*Generated from database: 2025-11-30*
+*Generated from database: 2025-12-01*
 *Protocol Version: 4.3.3*
 *Load when: User mentions EXEC, implementation, coding, or testing*

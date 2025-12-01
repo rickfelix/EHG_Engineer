@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-11-30 12:38:06 PM
+**Generated**: 2025-12-01 6:34:54 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -41,6 +41,27 @@ EHG_Engineer (Management)          EHG App (Implementation)
 └── Dashboard Views          ←     No changes here!
 ```
 
+## 🚀 Session Verification & Quick Start (MANDATORY)
+
+## Session Start Checklist
+
+### Required Verification
+1. **Check Priority**: `npm run prio:top3`
+2. **Git Status**: Clean working directory?
+3. **Context Load**: CLAUDE_CORE.md + phase file
+
+### Before Starting Work
+- Verify SD is in correct phase
+- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
+- Review recent handoffs if continuing
+
+### Key Commands
+| Command | Purpose |
+|---------|---------|
+| `npm run prio:top3` | Top priority SDs |
+| `git status` | Working tree status |
+| `npm run handoff:latest` | Latest handoff |
+
 ## 🔍 Session Start Verification (MANDATORY)
 
 **Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
@@ -76,26 +97,47 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 
 **Pattern Reference**: PAT-SESS-VER-001
 
-## 🚀 Session Verification & Quick Start (MANDATORY)
+## 🤖 Built-in Agent Integration
 
-## Session Start Checklist
+## Built-in Agent Integration
 
-### Required Verification
-1. **Check Priority**: `npm run prio:top3`
-2. **Git Status**: Clean working directory?
-3. **Context Load**: CLAUDE_CORE.md + phase file
+### Three-Layer Agent Architecture
 
-### Before Starting Work
-- Verify SD is in correct phase
-- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
-- Review recent handoffs if continuing
+LEO Protocol uses three complementary agent layers:
 
-### Key Commands
-| Command | Purpose |
-|---------|---------|
-| `npm run prio:top3` | Top priority SDs |
-| `git status` | Working tree status |
-| `npm run handoff:latest` | Latest handoff |
+| Layer | Source | Agents | Purpose |
+|-------|--------|--------|---------|
+| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
+| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
+| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
+
+### Integration Principle
+
+> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
+
+Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
+
+### When to Use Each Layer
+
+| Task | Use | Example |
+|------|-----|---------|
+| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
+| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
+| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
+| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
+| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
+
+### Parallel Execution
+
+Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
+
+```
+Task(subagent_type="Explore", prompt="Search for existing implementations")
+Task(subagent_type="Explore", prompt="Find related patterns")
+Task(subagent_type="Explore", prompt="Identify affected areas")
+```
+
+This is faster than sequential exploration and provides comprehensive coverage.
 
 ## Execution Philosophy
 
@@ -784,7 +826,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ---
 
-*Generated from database: 2025-11-30*
+*Generated from database: 2025-12-01*
 *Protocol Version: 4.3.3*
 *Includes: Hot Patterns (5) + Recent Lessons (5)*
 *Load this file first in all sessions*

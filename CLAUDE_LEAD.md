@@ -1,10 +1,67 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2025-11-30 12:38:06 PM
+**Generated**: 2025-12-01 6:34:54 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
 ---
+
+## 🔍 Explore Before Validation (LEAD Phase)
+
+## Explore Before Validation
+
+### Pattern: Discovery → Validation
+
+Before running formal validation gates, use the built-in `Explore` agent for fast codebase discovery:
+
+**Step 1: Launch Explore Agent(s)**
+```
+Task(subagent_type="Explore", prompt="Search for existing implementations of [feature]")
+Task(subagent_type="Explore", prompt="Find similar patterns in the codebase")
+Task(subagent_type="Explore", prompt="Identify affected areas and dependencies")
+```
+
+**Step 2: Review Explore Findings**
+- Existing implementations found? → May not need new SD
+- Similar patterns? → Inform PRD design, reuse existing code
+- Affected areas identified? → Scope boundaries are clear
+
+**Step 3: Run Formal Validation**
+```bash
+node lib/sub-agent-executor.js VALIDATION <SD-ID>
+```
+
+### Why This Order?
+
+| Agent | Speed | Scope | Authority |
+|-------|-------|-------|-----------|
+| Explore | Fast (parallel) | Broad discovery | Informational |
+| validation-agent | Slower | Gate enforcement | Authoritative (database-backed) |
+
+Explore finds candidates quickly; validation-agent confirms with database-backed checks.
+
+### When to Skip Explore
+
+- **Trivial changes**: Typo fixes, config updates
+- **Known scope**: User specifies exact files
+- **Follow-up work**: Already explored in previous session
+- **Emergency fixes**: Time-critical bug fixes
+
+### Example: New Feature Discovery
+
+```
+User: "I want to add user preferences"
+
+Claude: "Let me explore the codebase first."
+
+Task(subagent_type="Explore", prompt="very thorough - Search for existing user preferences, settings, or configuration implementations in both EHG and EHG_Engineer codebases")
+
+[Explore returns: Found UserSettings component in /ehg/src/components, preferences table in database, no EHG_Engineer equivalent]
+
+Claude: "Found existing user preferences in the EHG app. Let me now run formal validation to check for duplicates."
+
+node lib/sub-agent-executor.js VALIDATION <SD-ID>
+```
 
 ## SD to Quick Fix Reverse Rubric (LEO v4.3.3)
 
@@ -343,6 +400,6 @@ LEAD MUST answer these questions BEFORE approval:
 
 ---
 
-*Generated from database: 2025-11-30*
+*Generated from database: 2025-12-01*
 *Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*
