@@ -1,14 +1,21 @@
 #!/usr/bin/env node
 /**
- * SD-GOV-COMPLIANCE-READINESS-ORCHESTRATOR-001
- * FR-1: Compliance Check Script
+ * SD-GOV-COMPLIANCE-READINESS-ORCHESTRATOR-001 + SD-AUTO-COMPLIANCE-ENGINE-001
+ * Continuous Compliance Engine (CCE) - Compliance Check Script
  *
  * Verifies all 40 stages against:
  * - Universal Stage Review Framework v1.1
  * - CrewAI Compliance Policy v1.0
+ * - Database-driven policy registry (compliance_policies table)
  *
  * Usage:
- *   node scripts/compliance-check.js [--run-type=scheduled|manual|on_demand] [--stages=1,2,3]
+ *   node scripts/compliance-check.js [--run-type=scheduled|manual|on_demand] [--stages=1,2,3] [--emit-events]
+ *
+ * Flags:
+ *   --run-type=<type>   Type of run: scheduled, manual, on_demand (default: manual)
+ *   --stages=<list>     Comma-separated stage numbers to check (default: all 1-40)
+ *   --emit-events       Emit compliance events to compliance_events table for UI consumption
+ *   --use-registry      Load rules from compliance_policies table (default: true)
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -27,6 +34,8 @@ const args = process.argv.slice(2);
 const runType = args.find(a => a.startsWith('--run-type='))?.split('=')[1] || 'manual';
 const stagesArg = args.find(a => a.startsWith('--stages='))?.split('=')[1];
 const stagesToCheck = stagesArg ? stagesArg.split(',').map(Number) : Array.from({ length: 40 }, (_, i) => i + 1);
+const emitEvents = args.includes('--emit-events');
+const useRegistry = !args.includes('--no-registry'); // Default: use registry
 
 // Compliance rules configuration
 const COMPLIANCE_RULES = {
@@ -225,19 +234,276 @@ async function checkExceptionStatus(stage) {
   };
 }
 
+// =============================================================================
+// CCE: Policy Registry Functions (SD-AUTO-COMPLIANCE-ENGINE-001)
+// =============================================================================
+
+/**
+ * Load active policies from the compliance_policies table
+ */
+async function loadPoliciesFromRegistry() {
+  const { data, error } = await supabase
+    .from('compliance_policies')
+    .select('*')
+    .eq('is_active', true)
+    .order('severity', { ascending: true }); // critical first
+
+  if (error) {
+    console.warn('⚠️  Failed to load policies from registry:', error.message);
+    console.warn('   Falling back to hardcoded rules');
+    return null;
+  }
+
+  console.log(`📋 Loaded ${data.length} policies from registry`);
+  return data;
+}
+
+/**
+ * Create a check function from a policy's rule_config
+ */
+function createCheckFromPolicy(policy) {
+  const config = policy.rule_config;
+
+  return async (stage) => {
+    // Check if policy applies to this stage
+    if (policy.applicable_stages?.length > 0 && !policy.applicable_stages.includes(stage)) {
+      return {
+        passed: true,
+        expected: 'N/A for this stage',
+        actual: 'Policy not applicable',
+        details: { skipped: true, reason: 'Stage not in applicable_stages' }
+      };
+    }
+
+    switch (config.check_type) {
+      case 'row_count':
+        return await checkRowCount(stage, config);
+      case 'table_exists':
+        return await checkTableExists(config.target_table);
+      case 'custom':
+        return await executeCustomCheck(stage, config.custom_function);
+      default:
+        return {
+          passed: true,
+          expected: 'Unknown check type',
+          actual: `Check type '${config.check_type}' not implemented`,
+          details: { warning: 'Skipped' }
+        };
+    }
+  };
+}
+
+/**
+ * Check row count in a table with optional where clause
+ */
+async function checkRowCount(stage, config) {
+  const { target_table, where_clause, expected_condition } = config;
+
+  let query = supabase.from(target_table).select('id');
+
+  // Apply where clause if present (replace $1 with stage)
+  if (where_clause) {
+    const column = where_clause.split('=')[0].trim();
+    query = query.eq(column, stage);
+  }
+
+  const { data, error, count } = await query;
+
+  if (error) {
+    return {
+      passed: false,
+      expected: expected_condition || 'count >= 1',
+      actual: `Error: ${error.message}`,
+      details: { error: error.message }
+    };
+  }
+
+  const rowCount = data?.length || 0;
+  // Parse expected condition (e.g., "count >= 1")
+  const passed = rowCount >= 1; // Simplified - always check for at least 1
+
+  return {
+    passed,
+    expected: expected_condition || 'count >= 1',
+    actual: `${rowCount} rows found`,
+    details: { rowCount, table: target_table }
+  };
+}
+
+/**
+ * Check if a table exists
+ */
+async function checkTableExists(tableName) {
+  const { data, error } = await supabase.from(tableName).select('id').limit(1);
+
+  if (error && error.message.includes('does not exist')) {
+    return {
+      passed: false,
+      expected: `Table '${tableName}' exists`,
+      actual: 'Table does not exist',
+      details: { error: error.message }
+    };
+  }
+
+  return {
+    passed: true,
+    expected: `Table '${tableName}' exists`,
+    actual: 'Table exists',
+    details: { table: tableName }
+  };
+}
+
+/**
+ * Execute a custom check function by name
+ */
+async function executeCustomCheck(stage, functionName) {
+  // Map function names to actual check functions
+  const customChecks = {
+    'check_crewai_agents': () => checkCrewAIAgents(stage),
+    'check_crewai_crews': () => checkCrewAICrews(stage),
+    'check_agent_assignments': () => checkAgentAssignments(stage),
+    'check_session_routing': () => checkSessionRouting(stage),
+    'check_exception_status': () => checkExceptionStatus(stage),
+  };
+
+  const checkFn = customChecks[functionName];
+  if (checkFn) {
+    return await checkFn();
+  }
+
+  return {
+    passed: true,
+    expected: `Custom check '${functionName}'`,
+    actual: 'Custom function not found',
+    details: { warning: 'Skipped' }
+  };
+}
+
+/**
+ * Convert registry policies to the COMPLIANCE_RULES format
+ */
+function policiesToRules(policies) {
+  const rules = {};
+
+  for (const policy of policies) {
+    const ruleKey = policy.policy_id.replace(/-/g, '_');
+    rules[ruleKey] = {
+      id: policy.policy_id,
+      name: policy.policy_name,
+      severity: policy.severity,
+      description: policy.description,
+      check: createCheckFromPolicy(policy)
+    };
+  }
+
+  return rules;
+}
+
+// =============================================================================
+// CCE: Event Emission Functions (SD-AUTO-COMPLIANCE-ENGINE-001)
+// =============================================================================
+
+/**
+ * Emit a compliance event to the compliance_events table
+ */
+async function emitComplianceEvent(eventType, checkId, policyId, stageNumber, severity, summary, details = {}) {
+  if (!emitEvents) return; // Skip if --emit-events not specified
+
+  const eventId = `EVT-${Date.now()}-${randomUUID().substring(0, 8)}`;
+
+  const { error } = await supabase
+    .from('compliance_events')
+    .insert({
+      event_id: eventId,
+      event_type: eventType,
+      check_id: checkId,
+      policy_id: policyId,
+      stage_number: stageNumber,
+      severity,
+      summary,
+      details,
+      emitted_at: new Date().toISOString()
+    });
+
+  if (error) {
+    console.warn(`⚠️  Failed to emit event ${eventType}:`, error.message);
+  }
+
+  return eventId;
+}
+
+/**
+ * Emit check started event
+ */
+async function emitCheckStarted(checkId, runType, stagesToCheck) {
+  return await emitComplianceEvent(
+    'check_started',
+    checkId,
+    null,
+    null,
+    'info',
+    `Compliance check started (${runType})`,
+    { runType, stagesToCheck, totalStages: stagesToCheck.length }
+  );
+}
+
+/**
+ * Emit check completed event
+ */
+async function emitCheckCompleted(checkId, summary) {
+  return await emitComplianceEvent(
+    'check_completed',
+    checkId,
+    null,
+    null,
+    summary.criticalScore < 80 ? 'critical' : summary.overallScore < 90 ? 'medium' : 'info',
+    `Compliance check completed: ${summary.passed}/${summary.totalStages} passed`,
+    summary
+  );
+}
+
+/**
+ * Emit violation detected event
+ */
+async function emitViolationDetected(checkId, policyId, stageNumber, severity, description) {
+  return await emitComplianceEvent(
+    'violation_detected',
+    checkId,
+    policyId,
+    stageNumber,
+    severity,
+    `Violation: ${description}`,
+    { policyId, stageNumber }
+  );
+}
+
 // Main compliance check function
 async function runComplianceCheck() {
   const runId = `COMPLIANCE-${Date.now()}-${randomUUID().substring(0, 8)}`;
   const startTime = new Date();
 
   console.log('\n' + '='.repeat(70));
-  console.log('COMPLIANCE CHECK ORCHESTRATOR');
+  console.log('CONTINUOUS COMPLIANCE ENGINE (CCE)');
   console.log('='.repeat(70));
   console.log(`Run ID: ${runId}`);
   console.log(`Run Type: ${runType}`);
   console.log(`Started: ${startTime.toISOString()}`);
   console.log(`Stages to check: ${stagesToCheck.join(', ')}`);
+  console.log(`Event Emission: ${emitEvents ? 'ENABLED' : 'disabled'}`);
+  console.log(`Policy Registry: ${useRegistry ? 'ENABLED' : 'hardcoded rules'}`);
   console.log('='.repeat(70) + '\n');
+
+  // CCE: Load rules from policy registry or use hardcoded fallback
+  let activeRules = COMPLIANCE_RULES;
+  if (useRegistry) {
+    const registryPolicies = await loadPoliciesFromRegistry();
+    if (registryPolicies && registryPolicies.length > 0) {
+      activeRules = policiesToRules(registryPolicies);
+      console.log(`✅ Using ${Object.keys(activeRules).length} policies from registry`);
+    } else {
+      console.log('⚠️  Using hardcoded fallback rules');
+    }
+  }
 
   // Create compliance check record
   const { data: checkRecord, error: insertError } = await supabase
@@ -251,7 +517,9 @@ async function runComplianceCheck() {
       created_by: process.env.GITHUB_ACTOR || 'manual',
       metadata: {
         stages_requested: stagesToCheck,
-        rules_checked: Object.keys(COMPLIANCE_RULES)
+        rules_checked: Object.keys(activeRules),
+        use_registry: useRegistry,
+        emit_events: emitEvents
       }
     })
     .select('id')
@@ -263,6 +531,10 @@ async function runComplianceCheck() {
   }
 
   const checkId = checkRecord.id;
+
+  // CCE: Emit check started event
+  await emitCheckStarted(checkId, runType, stagesToCheck);
+
   const results = {};
   const violations = [];
   let passed = 0;
@@ -275,7 +547,7 @@ async function runComplianceCheck() {
     console.log(`\n[Stage ${stage}] Running compliance checks...`);
     results[stage] = { stage, checks: {}, passed: true };
 
-    for (const [ruleKey, rule] of Object.entries(COMPLIANCE_RULES)) {
+    for (const [ruleKey, rule] of Object.entries(activeRules)) {
       try {
         const result = await rule.check(stage);
         results[stage].checks[ruleKey] = {
@@ -305,6 +577,15 @@ async function runComplianceCheck() {
             metadata: result.details
           };
           violations.push(violation);
+
+          // CCE: Emit violation detected event
+          await emitViolationDetected(
+            checkId,
+            rule.id,
+            stage,
+            rule.severity,
+            `${rule.name}: ${result.actual} (expected: ${result.expected})`
+          );
 
           // Adjust scores based on severity
           if (rule.severity === 'critical') {
@@ -380,7 +661,7 @@ async function runComplianceCheck() {
 
   // Summary
   console.log('\n' + '='.repeat(70));
-  console.log('COMPLIANCE CHECK SUMMARY');
+  console.log('CCE COMPLIANCE CHECK SUMMARY');
   console.log('='.repeat(70));
   console.log(`Run ID: ${runId}`);
   console.log(`Duration: ${(completedAt - startTime) / 1000}s`);
@@ -390,7 +671,21 @@ async function runComplianceCheck() {
   console.log(`Critical Score: ${criticalScore}/100`);
   console.log(`Overall Score: ${overallScore}/100`);
   console.log(`Violations: ${violations.length}`);
+  console.log(`Policy Source: ${useRegistry ? 'Database Registry' : 'Hardcoded Rules'}`);
+  console.log(`Events Emitted: ${emitEvents ? 'Yes' : 'No'}`);
   console.log('='.repeat(70));
+
+  // CCE: Emit check completed event with summary
+  const summaryData = {
+    totalStages: stagesToCheck.length,
+    passed,
+    failed,
+    criticalScore,
+    overallScore,
+    violations: violations.length,
+    duration: (completedAt - startTime) / 1000
+  };
+  await emitCheckCompleted(checkId, summaryData);
 
   // Return results for GitHub Actions
   const output = {

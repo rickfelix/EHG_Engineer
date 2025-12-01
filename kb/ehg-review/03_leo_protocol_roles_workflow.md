@@ -5,13 +5,14 @@ The LEO Protocol defines the operational framework for agent collaboration, qual
 
 ---
 
-## LEO Protocol v4.1.2 - Database-First
+## LEO Protocol v4.3.3 - UI Parity Governance
 
 ### Current Version
-**Version**: 4.1.2_database_first
+**Version**: 4.3.3 (leo-v4-3-3-ui-parity)
 **Status**: ACTIVE
 **Storage**: Database table `leo_protocols`
 **Enforcement**: Mandatory for all operations
+**Note**: See 00_unified_vision_2025.md for current operational context
 
 ### Core Principles
 
@@ -465,10 +466,10 @@ Sub-agents activate when specific keywords or patterns are detected in PRDs:
 ---
 
 ## Sources of Truth
-- **LEO Protocol**: Database table `leo_protocols` (v4.1.2_database_first)
+- **Unified Vision**: kb/ehg-review/00_unified_vision_2025.md (primary operational vision)
+- **LEO Protocol**: Database table `leo_protocols` (v4.3.3)
 - **Agent Definitions**: Database tables `leo_agents`, `leo_sub_agents`
-- **Workflow Stages**: `/mnt/c/_EHG/ehg/docs/workflow/stages.yaml`
-- **Stage KPIs**: `/mnt/c/Users/rickf/Dropbox/_EHG/_EHG/stage kpis.csv`
+- **Strategic Directives**: Database table `strategic_directives_v2`
 - **Handoff Templates**: Database table `leo_handoff_templates`
 
-**Last updated**: 2025-01-14
+**Last updated**: 2025-11-29

@@ -1,0 +1,1284 @@
+{
+  "metadata": {
+    "sd_id": "SD-BLUEPRINT-ENGINE-001",
+    "sd_title": "Stage 1 Blueprint Engine v1 (Medium-Weight, Capability-Aware, Portfolio-Aware)",
+    "target_application": "EHG (Runtime)",
+    "generated_at": "2025-11-30T12:45:00Z",
+    "generated_by": "USER_STORY_CONTEXT_SUB_AGENT",
+    "version": "1.0.0",
+    "invest_validation": {
+      "independent": true,
+      "negotiable": true,
+      "valuable": true,
+      "estimable": true,
+      "small": true,
+      "testable": true
+    }
+  },
+  "success_criteria_mapping": {
+    "SC-001": {
+      "metric": ">=30% reduction in Stage 3 validation failures",
+      "stories": ["US-001", "US-002", "US-003", "US-008", "US-009"]
+    },
+    "SC-002": {
+      "metric": ">=40% faster Stage 2 research cycles",
+      "stories": ["US-004", "US-005"]
+    },
+    "SC-003": {
+      "metric": ">=50% of blueprints selected fill portfolio gaps",
+      "stories": ["US-010", "US-011", "US-012"]
+    },
+    "SC-004": {
+      "metric": ">=70% Chairman satisfaction for Stage 1 UX",
+      "stories": ["US-001", "US-002", "US-003", "US-004", "US-005", "US-006", "US-007"]
+    }
+  },
+  "epics": [
+    {
+      "id": "EPIC-001",
+      "name": "Blueprint Browsing",
+      "description": "Enable Chairman to browse intelligent blueprints with strategic context, capability alignment, and portfolio alignment scores",
+      "business_value": "Reduces time-to-insight for venture selection by providing pre-analyzed strategic context upfront",
+      "stories": ["US-001", "US-002", "US-003"]
+    },
+    {
+      "id": "EPIC-002",
+      "name": "Scaffold Preview",
+      "description": "Allow Chairman to preview scaffold content (problem framing, market hypothesis, competitors) before selection",
+      "business_value": "Increases selection confidence and reduces Stage 2 rework by setting correct expectations",
+      "stories": ["US-004", "US-005"]
+    },
+    {
+      "id": "EPIC-003",
+      "name": "Blueprint Selection",
+      "description": "Enable one-click blueprint selection with automatic venture population and preference tracking",
+      "business_value": "Eliminates manual data entry and enables system learning for better future recommendations",
+      "stories": ["US-006", "US-007"]
+    },
+    {
+      "id": "EPIC-004",
+      "name": "Preference Learning",
+      "description": "Capture and aggregate user interaction signals to improve recommendation quality over time",
+      "business_value": "Creates compounding value - system gets smarter with each interaction",
+      "stories": ["US-008", "US-009"]
+    },
+    {
+      "id": "EPIC-005",
+      "name": "Portfolio Awareness",
+      "description": "Evaluate blueprints against existing portfolio for gap-filling and cannibalization risk detection",
+      "business_value": "Ensures strategic coherence across venture portfolio and prevents redundant investments",
+      "stories": ["US-010", "US-011", "US-012"]
+    }
+  ],
+  "user_stories": [
+    {
+      "story_id": "US-001",
+      "story_key": "US-BLUEPRINT-001",
+      "epic": "EPIC-001",
+      "title": "Browse Intelligent Blueprints with Strategic Context",
+      "as_a": "Chairman",
+      "i_want": "to browse a curated list of intelligent blueprints with strategic context",
+      "so_that": "I can quickly identify promising venture opportunities without manual research",
+      "acceptance_criteria": [
+        {
+          "id": "AC-001-1",
+          "scenario": "Happy path - Blueprint list loads successfully",
+          "given": "Chairman is authenticated AND on the Stage 1 venture creation page",
+          "when": "Chairman clicks 'Browse Blueprints' button",
+          "then": "System displays a grid/list of at least 10 blueprints AND each blueprint shows title, category, and summary AND page loads in under 2 seconds",
+          "test_data": {
+            "expected_count": ">=10",
+            "load_time_ms": "<=2000"
+          }
+        },
+        {
+          "id": "AC-001-2",
+          "scenario": "Blueprint card displays required information",
+          "given": "Blueprint list is displayed",
+          "when": "Chairman views any blueprint card",
+          "then": "Card shows blueprint title AND category/industry AND 1-2 sentence description AND capability alignment score (0-100) AND portfolio alignment score (0-100) AND visual indicator for overall fit (green/yellow/red)",
+          "test_data": {
+            "required_fields": ["title", "category", "description", "capability_score", "portfolio_score", "fit_indicator"]
+          }
+        },
+        {
+          "id": "AC-001-3",
+          "scenario": "Filter blueprints by category",
+          "given": "Blueprint list is displayed",
+          "when": "Chairman selects a category filter (e.g., 'Technology', 'Healthcare')",
+          "then": "List updates to show only blueprints in selected category AND filter state is visually indicated AND 'Clear filter' option is available",
+          "test_data": {
+            "filter_categories": ["Technology", "Healthcare", "Finance", "E-commerce", "SaaS"]
+          }
+        },
+        {
+          "id": "AC-001-4",
+          "scenario": "Sort blueprints by alignment score",
+          "given": "Blueprint list is displayed",
+          "when": "Chairman selects 'Sort by Portfolio Fit'",
+          "then": "List reorders with highest portfolio alignment scores at top AND sort direction can be toggled",
+          "test_data": {
+            "sort_options": ["portfolio_fit", "capability_fit", "newest", "alphabetical"]
+          }
+        },
+        {
+          "id": "AC-001-5",
+          "scenario": "Error path - API failure",
+          "given": "Chairman is on Stage 1 page",
+          "when": "Blueprint API returns error",
+          "then": "User sees friendly error message AND retry button is displayed AND error is logged to system",
+          "expected_error": "Unable to load blueprints. Please try again."
+        }
+      ],
+      "priority": "must_have",
+      "story_points": 5,
+      "complexity": "M",
+      "implementation_context": "Create BlueprintBrowser component with card grid layout. Use existing ventures table structure as reference. Blueprint data stored in new 'blueprints' table with capability_score and portfolio_score columns calculated via database functions. Consider pagination for performance (limit 20 per page).",
+      "architecture_references": [
+        "database/migrations/20251130_ehg_app_schema_migration.sql - ventures table structure",
+        "Existing card grid patterns in venture list components",
+        "Supabase real-time subscription pattern for live updates"
+      ],
+      "example_code_patterns": [
+        {
+          "pattern": "Blueprint fetch query",
+          "code": "const { data: blueprints, error } = await supabase\n  .from('blueprints')\n  .select('*, capability_score, portfolio_score')\n  .order('portfolio_score', { ascending: false })\n  .limit(20);"
+        }
+      ],
+      "testing_scenarios": [
+        {
+          "id": "TC-001-1",
+          "scenario": "Verify blueprint list renders with required fields",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-001-2",
+          "scenario": "Verify filtering by category works",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-001-3",
+          "scenario": "Verify sorting by alignment score",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-001-4",
+          "scenario": "Verify error handling on API failure",
+          "priority": "P1"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/blueprint-engine/US-001-browse-blueprints.spec.ts"
+    },
+    {
+      "story_id": "US-002",
+      "story_key": "US-BLUEPRINT-002",
+      "epic": "EPIC-001",
+      "title": "View Capability Alignment Scores",
+      "as_a": "Chairman",
+      "i_want": "to see capability alignment scores for each blueprint",
+      "so_that": "I can understand if EHG has the skills and resources to build this venture successfully",
+      "acceptance_criteria": [
+        {
+          "id": "AC-002-1",
+          "scenario": "Happy path - Capability score displayed on card",
+          "given": "Blueprint card is displayed",
+          "when": "Chairman views the capability alignment section",
+          "then": "Score is shown as percentage (0-100%) AND visual gauge/bar indicates score level AND tooltip explains what capability alignment means",
+          "test_data": {
+            "score_range": [0, 100],
+            "display_format": "percentage"
+          }
+        },
+        {
+          "id": "AC-002-2",
+          "scenario": "Capability score breakdown on hover/click",
+          "given": "Blueprint card with capability score is visible",
+          "when": "Chairman hovers over or clicks the capability score",
+          "then": "Popup/tooltip shows breakdown: Technical Skills match (%), Resource Availability (%), Historical Success Rate (%) AND each factor is explained",
+          "test_data": {
+            "breakdown_factors": ["technical_skills", "resource_availability", "historical_success_rate"]
+          }
+        },
+        {
+          "id": "AC-002-3",
+          "scenario": "Low capability score warning",
+          "given": "Blueprint has capability score below 50%",
+          "when": "Chairman views the blueprint card",
+          "then": "Warning indicator (yellow/red) is shown AND tooltip explains risk factors AND 'View Details' links to specific capability gaps",
+          "test_data": {
+            "threshold_warning": 50,
+            "threshold_danger": 30
+          }
+        },
+        {
+          "id": "AC-002-4",
+          "scenario": "Edge case - No capability data available",
+          "given": "Blueprint exists but capability assessment not completed",
+          "when": "Chairman views the blueprint card",
+          "then": "Shows 'Assessment Pending' badge AND 'Request Assessment' button is available",
+          "expected_behavior": "Graceful degradation when data not available"
+        }
+      ],
+      "priority": "must_have",
+      "story_points": 3,
+      "complexity": "S",
+      "implementation_context": "Capability score is calculated by comparing blueprint requirements against EHG's registered capabilities (stored in company settings or separate capabilities table). Score calculation: (matched_capabilities / required_capabilities) * 100, weighted by importance. Display using radial progress component.",
+      "architecture_references": [
+        "database/migrations/20251130_ehg_app_schema_migration.sql - companies.settings JSONB for capability storage",
+        "Consider creating 'ehg_capabilities' table for more structured capability tracking"
+      ],
+      "example_code_patterns": [
+        {
+          "pattern": "Capability score calculation (database function)",
+          "code": "CREATE OR REPLACE FUNCTION calculate_capability_score(blueprint_id UUID)\nRETURNS DECIMAL AS $$\nDECLARE\n  req_caps JSONB;\n  ehg_caps JSONB;\n  match_count INT := 0;\n  total_count INT;\nBEGIN\n  SELECT required_capabilities INTO req_caps FROM blueprints WHERE id = blueprint_id;\n  SELECT capabilities INTO ehg_caps FROM companies WHERE id = 'EHG_COMPANY_ID';\n  -- Calculate overlap...\n  RETURN (match_count::DECIMAL / total_count) * 100;\nEND;\n$$ LANGUAGE plpgsql;"
+        }
+      ],
+      "testing_scenarios": [
+        {
+          "id": "TC-002-1",
+          "scenario": "Verify capability score displays correctly",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-002-2",
+          "scenario": "Verify score breakdown popup",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-002-3",
+          "scenario": "Verify low score warning display",
+          "priority": "P1"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/blueprint-engine/US-002-capability-scores.spec.ts"
+    },
+    {
+      "story_id": "US-003",
+      "story_key": "US-BLUEPRINT-003",
+      "epic": "EPIC-001",
+      "title": "View Portfolio Alignment Scores",
+      "as_a": "Chairman",
+      "i_want": "to see portfolio alignment scores for each blueprint",
+      "so_that": "I can understand if this venture fills a strategic gap in my portfolio",
+      "acceptance_criteria": [
+        {
+          "id": "AC-003-1",
+          "scenario": "Happy path - Portfolio score displayed on card",
+          "given": "Blueprint card is displayed AND Chairman has existing ventures in portfolio",
+          "when": "Chairman views the portfolio alignment section",
+          "then": "Score is shown as percentage (0-100%) AND visual indicator shows gap-filling potential AND color coding indicates strategic fit (green=fills gap, yellow=neutral, red=overlap)",
+          "test_data": {
+            "score_range": [0, 100],
+            "color_thresholds": {"green": ">70", "yellow": "40-70", "red": "<40"}
+          }
+        },
+        {
+          "id": "AC-003-2",
+          "scenario": "Portfolio alignment breakdown",
+          "given": "Blueprint card with portfolio score is visible",
+          "when": "Chairman clicks on portfolio score for details",
+          "then": "Modal shows: Industry Diversity Impact (%), Revenue Model Diversity (%), Risk Profile Balance (%) AND visual comparison with current portfolio composition",
+          "test_data": {
+            "breakdown_factors": ["industry_diversity", "revenue_model_diversity", "risk_balance"]
+          }
+        },
+        {
+          "id": "AC-003-3",
+          "scenario": "Gap identification display",
+          "given": "Blueprint fills a portfolio gap",
+          "when": "Chairman views portfolio score details",
+          "then": "System highlights which specific gap this blueprint addresses AND shows 'Gap Filled' badge for high-score blueprints",
+          "test_data": {
+            "gap_types": ["industry", "stage", "risk_level", "revenue_model"]
+          }
+        },
+        {
+          "id": "AC-003-4",
+          "scenario": "Empty portfolio edge case",
+          "given": "Chairman has no existing ventures",
+          "when": "Chairman views portfolio alignment scores",
+          "then": "All blueprints show 100% portfolio fit (any venture fills gaps in empty portfolio) AND informational message explains this",
+          "expected_behavior": "First venture selection always has perfect portfolio fit"
+        }
+      ],
+      "priority": "must_have",
+      "story_points": 5,
+      "complexity": "M",
+      "implementation_context": "Portfolio alignment calculated by analyzing current portfolio composition vs. blueprint attributes. Use portfolio gap analysis function. Consider: industry distribution, stage distribution, risk profile distribution. High score = fills identified gap, Low score = overlaps with existing ventures.",
+      "architecture_references": [
+        "database/migrations/20251130_ehg_app_schema_migration.sql - portfolios table",
+        "database/migrations/20251130_ehg_app_schema_migration.sql - ventures table with industry, risk_score fields"
+      ],
+      "example_code_patterns": [
+        {
+          "pattern": "Portfolio gap analysis query",
+          "code": "WITH current_portfolio AS (\n  SELECT industry, COUNT(*) as count\n  FROM ventures\n  WHERE portfolio_id = $1 AND status = 'active'\n  GROUP BY industry\n)\nSELECT b.id, b.title,\n  CASE WHEN cp.count IS NULL THEN 100\n       WHEN cp.count < 2 THEN 80\n       ELSE 50 - (cp.count * 10)\n  END as portfolio_score\nFROM blueprints b\nLEFT JOIN current_portfolio cp ON b.industry = cp.industry;"
+        }
+      ],
+      "testing_scenarios": [
+        {
+          "id": "TC-003-1",
+          "scenario": "Verify portfolio score with existing ventures",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-003-2",
+          "scenario": "Verify portfolio score with empty portfolio",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-003-3",
+          "scenario": "Verify gap identification display",
+          "priority": "P1"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/blueprint-engine/US-003-portfolio-scores.spec.ts"
+    },
+    {
+      "story_id": "US-004",
+      "story_key": "US-BLUEPRINT-004",
+      "epic": "EPIC-002",
+      "title": "Preview Scaffold Content Before Selection",
+      "as_a": "Chairman",
+      "i_want": "to preview the full scaffold content before selecting a blueprint",
+      "so_that": "I understand exactly what I'm getting and can make an informed decision",
+      "acceptance_criteria": [
+        {
+          "id": "AC-004-1",
+          "scenario": "Happy path - Open preview modal",
+          "given": "Chairman is viewing blueprint list",
+          "when": "Chairman clicks 'Preview' button on a blueprint card",
+          "then": "Full-screen modal opens AND displays complete scaffold content AND modal has clear close button AND background is dimmed",
+          "test_data": {
+            "modal_type": "full_screen_preview"
+          }
+        },
+        {
+          "id": "AC-004-2",
+          "scenario": "Preview shows problem framing section",
+          "given": "Preview modal is open",
+          "when": "Chairman views the Problem Framing tab/section",
+          "then": "Shows: Problem Statement (2-3 sentences) AND Target Customer Profile AND Pain Points (bulleted list) AND Current Alternatives",
+          "test_data": {
+            "required_sections": ["problem_statement", "target_customer", "pain_points", "current_alternatives"]
+          }
+        },
+        {
+          "id": "AC-004-3",
+          "scenario": "Preview shows market hypothesis section",
+          "given": "Preview modal is open",
+          "when": "Chairman views the Market Hypothesis tab/section",
+          "then": "Shows: Market Size Estimate (TAM/SAM/SOM) AND Growth Rate Projection AND Key Assumptions AND Validation Approach",
+          "test_data": {
+            "required_sections": ["market_size", "growth_rate", "assumptions", "validation_approach"]
+          }
+        },
+        {
+          "id": "AC-004-4",
+          "scenario": "Preview shows competitors section",
+          "given": "Preview modal is open",
+          "when": "Chairman views the Competitors tab/section",
+          "then": "Shows: List of 3-5 key competitors AND Competitive positioning matrix AND Differentiation opportunities",
+          "test_data": {
+            "min_competitors": 3,
+            "max_competitors": 5
+          }
+        },
+        {
+          "id": "AC-004-5",
+          "scenario": "Preview modal navigation",
+          "given": "Preview modal is open",
+          "when": "Chairman navigates between sections",
+          "then": "Tab navigation allows switching between sections AND current section is highlighted AND scroll position resets for each section",
+          "test_data": {
+            "navigation_type": "tabs"
+          }
+        }
+      ],
+      "priority": "must_have",
+      "story_points": 5,
+      "complexity": "M",
+      "implementation_context": "Create BlueprintPreviewModal component with tabbed navigation. Scaffold content stored in 'blueprint_scaffolds' table with JSONB content field. Tabs: Overview, Problem Framing, Market Hypothesis, Competitors, Technical Requirements. Use shadcn/ui Dialog and Tabs components.",
+      "architecture_references": [
+        "shadcn/ui Dialog component for modal",
+        "shadcn/ui Tabs component for section navigation"
+      ],
+      "example_code_patterns": [
+        {
+          "pattern": "Preview modal structure",
+          "code": "<Dialog open={previewOpen} onOpenChange={setPreviewOpen}>\n  <DialogContent className=\"max-w-4xl max-h-[90vh] overflow-y-auto\">\n    <DialogHeader>\n      <DialogTitle>{blueprint.title}</DialogTitle>\n    </DialogHeader>\n    <Tabs defaultValue=\"overview\">\n      <TabsList>\n        <TabsTrigger value=\"overview\">Overview</TabsTrigger>\n        <TabsTrigger value=\"problem\">Problem Framing</TabsTrigger>\n        <TabsTrigger value=\"market\">Market Hypothesis</TabsTrigger>\n        <TabsTrigger value=\"competitors\">Competitors</TabsTrigger>\n      </TabsList>\n      <TabsContent value=\"problem\">{/* ... */}</TabsContent>\n    </Tabs>\n  </DialogContent>\n</Dialog>"
+        }
+      ],
+      "testing_scenarios": [
+        {
+          "id": "TC-004-1",
+          "scenario": "Verify preview modal opens on click",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-004-2",
+          "scenario": "Verify all scaffold sections display",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-004-3",
+          "scenario": "Verify tab navigation works",
+          "priority": "P1"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/blueprint-engine/US-004-scaffold-preview.spec.ts"
+    },
+    {
+      "story_id": "US-005",
+      "story_key": "US-BLUEPRINT-005",
+      "epic": "EPIC-002",
+      "title": "View Scaffold Head Start Content",
+      "as_a": "Chairman",
+      "i_want": "to see problem framing, market hypothesis, and competitor analysis in the preview",
+      "so_that": "I have a head start on Stage 2 research when I select a blueprint",
+      "acceptance_criteria": [
+        {
+          "id": "AC-005-1",
+          "scenario": "Problem framing content is research-ready",
+          "given": "Preview modal is open on Problem Framing section",
+          "when": "Chairman reviews the content",
+          "then": "Problem statement is specific and actionable AND includes quantified impact where possible AND ready to copy/paste into venture form",
+          "test_data": {
+            "content_quality": "research_ready"
+          }
+        },
+        {
+          "id": "AC-005-2",
+          "scenario": "Market hypothesis includes validation prompts",
+          "given": "Preview modal is open on Market Hypothesis section",
+          "when": "Chairman reviews the content",
+          "then": "Market size includes source citations or estimation methodology AND key assumptions are listed with validation suggestions AND hypothesis is structured for Stage 2 validation",
+          "test_data": {
+            "required_elements": ["source_citations", "assumptions", "validation_prompts"]
+          }
+        },
+        {
+          "id": "AC-005-3",
+          "scenario": "Competitor analysis is actionable",
+          "given": "Preview modal is open on Competitors section",
+          "when": "Chairman reviews the content",
+          "then": "Each competitor has: Name, Website, Key Features, Weaknesses AND positioning opportunities are highlighted AND ready for deeper Stage 2 research",
+          "test_data": {
+            "competitor_fields": ["name", "website", "features", "weaknesses"]
+          }
+        },
+        {
+          "id": "AC-005-4",
+          "scenario": "Copy to clipboard functionality",
+          "given": "Chairman is viewing any scaffold section",
+          "when": "Chairman clicks 'Copy Section' button",
+          "then": "Section content is copied to clipboard AND toast confirms successful copy AND content is formatted for paste into venture fields",
+          "test_data": {
+            "copy_format": "structured_text"
+          }
+        }
+      ],
+      "priority": "should_have",
+      "story_points": 3,
+      "complexity": "S",
+      "implementation_context": "Ensure scaffold content is pre-populated with high-quality, research-ready content. Include source references where applicable. Add 'Copy' buttons to each section. Content should be structured to reduce Stage 2 research time by 40%.",
+      "architecture_references": [
+        "Content should match ventures table fields for easy population"
+      ],
+      "example_code_patterns": [
+        {
+          "pattern": "Copy to clipboard handler",
+          "code": "const copyToClipboard = async (content: string, section: string) => {\n  await navigator.clipboard.writeText(content);\n  toast.success(`${section} copied to clipboard`);\n};"
+        }
+      ],
+      "testing_scenarios": [
+        {
+          "id": "TC-005-1",
+          "scenario": "Verify content quality metrics",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-005-2",
+          "scenario": "Verify copy to clipboard works",
+          "priority": "P1"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/blueprint-engine/US-005-head-start-content.spec.ts"
+    },
+    {
+      "story_id": "US-006",
+      "story_key": "US-BLUEPRINT-006",
+      "epic": "EPIC-003",
+      "title": "Select Blueprint and Populate Venture",
+      "as_a": "Chairman",
+      "i_want": "to select a blueprint and have it automatically populate my new venture",
+      "so_that": "I save time and don't need to manually enter scaffold information",
+      "acceptance_criteria": [
+        {
+          "id": "AC-006-1",
+          "scenario": "Happy path - Blueprint selection creates venture",
+          "given": "Chairman is viewing a blueprint (list or preview)",
+          "when": "Chairman clicks 'Select Blueprint' or 'Start Venture' button",
+          "then": "New venture is created in 'draft_idea' stage AND venture fields populated from blueprint scaffold AND Chairman is redirected to venture detail page AND success toast confirms creation",
+          "test_data": {
+            "venture_stage": "draft_idea",
+            "populated_fields": ["name", "description", "industry", "problem_statement", "value_proposition"]
+          }
+        },
+        {
+          "id": "AC-006-2",
+          "scenario": "Blueprint to venture field mapping",
+          "given": "Chairman selects a blueprint",
+          "when": "Venture is created",
+          "then": "Blueprint.title -> venture.name AND Blueprint.problem_framing -> venture.problem_statement AND Blueprint.market_hypothesis -> venture.metadata.market_hypothesis AND Blueprint.competitors -> venture.metadata.competitor_analysis AND source_blueprint_id is set",
+          "test_data": {
+            "field_mapping": {
+              "title": "name",
+              "problem_framing": "problem_statement",
+              "market_hypothesis": "metadata.market_hypothesis",
+              "competitors": "metadata.competitor_analysis"
+            }
+          }
+        },
+        {
+          "id": "AC-006-3",
+          "scenario": "Confirmation dialog before selection",
+          "given": "Chairman clicks 'Select Blueprint'",
+          "when": "Selection is initiated",
+          "then": "Confirmation dialog shows: Blueprint name, Fields that will be populated, 'Confirm' and 'Cancel' buttons",
+          "test_data": {
+            "dialog_type": "confirmation"
+          }
+        },
+        {
+          "id": "AC-006-4",
+          "scenario": "Error path - Venture creation fails",
+          "given": "Chairman confirms blueprint selection",
+          "when": "Database insert fails",
+          "then": "Error message is shown AND Chairman stays on blueprint page AND can retry",
+          "expected_error": "Failed to create venture. Please try again."
+        },
+        {
+          "id": "AC-006-5",
+          "scenario": "Link venture to blueprint for tracking",
+          "given": "Venture is successfully created from blueprint",
+          "when": "Creation completes",
+          "then": "Venture.source_blueprint_id = blueprint.id AND blueprint.selection_count is incremented AND event is logged for analytics",
+          "test_data": {
+            "tracking_fields": ["source_blueprint_id", "selection_count", "analytics_event"]
+          }
+        }
+      ],
+      "priority": "must_have",
+      "story_points": 5,
+      "complexity": "M",
+      "implementation_context": "Use ventures table from EHG schema. Set source_blueprint_id to track origin. Increment blueprint.selection_count for popularity tracking. Create venture in 'draft_idea' stage. Ensure proper RLS for venture creation.",
+      "architecture_references": [
+        "database/migrations/20251130_ehg_app_schema_migration.sql - ventures table with source_blueprint_id column"
+      ],
+      "example_code_patterns": [
+        {
+          "pattern": "Venture creation from blueprint",
+          "code": "const createVentureFromBlueprint = async (blueprintId: string, portfolioId: string) => {\n  const { data: blueprint } = await supabase.from('blueprints').select('*').eq('id', blueprintId).single();\n  \n  const { data: venture, error } = await supabase.from('ventures').insert({\n    name: blueprint.title,\n    description: blueprint.description,\n    problem_statement: blueprint.scaffold.problem_framing,\n    industry: blueprint.industry,\n    stage: 'draft_idea',\n    portfolio_id: portfolioId,\n    source_blueprint_id: blueprintId,\n    metadata: {\n      market_hypothesis: blueprint.scaffold.market_hypothesis,\n      competitor_analysis: blueprint.scaffold.competitors\n    }\n  }).select().single();\n  \n  // Track selection\n  await supabase.rpc('increment_blueprint_selection', { blueprint_id: blueprintId });\n  \n  return venture;\n};"
+        }
+      ],
+      "testing_scenarios": [
+        {
+          "id": "TC-006-1",
+          "scenario": "Verify venture creation from blueprint",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-006-2",
+          "scenario": "Verify field mapping is correct",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-006-3",
+          "scenario": "Verify source_blueprint_id tracking",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-006-4",
+          "scenario": "Verify error handling on creation failure",
+          "priority": "P1"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/blueprint-engine/US-006-select-blueprint.spec.ts"
+    },
+    {
+      "story_id": "US-007",
+      "story_key": "US-BLUEPRINT-007",
+      "epic": "EPIC-003",
+      "title": "Track Blueprint Selection for System Learning",
+      "as_a": "Chairman",
+      "i_want": "my blueprint selection to be tracked",
+      "so_that": "the system learns my preferences and improves future recommendations",
+      "acceptance_criteria": [
+        {
+          "id": "AC-007-1",
+          "scenario": "Selection event is recorded",
+          "given": "Chairman selects a blueprint",
+          "when": "Venture is created successfully",
+          "then": "Selection event is logged with: user_id, blueprint_id, timestamp, portfolio_id, session_duration",
+          "test_data": {
+            "event_type": "blueprint_selected",
+            "required_fields": ["user_id", "blueprint_id", "timestamp", "portfolio_id"]
+          }
+        },
+        {
+          "id": "AC-007-2",
+          "scenario": "Selection context is captured",
+          "given": "Chairman selects a blueprint",
+          "when": "Event is logged",
+          "then": "Context includes: blueprints_viewed_before_selection, filters_applied, sort_order_used, time_spent_previewing",
+          "test_data": {
+            "context_fields": ["viewed_blueprints", "active_filters", "sort_order", "preview_duration_ms"]
+          }
+        },
+        {
+          "id": "AC-007-3",
+          "scenario": "Privacy notice displayed",
+          "given": "Chairman uses blueprint browser for first time",
+          "when": "Page loads",
+          "then": "Unobtrusive notice explains: 'Your interactions help improve recommendations' AND link to preferences is available",
+          "test_data": {
+            "notice_type": "first_visit_only"
+          }
+        }
+      ],
+      "priority": "should_have",
+      "story_points": 3,
+      "complexity": "S",
+      "implementation_context": "Create 'blueprint_interactions' table to store all user events. Use this data for preference learning (US-008, US-009). Events: view, expand, select. Include session context for better ML training data.",
+      "architecture_references": [
+        "Consider pattern from database/schema/009_context_learning_schema.sql for context tracking"
+      ],
+      "example_code_patterns": [
+        {
+          "pattern": "Selection event tracking",
+          "code": "const trackSelection = async (blueprintId: string, context: SelectionContext) => {\n  await supabase.from('blueprint_interactions').insert({\n    user_id: currentUser.id,\n    blueprint_id: blueprintId,\n    event_type: 'selected',\n    event_context: {\n      viewed_blueprints: context.viewedIds,\n      active_filters: context.filters,\n      preview_duration_ms: context.previewTime,\n      session_duration_ms: context.sessionTime\n    }\n  });\n};"
+        }
+      ],
+      "testing_scenarios": [
+        {
+          "id": "TC-007-1",
+          "scenario": "Verify selection event is logged",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-007-2",
+          "scenario": "Verify context data is captured",
+          "priority": "P1"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/blueprint-engine/US-007-selection-tracking.spec.ts"
+    },
+    {
+      "story_id": "US-008",
+      "story_key": "US-BLUEPRINT-008",
+      "epic": "EPIC-004",
+      "title": "Capture View, Expand, and Select Signals",
+      "as_a": "System",
+      "i_want": "to capture user interaction signals (view, expand, select)",
+      "so_that": "I can learn Chairman preferences and improve recommendations",
+      "acceptance_criteria": [
+        {
+          "id": "AC-008-1",
+          "scenario": "View signal captured",
+          "given": "Blueprint card is rendered in viewport",
+          "when": "Card is visible for more than 2 seconds",
+          "then": "View event is logged with: blueprint_id, viewport_position, timestamp",
+          "test_data": {
+            "visibility_threshold_ms": 2000,
+            "event_type": "viewed"
+          }
+        },
+        {
+          "id": "AC-008-2",
+          "scenario": "Expand signal captured",
+          "given": "Chairman clicks to preview a blueprint",
+          "when": "Preview modal opens",
+          "then": "Expand event is logged with: blueprint_id, previous_views_count, expand_duration",
+          "test_data": {
+            "event_type": "expanded"
+          }
+        },
+        {
+          "id": "AC-008-3",
+          "scenario": "Select signal captured (strongest signal)",
+          "given": "Chairman confirms blueprint selection",
+          "when": "Venture is created",
+          "then": "Select event is logged with weight=1.0 AND includes full interaction history for session",
+          "test_data": {
+            "event_type": "selected",
+            "signal_weight": 1.0
+          }
+        },
+        {
+          "id": "AC-008-4",
+          "scenario": "Negative signal from skip",
+          "given": "Chairman views blueprint preview",
+          "when": "Chairman closes preview without selecting (after 10+ seconds)",
+          "then": "Skip event is logged with weight=-0.3 AND indicates conscious rejection",
+          "test_data": {
+            "event_type": "skipped",
+            "signal_weight": -0.3,
+            "threshold_seconds": 10
+          }
+        },
+        {
+          "id": "AC-008-5",
+          "scenario": "Debounce rapid interactions",
+          "given": "Chairman rapidly scrolls through list",
+          "when": "Multiple blueprints flash in viewport",
+          "then": "Only blueprints viewed for >2s are logged AND system debounces rapid scroll events",
+          "test_data": {
+            "debounce_ms": 2000
+          }
+        }
+      ],
+      "priority": "should_have",
+      "story_points": 5,
+      "complexity": "M",
+      "implementation_context": "Use Intersection Observer API for view tracking. Implement client-side debouncing to reduce noise. Batch events and send to server every 30 seconds or on page unload. Store in 'blueprint_interactions' table with event_type and signal_weight columns.",
+      "architecture_references": [
+        "Intersection Observer API for viewport detection",
+        "Consider pattern from analytics/tracking systems"
+      ],
+      "example_code_patterns": [
+        {
+          "pattern": "View tracking with Intersection Observer",
+          "code": "const observer = new IntersectionObserver(\n  (entries) => {\n    entries.forEach(entry => {\n      if (entry.isIntersecting) {\n        const timer = setTimeout(() => {\n          trackView(entry.target.dataset.blueprintId);\n        }, 2000);\n        entry.target.dataset.viewTimer = timer;\n      } else {\n        clearTimeout(entry.target.dataset.viewTimer);\n      }\n    });\n  },\n  { threshold: 0.5 }\n);"
+        }
+      ],
+      "testing_scenarios": [
+        {
+          "id": "TC-008-1",
+          "scenario": "Verify view event after 2s visibility",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-008-2",
+          "scenario": "Verify expand event on preview",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-008-3",
+          "scenario": "Verify skip signal on conscious rejection",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-008-4",
+          "scenario": "Verify debounce prevents noise",
+          "priority": "P1"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/blueprint-engine/US-008-signal-capture.spec.ts"
+    },
+    {
+      "story_id": "US-009",
+      "story_key": "US-BLUEPRINT-009",
+      "epic": "EPIC-004",
+      "title": "Aggregate Preference Data for Recommendation Improvement",
+      "as_a": "System",
+      "i_want": "to aggregate preference data across interactions",
+      "so_that": "future blueprint recommendations improve based on Chairman patterns",
+      "acceptance_criteria": [
+        {
+          "id": "AC-009-1",
+          "scenario": "Daily preference aggregation",
+          "given": "User interaction events exist in database",
+          "when": "Daily aggregation job runs (midnight)",
+          "then": "User preference profile is updated with: category_preferences, complexity_preferences, industry_preferences",
+          "test_data": {
+            "aggregation_schedule": "0 0 * * *",
+            "output_table": "user_blueprint_preferences"
+          }
+        },
+        {
+          "id": "AC-009-2",
+          "scenario": "Preference score calculation",
+          "given": "User has interacted with blueprints",
+          "when": "Preferences are calculated",
+          "then": "Score = SUM(signal_weight * recency_decay) for each category AND scores are normalized to 0-100 range",
+          "test_data": {
+            "recency_decay": "0.95^days_old",
+            "score_range": [0, 100]
+          }
+        },
+        {
+          "id": "AC-009-3",
+          "scenario": "Cold start handling",
+          "given": "New user with no interaction history",
+          "when": "Preferences are requested",
+          "then": "System falls back to global popularity scores AND returns 'cold_start: true' flag",
+          "test_data": {
+            "fallback_strategy": "global_popularity"
+          }
+        },
+        {
+          "id": "AC-009-4",
+          "scenario": "Preference decay over time",
+          "given": "User has old interaction data (>30 days)",
+          "when": "Preferences are recalculated",
+          "then": "Older interactions have reduced weight AND very old data (>90 days) is excluded from calculation",
+          "test_data": {
+            "max_age_days": 90,
+            "decay_factor": 0.95
+          }
+        }
+      ],
+      "priority": "could_have",
+      "story_points": 8,
+      "complexity": "L",
+      "implementation_context": "Create database function or scheduled job for aggregation. Store preferences in 'user_blueprint_preferences' table. Use time-weighted scoring with exponential decay. Consider using Supabase edge functions or pg_cron for scheduling.",
+      "architecture_references": [
+        "database/schema/009_context_learning_schema.sql for learning patterns",
+        "Consider pg_cron extension for scheduling"
+      ],
+      "example_code_patterns": [
+        {
+          "pattern": "Preference aggregation function",
+          "code": "CREATE OR REPLACE FUNCTION aggregate_user_preferences(p_user_id UUID)\nRETURNS VOID AS $$\nDECLARE\n  decay_factor CONSTANT DECIMAL := 0.95;\nBEGIN\n  INSERT INTO user_blueprint_preferences (user_id, category, preference_score, updated_at)\n  SELECT\n    p_user_id,\n    b.category,\n    SUM(i.signal_weight * POWER(decay_factor, EXTRACT(DAY FROM NOW() - i.created_at))),\n    NOW()\n  FROM blueprint_interactions i\n  JOIN blueprints b ON i.blueprint_id = b.id\n  WHERE i.user_id = p_user_id\n    AND i.created_at > NOW() - INTERVAL '90 days'\n  GROUP BY b.category\n  ON CONFLICT (user_id, category)\n  DO UPDATE SET preference_score = EXCLUDED.preference_score, updated_at = NOW();\nEND;\n$$ LANGUAGE plpgsql;"
+        }
+      ],
+      "testing_scenarios": [
+        {
+          "id": "TC-009-1",
+          "scenario": "Verify daily aggregation runs",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-009-2",
+          "scenario": "Verify preference scores are normalized",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-009-3",
+          "scenario": "Verify cold start fallback",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-009-4",
+          "scenario": "Verify old data is excluded",
+          "priority": "P2"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/blueprint-engine/US-009-preference-aggregation.spec.ts"
+    },
+    {
+      "story_id": "US-010",
+      "story_key": "US-BLUEPRINT-010",
+      "epic": "EPIC-005",
+      "title": "Evaluate Blueprints Against Portfolio Gaps",
+      "as_a": "System",
+      "i_want": "to evaluate each blueprint against current portfolio gaps",
+      "so_that": "recommendations prioritize strategic gap-filling opportunities",
+      "acceptance_criteria": [
+        {
+          "id": "AC-010-1",
+          "scenario": "Gap analysis calculation",
+          "given": "User has existing ventures in portfolio",
+          "when": "Blueprint list is loaded",
+          "then": "Each blueprint has portfolio_gap_score calculated AND score indicates how well blueprint fills identified gaps",
+          "test_data": {
+            "score_range": [0, 100],
+            "calculation": "gap_fill_potential"
+          }
+        },
+        {
+          "id": "AC-010-2",
+          "scenario": "Industry gap detection",
+          "given": "Portfolio has 3 tech ventures, 0 healthcare ventures",
+          "when": "Gap analysis runs",
+          "then": "Healthcare blueprints receive higher gap scores AND tech blueprints receive lower scores (diminishing returns)",
+          "test_data": {
+            "gap_type": "industry_diversity",
+            "boost_factor": 1.5
+          }
+        },
+        {
+          "id": "AC-010-3",
+          "scenario": "Stage gap detection",
+          "given": "Portfolio has mostly early-stage ventures",
+          "when": "Gap analysis runs",
+          "then": "Blueprints targeting later stages receive higher gap scores AND provides stage balance",
+          "test_data": {
+            "gap_type": "stage_balance"
+          }
+        },
+        {
+          "id": "AC-010-4",
+          "scenario": "Risk profile gap detection",
+          "given": "Portfolio is heavily weighted to high-risk ventures",
+          "when": "Gap analysis runs",
+          "then": "Lower-risk blueprints receive higher gap scores AND helps balance portfolio risk",
+          "test_data": {
+            "gap_type": "risk_balance"
+          }
+        },
+        {
+          "id": "AC-010-5",
+          "scenario": "Gap score factors into ranking",
+          "given": "Blueprints have been scored for gaps",
+          "when": "Default sort is applied",
+          "then": "Blueprints are sorted by composite score: (0.4 * capability) + (0.4 * portfolio_gap) + (0.2 * preference)",
+          "test_data": {
+            "sort_weights": {"capability": 0.4, "portfolio_gap": 0.4, "preference": 0.2}
+          }
+        }
+      ],
+      "priority": "must_have",
+      "story_points": 8,
+      "complexity": "L",
+      "implementation_context": "Create database function 'calculate_portfolio_gap_score(blueprint_id, portfolio_id)'. Analyze: industry distribution, stage distribution, risk profile distribution, revenue model diversity. Higher gap = more valuable. Cache scores and refresh on portfolio change.",
+      "architecture_references": [
+        "database/migrations/20251130_ehg_app_schema_migration.sql - ventures table for portfolio analysis",
+        "database/migrations/20251130_ehg_app_schema_migration.sql - portfolios table"
+      ],
+      "example_code_patterns": [
+        {
+          "pattern": "Portfolio gap analysis function",
+          "code": "CREATE OR REPLACE FUNCTION calculate_portfolio_gap_score(\n  p_blueprint_id UUID,\n  p_portfolio_id UUID\n) RETURNS DECIMAL AS $$\nDECLARE\n  industry_gap DECIMAL;\n  stage_gap DECIMAL;\n  risk_gap DECIMAL;\n  total_ventures INT;\n  blueprint_industry TEXT;\nBEGIN\n  SELECT industry INTO blueprint_industry FROM blueprints WHERE id = p_blueprint_id;\n  SELECT COUNT(*) INTO total_ventures FROM ventures WHERE portfolio_id = p_portfolio_id AND status = 'active';\n  \n  -- Industry gap: fewer ventures in this industry = higher score\n  SELECT 100 - COALESCE((COUNT(*) * 100 / NULLIF(total_ventures, 0)), 0)\n  INTO industry_gap\n  FROM ventures\n  WHERE portfolio_id = p_portfolio_id AND industry = blueprint_industry;\n  \n  -- Similar calculations for stage_gap and risk_gap...\n  \n  RETURN (industry_gap * 0.5) + (stage_gap * 0.3) + (risk_gap * 0.2);\nEND;\n$$ LANGUAGE plpgsql;"
+        }
+      ],
+      "testing_scenarios": [
+        {
+          "id": "TC-010-1",
+          "scenario": "Verify gap score calculation",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-010-2",
+          "scenario": "Verify industry gap boosts underrepresented industries",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-010-3",
+          "scenario": "Verify composite sort order",
+          "priority": "P1"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/blueprint-engine/US-010-gap-evaluation.spec.ts"
+    },
+    {
+      "story_id": "US-011",
+      "story_key": "US-BLUEPRINT-011",
+      "epic": "EPIC-005",
+      "title": "Flag Cannibalization Risks",
+      "as_a": "System",
+      "i_want": "to flag blueprints that may cannibalize existing ventures",
+      "so_that": "Chairman is informed of potential conflicts before selection",
+      "acceptance_criteria": [
+        {
+          "id": "AC-011-1",
+          "scenario": "Cannibalization detection",
+          "given": "Blueprint targets same industry and market as existing venture",
+          "when": "Cannibalization analysis runs",
+          "then": "Cannibalization risk flag is set AND risk score calculated (0-100) AND affected venture(s) identified",
+          "test_data": {
+            "risk_threshold": 50,
+            "output_fields": ["risk_flag", "risk_score", "affected_ventures"]
+          }
+        },
+        {
+          "id": "AC-011-2",
+          "scenario": "Cannibalization warning display",
+          "given": "Blueprint has cannibalization risk > 50",
+          "when": "Blueprint card is displayed",
+          "then": "Warning badge shows on card AND tooltip lists affected ventures AND 'View Conflict' link available",
+          "test_data": {
+            "badge_type": "warning",
+            "tooltip_content": "May compete with: [venture names]"
+          }
+        },
+        {
+          "id": "AC-011-3",
+          "scenario": "Detailed conflict analysis",
+          "given": "Chairman clicks 'View Conflict' on cannibalization warning",
+          "when": "Conflict modal opens",
+          "then": "Shows: Blueprint vs Existing Venture comparison AND overlapping target markets AND potential revenue impact AND mitigation suggestions",
+          "test_data": {
+            "comparison_fields": ["target_market", "value_proposition", "pricing_tier"]
+          }
+        },
+        {
+          "id": "AC-011-4",
+          "scenario": "Allow selection despite warning",
+          "given": "Blueprint has cannibalization warning",
+          "when": "Chairman clicks 'Select Blueprint'",
+          "then": "Additional confirmation shows warning AND requires explicit acknowledgment AND logs informed decision",
+          "test_data": {
+            "confirmation_type": "acknowledged_risk"
+          }
+        },
+        {
+          "id": "AC-011-5",
+          "scenario": "No false positives for complementary ventures",
+          "given": "Blueprint is in same industry but targets different segment",
+          "when": "Cannibalization analysis runs",
+          "then": "Low or no cannibalization risk flagged AND system recognizes complementary positioning",
+          "test_data": {
+            "differentiation_factors": ["target_segment", "pricing_tier", "geography"]
+          }
+        }
+      ],
+      "priority": "should_have",
+      "story_points": 5,
+      "complexity": "M",
+      "implementation_context": "Create cannibalization detection function that compares: industry, target_market, value_proposition, pricing_tier. Use text similarity or embedding comparison for value_proposition matching. Cache results per portfolio composition.",
+      "architecture_references": [
+        "database/migrations/20251130_ehg_app_schema_migration.sql - ventures with industry, target_market fields",
+        "Consider using pg_trgm extension for text similarity"
+      ],
+      "example_code_patterns": [
+        {
+          "pattern": "Cannibalization risk calculation",
+          "code": "CREATE OR REPLACE FUNCTION calculate_cannibalization_risk(\n  p_blueprint_id UUID,\n  p_portfolio_id UUID\n) RETURNS TABLE(\n  venture_id UUID,\n  venture_name TEXT,\n  risk_score DECIMAL,\n  overlap_factors JSONB\n) AS $$\nBEGIN\n  RETURN QUERY\n  SELECT\n    v.id,\n    v.name,\n    (\n      CASE WHEN v.industry = b.industry THEN 40 ELSE 0 END +\n      CASE WHEN similarity(v.target_market, b.target_market) > 0.5 THEN 30 ELSE 0 END +\n      CASE WHEN similarity(v.value_proposition, b.value_proposition) > 0.5 THEN 30 ELSE 0 END\n    )::DECIMAL as risk_score,\n    jsonb_build_object(\n      'industry_match', v.industry = b.industry,\n      'market_similarity', similarity(v.target_market, b.target_market)\n    )\n  FROM ventures v\n  CROSS JOIN blueprints b\n  WHERE v.portfolio_id = p_portfolio_id\n    AND b.id = p_blueprint_id\n    AND v.status = 'active'\n  ORDER BY risk_score DESC;\nEND;\n$$ LANGUAGE plpgsql;"
+        }
+      ],
+      "testing_scenarios": [
+        {
+          "id": "TC-011-1",
+          "scenario": "Verify cannibalization detected for overlapping ventures",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-011-2",
+          "scenario": "Verify warning badge displays",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-011-3",
+          "scenario": "Verify conflict modal shows details",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-011-4",
+          "scenario": "Verify complementary ventures don't trigger false positives",
+          "priority": "P1"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/blueprint-engine/US-011-cannibalization-flags.spec.ts"
+    },
+    {
+      "story_id": "US-012",
+      "story_key": "US-BLUEPRINT-012",
+      "epic": "EPIC-005",
+      "title": "Strategic Recommendation Summary",
+      "as_a": "Chairman",
+      "i_want": "to see a strategic recommendation summary for each blueprint",
+      "so_that": "I can quickly understand the overall strategic fit",
+      "acceptance_criteria": [
+        {
+          "id": "AC-012-1",
+          "scenario": "Strategic summary badge on card",
+          "given": "Blueprint card is displayed",
+          "when": "Chairman views the card",
+          "then": "Strategic fit badge shows: 'Highly Recommended', 'Recommended', 'Consider', or 'Caution' AND badge color matches recommendation level",
+          "test_data": {
+            "badges": {
+              "highly_recommended": {"min_score": 80, "color": "green"},
+              "recommended": {"min_score": 60, "color": "blue"},
+              "consider": {"min_score": 40, "color": "yellow"},
+              "caution": {"min_score": 0, "color": "red"}
+            }
+          }
+        },
+        {
+          "id": "AC-012-2",
+          "scenario": "Recommendation reasoning tooltip",
+          "given": "Strategic badge is displayed",
+          "when": "Chairman hovers over badge",
+          "then": "Tooltip shows: Top 3 reasons for recommendation AND key score breakdown AND potential concerns if any",
+          "test_data": {
+            "tooltip_sections": ["reasons", "scores", "concerns"]
+          }
+        },
+        {
+          "id": "AC-012-3",
+          "scenario": "Composite score calculation",
+          "given": "Blueprint has all scores calculated",
+          "when": "Strategic recommendation is determined",
+          "then": "Score = weighted average: 35% portfolio_gap + 35% capability_fit + 20% preference_match + 10% popularity AND cannibalization penalty applied if flagged",
+          "test_data": {
+            "weights": {
+              "portfolio_gap": 0.35,
+              "capability_fit": 0.35,
+              "preference_match": 0.20,
+              "popularity": 0.10
+            },
+            "cannibalization_penalty": -20
+          }
+        },
+        {
+          "id": "AC-012-4",
+          "scenario": "Personalized recommendation text",
+          "given": "Chairman views blueprint details",
+          "when": "Recommendation section is displayed",
+          "then": "Shows personalized text: 'This blueprint is {recommendation} because it {top_reason} and aligns with your preference for {preference_type}' AND text adapts to specific scores",
+          "test_data": {
+            "text_template": "personalized"
+          }
+        }
+      ],
+      "priority": "should_have",
+      "story_points": 5,
+      "complexity": "M",
+      "implementation_context": "Create composite scoring function that combines all signals. Generate human-readable recommendation text based on score breakdown. Use template strings with dynamic substitution.",
+      "architecture_references": [
+        "US-002, US-003, US-010, US-011 provide input scores"
+      ],
+      "example_code_patterns": [
+        {
+          "pattern": "Strategic recommendation generation",
+          "code": "const generateRecommendation = (blueprint: BlueprintWithScores): Recommendation => {\n  let score = (\n    blueprint.portfolio_gap_score * 0.35 +\n    blueprint.capability_score * 0.35 +\n    blueprint.preference_score * 0.20 +\n    blueprint.popularity_score * 0.10\n  );\n  \n  // Apply cannibalization penalty\n  if (blueprint.cannibalization_risk > 50) {\n    score -= 20;\n  }\n  \n  const level = score >= 80 ? 'highly_recommended' :\n                score >= 60 ? 'recommended' :\n                score >= 40 ? 'consider' : 'caution';\n  \n  const reasons = generateReasons(blueprint);\n  \n  return { level, score, reasons, text: generateText(level, reasons) };\n};"
+        }
+      ],
+      "testing_scenarios": [
+        {
+          "id": "TC-012-1",
+          "scenario": "Verify badge displays correct level",
+          "priority": "P0"
+        },
+        {
+          "id": "TC-012-2",
+          "scenario": "Verify tooltip shows reasoning",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-012-3",
+          "scenario": "Verify cannibalization penalty applies",
+          "priority": "P1"
+        },
+        {
+          "id": "TC-012-4",
+          "scenario": "Verify personalized text generation",
+          "priority": "P2"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/blueprint-engine/US-012-strategic-summary.spec.ts"
+    }
+  ],
+  "implementation_context": {
+    "database_changes": [
+      {
+        "table": "blueprints",
+        "description": "New table to store blueprint definitions",
+        "columns": ["id", "title", "description", "industry", "category", "scaffold", "required_capabilities", "selection_count", "created_at"]
+      },
+      {
+        "table": "blueprint_scaffolds",
+        "description": "Detailed scaffold content for each blueprint",
+        "columns": ["id", "blueprint_id", "problem_framing", "market_hypothesis", "competitors", "technical_requirements"]
+      },
+      {
+        "table": "blueprint_interactions",
+        "description": "User interaction tracking for preference learning",
+        "columns": ["id", "user_id", "blueprint_id", "event_type", "signal_weight", "event_context", "created_at"]
+      },
+      {
+        "table": "user_blueprint_preferences",
+        "description": "Aggregated user preferences by category",
+        "columns": ["id", "user_id", "category", "preference_score", "updated_at"]
+      }
+    ],
+    "components_to_create": [
+      "BlueprintBrowser - Main browsing interface",
+      "BlueprintCard - Individual blueprint display",
+      "BlueprintPreviewModal - Full preview modal",
+      "CapabilityScoreDisplay - Score visualization",
+      "PortfolioScoreDisplay - Portfolio alignment visualization",
+      "CannibalizationWarning - Conflict warning component",
+      "StrategicBadge - Recommendation badge"
+    ],
+    "database_functions": [
+      "calculate_capability_score(blueprint_id, company_id)",
+      "calculate_portfolio_gap_score(blueprint_id, portfolio_id)",
+      "calculate_cannibalization_risk(blueprint_id, portfolio_id)",
+      "aggregate_user_preferences(user_id)",
+      "increment_blueprint_selection(blueprint_id)"
+    ],
+    "api_endpoints": [
+      "GET /api/blueprints - List all blueprints with scores",
+      "GET /api/blueprints/:id - Get blueprint details",
+      "POST /api/blueprints/:id/select - Select blueprint and create venture",
+      "POST /api/blueprint-interactions - Log user interactions",
+      "GET /api/user-preferences - Get user preferences"
+    ],
+    "performance_considerations": [
+      "Cache blueprint scores per user/portfolio combination",
+      "Use Intersection Observer for view tracking to minimize DOM queries",
+      "Batch interaction events before server send",
+      "Paginate blueprint list (20 per page)"
+    ],
+    "security_considerations": [
+      "RLS policies for blueprint_interactions (users can only see own)",
+      "RLS policies for user_blueprint_preferences (users can only see own)",
+      "Rate limiting on interaction logging endpoint",
+      "Validate portfolio ownership before gap analysis"
+    ]
+  },
+  "test_scenarios": {
+    "e2e_test_suites": [
+      {
+        "suite": "Blueprint Browsing",
+        "tests": ["US-001", "US-002", "US-003"],
+        "priority": "P0",
+        "estimated_tests": 12
+      },
+      {
+        "suite": "Scaffold Preview",
+        "tests": ["US-004", "US-005"],
+        "priority": "P0",
+        "estimated_tests": 8
+      },
+      {
+        "suite": "Blueprint Selection",
+        "tests": ["US-006", "US-007"],
+        "priority": "P0",
+        "estimated_tests": 8
+      },
+      {
+        "suite": "Preference Learning",
+        "tests": ["US-008", "US-009"],
+        "priority": "P1",
+        "estimated_tests": 10
+      },
+      {
+        "suite": "Portfolio Awareness",
+        "tests": ["US-010", "US-011", "US-012"],
+        "priority": "P0",
+        "estimated_tests": 12
+      }
+    ],
+    "integration_tests": [
+      "Blueprint creation from seed data",
+      "Venture creation from blueprint selection",
+      "Preference aggregation job execution",
+      "Gap analysis with various portfolio compositions"
+    ],
+    "unit_tests": [
+      "Score calculation functions",
+      "Recommendation text generation",
+      "Signal weight calculations",
+      "Debounce logic for interactions"
+    ]
+  },
+  "confidence_score": 92,
+  "confidence_breakdown": {
+    "requirement_clarity": 95,
+    "technical_feasibility": 90,
+    "test_coverage_completeness": 92,
+    "implementation_guidance_quality": 90,
+    "invest_criteria_adherence": 93
+  },
+  "notes": [
+    "Stories are ordered by epic for logical grouping, not necessarily implementation order",
+    "US-009 (preference aggregation) is lower priority - can be deferred to v1.1",
+    "Database schema should be created before component work begins",
+    "Consider feature flags for preference learning features",
+    "All scores use 0-100 range for consistency"
+  ]
+}

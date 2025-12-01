@@ -1,0 +1,82 @@
+{
+  "sd_id": "SD-RESEARCH-106",
+  "sd_title": "LEO Protocol Evolution to v5.x",
+  "priority": "critical",
+  "research_status": "complete",
+  "last_updated": "2025-11-29",
+  "reviewed_by": "Claude (Opus 4.5)",
+  "documents": [
+    {
+      "id": "doc-001",
+      "title": "LEO Protocol v5.x — Next-Generation Governance Engine",
+      "filename": "LEO Protocol v5.x — Next-Generation Governance Engine.pdf",
+      "pages": 18,
+      "relevance": "primary",
+      "summary_file": "leo-protocol-v5x-summary.md",
+      "key_sections": [
+        "Vision Statement",
+        "Architecture Overview",
+        "Control Flow Model",
+        "Trigger Model for Stage Transitions",
+        "SD-Stage Alignment Rules",
+        "Workflow Engine Evaluation",
+        "Migration Strategy"
+      ],
+      "key_decisions": [
+        "Temporal.io selected as workflow engine",
+        "40-stage pipeline with LEAD/PLAN/EXEC phases",
+        "5-type trigger model with conflict resolution",
+        "Backward-compatible migration from v4.3.3"
+      ]
+    },
+    {
+      "id": "doc-002",
+      "title": "Stage Data Contract System (JSON Schema + TypeScript)",
+      "filename": "Stage Data Contract System (JSON Schema + TypeScript).pdf",
+      "pages": 16,
+      "relevance": "supporting",
+      "summary_file": "stage-data-contracts-summary.md",
+      "key_sections": [
+        "Contract Structure",
+        "JSON Schema Patterns",
+        "TypeScript Generation",
+        "Validation Pipeline"
+      ],
+      "key_decisions": [
+        "StageX_input.json / StageX_output.json pattern",
+        "Ajv for runtime validation",
+        "json-schema-to-typescript for type generation"
+      ]
+    },
+    {
+      "id": "doc-003",
+      "title": "Multi-Venture Orchestration Strategy",
+      "filename": "Multi-Venture Orchestration Strategy for AI-Run Venture Portfolio.pdf",
+      "pages": 11,
+      "relevance": "supporting",
+      "summary_file": "multi-venture-orchestration-summary.md",
+      "key_sections": [
+        "Scale Requirements",
+        "Temporal.io Patterns",
+        "Resource Isolation",
+        "EVA Autonomy Integration"
+      ],
+      "key_decisions": [
+        "Support 10-50 concurrent ventures",
+        "Independent workflow per venture",
+        "Autonomy-aware stage progression"
+      ]
+    }
+  ],
+  "prd_generation_notes": [
+    "Reference Temporal.io TypeScript SDK documentation",
+    "Define initial stage contracts for stages 1-10 as MVP",
+    "Include capacity planning for multi-venture support",
+    "Plan migration path from v4.3.3 with backward compatibility",
+    "Integrate EVA autonomy levels for trigger permissions"
+  ],
+  "cross_references": {
+    "SD-RESEARCH-107": "EVA intent-vs-reality feeds drift detection into stage gates",
+    "SD-RESEARCH-108": "Security & compliance policies integrated into Policy Engine"
+  }
+}

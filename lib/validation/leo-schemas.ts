@@ -260,3 +260,82 @@ export type GateScoresResponseType = z.infer<typeof GateScoresResponse>;
 export type WSGateUpdatedEventType = z.infer<typeof WSGateUpdatedEvent>;
 export type WSSubAgentStatusEventType = z.infer<typeof WSSubAgentStatusEvent>;
 export type WSDriftDetectedEventType = z.infer<typeof WSDriftDetectedEvent>;
+
+// ============================================
+// CCE Compliance API Schemas (SD-AUTO-COMPLIANCE-ENGINE-001)
+// ============================================
+
+export const ComplianceSeverityEnum = z.enum(['critical', 'high', 'medium', 'low', 'info']);
+export const ComplianceCategoryEnum = z.enum(['crewai', 'dossier', 'session', 'integration', 'custom']);
+export const ComplianceEventTypeEnum = z.enum([
+  'check_started', 'check_completed', 'check_failed',
+  'violation_detected', 'violation_resolved',
+  'policy_changed', 'remediation_created'
+]);
+
+/**
+ * GET /api/compliance/checks query parameters
+ */
+export const ComplianceChecksQuery = z.object({
+  limit: z.coerce.number().min(1).max(100).default(20).optional(),
+  offset: z.coerce.number().min(0).default(0).optional(),
+  stage: z.coerce.number().min(1).max(40).optional(),
+  run_type: z.enum(['scheduled', 'manual', 'on_demand']).optional()
+});
+
+/**
+ * GET /api/compliance/violations query parameters
+ */
+export const ComplianceViolationsQuery = z.object({
+  limit: z.coerce.number().min(1).max(100).default(20).optional(),
+  offset: z.coerce.number().min(0).default(0).optional(),
+  stage: z.coerce.number().min(1).max(40).optional(),
+  severity: ComplianceSeverityEnum.optional(),
+  status: z.enum(['open', 'resolved', 'exception']).optional()
+});
+
+/**
+ * GET /api/compliance/policies query parameters
+ */
+export const CompliancePoliciesQuery = z.object({
+  category: ComplianceCategoryEnum.optional(),
+  is_active: z.coerce.boolean().optional(),
+  severity: ComplianceSeverityEnum.optional()
+});
+
+/**
+ * GET /api/compliance/events query parameters
+ */
+export const ComplianceEventsQuery = z.object({
+  limit: z.coerce.number().min(1).max(100).default(50).optional(),
+  offset: z.coerce.number().min(0).default(0).optional(),
+  event_type: ComplianceEventTypeEnum.optional(),
+  is_read: z.coerce.boolean().optional(),
+  since: z.string().datetime().optional()
+});
+
+/**
+ * POST /api/compliance/run request body
+ */
+export const ComplianceRunBody = z.object({
+  run_type: z.enum(['manual', 'on_demand']).default('manual'),
+  stages: z.array(z.number().min(1).max(40)).optional(),
+  emit_events: z.boolean().default(true)
+});
+
+/**
+ * PATCH /api/compliance/events/[id] request body
+ */
+export const ComplianceEventPatchBody = z.object({
+  is_read: z.boolean()
+});
+
+// Compliance type exports
+export type ComplianceSeverity = z.infer<typeof ComplianceSeverityEnum>;
+export type ComplianceCategory = z.infer<typeof ComplianceCategoryEnum>;
+export type ComplianceEventType = z.infer<typeof ComplianceEventTypeEnum>;
+export type ComplianceChecksQueryType = z.infer<typeof ComplianceChecksQuery>;
+export type ComplianceViolationsQueryType = z.infer<typeof ComplianceViolationsQuery>;
+export type CompliancePoliciesQueryType = z.infer<typeof CompliancePoliciesQuery>;
+export type ComplianceEventsQueryType = z.infer<typeof ComplianceEventsQuery>;
+export type ComplianceRunBodyType = z.infer<typeof ComplianceRunBody>;

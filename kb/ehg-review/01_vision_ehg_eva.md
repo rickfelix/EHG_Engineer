@@ -105,31 +105,41 @@ EVA (Executive Virtual Assistant) serves as the **intelligent orchestration laye
 - **Chairman Interface**: Single human touchpoint for all decisions
 - **Cross-Venture Synergy**: Identifies and leverages portfolio opportunities
 
-### EVA's Evolutionary Trajectory
+### EVA's Autonomy Levels (L0 → L4)
 
-#### Phase 1: Assistant (Current)
-- Basic task automation
-- Information retrieval
-- Simple orchestration
-- Manual oversight required
+EVA operates on a graduated autonomy ladder, with the Chairman maintaining oversight while progressively delegating operational control. Progression is milestone-driven, not calendar-driven.
 
-#### Phase 2: Orchestrator (6 months)
-- Complex workflow management
-- Predictive recommendations
-- Automated quality gates
-- Exception-based intervention
+#### L0: Advisory (Completed)
+- EVA suggests, human decides and executes
+- Basic task automation and information retrieval
+- Manual oversight required for all operations
 
-#### Phase 3: Master Orchestrator (12 months)
-- Cross-venture optimization
-- Strategic planning support
-- Autonomous decision-making (within bounds)
-- Continuous learning and improvement
+#### L1: Assisted (Current)
+- EVA drafts SDs, PRDs, code implementations
+- Chairman reviews and approves all major decisions
+- LEO Protocol enforces quality gates
+- Sub-agents handle specialized tasks
+- **Unlock L2**: Achieve consistent 85% quality gate pass rate
 
-#### Phase 4: Autonomous Agent (18-24 months)
-- Independent venture operations
+#### L2: Supervised
+- EVA executes routine tasks autonomously
+- Chairman monitors via dashboards, handles exceptions
+- Automated quality gates with escalation thresholds
+- Proactive risk detection and mitigation
+- **Unlock L3**: Flagship venture reaches Stage 31+, L2 stable
+
+#### L3: Autonomous
+- EVA handles full workflows end-to-end
+- Chairman sets guardrails and strategic direction
+- Cross-venture optimization enabled
+- Self-improving through feedback loops
+- **Unlock L4**: Multi-venture operations proven, L3 stable
+
+#### L4: Trial Mode
+- EVA operates ventures end-to-end independently
+- Chairman intervenes only on anomalies
 - Strategic initiative generation
-- Self-improving algorithms
-- Chairman as strategic overseer only
+- Full portfolio management capability
 
 ### EVA KPIs
 
@@ -258,10 +268,11 @@ EVA (Executive Virtual Assistant) serves as the **intelligent orchestration laye
 ---
 
 ## Sources of Truth
-- **Vision Document**: Mission_v3.txt
+- **Unified Vision**: kb/ehg-review/00_unified_vision_2025.md (primary source of truth)
 - **Strategic Directives**: Database table strategic_directives_v2
 - **Backlog Items**: Database table sd_backlog_map
-- **EVA Specifications**: DAY_IN_THE_LIFE_EHG_1.5_YEAR.md
+- **LEO Protocol**: Database table leo_protocols (v4.3.3)
 - **Platform Architecture**: EHG and EHG_Engineer repositories
 
-**Last updated**: 2025-01-14
+**Last updated**: 2025-11-29
+**Note**: This document provides historical context and long-term vision. For current operational vision, see 00_unified_vision_2025.md

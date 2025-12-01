@@ -1,0 +1,65 @@
+{
+  "sd_id": "SD-RESEARCH-107",
+  "sd_title": "EVA Intent-vs-Reality Analysis Model",
+  "priority": "critical",
+  "research_status": "complete",
+  "last_updated": "2025-11-29",
+  "reviewed_by": "Claude (Opus 4.5)",
+  "documents": [
+    {
+      "id": "doc-001",
+      "title": "EVA Intent-vs-Reality Analysis Model",
+      "filename": "EVA Intent-vs-Reality Analysis Model.pdf",
+      "pages": 16,
+      "relevance": "primary",
+      "summary_file": "eva-intent-vs-reality-summary.md",
+      "key_sections": [
+        "v_intent_vs_reality View",
+        "Stage Alignment Heuristics",
+        "Drift Detection Algorithms",
+        "Risk Scoring Framework",
+        "Confidence Thresholds"
+      ],
+      "key_decisions": [
+        "PostgreSQL view as core detection mechanism",
+        "Hybrid drift detection (rule-based + statistical)",
+        "Risk Score = Likelihood × Impact (0-100)",
+        "Confidence thresholds vary by autonomy level"
+      ]
+    },
+    {
+      "id": "doc-002",
+      "title": "EVA Autonomy Levels (L0–L4)",
+      "filename": "EVA Autonomy Levels (L0–L4) – Safe AI Governance Model.pdf",
+      "pages": 21,
+      "relevance": "supporting",
+      "summary_file": "eva-autonomy-levels-summary.md",
+      "key_sections": [
+        "Autonomy Level Matrix",
+        "Authorization Rules",
+        "Safety Rails",
+        "Guardrails",
+        "Kill-Switch Patterns"
+      ],
+      "key_decisions": [
+        "5-level autonomy framework (L0-L4)",
+        "Safety rails as non-negotiable boundaries",
+        "6 kill-switch patterns defined",
+        "Phased rollout starting with L0/L1"
+      ]
+    }
+  ],
+  "prd_generation_notes": [
+    "Implement v_intent_vs_reality view as database foundation",
+    "Build drift detection service with configurable thresholds",
+    "Create risk dashboard with RAG (Red/Amber/Green) visualization",
+    "Implement autonomy level as venture-level configuration",
+    "Build kill-switch UI and API endpoints",
+    "Design audit logging for all EVA actions categorized by level",
+    "Integrate with LEO v5.x stage gates for drift-aware progression"
+  ],
+  "cross_references": {
+    "SD-RESEARCH-106": "LEO v5.x stage gates use drift analysis for progression decisions",
+    "SD-RESEARCH-108": "Kill-switches and guardrails implement security controls"
+  }
+}

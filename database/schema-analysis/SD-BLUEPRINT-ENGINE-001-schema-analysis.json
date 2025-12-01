@@ -1,0 +1,414 @@
+{
+  "sd_id": "SD-BLUEPRINT-ENGINE-001",
+  "analysis_timestamp": "2025-11-30T13:00:00.000Z",
+  "analyst": "Principal Database Architect (Sub-Agent)",
+  "target_database": "EHG (liapbndqlqxdcgpwntbv)",
+  "target_repository": "/mnt/c/_EHG/ehg/",
+
+  "schema_analysis": {
+    "existing_table_assessment": {
+      "opportunity_blueprints": {
+        "exists": true,
+        "current_structure": {
+          "columns": [
+            {"name": "id", "type": "uuid", "nullable": false, "notes": "Primary key"},
+            {"name": "market_segment_id", "type": "uuid", "nullable": false, "notes": "FK to market_segments, required via migration 20251030"},
+            {"name": "title", "type": "text", "nullable": false},
+            {"name": "problem_statement", "type": "text", "nullable": false},
+            {"name": "solution_concept", "type": "text", "nullable": false},
+            {"name": "target_market", "type": "text", "nullable": true},
+            {"name": "differentiation", "type": "text", "nullable": true},
+            {"name": "competitive_gaps", "type": "text[]", "nullable": true},
+            {"name": "customer_evidence", "type": "jsonb", "nullable": true, "notes": "Array of {quote, source, severity}"},
+            {"name": "opportunity_score", "type": "integer", "nullable": true},
+            {"name": "chairman_status", "type": "text", "nullable": true, "notes": "pending|approved|rejected|needs_revision"},
+            {"name": "chairman_feedback", "type": "text", "nullable": true},
+            {"name": "approved_at", "type": "timestamptz", "nullable": true},
+            {"name": "venture_id", "type": "uuid", "nullable": true, "notes": "FK to ventures when converted"},
+            {"name": "created_by", "type": "text", "nullable": true},
+            {"name": "created_at", "type": "timestamptz", "nullable": true},
+            {"name": "updated_at", "type": "timestamptz", "nullable": true},
+            {"name": "enhanced_data", "type": "jsonb", "nullable": true, "notes": "AI-enhanced version cache"},
+            {"name": "enhanced_at", "type": "timestamptz", "nullable": true}
+          ],
+          "rls_enabled": true,
+          "has_indexes": true
+        },
+        "gaps_for_blueprint_engine": [
+          "No scaffold JSONB column for medium-weight structure",
+          "No capability alignment scoring columns",
+          "No portfolio alignment scoring columns",
+          "No preference signal tracking",
+          "No blueprint origin/freshness metadata",
+          "No CRU-AI board reference column"
+        ]
+      },
+      "related_tables": {
+        "market_segments": {
+          "exists": true,
+          "location": "20251011_customer_intelligence_schema.sql",
+          "notes": "Contains TAM/SAM/SOM, segment characteristics, prioritization scores"
+        },
+        "ventures": {
+          "exists": true,
+          "notes": "Core table for venture data, referenced by many tables"
+        },
+        "venture_archetypes": {
+          "exists": true,
+          "location": "20251010000000_venture_archetypes.sql",
+          "notes": "Visual themes, workflow emphasis - potential synergy with blueprint engine"
+        },
+        "ideation_stage_results": {
+          "exists": true,
+          "location": "020_crewai_ideation_infrastructure.sql",
+          "notes": "Stage 1-6 ideation results with agent outputs"
+        }
+      }
+    },
+    "missing_tables": [
+      "ehg_capability_registry",
+      "blueprint_preference_signals",
+      "blueprint_preference_aggregates",
+      "opportunity_blueprints_v2 or scaffold column addition"
+    ]
+  },
+
+  "recommended_tables": [
+    {
+      "table_name": "ehg_capability_registry",
+      "purpose": "Central registry of EHG platform capabilities for alignment scoring",
+      "columns": [
+        {"name": "id", "type": "uuid PRIMARY KEY DEFAULT gen_random_uuid()"},
+        {"name": "capability_code", "type": "text UNIQUE NOT NULL", "notes": "e.g., 'agent_orchestration', 'competitive_intel', 'ideation_pipeline'"},
+        {"name": "capability_name", "type": "text NOT NULL"},
+        {"name": "description", "type": "text"},
+        {"name": "category", "type": "text NOT NULL", "notes": "e.g., 'ai_agents', 'analytics', 'workflows', 'integrations'"},
+        {"name": "maturity_level", "type": "integer CHECK (maturity_level BETWEEN 1 AND 5)", "notes": "1=concept, 5=production-ready"},
+        {"name": "dependency_capabilities", "type": "text[]", "notes": "Capability codes this depends on"},
+        {"name": "feature_flags", "type": "jsonb DEFAULT '{}'", "notes": "Feature toggle configuration"},
+        {"name": "is_active", "type": "boolean DEFAULT true"},
+        {"name": "created_at", "type": "timestamptz DEFAULT now()"},
+        {"name": "updated_at", "type": "timestamptz DEFAULT now()"}
+      ],
+      "indexes": [
+        "idx_capability_registry_category ON ehg_capability_registry(category)",
+        "idx_capability_registry_code ON ehg_capability_registry(capability_code)",
+        "idx_capability_registry_active ON ehg_capability_registry(is_active) WHERE is_active = true"
+      ],
+      "estimated_rows": "50-200 (platform capabilities)"
+    },
+    {
+      "table_name": "blueprint_preference_signals",
+      "purpose": "Capture user preference signals for blueprint recommendations",
+      "columns": [
+        {"name": "id", "type": "uuid PRIMARY KEY DEFAULT gen_random_uuid()"},
+        {"name": "user_id", "type": "uuid NOT NULL", "notes": "FK to auth.users"},
+        {"name": "blueprint_id", "type": "uuid NOT NULL", "notes": "FK to opportunity_blueprints"},
+        {"name": "signal_type", "type": "text NOT NULL", "notes": "e.g., 'view', 'expand', 'apply', 'dismiss', 'bookmark', 'share'"},
+        {"name": "signal_weight", "type": "numeric(3,2) DEFAULT 1.0", "notes": "Weight for aggregation"},
+        {"name": "context_data", "type": "jsonb DEFAULT '{}'", "notes": "Session context, time spent, etc."},
+        {"name": "company_id", "type": "uuid", "notes": "FK to companies for company-level preferences"},
+        {"name": "created_at", "type": "timestamptz DEFAULT now()"}
+      ],
+      "indexes": [
+        "idx_preference_signals_user ON blueprint_preference_signals(user_id)",
+        "idx_preference_signals_blueprint ON blueprint_preference_signals(blueprint_id)",
+        "idx_preference_signals_type ON blueprint_preference_signals(signal_type)",
+        "idx_preference_signals_company ON blueprint_preference_signals(company_id)",
+        "idx_preference_signals_created ON blueprint_preference_signals(created_at DESC)"
+      ],
+      "estimated_rows": "10,000+ (grows with usage)"
+    },
+    {
+      "table_name": "blueprint_preference_aggregates",
+      "purpose": "Aggregated preference scores per user/company for fast recommendations",
+      "columns": [
+        {"name": "id", "type": "uuid PRIMARY KEY DEFAULT gen_random_uuid()"},
+        {"name": "entity_type", "type": "text NOT NULL", "notes": "'user' or 'company'"},
+        {"name": "entity_id", "type": "uuid NOT NULL"},
+        {"name": "market_segment_id", "type": "uuid", "notes": "FK to market_segments"},
+        {"name": "capability_preferences", "type": "jsonb DEFAULT '{}'", "notes": "Aggregated capability scores"},
+        {"name": "industry_preferences", "type": "jsonb DEFAULT '{}'", "notes": "Industry vertical preferences"},
+        {"name": "complexity_preference", "type": "text", "notes": "'simple', 'medium', 'complex'"},
+        {"name": "total_interactions", "type": "integer DEFAULT 0"},
+        {"name": "last_interaction_at", "type": "timestamptz"},
+        {"name": "updated_at", "type": "timestamptz DEFAULT now()"}
+      ],
+      "indexes": [
+        "UNIQUE idx_preference_aggregates_entity ON blueprint_preference_aggregates(entity_type, entity_id)",
+        "idx_preference_aggregates_segment ON blueprint_preference_aggregates(market_segment_id)"
+      ],
+      "estimated_rows": "1,000-5,000 (users + companies)"
+    }
+  ],
+
+  "scaffold_jsonb_structure": {
+    "description": "Recommended JSONB structure for medium-weight scaffold in opportunity_blueprints",
+    "add_column": "scaffold jsonb DEFAULT '{}'::jsonb",
+    "schema": {
+      "version": "1.0",
+      "scaffold_type": "medium_weight",
+      "business_model": {
+        "type": "string (enum: b2b_saas, b2c_marketplace, b2b_service, b2c_product, platform)",
+        "revenue_streams": "string[] (subscription, transactional, advertising, licensing)",
+        "pricing_tier_guidance": {
+          "entry": {"min": "number", "max": "number", "features_hint": "string[]"},
+          "standard": {"min": "number", "max": "number", "features_hint": "string[]"},
+          "premium": {"min": "number", "max": "number", "features_hint": "string[]"}
+        }
+      },
+      "capability_requirements": {
+        "required_capabilities": "string[] (capability_codes from ehg_capability_registry)",
+        "optional_capabilities": "string[] (nice-to-have capability_codes)",
+        "capability_alignment_score": "number (0-100, computed)"
+      },
+      "portfolio_fit": {
+        "portfolio_alignment_score": "number (0-100, computed)",
+        "synergy_opportunities": "string[] (venture_ids with potential synergy)",
+        "market_overlap_risk": "number (0-100, higher = more overlap risk)",
+        "strategic_fit_notes": "string"
+      },
+      "stage_1_outputs": {
+        "market_sizing_summary": "string",
+        "competitive_position": "string (enum: leader, challenger, follower, niche)",
+        "differentiation_vectors": "string[]",
+        "risk_factors": "string[]"
+      },
+      "freshness_metadata": {
+        "generated_at": "timestamptz",
+        "source_data_date": "timestamptz",
+        "confidence_decay_rate": "number (0-1, per day)",
+        "last_validation_at": "timestamptz",
+        "validation_status": "string (enum: fresh, stale, expired)"
+      },
+      "origin_metadata": {
+        "origin_type": "string (enum: competitive_intel, user_submitted, ai_generated, cruai_board)",
+        "origin_source_id": "uuid (reference to source record)",
+        "generation_model": "string (model used for AI generation)",
+        "human_reviewed": "boolean",
+        "reviewed_by": "uuid (user_id)"
+      }
+    }
+  },
+
+  "additional_columns_for_opportunity_blueprints": [
+    {
+      "column": "scaffold",
+      "type": "jsonb DEFAULT '{}'::jsonb",
+      "purpose": "Medium-weight scaffold structure per schema above"
+    },
+    {
+      "column": "capability_alignment_score",
+      "type": "integer CHECK (capability_alignment_score BETWEEN 0 AND 100)",
+      "purpose": "Computed score based on required capabilities vs EHG platform capabilities"
+    },
+    {
+      "column": "portfolio_alignment_score",
+      "type": "integer CHECK (portfolio_alignment_score BETWEEN 0 AND 100)",
+      "purpose": "Computed score based on portfolio synergy and market overlap"
+    },
+    {
+      "column": "cruai_board_reference_id",
+      "type": "uuid",
+      "purpose": "FK to CRU-AI board entry if blueprint originated from board"
+    },
+    {
+      "column": "origin_type",
+      "type": "text DEFAULT 'competitive_intel'",
+      "purpose": "Blueprint origin: competitive_intel, user_submitted, ai_generated, cruai_board"
+    },
+    {
+      "column": "freshness_score",
+      "type": "integer CHECK (freshness_score BETWEEN 0 AND 100)",
+      "purpose": "Computed freshness based on data age and validation"
+    },
+    {
+      "column": "last_validated_at",
+      "type": "timestamptz",
+      "purpose": "When blueprint data was last validated against current market"
+    }
+  ],
+
+  "rls_recommendations": {
+    "ehg_capability_registry": {
+      "strategy": "Public read, admin write",
+      "policies": [
+        {
+          "name": "select_capability_registry_authenticated",
+          "operation": "SELECT",
+          "roles": ["authenticated"],
+          "using": "true",
+          "notes": "All authenticated users can read capabilities"
+        },
+        {
+          "name": "all_capability_registry_service",
+          "operation": "ALL",
+          "roles": ["service_role"],
+          "using": "true",
+          "with_check": "true",
+          "notes": "Service role has full access"
+        }
+      ]
+    },
+    "blueprint_preference_signals": {
+      "strategy": "User-scoped with company visibility",
+      "policies": [
+        {
+          "name": "select_own_preference_signals",
+          "operation": "SELECT",
+          "roles": ["authenticated"],
+          "using": "user_id = auth.uid() OR company_id IN (SELECT company_id FROM user_company_access WHERE user_id = auth.uid())",
+          "notes": "Users see own signals + company signals"
+        },
+        {
+          "name": "insert_own_preference_signals",
+          "operation": "INSERT",
+          "roles": ["authenticated"],
+          "with_check": "user_id = auth.uid()",
+          "notes": "Users can only insert their own signals"
+        },
+        {
+          "name": "all_preference_signals_service",
+          "operation": "ALL",
+          "roles": ["service_role"],
+          "using": "true",
+          "with_check": "true"
+        }
+      ]
+    },
+    "blueprint_preference_aggregates": {
+      "strategy": "Entity-scoped access",
+      "policies": [
+        {
+          "name": "select_own_preference_aggregates",
+          "operation": "SELECT",
+          "roles": ["authenticated"],
+          "using": "(entity_type = 'user' AND entity_id = auth.uid()) OR (entity_type = 'company' AND entity_id IN (SELECT company_id FROM user_company_access WHERE user_id = auth.uid()))",
+          "notes": "Users see own aggregates + company aggregates"
+        },
+        {
+          "name": "all_preference_aggregates_service",
+          "operation": "ALL",
+          "roles": ["service_role"],
+          "using": "true",
+          "with_check": "true"
+        }
+      ]
+    }
+  },
+
+  "integration_points": {
+    "cruai_board": {
+      "table": "TBD (cruai_board_entries or similar)",
+      "relationship": "opportunity_blueprints.cruai_board_reference_id -> cruai_board.id",
+      "notes": "Blueprint engine should pull opportunities from CRU-AI board decisions"
+    },
+    "ventures": {
+      "table": "ventures",
+      "relationship": "opportunity_blueprints.venture_id -> ventures.id",
+      "notes": "Existing relationship for converted blueprints"
+    },
+    "market_segments": {
+      "table": "market_segments",
+      "relationship": "opportunity_blueprints.market_segment_id -> market_segments.id (EXISTING)",
+      "notes": "Already enforced as NOT NULL"
+    },
+    "ideation_stage_results": {
+      "table": "ideation_stage_results",
+      "relationship": "Can link via venture_id or add blueprint_id FK",
+      "notes": "Stage 1 results should feed into scaffold.stage_1_outputs"
+    },
+    "stage_1_ui_components": {
+      "components": [
+        "src/components/ventures/VentureCreationPage/OpportunityBrowseTab.tsx",
+        "src/components/ventures/VentureCreationPage/VentureCreationPage.tsx"
+      ],
+      "notes": "UI already displays blueprints; enhance to show scaffold data"
+    }
+  },
+
+  "migration_notes": {
+    "approach": "Additive migration - extend existing table",
+    "recommendation": "Do NOT create opportunity_blueprints_v2. Instead, add columns to existing table.",
+    "steps": [
+      "1. Create ehg_capability_registry table with seed data",
+      "2. Create blueprint_preference_signals table",
+      "3. Create blueprint_preference_aggregates table",
+      "4. ALTER opportunity_blueprints ADD COLUMN scaffold jsonb DEFAULT '{}'::jsonb",
+      "5. ALTER opportunity_blueprints ADD COLUMN capability_alignment_score integer",
+      "6. ALTER opportunity_blueprints ADD COLUMN portfolio_alignment_score integer",
+      "7. ALTER opportunity_blueprints ADD COLUMN origin_type text DEFAULT 'competitive_intel'",
+      "8. ALTER opportunity_blueprints ADD COLUMN freshness_score integer",
+      "9. ALTER opportunity_blueprints ADD COLUMN last_validated_at timestamptz",
+      "10. Create GIN index on scaffold column",
+      "11. Backfill scaffold data for existing blueprints (can be async)"
+    ],
+    "backwards_compatibility": "All new columns nullable or have defaults - no breaking changes",
+    "typescript_updates_required": [
+      "src/services/ventureIdeationService.ts - extend OpportunityBlueprint interface",
+      "src/components/ventures/VentureCreationPage/OpportunityBrowseTab.tsx - update local interface"
+    ]
+  },
+
+  "risk_assessment": {
+    "risks": [
+      {
+        "risk_id": "RISK-001",
+        "description": "JSONB scaffold schema drift without validation",
+        "severity": "MEDIUM",
+        "mitigation": "Implement Zod schema validation in TypeScript service layer",
+        "probability": "HIGH"
+      },
+      {
+        "risk_id": "RISK-002",
+        "description": "Performance degradation from GIN index on large JSONB scaffold",
+        "severity": "LOW",
+        "mitigation": "Create selective GIN index on scaffold->>'origin_type' and scaffold->>'validation_status' only",
+        "probability": "LOW"
+      },
+      {
+        "risk_id": "RISK-003",
+        "description": "CRU-AI board table may not exist yet",
+        "severity": "MEDIUM",
+        "mitigation": "Make cruai_board_reference_id nullable, add FK constraint later",
+        "probability": "HIGH"
+      },
+      {
+        "risk_id": "RISK-004",
+        "description": "Preference signal table could grow very large",
+        "severity": "LOW",
+        "mitigation": "Implement retention policy (90-day TTL) or partition by created_at",
+        "probability": "MEDIUM"
+      },
+      {
+        "risk_id": "RISK-005",
+        "description": "TypeScript interface mismatch after migration",
+        "severity": "HIGH",
+        "mitigation": "Update TypeScript interfaces BEFORE deploying migration; use strict type checking",
+        "probability": "MEDIUM"
+      }
+    ],
+    "overall_risk_level": "MEDIUM",
+    "recommendation": "Proceed with migration in phased approach: (1) New tables, (2) Column additions, (3) TypeScript updates, (4) Backfill"
+  },
+
+  "confidence_score": 85,
+  "confidence_breakdown": {
+    "existing_schema_analysis": 95,
+    "new_table_design": 85,
+    "integration_points": 80,
+    "rls_policy_design": 90,
+    "migration_safety": 85,
+    "notes": "High confidence on schema design. Integration points need verification against CRU-AI board implementation status."
+  },
+
+  "next_steps": [
+    "1. Verify CRU-AI board table exists or is planned (may need separate SD)",
+    "2. Generate SQL migration file: database/migrations/YYYYMMDD_blueprint_engine_schema.sql",
+    "3. Update TypeScript interfaces in ventureIdeationService.ts",
+    "4. Create seed data for ehg_capability_registry (platform capabilities)",
+    "5. Implement capability alignment scoring function",
+    "6. Implement portfolio alignment scoring function",
+    "7. Add preference signal capture to OpportunityBrowseTab component"
+  ]
+}

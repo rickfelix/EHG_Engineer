@@ -1,5 +1,7 @@
 # A Day in the Life with EHG Platform - 1.5 Year Vision
 
+> **DEPRECATION NOTICE** (2025-11-29): This aspirational document has been superseded by the operational vision in `kb/ehg-review/00_unified_vision_2025.md`. The scenarios below represent long-term aspirations; for current 6-month operational targets, refer to the unified vision document.
+
 *Spring 2026 - Managing a Growing Portfolio of AI-Augmented Ventures*
 
 ## Executive Summary

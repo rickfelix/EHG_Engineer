@@ -1,0 +1,65 @@
+{
+  "sd_id": "SD-RESEARCH-108",
+  "sd_title": "Security, Compliance & AI Auditability",
+  "priority": "critical",
+  "research_status": "complete",
+  "last_updated": "2025-11-29",
+  "reviewed_by": "Claude (Opus 4.5)",
+  "documents": [
+    {
+      "id": "doc-001",
+      "title": "Security & Compliance Framework for Autonomous AI Ventures",
+      "filename": "Security & Compliance Framework for Autonomous AI Ventures.pdf",
+      "pages": 7,
+      "relevance": "primary",
+      "summary_file": "security-compliance-framework-summary.md",
+      "key_sections": [
+        "Zero-Trust Security Architecture",
+        "Row-Level Security with Venture Isolation",
+        "Immutable Audit Trail Design",
+        "Risk Matrix",
+        "Regulatory Roadmap"
+      ],
+      "key_decisions": [
+        "Zero-trust with mTLS, JWT, MFA",
+        "RLS via venture_id + session GUC",
+        "Append-only audit log with cryptographic chaining",
+        "SOC 2 and EU AI Act compliance targets"
+      ]
+    },
+    {
+      "id": "doc-002",
+      "title": "Cross-Schema Governance Architecture for EHG",
+      "filename": "Cross-Schema Governance Architecture for EHG.pdf",
+      "pages": 22,
+      "relevance": "supporting",
+      "summary_file": "cross-schema-governance-summary.md",
+      "key_sections": [
+        "Three-Schema Architecture",
+        "Schema Isolation Benefits",
+        "Cross-Schema Access Patterns",
+        "Database Role Hierarchy",
+        "RLS Policy Architecture"
+      ],
+      "key_decisions": [
+        "governance_schema / portfolio_schema / runtime_schema separation",
+        "Hierarchical DB roles (no superuser in runtime)",
+        "Cross-schema views for reporting",
+        "Venture_id RLS on all runtime tables"
+      ]
+    }
+  ],
+  "prd_generation_notes": [
+    "Implement RLS policies for all runtime tables as Phase 1",
+    "Build audit logging triggers with cryptographic chaining",
+    "Design three-schema migration for existing tables",
+    "Create compliance reporting dashboard",
+    "Implement database role hierarchy in Supabase",
+    "Plan SOC 2 Type II readiness assessment",
+    "Document EU AI Act high-risk system compliance path"
+  ],
+  "cross_references": {
+    "SD-RESEARCH-106": "LEO v5.x Policy Integration Framework uses these security controls",
+    "SD-RESEARCH-107": "Kill-switches and guardrails implement security boundaries"
+  }
+}

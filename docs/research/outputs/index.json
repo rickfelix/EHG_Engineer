@@ -1,0 +1,128 @@
+{
+  "schema_version": "1.0",
+  "description": "Master index of research outputs linked to Strategic Directives",
+  "last_updated": "2025-11-29",
+  "usage": "PLAN agents should check this index before PRD generation to load relevant research",
+  "lookup_instructions": {
+    "step_1": "Read this index.json to find SD research folder",
+    "step_2": "Navigate to docs/research/outputs/{SD-ID}/",
+    "step_3": "Read the SD's index.json for document list and PRD notes",
+    "step_4": "Read summary files for detailed findings",
+    "step_5": "Include prd_generation_notes in PRD creation"
+  },
+  "strategic_directives": [
+    {
+      "sd_id": "SD-RESEARCH-106",
+      "sd_title": "LEO Protocol Evolution to v5.x",
+      "priority": "critical",
+      "research_status": "complete",
+      "folder": "SD-RESEARCH-106",
+      "index_file": "SD-RESEARCH-106/index.json",
+      "document_count": 3,
+      "primary_documents": [
+        "LEO Protocol v5.x — Next-Generation Governance Engine.pdf"
+      ],
+      "key_topics": [
+        "Temporal.io workflow engine",
+        "40-stage pipeline",
+        "Stage contracts",
+        "Migration from v4.3.3"
+      ]
+    },
+    {
+      "sd_id": "SD-RESEARCH-107",
+      "sd_title": "EVA Intent-vs-Reality Analysis Model",
+      "priority": "critical",
+      "research_status": "complete",
+      "folder": "SD-RESEARCH-107",
+      "index_file": "SD-RESEARCH-107/index.json",
+      "document_count": 2,
+      "primary_documents": [
+        "EVA Intent-vs-Reality Analysis Model.pdf"
+      ],
+      "key_topics": [
+        "v_intent_vs_reality view",
+        "Drift detection algorithms",
+        "Risk scoring framework",
+        "EVA autonomy levels L0-L4"
+      ]
+    },
+    {
+      "sd_id": "SD-RESEARCH-108",
+      "sd_title": "Security, Compliance & AI Auditability",
+      "priority": "critical",
+      "research_status": "complete",
+      "folder": "SD-RESEARCH-108",
+      "index_file": "SD-RESEARCH-108/index.json",
+      "document_count": 2,
+      "primary_documents": [
+        "Security & Compliance Framework for Autonomous AI Ventures.pdf"
+      ],
+      "key_topics": [
+        "Zero-trust architecture",
+        "RLS with venture_id isolation",
+        "Immutable audit trails",
+        "Compliance-as-Code (NIST OSCAL, OPA)"
+      ]
+    }
+  ],
+  "cross_reference_matrix": {
+    "SD-RESEARCH-106": {
+      "depends_on": [],
+      "informs": ["SD-RESEARCH-107", "SD-RESEARCH-108"],
+      "shared_concepts": ["Temporal.io", "Stage gates", "Policy engine"]
+    },
+    "SD-RESEARCH-107": {
+      "depends_on": ["SD-RESEARCH-106"],
+      "informs": ["SD-RESEARCH-108"],
+      "shared_concepts": ["EVA autonomy", "Drift detection", "Kill-switches"]
+    },
+    "SD-RESEARCH-108": {
+      "depends_on": ["SD-RESEARCH-106", "SD-RESEARCH-107"],
+      "informs": [],
+      "shared_concepts": ["RLS policies", "Audit logging", "Compliance"]
+    }
+  },
+  "all_source_documents": [
+    {
+      "title": "Cross-Schema Governance Architecture for EHG",
+      "pages": 22,
+      "used_by": ["SD-RESEARCH-108"]
+    },
+    {
+      "title": "Stage Data Contract System (JSON Schema + TypeScript)",
+      "pages": 16,
+      "used_by": ["SD-RESEARCH-106"]
+    },
+    {
+      "title": "Multi-Venture Orchestration Strategy",
+      "pages": 11,
+      "used_by": ["SD-RESEARCH-106"]
+    },
+    {
+      "title": "Unified EHG Interface",
+      "pages": 14,
+      "used_by": ["SD-RESEARCH-106", "SD-RESEARCH-107", "SD-RESEARCH-108"]
+    },
+    {
+      "title": "EVA Intent-vs-Reality Analysis Model",
+      "pages": 16,
+      "used_by": ["SD-RESEARCH-107"]
+    },
+    {
+      "title": "Security & Compliance Framework for Autonomous AI Ventures",
+      "pages": 7,
+      "used_by": ["SD-RESEARCH-108"]
+    },
+    {
+      "title": "EVA Autonomy Levels (L0–L4)",
+      "pages": 21,
+      "used_by": ["SD-RESEARCH-107", "SD-RESEARCH-108"]
+    },
+    {
+      "title": "LEO Protocol v5.x — Next-Generation Governance Engine",
+      "pages": 18,
+      "used_by": ["SD-RESEARCH-106"]
+    }
+  ]
+}
