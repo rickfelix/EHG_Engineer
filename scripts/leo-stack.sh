@@ -21,10 +21,15 @@ MIN_FREE_MEMORY_CRITICAL_MB=300  # Critical threshold
 MIN_INOTIFY_WATCHES=100000
 MIN_DISK_SPACE_MB=1000  # Minimum free disk space
 MIN_INODES_FREE=10000  # Minimum free inodes
-STARTUP_DELAY=5  # Delay between server starts
+STARTUP_DELAY=5  # Delay between server starts (default)
 SHUTDOWN_GRACE_PERIOD=5  # Increased from 3s
 OPERATION_TIMEOUT=30  # Max time for any single operation
-RESTART_COOLDOWN=10  # Delay between stop and start phases
+RESTART_COOLDOWN=10  # Delay between stop and start phases (default)
+
+# Fast mode settings (use --fast flag)
+FAST_MODE=false
+FAST_STARTUP_DELAY=1  # Reduced delay in fast mode
+FAST_RESTART_COOLDOWN=2  # Reduced cooldown in fast mode
 WSL_HEALTH_CHECK_INTERVAL=2  # Check WSL health every 2s during operations
 MAX_WSL_HEALTH_FAILURES=3  # Max consecutive WSL health check failures before abort
 WSL_RECOVERY_DELAY=3  # Extra delay after detecting WSL stress
@@ -737,19 +742,27 @@ status() {
 
 # Function to start all servers (ENHANCED WITH WSL PRE-FLIGHT)
 start_all() {
-    log "INFO" "${BLUE}🚀 Starting LEO Stack with WSL-sensitive mode...${NC}"
+    if [ "$FAST_MODE" = true ]; then
+        log "INFO" "${MAGENTA}⚡ Starting LEO Stack (FAST MODE - minimal checks)...${NC}"
+    else
+        log "INFO" "${BLUE}🚀 Starting LEO Stack with WSL-sensitive mode...${NC}"
+    fi
     echo "=================================="
 
-    # ENHANCED: Comprehensive pre-flight diagnostics
-    if ! wsl_preflight_diagnostics; then
-        log "ERROR" "${RED}Pre-flight diagnostics failed - aborting for safety${NC}"
-        return 1
-    fi
+    # ENHANCED: Comprehensive pre-flight diagnostics (skip in fast mode)
+    if [ "$FAST_MODE" = true ]; then
+        log "INFO" "${YELLOW}⚡ Skipping pre-flight diagnostics (fast mode)${NC}"
+    else
+        if ! wsl_preflight_diagnostics; then
+            log "ERROR" "${RED}Pre-flight diagnostics failed - aborting for safety${NC}"
+            return 1
+        fi
 
-    # Additional resource checks
-    log "INFO" "${BLUE}Running additional resource checks...${NC}"
-    check_memory
-    check_inotify
+        # Additional resource checks
+        log "INFO" "${BLUE}Running additional resource checks...${NC}"
+        check_memory
+        check_inotify
+    fi
     echo "=================================="
 
     # Clean up any duplicate processes (with WSL monitoring)
@@ -786,7 +799,11 @@ start_all() {
 
 # Function to restart all servers (ENHANCED WITH COOLDOWN)
 restart_all() {
-    log "INFO" "${BLUE}🔄 Restarting LEO Stack (enhanced safe mode)...${NC}"
+    if [ "$FAST_MODE" = true ]; then
+        log "INFO" "${MAGENTA}⚡ Restarting LEO Stack (FAST MODE)...${NC}"
+    else
+        log "INFO" "${BLUE}🔄 Restarting LEO Stack (enhanced safe mode)...${NC}"
+    fi
     echo "=================================="
 
     # Stop all servers gracefully
@@ -872,6 +889,23 @@ emergency_cleanup() {
     log "INFO" "${GREEN}Emergency cleanup complete${NC}"
 }
 
+# Parse flags (--fast)
+parse_flags() {
+    for arg in "$@"; do
+        case "$arg" in
+            --fast|-f)
+                FAST_MODE=true
+                STARTUP_DELAY=$FAST_STARTUP_DELAY
+                RESTART_COOLDOWN=$FAST_RESTART_COOLDOWN
+                log "INFO" "${MAGENTA}⚡ FAST MODE enabled: delays reduced (startup=${STARTUP_DELAY}s, cooldown=${RESTART_COOLDOWN}s)${NC}"
+                ;;
+        esac
+    done
+}
+
+# Parse flags from all arguments
+parse_flags "$@"
+
 # Main command handler
 case "${1:-}" in
     start)
@@ -929,14 +963,19 @@ case "${1:-}" in
         fi
         ;;
     *)
-        echo "Usage: $0 {start|stop|restart|status|clean|emergency|diagnostics|health|start-*|logs}"
+        echo "Usage: $0 {start|stop|restart|status|clean|emergency|diagnostics|health|start-*|logs} [--fast]"
         echo ""
         echo "Primary Commands:"
         echo "  start            - WSL-safe startup with comprehensive pre-flight diagnostics"
         echo "  stop             - Gracefully stop all servers (SIGTERM → SIGKILL with WSL monitoring)"
-        echo "  restart          - SAFE restart: stop → ${RESTART_COOLDOWN}s cooldown → verify → start"
+        echo "  restart          - SAFE restart: stop → cooldown → verify → start"
         echo "  status           - Show server status with comprehensive WSL health report"
         echo "  clean            - Clean up duplicate processes on all ports (WSL-monitored)"
+        echo ""
+        echo "⚡ Fast Mode (--fast or -f):"
+        echo "  start --fast     - Quick startup: skip diagnostics, ${FAST_STARTUP_DELAY}s delays"
+        echo "  restart --fast   - Quick restart: ${FAST_RESTART_COOLDOWN}s cooldown instead of 10s"
+        echo "  Example: bash $0 restart --fast"
         echo ""
         echo "WSL-Specific Commands:"
         echo "  diagnostics|diag - Run comprehensive WSL pre-flight diagnostics"
