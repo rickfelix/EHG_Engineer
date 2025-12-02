@@ -20,7 +20,7 @@ dotenv.config();
 
 // Get DATABASE_URL from environment or construct from Supabase variables
 const DATABASE_URL = process.env.DATABASE_URL ||
-  `postgresql://postgres.dedlbzhpgkmetvhbkyzq:${process.env.SUPABASE_DB_PASSWORD}@aws-0-us-west-1.pooler.supabase.com:6543/postgres`;
+  `postgresql://postgres.dedlbzhpgkmetvhbkyzq:${process.env.SUPABASE_DB_PASSWORD}@aws-1-us-east-1.pooler.supabase.com:6543/postgres`;
 
 if (!DATABASE_URL || DATABASE_URL.includes('undefined')) {
   console.error('❌ DATABASE_URL not configured properly');

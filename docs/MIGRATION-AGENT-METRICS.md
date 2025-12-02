@@ -22,7 +22,7 @@ Creates 3 tables in your EHG_Engineer database:
 ### 1. Environment Variable
 Ensure `.env` contains:
 ```
-SUPABASE_POOLER_URL=postgresql://postgres.dedlbzhpgkmetvhbkyzq:[password]@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
+SUPABASE_POOLER_URL=postgresql://postgres.dedlbzhpgkmetvhbkyzq:[password]@aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
 ```
 
 ### 2. Database Access

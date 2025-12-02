@@ -5,17 +5,17 @@
 
 const { createClient } = require('@supabase/supabase-js');
 
-// EHG Application Database (business app, not EHG_Engineer)
+// EHG CONSOLIDATED Database (all EHG data consolidated here per SD-ARCH-EHG-006)
 // Using hardcoded credentials since this is for investigation
-const EHG_SUPABASE_URL = 'https://liapbndqlqxdcgpwntbv.supabase.co';
-const EHG_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpYXBibmRxbHF4ZGNncHdudGJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYzNzI4MzcsImV4cCI6MjA3MTk0ODgzN30.YlzzH17RYHsFs3TBmKlbmZPJYfUEWU71cAURwTsu8-M';
+const EHG_SUPABASE_URL = 'https://dedlbzhpgkmetvhbkyzq.supabase.co';
+const EHG_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlZGxiemhwZ2ttZXR2aGJreXpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MTE5MzcsImV4cCI6MjA3MjA4NzkzN30.o-AUQPUXAobkhMfdxa5g3oDkcneXNnmwK80KfAER16g';
 
 const supabase = createClient(EHG_SUPABASE_URL, EHG_SUPABASE_ANON_KEY);
 
 async function investigateAgentData() {
   console.log('\n════════════════════════════════════════════════════════════════');
   console.log('🔍 COMPREHENSIVE AGENT DATA INVESTIGATION');
-  console.log('   Database: EHG Application (liapbndqlqxdcgpwntbv)');
+  console.log('   Database: EHG Consolidated (dedlbzhpgkmetvhbkyzq)');
   console.log('════════════════════════════════════════════════════════════════\n');
 
   // 1. Check ai_ceo_agents table

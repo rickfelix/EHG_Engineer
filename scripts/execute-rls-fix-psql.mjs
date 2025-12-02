@@ -15,7 +15,7 @@ const __dirname = path.dirname(__filename);
 
 // Direct PostgreSQL connection string for Supabase
 // Format: postgresql://postgres.[project-ref]:[password]@[host]:[port]/postgres
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres.dedlbzhpgkmetvhbkyzq:YOUR_DB_PASSWORD@aws-0-us-east-1.pooler.supabase.com:6543/postgres';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres.dedlbzhpgkmetvhbkyzq:YOUR_DB_PASSWORD@aws-1-us-east-1.pooler.supabase.com:6543/postgres';
 
 // Alternative: Use the transaction pooler connection
 const SUPABASE_PROJECT_REF = 'dedlbzhpgkmetvhbkyzq';
@@ -75,7 +75,7 @@ async function executeWithPooledConnection() {
     console.log('='.repeat(70));
     console.log('\nTo execute this migration, you need a direct PostgreSQL connection.');
     console.log('\nOption 1: Set DATABASE_URL environment variable:');
-    console.log('  export DATABASE_URL="postgresql://postgres.dedlbzhpgkmetvhbkyzq:[PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres"');
+    console.log('  export DATABASE_URL="postgresql://postgres.dedlbzhpgkmetvhbkyzq:[PASSWORD]@aws-1-us-east-1.pooler.supabase.com:6543/postgres"');
     console.log('  node scripts/execute-rls-fix-psql.mjs\n');
 
     console.log('Option 2: Use Supabase Dashboard SQL Editor:');

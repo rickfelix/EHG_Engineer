@@ -4,13 +4,14 @@
 
 const { createClient } = require('@supabase/supabase-js');
 
-const EHG_SUPABASE_URL = 'https://liapbndqlqxdcgpwntbv.supabase.co';
-const EHG_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpYXBibmRxbHF4ZGNncHdudGJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYzNzI4MzcsImV4cCI6MjA3MTk0ODgzN30.YlzzH17RYHsFs3TBmKlbmZPJYfUEWU71cAURwTsu8-M';
+// EHG CONSOLIDATED Database (all EHG data consolidated here per SD-ARCH-EHG-006)
+const EHG_SUPABASE_URL = 'https://dedlbzhpgkmetvhbkyzq.supabase.co';
+const EHG_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlZGxiemhwZ2ttZXR2aGJreXpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MTE5MzcsImV4cCI6MjA3MjA4NzkzN30.o-AUQPUXAobkhMfdxa5g3oDkcneXNnmwK80KfAER16g';
 
 const supabase = createClient(EHG_SUPABASE_URL, EHG_SUPABASE_ANON_KEY);
 
 async function listTables() {
-  console.log('\n🔍 Listing all tables in EHG database (liapbndqlqxdcgpwntbv)\n');
+  console.log('\n🔍 Listing all tables in EHG Consolidated database (dedlbzhpgkmetvhbkyzq)\n');
 
   // Query to get all tables in public schema
   const { data, error } = await supabase
