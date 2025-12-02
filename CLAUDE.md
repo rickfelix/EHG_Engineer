@@ -22,8 +22,14 @@ See documentation for table structure: `database/schema/007_leo_protocol_schema_
 
 *For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
 
+## Common Commands
+
+- `bash scripts/leo-stack.sh restart` - Restart all LEO servers (Engineer on 3000, App on 8080, Agent Platform on 8000)
+- `bash scripts/leo-stack.sh status` - Check server status
+- `bash scripts/leo-stack.sh stop` - Stop all servers
+
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-12-01 6:48:06 AM
+**Last Generated**: 2025-12-02 7:29:22 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -63,6 +69,6 @@ See documentation for table structure: `database/schema/007_leo_protocol_schema_
 
 ---
 
-*Router generated from database: 2025-12-01*
+*Router generated from database: 2025-12-02*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*

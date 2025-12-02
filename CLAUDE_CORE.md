@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-01 6:34:54 PM
+**Generated**: 2025-12-02 7:29:22 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -8,11 +8,11 @@
 
 ## 🏗️ Application Architecture - CRITICAL CONTEXT
 
-### Two Distinct Applications:
+### Two Distinct Applications (CONSOLIDATED DATABASE):
 1. **EHG_Engineer** (Management Dashboard) - WHERE YOU ARE NOW
    - **Path**: `/mnt/c/_EHG/EHG_Engineer/`
    - **Purpose**: LEO Protocol dashboard for managing Strategic Directives & PRDs
-   - **Database**: dedlbzhpgkmetvhbkyzq (Supabase)
+   - **Database**: dedlbzhpgkmetvhbkyzq (Supabase) - CONSOLIDATED
    - **GitHub**: https://github.com/rickfelix/EHG_Engineer.git
    - **Port**: 3000-3001
    - **Role**: MANAGEMENT TOOL ONLY - no customer features here!
@@ -20,10 +20,12 @@
 2. **EHG** (Business Application) - IMPLEMENTATION TARGET
    - **Path**: `/mnt/c/_EHG/ehg/`
    - **Purpose**: The actual customer-facing business application
-   - **Database**: liapbndqlqxdcgpwntbv (Supabase)
+   - **Database**: dedlbzhpgkmetvhbkyzq (Supabase) - CONSOLIDATED (SD-ARCH-EHG-006)
    - **GitHub**: https://github.com/rickfelix/ehg.git
    - **Built with**: Vite + React + Shadcn + TypeScript
    - **Role**: WHERE ALL FEATURES GET IMPLEMENTED
+
+> **NOTE (SD-ARCH-EHG-006)**: As of 2025-11-30, both applications use the **CONSOLIDATED** database (dedlbzhpgkmetvhbkyzq). The old EHG database (liapbndqlqxdcgpwntbv) has been deprecated.
 
 ### ⚠️ CRITICAL: During EXEC Phase Implementation
 1. **Read PRD** from EHG_Engineer database
@@ -617,23 +619,26 @@ Patterns exceeding these thresholds auto-create CRITICAL SDs:
 
 ## 🗄️ Supabase Database Operations
 
-### Connection Details
+### Connection Details (CONSOLIDATED DATABASE)
+
+> **NOTE (SD-ARCH-EHG-006)**: As of 2025-11-30, both EHG and EHG_Engineer use the **CONSOLIDATED** database.
+
 - **Project URL**: https://dedlbzhpgkmetvhbkyzq.supabase.co
 - **Project ID**: dedlbzhpgkmetvhbkyzq
 - **Connection**: Via Supabase client using environment variables
 
 ### Environment Variables Required
 ```bash
-# For EHG application (liapbndqlqxdcgpwntbv)
-EHG_SUPABASE_URL=https://liapbndqlqxdcgpwntbv.supabase.co
-EHG_SUPABASE_ANON_KEY=[anon-key]
-EHG_POOLER_URL=postgresql://postgres.liapbndqlqxdcgpwntbv:[password]@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
-
-# For EHG_Engineer (dedlbzhpgkmetvhbkyzq)
+# CONSOLIDATED Database (used by both EHG and EHG_Engineer)
 SUPABASE_URL=https://dedlbzhpgkmetvhbkyzq.supabase.co
 SUPABASE_ANON_KEY=[anon-key]
-SUPABASE_POOLER_URL=postgresql://postgres.dedlbzhpgkmetvhbkyzq:[password]@aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
-SUPABASE_DB_PASSWORD=Fl!M32DaM00n!1
+SUPABASE_SERVICE_ROLE_KEY=[service-role-key]
+SUPABASE_POOLER_URL=postgresql://postgres.dedlbzhpgkmetvhbkyzq:[password]@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+
+# EHG Application vars (same consolidated database)
+EHG_SUPABASE_URL=https://dedlbzhpgkmetvhbkyzq.supabase.co
+EHG_SUPABASE_ANON_KEY=[anon-key]
+EHG_SUPABASE_SERVICE_ROLE_KEY=[service-role-key]
 ```
 
 ## 🔧 CRITICAL DEVELOPMENT WORKFLOW
@@ -826,7 +831,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ---
 
-*Generated from database: 2025-12-01*
+*Generated from database: 2025-12-02*
 *Protocol Version: 4.3.3*
 *Includes: Hot Patterns (5) + Recent Lessons (5)*
 *Load this file first in all sessions*

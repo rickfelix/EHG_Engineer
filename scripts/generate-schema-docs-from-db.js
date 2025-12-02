@@ -46,7 +46,7 @@ dotenv.config();
 
 // Detect which database to document based on CLI flags
 const isEHGApp = process.argv.includes('--app') || process.argv.includes('--ehg');
-const isEngineer = !isEHGApp; // Default to Engineer database
+void (!isEHGApp); // Default to Engineer database
 
 // Select database configuration
 let supabaseUrl, supabaseKey, poolerUrl, databaseTarget;
@@ -138,18 +138,18 @@ class SchemaDocumentationGenerator {
     this.projectId = urlMatch ? urlMatch[1] : 'unknown';
 
     // Determine application details based on database target and project ID
+    // NOTE: As of SD-ARCH-EHG-006 (2025-11-30), both EHG and EHG_Engineer
+    // now use the CONSOLIDATED database (dedlbzhpgkmetvhbkyzq).
     const dbMappings = {
       'dedlbzhpgkmetvhbkyzq': {
-        name: 'EHG_Engineer',
-        description: 'LEO Protocol Management Dashboard',
-        path: '/mnt/c/_EHG/EHG_Engineer/',
-        purpose: 'Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration'
-      },
-      'liapbndqlqxdcgpwntbv': {
-        name: 'EHG',
-        description: 'Business Application (Customer-Facing)',
-        path: '/mnt/c/_EHG/ehg/',
-        purpose: 'Customer features, business logic, user-facing functionality'
+        name: CONFIG.databaseTarget === 'ehg' ? 'EHG' : 'EHG_Engineer',
+        description: CONFIG.databaseTarget === 'ehg'
+          ? 'Business Application (Customer-Facing) - CONSOLIDATED DB'
+          : 'LEO Protocol Management Dashboard - CONSOLIDATED DB',
+        path: CONFIG.databaseTarget === 'ehg' ? '/mnt/c/_EHG/ehg/' : '/mnt/c/_EHG/EHG_Engineer/',
+        purpose: CONFIG.databaseTarget === 'ehg'
+          ? 'Customer features, business logic, user-facing functionality'
+          : 'Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration'
       }
     };
 
@@ -202,9 +202,9 @@ class SchemaDocumentationGenerator {
       this.log('✅ Schema documentation generated successfully!');
       this.log(`📁 Output: ${CONFIG.outputDir}`);
 
-    } catch (error) {
-      console.error('❌ Error generating schema documentation:', error);
-      throw error;
+    } catch {
+      console.error('❌ Error generating schema documentation:', _error);
+      throw _error;
     } finally {
       if (this.pgClient) {
         await this.pgClient.end();
@@ -405,7 +405,7 @@ class SchemaDocumentationGenerator {
         .select('*', { count: 'exact', head: true });
 
       return error ? 'N/A (RLS restricted)' : count;
-    } catch (error) {
+    } catch {
       return 'N/A';
     }
   }

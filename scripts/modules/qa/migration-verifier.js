@@ -43,8 +43,9 @@ export async function verifyDatabaseMigrations(sd_id, targetApp = 'ehg') {
   console.log(`   Found ${migrationFiles.length} migration file(s)`);
 
   // Step 2: Check if migrations are applied
+  // NOTE: As of SD-ARCH-EHG-006 (2025-11-30), both apps use CONSOLIDATED database (dedlbzhpgkmetvhbkyzq)
   const supabaseUrl = targetApp === 'ehg'
-    ? process.env.VITE_SUPABASE_URL || 'https://liapbndqlqxdcgpwntbv.supabase.co'
+    ? process.env.EHG_SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://dedlbzhpgkmetvhbkyzq.supabase.co'
     : process.env.SUPABASE_URL;
 
   const supabaseKey = targetApp === 'ehg'
@@ -143,7 +144,7 @@ async function checkMigrationApplied(supabase, migrationFile) {
       .limit(1);
 
     return !error; // If no error, table exists
-  } catch (error) {
+  } catch {
     return false;
   }
 }

@@ -9,12 +9,13 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const EHG_SUPABASE_URL = 'https://liapbndqlqxdcgpwntbv.supabase.co';
+// CONSOLIDATED: Both EHG and EHG_Engineer now use the same database (SD-ARCH-EHG-006)
+const EHG_SUPABASE_URL = process.env.EHG_SUPABASE_URL || 'https://dedlbzhpgkmetvhbkyzq.supabase.co';
 const EHG_ANON_KEY = process.env.EHG_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_EHG_SUPABASE_ANON_KEY;
 
 async function checkMigrationStatus() {
   console.log('\n🔍 Checking Ideas-to-Ventures Migration Status...\n');
-  console.log('Database: EHG Application (liapbndqlqxdcgpwntbv)');
+  console.log('Database: EHG Application (CONSOLIDATED: dedlbzhpgkmetvhbkyzq)');
   console.log('SD: SD-VENTURE-UNIFICATION-001 US-006\n');
 
   if (!EHG_ANON_KEY) {

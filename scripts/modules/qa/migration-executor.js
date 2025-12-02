@@ -26,9 +26,8 @@ export async function executePendingMigrations(pendingMigrations, targetApp = 'e
     ? '/mnt/c/_EHG/ehg'
     : '/mnt/c/_EHG/EHG_Engineer';
 
-  const projectRef = targetApp === 'ehg'
-    ? 'liapbndqlqxdcgpwntbv'
-    : 'dedlbzhpgkmetvhbkyzq';
+  // NOTE: As of SD-ARCH-EHG-006 (2025-11-30), both apps use CONSOLIDATED database
+  const projectRef = 'dedlbzhpgkmetvhbkyzq';  // CONSOLIDATED: replaces old liapbndqlqxdcgpwntbv
 
   try {
     // Step 1: Link to Supabase project
@@ -41,7 +40,7 @@ export async function executePendingMigrations(pendingMigrations, targetApp = 'e
         stdio: 'pipe'
       });
       console.log('   ✅ Linked to Supabase project');
-    } catch (linkError) {
+    } catch {
       // Already linked, continue
       console.log('   ℹ️  Project already linked');
     }

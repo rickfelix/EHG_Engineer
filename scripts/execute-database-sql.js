@@ -21,7 +21,11 @@ const { Client } = pg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Database configurations
+/**
+ * Database configurations
+ * NOTE: As of SD-ARCH-EHG-006 (2025-11-30), both EHG and EHG_Engineer
+ * now use the CONSOLIDATED database (dedlbzhpgkmetvhbkyzq).
+ */
 const DATABASES = {
   engineer: {
     name: 'EHG_Engineer Management DB',
@@ -31,10 +35,10 @@ const DATABASES = {
     color: '\x1b[36m' // Cyan
   },
   ehg: {
-    name: 'EHG Customer Application DB',
-    projectId: 'liapbndqlqxdcgpwntbv',
+    name: 'EHG Customer Application DB (CONSOLIDATED)',
+    projectId: 'dedlbzhpgkmetvhbkyzq',  // CONSOLIDATED: migrated from liapbndqlqxdcgpwntbv
     envVar: 'EHG_POOLER_URL',
-    description: 'Customer data, business features',
+    description: 'Customer data, business features (same DB as Engineer)',
     color: '\x1b[33m' // Yellow
   }
 };

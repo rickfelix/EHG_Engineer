@@ -6,8 +6,8 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// EHG Application Database
-const supabaseUrl = process.env.EHG_SUPABASE_URL || 'https://liapbndqlqxdcgpwntbv.supabase.co';
+// EHG Application Database (CONSOLIDATED as of SD-ARCH-EHG-006)
+const supabaseUrl = process.env.EHG_SUPABASE_URL || 'https://dedlbzhpgkmetvhbkyzq.supabase.co';
 const supabaseKey = process.env.EHG_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseKey) {
@@ -52,11 +52,11 @@ async function executeMigration() {
 
       console.log(`⏳ Executing statement ${i + 1}/${statements.length}...`);
 
-      const { data, error } = await supabase.rpc('exec_sql', { sql_query: statement });
+      const { error } = await supabase.rpc('exec_sql', { sql_query: statement });
 
       if (error) {
         // Try alternative method using direct query
-        const { error: queryError } = await supabase.from('_').select('*').limit(0);
+        const { error: _queryError } = await supabase.from('_').select('*').limit(0);
 
         console.log(`❌ Statement ${i + 1} failed: ${error.message}`);
         errorCount++;
@@ -73,7 +73,7 @@ async function executeMigration() {
     // Verify tables created
     console.log('🔍 Verifying tables created...\n');
 
-    const { data: tables, error: tablesError } = await supabase
+    const { error: tablesError } = await supabase
       .from('profiles')
       .select('*')
       .limit(0);
@@ -84,7 +84,7 @@ async function executeMigration() {
       console.log('✅ Profiles table exists');
     }
 
-    const { data: prefs, error: prefsError } = await supabase
+    const { error: prefsError } = await supabase
       .from('user_preferences')
       .select('*')
       .limit(0);

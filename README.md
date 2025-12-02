@@ -2,14 +2,16 @@
 
 ## ⚠️ CRITICAL DISTINCTION - READ THIS FIRST!
 
-### Two Separate Systems:
+### Two Separate Applications, One Consolidated Database:
 
 | System | Database ID | Purpose |
 |--------|------------|---------|
 | **EHG_Engineer** | dedlbzhpgkmetvhbkyzq | The LEO Protocol tool you're using RIGHT NOW to build applications |
-| **EHG** | liapbndqlqxdcgpwntbv | The actual EHG portfolio application being built |
+| **EHG** | dedlbzhpgkmetvhbkyzq | The actual EHG portfolio application being built |
 
-**Remember**: 
+> **NOTE (SD-ARCH-EHG-006)**: As of 2025-11-30, both applications use the **CONSOLIDATED** database (dedlbzhpgkmetvhbkyzq). The old EHG database (liapbndqlqxdcgpwntbv) has been deprecated.
+
+**Remember**:
 - EHG_Engineer = The hammer 🔨
 - EHG = The house you're building 🏠
 
@@ -55,15 +57,11 @@ All projects are managed in `applications/registry.json`:
 
 ## Database Connections
 
-### For EHG Project Development:
-```bash
-# Connect to EHG database (NOT EHG_Engineer)
-supabase link --project-ref liapbndqlqxdcgpwntbv
-```
+> **NOTE**: Both EHG and EHG_Engineer now use the **CONSOLIDATED** database (SD-ARCH-EHG-006).
 
-### For LEO Protocol System:
+### For All Development (CONSOLIDATED):
 ```bash
-# This is only if you're modifying the LEO Protocol itself
+# Connect to the consolidated database
 supabase link --project-ref dedlbzhpgkmetvhbkyzq
 ```
 

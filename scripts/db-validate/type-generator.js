@@ -30,6 +30,8 @@ import { createDatabaseClient } from '../lib/supabase-connection.js';
 
 /**
  * Project configuration
+ * NOTE: As of SD-ARCH-EHG-006 (2025-11-30), both EHG and EHG_Engineer
+ * now use the CONSOLIDATED database (dedlbzhpgkmetvhbkyzq).
  */
 const PROJECT_CONFIGS = {
   engineer: {
@@ -38,7 +40,7 @@ const PROJECT_CONFIGS = {
     cacheFile: '.schema-cache/engineer-types.hash'
   },
   ehg: {
-    projectRef: 'liapbndqlqxdcgpwntbv',
+    projectRef: 'dedlbzhpgkmetvhbkyzq',  // CONSOLIDATED: migrated from liapbndqlqxdcgpwntbv (SD-ARCH-EHG-006)
     outputPath: '../ehg/src/types/database.ts',
     cacheFile: '.schema-cache/ehg-types.hash'
   }
