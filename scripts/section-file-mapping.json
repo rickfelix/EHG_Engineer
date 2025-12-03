@@ -4,7 +4,8 @@
     "sections": [
       "file_warning",
       "smart_router",
-      "session_prologue"
+      "session_prologue",
+      "common_commands"
     ]
   },
   "CLAUDE_CORE.md": {
@@ -40,7 +41,8 @@
       "simplicity_first_enforcement",
       "lead_pre_approval_simplicity_gate",
       "sd_evaluation",
-      "knowledge_retrieval"
+      "knowledge_retrieval",
+      "parent_child_sd_governance"
     ]
   },
   "CLAUDE_PLAN.md": {
@@ -50,6 +52,7 @@
       "plan_multi_perspective",
       "prd_research_lookup",
       "plan_pre_exec_checklist",
+      "plan_test_infrastructure_gate",
       "testing_tier_strategy",
       "testing_tier_strategy_updated",
       "plan_cicd_verification",
@@ -70,6 +73,7 @@
     "description": "EXEC phase operations (~20-25k chars)",
     "sections": [
       "exec_implementation_requirements",
+      "exec_retrospective_anti_patterns",
       "exec_skill_integration",
       "exec_requirement",
       "exec_component_sizing_guidelines",
