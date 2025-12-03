@@ -8,12 +8,12 @@
       "id": "APP001",
       "name": "ehg",
       "github_repo": "rickfelix/ehg.git",
-      "supabase_project_id": "liapbndqlqxdcgpwntbv",
-      "supabase_url": "https://liapbndqlqxdcgpwntbv.supabase.co",
+      "supabase_project_id": "dedlbzhpgkmetvhbkyzq",
+      "supabase_url": "https://dedlbzhpgkmetvhbkyzq.supabase.co",
       "status": "active",
       "environment": "development",
       "registered_at": "2025-08-30T15:20:08.903Z",
-      "note": "Uses the 'ehg' database, NOT ehg_engineer"
+      "note": "CONSOLIDATED: Now uses same DB as EHG_Engineer (SD-ARCH-EHG-006)"
     },
     "APP002": {
       "id": "APP002",

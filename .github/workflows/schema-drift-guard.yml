@@ -30,9 +30,9 @@ jobs:
         run: |
           cd supabase/ehg_app
 
-          # Link to EHG app Supabase project
-          echo "Linking to EHG app project..."
-          supabase link --project-ref liapbndqlqxdcgpwntbv || true
+          # Link to CONSOLIDATED Supabase project (SD-ARCH-EHG-006)
+          echo "Linking to CONSOLIDATED project..."
+          supabase link --project-ref dedlbzhpgkmetvhbkyzq || true
 
           # Generate diff to detect untracked changes
           echo "Checking for schema drift..."

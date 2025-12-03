@@ -14,14 +14,15 @@
     "ehg": {
       "name": "EHG Application",
       "database": {
-        "name": "ehg",
-        "supabase_project_id": "liapbndqlqxdcgpwntbv",
-        "supabase_url": "https://liapbndqlqxdcgpwntbv.supabase.co",
-        "purpose": "The actual EHG application database with user data, ventures, portfolio, etc."
+        "name": "ehg_consolidated",
+        "supabase_project_id": "dedlbzhpgkmetvhbkyzq",
+        "supabase_url": "https://dedlbzhpgkmetvhbkyzq.supabase.co",
+        "purpose": "CONSOLIDATED: EHG application + LEO Protocol in single database",
+        "migration_note": "Migrated from liapbndqlqxdcgpwntbv via SD-ARCH-EHG-006 (2025-11-30)"
       },
       "github_repo": "rickfelix/ehg",
       "description": "The portfolio application being built using LEO Protocol"
     }
   },
-  "important_note": "NEVER confuse ehg_engineer (the tool) with ehg (the project)"
+  "important_note": "As of SD-ARCH-EHG-006, both EHG_Engineer and EHG use the same consolidated database (dedlbzhpgkmetvhbkyzq)"
 }

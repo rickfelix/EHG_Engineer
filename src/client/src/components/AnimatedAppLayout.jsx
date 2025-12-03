@@ -11,7 +11,8 @@ import {
   FlaskConical,
   Package,
   GitPullRequest,
-  ClipboardCheck
+  ClipboardCheck,
+  Rocket
 } from 'lucide-react';
 import Breadcrumbs from './Breadcrumbs';
 import SmartRefreshButton from './SmartRefreshButton';
@@ -46,6 +47,7 @@ function AnimatedAppLayout({
   
   const navItems = [
     { path: '/', icon: Home, label: 'Strategic Directives', tooltip: 'Home' },
+    { path: '/ventures', icon: Rocket, label: 'Ventures', tooltip: 'Ventures' },
     { path: '/backlog', icon: Package, label: 'Backlog', tooltip: 'Backlog' },
     { path: '/uat-tests', icon: ClipboardCheck, label: 'UAT Tests', tooltip: 'UAT' }
   ];
