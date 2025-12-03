@@ -6,12 +6,18 @@
  *
  * Validates:
  * 1. Risk Assessment completion (MANDATORY after LEAD_PRE_APPROVAL)
- * 2. User Story Context Engineering (MANDATORY for PLAN→EXEC)
- * 3. Checkpoint Plan existence (MANDATORY for SDs with >8 stories)
- * 4. Test Plan generation (MANDATORY for EXEC→PLAN)
+ * 2. Risk Assessment quality (boilerplate detection) - SD-CAPABILITY-LIFECYCLE-001
+ * 3. User Story Context Engineering (MANDATORY for PLAN→EXEC)
+ * 4. Checkpoint Plan existence (MANDATORY for SDs with >8 stories)
+ * 5. Test Plan generation (MANDATORY for EXEC→PLAN)
  *
  * Integration: Called by unified-handoff-system.js at validation gates
  */
+
+import {
+  validateRiskAssessmentForHandoff,
+  getRiskAssessmentImprovementGuidance
+} from './risk-assessment-quality-validation.js';
 
 /**
  * Validate BMAD enhancements for PLAN→EXEC handoff
@@ -389,14 +395,73 @@ export async function validateRiskAssessment(sd_id, supabase) {
       console.log(`      Risk Level: ${risk.risk_level}`);
       console.log(`      Verdict: ${risk.verdict}`);
 
-      validation.score += 100;
-      validation.details.risk_assessment = {
-        verdict: 'PASS',
-        overall_risk_score: risk.overall_risk_score,
+      // ================================================
+      // QUALITY VALIDATION (SD-CAPABILITY-LIFECYCLE-001)
+      // Detect boilerplate/default rationales
+      // ================================================
+      console.log('\n   🔍 Validating Risk Assessment Quality (boilerplate detection)...');
+
+      // Build assessment object for quality check (using correct schema column names)
+      const assessmentForQuality = {
+        id: risk.id,
+        sd_id: risk.sd_id,
+        technical_complexity: risk.technical_complexity,
+        security_risk: risk.security_risk,
+        performance_risk: risk.performance_risk,
+        integration_risk: risk.integration_risk,
+        data_migration_risk: risk.data_migration_risk,
+        ui_ux_risk: risk.ui_ux_risk,
+        critical_issues: risk.critical_issues || [],
+        warnings: risk.warnings || [],
+        recommendations: risk.recommendations || [],
         risk_level: risk.risk_level,
-        assessment_verdict: risk.verdict,
+        verdict: risk.verdict,
         confidence: risk.confidence
       };
+
+      const qualityResult = validateRiskAssessmentForHandoff(assessmentForQuality, {
+        minimumScore: 70,
+        maxBoilerplatePercent: 50,
+        blockOnWarnings: false
+      });
+
+      console.log(`      Quality Score: ${qualityResult.score}%`);
+      console.log(`      Boilerplate: ${qualityResult.qualityDetails?.boilerplateDetails?.boilerplate_percentage || 0}%`);
+
+      if (qualityResult.valid) {
+        console.log('      ✅ PASS: Risk assessment quality acceptable');
+        validation.score += 100;
+        validation.details.risk_assessment = {
+          verdict: 'PASS',
+          overall_risk_score: risk.overall_risk_score,
+          risk_level: risk.risk_level,
+          assessment_verdict: risk.verdict,
+          confidence: risk.confidence,
+          quality_score: qualityResult.score,
+          boilerplate_details: qualityResult.qualityDetails?.boilerplateDetails
+        };
+      } else {
+        console.log('      ❌ FAIL: Risk assessment contains too much boilerplate');
+        validation.passed = false;
+        validation.score += 30; // Partial credit for existence
+
+        // Add quality issues as validation issues
+        validation.issues.push(...qualityResult.issues);
+        validation.warnings.push(...qualityResult.warnings);
+
+        // Get improvement guidance
+        const guidance = getRiskAssessmentImprovementGuidance(qualityResult);
+
+        validation.details.risk_assessment = {
+          verdict: 'QUALITY_FAIL',
+          overall_risk_score: risk.overall_risk_score,
+          risk_level: risk.risk_level,
+          quality_score: qualityResult.score,
+          boilerplate_details: qualityResult.qualityDetails?.boilerplateDetails,
+          improvement_guidance: guidance,
+          remediation: 'Re-run RISK sub-agent with detailed SD context or manually replace default rationales'
+        };
+      }
     }
 
     console.log('\n   📊 Risk Assessment Summary:');
