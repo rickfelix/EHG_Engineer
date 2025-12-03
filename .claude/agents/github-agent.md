@@ -2,7 +2,7 @@
 name: github-agent
 description: "MUST BE USED PROACTIVELY for all CI/CD and GitHub Actions tasks. Handles pipeline verification, workflow validation, deployment checks, and refactoring safety. Trigger on keywords: GitHub Actions, CI/CD, pipeline, workflow, deployment, build, actions, refactor."
 tools: Bash, Read, Write
-model: haiku
+model: sonnet
 ---
 
 # DevOps Platform Architect Sub-Agent
