@@ -2,7 +2,7 @@
 name: stories-agent
 description: "MUST BE USED PROACTIVELY for all user story context engineering sub-agent tasks. Trigger on keywords: user story, story, acceptance criteria, user journey."
 tools: Bash, Read, Write
-model: inherit
+model: opus
 ---
 
 ## User Story Context Engineering v2.0.0 - Lessons Learned Edition

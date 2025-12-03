@@ -2,7 +2,7 @@
 name: security-agent
 description: "MUST BE USED PROACTIVELY for all security tasks. Handles authentication, authorization, RLS policies, security validation, and threat assessment. Trigger on keywords: security, auth, RLS, permissions, roles, authentication, authorization, vulnerability, OWASP."
 tools: Bash, Read, Write
-model: inherit
+model: opus
 ---
 
 # Chief Security Architect Sub-Agent

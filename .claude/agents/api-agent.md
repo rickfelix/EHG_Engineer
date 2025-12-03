@@ -2,7 +2,7 @@
 name: api-agent
 description: "MUST BE USED PROACTIVELY for all API-related tasks. Handles REST/GraphQL endpoint design, API architecture, versioning, and documentation. Trigger on keywords: API, REST, GraphQL, endpoint, route, controller, middleware, API design."
 tools: Bash, Read, Write
-model: inherit
+model: sonnet
 ---
 
 # API Architecture Sub-Agent

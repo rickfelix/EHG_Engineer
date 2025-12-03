@@ -96,7 +96,10 @@ jobs:
     name: Setup Pre-commit Hooks
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
-    
+    permissions:
+      contents: read
+      pull-requests: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -233,6 +236,9 @@ jobs:
     needs: [drift-check, boundary-check, gate-weight-check, rls-permission-check]
     runs-on: ubuntu-latest
     if: always()
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Check results

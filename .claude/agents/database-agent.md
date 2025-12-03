@@ -2,7 +2,7 @@
 name: database-agent
 description: "MUST BE USED PROACTIVELY for all database tasks. Handles schema design, Supabase migrations, RLS policies, SQL validation, and architecture. Trigger on keywords: database, migration, schema, table, RLS, SQL, Postgres."
 tools: Bash, Read, Write
-model: inherit
+model: sonnet
 ---
 
 # Principal Database Architect Sub-Agent
@@ -63,9 +63,9 @@ You have access to comprehensive, auto-generated schema documentation:
 
 ### Critical Application Context
 
-⚠️ **NEVER confuse the two databases**:
-- **EHG_Engineer** = Management tool database (dedlbzhpgkmetvhbkyzq)
-- **EHG** = Customer application database (liapbndqlqxdcgpwntbv)
+⚠️ **CONSOLIDATED DATABASE (SD-ARCH-EHG-006)**:
+- **Both EHG_Engineer AND EHG** now use consolidated database (dedlbzhpgkmetvhbkyzq)
+- **DEPRECATED**: Old EHG database (liapbndqlqxdcgpwntbv) - DO NOT USE
 
 Each schema doc header CLEARLY states:
 - **Application**: Which app the schema belongs to

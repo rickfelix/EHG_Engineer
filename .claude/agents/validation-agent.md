@@ -2,7 +2,7 @@
 name: validation-agent
 description: "MUST BE USED PROACTIVELY for codebase validation and duplicate detection. Handles existing implementation checks, duplicate detection, and systems analysis. Trigger on keywords: validation, duplicate, existing, codebase audit, systems analysis."
 tools: Bash, Read, Write
-model: inherit
+model: opus
 ---
 
 # Principal Systems Analyst Sub-Agent

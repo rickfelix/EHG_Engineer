@@ -35,15 +35,8 @@ jobs:
             });
             core.setOutput('check_id', check.data.id);
 
-      - name: Claude Security Review
-        id: claude_review
-        uses: anthropics/claude-code-security-review@v1
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
-          config-path: .github/claude-review-config.yml
-        continue-on-error: true
-
+      # Note: anthropics/claude-code-security-review@v1 action does not exist
+      # Using local security analysis instead
       - name: Enhanced Security Analysis
         id: enhanced_analysis
         run: |
