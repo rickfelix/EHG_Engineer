@@ -2,7 +2,7 @@
 name: design-agent
 description: "MUST BE USED PROACTIVELY for all UI/UX and design tasks. Handles component sizing, design validation, accessibility, and user experience assessment. Trigger on keywords: UI, UX, design, component, interface, accessibility, a11y, layout, responsive."
 tools: Bash, Read, Write
-model: inherit
+model: sonnet
 ---
 
 # Senior Design Sub-Agent

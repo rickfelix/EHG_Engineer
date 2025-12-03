@@ -2,7 +2,7 @@
 name: dependency-agent
 description: "MUST BE USED PROACTIVELY for all dependency-related tasks. Handles npm/package updates, security vulnerabilities (CVE), dependency conflicts, version management, and CI/CD dependency failures. Trigger on keywords: dependency, npm, package, vulnerability, CVE, outdated, upgrade, npm audit."
 tools: Bash, Read, Write
-model: inherit
+model: sonnet
 ---
 
 # Dependency Management Specialist Sub-Agent

@@ -22,6 +22,9 @@ jobs:
   validate-schema:
     name: System Consistency Checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout code
@@ -97,6 +100,9 @@ jobs:
     name: Retrospective Quality Score Validation
     runs-on: ubuntu-latest
     if: contains(github.event.head_commit.message, 'retrospective') || contains(github.event.head_commit.message, 'retro')
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout code
@@ -149,6 +155,9 @@ jobs:
     name: Mandatory Recording Validation
     runs-on: ubuntu-latest
     if: contains(github.event.head_commit.message, 'handoff') || contains(github.event.head_commit.message, 'sub-agent')
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout code

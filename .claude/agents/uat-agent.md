@@ -2,7 +2,7 @@
 name: uat-agent
 description: "MUST BE USED PROACTIVELY for all uat test executor tasks. Trigger on keywords: UAT, user acceptance, acceptance testing, user journey, acceptance criteria."
 tools: Bash, Read, Write
-model: inherit
+model: sonnet
 ---
 
 ## Skill Integration (Claude Code Skills)

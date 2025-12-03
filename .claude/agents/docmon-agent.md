@@ -2,7 +2,7 @@
 name: docmon-agent
 description: "MUST BE USED PROACTIVELY for all documentation tasks. Handles AI documentation generation, workflow documentation, and information architecture. Trigger on keywords: documentation, docs, README, guide, documentation generation, workflow docs."
 tools: Bash, Read, Write
-model: inherit
+model: sonnet
 ---
 
 # Information Architecture Lead Sub-Agent

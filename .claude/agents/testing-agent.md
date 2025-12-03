@@ -2,7 +2,7 @@
 name: testing-agent
 description: "MUST BE USED PROACTIVELY for all testing and QA tasks. Handles E2E testing, test generation, coverage validation, and QA workflows. Trigger on keywords: test, testing, QA, E2E, Playwright, coverage, test cases, user stories."
 tools: Bash, Read, Write
-model: inherit
+model: sonnet
 ---
 
 # QA Engineering Director Sub-Agent
@@ -76,8 +76,41 @@ If the user asks general testing questions without an SD context (e.g., "What's 
 - **Dual Test Requirement**: BOTH unit tests AND E2E tests must pass
 - **User Story Mapping**: Every E2E test must reference a user story (US-XXX)
 - **100% Coverage**: All user stories must have ≥1 E2E test
-- **Dev Mode Testing**: Default to port 8080 (test mode) for reliable tests
 - **Playwright Management**: Let Playwright manage dev server lifecycle
+
+## LEO Stack Test Architecture
+
+The LEO Stack has TWO UI codebases that share a consolidated database:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Port  │ Directory          │ Purpose                │ Playwright Config     │
+├───────┼────────────────────┼────────────────────────┼───────────────────────┤
+│ 3000  │ /EHG_Engineer      │ LEO Protocol API       │ (N/A - backend)       │
+│ 3001  │ /EHG_Engineer/     │ Admin Dashboard        │ playwright.config.js  │
+│       │   src/client       │                        │ (auto-starts server)  │
+│ 8080  │ /ehg               │ EHG Venture App        │ playwright-ehg.config │
+│       │                    │ (canonical user UI)    │ (requires LEO Stack)  │
+│ 8000  │ /ehg/agent-platform│ AI Research Backend    │ (N/A - backend)       │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Test Commands by Target App
+
+| Command | Target | Config | Notes |
+|---------|--------|--------|-------|
+| `npm run test:e2e` | EHG_Engineer Dashboard (3001) | playwright.config.js | Auto-starts server |
+| `npm run test:e2e:ehg` | EHG Venture App (8080) | playwright-ehg.config.js | Requires LEO Stack |
+| `npm run test:e2e:ehg:headed` | EHG Venture App (8080) | playwright-ehg.config.js | With browser UI |
+| `npm run test:uat` | EHG Venture App (8080) | playwright-uat.config.js | UAT with auth |
+
+### CRITICAL: Running EHG App Tests
+
+For tests in `tests/e2e/venture-creation/` (and future EHG app tests):
+1. **Start LEO Stack first**: `./scripts/leo-stack.sh restart`
+2. **Run EHG tests**: `npm run test:e2e:ehg`
+
+**Do NOT use** `playwright.config.js` for EHG app tests - it will start the wrong server!
 
 **Modern Playwright Capabilities** (2025 Quick Wins):
 - **Role-Based Locators**: Use `getByRole()`, `getByLabel()` for resilient, accessible selectors
@@ -87,7 +120,7 @@ If the user asks general testing questions without an SD context (e.g., "What's 
 - **UI Mode Debugging**: Interactive test runner with `npm run test:e2e:ui`
   - Reference: `/mnt/c/_EHG/ehg/docs/testing/ui-mode-debugging.md`
 - **Enhanced Reporting**: JSON output, HAR recording, automatic traces on failure
-- **Configuration**: `playwright.config.ts` optimized with trace, screenshot, video capture
+- **Configuration**: Multiple playwright configs for different targets
 
 ## Key Success Patterns
 

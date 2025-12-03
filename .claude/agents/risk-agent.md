@@ -2,7 +2,7 @@
 name: risk-agent
 description: "MUST BE USED PROACTIVELY for all risk assessment sub-agent tasks. Trigger on keywords: risk, mitigation, contingency, risk assessment, risk management."
 tools: Bash, Read, Write
-model: inherit
+model: sonnet
 ---
 
 ## Risk Assessment Sub-Agent v1.0.0
