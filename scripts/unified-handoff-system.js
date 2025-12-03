@@ -1,7 +1,26 @@
 #!/usr/bin/env node
 
 /**
- * Unified LEO Protocol Handoff System
+ * ============================================================================
+ * ⚠️  DEPRECATED - USE scripts/handoff.js INSTEAD
+ * ============================================================================
+ *
+ * This file is deprecated in favor of the modular handoff system.
+ * Use the new CLI: node scripts/handoff.js
+ *
+ * The new system provides:
+ * - Same functionality with better maintainability
+ * - Modular architecture (scripts/modules/handoff/)
+ * - Easier testing and extension
+ *
+ * Migration: Replace calls to this file with scripts/handoff.js
+ *   OLD: node scripts/unified-handoff-system.js execute PLAN-TO-EXEC SD-XXX
+ *   NEW: node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX
+ *
+ * This file will be removed in a future release.
+ * ============================================================================
+ *
+ * Unified LEO Protocol Handoff System (LEGACY)
  * Comprehensive handoff management leveraging database templates
  *
  * FEATURES:
@@ -2345,9 +2364,20 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
 
 // CLI Interface
 async function main() {
+  // DEPRECATION WARNING
+  console.warn('');
+  console.warn('⚠️  DEPRECATION WARNING');
+  console.warn('='.repeat(60));
+  console.warn('   unified-handoff-system.js is deprecated.');
+  console.warn('   Please use: node scripts/handoff.js');
+  console.warn('');
+  console.warn('   This file will be removed in a future release.');
+  console.warn('='.repeat(60));
+  console.warn('');
+
   const args = process.argv.slice(2);
   const command = args[0];
-  
+
   const system = new UnifiedHandoffSystem();
   
   switch (command) {
