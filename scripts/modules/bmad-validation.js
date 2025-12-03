@@ -19,6 +19,11 @@ import {
   getRiskAssessmentImprovementGuidance
 } from './risk-assessment-quality-validation.js';
 
+import {
+  validateTestPlanForHandoff,
+  getTestPlanImprovementGuidance
+} from './test-plan-quality-validation.js';
+
 /**
  * Validate BMAD enhancements for PLAN→EXEC handoff
  *
@@ -248,14 +253,57 @@ export async function validateBMADForExecToPlan(sd_id, supabase) {
 
       if (hasUnitTests && hasE2ETests) {
         console.log('      ✅ PASS: Comprehensive test plan with unit and E2E tests');
-        validation.score += 50;
-        validation.details.test_plan = {
-          verdict: 'PASS',
-          test_plan_id: testPlan.id,
-          unit_test_count: testPlan.unit_test_strategy.test_cases.length,
-          e2e_test_count: testPlan.e2e_test_strategy.test_cases.length,
-          integration_test_count: hasIntegrationTests ? testPlan.integration_test_strategy.test_cases.length : 0
-        };
+
+        // ================================================
+        // 2a. TEST PLAN QUALITY VALIDATION (SD-CAPABILITY-LIFECYCLE-001)
+        // Detect boilerplate test cases
+        // ================================================
+        console.log('\n   🔍 Validating Test Plan Quality (boilerplate detection)...');
+
+        const qualityResult = validateTestPlanForHandoff(testPlan, {
+          minimumScore: 70,
+          maxBoilerplatePercent: 50,
+          blockOnWarnings: false
+        });
+
+        console.log(`      Quality Score: ${qualityResult.score}%`);
+        console.log(`      E2E Boilerplate: ${qualityResult.qualityDetails?.boilerplateDetails?.e2e_boilerplate_percentage || 0}%`);
+
+        if (qualityResult.valid) {
+          console.log('      ✅ PASS: Test plan quality acceptable');
+          validation.score += 50;
+          validation.details.test_plan = {
+            verdict: 'PASS',
+            test_plan_id: testPlan.id,
+            unit_test_count: testPlan.unit_test_strategy.test_cases.length,
+            e2e_test_count: testPlan.e2e_test_strategy.test_cases.length,
+            integration_test_count: hasIntegrationTests ? testPlan.integration_test_strategy.test_cases.length : 0,
+            quality_score: qualityResult.score,
+            boilerplate_details: qualityResult.qualityDetails?.boilerplateDetails
+          };
+        } else {
+          console.log('      ❌ FAIL: Test plan contains too much boilerplate');
+          validation.passed = false;
+          validation.score += 20; // Partial credit for existence
+
+          // Add quality issues as validation issues
+          validation.issues.push(...qualityResult.issues);
+          validation.warnings.push(...qualityResult.warnings);
+
+          // Get improvement guidance
+          const guidance = getTestPlanImprovementGuidance(qualityResult);
+
+          validation.details.test_plan = {
+            verdict: 'QUALITY_FAIL',
+            test_plan_id: testPlan.id,
+            unit_test_count: testPlan.unit_test_strategy.test_cases.length,
+            e2e_test_count: testPlan.e2e_test_strategy.test_cases.length,
+            quality_score: qualityResult.score,
+            boilerplate_details: qualityResult.qualityDetails?.boilerplateDetails,
+            improvement_guidance: guidance,
+            remediation: 'Replace generic user_actions and expected_outcomes with specific UI interactions and assertions'
+          };
+        }
       } else {
         console.log('      ⚠️  WARNING: Test plan incomplete - missing critical test types');
         validation.warnings.push('Test plan missing critical test types (unit or E2E)');
