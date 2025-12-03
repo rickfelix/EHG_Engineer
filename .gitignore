@@ -46,3 +46,46 @@ scripts/complete-*-sd.mjs
 scripts/check-*-venture-*.mjs
 scripts/create-*-venture-*.mjs
 scripts/delete-orphan-*.mjs
+
+# One-off database/migration scripts (use process scripts instead)
+scripts/apply-*.mjs
+scripts/check-*.mjs
+scripts/complete-*.mjs
+scripts/diagnose-*.mjs
+scripts/execute-*.mjs
+scripts/export-*.mjs
+scripts/fix-*.mjs
+scripts/get-*.mjs
+scripts/implement-*.mjs
+scripts/insert-*.mjs
+scripts/list-*.mjs
+scripts/migrate-*.mjs
+scripts/query-*.mjs
+scripts/review-*.mjs
+scripts/smart-*.mjs
+scripts/stories-*.mjs
+scripts/test-auth-*.mjs
+scripts/update-*.mjs
+scripts/verify-*.mjs
+scripts/comprehensive-*.mjs
+scripts/infrastructure-*.mjs
+scripts/full-data-*.mjs
+scripts/create-*-handoff.mjs
+scripts/create-*-via-*.mjs
+scripts/audit-*.js
+
+# Database results/exports (temporary artifacts)
+database/*.json
+
+# One-off root level scripts
+audit_rls.js
+
+# Build artifacts (rebuild when needed)
+src/client/dist/
+
+# Playwright MCP screenshots
+.playwright-mcp/
+
+# Backup files with timestamps
+*.backup-*
+*.mjs.backup-*
