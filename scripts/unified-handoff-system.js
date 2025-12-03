@@ -1,7 +1,26 @@
 #!/usr/bin/env node
 
 /**
- * Unified LEO Protocol Handoff System
+ * ============================================================================
+ * ⚠️  DEPRECATED - USE scripts/handoff.js INSTEAD
+ * ============================================================================
+ *
+ * This file is deprecated in favor of the modular handoff system.
+ * Use the new CLI: node scripts/handoff.js
+ *
+ * The new system provides:
+ * - Same functionality with better maintainability
+ * - Modular architecture (scripts/modules/handoff/)
+ * - Easier testing and extension
+ *
+ * Migration: Replace calls to this file with scripts/handoff.js
+ *   OLD: node scripts/unified-handoff-system.js execute PLAN-TO-EXEC SD-XXX
+ *   NEW: node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX
+ *
+ * This file will be removed in a future release.
+ * ============================================================================
+ *
+ * Unified LEO Protocol Handoff System (LEGACY)
  * Comprehensive handoff management leveraging database templates
  *
  * FEATURES:
@@ -42,6 +61,7 @@ import {
 } from '../lib/utils/sd-type-validation.js';
 import { autoValidateUserStories } from './auto-validate-user-stories-on-exec-complete.js';
 import { autoCompleteDeliverables, checkDeliverablesNeedCompletion } from './modules/handoff/auto-complete-deliverables.js';
+import { validateSDCompletionReadiness, getSDImprovementGuidance } from './modules/sd-quality-validation.js';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
@@ -1046,6 +1066,69 @@ class UnifiedHandoffSystem {
       }
 
       console.log(`✅ Sub-agent orchestration passed: ${orchestrationResult.passed}/${orchestrationResult.total_agents} agents`);
+      console.log('-'.repeat(50));
+
+      // RETROSPECTIVE QUALITY GATE (SD-CAPABILITY-LIFECYCLE-001)
+      // Validates retrospective exists AND has quality content (not boilerplate)
+      console.log('\n🔒 RETROSPECTIVE QUALITY GATE');
+      console.log('-'.repeat(50));
+
+      // Load SD for quality validation
+      const { data: sdForRetroGate } = await this.supabase
+        .from('strategic_directives_v2')
+        .select('*')
+        .eq('id', sdId)
+        .single();
+
+      // Load retrospective for this SD
+      const { data: retrospective } = await this.supabase
+        .from('retrospectives')
+        .select('*')
+        .eq('sd_id', sdId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      const retroGateResult = validateSDCompletionReadiness(sdForRetroGate, retrospective);
+
+      if (!retroGateResult.valid || retroGateResult.score < 70) {
+        console.error('\n❌ RETROSPECTIVE QUALITY GATE FAILED');
+        console.error(`   Score: ${retroGateResult.score}%`);
+        console.error(`   Issues: ${retroGateResult.issues.length}`);
+        retroGateResult.issues.forEach(issue => console.error(`   • ${issue}`));
+
+        if (retroGateResult.warnings.length > 0) {
+          console.error('   Warnings:');
+          retroGateResult.warnings.slice(0, 3).forEach(w => console.error(`   • ${w}`));
+        }
+
+        const guidance = getSDImprovementGuidance(retroGateResult);
+        console.error('\n   REMEDIATION:');
+        if (guidance.required.length > 0) {
+          console.error('   Required:');
+          guidance.required.forEach(r => console.error(`   • ${r}`));
+        }
+        if (guidance.recommended.length > 0) {
+          console.error('   Recommended:');
+          guidance.recommended.slice(0, 2).forEach(r => console.error(`   • ${r}`));
+        }
+
+        return {
+          success: false,
+          rejected: true,
+          reasonCode: 'RETROSPECTIVE_QUALITY_GATE_FAILED',
+          message: `Retrospective quality gate failed (${retroGateResult.score}%) - ${retroGateResult.issues.join('; ')}`,
+          details: retroGateResult,
+          guidance,
+          remediation: 'Ensure retrospective has non-boilerplate key_learnings and action_items'
+        };
+      }
+
+      console.log(`✅ Retrospective quality gate passed (${retroGateResult.score}%)`);
+      if (retroGateResult.warnings.length > 0) {
+        console.log('   Warnings (non-blocking):');
+        retroGateResult.warnings.slice(0, 2).forEach(w => console.log(`   • ${w}`));
+      }
       console.log('-'.repeat(50));
 
       // Load Strategic Directive to determine target repository
@@ -2281,9 +2364,20 @@ ${prd.known_issues ? JSON.stringify(prd.known_issues, null, 2) : 'No known issue
 
 // CLI Interface
 async function main() {
+  // DEPRECATION WARNING
+  console.warn('');
+  console.warn('⚠️  DEPRECATION WARNING');
+  console.warn('='.repeat(60));
+  console.warn('   unified-handoff-system.js is deprecated.');
+  console.warn('   Please use: node scripts/handoff.js');
+  console.warn('');
+  console.warn('   This file will be removed in a future release.');
+  console.warn('='.repeat(60));
+  console.warn('');
+
   const args = process.argv.slice(2);
   const command = args[0];
-  
+
   const system = new UnifiedHandoffSystem();
   
   switch (command) {

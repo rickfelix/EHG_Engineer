@@ -14,6 +14,8 @@ let GitCommitVerifier;
 let validateGate3PlanToLead;
 let validateGate4LeadFinal;
 let shouldValidateDesignDatabase;
+let validateSDCompletionReadiness;
+let getSDImprovementGuidance;
 
 export class PlanToLeadExecutor extends BaseExecutor {
   constructor(dependencies = {}) {
@@ -69,6 +71,57 @@ export class PlanToLeadExecutor extends BaseExecutor {
           issues: [],
           warnings: [],
           details: result
+        };
+      },
+      required: true
+    });
+
+    // RETROSPECTIVE QUALITY GATE (SD-CAPABILITY-LIFECYCLE-001)
+    // Validates retrospective exists AND has quality content (not boilerplate)
+    gates.push({
+      name: 'RETROSPECTIVE_QUALITY_GATE',
+      validator: async (ctx) => {
+        console.log('\n🔒 RETROSPECTIVE QUALITY GATE');
+        console.log('-'.repeat(50));
+
+        // Load retrospective for this SD
+        const { data: retrospective } = await this.supabase
+          .from('retrospectives')
+          .select('*')
+          .eq('sd_id', ctx.sdId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        const retroGateResult = validateSDCompletionReadiness(ctx.sd, retrospective);
+        ctx._retroGateResult = retroGateResult;
+
+        if (!retroGateResult.valid || retroGateResult.score < 70) {
+          const guidance = getSDImprovementGuidance(retroGateResult);
+          return {
+            passed: false,
+            score: retroGateResult.score,
+            max_score: 100,
+            issues: retroGateResult.issues,
+            warnings: retroGateResult.warnings,
+            guidance,
+            remediation: 'Ensure retrospective has non-boilerplate key_learnings and action_items'
+          };
+        }
+
+        console.log(`✅ Retrospective quality gate passed (${retroGateResult.score}%)`);
+        if (retroGateResult.warnings.length > 0) {
+          console.log('   Warnings (non-blocking):');
+          retroGateResult.warnings.slice(0, 2).forEach(w => console.log(`   • ${w}`));
+        }
+
+        return {
+          passed: true,
+          score: retroGateResult.score,
+          max_score: 100,
+          issues: [],
+          warnings: retroGateResult.warnings,
+          details: retroGateResult
         };
       },
       required: true
@@ -309,6 +362,14 @@ export class PlanToLeadExecutor extends BaseExecutor {
   getRemediation(gateName) {
     const remediations = {
       'SUB_AGENT_ORCHESTRATION': 'Retrospective must be generated before LEAD final approval. Run: node scripts/generate-comprehensive-retrospective.js <SD-ID>',
+      'RETROSPECTIVE_QUALITY_GATE': [
+        'Retrospective must exist and have quality content:',
+        '1. Ensure retrospective is created: node scripts/execute-subagent.js --code RETRO --sd-id <SD-ID>',
+        '2. Replace boilerplate learnings with SD-specific insights',
+        '3. Add at least one improvement area',
+        '4. Ensure key_learnings are not generic phrases',
+        '5. Re-run this handoff'
+      ].join('\n'),
       'GATE5_GIT_COMMIT_ENFORCEMENT': [
         'All implementation work must be committed and pushed:',
         '1. Review uncommitted changes: git status',
@@ -359,6 +420,12 @@ export class PlanToLeadExecutor extends BaseExecutor {
     if (!shouldValidateDesignDatabase) {
       const designDb = await import('../../design-database-gates-validation.js');
       shouldValidateDesignDatabase = designDb.shouldValidateDesignDatabase;
+    }
+
+    if (!validateSDCompletionReadiness) {
+      const sdQuality = await import('../../sd-quality-validation.js');
+      validateSDCompletionReadiness = sdQuality.validateSDCompletionReadiness;
+      getSDImprovementGuidance = sdQuality.getSDImprovementGuidance;
     }
   }
 }
