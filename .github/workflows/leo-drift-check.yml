@@ -13,7 +13,7 @@ jobs:
   drift-check:
     name: Check for Filesystem Drift
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -42,7 +42,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
           node dist/tools/gates/drift-check.js || {
-            echo "⚠️ Drift detection encountered an error"
+            echo "Warning: Drift detection encountered an error"
             echo "This is informational - workflow will continue"
             exit 0
           }
@@ -60,7 +60,7 @@ jobs:
   boundary-check:
     name: Check Module Boundaries
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -79,7 +79,7 @@ jobs:
       - name: Run ESLint boundary checks
         run: |
           npx eslint . --ext .js,.jsx,.ts,.tsx --max-warnings 100 || {
-            echo "⚠️ ESLint found issues (expected during development)"
+            echo "Warning: ESLint found issues (expected during development)"
             echo "This is informational - workflow will continue"
             exit 0
           }
@@ -88,7 +88,7 @@ jobs:
       - name: Report boundary violations
         if: failure()
         run: |
-          echo "❌ Module boundary violations detected!"
+          echo "Module boundary violations detected!"
           echo "LEO Engineering and EHG App modules must remain separate."
           echo "Check the ESLint output above for specific violations."
 
@@ -116,7 +116,7 @@ jobs:
                   language: system
                   pass_filenames: false
                   always_run: true
-                  
+
                 - id: boundary-check
                   name: Module Boundary Check
                   entry: npx eslint
@@ -128,20 +128,21 @@ jobs:
       - name: Comment on PR
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
+        continue-on-error: true  # Don't fail if comment fails
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const comment = `
-            ### 🔍 LEO Protocol Compliance Check
-            
+            ### LEO Protocol Compliance Check
+
             This PR is being checked for:
             - **Filesystem Drift**: PRDs, handoffs, and gate reviews must be in database only
             - **Module Boundaries**: LEO Engineering and EHG App must remain separate
             - **Artifact Compliance**: All LEO artifacts must follow database-first architecture
-            
-            Status: ⏳ Running checks...
+
+            Status: Running checks...
             `;
-            
+
             github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -161,32 +162,64 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          echo "🔢 Validating gate weight integrity..."
+          echo "Validating gate weight integrity..."
 
           # Skip if DATABASE_URL not configured
           if [ -z "$DATABASE_URL" ]; then
-            echo "⚠️ DATABASE_URL not configured, skipping gate weight check"
+            echo "Warning: DATABASE_URL not configured, skipping gate weight check"
             exit 0
           fi
 
-          # Run the check_gate_weights() function
-          psql "$DATABASE_URL" -t -c "SELECT check_gate_weights();" || {
-            echo "❌ Gate weight validation failed!"
-            echo "Each gate's rules must sum to exactly 1.000"
-            exit 1
-          }
+          # Retry logic for intermittent Supabase connection issues
+          MAX_RETRIES=3
+          RETRY_DELAY=5
 
-          echo "✅ All gate weights valid (sum to 1.000)"
+          for attempt in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $attempt of $MAX_RETRIES..."
+
+            # Run the check_gate_weights() function with connection timeout
+            if PGCONNECT_TIMEOUT=10 psql "$DATABASE_URL" -t -c "SELECT check_gate_weights();" 2>&1; then
+              echo "Gate weight validation succeeded"
+              exit 0
+            else
+              LAST_ERROR=$?
+              echo "Attempt $attempt failed (exit code: $LAST_ERROR)"
+
+              if [ $attempt -lt $MAX_RETRIES ]; then
+                echo "Retrying in ${RETRY_DELAY} seconds..."
+                sleep $RETRY_DELAY
+                RETRY_DELAY=$((RETRY_DELAY * 2))  # Exponential backoff
+              fi
+            fi
+          done
+
+          echo "Gate weight validation failed after $MAX_RETRIES attempts!"
+          echo "This may be due to intermittent Supabase connection issues."
+          echo "Each gate's rules must sum to exactly 1.000"
+          exit 1
 
       - name: Display weight summary
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "⚠️ DATABASE_URL not configured, skipping weight summary"
+            echo "Warning: DATABASE_URL not configured, skipping weight summary"
             exit 0
           fi
-          psql "$DATABASE_URL" -c "SELECT * FROM v_gate_rule_integrity;"
+
+          # Retry logic for display step
+          MAX_RETRIES=2
+          for attempt in $(seq 1 $MAX_RETRIES); do
+            if PGCONNECT_TIMEOUT=10 psql "$DATABASE_URL" -c "SELECT * FROM v_gate_rule_integrity;" 2>&1; then
+              exit 0
+            else
+              if [ $attempt -lt $MAX_RETRIES ]; then
+                echo "Display attempt $attempt failed, retrying..."
+                sleep 3
+              fi
+            fi
+          done
+          echo "Warning: Could not display weight summary"
 
   rls-permission-check:
     name: Verify RLS Permissions
@@ -201,35 +234,58 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
-          echo "🔐 Testing RLS permissions..."
+          echo "Testing RLS permissions..."
 
           # Skip if DATABASE_URL not configured
           if [ -z "$DATABASE_URL" ]; then
-            echo "⚠️ DATABASE_URL not configured, skipping RLS permission check"
+            echo "Warning: DATABASE_URL not configured, skipping RLS permission check"
             exit 0
           fi
 
-          # Test that anonymous users cannot write
-          psql "$DATABASE_URL" << 'EOF'
-          -- Set role to anonymous
-          SET ROLE anon;
+          # Retry logic for intermittent Supabase connection issues
+          MAX_RETRIES=3
+          RETRY_DELAY=5
 
-          -- This should fail with insufficient privilege
-          DO $$
-          BEGIN
-            INSERT INTO leo_gate_reviews (prd_id, gate, score, evidence)
-            VALUES ('test-prd', '2A', 50, '{}');
-            RAISE EXCEPTION 'ERROR: Anonymous insert was allowed!';
-          EXCEPTION
-            WHEN insufficient_privilege THEN
-              RAISE NOTICE '✅ Anonymous insert correctly blocked';
-          END $$;
+          for attempt in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $attempt of $MAX_RETRIES..."
 
-          -- Reset role
-          RESET ROLE;
-          EOF
+            # Test that anonymous users cannot write with connection timeout
+            if PGCONNECT_TIMEOUT=10 psql "$DATABASE_URL" << 'EOF' 2>&1
+-- Set role to anonymous
+SET ROLE anon;
 
-          echo "✅ RLS permissions are properly restrictive"
+-- This should fail with insufficient privilege
+DO $$
+BEGIN
+  INSERT INTO leo_gate_reviews (prd_id, gate, score, evidence)
+  VALUES ('test-prd', '2A', 50, '{}');
+  RAISE EXCEPTION 'ERROR: Anonymous insert was allowed!';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'Anonymous insert correctly blocked';
+END $$;
+
+-- Reset role
+RESET ROLE;
+EOF
+            then
+              echo "RLS permissions are properly restrictive"
+              exit 0
+            else
+              LAST_ERROR=$?
+              echo "Attempt $attempt failed (exit code: $LAST_ERROR)"
+
+              if [ $attempt -lt $MAX_RETRIES ]; then
+                echo "Retrying in ${RETRY_DELAY} seconds..."
+                sleep $RETRY_DELAY
+                RETRY_DELAY=$((RETRY_DELAY * 2))  # Exponential backoff
+              fi
+            fi
+          done
+
+          echo "RLS permission check failed after $MAX_RETRIES attempts!"
+          echo "This may be due to intermittent Supabase connection issues."
+          exit 1
 
   summary:
     name: Compliance Summary
@@ -247,57 +303,58 @@ jobs:
           # Drift and boundary checks are informational during development
           if [ "${{ needs.gate-weight-check.result }}" == "failure" ] || \
              [ "${{ needs.rls-permission-check.result }}" == "failure" ]; then
-            echo "❌ LEO Protocol critical compliance check failed!"
+            echo "LEO Protocol critical compliance check failed!"
             echo ""
             echo "Critical failures:"
             [ "${{ needs.gate-weight-check.result }}" == "failure" ] && echo "  - Gate weights invalid (CRITICAL)"
             [ "${{ needs.rls-permission-check.result }}" == "failure" ] && echo "  - RLS permissions too permissive (CRITICAL)"
             echo ""
             echo "Informational (non-blocking):"
-            [ "${{ needs.drift-check.result }}" == "failure" ] && echo "  ⚠️ Filesystem drift detected"
-            [ "${{ needs.boundary-check.result }}" == "failure" ] && echo "  ⚠️ Module boundary violations"
+            [ "${{ needs.drift-check.result }}" == "failure" ] && echo "  Warning: Filesystem drift detected"
+            [ "${{ needs.boundary-check.result }}" == "failure" ] && echo "  Warning: Module boundary violations"
             echo ""
             echo "Critical fixes required:"
             [ "${{ needs.gate-weight-check.result }}" == "failure" ] && echo "  - Fix gate weights: Ensure each gate's rules sum to 1.000"
             [ "${{ needs.rls-permission-check.result }}" == "failure" ] && echo "  - Fix RLS policies: Review permission configuration"
             exit 1
           else
-            echo "✅ LEO Protocol critical compliance checks passed!"
+            echo "LEO Protocol critical compliance checks passed!"
             echo "System meets LEO v4.1.2 security requirements."
             echo ""
-            echo "✓ Gate weights valid"
-            echo "✓ RLS permissions secure"
+            echo "Gate weights valid"
+            echo "RLS permissions secure"
             echo ""
             echo "Informational checks:"
-            [ "${{ needs.drift-check.result }}" == "failure" ] && echo "  ⚠️ Drift detection had issues" || echo "  ✓ Drift detection passed"
-            [ "${{ needs.boundary-check.result }}" == "failure" ] && echo "  ⚠️ ESLint found ${ESL_ERRORS:-many} issues" || echo "  ✓ Boundary checks passed"
+            [ "${{ needs.drift-check.result }}" == "failure" ] && echo "  Warning: Drift detection had issues" || echo "  Drift detection passed"
+            [ "${{ needs.boundary-check.result }}" == "failure" ] && echo "  Warning: ESLint found issues" || echo "  Boundary checks passed"
           fi
 
       - name: Update PR status
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
+        continue-on-error: true  # Don't fail workflow if comment fails
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const driftPassed = '${{ needs.drift-check.result }}' !== 'failure';
             const boundaryPassed = '${{ needs.boundary-check.result }}' !== 'failure';
-            
-            const status = driftPassed && boundaryPassed ? '✅ Passed' : '❌ Failed';
+
+            const status = driftPassed && boundaryPassed ? 'Passed' : 'Failed';
             const comment = `
-            ### 🔍 LEO Protocol Compliance Check - ${status}
-            
+            ### LEO Protocol Compliance Check - ${status}
+
             | Check | Result |
             |-------|--------|
-            | Filesystem Drift | ${driftPassed ? '✅ Passed' : '❌ Failed'} |
-            | Module Boundaries | ${boundaryPassed ? '✅ Passed' : '❌ Failed'} |
-            
+            | Filesystem Drift | ${driftPassed ? 'Passed' : 'Failed'} |
+            | Module Boundaries | ${boundaryPassed ? 'Passed' : 'Failed'} |
+
             ${!driftPassed || !boundaryPassed ? `
             #### Required Actions:
             ${!driftPassed ? '- Fix filesystem drift (see drift-check output)\n' : ''}
             ${!boundaryPassed ? '- Fix module boundary violations (see ESLint output)' : ''}
             ` : 'All compliance checks passed! Ready for review.'}
             `;
-            
+
             github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
