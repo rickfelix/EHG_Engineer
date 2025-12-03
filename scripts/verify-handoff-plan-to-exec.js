@@ -18,6 +18,7 @@ import { dirname } from 'path';
 
 import { createClient } from '@supabase/supabase-js';
 import HandoffValidator from './handoff-validator.js';
+import { validateUserStoriesForHandoff, getUserStoryImprovementGuidance } from './modules/user-story-quality-validation.js';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
@@ -230,7 +231,7 @@ class PlanToExecVerifier {
       console.log('\n📝 Checking for user stories...');
       const { data: userStories, error: userStoriesError } = await this.supabase
         .from('user_stories')
-        .select('story_key, title, status')
+        .select('story_key, title, status, user_role, user_want, user_benefit, acceptance_criteria, story_points, implementation_context')
         .eq('sd_id', sdId);
 
       if (userStoriesError) {
@@ -248,6 +249,31 @@ class PlanToExecVerifier {
       console.log(`   ✅ User stories found: ${userStories.length}`);
       const completedStories = userStories.filter(s => s.status === 'completed').length;
       console.log(`   📊 Status: ${completedStories}/${userStories.length} completed`);
+
+      // 3a-2. NEW: User Story Quality Validation (SD-CAPABILITY-LIFECYCLE-001)
+      // Prevents boilerplate and low-quality stories from reaching EXEC
+      console.log('\n🔍 Validating user story quality...');
+      const storyQualityResult = validateUserStoriesForHandoff(userStories, {
+        minimumScore: 70,
+        minimumStories: 1,
+        blockOnWarnings: false
+      });
+
+      console.log(storyQualityResult.summary);
+
+      if (!storyQualityResult.valid) {
+        const guidance = getUserStoryImprovementGuidance(storyQualityResult);
+        console.log('\n   ❌ User story quality validation failed');
+        return this.rejectHandoff(sdId, 'USER_STORY_QUALITY', 'User stories do not meet quality standards for EXEC phase', {
+          qualityValidation: storyQualityResult,
+          improvements: guidance
+        });
+      }
+
+      console.log(`   ✅ User story quality passed (average score: ${storyQualityResult.averageScore}%)`);
+      if (storyQualityResult.warnings.length > 0) {
+        console.log(`   ⚠️  ${storyQualityResult.warnings.length} warnings (non-blocking)`);
+      }
 
       // 3b. MANDATORY: Workflow Review Validation (SD-DESIGN-WORKFLOW-REVIEW-001)
       console.log('\n📋 Checking workflow review analysis...');
@@ -631,6 +657,30 @@ class PlanToExecVerifier {
         guidance.actions = ['Check database connectivity', 'Verify user_stories table exists', 'Retry handoff'];
         guidance.timeEstimate = '15-20 minutes';
         guidance.instructions = 'Database error accessing user_stories table. Verify table exists and permissions are correct.';
+        break;
+
+      case 'USER_STORY_QUALITY':
+        // SD-CAPABILITY-LIFECYCLE-001: User story quality gate
+        const qualityValidation = details.qualityValidation;
+        const qualityImprovements = details.improvements;
+
+        guidance.required = qualityImprovements?.required || ['Improve user story quality to meet minimum standards'];
+        guidance.actions = [
+          'Review user story quality validation results',
+          'Fix stories with boilerplate acceptance criteria',
+          'Add specific, testable acceptance criteria (minimum 2 per story)',
+          'Use Given-When-Then format for acceptance criteria',
+          'Replace generic user_role with specific personas',
+          'Ensure user_want describes actual functionality (≥20 chars)',
+          'Ensure user_benefit explains value to user (≥15 chars)',
+          'Re-run stories-agent to regenerate poor quality stories',
+          'Retry PLAN→EXEC handoff'
+        ];
+        guidance.timeEstimate = qualityImprovements?.timeEstimate || '30-60 minutes';
+        guidance.instructions = qualityImprovements?.instructions ||
+          `User story quality score is ${qualityValidation?.averageScore || 0}% (minimum 70%). ` +
+          `${qualityValidation?.qualityDistribution?.poor || 0} stories scored below 70. ` +
+          'Focus on stories with blocking issues first. Use the stories-agent skill for guidance.';
         break;
 
       case 'HANDOFF_INVALID':
