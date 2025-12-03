@@ -89,3 +89,6 @@ src/client/dist/
 # Backup files with timestamps
 *.backup-*
 *.mjs.backup-*
+
+# Claude instance locks (prevents multi-instance conflicts)
+.claude-locks/

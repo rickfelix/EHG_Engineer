@@ -171,5 +171,47 @@ if [ ! -z "$STAGED_MD_FILES" ]; then
 fi
 
 echo "✅ DOCMON: No database-first violations detected"
+
+# ============================================================================
+# Work Accumulation Warning (prevents 250+ script accumulation)
+# ============================================================================
+echo ""
+echo "🔍 Checking for work accumulation..."
+
+# Count untracked files
+UNTRACKED_COUNT=$(git status --porcelain | grep "^??" | wc -l)
+if [ "$UNTRACKED_COUNT" -gt 20 ]; then
+  echo ""
+  echo "⚠️  WARNING: $UNTRACKED_COUNT untracked files detected!"
+  echo "   Consider reviewing and cleaning up before continuing."
+  echo "   Run: git status --porcelain | grep '^??' | head -20"
+  echo ""
+fi
+
+# Check if branch is far behind main
+BEHIND=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo 0)
+if [ "$BEHIND" -gt 50 ]; then
+  echo ""
+  echo "⚠️  WARNING: Branch is $BEHIND commits behind main."
+  echo "   Consider rebasing: git fetch origin && git rebase origin/main"
+  echo ""
+fi
+
+# ============================================================================
+# Branch Naming Convention Check
+# ============================================================================
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+if [ "$BRANCH" != "main" ]; then
+  # Valid patterns: feat/, fix/, docs/, test/, quick-fix/, reports/
+  if ! echo "$BRANCH" | grep -qE '^(feat|fix|docs|test|quick-fix|reports)/'; then
+    echo ""
+    echo "⚠️  WARNING: Branch name '$BRANCH' does not follow convention."
+    echo "   Expected prefixes: feat/, fix/, docs/, test/, quick-fix/, or reports/"
+    echo ""
+  fi
+fi
+
+echo "✅ Work accumulation check complete"
 echo ""
 echo "✅ Pre-commit checks passed. Proceeding with commit."

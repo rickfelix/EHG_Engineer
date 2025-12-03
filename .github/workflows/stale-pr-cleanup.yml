@@ -1,0 +1,86 @@
+name: Stale PR Detection
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday 9 AM UTC
+  workflow_dispatch:
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  stale-detection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          stale-pr-message: |
+            This PR has been inactive for 14 days.
+
+            **Action Required:**
+            - If work is ongoing: push a commit or comment
+            - If work is stalled: consider closing and creating smaller PRs
+            - If abandoned: close the PR
+
+            PRs over 400 LOC should be split per LEO Protocol guidelines.
+          close-pr-message: 'Closing stale PR after 30 days of inactivity. Reopen if still needed.'
+          days-before-stale: 14
+          days-before-close: 30
+          stale-pr-label: 'stale'
+          exempt-pr-labels: 'wip,blocked,needs-review'
+
+      - name: Check for large PRs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prs = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open'
+            });
+
+            for (const pr of prs.data) {
+              const diff = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number
+              });
+
+              const totalLines = diff.data.additions + diff.data.deletions;
+
+              if (totalLines > 400) {
+                // Add large-pr label
+                try {
+                  await github.rest.issues.addLabels({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: pr.number,
+                    labels: ['large-pr']
+                  });
+                } catch (e) {
+                  // Label may already exist or not be defined
+                  console.log(`Could not add label: ${e.message}`);
+                }
+
+                // Check for existing large PR comment
+                const comments = await github.rest.issues.listComments({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number
+                });
+
+                const hasLargePRComment = comments.data.some(c =>
+                  c.body && c.body.includes('Large PR Alert')
+                );
+
+                if (!hasLargePRComment) {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: pr.number,
+                    body: `## Large PR Alert\n\nThis PR has **${totalLines.toLocaleString()} lines changed** (target: ≤400).\n\n**Recommendations:**\n- Split into smaller, focused PRs\n- Each PR should be self-contained and testable\n- See LEO Protocol CLAUDE_CORE.md for guidelines\n\n*This is an automated check.*`
+                  });
+                }
+              }
+            }

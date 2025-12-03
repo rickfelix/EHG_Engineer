@@ -380,6 +380,44 @@ To request an exception to this block:
 
 **Full Guidelines**: See `docs/03_protocols_and_standards/leo_git_commit_guidelines_v4.2.0.md`
 
+## 🔒 Session Boundaries (MANDATORY)
+
+### Multi-Instance Safety
+When multiple Claude Code instances run simultaneously, use the branch lock mechanism:
+```bash
+# At session start
+node scripts/claude-session-lock.mjs acquire SD-XXX-YYY-001
+
+# At session end
+node scripts/claude-session-lock.mjs release
+
+# Check status
+node scripts/claude-session-lock.mjs status
+```
+
+**Rule**: Each Claude instance MUST work on a **different branch**. Never have two instances on the same branch.
+
+### Session Start Checklist
+- [ ] `git status` - Check for uncommitted work from previous session
+- [ ] If > 10 untracked files → Address BEFORE new work
+- [ ] Acquire branch lock: `node scripts/claude-session-lock.mjs acquire SD-ID`
+- [ ] Verify on correct branch for intended work
+
+### Session End Checklist
+- [ ] All changes committed OR explicitly documented as WIP
+- [ ] No temporary scripts remaining (`tmp-*.mjs`)
+- [ ] Handoff created if work incomplete
+- [ ] Release branch lock: `node scripts/claude-session-lock.mjs release`
+- [ ] `git status` shows clean tree OR documented reason
+
+### Commit Frequency Triggers
+1. **File Count**: If untracked files > 10 → Commit NOW
+2. **Time**: Every 30 minutes of active work → Checkpoint commit
+3. **Phase Boundary**: Before any handoff → Commit all work
+4. **Script Creation**: After testing any new utility script → Commit
+
+**Pattern Reference**: PAT-BRANCH-HYGIENE-001
+
 ## 📊 Communication & Context
 
 ### Communication Style
