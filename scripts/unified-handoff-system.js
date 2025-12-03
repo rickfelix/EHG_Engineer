@@ -42,6 +42,7 @@ import {
 } from '../lib/utils/sd-type-validation.js';
 import { autoValidateUserStories } from './auto-validate-user-stories-on-exec-complete.js';
 import { autoCompleteDeliverables, checkDeliverablesNeedCompletion } from './modules/handoff/auto-complete-deliverables.js';
+import { validateSDCompletionReadiness, getSDImprovementGuidance } from './modules/sd-quality-validation.js';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
@@ -1046,6 +1047,69 @@ class UnifiedHandoffSystem {
       }
 
       console.log(`✅ Sub-agent orchestration passed: ${orchestrationResult.passed}/${orchestrationResult.total_agents} agents`);
+      console.log('-'.repeat(50));
+
+      // RETROSPECTIVE QUALITY GATE (SD-CAPABILITY-LIFECYCLE-001)
+      // Validates retrospective exists AND has quality content (not boilerplate)
+      console.log('\n🔒 RETROSPECTIVE QUALITY GATE');
+      console.log('-'.repeat(50));
+
+      // Load SD for quality validation
+      const { data: sdForRetroGate } = await this.supabase
+        .from('strategic_directives_v2')
+        .select('*')
+        .eq('id', sdId)
+        .single();
+
+      // Load retrospective for this SD
+      const { data: retrospective } = await this.supabase
+        .from('retrospectives')
+        .select('*')
+        .eq('sd_id', sdId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      const retroGateResult = validateSDCompletionReadiness(sdForRetroGate, retrospective);
+
+      if (!retroGateResult.valid || retroGateResult.score < 70) {
+        console.error('\n❌ RETROSPECTIVE QUALITY GATE FAILED');
+        console.error(`   Score: ${retroGateResult.score}%`);
+        console.error(`   Issues: ${retroGateResult.issues.length}`);
+        retroGateResult.issues.forEach(issue => console.error(`   • ${issue}`));
+
+        if (retroGateResult.warnings.length > 0) {
+          console.error('   Warnings:');
+          retroGateResult.warnings.slice(0, 3).forEach(w => console.error(`   • ${w}`));
+        }
+
+        const guidance = getSDImprovementGuidance(retroGateResult);
+        console.error('\n   REMEDIATION:');
+        if (guidance.required.length > 0) {
+          console.error('   Required:');
+          guidance.required.forEach(r => console.error(`   • ${r}`));
+        }
+        if (guidance.recommended.length > 0) {
+          console.error('   Recommended:');
+          guidance.recommended.slice(0, 2).forEach(r => console.error(`   • ${r}`));
+        }
+
+        return {
+          success: false,
+          rejected: true,
+          reasonCode: 'RETROSPECTIVE_QUALITY_GATE_FAILED',
+          message: `Retrospective quality gate failed (${retroGateResult.score}%) - ${retroGateResult.issues.join('; ')}`,
+          details: retroGateResult,
+          guidance,
+          remediation: 'Ensure retrospective has non-boilerplate key_learnings and action_items'
+        };
+      }
+
+      console.log(`✅ Retrospective quality gate passed (${retroGateResult.score}%)`);
+      if (retroGateResult.warnings.length > 0) {
+        console.log('   Warnings (non-blocking):');
+        retroGateResult.warnings.slice(0, 2).forEach(w => console.log(`   • ${w}`));
+      }
       console.log('-'.repeat(50));
 
       // Load Strategic Directive to determine target repository
