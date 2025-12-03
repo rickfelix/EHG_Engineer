@@ -5,6 +5,7 @@
       "file_warning",
       "smart_router",
       "session_prologue",
+      "session_init",
       "common_commands"
     ]
   },

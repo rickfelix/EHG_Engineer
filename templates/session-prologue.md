@@ -1,12 +1,6 @@
-# Session Prologue - LEO Protocol v4.2.0 - Story Gates & Automated Release Control v4.2.0_story_gates
+# Session Prologue - LEO Protocol v4.3.3 - UI Parity Governance 4.3.3
 *Copy-paste this at session start to align Claude with EHG_Engineer practices*
-*Generated: 2025-09-26T14:18:32.015Z*
-
-## 🎯 APPLICATION QUICK REFERENCE
-- **Management Dashboard**: `/mnt/c/_EHG/EHG_Engineer/` (YOU ARE HERE - for managing work)
-- **Target App for Features**: `/mnt/c/_EHG/ehg/` (IMPLEMENT HERE - actual features)
-- **Before ANY implementation**: `cd /mnt/c/_EHG/ehg` then verify with `pwd`
-- **GitHub Repos**: EHG_Engineer.git (dashboard) vs ehg.git (app)
+*Generated: 2025-12-03T23:21:50.817Z*
 
 ## Core Directives
 
@@ -26,37 +20,17 @@
 
 ## Quick Checks
 
+- `npm run sd:next` - **START HERE** - Intelligent SD queue showing what to work on next
 - `npm run prio:top3` - View current top 3 priorities with WSJF scores
-- `npm run docs:boundary` - Regenerate DO/DON'T boundary patterns
-- `node scripts/check-deps.js` - Verify dependency policy compliance
-- `node scripts/query-active-sds.js` - List active strategic directives
+- `npm run sd:status` - Progress vs baseline with variance analysis
+- `npm run sd:burnrate` - Velocity metrics and completion forecasting
 
-## 🛡️ Pre-Session Validation (NEW - MANDATORY)
+## Session Start Workflow
 
-**Run BEFORE starting any SD work:**
-
-```bash
-# Validate LEO Protocol database schema
-node scripts/validate-leo-schema.js
-```
-
-This checks:
-- ✅ Handoff tables exist with correct schema
-- ✅ Strategic directives table is accessible
-- ✅ Sub-agent configuration is loaded
-- ✅ Environment variables are set
-
-**If validation fails:**
-- Red warnings (❌) = Use fallback handoff methods
-- See: `docs/handoff-resilience-guide.md` for recovery steps
-- Handoff fallback: Use git commit messages with 7 elements
-
-**Handoff Table Check:**
-```bash
-node scripts/check-handoff-tables-new.mjs
-```
-
-Returns: `handoff_tracking` (preferred) or `leo_sub_agent_handoffs` (legacy) or null (use git)
+1. Run `npm run sd:next` to see the SD queue
+2. If SD marked "CONTINUE" → Resume that SD
+3. If no active SD → Pick highest-ranked READY SD
+4. Load CLAUDE_LEAD.md for approval workflow
 
 ---
-*Remind Claude: Validate schema first, follow database-first, keep PRs small, use sub-agents, create resilient handoffs*
+*Remind Claude: Follow database-first, keep PRs small, use sub-agents, create handoffs*

@@ -22,6 +22,41 @@ See documentation for table structure: `database/schema/007_leo_protocol_schema_
 
 *For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
 
+## Session Initialization - SD Selection
+
+### Intent Detection Keywords
+When the user says any of the following, run `npm run sd:next` FIRST:
+- "start LEO", "start the LEO protocol"
+- "what should we work on", "what's next"
+- "identify next work", "next SD", "next strategic directive"
+- "continue work", "resume", "pick up where we left off"
+- "show queue", "show priorities", "what's ready"
+
+### Automatic SD Queue Loading
+```bash
+npm run sd:next
+```
+
+This command provides:
+1. **Track View** - Three parallel execution tracks (A: Infrastructure, B: Features, C: Quality)
+2. **Dependency Status** - Which SDs are READY vs BLOCKED
+3. **Continuity** - Recent git activity and "Working On" flag
+4. **Recommendations** - Suggested starting point per track
+
+### After Running sd:next
+1. If SD marked "CONTINUE" (is_working_on=true) → Resume that SD
+2. If no active SD → Pick highest-ranked READY SD from appropriate track
+3. Load CLAUDE_LEAD.md for SD approval workflow
+
+### Related Commands
+| Command | Purpose |
+|---------|---------|
+| `npm run sd:next` | Show intelligent SD queue |
+| `npm run sd:status` | Progress vs baseline |
+| `npm run sd:burnrate` | Velocity and forecasting |
+| `npm run sd:baseline view` | Current execution plan |
+
+
 ## Common Commands
 
 - `bash scripts/leo-stack.sh restart` - Restart all LEO servers (Engineer on 3000, App on 8080, Agent Platform on 8000)
@@ -29,7 +64,7 @@ See documentation for table structure: `database/schema/007_leo_protocol_schema_
 - `bash scripts/leo-stack.sh stop` - Stop all servers
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-12-02 7:29:22 PM
+**Last Generated**: 2025-12-03 6:21:23 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -69,6 +104,6 @@ See documentation for table structure: `database/schema/007_leo_protocol_schema_
 
 ---
 
-*Router generated from database: 2025-12-02*
+*Router generated from database: 2025-12-03*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*

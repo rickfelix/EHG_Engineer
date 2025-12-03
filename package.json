@@ -131,7 +131,13 @@
     "pattern:maintenance": "node scripts/pattern-maintenance.js",
     "pattern:maintenance:dry": "node scripts/pattern-maintenance.js --dry-run",
     "pattern:alert": "node scripts/pattern-alert-sd-creator.js",
-    "pattern:alert:dry": "node scripts/pattern-alert-sd-creator.js --dry-run"
+    "pattern:alert:dry": "node scripts/pattern-alert-sd-creator.js --dry-run",
+    "sd:next": "node scripts/sd-next.js",
+    "sd:baseline": "node scripts/sd-baseline.js",
+    "sd:baseline:create": "node scripts/sd-baseline.js create",
+    "sd:baseline:view": "node scripts/sd-baseline.js view",
+    "sd:status": "node scripts/sd-status.js",
+    "sd:burnrate": "node scripts/sd-burnrate.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",

@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2025-12-02 7:29:22 PM
+**Generated**: 2025-12-03 6:21:23 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
@@ -148,6 +148,68 @@ Consider using /quick-fix to reduce overhead.
 - SD Type validation: lib/utils/sd-type-validation.js
 - Evidence: SD-TECH-DEBT-DOCS-001 (documentation SD blocked by code-centric validation)
 - Pattern: 7 QA-category SDs went through full workflow
+
+## SD Orchestration & Baseline Management
+
+## SD Orchestration & Baseline Management (LEAD Responsibility)
+
+### LEAD Owns SD Prioritization
+The LEAD role is responsible for:
+1. **SD sequencing** - Maintaining execution order via `sequence_rank`
+2. **Track assignment** - Assigning SDs to tracks (A: Infrastructure, B: Features, C: Quality)
+3. **Baseline management** - Creating and approving rebaselines
+4. **Burn rate monitoring** - Tracking velocity and forecasting completion
+
+### Commands (LEAD Authority)
+
+#### Daily Operations
+```bash
+npm run sd:next      # View execution queue
+npm run sd:status    # Progress vs baseline
+```
+
+#### Baseline Management (Requires LEAD Approval)
+```bash
+npm run sd:baseline view        # View current baseline
+npm run sd:baseline create      # Create initial baseline
+npm run sd:baseline rebaseline  # Create new baseline (requires approval)
+```
+
+#### Velocity & Forecasting
+```bash
+npm run sd:burnrate             # Current velocity metrics
+npm run sd:burnrate forecast    # Completion forecasts
+npm run sd:burnrate snapshot    # Take periodic snapshot
+```
+
+### Track Definitions
+
+| Track | Name | Focus |
+|-------|------|-------|
+| A | Infrastructure/Safety | EVA systems, circuit breakers, core infra |
+| B | Feature/Stages | Stage implementations (7-40), user features |
+| C | Quality | Verification ladder, quality gates, testing |
+| STANDALONE | Standalone | No dependencies, can run anytime |
+
+### Rebaseline Triggers
+LEAD should consider rebaseline when:
+1. Burn rate deviates >20% from plan for 3+ SDs
+2. New critical SD added that changes dependencies
+3. Major blocker discovered
+4. Explicit request from Chairman
+
+### Dependency Health Score
+Each SD has a health score (0.0 - 1.0):
+- **1.0** = All dependencies completed, READY to start
+- **0.5** = Half of dependencies completed
+- **0.0** = No dependencies completed, BLOCKED
+
+### Conflict Detection
+Before approving parallel work on multiple SDs:
+1. Check `sd_conflict_matrix` for file/component overlap
+2. SDs touching same files should NOT run in parallel
+3. Use `npm run sd:next` to see track assignments
+
 
 ## 📋 Directive Submission Review Process
 
@@ -398,8 +460,82 @@ LEAD MUST answer these questions BEFORE approval:
 
 **SCOPE LOCK**: Once LEAD approves an SD, the scope is LOCKED. LEAD commits to delivering the approved scope.
 
+## Parent-Child SD Phase Governance
+
+## Parent-Child SD Phase Governance (PAT-PARENT-CHILD-001)
+
+### Overview
+
+When a parent SD delegates work to child SDs, specific phase transition rules apply.
+
+**Critical Rule**: Parent SDs MUST be in EXEC phase before child SDs can be activated.
+
+### The Problem
+
+Database trigger `enforce_sd_phase_transition_rules` enforces:
+- Child SD cannot be activated while parent is in PLAN phase
+- Parent must be in EXEC phase first
+
+**Error Message**: "LEO Protocol: Child SD cannot be activated while parent is in PLAN phase. Parent must be in EXEC phase first."
+
+### Why This Happens
+
+Typical workflow:
+1. Parent SD completes v1 implementation
+2. Parent transitions to PLAN phase (waiting for v2 work from children)
+3. Child SDs need to activate to do v2 work
+4. **BLOCKED**: Trigger prevents child activation because parent is in PLAN
+
+### Resolution Steps
+
+**Option 1: Manual Phase Transition**
+
+```sql
+-- Step 1: Insert handoff record
+INSERT INTO sd_handoffs (sd_id, direction, from_agent, to_agent, summary, created_by)
+VALUES (
+  '<PARENT_SD_UUID>',
+  'PLAN_TO_EXEC',
+  'PLAN',
+  'EXEC',
+  'Re-activating parent SD to allow child SD execution',
+  'SYSTEM'
+);
+
+-- Step 2: Update parent phase
+UPDATE strategic_directives_v2
+SET phase = 'EXEC', status = 'in_progress'
+WHERE id = '<PARENT_SD_UUID>';
+```
+
+**Option 2: Use Helper Script (Recommended)**
+
+```bash
+node scripts/reactivate-parent-sd.js <PARENT_SD_ID>
+```
+
+### Best Practices
+
+1. **Plan for re-activation**: When parent delegates to children, document that parent will need to return to EXEC
+2. **Use parent-child SD pattern intentionally**: Understand the phase governance before creating child SDs
+3. **Document in PRD**: Note parent-child relationships and phase transition requirements
+4. **Check before activation**: Query parent phase before attempting child activation
+
+### Recommended Improvements
+
+1. Update trigger error messages to include resolution steps
+2. Create `scripts/reactivate-parent-sd.js` helper script
+3. Add database function for safe parent re-activation
+4. Update unified-handoff-system.js for parent-child handling
+
+### Related Patterns
+
+- SD Hierarchy documentation
+- Phase transition rules
+- Database trigger governance
+
 ---
 
-*Generated from database: 2025-12-02*
+*Generated from database: 2025-12-03*
 *Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

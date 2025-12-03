@@ -47,10 +47,17 @@ async function generateSessionPrologue() {
 
 ## Quick Checks
 
+- \`npm run sd:next\` - **START HERE** - Intelligent SD queue showing what to work on next
 - \`npm run prio:top3\` - View current top 3 priorities with WSJF scores
-- \`npm run docs:boundary\` - Regenerate DO/DON'T boundary patterns
-- \`node scripts/check-deps.js\` - Verify dependency policy compliance
-- \`node scripts/query-active-sds.js\` - List active strategic directives
+- \`npm run sd:status\` - Progress vs baseline with variance analysis
+- \`npm run sd:burnrate\` - Velocity metrics and completion forecasting
+
+## Session Start Workflow
+
+1. Run \`npm run sd:next\` to see the SD queue
+2. If SD marked "CONTINUE" → Resume that SD
+3. If no active SD → Pick highest-ranked READY SD
+4. Load CLAUDE_LEAD.md for approval workflow
 
 ---
 *Remind Claude: Follow database-first, keep PRs small, use sub-agents, create handoffs*`;
