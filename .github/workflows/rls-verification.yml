@@ -39,6 +39,8 @@ jobs:
           SUPABASE_POOLER_URL: ${{ secrets.DATABASE_URL }}
           # Disable TLS certificate validation for self-signed certs
           NODE_TLS_REJECT_UNAUTHORIZED: '0'
+          # PostgreSQL connection timeout (seconds) - prevents intermittent timeouts
+          PGCONNECT_TIMEOUT: '10'
         run: |
           set +e # Don't exit on error, we want to capture the output
 
@@ -82,7 +84,7 @@ jobs:
               `- \`${t.table_name}\`: ${t.issues.join(', ')} (Missing: ${t.missing_policies.join(', ')})`
             ).join('\n');
 
-            const body = `## ❌ RLS Policy Verification Failed
+            const body = `## [FAIL] RLS Policy Verification Failed
 
             **Coverage**: ${report.policy_coverage_percentage}%
             **Tables Checked**: ${report.total_tables_checked}
@@ -92,12 +94,12 @@ jobs:
             ${report.failed_tables.length > 0 ? `### Failed Tables\n${failedTables}\n` : ''}
             ${report.warnings.length > 0 ? `### Warnings\n${warnings}\n` : ''}
 
-            ### 🔧 Next Steps
+            ### Next Steps
             1. Add RLS policies to the failed tables
             2. Ensure policies cover SELECT, INSERT, UPDATE, DELETE operations
             3. Re-run verification: \`node scripts/verify-rls-policies.js\`
 
-            ### 🆘 Emergency Override
+            ### Emergency Override
             If this is a critical deployment and RLS policies cannot be added immediately:
             1. Add \`rls-override\` label to this PR
             2. Obtain CODEOWNERS approval
@@ -123,8 +125,8 @@ jobs:
             const hasOverride = labels.includes('rls-override');
 
             if (hasOverride) {
-              console.log('⚠️  Emergency override label detected');
-              console.log('⚠️  RLS verification failure will be treated as warning');
+              console.log('[WARN] Emergency override label detected');
+              console.log('[WARN] RLS verification failure will be treated as warning');
 
               // Create issue for follow-up
               await github.rest.issues.create({
@@ -142,12 +144,12 @@ jobs:
       - name: Fail if no override
         if: failure() && steps.check-override.outputs.result == 'false'
         run: |
-          echo "❌ RLS verification failed and no emergency override label found"
+          echo "[FAIL] RLS verification failed and no emergency override label found"
           echo "Add 'rls-override' label with CODEOWNERS approval to bypass this check"
           exit 1
 
       - name: Success summary
         if: success()
         run: |
-          echo "✅ RLS Policy Verification Passed"
+          echo "[OK] RLS Policy Verification Passed"
           echo "All application tables have proper RLS policies configured"

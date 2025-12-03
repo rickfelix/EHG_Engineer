@@ -28,13 +28,14 @@ const EXCLUDED_TABLE_PATTERNS = [
   /^information_schema/ // Information schema
 ];
 
-// Configuration
+// Configuration with improved timeouts for CI/CD environments
 const CONFIG = {
   connectionString: process.env.SUPABASE_RLS_AUDITOR_URL || process.env.SUPABASE_POOLER_URL,
   statementTimeout: 30000, // 30 seconds
-  connectionTimeoutMillis: 5000,
+  connectionTimeoutMillis: 10000, // 10 seconds (increased from 5s)
   maxRetries: 3,
-  retryDelayMs: 1000
+  // Exponential backoff delays: 5s, 10s, 20s (instead of fixed 1s)
+  retryDelays: [5000, 10000, 20000]
 };
 
 class RLSVerifier {
@@ -69,7 +70,7 @@ class RLSVerifier {
   }
 
   /**
-   * Connect to database with retry logic
+   * Connect to database with exponential backoff retry logic
    */
   async connect(attempt = 1) {
     try {
@@ -89,13 +90,14 @@ class RLSVerifier {
       this.client = new Client(connectionConfig);
 
       await this.client.connect();
-      console.log('✅ Connected to database');
+      console.log('[OK] Connected to database');
       return true;
     } catch (error) {
       if (attempt < CONFIG.maxRetries) {
-        console.warn(`⚠️  Connection attempt ${attempt} failed, retrying in ${CONFIG.retryDelayMs}ms...`);
-        console.warn(`    Error: ${error.message}`);
-        await new Promise(resolve => setTimeout(resolve, CONFIG.retryDelayMs));
+        const delay = CONFIG.retryDelays[attempt - 1] || CONFIG.retryDelays[CONFIG.retryDelays.length - 1];
+        console.warn(`[WARN] Connection attempt ${attempt} failed, retrying in ${delay / 1000}s...`);
+        console.warn(`       Error: ${error.message}`);
+        await new Promise(resolve => setTimeout(resolve, delay));
         return this.connect(attempt + 1);
       }
       throw new Error(`Failed to connect after ${CONFIG.maxRetries} attempts: ${error.message}`);
@@ -231,7 +233,7 @@ class RLSVerifier {
     try {
       await this.connect();
 
-      console.log('🔍 Querying database tables...\n');
+      console.log('[INFO] Querying database tables...\n');
       const tables = await this.queryTables(specificTable);
 
       console.log(`Found ${tables.length} table(s) to verify\n`);
@@ -241,7 +243,7 @@ class RLSVerifier {
       const excludedCount = tables.length - tablesToVerify.length;
 
       if (excludedCount > 0) {
-        console.log(`ℹ️  Excluded ${excludedCount} system/internal tables\n`);
+        console.log(`[INFO] Excluded ${excludedCount} system/internal tables\n`);
       }
 
       this.results.total_tables_checked = tablesToVerify.length;
@@ -252,13 +254,13 @@ class RLSVerifier {
 
         if (verification.status === 'FAIL') {
           this.results.failed_tables.push(verification);
-          console.log(`❌ ${verification.table_name}: ${verification.issues.join(', ')}`);
+          console.log(`[FAIL] ${verification.table_name}: ${verification.issues.join(', ')}`);
         } else if (verification.status === 'INFO') {
           // Don't add to warnings - these are informational categorizations
-          const icon = verification.policy_type === 'READ_ONLY' ? '📖' : '⚡';
-          console.log(`${icon} ${verification.table_name}: ${verification.issues.join(', ')}`);
+          const prefix = verification.policy_type === 'READ_ONLY' ? '[READ-ONLY]' : '[PARTIAL]';
+          console.log(`${prefix} ${verification.table_name}: ${verification.issues.join(', ')}`);
         } else {
-          console.log(`✅ ${verification.table_name}: ${verification.policy_count} policies (${verification.policy_type})`);
+          console.log(`[OK] ${verification.table_name}: ${verification.policy_count} policies (${verification.policy_type})`);
         }
       });
 
@@ -298,19 +300,19 @@ class RLSVerifier {
     console.log('');
     console.log('COVERAGE SUMMARY:');
     console.log(`  Total Tables Checked: ${this.results.total_tables_checked}`);
-    console.log(`  ✅ Tables with RLS Enabled: ${this.results.tables_with_rls} (${this.results.rls_coverage_percentage}%)`);
-    console.log(`  ❌ Tables Missing RLS: ${this.results.tables_missing_rls}`);
+    console.log(`  [OK] Tables with RLS Enabled: ${this.results.tables_with_rls} (${this.results.rls_coverage_percentage}%)`);
+    console.log(`  [FAIL] Tables Missing RLS: ${this.results.tables_missing_rls}`);
     console.log('');
     console.log('POLICY BREAKDOWN:');
-    console.log(`  ✅ Full CRUD (SELECT, INSERT, UPDATE, DELETE): ${this.results.tables_with_full_crud} (${this.results.full_crud_percentage}%)`);
-    console.log(`  📖 Read-Only (SELECT only): ${this.results.tables_with_read_only}`);
-    console.log(`  ⚡ Partial Coverage (some operations): ${this.results.tables_with_partial_coverage}`);
+    console.log(`  [OK] Full CRUD (SELECT, INSERT, UPDATE, DELETE): ${this.results.tables_with_full_crud} (${this.results.full_crud_percentage}%)`);
+    console.log(`  [READ-ONLY] Read-Only (SELECT only): ${this.results.tables_with_read_only}`);
+    console.log(`  [PARTIAL] Partial Coverage (some operations): ${this.results.tables_with_partial_coverage}`);
     console.log('');
 
     if (this.results.failed_tables.length > 0) {
       console.log('FAILED TABLES (Missing RLS):');
       this.results.failed_tables.forEach(table => {
-        console.log(`  ❌ ${table.table_name}:`);
+        console.log(`  [FAIL] ${table.table_name}:`);
         table.issues.forEach(issue => console.log(`     - ${issue}`));
       });
       console.log('');
@@ -319,7 +321,7 @@ class RLSVerifier {
     if (this.results.read_only_tables.length > 0) {
       console.log('READ-ONLY TABLES (Informational):');
       this.results.read_only_tables.slice(0, 5).forEach(table => {
-        console.log(`  📖 ${table.table_name}`);
+        console.log(`  [READ-ONLY] ${table.table_name}`);
       });
       if (this.results.read_only_tables.length > 5) {
         console.log(`  ... and ${this.results.read_only_tables.length - 5} more`);
@@ -330,7 +332,7 @@ class RLSVerifier {
     if (this.results.partial_coverage_tables.length > 0) {
       console.log('PARTIAL COVERAGE TABLES (Informational):');
       this.results.partial_coverage_tables.slice(0, 5).forEach(table => {
-        console.log(`  ⚡ ${table.table_name}: missing ${table.missing_policies.join(', ')}`);
+        console.log(`  [PARTIAL] ${table.table_name}: missing ${table.missing_policies.join(', ')}`);
       });
       if (this.results.partial_coverage_tables.length > 5) {
         console.log(`  ... and ${this.results.partial_coverage_tables.length - 5} more`);
@@ -340,15 +342,15 @@ class RLSVerifier {
 
     console.log('VERDICT:');
     if (this.results.passed) {
-      console.log('  ✅ ALL TABLES HAVE RLS ENABLED');
+      console.log('  [OK] ALL TABLES HAVE RLS ENABLED');
       if (this.results.full_crud_percentage === 100) {
-        console.log('  ✅ ALL TABLES HAVE FULL CRUD POLICIES');
+        console.log('  [OK] ALL TABLES HAVE FULL CRUD POLICIES');
       } else {
-        console.log(`  ℹ️  ${this.results.full_crud_percentage}% have full CRUD policies`);
-        console.log('  ℹ️  Remaining tables have intentional read-only or partial coverage');
+        console.log(`  [INFO] ${this.results.full_crud_percentage}% have full CRUD policies`);
+        console.log('  [INFO] Remaining tables have intentional read-only or partial coverage');
       }
     } else {
-      console.log('  ❌ RLS POLICY VERIFICATION FAILED');
+      console.log('  [FAIL] RLS POLICY VERIFICATION FAILED');
       console.log(`  ${this.results.tables_missing_rls} table(s) require RLS to be enabled`);
     }
     console.log('='.repeat(60));
@@ -384,7 +386,7 @@ async function main() {
     process.exit(results.passed ? 0 : 1);
 
   } catch (error) {
-    console.error('\n❌ VERIFICATION FAILED');
+    console.error('\n[FAIL] VERIFICATION FAILED');
     console.error('Error:', error.message);
     console.error('Stack:', error.stack);
     process.exit(2);
