@@ -10,6 +10,7 @@ import ContextMonitor from './components/ContextMonitor';
 import DirectiveLab from './components/DirectiveLab';
 import BacklogManager from './components/BacklogManager';
 import PRReviews from './components/PRReviews';
+import VenturesManager from './components/VenturesManager';
 import BacklogImportView from './pages/BacklogImportView';
 import { UATDashboard } from './components/uat/UATDashboard';
 import logger from './utils/logger';
@@ -329,6 +330,27 @@ function App() {
             path="backlog-import"
             element={<BacklogImportView />}
           />
+          <Route path="ventures">
+            <Route
+              index
+              element={
+                <VenturesManager
+                  isCompact={isCompactMode}
+                  onRefresh={refreshData}
+                />
+              }
+            />
+            <Route
+              path=":id"
+              element={
+                <VenturesManager
+                  isCompact={isCompactMode}
+                  detailMode={true}
+                  onRefresh={refreshData}
+                />
+              }
+            />
+          </Route>
           {/* 404 Fallback Route */}
           <Route
             path="*"
