@@ -19,6 +19,7 @@ import { dirname } from 'path';
 import { createClient } from '@supabase/supabase-js';
 import HandoffValidator from './handoff-validator.js';
 import { validateUserStoriesForHandoff, getUserStoryImprovementGuidance } from './modules/user-story-quality-validation.js';
+import { validatePRDForHandoff, getPRDImprovementGuidance } from './modules/prd-quality-validation.js';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
@@ -294,9 +295,9 @@ class PlanToExecVerifier {
       // 4. Validate PRD Quality
       const prdValidator = await this.loadPRDValidator();
       const prdValidation = await prdValidator(prd);
-      
+
       console.log(`\\n📊 PRD Quality Score: ${prdValidation.percentage || prdValidation.score}%`);
-      
+
       if (!prdValidation.valid || (prdValidation.percentage || prdValidation.score) < this.prdRequirements.minimumScore) {
         return this.rejectHandoff(sdId, 'PRD_QUALITY', 'PRD does not meet quality standards', {
           prdValidation,
@@ -304,7 +305,31 @@ class PlanToExecVerifier {
           actualScore: prdValidation.percentage || prdValidation.score
         });
       }
-      
+
+      // 4a. NEW: PRD Boilerplate/Placeholder Detection (SD-CAPABILITY-LIFECYCLE-001)
+      // Prevents placeholder text like "To be defined" from reaching EXEC
+      console.log('\n🔍 Validating PRD content quality (boilerplate detection)...');
+      const prdBoilerplateResult = validatePRDForHandoff(prd, {
+        minimumScore: 70,
+        blockOnWarnings: false
+      });
+
+      console.log(prdBoilerplateResult.summary);
+
+      if (!prdBoilerplateResult.valid) {
+        const guidance = getPRDImprovementGuidance(prdBoilerplateResult);
+        console.log('\n   ❌ PRD content quality validation failed');
+        return this.rejectHandoff(sdId, 'PRD_BOILERPLATE', 'PRD contains placeholder or boilerplate content', {
+          qualityValidation: prdBoilerplateResult,
+          improvements: guidance
+        });
+      }
+
+      console.log(`   ✅ PRD content quality passed (score: ${prdBoilerplateResult.score}%)`);
+      if (prdBoilerplateResult.warnings.length > 0) {
+        console.log(`   ⚠️  ${prdBoilerplateResult.warnings.length} warnings (non-blocking)`);
+      }
+
       // 5. Check PLAN phase completion
       if (prd.status !== 'approved' && prd.status !== 'ready_for_exec') {
         return this.rejectHandoff(sdId, 'PLAN_INCOMPLETE', `PRD status is '${prd.status}', expected 'approved' or 'ready_for_exec'`);
@@ -681,6 +706,28 @@ class PlanToExecVerifier {
           `User story quality score is ${qualityValidation?.averageScore || 0}% (minimum 70%). ` +
           `${qualityValidation?.qualityDistribution?.poor || 0} stories scored below 70. ` +
           'Focus on stories with blocking issues first. Use the stories-agent skill for guidance.';
+        break;
+
+      case 'PRD_BOILERPLATE':
+        // SD-CAPABILITY-LIFECYCLE-001: PRD content quality gate
+        const prdQualityValidation = details.qualityValidation;
+        const prdImprovements = details.improvements;
+
+        guidance.required = prdImprovements?.required || ['Replace placeholder content in PRD with specific requirements'];
+        guidance.actions = [
+          'Review PRD boilerplate detection results',
+          'Replace "To be defined" with specific functional requirements',
+          'Add SD-specific acceptance criteria (not generic "all tests passing")',
+          'Define specific test scenarios with inputs and expected outputs',
+          'Write a detailed executive summary for this SD',
+          'Document implementation approach with specific steps',
+          'Add system architecture details',
+          'Retry PLAN→EXEC handoff'
+        ];
+        guidance.timeEstimate = prdImprovements?.timeEstimate || '30-60 minutes';
+        guidance.instructions = prdImprovements?.instructions ||
+          `PRD content quality score is ${prdQualityValidation?.score || 0}% (minimum 70%). ` +
+          'Focus on replacing placeholder text with specific, measurable content unique to this SD.';
         break;
 
       case 'HANDOFF_INVALID':
