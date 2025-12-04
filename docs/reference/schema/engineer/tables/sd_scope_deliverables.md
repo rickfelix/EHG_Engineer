@@ -1,11 +1,11 @@
 # sd_scope_deliverables Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
-**Rows**: 0
+**Generated**: 2025-12-04T22:29:13.796Z
+**Rows**: 723
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (17 total)
+## Columns (19 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -35,6 +35,8 @@
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
 | created_by | `character varying(100)` | YES | `'SYSTEM'::character varying` | - |
 | metadata | `jsonb` | YES | `'{}'::jsonb` | - |
+| user_story_id | `uuid` | YES | - | Links deliverable to user story for bi-directional sync. When story validated, linked deliverables complete. |
+| checkpoint_sd_id | `character varying(100)` | YES | - | Links deliverable to parent SD checkpoint. Enables progress rollup from child to parent SDs. |
 
 ## Constraints
 
@@ -42,16 +44,22 @@
 - `sd_scope_deliverables_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `sd_scope_deliverables_checkpoint_sd_id_fkey`: checkpoint_sd_id → strategic_directives_v2(id)
 - `sd_scope_deliverables_sd_id_fkey`: sd_id → strategic_directives_v2(id)
+- `sd_scope_deliverables_user_story_id_fkey`: user_story_id → user_stories(id)
 
 ### Check Constraints
 - `sd_scope_deliverables_completion_status_check`: CHECK (((completion_status)::text = ANY ((ARRAY['pending'::character varying, 'in_progress'::character varying, 'completed'::character varying, 'skipped'::character varying, 'blocked'::character varying])::text[])))
 - `sd_scope_deliverables_deliverable_type_check`: CHECK (((deliverable_type)::text = ANY ((ARRAY['database'::character varying, 'ui_feature'::character varying, 'api'::character varying, 'documentation'::character varying, 'configuration'::character varying, 'test'::character varying, 'migration'::character varying, 'integration'::character varying, 'other'::character varying])::text[])))
 - `sd_scope_deliverables_priority_check`: CHECK (((priority)::text = ANY ((ARRAY['required'::character varying, 'optional'::character varying, 'nice_to_have'::character varying])::text[])))
-- `sd_scope_deliverables_verified_by_check`: CHECK (((verified_by)::text = ANY ((ARRAY['EXEC'::character varying, 'PLAN'::character varying, 'LEAD'::character varying, 'QA_DIRECTOR'::character varying, 'DATABASE_ARCHITECT'::character varying, 'DESIGN_AGENT'::character varying])::text[])))
+- `sd_scope_deliverables_verified_by_check`: CHECK (((verified_by IS NULL) OR ((verified_by)::text = ANY ((ARRAY['EXEC'::character varying, 'PLAN'::character varying, 'LEAD'::character varying, 'QA_DIRECTOR'::character varying, 'DATABASE_ARCHITECT'::character varying, 'DESIGN_AGENT'::character varying, 'ARCHITECT'::character varying, 'database'::character varying, 'DATABASE'::character varying, 'database-agent'::character varying, 'DESIGN'::character varying, 'DESIGN_REVIEWER'::character varying, 'devops'::character varying, 'DOCMON'::character varying, 'EXEC_IMPL'::character varying, 'GITHUB'::character varying, 'GITHUB_ACTIONS'::character varying, 'LEAD_PRE_APPROVAL'::character varying, 'LEAD_VALIDATION'::character varying, 'PERFORMANCE'::character varying, 'qa'::character varying, 'QA'::character varying, 'RETRO'::character varying, 'RISK'::character varying, 'SD-CREWAI-ARCHITECTURE-001'::character varying, 'SD-VENTURE-UNIFICATION-001'::character varying, 'SECURITY'::character varying, 'STORIES'::character varying, 'testing'::character varying, 'TESTING'::character varying, 'TESTING_VALIDATOR'::character varying, 'VALIDATION'::character varying, 'VALIDATION_GATE'::character varying])::text[]))))
 
 ## Indexes
 
+- `idx_scope_deliverables_checkpoint`
+  ```sql
+  CREATE INDEX idx_scope_deliverables_checkpoint ON public.sd_scope_deliverables USING btree (checkpoint_sd_id)
+  ```
 - `idx_scope_deliverables_sd`
   ```sql
   CREATE INDEX idx_scope_deliverables_sd ON public.sd_scope_deliverables USING btree (sd_id)
@@ -63,6 +71,10 @@
 - `idx_scope_deliverables_type`
   ```sql
   CREATE INDEX idx_scope_deliverables_type ON public.sd_scope_deliverables USING btree (deliverable_type)
+  ```
+- `idx_scope_deliverables_user_story`
+  ```sql
+  CREATE INDEX idx_scope_deliverables_user_story ON public.sd_scope_deliverables USING btree (user_story_id)
   ```
 - `idx_scope_deliverables_verified`
   ```sql
@@ -87,6 +99,11 @@
 - **With Check**: `true`
 
 ## Triggers
+
+### trigger_sync_deliverables_to_story
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION sync_deliverables_to_story()`
 
 ### update_sd_scope_deliverables_timestamp
 

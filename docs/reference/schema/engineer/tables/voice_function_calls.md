@@ -1,12 +1,12 @@
 # voice_function_calls Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
+**Generated**: 2025-12-04T22:29:13.796Z
 **Rows**: 0
-**RLS**: Enabled (1 policy)
+**RLS**: Enabled (5 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -53,7 +53,29 @@
 
 ## RLS Policies
 
-### 1. Users can view own function calls (SELECT)
+### 1. Allow authenticated users to delete voice_function_calls (DELETE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 2. Allow authenticated users to insert voice_function_calls (INSERT)
+
+- **Roles**: {authenticated}
+- **With Check**: `true`
+
+### 3. Allow authenticated users to update voice_function_calls (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+- **With Check**: `true`
+
+### 4. Allow service_role to manage voice_function_calls (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
+
+### 5. Users can view own function calls (SELECT)
 
 - **Roles**: {public}
 - **Using**: `(EXISTS ( SELECT 1

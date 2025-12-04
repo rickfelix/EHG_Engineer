@@ -1,11 +1,11 @@
 # sd_phase_handoffs Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
-**Rows**: 440
+**Generated**: 2025-12-04T23:01:42.129Z
+**Rows**: 1,125
 **RLS**: Enabled (8 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -146,6 +146,11 @@
 
 ## Triggers
 
+### enforce_handoff_creation
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION enforce_handoff_system()`
+
 ### trigger_handoff_accepted_at
 
 - **Timing**: BEFORE UPDATE
@@ -165,6 +170,16 @@
 
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION auto_recalculate_sd_progress()`
+
+### trigger_verify_deliverables_before_handoff
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION verify_deliverables_before_handoff()`
+
+### trigger_verify_deliverables_before_handoff_insert
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION verify_deliverables_before_handoff()`
 
 ### validate_handoff_trigger
 

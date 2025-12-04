@@ -1,0 +1,76 @@
+# companies Table
+
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
+**Database**: dedlbzhpgkmetvhbkyzq
+**Repository**: /mnt/c/_EHG/EHG_Engineer/
+**Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
+**Generated**: 2025-12-04T22:29:13.796Z
+**Rows**: 13
+**RLS**: Enabled (5 policies)
+
+⚠️ **This is a REFERENCE document** - Query database directly for validation
+
+⚠️ **CRITICAL**: This schema is for **EHG_Engineer** database. Implementations go in /mnt/c/_EHG/EHG_Engineer/
+
+---
+
+## Columns (12 total)
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | `uuid` | **NO** | `gen_random_uuid()` | - |
+| name | `character varying(255)` | **NO** | - | - |
+| description | `text` | YES | - | - |
+| logo_url | `text` | YES | - | - |
+| website | `text` | YES | - | - |
+| industry | `character varying(100)` | YES | - | - |
+| settings | `jsonb` | YES | `'{}'::jsonb` | - |
+| created_at | `timestamp with time zone` | YES | `now()` | - |
+| is_demo | `boolean` | YES | `false` | - |
+| mission | `text` | YES | - | - |
+| vision | `text` | YES | - | - |
+| portfolio_id | `uuid` | YES | - | - |
+
+## Constraints
+
+### Primary Key
+- `companies_pkey`: PRIMARY KEY (id)
+
+## Indexes
+
+- `companies_pkey`
+  ```sql
+  CREATE UNIQUE INDEX companies_pkey ON public.companies USING btree (id)
+  ```
+
+## RLS Policies
+
+### 1. Allow service_role to delete companies (DELETE)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+
+### 2. Allow service_role to insert companies (INSERT)
+
+- **Roles**: {service_role}
+- **With Check**: `true`
+
+### 3. Allow service_role to update companies (UPDATE)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
+
+### 4. anon_select_companies (SELECT)
+
+- **Roles**: {anon}
+- **Using**: `true`
+
+### 5. authenticated_select_companies (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+---
+
+[← Back to Schema Overview](../database-schema-overview.md)

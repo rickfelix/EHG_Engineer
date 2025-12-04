@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-12-04 8:50:29 AM
+**Generated**: 2025-12-04 5:58:27 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -1004,6 +1004,36 @@ Required: [object Object], [object Object], [object Object], [object Object], [o
 
 
 - **supervisorChecklistPass** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **hasESLintPass** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **hasTypeScriptPass** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **hasImportsPass** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **hasUnitTestsExecuted** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **hasUnitTestsPassing** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **hasCoverageThreshold** (undefined)
   - Severity: undefined
   - Definition: undefined
 

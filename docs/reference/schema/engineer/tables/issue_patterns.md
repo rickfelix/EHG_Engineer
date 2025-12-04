@@ -1,12 +1,12 @@
 # issue_patterns Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
-**Rows**: 11
-**RLS**: Enabled (3 policies)
+**Generated**: 2025-12-04T22:29:13.796Z
+**Rows**: 35
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (17 total)
+## Columns (19 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -35,6 +35,8 @@
 | status | `character varying(20)` | YES | `'active'::character varying` | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| resolution_date | `timestamp with time zone` | YES | - | Date when the pattern root cause was resolved |
+| resolution_notes | `text` | YES | - | Notes explaining how the root cause was resolved |
 
 ## Constraints
 
@@ -61,6 +63,14 @@
 - `idx_issue_patterns_last_seen`
   ```sql
   CREATE INDEX idx_issue_patterns_last_seen ON public.issue_patterns USING btree (last_seen_sd_id)
+  ```
+- `idx_issue_patterns_lifecycle`
+  ```sql
+  CREATE INDEX idx_issue_patterns_lifecycle ON public.issue_patterns USING btree (updated_at, status) WHERE ((status)::text <> 'resolved'::text)
+  ```
+- `idx_issue_patterns_resolution`
+  ```sql
+  CREATE INDEX idx_issue_patterns_resolution ON public.issue_patterns USING btree (resolution_date) WHERE (resolution_date IS NOT NULL)
   ```
 - `idx_issue_patterns_severity`
   ```sql
@@ -112,6 +122,11 @@
 - **Roles**: {public}
 - **Using**: `true`
 - **With Check**: `true`
+
+### 4. Allow authenticated users to delete issue_patterns (DELETE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
 
 ## Triggers
 

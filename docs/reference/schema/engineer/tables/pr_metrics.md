@@ -1,12 +1,12 @@
 # pr_metrics Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
+**Generated**: 2025-12-04T22:29:13.796Z
 **Rows**: 1
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -56,17 +56,22 @@
 
 ## RLS Policies
 
-### 1. Enable insert for authenticated users (INSERT)
+### 1. Allow authenticated users to delete pr_metrics (DELETE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 2. Enable insert for authenticated users (INSERT)
 
 - **Roles**: {public}
 - **With Check**: `true`
 
-### 2. Enable read access for all users (SELECT)
+### 3. Enable read access for all users (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`
 
-### 3. Enable update for authenticated users (UPDATE)
+### 4. Enable update for authenticated users (UPDATE)
 
 - **Roles**: {public}
 - **Using**: `true`

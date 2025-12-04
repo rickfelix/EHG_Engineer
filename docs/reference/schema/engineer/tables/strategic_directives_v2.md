@@ -1,12 +1,12 @@
 # strategic_directives_v2 Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
-**Rows**: 0
-**RLS**: Enabled (2 policies)
+**Generated**: 2025-12-04T22:29:13.796Z
+**Rows**: 393
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (64 total)
+## Columns (71 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -63,7 +63,7 @@
 | present_in_latest_import | `boolean` | YES | `false` | PRESENT IN LATEST IMPORT: Boolean flag indicating if this SD was present in the most recent import. FALSE suggests it may be stale or removed upstream. |
 | sequence_rank | `integer(32)` | **NO** | - | SEQUENCE RANK: Execution order within dependency chain. Lower numbers = higher priority and earlier execution. Used by LEO Protocol for scheduling. |
 | sd_key | `text` | **NO** | - | SD KEY: Human-readable key format used by Vision Alignment Pipeline (e.g., SD-2025-09-22-vision-pipeline). Alternative to id field for workflows. |
-| parent_sd_id | `character varying(50)` | YES | - | PARENT SD ID: References parent directive if this is a child/sub-directive. NULL for top-level directives. Foreign key to id field. |
+| parent_sd_id | `character varying(50)` | YES | - | Parent SD ID for Child SD Pattern. If set, this SD is a child implementation unit of the parent orchestrator SD. Parent SDs coordinate children but do not contain implementation code. |
 | is_active | `boolean` | YES | `true` | IS ACTIVE: Boolean flag indicating if this SD is currently active. FALSE = soft-deleted/archived. Default: TRUE. |
 | archived_at | `timestamp without time zone` | YES | - | ARCHIVED AT: Timestamp when this directive was archived. NULL if currently active. Set when is_active changes to FALSE. |
 | archived_by | `character varying(100)` | YES | - | ARCHIVED BY: User/agent who archived this directive. NULL if not archived. |
@@ -82,6 +82,13 @@
 | embedding_generated_at | `timestamp with time zone` | YES | - | - |
 | embedding_model | `character varying(100)` | YES | `'text-embedding-3-small'::character varying` | - |
 | sd_type | `character varying(50)` | **NO** | `'feature'::character varying` | SD type classification: feature (UI/UX), infrastructure (CI/CD, tooling), database (schema), security (auth/RLS), documentation |
+| relationship_type | `text` | YES | `'standalone'::text` | SD relationship type: standalone (normal), parent (orchestrator), child_phase (inherits workflow from parent), child_independent (own full workflow) |
+| scope_reduction_percentage | `integer(32)` | YES | `0` | Percentage of original scope that was eliminated during LEAD review. Target: >10%. Inspired by Musk Step 2. |
+| delivers_capabilities | `jsonb` | YES | `'[]'::jsonb` | Array of capabilities that will be auto-registered when SD completes. Format: [{capability_type, capability_key, name, description, metadata}] |
+| modifies_capabilities | `jsonb` | YES | `'[]'::jsonb` | Array of existing capabilities to update when SD completes. Format: [{capability_key, updates: {...}}] |
+| deprecates_capabilities | `jsonb` | YES | `'[]'::jsonb` | Array of capability_keys to mark as deprecated when SD completes. Format: [{capability_key, reason}] |
+| active_session_id | `text` | YES | - | - |
+| complexity_level | `character varying(20)` | YES | `'moderate'::character varying` | SD complexity level for effort policy lookup: simple, moderate, complex, critical |
 
 ## Constraints
 
@@ -98,14 +105,21 @@
 - `check_target_application`: CHECK (((target_application)::text = ANY ((ARRAY['EHG'::character varying, 'EHG_Engineer'::character varying])::text[])))
 - `chk_sd_v2_triage`: CHECK (((rolled_triage IS NULL) OR (rolled_triage = ANY (ARRAY['High'::text, 'Medium'::text, 'Low'::text, 'Future'::text]))))
 - `sd_type_check`: CHECK (((sd_type)::text = ANY ((ARRAY['feature'::character varying, 'infrastructure'::character varying, 'database'::character varying, 'security'::character varying, 'documentation'::character varying])::text[])))
+- `strategic_directives_v2_complexity_level_check`: CHECK (((complexity_level)::text = ANY ((ARRAY['simple'::character varying, 'moderate'::character varying, 'complex'::character varying, 'critical'::character varying])::text[])))
 - `strategic_directives_v2_confidence_score_check`: CHECK (((confidence_score >= 0) AND (confidence_score <= 100)))
 - `strategic_directives_v2_priority_check`: CHECK (((priority)::text = ANY ((ARRAY['critical'::character varying, 'high'::character varying, 'medium'::character varying, 'low'::character varying])::text[])))
 - `strategic_directives_v2_progress_check`: CHECK (((progress >= 0) AND (progress <= 100)))
 - `strategic_directives_v2_progress_percentage_check`: CHECK (((progress_percentage >= 0) AND (progress_percentage <= 100)))
+- `strategic_directives_v2_relationship_type_check`: CHECK ((relationship_type = ANY (ARRAY['standalone'::text, 'parent'::text, 'child_phase'::text, 'child_independent'::text])))
+- `strategic_directives_v2_scope_reduction_check`: CHECK (((scope_reduction_percentage >= 0) AND (scope_reduction_percentage <= 100)))
 - `strategic_directives_v2_status_check`: CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'in_progress'::character varying, 'active'::character varying, 'pending_approval'::character varying, 'completed'::character varying, 'deferred'::character varying, 'cancelled'::character varying])::text[])))
 
 ## Indexes
 
+- `idx_sd_active_session`
+  ```sql
+  CREATE INDEX idx_sd_active_session ON public.strategic_directives_v2 USING btree (active_session_id) WHERE (active_session_id IS NOT NULL)
+  ```
 - `idx_sd_archived_at`
   ```sql
   CREATE INDEX idx_sd_archived_at ON public.strategic_directives_v2 USING btree (archived_at)
@@ -118,9 +132,17 @@
   ```sql
   CREATE INDEX idx_sd_parent ON public.strategic_directives_v2 USING btree (parent_sd_id)
   ```
+- `idx_sd_parent_sd_id`
+  ```sql
+  CREATE INDEX idx_sd_parent_sd_id ON public.strategic_directives_v2 USING btree (parent_sd_id)
+  ```
 - `idx_sd_uuid_id`
   ```sql
   CREATE UNIQUE INDEX idx_sd_uuid_id ON public.strategic_directives_v2 USING btree (uuid_id)
+  ```
+- `idx_sd_v2_complexity`
+  ```sql
+  CREATE INDEX idx_sd_v2_complexity ON public.strategic_directives_v2 USING btree (complexity_level)
   ```
 - `idx_sd_v2_import_run`
   ```sql
@@ -201,12 +223,17 @@
 
 ## RLS Policies
 
-### 1. authenticated_read_strategic_directives_v2 (SELECT)
+### 1. anon_read_strategic_directives_v2 (SELECT)
+
+- **Roles**: {anon}
+- **Using**: `true`
+
+### 2. authenticated_read_strategic_directives_v2 (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 2. service_role_all_strategic_directives_v2 (ALL)
+### 3. service_role_all_strategic_directives_v2 (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
@@ -238,6 +265,11 @@
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION auto_calculate_progress()`
+
+### auto_populate_legacy_id
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION populate_legacy_id_from_id()`
 
 ### check_sd_hierarchy
 
@@ -279,6 +311,31 @@
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION trigger_retro_notification()`
 
+### trg_auto_set_is_parent
+
+- **Timing**: AFTER INSERT
+- **Action**: `EXECUTE FUNCTION auto_set_is_parent()`
+
+### trg_auto_set_is_parent
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION auto_set_is_parent()`
+
+### trg_capability_lifecycle
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION fn_handle_capability_lifecycle()`
+
+### trg_enforce_metadata_object
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION enforce_metadata_object()`
+
+### trg_enforce_metadata_object
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_metadata_object()`
+
 ### update_sd_timestamp
 
 - **Timing**: BEFORE UPDATE
@@ -288,6 +345,16 @@
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION update_updated_at_column()`
+
+### validate_child_sd_phase
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION validate_child_sd_phase_transition()`
+
+### validate_child_sd_phase
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION validate_child_sd_phase_transition()`
 
 ## Usage Examples
 

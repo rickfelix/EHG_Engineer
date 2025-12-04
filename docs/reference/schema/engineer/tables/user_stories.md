@@ -1,12 +1,12 @@
 # user_stories Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
-**Rows**: 0
-**RLS**: Enabled (2 policies)
+**Generated**: 2025-12-04T22:29:13.796Z
+**Rows**: 957
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -121,12 +121,22 @@
 
 ## RLS Policies
 
-### 1. authenticated_read_user_stories (SELECT)
+### 1. anon_insert_user_stories (INSERT)
+
+- **Roles**: {anon}
+- **With Check**: `true`
+
+### 2. anon_read_user_stories (SELECT)
+
+- **Roles**: {anon}
+- **Using**: `true`
+
+### 3. authenticated_read_user_stories (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 2. service_role_all_user_stories (ALL)
+### 4. service_role_all_user_stories (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
@@ -153,6 +163,11 @@
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION auto_validate_story_on_test_pass()`
+
+### trigger_sync_story_to_deliverables
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION sync_story_to_deliverables()`
 
 ### update_story_timestamp
 

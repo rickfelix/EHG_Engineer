@@ -1,11 +1,11 @@
 # nav_routes Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
-**Rows**: 0
+**Generated**: 2025-12-04T22:29:13.796Z
+**Rows**: 45
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -83,25 +83,26 @@
 
 ## RLS Policies
 
-### 1. nav_routes_delete (DELETE)
-
-- **Roles**: {authenticated}
-- **Using**: `((auth.jwt() ->> 'role'::text) = 'admin'::text)`
-
-### 2. nav_routes_insert (INSERT)
-
-- **Roles**: {authenticated}
-- **With Check**: `((auth.jwt() ->> 'role'::text) = 'admin'::text)`
-
-### 3. nav_routes_select (SELECT)
+### 1. Allow authenticated users to delete nav_routes (DELETE)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 4. nav_routes_update (UPDATE)
+### 2. Allow authenticated users to insert nav_routes (INSERT)
 
 - **Roles**: {authenticated}
-- **Using**: `((auth.jwt() ->> 'role'::text) = 'admin'::text)`
+- **With Check**: `true`
+
+### 3. Allow authenticated users to read nav_routes (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 4. Allow authenticated users to update nav_routes (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+- **With Check**: `true`
 
 ## Triggers
 

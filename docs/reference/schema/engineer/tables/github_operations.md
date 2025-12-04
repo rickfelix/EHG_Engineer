@@ -1,12 +1,12 @@
 # github_operations Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
+**Generated**: 2025-12-04T22:29:13.796Z
 **Rows**: 0
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -81,12 +81,23 @@
 
 ## RLS Policies
 
-### 1. Allow insert GitHub operations (INSERT)
+### 1. Allow authenticated users to delete github_operations (DELETE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 2. Allow authenticated users to update github_operations (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+- **With Check**: `true`
+
+### 3. Allow insert GitHub operations (INSERT)
 
 - **Roles**: {public}
 - **With Check**: `((sd_id IS NOT NULL) OR (prd_id IS NOT NULL))`
 
-### 2. Allow read access to GitHub operations (SELECT)
+### 4. Allow read access to GitHub operations (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`

@@ -1,12 +1,12 @@
 # voice_conversations Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
+**Generated**: 2025-12-04T22:29:13.796Z
 **Rows**: 0
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -62,17 +62,22 @@
 
 ## RLS Policies
 
-### 1. Users can insert own conversations (INSERT)
+### 1. Allow users to delete own voice_conversations (DELETE)
+
+- **Roles**: {authenticated}
+- **Using**: `(auth.uid() = user_id)`
+
+### 2. Users can insert own conversations (INSERT)
 
 - **Roles**: {public}
 - **With Check**: `(auth.uid() = user_id)`
 
-### 2. Users can update own conversations (UPDATE)
+### 3. Users can update own conversations (UPDATE)
 
 - **Roles**: {public}
 - **Using**: `(auth.uid() = user_id)`
 
-### 3. Users can view own conversations (SELECT)
+### 4. Users can view own conversations (SELECT)
 
 - **Roles**: {public}
 - **Using**: `(auth.uid() = user_id)`

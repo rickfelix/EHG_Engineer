@@ -1,12 +1,12 @@
 # system_health Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
+**Generated**: 2025-12-04T22:29:13.796Z
 **Rows**: 1
-**RLS**: Enabled (5 policies)
+**RLS**: Enabled (6 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -63,7 +63,12 @@
 - **Using**: `true`
 - **With Check**: `true`
 
-### 5. insert_system_health_policy (INSERT)
+### 5. Allow service_role to delete system_health (DELETE)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+
+### 6. insert_system_health_policy (INSERT)
 
 - **Roles**: {public}
 - **With Check**: `true`

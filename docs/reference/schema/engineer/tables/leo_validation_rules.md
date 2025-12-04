@@ -1,12 +1,12 @@
 # leo_validation_rules Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
-**Rows**: 0
-**RLS**: Enabled (2 policies)
+**Generated**: 2025-12-04T22:29:13.796Z
+**Rows**: 14
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -33,7 +33,7 @@
 - `leo_validation_rules_pkey`: PRIMARY KEY (id)
 
 ### Check Constraints
-- `leo_validation_rules_gate_check`: CHECK ((gate = ANY (ARRAY['2A'::text, '2B'::text, '2C'::text, '2D'::text, '3'::text])))
+- `leo_validation_rules_gate_check`: CHECK ((gate = ANY (ARRAY['0'::text, '2A'::text, '2B'::text, '2C'::text, '2D'::text, '3'::text])))
 - `leo_validation_rules_weight_check`: CHECK (((weight >= (0)::numeric) AND (weight <= (1)::numeric)))
 
 ## Indexes
@@ -45,12 +45,17 @@
 
 ## RLS Policies
 
-### 1. authenticated_read_leo_validation_rules (SELECT)
+### 1. Anon users can read validation_rules (SELECT)
+
+- **Roles**: {anon}
+- **Using**: `true`
+
+### 2. authenticated_read_leo_validation_rules (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 2. service_role_all_leo_validation_rules (ALL)
+### 3. service_role_all_leo_validation_rules (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`

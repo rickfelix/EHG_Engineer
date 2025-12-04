@@ -1,12 +1,12 @@
 # voice_usage_metrics Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
+**Generated**: 2025-12-04T22:29:13.796Z
 **Rows**: 0
-**RLS**: Enabled (1 policy)
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -54,7 +54,18 @@
 
 ## RLS Policies
 
-### 1. Users can view own metrics (SELECT)
+### 1. Allow authenticated users to insert voice_usage_metrics (INSERT)
+
+- **Roles**: {authenticated}
+- **With Check**: `true`
+
+### 2. Allow service_role to manage voice_usage_metrics (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
+
+### 3. Users can view own metrics (SELECT)
 
 - **Roles**: {public}
 - **Using**: `(EXISTS ( SELECT 1

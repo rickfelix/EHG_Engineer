@@ -1,12 +1,12 @@
 # voice_cached_responses Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
+**Generated**: 2025-12-04T22:29:13.796Z
 **Rows**: 0
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -58,12 +58,23 @@
 
 ## RLS Policies
 
-### 1. Public read cached responses (SELECT)
+### 1. Allow service_role to delete voice_cached_responses (DELETE)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+
+### 2. Allow service_role to update voice_cached_responses (UPDATE)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
+
+### 3. Public read cached responses (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`
 
-### 2. Service role writes cached responses (INSERT)
+### 4. Service role writes cached responses (INSERT)
 
 - **Roles**: {public}
 - **With Check**: `(auth.role() = 'service_role'::text)`
