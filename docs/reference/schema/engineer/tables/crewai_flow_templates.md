@@ -1,12 +1,12 @@
 # crewai_flow_templates Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
+**Generated**: 2025-12-04T22:29:13.796Z
 **Rows**: 3
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (5 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -68,12 +68,29 @@
 
 ## RLS Policies
 
-### 1. templates_create_user (INSERT)
+### 1. Allow authenticated users to delete crewai_flow_templates (DELETE)
+
+- **Roles**: {authenticated}
+- **Using**: `(auth.uid() = created_by)`
+
+### 2. Allow authenticated users to update crewai_flow_templates (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `(auth.uid() = created_by)`
+- **With Check**: `(auth.uid() = created_by)`
+
+### 3. Allow service_role to manage crewai_flow_templates (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
+
+### 4. templates_create_user (INSERT)
 
 - **Roles**: {public}
 - **With Check**: `((auth.uid() = created_by) AND (is_official = false))`
 
-### 2. templates_read_all (SELECT)
+### 5. templates_read_all (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`

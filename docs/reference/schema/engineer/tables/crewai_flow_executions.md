@@ -1,12 +1,12 @@
 # crewai_flow_executions Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
+**Generated**: 2025-12-04T22:29:13.796Z
 **Rows**: 0
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (5 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -89,12 +89,29 @@
 
 ## RLS Policies
 
-### 1. executions_create (INSERT)
+### 1. Allow authenticated users to delete crewai_flow_executions (DELETE)
+
+- **Roles**: {authenticated}
+- **Using**: `(auth.uid() = executed_by)`
+
+### 2. Allow authenticated users to update crewai_flow_executions (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `(auth.uid() = executed_by)`
+- **With Check**: `(auth.uid() = executed_by)`
+
+### 3. Allow service_role to manage crewai_flow_executions (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
+
+### 4. executions_create (INSERT)
 
 - **Roles**: {public}
 - **With Check**: `(auth.uid() = executed_by)`
 
-### 2. executions_read_own (SELECT)
+### 5. executions_read_own (SELECT)
 
 - **Roles**: {public}
 - **Using**: `(auth.uid() = executed_by)`

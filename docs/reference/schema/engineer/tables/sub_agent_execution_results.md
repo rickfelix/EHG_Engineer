@@ -1,12 +1,12 @@
 # sub_agent_execution_results Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
-**Rows**: 1,506
-**RLS**: Enabled (3 policies)
+**Generated**: 2025-12-04T22:29:13.796Z
+**Rows**: 3,023
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (15 total)
+## Columns (18 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -33,6 +33,9 @@
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
 | risk_assessment_id | `uuid` | YES | - | BMAD Enhancement: Link to risk assessment if this execution was for RISK sub-agent |
+| validation_mode | `text` | YES | `'prospective'::text` | Validation mode: prospective (default, pre-execution validation) or retrospective (post-execution review) |
+| justification | `text` | YES | - | Required for CONDITIONAL_PASS verdicts: explanation of conditions and follow-up actions (min 50 chars) |
+| conditions | `jsonb` | YES | - | Required for CONDITIONAL_PASS verdicts: array of follow-up action strings (non-empty array) |
 
 ## Constraints
 
@@ -43,12 +46,20 @@
 - `sub_agent_execution_results_risk_assessment_id_fkey`: risk_assessment_id → risk_assessments(id)
 
 ### Check Constraints
+- `check_conditional_pass_retrospective`: CHECK (((verdict <> 'CONDITIONAL_PASS'::text) OR (validation_mode = 'retrospective'::text)))
+- `check_conditions_required`: CHECK (((verdict <> 'CONDITIONAL_PASS'::text) OR ((conditions IS NOT NULL) AND (jsonb_array_length(conditions) > 0))))
+- `check_justification_required`: CHECK (((verdict <> 'CONDITIONAL_PASS'::text) OR ((justification IS NOT NULL) AND (length(justification) >= 50))))
+- `check_validation_mode_values`: CHECK ((validation_mode = ANY (ARRAY['prospective'::text, 'retrospective'::text])))
 - `valid_confidence`: CHECK (((confidence >= 0) AND (confidence <= 100)))
 - `valid_execution_time`: CHECK ((execution_time >= 0))
 - `valid_verdict`: CHECK ((verdict = ANY (ARRAY['PASS'::text, 'FAIL'::text, 'BLOCKED'::text, 'CONDITIONAL_PASS'::text, 'WARNING'::text])))
 
 ## Indexes
 
+- `idx_audit_trail`
+  ```sql
+  CREATE INDEX idx_audit_trail ON public.sub_agent_execution_results USING btree (created_at DESC) WHERE (verdict = 'CONDITIONAL_PASS'::text)
+  ```
 - `idx_sub_agent_results_created_at`
   ```sql
   CREATE INDEX idx_sub_agent_results_created_at ON public.sub_agent_execution_results USING btree (created_at DESC)
@@ -73,6 +84,14 @@
   ```sql
   CREATE INDEX idx_sub_agent_results_verdict ON public.sub_agent_execution_results USING btree (verdict)
   ```
+- `idx_sub_agent_validation_mode`
+  ```sql
+  CREATE INDEX idx_sub_agent_validation_mode ON public.sub_agent_execution_results USING btree (sd_id, validation_mode)
+  ```
+- `idx_verdict_validation_mode`
+  ```sql
+  CREATE INDEX idx_verdict_validation_mode ON public.sub_agent_execution_results USING btree (verdict, validation_mode)
+  ```
 - `sub_agent_execution_results_pkey`
   ```sql
   CREATE UNIQUE INDEX sub_agent_execution_results_pkey ON public.sub_agent_execution_results USING btree (id)
@@ -90,12 +109,27 @@
 - **Roles**: {public}
 - **Using**: `true`
 
-### 3. Allow update to service role (UPDATE)
+### 3. Allow service_role to delete sub_agent_execution_results (DELETE)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+
+### 4. Allow update to service role (UPDATE)
 
 - **Roles**: {public}
 - **Using**: `true`
 
 ## Triggers
+
+### trigger_complete_deliverables_on_subagent
+
+- **Timing**: AFTER INSERT
+- **Action**: `EXECUTE FUNCTION complete_deliverables_on_subagent_pass()`
+
+### trigger_complete_deliverables_on_subagent_update
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION complete_deliverables_on_subagent_pass()`
 
 ### update_sub_agent_results_timestamp
 

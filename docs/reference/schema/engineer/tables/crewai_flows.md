@@ -1,11 +1,11 @@
 # crewai_flows Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
-**Rows**: 0
+**Generated**: 2025-12-04T22:29:13.796Z
+**Rows**: 3
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (18 total)
+## Columns (21 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -36,6 +36,9 @@
 | tags | `ARRAY` | YES | `ARRAY[]::text[]` | - |
 | execution_count | `integer(32)` | YES | `0` | - |
 | last_executed_at | `timestamp with time zone` | YES | - | - |
+| is_template | `boolean` | YES | - | - |
+| template_category | `text` | YES | - | - |
+| avg_execution_time_ms | `integer(32)` | YES | - | - |
 
 ## Constraints
 

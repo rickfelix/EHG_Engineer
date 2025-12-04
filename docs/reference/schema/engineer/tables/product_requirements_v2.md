@@ -1,12 +1,12 @@
 # product_requirements_v2 Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
-**Rows**: 0
-**RLS**: Enabled (2 policies)
+**Generated**: 2025-12-04T22:29:13.796Z
+**Rows**: 268
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -140,12 +140,22 @@
 
 ## RLS Policies
 
-### 1. authenticated_read_product_requirements_v2 (SELECT)
+### 1. anon_insert_product_requirements_v2 (INSERT)
+
+- **Roles**: {anon}
+- **With Check**: `true`
+
+### 2. anon_read_product_requirements_v2 (SELECT)
+
+- **Roles**: {anon}
+- **Using**: `true`
+
+### 3. authenticated_read_product_requirements_v2 (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 2. service_role_all_product_requirements_v2 (ALL)
+### 4. service_role_all_product_requirements_v2 (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`

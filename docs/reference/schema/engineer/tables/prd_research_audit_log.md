@@ -1,12 +1,12 @@
 # prd_research_audit_log Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
-**Rows**: 6
-**RLS**: Enabled (4 policies)
+**Generated**: 2025-12-04T22:29:13.796Z
+**Rows**: 11
+**RLS**: Enabled (6 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -76,7 +76,18 @@
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 4. insert_prd_research_audit_log_policy (INSERT)
+### 4. Allow service_role to delete prd_research_audit_log (DELETE)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+
+### 5. Allow service_role to update prd_research_audit_log (UPDATE)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
+
+### 6. insert_prd_research_audit_log_policy (INSERT)
 
 - **Roles**: {public}
 - **With Check**: `true`

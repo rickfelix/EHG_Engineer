@@ -1,11 +1,11 @@
 # retrospectives Table
 
-**Application**: EHG_Engineer - LEO Protocol Management Dashboard
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-10-28T12:24:22.172Z
-**Rows**: 0
+**Generated**: 2025-12-04T22:29:13.796Z
+**Rows**: 224
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (57 total)
+## Columns (58 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -76,6 +76,7 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 | affected_components | `ARRAY` | YES | `'{}'::text[]` | Array of component names affected by this retrospective (e.g., ["Authentication", "Database", "API"]) |
 | tags | `ARRAY` | YES | `'{}'::text[]` | Array of categorization tags (e.g., ["supabase", "react", "performance", "critical"]) |
 | content_embedding | `USER-DEFINED` | YES | - | OpenAI text-embedding-3-small vector (1536 dimensions) for semantic search. Generated from title + key_learnings + action_items. |
+| unnecessary_work_identified | `jsonb` | YES | `'[]'::jsonb` | Array of items that could have been deleted but were not. Used to improve future Q8 decisions. |
 
 ## Constraints
 
@@ -114,6 +115,10 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 - `idx_retrospectives_content_embedding_ivfflat`
   ```sql
   CREATE INDEX idx_retrospectives_content_embedding_ivfflat ON public.retrospectives USING ivfflat (content_embedding vector_cosine_ops) WITH (lists='10')
+  ```
+- `idx_retrospectives_deletion_audit`
+  ```sql
+  CREATE INDEX idx_retrospectives_deletion_audit ON public.retrospectives USING gin (unnecessary_work_identified)
   ```
 - `idx_retrospectives_failure_patterns`
   ```sql
@@ -220,7 +225,7 @@ const { data, error } = await supabase
 // Get high-quality retrospectives (score >= 85)
 const { data, error } = await supabase
   .from('retrospectives')
-  .select('sd_id, quality_score, lessons_learned')
+  .select('sd_id, quality_score, key_learnings')
   .gte('quality_score', 85)
   .order('quality_score', { ascending: false });
 ```

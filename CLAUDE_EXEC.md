@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2025-12-04 8:50:29 AM
+**Generated**: 2025-12-04 5:58:27 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
@@ -909,6 +909,7 @@ When implementing tests, ensure coverage for:
 | Column | Valid Values | Hint |
 |--------|--------------|------|
 | `status` | pending, accepted, rejected, failed | Use one of: pending, accepted, rejected, failed |
+| `validation_score` | N/A | Validation score must be an integer between 0 and 100. Use Math.round() and clamp to 0-100. |
 
 ### leo_protocols
 
