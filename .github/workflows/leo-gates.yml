@@ -57,7 +57,7 @@ jobs:
       fail-fast: false
       matrix:
         prd: ${{ fromJson(needs.detect-prds.outputs.prds) }}
-        gate: ['2A', '2B', '2C', '2D', '3']
+        gate: ['0', '2A', '2B', '2C', '2D', '3']
     
     steps:
       - name: Checkout code
@@ -86,6 +86,7 @@ jobs:
           printf '═%.0s' {1..50} && echo
 
           case "${{ matrix.gate }}" in
+            0)  npx tsx tools/gates/gate0.ts || echo "⚠️ Gate 0 failed - informational only" ;;
             2A) npx tsx tools/gates/gate2a.ts || echo "⚠️ Gate 2A failed - informational only" ;;
             2B) npx tsx tools/gates/gate2b.ts || echo "⚠️ Gate 2B failed - informational only" ;;
             2C) npx tsx tools/gates/gate2c.ts || echo "⚠️ Gate 2C failed - informational only" ;;
@@ -169,7 +170,7 @@ jobs:
               console.log(`\nPRD: ${prd}`);
               console.log('-'.repeat(40));
               
-              const gateOrder = ['2A', '2B', '2C', '2D', '3'];
+              const gateOrder = ['0', '2A', '2B', '2C', '2D', '3'];
               let allPass = true;
               
               for (const gate of gateOrder) {
@@ -212,17 +213,18 @@ jobs:
           script: |
             const comment = `
             ### 📊 LEO Gate Validation Results
-            
+
             Gates have been validated for the affected PRDs.
-            
+
             | Gate | Description | Pass Threshold |
             |------|-------------|----------------|
+            | 0 | Static Analysis | ≥85% |
             | 2A | Architecture/Interfaces | ≥85% |
             | 2B | Design & DB | ≥85% |
             | 2C | Security & Risk | ≥85% |
             | 2D | NFR & Testing | ≥85% |
             | 3 | Final Verification | ≥85% |
-            
+
             View the workflow run for detailed results.
             `;
             
