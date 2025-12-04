@@ -7,19 +7,37 @@
  * Owner: LEAD role
  *
  * Features:
- * 1. Dependency resolution - Verifies deps are actually completed
- * 2. Progress awareness - Surfaces partially completed SDs
- * 3. Session context - Checks recent git activity for continuity
- * 4. Risk-based ordering - Weights by downstream unblocking
- * 5. Conflict detection - Warns about parallel execution risks
- * 6. Track visibility - Shows parallel execution tracks
+ * 1. Multi-session awareness - Shows active sessions and their claims
+ * 2. Dependency resolution - Verifies deps are actually completed
+ * 3. Progress awareness - Surfaces partially completed SDs
+ * 4. Session context - Checks recent git activity for continuity
+ * 5. Risk-based ordering - Weights by downstream unblocking
+ * 6. Conflict detection - Warns about parallel execution risks
+ * 7. Track visibility - Shows parallel execution tracks
+ * 8. Parallel opportunities - Proactively suggests opening new terminals
  */
 
 import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
+import fs from 'fs';
 import dotenv from 'dotenv';
 
-dotenv.config();
+// Load environment from EHG_Engineer regardless of cwd
+const envPath = '/mnt/c/_EHG/EHG_Engineer/.env';
+if (fs.existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+} else {
+  dotenv.config();
+}
+
+// Import session manager (dynamic import for ESM compatibility)
+let sessionManager;
+try {
+  sessionManager = (await import('../lib/session-manager.mjs')).default;
+} catch {
+  // Fallback if module not found
+  sessionManager = null;
+}
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -50,18 +68,28 @@ class SDNextSelector {
     this.actuals = {};
     this.recentActivity = [];
     this.conflicts = [];
+    this.currentSession = null;
+    this.activeSessions = [];
+    this.claimedSDs = new Map(); // sd_id -> session_id
   }
 
   async run() {
     console.log(`\n${colors.bold}${colors.cyan}═══════════════════════════════════════════════════════════════════${colors.reset}`);
     console.log(`${colors.bold}${colors.white} LEAD SD EXECUTION QUEUE${colors.reset}`);
-    console.log(`${colors.dim} Intelligent Strategic Directive Selection${colors.reset}`);
+    console.log(`${colors.dim} Multi-Session Aware Strategic Directive Selection${colors.reset}`);
     console.log(`${colors.cyan}═══════════════════════════════════════════════════════════════════${colors.reset}\n`);
+
+    // Initialize session (auto-register and heartbeat)
+    await this.initializeSession();
 
     // Load data
     await this.loadActiveBaseline();
     await this.loadRecentActivity();
     await this.loadConflicts();
+    await this.loadActiveSessions();
+
+    // Display active sessions
+    await this.displayActiveSessions();
 
     if (!this.baseline) {
       await this.showFallbackQueue();
@@ -74,10 +102,72 @@ class SDNextSelector {
     // Display recommendations
     await this.displayRecommendations();
 
+    // Display parallel opportunities
+    await this.displayParallelOpportunities();
+
     // Display session context
     this.displaySessionContext();
 
     console.log(`\n${colors.cyan}═══════════════════════════════════════════════════════════════════${colors.reset}\n`);
+  }
+
+  async initializeSession() {
+    if (!sessionManager) {
+      console.log(`${colors.dim}(Session coordination not available)${colors.reset}\n`);
+      return;
+    }
+
+    try {
+      // Cleanup stale sessions first
+      await sessionManager.cleanupStaleSessions();
+
+      // Get or create session (auto-registers and updates heartbeat)
+      this.currentSession = await sessionManager.getOrCreateSession();
+    } catch {
+      console.log(`${colors.dim}(Session init warning: ${e.message})${colors.reset}\n`);
+    }
+  }
+
+  async loadActiveSessions() {
+    if (!sessionManager) return;
+
+    try {
+      this.activeSessions = await sessionManager.getActiveSessions();
+
+      // Build claimed SDs map
+      for (const session of this.activeSessions) {
+        if (session.sd_id) {
+          this.claimedSDs.set(session.sd_id, session.session_id);
+        }
+      }
+    } catch {
+      // Non-fatal - continue without session data
+    }
+  }
+
+  async displayActiveSessions() {
+    if (this.activeSessions.length === 0) return;
+
+    const sessionsWithClaims = this.activeSessions.filter(s => s.sd_id);
+    const idleSessions = this.activeSessions.filter(s => !s.sd_id);
+
+    if (sessionsWithClaims.length > 0) {
+      console.log(`${colors.bold}ACTIVE SESSIONS (${sessionsWithClaims.length}):${colors.reset}\n`);
+
+      for (const s of sessionsWithClaims) {
+        const isCurrent = this.currentSession && s.session_id === this.currentSession.session_id;
+        const marker = isCurrent ? `${colors.green}→${colors.reset}` : ' ';
+        const shortId = s.session_id.substring(0, 16) + '...';
+        const ageMin = Math.round(s.claim_duration_minutes || 0);
+
+        console.log(`${marker} ${shortId} │ ${colors.bold}${s.sd_id}${colors.reset} (Track ${s.track}) │ ${ageMin}m active`);
+      }
+      console.log();
+    }
+
+    if (idleSessions.length > 0 && sessionsWithClaims.length === 0) {
+      console.log(`${colors.dim}(${idleSessions.length} idle session(s) detected)${colors.reset}\n`);
+    }
   }
 
   async loadActiveBaseline() {
@@ -136,7 +226,7 @@ class SDNextSelector {
         .slice(0, 5)
         .map(([sd, count]) => ({ sd_id: sd, commits: count }));
 
-    } catch (e) {
+    } catch {
       // Git not available or error
       this.recentActivity = [];
     }
@@ -216,7 +306,7 @@ class SDNextSelector {
     }
 
     // Find ready SDs
-    const readySDs = sds.filter(sd => {
+    const _readySDs = sds.filter(sd => {
       const track = sd.metadata?.execution_track;
       return track && this.checkDependenciesResolvedSync(sd.dependencies);
     });
@@ -256,17 +346,47 @@ class SDNextSelector {
     console.log(`\n${trackColors[trackKey]}${colors.bold}TRACK ${trackKey}: ${trackName}${colors.reset}`);
 
     items.forEach(item => {
+      const sdId = item.legacy_id || item.sd_id;
       const rankStr = `[${item.sequence_rank}]`.padEnd(5);
-      const statusIcon = item.deps_resolved ? `${colors.green}READY${colors.reset}` :
-                         item.progress_percentage > 0 ? `${colors.yellow}${item.progress_percentage}%${colors.reset}` :
-                         `${colors.red}BLOCKED${colors.reset}`;
+
+      // Check if claimed by another session
+      const claimedBySession = this.claimedSDs.get(sdId);
+      const isClaimedByOther = claimedBySession &&
+        this.currentSession &&
+        claimedBySession !== this.currentSession.session_id;
+      const isClaimedByMe = claimedBySession &&
+        this.currentSession &&
+        claimedBySession === this.currentSession.session_id;
+
+      // Status icon logic
+      let statusIcon;
+      if (isClaimedByOther) {
+        statusIcon = `${colors.yellow}CLAIMED${colors.reset}`;
+      } else if (isClaimedByMe) {
+        statusIcon = `${colors.green}YOURS${colors.reset}`;
+      } else if (item.deps_resolved) {
+        statusIcon = `${colors.green}READY${colors.reset}`;
+      } else if (item.progress_percentage > 0) {
+        statusIcon = `${colors.yellow}${item.progress_percentage}%${colors.reset}`;
+      } else {
+        statusIcon = `${colors.red}BLOCKED${colors.reset}`;
+      }
 
       const workingIcon = item.is_working_on ? `${colors.bgYellow} ACTIVE ${colors.reset} ` : '';
+      const claimedIcon = isClaimedByOther ? `${colors.bgBlue} CLAIMED ${colors.reset} ` : '';
 
-      console.log(`  ${workingIcon}${rankStr} ${item.legacy_id} - ${item.title.substring(0, 45)}... ${statusIcon}`);
+      console.log(`  ${claimedIcon}${workingIcon}${rankStr} ${sdId} - ${item.title.substring(0, 45)}... ${statusIcon}`);
 
-      // Show blockers if not resolved
-      if (!item.deps_resolved && item.dependencies) {
+      // Show who claimed it
+      if (isClaimedByOther) {
+        const claimingSession = this.activeSessions.find(s => s.session_id === claimedBySession);
+        const shortId = claimedBySession.substring(0, 12) + '...';
+        const ageMin = claimingSession ? Math.round(claimingSession.claim_duration_minutes || 0) : '?';
+        console.log(`${colors.dim}        └─ Claimed by session ${shortId} (${ageMin}m)${colors.reset}`);
+      }
+
+      // Show blockers if not resolved and not claimed
+      if (!item.deps_resolved && item.dependencies && !isClaimedByOther) {
         const deps = this.parseDependencies(item.dependencies);
         const unresolvedDeps = deps.filter(d => !d.resolved);
         if (unresolvedDeps.length > 0) {
@@ -330,7 +450,7 @@ class SDNextSelector {
     }
 
     // Find ready SDs from baseline
-    const readySDs = [];
+    const _readySDs = [];
     for (const item of this.baselineItems) {
       const { data: sd } = await supabase
         .from('strategic_directives_v2')
@@ -371,6 +491,63 @@ class SDNextSelector {
     }
   }
 
+  async displayParallelOpportunities() {
+    if (!sessionManager) return;
+
+    try {
+      const trackStatus = await sessionManager.getParallelTrackStatus();
+
+      // Find tracks without active sessions that have available work
+      const openTracks = trackStatus.filter(t =>
+        t.track_status === 'open' && t.available_sds > 0
+      );
+
+      // If current session has no SD claimed, suggest claiming one
+      if (this.currentSession && !this.currentSession.sd_id) {
+        const readyTracks = trackStatus.filter(t => t.available_sds > 0);
+        if (readyTracks.length > 0) {
+          console.log(`\n${colors.bold}───────────────────────────────────────────────────────────────────${colors.reset}`);
+          console.log(`${colors.bold}${colors.cyan}CLAIM AN SD:${colors.reset}\n`);
+          console.log(`${colors.dim}This session has no SD claimed. To claim:${colors.reset}`);
+          console.log(`  ${colors.cyan}npm run sd:claim <SD-ID>${colors.reset}  - Claim a specific SD`);
+          console.log(`  ${colors.dim}Or tell me: "I want to work on <SD-ID>"${colors.reset}\n`);
+        }
+      }
+
+      // If there are open tracks and current session already has a claim, suggest parallel
+      if (openTracks.length > 0 && this.currentSession?.sd_id) {
+        console.log(`\n${colors.bold}───────────────────────────────────────────────────────────────────${colors.reset}`);
+        console.log(`${colors.bold}${colors.green}PARALLEL OPPORTUNITY:${colors.reset}\n`);
+        console.log(`  ${colors.dim}Open another terminal for parallel work:${colors.reset}\n`);
+
+        for (const track of openTracks) {
+          const trackColor = track.track === 'A' ? colors.magenta :
+                            track.track === 'B' ? colors.blue :
+                            track.track === 'C' ? colors.cyan : colors.yellow;
+
+          console.log(`  ${trackColor}${colors.bold}Track ${track.track}${colors.reset} (${track.track_name})`);
+          console.log(`    Next: ${colors.bold}${track.next_available_sd}${colors.reset}`);
+          console.log(`    Available: ${track.available_sds} SDs`);
+        }
+
+        console.log(`\n  ${colors.dim}Run ${colors.cyan}npm run sd:next${colors.dim} in new terminal, then:${colors.reset}`);
+        console.log(`  ${colors.cyan}npm run sd:claim <SD-ID>${colors.reset}`);
+      }
+
+      // If all tracks are occupied, show status
+      const occupiedTracks = trackStatus.filter(t => t.track_status === 'occupied');
+      if (occupiedTracks.length === trackStatus.length && trackStatus.length > 0) {
+        console.log(`\n${colors.bold}───────────────────────────────────────────────────────────────────${colors.reset}`);
+        console.log(`${colors.bold}${colors.yellow}ALL TRACKS ACTIVE:${colors.reset}\n`);
+        console.log(`  ${colors.dim}All parallel tracks have active sessions.${colors.reset}`);
+        console.log(`  ${colors.dim}Wait for a session to complete or release its SD.${colors.reset}`);
+      }
+
+    } catch {
+      // Non-fatal - just skip parallel suggestions
+    }
+  }
+
   displaySessionContext() {
     if (this.recentActivity.length === 0) return;
 
@@ -406,7 +583,7 @@ class SDNextSelector {
     return true;
   }
 
-  checkDependenciesResolvedSync(dependencies) {
+  checkDependenciesResolvedSync(_dependencies) {
     // Sync version for display - assumes deps were already checked
     return true; // Placeholder - actual check happens async
   }

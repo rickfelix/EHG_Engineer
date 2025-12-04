@@ -137,7 +137,12 @@
     "sd:baseline:create": "node scripts/sd-baseline.js create",
     "sd:baseline:view": "node scripts/sd-baseline.js view",
     "sd:status": "node scripts/sd-status.js",
-    "sd:burnrate": "node scripts/sd-burnrate.js"
+    "sd:burnrate": "node scripts/sd-burnrate.js",
+    "sd:claim": "node scripts/claude-session-coordinator.mjs claim",
+    "sd:release": "node scripts/claude-session-coordinator.mjs release",
+    "session:status": "node scripts/claude-session-coordinator.mjs status",
+    "session:cleanup": "node scripts/claude-session-coordinator.mjs cleanup",
+    "session:info": "node scripts/claude-session-coordinator.mjs info"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",

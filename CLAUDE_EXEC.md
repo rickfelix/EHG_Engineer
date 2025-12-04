@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2025-12-02 7:29:22 PM
+**Generated**: 2025-12-03 6:21:23 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
@@ -87,6 +87,94 @@ Before writing ANY code, EXEC MUST:
 - ❌ Not restarting dev servers after changes
 - ❌ **CRITICAL**: Creating files for PRDs, handoffs, or documentation
 - ❌ **CRITICAL**: Proceeding with implementation when requirements are ambiguous
+
+## ❌ Anti-Patterns from Retrospectives (EXEC Phase)
+
+**Source**: Analysis of 175 high-quality retrospectives (score ≥60)
+
+These patterns have caused significant time waste. **AVOID them.**
+
+### 1. Manual Test Creation (2-3 hours waste per SD)
+**Pattern**: Writing tests manually instead of delegating to testing-agent
+
+**Evidence**: SD-VENTURE-UNIFICATION-001
+> "Manual test creation wasted 2-3 hours instead of delegating to testing-agent"
+
+**Fix**: Always use Task tool with `subagent_type: "testing-agent"`
+```
+Task(subagent_type="testing-agent", prompt="Create E2E tests for [feature] based on PRD acceptance criteria")
+```
+
+---
+
+### 2. Skipping Knowledge Retrieval (4-6 hours rework)
+**Pattern**: Starting implementation without querying retrospectives/patterns
+
+**Evidence**: SD-VENTURE-UNIFICATION-001
+> "Zero consultation of retrospectives before implementation (research_confidence_score = 0.00)"
+
+**Fix**: Run before EXEC starts:
+```bash
+node scripts/automated-knowledge-retrieval.js <SD-ID>
+```
+If `research_confidence_score = 0.00`, you skipped this step.
+
+---
+
+### 3. Workarounds Before Root Cause (2-3x time multiplier)
+**Pattern**: Working around issues instead of fixing root causes
+
+**Evidence**: SD-2025-1020-E2E-SELECTORS (Score: 100)
+> "Time spent on workarounds >> time to follow protocol"
+> "Multiple workarounds instead of fixing root causes"
+
+**Fix**: Before implementing a workaround, ask:
+- [ ] Have I identified the root cause?
+- [ ] Is this a fix or a workaround?
+- [ ] What is the time multiplier? (typical: 2-3x)
+
+---
+
+### 4. Accepting Environmental Blockers Without Debug
+**Pattern**: Accepting "it's environmental" without investigation
+
+**Evidence**: SD-VENTURE-UNIFICATION-001
+> "Environmental issues treated as blockers rather than investigation opportunities"
+
+**Fix**: 5-step minimum debug before accepting as environmental:
+1. Check logs for specific error
+2. Verify credentials/tokens
+3. Test in isolation (curl, manual browser)
+4. Check network/ports
+5. Compare with known working state
+
+---
+
+### 5. Manual Sub-Agent Simulation (15% quality delta)
+**Pattern**: Manually creating sub-agent results instead of executing tools
+
+**Evidence**: SD-RECONNECT-014 (Score: 90)
+> "Manual: 75% confidence. Tool: 60% confidence (-15% delta)"
+> "Manual sub-agent simulation is an anti-pattern"
+
+**Fix**: Sub-agent results MUST have:
+- `tool_executed: true`
+- Actual execution timestamp
+- Real output (not simulated)
+
+---
+
+### Quick Reference
+
+| Anti-Pattern | Time Cost | Fix |
+|--------------|-----------|-----|
+| Manual test creation | 2-3 hours | Use testing-agent |
+| Skip knowledge retrieval | 4-6 hours | Run automated-knowledge-retrieval.js |
+| Workarounds first | 2-3x multiplier | Fix root cause |
+| Accept environmental | Hours of idle | 5-step debug minimum |
+| Simulate sub-agents | 15% quality loss | Execute actual tools |
+
+**Pattern References**: PAT-RECURSION-001 through PAT-RECURSION-005
 
 ## 📚 Skill Integration (EXEC Phase)
 
@@ -392,6 +480,86 @@ UI Parity Status:
 - Gate 2.5 Status: PASS/FAIL
 ```
 
+## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge
+
+## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge (MANDATORY)
+
+**Every completed Strategic Directive and Quick-Fix MUST end with:**
+
+1. **Commit** - All changes committed with proper message format
+2. **Push** - Branch pushed to remote
+3. **Merge to Main** - Feature branch merged into main
+
+### For Quick-Fixes
+
+The `complete-quick-fix.js` script handles this automatically:
+
+```bash
+node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN --pr-url https://...
+```
+
+The script will:
+1. Verify tests pass and UAT completed
+2. Commit and push changes
+3. **Prompt to merge PR to main** (or local merge if no PR)
+4. Delete the feature branch
+
+### For Strategic Directives
+
+After LEAD approval, execute the following:
+
+```bash
+# 1. Ensure all changes committed
+git add .
+git commit -m "feat(SD-YYYY-XXX): [description]
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# 2. Push to remote
+git push origin feature/SD-YYYY-XXX
+
+# 3. Create PR if not exists
+gh pr create --title "feat(SD-YYYY-XXX): [title]" --body "..."
+
+# 4. Merge PR (preferred method)
+gh pr merge --merge --delete-branch
+
+# OR local merge fallback
+git checkout main
+git pull origin main
+git merge --no-ff feature/SD-YYYY-XXX
+git push origin main
+git branch -d feature/SD-YYYY-XXX
+git push origin --delete feature/SD-YYYY-XXX
+```
+
+### Merge Checklist
+
+Before merging, verify:
+- [ ] All tests passing (unit + E2E)
+- [ ] CI/CD pipeline green
+- [ ] Code review completed (if required)
+- [ ] No merge conflicts
+- [ ] SD status = 'archived' OR Quick-Fix status = 'completed'
+
+### Anti-Patterns
+
+❌ **NEVER** leave feature branches unmerged after completion
+❌ **NEVER** skip the push step
+❌ **NEVER** merge without verifying tests pass
+❌ **NEVER** force push to main
+
+### Verification
+
+After merge, confirm:
+```bash
+git checkout main
+git pull origin main
+git log --oneline -5  # Should show your merge commit
+```
+
 ## 🌿 Branch Hygiene Gate (MANDATORY)
 
 ## Branch Hygiene Gate (MANDATORY)
@@ -481,86 +649,6 @@ When starting implementation:
 3. If multiple SDs detected → split branches
 4. If >100 files changed → assess scope creep
 5. Document branch health in handoff notes
-
-## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge
-
-## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge (MANDATORY)
-
-**Every completed Strategic Directive and Quick-Fix MUST end with:**
-
-1. **Commit** - All changes committed with proper message format
-2. **Push** - Branch pushed to remote
-3. **Merge to Main** - Feature branch merged into main
-
-### For Quick-Fixes
-
-The `complete-quick-fix.js` script handles this automatically:
-
-```bash
-node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN --pr-url https://...
-```
-
-The script will:
-1. Verify tests pass and UAT completed
-2. Commit and push changes
-3. **Prompt to merge PR to main** (or local merge if no PR)
-4. Delete the feature branch
-
-### For Strategic Directives
-
-After LEAD approval, execute the following:
-
-```bash
-# 1. Ensure all changes committed
-git add .
-git commit -m "feat(SD-YYYY-XXX): [description]
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-
-# 2. Push to remote
-git push origin feature/SD-YYYY-XXX
-
-# 3. Create PR if not exists
-gh pr create --title "feat(SD-YYYY-XXX): [title]" --body "..."
-
-# 4. Merge PR (preferred method)
-gh pr merge --merge --delete-branch
-
-# OR local merge fallback
-git checkout main
-git pull origin main
-git merge --no-ff feature/SD-YYYY-XXX
-git push origin main
-git branch -d feature/SD-YYYY-XXX
-git push origin --delete feature/SD-YYYY-XXX
-```
-
-### Merge Checklist
-
-Before merging, verify:
-- [ ] All tests passing (unit + E2E)
-- [ ] CI/CD pipeline green
-- [ ] Code review completed (if required)
-- [ ] No merge conflicts
-- [ ] SD status = 'archived' OR Quick-Fix status = 'completed'
-
-### Anti-Patterns
-
-❌ **NEVER** leave feature branches unmerged after completion
-❌ **NEVER** skip the push step
-❌ **NEVER** merge without verifying tests pass
-❌ **NEVER** force push to main
-
-### Verification
-
-After merge, confirm:
-```bash
-git checkout main
-git pull origin main
-git log --oneline -5  # Should show your merge commit
-```
 
 ## E2E Testing: Dev Mode vs Preview Mode
 
@@ -847,6 +935,6 @@ Verifies LEAD to PLAN handoff requirements are met before allowing transition.
 
 ---
 
-*Generated from database: 2025-12-02*
+*Generated from database: 2025-12-03*
 *Protocol Version: 4.3.3*
 *Load when: User mentions EXEC, implementation, coding, or testing*

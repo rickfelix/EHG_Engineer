@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-12-02 7:29:22 PM
+**Generated**: 2025-12-03 6:21:23 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -290,6 +290,61 @@ Before creating PLAN→EXEC handoff, PLAN agent MUST verify:
 **Success Pattern** (SD-UAT-002):
 > "LEAD code review rejected 3/5 false claims → saved hours of unnecessary work"
 
+
+## 🧪 Test Infrastructure Readiness Gate (Before PLAN→EXEC)
+
+**Source**: Retrospective analysis of SD-STAGE4-AI-FIRST-UX-001, SD-VENTURE-UNIFICATION-001
+
+**Failure Pattern**: "Testing infrastructure validated AFTER implementation" caused:
+- 28/32 E2E test failures (mock API config not planned)
+- 11/18 unit test timeouts (vitest async issues)
+- 2-4 hours of debugging per SD
+
+### MANDATORY Verification Before PLAN→EXEC Handoff
+
+```markdown
+## Test Infrastructure Readiness Checklist
+
+### Authentication
+- [ ] Test user exists in database (query auth.users)
+- [ ] Test credentials match .env.test.local
+- [ ] Manual login works: `npm run test:auth:verify` or manual browser test
+- [ ] Service role key is valid (for admin operations)
+
+### Unit Tests
+- [ ] `npm run test:unit` runs without infrastructure errors
+- [ ] Baseline count documented: ___ passing / ___ failing
+- [ ] No timeout issues (if vitest, check async handling)
+
+### E2E Tests
+- [ ] Playwright installed: `npx playwright --version`
+- [ ] Browser dependencies: `npx playwright install`
+- [ ] `npm run test:e2e -- --list` shows available tests
+- [ ] Mock API configuration reviewed (if applicable)
+
+### Environment
+- [ ] .env.test exists with test database credentials
+- [ ] Test database is accessible
+- [ ] No port conflicts with dev server
+```
+
+### Exit Criteria
+
+**BLOCKING**: Do NOT approve PLAN→EXEC handoff if:
+- Test user authentication fails
+- Unit test suite has infrastructure errors (not test failures)
+- E2E environment is not configured
+
+**Pattern Reference**: PAT-RECURSION-005, PAT-AUTH-PW-001
+
+### Why This Gate Exists
+
+From retrospectives:
+> "Testing infrastructure validated AFTER implementation = failure pattern"
+> "E2E test suite created but never executed due to auth blocker"
+> "Mock API configuration not planned upfront"
+
+**Time saved**: 2-4 hours per SD by catching infrastructure issues before implementation.
 
 ## Testing Tier Strategy
 
@@ -915,6 +970,6 @@ Required: [object Object], [object Object], [object Object], [object Object], [o
 
 ---
 
-*Generated from database: 2025-12-02*
+*Generated from database: 2025-12-03*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-02 7:29:22 PM
+**Generated**: 2025-12-03 6:21:23 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -380,44 +380,6 @@ To request an exception to this block:
 
 **Full Guidelines**: See `docs/03_protocols_and_standards/leo_git_commit_guidelines_v4.2.0.md`
 
-## 🔒 Session Boundaries (MANDATORY)
-
-### Multi-Instance Safety
-When multiple Claude Code instances run simultaneously, use the branch lock mechanism:
-```bash
-# At session start
-node scripts/claude-session-lock.mjs acquire SD-XXX-YYY-001
-
-# At session end
-node scripts/claude-session-lock.mjs release
-
-# Check status
-node scripts/claude-session-lock.mjs status
-```
-
-**Rule**: Each Claude instance MUST work on a **different branch**. Never have two instances on the same branch.
-
-### Session Start Checklist
-- [ ] `git status` - Check for uncommitted work from previous session
-- [ ] If > 10 untracked files → Address BEFORE new work
-- [ ] Acquire branch lock: `node scripts/claude-session-lock.mjs acquire SD-ID`
-- [ ] Verify on correct branch for intended work
-
-### Session End Checklist
-- [ ] All changes committed OR explicitly documented as WIP
-- [ ] No temporary scripts remaining (`tmp-*.mjs`)
-- [ ] Handoff created if work incomplete
-- [ ] Release branch lock: `node scripts/claude-session-lock.mjs release`
-- [ ] `git status` shows clean tree OR documented reason
-
-### Commit Frequency Triggers
-1. **File Count**: If untracked files > 10 → Commit NOW
-2. **Time**: Every 30 minutes of active work → Checkpoint commit
-3. **Phase Boundary**: Before any handoff → Commit all work
-4. **Script Creation**: After testing any new utility script → Commit
-
-**Pattern Reference**: PAT-BRANCH-HYGIENE-001
-
 ## 📊 Communication & Context
 
 ### Communication Style
@@ -767,18 +729,7 @@ sd.priority === 1 ? 'CRITICAL' : 'LOW'  // Always 'LOW'!
 - [ ] Create /docs/reference/database-constraints-testing.md with all constraint patte...
 - [ ] Update testing-agent prompts to include database constraint patterns
 
-### 2. Playwright Authentication Troubleshooting - Password Reset Solution ⭐
-**Category**: APPLICATION_ISSUE | **Date**: 11/19/2025 | **Score**: 100
-
-**Key Improvements**:
-- Initial confusion about which service_role key to use (EHG vs EHG_Engineer)
-- Multiple attempts with invalid service_role key before getting correct one
-
-**Action Items**:
-- [ ] Add reset-password.cjs script to EHG repository for future use
-- [ ] Document Supabase Admin API authentication troubleshooting in testing guide
-
-### 3. SD-VENTURE-UNIFICATION-001 Phase 3 (EXEC) - Comprehensive Implementation Retrospective ⭐
+### 2. SD-VENTURE-UNIFICATION-001 Phase 3 (EXEC) - Comprehensive Implementation Retrospective ⭐
 **Category**: PROCESS_IMPROVEMENT | **Date**: 11/3/2025 | **Score**: 100
 
 **Key Improvements**:
@@ -789,7 +740,7 @@ sd.priority === 1 ? 'CRITICAL' : 'LOW'  // Always 'LOW'!
 - [ ] MANDATE testing-agent delegation for all test creation tasks (saves 2-3 hours pe...
 - [ ] Add automated-knowledge-retrieval.js to EXEC pre-flight checklist (v4.3.0 compli...
 
-### 4. SD-STAGE4-AI-FIRST-UX-001 Comprehensive Retrospective ⭐
+### 3. SD-STAGE4-AI-FIRST-UX-001 Comprehensive Retrospective ⭐
 **Category**: APPLICATION_ISSUE | **Date**: 11/15/2025 | **Score**: 100
 
 **Key Improvements**:
@@ -800,16 +751,19 @@ sd.priority === 1 ? 'CRITICAL' : 'LOW'  // Always 'LOW'!
 - [ ] Create SD-TESTING-INFRASTRUCTURE-FIX-001 for unit test timeout resolution
 - [ ] Fix E2E mock API configuration (28/32 test failures)
 
-### 5. SD-ARCH-EHG-003: Stage Data Contracts & LEO Supervision Policies ⭐
-**Category**: DATABASE_SCHEMA | **Date**: 11/30/2025 | **Score**: 92
+### 4. Playwright Authentication Troubleshooting - Password Reset Solution ⭐
+**Category**: APPLICATION_ISSUE | **Date**: 11/19/2025 | **Score**: 100
 
 **Key Improvements**:
-- SECURITY sub-agent score was 62% (conditional) - could have addressed earlier
-- Could have added audit triggers (recommended but not blocking)
+- Initial confusion about which service_role key to use (EHG vs EHG_Engineer)
+- Multiple attempts with invalid service_role key before getting correct one
 
 **Action Items**:
-- [ ] Monitor GIN index usage
-- [ ] Consider audit triggers
+- [ ] Add reset-password.cjs script to EHG repository for future use
+- [ ] Document Supabase Admin API authentication troubleshooting in testing guide
+
+### 5. SD-FOUND-SAFETY-002 Comprehensive Retrospective ⭐
+**Category**: APPLICATION_ISSUE | **Date**: 11/21/2025 | **Score**: 90
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -869,7 +823,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ---
 
-*Generated from database: 2025-12-02*
+*Generated from database: 2025-12-03*
 *Protocol Version: 4.3.3*
 *Includes: Hot Patterns (5) + Recent Lessons (5)*
 *Load this file first in all sessions*
