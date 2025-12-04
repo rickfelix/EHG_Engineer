@@ -16,7 +16,7 @@ See documentation for table structure: `database/schema/007_leo_protocol_schema_
 1. **Follow LEAD→PLAN→EXEC** - Target ≥85% gate pass rate
 2. **Use sub-agents** - Architect, QA, Reviewer - summarize outputs
 3. **Database-first** - No markdown files as source of truth
-4. **USE PROCESS SCRIPTS** - ⚠️ NEVER bypass add-prd-to-database.js, unified-handoff-system.js ⚠️
+4. **USE PROCESS SCRIPTS** - ⚠️ NEVER bypass add-prd-to-database.js, handoff.js ⚠️
 5. **Small PRs** - Target ≤100 lines, max 400 with justification
 6. **Priority-first** - Use `npm run prio:top3` to justify work
 
@@ -64,7 +64,7 @@ This command provides:
 - `bash scripts/leo-stack.sh stop` - Stop all servers
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-12-03 6:21:23 PM
+**Last Generated**: 2025-12-04 8:50:29 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -104,6 +104,6 @@ This command provides:
 
 ---
 
-*Router generated from database: 2025-12-03*
+*Router generated from database: 2025-12-04*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*

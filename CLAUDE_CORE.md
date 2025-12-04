@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-03 6:21:23 PM
+**Generated**: 2025-12-04 8:50:29 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -99,6 +99,65 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 
 **Pattern Reference**: PAT-SESS-VER-001
 
+## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
+
+**Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions. Do NOT use database-agent to create handoffs directly.
+
+### ⛔ NEVER DO THIS:
+- Using `database-agent` to directly insert into `sd_phase_handoffs`
+- Creating handoff records without running validation scripts
+- Skipping preflight knowledge retrieval
+
+### ✅ ALWAYS DO THIS:
+
+#### LEAD → PLAN Transition
+```bash
+# Step 1: MANDATORY - Run preflight (loads context from database)
+node scripts/phase-preflight.js --phase PLAN --sd-id SD-XXX-001
+
+# Step 2: MANDATORY - Execute handoff (validates and blocks if not ready)
+node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001
+```
+
+#### PLAN → EXEC Transition
+```bash
+# Step 1: MANDATORY - Run preflight
+node scripts/phase-preflight.js --phase EXEC --sd-id SD-XXX-001
+
+# Step 2: MANDATORY - Execute handoff (enforces BMAD, branch, and gate validation)
+node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001
+```
+
+#### EXEC → PLAN Transition (Verification)
+```bash
+node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
+```
+
+#### PLAN → LEAD Transition (Final Approval)
+```bash
+node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
+```
+
+### What These Scripts Enforce
+| Script | Validations |
+|--------|-------------|
+| `phase-preflight.js` | Loads context, patterns, and lessons from database |
+| `handoff.js LEAD-TO-PLAN` | SD completeness (100% required), strategic objectives |
+| `handoff.js PLAN-TO-EXEC` | BMAD validation, DESIGN→DB workflow, Git branch enforcement |
+| `handoff.js EXEC-TO-PLAN` | Implementation fidelity, test coverage, deliverables |
+| `handoff.js PLAN-TO-LEAD` | Traceability, workflow ROI, retrospective quality |
+
+### Compliance Marker
+Valid handoffs are recorded with `created_by: 'UNIFIED-HANDOFF-SYSTEM'`. Handoffs with other `created_by` values indicate process bypass.
+
+### Check Compliance
+```bash
+npm run handoff:compliance        # Check all recent handoffs
+npm run handoff:compliance SD-ID  # Check specific SD
+```
+
+**FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
+
 ## 🤖 Built-in Agent Integration
 
 ## Built-in Agent Integration
@@ -140,6 +199,33 @@ Task(subagent_type="Explore", prompt="Identify affected areas")
 ```
 
 This is faster than sequential exploration and provides comprehensive coverage.
+
+## Sub-Agent Model Routing
+
+**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
+
+### Model Selection Rule
+- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
+- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
+- If you need to specify a model explicitly, use `model: 'sonnet'`
+
+### Why This Matters
+- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
+- Claude Code Max subscription does not include Haiku access
+- Sonnet provides the right balance of speed and quality for sub-agent work
+
+### Examples
+```javascript
+// CORRECT - Use sonnet or omit model
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
+Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
+
+// WRONG - Never use haiku
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
+```
+
+*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
+
 
 ## Execution Philosophy
 
@@ -611,7 +697,20 @@ Patterns exceeding these thresholds auto-create CRITICAL SDs:
 - SDs → `strategic_directives_v2`
 - PRDs → `product_requirements_v2`
 - Retrospectives → `retrospectives`
-- Handoffs → `sd_phase_handoffs`
+- Handoffs → `sd_phase_handoffs` ⚠️ (CANONICAL - see note below)
+
+#### ⚠️ Handoff Table Clarification (IMPORTANT)
+Two handoff-related tables exist - use the correct one:
+
+| Table | Purpose | Use For |
+|-------|---------|---------|
+| `sd_phase_handoffs` | **Handoff artifacts** (content, summaries) | Compliance checks, handoff content |
+| `leo_handoff_executions` | **Execution metadata** (scores, status) | Statistics, execution tracking |
+
+**For compliance verification**: Query `sd_phase_handoffs` (created_by = 'UNIFIED-HANDOFF-SYSTEM')
+**For handoff stats**: Query `leo_handoff_executions`
+
+**NEVER** check `leo_handoff_executions` to verify handoffs exist - it only has execution metadata, not the actual handoff records.
 
 **Why**: Single source of truth, real-time updates, automated tracking, no file sync issues
 
@@ -718,27 +817,27 @@ sd.priority === 1 ? 'CRITICAL' : 'LOW'  // Always 'LOW'!
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. Critical Test Coverage Investment - Comprehensive Retrospective ⭐
-**Category**: TESTING_STRATEGY | **Date**: 11/15/2025 | **Score**: 100
+### 1. Chairman Circuit Breaker System - Retrospective ⭐
+**Category**: PERFORMANCE_OPTIMIZATION | **Date**: 12/3/2025 | **Score**: 100
 
 **Key Improvements**:
-- Initial schema validation - should consult database-agent earlier
-- Test data setup required manual fixes despite testing-agent generation
+- Could add integration tests with actual Supabase calls
+- Dashboard visualization for circuit breaker states not yet implemented
 
 **Action Items**:
-- [ ] Create /docs/reference/database-constraints-testing.md with all constraint patte...
-- [ ] Update testing-agent prompts to include database constraint patterns
+- [ ] Apply withCircuitBreaker wrapper to EVA API calls in production
+- [ ] Create dashboard widget showing circuit breaker states
 
-### 2. SD-VENTURE-UNIFICATION-001 Phase 3 (EXEC) - Comprehensive Implementation Retrospective ⭐
-**Category**: PROCESS_IMPROVEMENT | **Date**: 11/3/2025 | **Score**: 100
+### 2. SD-STAGE-09-001 Retrospective: EVA L0 Integration for Gap Analysis ⭐
+**Category**: APPLICATION_ISSUE | **Date**: 12/4/2025 | **Score**: 100
 
 **Key Improvements**:
-- Manual test creation wasted 2-3 hours instead of delegating to testing-agent (LEO v4.3.0 gap)
-- Zero consultation of retrospectives before implementation (research_confidence_score = 0.00)
+- SD missing success_metrics and key_principles - caused LEAD handoff rejection
+- User stories table has specific column requirements (user_role, user_want, user_benefit) - not intui...
 
 **Action Items**:
-- [ ] MANDATE testing-agent delegation for all test creation tasks (saves 2-3 hours pe...
-- [ ] Add automated-knowledge-retrieval.js to EXEC pre-flight checklist (v4.3.0 compli...
+- [ ] Document SD required fields (success_metrics, key_principles) in CLAUDE_LEAD.md
+- [ ] Add user_stories column requirements to CLAUDE_PLAN.md
 
 ### 3. SD-STAGE4-AI-FIRST-UX-001 Comprehensive Retrospective ⭐
 **Category**: APPLICATION_ISSUE | **Date**: 11/15/2025 | **Score**: 100
@@ -751,7 +850,18 @@ sd.priority === 1 ? 'CRITICAL' : 'LOW'  // Always 'LOW'!
 - [ ] Create SD-TESTING-INFRASTRUCTURE-FIX-001 for unit test timeout resolution
 - [ ] Fix E2E mock API configuration (28/32 test failures)
 
-### 4. Playwright Authentication Troubleshooting - Password Reset Solution ⭐
+### 4. SD-EVA-DECISION-001 Completion Retrospective ⭐
+**Category**: DATABASE_SCHEMA | **Date**: 12/4/2025 | **Score**: 100
+
+**Key Improvements**:
+- Database connection issues - psql timeouts required switching to Node.js Supabase client
+- RLS policy blocks for LEO protocol section inserts - needed service role key
+
+**Action Items**:
+- [ ] Use git worktrees for parallel SD work to prevent stash/branch conflicts
+- [ ] Always use database agent with service role for operations when RLS policies blo...
+
+### 5. Playwright Authentication Troubleshooting - Password Reset Solution ⭐
 **Category**: APPLICATION_ISSUE | **Date**: 11/19/2025 | **Score**: 100
 
 **Key Improvements**:
@@ -761,9 +871,6 @@ sd.priority === 1 ? 'CRITICAL' : 'LOW'  // Always 'LOW'!
 **Action Items**:
 - [ ] Add reset-password.cjs script to EHG repository for future use
 - [ ] Document Supabase Admin API authentication troubleshooting in testing guide
-
-### 5. SD-FOUND-SAFETY-002 Comprehensive Retrospective ⭐
-**Category**: APPLICATION_ISSUE | **Date**: 11/21/2025 | **Score**: 90
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -823,7 +930,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ---
 
-*Generated from database: 2025-12-03*
+*Generated from database: 2025-12-04*
 *Protocol Version: 4.3.3*
 *Includes: Hot Patterns (5) + Recent Lessons (5)*
 *Load this file first in all sessions*

@@ -15,7 +15,9 @@
       "application_architecture",
       "session_verification",
       "session_verification_quick_start",
+      "mandatory_phase_transitions",
       "builtin_agent_integration",
+      "model_routing_guidance",
       "execution_philosophy",
       "skill_integration",
       "ui_parity_requirement",
@@ -34,6 +36,7 @@
   "CLAUDE_LEAD.md": {
     "description": "LEAD phase operations (~25-30k chars)",
     "sections": [
+      "mandatory_phase_transitions_lead",
       "lead_operations",
       "lead_explore_integration",
       "directive_submission_review",
@@ -43,12 +46,14 @@
       "lead_pre_approval_simplicity_gate",
       "sd_evaluation",
       "knowledge_retrieval",
-      "parent_child_sd_governance"
+      "parent_child_sd_governance",
+      "multi_track_parallel_execution"
     ]
   },
   "CLAUDE_PLAN.md": {
     "description": "PLAN phase operations (~30-35k chars)",
     "sections": [
+      "mandatory_phase_transitions_plan",
       "PHASE_2_PLANNING",
       "plan_multi_perspective",
       "prd_research_lookup",
@@ -73,6 +78,7 @@
   "CLAUDE_EXEC.md": {
     "description": "EXEC phase operations (~20-25k chars)",
     "sections": [
+      "mandatory_phase_transitions_exec",
       "exec_implementation_requirements",
       "exec_retrospective_anti_patterns",
       "exec_skill_integration",
@@ -81,7 +87,9 @@
       "exec_todo_comment_standard",
       "exec_dual_test_requirement",
       "exec_completion_merge_requirement",
+      "auto_merge_workflow",
       "branch_hygiene_gate",
+      "multi_instance_coordination",
       "exec_ui_parity_verification",
       "exec_edge_case_testing_checklist",
       "testing_tools",

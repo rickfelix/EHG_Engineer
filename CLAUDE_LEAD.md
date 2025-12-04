@@ -1,10 +1,50 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2025-12-03 6:21:23 PM
+**Generated**: 2025-12-04 8:50:29 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
 ---
+
+## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
+
+**Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions. Do NOT use database-agent to create handoffs directly.
+
+### ⛔ NEVER DO THIS:
+- Using `database-agent` to directly insert into `sd_phase_handoffs`
+- Creating handoff records without running validation scripts
+- Skipping preflight knowledge retrieval
+
+### ✅ ALWAYS DO THIS:
+
+#### LEAD → PLAN Transition
+```bash
+node scripts/phase-preflight.js --phase PLAN --sd-id SD-XXX-001
+node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001
+```
+
+#### PLAN → EXEC Transition
+```bash
+node scripts/phase-preflight.js --phase EXEC --sd-id SD-XXX-001
+node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001
+```
+
+#### EXEC → PLAN Transition (Verification)
+```bash
+node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
+```
+
+#### PLAN → LEAD Transition (Final Approval)
+```bash
+node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
+```
+
+### Compliance Check
+```bash
+npm run handoff:compliance SD-XXX-001
+```
+
+**Database trigger now BLOCKS direct inserts. You MUST use the scripts above.**
 
 ## 🔍 Explore Before Validation (LEAD Phase)
 
@@ -526,7 +566,7 @@ node scripts/reactivate-parent-sd.js <PARENT_SD_ID>
 1. Update trigger error messages to include resolution steps
 2. Create `scripts/reactivate-parent-sd.js` helper script
 3. Add database function for safe parent re-activation
-4. Update unified-handoff-system.js for parent-child handling
+4. Update handoff.js for parent-child handling
 
 ### Related Patterns
 
@@ -534,8 +574,60 @@ node scripts/reactivate-parent-sd.js <PARENT_SD_ID>
 - Phase transition rules
 - Database trigger governance
 
+## Multi-Track Parallel Execution
+
+### Track System Overview
+
+The LEO Protocol organizes SDs into tracks designed for **parallel execution across multiple Claude Code instances**:
+
+| Track | Focus Area | Can Run In Parallel With |
+|-------|-----------|-------------------------|
+| **A: Infrastructure** | Core systems, safety, EVA | B, C |
+| **B: Features** | User-facing stages, product | A, C |
+| **C: Quality** | Testing, verification, gates | A, B |
+| **STANDALONE** | No dependencies | Any track |
+
+### How To Present SD Options
+
+When presenting READY SDs to the user, **always clarify parallel execution options**:
+
+```
+**For this session**, I recommend SD-XXX (Track A, rank #1).
+
+**For parallel throughput**, you could also start additional Claude Code instances:
+- Track B: SD-YYY (Features)  
+- Track C: SD-ZZZ (Quality)
+
+Tracks are designed to work simultaneously without file conflicts.
+Would you like to proceed with just Track A, or start multiple instances?
+```
+
+### Conflict Prevention
+
+Before recommending parallel work:
+1. Check `sd_conflict_matrix` for file/component overlap
+2. SDs touching the same files should NOT run in parallel
+3. Use `npm run sd:next` to see track assignments
+
+### Single vs Multi-Instance Decision
+
+| Scenario | Recommendation |
+|----------|---------------|
+| User has one Claude Code session | Pick highest-ranked READY SD |
+| User asks about multiple SDs | Explain parallel track option |
+| User has limited time | Focus on single highest-impact SD |
+| User wants maximum throughput | Suggest 2-3 parallel instances by track |
+
+### Commands Reference
+
+```bash
+npm run sd:next      # Shows all tracks with READY SDs
+npm run sd:status    # Overall progress by track
+```
+
+
 ---
 
-*Generated from database: 2025-12-03*
+*Generated from database: 2025-12-04*
 *Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

@@ -1,10 +1,50 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-12-03 6:21:23 PM
+**Generated**: 2025-12-04 8:50:29 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
 ---
+
+## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
+
+**Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions. Do NOT use database-agent to create handoffs directly.
+
+### ⛔ NEVER DO THIS:
+- Using `database-agent` to directly insert into `sd_phase_handoffs`
+- Creating handoff records without running validation scripts
+- Skipping preflight knowledge retrieval
+
+### ✅ ALWAYS DO THIS:
+
+#### LEAD → PLAN Transition
+```bash
+node scripts/phase-preflight.js --phase PLAN --sd-id SD-XXX-001
+node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001
+```
+
+#### PLAN → EXEC Transition
+```bash
+node scripts/phase-preflight.js --phase EXEC --sd-id SD-XXX-001
+node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001
+```
+
+#### EXEC → PLAN Transition (Verification)
+```bash
+node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
+```
+
+#### PLAN → LEAD Transition (Final Approval)
+```bash
+node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
+```
+
+### Compliance Check
+```bash
+npm run handoff:compliance SD-XXX-001
+```
+
+**Database trigger now BLOCKS direct inserts. You MUST use the scripts above.**
 
 ## 🎯 Multi-Perspective Planning
 
@@ -380,7 +420,7 @@ From retrospectives:
 ## BMAD Enhancements
 
 ### 6 Key Improvements
-1. **Unified Handoff System** - All handoffs via `unified-handoff-system.js`
+1. **Unified Handoff System** - All handoffs via `handoff.js`
 2. **Database-First PRDs** - PRDs stored in database, not markdown
 3. **Validation Gates** - 4-gate validation before EXEC
 4. **Progress Tracking** - Automatic progress % calculation
@@ -389,7 +429,7 @@ From retrospectives:
 
 ### Using Handoff System
 ```bash
-node scripts/unified-handoff-system.js create "{message}"
+node scripts/handoff.js create "{message}"
 ```
 
 ### PRD Creation
@@ -970,6 +1010,6 @@ Required: [object Object], [object Object], [object Object], [object Object], [o
 
 ---
 
-*Generated from database: 2025-12-03*
+*Generated from database: 2025-12-04*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

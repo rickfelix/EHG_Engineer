@@ -1,10 +1,50 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2025-12-03 6:21:23 PM
+**Generated**: 2025-12-04 8:50:29 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
 ---
+
+## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
+
+**Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions. Do NOT use database-agent to create handoffs directly.
+
+### ⛔ NEVER DO THIS:
+- Using `database-agent` to directly insert into `sd_phase_handoffs`
+- Creating handoff records without running validation scripts
+- Skipping preflight knowledge retrieval
+
+### ✅ ALWAYS DO THIS:
+
+#### LEAD → PLAN Transition
+```bash
+node scripts/phase-preflight.js --phase PLAN --sd-id SD-XXX-001
+node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001
+```
+
+#### PLAN → EXEC Transition
+```bash
+node scripts/phase-preflight.js --phase EXEC --sd-id SD-XXX-001
+node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001
+```
+
+#### EXEC → PLAN Transition (Verification)
+```bash
+node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
+```
+
+#### PLAN → LEAD Transition (Final Approval)
+```bash
+node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
+```
+
+### Compliance Check
+```bash
+npm run handoff:compliance SD-XXX-001
+```
+
+**Database trigger now BLOCKS direct inserts. You MUST use the scripts above.**
 
 ## 🚨 EXEC Agent Implementation Requirements
 
@@ -252,6 +292,68 @@ Skills provide patterns, templates, and examples. Apply them to your specific im
 Skills are for **creative guidance** (how to build).
 Sub-agents are for **validation** (did you build it right).
 Use skills during EXEC, save sub-agents for PLAN_VERIFY.
+
+## Multi-Instance Coordination (MANDATORY)
+
+## 🔀 Multi-Instance Coordination (MANDATORY)
+
+**Root Cause**: Multiple Claude Code instances operating in the same git working directory causes branch conflicts, stash collisions, and interrupted operations.
+
+### MANDATORY: Git Worktrees for Parallel SD Work
+
+When multiple Claude Code instances may run concurrently on different SDs:
+
+#### Before Starting EXEC Phase:
+```bash
+# 1. Create isolated worktree (NOT shared /mnt/c/_EHG/ehg)
+cd /mnt/c/_EHG/ehg
+git worktree add /mnt/c/_EHG/ehg-worktrees/${SD_ID} -b feat/${SD_ID}-branch
+
+# 2. Work ONLY in worktree directory
+cd /mnt/c/_EHG/ehg-worktrees/${SD_ID}
+
+# 3. All git operations happen here
+git add . && git commit -m "feat(${SD_ID}): description"
+git push origin feat/${SD_ID}-branch
+```
+
+#### After PR Merged:
+```bash
+# Cleanup worktree
+cd /mnt/c/_EHG/ehg
+git worktree remove /mnt/c/_EHG/ehg-worktrees/${SD_ID}
+```
+
+### Forbidden Operations (Multi-Instance)
+
+| Operation | Why Forbidden | Alternative |
+|-----------|---------------|-------------|
+| `git stash pop` across SDs | Mixes changes between instances | Use worktrees |
+| `git checkout` to different SD branch | Switches shared directory | Use worktrees |
+| Working in `/mnt/c/_EHG/ehg` during parallel execution | Shared state conflicts | Use worktree path |
+| Branch switching mid-operation | Interrupts other instance | Complete or stash first |
+
+### Quick Reference
+
+```bash
+# Helper script (recommended)
+bash scripts/create-sd-worktree.sh SD-STAGE-09-001
+
+# List active worktrees
+git worktree list
+
+# Check if directory is worktree
+git rev-parse --is-inside-work-tree
+```
+
+### Why Worktrees?
+
+- **Complete isolation**: Each instance has its own filesystem
+- **Shared history**: All worktrees share the same .git
+- **No conflicts**: Branch operations don't affect other instances
+- **Built-in**: No custom tooling required
+
+**Evidence**: SD-STAGE-09-001 + SD-EVA-DECISION-001 collision - parallel instances caused branch switch during commit, resulting in mixed changes and failed operations.
 
 ## 📦 Database-First Progress Tracking (MANDATORY)
 
@@ -650,6 +752,39 @@ When starting implementation:
 4. If >100 files changed → assess scope creep
 5. Document branch health in handoff notes
 
+## Auto-Merge Workflow for SD Completion
+
+### Auto-Merge Workflow (RECOMMENDED)
+
+After creating a PR, enable auto-merge to allow Claude to continue to the next SD without waiting:
+
+```bash
+# Create PR and enable auto-merge in one step
+gh pr create --title "feat(SD-XXX): title" --body "..." --base main
+gh pr merge --auto --squash --delete-branch
+```
+
+**Benefits**:
+- Claude continues to next SD immediately
+- Merge happens automatically when CI passes
+- No manual intervention required
+- Branch auto-deleted after merge
+
+**Requirements for Auto-Merge**:
+- Repository must have auto-merge enabled in GitHub settings
+- All required status checks must pass
+- No merge conflicts with main
+
+**Usage Pattern**:
+```bash
+# After EXEC phase tests pass:
+git add . && git commit -m "feat(SD-XXX): description"
+git push origin feat/SD-XXX-branch
+gh pr create --title "feat(SD-XXX): title" --body "## Summary..."  --base main
+gh pr merge --auto --squash --delete-branch
+# Claude immediately continues to next SD
+```
+
 ## E2E Testing: Dev Mode vs Preview Mode
 
 **E2E Testing Mode**: Default to dev mode (port 5173) for reliable tests.
@@ -935,6 +1070,6 @@ Verifies LEAD to PLAN handoff requirements are met before allowing transition.
 
 ---
 
-*Generated from database: 2025-12-03*
+*Generated from database: 2025-12-04*
 *Protocol Version: 4.3.3*
 *Load when: User mentions EXEC, implementation, coding, or testing*
