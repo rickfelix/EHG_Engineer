@@ -1,0 +1,75 @@
+{
+  "testSuite": "Gate 0: Static Analysis Verification - Unit Tests",
+  "strategicDirective": "SD-VERIFY-LADDER-001",
+  "prdId": "PRD-SD-VERIFY-LADDER-001",
+  "testFile": "tests/unit/gates/gate0.test.js",
+  "executionDate": "2025-12-04",
+  "results": {
+    "numPassedTests": 21,
+    "numFailedTests": 0,
+    "numTotalTests": 21,
+    "success": true
+  },
+  "testGroups": {
+    "hasESLintPass": {
+      "tests": 4,
+      "passed": 4,
+      "scenarios": ["TS-1", "TS-2", "error parsing", "timeout handling"]
+    },
+    "hasTypeScriptPass": {
+      "tests": 4,
+      "passed": 4,
+      "scenarios": ["TS-3", "TS-4", "error parsing", "timeout handling"]
+    },
+    "hasImportsPass": {
+      "tests": 4,
+      "passed": 4,
+      "scenarios": ["TS-5", "TS-6", "timeout handling", "non-blocking behavior"]
+    },
+    "securityFeatures": {
+      "tests": 3,
+      "passed": 3,
+      "scenarios": ["PRD_ID validation", "hardcoded commands", "timeout enforcement"]
+    },
+    "weightedScoring": {
+      "tests": 6,
+      "passed": 6,
+      "scenarios": [
+        "weight validation",
+        "all checks passing (100%)",
+        "imports failing (80%)",
+        "eslint failing (60%)",
+        "typescript failing (60%)",
+        "weight sum validation"
+      ]
+    }
+  },
+  "prdCoverage": {
+    "totalScenarios": 10,
+    "unitTestsCovered": 6,
+    "integrationTestsCovered": 4,
+    "coveragePercentage": 100,
+    "scenarios": {
+      "TS-1": "PASS - hasESLintPass returns true when eslint succeeds",
+      "TS-2": "PASS - hasESLintPass returns false when eslint fails",
+      "TS-3": "PASS - hasTypeScriptPass returns true when tsc succeeds",
+      "TS-4": "PASS - hasTypeScriptPass returns false when tsc fails",
+      "TS-5": "PASS - hasImportsPass returns true when imports resolve",
+      "TS-6": "PASS - hasImportsPass returns false when imports fail",
+      "TS-7": "IMPL - Full gate execution passes (integration test)",
+      "TS-8": "IMPL - Full gate execution fails (integration test)",
+      "TS-9": "IMPL - Gate results stored in database (integration test)",
+      "TS-10": "IMPL - CI/CD integration (integration test)"
+    }
+  },
+  "executionTime": "6.505s",
+  "testRunner": "Jest",
+  "nodeVersion": "v22.18.0",
+  "notes": [
+    "All 21 unit tests passed successfully",
+    "100% coverage of PRD test scenarios TS-1 through TS-6",
+    "Security features validated (command injection prevention, timeouts)",
+    "Weighted scoring validated (all score scenarios tested)",
+    "Integration tests (TS-7 through TS-10) implemented in separate file"
+  ]
+}
