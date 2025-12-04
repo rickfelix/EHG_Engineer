@@ -20,6 +20,27 @@ export class HandoffRecorder {
   }
 
   /**
+   * Normalize validation score to integer 0-100
+   * @param {number} score - Raw score value
+   * @returns {number} Normalized integer score
+   */
+  _normalizeValidationScore(score) {
+    // Default to 100 if not provided
+    if (score === null || score === undefined) {
+      return 100;
+    }
+
+    // Convert to number if string
+    const numScore = typeof score === 'string' ? parseFloat(score) : score;
+
+    // Round to nearest integer
+    const rounded = Math.round(numScore);
+
+    // Clamp to 0-100 range
+    return Math.max(0, Math.min(100, rounded));
+  }
+
+  /**
    * Record a successful handoff execution
    * @param {string} handoffType - Handoff type
    * @param {string} sdId - Strategic Directive ID
@@ -28,6 +49,12 @@ export class HandoffRecorder {
    */
   async recordSuccess(handoffType, sdId, result, template = null) {
     const executionId = randomUUID();
+
+    // Normalize validation score
+    const rawScore = result.qualityScore || result.totalScore || 100;
+    const normalizedScore = this._normalizeValidationScore(rawScore);
+
+    console.log(`🔍 Validation score normalization: ${rawScore} (${typeof rawScore}) → ${normalizedScore} (${typeof normalizedScore})`);
 
     const execution = {
       id: executionId,
@@ -38,7 +65,7 @@ export class HandoffRecorder {
       prd_id: result.prdId,
       handoff_type: handoffType,
       status: 'accepted',
-      validation_score: result.qualityScore || 100,
+      validation_score: normalizedScore,
       validation_passed: true,
       validation_details: {
         result: result,
@@ -63,6 +90,7 @@ export class HandoffRecorder {
 
       if (error) {
         console.error('❌ Failed to store handoff execution:', error.message);
+        console.error('   Execution data:', JSON.stringify(execution, null, 2));
         throw error;
       }
 
@@ -91,6 +119,10 @@ export class HandoffRecorder {
 
     const rejectionContent = this.contentBuilder.buildRejection(handoffType, sdId, result);
 
+    // Normalize validation score
+    const rawScore = result.actualScore || 0;
+    const normalizedScore = this._normalizeValidationScore(rawScore);
+
     const execution = {
       id: executionId,
       template_id: template?.id,
@@ -100,7 +132,7 @@ export class HandoffRecorder {
       handoff_type: handoffType,
       status: 'rejected',
       ...rejectionContent,
-      validation_score: result.actualScore || 0,
+      validation_score: normalizedScore,
       validation_passed: false,
       validation_details: {
         result: result,
@@ -224,6 +256,10 @@ export class HandoffRecorder {
       const [fromPhase, , toPhase] = handoffType.split('-');
       const handoffContent = this.contentBuilder.build(handoffType, sd, result, subAgentResults);
 
+      // Normalize validation score
+      const rawScore = result.qualityScore || result.totalScore || 100;
+      const normalizedScore = this._normalizeValidationScore(rawScore);
+
       const handoffId = randomUUID();
       const handoffRecord = {
         id: handoffId,
@@ -233,12 +269,12 @@ export class HandoffRecorder {
         handoff_type: handoffType,
         status: 'pending_acceptance', // Insert as pending first
         ...handoffContent,
-        validation_score: result.qualityScore || 100,
+        validation_score: normalizedScore,
         validation_passed: result.success !== false,
         validation_details: result.validation || {},
         metadata: {
           execution_id: executionId,
-          quality_score: result.qualityScore || 100,
+          quality_score: normalizedScore,
           created_via: 'unified-handoff-system',
           sub_agent_count: subAgentResults?.length || 0
         },
