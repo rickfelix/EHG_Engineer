@@ -410,7 +410,7 @@ class SDNextSelector {
           .eq('legacy_id', item.sd_id)
           .single();
 
-        if (sd) {
+        if (sd && sd.status !== 'completed' && sd.status !== 'cancelled') {
           const depsResolved = await this.checkDependenciesResolved(sd.dependencies);
           tracks[trackKey].push({
             ...item,
