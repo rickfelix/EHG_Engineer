@@ -64,7 +64,7 @@ This command provides:
 - `bash scripts/leo-stack.sh stop` - Stop all servers
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-12-04 8:50:29 AM
+**Last Generated**: 2025-12-04 8:55:50 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
