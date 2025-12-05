@@ -6,8 +6,43 @@
  *
  * All rubrics (SD, PRD, User Story, Retrospective) extend this class.
  *
+ * ╔══════════════════════════════════════════════════════════════════════╗
+ * ║          CONTINUOUS IMPROVEMENT & QUALITY EVOLUTION                   ║
+ * ╚══════════════════════════════════════════════════════════════════════╝
+ *
+ * The Russian Judge is designed to help the LEO Protocol improve over time:
+ *
+ * 1. **Learning System**: Currently in ADVISORY mode—logs scores but doesn't
+ *    block handoffs. This lets us gather data on what scores correlate with
+ *    actual quality issues in production.
+ *
+ * 2. **Data-Driven Tuning**: Start with lenient thresholds (50-65% based on
+ *    sd_type), then tighten based on empirical evidence:
+ *    - If >3 quality issues from SDs that passed → increase threshold +5-10%
+ *    - If pass rate <50% with no issues → decrease threshold -5%
+ *    - See: config/russian-judge-thresholds.json for tuning history
+ *
+ * 3. **Meta-Analysis**: Database views track pass rates, score distributions,
+ *    and criterion performance by sd_type. Use these to identify patterns:
+ *    - Which criteria consistently score low? (rubric needs refinement)
+ *    - Which sd_types have high scores but production issues? (threshold too low)
+ *    - See: database/migrations/20251205_russian_judge_sd_type_awareness.sql
+ *
+ * 4. **Future Enforcement**: Once calibrated (2-4 weeks), can transition to:
+ *    - Phase 2: Soft enforcement (warnings + LEAD override)
+ *    - Phase 3: Hard enforcement for critical SDs (security, database)
+ *
+ * 5. **Complete Documentation**: See docs/russian-judge-quality-system.md for:
+ *    - Architecture overview
+ *    - Threshold tuning guidelines
+ *    - Meta-analysis queries
+ *    - Continuous improvement workflow
+ *    - Future enhancement roadmap
+ *
  * @module ai-quality-evaluator
- * @version 1.0.0
+ * @version 1.1.0-sd-type-aware
+ * @see {@link ../docs/russian-judge-quality-system.md} Complete documentation
+ * @see {@link ../config/russian-judge-thresholds.json} Threshold configuration
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -48,14 +83,15 @@ export class AIQualityEvaluator {
    *
    * @param {string} content - Formatted content to evaluate
    * @param {string} contentId - ID of content being assessed
+   * @param {Object} sd - Strategic Directive object (for sd_type awareness)
    * @returns {Promise<Object>} Assessment result
    */
-  async evaluate(content, contentId) {
+  async evaluate(content, contentId, sd = null) {
     const startTime = Date.now();
 
     try {
-      // Build evaluation prompt
-      const messages = this.buildPrompt(content);
+      // Build evaluation prompt with sd_type context
+      const messages = this.buildPrompt(content, sd);
 
       // Call OpenAI API
       const response = await this.callOpenAI(messages);
@@ -75,6 +111,10 @@ export class AIQualityEvaluator {
       // Generate feedback
       const feedback = this.generateFeedback(scores);
 
+      // Get dynamic pass threshold based on sd_type
+      const threshold = this.getPassThreshold(this.rubricConfig.contentType, sd);
+      const passed = weightedScore >= threshold;
+
       // Track metrics
       const duration = Date.now() - startTime;
       const tokensUsed = response.usage;
@@ -88,14 +128,18 @@ export class AIQualityEvaluator {
         feedback,
         duration,
         tokensUsed,
-        cost
+        cost,
+        sd,
+        threshold
       );
 
       return {
         scores,
         weightedScore,
         feedback,
-        passed: weightedScore >= 70,
+        passed,
+        threshold,
+        sd_type: sd?.sd_type || 'unknown',
         duration,
         cost
       };
@@ -106,10 +150,10 @@ export class AIQualityEvaluator {
   }
 
   /**
-   * Build OpenAI API prompt with rubric criteria
+   * Build OpenAI API prompt with rubric criteria and sd_type context
    */
-  buildPrompt(content) {
-    const systemPrompt = this.getSystemPrompt();
+  buildPrompt(content, sd = null) {
+    const systemPrompt = this.getSystemPrompt(sd);
     const userPrompt = this.getUserPrompt(content);
 
     return [
@@ -120,8 +164,18 @@ export class AIQualityEvaluator {
 
   /**
    * Get system prompt (defines evaluation rules + LEO Protocol context)
+   * Now includes sd_type-specific guidance for intelligent evaluation
    */
-  getSystemPrompt() {
+  getSystemPrompt(sd = null) {
+    // Add SD type context if available
+    let sdTypeContext = '';
+    if (sd?.sd_type) {
+      sdTypeContext = `\n\n**SD Type**: ${sd.sd_type}
+
+**Evaluation Adjustments for ${sd.sd_type.toUpperCase()} SDs:**
+${this.getTypeSpecificGuidance(sd.sd_type)}`;
+    }
+
     return `You are a quality evaluator for LEO Protocol deliverables.
 
 **LEO Protocol Context:**
@@ -141,6 +195,7 @@ LEO Protocol is a database-first software development lifecycle with 3 phases:
 - Generic benefits: "improve UX", "better system", "enhance functionality"
 - Boilerplate acceptance criteria: "all tests passing", "code review completed"
 - Missing architecture details: No data flow, no integration points
+${sdTypeContext}
 
 Your task is to score content across multiple criteria using a 0-10 scale:
 
@@ -156,6 +211,7 @@ Your task is to score content across multiple criteria using a 0-10 scale:
 3. Focus on **actionable feedback** - what needs improvement?
 4. Avoid **grade inflation** - if something is mediocre, score it 4-6
 5. **Penalize placeholders heavily** - "To be defined" should score 0-3
+6. **Adjust strictness based on SD type** - apply the guidance above appropriately
 
 Return ONLY valid JSON in this exact format:
 {
@@ -166,6 +222,77 @@ Return ONLY valid JSON in this exact format:
 }
 
 NO additional text, explanations, or markdown - ONLY the JSON object.`;
+  }
+
+  /**
+   * Get type-specific evaluation guidance for different SD types
+   * Helps the AI understand when to be lenient vs strict
+   */
+  getTypeSpecificGuidance(sdType) {
+    const guidance = {
+      documentation: `- Relax technical architecture requirements (focus on clarity, not code design)
+- Don't penalize for missing code-related details (UI components, API endpoints)
+- Prioritize documentation coverage, organization, and completeness
+- Accept simplified acceptance criteria for documentation tasks
+- "As a developer, I need organized docs" is a valid user story`,
+
+      infrastructure: `- De-emphasize user benefits (internal tooling, not customer-facing)
+- "User" may be "developer" or "system" (this is acceptable)
+- Focus on technical robustness, reliability, and operational excellence
+- Prioritize system architecture over user stories
+- Benefits can be technical (reduced deploy time, better monitoring, etc.)`,
+
+      feature: `- Full evaluation across all criteria (customer-facing work)
+- Balance user value with technical quality
+- Require clear end-user benefit (not generic "improve system")
+- Strict on UI/UX requirements and acceptance criteria
+- Apply standard LEO Protocol quality standards`,
+
+      database: `- Prioritize schema design quality and data integrity
+- Emphasize migration safety, rollback plans, and RLS policies
+- Focus on risk analysis (data loss scenarios, downtime, corruption)
+- Benefits can be technical (performance, data consistency, scalability)
+- Strict on database-specific risks and mitigation strategies`,
+
+      security: `- Extra weight on risk analysis and threat modeling
+- Require specific security threat identification (not generic "security")
+- Strict on authentication/authorization logic and OWASP compliance
+- Emphasize security best practices and vulnerability prevention
+- No assumptions about "secure by default" - require explicit security measures`
+    };
+
+    return guidance[sdType] || guidance.feature;
+  }
+
+  /**
+   * Get dynamic pass threshold based on content type and SD type
+   * Start lenient (Phase 1), tighten based on empirical data (Phase 2+)
+   *
+   * Philosophy: Start lenient to avoid blocking work, then increase
+   * thresholds where quality issues are detected in production.
+   */
+  getPassThreshold(contentType, sd = null) {
+    if (!sd?.sd_type) return 60; // Default (lenient starting point)
+
+    // PHASE 1: Start lenient, tighten based on data
+    const thresholds = {
+      // Documentation-only SDs: Very lenient (focus on clarity)
+      documentation: 50,
+
+      // Infrastructure SDs: Lenient (internal tooling)
+      infrastructure: 55,
+
+      // Feature SDs: Moderate baseline
+      feature: 60,
+
+      // Database SDs: Slightly stricter (data integrity)
+      database: 65,
+
+      // Security SDs: Stricter (but not blocking)
+      security: 65
+    };
+
+    return thresholds[sd.sd_type] || 60; // Default to lenient
   }
 
   /**
@@ -276,9 +403,9 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
   }
 
   /**
-   * Store assessment in database
+   * Store assessment in database with sd_type and threshold tracking
    */
-  async storeAssessment(contentId, scores, weightedScore, feedback, duration, tokensUsed, cost) {
+  async storeAssessment(contentId, scores, weightedScore, feedback, duration, tokensUsed, cost, sd = null, threshold = 70) {
     try {
       const { error } = await this.supabase
         .from('ai_quality_assessments')
@@ -293,7 +420,9 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
           assessment_duration_ms: duration,
           tokens_used: tokensUsed,
           cost_usd: cost,
-          rubric_version: 'v1.0.0'
+          rubric_version: 'v1.1.0-sd-type-aware',  // Updated version
+          sd_type: sd?.sd_type || null,
+          pass_threshold: threshold
         });
 
       if (error) {

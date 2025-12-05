@@ -4,22 +4,102 @@
  * Uses AI-powered Russian Judge multi-criterion weighted scoring (0-10 per criterion)
  * to evaluate User Story quality during PLAN phase.
  *
- * Criteria:
- * 1. Acceptance Criteria Clarity & Testability (50%) - Specific, testable, not boilerplate
- * 2. Story Independence & Implementability (30%) - Can be implemented standalone
- * 3. Benefit Articulation (15%) - Clear user benefit, not "improve system"
- * 4. Given-When-Then Format (5%) - Proper GWT usage
+ * ╔══════════════════════════════════════════════════════════════════════╗
+ * ║          SD TYPE-AWARE EVALUATION (v1.1.0)                           ║
+ * ╚══════════════════════════════════════════════════════════════════════╝
+ *
+ * Evaluation strictness now adjusts based on SD type:
+ *
+ * DOCUMENTATION SDs: LENIENT
+ * - Accept "As a developer, I need organized docs" as valid
+ * - Don't penalize for lack of complex acceptance criteria
+ * - Focus on completeness (all files migrated) over sophistication
+ *
+ * INFRASTRUCTURE SDs: MODERATE
+ * - Acceptance criteria focus on operational metrics
+ * - "User" may be "developer" or "system" (acceptable)
+ * - Benefits can be technical (reduced deploy time, better monitoring)
+ *
+ * FEATURE SDs: STRICT (default)
+ * - Require clear end-user benefit (not "improve system")
+ * - Strict on testability and INVEST principles
+ * - No boilerplate acceptance criteria
+ *
+ * DATABASE SDs: MODERATE
+ * - Focus on data integrity and migration safety
+ * - Acceptance criteria: rollback plan, data validation
+ * - Benefits can be technical (performance, consistency)
+ *
+ * SECURITY SDs: STRICT
+ * - Require threat modeling in acceptance criteria
+ * - No assumptions about "secure by default"
+ * - Benefits must address specific security risks
+ *
+ * Criteria (weights unchanged, guidance adjusted):
+ * 1. Acceptance Criteria Clarity & Testability (50%)
+ * 2. Story Independence & Implementability (30%)
+ * 3. Benefit Articulation (15%)
+ * 4. Given-When-Then Format (5%)
  *
  * @module rubrics/user-story-quality-rubric
- * @version 1.0.0
+ * @version 1.1.0-sd-type-aware
  */
 
 import { AIQualityEvaluator } from '../ai-quality-evaluator.js';
 
 export class UserStoryQualityRubric extends AIQualityEvaluator {
-  constructor() {
+  /**
+   * Get type-specific evaluation guidance for different SD types
+   * Helps the AI understand when to be lenient vs strict on user stories
+   *
+   * @param {string} sdType - Strategic Directive type
+   * @returns {string} Guidance text for AI system prompt
+   */
+  static getTypeSpecificGuidance(sdType) {
+    const guidance = {
+      documentation: `**LENIENT MODE for Documentation SDs:**
+- Accept "As a developer, I need organized docs" as a valid user story
+- Don't penalize for lack of complex acceptance criteria
+- Focus on completeness (e.g., "all 34 files migrated") over sophistication
+- Simple Given-When-Then is acceptable
+- Benefits can be straightforward: "easier to find information", "reduced onboarding time"`,
+
+      infrastructure: `**MODERATE MODE for Infrastructure SDs:**
+- "User" may be "developer", "system", or "CI/CD pipeline" (all acceptable)
+- Acceptance criteria should focus on operational metrics (deploy time, build success rate)
+- Benefits can be technical: "reduced deploy time from 10min to 2min"
+- Given-When-Then may reference system events rather than user actions
+- Don't penalize for lack of end-user benefit (internal tooling is valid)`,
+
+      feature: `**STRICT MODE for Feature SDs:**
+- Require clear end-user benefit (not generic "improve system" or "enhance UX")
+- Strict on testability: all acceptance criteria must be independently testable
+- Apply full INVEST principles (Independent, Negotiable, Valuable, Estimable, Small, Testable)
+- No boilerplate like "works correctly", "good performance", "user-friendly"
+- Given-When-Then should cover happy path + edge cases`,
+
+      database: `**MODERATE MODE for Database SDs:**
+- Focus on data integrity and migration safety in acceptance criteria
+- Require rollback plan and data validation steps
+- Benefits can be technical: "improved query performance", "data consistency"
+- "User" may be "system" or "database administrator"
+- Given-When-Then should cover migration scenarios, not just user interactions`,
+
+      security: `**STRICT MODE for Security SDs:**
+- Require threat modeling in acceptance criteria (specific attacks prevented)
+- No assumptions about "secure by default" - require explicit security measures
+- Benefits must address specific security risks (e.g., "prevent SQL injection via parameterized queries")
+- Given-When-Then should cover attack scenarios and security failures
+- Higher bar for acceptance criteria (must demonstrate security thinking)`
+    };
+
+    return guidance[sdType] || guidance.feature;
+  }
+
+  constructor(sd = null) {
     const rubricConfig = {
       contentType: 'user_story',
+      sd_type: sd?.sd_type || null, // Track sd_type for later reference
       criteria: [
         {
           name: 'acceptance_criteria_clarity_testability',
@@ -171,9 +251,10 @@ SD Link: ${userStory.sd_id || 'Not linked'}`;
     }
 
     // Construct from components if available
-    const asA = userStory.as_a || userStory.persona || '';
-    const iWant = userStory.i_want || userStory.action || '';
-    const soThat = userStory.so_that || userStory.benefit || '';
+    // Support multiple field naming conventions: as_a/persona/user_role, i_want/action/user_want, so_that/benefit/user_benefit
+    const asA = userStory.as_a || userStory.persona || userStory.user_role || '';
+    const iWant = userStory.i_want || userStory.action || userStory.user_want || '';
+    const soThat = userStory.so_that || userStory.benefit || userStory.user_benefit || '';
 
     if (asA && iWant && soThat) {
       return `As a ${asA}\nI want ${iWant}\nSo that ${soThat}`;
@@ -237,14 +318,31 @@ SD Link: ${userStory.sd_id || 'Not linked'}`;
   }
 
   /**
-   * Validate User Story quality using Russian Judge AI scoring (with PRD context)
+   * Validate User Story quality using Russian Judge AI scoring (with PRD + SD context)
    *
    * @param {Object} userStory - User Story from database
    * @param {Object} prd - Product Requirements Document (optional - will fetch if not provided)
+   * @param {Object} sd - Strategic Directive (optional - will fetch if not provided)
    * @returns {Promise<Object>} Validation result compatible with LEO Protocol
    */
-  async validateUserStoryQuality(userStory, prd = null) {
+  async validateUserStoryQuality(userStory, prd = null, sd = null) {
     try {
+      // Fetch SD context if not provided but user story has SD link
+      if (!sd && userStory.sd_id) {
+        try {
+          const { data: sdData } = await this.supabase
+            .from('strategic_directives_v2')
+            .select('id, sd_id, title, sd_type, scope')
+            .eq('sd_id', userStory.sd_id)
+            .single();
+
+          sd = sdData;
+        } catch (sdError) {
+          console.warn(`Could not fetch SD context for User Story ${userStory.id}:`, sdError.message);
+          // Continue without SD context
+        }
+      }
+
       // Fetch PRD context if not provided but user story has SD link
       if (!prd && userStory.sd_id) {
         try {
@@ -267,8 +365,9 @@ SD Link: ${userStory.sd_id || 'Not linked'}`;
       // Get User Story ID
       const storyId = userStory.id || userStory.story_id;
 
-      // Run AI evaluation
-      const assessment = await this.evaluate(formattedContent, storyId);
+      // Run AI evaluation with sd_type awareness
+      // Pass sd object for dynamic threshold and type-specific guidance
+      const assessment = await this.evaluate(formattedContent, storyId, sd);
 
       // Convert to LEO Protocol format
       return {
@@ -279,9 +378,12 @@ SD Link: ${userStory.sd_id || 'Not linked'}`;
         details: {
           criterion_scores: assessment.scores,
           weighted_score: assessment.weightedScore,
-          threshold: 70,
+          threshold: assessment.threshold, // Dynamic threshold based on sd_type
+          sd_type: assessment.sd_type,
           cost_usd: assessment.cost,
-          duration_ms: assessment.duration
+          duration_ms: assessment.duration,
+          sd_context_included: !!sd,
+          prd_context_included: !!prd
         }
       };
     } catch (error) {

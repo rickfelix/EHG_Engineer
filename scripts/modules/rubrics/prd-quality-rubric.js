@@ -4,26 +4,107 @@
  * Uses AI-powered Russian Judge multi-criterion weighted scoring (0-10 per criterion)
  * to evaluate PRD quality during PLAN phase.
  *
- * Criteria:
- * 1. Requirements Depth & Specificity (40%) - Avoid "To be defined" placeholders
- * 2. Architecture Explanation Quality (30%) - Components, data flow, integration points
- * 3. Test Scenario Sophistication (20%) - Happy path + edge cases + error conditions
- * 4. Risk Analysis Completeness (10%) - Technical risks + mitigation + rollback plan
+ * ╔══════════════════════════════════════════════════════════════════════╗
+ * ║               SD TYPE-AWARE EVALUATION (v1.1.0)                      ║
+ * ╚══════════════════════════════════════════════════════════════════════╝
+ *
+ * Criteria weights now adjust based on SD type:
+ *
+ * DOCUMENTATION SDs (documentation-only work):
+ * 1. Requirements (60%) - Focus on completeness, not technical depth
+ * 2. Architecture (5%) - Minimal relevance for docs-only
+ * 3. Test Scenarios (25%) - Validation still important
+ * 4. Risk Analysis (10%) - Standard
+ *
+ * INFRASTRUCTURE SDs (CI/CD, tooling):
+ * 1. Requirements (35%) - Less emphasis on detailed specs
+ * 2. Architecture (45%) - MORE weight on technical design
+ * 3. Test Scenarios (10%) - Less emphasis on user scenarios
+ * 4. Risk Analysis (10%) - Standard
+ *
+ * FEATURE SDs (customer-facing) - DEFAULT:
+ * 1. Requirements (40%) - Balanced
+ * 2. Architecture (30%) - Balanced
+ * 3. Test Scenarios (20%) - Balanced
+ * 4. Risk Analysis (10%) - Standard
+ *
+ * DATABASE SDs (schema migrations):
+ * 1. Requirements (30%) - Less emphasis
+ * 2. Architecture (35%) - Focus on schema design
+ * 3. Test Scenarios (15%) - Migration testing
+ * 4. Risk Analysis (20%) - HIGHER weight (data loss risks)
+ *
+ * SECURITY SDs (auth, RLS):
+ * 1. Requirements (30%) - Less emphasis
+ * 2. Architecture (30%) - Security architecture
+ * 3. Test Scenarios (15%) - Security testing
+ * 4. Risk Analysis (25%) - HIGHEST weight (threat modeling)
  *
  * @module rubrics/prd-quality-rubric
- * @version 1.0.0
+ * @version 1.1.0-sd-type-aware
  */
 
 import { AIQualityEvaluator } from '../ai-quality-evaluator.js';
 
 export class PRDQualityRubric extends AIQualityEvaluator {
-  constructor() {
+  /**
+   * Get dynamic criterion weights based on SD type
+   * Adjusts evaluation priorities to match the nature of the work
+   *
+   * @param {Object} sd - Strategic Directive with sd_type
+   * @returns {Object} Criterion weights (must sum to 1.0)
+   */
+  static getWeights(sd = null) {
+    const defaultWeights = {
+      requirements: 0.40,
+      architecture: 0.30,
+      test_scenarios: 0.20,
+      risk_analysis: 0.10
+    };
+
+    if (!sd?.sd_type) return defaultWeights;
+
+    // Type-specific weight adjustments
+    const typeWeights = {
+      documentation: {
+        requirements: 0.60,      // Focus on completeness
+        architecture: 0.05,      // Minimal relevance for docs-only
+        test_scenarios: 0.25,    // Validation still important
+        risk_analysis: 0.10      // Standard
+      },
+      infrastructure: {
+        requirements: 0.35,      // Less emphasis on detailed specs
+        architecture: 0.45,      // MORE weight on technical design
+        test_scenarios: 0.10,    // Less emphasis on user scenarios
+        risk_analysis: 0.10      // Standard
+      },
+      database: {
+        requirements: 0.30,      // Less emphasis
+        architecture: 0.35,      // Focus on schema design
+        test_scenarios: 0.15,    // Migration testing
+        risk_analysis: 0.20      // HIGHER weight (data loss risks)
+      },
+      security: {
+        requirements: 0.30,      // Less emphasis
+        architecture: 0.30,      // Security architecture
+        test_scenarios: 0.15,    // Security testing
+        risk_analysis: 0.25      // HIGHEST weight (threat modeling)
+      }
+    };
+
+    return typeWeights[sd.sd_type] || defaultWeights;
+  }
+
+  constructor(sd = null) {
+    // Get dynamic weights based on SD type
+    const weights = PRDQualityRubric.getWeights(sd);
+
     const rubricConfig = {
       contentType: 'prd',
       criteria: [
         {
           name: 'requirements_depth_specificity',
-          weight: 0.40,
+          weight: weights.requirements,
           prompt: `Evaluate requirements depth and specificity:
 - 0-3: Mostly placeholders ("To be defined", "TBD", generic statements)
 - 4-6: Some specific requirements but many vague or incomplete
@@ -34,7 +115,7 @@ Penalize heavily for placeholder text like "To be defined" or "Will be determine
         },
         {
           name: 'architecture_explanation_quality',
-          weight: 0.30,
+          weight: weights.architecture,
           prompt: `Evaluate architecture explanation quality:
 - 0-3: No architecture details or vague high-level statements
 - 4-6: Basic architecture mentioned but missing key details (data flow, integration points)
@@ -45,7 +126,7 @@ Look for technical depth that enables implementation, not just buzzwords.`
         },
         {
           name: 'test_scenario_sophistication',
-          weight: 0.20,
+          weight: weights.test_scenarios,
           prompt: `Evaluate test scenario sophistication:
 - 0-3: No test scenarios or only trivial happy path
 - 4-6: Happy path covered but missing edge cases and error conditions
@@ -56,7 +137,7 @@ Score 9-10 only if test scenarios demonstrate deep understanding of potential fa
         },
         {
           name: 'risk_analysis_completeness',
-          weight: 0.10,
+          weight: weights.risk_analysis,
           prompt: `Evaluate risk analysis completeness:
 - 0-3: No technical risks identified or listed without mitigation
 - 4-6: Basic risks with generic mitigation ("test thoroughly")
@@ -113,8 +194,8 @@ ${this.formatFunctionalRequirements(prd.functional_requirements)}
 ## UI/UX Requirements
 ${this.formatUIUXRequirements(prd.ui_ux_requirements)}
 
-## Technical Architecture
-${this.formatTechnicalArchitecture(prd.technical_architecture)}
+## System Architecture
+${this.formatTechnicalArchitecture(prd.system_architecture)}
 
 ## Test Scenarios
 ${this.formatTestScenarios(prd.test_scenarios)}
@@ -397,8 +478,9 @@ SD UUID: ${prd.sd_uuid || 'Not linked'}`;
       // Get PRD ID
       const prdId = prd.id;
 
-      // Run AI evaluation
-      const assessment = await this.evaluate(formattedContent, prdId);
+      // Run AI evaluation with sd_type awareness
+      // Pass sd object for dynamic threshold and type-specific guidance
+      const assessment = await this.evaluate(formattedContent, prdId, sd);
 
       // Convert to LEO Protocol format
       return {
@@ -409,7 +491,8 @@ SD UUID: ${prd.sd_uuid || 'Not linked'}`;
         details: {
           criterion_scores: assessment.scores,
           weighted_score: assessment.weightedScore,
-          threshold: 70,
+          threshold: assessment.threshold, // Dynamic threshold based on sd_type
+          sd_type: assessment.sd_type,
           cost_usd: assessment.cost,
           duration_ms: assessment.duration,
           sd_context_included: !!sd

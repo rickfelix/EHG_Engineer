@@ -1,0 +1,132 @@
+{
+  "version": "1.1.0-sd-type-aware",
+  "phase": "lenient_baseline",
+  "last_updated": "2025-12-05",
+  "updated_by": "Claude Code (LEO Protocol Implementation)",
+  "philosophy": "Start lenient to avoid blocking work, tighten based on empirical evidence of quality issues slipping through",
+
+  "thresholds": {
+    "documentation": {
+      "value": 50,
+      "rationale": "Very lenient - documentation SDs focus on clarity and completeness, not technical architecture",
+      "history": [
+        {
+          "date": "2025-12-05",
+          "from": null,
+          "to": 50,
+          "reason": "Initial baseline - start lenient"
+        }
+      ]
+    },
+    "infrastructure": {
+      "value": 55,
+      "rationale": "Lenient - internal tooling, not customer-facing. Focus on technical robustness.",
+      "history": [
+        {
+          "date": "2025-12-05",
+          "from": null,
+          "to": 55,
+          "reason": "Initial baseline - start lenient"
+        }
+      ]
+    },
+    "feature": {
+      "value": 60,
+      "rationale": "Moderate - customer-facing work requires balance of user value and technical quality",
+      "history": [
+        {
+          "date": "2025-12-05",
+          "from": null,
+          "to": 60,
+          "reason": "Initial baseline - moderate strictness"
+        }
+      ]
+    },
+    "database": {
+      "value": 65,
+      "rationale": "Slightly stricter - data integrity critical, but not blocking at this phase",
+      "history": [
+        {
+          "date": "2025-12-05",
+          "from": null,
+          "to": 65,
+          "reason": "Initial baseline - slightly stricter for data safety"
+        }
+      ]
+    },
+    "security": {
+      "value": 65,
+      "rationale": "Stricter - security critical, but avoid false positives that block legitimate work",
+      "history": [
+        {
+          "date": "2025-12-05",
+          "from": null,
+          "to": 65,
+          "reason": "Initial baseline - stricter but not blocking"
+        }
+      ]
+    },
+    "unknown": {
+      "value": 60,
+      "rationale": "Default when sd_type is not set. Moderate baseline.",
+      "history": [
+        {
+          "date": "2025-12-05",
+          "from": null,
+          "to": 60,
+          "reason": "Initial baseline - default to moderate"
+        }
+      ]
+    }
+  },
+
+  "tuning_criteria": {
+    "increase_threshold": {
+      "condition": ">3 quality issues from SDs that passed Russian Judge in last 4 weeks",
+      "adjustment": "+5 to +10 percentage points",
+      "requires_approval": "LEAD approval required for increases >10%",
+      "example": "If database SDs have 4 migration failures in production despite passing at 65%, increase to 70-75%"
+    },
+    "keep_threshold": {
+      "condition": "<1 quality issue AND pass rate >70% in last 4 weeks",
+      "adjustment": "No change",
+      "reasoning": "Threshold is working well - keeps quality high without blocking work"
+    },
+    "decrease_threshold": {
+      "condition": "Pass rate <50% AND no quality issues in last 4 weeks",
+      "adjustment": "-5 percentage points",
+      "requires_approval": "No approval needed for decreases",
+      "reasoning": "Threshold too strict - blocking legitimate work without quality benefit"
+    }
+  },
+
+  "monitoring": {
+    "frequency": "Weekly review",
+    "metrics_to_track": [
+      "Pass rate by sd_type",
+      "Quality issues that slip through (GitHub issues, UAT failures)",
+      "False positives (low scores for good-quality SDs)",
+      "Average score vs threshold distance"
+    ],
+    "review_query": "SELECT * FROM v_ai_quality_tuning_recommendations WHERE assessments_last_4_weeks >= 5 ORDER BY sd_type;",
+    "dashboard_url": "https://ehg-engineer.vercel.app/admin/russian-judge-metrics (TODO: implement)"
+  },
+
+  "notes": [
+    "These thresholds represent PHASE 1: Lenient Baseline",
+    "After 2-4 weeks of monitoring, adjust based on empirical data",
+    "Target pass rates: 60-85% (not too lenient, not too strict)",
+    "Quality > Quantity: Better to let questionable work through and learn than block legitimate work",
+    "Russian Judge is ADVISORY (logs but doesn't block) - thresholds inform but don't enforce",
+    "See database/migrations/20251205_russian_judge_sd_type_awareness.sql for schema",
+    "See plan: /home/rickf/.claude/plans/peaceful-wobbling-gadget.md for full implementation strategy"
+  ],
+
+  "future_enhancements": [
+    "Per-content-type thresholds (PRD vs User Story within same sd_type)",
+    "Time-decay weighting (recent assessments weighted more heavily)",
+    "Automatic threshold adjustments based on v_ai_quality_tuning_recommendations",
+    "A/B testing different thresholds on parallel SDs",
+    "Machine learning to predict optimal thresholds based on SD characteristics"
+  ]
+}

@@ -4,14 +4,25 @@
  * Uses AI-powered Russian Judge multi-criterion weighted scoring (0-10 per criterion)
  * to evaluate Retrospective quality during PLAN→LEAD handoff.
  *
- * Criteria:
- * 1. Learning Specificity (40%) - SD-specific vs boilerplate ("follow LEO protocol")
+ * ╔══════════════════════════════════════════════════════════════════════╗
+ * ║          SD TYPE-AWARE EVALUATION (v1.1.0)                           ║
+ * ╚══════════════════════════════════════════════════════════════════════╝
+ *
+ * Retrospectives now receive sd_type context for intelligent evaluation:
+ * - Documentation SDs: Focus on documentation process lessons
+ * - Infrastructure SDs: Focus on technical/operational lessons
+ * - Feature SDs: Balance user value + technical lessons
+ * - Database SDs: Focus on data safety and migration lessons
+ * - Security SDs: Focus on security process and threat modeling lessons
+ *
+ * Criteria weights (unchanged):
+ * 1. Learning Specificity (40%) - SD-specific vs boilerplate
  * 2. Action Item Actionability (30%) - SMART actions with clear ownership
- * 3. Improvement Area Depth (20%) - Root cause analysis, not surface observations
+ * 3. Improvement Area Depth (20%) - Root cause analysis depth
  * 4. Lesson Applicability (10%) - Reusable patterns for future SDs
  *
  * @module rubrics/retrospective-quality-rubric
- * @version 1.0.0
+ * @version 1.1.0-sd-type-aware
  */
 
 import { AIQualityEvaluator } from '../ai-quality-evaluator.js';
@@ -299,8 +310,9 @@ Duration: ${retrospective.duration_days || 'Unknown'} days`;
       // Get Retrospective ID
       const retroId = retrospective.id || retrospective.sd_id;
 
-      // Run AI evaluation
-      const assessment = await this.evaluate(formattedContent, retroId);
+      // Run AI evaluation with sd_type awareness
+      // Pass sd object for dynamic threshold and type-specific guidance
+      const assessment = await this.evaluate(formattedContent, retroId, sd);
 
       // Convert to LEO Protocol format
       return {
@@ -311,7 +323,8 @@ Duration: ${retrospective.duration_days || 'Unknown'} days`;
         details: {
           criterion_scores: assessment.scores,
           weighted_score: assessment.weightedScore,
-          threshold: 70,
+          threshold: assessment.threshold, // Dynamic threshold based on sd_type
+          sd_type: assessment.sd_type,
           cost_usd: assessment.cost,
           duration_ms: assessment.duration,
           sd_context_included: !!sd
