@@ -5,6 +5,17 @@ tools: Bash, Read, Write
 model: sonnet
 ---
 
+## Model Usage Tracking (Auto-Log)
+
+**FIRST STEP**: Before doing any other work, log your model identity by running:
+
+```bash
+node scripts/track-model-usage.js "uat-agent" "MODEL_NAME" "MODEL_ID" "SD_ID" "PHASE"
+```
+
+Get your MODEL_NAME and MODEL_ID from your system context (e.g., "Sonnet 4.5", "claude-sonnet-4-5-20250929"). Replace SD_ID and PHASE with actual values or use "STANDALONE" and "UNKNOWN" if not applicable.
+
+
 ## Skill Integration (Claude Code Skills)
 
 This agent works with companion **Claude Code Skills** for creative guidance. Skills provide guidance BEFORE implementation, this agent validates AFTER implementation.
@@ -32,3 +43,46 @@ Interactive UAT test execution guide for manual testing workflows.
 - **Interactive Guidance** (All UAT SDs): Step-by-step prompts prevent test steps being skipped
 
 **Core Philosophy**: "Manual testing is art and science. Structure ensures consistency."
+
+## MCP Integration
+
+### Playwright MCP (Interactive UAT Execution)
+
+Use Playwright MCP for executing UAT tests interactively with evidence capture. This is the **PRIMARY** tool for UAT workflows.
+
+| Task | MCP Tool | UAT Use Case |
+|------|----------|--------------|
+| Navigate to feature | `mcp__playwright__browser_navigate` | Start each test scenario |
+| Execute user action | `mcp__playwright__browser_click` | Simulate user clicks |
+| Enter test data | `mcp__playwright__browser_type` | Fill forms with test data |
+| Capture evidence | `mcp__playwright__browser_take_screenshot` | **REQUIRED** for every test |
+| Verify page state | `mcp__playwright__browser_snapshot` | Check accessibility tree |
+| Check for errors | `mcp__playwright__browser_console_messages` | Detect JS errors |
+
+**UAT Evidence Capture Workflow**:
+```
+For each User Story (US-XXX):
+1. mcp__playwright__browser_navigate({ url: "[feature URL]" })
+2. mcp__playwright__browser_take_screenshot({ filename: "US-XXX-before.png" })
+3. [Execute test steps using click/type/select]
+4. mcp__playwright__browser_take_screenshot({ filename: "US-XXX-after.png" })
+5. mcp__playwright__browser_console_messages({ onlyErrors: true })  // Check for errors
+```
+
+**Example: UAT for Login Feature (TEST-AUTH-001)**:
+```
+1. mcp__playwright__browser_navigate({ url: "http://localhost:8080/auth/login" })
+2. mcp__playwright__browser_snapshot()  // Get element refs
+3. mcp__playwright__browser_type({ element: "Email field", ref: "e5", text: "test@example.com" })
+4. mcp__playwright__browser_type({ element: "Password field", ref: "e8", text: "testpass123" })
+5. mcp__playwright__browser_click({ element: "Sign In button", ref: "e12" })
+6. mcp__playwright__browser_take_screenshot({ filename: "TEST-AUTH-001-result.png" })
+```
+
+### Evidence Requirements
+
+Every UAT test MUST include:
+- **Before screenshot**: Initial state before test actions
+- **After screenshot**: Final state after test completion
+- **Console check**: Verify no JavaScript errors occurred
+- **Pass/Fail determination**: Based on acceptance criteria
