@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-04 5:58:27 PM
+**Generated**: 2025-12-05 9:24:37 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -43,27 +43,6 @@ EHG_Engineer (Management)          EHG App (Implementation)
 └── Dashboard Views          ←     No changes here!
 ```
 
-## 🚀 Session Verification & Quick Start (MANDATORY)
-
-## Session Start Checklist
-
-### Required Verification
-1. **Check Priority**: `npm run prio:top3`
-2. **Git Status**: Clean working directory?
-3. **Context Load**: CLAUDE_CORE.md + phase file
-
-### Before Starting Work
-- Verify SD is in correct phase
-- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
-- Review recent handoffs if continuing
-
-### Key Commands
-| Command | Purpose |
-|---------|---------|
-| `npm run prio:top3` | Top priority SDs |
-| `git status` | Working tree status |
-| `npm run handoff:latest` | Latest handoff |
-
 ## 🔍 Session Start Verification (MANDATORY)
 
 **Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
@@ -98,6 +77,27 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 - If records don't exist, CREATE them before proceeding
 
 **Pattern Reference**: PAT-SESS-VER-001
+
+## 🚀 Session Verification & Quick Start (MANDATORY)
+
+## Session Start Checklist
+
+### Required Verification
+1. **Check Priority**: `npm run prio:top3`
+2. **Git Status**: Clean working directory?
+3. **Context Load**: CLAUDE_CORE.md + phase file
+
+### Before Starting Work
+- Verify SD is in correct phase
+- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
+- Review recent handoffs if continuing
+
+### Key Commands
+| Command | Purpose |
+|---------|---------|
+| `npm run prio:top3` | Top priority SDs |
+| `git status` | Working tree status |
+| `npm run handoff:latest` | Latest handoff |
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -227,6 +227,39 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 *Added: SD-EVA-DECISION-001 to prevent haiku model usage*
 
 
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
+
 ## Execution Philosophy
 
 ## 🧠 EXECUTION PHILOSOPHY (Read First!)
@@ -284,39 +317,6 @@ These principles override default behavior and must be internalized before start
 
 **REMEMBER**: The goal is NOT to complete SDs quickly. The goal is to complete SDs CORRECTLY. A properly implemented SD that takes 8 hours is infinitely better than a rushed implementation that takes 4 hours but requires 6 hours of fixes.
 
-
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## 🎯 Skill Integration (Claude Code Skills)
 
@@ -775,6 +775,289 @@ sd.priority === 1 ? 'CRITICAL' : 'LOW'  // Always 'LOW'!
 **Pattern Reference**: PAT-DATA-TYPE-001
 
 
+## AI-Powered Russian Judge Quality Assessment
+
+**Status**: ACTIVE - Replaced pattern-matching validation in LEO Protocol v4.3.3
+**Model**: gpt-5-mini (NOT gpt-4o-mini)
+**Temperature**: 0.3 (balance consistency + nuance)
+**Threshold**: 70% weighted score to pass
+**Storage**: ai_quality_assessments table
+
+### Overview
+
+LEO Protocol uses AI-powered multi-criterion weighted scoring ("Russian Judge" pattern) to evaluate deliverable quality across all phases. Each rubric evaluates content on a 0-10 scale per criterion, applies weights, and generates graduated feedback (required vs recommended improvements).
+
+**Why Russian Judge?**: Like Olympic judging, multiple criteria are evaluated independently, weighted by importance, and combined for a final score. This prevents one strong criterion from masking weaknesses in others.
+
+### Four Core Rubrics
+
+#### 1. Strategic Directive (SD) Quality Rubric
+**Phase**: LEAD (Strategic Approval)
+**Content Type**: sd
+**Criteria**:
+- **Description Quality (35%)**: WHAT + WHY + business value + technical approach
+  - 0-3: Missing, generic ("implement feature"), or pure boilerplate
+  - 7-8: Clear WHAT + WHY with business value articulated
+  - 9-10: Comprehensive with measurable impact
+- **Strategic Objectives Measurability (30%)**: SMART criteria compliance
+  - 0-3: No objectives or vague ("improve quality", "enhance UX")
+  - 7-8: Most objectives are specific and measurable
+  - 9-10: All objectives follow SMART criteria with clear success metrics
+- **Success Metrics Quantifiability (25%)**: Baseline + target + method + timeline
+  - 0-3: No metrics or vague ("better performance")
+  - 7-8: Metrics with baseline and target ("reduce from 2s to 1s")
+  - 9-10: Complete metrics with measurement method and timeline
+- **Risk Assessment Depth (10%)**: Mitigation + contingency + probability
+  - 0-3: No risks or listed without mitigation
+  - 7-8: Risks with specific mitigation strategies
+  - 9-10: Risks with mitigation + contingency plans + probability estimates
+
+#### 2. Product Requirements Document (PRD) Quality Rubric
+**Phase**: PLAN (Requirements & Architecture)
+**Content Type**: prd
+**Criteria**:
+- **Requirements Depth & Specificity (40%)**: Avoid "To be defined" placeholders
+  - 0-3: Mostly placeholders ("To be defined", "TBD", generic statements)
+  - 7-8: Most requirements are specific, actionable, and complete
+  - 9-10: All requirements are detailed, specific, testable with clear acceptance criteria
+- **Architecture Explanation Quality (30%)**: Components, data flow, integration points
+  - 0-3: No architecture details or vague high-level statements
+  - 7-8: Clear architecture with components, data flow, and integration points
+  - 9-10: Comprehensive architecture + trade-offs + scalability considerations
+- **Test Scenario Sophistication (20%)**: Happy path + edge cases + error conditions
+  - 0-3: No test scenarios or only trivial happy path
+  - 7-8: Happy path + common edge cases + error handling scenarios
+  - 9-10: Comprehensive test coverage including performance and security tests
+- **Risk Analysis Completeness (10%)**: Technical risks + mitigation + rollback plan
+  - 0-3: No technical risks identified or listed without mitigation
+  - 7-8: Specific technical risks with concrete mitigation strategies
+  - 9-10: Comprehensive risk analysis with rollback plan + monitoring strategy
+
+**Hierarchical Context Enhancement**: PRD rubric receives SD context (strategic objectives, success metrics, business problem) for holistic evaluation that ensures PRD aligns with strategic goals.
+
+#### 3. User Story Quality Rubric
+**Phase**: PLAN (Granular Requirements)
+**Content Type**: user_story
+**Criteria**:
+- **Acceptance Criteria Clarity (40%)**: Specific, testable, pass/fail criteria
+- **INVEST Principles Compliance (35%)**: Independent, Negotiable, Valuable, Estimable, Small, Testable
+- **Technical Feasibility Assessment (15%)**: Implementation approach clarity
+- **Context Completeness (10%)**: User context + rationale + dependencies
+
+**Hierarchical Context Enhancement**: User Story rubric receives PRD context for alignment validation.
+
+#### 4. Retrospective Quality Rubric
+**Phase**: EXEC (Post-Implementation Review)
+**Content Type**: retrospective
+**Criteria**:
+- **Issue Analysis Depth (40%)**: Root cause identification + pattern recognition
+- **Solution Specificity (30%)**: Actionable, concrete, testable solutions
+- **Lesson Articulation (20%)**: Clear, transferable learnings
+- **Metadata Completeness (10%)**: Effort, cost, timeline accuracy
+
+**Hierarchical Context Enhancement**: Retrospective rubric receives SD context to validate outcomes against strategic objectives.
+
+### Hierarchical Context Pattern
+
+**Purpose**: Provide parent context to enable holistic evaluation
+
+**Context Flow**:
+```
+Strategic Directive (SD)
+  ├─> PRD (receives SD context)
+  │    └─> User Story (receives PRD context)
+  └─> Retrospective (receives SD context)
+```
+
+**Implementation**:
+- PRD validation: Fetches SD via `prd.sd_uuid → strategic_directives_v2.uuid_id`
+- User Story validation: Fetches PRD via `user_story.prd_id → prds.id`
+- Retrospective validation: Fetches SD via `retrospective.sd_id → strategic_directives_v2.sd_id`
+
+**Why**: Prevents locally optimal but strategically misaligned deliverables. For example, a PRD might have perfect technical architecture (score 10/10) but completely miss the strategic business objective (SD context reveals misalignment).
+
+### Anti-Patterns Heavily Penalized
+
+**LEO Protocol values specificity and rejects boilerplate**:
+- **Placeholder text**: "To be defined", "TBD", "during planning" → Score 0-3
+- **Generic benefits**: "improve UX", "better system", "enhance functionality" → Score 0-3
+- **Boilerplate acceptance criteria**: "all tests passing", "code review completed" → Score 4-6
+- **Missing architecture details**: No data flow, no integration points → Score 0-3
+
+### Scoring Scale Philosophy
+
+**0-3: Completely inadequate** (missing, boilerplate, or unusable)
+- Use for placeholder text, missing sections, pure boilerplate
+- Example: "To be defined" in requirements
+
+**4-6: Present but needs significant improvement**
+- Use for generic statements that lack specificity
+- Example: "improve system performance" (no baseline, no target)
+
+**7-8: Good quality with minor issues**
+- Use for specific, actionable content with clear intent
+- Example: "Reduce page load from 2s to 1s" (has baseline + target)
+
+**9-10: Excellent, exemplary quality** (reserve for truly exceptional work)
+- Use ONLY for comprehensive, deeply thoughtful content
+- Example: "Reduce page load from 2s to 1s (measured via Lighthouse, baseline from Google Analytics, target validated with UX research showing 1s = 15% bounce rate reduction, 3-month timeline)"
+
+**Grade Inflation Prevention**: Rubrics are intentionally strict. Scores of 9-10 should be rare. Most good work scores 7-8. Mediocre work scores 4-6.
+
+### Assessment Storage and History
+
+**Table**: ai_quality_assessments
+
+**Schema**:
+```sql
+CREATE TABLE ai_quality_assessments (
+  id UUID PRIMARY KEY,
+  content_type TEXT NOT NULL,           -- 'sd', 'prd', 'user_story', 'retrospective'
+  content_id TEXT NOT NULL,             -- ID of content being assessed
+  model TEXT NOT NULL,                  -- 'gpt-5-mini'
+  temperature NUMERIC,                  -- 0.3
+  scores JSONB NOT NULL,                -- Criterion-level scores + reasoning
+  weighted_score INTEGER NOT NULL,      -- 0-100 final score
+  feedback JSONB,                       -- {required: [], recommended: []}
+  assessed_at TIMESTAMP,                -- When assessment ran
+  assessment_duration_ms INTEGER,       -- Performance tracking
+  tokens_used JSONB,                    -- {prompt_tokens, completion_tokens, total_tokens}
+  cost_usd NUMERIC,                     -- AI API cost (gpt-5-mini: $0.15/1M input, $0.60/1M output)
+  rubric_version TEXT                   -- 'v1.0.0'
+);
+```
+
+**Why Store Assessments?**:
+1. **Audit trail**: Track quality trends over time
+2. **Cost transparency**: Monitor AI API spend
+3. **Rubric evolution**: Compare quality before/after rubric changes
+4. **Performance optimization**: Identify slow evaluations
+
+### Integration with LEO Protocol Handoffs
+
+**PLAN → EXEC Handoff (validate-plan-handoff.js)**:
+- PRD quality validation: `PRDQualityRubric.validatePRDQuality(prd, sd)`
+- User Story quality validation: `UserStoryQualityRubric.validateUserStoryQuality(userStory, prd)`
+- Threshold: 70% weighted score to pass
+- On failure: Returns FAIL with `issues` and `warnings` for PLAN agent to address
+
+**EXEC → Retrospective**:
+- Retrospective quality validation: `RetrospectiveQualityRubric.validateRetrospectiveQuality(retro, sd)`
+- Ensures lessons learned are actionable and measurable
+
+**LEAD → PLAN Handoff**:
+- SD quality validation: `SDQualityRubric.validateSDQuality(sd)`
+- Validates strategic clarity before PRD creation
+
+### When to Use AI Quality Assessment
+
+**Use AI Assessment When**:
+- Evaluating subjective quality ("Is this requirement specific enough?")
+- Validating completeness ("Are all required fields present AND meaningful?")
+- Checking for anti-patterns (placeholder text, boilerplate)
+- Ensuring strategic alignment (PRD → SD, User Story → PRD)
+
+**Use Traditional Validation When**:
+- Checking objective constraints (field presence, data types)
+- Verifying database schema (foreign key integrity)
+- Testing code functionality (unit tests, E2E tests)
+- Enforcing hard rules (no merge without passing tests)
+
+**Best Practice**: Combine both. Traditional validation catches structural issues ("description field is missing"). AI assessment catches quality issues ("description is present but generic boilerplate").
+
+### Cost and Performance
+
+**Typical Costs** (gpt-5-mini pricing):
+- SD assessment: ~$0.001-0.003 per evaluation
+- PRD assessment: ~$0.003-0.008 per evaluation (larger content)
+- User Story assessment: ~$0.001-0.002 per evaluation
+- Retrospective assessment: ~$0.002-0.005 per evaluation
+
+**Performance**:
+- Average assessment duration: 2-5 seconds
+- Max tokens: 1000 (prevents runaway costs)
+- Timeout: 30 seconds (with 3 retry attempts)
+- Retry backoff: Exponential (1s, 2s, 4s)
+
+**User Prioritization**: Quality over cost. The user explicitly prioritizes deliverable quality and is willing to accept AI costs for better validation.
+
+### Migration from Pattern-Matching Validation
+
+**Before (Pattern-Matching)**:
+```javascript
+// Naive keyword counting
+const hasTBD = prd.requirements.some(r => r.includes('TBD'));
+if (hasTBD) return { passed: false };
+```
+
+**After (AI Russian Judge)**:
+```javascript
+// Holistic multi-criterion evaluation
+const assessment = await prdRubric.validatePRDQuality(prd, sd);
+// Returns: { passed: true/false, score: 0-100, issues: [], warnings: [], details: {...} }
+```
+
+**Why AI is Better**:
+- Evaluates **meaning**, not just keywords ("To be determined" detected same as "TBD")
+- Multi-dimensional scoring (can't hide one weakness behind one strength)
+- Provides actionable feedback ("Requirements need baseline metrics, not just targets")
+- Hierarchical context (PRD evaluated in light of SD strategic objectives)
+
+### Files Reference
+
+**Rubric Implementations**:
+- `/scripts/modules/rubrics/sd-quality-rubric.js`
+- `/scripts/modules/rubrics/prd-quality-rubric.js`
+- `/scripts/modules/rubrics/user-story-quality-rubric.js`
+- `/scripts/modules/rubrics/retrospective-quality-rubric.js`
+
+**Base Class**:
+- `/scripts/modules/ai-quality-evaluator.js`
+
+**Integration Points**:
+- `/scripts/validate-plan-handoff.js` (PRD + User Story validation)
+- `/scripts/validate-lead-handoff.js` (SD validation)
+- Retrospective validation (TBD - future integration)
+
+**Database Schema**:
+- `/database/schema/` (ai_quality_assessments table)
+
+### Example: PRD Validation Flow
+
+1. **PLAN agent creates PRD** in database
+2. **User calls**: `npm run handoff` (PLAN → EXEC)
+3. **validate-plan-handoff.js runs**:
+   - Fetches PRD from database
+   - Fetches parent SD via `prd.sd_uuid`
+   - Calls `PRDQualityRubric.validatePRDQuality(prd, sd)`
+4. **AI evaluator**:
+   - Formats PRD content + SD context
+   - Builds multi-criterion prompt
+   - Calls OpenAI API (gpt-5-mini)
+   - Parses scores, calculates weighted score
+   - Generates graduated feedback
+   - Stores assessment in `ai_quality_assessments` table
+5. **Handoff script**:
+   - If score ≥ 70: PASS → Proceed to EXEC
+   - If score < 70: FAIL → Return `issues` to PLAN agent for revision
+6. **User receives**: Structured feedback with criterion-level scores + reasoning
+
+### Quality Philosophy Alignment
+
+**LEO Protocol Core Values**:
+1. **Database-first**: All requirements in database (not markdown)
+2. **Anti-boilerplate**: Reject generic, placeholder text
+3. **Specific & testable**: Every requirement has clear pass/fail criteria
+4. **Measured progress**: Track quality trends over time
+
+**How Russian Judge Supports This**:
+1. **Database-first**: Assessments stored in `ai_quality_assessments` table (audit trail)
+2. **Anti-boilerplate**: Rubrics explicitly penalize "To be defined", "TBD", generic statements
+3. **Specific & testable**: Criteria prompt for baseline, target, measurement method, timeline
+4. **Measured progress**: `cost_usd`, `assessment_duration_ms`, `weighted_score` tracked per assessment
+
+**Result**: Objective quality gates that enforce LEO Protocol's philosophy without relying on human judgment.
+
 ## 🔥 Hot Issue Patterns (Auto-Updated)
 
 **CRITICAL**: These are active patterns detected from retrospectives. Review before starting work.
@@ -930,7 +1213,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ---
 
-*Generated from database: 2025-12-04*
+*Generated from database: 2025-12-05*
 *Protocol Version: 4.3.3*
 *Includes: Hot Patterns (5) + Recent Lessons (5)*
 *Load this file first in all sessions*

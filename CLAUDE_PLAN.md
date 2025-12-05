@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-12-04 5:58:27 PM
+**Generated**: 2025-12-05 9:24:37 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -188,6 +188,23 @@ node scripts/detect-stubbed-code.js <SD-ID>
 **Exit Requirement**: Zero stubbed code in production files, OR documented in "Known Issues" with follow-up SD created.
 
 
+## Enhanced QA Engineering Director v2.0 - Testing-First Edition
+
+**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
+
+**Core Capabilities:**
+1. Professional test case generation from user stories
+2. Pre-test build validation (saves 2-3 hours)
+3. Database migration verification (prevents 1-2 hours debugging)
+4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
+5. Test infrastructure discovery and reuse
+
+**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
+
+**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
+
+**Full Guide**: See `docs/reference/qa-director-guide.md`
+
 ## ✅ Scope Verification with Explore (PLAN_VERIFY)
 
 ## Scope Verification with Explore
@@ -258,23 +275,6 @@ This change [describe]. Options:
 
 Which do you prefer?"
 ```
-
-## Enhanced QA Engineering Director v2.0 - Testing-First Edition
-
-**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
-
-**Core Capabilities:**
-1. Professional test case generation from user stories
-2. Pre-test build validation (saves 2-3 hours)
-3. Database migration verification (prevents 1-2 hours debugging)
-4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
-5. Test infrastructure discovery and reuse
-
-**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
-
-**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
-
-**Full Guide**: See `docs/reference/qa-director-guide.md`
 
 ## Database Schema Documentation
 
@@ -415,33 +415,6 @@ From retrospectives:
 **From SD-UAT-020**:
 > "Created 100+ test checklist but didn't execute manually. Time spent on unused documentation."
 
-## 🔬 BMAD Method Enhancements
-
-## BMAD Enhancements
-
-### 6 Key Improvements
-1. **Unified Handoff System** - All handoffs via `handoff.js`
-2. **Database-First PRDs** - PRDs stored in database, not markdown
-3. **Validation Gates** - 4-gate validation before EXEC
-4. **Progress Tracking** - Automatic progress % calculation
-5. **Context Management** - Proactive monitoring, compression strategies
-6. **Sub-Agent Compression** - 3-tier output reduction
-
-### Using Handoff System
-```bash
-node scripts/handoff.js create "{message}"
-```
-
-### PRD Creation
-```bash
-node scripts/add-prd-to-database.js {SD-ID}
-```
-
-### Never Bypass
-- ⚠️ Always use process scripts
-- ⚠️ Never create PRDs as markdown files
-- ⚠️ Never skip validation gates
-
 ## Research Lookup Before PRD Creation
 
 ## Research Lookup Before PRD Creation (MANDATORY)
@@ -539,6 +512,33 @@ node scripts/add-prd-to-database.js SD-RESEARCH-106
 # → PRD includes research findings in technical_approach
 ```
 
+
+## 🔬 BMAD Method Enhancements
+
+## BMAD Enhancements
+
+### 6 Key Improvements
+1. **Unified Handoff System** - All handoffs via `handoff.js`
+2. **Database-First PRDs** - PRDs stored in database, not markdown
+3. **Validation Gates** - 4-gate validation before EXEC
+4. **Progress Tracking** - Automatic progress % calculation
+5. **Context Management** - Proactive monitoring, compression strategies
+6. **Sub-Agent Compression** - 3-tier output reduction
+
+### Using Handoff System
+```bash
+node scripts/handoff.js create "{message}"
+```
+
+### PRD Creation
+```bash
+node scripts/add-prd-to-database.js {SD-ID}
+```
+
+### Never Bypass
+- ⚠️ Always use process scripts
+- ⚠️ Never create PRDs as markdown files
+- ⚠️ Never skip validation gates
 
 ## CI/CD Pipeline Verification
 
@@ -922,6 +922,198 @@ sequenceDiagram
 - State transitions → State diagram
 - System architecture → Component diagram
 
+## Quality Assessment Integration in Handoffs
+
+**Context**: AI-powered Russian Judge quality assessment is integrated into PLAN → EXEC handoffs to validate PRD and User Story quality before implementation begins.
+
+### When Quality Assessment Runs
+
+**PLAN → EXEC Handoff** (`npm run handoff` from PLAN phase):
+1. **PRD Quality Validation**: Evaluates PRD against 4 weighted criteria (see AI-Powered Russian Judge section)
+2. **User Story Quality Validation**: Evaluates User Stories against INVEST principles + acceptance criteria clarity
+3. **Threshold**: Both must score ≥70% to proceed to EXEC phase
+
+**Why At Handoff Time?**:
+- Catches quality issues BEFORE implementation starts (prevents rework)
+- Forces PLAN agent to address ambiguity and placeholder text
+- Ensures EXEC agent receives implementation-ready requirements
+
+### Hierarchical Context in Handoff Validation
+
+**PRD Validation**:
+```javascript
+// Automatic parent context fetching
+const assessment = await prdRubric.validatePRDQuality(prd, sd);
+```
+
+**What Happens**:
+1. Handoff script fetches PRD from database
+2. If `prd.sd_uuid` exists, fetches parent SD from `strategic_directives_v2`
+3. Passes both PRD + SD context to AI evaluator
+4. AI evaluates PRD requirements against SD strategic objectives
+5. Returns holistic assessment ("PRD architecture is solid but doesn't address SD's cost reduction objective")
+
+**User Story Validation**:
+```javascript
+// Fetch PRD context for alignment check
+const assessment = await userStoryRubric.validateUserStoryQuality(userStory, prd);
+```
+
+**What Happens**:
+1. Handoff script fetches User Story from database
+2. Fetches parent PRD via `user_story.prd_id`
+3. Passes both User Story + PRD context to AI evaluator
+4. AI validates User Story acceptance criteria align with PRD requirements
+
+### Handoff Failure Handling
+
+**If Quality Assessment Fails (score < 70)**:
+
+**Handoff Script Returns**:
+```javascript
+{
+  status: 'FAIL',
+  phase: 'PLAN',
+  issues: [
+    'requirements_depth_specificity: Needs significant improvement (4/10) - Most requirements contain placeholder text like "To be defined" which prevents implementation',
+    'architecture_explanation_quality: Room for improvement (6/10) - Architecture mentions React components but missing data flow and API integration details'
+  ],
+  warnings: [
+    'test_scenario_sophistication: Room for improvement (6/10) - Test scenarios cover happy path but missing edge cases for error conditions'
+  ],
+  weighted_score: 62,
+  threshold: 70
+}
+```
+
+**PLAN Agent Must**:
+1. **Address all `issues`** (score < 5/10) - These are blockers
+2. **Consider `warnings`** (score 5-7/10) - Recommended improvements
+3. **Regenerate PRD/User Stories** in database
+4. **Re-run handoff validation** (`npm run handoff`)
+
+**Quality Gate Enforcement**: Handoff script will NOT create EXEC handoff entry until PRD/User Story quality passes threshold.
+
+### Integration with PRD Schema
+
+**PRD Database Schema** (`prds` table):
+- `id`: PRD identifier
+- `sd_uuid`: Foreign key to parent Strategic Directive
+- `functional_requirements`: JSONB array of requirements
+- `ui_ux_requirements`: JSONB array of UI requirements
+- `technical_architecture`: JSONB object (overview, components, data_flow, integration_points)
+- `test_scenarios`: JSONB array of test scenarios
+- `acceptance_criteria`: JSONB array of criteria
+- `risks`: JSONB array of risks + mitigation
+- `status`: PRD lifecycle status
+
+**AI Assessment Validates**:
+- **Depth**: Are requirements specific or generic?
+- **Architecture**: Are components, data flow, and integration points explained?
+- **Tests**: Do scenarios cover happy path + edge cases + error conditions?
+- **Risks**: Are technical risks identified with mitigation + rollback plans?
+
+**Quality Before Quantity**: Better to have 5 deeply detailed requirements (score 8/10) than 20 placeholder requirements (score 3/10).
+
+### Common Quality Issues and AI Feedback
+
+**Issue**: Placeholder Text in Requirements
+```
+AI Feedback: "requirements_depth_specificity: Needs significant improvement (3/10) -
+Functional requirement #4 states 'Authentication flow to be defined during implementation'.
+This prevents EXEC agent from implementing. Specify: authentication method (OAuth, JWT),
+user roles, session timeout, error handling."
+```
+
+**Issue**: Missing Architecture Details
+```
+AI Feedback: "architecture_explanation_quality: Room for improvement (5/10) -
+Architecture mentions 'React components and Node.js backend' but missing:
+- How do components communicate? (Props, Context, Redux?)
+- What is the API structure? (REST endpoints, GraphQL schema?)
+- Where is state managed? (Client-side, server-side, hybrid?)"
+```
+
+**Issue**: Trivial Test Scenarios
+```
+AI Feedback: "test_scenario_sophistication: Room for improvement (6/10) -
+Test scenarios only cover happy path ('user logs in successfully'). Missing:
+- Edge cases: user enters wrong password, network timeout, expired session
+- Error conditions: database unavailable, rate limiting, concurrent login attempts
+- Performance tests: login under load, response time validation"
+```
+
+### Best Practices for PLAN Phase
+
+**To Pass PRD Quality Gate (≥70%)**:
+1. **Replace ALL placeholders** ("To be defined", "TBD") with specific details
+2. **Add baseline + target metrics** for measurable requirements ("reduce from X to Y")
+3. **Document data flow and integration points** in technical architecture
+4. **Include edge cases and error conditions** in test scenarios
+5. **Provide specific mitigation strategies** (not "test thoroughly") for risks
+
+**To Pass User Story Quality Gate (≥70%)**:
+1. **Write specific, testable acceptance criteria** ("Given X, When Y, Then Z")
+2. **Follow INVEST principles** (Independent, Negotiable, Valuable, Estimable, Small, Testable)
+3. **Provide user context** (who is the user? what problem are they solving?)
+4. **Link to parent PRD requirements** for traceability
+
+### Quality Assessment vs Traditional Validation
+
+**Traditional Validation** (still used):
+- Field presence: "Does `functional_requirements` exist?"
+- Data types: "Is `test_scenarios` a JSONB array?"
+- Foreign keys: "Does `sd_uuid` reference a valid Strategic Directive?"
+
+**AI Quality Assessment** (new):
+- Content depth: "Are requirements specific or generic?"
+- Semantic meaning: "Does PRD align with SD strategic objectives?"
+- Anti-patterns: "Does content contain placeholder text or boilerplate?"
+
+**Both Required**: Traditional validation catches structural issues. AI assessment catches quality issues. A PRD can pass traditional validation (all fields present) but fail AI assessment (all fields contain "To be defined").
+
+### Performance and Cost in Handoffs
+
+**Typical PLAN → EXEC Handoff**:
+- PRD validation: ~3-8 seconds, $0.003-0.008
+- User Story validation (×5 stories): ~5-10 seconds, $0.005-0.010
+- **Total**: ~10-20 seconds, $0.01-0.02 per handoff
+
+**User Prioritization**: Quality over speed. Better to wait 20 seconds for thorough validation than proceed with ambiguous requirements and waste hours in EXEC rework.
+
+**Caching Strategy**: Assessments stored in `ai_quality_assessments` table. If PRD unchanged since last assessment, can reuse previous score (optimization for future implementation).
+
+### Example: Successful PLAN → EXEC Handoff
+
+1. **PLAN agent creates PRD** with specific requirements, detailed architecture, comprehensive tests
+2. **User runs**: `npm run handoff`
+3. **PRD Quality Assessment**:
+   - requirements_depth_specificity: 8/10 (all requirements specific and actionable)
+   - architecture_explanation_quality: 9/10 (components, data flow, integration points explained)
+   - test_scenario_sophistication: 7/10 (happy path + edge cases covered)
+   - risk_analysis_completeness: 8/10 (risks with mitigation + rollback plans)
+   - **Weighted Score**: 82/100 ✅ PASS
+4. **User Story Quality Assessment**: All stories score ≥70% ✅ PASS
+5. **Handoff Entry Created**: `from_phase=PLAN`, `to_phase=EXEC`, `status=pending`
+6. **EXEC Agent Proceeds**: Implementation with clear, unambiguous requirements
+
+**Result**: No rework, no ambiguity, faster implementation.
+
+### Files Reference
+
+**Handoff Validation Script**:
+- `/scripts/validate-plan-handoff.js` (PRD + User Story quality checks)
+
+**Rubric Implementations**:
+- `/scripts/modules/rubrics/prd-quality-rubric.js`
+- `/scripts/modules/rubrics/user-story-quality-rubric.js`
+
+**Database Tables**:
+- `prds`: Product Requirements Documents
+- `user_stories`: User Stories linked to PRDs
+- `ai_quality_assessments`: Assessment history and scores
+- `handoffs`: Handoff status tracking (includes quality gate results)
+
 ## Handoff Templates
 
 
@@ -1038,8 +1230,28 @@ Required: [object Object], [object Object], [object Object], [object Object], [o
   - Definition: undefined
 
 
+- **hasTestEvidence** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **hasDiffMinimality** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **hasRollbackSafety** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
+- **hasMigrationCorrectness** (undefined)
+  - Severity: undefined
+  - Definition: undefined
+
+
 ---
 
-*Generated from database: 2025-12-04*
+*Generated from database: 2025-12-05*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

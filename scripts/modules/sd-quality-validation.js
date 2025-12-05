@@ -1,21 +1,20 @@
 /**
- * SD QUALITY VALIDATION MODULE
+ * SD QUALITY VALIDATION MODULE (AI-POWERED)
  *
- * Validates Strategic Directive quality and enforces retrospective gate
- * at SD completion.
+ * Uses AI-powered Russian Judge multi-criterion weighted scoring to validate:
+ * 1. Strategic Directive quality (LEAD phase)
+ * 2. Retrospective quality (PLAN→LEAD handoff)
  *
- * Detects:
- * 1. Empty/missing success_metrics
- * 2. Empty/missing risks
- * 3. Vague descriptions (too short, boilerplate)
- * 4. Empty strategic_objectives
- * 5. Missing retrospective at completion (gate enforcement)
- * 6. Boilerplate retrospective content
+ * Replaced keyword/pattern-based validation with semantic AI evaluation using gpt-5-mini.
+ * All assessments stored in ai_quality_assessments table for meta-analysis.
  *
  * @module sd-quality-validation
- * @version 1.0.0
- * @see SD-CAPABILITY-LIFECYCLE-001 - LEO Protocol quality improvements
+ * @version 2.0.0 (AI-powered Russian Judge)
+ * @see /database/migrations/20251205_ai_quality_assessments.sql
  */
+
+import { SDQualityRubric } from './rubrics/sd-quality-rubric.js';
+import { RetrospectiveQualityRubric } from './rubrics/retrospective-quality-rubric.js';
 
 // ============================================
 // BOILERPLATE DETECTION PATTERNS
@@ -113,258 +112,166 @@ function checkArrayBoilerplate(items, patterns) {
 }
 
 /**
- * Validate Strategic Directive quality
+ * Validate Strategic Directive quality using AI-powered Russian Judge rubric
  * @param {Object} sd - Strategic Directive object from database
- * @returns {Object} Validation result
+ * @returns {Promise<Object>} Validation result (async now - calls OpenAI)
  */
-export function validateSDQuality(sd) {
-  const issues = [];
-  const warnings = [];
-  let score = 100;
+export async function validateSDQuality(sd) {
+  const sdId = sd?.id || sd?.sd_id || 'Unknown';
 
-  const sdId = sd.id || 'Unknown';
-
-  // ============================================
-  // 1. CHECK FOR SD PRESENCE
-  // ============================================
+  // Basic presence check (fast-fail before AI call)
   if (!sd || Object.keys(sd).length === 0) {
-    issues.push(`${sdId}: Strategic Directive is empty or missing`);
-    return { sd_id: sdId, valid: false, issues, warnings, score: 0, details: {} };
+    return {
+      sd_id: sdId,
+      status: sd?.status,
+      valid: false,
+      passed: false,
+      score: 0,
+      issues: [`${sdId}: Strategic Directive is empty or missing`],
+      warnings: [],
+      details: {}
+    };
   }
 
-  // ============================================
-  // 2. CHECK DESCRIPTION
-  // ============================================
-  if (!sd.description) {
-    issues.push(`${sdId}: No description defined`);
-    score -= 20;
-  } else if (sd.description.length < MINIMUM_DESCRIPTION_LENGTH) {
-    warnings.push(`${sdId}: Description too brief (${sd.description.length} chars, min ${MINIMUM_DESCRIPTION_LENGTH})`);
-    score -= 10;
-  } else {
-    const isBoilerplate = isBoilerplateText(sd.description, BOILERPLATE_DESCRIPTIONS, MINIMUM_DESCRIPTION_LENGTH);
-    if (isBoilerplate) {
-      warnings.push(`${sdId}: Description appears to be boilerplate`);
-      score -= 10;
-    }
-  }
+  try {
+    // Use AI-powered Russian Judge rubric
+    const rubric = new SDQualityRubric();
+    const result = await rubric.validateSDQuality(sd);
 
-  // ============================================
-  // 3. CHECK STRATEGIC OBJECTIVES
-  // ============================================
-  const objectives = sd.strategic_objectives || [];
-  if (objectives.length === 0) {
-    issues.push(`${sdId}: No strategic_objectives defined`);
-    score -= 20;
-  } else if (objectives.length < MINIMUM_OBJECTIVES_COUNT) {
-    warnings.push(`${sdId}: Only ${objectives.length} objectives (recommend ${MINIMUM_OBJECTIVES_COUNT}+)`);
-    score -= 5;
-  } else {
-    const objCheck = checkArrayBoilerplate(objectives, BOILERPLATE_OBJECTIVES);
-    if (objCheck.isBoilerplate) {
-      warnings.push(`${sdId}: ${objCheck.percentage}% of objectives are boilerplate`);
-      score -= 10;
-    }
-  }
+    // Convert to legacy format for backward compatibility
+    return {
+      sd_id: sdId,
+      status: sd.status,
+      valid: result.passed,
+      passed: result.passed,
+      score: result.score,
+      issues: result.issues,
+      warnings: result.warnings,
+      details: {
+        ...result.details,
+        // Add counts for backward compatibility
+        description_length: sd.description?.length || 0,
+        objectives_count: sd.strategic_objectives?.length || 0,
+        metrics_count: sd.success_metrics?.length || 0,
+        risks_count: sd.risks?.length || 0
+      }
+    };
+  } catch (error) {
+    console.error(`SD Quality Validation Error (${sdId}):`, error.message);
 
-  // ============================================
-  // 4. CHECK SUCCESS METRICS
-  // ============================================
-  const metrics = sd.success_metrics || [];
-  if (metrics.length === 0) {
-    issues.push(`${sdId}: No success_metrics defined`);
-    score -= 15;
-  } else if (metrics.length < MINIMUM_SUCCESS_METRICS_COUNT) {
-    warnings.push(`${sdId}: Only ${metrics.length} success metrics (recommend ${MINIMUM_SUCCESS_METRICS_COUNT}+)`);
-    score -= 5;
+    // Fallback: return failed validation with error details
+    return {
+      sd_id: sdId,
+      status: sd.status,
+      valid: false,
+      passed: false,
+      score: 0,
+      issues: [`AI quality assessment failed: ${error.message}. Manual review required.`],
+      warnings: ['OpenAI API error - check OPENAI_API_KEY environment variable'],
+      details: {
+        error: error.message,
+        description_length: sd.description?.length || 0,
+        objectives_count: sd.strategic_objectives?.length || 0,
+        metrics_count: sd.success_metrics?.length || 0,
+        risks_count: sd.risks?.length || 0
+      }
+    };
   }
-
-  // ============================================
-  // 5. CHECK RISKS
-  // ============================================
-  const risks = sd.risks || [];
-  if (risks.length === 0) {
-    warnings.push(`${sdId}: No risks defined (every SD has some risk)`);
-    score -= 10;
-  } else if (risks.length < MINIMUM_RISKS_COUNT) {
-    warnings.push(`${sdId}: Only ${risks.length} risks identified`);
-    score -= 5;
-  }
-
-  // ============================================
-  // 6. CHECK STATUS CONSISTENCY
-  // ============================================
-  if (sd.status === 'completed') {
-    // Completed SDs should have all fields filled
-    if (objectives.length === 0 || metrics.length === 0) {
-      issues.push(`${sdId}: Completed SD missing required fields (objectives or metrics)`);
-      score -= 15;
-    }
-  }
-
-  return {
-    sd_id: sdId,
-    status: sd.status,
-    valid: issues.length === 0,
-    issues,
-    warnings,
-    score: Math.max(0, score),
-    details: {
-      description_length: sd.description?.length || 0,
-      objectives_count: objectives.length,
-      metrics_count: metrics.length,
-      risks_count: risks.length
-    }
-  };
 }
 
 /**
- * Validate retrospective quality for an SD
+ * Validate retrospective quality using AI-powered Russian Judge rubric
  * @param {Object} retrospective - Retrospective object from database
- * @returns {Object} Validation result
+ * @returns {Promise<Object>} Validation result (async now - calls OpenAI)
  */
-export function validateRetrospectiveQuality(retrospective) {
-  const issues = [];
-  const warnings = [];
-  let score = 100;
-
+export async function validateRetrospectiveQuality(retrospective) {
   const retroId = retrospective?.id || 'Unknown';
   const sdId = retrospective?.sd_id || 'Unknown';
 
+  // Basic presence check (fast-fail before AI call)
   if (!retrospective) {
-    issues.push(`${sdId}: No retrospective found`);
-    return { retro_id: retroId, sd_id: sdId, valid: false, issues, warnings, score: 0, details: {} };
+    return {
+      retro_id: retroId,
+      sd_id: sdId,
+      valid: false,
+      passed: false,
+      score: 0,
+      issues: [`${sdId}: No retrospective found`],
+      warnings: [],
+      details: {}
+    };
   }
 
-  // ============================================
-  // 1. CHECK KEY_LEARNINGS
-  // ============================================
-  let keyLearnings = retrospective.key_learnings || [];
-  // Handle case where key_learnings might be a JSON string
-  if (typeof keyLearnings === 'string') {
-    try {
-      keyLearnings = JSON.parse(keyLearnings);
-    } catch {
-      keyLearnings = [];
+  try {
+    // Use AI-powered Russian Judge rubric
+    const rubric = new RetrospectiveQualityRubric();
+    const result = await rubric.validateRetrospectiveQuality(retrospective);
+
+    // Parse arrays for backward compatibility
+    let keyLearnings = retrospective.key_learnings || [];
+    let actionItems = retrospective.action_items || [];
+    let improvements = retrospective.what_needs_improvement || [];
+
+    // Handle JSON string parsing
+    if (typeof keyLearnings === 'string') {
+      try { keyLearnings = JSON.parse(keyLearnings); } catch { keyLearnings = []; }
     }
-  }
-  if (!Array.isArray(keyLearnings)) keyLearnings = [];
+    if (typeof actionItems === 'string') {
+      try { actionItems = JSON.parse(actionItems); } catch { actionItems = []; }
+    }
+    if (typeof improvements === 'string') {
+      try { improvements = JSON.parse(improvements); } catch { improvements = []; }
+    }
 
-  if (keyLearnings.length === 0) {
-    issues.push(`${sdId}: No key_learnings in retrospective`);
-    score -= 20;
-  } else {
-    // Check if items have is_boilerplate flag
-    const boilerplateItems = keyLearnings.filter(item => {
-      if (typeof item === 'object' && item.is_boilerplate !== undefined) {
-        return item.is_boilerplate;
+    if (!Array.isArray(keyLearnings)) keyLearnings = [];
+    if (!Array.isArray(actionItems)) actionItems = [];
+    if (!Array.isArray(improvements)) improvements = [];
+
+    // Convert to legacy format for backward compatibility
+    return {
+      retro_id: retroId,
+      sd_id: sdId,
+      valid: result.passed,
+      passed: result.passed,
+      score: result.score,
+      issues: result.issues,
+      warnings: result.warnings,
+      details: {
+        ...result.details,
+        // Add counts for backward compatibility
+        key_learnings_count: keyLearnings.length,
+        action_items_count: actionItems.length,
+        improvements_count: improvements.length,
+        quality_score: retrospective.quality_score,
+        existing_quality_issues: retrospective.quality_issues?.length || 0
       }
-      // Check against known boilerplate patterns
-      const text = typeof item === 'string' ? item : (item.learning || '');
-      return BOILERPLATE_RETRO_LEARNINGS.some(p => text.toLowerCase().includes(p));
-    });
+    };
+  } catch (error) {
+    console.error(`Retrospective Quality Validation Error (${sdId}):`, error.message);
 
-    if (boilerplateItems.length === keyLearnings.length && keyLearnings.length > 0) {
-      issues.push(`${sdId}: All key_learnings are boilerplate`);
-      score -= 25;
-    } else if (boilerplateItems.length > 0) {
-      warnings.push(`${sdId}: ${boilerplateItems.length}/${keyLearnings.length} key_learnings are boilerplate`);
-      score -= 10;
-    }
-  }
-
-  // ============================================
-  // 2. CHECK ACTION_ITEMS
-  // ============================================
-  let actionItems = retrospective.action_items || [];
-  if (typeof actionItems === 'string') {
-    try {
-      actionItems = JSON.parse(actionItems);
-    } catch {
-      actionItems = [];
-    }
-  }
-  if (!Array.isArray(actionItems)) actionItems = [];
-
-  if (actionItems.length === 0) {
-    warnings.push(`${sdId}: No action_items in retrospective`);
-    score -= 10;
-  } else {
-    const boilerplateActions = actionItems.filter(item => {
-      if (typeof item === 'object' && item.is_boilerplate !== undefined) {
-        return item.is_boilerplate;
+    // Fallback: return failed validation with error details
+    return {
+      retro_id: retroId,
+      sd_id: sdId,
+      valid: false,
+      passed: false,
+      score: 0,
+      issues: [`AI quality assessment failed: ${error.message}. Manual review required.`],
+      warnings: ['OpenAI API error - check OPENAI_API_KEY environment variable'],
+      details: {
+        error: error.message
       }
-      const text = typeof item === 'string' ? item : (item.action || '');
-      return BOILERPLATE_RETRO_ACTION_ITEMS.some(p => text.toLowerCase().includes(p));
-    });
-
-    if (boilerplateActions.length === actionItems.length && actionItems.length > 0) {
-      warnings.push(`${sdId}: All action_items are boilerplate`);
-      score -= 15;
-    }
+    };
   }
-
-  // ============================================
-  // 3. CHECK WHAT_NEEDS_IMPROVEMENT
-  // ============================================
-  let improvements = retrospective.what_needs_improvement || [];
-  if (typeof improvements === 'string') {
-    try {
-      improvements = JSON.parse(improvements);
-    } catch {
-      improvements = [];
-    }
-  }
-  if (!Array.isArray(improvements)) improvements = [];
-
-  if (improvements.length === 0) {
-    // This was identified in the quality_issues field as well
-    warnings.push(`${sdId}: No improvement areas identified (every SD has room for improvement)`);
-    score -= 10;
-  }
-
-  // ============================================
-  // 4. CHECK QUALITY SCORE
-  // ============================================
-  if (retrospective.quality_score !== null && retrospective.quality_score !== undefined) {
-    if (retrospective.quality_score < 50) {
-      warnings.push(`${sdId}: Retrospective quality_score is low (${retrospective.quality_score}%)`);
-      score -= 10;
-    }
-  }
-
-  // ============================================
-  // 5. CHECK FOR EXISTING QUALITY ISSUES
-  // ============================================
-  if (retrospective.quality_issues && retrospective.quality_issues.length > 0) {
-    warnings.push(`${sdId}: ${retrospective.quality_issues.length} existing quality issue(s) flagged`);
-    score -= retrospective.quality_issues.length * 5;
-  }
-
-  return {
-    retro_id: retroId,
-    sd_id: sdId,
-    valid: issues.length === 0,
-    issues,
-    warnings,
-    score: Math.max(0, score),
-    details: {
-      key_learnings_count: keyLearnings.length,
-      action_items_count: actionItems.length,
-      improvements_count: improvements.length,
-      quality_score: retrospective.quality_score,
-      existing_quality_issues: retrospective.quality_issues?.length || 0
-    }
-  };
 }
 
 /**
  * Validate SD completion readiness (includes retrospective gate)
  * @param {Object} sd - Strategic Directive
  * @param {Object} retrospective - Optional retrospective (will be fetched if not provided)
- * @returns {Object} Validation result
+ * @returns {Promise<Object>} Validation result (async now - calls AI)
  */
-export function validateSDCompletionReadiness(sd, retrospective = null) {
+export async function validateSDCompletionReadiness(sd, retrospective = null) {
   const result = {
     valid: true,
     sd_id: sd?.id || 'Unknown',
@@ -381,15 +288,15 @@ export function validateSDCompletionReadiness(sd, retrospective = null) {
     return result;
   }
 
-  // Validate SD quality
-  const sdQuality = validateSDQuality(sd);
+  // Validate SD quality (async now)
+  const sdQuality = await validateSDQuality(sd);
   result.sdQuality = sdQuality;
   result.issues.push(...sdQuality.issues);
   result.warnings.push(...sdQuality.warnings);
 
-  // Validate retrospective if provided
+  // Validate retrospective if provided (async now)
   if (retrospective) {
-    const retroQuality = validateRetrospectiveQuality(retrospective);
+    const retroQuality = await validateRetrospectiveQuality(retrospective);
     result.retroQuality = retroQuality;
     result.issues.push(...retroQuality.issues);
     result.warnings.push(...retroQuality.warnings);

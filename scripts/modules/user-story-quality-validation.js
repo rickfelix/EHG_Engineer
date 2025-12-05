@@ -1,13 +1,22 @@
 /**
- * USER STORY QUALITY VALIDATION MODULE
+ * USER STORY QUALITY VALIDATION MODULE (AI-POWERED)
  *
- * Validates user story quality during PLAN→EXEC handoff to ensure
- * stories are implementation-ready and not boilerplate.
+ * Uses AI-powered Russian Judge multi-criterion weighted scoring to validate
+ * user story quality during PLAN→EXEC handoff.
+ *
+ * Replaced keyword/pattern-based validation with semantic AI evaluation using gpt-5-mini.
+ * All assessments stored in ai_quality_assessments table for meta-analysis.
  *
  * @module user-story-quality-validation
- * @version 1.0.0
- * @see SD-CAPABILITY-LIFECYCLE-001 - Retrospective analysis identified boilerplate patterns
+ * @version 2.0.0 (AI-powered Russian Judge)
+ * @see /database/migrations/20251205_ai_quality_assessments.sql
  */
+
+import { UserStoryQualityRubric } from './rubrics/user-story-quality-rubric.js';
+
+// ============================================
+// LEGACY BOILERPLATE PATTERNS (kept for backward compat)
+// ============================================
 
 // Known boilerplate patterns to flag
 const BOILERPLATE_AC = [
@@ -37,121 +46,56 @@ const GENERIC_BENEFITS = [
 ];
 
 /**
- * Validate a single user story for quality
+ * Validate a single user story for quality using AI-powered Russian Judge rubric
  * @param {Object} story - User story object from database
- * @returns {Object} { valid: boolean, issues: array, warnings: array, score: number }
+ * @returns {Promise<Object>} { valid: boolean, passed: boolean, issues: array, warnings: array, score: number }
  */
-export function validateUserStoryQuality(story) {
-  const issues = [];  // Blocking issues
-  const warnings = [];  // Non-blocking but logged
-  let score = 100;
+export async function validateUserStoryQuality(story) {
+  const storyKey = story?.story_key || story?.id || 'Unknown';
 
-  // === BLOCKING CHECKS (will reject handoff) ===
-
-  // 1. Title check
-  if (!story.title || story.title.trim().length < 10) {
-    issues.push(`Story ${story.story_key}: Title is empty or too short (<10 chars)`);
-    score -= 20;
-  } else if (BOILERPLATE_TITLES.some(bp => story.title.toLowerCase().includes(bp))) {
-    issues.push(`Story ${story.story_key}: Title contains boilerplate text ("${story.title}")`);
-    score -= 15;
+  // Basic presence check (fast-fail before AI call)
+  if (!story || Object.keys(story).length === 0) {
+    return {
+      story_key: storyKey,
+      valid: false,
+      passed: false,
+      score: 0,
+      issues: [`${storyKey}: User story is empty or missing`],
+      warnings: []
+    };
   }
 
-  // 2. User want check
-  if (!story.user_want || story.user_want.trim().length < 20) {
-    issues.push(`Story ${story.story_key}: user_want is empty or too short (<20 chars)`);
-    score -= 20;
-  } else if (story.user_want.toLowerCase().includes('undefined')) {
-    issues.push(`Story ${story.story_key}: user_want contains "undefined"`);
-    score -= 20;
-  }
+  try {
+    // Use AI-powered Russian Judge rubric
+    const rubric = new UserStoryQualityRubric();
+    const result = await rubric.validateUserStoryQuality(story);
 
-  // 3. User benefit check
-  if (!story.user_benefit || story.user_benefit.trim().length < 15) {
-    issues.push(`Story ${story.story_key}: user_benefit is empty or too short (<15 chars)`);
-    score -= 15;
-  } else if (GENERIC_BENEFITS.some(gb => story.user_benefit.toLowerCase().includes(gb))) {
-    warnings.push(`Story ${story.story_key}: user_benefit is generic ("${story.user_benefit.substring(0, 50)}...")`);
-    score -= 5;
-  }
+    // Convert to legacy format for backward compatibility
+    return {
+      story_key: storyKey,
+      valid: result.passed,
+      passed: result.passed,
+      score: result.score,
+      issues: result.issues,
+      warnings: result.warnings,
+      details: result.details
+    };
+  } catch (error) {
+    console.error(`User Story Quality Validation Error (${storyKey}):`, error.message);
 
-  // 4. Acceptance criteria check
-  if (!story.acceptance_criteria || story.acceptance_criteria.length === 0) {
-    issues.push(`Story ${story.story_key}: No acceptance criteria defined`);
-    score -= 25;
-  } else if (story.acceptance_criteria.length < 2) {
-    issues.push(`Story ${story.story_key}: Insufficient acceptance criteria (${story.acceptance_criteria.length}, need ≥2)`);
-    score -= 15;
-  } else {
-    // Check for boilerplate AC
-    const realAC = story.acceptance_criteria.filter(ac => {
-      const text = typeof ac === 'string' ? ac : (ac.criterion || ac.text || ac.description || '');
-      return !BOILERPLATE_AC.some(bp => text.toLowerCase().includes(bp.toLowerCase()));
-    });
-
-    if (realAC.length < 2) {
-      issues.push(`Story ${story.story_key}: Only boilerplate acceptance criteria found (${realAC.length} specific, ${story.acceptance_criteria.length - realAC.length} boilerplate)`);
-      score -= 20;
-    }
-
-    // Check for Given-When-Then format (best practice)
-    const hasGWT = story.acceptance_criteria.some(ac => {
-      const text = typeof ac === 'string' ? ac : (ac.criterion || ac.text || '');
-      return text.toLowerCase().includes('given') &&
-             text.toLowerCase().includes('when') &&
-             text.toLowerCase().includes('then');
-    });
-
-    if (!hasGWT) {
-      warnings.push(`Story ${story.story_key}: No Given-When-Then format in acceptance criteria (recommended)`);
-      score -= 5;
-    }
-  }
-
-  // === WARNING CHECKS (logged but don't block) ===
-
-  // 5. User role check
-  if (!story.user_role || story.user_role.trim().length === 0) {
-    warnings.push(`Story ${story.story_key}: user_role is empty`);
-    score -= 5;
-  } else if (GENERIC_ROLES.includes(story.user_role.toLowerCase().trim())) {
-    warnings.push(`Story ${story.story_key}: Generic user_role "${story.user_role}" - consider more specific persona`);
-    score -= 3;
-  }
-
-  // 6. Story points check
-  if (!story.story_points || story.story_points === 0) {
-    warnings.push(`Story ${story.story_key}: No story points assigned`);
-    score -= 3;
-  }
-
-  // 7. Implementation context check (BMAD enhancement)
-  if (!story.implementation_context) {
-    warnings.push(`Story ${story.story_key}: Missing implementation_context (BMAD enhancement)`);
-    score -= 5;
-  } else {
-    try {
-      const context = typeof story.implementation_context === 'string'
-        ? JSON.parse(story.implementation_context)
-        : story.implementation_context;
-
-      // Check for minimal context
-      if (context.approach === 'See user story details' || !context.approach) {
-        warnings.push(`Story ${story.story_key}: implementation_context has placeholder approach`);
-        score -= 3;
+    // Fallback: return failed validation with error details
+    return {
+      story_key: storyKey,
+      valid: false,
+      passed: false,
+      score: 0,
+      issues: [`AI quality assessment failed: ${error.message}. Manual review required.`],
+      warnings: ['OpenAI API error - check OPENAI_API_KEY environment variable'],
+      details: {
+        error: error.message
       }
-    } catch (e) {
-      // Ignore JSON parse errors
-    }
+    };
   }
-
-  return {
-    story_key: story.story_key,
-    valid: issues.length === 0,
-    issues,
-    warnings,
-    score: Math.max(0, score)
-  };
 }
 
 /**
@@ -161,9 +105,9 @@ export function validateUserStoryQuality(story) {
  * @param {number} options.minimumScore - Minimum average score required (default: 70)
  * @param {number} options.minimumStories - Minimum number of stories required (default: 1)
  * @param {boolean} options.blockOnWarnings - Whether to block on warnings (default: false)
- * @returns {Object} Validation result
+ * @returns {Promise<Object>} Validation result (async now - calls AI)
  */
-export function validateUserStoriesForHandoff(stories, options = {}) {
+export async function validateUserStoriesForHandoff(stories, options = {}) {
   const {
     minimumScore = 70,
     minimumStories = 1,
@@ -195,11 +139,11 @@ export function validateUserStoriesForHandoff(stories, options = {}) {
     return result;
   }
 
-  // Validate each story
+  // Validate each story (async now)
   let totalScore = 0;
 
   for (const story of stories) {
-    const storyResult = validateUserStoryQuality(story);
+    const storyResult = await validateUserStoryQuality(story);
     result.storyResults.push(storyResult);
     result.validatedStories++;
     totalScore += storyResult.score;
