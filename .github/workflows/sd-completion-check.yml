@@ -1,0 +1,166 @@
+name: SD Completion Check
+
+# This workflow ensures SD completion requirements are met before merge
+# Uses same logic as database trigger: calculate_sd_progress()
+#
+# Requirements for merge:
+# - Retrospective exists with quality_score >= 70
+# - At least 3 handoffs with status='accepted'
+# - All 5 phases at 100% progress
+#
+# Bypass: Add [SKIP-SD-CHECK] to PR title (for emergencies only)
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, ready_for_review, closed]
+
+jobs:
+  verify-completion:
+    name: Verify SD Completion
+    runs-on: ubuntu-latest
+    # Only run on open PRs
+    if: github.event.pull_request.merged != true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for bypass
+        id: bypass
+        run: |
+          if [[ "${{ github.event.pull_request.title }}" == *"[SKIP-SD-CHECK]"* ]]; then
+            echo "::warning::SD completion check bypassed via PR title"
+            echo "bypassed=true" >> $GITHUB_OUTPUT
+          else
+            echo "bypassed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Extract SD ID from branch
+        if: steps.bypass.outputs.bypassed != 'true'
+        id: extract
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          echo "Branch: $BRANCH"
+
+          # Extract SD ID (format: SD-STAGE-12-001, SD-QUALITY-GATE-001, etc.)
+          SD_ID=$(echo "$BRANCH" | grep -oP 'SD-[A-Z0-9-]+' || echo "")
+
+          # Also check for Quick-Fix ID
+          QF_ID=$(echo "$BRANCH" | grep -oP 'QF-[0-9-]+' || echo "")
+
+          echo "sd_id=$SD_ID" >> $GITHUB_OUTPUT
+          echo "qf_id=$QF_ID" >> $GITHUB_OUTPUT
+
+          if [ -n "$SD_ID" ]; then
+            echo "Found SD ID: $SD_ID"
+          elif [ -n "$QF_ID" ]; then
+            echo "Found Quick-Fix ID: $QF_ID (using separate validation)"
+          else
+            echo "No SD or QF ID found - this appears to be a non-SD branch"
+          fi
+
+      - name: Setup Node.js
+        if: steps.bypass.outputs.bypassed != 'true' && steps.extract.outputs.sd_id != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        if: steps.bypass.outputs.bypassed != 'true' && steps.extract.outputs.sd_id != ''
+        run: npm ci
+
+      - name: Verify SD completion
+        if: steps.bypass.outputs.bypassed != 'true' && steps.extract.outputs.sd_id != ''
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SD_ID: ${{ steps.extract.outputs.sd_id }}
+        run: node scripts/verify-sd-completion.js $SD_ID
+
+      - name: Skip message (non-SD branch)
+        if: steps.bypass.outputs.bypassed != 'true' && steps.extract.outputs.sd_id == '' && steps.extract.outputs.qf_id == ''
+        run: |
+          echo "✅ No SD ID found in branch name - skipping completion check"
+          echo "This is a non-SD branch (chore, docs, etc.)"
+
+  # Post-merge: Auto-archive SD
+  auto-archive:
+    name: Auto-Archive SD
+    runs-on: ubuntu-latest
+    # Only run when PR is merged
+    if: github.event.pull_request.merged == true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract SD ID
+        id: extract
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          SD_ID=$(echo "$BRANCH" | grep -oP 'SD-[A-Z0-9-]+' || echo "")
+          echo "sd_id=$SD_ID" >> $GITHUB_OUTPUT
+
+          if [ -n "$SD_ID" ]; then
+            echo "Found SD ID: $SD_ID - will auto-archive"
+          else
+            echo "No SD ID found - skipping auto-archive"
+          fi
+
+      - name: Setup Node.js
+        if: steps.extract.outputs.sd_id != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Supabase client
+        if: steps.extract.outputs.sd_id != ''
+        run: npm install @supabase/supabase-js
+
+      - name: Archive SD
+        if: steps.extract.outputs.sd_id != ''
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SD_ID: ${{ steps.extract.outputs.sd_id }}
+        run: |
+          node << 'EOF'
+          const { createClient } = require('@supabase/supabase-js');
+
+          const supabase = createClient(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY
+          );
+
+          async function archiveSD() {
+            const sdId = process.env.SD_ID;
+            console.log(`Archiving SD: ${sdId}`);
+
+            const { data, error } = await supabase
+              .from('strategic_directives')
+              .update({
+                status: 'archived',
+                archived_at: new Date().toISOString()
+              })
+              .eq('id', sdId)
+              .select();
+
+            if (error) {
+              console.error('Failed to archive SD:', error.message);
+              // Don't fail the job - this is informational
+              return;
+            }
+
+            if (data && data.length > 0) {
+              console.log(`✅ SD ${sdId} archived successfully`);
+              console.log(`   Status: archived`);
+              console.log(`   Archived at: ${data[0].archived_at}`);
+            } else {
+              console.log(`⚠️ SD ${sdId} not found or already archived`);
+            }
+          }
+
+          archiveSD().catch(console.error);
+          EOF

@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2025-12-04 5:58:27 PM
+**Generated**: 2025-12-05 9:24:37 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
@@ -45,6 +45,42 @@ npm run handoff:compliance SD-XXX-001
 ```
 
 **Database trigger now BLOCKS direct inserts. You MUST use the scripts above.**
+
+## 🚧 SD Completion Gate (Merge Validation)
+
+**Added**: 2025-12-05 (Post SD-STAGE-12-001 Protocol Improvement)
+
+Before merging any SD branch to main, the SD completion check validates:
+
+### Requirements for Merge
+- ✅ Retrospective exists with `quality_score >= 70`
+- ✅ At least 3 handoffs with `status='accepted'`
+- ✅ All 5 phases at 100% progress
+
+### How It Works
+
+1. **GitHub Action** (`.github/workflows/sd-completion-check.yml`)
+   - Runs on all PRs to main
+   - Extracts SD ID from branch name
+   - Calls `get_progress_breakdown()` - same logic as database trigger
+   - Blocks merge if incomplete
+
+2. **Pre-Push Hook** (`.husky/pre-push`)
+   - Backup for direct push to main
+   - Same validation logic as GitHub Action
+   - Blocks push if SD incomplete
+
+### Verification Command
+```bash
+node scripts/verify-sd-completion.js SD-XXX-001
+```
+
+### Bypass (Emergencies Only)
+- **PR**: Add `[SKIP-SD-CHECK]` to PR title
+- **Push**: Use `SKIP_SD_CHECK=1 git push`
+
+### Post-Merge Auto-Archive
+After successful merge, SD status is automatically set to `archived`.
 
 ## 🚨 EXEC Agent Implementation Requirements
 
@@ -1071,6 +1107,6 @@ Verifies LEAD to PLAN handoff requirements are met before allowing transition.
 
 ---
 
-*Generated from database: 2025-12-04*
+*Generated from database: 2025-12-05*
 *Protocol Version: 4.3.3*
 *Load when: User mentions EXEC, implementation, coding, or testing*

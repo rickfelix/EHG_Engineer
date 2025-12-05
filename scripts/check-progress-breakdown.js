@@ -12,7 +12,7 @@ const supabase = createClient(
 console.log('🔍 Checking Progress Breakdown for SD-KNOWLEDGE-001\n');
 
 const { data, error } = await supabase.rpc('get_progress_breakdown', {
-  p_sd_id: 'SD-KNOWLEDGE-001'
+  sd_id_param: 'SD-KNOWLEDGE-001'
 });
 
 if (error) {

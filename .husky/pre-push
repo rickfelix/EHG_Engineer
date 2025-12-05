@@ -1,0 +1,101 @@
+#!/bin/sh
+# ============================================================================
+# Pre-Push Hook: SD Completion Check
+# ============================================================================
+#
+# This hook validates SD completion before allowing push to main.
+# It uses the same logic as the database trigger: calculate_sd_progress()
+#
+# Requirements for push to main:
+# - Retrospective exists with quality_score >= 70
+# - At least 3 handoffs with status='accepted'
+# - All 5 phases at 100% progress
+#
+# Bypass: Use SKIP_SD_CHECK=1 git push (for emergencies only)
+
+# Get the remote name and URL
+remote="$1"
+url="$2"
+
+# Check for bypass
+if [ "$SKIP_SD_CHECK" = "1" ]; then
+  echo "⚠️  SD completion check bypassed via SKIP_SD_CHECK=1"
+  exit 0
+fi
+
+# Only check when pushing to main
+while read local_ref local_sha remote_ref remote_sha
+do
+  # Skip if not pushing to main (POSIX-compatible check)
+  case "$remote_ref" in
+    *refs/heads/main*) ;;
+    *) continue ;;
+  esac
+
+  echo ""
+  echo "🔍 Pushing to main - checking SD completion..."
+  echo ""
+
+  # Get current branch name
+  BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+  # Extract SD ID from branch name (POSIX-compatible)
+  SD_ID=$(echo "$BRANCH" | grep -oE 'SD-[A-Z0-9-]+' | head -1 || echo "")
+
+  if [ -z "$SD_ID" ]; then
+    echo "✅ No SD ID in branch name - skipping completion check"
+    echo "   Branch: $BRANCH"
+    continue
+  fi
+
+  echo "   SD ID: $SD_ID"
+  echo "   Branch: $BRANCH"
+  echo ""
+
+  # Check if environment variables are set
+  if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+    # Try to load from .env file
+    if [ -f ".env" ]; then
+      export $(grep -E '^(SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY|NEXT_PUBLIC_SUPABASE_URL)=' .env | xargs)
+      # Use NEXT_PUBLIC_SUPABASE_URL if SUPABASE_URL is not set
+      if [ -z "$SUPABASE_URL" ] && [ -n "$NEXT_PUBLIC_SUPABASE_URL" ]; then
+        export SUPABASE_URL="$NEXT_PUBLIC_SUPABASE_URL"
+      fi
+    fi
+  fi
+
+  # Verify we have the required environment variables
+  if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+    echo "⚠️  Cannot verify SD completion - missing environment variables"
+    echo "   Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY"
+    echo "   Or bypass with: SKIP_SD_CHECK=1 git push"
+    echo ""
+    # Don't block if we can't check - GitHub Action will catch it
+    continue
+  fi
+
+  # Run the verification script
+  node scripts/verify-sd-completion.js "$SD_ID"
+
+  if [ $? -ne 0 ]; then
+    echo ""
+    echo "❌ Push blocked: SD completion check failed"
+    echo ""
+    echo "To complete the DONE phase:"
+    echo "  1. npm run handoff exec-to-plan"
+    echo "  2. Verify retrospective was created"
+    echo "  3. Try push again"
+    echo ""
+    echo "To bypass (emergencies only):"
+    echo "  SKIP_SD_CHECK=1 git push"
+    echo ""
+    exit 1
+  fi
+
+  echo ""
+  echo "✅ SD completion verified - push allowed"
+  echo ""
+
+done
+
+exit 0

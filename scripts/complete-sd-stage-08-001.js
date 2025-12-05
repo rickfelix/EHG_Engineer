@@ -350,7 +350,7 @@ async function completeSd() {
   if (sdError) {
     console.error('  ❌ Error updating SD status:', sdError.message);
     console.log('\nProgress breakdown check:');
-    const { data: breakdown } = await supabase.rpc('get_progress_breakdown', { p_sd_id: sdId });
+    const { data: breakdown } = await supabase.rpc('get_progress_breakdown', { sd_id_param: sdId });
     if (breakdown) {
       console.log(JSON.stringify(breakdown, null, 2));
     }
