@@ -30,7 +30,8 @@
       "database_first_enforcement_expanded",
       "supabase_operations",
       "database_column_reference",
-      "pattern_search_guide"
+      "pattern_search_guide",
+      "ai_quality_russian_judge"
     ]
   },
   "CLAUDE_LEAD.md": {
@@ -72,7 +73,8 @@
       "qa_engineering_enhanced",
       "schema_documentation_access",
       "schema_documentation_reference",
-      "database_schema_overview"
+      "database_schema_overview",
+      "handoff_quality_gates"
     ]
   },
   "CLAUDE_EXEC.md": {

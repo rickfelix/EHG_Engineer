@@ -1,0 +1,335 @@
+/**
+ * Retrospective Quality Rubric - Retrospective Quality Assessment
+ *
+ * Uses AI-powered Russian Judge multi-criterion weighted scoring (0-10 per criterion)
+ * to evaluate Retrospective quality during PLAN→LEAD handoff.
+ *
+ * Criteria:
+ * 1. Learning Specificity (40%) - SD-specific vs boilerplate ("follow LEO protocol")
+ * 2. Action Item Actionability (30%) - SMART actions with clear ownership
+ * 3. Improvement Area Depth (20%) - Root cause analysis, not surface observations
+ * 4. Lesson Applicability (10%) - Reusable patterns for future SDs
+ *
+ * @module rubrics/retrospective-quality-rubric
+ * @version 1.0.0
+ */
+
+import { AIQualityEvaluator } from '../ai-quality-evaluator.js';
+
+export class RetrospectiveQualityRubric extends AIQualityEvaluator {
+  constructor() {
+    const rubricConfig = {
+      contentType: 'retrospective',
+      criteria: [
+        {
+          name: 'learning_specificity',
+          weight: 0.40,
+          prompt: `Evaluate learning specificity (avoid generic boilerplate):
+- 0-3: Generic boilerplate ("follow LEO protocol", "communicate better") with no SD-specific insights
+- 4-6: Some specific learnings but mixed with generic statements
+- 7-8: Most learnings are specific to this SD with concrete examples
+- 9-10: All learnings are SD-specific with clear context, examples, and unique insights
+
+Penalize heavily for generic lessons that could apply to any project. Reserve 9-10 for truly unique insights.`
+        },
+        {
+          name: 'action_item_actionability',
+          weight: 0.30,
+          prompt: `Evaluate whether action items are actionable and follow SMART criteria:
+- 0-3: Vague action items ("improve quality", "be more careful") with no ownership
+- 4-6: Some specific actions but missing ownership, timeline, or success criteria
+- 7-8: Most action items are SMART (Specific, Measurable, Achievable, Relevant, Time-bound) with ownership
+- 9-10: All action items are SMART with clear ownership, timeline, and measurable success criteria
+
+Look for concrete next steps, not aspirational goals.`
+        },
+        {
+          name: 'improvement_area_depth',
+          weight: 0.20,
+          prompt: `Evaluate depth of improvement area analysis:
+- 0-3: Surface-level observations ("tests failed") without root cause analysis
+- 4-6: Some root cause exploration but missing deeper "why" investigation
+- 7-8: Clear root cause analysis with contributing factors identified
+- 9-10: Comprehensive root cause analysis with contributing factors, systemic issues, and preventive measures
+
+Score 9-10 only if retrospective demonstrates 5 Whys depth or equivalent root cause investigation.`
+        },
+        {
+          name: 'lesson_applicability',
+          weight: 0.10,
+          prompt: `Evaluate whether lessons learned are reusable for future SDs:
+- 0-3: Lessons are so specific they only apply to this exact SD scenario
+- 4-6: Some lessons could transfer to similar SDs but not broadly applicable
+- 7-8: Most lessons identify reusable patterns applicable to future work
+- 9-10: All lessons capture generalizable patterns, anti-patterns, or protocol improvements
+
+Look for "meta-lessons" about process, architecture, or methodology - not just project details.`
+        }
+      ]
+    };
+
+    super(rubricConfig);
+  }
+
+  /**
+   * Format Retrospective data for AI evaluation (with optional SD context)
+   *
+   * @param {Object} retrospective - Retrospective from database
+   * @param {Object} sd - Strategic Directive (parent context) - optional
+   * @returns {string} Formatted content for evaluation
+   */
+  formatRetrospectiveForEvaluation(retrospective, sd = null) {
+    let sdContext = '';
+
+    if (sd) {
+      sdContext = `## STRATEGIC DIRECTIVE CONTEXT
+
+**SD ID:** ${sd.sd_id || sd.id}
+**Title:** ${sd.title || 'Not set'}
+**Description:** ${sd.description || 'Not provided'}
+
+**Strategic Objectives:**
+${this.formatStrategicObjectives(sd.strategic_objectives)}
+
+**Success Metrics:**
+${this.formatSuccessMetrics(sd.success_metrics)}
+
+**Original Scope:**
+${sd.scope || 'Not defined'}
+
+---
+
+`;
+    }
+
+    return `# Retrospective for SD: ${retrospective.sd_id}
+
+${sdContext}## What Went Well
+${this.formatList(retrospective.what_went_well)}
+
+## What Didn't Go Well
+${this.formatList(retrospective.what_went_wrong)}
+
+## Lessons Learned
+${this.formatLessons(retrospective.lessons_learned)}
+
+## Action Items
+${this.formatActionItems(retrospective.action_items)}
+
+## Improvement Areas
+${this.formatImprovementAreas(retrospective.improvement_areas)}
+
+## Additional Context
+Quality Score: ${retrospective.quality_score || 'Not scored'}
+Completion Date: ${retrospective.completed_at || 'Not set'}
+Duration: ${retrospective.duration_days || 'Unknown'} days`;
+  }
+
+  /**
+   * Format Strategic Objectives from SD
+   */
+  formatStrategicObjectives(objectives) {
+    if (!objectives || objectives.length === 0) {
+      return 'No strategic objectives defined';
+    }
+
+    if (Array.isArray(objectives)) {
+      // Show first 3 objectives to avoid token bloat
+      const topObjectives = objectives.slice(0, 3);
+      return topObjectives.map((obj, idx) => {
+        if (typeof obj === 'string') {
+          return `${idx + 1}. ${obj}`;
+        } else if (obj.objective) {
+          return `${idx + 1}. ${obj.objective}`;
+        }
+        return `${idx + 1}. ${JSON.stringify(obj)}`;
+      }).join('\n') + (objectives.length > 3 ? `\n... and ${objectives.length - 3} more` : '');
+    }
+
+    return JSON.stringify(objectives);
+  }
+
+  /**
+   * Format Success Metrics from SD
+   */
+  formatSuccessMetrics(metrics) {
+    if (!metrics || metrics.length === 0) {
+      return 'No success metrics defined';
+    }
+
+    if (Array.isArray(metrics)) {
+      // Show first 3 metrics to avoid token bloat
+      const topMetrics = metrics.slice(0, 3);
+      return topMetrics.map((metric, idx) => {
+        if (typeof metric === 'string') {
+          return `${idx + 1}. ${metric}`;
+        } else if (metric.metric) {
+          const baseline = metric.baseline ? ` (Baseline: ${metric.baseline})` : '';
+          const target = metric.target ? ` → Target: ${metric.target}` : '';
+          return `${idx + 1}. ${metric.metric}${baseline}${target}`;
+        }
+        return `${idx + 1}. ${JSON.stringify(metric)}`;
+      }).join('\n') + (metrics.length > 3 ? `\n... and ${metrics.length - 3} more` : '');
+    }
+
+    return JSON.stringify(metrics);
+  }
+
+  /**
+   * Format generic list for evaluation
+   */
+  formatList(items) {
+    if (!items || items.length === 0) {
+      return 'None listed';
+    }
+
+    if (Array.isArray(items)) {
+      return items.map((item, idx) => {
+        if (typeof item === 'string') {
+          return `${idx + 1}. ${item}`;
+        }
+        return `${idx + 1}. ${JSON.stringify(item)}`;
+      }).join('\n');
+    }
+
+    return JSON.stringify(items);
+  }
+
+  /**
+   * Format lessons learned for evaluation
+   */
+  formatLessons(lessons) {
+    if (!lessons || lessons.length === 0) {
+      return 'No lessons learned documented';
+    }
+
+    if (Array.isArray(lessons)) {
+      return lessons.map((lesson, idx) => {
+        if (typeof lesson === 'string') {
+          return `${idx + 1}. ${lesson}`;
+        } else if (lesson.lesson) {
+          const category = lesson.category ? ` [${lesson.category}]` : '';
+          const applicability = lesson.applicability ? `\n   Applicability: ${lesson.applicability}` : '';
+          return `${idx + 1}. ${lesson.lesson}${category}${applicability}`;
+        }
+        return `${idx + 1}. ${JSON.stringify(lesson)}`;
+      }).join('\n\n');
+    }
+
+    return JSON.stringify(lessons);
+  }
+
+  /**
+   * Format action items for evaluation
+   */
+  formatActionItems(actions) {
+    if (!actions || actions.length === 0) {
+      return 'No action items defined';
+    }
+
+    if (Array.isArray(actions)) {
+      return actions.map((action, idx) => {
+        if (typeof action === 'string') {
+          return `${idx + 1}. ${action}`;
+        } else if (action.action) {
+          const owner = action.owner ? ` [Owner: ${action.owner}]` : '';
+          const deadline = action.deadline ? ` [Deadline: ${action.deadline}]` : '';
+          const status = action.status ? ` [Status: ${action.status}]` : '';
+          return `${idx + 1}. ${action.action}${owner}${deadline}${status}`;
+        }
+        return `${idx + 1}. ${JSON.stringify(action)}`;
+      }).join('\n');
+    }
+
+    return JSON.stringify(actions);
+  }
+
+  /**
+   * Format improvement areas for evaluation
+   */
+  formatImprovementAreas(areas) {
+    if (!areas || areas.length === 0) {
+      return 'No improvement areas identified';
+    }
+
+    if (Array.isArray(areas)) {
+      return areas.map((area, idx) => {
+        if (typeof area === 'string') {
+          return `${idx + 1}. ${area}`;
+        } else if (area.area) {
+          const rootCause = area.root_cause ? `\n   Root Cause: ${area.root_cause}` : '';
+          const prevention = area.prevention ? `\n   Prevention: ${area.prevention}` : '';
+          return `${idx + 1}. ${area.area}${rootCause}${prevention}`;
+        }
+        return `${idx + 1}. ${JSON.stringify(area)}`;
+      }).join('\n\n');
+    }
+
+    return JSON.stringify(areas);
+  }
+
+  /**
+   * Validate Retrospective quality using Russian Judge AI scoring (with SD context)
+   *
+   * @param {Object} retrospective - Retrospective from database
+   * @param {Object} sd - Strategic Directive (optional - will fetch if not provided)
+   * @returns {Promise<Object>} Validation result compatible with LEO Protocol
+   */
+  async validateRetrospectiveQuality(retrospective, sd = null) {
+    try {
+      // Fetch SD context if not provided but retrospective has sd_id
+      if (!sd && retrospective.sd_id) {
+        try {
+          const { data: sdData } = await this.supabase
+            .from('strategic_directives_v2')
+            .select('sd_id, id, title, description, strategic_objectives, success_metrics, scope')
+            .eq('sd_id', retrospective.sd_id)
+            .single();
+
+          sd = sdData;
+        } catch (sdError) {
+          console.warn(`Could not fetch SD context for Retrospective ${retrospective.sd_id}:`, sdError.message);
+          // Continue without SD context
+        }
+      }
+
+      // Format retrospective for evaluation (with SD context if available)
+      const formattedContent = this.formatRetrospectiveForEvaluation(retrospective, sd);
+
+      // Get Retrospective ID
+      const retroId = retrospective.id || retrospective.sd_id;
+
+      // Run AI evaluation
+      const assessment = await this.evaluate(formattedContent, retroId);
+
+      // Convert to LEO Protocol format
+      return {
+        passed: assessment.passed,
+        score: assessment.weightedScore,
+        issues: assessment.feedback.required,
+        warnings: assessment.feedback.recommended,
+        details: {
+          criterion_scores: assessment.scores,
+          weighted_score: assessment.weightedScore,
+          threshold: 70,
+          cost_usd: assessment.cost,
+          duration_ms: assessment.duration,
+          sd_context_included: !!sd
+        }
+      };
+    } catch (error) {
+      console.error('Retrospective Quality Validation Error:', error);
+
+      // Return failed validation on error
+      return {
+        passed: false,
+        score: 0,
+        issues: [`AI quality assessment failed: ${error.message}`],
+        warnings: ['Manual review required'],
+        details: {
+          error: error.message
+        }
+      };
+    }
+  }
+}
