@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-12-05 9:24:37 AM
+**Generated**: 2025-12-06 2:35:48 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -415,6 +415,33 @@ From retrospectives:
 **From SD-UAT-020**:
 > "Created 100+ test checklist but didn't execute manually. Time spent on unused documentation."
 
+## 🔬 BMAD Method Enhancements
+
+## BMAD Enhancements
+
+### 6 Key Improvements
+1. **Unified Handoff System** - All handoffs via `handoff.js`
+2. **Database-First PRDs** - PRDs stored in database, not markdown
+3. **Validation Gates** - 4-gate validation before EXEC
+4. **Progress Tracking** - Automatic progress % calculation
+5. **Context Management** - Proactive monitoring, compression strategies
+6. **Sub-Agent Compression** - 3-tier output reduction
+
+### Using Handoff System
+```bash
+node scripts/handoff.js create "{message}"
+```
+
+### PRD Creation
+```bash
+node scripts/add-prd-to-database.js {SD-ID}
+```
+
+### Never Bypass
+- ⚠️ Always use process scripts
+- ⚠️ Never create PRDs as markdown files
+- ⚠️ Never skip validation gates
+
 ## Research Lookup Before PRD Creation
 
 ## Research Lookup Before PRD Creation (MANDATORY)
@@ -512,33 +539,6 @@ node scripts/add-prd-to-database.js SD-RESEARCH-106
 # → PRD includes research findings in technical_approach
 ```
 
-
-## 🔬 BMAD Method Enhancements
-
-## BMAD Enhancements
-
-### 6 Key Improvements
-1. **Unified Handoff System** - All handoffs via `handoff.js`
-2. **Database-First PRDs** - PRDs stored in database, not markdown
-3. **Validation Gates** - 4-gate validation before EXEC
-4. **Progress Tracking** - Automatic progress % calculation
-5. **Context Management** - Proactive monitoring, compression strategies
-6. **Sub-Agent Compression** - 3-tier output reduction
-
-### Using Handoff System
-```bash
-node scripts/handoff.js create "{message}"
-```
-
-### PRD Creation
-```bash
-node scripts/add-prd-to-database.js {SD-ID}
-```
-
-### Never Bypass
-- ⚠️ Always use process scripts
-- ⚠️ Never create PRDs as markdown files
-- ⚠️ Never skip validation gates
 
 ## CI/CD Pipeline Verification
 
@@ -876,6 +876,137 @@ SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';
 -- Table columns
 SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'strategic_directives';
 ```
+
+## Child SD Pattern: When to Decompose
+
+### PLAN Agent Responsibility
+
+During parent PRD creation, PLAN agent must evaluate:
+- **User story count**: ≥8 stories → consider decomposition
+- **Phase boundaries**: 3+ distinct phases → consider decomposition
+- **Duration estimate**: Multi-week work → consider decomposition
+- **Complexity**: High complexity → consider decomposition
+
+### Decision Matrix
+
+| Criteria | Single SD | Parent + Children |
+|----------|-----------|-------------------|
+| User Stories | < 8 | ≥ 8 |
+| Distinct Phases | 1-2 | 3+ |
+| Duration | Days | Weeks |
+| Complexity | Low-Medium | High |
+
+### Decomposition Workflow
+
+**Step 1: PLAN Proposes Decomposition**
+
+During parent PRD creation:
+1. Identify natural boundaries (phases, features, components)
+2. Create child SD records with `parent_sd_id` and `relationship_type = 'child'`
+3. Define dependency chain in parent's `dependency_chain` field
+4. Document children in parent PRD
+5. Mark children as `status = 'draft'` (they need LEAD approval)
+
+**Step 2: Create Child SDs**
+
+```javascript
+// Example: Parent PLAN creates 3 children
+await supabase.from('strategic_directives_v2').insert([
+  {
+    id: 'SD-PARENT-001-A',
+    title: 'Phase A: Foundation',
+    parent_sd_id: 'SD-PARENT-001',
+    relationship_type: 'child',
+    status: 'draft', // Needs LEAD approval
+    current_phase: null,
+    priority: 'critical'
+  },
+  {
+    id: 'SD-PARENT-001-B',
+    title: 'Phase B: Features',
+    parent_sd_id: 'SD-PARENT-001',
+    relationship_type: 'child',
+    status: 'draft',
+    current_phase: null,
+    priority: 'high'
+  },
+  {
+    id: 'SD-PARENT-001-C',
+    title: 'Phase C: Polish',
+    parent_sd_id: 'SD-PARENT-001',
+    relationship_type: 'child',
+    status: 'draft',
+    current_phase: null,
+    priority: 'medium'
+  }
+]);
+
+// Update parent with dependency chain
+await supabase.from('strategic_directives_v2')
+  .update({
+    relationship_type: 'parent',
+    dependency_chain: {
+      children: [
+        {sd_id: 'SD-PARENT-001-A', order: 1, depends_on: null},
+        {sd_id: 'SD-PARENT-001-B', order: 2, depends_on: 'SD-PARENT-001-A'},
+        {sd_id: 'SD-PARENT-001-C', order: 3, depends_on: 'SD-PARENT-001-B'}
+      ]
+    }
+  })
+  .eq('id', 'SD-PARENT-001');
+```
+
+**Step 3: Children Go Through LEAD**
+
+After parent PLAN completes:
+- Each child SD goes to LEAD individually
+- LEAD validates strategic value of THAT child
+- LEAD locks scope for THAT child
+- LEAD assesses risks for THAT child
+- After LEAD approval, child enters PLAN
+
+**Step 4: Sequential Execution**
+
+- Child A: LEAD → PLAN → EXEC → Complete
+- Then Child B: LEAD → PLAN → EXEC → Complete
+- Then Child C: LEAD → PLAN → EXEC → Complete
+- Then Parent: Auto-completes
+
+### Parent PRD Template
+
+```markdown
+## Child SD Overview
+
+This SD requires decomposition due to [complexity/phases/duration].
+
+| Child ID | Scope | Priority | Depends On |
+|----------|-------|----------|------------|
+| SD-XXX-A | Foundation | critical | None |
+| SD-XXX-B | Features | high | SD-XXX-A |
+| SD-XXX-C | Polish | medium | SD-XXX-B |
+
+## Sequential Execution
+
+Children execute sequentially:
+1. Child A completes full LEAD→PLAN→EXEC
+2. Child B starts LEAD after Child A completes
+3. Child C starts LEAD after Child B completes
+4. Parent completes after Child C completes
+
+## Why Children Need Individual LEAD Approval
+
+Each child represents distinct strategic value:
+- **Child A (Foundation)**: Validates core architecture decisions
+- **Child B (Features)**: Validates feature priority and scope
+- **Child C (Polish)**: Validates UX investment vs other priorities
+
+## Completion Criteria
+
+Parent completes when:
+- [ ] All children have status = 'completed'
+- [ ] Parent progress = 100% (auto-calculated)
+```
+
 
 ## Visual Documentation Best Practices
 
@@ -1252,6 +1383,6 @@ Required: [object Object], [object Object], [object Object], [object Object], [o
 
 ---
 
-*Generated from database: 2025-12-05*
+*Generated from database: 2025-12-06*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

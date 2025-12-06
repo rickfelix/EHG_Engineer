@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-04T22:29:13.796Z
-**Rows**: 224
+**Generated**: 2025-12-04T23:01:42.129Z
+**Rows**: 225
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (58 total)
+## Columns (59 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -77,6 +77,7 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 | tags | `ARRAY` | YES | `'{}'::text[]` | Array of categorization tags (e.g., ["supabase", "react", "performance", "critical"]) |
 | content_embedding | `USER-DEFINED` | YES | - | OpenAI text-embedding-3-small vector (1536 dimensions) for semantic search. Generated from title + key_learnings + action_items. |
 | unnecessary_work_identified | `jsonb` | YES | `'[]'::jsonb` | Array of items that could have been deleted but were not. Used to improve future Q8 decisions. |
+| protocol_improvements | `jsonb` | YES | `'[]'::jsonb` | Array of LEO Protocol improvement suggestions. Each object: { category: string, improvement: string, evidence: string, impact: string, affected_phase: LEAD|PLAN|EXEC|null } |
 
 ## Constraints
 
@@ -88,6 +89,7 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 
 ### Check Constraints
 - `check_learning_category`: CHECK ((learning_category = ANY (ARRAY['APPLICATION_ISSUE'::text, 'PROCESS_IMPROVEMENT'::text, 'TESTING_STRATEGY'::text, 'DATABASE_SCHEMA'::text, 'DEPLOYMENT_ISSUE'::text, 'PERFORMANCE_OPTIMIZATION'::text, 'USER_EXPERIENCE'::text, 'SECURITY_VULNERABILITY'::text, 'DOCUMENTATION'::text])))
+- `check_protocol_improvements_is_array`: CHECK (((jsonb_typeof(protocol_improvements) = 'array'::text) OR (protocol_improvements IS NULL)))
 - `check_target_application`: CHECK ((target_application = ANY (ARRAY['EHG'::text, 'EHG_Engineer'::text])))
 - `retrospectives_checkpoint_effectiveness_check`: CHECK (((checkpoint_effectiveness >= 0) AND (checkpoint_effectiveness <= 100)))
 - `retrospectives_context_efficiency_rating_check`: CHECK (((context_efficiency_rating >= 0) AND (context_efficiency_rating <= 100)))
@@ -127,6 +129,10 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 - `idx_retrospectives_learning_category`
   ```sql
   CREATE INDEX idx_retrospectives_learning_category ON public.retrospectives USING btree (learning_category)
+  ```
+- `idx_retrospectives_protocol_improvements_gin`
+  ```sql
+  CREATE INDEX idx_retrospectives_protocol_improvements_gin ON public.retrospectives USING gin (protocol_improvements)
   ```
 - `idx_retrospectives_related_commits_gin`
   ```sql
@@ -198,6 +204,16 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION auto_populate_retrospective_fields()`
+
+### validate_protocol_improvements_trigger
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION validate_protocol_improvements_for_process_category()`
+
+### validate_protocol_improvements_trigger
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION validate_protocol_improvements_for_process_category()`
 
 ### validate_retrospective_quality_trigger
 
