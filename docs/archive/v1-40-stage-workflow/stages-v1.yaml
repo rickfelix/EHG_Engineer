@@ -1,0 +1,1839 @@
+stages:
+  - id: 1
+    title: Draft Idea
+    description: Capture and validate initial venture ideas with AI assistance and Chairman feedback.
+    depends_on: []
+    inputs:
+      - Voice recording
+      - Text input
+      - Chairman feedback
+    outputs:
+      - Structured idea document
+      - Initial validation
+      - Risk assessment
+    metrics:
+      - Idea quality score
+      - Validation completeness
+      - Time to capture
+    gates:
+      entry: []
+      exit:
+        - Title validated (3-120 chars)
+        - Description validated (20-2000 chars)
+        - Category assigned
+    substages:
+      - id: '1.1'
+        title: Idea Brief Creation
+        done_when:
+          - Title captured
+          - Description written
+          - Category selected
+      - id: '1.2'
+        title: Assumption Listing
+        done_when:
+          - Key assumptions documented
+          - Risk factors identified
+      - id: '1.3'
+        title: Initial Success Criteria
+        done_when:
+          - Success metrics defined
+          - Validation rules applied
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 2
+    title: AI Review
+    description: Multi-agent AI system reviews and critiques the idea from multiple perspectives.
+    depends_on:
+      - 1
+    inputs:
+      - Structured idea
+      - Historical data
+      - Market signals
+    outputs:
+      - AI critique report
+      - Contrarian analysis
+      - Risk assessment
+    metrics:
+      - Review thoroughness
+      - Risk identification rate
+      - Processing time
+    gates:
+      entry:
+        - Idea document complete
+        - Validation passed
+      exit:
+        - Multi-model pass complete
+        - Contrarian review done
+        - Top-5 risks identified
+    substages:
+      - id: '2.1'
+        title: Multi-Model Analysis
+        done_when:
+          - EVA multi-model analysis complete
+          - Specialist agents review complete
+          - Contrarian perspectives gathered
+      - id: '2.2'
+        title: Contrarian Red Team
+        done_when:
+          - Devil's advocate analysis
+          - Failure mode assessment
+      - id: '2.3'
+        title: Risk Prioritization
+        done_when:
+          - Top-5 risks ranked
+          - Mitigation strategies proposed
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 3
+    title: Comprehensive Validation
+    description: Validate problem-solution fit, user willingness to pay, and technical feasibility.
+    depends_on:
+      - 2
+    inputs:
+      - AI review report
+      - Market research
+      - User interviews
+    outputs:
+      - Validation report
+      - User feedback
+      - Feasibility assessment
+    metrics:
+      - Validation score
+      - User interest level
+      - Technical feasibility score
+    gates:
+      entry:
+        - AI review complete
+        - Risk assessment done
+      exit:
+        - Problem validated
+        - Solution validated
+        - Kill/Revise/Proceed decision
+    substages:
+      - id: '3.1'
+        title: Problem Validation
+        done_when:
+          - User interviews conducted
+          - Pain points documented
+      - id: '3.2'
+        title: Solution Validation
+        done_when:
+          - Solution-fit confirmed
+          - MVP scope defined
+      - id: '3.3'
+        title: Willingness to Pay
+        done_when:
+          - Pricing signals captured
+          - Revenue model validated
+      - id: '3.4'
+        title: Kill/Revise/Proceed Gate
+        done_when:
+          - Decision documented
+          - Next steps defined
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 4
+    title: Competitive Intelligence & Market Defense
+    description: Analyze competitive landscape and establish market positioning strategy.
+    depends_on:
+      - 3
+    inputs:
+      - Market research
+      - Competitor data
+      - Industry reports
+    outputs:
+      - Competitive analysis
+      - Market positioning
+      - Defense strategy
+    metrics:
+      - Market coverage
+      - Competitor identification
+      - Differentiation score
+    gates:
+      entry:
+        - Validation complete
+        - Market defined
+      exit:
+        - Competitors analyzed
+        - Positioning defined
+        - Moat identified
+    substages:
+      - id: '4.1'
+        title: Competitor Identification
+        done_when:
+          - Direct competitors listed
+          - Indirect competitors mapped
+      - id: '4.2'
+        title: Feature Comparison
+        done_when:
+          - Feature matrix complete
+          - Gaps identified
+      - id: '4.3'
+        title: Market Positioning
+        done_when:
+          - USP defined
+          - Differentiation strategy set
+      - id: '4.4'
+        title: Defense Strategy
+        done_when:
+          - Competitive moat defined
+          - IP strategy outlined
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 5
+    title: Profitability Forecasting
+    description: Create financial models and profitability projections for the venture.
+    depends_on:
+      - 4
+    inputs:
+      - Market size data
+      - Pricing strategy
+      - Cost estimates
+    outputs:
+      - Financial model
+      - P&L projections
+      - Break-even analysis
+    metrics:
+      - Model accuracy
+      - Revenue projections
+      - Margin forecasts
+    gates:
+      entry:
+        - Market positioning defined
+        - Pricing signals captured
+      exit:
+        - Financial model complete
+        - Profitability validated
+        - Investment requirements defined
+    substages:
+      - id: '5.1'
+        title: Revenue Modeling
+        done_when:
+          - Revenue streams defined
+          - Growth projections created
+      - id: '5.2'
+        title: Cost Structure
+        done_when:
+          - COGS estimated
+          - OpEx projected
+          - CapEx planned
+      - id: '5.3'
+        title: Profitability Analysis
+        done_when:
+          - Break-even calculated
+          - Margins projected
+          - ROI estimated
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 6
+    title: Risk Evaluation
+    description: Comprehensive risk assessment and mitigation strategy development.
+    depends_on:
+      - 5
+    inputs:
+      - Financial model
+      - Technical assessment
+      - Market analysis
+    outputs:
+      - Risk matrix
+      - Mitigation plans
+      - Contingency strategies
+    metrics:
+      - Risk coverage
+      - Mitigation effectiveness
+      - Risk score
+    gates:
+      entry:
+        - Financial model complete
+        - Technical review done
+      exit:
+        - All risks identified
+        - Mitigation plans approved
+        - Risk tolerance defined
+    substages:
+      - id: '6.1'
+        title: Risk Identification
+        done_when:
+          - Technical risks listed
+          - Market risks assessed
+          - Operational risks mapped
+      - id: '6.2'
+        title: Risk Scoring
+        done_when:
+          - Probability assigned
+          - Impact assessed
+          - Risk matrix created
+      - id: '6.3'
+        title: Mitigation Planning
+        done_when:
+          - Mitigation strategies defined
+          - Contingencies planned
+          - Triggers identified
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 7
+    title: Comprehensive Planning Suite
+    description: Develop comprehensive business and technical plans for venture execution.
+    depends_on:
+      - 6
+    inputs:
+      - Risk assessment
+      - Resource requirements
+      - Timeline constraints
+    outputs:
+      - Business plan
+      - Technical roadmap
+      - Resource plan
+    metrics:
+      - Plan completeness
+      - Timeline feasibility
+      - Resource efficiency
+    gates:
+      entry:
+        - Risks evaluated
+        - Resources identified
+      exit:
+        - Business plan approved
+        - Technical roadmap set
+        - Resources allocated
+    substages:
+      - id: '7.1'
+        title: Business Planning
+        done_when:
+          - Business model defined
+          - Go-to-market planned
+          - Operations designed
+      - id: '7.2'
+        title: Technical Planning
+        done_when:
+          - Architecture designed
+          - Tech stack selected
+          - Development roadmap created
+      - id: '7.3'
+        title: Resource Planning
+        done_when:
+          - Team requirements defined
+          - Budget allocated
+          - Timeline set
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 8
+    title: Problem Decomposition Engine
+    description: Break down complex problems into manageable, actionable components.
+    depends_on:
+      - 7
+    inputs:
+      - Business plan
+      - Technical requirements
+      - Complexity assessment
+    outputs:
+      - Decomposed tasks
+      - Work breakdown structure
+      - Dependencies map
+    metrics:
+      - Decomposition depth
+      - Task clarity
+      - Dependency resolution
+    gates:
+      entry:
+        - Plans approved
+        - Scope defined
+      exit:
+        - Problems decomposed
+        - Tasks prioritized
+        - Dependencies mapped
+    substages:
+      - id: '8.1'
+        title: Problem Analysis
+        done_when:
+          - Core problems identified
+          - Complexity assessed
+      - id: '8.2'
+        title: Task Breakdown
+        done_when:
+          - Tasks decomposed
+          - Subtasks defined
+          - WBS created
+      - id: '8.3'
+        title: Dependency Mapping
+        done_when:
+          - Dependencies identified
+          - Critical path defined
+          - Blockers resolved
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 9
+    title: Gap Analysis & Market Opportunity Modeling
+    description: Identify capability gaps and model market opportunities.
+    depends_on:
+      - 8
+    inputs:
+      - Current capabilities
+      - Market requirements
+      - Competitor analysis
+    outputs:
+      - Gap analysis report
+      - Opportunity matrix
+      - Capability roadmap
+    metrics:
+      - Gap coverage
+      - Opportunity size
+      - Capability score
+    gates:
+      entry:
+        - Decomposition complete
+        - Market analyzed
+      exit:
+        - Gaps identified
+        - Opportunities prioritized
+        - Roadmap defined
+    substages:
+      - id: '9.1'
+        title: Capability Assessment
+        done_when:
+          - Current state documented
+          - Required capabilities listed
+      - id: '9.2'
+        title: Gap Identification
+        done_when:
+          - Gaps catalogued
+          - Severity assessed
+          - Priority assigned
+      - id: '9.3'
+        title: Opportunity Modeling
+        done_when:
+          - Opportunities mapped
+          - Market size estimated
+          - ROI projected
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 10
+    title: Comprehensive Technical Review
+    description: Validate technical architecture and implementation feasibility.
+    depends_on:
+      - 9
+    inputs:
+      - Technical requirements
+      - Architecture design
+      - Resource constraints
+    outputs:
+      - Technical review report
+      - Architecture validation
+      - Implementation plan
+    metrics:
+      - Technical debt score
+      - Scalability rating
+      - Security score
+    gates:
+      entry:
+        - Architecture designed
+        - Requirements defined
+      exit:
+        - Architecture approved
+        - Feasibility confirmed
+        - Tech debt acceptable
+    substages:
+      - id: '10.1'
+        title: Architecture Review
+        done_when:
+          - Design validated
+          - Patterns approved
+          - Standards met
+      - id: '10.2'
+        title: Scalability Assessment
+        done_when:
+          - Load projections validated
+          - Scaling strategy defined
+      - id: '10.3'
+        title: Security Review
+        done_when:
+          - Security assessment complete
+          - Compliance verified
+          - Risks mitigated
+      - id: '10.4'
+        title: Implementation Planning
+        done_when:
+          - Development approach set
+          - Timeline validated
+          - Resources confirmed
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 11
+    title: Strategic Naming & Brand Foundation
+    description: Develop strategic brand identity and naming conventions.
+    depends_on:
+      - 10
+    inputs:
+      - Market positioning
+      - Brand strategy
+      - Legal requirements
+    outputs:
+      - Brand name
+      - Brand guidelines
+      - Trademark search
+    metrics:
+      - Brand strength score
+      - Trademark availability
+      - Market resonance
+    gates:
+      entry:
+        - Positioning defined
+        - Market validated
+      exit:
+        - Name selected
+        - Trademark cleared
+        - Brand guidelines set
+    substages:
+      - id: '11.1'
+        title: Name Generation
+        done_when:
+          - Name candidates created
+          - Linguistic analysis done
+      - id: '11.2'
+        title: Trademark Search
+        done_when:
+          - Availability checked
+          - Domain secured
+          - Legal clearance obtained
+      - id: '11.3'
+        title: Brand Foundation
+        done_when:
+          - Brand values defined
+          - Visual identity created
+          - Guidelines documented
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 12
+    title: Adaptive Naming Module
+    description: Optimize naming for different markets and contexts.
+    depends_on:
+      - 11
+    inputs:
+      - Primary brand name
+      - Market segments
+      - Cultural factors
+    outputs:
+      - Name variations
+      - Market adaptations
+      - Localization guide
+    metrics:
+      - Adaptation coverage
+      - Cultural fit score
+      - Market acceptance
+    gates:
+      entry:
+        - Primary name selected
+        - Markets identified
+      exit:
+        - Variations approved
+        - Localizations complete
+        - Guidelines updated
+    substages:
+      - id: '12.1'
+        title: Market Analysis
+        done_when:
+          - Target markets mapped
+          - Cultural factors assessed
+      - id: '12.2'
+        title: Name Adaptation
+        done_when:
+          - Variations created
+          - Translations verified
+          - Phonetics validated
+      - id: '12.3'
+        title: Testing & Validation
+        done_when:
+          - Market testing complete
+          - Feedback incorporated
+          - Final selections made
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 13
+    title: Exit-Oriented Design
+    description: Design venture with exit strategy and value maximization in mind.
+    depends_on:
+      - 12
+    inputs:
+      - Business model
+      - Market analysis
+      - Industry trends
+    outputs:
+      - Exit strategy
+      - Value drivers
+      - Acquisition targets
+    metrics:
+      - Exit readiness score
+      - Valuation potential
+      - Strategic fit
+    gates:
+      entry:
+        - Business model defined
+        - Market position clear
+      exit:
+        - Exit strategy approved
+        - Value drivers identified
+        - Timeline set
+    substages:
+      - id: '13.1'
+        title: Exit Strategy Definition
+        done_when:
+          - Exit options evaluated
+          - Preferred path selected
+          - Timeline established
+      - id: '13.2'
+        title: Value Driver Identification
+        done_when:
+          - Key metrics defined
+          - Growth levers identified
+          - IP strategy set
+      - id: '13.3'
+        title: Buyer Landscape
+        done_when:
+          - Potential acquirers listed
+          - Strategic fit assessed
+          - Relationships mapped
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 14
+    title: Comprehensive Development Preparation
+    description: Prepare all resources and infrastructure for development phase.
+    depends_on:
+      - 13
+    inputs:
+      - Technical plan
+      - Resource requirements
+      - Timeline
+    outputs:
+      - Development environment
+      - Team structure
+      - Sprint plan
+    metrics:
+      - Readiness score
+      - Team velocity
+      - Infrastructure stability
+    gates:
+      entry:
+        - Technical plan approved
+        - Resources allocated
+      exit:
+        - Environment ready
+        - Team assembled
+        - First sprint planned
+    substages:
+      - id: '14.1'
+        title: Environment Setup
+        done_when:
+          - Dev environment configured
+          - CI/CD pipeline ready
+          - Tools provisioned
+      - id: '14.2'
+        title: Team Formation
+        done_when:
+          - Roles defined
+          - Team assembled
+          - Responsibilities assigned
+      - id: '14.3'
+        title: Sprint Planning
+        done_when:
+          - Backlog created
+          - First sprint planned
+          - Velocity estimated
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 15
+    title: Pricing Strategy & Revenue Architecture
+    description: Develop comprehensive pricing strategy and revenue model.
+    depends_on:
+      - 14
+    inputs:
+      - Cost structure
+      - Market research
+      - Competitor pricing
+    outputs:
+      - Pricing model
+      - Revenue projections
+      - Pricing tiers
+    metrics:
+      - Price optimization
+      - Revenue potential
+      - Market acceptance
+    gates:
+      entry:
+        - Costs calculated
+        - Market research complete
+      exit:
+        - Pricing approved
+        - Tiers defined
+        - Projections validated
+    substages:
+      - id: '15.1'
+        title: Pricing Research
+        done_when:
+          - Competitor prices analyzed
+          - Customer willingness assessed
+          - Value metrics defined
+      - id: '15.2'
+        title: Model Development
+        done_when:
+          - Pricing model created
+          - Tiers structured
+          - Discounts planned
+      - id: '15.3'
+        title: Revenue Projection
+        done_when:
+          - Projections calculated
+          - Scenarios modeled
+          - Targets set
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 16
+    title: AI CEO Agent Development
+    description: Configure and deploy AI CEO agent for autonomous venture management.
+    depends_on:
+      - 15
+    inputs:
+      - Business strategy
+      - Decision framework
+      - KPIs
+    outputs:
+      - AI CEO configuration
+      - Decision models
+      - Automation rules
+    metrics:
+      - Decision accuracy
+      - Automation rate
+      - Strategic alignment
+    gates:
+      entry:
+        - Strategy defined
+        - KPIs set
+      exit:
+        - AI CEO deployed
+        - Decision models trained
+        - Oversight configured
+    substages:
+      - id: '16.1'
+        title: Agent Configuration
+        done_when:
+          - Personality defined
+          - Decision framework set
+          - Constraints configured
+      - id: '16.2'
+        title: Model Training
+        done_when:
+          - Historical data processed
+          - Decision models trained
+          - Validation complete
+      - id: '16.3'
+        title: Integration & Testing
+        done_when:
+          - Systems integrated
+          - Testing complete
+          - Failsafes verified
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 17
+    title: GTM Strategist Agent Development
+    description: Deploy go-to-market strategist agent for marketing automation.
+    depends_on:
+      - 16
+    inputs:
+      - Market strategy
+      - Customer segments
+      - Marketing channels
+    outputs:
+      - GTM agent config
+      - Campaign templates
+      - Automation workflows
+    metrics:
+      - Campaign effectiveness
+      - Lead generation
+      - Conversion rates
+    gates:
+      entry:
+        - Market strategy defined
+        - Segments identified
+      exit:
+        - GTM agent deployed
+        - Campaigns configured
+        - Workflows active
+    substages:
+      - id: '17.1'
+        title: Strategy Configuration
+        done_when:
+          - GTM strategy encoded
+          - Channels configured
+          - Budgets allocated
+      - id: '17.2'
+        title: Campaign Development
+        done_when:
+          - Templates created
+          - Content generated
+          - Schedules set
+      - id: '17.3'
+        title: Automation Setup
+        done_when:
+          - Workflows configured
+          - Triggers defined
+          - Testing complete
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 18
+    title: Documentation Sync to GitHub
+    description: Synchronize all documentation and code to version control.
+    depends_on:
+      - 17
+    inputs:
+      - Documentation
+      - Code repositories
+      - Configuration files
+    outputs:
+      - GitHub repos
+      - Documentation site
+      - Version history
+    metrics:
+      - Sync completeness
+      - Documentation coverage
+      - Version control compliance
+    gates:
+      entry:
+        - Documentation complete
+        - Code ready
+      exit:
+        - Repos synchronized
+        - CI/CD connected
+        - Access configured
+    substages:
+      - id: '18.1'
+        title: Repository Setup
+        done_when:
+          - Repos created
+          - Structure defined
+          - Permissions set
+      - id: '18.2'
+        title: Content Migration
+        done_when:
+          - Code pushed
+          - Docs uploaded
+          - Assets stored
+      - id: '18.3'
+        title: Automation Configuration
+        done_when:
+          - Webhooks set
+          - CI/CD configured
+          - Sync automated
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 19
+    title: Tri-Party Integration Verification
+    description: Verify all third-party integrations and external dependencies.
+    depends_on:
+      - 18
+    inputs:
+      - Integration requirements
+      - API documentation
+      - Test accounts
+    outputs:
+      - Integration test results
+      - API configurations
+      - Fallback strategies
+    metrics:
+      - Integration success rate
+      - API reliability
+      - Latency metrics
+    gates:
+      entry:
+        - Integrations identified
+        - APIs documented
+      exit:
+        - All integrations verified
+        - Fallbacks configured
+        - SLAs met
+    substages:
+      - id: '19.1'
+        title: Integration Testing
+        done_when:
+          - APIs tested
+          - Data flows verified
+          - Error handling confirmed
+      - id: '19.2'
+        title: Performance Validation
+        done_when:
+          - Latency measured
+          - Throughput tested
+          - Limits documented
+      - id: '19.3'
+        title: Fallback Configuration
+        done_when:
+          - Fallbacks implemented
+          - Circuit breakers set
+          - Monitoring configured
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 20
+    title: Enhanced Context Loading
+    description: Load and optimize all context for AI agents and system components.
+    depends_on:
+      - 19
+    inputs:
+      - System context
+      - Historical data
+      - Knowledge base
+    outputs:
+      - Context models
+      - Embeddings
+      - Knowledge graphs
+    metrics:
+      - Context completeness
+      - Loading performance
+      - Memory efficiency
+    gates:
+      entry:
+        - Data prepared
+        - Models trained
+      exit:
+        - Context loaded
+        - Performance optimized
+        - Validation complete
+    substages:
+      - id: '20.1'
+        title: Context Preparation
+        done_when:
+          - Data collected
+          - Context structured
+          - Embeddings created
+      - id: '20.2'
+        title: Loading Optimization
+        done_when:
+          - Caching configured
+          - Indexes created
+          - Memory optimized
+      - id: '20.3'
+        title: Validation & Testing
+        done_when:
+          - Context validated
+          - Performance tested
+          - Accuracy verified
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 21
+    title: Final Pre-Flight Check
+    description: Comprehensive validation before development phase begins.
+    depends_on:
+      - 20
+    inputs:
+      - All previous outputs
+      - Checklist
+      - Success criteria
+    outputs:
+      - Pre-flight report
+      - Go/No-go decision
+      - Risk assessment
+    metrics:
+      - Checklist completion
+      - Risk score
+      - Readiness rating
+    gates:
+      entry:
+        - All preparations complete
+        - Resources ready
+      exit:
+        - All checks passed
+        - Go decision made
+        - Risks accepted
+    substages:
+      - id: '21.1'
+        title: Technical Validation
+        done_when:
+          - Architecture verified
+          - Dependencies resolved
+          - Environment stable
+      - id: '21.2'
+        title: Business Validation
+        done_when:
+          - Strategy confirmed
+          - Resources committed
+          - Stakeholders aligned
+      - id: '21.3'
+        title: Go/No-Go Decision
+        done_when:
+          - Criteria evaluated
+          - Decision made
+          - Communication sent
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 22
+    title: Iterative Development Loop
+    description: Execute agile development cycles with continuous feedback.
+    depends_on:
+      - 21
+    inputs:
+      - Sprint backlog
+      - User stories
+      - Technical requirements
+    outputs:
+      - Working software
+      - Sprint reports
+      - Velocity metrics
+    metrics:
+      - Sprint velocity
+      - Burn rate
+      - Quality metrics
+    gates:
+      entry:
+        - Sprint planned
+        - Team ready
+      exit:
+        - Sprint goals met
+        - Quality standards passed
+        - Demo complete
+    substages:
+      - id: '22.1'
+        title: Sprint Execution
+        done_when:
+          - Stories completed
+          - Code reviewed
+          - Tests passed
+      - id: '22.2'
+        title: Daily Standups
+        done_when:
+          - Progress tracked
+          - Blockers resolved
+          - Adjustments made
+      - id: '22.3'
+        title: Sprint Review
+        done_when:
+          - Demo delivered
+          - Feedback collected
+          - Retrospective complete
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 23
+    title: Continuous Feedback Loops
+    description: Establish and maintain continuous feedback mechanisms.
+    depends_on:
+      - 22
+    inputs:
+      - User feedback
+      - System metrics
+      - Performance data
+    outputs:
+      - Feedback reports
+      - Improvement backlog
+      - Priority adjustments
+    metrics:
+      - Feedback volume
+      - Response time
+      - Implementation rate
+    gates:
+      entry:
+        - Feedback channels open
+        - Metrics flowing
+      exit:
+        - Feedback processed
+        - Actions prioritized
+        - Loop closed
+    substages:
+      - id: '23.1'
+        title: Feedback Collection
+        done_when:
+          - Channels monitored
+          - Feedback captured
+          - Data aggregated
+      - id: '23.2'
+        title: Analysis & Prioritization
+        done_when:
+          - Patterns identified
+          - Issues prioritized
+          - Actions defined
+      - id: '23.3'
+        title: Implementation & Closure
+        done_when:
+          - Changes implemented
+          - Users notified
+          - Loop documented
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 24
+    title: 'MVP Engine: Automated Feedback Iteration'
+    description: Automated iteration engine for rapid MVP improvements.
+    depends_on:
+      - 23
+    inputs:
+      - Feedback data
+      - Performance metrics
+      - User behavior
+    outputs:
+      - Iteration plan
+      - Automated improvements
+      - A/B test results
+    metrics:
+      - Iteration velocity
+      - Improvement rate
+      - User satisfaction
+    gates:
+      entry:
+        - MVP deployed
+        - Metrics baseline set
+      exit:
+        - Iterations complete
+        - Metrics improved
+        - Users satisfied
+    substages:
+      - id: '24.1'
+        title: Automated Analysis
+        done_when:
+          - Data analyzed
+          - Patterns detected
+          - Opportunities identified
+      - id: '24.2'
+        title: Iteration Planning
+        done_when:
+          - Changes prioritized
+          - Tests designed
+          - Resources allocated
+      - id: '24.3'
+        title: Execution & Measurement
+        done_when:
+          - Changes deployed
+          - Tests run
+          - Results measured
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 25
+    title: Quality Assurance
+    description: Comprehensive quality assurance and testing processes.
+    depends_on:
+      - 24
+    inputs:
+      - Test plans
+      - Quality criteria
+      - Test data
+    outputs:
+      - Test results
+      - Bug reports
+      - Quality certification
+    metrics:
+      - Test coverage
+      - Defect density
+      - Quality score
+    gates:
+      entry:
+        - Test plans approved
+        - Environment ready
+      exit:
+        - Tests passed
+        - Quality certified
+        - Release approved
+    substages:
+      - id: '25.1'
+        title: Test Execution
+        done_when:
+          - Unit tests passed
+          - Integration tests complete
+          - E2E tests successful
+      - id: '25.2'
+        title: Bug Management
+        done_when:
+          - Bugs logged
+          - Fixes verified
+          - Regression tested
+      - id: '25.3'
+        title: Quality Certification
+        done_when:
+          - Criteria met
+          - Documentation complete
+          - Sign-off received
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 26
+    title: Security & Compliance Certification
+    description: Security validation and compliance certification processes.
+    depends_on:
+      - 25
+    inputs:
+      - Security requirements
+      - Compliance standards
+      - Audit criteria
+    outputs:
+      - Security report
+      - Compliance certificates
+      - Audit trail
+    metrics:
+      - Security score
+      - Compliance rate
+      - Vulnerability count
+    gates:
+      entry:
+        - Security requirements defined
+        - Standards identified
+      exit:
+        - Security verified
+        - Compliance achieved
+        - Certificates issued
+    substages:
+      - id: '26.1'
+        title: Security Testing
+        done_when:
+          - Penetration testing complete
+          - Vulnerabilities patched
+          - OWASP compliance verified
+      - id: '26.2'
+        title: Compliance Validation
+        done_when:
+          - Standards reviewed
+          - Evidence collected
+          - Audits passed
+      - id: '26.3'
+        title: Certification Process
+        done_when:
+          - Documentation prepared
+          - Certificates obtained
+          - Records archived
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 27
+    title: Actor Model & Saga Transaction Integration
+    description: Implement distributed transaction patterns and actor model architecture.
+    depends_on:
+      - 26
+    inputs:
+      - Architecture design
+      - Transaction requirements
+      - State management needs
+    outputs:
+      - Actor system
+      - Saga orchestration
+      - Event sourcing
+    metrics:
+      - Transaction success rate
+      - Latency metrics
+      - Consistency score
+    gates:
+      entry:
+        - Architecture approved
+        - Patterns selected
+      exit:
+        - Actors implemented
+        - Sagas tested
+        - Consistency verified
+    substages:
+      - id: '27.1'
+        title: Actor Implementation
+        done_when:
+          - Actors defined
+          - Messages designed
+          - Supervision configured
+      - id: '27.2'
+        title: Saga Orchestration
+        done_when:
+          - Sagas designed
+          - Compensations defined
+          - Orchestrator built
+      - id: '27.3'
+        title: Testing & Validation
+        done_when:
+          - Failure scenarios tested
+          - Recovery verified
+          - Performance validated
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 28
+    title: Development Excellence & Caching Optimizations
+    description: Optimize performance through caching and development best practices.
+    depends_on:
+      - 27
+    inputs:
+      - Performance metrics
+      - Bottleneck analysis
+      - Cache requirements
+    outputs:
+      - Optimized code
+      - Cache layer
+      - Performance report
+    metrics:
+      - Response time
+      - Cache hit rate
+      - Resource utilization
+    gates:
+      entry:
+        - Baseline measured
+        - Bottlenecks identified
+      exit:
+        - Performance targets met
+        - Caching optimized
+        - Best practices applied
+    substages:
+      - id: '28.1'
+        title: Performance Analysis
+        done_when:
+          - Profiling complete
+          - Bottlenecks identified
+          - Optimization targets set
+      - id: '28.2'
+        title: Cache Implementation
+        done_when:
+          - Cache strategy defined
+          - Layers implemented
+          - Invalidation configured
+      - id: '28.3'
+        title: Code Optimization
+        done_when:
+          - Hot paths optimized
+          - Algorithms improved
+          - Resources reduced
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 29
+    title: Final Polish
+    description: Final UI/UX refinements and production readiness preparations.
+    depends_on:
+      - 28
+    inputs:
+      - UI/UX feedback
+      - Performance data
+      - User testing results
+    outputs:
+      - Polished UI
+      - Optimized UX
+      - Production assets
+    metrics:
+      - UI consistency
+      - UX score
+      - Performance metrics
+    gates:
+      entry:
+        - Features complete
+        - Testing done
+      exit:
+        - UI polished
+        - UX optimized
+        - Assets ready
+    substages:
+      - id: '29.1'
+        title: UI Refinement
+        done_when:
+          - Visual polish applied
+          - Animations smooth
+          - Responsive design verified
+      - id: '29.2'
+        title: UX Optimization
+        done_when:
+          - Flows optimized
+          - Friction removed
+          - Accessibility verified
+      - id: '29.3'
+        title: Asset Preparation
+        done_when:
+          - Assets optimized
+          - CDN configured
+          - Bundles minimized
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 30
+    title: Production Deployment
+    description: Deploy to production with zero-downtime and rollback capabilities.
+    depends_on:
+      - 29
+    inputs:
+      - Release candidate
+      - Deployment plan
+      - Rollback strategy
+    outputs:
+      - Production deployment
+      - Monitoring setup
+      - Documentation
+    metrics:
+      - Deployment success rate
+      - Downtime
+      - Rollback time
+    gates:
+      entry:
+        - Release approved
+        - Chairman approval received
+      exit:
+        - Deployment successful
+        - Monitoring active
+        - Rollback tested
+    substages:
+      - id: '30.1'
+        title: Pre-Deployment Validation
+        done_when:
+          - Health checks passed
+          - Dependencies verified
+          - Backups created
+      - id: '30.2'
+        title: Blue-Green Deployment
+        done_when:
+          - Green environment ready
+          - Traffic switched
+          - Validation complete
+      - id: '30.3'
+        title: Post-Deployment Verification
+        done_when:
+          - Smoke tests passed
+          - Monitoring confirmed
+          - Rollback tested
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 31
+    title: MVP Launch
+    description: Orchestrate MVP launch with coordinated marketing and support.
+    depends_on:
+      - 30
+    inputs:
+      - Launch plan
+      - Marketing materials
+      - Support resources
+    outputs:
+      - Live product
+      - Launch metrics
+      - User feedback
+    metrics:
+      - Launch success rate
+      - User acquisition
+      - Engagement metrics
+    gates:
+      entry:
+        - Production stable
+        - Marketing ready
+        - Support trained
+      exit:
+        - Launch executed
+        - Users onboarded
+        - Metrics flowing
+    substages:
+      - id: '31.1'
+        title: Launch Preparation
+        done_when:
+          - Communications ready
+          - Teams briefed
+          - Contingencies planned
+      - id: '31.2'
+        title: Launch Execution
+        done_when:
+          - Product live
+          - Marketing activated
+          - PR released
+      - id: '31.3'
+        title: Initial Monitoring
+        done_when:
+          - Metrics tracked
+          - Issues addressed
+          - Feedback collected
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 32
+    title: Customer Success & Retention Engineering
+    description: Establish customer success systems and retention mechanisms.
+    depends_on:
+      - 31
+    inputs:
+      - Customer data
+      - Usage metrics
+      - Support tickets
+    outputs:
+      - Success playbooks
+      - Retention programs
+      - Health scores
+    metrics:
+      - Customer health score
+      - Retention rate
+      - NPS score
+    gates:
+      entry:
+        - Customers onboarded
+        - Data flowing
+      exit:
+        - Success system active
+        - Retention improving
+        - NPS positive
+    substages:
+      - id: '32.1'
+        title: Success Infrastructure
+        done_when:
+          - CRM configured
+          - Playbooks created
+          - Team trained
+      - id: '32.2'
+        title: Health Monitoring
+        done_when:
+          - Metrics defined
+          - Scoring implemented
+          - Alerts configured
+      - id: '32.3'
+        title: Retention Programs
+        done_when:
+          - Programs designed
+          - Automation built
+          - Engagement tracked
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 33
+    title: Post-MVP Expansion
+    description: Expand features and capabilities based on market feedback.
+    depends_on:
+      - 32
+    inputs:
+      - User feedback
+      - Market demands
+      - Competitive analysis
+    outputs:
+      - Feature roadmap
+      - Expansion plan
+      - New capabilities
+    metrics:
+      - Feature adoption
+      - Market coverage
+      - User satisfaction
+    gates:
+      entry:
+        - MVP stable
+        - Feedback analyzed
+      exit:
+        - Expansion planned
+        - Features prioritized
+        - Resources allocated
+    substages:
+      - id: '33.1'
+        title: Feature Planning
+        done_when:
+          - Features identified
+          - Priority set
+          - Roadmap created
+      - id: '33.2'
+        title: Market Expansion
+        done_when:
+          - New segments identified
+          - Localization planned
+          - Partnerships explored
+      - id: '33.3'
+        title: Capability Development
+        done_when:
+          - New features built
+          - Integrations added
+          - Platform extended
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 34
+    title: Creative Media Automation
+    description: Automate content creation and creative asset generation.
+    depends_on:
+      - 33
+    inputs:
+      - Brand guidelines
+      - Content strategy
+      - Campaign requirements
+    outputs:
+      - Automated content
+      - Creative assets
+      - Campaign materials
+    metrics:
+      - Content velocity
+      - Asset quality
+      - Campaign performance
+    gates:
+      entry:
+        - Strategy defined
+        - Templates created
+      exit:
+        - Automation running
+        - Quality verified
+        - Campaigns active
+    substages:
+      - id: '34.1'
+        title: Content Automation
+        done_when:
+          - Templates built
+          - Workflows configured
+          - Quality controls set
+      - id: '34.2'
+        title: Asset Generation
+        done_when:
+          - AI models trained
+          - Assets generated
+          - Brand compliance verified
+      - id: '34.3'
+        title: Campaign Execution
+        done_when:
+          - Campaigns launched
+          - Performance tracked
+          - Optimization running
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 35
+    title: GTM Timing Intelligence
+    description: Optimize go-to-market timing using market intelligence.
+    depends_on:
+      - 34
+    inputs:
+      - Market signals
+      - Competitive data
+      - Seasonal patterns
+    outputs:
+      - Timing recommendations
+      - Launch windows
+      - Market readiness
+    metrics:
+      - Timing accuracy
+      - Market reception
+      - Competitive advantage
+    gates:
+      entry:
+        - Market data available
+        - Patterns analyzed
+      exit:
+        - Timing optimized
+        - Windows identified
+        - Strategy adjusted
+    substages:
+      - id: '35.1'
+        title: Market Signal Analysis
+        done_when:
+          - Signals collected
+          - Patterns identified
+          - Trends analyzed
+      - id: '35.2'
+        title: Timing Optimization
+        done_when:
+          - Models run
+          - Windows calculated
+          - Risks assessed
+      - id: '35.3'
+        title: Strategy Adjustment
+        done_when:
+          - Plans updated
+          - Resources reallocated
+          - Teams aligned
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 36
+    title: Parallel Exploration
+    description: Explore multiple growth opportunities in parallel.
+    depends_on:
+      - 35
+    inputs:
+      - Opportunity pipeline
+      - Resource capacity
+      - Risk tolerance
+    outputs:
+      - Exploration portfolio
+      - Experiment results
+      - Pivot decisions
+    metrics:
+      - Exploration velocity
+      - Success rate
+      - Resource efficiency
+    gates:
+      entry:
+        - Opportunities identified
+        - Resources available
+      exit:
+        - Experiments complete
+        - Winners selected
+        - Resources focused
+    substages:
+      - id: '36.1'
+        title: Opportunity Portfolio
+        done_when:
+          - Opportunities catalogued
+          - Resources allocated
+          - Experiments designed
+      - id: '36.2'
+        title: Parallel Execution
+        done_when:
+          - Experiments running
+          - Data collected
+          - Progress tracked
+      - id: '36.3'
+        title: Selection & Focus
+        done_when:
+          - Results analyzed
+          - Winners chosen
+          - Resources consolidated
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 37
+    title: Strategic Risk Forecasting
+    description: Forecast and prepare for strategic risks and market changes.
+    depends_on:
+      - 36
+    inputs:
+      - Market intelligence
+      - Risk indicators
+      - Scenario models
+    outputs:
+      - Risk forecasts
+      - Mitigation strategies
+      - Contingency plans
+    metrics:
+      - Forecast accuracy
+      - Risk preparedness
+      - Response time
+    gates:
+      entry:
+        - Data sources connected
+        - Models calibrated
+      exit:
+        - Risks forecasted
+        - Strategies defined
+        - Plans activated
+    substages:
+      - id: '37.1'
+        title: Risk Modeling
+        done_when:
+          - Models built
+          - Scenarios defined
+          - Probabilities calculated
+      - id: '37.2'
+        title: Impact Assessment
+        done_when:
+          - Impacts quantified
+          - Dependencies mapped
+          - Thresholds set
+      - id: '37.3'
+        title: Contingency Planning
+        done_when:
+          - Plans created
+          - Triggers defined
+          - Resources reserved
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 38
+    title: Timing Optimization
+    description: Optimize timing for major strategic decisions and market moves.
+    depends_on:
+      - 37
+    inputs:
+      - Market conditions
+      - Competitive landscape
+      - Internal readiness
+    outputs:
+      - Timing decisions
+      - Action triggers
+      - Execution calendar
+    metrics:
+      - Timing effectiveness
+      - Market impact
+      - Competitive position
+    gates:
+      entry:
+        - Conditions monitored
+        - Triggers defined
+      exit:
+        - Timing optimized
+        - Decisions made
+        - Actions executed
+    substages:
+      - id: '38.1'
+        title: Condition Monitoring
+        done_when:
+          - Indicators tracked
+          - Thresholds watched
+          - Alerts configured
+      - id: '38.2'
+        title: Decision Analysis
+        done_when:
+          - Options evaluated
+          - Timing calculated
+          - Impacts assessed
+      - id: '38.3'
+        title: Execution Coordination
+        done_when:
+          - Teams aligned
+          - Resources mobilized
+          - Actions synchronized
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 39
+    title: Multi-Venture Coordination
+    description: Coordinate multiple ventures within the portfolio for synergies.
+    depends_on:
+      - 38
+    inputs:
+      - Portfolio data
+      - Venture metrics
+      - Synergy opportunities
+    outputs:
+      - Coordination plan
+      - Synergy realization
+      - Portfolio optimization
+    metrics:
+      - Portfolio performance
+      - Synergy value
+      - Resource efficiency
+    gates:
+      entry:
+        - Multiple ventures active
+        - Data integrated
+      exit:
+        - Coordination established
+        - Synergies captured
+        - Portfolio optimized
+    substages:
+      - id: '39.1'
+        title: Portfolio Analysis
+        done_when:
+          - Ventures assessed
+          - Synergies identified
+          - Conflicts resolved
+      - id: '39.2'
+        title: Coordination Planning
+        done_when:
+          - Plans created
+          - Resources shared
+          - Governance established
+      - id: '39.3'
+        title: Synergy Execution
+        done_when:
+          - Initiatives launched
+          - Value captured
+          - Benefits measured
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)
+  - id: 40
+    title: Venture Active
+    description: Active venture management with growth optimization and exit readiness.
+    depends_on:
+      - 39
+    inputs:
+      - Venture performance
+      - Market conditions
+      - Exit opportunities
+    outputs:
+      - Growth decisions
+      - Exit timing
+      - Value realization
+    metrics:
+      - Growth rate
+      - Valuation
+      - Exit readiness score
+    gates:
+      entry:
+        - Venture mature
+        - Metrics positive
+      exit:
+        - Growth optimized
+        - Exit executed
+        - Value captured
+    substages:
+      - id: '40.1'
+        title: Growth Management
+        done_when:
+          - Growth levers identified
+          - Strategies executed
+          - Metrics improved
+      - id: '40.2'
+        title: Exit Preparation
+        done_when:
+          - Buyers identified
+          - Due diligence ready
+          - Valuation maximized
+      - id: '40.3'
+        title: Value Realization
+        done_when:
+          - Deal negotiated
+          - Transaction closed
+          - Value distributed
+    notes:
+      progression_mode: Manual → Assisted → Auto (suggested)

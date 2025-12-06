@@ -29,10 +29,9 @@ Read file: docs/quick-fix-protocol.md
 **After reading the protocol, confirm you understand:**
 1. Compliance rubric is mandatory (cannot skip)
 2. Tests must actually run (cannot assume)
-3. PR created with auto-merge enabled (merges when CI passes)
-4. User approval needed for commit/push
-5. Auto-refinement limited to 3 attempts
-6. Specialist sub-agents invoked intelligently
+3. PR created with auto-merge enabled (merges automatically when CI passes)
+4. Auto-refinement limited to 3 attempts
+5. Specialist sub-agents invoked intelligently
 
 ---
 
@@ -118,25 +117,31 @@ If qualified for quick-fix:
    - Manually test the fix
    - Confirm issue is resolved
 
-## Step 5: Complete & Create PR (Review Required)
+## Step 5: Complete & Create PR (Auto-Merge Enabled)
 
 ```bash
-# Create PR (do NOT auto-merge - code review required)
+# Create PR with auto-merge enabled
 gh pr create --title "fix(QF-YYYYMMDD-NNN): [description]" --body "[summary]"
+
+# Enable auto-merge (merges when CI passes)
+gh pr merge --auto --squash
 
 # Complete the quick-fix record
 node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN \
   --pr-url https://github.com/.../pull/123
 ```
 
-**⚠️ IMPORTANT: No Auto-Merge**
-Quick-fixes require code review before merge. This maintains quality standards.
+**✅ Auto-Merge Enabled**
+Quick-fix PRs are pre-approved and will auto-merge when CI passes. This assumes:
+- Smoke tests passed locally before commit
+- Changes are within scope (≤50 LOC)
+- Pre-commit hooks validated code quality
 
 **Requirements for completion:**
 - ✅ Both unit and E2E tests passing
 - ✅ UAT verified (manual confirmation)
 - ✅ Actual LOC ≤ 50 (hard cap)
-- ✅ PR created and awaiting review (NOT auto-merged)
+- ✅ PR created with auto-merge enabled
 
 ## Auto-Escalation Triggers
 
@@ -154,7 +159,7 @@ Quick-fix will auto-escalate to full SD if:
 - Dual test requirement (unit + E2E smoke tests)
 - Server restart verification
 - Manual UAT confirmation
-- PR creation with code review (NO auto-merge)
+- PR creation with auto-merge enabled
 - Database-first tracking
 - RCA pattern detection (escalates systemic issues)
 - Console error baseline capture

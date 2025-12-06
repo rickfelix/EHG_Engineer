@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2025-12-05 9:24:37 AM
+**Generated**: 2025-12-06 2:35:48 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
@@ -45,42 +45,6 @@ npm run handoff:compliance SD-XXX-001
 ```
 
 **Database trigger now BLOCKS direct inserts. You MUST use the scripts above.**
-
-## 🚧 SD Completion Gate (Merge Validation)
-
-**Added**: 2025-12-05 (Post SD-STAGE-12-001 Protocol Improvement)
-
-Before merging any SD branch to main, the SD completion check validates:
-
-### Requirements for Merge
-- ✅ Retrospective exists with `quality_score >= 70`
-- ✅ At least 3 handoffs with `status='accepted'`
-- ✅ All 5 phases at 100% progress
-
-### How It Works
-
-1. **GitHub Action** (`.github/workflows/sd-completion-check.yml`)
-   - Runs on all PRs to main
-   - Extracts SD ID from branch name
-   - Calls `get_progress_breakdown()` - same logic as database trigger
-   - Blocks merge if incomplete
-
-2. **Pre-Push Hook** (`.husky/pre-push`)
-   - Backup for direct push to main
-   - Same validation logic as GitHub Action
-   - Blocks push if SD incomplete
-
-### Verification Command
-```bash
-node scripts/verify-sd-completion.js SD-XXX-001
-```
-
-### Bypass (Emergencies Only)
-- **PR**: Add `[SKIP-SD-CHECK]` to PR title
-- **Push**: Use `SKIP_SD_CHECK=1 git push`
-
-### Post-Merge Auto-Archive
-After successful merge, SD status is automatically set to `archived`.
 
 ## 🚨 EXEC Agent Implementation Requirements
 
@@ -618,86 +582,6 @@ UI Parity Status:
 - Gate 2.5 Status: PASS/FAIL
 ```
 
-## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge
-
-## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge (MANDATORY)
-
-**Every completed Strategic Directive and Quick-Fix MUST end with:**
-
-1. **Commit** - All changes committed with proper message format
-2. **Push** - Branch pushed to remote
-3. **Merge to Main** - Feature branch merged into main
-
-### For Quick-Fixes
-
-The `complete-quick-fix.js` script handles this automatically:
-
-```bash
-node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN --pr-url https://...
-```
-
-The script will:
-1. Verify tests pass and UAT completed
-2. Commit and push changes
-3. **Prompt to merge PR to main** (or local merge if no PR)
-4. Delete the feature branch
-
-### For Strategic Directives
-
-After LEAD approval, execute the following:
-
-```bash
-# 1. Ensure all changes committed
-git add .
-git commit -m "feat(SD-YYYY-XXX): [description]
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-
-# 2. Push to remote
-git push origin feature/SD-YYYY-XXX
-
-# 3. Create PR if not exists
-gh pr create --title "feat(SD-YYYY-XXX): [title]" --body "..."
-
-# 4. Merge PR (preferred method)
-gh pr merge --merge --delete-branch
-
-# OR local merge fallback
-git checkout main
-git pull origin main
-git merge --no-ff feature/SD-YYYY-XXX
-git push origin main
-git branch -d feature/SD-YYYY-XXX
-git push origin --delete feature/SD-YYYY-XXX
-```
-
-### Merge Checklist
-
-Before merging, verify:
-- [ ] All tests passing (unit + E2E)
-- [ ] CI/CD pipeline green
-- [ ] Code review completed (if required)
-- [ ] No merge conflicts
-- [ ] SD status = 'archived' OR Quick-Fix status = 'completed'
-
-### Anti-Patterns
-
-❌ **NEVER** leave feature branches unmerged after completion
-❌ **NEVER** skip the push step
-❌ **NEVER** merge without verifying tests pass
-❌ **NEVER** force push to main
-
-### Verification
-
-After merge, confirm:
-```bash
-git checkout main
-git pull origin main
-git log --oneline -5  # Should show your merge commit
-```
-
 ## 🌿 Branch Hygiene Gate (MANDATORY)
 
 ## Branch Hygiene Gate (MANDATORY)
@@ -788,6 +672,86 @@ When starting implementation:
 4. If >100 files changed → assess scope creep
 5. Document branch health in handoff notes
 
+## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge
+
+## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge (MANDATORY)
+
+**Every completed Strategic Directive and Quick-Fix MUST end with:**
+
+1. **Commit** - All changes committed with proper message format
+2. **Push** - Branch pushed to remote
+3. **Merge to Main** - Feature branch merged into main
+
+### For Quick-Fixes
+
+The `complete-quick-fix.js` script handles this automatically:
+
+```bash
+node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN --pr-url https://...
+```
+
+The script will:
+1. Verify tests pass and UAT completed
+2. Commit and push changes
+3. **Prompt to merge PR to main** (or local merge if no PR)
+4. Delete the feature branch
+
+### For Strategic Directives
+
+After LEAD approval, execute the following:
+
+```bash
+# 1. Ensure all changes committed
+git add .
+git commit -m "feat(SD-YYYY-XXX): [description]
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# 2. Push to remote
+git push origin feature/SD-YYYY-XXX
+
+# 3. Create PR if not exists
+gh pr create --title "feat(SD-YYYY-XXX): [title]" --body "..."
+
+# 4. Merge PR (preferred method)
+gh pr merge --merge --delete-branch
+
+# OR local merge fallback
+git checkout main
+git pull origin main
+git merge --no-ff feature/SD-YYYY-XXX
+git push origin main
+git branch -d feature/SD-YYYY-XXX
+git push origin --delete feature/SD-YYYY-XXX
+```
+
+### Merge Checklist
+
+Before merging, verify:
+- [ ] All tests passing (unit + E2E)
+- [ ] CI/CD pipeline green
+- [ ] Code review completed (if required)
+- [ ] No merge conflicts
+- [ ] SD status = 'archived' OR Quick-Fix status = 'completed'
+
+### Anti-Patterns
+
+❌ **NEVER** leave feature branches unmerged after completion
+❌ **NEVER** skip the push step
+❌ **NEVER** merge without verifying tests pass
+❌ **NEVER** force push to main
+
+### Verification
+
+After merge, confirm:
+```bash
+git checkout main
+git pull origin main
+git log --oneline -5  # Should show your merge commit
+```
+
 ## Auto-Merge Workflow for SD Completion
 
 ### Auto-Merge Workflow (RECOMMENDED)
@@ -832,6 +796,67 @@ baseURL: 'http://localhost:5173'  // Dev mode
 ```
 
 **Full Guide**: See `docs/reference/e2e-testing-modes.md`
+
+## Working with Child SDs During EXEC
+
+### Child SD Lifecycle
+
+**Children have FULL workflow** (not simplified):
+1. LEAD validates child (strategic value, scope, risks)
+2. PLAN creates child PRD (detailed requirements)
+3. PLAN→EXEC handoff (with validation gates)
+4. EXEC implements (full testing required)
+5. EXEC→PLAN handoff (verification)
+6. Mark child as 'completed'
+
+### Sequential Execution Rules
+
+**Database trigger enforces**:
+- Child B cannot start until Child A has `status = 'completed'`
+- Attempting to activate out-of-order will fail
+
+**EXEC agent must**:
+1. Check dependency status before starting
+2. Wait if dependency not complete
+3. Document in handoff when dependency cleared
+
+### Progress Tracking
+
+```javascript
+// Update child progress as you work
+await supabase.from('strategic_directives_v2')
+  .update({ progress: 75 })
+  .eq('id', 'SD-PARENT-001-A');
+
+// Parent progress auto-calculates
+// DO NOT manually set parent progress
+```
+
+### Parent Completion
+
+After last child completes:
+1. Parent progress auto-updates to 100%
+2. Parent status auto-updates to 'completed'
+3. (Optional) Create orchestration retrospective
+
+### Common Mistakes
+
+| Mistake | Why Wrong | Fix |
+|---------|-----------|-----|
+| Starting Child B before Child A done | Violates dependencies | Wait for dependency |
+| Setting parent progress manually | Overwrites calculation | Let function calculate |
+| Skipping child LEAD | No strategic validation | Full LEAD required |
+| Skipping child PRD | No requirements doc | Full PLAN required |
+
+### Why Full Workflow Matters
+
+Each child SD is a strategic directive, not a task:
+- **LEAD validates**: Is this child strategically sound?
+- **PLAN defines**: What exactly does this child deliver?
+- **EXEC implements**: How do we build it?
+
+Skipping phases = skipping essential validation.
+
 
 ## Playwright MCP Integration
 
@@ -1107,6 +1132,6 @@ Verifies LEAD to PLAN handoff requirements are met before allowing transition.
 
 ---
 
-*Generated from database: 2025-12-05*
+*Generated from database: 2025-12-06*
 *Protocol Version: 4.3.3*
 *Load when: User mentions EXEC, implementation, coding, or testing*

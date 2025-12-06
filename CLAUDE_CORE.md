@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-05 9:24:37 AM
+**Generated**: 2025-12-06 2:35:48 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -687,6 +687,87 @@ Patterns exceeding these thresholds auto-create CRITICAL SDs:
 
 **Weekly Maintenance:** `npm run pattern:maintenance` (also runs via GitHub Action)
 
+## Parent-Child SD Hierarchy
+
+### Overview
+
+The LEO Protocol supports hierarchical SDs for multi-phase work. Parent SDs coordinate children; **every child goes through full LEAD→PLAN→EXEC**.
+
+### Relationship Types
+
+| Type | Description | Workflow | Use Case |
+|------|-------------|----------|----------|
+| `standalone` | Default | LEAD→PLAN→EXEC | Normal SDs |
+| `parent` | Orchestrator | LEAD→PLAN→waits→Complete | Multi-phase coordinator |
+| `child` | Has parent | LEAD→PLAN→EXEC→Complete | Sequential execution units |
+
+### Key Rules
+
+1. **Every child gets full LEAD→PLAN→EXEC** - complete workflow, no shortcuts
+2. **Parent PLAN creates children** - PLAN agent proposes decomposition during parent PRD
+3. **Each child needs LEAD approval** - validates strategic value, scope, risks per child
+4. **Children execute sequentially** - Child B waits for Child A to complete
+5. **Parent progress = weighted child progress** - auto-calculated
+6. **Parent completes last** - after all children finish
+
+### Workflow Diagram
+
+```
+PARENT SD:
+  LEAD (approve multi-phase initiative)
+    ↓
+  PLAN (discover 15 user stories → propose 3 children)
+    ↓
+  Parent enters "orchestrator/waiting" state
+
+CHILDREN (sequential):
+  Child A: LEAD → PLAN → EXEC → Complete
+           ↓
+  Child B: LEAD → PLAN → EXEC → Complete
+           ↓
+  Child C: LEAD → PLAN → EXEC → Complete
+
+PARENT SD:
+  After last child → Auto-complete (progress = 100%)
+```
+
+### Why Children Need LEAD
+
+Each child SD needs LEAD approval because:
+- **Strategic validation**: Is THIS child the right thing to build?
+- **Scope lock**: What exactly does THIS child deliver?
+- **Risk assessment**: What are the risks for THIS specific child?
+- **Resource check**: Do we have what we need for THIS child?
+
+LEAD is not redundant - it's essential validation per child.
+
+### Progress Calculation
+
+Parent progress = weighted average of child progress:
+
+| Child Priority | Weight |
+|----------------|--------|
+| critical | 40% |
+| high | 30% |
+| medium | 20% |
+| low | 10% |
+
+**Formula**: `Σ(child.progress × weight) / Σ(weight)`
+
+### Database Functions
+
+```sql
+-- View family hierarchy
+SELECT * FROM sd_family_tree WHERE parent_id = 'SD-PARENT-001';
+
+-- Calculate parent progress
+SELECT calculate_parent_sd_progress('SD-PARENT-001');
+
+-- Get next child to execute
+SELECT get_next_child_sd('SD-PARENT-001');
+```
+
+
 ## Database-First Enforcement - Expanded
 
 **Database-First Enforcement (MANDATORY)**:
@@ -1213,7 +1294,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ---
 
-*Generated from database: 2025-12-05*
+*Generated from database: 2025-12-06*
 *Protocol Version: 4.3.3*
 *Includes: Hot Patterns (5) + Recent Lessons (5)*
 *Load this file first in all sessions*
