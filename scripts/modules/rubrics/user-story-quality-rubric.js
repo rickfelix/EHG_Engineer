@@ -187,7 +187,7 @@ ${this.formatStoryText(userStory)}
 ${this.formatAcceptanceCriteria(userStory.acceptance_criteria)}
 
 ## Given-When-Then Scenarios
-${this.formatGivenWhenThen(userStory.scenarios)}
+${this.formatGivenWhenThen(userStory.scenarios || userStory.test_scenarios || userStory.testing_scenarios)}
 
 ## Additional Context
 Priority: ${userStory.priority || 'Not set'}

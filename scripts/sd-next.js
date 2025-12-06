@@ -235,6 +235,7 @@ class SDNextSelector {
     const { data: recentSDs } = await supabase
       .from('strategic_directives_v2')
       .select('legacy_id, title, updated_at')
+      .eq('is_active', true)
       .in('status', ['draft', 'active', 'in_progress'])
       .order('updated_at', { ascending: false })
       .limit(5);
@@ -267,6 +268,7 @@ class SDNextSelector {
     const { data: sds, error } = await supabase
       .from('strategic_directives_v2')
       .select('legacy_id, title, priority, status, sequence_rank, progress_percentage, dependencies, metadata, is_working_on')
+      .eq('is_active', true)
       .in('status', ['draft', 'active', 'in_progress'])
       .in('priority', ['critical', 'high'])
       .not('sequence_rank', 'is', null)
@@ -406,11 +408,11 @@ class SDNextSelector {
         // Enrich with SD details
         const { data: sd } = await supabase
           .from('strategic_directives_v2')
-          .select('legacy_id, title, status, progress_percentage, is_working_on, dependencies')
+          .select('legacy_id, title, status, progress_percentage, is_working_on, dependencies, is_active')
           .eq('legacy_id', item.sd_id)
           .single();
 
-        if (sd && sd.status !== 'completed' && sd.status !== 'cancelled') {
+        if (sd && sd.is_active && sd.status !== 'completed' && sd.status !== 'cancelled') {
           const depsResolved = await this.checkDependenciesResolved(sd.dependencies);
           tracks[trackKey].push({
             ...item,
@@ -439,6 +441,7 @@ class SDNextSelector {
     const { data: workingOn } = await supabase
       .from('strategic_directives_v2')
       .select('legacy_id, title, progress_percentage')
+      .eq('is_active', true)
       .eq('is_working_on', true)
       .lt('progress_percentage', 100)
       .single();
@@ -450,15 +453,15 @@ class SDNextSelector {
     }
 
     // Find ready SDs from baseline
-    const _readySDs = [];
+    const readySDs = [];
     for (const item of this.baselineItems) {
       const { data: sd } = await supabase
         .from('strategic_directives_v2')
-        .select('legacy_id, title, status, progress_percentage, dependencies')
+        .select('legacy_id, title, status, progress_percentage, dependencies, is_active')
         .eq('legacy_id', item.sd_id)
         .single();
 
-      if (sd && sd.status !== 'completed' && sd.status !== 'cancelled') {
+      if (sd && sd.is_active && sd.status !== 'completed' && sd.status !== 'cancelled') {
         const depsResolved = await this.checkDependenciesResolved(sd.dependencies);
         if (depsResolved) {
           readySDs.push({ ...item, ...sd });

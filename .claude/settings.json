@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat > /tmp/claude-hook-debug.json && echo \"$(date): raw input saved\" >> /tmp/claude-model-tracking.log",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

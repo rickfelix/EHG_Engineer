@@ -138,8 +138,56 @@ export class PlanToExecExecutor extends BaseExecutor {
       console.log('   ⚠️  No PRD found - cannot extract deliverables');
     }
 
+    // AI Quality Assessment (Russian Judge) - PRD & User Stories
+    const russianJudgeEnabled = process.env.RUSSIAN_JUDGE_ENABLED === 'true';
+    if (russianJudgeEnabled && prd) {
+      try {
+        console.log('\n🤖 AI QUALITY ASSESSMENT (Russian Judge)');
+        console.log('-'.repeat(50));
+
+        // Assess PRD Quality
+        const { PRDQualityRubric } = await import('../../rubrics/prd-quality-rubric.js');
+        const prdRubric = new PRDQualityRubric();
+        const prdAssessment = await prdRubric.validatePRDQuality(prd, sd);
+
+        console.log(`   PRD Score: ${prdAssessment.score}% (threshold: 70%)`);
+        console.log(`   Status: ${prdAssessment.passed ? 'PASSED' : 'NEEDS IMPROVEMENT'}`);
+
+        if (prdAssessment.issues && prdAssessment.issues.length > 0) {
+          console.log('\n   ⚡ PRD Issues:');
+          prdAssessment.issues.forEach(issue => console.log(`     - ${issue}`));
+        }
+
+        // Assess User Stories Quality (if exist)
+        const { data: userStories } = await this.supabase
+          .from('user_stories')
+          .select('*')
+          .eq('prd_id', prd.id)
+          .limit(5);
+
+        if (userStories && userStories.length > 0) {
+          const { UserStoryQualityRubric } = await import('../../rubrics/user-story-quality-rubric.js');
+          const storyRubric = new UserStoryQualityRubric();
+
+          let totalScore = 0;
+          for (const story of userStories) {
+            const storyAssessment = await storyRubric.validateUserStoryQuality(story, prd);
+            totalScore += storyAssessment.score;
+          }
+          const avgStoryScore = Math.round(totalScore / userStories.length);
+
+          console.log(`   User Stories Score: ${avgStoryScore}% (${userStories.length} stories sampled)`);
+        }
+
+        console.log('');
+      } catch (error) {
+        console.log(`\n   ⚠️  Russian Judge unavailable: ${error.message}`);
+        console.log('   Proceeding with traditional validation only\n');
+      }
+    }
+
     // Standard PLAN-to-EXEC verification
-    console.log('\n🔍 Step 2: Standard PLAN→EXEC Verification');
+    console.log('🔍 Step 2: Standard PLAN→EXEC Verification');
     console.log('-'.repeat(50));
 
     const verifier = new PlanToExecVerifier();

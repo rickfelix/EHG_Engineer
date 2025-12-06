@@ -108,8 +108,8 @@ export class AIQualityEvaluator {
       // Calculate weighted score
       const weightedScore = this.calculateWeightedScore(scores);
 
-      // Generate feedback
-      const feedback = this.generateFeedback(scores);
+      // Generate feedback (pass criteria config to enable weight-based blocking logic)
+      const feedback = this.generateFeedback(scores, this.rubricConfig.criteria);
 
       // Get dynamic pass threshold based on sd_type
       const threshold = this.getPassThreshold(this.rubricConfig.contentType, sd);
@@ -368,17 +368,54 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
 
   /**
    * Generate graduated feedback from scores
+   *
+   * Blocking issues (required) are only generated for:
+   * - High-weight criteria (weight >= 0.15) with score < 5
+   * - Medium-weight criteria (weight >= 0.10) with score < 3 (severe failure)
+   *
+   * Low-weight criteria (< 0.10) NEVER block, even with severe scores
+   * This prevents a 5% weight criterion from blocking the entire handoff
+   *
+   * Phase 1 (ADVISORY): Calibrating thresholds based on empirical data
    */
-  generateFeedback(scores) {
+  generateFeedback(scores, criteria = null) {
     const required = [];
     const recommended = [];
+
+    // Build weight lookup from criteria config
+    const weightLookup = {};
+    if (criteria && Array.isArray(criteria)) {
+      for (const c of criteria) {
+        weightLookup[c.name] = c.weight;
+      }
+    }
 
     for (const [criterionName, scoreData] of Object.entries(scores)) {
       const score = scoreData.score;
       const reasoning = scoreData.reasoning;
+      const weight = weightLookup[criterionName] || 0.10; // Default to 10% if unknown
 
-      if (score < 5) {
+      // Low-weight criteria (<10%) NEVER block, regardless of score
+      // This is critical for Phase 1 calibration (e.g., given_when_then_format at 5%)
+      if (weight < 0.10) {
+        if (score < 5) {
+          recommended.push(`${criterionName}: Needs improvement (${score}/10) - ${reasoning}`);
+        } else if (score < 7) {
+          recommended.push(`${criterionName}: Room for improvement (${score}/10) - ${reasoning}`);
+        }
+        continue;
+      }
+
+      // For medium+ weight criteria (>=10%)
+      if (score < 3 && weight >= 0.10) {
+        // Severe failure on medium+ weight criteria - blocking
         required.push(`${criterionName}: Needs significant improvement (${score}/10) - ${reasoning}`);
+      } else if (score < 5 && weight >= 0.15) {
+        // Major criterion failure - blocking only for high-weight criteria
+        required.push(`${criterionName}: Needs significant improvement (${score}/10) - ${reasoning}`);
+      } else if (score < 5) {
+        // Medium-weight with score 3-4 - recommended, not blocking
+        recommended.push(`${criterionName}: Needs improvement (${score}/10) - ${reasoning}`);
       } else if (score < 7) {
         recommended.push(`${criterionName}: Room for improvement (${score}/10) - ${reasoning}`);
       }

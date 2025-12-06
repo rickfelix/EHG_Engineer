@@ -5,6 +5,17 @@ tools: Bash, Read, Write
 model: sonnet
 ---
 
+## Model Usage Tracking (Auto-Log)
+
+**FIRST STEP**: Before doing any other work, log your model identity by running:
+
+```bash
+node scripts/track-model-usage.js "risk-agent" "MODEL_NAME" "MODEL_ID" "SD_ID" "PHASE"
+```
+
+Get your MODEL_NAME and MODEL_ID from your system context (e.g., "Sonnet 4.5", "claude-sonnet-4-5-20250929"). Replace SD_ID and PHASE with actual values or use "STANDALONE" and "UNKNOWN" if not applicable.
+
+
 ## Risk Assessment Sub-Agent v1.0.0
 
 **BMAD Enhancement**: Multi-domain risk assessment for Strategic Directives.

@@ -79,7 +79,7 @@ class LeadToPlanVerifier {
       const sdValidation = this.validateStrategicDirective(sd);
       
       console.log(`\\n📊 SD Completeness Score: ${sdValidation.percentage}%`);
-      
+
       if (!sdValidation.valid || sdValidation.percentage < this.sdRequirements.minimumScore) {
         return this.rejectHandoff(sdId, 'SD_INCOMPLETE', 'Strategic Directive does not meet completeness standards', {
           sdValidation,
@@ -87,7 +87,43 @@ class LeadToPlanVerifier {
           actualScore: sdValidation.percentage
         });
       }
-      
+
+      // 3.5. AI Quality Assessment (Russian Judge)
+      const russianJudgeEnabled = process.env.RUSSIAN_JUDGE_ENABLED === 'true';
+      if (russianJudgeEnabled) {
+        try {
+          console.log('\\n🤖 AI QUALITY ASSESSMENT (Russian Judge)');
+          console.log('-'.repeat(50));
+
+          const { SDQualityRubric } = await import('./modules/rubrics/sd-quality-rubric.js');
+          const rubric = new SDQualityRubric();
+          const aiAssessment = await rubric.validateSDQuality(sd);
+
+          console.log(`   Score: ${aiAssessment.score}% (threshold: 70%)`);
+          console.log(`   Status: ${aiAssessment.passed ? 'PASSED' : 'NEEDS IMPROVEMENT'}`);
+
+          if (aiAssessment.issues && aiAssessment.issues.length > 0) {
+            console.log('\\n   ⚡ Issues identified:');
+            aiAssessment.issues.forEach(issue => console.log(`     - ${issue}`));
+          }
+
+          if (aiAssessment.warnings && aiAssessment.warnings.length > 0) {
+            console.log('\\n   💡 Recommendations:');
+            aiAssessment.warnings.forEach(warning => console.log(`     - ${warning}`));
+          }
+
+          // Mode: ADVISORY for LEAD-TO-PLAN (log but don't block)
+          if (!aiAssessment.passed) {
+            console.log('\\n   ⚠️  Note: Proceeding despite quality concerns (ADVISORY mode)');
+          } else {
+            console.log('\\n   ✅ Quality assessment passed');
+          }
+        } catch (error) {
+          console.log(`\\n   ⚠️  Russian Judge unavailable: ${error.message}`);
+          console.log('   Proceeding with traditional validation only');
+        }
+      }
+
       // 4. Check Strategic Directive status
       if (sd.status !== 'active' && sd.status !== 'approved' && sd.status !== 'in_progress') {
         return this.rejectHandoff(sdId, 'SD_STATUS', `SD status is '${sd.status}', expected 'active', 'approved', or 'in_progress'`);

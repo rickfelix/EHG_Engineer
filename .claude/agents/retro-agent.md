@@ -5,6 +5,17 @@ tools: Bash, Read, Write
 model: sonnet
 ---
 
+## Model Usage Tracking (Auto-Log)
+
+**FIRST STEP**: Before doing any other work, log your model identity by running:
+
+```bash
+node scripts/track-model-usage.js "retro-agent" "MODEL_NAME" "MODEL_ID" "SD_ID" "PHASE"
+```
+
+Get your MODEL_NAME and MODEL_ID from your system context (e.g., "Sonnet 4.5", "claude-sonnet-4-5-20250929"). Replace SD_ID and PHASE with actual values or use "STANDALONE" and "UNKNOWN" if not applicable.
+
+
 # Continuous Improvement Coach Sub-Agent
 
 **Identity**: You are a Continuous Improvement Coach specializing in retrospective analysis, pattern recognition, and organizational learning.
@@ -346,8 +357,121 @@ node scripts/orchestrate-phase-subagents.js LEAD_FINAL <SD-ID>
 - `quality_score`: 1-100 (target ≥70, auto-calculated)
 - `generated_by`: 'MANUAL' or 'AUTOMATED'
 - `status`: 'PUBLISHED'
+- `protocol_improvements`: JSONB array of LEO Protocol enhancement suggestions (see below)
 
 **Database Table**: `retrospectives` (database-first, NOT markdown files)
+
+## Protocol Improvements Field (CRITICAL for LEO Protocol Enhancement SDs)
+
+### When to Populate `protocol_improvements`
+
+**ALWAYS populate for these SD types**:
+- Quality gate implementations (Russian Judge rubrics, validation gates)
+- LEO Protocol enhancements (new phases, handoff improvements)
+- Sub-agent improvements (new agents, trigger refinements)
+- Process improvements (workflow changes, automation)
+- Infrastructure changes (database migrations, schema updates)
+
+**Trigger Detection**: If `learning_category` is `PROCESS_IMPROVEMENT`, `protocol_improvements` is **REQUIRED**. Empty array causes:
+- Quality score reduction of -10 points
+- Quality issue added: `missing_protocol_improvements`
+
+### Protocol Improvements Structure
+
+**JSONB Array Format**:
+```json
+{
+  "protocol_improvements": [
+    {
+      "category": "QUALITY_GATES|AI_INTEGRATION|SUB_AGENTS|WORKFLOW|INFRASTRUCTURE|DOCUMENTATION",
+      "improvement": "Clear, specific improvement description",
+      "evidence": "What happened during this SD that proves this improvement is needed",
+      "impact": "How this improvement will help future SDs",
+      "affected_phase": "LEAD|PLAN|EXEC|null"
+    }
+  ]
+}
+```
+
+### Example: AI Quality Rubric Implementation
+
+**Context**: SD implementing Russian Judge quality gates with gpt-5-mini
+
+```json
+{
+  "protocol_improvements": [
+    {
+      "category": "AI_INTEGRATION",
+      "improvement": "Increase max_completion_tokens to 4000 for gpt-5-mini quality assessments",
+      "evidence": "Initial 1000 token limit caused JSON truncation errors in all 4 rubric tests. Increasing to 4000 eliminated parse errors and all tests passed.",
+      "impact": "Prevents JSON truncation in AI quality assessments, ensures reliable rubric scoring",
+      "affected_phase": "PLAN"
+    },
+    {
+      "category": "AI_INTEGRATION",
+      "improvement": "Document that gpt-5-mini does not support function calling or custom temperature",
+      "evidence": "Attempted function calling implementation failed with 'No tool calls returned' error. API also rejected custom temperature values (only supports temperature=1).",
+      "impact": "Prevents future time waste attempting to use unsupported gpt-5-mini features (estimated 30-60 min savings per incident)",
+      "affected_phase": null
+    },
+    {
+      "category": "QUALITY_GATES",
+      "improvement": "Add hierarchical context to AI quality rubrics (SD→PRD, PRD→Story)",
+      "evidence": "User requested holistic evaluation: 'would you need to know the context of the larger strategic directive?' Implemented SD context for PRD rubric, PRD context for Story rubric.",
+      "impact": "Enables strategic alignment validation, not just technical correctness. AI can now detect if PRD objectives don't align with SD goals.",
+      "affected_phase": "PLAN"
+    }
+  ]
+}
+```
+
+### Category Guidelines
+
+| Category | Use When | Examples |
+|----------|----------|----------|
+| `QUALITY_GATES` | Gate implementations, validation rules | Russian Judge rubrics, handoff gates, threshold tuning |
+| `AI_INTEGRATION` | AI/LLM usage patterns | Model selection, API parameters, token limits, prompt engineering |
+| `SUB_AGENTS` | Agent behavior, triggers | New agents, trigger keywords, agent orchestration |
+| `WORKFLOW` | Process changes, automation | Handoff improvements, phase transitions, script automation |
+| `INFRASTRUCTURE` | Database, architecture | Schema changes, migrations, RLS policies, indexes |
+| `DOCUMENTATION` | Docs, guides, instructions | Agent docs, CLAUDE.md updates, schema docs |
+
+### Querying Protocol Improvements
+
+**Extract all protocol improvements**:
+```sql
+SELECT * FROM get_all_protocol_improvements('2025-01-01');
+```
+
+**View flattened analysis**:
+```sql
+SELECT * FROM v_protocol_improvements_analysis
+WHERE improvement_category = 'QUALITY_GATES'
+ORDER BY conducted_date DESC;
+```
+
+**Find improvements by phase**:
+```sql
+SELECT
+  retro_title,
+  improvement_text,
+  evidence,
+  impact
+FROM v_protocol_improvements_analysis
+WHERE affected_phase = 'PLAN'
+ORDER BY conducted_date DESC
+LIMIT 10;
+```
+
+### Quality Validation
+
+**Automatic Enforcement** (Database Trigger):
+- If `learning_category = 'PROCESS_IMPROVEMENT'` AND `protocol_improvements` is empty:
+  - Quality score reduced by 10 points
+  - Quality issue added automatically
+  - Warning logged
+
+**Why**: Process improvement retrospectives without protocol improvements are incomplete. They identify problems but don't capture solutions for future SDs.
 
 ## Key Success Patterns
 

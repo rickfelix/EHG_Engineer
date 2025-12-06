@@ -51,7 +51,44 @@ class PlanToExecVerifier {
       minimumAcceptanceCriteria: 5
     };
   }
-  
+
+  /**
+   * Get minimum user story quality score based on SD category
+   * Infrastructure and documentation SDs have more lenient thresholds
+   * since they focus less on user-facing acceptance criteria
+   *
+   * @param {string} category - SD category from strategic_directives_v2
+   * @returns {number} Minimum score percentage
+   */
+  getStoryMinimumScoreByCategory(category) {
+    // Map category to minimum score (matching ai-quality-evaluator.js thresholds)
+    const categoryThresholds = {
+      // Very lenient for documentation-only work
+      'documentation': 50,
+      'docs': 50,
+
+      // Lenient for internal/infrastructure work
+      'infrastructure': 55,
+      'infra': 55,
+      'tooling': 55,
+      'devops': 55,
+
+      // Moderate for standard features
+      'feature': 65,
+      'enhancement': 65,
+
+      // Stricter for data/security work
+      'database': 68,
+      'security': 68,
+
+      // Default for unknown categories
+      'default': 70
+    };
+
+    const normalizedCategory = (category || '').toLowerCase();
+    return categoryThresholds[normalizedCategory] || categoryThresholds.default;
+  }
+
   /**
    * Load PRD validation checklist system
    */
@@ -254,8 +291,13 @@ class PlanToExecVerifier {
       // 3a-2. NEW: User Story Quality Validation (SD-CAPABILITY-LIFECYCLE-001)
       // Prevents boilerplate and low-quality stories from reaching EXEC
       console.log('\n🔍 Validating user story quality...');
-      const storyQualityResult = validateUserStoriesForHandoff(userStories, {
-        minimumScore: 70,
+
+      // SD-type-aware minimum score (infrastructure/documentation are more lenient)
+      const storyMinimumScore = this.getStoryMinimumScoreByCategory(sd.category);
+      console.log(`   SD Category: ${sd.category || 'unknown'} → Minimum Score: ${storyMinimumScore}%`);
+
+      const storyQualityResult = await validateUserStoriesForHandoff(userStories, {
+        minimumScore: storyMinimumScore,
         minimumStories: 1,
         blockOnWarnings: false
       });
@@ -309,8 +351,13 @@ class PlanToExecVerifier {
       // 4a. NEW: PRD Boilerplate/Placeholder Detection (SD-CAPABILITY-LIFECYCLE-001)
       // Prevents placeholder text like "To be defined" from reaching EXEC
       console.log('\n🔍 Validating PRD content quality (boilerplate detection)...');
-      const prdBoilerplateResult = validatePRDForHandoff(prd, {
-        minimumScore: 70,
+
+      // SD-type-aware minimum score for PRD (same logic as user stories)
+      const prdMinimumScore = this.getStoryMinimumScoreByCategory(sd.category);
+      console.log(`   SD Category: ${sd.category || 'unknown'} → PRD Minimum Score: ${prdMinimumScore}%`);
+
+      const prdBoilerplateResult = await validatePRDForHandoff(prd, {
+        minimumScore: prdMinimumScore,
         blockOnWarnings: false
       });
 

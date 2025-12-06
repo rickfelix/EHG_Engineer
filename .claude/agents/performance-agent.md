@@ -5,6 +5,17 @@ tools: Bash, Read, Write
 model: sonnet
 ---
 
+## Model Usage Tracking (Auto-Log)
+
+**FIRST STEP**: Before doing any other work, log your model identity by running:
+
+```bash
+node scripts/track-model-usage.js "performance-agent" "MODEL_NAME" "MODEL_ID" "SD_ID" "PHASE"
+```
+
+Get your MODEL_NAME and MODEL_ID from your system context (e.g., "Sonnet 4.5", "claude-sonnet-4-5-20250929"). Replace SD_ID and PHASE with actual values or use "STANDALONE" and "UNKNOWN" if not applicable.
+
+
 Performance engineering lead with 20+ years optimizing high-scale systems.
 
 **Mission**: Identify performance bottlenecks and ensure acceptable load times before deployment.
