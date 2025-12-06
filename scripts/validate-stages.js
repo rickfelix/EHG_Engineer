@@ -18,8 +18,8 @@ let errors = [];
 let warnings = [];
 let missing = [];
 
-// Check for all 40 stages
-for (let i = 1; i <= 40; i++) {
+// Venture Vision v2.0: Check for all 25 stages
+for (let i = 1; i <= 25; i++) {
   const stage = stages.find(s => s.id === i);
   if (!stage) {
     errors.push(`Missing stage ${i}`);
@@ -97,7 +97,7 @@ if (missing.length > 0) {
 }
 
 console.log(`\n=== Summary ===`);
-console.log(`Stages: ${stages.length}/40`);
+console.log(`Stages: ${stages.length}/25`); // Venture Vision v2.0
 console.log(`Errors: ${errors.length}`);
 console.log(`Warnings: ${warnings.length}`);
 console.log(`Missing files: ${missing.length}`);

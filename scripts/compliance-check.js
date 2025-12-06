@@ -3,7 +3,7 @@
  * SD-GOV-COMPLIANCE-READINESS-ORCHESTRATOR-001 + SD-AUTO-COMPLIANCE-ENGINE-001
  * Continuous Compliance Engine (CCE) - Compliance Check Script
  *
- * Verifies all 40 stages against:
+ * Verifies all 25 stages against (Venture Vision v2.0):
  * - Universal Stage Review Framework v1.1
  * - CrewAI Compliance Policy v1.0
  * - Database-driven policy registry (compliance_policies table)
@@ -13,7 +13,7 @@
  *
  * Flags:
  *   --run-type=<type>   Type of run: scheduled, manual, on_demand (default: manual)
- *   --stages=<list>     Comma-separated stage numbers to check (default: all 1-40)
+ *   --stages=<list>     Comma-separated stage numbers to check (default: all 1-25)
  *   --emit-events       Emit compliance events to compliance_events table for UI consumption
  *   --use-registry      Load rules from compliance_policies table (default: true)
  */
@@ -33,7 +33,8 @@ const supabase = createClient(
 const args = process.argv.slice(2);
 const runType = args.find(a => a.startsWith('--run-type='))?.split('=')[1] || 'manual';
 const stagesArg = args.find(a => a.startsWith('--stages='))?.split('=')[1];
-const stagesToCheck = stagesArg ? stagesArg.split(',').map(Number) : Array.from({ length: 40 }, (_, i) => i + 1);
+// Venture Vision v2.0: Default to 25 stages
+const stagesToCheck = stagesArg ? stagesArg.split(',').map(Number) : Array.from({ length: 25 }, (_, i) => i + 1);
 const emitEvents = args.includes('--emit-events');
 const useRegistry = !args.includes('--no-registry'); // Default: use registry
 
@@ -172,13 +173,13 @@ async function checkDossierExists(stage) {
     .limit(1);
 
   // Dossiers are considered to exist if stage has been reviewed
-  // or if stage is <= 40 (all stages should have dossiers)
-  const dossierExpected = stage >= 1 && stage <= 40;
+  // Venture Vision v2.0: Valid stages are 1-25
+  const dossierExpected = stage >= 1 && stage <= 25;
 
   return {
     passed: dossierExpected,
     expected: 'Stage dossier documented',
-    actual: dossierExpected ? 'Stage in valid range (1-40)' : 'Invalid stage number',
+    actual: dossierExpected ? 'Stage in valid range (1-25)' : 'Invalid stage number',
     details: {
       stageNumber: stage,
       hasReview: data?.length > 0,

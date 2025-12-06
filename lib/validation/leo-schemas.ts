@@ -279,7 +279,7 @@ export const ComplianceEventTypeEnum = z.enum([
 export const ComplianceChecksQuery = z.object({
   limit: z.coerce.number().min(1).max(100).default(20).optional(),
   offset: z.coerce.number().min(0).default(0).optional(),
-  stage: z.coerce.number().min(1).max(40).optional(),
+  stage: z.coerce.number().min(1).max(25).optional(), // Venture Vision v2.0: 25 stages
   run_type: z.enum(['scheduled', 'manual', 'on_demand']).optional()
 });
 
@@ -289,7 +289,7 @@ export const ComplianceChecksQuery = z.object({
 export const ComplianceViolationsQuery = z.object({
   limit: z.coerce.number().min(1).max(100).default(20).optional(),
   offset: z.coerce.number().min(0).default(0).optional(),
-  stage: z.coerce.number().min(1).max(40).optional(),
+  stage: z.coerce.number().min(1).max(25).optional(), // Venture Vision v2.0: 25 stages
   severity: ComplianceSeverityEnum.optional(),
   status: z.enum(['open', 'resolved', 'exception']).optional()
 });
@@ -319,7 +319,7 @@ export const ComplianceEventsQuery = z.object({
  */
 export const ComplianceRunBody = z.object({
   run_type: z.enum(['manual', 'on_demand']).default('manual'),
-  stages: z.array(z.number().min(1).max(40)).optional(),
+  stages: z.array(z.number().min(1).max(25)).optional(), // Venture Vision v2.0: 25 stages
   emit_events: z.boolean().default(true)
 });
 
