@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS compliance_events (
   )),
   check_id UUID REFERENCES compliance_checks(id) ON DELETE SET NULL,
   policy_id TEXT REFERENCES compliance_policies(policy_id),
-  stage_number INTEGER CHECK (stage_number BETWEEN 1 AND 40),
+  stage_number INTEGER CHECK (stage_number BETWEEN 1 AND 25),
 
   -- Event data
   severity TEXT CHECK (severity IN ('critical', 'high', 'medium', 'low', 'info')),
