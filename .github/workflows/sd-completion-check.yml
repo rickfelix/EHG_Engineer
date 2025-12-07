@@ -43,8 +43,9 @@ jobs:
           BRANCH="${{ github.head_ref }}"
           echo "Branch: $BRANCH"
 
-          # Extract SD ID (format: SD-STAGE-12-001, SD-QUALITY-GATE-001, etc.)
-          SD_ID=$(echo "$BRANCH" | grep -oP 'SD-[A-Z0-9-]+' || echo "")
+          # Extract SD ID (format: SD-VISION-TRANSITION-001, SD-QUALITY-GATE-001, etc.)
+          # Use lookahead to avoid capturing trailing hyphens
+          SD_ID=$(echo "$BRANCH" | grep -oP 'SD-[A-Z0-9-]+(?=-)' || echo "$BRANCH" | grep -oP 'SD-[A-Z0-9-]+$' || echo "")
 
           # Also check for Quick-Fix ID
           QF_ID=$(echo "$BRANCH" | grep -oP 'QF-[0-9-]+' || echo "")
@@ -100,7 +101,7 @@ jobs:
         id: extract
         run: |
           BRANCH="${{ github.head_ref }}"
-          SD_ID=$(echo "$BRANCH" | grep -oP 'SD-[A-Z0-9-]+' || echo "")
+          SD_ID=$(echo "$BRANCH" | grep -oP 'SD-[A-Z0-9-]+(?=-)' || echo "$BRANCH" | grep -oP 'SD-[A-Z0-9-]+$' || echo "")
           echo "sd_id=$SD_ID" >> $GITHUB_OUTPUT
 
           if [ -n "$SD_ID" ]; then
