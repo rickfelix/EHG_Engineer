@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-06 2:35:48 PM
+**Generated**: 2025-12-07 8:58:57 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -800,26 +800,42 @@ Two handoff-related tables exist - use the correct one:
 ## 🗄️ Supabase Database Operations
 
 ### Connection Details (CONSOLIDATED DATABASE)
-
-> **NOTE (SD-ARCH-EHG-006)**: As of 2025-11-30, both EHG and EHG_Engineer use the **CONSOLIDATED** database.
-
 - **Project URL**: https://dedlbzhpgkmetvhbkyzq.supabase.co
 - **Project ID**: dedlbzhpgkmetvhbkyzq
 - **Connection**: Via Supabase client using environment variables
 
-### Environment Variables Required
-```bash
-# CONSOLIDATED Database (used by both EHG and EHG_Engineer)
-SUPABASE_URL=https://dedlbzhpgkmetvhbkyzq.supabase.co
-SUPABASE_ANON_KEY=[anon-key]
-SUPABASE_SERVICE_ROLE_KEY=[service-role-key]
-SUPABASE_POOLER_URL=postgresql://postgres.dedlbzhpgkmetvhbkyzq:[password]@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+### ⚠️ CRITICAL: Database Connection Pattern
 
-# EHG Application vars (same consolidated database)
-EHG_SUPABASE_URL=https://dedlbzhpgkmetvhbkyzq.supabase.co
-EHG_SUPABASE_ANON_KEY=[anon-key]
-EHG_SUPABASE_SERVICE_ROLE_KEY=[service-role-key]
+**NEVER use raw psql to direct Supabase URL** - it will timeout:
+```bash
+# ❌ WRONG - Times out after 30+ seconds
+psql 'postgresql://postgres.PROJECT:password@PROJECT.supabase.co:5432/postgres'
 ```
+
+**ALWAYS use connection helpers from `scripts/lib/supabase-connection.js`**:
+
+#### For SQL Queries (raw PostgreSQL):
+```javascript
+import { createDatabaseClient } from './scripts/lib/supabase-connection.js';
+const client = await createDatabaseClient();
+const result = await client.query('SELECT * FROM table_name WHERE id = $1', ['value']);
+await client.end();
+```
+
+#### For Supabase-style Queries (recommended):
+```javascript
+import { createSupabaseServiceClient } from './scripts/lib/supabase-connection.js';
+const client = await createSupabaseServiceClient();
+const { data, error } = await client.from('table_name').select('*').eq('id', 'value');
+```
+
+**Why?** The helpers use the connection pooler URL (`aws-1-us-east-1.pooler.supabase.com`) which handles connection management properly, while direct URLs timeout due to connection limits.
+
+### Running SQL Migrations
+For SQL migrations, use the Supabase CLI or dashboard SQL editor:
+- **Dashboard**: Project > SQL Editor > paste and run
+- **CLI**: `npx supabase db push` (if set up)
+- **Script**: Create a .mjs script using `createDatabaseClient()`
 
 ## 🔧 CRITICAL DEVELOPMENT WORKFLOW
 
@@ -1294,7 +1310,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ---
 
-*Generated from database: 2025-12-06*
+*Generated from database: 2025-12-07*
 *Protocol Version: 4.3.3*
 *Includes: Hot Patterns (5) + Recent Lessons (5)*
 *Load this file first in all sessions*
