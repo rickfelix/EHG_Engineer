@@ -39,8 +39,9 @@ const CONFIG = {
 };
 
 class RLSVerifier {
-  constructor() {
+  constructor(options = {}) {
     this.client = null;
+    this.jsonOutput = options.jsonOutput || false;
     this.results = {
       timestamp: new Date().toISOString(),
       total_tables_checked: 0,
@@ -60,6 +61,21 @@ class RLSVerifier {
       partial_coverage_tables: [],
       execution_time_ms: 0
     };
+  }
+
+  /**
+   * Conditional logging - only logs when NOT in JSON output mode
+   */
+  log(...args) {
+    if (!this.jsonOutput) {
+      console.log(...args);
+    }
+  }
+
+  warn(...args) {
+    if (!this.jsonOutput) {
+      console.warn(...args);
+    }
   }
 
   /**
@@ -90,13 +106,13 @@ class RLSVerifier {
       this.client = new Client(connectionConfig);
 
       await this.client.connect();
-      console.log('[OK] Connected to database');
+      this.log('[OK] Connected to database');
       return true;
     } catch (error) {
       if (attempt < CONFIG.maxRetries) {
         const delay = CONFIG.retryDelays[attempt - 1] || CONFIG.retryDelays[CONFIG.retryDelays.length - 1];
-        console.warn(`[WARN] Connection attempt ${attempt} failed, retrying in ${delay / 1000}s...`);
-        console.warn(`       Error: ${error.message}`);
+        this.warn(`[WARN] Connection attempt ${attempt} failed, retrying in ${delay / 1000}s...`);
+        this.warn(`       Error: ${error.message}`);
         await new Promise(resolve => setTimeout(resolve, delay));
         return this.connect(attempt + 1);
       }
@@ -233,17 +249,17 @@ class RLSVerifier {
     try {
       await this.connect();
 
-      console.log('[INFO] Querying database tables...\n');
+      this.log('[INFO] Querying database tables...\n');
       const tables = await this.queryTables(specificTable);
 
-      console.log(`Found ${tables.length} table(s) to verify\n`);
+      this.log(`Found ${tables.length} table(s) to verify\n`);
 
       // Filter out excluded tables
       const tablesToVerify = tables.filter(t => !this.shouldExcludeTable(t.table_name));
       const excludedCount = tables.length - tablesToVerify.length;
 
       if (excludedCount > 0) {
-        console.log(`[INFO] Excluded ${excludedCount} system/internal tables\n`);
+        this.log(`[INFO] Excluded ${excludedCount} system/internal tables\n`);
       }
 
       this.results.total_tables_checked = tablesToVerify.length;
@@ -254,13 +270,13 @@ class RLSVerifier {
 
         if (verification.status === 'FAIL') {
           this.results.failed_tables.push(verification);
-          console.log(`[FAIL] ${verification.table_name}: ${verification.issues.join(', ')}`);
+          this.log(`[FAIL] ${verification.table_name}: ${verification.issues.join(', ')}`);
         } else if (verification.status === 'INFO') {
           // Don't add to warnings - these are informational categorizations
           const prefix = verification.policy_type === 'READ_ONLY' ? '[READ-ONLY]' : '[PARTIAL]';
-          console.log(`${prefix} ${verification.table_name}: ${verification.issues.join(', ')}`);
+          this.log(`${prefix} ${verification.table_name}: ${verification.issues.join(', ')}`);
         } else {
-          console.log(`[OK] ${verification.table_name}: ${verification.policy_count} policies (${verification.policy_type})`);
+          this.log(`[OK] ${verification.table_name}: ${verification.policy_count} policies (${verification.policy_type})`);
         }
       });
 
@@ -371,7 +387,7 @@ async function main() {
   const tableIndex = args.indexOf('--table');
   const specificTable = tableIndex >= 0 ? args[tableIndex + 1] : null;
 
-  const verifier = new RLSVerifier();
+  const verifier = new RLSVerifier({ jsonOutput });
 
   try {
     const results = await verifier.verify(specificTable);
@@ -386,6 +402,7 @@ async function main() {
     process.exit(results.passed ? 0 : 1);
 
   } catch (error) {
+    // Always output errors to stderr, even in JSON mode
     console.error('\n[FAIL] VERIFICATION FAILED');
     console.error('Error:', error.message);
     console.error('Stack:', error.stack);
