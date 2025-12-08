@@ -112,7 +112,10 @@ jobs:
     needs: run-gates
     runs-on: ubuntu-latest
     if: always()
-    
+    permissions:
+      issues: write
+      pull-requests: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
