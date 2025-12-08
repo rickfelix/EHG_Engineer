@@ -140,6 +140,8 @@
     "sd:burnrate": "node scripts/sd-burnrate.js",
     "sd:claim": "node scripts/claude-session-coordinator.mjs claim",
     "sd:release": "node scripts/claude-session-coordinator.mjs release",
+    "token:budget": "node scripts/show-budget-status.js",
+    "token:log": "node scripts/token-logger.js",
     "session:status": "node scripts/claude-session-coordinator.mjs status",
     "session:cleanup": "node scripts/claude-session-coordinator.mjs cleanup",
     "session:info": "node scripts/claude-session-coordinator.mjs info",
