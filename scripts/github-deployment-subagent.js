@@ -444,13 +444,29 @@ class GitHubDeploymentSubAgent {
 
     console.log(`  📦 Creating release: ${releaseTag}`);
 
-    // Merge to main (if not already)
+    // Merge feature branch to main
     try {
+      // Capture current branch before switching
+      const { stdout: currentBranch } = await execAsync('git rev-parse --abbrev-ref HEAD');
+      const featureBranch = currentBranch.trim();
+      const isFeatureBranch = featureBranch.includes(this.sdId) || featureBranch.startsWith('feat/');
+
+      console.log(`  📍 Current branch: ${featureBranch}`);
+
       console.log('  🔀 Checking out main branch...');
       await execAsync('git checkout main');
-      
+
       console.log('  📥 Pulling latest changes...');
       await execAsync('git pull origin main');
+
+      // Merge feature branch if we came from one
+      if (isFeatureBranch && featureBranch !== 'main') {
+        console.log(`  🔀 Merging ${featureBranch} into main...`);
+        await execAsync(`git merge --no-ff ${featureBranch} -m "Merge ${featureBranch}: ${this.sdId} deployment"`);
+        console.log('  ✅ Feature branch merged');
+      } else {
+        console.log('  ℹ️  Already on main or no feature branch detected');
+      }
 
       // Create and push tag
       console.log(`  🏷️  Creating tag: ${releaseTag}`);
