@@ -1,0 +1,1203 @@
+{
+  "meta": {
+    "title": "Dynamic Model Allocation Framework - Technical Specifications",
+    "version": "1.0.0",
+    "date": "2025-12-06",
+    "author": "Claude Sonnet 4.5",
+    "codebase": "EHG_Engineer",
+    "purpose": "Comprehensive technical specs for implementing intelligent Anthropic model allocation"
+  },
+  "sub_agents": {
+    "registry": [
+      {
+        "name": "VALIDATION",
+        "file_path": "lib/sub-agents/validation.js",
+        "default_model": "sonnet",
+        "purpose": "5-step SD evaluation, duplicate detection, backlog analysis",
+        "typical_phases": ["LEAD", "PLAN"],
+        "estimated_tokens_per_run": {
+          "min": 8000,
+          "max": 15000,
+          "average": 11500
+        },
+        "model_floor": {
+          "LEAD": "sonnet",
+          "PLAN": "opus",
+          "EXEC": "opus"
+        },
+        "criticality": "high",
+        "can_downgrade": false
+      },
+      {
+        "name": "SECURITY",
+        "file_path": "lib/sub-agents/security.js",
+        "default_model": "opus",
+        "purpose": "Security vulnerability detection, RLS verification, auth checks",
+        "typical_phases": ["LEAD", "PLAN", "EXEC"],
+        "estimated_tokens_per_run": {
+          "min": 10000,
+          "max": 20000,
+          "average": 15000
+        },
+        "model_floor": {
+          "LEAD": "opus",
+          "PLAN": "opus",
+          "EXEC": "opus"
+        },
+        "criticality": "critical",
+        "can_downgrade": false,
+        "rationale": "Security is non-negotiable. Haiku insufficient for threat analysis."
+      },
+      {
+        "name": "DATABASE",
+        "file_path": "lib/sub-agents/database.js",
+        "default_model": "sonnet",
+        "purpose": "Two-phase migration validation, schema health checks",
+        "typical_phases": ["PLAN", "EXEC"],
+        "estimated_tokens_per_run": {
+          "min": 12000,
+          "max": 25000,
+          "average": 18500
+        },
+        "model_floor": {
+          "LEAD": "haiku",
+          "PLAN": "sonnet",
+          "EXEC": "sonnet"
+        },
+        "criticality": "high",
+        "can_downgrade": true,
+        "downgrade_conditions": "Haiku OK for read-only schema docs, Sonnet for modifications"
+      },
+      {
+        "name": "TESTING",
+        "file_path": "lib/sub-agents/testing.js",
+        "default_model": "sonnet",
+        "purpose": "QA Engineering Director, E2E test execution, user story verification",
+        "typical_phases": ["EXEC"],
+        "estimated_tokens_per_run": {
+          "min": 15000,
+          "max": 30000,
+          "average": 22500
+        },
+        "model_floor": {
+          "LEAD": "sonnet",
+          "PLAN": "sonnet",
+          "EXEC": "sonnet"
+        },
+        "criticality": "high",
+        "can_downgrade": true,
+        "downgrade_conditions": "Haiku OK for test evidence collection, Sonnet for test writing"
+      },
+      {
+        "name": "DESIGN",
+        "file_path": "lib/sub-agents/design.js",
+        "default_model": "sonnet",
+        "purpose": "UI/UX compliance, accessibility validation, component size analysis",
+        "typical_phases": ["PLAN", "EXEC"],
+        "estimated_tokens_per_run": {
+          "min": 8000,
+          "max": 18000,
+          "average": 13000
+        },
+        "model_floor": {
+          "LEAD": "haiku",
+          "PLAN": "sonnet",
+          "EXEC": "sonnet"
+        },
+        "criticality": "medium",
+        "can_downgrade": true
+      },
+      {
+        "name": "PERFORMANCE",
+        "file_path": "lib/sub-agents/performance.js",
+        "default_model": "sonnet",
+        "purpose": "Bundle size, load time, memory leak detection",
+        "typical_phases": ["EXEC"],
+        "estimated_tokens_per_run": {
+          "min": 7000,
+          "max": 15000,
+          "average": 11000
+        },
+        "model_floor": {
+          "LEAD": "haiku",
+          "PLAN": "haiku",
+          "EXEC": "sonnet"
+        },
+        "criticality": "medium",
+        "can_downgrade": true
+      },
+      {
+        "name": "GITHUB",
+        "file_path": "lib/sub-agents/github.js",
+        "default_model": "sonnet",
+        "purpose": "PR creation, status checks, review coordination",
+        "typical_phases": ["LEAD", "EXEC"],
+        "estimated_tokens_per_run": {
+          "min": 5000,
+          "max": 12000,
+          "average": 8500
+        },
+        "model_floor": {
+          "LEAD": "haiku",
+          "PLAN": "haiku",
+          "EXEC": "sonnet"
+        },
+        "criticality": "low",
+        "can_downgrade": true,
+        "downgrade_conditions": "Haiku OK for read-only status checks"
+      },
+      {
+        "name": "DOCMON",
+        "file_path": "lib/sub-agents/docmon.js",
+        "default_model": "sonnet",
+        "purpose": "Documentation compliance monitoring",
+        "typical_phases": ["LEAD", "PLAN"],
+        "estimated_tokens_per_run": {
+          "min": 4000,
+          "max": 8000,
+          "average": 6000
+        },
+        "model_floor": {
+          "LEAD": "haiku",
+          "PLAN": "haiku",
+          "EXEC": "haiku"
+        },
+        "criticality": "low",
+        "can_downgrade": true,
+        "rationale": "Template-based PRD generation, high pass rate (83-100%)"
+      },
+      {
+        "name": "RETRO",
+        "file_path": "lib/sub-agents/retro.js",
+        "default_model": "sonnet",
+        "purpose": "Retrospective generation, lesson extraction",
+        "typical_phases": ["PLAN", "EXEC"],
+        "estimated_tokens_per_run": {
+          "min": 6000,
+          "max": 12000,
+          "average": 9000
+        },
+        "model_floor": {
+          "LEAD": "haiku",
+          "PLAN": "haiku",
+          "EXEC": "haiku"
+        },
+        "criticality": "low",
+        "can_downgrade": true,
+        "rationale": "Pattern extraction, 96% overall pass rate"
+      },
+      {
+        "name": "STORIES",
+        "file_path": "lib/sub-agents/stories.js",
+        "default_model": "sonnet",
+        "purpose": "User story generation, acceptance criteria",
+        "typical_phases": ["PLAN"],
+        "estimated_tokens_per_run": {
+          "min": 10000,
+          "max": 20000,
+          "average": 15000
+        },
+        "model_floor": {
+          "LEAD": "sonnet",
+          "PLAN": "sonnet",
+          "EXEC": "sonnet"
+        },
+        "criticality": "medium",
+        "can_downgrade": false,
+        "rationale": "Testing Sonnet (was 3.4% pass rate with Opus, experimenting)"
+      },
+      {
+        "name": "RISK",
+        "file_path": "lib/sub-agents/risk.js",
+        "default_model": "sonnet",
+        "purpose": "Risk assessment, mitigation planning",
+        "typical_phases": ["LEAD", "PLAN"],
+        "estimated_tokens_per_run": {
+          "min": 7000,
+          "max": 14000,
+          "average": 10500
+        },
+        "model_floor": {
+          "LEAD": "haiku",
+          "PLAN": "sonnet",
+          "EXEC": "sonnet"
+        },
+        "criticality": "medium",
+        "can_downgrade": true
+      },
+      {
+        "name": "UAT",
+        "file_path": "lib/sub-agents/uat.js",
+        "default_model": "sonnet",
+        "purpose": "User acceptance testing coordination",
+        "typical_phases": ["EXEC"],
+        "estimated_tokens_per_run": {
+          "min": 8000,
+          "max": 15000,
+          "average": 11500
+        },
+        "model_floor": {
+          "LEAD": "haiku",
+          "PLAN": "sonnet",
+          "EXEC": "sonnet"
+        },
+        "criticality": "medium",
+        "can_downgrade": true
+      },
+      {
+        "name": "API",
+        "file_path": "lib/sub-agents/api.js",
+        "default_model": "sonnet",
+        "purpose": "API design validation, contract verification",
+        "typical_phases": ["PLAN"],
+        "estimated_tokens_per_run": {
+          "min": 6000,
+          "max": 12000,
+          "average": 9000
+        },
+        "model_floor": {
+          "LEAD": "haiku",
+          "PLAN": "sonnet",
+          "EXEC": "sonnet"
+        },
+        "criticality": "medium",
+        "can_downgrade": true
+      },
+      {
+        "name": "DEPENDENCY",
+        "file_path": "lib/sub-agents/dependency.js",
+        "default_model": "sonnet",
+        "purpose": "Dependency security, CVE handling",
+        "typical_phases": ["EXEC"],
+        "estimated_tokens_per_run": {
+          "min": 5000,
+          "max": 10000,
+          "average": 7500
+        },
+        "model_floor": {
+          "LEAD": "haiku",
+          "PLAN": "haiku",
+          "EXEC": "sonnet"
+        },
+        "criticality": "low",
+        "can_downgrade": true
+      },
+      {
+        "name": "QUICKFIX",
+        "file_path": "lib/sub-agents/quickfix.js",
+        "default_model": "sonnet",
+        "purpose": "Quick-fix validation (<50 LOC changes)",
+        "typical_phases": ["EXEC"],
+        "estimated_tokens_per_run": {
+          "min": 3000,
+          "max": 6000,
+          "average": 4500
+        },
+        "model_floor": {
+          "LEAD": "haiku",
+          "PLAN": "haiku",
+          "EXEC": "haiku"
+        },
+        "criticality": "low",
+        "can_downgrade": true,
+        "rationale": "Small changes, low risk"
+      },
+      {
+        "name": "GITHUB-ENHANCED",
+        "file_path": "lib/sub-agents/github-enhanced.js",
+        "default_model": "sonnet",
+        "purpose": "Advanced GitHub workflow automation",
+        "typical_phases": ["EXEC"],
+        "estimated_tokens_per_run": {
+          "min": 6000,
+          "max": 12000,
+          "average": 9000
+        },
+        "model_floor": {
+          "LEAD": "haiku",
+          "PLAN": "sonnet",
+          "EXEC": "sonnet"
+        },
+        "criticality": "medium",
+        "can_downgrade": true
+      }
+    ],
+    "summary": {
+      "total_agents": 16,
+      "model_distribution": {
+        "opus": 1,
+        "sonnet": 15,
+        "haiku": 0
+      },
+      "average_tokens_per_execution": 11750,
+      "high_cost_agents": ["TESTING", "DATABASE", "SECURITY", "STORIES"],
+      "low_cost_agents": ["QUICKFIX", "DOCMON", "DEPENDENCY", "GITHUB"]
+    }
+  },
+  "pricing": {
+    "models": {
+      "haiku_4_5": {
+        "input_cost_per_1m_tokens": 1.00,
+        "output_cost_per_1m_tokens": 5.00,
+        "context_window": 200000,
+        "cost_ratio_vs_opus": 0.20,
+        "savings_vs_opus_input": "80%"
+      },
+      "sonnet_4_5": {
+        "input_cost_per_1m_tokens": 3.00,
+        "output_cost_per_1m_tokens": 15.00,
+        "context_window": 200000,
+        "cost_ratio_vs_opus": 0.60,
+        "savings_vs_opus_input": "40%"
+      },
+      "opus_4_5": {
+        "input_cost_per_1m_tokens": 5.00,
+        "output_cost_per_1m_tokens": 25.00,
+        "context_window": 200000,
+        "cost_ratio_vs_opus": 1.00,
+        "savings_vs_opus_input": "0%"
+      }
+    },
+    "optimization_features": {
+      "prompt_caching": {
+        "savings_percent": 90,
+        "applicable_to": ["haiku", "sonnet"]
+      },
+      "batch_processing": {
+        "savings_percent": 50,
+        "applicable_to": ["haiku", "sonnet", "opus"]
+      }
+    },
+    "example_calculations": {
+      "typical_sd_opus_only": {
+        "input_tokens": 500000,
+        "output_tokens": 100000,
+        "input_cost": 2.50,
+        "output_cost": 2.50,
+        "total_cost": 5.00,
+        "description": "All sub-agents use Opus"
+      },
+      "typical_sd_current_approach": {
+        "input_tokens": 500000,
+        "output_tokens": 100000,
+        "model_distribution": {
+          "sonnet_percent": 80,
+          "opus_percent": 20
+        },
+        "total_cost": 3.40,
+        "savings_vs_opus": "32%",
+        "description": "Sonnet primary, Opus for security (current state)"
+      },
+      "typical_sd_optimal_approach": {
+        "input_tokens": 500000,
+        "output_tokens": 100000,
+        "model_distribution": {
+          "haiku_percent": 40,
+          "sonnet_percent": 40,
+          "opus_percent": 20
+        },
+        "total_cost": 2.60,
+        "savings_vs_opus": "48%",
+        "savings_vs_current": "24%",
+        "description": "Haiku for routine, Sonnet for complex, Opus for critical"
+      }
+    }
+  },
+  "complexity_rubric": {
+    "levels": [
+      {
+        "level": 1,
+        "name": "Trivial",
+        "description": "Typo fix, 1-line change, no dependencies",
+        "loc_range": "1-10",
+        "dependencies": 0,
+        "examples": ["Fix typo", "Update string", "Change constant"],
+        "recommended_model": "haiku",
+        "estimated_tokens": 3000
+      },
+      {
+        "level": 2,
+        "name": "Simple",
+        "description": "Small feature, isolated change, clear requirements",
+        "loc_range": "11-50",
+        "dependencies": "1-2",
+        "examples": ["Add button", "Simple validation", "CSS update"],
+        "recommended_model": "haiku",
+        "estimated_tokens": 6000
+      },
+      {
+        "level": 3,
+        "name": "Moderate",
+        "description": "Feature with design, some dependencies, testing needed",
+        "loc_range": "51-200",
+        "dependencies": "3-5",
+        "examples": ["Form with validation", "API integration", "New component"],
+        "recommended_model": "sonnet",
+        "estimated_tokens": 12000
+      },
+      {
+        "level": 4,
+        "name": "Complex",
+        "description": "Architectural, schema changes, multi-system impact",
+        "loc_range": "201-500",
+        "dependencies": "6-10",
+        "examples": ["Database migration", "Auth flow", "Multi-step wizard"],
+        "recommended_model": "sonnet",
+        "recommended_model_if_security": "opus",
+        "estimated_tokens": 25000
+      },
+      {
+        "level": 5,
+        "name": "Critical",
+        "description": "Security, core logic, high risk, extensive testing",
+        "loc_range": "500+",
+        "dependencies": "10+",
+        "examples": ["RLS policy system", "Payment integration", "Data migration"],
+        "recommended_model": "opus",
+        "estimated_tokens": 40000
+      }
+    ]
+  },
+  "rework_matrix": {
+    "note": "Estimated - no historical data available. Needs calibration with actual data.",
+    "task_types": [
+      {
+        "task_type": "code_generation",
+        "haiku": {
+          "rework_probability": 0.25,
+          "notes": "Haiku often misses edge cases"
+        },
+        "sonnet": {
+          "rework_probability": 0.08,
+          "notes": "Sonnet usually sufficient"
+        },
+        "opus": {
+          "rework_probability": 0.03,
+          "notes": "Opus rarely needs rework"
+        },
+        "optimal_model": "haiku",
+        "optimal_reasoning": "Even with 25% rework, Haiku still cost-effective for routine code"
+      },
+      {
+        "task_type": "schema_design",
+        "haiku": {
+          "rework_probability": 0.40,
+          "notes": "Haiku misses constraints, RLS implications"
+        },
+        "sonnet": {
+          "rework_probability": 0.12,
+          "notes": "Sonnet handles most cases"
+        },
+        "opus": {
+          "rework_probability": 0.02,
+          "notes": "Opus comprehensive design"
+        },
+        "optimal_model": "sonnet",
+        "optimal_reasoning": "Haiku rework too high (40%), Sonnet balances cost and quality"
+      },
+      {
+        "task_type": "test_generation",
+        "haiku": {
+          "rework_probability": 0.30,
+          "notes": "May generate incomplete coverage"
+        },
+        "sonnet": {
+          "rework_probability": 0.10,
+          "notes": "Good understanding of user stories"
+        },
+        "opus": {
+          "rework_probability": 0.05,
+          "notes": "Comprehensive test coverage"
+        },
+        "optimal_model": "sonnet",
+        "optimal_reasoning": "Sonnet balance of coverage and cost"
+      },
+      {
+        "task_type": "security_review",
+        "haiku": {
+          "rework_probability": 0.50,
+          "notes": "Insufficient for threat modeling"
+        },
+        "sonnet": {
+          "rework_probability": 0.20,
+          "notes": "Adequate for most security checks"
+        },
+        "opus": {
+          "rework_probability": 0.05,
+          "notes": "Comprehensive threat analysis"
+        },
+        "optimal_model": "opus",
+        "optimal_reasoning": "Security non-negotiable, high rework cost with Haiku"
+      },
+      {
+        "task_type": "duplicate_detection",
+        "haiku": {
+          "rework_probability": 0.35,
+          "notes": "Misses semantic similarities"
+        },
+        "sonnet": {
+          "rework_probability": 0.15,
+          "notes": "Good semantic search"
+        },
+        "opus": {
+          "rework_probability": 0.08,
+          "notes": "Excellent context understanding"
+        },
+        "optimal_model": "opus",
+        "optimal_reasoning": "Prevents 8-10 hours duplicate work, worth the cost"
+      },
+      {
+        "task_type": "documentation",
+        "haiku": {
+          "rework_probability": 0.05,
+          "notes": "Template-based, low rework"
+        },
+        "sonnet": {
+          "rework_probability": 0.02,
+          "notes": "Very reliable"
+        },
+        "opus": {
+          "rework_probability": 0.01,
+          "notes": "Overkill for docs"
+        },
+        "optimal_model": "haiku",
+        "optimal_reasoning": "Low rework, template-based, huge cost savings"
+      },
+      {
+        "task_type": "status_checks",
+        "haiku": {
+          "rework_probability": 0.10,
+          "notes": "Simple verification"
+        },
+        "sonnet": {
+          "rework_probability": 0.05,
+          "notes": "Very reliable"
+        },
+        "opus": {
+          "rework_probability": 0.02,
+          "notes": "Overkill"
+        },
+        "optimal_model": "haiku",
+        "optimal_reasoning": "Low stakes, low rework, cost-effective"
+      },
+      {
+        "task_type": "retrospective",
+        "haiku": {
+          "rework_probability": 0.08,
+          "notes": "Pattern extraction works well"
+        },
+        "sonnet": {
+          "rework_probability": 0.04,
+          "notes": "Excellent"
+        },
+        "opus": {
+          "rework_probability": 0.02,
+          "notes": "Overkill"
+        },
+        "optimal_model": "haiku",
+        "optimal_reasoning": "96% pass rate historically, low rework"
+      }
+    ],
+    "rework_cost_multiplier": 1.5,
+    "rework_cost_explanation": "Rework costs 1.5x original implementation (debugging, re-testing, PR updates)"
+  },
+  "budget_zones": {
+    "zones": [
+      {
+        "name": "GREEN",
+        "utilization_range": "0-70%",
+        "behavior": "Use preferred models freely",
+        "model_selection_strategy": "Respect complexity rubric, use Opus for security",
+        "alerts": []
+      },
+      {
+        "name": "YELLOW",
+        "utilization_range": "70-85%",
+        "behavior": "Shift toward cheaper models",
+        "model_selection_strategy": "Reserve Opus for critical-only, use Sonnet primary",
+        "alerts": [
+          "Monitor closely",
+          "Start optimizing non-critical tasks"
+        ]
+      },
+      {
+        "name": "ORANGE",
+        "utilization_range": "85-95%",
+        "behavior": "Aggressive cost reduction",
+        "model_selection_strategy": "Haiku primary, Sonnet for complex, Opus security-only",
+        "alerts": [
+          "Aggressive cost reduction needed",
+          "Consider deferring low-priority SDs"
+        ]
+      },
+      {
+        "name": "RED",
+        "utilization_range": "95-100%",
+        "behavior": "Emergency mode",
+        "model_selection_strategy": "Haiku-only unless critical-path security task",
+        "alerts": [
+          "Budget exhausted",
+          "Defer non-critical SDs",
+          "Request Chairman approval for new work"
+        ]
+      }
+    ]
+  },
+  "allocation_algorithm": {
+    "function_name": "RecommendModel",
+    "inputs": [
+      "taskType (string): Sub-agent code",
+      "complexity (number): 1-5",
+      "phase (string): LEAD, PLAN, EXEC",
+      "budgetStatus (string): GREEN, YELLOW, ORANGE, RED",
+      "isCritical (boolean): Security or quality critical"
+    ],
+    "output": "model (string): haiku, sonnet, opus",
+    "logic_flow": [
+      "Step 1: Get model floor for sub-agent + phase (non-negotiable minimum)",
+      "Step 2: Get preferred model based on complexity rubric",
+      "Step 3: Adjust for budget zone (GREEN = preferred, YELLOW = shift down, ORANGE = aggressive, RED = emergency)",
+      "Step 4: Ensure result >= model floor (never violate floor)",
+      "Step 5: If floor violation in RED zone, throw error (defer SD)"
+    ],
+    "example_decisions": [
+      {
+        "input": {
+          "taskType": "VALIDATION",
+          "complexity": 3,
+          "phase": "LEAD",
+          "budgetStatus": "GREEN",
+          "isCritical": false
+        },
+        "output": "sonnet",
+        "reasoning": "Green zone, use preferred model for complexity 3. Floor is sonnet."
+      },
+      {
+        "input": {
+          "taskType": "DOCMON",
+          "complexity": 2,
+          "phase": "LEAD",
+          "budgetStatus": "ORANGE",
+          "isCritical": false
+        },
+        "output": "haiku",
+        "reasoning": "Orange zone, aggressive cost reduction. Haiku sufficient for DOCMON."
+      },
+      {
+        "input": {
+          "taskType": "SECURITY",
+          "complexity": 5,
+          "phase": "EXEC",
+          "budgetStatus": "RED",
+          "isCritical": true
+        },
+        "output": "opus",
+        "reasoning": "RED zone but critical security task. Floor is opus. Use opus."
+      },
+      {
+        "input": {
+          "taskType": "VALIDATION",
+          "complexity": 4,
+          "phase": "PLAN",
+          "budgetStatus": "RED",
+          "isCritical": true
+        },
+        "output": "ERROR: Defer SD",
+        "reasoning": "RED zone, floor is opus (PLAN/EXEC), cannot violate. Defer SD instead."
+      }
+    ]
+  },
+  "forecasting_model": {
+    "type": "linear_burn_rate",
+    "formula": "hoursToExhaustion = tokensRemaining / burnRateTokensPerHour",
+    "inputs": [
+      "tokensConsumedThisWeek (number): Total tokens burned so far",
+      "hoursElapsed (number): Hours since week reset",
+      "weeklyLimit (number): Token budget limit (e.g., 500000)"
+    ],
+    "outputs": [
+      "tokensRemaining (number): Budget left",
+      "burnRateTokensPerHour (float): Current burn rate",
+      "hoursToExhaustion (float): Hours until budget exhausted",
+      "exhaustionDate (datetime): Projected exhaustion timestamp",
+      "budgetZone (string): GREEN, YELLOW, ORANGE, RED",
+      "utilizationPercent (float): % of budget consumed",
+      "recommendation (string): Action to take"
+    ],
+    "future_enhancements": [
+      "Complexity-weighted remaining SD estimates",
+      "Historical pattern analysis (some days burn more)",
+      "Confidence intervals (not point estimates)",
+      "ML-based complexity prediction"
+    ]
+  },
+  "database_schema": {
+    "tables": [
+      {
+        "name": "sd_token_logs",
+        "description": "SD-level token logs (aggregate by SD and phase)",
+        "columns": [
+          {
+            "name": "id",
+            "type": "UUID",
+            "primary_key": true,
+            "default": "gen_random_uuid()"
+          },
+          {
+            "name": "sd_id",
+            "type": "UUID",
+            "references": "strategic_directives_v2(id)",
+            "not_null": true
+          },
+          {
+            "name": "complexity",
+            "type": "INT",
+            "check": "complexity BETWEEN 1 AND 5"
+          },
+          {
+            "name": "phase",
+            "type": "VARCHAR(10)",
+            "check": "phase IN ('LEAD', 'PLAN', 'EXEC')"
+          },
+          {
+            "name": "tokens_burned",
+            "type": "INT",
+            "not_null": true
+          },
+          {
+            "name": "rework_cycles",
+            "type": "INT",
+            "default": 0
+          },
+          {
+            "name": "model_distribution",
+            "type": "JSONB",
+            "description": "e.g., {\"haiku\": 0.3, \"sonnet\": 0.5, \"opus\": 0.2}"
+          },
+          {
+            "name": "loc_modified",
+            "type": "INT",
+            "description": "Lines of code changed (from git diff)"
+          },
+          {
+            "name": "created_at",
+            "type": "TIMESTAMPTZ",
+            "default": "NOW()"
+          }
+        ],
+        "constraints": [
+          "UNIQUE (sd_id, phase)"
+        ],
+        "rls_enabled": true
+      },
+      {
+        "name": "weekly_budget_snapshots",
+        "description": "Weekly budget tracking (one row per week)",
+        "columns": [
+          {
+            "name": "id",
+            "type": "UUID",
+            "primary_key": true,
+            "default": "gen_random_uuid()"
+          },
+          {
+            "name": "week_start",
+            "type": "TIMESTAMPTZ",
+            "not_null": true
+          },
+          {
+            "name": "week_end",
+            "type": "TIMESTAMPTZ",
+            "not_null": true
+          },
+          {
+            "name": "budget_limit",
+            "type": "INT",
+            "not_null": true,
+            "default": 500000,
+            "description": "500k tokens default"
+          },
+          {
+            "name": "tokens_burned",
+            "type": "INT",
+            "default": 0
+          },
+          {
+            "name": "burn_rate_tokens_per_hour",
+            "type": "FLOAT"
+          },
+          {
+            "name": "forecast_accuracy_percent",
+            "type": "FLOAT",
+            "description": "Compare predicted vs actual at week end"
+          },
+          {
+            "name": "budget_zone",
+            "type": "VARCHAR(10)",
+            "check": "budget_zone IN ('GREEN', 'YELLOW', 'ORANGE', 'RED')"
+          },
+          {
+            "name": "created_at",
+            "type": "TIMESTAMPTZ",
+            "default": "NOW()"
+          },
+          {
+            "name": "updated_at",
+            "type": "TIMESTAMPTZ",
+            "default": "NOW()"
+          }
+        ],
+        "constraints": [
+          "UNIQUE (week_start)"
+        ],
+        "rls_enabled": true
+      },
+      {
+        "name": "sub_agent_model_floors",
+        "description": "Sub-agent model floor configuration",
+        "columns": [
+          {
+            "name": "sub_agent_name",
+            "type": "VARCHAR(50)",
+            "primary_key": true
+          },
+          {
+            "name": "model_floor",
+            "type": "VARCHAR(10)",
+            "check": "model_floor IN ('haiku', 'sonnet', 'opus')"
+          },
+          {
+            "name": "can_override",
+            "type": "BOOLEAN",
+            "default": false
+          },
+          {
+            "name": "rationale",
+            "type": "TEXT"
+          },
+          {
+            "name": "phase_overrides",
+            "type": "JSONB",
+            "description": "e.g., {\"LEAD\": \"sonnet\", \"PLAN\": \"opus\"}"
+          },
+          {
+            "name": "created_at",
+            "type": "TIMESTAMPTZ",
+            "default": "NOW()"
+          },
+          {
+            "name": "updated_at",
+            "type": "TIMESTAMPTZ",
+            "default": "NOW()"
+          }
+        ],
+        "rls_enabled": true
+      },
+      {
+        "name": "model_allocation_decisions",
+        "description": "Model allocation decisions (audit trail)",
+        "columns": [
+          {
+            "name": "id",
+            "type": "UUID",
+            "primary_key": true,
+            "default": "gen_random_uuid()"
+          },
+          {
+            "name": "sd_id",
+            "type": "UUID",
+            "references": "strategic_directives_v2(id)"
+          },
+          {
+            "name": "sub_agent_name",
+            "type": "VARCHAR(50)"
+          },
+          {
+            "name": "phase",
+            "type": "VARCHAR(10)"
+          },
+          {
+            "name": "complexity",
+            "type": "INT"
+          },
+          {
+            "name": "budget_zone",
+            "type": "VARCHAR(10)"
+          },
+          {
+            "name": "recommended_model",
+            "type": "VARCHAR(10)"
+          },
+          {
+            "name": "actual_model_used",
+            "type": "VARCHAR(10)"
+          },
+          {
+            "name": "override_reason",
+            "type": "TEXT",
+            "description": "If actual != recommended"
+          },
+          {
+            "name": "tokens_consumed",
+            "type": "INT"
+          },
+          {
+            "name": "created_at",
+            "type": "TIMESTAMPTZ",
+            "default": "NOW()"
+          }
+        ],
+        "rls_enabled": true
+      }
+    ]
+  },
+  "success_metrics": {
+    "financial_efficiency": {
+      "token_utilization_rate": {
+        "target": "80-95%",
+        "measurement": "tokens_burned / weekly_limit",
+        "frequency": "weekly"
+      },
+      "rework_rate_by_model": {
+        "haiku": "<20%",
+        "sonnet": "<10%",
+        "opus": "<5%",
+        "measurement": "rework_cycles / total_executions",
+        "frequency": "weekly"
+      },
+      "cost_per_sd": {
+        "target": "trend downward",
+        "measurement": "sum(tokens_burned) / count(sds_completed)",
+        "frequency": "monthly"
+      },
+      "model_distribution": {
+        "target": {
+          "haiku": "40%",
+          "sonnet": "40%",
+          "opus": "20%"
+        },
+        "measurement": "count(executions_by_model) / total_executions",
+        "frequency": "weekly"
+      }
+    },
+    "development_velocity": {
+      "sds_completed_per_week": {
+        "target": "maintain baseline (6-8)",
+        "measurement": "count(sds_completed)",
+        "frequency": "weekly"
+      },
+      "time_to_sd_completion": {
+        "target": "no degradation",
+        "measurement": "avg(completion_date - start_date)",
+        "frequency": "weekly"
+      },
+      "model_override_rate": {
+        "target": "<5%",
+        "measurement": "count(overrides) / total_executions",
+        "frequency": "weekly"
+      },
+      "budget_exhaustion_frequency": {
+        "target": "0 per month",
+        "measurement": "count(weeks_exhausted)",
+        "frequency": "monthly"
+      }
+    },
+    "forecast_accuracy": {
+      "burn_rate_prediction_error": {
+        "target": "±5-10%",
+        "measurement": "abs(predicted - actual) / actual",
+        "frequency": "weekly"
+      },
+      "exhaustion_time_prediction": {
+        "target": "±6 hours",
+        "measurement": "abs(predicted_hours - actual_hours)",
+        "frequency": "weekly"
+      },
+      "budget_zone_accuracy": {
+        "target": ">80%",
+        "measurement": "count(correct_zone) / total_predictions",
+        "frequency": "weekly"
+      }
+    },
+    "output_quality": {
+      "code_review_pass_rate": {
+        "target": ">85%",
+        "measurement": "count(approved_prs) / total_prs",
+        "frequency": "weekly"
+      },
+      "security_issues_opus_critical": {
+        "target": "0",
+        "measurement": "count(security_issues)",
+        "frequency": "per SD"
+      },
+      "e2e_test_pass_rate": {
+        "target": ">95%",
+        "measurement": "count(passed_tests) / total_tests",
+        "frequency": "per SD"
+      },
+      "rework_cycles_per_sd": {
+        "target": "trend downward",
+        "measurement": "sum(rework_cycles) / count(sds)",
+        "frequency": "monthly"
+      }
+    }
+  },
+  "mvp_specification": {
+    "phase_0_mvp": {
+      "timeline": "Week 1 (Days 1-5)",
+      "must_have": [
+        {
+          "feature": "Manual token logging at SD checkpoints",
+          "effort": "5 mins per SD",
+          "implementation": "Chairman manually logs tokens at SD start/completion"
+        },
+        {
+          "feature": "Linear burn rate forecasting",
+          "effort": "20 mins to build",
+          "implementation": "Simple formula: burn_rate = tokens_consumed / hours_elapsed"
+        },
+        {
+          "feature": "Traffic-light status display",
+          "effort": "45 mins to build",
+          "implementation": "CLI output before each SD execution (Green/Yellow/Orange/Red)"
+        },
+        {
+          "feature": "Basic model recommendation",
+          "effort": "1 hour to build",
+          "implementation": "Lookup table: Complexity × Budget Zone → Model"
+        },
+        {
+          "feature": "CLI output integration",
+          "effort": "30 mins",
+          "implementation": "Add token status to npm run sd:next output"
+        }
+      ],
+      "nice_to_have": [
+        "Sub-agent cost breakdown visualization",
+        "Historical comparison (vs. last week)",
+        "Forecast accuracy tracking"
+      ],
+      "defer_to_week_2": [
+        "Database schema implementation",
+        "Sub-agent instrumentation (auto-logging)",
+        "Rework tracking infrastructure",
+        "Complexity registry learning",
+        "Dashboard web interface"
+      ]
+    },
+    "data_collection_starting_point": {
+      "week_1": "Manual logging spreadsheet",
+      "week_2": "Database INSERT statements (manual)",
+      "week_3_plus": "Automatic capture from Anthropic API"
+    }
+  },
+  "risk_register": [
+    {
+      "risk_id": "R1",
+      "risk": "Forecast is inaccurate (±20% error)",
+      "likelihood": "medium",
+      "impact": "high",
+      "mitigation": "Start with conservative burn rate estimate, adjust weekly, manual review on Fridays"
+    },
+    {
+      "risk_id": "R2",
+      "risk": "Haiku rework rate higher than estimated",
+      "likelihood": "medium",
+      "impact": "medium",
+      "mitigation": "Track rework explicitly, fall back to Sonnet if rework rate spikes >30%"
+    },
+    {
+      "risk_id": "R3",
+      "risk": "Model floor policies conflict with budget",
+      "likelihood": "low",
+      "impact": "high",
+      "mitigation": "Defer non-critical SDs instead of downgrading model floor, never compromise security"
+    },
+    {
+      "risk_id": "R4",
+      "risk": "System too complex, creates friction",
+      "likelihood": "medium",
+      "impact": "medium",
+      "mitigation": "MVP is minimal, manual logging only, no complex infrastructure this week"
+    },
+    {
+      "risk_id": "R5",
+      "risk": "Token counts from API unavailable",
+      "likelihood": "low",
+      "impact": "medium",
+      "mitigation": "Fallback to manual logging, estimate from conversation length (~4 chars per token)"
+    },
+    {
+      "risk_id": "R6",
+      "risk": "Weekly budget limit unknown",
+      "likelihood": "high",
+      "impact": "low",
+      "mitigation": "Assume 500k tokens/week (standard Max plan), calibrate based on actual usage"
+    },
+    {
+      "risk_id": "R7",
+      "risk": "Chairman forgets to log tokens",
+      "likelihood": "high",
+      "impact": "medium",
+      "mitigation": "Automated reminders in handoff.js, make logging mandatory for phase transitions"
+    },
+    {
+      "risk_id": "R8",
+      "risk": "Model downgrades degrade quality",
+      "likelihood": "medium",
+      "impact": "high",
+      "mitigation": "Monitor code review pass rate, E2E test pass rate, rollback if degradation >5%"
+    }
+  ],
+  "immediate_action_items": [
+    {
+      "action": "Set up manual token logging checkpoint",
+      "owner": "Claude Code",
+      "timeline": "Today",
+      "effort": "30 mins",
+      "priority": "P0"
+    },
+    {
+      "action": "Create burn rate calculator script",
+      "owner": "Claude Code",
+      "timeline": "Today",
+      "effort": "20 mins",
+      "priority": "P0"
+    },
+    {
+      "action": "Add traffic-light status to npm run sd:next",
+      "owner": "Claude Code",
+      "timeline": "Tomorrow",
+      "effort": "45 mins",
+      "priority": "P0"
+    },
+    {
+      "action": "Implement basic model recommendation logic",
+      "owner": "Claude Code",
+      "timeline": "Tomorrow",
+      "effort": "1 hour",
+      "priority": "P1"
+    },
+    {
+      "action": "Document model floors + safety policy in CLAUDE.md",
+      "owner": "Claude Code",
+      "timeline": "Tomorrow",
+      "effort": "30 mins",
+      "priority": "P1"
+    },
+    {
+      "action": "Create token logging spreadsheet",
+      "owner": "Chairman",
+      "timeline": "Today",
+      "effort": "10 mins",
+      "priority": "P0"
+    },
+    {
+      "action": "Define weekly budget limit",
+      "owner": "Chairman",
+      "timeline": "Today",
+      "effort": "5 mins",
+      "priority": "P0"
+    }
+  ]
+}

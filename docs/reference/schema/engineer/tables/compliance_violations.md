@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-04T23:01:42.129Z
+**Generated**: 2025-12-06T23:43:44.752Z
 **Rows**: 12
 **RLS**: Enabled (3 policies)
 
@@ -51,7 +51,7 @@
 
 ### Check Constraints
 - `compliance_violations_severity_check`: CHECK ((severity = ANY (ARRAY['critical'::text, 'high'::text, 'medium'::text, 'low'::text, 'info'::text])))
-- `compliance_violations_stage_number_check`: CHECK (((stage_number >= 1) AND (stage_number <= 40)))
+- `compliance_violations_stage_number_check`: CHECK (((stage_number >= 1) AND (stage_number <= 25)))
 - `compliance_violations_status_check`: CHECK ((status = ANY (ARRAY['open'::text, 'acknowledged'::text, 'remediated'::text, 'false_positive'::text])))
 
 ## Indexes
