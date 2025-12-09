@@ -14,6 +14,7 @@ let shouldValidateDesignDatabase;
 let GitBranchVerifier;
 let PlanToExecVerifier;
 let extractAndPopulateDeliverables;
+let validateContractGate;
 
 export class PlanToExecExecutor extends BaseExecutor {
   constructor(dependencies = {}) {
@@ -51,6 +52,59 @@ export class PlanToExecExecutor extends BaseExecutor {
         const bmadResult = await validateBMADForPlanToExec(ctx.sdId, this.supabase);
         ctx._bmadResult = bmadResult; // Store for later use
         return bmadResult;
+      },
+      required: true
+    });
+
+    // Contract Compliance Gate (validates PRD against parent data/UX contracts)
+    gates.push({
+      name: 'GATE_CONTRACT_COMPLIANCE',
+      validator: async (ctx) => {
+        console.log('\n📜 CONTRACT COMPLIANCE GATE: Parent Contract Validation');
+        console.log('-'.repeat(50));
+
+        // Get PRD for validation
+        const sdUuid = sd.uuid_id || sd.id;
+        const prd = await this.prdRepo?.getBySdUuid(sdUuid);
+
+        if (!prd) {
+          console.log('   ⚠️  No PRD found - skipping contract validation');
+          return {
+            passed: true,
+            score: 100,
+            max_score: 100,
+            issues: [],
+            warnings: ['No PRD found for contract validation'],
+            details: { skipped: true, reason: 'No PRD' }
+          };
+        }
+
+        const contractResult = await validateContractGate(ctx.sdId, prd);
+        ctx._contractResult = contractResult;
+
+        // DATA_CONTRACT violations are BLOCKERs
+        // UX_CONTRACT violations are WARNINGs (allow override)
+        const dataViolations = contractResult.issues.filter(i => i.includes('DATA_CONTRACT'));
+        const uxWarnings = contractResult.warnings.filter(w => w.includes('UX_CONTRACT'));
+
+        if (dataViolations.length > 0) {
+          console.log(`   ❌ ${dataViolations.length} DATA_CONTRACT violation(s) - BLOCKING`);
+          dataViolations.forEach(v => console.log(`      • ${v}`));
+        }
+
+        if (uxWarnings.length > 0) {
+          console.log(`   ⚠️  ${uxWarnings.length} UX_CONTRACT warning(s) - overridable`);
+        }
+
+        if (contractResult.details?.cultural_design_style) {
+          console.log(`   📎 Cultural style: ${contractResult.details.cultural_design_style}`);
+        }
+
+        if (contractResult.passed) {
+          console.log('   ✅ Contract compliance validated');
+        }
+
+        return contractResult;
       },
       required: true
     });
@@ -217,6 +271,24 @@ export class PlanToExecExecutor extends BaseExecutor {
   getRemediation(gateName) {
     const remediations = {
       'BMAD_PLAN_TO_EXEC': 'Run STORIES sub-agent to generate user stories with proper acceptance criteria.',
+      'GATE_CONTRACT_COMPLIANCE': [
+        'PRD violates parent SD contract boundaries:',
+        '',
+        'DATA_CONTRACT violations (BLOCKING):',
+        '1. Review allowed_tables in parent contract',
+        '2. Update PRD to only reference allowed tables',
+        '3. Request contract update if scope needs expansion',
+        '',
+        'UX_CONTRACT violations (WARNING):',
+        '1. Review component_paths in parent UX contract',
+        '2. Either adjust component paths or document justification',
+        '',
+        'Cultural Design Style:',
+        '- Style is STRICTLY inherited from parent',
+        '- Cannot be overridden by child SDs',
+        '',
+        'Run: node scripts/verify-contract-system.js to debug contracts'
+      ].join('\n'),
       'GATE1_DESIGN_DATABASE': [
         'Execute DESIGN and DATABASE sub-agents:',
         '1. Run DESIGN sub-agent: node lib/sub-agent-executor.js DESIGN <SD-ID>',
@@ -260,6 +332,11 @@ export class PlanToExecExecutor extends BaseExecutor {
     if (!extractAndPopulateDeliverables) {
       const { extractAndPopulateDeliverables: fn } = await import('../extract-deliverables-from-prd.js');
       extractAndPopulateDeliverables = fn;
+    }
+
+    if (!validateContractGate) {
+      const { validateContractGate: fn } = await import('../../contract-validation.js');
+      validateContractGate = fn;
     }
   }
 }
