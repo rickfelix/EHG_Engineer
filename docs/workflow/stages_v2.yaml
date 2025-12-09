@@ -283,7 +283,7 @@ stages:
   # ============================================================================
   - id: 10
     title: "Strategic Naming"
-    description: "Brand naming, identity development, and guidelines creation."
+    description: "Brand naming, identity development, cultural design style selection, and guidelines creation."
     phase_number: 3
     phase_name: "THE IDENTITY"
     work_type: sd_required
@@ -295,15 +295,47 @@ stages:
       - Business model
       - Target audience
       - Competitive positioning
+      - Industry vertical (for cultural style inference)
     outputs:
       - Brand name
       - Brand guidelines
       - Visual identity specs
+      - Cultural design style selection
     artifacts:
       - brand_guidelines
+      - cultural_design_config
     metrics:
       - Name availability
       - Brand strength score
+      - Cultural style alignment score
+    # Cultural Design Style Configuration
+    # References: docs/02_api/design_system_handcrafted.md (Stage 55 PRD)
+    cultural_design_styles:
+      wabi_sabi:
+        name: "Wabi-sabi (Japanese)"
+        best_for: ["wellness", "artisanal", "premium lifestyle", "sustainability"]
+        characteristics: "Organic asymmetry, intentional imperfection, natural warmth"
+        variance: "5% spacing, 10% desaturation, 15% off-center positioning"
+      swiss_minimal:
+        name: "Swiss Minimal"
+        best_for: ["fintech", "enterprise B2B", "legal", "healthcare"]
+        characteristics: "Grid precision with intentional breaks, high legibility, trust"
+        variance: "2% grid deviation, golden ratio typography, 7:1 contrast"
+      bauhaus:
+        name: "Bauhaus"
+        best_for: ["architecture", "manufacturing", "design tools", "education"]
+        characteristics: "Form follows function with character, geometric primitives"
+        variance: "3% corner softening, 10% vibrance boost, geometric shapes"
+      california_modern:
+        name: "California Modern"
+        best_for: ["consumer apps", "SaaS", "social platforms", "startups"]
+        characteristics: "Optimistic functionality, warm minimalism, approachable"
+        variance: "15% brightness, 5% warmer colors, 10% breathing room"
+    style_selection_rules:
+      - "Style is selected during Stage 10 based on venture vertical and target audience"
+      - "Style persists to all UI components via venture.cultural_design_style field"
+      - "Design sub-agent applies style rules from handcrafted design PRD"
+      - "Style can be overridden per-component when justified"
 
   - id: 11
     title: "Go-to-Market Strategy"
