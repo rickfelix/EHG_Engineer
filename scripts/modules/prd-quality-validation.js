@@ -213,22 +213,25 @@ export async function validatePRDForHandoff(prd, options = {}) {
   const qualityResult = await validatePRDQuality(prd);
   result.qualityDetails = qualityResult;
   result.score = qualityResult.score;
-  result.issues = qualityResult.issues;
-  result.warnings = qualityResult.warnings;
 
-  // Check if valid based on issues
-  if (qualityResult.issues.length > 0) {
+  // Check if score meets minimum threshold
+  // If score passes threshold, PRD is valid - issues become non-blocking recommendations
+  // If score fails threshold, issues are blocking
+  if (qualityResult.score >= minimumScore) {
+    // Score passes - issues are recommendations (move to warnings), not blocking
+    result.valid = true;
+    result.warnings = [...qualityResult.warnings, ...qualityResult.issues];
+    result.issues = [];
+  } else {
+    // Score fails - issues are blocking
     result.valid = false;
-  }
-
-  // Check minimum score
-  if (qualityResult.score < minimumScore) {
-    result.valid = false;
+    result.issues = qualityResult.issues;
+    result.warnings = qualityResult.warnings;
     result.issues.push(`PRD quality score (${qualityResult.score}%) is below minimum (${minimumScore}%)`);
   }
 
-  // Check warnings if blocking
-  if (blockOnWarnings && qualityResult.warnings.length > 0) {
+  // Check warnings if blocking (only blocks if explicitly configured)
+  if (blockOnWarnings && result.warnings.length > 0) {
     result.valid = false;
   }
 
