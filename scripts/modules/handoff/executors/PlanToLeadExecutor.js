@@ -93,7 +93,7 @@ export class PlanToLeadExecutor extends BaseExecutor {
           .limit(1)
           .single();
 
-        const retroGateResult = validateSDCompletionReadiness(ctx.sd, retrospective);
+        const retroGateResult = await validateSDCompletionReadiness(ctx.sd, retrospective);
         ctx._retroGateResult = retroGateResult;
 
         if (!retroGateResult.valid || retroGateResult.score < 70) {

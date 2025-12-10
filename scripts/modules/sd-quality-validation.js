@@ -343,7 +343,7 @@ export function getSDImprovementGuidance(validationResult) {
       guidance.recommended.push('Identify at least one risk with mitigation strategy');
     }
 
-    if (sd.issues.some(i => i.includes('description'))) {
+    if (sd.issues?.some(i => i.includes('description'))) {
       guidance.required.push('Expand description to explain business value and technical approach');
     }
   }
@@ -352,21 +352,21 @@ export function getSDImprovementGuidance(validationResult) {
   if (validationResult.retroQuality) {
     const retro = validationResult.retroQuality;
 
-    if (retro.issues.some(i => i.includes('key_learnings'))) {
+    if (retro.issues?.some(i => i.includes('key_learnings'))) {
       guidance.required.push('Add specific, non-boilerplate key learnings from this SD');
     }
 
-    if (retro.issues.some(i => i.includes('boilerplate'))) {
+    if (retro.issues?.some(i => i.includes('boilerplate'))) {
       guidance.required.push('Replace boilerplate learnings with SD-specific insights');
     }
 
-    if (retro.warnings.some(w => w.includes('improvement'))) {
+    if (retro.warnings?.some(w => w.includes('improvement'))) {
       guidance.recommended.push('Identify at least one area that could be improved');
     }
   }
 
   // Gate enforcement
-  if (validationResult.issues.some(i => i.includes('No retrospective found'))) {
+  if (validationResult.issues?.some(i => i.includes('No retrospective found'))) {
     guidance.required.push('Create retrospective before marking SD as complete');
     guidance.required.push('Run: node scripts/execute-subagent.js --code RETRO --sd-id <SD-ID>');
   }
