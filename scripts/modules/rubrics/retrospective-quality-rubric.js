@@ -367,6 +367,7 @@ Duration: ${retrospective.duration_days || 'Unknown'} days`;
       const assessment = await this.evaluate(formattedContent, retroId, sd);
 
       // Convert to LEO Protocol format
+      // NEW: Include improvements array from AI feedback
       return {
         passed: assessment.passed,
         score: assessment.weightedScore,
@@ -379,7 +380,8 @@ Duration: ${retrospective.duration_days || 'Unknown'} days`;
           sd_type: assessment.sd_type,
           cost_usd: assessment.cost,
           duration_ms: assessment.duration,
-          sd_context_included: !!sd
+          sd_context_included: !!sd,
+          improvements: assessment.feedback.improvements || [] // NEW: Actionable improvements
         }
       };
     } catch (error) {

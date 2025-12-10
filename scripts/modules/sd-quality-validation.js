@@ -228,6 +228,9 @@ export async function validateRetrospectiveQuality(retrospective) {
     if (!Array.isArray(improvements)) improvements = [];
 
     // Convert to legacy format for backward compatibility
+    // NEW: Include improvement suggestions from AI feedback
+    const aiImprovements = result.details?.improvements || [];
+
     return {
       retro_id: retroId,
       sd_id: sdId,
@@ -236,6 +239,7 @@ export async function validateRetrospectiveQuality(retrospective) {
       score: result.score,
       issues: result.issues,
       warnings: result.warnings,
+      improvements: aiImprovements, // NEW: Actionable improvement suggestions
       details: {
         ...result.details,
         // Add counts for backward compatibility
@@ -278,6 +282,7 @@ export async function validateSDCompletionReadiness(sd, retrospective = null) {
     score: 0,
     issues: [],
     warnings: [],
+    improvements: [], // NEW: Actionable improvement suggestions
     sdQuality: null,
     retroQuality: null
   };
@@ -300,6 +305,11 @@ export async function validateSDCompletionReadiness(sd, retrospective = null) {
     result.retroQuality = retroQuality;
     result.issues.push(...retroQuality.issues);
     result.warnings.push(...retroQuality.warnings);
+
+    // NEW: Collect improvement suggestions from retrospective validation
+    if (retroQuality.improvements?.length > 0) {
+      result.improvements.push(...retroQuality.improvements);
+    }
 
     // Combined score (weighted: SD 60%, Retro 40%)
     result.score = Math.round(sdQuality.score * 0.6 + retroQuality.score * 0.4);
