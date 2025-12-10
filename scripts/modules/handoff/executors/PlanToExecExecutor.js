@@ -263,6 +263,9 @@ export class PlanToExecExecutor extends BaseExecutor {
       gateResults
     });
 
+    // Display EXEC phase requirements (proactive guidance)
+    await this._displayExecPhaseRequirements(sdId, prd);
+
     // Merge validation details
     const branchResults = gateResults.gateResults.GATE6_BRANCH_ENFORCEMENT?.details || {};
 
@@ -565,6 +568,72 @@ export class PlanToExecExecutor extends BaseExecutor {
       console.log(`\n   ⚠️  Retrospective creation error: ${error.message}`);
       console.log('   Continuing with handoff execution');
       console.log('');
+    }
+  }
+
+  /**
+   * DISPLAY EXEC PHASE REQUIREMENTS
+   *
+   * Proactive guidance showing what needs to be completed during EXEC phase.
+   * This prevents the "forgot to create E2E tests" pattern by listing all
+   * requirements at the START of EXEC rather than failing at handoff.
+   */
+  async _displayExecPhaseRequirements(sdId, _prd) {
+    try {
+      console.log('\n' + '='.repeat(70));
+      console.log('📋 EXEC PHASE REQUIREMENTS');
+      console.log('   To complete EXEC-TO-PLAN handoff, you must:');
+      console.log('='.repeat(70));
+
+      // Get user stories for this SD
+      const { data: userStories, error } = await this.supabase
+        .from('user_stories')
+        .select('id, title, status, e2e_test_path, e2e_test_status')
+        .eq('sd_id', sdId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.log('\n   ⚠️  Could not retrieve user stories');
+      } else if (userStories && userStories.length > 0) {
+        console.log(`\n   □ Implement ${userStories.length} user stories:`);
+        userStories.forEach((story, idx) => {
+          const statusIcon = story.status === 'completed' ? '✓' : '○';
+          console.log(`     ${statusIcon} US-${String(idx + 1).padStart(3, '0')}: ${story.title}`);
+        });
+
+        // E2E test requirements
+        const needsE2E = userStories.filter(s => !s.e2e_test_path);
+        if (needsE2E.length > 0) {
+          console.log(`\n   □ Create E2E tests for ${needsE2E.length} user stories:`);
+          console.log('     - Each user story must have e2e_test_path populated');
+          console.log('     - Tests must pass (e2e_test_status = "passing")');
+          console.log('     - Example: tests/e2e/phase-N-stages.spec.ts');
+        } else {
+          console.log('\n   ✓ E2E test paths already mapped');
+        }
+      } else {
+        console.log('\n   ⚠️  No user stories found - create them during EXEC');
+      }
+
+      // Deliverables reminder
+      console.log('\n   □ Complete all deliverables:');
+      console.log('     - UI components implemented and functional');
+      console.log('     - API endpoints working and tested');
+      console.log('     - Database migrations applied (if applicable)');
+
+      // Final steps
+      console.log('\n   □ Final verification:');
+      console.log('     - All unit tests passing');
+      console.log('     - All E2E tests passing');
+      console.log('     - Changes committed and pushed to feature branch');
+
+      console.log('\n' + '='.repeat(70));
+      console.log('   Run: node scripts/handoff.js execute EXEC-TO-PLAN ' + sdId);
+      console.log('   when all requirements are complete.');
+      console.log('='.repeat(70) + '\n');
+
+    } catch (error) {
+      console.log(`\n   ⚠️  Could not display EXEC requirements: ${error.message}`);
     }
   }
 
