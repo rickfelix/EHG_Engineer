@@ -345,47 +345,76 @@ export class PlanToExecExecutor extends BaseExecutor {
   /**
    * CREATE HANDOFF RETROSPECTIVE
    *
-   * After a successful handoff, prompt for key insights to capture learnings.
-   * This creates a retrospective record for continuous improvement.
+   * After a successful handoff, automatically creates a retrospective record.
+   * Uses handoff metrics for quality scoring. Interactive prompts are optional
+   * and have a timeout to prevent blocking in non-interactive contexts.
+   *
+   * ROOT CAUSE FIX: Previous version used blocking readline prompts that would
+   * hang indefinitely in non-interactive mode (piped output, Claude Code, etc.).
+   * Now uses non-blocking defaults with optional interactive enhancement.
    */
   async _createHandoffRetrospective(sdId, sd, handoffResult, retrospectiveType, context = {}) {
     try {
-      console.log('\n📝 HANDOFF RETROSPECTIVE: Capture Learnings');
+      console.log('\n📝 HANDOFF RETROSPECTIVE: Auto-capturing learnings');
       console.log('='.repeat(70));
-      console.log('   Handoff successful! Let\'s capture key insights for improvement.');
-      console.log('');
 
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
+      // Determine if running interactively (TTY connected to stdin)
+      const isInteractive = process.stdin.isTTY && process.stdout.isTTY;
 
-      const prompt = (question) => new Promise((resolve) => {
-        rl.question(question, resolve);
-      });
+      let prdRating = '4';
+      let storiesRating = '4';
+      let validationRating = '4';
+      let gapsFound = 'none';
+      let testPlanRating = '4';
 
-      // Key questions for PLAN→EXEC handoff
-      const questions = [
-        'Was the PRD complete enough to start implementation? (1-5, 5=very complete): ',
-        'Were user stories actionable and testable? (1-5, 5=very actionable): ',
-        'Were validation criteria clear? (1-5, 5=very clear): ',
-        'Were any gaps discovered when reviewing for implementation? (describe or "none"): ',
-        'Was the test plan adequate? (1-5, 5=excellent): '
-      ];
+      if (isInteractive) {
+        // Interactive mode: prompt with timeout
+        console.log('   Handoff successful! Quick feedback (10s timeout, Enter to skip):');
+        console.log('');
 
-      console.log('   Please answer these quick questions (press Enter to skip):');
-      console.log('');
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout
+        });
 
-      const answers = [];
-      for (const question of questions) {
-        const answer = await prompt(`   ${question}`);
-        answers.push(answer.trim() || 'N/A');
+        const promptWithTimeout = (question, timeoutMs = 10000) => new Promise((resolve) => {
+          const timer = setTimeout(() => {
+            resolve('');
+          }, timeoutMs);
+
+          rl.question(`   ${question}`, (answer) => {
+            clearTimeout(timer);
+            resolve(answer);
+          });
+        });
+
+        // Key questions for PLAN→EXEC handoff (with timeout)
+        prdRating = (await promptWithTimeout('PRD completeness? (1-5, 5=very complete): ')) || '4';
+        storiesRating = (await promptWithTimeout('User stories actionable? (1-5): ')) || '4';
+        validationRating = (await promptWithTimeout('Validation criteria clear? (1-5): ')) || '4';
+        gapsFound = (await promptWithTimeout('Any gaps discovered? (or "none"): ')) || 'none';
+        testPlanRating = (await promptWithTimeout('Test plan adequate? (1-5): ')) || '4';
+
+        rl.close();
+      } else {
+        // Non-interactive mode: use defaults based on handoff result
+        console.log('   Running in non-interactive mode - using auto-generated metrics');
+
+        // Derive quality from handoff result
+        if (handoffResult.qualityScore) {
+          const derivedRating = Math.ceil(handoffResult.qualityScore / 20); // 0-100 -> 1-5
+          prdRating = String(derivedRating);
+          storiesRating = String(derivedRating);
+          validationRating = String(derivedRating);
+          testPlanRating = String(derivedRating);
+        }
+
+        // Check BMAD validation for stories quality
+        if (context.gateResults?.gateResults?.BMAD_PLAN_TO_EXEC?.score) {
+          const bmadScore = context.gateResults.gateResults.BMAD_PLAN_TO_EXEC.score;
+          storiesRating = String(Math.ceil(bmadScore / 20));
+        }
       }
-
-      rl.close();
-
-      // Parse ratings and gap descriptions
-      const [prdRating, storiesRating, validationRating, gapsFound, testPlanRating] = answers;
 
       // Calculate quality score from ratings
       const numericRatings = [prdRating, storiesRating, validationRating, testPlanRating]
