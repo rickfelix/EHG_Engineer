@@ -149,7 +149,13 @@
     "handoff:list": "node scripts/handoff.js list",
     "handoff:stats": "node scripts/handoff.js stats",
     "handoff:compliance": "node scripts/check-handoff-compliance.js",
-    "preflight": "node scripts/phase-preflight.js"
+    "preflight": "node scripts/phase-preflight.js",
+    "protocol:improvements": "node scripts/protocol-improvements.js list",
+    "protocol:review": "node scripts/protocol-improvements.js list --status=PENDING",
+    "protocol:apply-auto": "node scripts/protocol-improvements.js apply-auto",
+    "protocol:effectiveness": "node scripts/protocol-improvements.js effectiveness",
+    "protocol:rescan": "node scripts/protocol-improvements.js rescan",
+    "protocol:stats": "node scripts/protocol-improvements.js stats"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",

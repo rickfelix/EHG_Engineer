@@ -1,0 +1,45 @@
+[
+  {
+    "id": "imp-001",
+    "source_retrospective_id": "retro-test-001",
+    "category": "VALIDATION",
+    "improvement_text": "Add pre-flight PRD validation before LEAD-TO-PLAN handoff",
+    "evidence": "3 failed handoffs due to missing PRD fields",
+    "impact_assessment": "high",
+    "affected_phase": "LEAD",
+    "target_table": "leo_handoff_templates",
+    "target_record_id": null,
+    "status": "pending_review",
+    "priority": 1,
+    "created_at": "2025-12-01T10:00:00Z"
+  },
+  {
+    "id": "imp-002",
+    "source_retrospective_id": "retro-test-001",
+    "category": "DOCUMENTATION",
+    "improvement_text": "Clarify required fields in CLAUDE_PLAN.md PRD section",
+    "evidence": "Confusion about which PRD fields are mandatory vs optional",
+    "impact_assessment": "medium",
+    "affected_phase": "PLAN",
+    "target_table": "leo_protocol_sections",
+    "target_record_id": "claude-plan-prd-requirements",
+    "status": "pending_review",
+    "priority": 2,
+    "created_at": "2025-12-01T10:01:00Z"
+  },
+  {
+    "id": "imp-003",
+    "source_retrospective_id": "retro-test-002",
+    "category": "MARKDOWN_EDIT_ATTEMPT",
+    "improvement_text": "Edit CLAUDE.md to add new section",
+    "evidence": "Direct markdown file edit suggested",
+    "impact_assessment": "invalid",
+    "affected_phase": null,
+    "target_table": "MARKDOWN_FILE",
+    "target_record_id": "CLAUDE.md",
+    "status": "rejected",
+    "priority": null,
+    "rejection_reason": "Direct markdown edits not allowed - must update database tables",
+    "created_at": "2025-12-01T10:02:00Z"
+  }
+]
