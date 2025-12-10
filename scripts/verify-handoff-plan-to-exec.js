@@ -269,7 +269,7 @@ class PlanToExecVerifier {
       console.log('\n📝 Checking for user stories...');
       const { data: userStories, error: userStoriesError } = await this.supabase
         .from('user_stories')
-        .select('story_key, title, status, user_role, user_want, user_benefit, acceptance_criteria, story_points, implementation_context')
+        .select('id, story_key, title, status, user_role, user_want, user_benefit, acceptance_criteria, story_points, implementation_context, sd_id')
         .eq('sd_id', sdId);
 
       if (userStoriesError) {
