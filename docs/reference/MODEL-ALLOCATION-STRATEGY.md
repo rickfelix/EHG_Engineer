@@ -54,14 +54,15 @@ Agents where judgment, reasoning, or edge-case thinking is required:
 |-------|--------|-----------|
 | **VALIDATION** | LEAD | Ideation phase, low-risk planning |
 | **DESIGN** | LEAD, PLAN, EXEC | Architecture reasoning, pattern selection |
-| **TESTING** | LEAD, PLAN, EXEC | Edge case detection, test strategy |
+| **TESTING** | LEAD, PLAN | Edge case detection, test strategy |
 | **DATABASE** | PLAN, EXEC | Schema reasoning, constraint analysis |
-| **STORIES** | LEAD, PLAN, EXEC | User story context, acceptance criteria |
+| **STORIES** | LEAD, EXEC | User story context (PLAN upgraded to Opus 2025-12-08) |
 | **API** | LEAD, PLAN, EXEC | API design patterns, contract validation |
 | **RISK** | LEAD, PLAN, EXEC | Risk assessment, mitigation planning |
 | **DEPENDENCY** | LEAD, PLAN, EXEC | Dependency analysis, CVE assessment |
 | **PERFORMANCE** | LEAD, PLAN, EXEC | Optimization analysis and planning |
 | **UAT** | LEAD, PLAN, EXEC | Structured testing, acceptance validation |
+| **DOCMON** | LEAD, PLAN, EXEC | Documentation (upgraded from Haiku in EXEC 2025-12-08) |
 
 **Cost Profile**: 1x baseline
 **Expected Rework Rate**: <10% (acceptable performance)
@@ -76,6 +77,8 @@ Agents where security, data protection, or critical gates are involved:
 |-------|--------|-----------|-----------------|
 | **SECURITY** | LEAD, PLAN, EXEC | Threat analysis, vulnerability detection | NEVER override - security is absolute |
 | **VALIDATION** | PLAN, EXEC | Critical duplicate detection, quality gates | NEVER override - prevents duplicate work |
+| **STORIES** | PLAN | User story elaboration (upgraded 2025-12-08, 3.4% pass rate with Sonnet) | Needed for story quality |
+| **TESTING** | EXEC | E2E test execution (upgraded 2025-12-08, 11% pass rate with Sonnet) | Critical for QA gates |
 
 **Cost Profile**: ~5x Sonnet
 **Override Policy**: Never compromise - these gates are non-negotiable
@@ -118,6 +121,7 @@ Agents where security, data protection, or critical gates are involved:
 | DATABASE | Sonnet | Schema design - constraints critical |
 | VALIDATION | Opus | Critical gate: prevent duplicate work |
 | SECURITY | Opus | Security design review |
+| STORIES | **Opus** | User story elaboration (upgraded 2025-12-08) |
 | Others | Sonnet | Design-phase reasoning |
 
 ---
@@ -130,13 +134,13 @@ Agents where security, data protection, or critical gates are involved:
 | Agent | Model | Reasoning |
 |-------|-------|-----------|
 | GITHUB | Haiku | PR operations - deterministic |
-| DOCMON | Haiku | Doc compliance - structural checks |
 | QUICKFIX | Haiku | Small patches - low risk |
 | DESIGN | Sonnet | Implementation decisions |
-| TESTING | Sonnet | E2E execution - edge case coverage |
 | DATABASE | Sonnet | Migration execution |
+| DOCMON | **Sonnet** | Doc compliance (upgraded 2025-12-08 from Haiku) |
 | VALIDATION | Opus | Final QA gate - quality critical |
 | SECURITY | Opus | Security code review |
+| TESTING | **Opus** | E2E execution (upgraded 2025-12-08 from Sonnet) |
 | Others | Sonnet | Execution-phase reasoning |
 
 ---
