@@ -83,6 +83,53 @@ Look for "meta-lessons" about process, architecture, or methodology - not just p
   }
 
   /**
+   * Required retrospective fields that must be present for valid evaluation.
+   * These MUST match the actual database column names from the retrospectives table.
+   *
+   * PREVENTATIVE MEASURE: If database schema changes, update this mapping.
+   * Last verified against schema: 2025-12-10
+   */
+  static REQUIRED_FIELDS = {
+    what_went_well: 'Array of positive outcomes',
+    what_needs_improvement: 'Array of areas needing improvement (NOT what_went_wrong)',
+    key_learnings: 'Array of lessons learned (NOT lessons_learned)',
+    action_items: 'Array of SMART action items',
+    improvement_areas: 'Array of improvement areas with root cause analysis'
+  };
+
+  /**
+   * Validate that retrospective has all required fields with correct column names.
+   * This prevents silent failures from schema/code mismatches.
+   *
+   * @param {Object} retrospective - Retrospective from database
+   * @returns {Object} Validation result with warnings for missing/empty fields
+   */
+  validateRetrospectiveFields(retrospective) {
+    const warnings = [];
+    const missingFields = [];
+
+    for (const [field, description] of Object.entries(RetrospectiveQualityRubric.REQUIRED_FIELDS)) {
+      if (retrospective[field] === undefined) {
+        missingFields.push(`Field '${field}' is undefined - check if column name matches database schema`);
+      } else if (Array.isArray(retrospective[field]) && retrospective[field].length === 0) {
+        warnings.push(`Field '${field}' is empty array - ${description}`);
+      }
+    }
+
+    if (missingFields.length > 0) {
+      console.warn('⚠️  RETROSPECTIVE SCHEMA MISMATCH DETECTED:');
+      missingFields.forEach(m => console.warn(`   - ${m}`));
+      console.warn('   → Verify database column names match code field references');
+    }
+
+    return {
+      valid: missingFields.length === 0,
+      missingFields,
+      warnings
+    };
+  }
+
+  /**
    * Format Retrospective data for AI evaluation (with optional SD context)
    *
    * @param {Object} retrospective - Retrospective from database
@@ -90,6 +137,11 @@ Look for "meta-lessons" about process, architecture, or methodology - not just p
    * @returns {string} Formatted content for evaluation
    */
   formatRetrospectiveForEvaluation(retrospective, sd = null) {
+    // PREVENTATIVE: Validate field names before formatting
+    const validation = this.validateRetrospectiveFields(retrospective);
+    if (!validation.valid) {
+      console.error('❌ RETROSPECTIVE FIELD VALIDATION FAILED - AI evaluation will receive incomplete data');
+    }
     let sdContext = '';
 
     if (sd) {
@@ -118,11 +170,11 @@ ${sd.scope || 'Not defined'}
 ${sdContext}## What Went Well
 ${this.formatList(retrospective.what_went_well)}
 
-## What Didn't Go Well
-${this.formatList(retrospective.what_went_wrong)}
+## What Didn't Go Well / Needs Improvement
+${this.formatList(retrospective.what_needs_improvement)}
 
-## Lessons Learned
-${this.formatLessons(retrospective.lessons_learned)}
+## Lessons Learned / Key Learnings
+${this.formatLessons(retrospective.key_learnings)}
 
 ## Action Items
 ${this.formatActionItems(retrospective.action_items)}
