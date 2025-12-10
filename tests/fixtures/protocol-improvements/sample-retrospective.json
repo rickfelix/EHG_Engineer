@@ -1,0 +1,52 @@
+{
+  "id": "retro-test-001",
+  "sd_id": "SD-TEST-001",
+  "title": "Retrospective: Test SD with Protocol Issues",
+  "conducted_date": "2025-12-01T00:00:00Z",
+  "learning_category": "PROCESS_IMPROVEMENT",
+  "quality_score": 85,
+  "what_went_well": [
+    "Tests passed on first run",
+    "Database schema was correct"
+  ],
+  "what_went_wrong": [
+    "PRD validation failed initially",
+    "Handoff took multiple attempts"
+  ],
+  "lessons_learned": [
+    "Need better upfront PRD validation",
+    "Handoff checklist should be clearer"
+  ],
+  "action_items": [
+    "- [ ] Add PRD pre-validation step",
+    "- [ ] Update handoff template"
+  ],
+  "failure_patterns": [
+    {
+      "pattern_id": "PAT-PRD-VALIDATION-001",
+      "occurrence_count": 3,
+      "impact": "high",
+      "description": "PRD missing required fields causes PLAN phase failures"
+    }
+  ],
+  "protocol_improvements": [
+    {
+      "category": "VALIDATION",
+      "improvement": "Add pre-flight PRD validation before LEAD-TO-PLAN handoff",
+      "evidence": "3 failed handoffs due to missing PRD fields (functional_requirements, success_criteria)",
+      "impact": "Would prevent ~80% of LEAD-TO-PLAN handoff failures",
+      "affected_phase": "LEAD",
+      "target_table": "leo_handoff_templates",
+      "implementation_note": "Add validation step to LEAD-TO-PLAN template checklist"
+    },
+    {
+      "category": "DOCUMENTATION",
+      "improvement": "Clarify required fields in CLAUDE_PLAN.md PRD section",
+      "evidence": "Confusion about which PRD fields are mandatory vs optional",
+      "impact": "Reduces cognitive load during PLAN phase, clearer expectations",
+      "affected_phase": "PLAN",
+      "target_table": "leo_protocol_sections",
+      "implementation_note": "Update CLAUDE_PLAN.md section on PRD requirements"
+    }
+  ]
+}

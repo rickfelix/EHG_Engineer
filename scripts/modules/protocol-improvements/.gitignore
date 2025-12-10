@@ -1,0 +1,14 @@
+# Node modules (if any dependencies added later)
+node_modules/
+
+# Test output
+*.test.js
+coverage/
+
+# Temporary files
+*.tmp
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
