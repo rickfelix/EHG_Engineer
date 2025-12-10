@@ -362,8 +362,14 @@ SD Link: ${userStory.sd_id || 'Not linked'}`;
       // Format user story for evaluation (with PRD context if available)
       const formattedContent = this.formatUserStoryForEvaluation(userStory, prd);
 
-      // Get User Story ID
-      const storyId = userStory.id || userStory.story_id;
+      // Get User Story ID - try multiple possible field names
+      // Primary: id (UUID from database), fallback: story_id, story_key
+      const storyId = userStory.id || userStory.story_id || userStory.story_key || null;
+
+      if (!storyId) {
+        console.warn('[UserStoryQualityRubric] Warning: User story has no identifiable ID field');
+        console.warn('  Available fields:', Object.keys(userStory).join(', '));
+      }
 
       // Run AI evaluation with sd_type awareness
       // Pass sd object for dynamic threshold and type-specific guidance

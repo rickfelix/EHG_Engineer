@@ -443,6 +443,13 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
    * Store assessment in database with sd_type and threshold tracking
    */
   async storeAssessment(contentId, scores, weightedScore, feedback, duration, tokensUsed, cost, sd = null, threshold = 70) {
+    // Guard: Skip storage if contentId is null/undefined (prevents NOT NULL constraint violation)
+    if (!contentId) {
+      console.warn(`[AIQualityEvaluator] Skipping assessment storage: content_id is ${contentId === null ? 'null' : 'undefined'} for content_type=${this.rubricConfig.contentType}`);
+      console.warn(`[AIQualityEvaluator] This may indicate a missing 'id' field in the evaluated content. Score: ${weightedScore}%`);
+      return;
+    }
+
     try {
       const { error } = await this.supabase
         .from('ai_quality_assessments')
