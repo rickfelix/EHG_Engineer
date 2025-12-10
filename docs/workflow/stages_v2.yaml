@@ -1,11 +1,90 @@
 # Venture Vision v2.0 - 25-Stage Lifecycle Configuration
 # SD: SD-VISION-TRANSITION-001D
 # Created: 2025-12-06
+# Updated: 2025-12-09 (Golden Nuggets Integration)
 # Purpose: Definitive configuration for the streamlined 25-stage venture lifecycle
 
 version: "2.0"
 name: "Venture Vision v2.0"
 description: "Streamlined 25-stage venture lifecycle for Solo AI Entrepreneur workflows"
+
+# ============================================================================
+# GOLDEN NUGGETS INTEGRATION (Phase 1) - ADR-002 Addendum B
+# ============================================================================
+# Source: docs/vision/VENTURE_ENGINE_GOLDEN_NUGGETS_PLAN.md
+# Evaluated by: Anti-Gravity (4.4/5) & Claude (3.9/5)
+
+golden_nuggets:
+  # Priority 1: Assumptions vs Reality (Score: 4.85)
+  assumptions_vs_reality:
+    enabled: true
+    description: "Track versioned assumption sets and compare against actual outcomes"
+    stages_create: [2, 3]   # Create Assumption Set V1
+    stages_update: [5]      # Update with financial inputs
+    stages_reality: [23, 24, 25]  # Collect reality data, generate report
+
+  # Priority 2: Tokens as Investment (Score: 4.35)
+  token_budget_profiles:
+    enabled: true
+    description: "Treat compute/tokens as capital with explicit budget profiles"
+    default_profile: "standard"
+    profiles:
+      exploratory:
+        total_tokens: 75000  # 50K-100K midpoint
+        use_case: "Quick validation, kill fast"
+      standard:
+        total_tokens: 375000  # 250K-500K midpoint
+        use_case: "Normal venture progression"
+        allocation:
+          THE_TRUTH: 0.25      # 25% (Stages 1-5)
+          THE_ENGINE: 0.15     # 15% (Stages 6-9)
+          THE_IDENTITY: 0.10   # 10% (Stages 10-12)
+          THE_BLUEPRINT: 0.20  # 20% (Stages 13-16)
+          THE_BUILD_LOOP: 0.20 # 20% (Stages 17-20)
+          LAUNCH_LEARN: 0.10   # 10% (Stages 21-25)
+      deep_due_diligence:
+        total_tokens: 1500000  # 1M-2M midpoint
+        use_case: "High-stakes, complex markets"
+      custom:
+        total_tokens: null  # Chairman override
+        use_case: "User-defined"
+
+  # Priority 3: Four Buckets - Hallucination Control (Score: 3.85)
+  four_buckets:
+    enabled: true
+    description: "Classify all outputs as Facts, Assumptions, Simulations, or Unknowns"
+    buckets:
+      facts: "Statements with traceable sources (DB record, prior artifact, evidence URL)"
+      assumptions: "Beliefs about market, users, behavior (must reference assumption_set_id)"
+      simulations: "Outputs from venture/feature sims (must reference simulation_run_id)"
+      unknowns: "Gaps deliberately not filled (must state resolution requirements)"
+    stage_gate_rules:
+      - "All Facts must have traceable sources"
+      - "All Assumptions must reference current assumption_set_id"
+      - "At least one Unknown must be declared (forces honest gaps)"
+    epistemic_required_stages: [3, 5, 16]  # Decision gates require classification
+
+  # Chairman Fast-Follow: Crew Tournament Pilot
+  crew_tournament_pilot:
+    enabled: true
+    description: "Tournament-style agent competition for Stage 11 (Brand & Messaging)"
+    pilot_stage: 11
+    config:
+      num_workers: 3
+      manager_count: 1
+      peer_review: false
+      token_ceiling: 50000
+      worker_model: "claude-sonnet-4-20250514"
+      manager_model: "claude-sonnet-4-20250514"
+    scoring_rubric:
+      clarity: 0.25
+      differentiation: 0.25
+      audience_fit: 0.25
+      memorability: 0.15
+      consistency: 0.10
+    success_criteria:
+      quality_improvement_target: 0.15  # 15% higher than single-agent baseline
+      token_efficiency_max: 3.0         # Max 3x single-agent cost
 
 phases:
   - id: 1
@@ -95,6 +174,10 @@ stages:
         - Multi-model pass complete
         - Contrarian review done
         - Top-5 risks identified
+    # GOLDEN NUGGET: Assumptions vs Reality
+    assumption_set:
+      action: "create_draft"
+      note: "Begin drafting Assumption Set V1 with initial market/competitor beliefs from critique"
 
   - id: 3
     title: "Market Validation & RAT"
@@ -129,6 +212,13 @@ stages:
       - revise
       - reject
     tier_cap: 3  # Tier 0 ventures capped at this stage
+    # GOLDEN NUGGET: Assumptions vs Reality + Four Buckets
+    assumption_set:
+      action: "finalize_v1"
+      note: "Finalize Assumption Set V1 with validated market beliefs, confidence scores"
+    epistemic_classification:
+      required: true
+      note: "Decision gate - all claims must be classified as Facts/Assumptions/Simulations/Unknowns"
 
   - id: 4
     title: "Competitive Intelligence"
@@ -182,6 +272,16 @@ stages:
       exit:
         - Financial model complete
         - Unit economics viable
+    # GOLDEN NUGGET: Assumptions vs Reality + Four Buckets + Token Budget
+    assumption_set:
+      action: "update"
+      note: "Update Assumption Set with financial model inputs (pricing, costs, margins)"
+    epistemic_classification:
+      required: true
+      note: "Decision gate - all financial claims must be classified"
+    token_budget:
+      action: "confirm_profile"
+      note: "Confirm token budget profile (exploratory/standard/deep) for remaining stages"
 
   # ============================================================================
   # PHASE 2: THE ENGINE (Stages 6-9)
@@ -357,9 +457,17 @@ stages:
     artifacts:
       - gtm_plan
       - marketing_manifest
+      - brand_messaging_options  # Tournament output
     metrics:
       - Channel coverage
       - Launch readiness
+    # GOLDEN NUGGET: Crew Tournament Pilot (Chairman Fast-Follow)
+    crew_tournament:
+      enabled: true
+      pilot: true
+      note: "Tournament-style agent competition for brand messaging (3 workers, 1 manager)"
+      config_reference: "golden_nuggets.crew_tournament_pilot"
+      artifacts_produced: ["brand_messaging_options"]
 
   - id: 12
     title: "Sales & Success Logic"
@@ -490,6 +598,10 @@ stages:
       - All constraints stated
       - API contracts generated
       - TypeScript interfaces generated
+    # GOLDEN NUGGET: Four Buckets - Schema Firewall requires full epistemic classification
+    epistemic_classification:
+      required: true
+      note: "Schema Firewall - all schema decisions must have epistemic classification (Facts/Assumptions/Unknowns)"
 
   # ============================================================================
   # PHASE 5: THE BUILD LOOP (Stages 17-20)
@@ -665,6 +777,10 @@ stages:
     metrics:
       - Launch checklist complete
       - Initial users onboarded
+    # GOLDEN NUGGET: Assumptions vs Reality - Reality data collection begins
+    assumption_set:
+      action: "begin_reality_collection"
+      note: "Launch triggers reality data collection against Assumption Set V1"
 
   - id: 24
     title: "Analytics & Feedback"
@@ -689,6 +805,10 @@ stages:
       - DAU/MAU tracking
       - NPS score
       - Feature adoption
+    # GOLDEN NUGGET: Assumptions vs Reality - Collect reality data points
+    assumption_set:
+      action: "collect_reality_data"
+      note: "Analytics feed reality data for assumption comparison (market size, adoption, pricing)"
 
   - id: 25
     title: "Optimization & Scale"
@@ -708,11 +828,19 @@ stages:
       - Optimization roadmap
       - Scaling plan
       - Growth experiments
+      - Assumptions vs Reality Report  # New output
     artifacts:
       - optimization_roadmap
+      - assumptions_vs_reality_report  # New artifact
     metrics:
       - Performance improvements
       - Scale readiness
+      - Assumption error rate  # New metric
+    # GOLDEN NUGGET: Assumptions vs Reality - Generate calibration report
+    assumption_set:
+      action: "generate_calibration_report"
+      note: "Generate Assumptions vs Reality Report comparing V1 beliefs against actual outcomes"
+      output_artifact: "assumptions_vs_reality_report"
 
 # Advisory Checkpoint Configuration
 advisory_checkpoints:
