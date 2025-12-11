@@ -359,8 +359,12 @@ function normalizeDetailedAnalysis(value) {
 
 /**
  * Execute sub-agent (integrated with real executor)
+ *
+ * @param {Object} subAgent - Sub-agent definition
+ * @param {string} sdId - Strategic Directive ID
+ * @param {Object} options - Execution options to pass through
  */
-async function executeSubAgent(subAgent, sdId) {
+async function executeSubAgent(subAgent, sdId, options = {}) {
   const code = subAgent.sub_agent_code || subAgent.code;
   const name = subAgent.name;
 
@@ -368,9 +372,11 @@ async function executeSubAgent(subAgent, sdId) {
 
   try {
     // Call REAL executor from lib/sub-agent-executor.js
+    // Spread options to forward validation_mode, full_e2e, etc.
     const result = await realExecuteSubAgent(code, sdId, {
       phase: 'orchestrated',
-      priority: subAgent.priority
+      priority: subAgent.priority,
+      ...options  // Forward any additional options (validation_mode, full_e2e, etc.)
     });
 
     // Transform result to match orchestrator's expected format
@@ -385,7 +391,11 @@ async function executeSubAgent(subAgent, sdId) {
       detailed_analysis: normalizeDetailedAnalysis(result.detailed_analysis),
       execution_time: result.execution_time_ms
         ? Math.floor(result.execution_time_ms / 1000)
-        : 0
+        : 0,
+      // SD-LEO-PROTOCOL-V4-4-0: Required for CONDITIONAL_PASS verdicts
+      validation_mode: result.validation_mode || null,
+      justification: result.justification || null,
+      conditions: result.conditions || null
     };
 
   } catch (error) {
@@ -435,7 +445,11 @@ async function storeSubAgentResult(sdId, result) {
     detailed_analysis: normalizeDetailedAnalysis(result.detailed_analysis),
     execution_time: result.execution_time || 0,
     metadata: { phase: result.phase, orchestrated: true },
-    created_at: new Date().toISOString()
+    created_at: new Date().toISOString(),
+    // SD-LEO-PROTOCOL-V4-4-0: Required for CONDITIONAL_PASS verdicts
+    validation_mode: result.validation_mode || null,
+    justification: result.justification || null,
+    conditions: result.conditions || null
   };
 
   // Use safeInsert for type-safe insert with validation
@@ -556,8 +570,13 @@ function aggregateResults(results) {
 
 /**
  * Main orchestration function
+ *
+ * @param {string} phase - Phase name (e.g., 'PLAN_VERIFY')
+ * @param {string} sdId - Strategic Directive ID
+ * @param {Object} options - Optional execution options
+ * @param {string} options.validation_mode - Override validation mode ('prospective' or 'retrospective')
  */
-async function orchestrate(phase, sdId) {
+async function orchestrate(phase, sdId, options = {}) {
   console.log('\n🎭 PHASE SUB-AGENT ORCHESTRATOR');
   console.log('═'.repeat(60));
   console.log(`Phase: ${phase}`);
@@ -625,7 +644,7 @@ async function orchestrate(phase, sdId) {
 
     for (const subAgent of requiredSubAgents) {
       try {
-        const result = await executeSubAgent(subAgent, sdId);
+        const result = await executeSubAgent(subAgent, sdId, options);
         result.phase = phase;
         result.priority = subAgent.priority >= 90 ? 'CRITICAL' : subAgent.priority >= 70 ? 'HIGH' : 'MEDIUM';
         executionResults.push(result);

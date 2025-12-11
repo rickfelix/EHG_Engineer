@@ -54,7 +54,11 @@ export class ExecToPlanExecutor extends BaseExecutor {
         console.log('\n🤖 Step 0: Sub-Agent Orchestration (PLAN_VERIFY phase)');
         console.log('-'.repeat(50));
 
-        const result = await orchestrate('PLAN_VERIFY', ctx.sdId);
+        // EXEC-TO-PLAN validates completed work, so use retrospective mode
+        // This allows TESTING to use CONDITIONAL_PASS when evidence exists
+        const result = await orchestrate('PLAN_VERIFY', ctx.sdId, {
+          validation_mode: 'retrospective'
+        });
         ctx._orchestrationResult = result;
 
         if (!result.can_proceed) {
