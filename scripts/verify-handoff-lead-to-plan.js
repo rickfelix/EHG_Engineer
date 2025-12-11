@@ -294,7 +294,55 @@ class LeadToPlanVerifier {
       if (!sd.risks) validation.errors.push('Missing risk assessment');
       validation.valid = false;
     }
-    
+
+    // =========================================================================
+    // EARLY VALIDATION GATES (Added per SD-VISION-TRANSITION-001D6 retrospective)
+    // These validations prevent issues from being caught only at SD closure
+    // =========================================================================
+
+    // GATE: target_application vs deliverable type validation
+    // Root cause: SD-D6 had target_application=EHG_Engineer but UI components were in EHG app
+    if (sd.target_application && sd.scope) {
+      const scope = (sd.scope || '').toLowerCase();
+      const targetApp = sd.target_application;
+
+      // Patterns that suggest EHG app (frontend/UI work)
+      const ehgPatterns = ['ui', 'component', 'form', 'page', 'dialog', 'dashboard', 'stage', 'frontend', 'react'];
+      // Patterns that suggest EHG_Engineer (tooling/infrastructure)
+      const engineerPatterns = ['script', 'tooling', 'migration', 'protocol', 'handoff', 'agent', 'cli', 'database migration'];
+
+      const suggestsEHG = ehgPatterns.some(p => scope.includes(p));
+      const suggestsEngineer = engineerPatterns.some(p => scope.includes(p));
+
+      if (suggestsEHG && !suggestsEngineer && targetApp === 'EHG_Engineer') {
+        validation.warnings.push('target_application is \'EHG_Engineer\' but scope suggests UI/frontend work (EHG app). Verify target_application is correct.');
+      } else if (suggestsEngineer && !suggestsEHG && targetApp === 'EHG') {
+        validation.warnings.push('target_application is \'EHG\' but scope suggests tooling/infrastructure work (EHG_Engineer). Verify target_application is correct.');
+      }
+    }
+
+    // GATE: strategic_objectives SMART criteria validation
+    // Root cause: SD-D6 had generic objectives without Owner/Target/Baseline/Deadline
+    if (sd.strategic_objectives && Array.isArray(sd.strategic_objectives)) {
+      const smartKeywords = ['owner:', 'target:', 'baseline:', 'deadline:', 'due:'];
+      let smartObjectiveCount = 0;
+
+      sd.strategic_objectives.forEach((obj, index) => {
+        const objText = (typeof obj === 'string' ? obj : obj.description || '').toLowerCase();
+        const hasSmart = smartKeywords.some(kw => objText.includes(kw));
+
+        if (hasSmart) {
+          smartObjectiveCount++;
+        }
+      });
+
+      const smartRatio = smartObjectiveCount / sd.strategic_objectives.length;
+
+      if (smartRatio < 0.5) {
+        validation.warnings.push(`Only ${Math.round(smartRatio * 100)}% of strategic_objectives have SMART criteria (Owner/Target/Baseline/Deadline). Consider enhancing objectives for measurability.`);
+      }
+    }
+
     validation.percentage = Math.round(validation.score);
     return validation;
   }
