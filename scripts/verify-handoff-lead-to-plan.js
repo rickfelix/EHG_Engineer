@@ -125,8 +125,10 @@ class LeadToPlanVerifier {
       }
 
       // 4. Check Strategic Directive status
-      if (sd.status !== 'active' && sd.status !== 'approved' && sd.status !== 'in_progress') {
-        return this.rejectHandoff(sdId, 'SD_STATUS', `SD status is '${sd.status}', expected 'active', 'approved', or 'in_progress'`);
+      // Note: Database constraint only allows: 'draft', 'active', 'superseded', 'archived'
+      // For LEAD-TO-PLAN, SD must be 'active' (meaning LEAD has approved it)
+      if (sd.status !== 'active') {
+        return this.rejectHandoff(sdId, 'SD_STATUS', `SD status is '${sd.status}', expected 'active' (LEAD approved). Update status to 'active' before handoff.`);
       }
       
       // 5. Validate business impact and feasibility
@@ -326,7 +328,7 @@ class LeadToPlanVerifier {
             check.issues.push('Timeline constraint may be unrealistic for comprehensive implementation');
           }
         }
-      } catch (e) {
+      } catch (_e) {
         // Ignore JSON parsing errors for feasibility check
       }
     }
@@ -348,11 +350,11 @@ class LeadToPlanVerifier {
             check.issues.push('High-risk items lack mitigation strategies');
           }
         }
-      } catch (e) {
+      } catch (_e) {
         // Ignore JSON parsing errors
       }
     }
-    
+
     // Only fail for critical feasibility issues
     if (check.issues.some(issue => issue.includes('unrealistic') || issue.includes('lack mitigation'))) {
       check.passed = false;
@@ -364,7 +366,7 @@ class LeadToPlanVerifier {
   /**
    * Check development environment readiness
    */
-  async checkEnvironmentReadiness(sd) {
+  async checkEnvironmentReadiness(_sd) {
     const check = {
       ready: true,
       issues: []
