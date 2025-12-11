@@ -217,7 +217,8 @@ async function testFullSubAgentWithContract() {
     console.log('\n🚀 Executing DOCMON sub-agent with contract mode...');
     console.log('   (This tests the full integration with a simple sub-agent)\n');
 
-    const result = await executeSubAgentWithContract('DOCMON', 'SD-TEST-001', {
+    // Use a real SD that exists in the database
+    const result = await executeSubAgentWithContract('DOCMON', 'SD-FOUND-AGENTIC-CONTEXT-001', {
       objective: 'Test documentation validation for contract mode',
       sessionId: null
     });
