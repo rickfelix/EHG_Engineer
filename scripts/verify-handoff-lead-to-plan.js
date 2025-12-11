@@ -343,10 +343,114 @@ class LeadToPlanVerifier {
       }
     }
 
+    // GATE: sd_type classification validation
+    // Root cause: SD-D6 was blocked because infrastructure SDs had wrong handoff requirements
+    // This gate validates that sd_type matches the actual scope/content of the SD
+    if (sd.sd_type && sd.scope) {
+      const detectedType = this.autoDetectSdType(sd);
+
+      if (detectedType.type !== sd.sd_type && detectedType.confidence >= 0.70) {
+        const confidencePercent = Math.round(detectedType.confidence * 100);
+        validation.warnings.push(
+          `sd_type is '${sd.sd_type}' but scope suggests '${detectedType.type}' (${confidencePercent}% confidence). ` +
+          `Matched keywords: ${detectedType.matchedKeywords.join(', ')}. ` +
+          'Verify sd_type is correct - wrong classification affects validation requirements.'
+        );
+      }
+    }
+
     validation.percentage = Math.round(validation.score);
     return validation;
   }
-  
+
+  /**
+   * Auto-detect SD type based on scope, title, and description keywords
+   * Returns: { type: string, confidence: number (0-1), matchedKeywords: string[] }
+   */
+  autoDetectSdType(sd) {
+    const text = `${sd.title || ''} ${sd.scope || ''} ${sd.description || ''}`.toLowerCase();
+
+    // Keyword patterns for each SD type (ordered by specificity)
+    const typePatterns = {
+      security: {
+        keywords: ['auth', 'authentication', 'authorization', 'rls', 'row level security',
+                   'permission', 'role', 'rbac', 'vulnerability', 'cve', 'owasp',
+                   'encryption', 'credential', 'secret', 'token', 'jwt', 'session'],
+        weight: 1.2 // Higher weight for security (specific domain)
+      },
+      database: {
+        keywords: ['schema', 'migration', 'table', 'column', 'index', 'postgres', 'supabase',
+                   'sql', 'query', 'rls policy', 'foreign key', 'constraint', 'trigger',
+                   'stored procedure', 'function', 'view', 'materialized'],
+        weight: 1.1
+      },
+      infrastructure: {
+        keywords: ['ci/cd', 'pipeline', 'github action', 'workflow', 'deploy', 'docker',
+                   'script', 'tooling', 'automation', 'build', 'bundle', 'lint', 'prettier',
+                   'eslint', 'pre-commit', 'hook', 'protocol', 'handoff', 'agent system',
+                   'mcp', 'leo protocol', 'devops', 'monitoring', 'logging'],
+        weight: 1.0
+      },
+      documentation: {
+        keywords: ['documentation', 'docs', 'readme', 'guide', 'tutorial', 'comment',
+                   'jsdoc', 'api doc', 'changelog', 'contributing', 'onboarding'],
+        weight: 0.9 // Lower weight - easily confused with other types
+      },
+      bugfix: {
+        keywords: ['bug', 'fix', 'error', 'issue', 'broken', 'crash', 'regression',
+                   'hotfix', 'patch', 'resolve', 'repair'],
+        weight: 1.0
+      },
+      refactor: {
+        keywords: ['refactor', 'restructure', 'reorganize', 'cleanup', 'technical debt',
+                   'code quality', 'architecture', 'modularize', 'extract', 'simplify'],
+        weight: 1.0
+      },
+      performance: {
+        keywords: ['performance', 'optimize', 'speed', 'latency', 'cache', 'memory',
+                   'cpu', 'load time', 'bundle size', 'lazy load', 'memoize', 'index'],
+        weight: 1.0
+      },
+      feature: {
+        keywords: ['feature', 'ui', 'component', 'page', 'form', 'dialog', 'modal',
+                   'dashboard', 'button', 'input', 'frontend', 'react', 'user interface',
+                   'ux', 'user experience', 'screen', 'view', 'layout', 'stage'],
+        weight: 0.8 // Lower weight - default fallback
+      }
+    };
+
+    let bestMatch = { type: 'feature', confidence: 0, matchedKeywords: [] };
+
+    for (const [type, config] of Object.entries(typePatterns)) {
+      const matchedKeywords = config.keywords.filter(kw => text.includes(kw));
+
+      if (matchedKeywords.length > 0) {
+        // Calculate confidence based on matches and weight
+        const baseConfidence = Math.min(matchedKeywords.length / 3, 1); // Cap at 3 keywords = 100%
+        const weightedConfidence = baseConfidence * config.weight;
+
+        if (weightedConfidence > bestMatch.confidence) {
+          bestMatch = {
+            type,
+            confidence: Math.min(weightedConfidence, 1), // Cap at 1.0
+            matchedKeywords
+          };
+        }
+      }
+    }
+
+    // If no strong match, default to feature with low confidence
+    if (bestMatch.confidence < 0.3) {
+      bestMatch = {
+        type: 'feature',
+        confidence: 0.3,
+        matchedKeywords: ['(default - no strong keyword matches)']
+      };
+    }
+
+    return bestMatch;
+  }
+
   /**
    * Validate strategic feasibility
    */
