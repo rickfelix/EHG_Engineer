@@ -15,6 +15,7 @@
 
 import { SDQualityRubric } from './rubrics/sd-quality-rubric.js';
 import { RetrospectiveQualityRubric } from './rubrics/retrospective-quality-rubric.js';
+import { getScoringWeights, isInfrastructureSDSync } from './sd-type-checker.js';
 
 // ============================================
 // BOILERPLATE DETECTION PATTERNS
@@ -311,23 +312,17 @@ export async function validateSDCompletionReadiness(sd, retrospective = null) {
       result.improvements.push(...retroQuality.improvements);
     }
 
-    // SD-type aware scoring weights
-    // Infrastructure/documentation/process SDs: Retrospective quality weighted higher (60%)
+    // SD-type aware scoring weights using centralized sd-type-checker
+    // Infrastructure/documentation/process SDs: Retrospective quality weighted higher
     // because these SDs are simpler by design and the retrospective captures the real value
-    // Standard feature SDs: SD quality weighted higher (60%) because objectives matter more
-    const sdType = (sd.sd_type || sd.category || '').toLowerCase();
-    const isInfrastructureSD = ['infrastructure', 'documentation', 'process'].includes(sdType);
+    // Standard feature SDs: SD quality weighted higher because objectives matter more
+    const weights = await getScoringWeights(sd, { useAI: false });
+    const sdWeight = weights.sdWeight;
+    const retroWeight = weights.retroWeight;
 
-    let sdWeight, retroWeight;
-    if (isInfrastructureSD) {
-      // Infrastructure SDs: favor retrospective learnings over SD structure
-      sdWeight = 0.30;
-      retroWeight = 0.70;
-    } else {
-      // Feature SDs: favor SD quality (objectives, metrics, scope clarity)
-      sdWeight = 0.60;
-      retroWeight = 0.40;
-    }
+    const isInfrastructure = isInfrastructureSDSync(sd);
+    const sdType = sd.sd_type || sd.category || 'feature';
+    console.log(`   📊 SD Type '${sdType}' (infrastructure=${isInfrastructure}): weights SD=${sdWeight}, Retro=${retroWeight}`);
 
     result.score = Math.round(sdQuality.score * sdWeight + retroQuality.score * retroWeight);
   } else {

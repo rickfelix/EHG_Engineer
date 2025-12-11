@@ -7,13 +7,16 @@
 
 import BaseExecutor from './BaseExecutor.js';
 import ResultBuilder from '../ResultBuilder.js';
+import {
+  isInfrastructureSDSync,
+  getThresholdProfile
+} from '../../sd-type-checker.js';
 
 // External validators (will be lazy loaded)
 let orchestrate;
 let GitCommitVerifier;
 let validateGate3PlanToLead;
 let validateGate4LeadFinal;
-let shouldValidateDesignDatabase;
 let validateSDCompletionReadiness;
 let getSDImprovementGuidance;
 
@@ -113,23 +116,27 @@ export class PlanToLeadExecutor extends BaseExecutor {
         ctx._retroGateResult = retroGateResult;
         ctx._isOrchestratorWithAllChildrenComplete = allChildrenComplete;
 
-        // Dynamic threshold based on SD type:
+        // Dynamic threshold based on SD type using centralized sd-type-checker
         // - Orchestrator SDs with all children complete: 50% (children did the actual work)
-        // - Infrastructure/docs-only SDs: 55% (process-focused, less code-related learnings)
-        // - Legacy SDs (before SMART criteria): 65%
-        // - Standard SDs: 65% (TODO: raise to 70% after SMART criteria SD)
-        const sdType = ctx.sd?.sd_type || ctx.sd?.category || '';
-        const isInfrastructureSD = ['infrastructure', 'documentation', 'process'].includes(sdType.toLowerCase());
+        // - Infrastructure/docs-only SDs: Uses THRESHOLD_PROFILES from sd-type-checker
+        // - Standard SDs: Uses THRESHOLD_PROFILES from sd-type-checker
+        const isInfrastructure = isInfrastructureSDSync(ctx.sd);
+        const sdType = ctx.sd?.sd_type || ctx.sd?.category || 'feature';
 
         let threshold;
         if (allChildrenComplete) {
           threshold = 50;
           console.log('   📂 Using orchestrator threshold (50%) - all children complete');
-        } else if (isInfrastructureSD) {
-          threshold = 55;
-          console.log(`   🔧 Using infrastructure SD threshold (55%) - sd_type='${sdType}'`);
+        } else if (isInfrastructure) {
+          // Use centralized threshold profile for infrastructure SDs
+          const profile = await getThresholdProfile(ctx.sd, { useAI: false });
+          threshold = profile.retrospectiveQuality;
+          console.log(`   🔧 Using infrastructure SD threshold (${threshold}%) - sd_type='${sdType}'`);
         } else {
-          threshold = 65;
+          // Use centralized threshold profile for standard SDs
+          const profile = await getThresholdProfile(ctx.sd, { useAI: false });
+          threshold = profile.retrospectiveQuality;
+          console.log(`   📋 Using standard SD threshold (${threshold}%) - sd_type='${sdType}'`);
         }
 
         if (!retroGateResult.valid || retroGateResult.score < threshold) {
@@ -214,7 +221,10 @@ export class PlanToLeadExecutor extends BaseExecutor {
     });
 
     // Gate 3 & 4: Only if design/database SD (conditional)
-    if (shouldValidateDesignDatabase(sd)) {
+    // Use centralized sd-type-checker - sync check here, async AI check done inside gate validators
+    // Non-code SDs (infrastructure, documentation, process) skip Gates 3 & 4
+    const isNonCodeSD = isInfrastructureSDSync(sd);
+    if (!isNonCodeSD) {
       // Gate 3: End-to-End Traceability
       gates.push({
         name: 'GATE3_TRACEABILITY',
@@ -655,10 +665,7 @@ export class PlanToLeadExecutor extends BaseExecutor {
       validateGate4LeadFinal = gate4.validateGate4LeadFinal;
     }
 
-    if (!shouldValidateDesignDatabase) {
-      const designDb = await import('../../design-database-gates-validation.js');
-      shouldValidateDesignDatabase = designDb.shouldValidateDesignDatabase;
-    }
+    // Note: shouldValidateDesignDatabase now imported from sd-type-checker.js (requiresDesignDatabaseGates)
 
     if (!validateSDCompletionReadiness) {
       const sdQuality = await import('../../sd-quality-validation.js');
