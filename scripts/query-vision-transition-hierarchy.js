@@ -1,107 +1,99 @@
-import pkg from 'pg';
-const { Client } = pkg;
+import { createDatabaseClient } from './lib/supabase-connection.js';
 
-const client = new Client({
-  host: 'dedlbzhpgkmetvhbkyzq.supabase.co',
-  port: 5432,
-  user: 'postgres',
-  password: 'Fl!M32DaM00n!1',
-  database: 'postgres'
-});
+(async () => {
+  const client = await createDatabaseClient('engineer', { verify: false });
 
-async function querySDHierarchy() {
   try {
-    await client.connect();
-    console.log('Connected to database successfully\n');
+    console.log('=== VISION TRANSITION SD HIERARCHY ===\n');
 
-    const query = `
-      WITH RECURSIVE sd_hierarchy AS (
-        -- Get the parent SD
-        SELECT
-          id,
-          sd_code,
-          title,
-          status,
-          parent_sd_id,
-          progress_percentage,
-          created_at,
-          updated_at,
-          0 as level,
-          sd_code as sort_path
-        FROM strategic_directives
-        WHERE sd_code LIKE 'SD-VISION-TRANSITION-001'
+    // Query all Vision Transition SDs
+    const result = await client.query(`
+      SELECT
+        id,
+        title,
+        status,
+        current_phase,
+        parent_sd_id,
+        sequence_rank,
+        metadata,
+        created_at
+      FROM strategic_directives_v2
+      WHERE id LIKE 'SD-VISION-TRANSITION-001%'
+      ORDER BY id
+    `);
 
-        UNION ALL
+    console.log(`Found ${result.rows.length} Vision Transition SDs:\n`);
 
-        -- Get all descendants
-        SELECT
-          sd.id,
-          sd.sd_code,
-          sd.title,
-          sd.status,
-          sd.parent_sd_id,
-          sd.progress_percentage,
-          sd.created_at,
-          sd.updated_at,
-          h.level + 1,
-          h.sort_path || '/' || sd.sd_code
-        FROM strategic_directives sd
-        INNER JOIN sd_hierarchy h ON sd.parent_sd_id = h.id
-      )
-      SELECT * FROM sd_hierarchy
-      ORDER BY sort_path;
-    `;
+    result.rows.forEach(sd => {
+      console.log(`${sd.id}`);
+      console.log(`  Title: ${sd.title}`);
+      console.log(`  Status: ${sd.status}`);
+      console.log(`  Phase: ${sd.current_phase || 'N/A'}`);
+      console.log(`  Parent: ${sd.parent_sd_id || 'None (root)'}`);
+      console.log(`  Sequence Rank: ${sd.sequence_rank || 'N/A'}`);
+      console.log(`  Created: ${sd.created_at}`);
 
-    const result = await client.query(query);
+      if (sd.metadata) {
+        console.log(`  Metadata Keys: ${Object.keys(sd.metadata).join(', ')}`);
 
-    console.log('================================================================================');
-    console.log('SD-VISION-TRANSITION FAMILY HIERARCHY');
-    console.log('================================================================================');
-    console.log(`Total SDs found: ${result.rows.length}\n`);
-
-    let currentLevel = -1;
-    result.rows.forEach(row => {
-      const indent = '  '.repeat(row.level);
-      const levelIndicator = row.level === 0 ? '📁 PARENT' : row.level === 1 ? '📂 CHILD' : '📄 GRANDCHILD';
-
-      if (row.level !== currentLevel) {
-        console.log('');
-        currentLevel = row.level;
+        // Show Kochel integration scope if present
+        if (sd.id === 'SD-VISION-TRANSITION-001D' && sd.metadata) {
+          console.log('  --- Kochel Integration Scope ---');
+          console.log(JSON.stringify(sd.metadata, null, 4));
+        }
       }
-
-      console.log(`${indent}${levelIndicator}: ${row.sd_code}`);
-      console.log(`${indent}    Title: ${row.title}`);
-      console.log(`${indent}    Status: ${row.status}`);
-      console.log(`${indent}    Progress: ${row.progress_percentage || 0}%`);
-      console.log(`${indent}    Parent ID: ${row.parent_sd_id || 'None (root)'}`);
-      console.log(`${indent}    Created: ${new Date(row.created_at).toISOString().split('T')[0]}`);
-      console.log(`${indent}    Updated: ${new Date(row.updated_at).toISOString().split('T')[0]}`);
       console.log('');
     });
 
-    console.log('================================================================================');
-    console.log('SUMMARY STATISTICS');
-    console.log('================================================================================');
+    // Check for SD-001F specifically
+    const hasF = result.rows.find(sd => sd.id === 'SD-VISION-TRANSITION-001F');
+    console.log('\n=== SD-VISION-TRANSITION-001F Status ===');
+    console.log(hasF ? 'EXISTS ✅' : 'DOES NOT EXIST ❌');
 
-    const statusCounts = result.rows.reduce((acc, row) => {
-      acc[row.status] = (acc[row.status] || 0) + 1;
-      return acc;
-    }, {});
+    // Check draft status SDs
+    console.log('\n=== DRAFT STATUS SDs ===');
+    const drafts = result.rows.filter(sd => sd.status === 'draft');
+    if (drafts.length > 0) {
+      drafts.forEach(sd => {
+        console.log(`  - ${sd.id}: ${sd.title}`);
+      });
+    } else {
+      console.log('  None in draft status');
+    }
 
-    console.log('\nStatus Distribution:');
-    Object.entries(statusCounts).forEach(([status, count]) => {
-      console.log(`  ${status}: ${count}`);
+    // Show parent-child relationships
+    console.log('\n=== HIERARCHY TREE ===');
+    const roots = result.rows.filter(sd => !sd.parent_sd_id);
+    const children = result.rows.filter(sd => sd.parent_sd_id);
+
+    roots.forEach(root => {
+      console.log(`${root.id} [${root.status}]`);
+      const rootChildren = children.filter(c => c.parent_sd_id === root.id);
+      rootChildren.forEach(child => {
+        console.log(`  └─ ${child.id} [${child.status}]`);
+        const grandChildren = children.filter(c => c.parent_sd_id === child.id);
+        grandChildren.forEach(gc => {
+          console.log(`      └─ ${gc.id} [${gc.status}]`);
+        });
+      });
     });
 
-    const avgProgress = result.rows.reduce((sum, row) => sum + (row.progress_percentage || 0), 0) / result.rows.length;
-    console.log(`\nAverage Progress: ${avgProgress.toFixed(1)}%`);
+    // Check for gaps in sequence
+    console.log('\n=== SEQUENCE GAP ANALYSIS ===');
+    const suffixes = result.rows.map(sd => sd.id.replace('SD-VISION-TRANSITION-001', ''));
+    const expectedSuffixes = ['', 'A', 'B', 'C', 'D', 'E', 'F'];
+    const missing = expectedSuffixes.filter(s => !suffixes.includes(s));
 
-    await client.end();
+    if (missing.length > 0) {
+      console.log('Missing SDs:', missing.map(s => `SD-VISION-TRANSITION-001${s}`).join(', '));
+    } else {
+      console.log('No gaps found in sequence (base through F)');
+    }
+
   } catch (error) {
     console.error('Error querying database:', error.message);
-    console.error('Stack:', error.stack);
-    process.exit(1);
+    console.error(error.stack);
+  } finally {
+    await client.end();
   }
-}
-
-querySDHierarchy();
+})();

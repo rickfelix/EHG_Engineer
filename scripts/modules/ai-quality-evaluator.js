@@ -212,12 +212,14 @@ Your task is to score content across multiple criteria using a 0-10 scale:
 4. Avoid **grade inflation** - if something is mediocre, score it 4-6
 5. **Penalize placeholders heavily** - "To be defined" should score 0-3
 6. **Adjust strictness based on SD type** - apply the guidance above appropriately
+7. **ALWAYS provide improvement suggestions** for scores below 8 - be specific about WHAT to change
 
 Return ONLY valid JSON in this exact format:
 {
   "criterion_name": {
     "score": <number 0-10>,
-    "reasoning": "<1-2 sentence explanation>"
+    "reasoning": "<1-2 sentence explanation of why this score>",
+    "improvement": "<REQUIRED for scores <8: specific, actionable suggestion to improve this criterion. Example: 'Add baselines and targets to success metrics like: Baseline: 0% → Target: 80% coverage'. Leave empty string if score >= 8>"
   }
 }
 
@@ -381,6 +383,7 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
   generateFeedback(scores, criteria = null) {
     const required = [];
     const recommended = [];
+    const improvements = []; // NEW: Actionable improvement suggestions
 
     // Build weight lookup from criteria config
     const weightLookup = {};
@@ -393,7 +396,18 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
     for (const [criterionName, scoreData] of Object.entries(scores)) {
       const score = scoreData.score;
       const reasoning = scoreData.reasoning;
+      const improvement = scoreData.improvement || ''; // NEW: Get improvement suggestion
       const weight = weightLookup[criterionName] || 0.10; // Default to 10% if unknown
+
+      // Collect improvement suggestions for any score < 8
+      if (score < 8 && improvement) {
+        improvements.push({
+          criterion: criterionName,
+          score,
+          weight,
+          suggestion: improvement
+        });
+      }
 
       // Low-weight criteria (<10%) NEVER block, regardless of score
       // This is critical for Phase 1 calibration (e.g., given_when_then_format at 5%)
@@ -422,7 +436,7 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
       // Scores 7+ are good, no feedback needed
     }
 
-    return { required, recommended };
+    return { required, recommended, improvements };
   }
 
   /**
@@ -443,6 +457,13 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
    * Store assessment in database with sd_type and threshold tracking
    */
   async storeAssessment(contentId, scores, weightedScore, feedback, duration, tokensUsed, cost, sd = null, threshold = 70) {
+    // Guard: Skip storage if contentId is null/undefined (prevents NOT NULL constraint violation)
+    if (!contentId) {
+      console.warn(`[AIQualityEvaluator] Skipping assessment storage: content_id is ${contentId === null ? 'null' : 'undefined'} for content_type=${this.rubricConfig.contentType}`);
+      console.warn(`[AIQualityEvaluator] This may indicate a missing 'id' field in the evaluated content. Score: ${weightedScore}%`);
+      return;
+    }
+
     try {
       const { error } = await this.supabase
         .from('ai_quality_assessments')

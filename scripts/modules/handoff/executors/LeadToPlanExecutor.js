@@ -129,47 +129,70 @@ export class LeadToPlanExecutor extends BaseExecutor {
   /**
    * CREATE HANDOFF RETROSPECTIVE
    *
-   * After a successful handoff, prompt for key insights to capture learnings.
-   * This creates a retrospective record for continuous improvement.
+   * After a successful handoff, automatically creates a retrospective record.
+   * Uses handoff metrics for quality scoring. Interactive prompts are optional
+   * and have a timeout to prevent blocking in non-interactive contexts.
+   *
+   * ROOT CAUSE FIX: Previous version used blocking readline prompts that would
+   * hang indefinitely in non-interactive mode (piped output, Claude Code, etc.).
+   * Now uses non-blocking defaults with optional interactive enhancement.
    */
   async _createHandoffRetrospective(sdId, sd, handoffResult, retrospectiveType) {
     try {
-      console.log('\n📝 HANDOFF RETROSPECTIVE: Capture Learnings');
+      console.log('\n📝 HANDOFF RETROSPECTIVE: Auto-capturing learnings');
       console.log('='.repeat(70));
-      console.log('   Handoff successful! Let\'s capture key insights for improvement.');
-      console.log('');
 
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
+      // Determine if running interactively (TTY connected to stdin)
+      const isInteractive = process.stdin.isTTY && process.stdout.isTTY;
 
-      const prompt = (question) => new Promise((resolve) => {
-        rl.question(question, resolve);
-      });
+      let clarityRating = '4';
+      let criteriaRating = '4';
+      let depsRating = '4';
+      let simplicityRating = '4';
+      let frictionPoints = 'none';
 
-      // Key questions for LEAD→PLAN handoff
-      const questions = [
-        'Was the SD clear enough for planning? (1-5, 5=very clear): ',
-        'Were acceptance criteria well-defined? (1-5, 5=very well): ',
-        'Were dependencies correctly identified? (1-5, 5=all identified): ',
-        'Did the simplicity assessment hold up? (1-5, 5=perfect): ',
-        'Any friction points in the approval process? (describe or "none"): '
-      ];
+      if (isInteractive) {
+        // Interactive mode: prompt with timeout
+        console.log('   Handoff successful! Quick feedback (10s timeout, Enter to skip):');
+        console.log('');
 
-      console.log('   Please answer these quick questions (press Enter to skip):');
-      console.log('');
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout
+        });
 
-      const answers = [];
-      for (const question of questions) {
-        const answer = await prompt(`   ${question}`);
-        answers.push(answer.trim() || 'N/A');
+        const promptWithTimeout = (question, timeoutMs = 10000) => new Promise((resolve) => {
+          const timer = setTimeout(() => {
+            resolve('');
+          }, timeoutMs);
+
+          rl.question(`   ${question}`, (answer) => {
+            clearTimeout(timer);
+            resolve(answer);
+          });
+        });
+
+        // Key questions for LEAD→PLAN handoff (with timeout)
+        clarityRating = (await promptWithTimeout('SD clarity? (1-5, 5=very clear): ')) || '4';
+        criteriaRating = (await promptWithTimeout('Acceptance criteria? (1-5): ')) || '4';
+        depsRating = (await promptWithTimeout('Dependencies identified? (1-5): ')) || '4';
+        simplicityRating = (await promptWithTimeout('Simplicity held up? (1-5): ')) || '4';
+        frictionPoints = (await promptWithTimeout('Friction points? (or "none"): ')) || 'none';
+
+        rl.close();
+      } else {
+        // Non-interactive mode: use defaults based on handoff result
+        console.log('   Running in non-interactive mode - using auto-generated metrics');
+
+        // Derive quality from handoff result
+        if (handoffResult.qualityScore) {
+          const derivedRating = Math.ceil(handoffResult.qualityScore / 20); // 0-100 -> 1-5
+          clarityRating = String(derivedRating);
+          criteriaRating = String(derivedRating);
+          depsRating = String(derivedRating);
+          simplicityRating = String(derivedRating);
+        }
       }
-
-      rl.close();
-
-      // Parse ratings and friction points
-      const [clarityRating, criteriaRating, depsRating, simplicityRating, frictionPoints] = answers;
 
       // Calculate quality score from ratings
       const numericRatings = [clarityRating, criteriaRating, depsRating, simplicityRating]

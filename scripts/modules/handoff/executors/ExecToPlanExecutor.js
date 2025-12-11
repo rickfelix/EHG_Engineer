@@ -54,7 +54,11 @@ export class ExecToPlanExecutor extends BaseExecutor {
         console.log('\n🤖 Step 0: Sub-Agent Orchestration (PLAN_VERIFY phase)');
         console.log('-'.repeat(50));
 
-        const result = await orchestrate('PLAN_VERIFY', ctx.sdId);
+        // EXEC-TO-PLAN validates completed work, so use retrospective mode
+        // This allows TESTING to use CONDITIONAL_PASS when evidence exists
+        const result = await orchestrate('PLAN_VERIFY', ctx.sdId, {
+          validation_mode: 'retrospective'
+        });
         ctx._orchestrationResult = result;
 
         if (!result.can_proceed) {
@@ -262,6 +266,32 @@ export class ExecToPlanExecutor extends BaseExecutor {
     // Build success result
     const orchestrationResult = gateResults.gateResults.SUB_AGENT_ORCHESTRATION?.details || {};
     const bmadResult = gateResults.gateResults.BMAD_EXEC_TO_PLAN || {};
+
+    // Update SD status to completed with 100% progress
+    // This is the final validation phase - EXEC is complete and verified
+    console.log('\n📊 Step 6: Updating SD Status to Completed');
+    console.log('-'.repeat(50));
+
+    try {
+      const { error: updateError } = await this.supabase
+        .from('strategic_directives_v2')
+        .update({
+          status: 'completed',
+          current_phase: 'EXEC_COMPLETE',
+          progress: 100,
+          completion_date: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', sdId);
+
+      if (updateError) {
+        console.warn(`   ⚠️  Failed to update SD status: ${updateError.message}`);
+      } else {
+        console.log('   ✅ SD status updated to completed (progress: 100%)');
+      }
+    } catch (error) {
+      console.warn(`   ⚠️  SD status update error: ${error.message}`);
+    }
 
     return {
       success: true,

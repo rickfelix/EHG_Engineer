@@ -93,17 +93,30 @@ export class PlanToLeadExecutor extends BaseExecutor {
           .limit(1)
           .single();
 
-        const retroGateResult = validateSDCompletionReadiness(ctx.sd, retrospective);
+        const retroGateResult = await validateSDCompletionReadiness(ctx.sd, retrospective);
         ctx._retroGateResult = retroGateResult;
 
         if (!retroGateResult.valid || retroGateResult.score < 70) {
           const guidance = getSDImprovementGuidance(retroGateResult);
+
+          // NEW: Display actionable improvement suggestions from AI
+          if (retroGateResult.improvements?.length > 0) {
+            console.log('\n📋 ACTIONABLE IMPROVEMENTS TO PASS THIS GATE:');
+            console.log('='.repeat(60));
+            retroGateResult.improvements.forEach((imp, idx) => {
+              console.log(`\n${idx + 1}. [${imp.criterion}] (score: ${imp.score}/10, weight: ${Math.round(imp.weight * 100)}%)`);
+              console.log(`   → ${imp.suggestion}`);
+            });
+            console.log('\n' + '='.repeat(60));
+          }
+
           return {
             passed: false,
             score: retroGateResult.score,
             max_score: 100,
             issues: retroGateResult.issues,
             warnings: retroGateResult.warnings,
+            improvements: retroGateResult.improvements, // NEW: Pass improvements to result
             guidance,
             remediation: 'Ensure retrospective has non-boilerplate key_learnings and action_items'
           };
