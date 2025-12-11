@@ -482,11 +482,22 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
 /**
  * Helper: Check if SD requires DESIGN→DATABASE validation
  *
+ * Infrastructure SDs (sd_type='infrastructure') are exempt from Gate 3/4 validation
+ * because they focus on building components/tooling rather than feature workflows.
+ * These SDs may mention UI/schema keywords but don't have the DESIGN→DATABASE
+ * sub-agent execution workflow that Gates 3/4 validate.
+ *
  * @param {Object} sd - Strategic Directive object
  * @returns {boolean} True if validation required
  */
 export function shouldValidateDesignDatabase(sd) {
   if (!sd) return false;
+
+  // Infrastructure SDs are exempt - they build tooling, not feature workflows
+  // These SDs may mention UI/schema keywords but don't follow DESIGN→DATABASE workflow
+  if (sd.sd_type === 'infrastructure' || sd.category === 'infrastructure') {
+    return false;
+  }
 
   // Check category field
   const hasDesignCategory = sd.category?.includes('design');
