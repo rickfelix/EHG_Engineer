@@ -265,7 +265,7 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
 /**
  * Validate Recommendation Adherence (Section A - 20 points)
  */
-async function validateRecommendationAdherence(sd_id, designAnalysis, databaseAnalysis, gate2Data, validation, supabase) {
+async function validateRecommendationAdherence(_sd_id, designAnalysis, databaseAnalysis, gate2Data, validation, _supabase) {
   let sectionScore = 0;
   const sectionDetails = {};
 
@@ -415,7 +415,7 @@ async function validateImplementationQuality(sd_id, gate2Data, validation, supab
  * Validate Traceability Mapping (Section C - 25 points - MAJOR)
  * Phase-aware: Traceability important but not critical
  */
-async function validateTraceabilityMapping(sd_id, designAnalysis, databaseAnalysis, validation, _supabase) {
+async function validateTraceabilityMapping(sd_id, designAnalysis, databaseAnalysis, validation, supabase) {
   let sectionScore = 0;
   const sectionDetails = {};
 
