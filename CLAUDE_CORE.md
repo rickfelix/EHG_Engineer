@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-11 7:40:40 PM
+**Generated**: 2025-12-11 5:54:13 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -43,27 +43,6 @@ EHG_Engineer (Management)          EHG App (Implementation)
 └── Dashboard Views          ←     No changes here!
 ```
 
-## 🚀 Session Verification & Quick Start (MANDATORY)
-
-## Session Start Checklist
-
-### Required Verification
-1. **Check Priority**: `npm run prio:top3`
-2. **Git Status**: Clean working directory?
-3. **Context Load**: CLAUDE_CORE.md + phase file
-
-### Before Starting Work
-- Verify SD is in correct phase
-- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
-- Review recent handoffs if continuing
-
-### Key Commands
-| Command | Purpose |
-|---------|---------|
-| `npm run prio:top3` | Top priority SDs |
-| `git status` | Working tree status |
-| `npm run handoff:latest` | Latest handoff |
-
 ## 🔍 Session Start Verification (MANDATORY)
 
 **Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
@@ -98,6 +77,27 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 - If records don't exist, CREATE them before proceeding
 
 **Pattern Reference**: PAT-SESS-VER-001
+
+## 🚀 Session Verification & Quick Start (MANDATORY)
+
+## Session Start Checklist
+
+### Required Verification
+1. **Check Priority**: `npm run prio:top3`
+2. **Git Status**: Clean working directory?
+3. **Context Load**: CLAUDE_CORE.md + phase file
+
+### Before Starting Work
+- Verify SD is in correct phase
+- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
+- Review recent handoffs if continuing
+
+### Key Commands
+| Command | Purpose |
+|---------|---------|
+| `npm run prio:top3` | Top priority SDs |
+| `git status` | Working tree status |
+| `npm run handoff:latest` | Latest handoff |
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 

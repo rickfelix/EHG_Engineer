@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2025-12-11 7:40:40 PM
+**Generated**: 2025-12-11 5:54:13 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
@@ -45,6 +45,75 @@ npm run handoff:compliance SD-XXX-001
 ```
 
 **Database trigger now BLOCKS direct inserts. You MUST use the scripts above.**
+
+## Mandatory 4-Step Handoff Chain
+
+## 🔄 Mandatory 4-Step Handoff Chain
+
+**CRITICAL: The complete LEO Protocol cycle requires ALL FOUR handoffs in sequence.**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    LEO PROTOCOL HANDOFF CHAIN                       │
+│                                                                     │
+│    ┌────────┐     ┌────────┐     ┌────────┐     ┌────────┐        │
+│    │  LEAD  │────→│  PLAN  │────→│  EXEC  │────→│  PLAN  │────→   │
+│    │        │ (1) │        │ (2) │        │ (3) │        │ (4)    │
+│    │ Approve│     │  PRD   │     │  Code  │     │ Verify │        │
+│    └────────┘     └────────┘     └────────┘     └────────┘        │
+│         │                                             │            │
+│         │              ┌───────────┐                  │            │
+│         └──────────────│ LEAD Final│←─────────────────┘            │
+│                        │ Approval  │                               │
+│                        └───────────┘                               │
+│                                                                     │
+│    (1) LEAD-TO-PLAN  - SD approved, PRD creation authorized        │
+│    (2) PLAN-TO-EXEC  - PRD complete, implementation approved       │
+│    (3) EXEC-TO-PLAN  - Code complete, verification phase           │
+│    (4) PLAN-TO-LEAD  - Verification complete, final approval       │
+│                                                                     │
+│    ⚠️  SD CANNOT reach 100% without PLAN-TO-LEAD handoff!          │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Handoff Commands (Execute in Order)
+
+| Step | Handoff | Command | Validates |
+|------|---------|---------|-----------|
+| 1 | LEAD → PLAN | `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001` | SD approved, scope defined |
+| 2 | PLAN → EXEC | `node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001` | PRD complete, design/database analyzed |
+| 3 | EXEC → PLAN | `node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001` | Implementation complete, tests passing |
+| 4 | PLAN → LEAD | `node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001` | Verification complete, retrospective exists |
+
+### Completion Requirements
+
+**The `calculate_sd_progress()` function requires:**
+- All 4 handoffs (LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN, **PLAN-TO-LEAD**)
+- Retrospective with quality score ≥70%
+- Git status clean, all commits pushed
+- Infrastructure SDs exempt from Gate 3/4 (design/database validation)
+
+**Root Cause (Six Whys)**: SD completion was previously possible with only 3 handoffs because the function checked `COUNT(handoffs) >= min_handoffs` but `min_handoffs=3`. Now explicitly requires PLAN-TO-LEAD handoff record.
+
+### Checking Handoff Status
+
+```bash
+# View all handoffs for an SD
+node scripts/check-handoff-chain.js SD-XXX-001
+
+# Or query directly
+node -e "
+import { createSupabaseClient } from './lib/supabase-client.js';
+const supabase = createSupabaseClient();
+const { data } = await supabase
+  .from('sd_phase_handoffs')
+  .select('handoff_type, status, created_at')
+  .eq('sd_id', 'SD-XXX-001')
+  .eq('status', 'accepted')
+  .order('created_at');
+console.log('Handoff chain:', data.map(h => h.handoff_type).join(' → '));
+"
+```
 
 ## 🚨 EXEC Agent Implementation Requirements
 

@@ -85,6 +85,7 @@
     "description": "EXEC phase operations (~20-25k chars)",
     "sections": [
       "mandatory_phase_transitions_exec",
+      "handoff_chain_diagram",
       "exec_implementation_requirements",
       "exec_retrospective_anti_patterns",
       "exec_skill_integration",
