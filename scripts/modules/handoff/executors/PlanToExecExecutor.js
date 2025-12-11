@@ -263,6 +263,10 @@ export class PlanToExecExecutor extends BaseExecutor {
       gateResults
     });
 
+    // STATE TRANSITION: Update PRD status on successful handoff
+    // Root cause fix: Handoffs should act as state machine transitions, not just validation gates
+    await this._transitionPrdToExec(prd, sdId);
+
     // Display EXEC phase requirements (proactive guidance)
     await this._displayExecPhaseRequirements(sdId, prd);
 
@@ -634,6 +638,45 @@ export class PlanToExecExecutor extends BaseExecutor {
 
     } catch (error) {
       console.log(`\n   ⚠️  Could not display EXEC requirements: ${error.message}`);
+    }
+  }
+
+  /**
+   * STATE TRANSITION: Update PRD status on successful PLAN-TO-EXEC handoff
+   *
+   * Root cause fix: Handoffs were designed as validation gates (check state) but not
+   * state machine transitions (update state). This caused PRD status to remain stale,
+   * blocking downstream handoffs that depend on PRD status.
+   *
+   * 5 Whys Analysis: See SD-QA-STAGES-21-25-001 retrospective
+   */
+  async _transitionPrdToExec(prd, sdId) {
+    if (!prd) {
+      console.log('\n   ⚠️  No PRD to transition');
+      return;
+    }
+
+    console.log('\n📊 STATE TRANSITION: PRD Status Update');
+    console.log('-'.repeat(50));
+
+    try {
+      const { error } = await this.supabase
+        .from('product_requirements_v2')
+        .update({
+          status: 'ready_for_exec',
+          phase: 'exec',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', prd.id);
+
+      if (error) {
+        console.log(`   ⚠️  Could not update PRD status: ${error.message}`);
+      } else {
+        console.log('   ✅ PRD status transitioned: approved → ready_for_exec');
+        console.log('   ✅ PRD phase transitioned: → exec');
+      }
+    } catch (error) {
+      console.log(`   ⚠️  PRD transition error: ${error.message}`);
     }
   }
 
