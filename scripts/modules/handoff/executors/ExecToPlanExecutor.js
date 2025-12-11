@@ -17,6 +17,8 @@ let validateE2ECoverage;
 let autoValidateUserStories;
 let autoCompleteDeliverables;
 let checkDeliverablesNeedCompletion;
+// LEO v4.3.4: Unified test evidence functions
+let getStoryTestCoverage;
 
 export class ExecToPlanExecutor extends BaseExecutor {
   constructor(dependencies = {}) {
@@ -130,32 +132,55 @@ export class ExecToPlanExecutor extends BaseExecutor {
       console.warn('⚠️  No PRD found for SD');
     }
 
-    // E2E Test Mapping (if PRD has stories)
-    let e2eMapping = null;
-    if (prd) {
-      console.log('\n🧪 Step 2: E2E Test → User Story Mapping');
-      console.log('-'.repeat(50));
+    // LEO v4.3.4: Unified Test Evidence Validation
+    let testEvidenceResult = null;
+    console.log('\n🧪 Step 2: Unified Test Evidence Validation (LEO v4.3.4)');
+    console.log('-'.repeat(50));
 
-      try {
-        const { data: userStories } = await this.supabase
-          .from('user_stories')
-          .select('id, story_id, title, status')
-          .eq('prd_id', prd.id);
+    try {
+      // Query v_story_test_coverage view for comprehensive test evidence
+      testEvidenceResult = await getStoryTestCoverage(sdId);
 
-        if (userStories && userStories.length > 0) {
-          e2eMapping = await mapE2ETestsToUserStories(sdId, this.supabase);
-          const coverageResult = await validateE2ECoverage(sdId, this.supabase);
-
-          if (!coverageResult.passed) {
-            console.log(`   ⚠️  E2E coverage: ${coverageResult.mapped_count}/${coverageResult.total_stories} stories mapped`);
-          } else {
-            console.log(`   ✅ E2E test mapping complete: ${coverageResult.mapped_count} stories covered`);
-          }
-        } else {
-          console.log('   ℹ️  No user stories to map');
+      if (testEvidenceResult.total_stories === 0) {
+        console.log('   ℹ️  No user stories to validate');
+      } else if (testEvidenceResult.all_passing) {
+        console.log(`   ✅ All ${testEvidenceResult.passing_count}/${testEvidenceResult.total_stories} stories have passing tests`);
+        console.log(`   📊 Latest test run: ${testEvidenceResult.latest_run_at || 'N/A'}`);
+      } else {
+        console.log(`   ⚠️  Test coverage: ${testEvidenceResult.passing_count}/${testEvidenceResult.total_stories} stories passing`);
+        if (testEvidenceResult.failing_stories?.length > 0) {
+          console.log('   ❌ Failing stories:');
+          testEvidenceResult.failing_stories.slice(0, 5).forEach(story => {
+            console.log(`      - ${story.story_key}: ${story.latest_test_status || 'No test evidence'}`);
+          });
         }
-      } catch (error) {
-        console.log(`   ⚠️  E2E mapping error: ${error.message}`);
+      }
+    } catch (error) {
+      console.log(`   ⚠️  Test evidence query error: ${error.message}`);
+      console.log('   → Falling back to legacy E2E mapping');
+
+      // Fallback to legacy E2E mapping if unified schema not available
+      if (prd) {
+        try {
+          const { data: userStories } = await this.supabase
+            .from('user_stories')
+            .select('id, story_id, title, status')
+            .eq('prd_id', prd.id);
+
+          if (userStories && userStories.length > 0) {
+            const e2eMapping = await mapE2ETestsToUserStories(sdId, this.supabase);
+            const coverageResult = await validateE2ECoverage(sdId, this.supabase);
+
+            if (!coverageResult.passed) {
+              console.log(`   ⚠️  E2E coverage: ${coverageResult.mapped_count}/${coverageResult.total_stories} stories mapped`);
+            } else {
+              console.log(`   ✅ E2E test mapping complete: ${coverageResult.mapped_count} stories covered`);
+            }
+            testEvidenceResult = { legacy: true, e2eMapping, coverageResult };
+          }
+        } catch (legacyError) {
+          console.log(`   ⚠️  Legacy E2E mapping error: ${legacyError.message}`);
+        }
       }
     }
 
@@ -300,7 +325,7 @@ export class ExecToPlanExecutor extends BaseExecutor {
         passed: orchestrationResult.passed
       },
       bmad_validation: bmadResult,
-      e2e_mapping: e2eMapping,
+      test_evidence: testEvidenceResult, // LEO v4.3.4: Unified test evidence
       deliverables: deliverablesStatus,
       commit_verification: commitVerification,
       qualityScore: gateResults.totalScore
@@ -406,6 +431,12 @@ export class ExecToPlanExecutor extends BaseExecutor {
       const deliverables = await import('../auto-complete-deliverables.js');
       autoCompleteDeliverables = deliverables.autoCompleteDeliverables;
       checkDeliverablesNeedCompletion = deliverables.checkDeliverablesNeedCompletion;
+    }
+
+    // LEO v4.3.4: Unified test evidence functions
+    if (!getStoryTestCoverage) {
+      const testEvidence = await import('../../../lib/test-evidence-ingest.js');
+      getStoryTestCoverage = testEvidence.getStoryTestCoverage;
     }
   }
 }
