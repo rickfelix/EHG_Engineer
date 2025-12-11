@@ -1,17 +1,17 @@
 /**
  * SD Type Classifier - AI-Powered Strategic Directive Classification
  *
- * Uses GPT-5o Mini with function calling to accurately classify SD types
+ * Uses GPT-5 Mini with JSON response mode to accurately classify SD types
  * based on semantic understanding of scope, title, and description.
  *
  * Key Features:
- * - Function calling for structured, type-safe output
+ * - JSON response mode for structured output (gpt-5-mini doesn't support function calling)
  * - Confidence scoring to trigger worst-case handoff requirements
  * - Reasoning explanation for transparency
  * - Fallback to keyword detection if API fails
  *
  * @module sd-type-classifier
- * @version 1.0.0
+ * @version 1.1.0
  */
 
 import OpenAI from 'openai';
@@ -43,50 +43,18 @@ const HANDOFF_REQUIREMENTS = {
   performance: ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD']
 };
 
-// Function schema for GPT-5o Mini
-const CLASSIFY_SD_TYPE_FUNCTION = {
-  type: 'function',
-  function: {
-    name: 'classify_sd_type',
-    description: 'Classify a Strategic Directive into the appropriate type based on its scope, title, and description. Focus on what the SD actually BUILDS or CHANGES, not what it references.',
-    parameters: {
-      type: 'object',
-      properties: {
-        sd_type: {
-          type: 'string',
-          enum: VALID_SD_TYPES,
-          description: 'The classified SD type. Choose based on the PRIMARY work being done.'
-        },
-        confidence: {
-          type: 'number',
-          minimum: 0,
-          maximum: 100,
-          description: 'Confidence level (0-100). Use 90+ for clear cases, 70-89 for moderate certainty, below 70 for ambiguous cases.'
-        },
-        reasoning: {
-          type: 'string',
-          description: 'Brief explanation (1-2 sentences) of why this type was chosen. Focus on the key indicators.'
-        },
-        alternative_type: {
-          type: 'string',
-          enum: [...VALID_SD_TYPES, 'none'],
-          description: 'Second-best type if confidence is below 80%, or "none" if clearly one type.'
-        },
-        alternative_confidence: {
-          type: 'number',
-          minimum: 0,
-          maximum: 100,
-          description: 'Confidence for the alternative type (0 if none).'
-        }
-      },
-      required: ['sd_type', 'confidence', 'reasoning', 'alternative_type', 'alternative_confidence']
-    }
-  }
-};
+// JSON schema for GPT-5 Mini response (no function calling support)
+const EXPECTED_JSON_SCHEMA = `{
+  "sd_type": "feature|infrastructure|database|security|documentation|bugfix|refactor|performance",
+  "confidence": 0-100,
+  "reasoning": "Brief explanation of why this type was chosen",
+  "alternative_type": "second-best type or 'none'",
+  "alternative_confidence": 0-100
+}`;
 
 export class SDTypeClassifier {
   constructor() {
-    this.model = 'gpt-4o-mini'; // Using gpt-4o-mini which supports function calling
+    this.model = 'gpt-5-mini'; // Using gpt-5-mini with JSON response mode
 
     if (!process.env.OPENAI_API_KEY) {
       console.warn('OPENAI_API_KEY not found - AI classification will fall back to keyword detection');
@@ -97,7 +65,7 @@ export class SDTypeClassifier {
   }
 
   /**
-   * Classify SD type using AI with function calling
+   * Classify SD type using AI with JSON response mode
    *
    * @param {Object} sd - Strategic Directive object
    * @param {string} sd.title - SD title
@@ -122,7 +90,7 @@ export class SDTypeClassifier {
   }
 
   /**
-   * Call OpenAI with function calling
+   * Call OpenAI with JSON response mode (gpt-5-mini doesn't support function calling)
    */
   async callOpenAI(sd) {
     const systemPrompt = `You are an expert at classifying Strategic Directives (SDs) in a software development lifecycle.
@@ -166,7 +134,12 @@ export class SDTypeClassifier {
 - "Build a deployment dashboard UI" = **feature** (building UI components)
 - "Build deployment pipeline scripts" = **infrastructure** (building CI/CD)
 - "Build QA test runner UI component" = **feature** (building UI)
-- "Build automated QA testing pipeline" = **infrastructure** (building automation)`;
+- "Build automated QA testing pipeline" = **infrastructure** (building automation)
+
+Return ONLY valid JSON in this exact format:
+${EXPECTED_JSON_SCHEMA}
+
+NO additional text, explanations, or markdown - ONLY the JSON object.`;
 
     const userPrompt = `Classify this Strategic Directive:
 
@@ -186,17 +159,30 @@ Analyze the SD carefully and classify it based on what is actually being BUILT o
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      tools: [CLASSIFY_SD_TYPE_FUNCTION],
-      tool_choice: { type: 'function', function: { name: 'classify_sd_type' } }
+      response_format: { type: 'json_object' },
+      max_completion_tokens: 500
     });
 
-    // Extract function call result
-    const toolCall = response.choices[0].message.tool_calls?.[0];
-    if (!toolCall || toolCall.function.name !== 'classify_sd_type') {
-      throw new Error('No valid function call in response');
-    }
+    // Parse JSON response
+    const content = response.choices[0].message.content;
+    try {
+      const result = JSON.parse(content);
 
-    return JSON.parse(toolCall.function.arguments);
+      // Validate required fields
+      if (!result.sd_type || typeof result.confidence !== 'number') {
+        throw new Error('Missing required fields in response');
+      }
+
+      // Ensure sd_type is valid
+      if (!VALID_SD_TYPES.includes(result.sd_type)) {
+        throw new Error(`Invalid sd_type: ${result.sd_type}`);
+      }
+
+      return result;
+    } catch (parseError) {
+      console.error('Failed to parse GPT-5 Mini response:', content.substring(0, 200));
+      throw new Error(`JSON parse failed: ${parseError.message}`);
+    }
   }
 
   /**
