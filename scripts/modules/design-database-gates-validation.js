@@ -482,11 +482,22 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
 /**
  * Helper: Check if SD requires DESIGN→DATABASE validation
  *
+ * Infrastructure/documentation/process SDs are excluded because they
+ * verify or document existing work rather than create new UI/database changes.
+ *
  * @param {Object} sd - Strategic Directive object
  * @returns {boolean} True if validation required
  */
 export function shouldValidateDesignDatabase(sd) {
   if (!sd) return false;
+
+  // Infrastructure SDs skip design/database validation - they verify, not create
+  const sdType = (sd.sd_type || sd.category || '').toLowerCase();
+  const isInfrastructureSD = ['infrastructure', 'documentation', 'process'].includes(sdType);
+
+  if (isInfrastructureSD) {
+    return false;
+  }
 
   // Check category field
   const hasDesignCategory = sd.category?.includes('design');
