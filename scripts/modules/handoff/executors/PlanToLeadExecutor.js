@@ -115,9 +115,22 @@ export class PlanToLeadExecutor extends BaseExecutor {
 
         // Dynamic threshold based on SD type:
         // - Orchestrator SDs with all children complete: 50% (children did the actual work)
+        // - Infrastructure/docs-only SDs: 55% (process-focused, less code-related learnings)
         // - Legacy SDs (before SMART criteria): 65%
         // - Standard SDs: 65% (TODO: raise to 70% after SMART criteria SD)
-        const threshold = allChildrenComplete ? 50 : 65;
+        const sdType = ctx.sd?.sd_type || ctx.sd?.category || '';
+        const isInfrastructureSD = ['infrastructure', 'documentation', 'process'].includes(sdType.toLowerCase());
+
+        let threshold;
+        if (allChildrenComplete) {
+          threshold = 50;
+          console.log('   📂 Using orchestrator threshold (50%) - all children complete');
+        } else if (isInfrastructureSD) {
+          threshold = 55;
+          console.log(`   🔧 Using infrastructure SD threshold (55%) - sd_type='${sdType}'`);
+        } else {
+          threshold = 65;
+        }
 
         if (!retroGateResult.valid || retroGateResult.score < threshold) {
           const guidance = getSDImprovementGuidance(retroGateResult);
