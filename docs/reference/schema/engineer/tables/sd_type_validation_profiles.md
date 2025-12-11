@@ -1,0 +1,60 @@
+# sd_type_validation_profiles Table
+
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
+**Database**: dedlbzhpgkmetvhbkyzq
+**Repository**: /mnt/c/_EHG/EHG_Engineer/
+**Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
+**Generated**: 2025-12-10T16:10:41.778Z
+**Rows**: 8
+**RLS**: Disabled
+
+⚠️ **This is a REFERENCE document** - Query database directly for validation
+
+⚠️ **CRITICAL**: This schema is for **EHG_Engineer** database. Implementations go in /mnt/c/_EHG/EHG_Engineer/
+
+---
+
+## Columns (15 total)
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| sd_type | `character varying(50)` | **NO** | - | - |
+| lead_weight | `integer(32)` | YES | `20` | - |
+| plan_weight | `integer(32)` | YES | `20` | - |
+| exec_weight | `integer(32)` | YES | `30` | - |
+| verify_weight | `integer(32)` | YES | `15` | - |
+| final_weight | `integer(32)` | YES | `15` | - |
+| requires_prd | `boolean` | YES | `true` | - |
+| requires_deliverables | `boolean` | YES | `true` | - |
+| requires_e2e_tests | `boolean` | YES | `true` | - |
+| requires_retrospective | `boolean` | YES | `true` | - |
+| requires_sub_agents | `boolean` | YES | `true` | - |
+| min_handoffs | `integer(32)` | YES | `3` | - |
+| description | `text` | YES | - | - |
+| created_at | `timestamp with time zone` | YES | `now()` | - |
+| updated_at | `timestamp with time zone` | YES | `now()` | - |
+
+## Constraints
+
+### Primary Key
+- `sd_type_validation_profiles_pkey`: PRIMARY KEY (sd_type)
+
+### Check Constraints
+- `sd_type_validation_profiles_exec_weight_check`: CHECK (((exec_weight >= 0) AND (exec_weight <= 100)))
+- `sd_type_validation_profiles_final_weight_check`: CHECK (((final_weight >= 0) AND (final_weight <= 100)))
+- `sd_type_validation_profiles_lead_weight_check`: CHECK (((lead_weight >= 0) AND (lead_weight <= 100)))
+- `sd_type_validation_profiles_min_handoffs_check`: CHECK (((min_handoffs >= 0) AND (min_handoffs <= 5)))
+- `sd_type_validation_profiles_plan_weight_check`: CHECK (((plan_weight >= 0) AND (plan_weight <= 100)))
+- `sd_type_validation_profiles_verify_weight_check`: CHECK (((verify_weight >= 0) AND (verify_weight <= 100)))
+- `weights_sum_to_100`: CHECK ((((((lead_weight + plan_weight) + exec_weight) + verify_weight) + final_weight) = 100))
+
+## Indexes
+
+- `sd_type_validation_profiles_pkey`
+  ```sql
+  CREATE UNIQUE INDEX sd_type_validation_profiles_pkey ON public.sd_type_validation_profiles USING btree (sd_type)
+  ```
+
+---
+
+[← Back to Schema Overview](../database-schema-overview.md)
