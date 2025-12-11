@@ -88,11 +88,54 @@ class LeadToPlanVerifier {
         });
       }
 
-      // 3.5. AI Quality Assessment (Russian Judge)
+      // 3.5. AI SD Type Classification (GPT-4o Mini)
+      // Validates sd_type matches actual scope/content with worst-case handoff enforcement
+      try {
+        console.log('\n🤖 AI SD TYPE CLASSIFICATION');
+        console.log('-'.repeat(50));
+
+        const { default: SDTypeClassifier } = await import('./modules/sd-type-classifier.js');
+        const classifier = new SDTypeClassifier();
+        const classification = await classifier.classify(sd);
+
+        console.log(`   Declared Type: ${classification.declaredType}`);
+        console.log(`   Detected Type: ${classification.detectedType}`);
+        console.log(`   Confidence: ${classification.confidence}%`);
+        console.log(`   Reasoning: ${classification.reasoning}`);
+
+        if (classification.mismatch) {
+          console.log('\n   ⚠️  TYPE MISMATCH DETECTED');
+          console.log(`   ${classification.recommendation}`);
+
+          if (classification.confidence >= 80) {
+            // High confidence mismatch - add as warning (not blocking in Phase 1)
+            sdValidation.warnings.push(
+              `sd_type mismatch: declared '${classification.declaredType}' but AI detected '${classification.detectedType}' ` +
+              `with ${classification.confidence}% confidence. ${classification.reasoning}`
+            );
+          }
+        }
+
+        if (classification.usedWorstCase) {
+          console.log('\n   ⚠️  WORST-CASE HANDOFFS APPLIED');
+          console.log(`   Due to low confidence (${classification.confidence}%), using most restrictive handoff requirements:`);
+          console.log(`   ${classification.effectiveHandoffs.join(' → ')}`);
+
+          // Store effective handoffs in SD metadata for later enforcement
+          sdValidation.effectiveHandoffs = classification.effectiveHandoffs;
+        }
+
+        console.log('\n   ✅ Classification complete');
+      } catch (classifierError) {
+        console.log(`\n   ⚠️  AI Classification unavailable: ${classifierError.message}`);
+        console.log('   Falling back to keyword-based validation');
+      }
+
+      // 3.6. AI Quality Assessment (Russian Judge)
       const russianJudgeEnabled = process.env.RUSSIAN_JUDGE_ENABLED === 'true';
       if (russianJudgeEnabled) {
         try {
-          console.log('\\n🤖 AI QUALITY ASSESSMENT (Russian Judge)');
+          console.log('\n🤖 AI QUALITY ASSESSMENT (Russian Judge)');
           console.log('-'.repeat(50));
 
           const { SDQualityRubric } = await import('./modules/rubrics/sd-quality-rubric.js');
