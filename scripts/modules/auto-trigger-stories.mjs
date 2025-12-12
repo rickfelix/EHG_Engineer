@@ -14,6 +14,33 @@
 import { randomUUID } from 'crypto';
 
 /**
+ * Validate that sdId is a valid SD key format, not a UUID
+ * Valid format: ^[A-Z0-9-]+$ (e.g., SD-EVA-MEETING-001)
+ * Invalid: UUID format (contains lowercase a-f)
+ */
+function validateSdId(sdId) {
+  // Check if it's a UUID (contains lowercase hex characters or too many hyphens)
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (uuidPattern.test(sdId)) {
+    throw new Error(
+      `Invalid sdId format: received UUID "${sdId}" but expected SD key format (e.g., "SD-EVA-MEETING-001"). ` +
+      `The valid_story_key constraint requires story_key format: ^[A-Z0-9-]+:US-[0-9]{3,}$`
+    );
+  }
+
+  // Check if it matches the expected SD key pattern
+  const sdKeyPattern = /^[A-Z0-9-]+$/;
+  if (!sdKeyPattern.test(sdId)) {
+    throw new Error(
+      `Invalid sdId format: "${sdId}" contains invalid characters. ` +
+      `SD keys must only contain uppercase letters, numbers, and hyphens (e.g., "SD-EVA-MEETING-001").`
+    );
+  }
+
+  return true;
+}
+
+/**
  * Auto-trigger Product Requirements Expert sub-agent
  *
  * @param {object} supabase - Supabase client instance
@@ -28,6 +55,9 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
     notifyOnSkip = true,
     logExecution = true
   } = options;
+
+  // Validate sdId format FIRST before any database operations
+  validateSdId(sdId);
 
   console.log('\n🎯 Product Requirements Expert: Auto-Trigger Check');
   console.log('═══════════════════════════════════════════════════\n');
