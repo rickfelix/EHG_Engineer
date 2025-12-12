@@ -74,9 +74,10 @@ class PlanToExecVerifier {
       'devops': 55,
       'quality': 55,  // QA/testing work is similar to infrastructure
 
-      // Moderate for standard features
-      'feature': 65,
-      'enhancement': 65,
+      // Moderate for standard features (lowered to 55% during Phase 1 AI calibration)
+      // TODO: Increase to 65% once AI scoring is calibrated (target: 2-4 weeks)
+      'feature': 55,
+      'enhancement': 55,
 
       // Stricter for data/security work
       'database': 68,

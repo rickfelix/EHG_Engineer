@@ -88,25 +88,48 @@ export class AIQualityEvaluator {
    */
   async evaluate(content, contentId, sd = null) {
     const startTime = Date.now();
+    const DEBUG = process.env.AI_DEBUG === 'true';
+    const logPrefix = `[AI-Eval:${this.rubricConfig.contentType}:${contentId?.substring(0, 8) || 'unknown'}]`;
+
+    if (DEBUG) {
+      console.log(`${logPrefix} Starting evaluation...`);
+      console.log(`${logPrefix} Content length: ${content?.length || 0} chars`);
+    }
 
     try {
       // Enrich SD with orchestrator context if needed
+      let enrichStart = Date.now();
       if (sd && !sd._orchestratorChecked) {
         sd = await this.enrichWithOrchestratorContext(sd);
+        if (DEBUG) console.log(`${logPrefix} SD enrichment: ${Date.now() - enrichStart}ms`);
       }
 
       // Build evaluation prompt with sd_type and orchestrator context
       const messages = this.buildPrompt(content, sd);
+      const promptTokenEstimate = Math.ceil((messages[0].content.length + messages[1].content.length) / 4);
+      if (DEBUG) {
+        console.log(`${logPrefix} Prompt built. Estimated tokens: ~${promptTokenEstimate}`);
+        console.log(`${logPrefix} Calling OpenAI API (${this.model})...`);
+      }
 
       // Call OpenAI API
+      const apiStart = Date.now();
       const response = await this.callOpenAI(messages);
+      const apiDuration = Date.now() - apiStart;
+
+      if (DEBUG) {
+        console.log(`${logPrefix} API response received in ${apiDuration}ms`);
+        console.log(`${logPrefix} Tokens: prompt=${response.usage?.prompt_tokens}, completion=${response.usage?.completion_tokens}`);
+      }
 
       // Parse scores
       let scores;
+      const parseStart = Date.now();
       try {
         scores = JSON.parse(response.choices[0].message.content);
+        if (DEBUG) console.log(`${logPrefix} JSON parsed in ${Date.now() - parseStart}ms`);
       } catch (parseError) {
-        console.error('Failed to parse OpenAI response. First 500 chars:', response.choices[0].message.content.substring(0, 500));
+        console.error(`${logPrefix} Failed to parse OpenAI response. First 500 chars:`, response.choices[0].message.content.substring(0, 500));
         throw new Error(`JSON parse failed: ${parseError.message}`);
       }
 
@@ -125,7 +148,14 @@ export class AIQualityEvaluator {
       const tokensUsed = response.usage;
       const cost = this.calculateCost(tokensUsed);
 
+      if (DEBUG) {
+        console.log(`${logPrefix} Score: ${weightedScore}% (threshold: ${threshold}%) - ${passed ? 'PASS' : 'FAIL'}`);
+        console.log(`${logPrefix} Total duration: ${duration}ms (API: ${apiDuration}ms)`);
+        console.log(`${logPrefix} Cost: $${cost.toFixed(6)}`);
+      }
+
       // Store assessment in database
+      const storeStart = Date.now();
       await this.storeAssessment(
         contentId,
         scores,
@@ -137,6 +167,7 @@ export class AIQualityEvaluator {
         sd,
         threshold
       );
+      if (DEBUG) console.log(`${logPrefix} Assessment stored in ${Date.now() - storeStart}ms`);
 
       return {
         scores,
@@ -151,7 +182,11 @@ export class AIQualityEvaluator {
         cost
       };
     } catch (error) {
-      console.error('AI Quality Evaluation Error:', error);
+      const duration = Date.now() - startTime;
+      console.error(`${logPrefix} FAILED after ${duration}ms: ${error.message}`);
+      if (error.stack && process.env.AI_DEBUG === 'true') {
+        console.error(`${logPrefix} Stack:`, error.stack);
+      }
       throw new Error(`AI evaluation failed: ${error.message}`);
     }
   }
@@ -401,27 +436,66 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
   }
 
   /**
-   * Call OpenAI API with retry logic
+   * Call OpenAI API with retry logic and rate limit handling
    * Note: gpt-5-mini doesn't support function/tool calling, so we use json_object mode
    */
   async callOpenAI(messages, retries = 3) {
+    const timeoutMs = parseInt(process.env.AI_API_TIMEOUT_MS) || 60000; // Default 60s timeout
+    const DEBUG = process.env.AI_DEBUG === 'true';
+
     for (let attempt = 1; attempt <= retries; attempt++) {
+      const attemptStart = Date.now();
       try {
-        const response = await this.openai.chat.completions.create({
+        if (DEBUG && attempt > 1) {
+          console.log(`[OpenAI] Retry attempt ${attempt}/${retries}...`);
+        }
+
+        // Create timeout promise
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`OpenAI API timeout after ${timeoutMs}ms`)), timeoutMs)
+        );
+
+        // Create API call promise
+        const apiPromise = this.openai.chat.completions.create({
           model: this.model,
           messages,
           response_format: { type: 'json_object' },
-          max_completion_tokens: 4000  // High limit to prevent JSON truncation (quality over cost)
+          max_completion_tokens: 8000  // Increased to handle detailed multi-criterion responses with improvements
           // Note: gpt-5-mini only supports temperature=1 (default), so we don't set it
         });
 
+        // Race between API call and timeout
+        const response = await Promise.race([apiPromise, timeoutPromise]);
+
+        if (DEBUG && attempt > 1) {
+          console.log(`[OpenAI] Retry ${attempt} succeeded after ${Date.now() - attemptStart}ms`);
+        }
+
         return response;
       } catch (error) {
-        if (attempt === retries) throw error;
+        const attemptDuration = Date.now() - attemptStart;
+        const isRateLimit = error.status === 429 || error.message?.includes('rate') || error.code === 'rate_limit_exceeded';
+        const isTimeout = error.message?.includes('timeout');
+        const isNetworkError = error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || error.message?.includes('network');
 
-        // Exponential backoff: 1s, 2s, 4s
-        const delay = Math.pow(2, attempt - 1) * 1000;
-        console.warn(`OpenAI API attempt ${attempt} failed, retrying in ${delay}ms...`);
+        // Enhanced error logging
+        console.warn(`[OpenAI] Attempt ${attempt}/${retries} failed after ${attemptDuration}ms`);
+        console.warn(`[OpenAI] Error type: ${isRateLimit ? 'RATE_LIMIT' : isTimeout ? 'TIMEOUT' : isNetworkError ? 'NETWORK' : 'OTHER'}`);
+        console.warn(`[OpenAI] Error details: ${error.message || error.code || 'Unknown'}`);
+        if (error.status) console.warn(`[OpenAI] HTTP status: ${error.status}`);
+
+        if (attempt === retries) {
+          if (isRateLimit) {
+            throw new Error(`OpenAI rate limit exceeded after ${retries} retries. Try increasing AI_RATE_LIMIT_DELAY_MS (current: ${process.env.AI_RATE_LIMIT_DELAY_MS || '1500'}ms)`);
+          }
+          throw error;
+        }
+
+        // Rate limit: longer backoff (3s, 6s, 12s)
+        // Timeout/other: exponential backoff (1s, 2s, 4s)
+        const baseDelay = isRateLimit ? 3000 : 1000;
+        const delay = Math.pow(2, attempt - 1) * baseDelay;
+        console.warn(`[OpenAI] Waiting ${delay}ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
