@@ -28,10 +28,11 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Initialize Supabase
+// Initialize Supabase with SERVICE_ROLE_KEY to bypass RLS
+// SD-VENTURE-STAGE0-UI-001: sub_agent_execution_batches requires service_role for INSERT/UPDATE
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
 // Parse command line arguments
