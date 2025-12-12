@@ -88,9 +88,10 @@ export class PlanToLeadExecutor extends BaseExecutor {
         console.log('-'.repeat(50));
 
         // Check if this is an orchestrator SD (has children with all completed)
+        // Include sd_id and title for better logging in executeSpecific
         const { data: children } = await this.supabase
           .from('strategic_directives_v2')
-          .select('id, status')
+          .select('id, sd_id, title, status')
           .eq('parent_sd_id', ctx.sdId);
 
         const isOrchestrator = children && children.length > 0;
