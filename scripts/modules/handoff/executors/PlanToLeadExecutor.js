@@ -112,13 +112,16 @@ export class PlanToLeadExecutor extends BaseExecutor {
           .limit(1)
           .single();
 
+        // Store orchestrator context for use in executeSpecific (prevents re-query issues)
+        ctx._isOrchestrator = isOrchestrator;
+        ctx._orchestratorChildren = children || [];
         ctx._isOrchestratorWithAllChildrenComplete = allChildrenComplete;
 
         // ORCHESTRATOR FAST-PATH: If all children complete and retrospective exists with
         // reasonable quality_score, auto-pass. Orchestrators coordinate, not produce.
         // The children's work IS the validation.
         if (allChildrenComplete && retrospective?.quality_score >= 60 && retrospective?.status === 'PUBLISHED') {
-          console.log('   ✅ ORCHESTRATOR AUTO-PASS: All 6 children completed + retrospective exists');
+          console.log(`   ✅ ORCHESTRATOR AUTO-PASS: All ${children.length} children completed + retrospective exists`);
           console.log(`      Retrospective quality_score: ${retrospective.quality_score}/100`);
           console.log('      Rationale: Orchestrators coordinate, children produce deliverables');
           console.log('      Skipping Russian Judge AI validation for orchestrator SDs');
@@ -133,6 +136,7 @@ export class PlanToLeadExecutor extends BaseExecutor {
               orchestrator_auto_pass: true,
               child_count: children.length,
               children_completed: children.filter(c => c.status === 'completed').length,
+              children: children, // Store for executeSpecific to use
               retrospective_id: retrospective.id,
               retrospective_quality: retrospective.quality_score
             }
@@ -333,14 +337,37 @@ export class PlanToLeadExecutor extends BaseExecutor {
     //
     // For orchestrators, we skip PRD/user story validation entirely and proceed
     // directly to status transitions.
+    //
+    // IMPORTANT: We use cached data from RETROSPECTIVE_QUALITY_GATE to avoid
+    // re-query consistency issues. The gate already validated the orchestrator
+    // status, so we trust that result rather than querying again.
     // ═══════════════════════════════════════════════════════════════════════════
-    const { data: children } = await this.supabase
-      .from('strategic_directives_v2')
-      .select('id, sd_id, title, status')
-      .eq('parent_sd_id', sdId);
 
-    const isOrchestrator = children && children.length > 0;
-    const allChildrenComplete = isOrchestrator && children.every(c => c.status === 'completed');
+    // Check if gate already determined this is an orchestrator with all children complete
+    const retroGateDetails = gateResults.gateResults?.RETROSPECTIVE_QUALITY_GATE?.details;
+    const orchestratorAutoPass = retroGateDetails?.orchestrator_auto_pass;
+
+    // Use cached children data from gate to avoid re-query inconsistency
+    let children = retroGateDetails?.children || [];
+    let isOrchestrator = orchestratorAutoPass || children.length > 0;
+    let allChildrenComplete = orchestratorAutoPass || (isOrchestrator && children.every(c => c.status === 'completed'));
+
+    // Fallback: If gate didn't cache children, query now (but prefer cached data)
+    if (!orchestratorAutoPass && children.length === 0) {
+      const { data: queriedChildren } = await this.supabase
+        .from('strategic_directives_v2')
+        .select('id, sd_id, title, status')
+        .eq('parent_sd_id', sdId);
+
+      children = queriedChildren || [];
+      isOrchestrator = children.length > 0;
+      allChildrenComplete = isOrchestrator && children.every(c => c.status === 'completed');
+
+      // Log if there's a mismatch between gate and fallback query
+      if (isOrchestrator) {
+        console.log(`   ℹ️  Orchestrator detected via fallback query: ${children.length} children`);
+      }
+    }
 
     if (isOrchestrator && allChildrenComplete) {
       console.log('\n📂 ORCHESTRATOR SD COMPLETION PATH');
