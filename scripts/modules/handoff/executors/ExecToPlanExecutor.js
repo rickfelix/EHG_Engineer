@@ -275,7 +275,8 @@ export class ExecToPlanExecutor extends BaseExecutor {
     try {
       const { default: GitCommitVerifier } = await import('../../../verify-git-commit-status.js');
       const appPath = this.determineTargetRepository(sd);
-      const verifier = new GitCommitVerifier(sdId, appPath);
+      // SD-VENTURE-STAGE0-UI-001: Pass legacy_id for commit search
+      const verifier = new GitCommitVerifier(sdId, appPath, { legacyId: sd?.legacy_id });
       commitVerification = await verifier.verify();
 
       if (commitVerification.verdict === 'PASS') {

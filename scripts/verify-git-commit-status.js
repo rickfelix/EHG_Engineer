@@ -26,8 +26,9 @@ import fs from 'fs';
 const execAsync = promisify(exec);
 
 class GitCommitVerifier {
-  constructor(sdId, appPath = '/mnt/c/_EHG/ehg') {
+  constructor(sdId, appPath = '/mnt/c/_EHG/ehg', options = {}) {
     this.sdId = sdId;
+    this.legacyId = options.legacyId || null; // SD-VENTURE-STAGE0-UI-001: Support legacy_id search
     this.appPath = appPath;
     this.results = {
       cleanWorkingDirectory: false,
@@ -43,6 +44,18 @@ class GitCommitVerifier {
       uncommittedFiles: [],
       currentBranch: ''
     };
+  }
+
+  /**
+   * Get all search terms for this SD (UUID + legacy_id)
+   * SD-VENTURE-STAGE0-UI-001: Commits often use legacy_id instead of UUID
+   */
+  getSearchTerms() {
+    const terms = [this.sdId];
+    if (this.legacyId && this.legacyId !== this.sdId) {
+      terms.push(this.legacyId);
+    }
+    return terms;
   }
 
   /**
@@ -129,35 +142,46 @@ class GitCommitVerifier {
 
   /**
    * Check 2: Commits exist for this SD
+   * SD-VENTURE-STAGE0-UI-001: Search by both UUID and legacy_id
    */
   async checkCommitsExist() {
     console.log('\n🔍 CHECK 2: Commits Exist for SD');
     console.log('-'.repeat(50));
 
-    const result = await this.gitCommand(`git log --all --oneline --grep="${this.sdId}"`);
+    const searchTerms = this.getSearchTerms();
+    let allCommits = [];
+    let matchedTerm = null;
 
-    if (!result.success) {
-      this.results.blockers.push('Failed to check git log');
-      console.error('❌ Git log command failed:', result.stderr);
-      return false;
+    // Search for each term
+    for (const term of searchTerms) {
+      const result = await this.gitCommand(`git log --all --oneline --grep="${term}"`);
+
+      if (result.success && result.stdout.trim()) {
+        const commits = result.stdout.split('\n').filter(line => line.trim().length > 0);
+        if (commits.length > 0) {
+          allCommits = [...new Set([...allCommits, ...commits])]; // Dedupe
+          matchedTerm = matchedTerm || term;
+        }
+      }
     }
 
-    const commits = result.stdout.split('\n').filter(line => line.trim().length > 0);
-    this.results.commitCount = commits.length;
+    this.results.commitCount = allCommits.length;
 
-    if (commits.length === 0) {
-      this.results.blockers.push(`No commits found with SD-ID: ${this.sdId}`);
-      console.error(`❌ No commits found containing "${this.sdId}"`);
+    if (allCommits.length === 0) {
+      const searchedTerms = searchTerms.join(' OR ');
+      this.results.blockers.push(`No commits found with SD-ID: ${searchedTerms}`);
+      console.error(`❌ No commits found containing "${searchedTerms}"`);
       console.error('   Implementation work must be committed before handoff');
       return false;
     }
 
-    console.log(`✅ Found ${commits.length} commit(s) with SD-ID: ${this.sdId}`);
-    commits.slice(0, 5).forEach(commit => {
+    const displayId = matchedTerm || this.sdId;
+    console.log(`✅ Found ${allCommits.length} commit(s) with SD-ID: ${displayId}`);
+    allCommits.slice(0, 5).forEach(commit => {
       console.log(`   ${commit}`);
     });
-    if (commits.length > 5) {
-      console.log(`   ... and ${commits.length - 5} more`);
+    if (allCommits.length > 5) {
+      console.log(`   ... and ${allCommits.length - 5} more`);
     }
 
     this.results.commitsExist = true;

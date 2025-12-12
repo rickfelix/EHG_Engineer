@@ -222,7 +222,8 @@ export class PlanToLeadExecutor extends BaseExecutor {
         console.log('-'.repeat(50));
         console.log(`   Target repository: ${appPath}`);
 
-        const verifier = new GitCommitVerifier(ctx.sdId, appPath);
+        // SD-VENTURE-STAGE0-UI-001: Pass legacy_id for commit search
+        const verifier = new GitCommitVerifier(ctx.sdId, appPath, { legacyId: ctx.sd?.legacy_id });
         const result = await verifier.verify();
         ctx._gitResults = result;
 
