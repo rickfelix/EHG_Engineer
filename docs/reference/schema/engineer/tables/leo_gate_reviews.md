@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-04T22:29:13.796Z
-**Rows**: 244
+**Generated**: 2025-12-04T23:01:42.129Z
+**Rows**: 245
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -32,7 +32,7 @@
 - `leo_gate_reviews_pkey`: PRIMARY KEY (id)
 
 ### Check Constraints
-- `leo_gate_reviews_gate_check`: CHECK ((gate = ANY (ARRAY['0'::text, '2A'::text, '2B'::text, '2C'::text, '2D'::text, '3'::text])))
+- `leo_gate_reviews_gate_check`: CHECK ((gate = ANY (ARRAY['0'::text, '1'::text, '2A'::text, '2B'::text, '2C'::text, '2D'::text, '3'::text])))
 - `leo_gate_reviews_score_check`: CHECK (((score >= (0)::numeric) AND (score <= (100)::numeric)))
 
 ## Indexes

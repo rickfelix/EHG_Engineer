@@ -60,18 +60,19 @@ class PlanToExecVerifier {
    * @param {string} category - SD category from strategic_directives_v2
    * @returns {number} Minimum score percentage
    */
-  getStoryMinimumScoreByCategory(category) {
-    // Map category to minimum score (matching ai-quality-evaluator.js thresholds)
+  getStoryMinimumScoreByCategory(category, sdType = null) {
+    // Map category/type to minimum score (matching ai-quality-evaluator.js thresholds)
     const categoryThresholds = {
       // Very lenient for documentation-only work
       'documentation': 50,
       'docs': 50,
 
-      // Lenient for internal/infrastructure work
+      // Lenient for internal/infrastructure work (includes QA/testing tooling)
       'infrastructure': 55,
       'infra': 55,
       'tooling': 55,
       'devops': 55,
+      'quality': 55,  // QA/testing work is similar to infrastructure
 
       // Moderate for standard features
       'feature': 65,
@@ -86,7 +87,12 @@ class PlanToExecVerifier {
     };
 
     const normalizedCategory = (category || '').toLowerCase();
-    return categoryThresholds[normalizedCategory] || categoryThresholds.default;
+    const normalizedSdType = (sdType || '').toLowerCase();
+
+    // Try category first, then sd_type, then default
+    return categoryThresholds[normalizedCategory] ||
+           categoryThresholds[normalizedSdType] ||
+           categoryThresholds.default;
   }
 
   /**
@@ -269,7 +275,7 @@ class PlanToExecVerifier {
       console.log('\n📝 Checking for user stories...');
       const { data: userStories, error: userStoriesError } = await this.supabase
         .from('user_stories')
-        .select('story_key, title, status, user_role, user_want, user_benefit, acceptance_criteria, story_points, implementation_context')
+        .select('id, story_key, title, status, user_role, user_want, user_benefit, acceptance_criteria, story_points, implementation_context, sd_id')
         .eq('sd_id', sdId);
 
       if (userStoriesError) {
@@ -293,7 +299,7 @@ class PlanToExecVerifier {
       console.log('\n🔍 Validating user story quality...');
 
       // SD-type-aware minimum score (infrastructure/documentation are more lenient)
-      const storyMinimumScore = this.getStoryMinimumScoreByCategory(sd.category);
+      const storyMinimumScore = this.getStoryMinimumScoreByCategory(sd.category, sd.sd_type);
       console.log(`   SD Category: ${sd.category || 'unknown'} → Minimum Score: ${storyMinimumScore}%`);
 
       const storyQualityResult = await validateUserStoriesForHandoff(userStories, {
@@ -353,7 +359,7 @@ class PlanToExecVerifier {
       console.log('\n🔍 Validating PRD content quality (boilerplate detection)...');
 
       // SD-type-aware minimum score for PRD (same logic as user stories)
-      const prdMinimumScore = this.getStoryMinimumScoreByCategory(sd.category);
+      const prdMinimumScore = this.getStoryMinimumScoreByCategory(sd.category, sd.sd_type);
       console.log(`   SD Category: ${sd.category || 'unknown'} → PRD Minimum Score: ${prdMinimumScore}%`);
 
       const prdBoilerplateResult = await validatePRDForHandoff(prd, {

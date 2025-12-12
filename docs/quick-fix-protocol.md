@@ -1,10 +1,22 @@
 # Quick-Fix Protocol Documentation
 
-**Version:** 2.0
+**Version:** 2.1
 **Status:** ACTIVE
-**Last Updated:** 2025-11-27
+**Last Updated:** 2025-12-08
 
 ---
+
+## Version 2.1 Enhancements (2025-12-08)
+
+| Feature | Description |
+|---------|-------------|
+| **Programmatic Test Verification** | Tests are run and exit codes verified - no more self-reported "yes/no" |
+| **Unit Test Runner** | `npm run test:unit` with 2 minute timeout |
+| **E2E Smoke Test Runner** | `npm run test:e2e --grep="smoke"` with 5 minute timeout |
+| **TypeScript Verification** | `npx tsc --noEmit` with 1 minute timeout - blocks completion on TS errors |
+| **Test Summary Extraction** | Parses Jest/Playwright output for pass/fail counts |
+| **Skip Flags** | `--skip-tests` and `--skip-typecheck` for CI/CD edge cases |
+| **CI Workflow Fix** | E2E tests now properly block PR merge on failure |
 
 ## Version 2.0 Enhancements (2025-11-27)
 
@@ -247,10 +259,18 @@ After completion, the fix MUST be merged to main:
 - ✅ E2E tests for affected workflows
 - ✅ All tests must pass before completion
 
+**Programmatic Verification (v2.1):**
+- ✅ Tests are run PROGRAMMATICALLY by `complete-quick-fix.js`
+- ✅ Unit tests: `npm run test:unit` (2 min timeout)
+- ✅ E2E smoke tests: `npm run test:e2e --grep="smoke"` (5 min timeout)
+- ✅ TypeScript: `npx tsc --noEmit` (1 min timeout)
+- ✅ Exit codes are checked - no self-reported "yes/no"
+
 **No Shortcuts:**
-- ❌ Cannot skip tests
-- ❌ Cannot ignore test failures
-- ❌ Cannot claim "tests pass" without running them
+- ❌ Cannot skip tests (programmatically enforced)
+- ❌ Cannot skip TypeScript check (programmatically enforced)
+- ❌ Cannot ignore failures (script blocks completion)
+- ❌ Cannot claim "tests pass" - they are actually run and verified
 
 ### Code Quality Requirements
 

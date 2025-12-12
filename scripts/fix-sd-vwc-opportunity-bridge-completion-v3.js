@@ -99,25 +99,6 @@ async function main() {
         }
       },
       {
-        sub_agent_code: 'TESTING_VALIDATOR',
-        sub_agent_name: 'Testing Sub-Agent',
-        verdict: 'PASS_WITH_WARNINGS',
-        confidence: 85,
-        critical_issues: [],
-        warnings: ['E2E infrastructure needs setup (separate SD required)'],
-        recommendations: [
-          'Unit tests passing for adapter logic',
-          'Manual testing completed',
-          'E2E infrastructure setup deferred to separate SD'
-        ],
-        detailed_analysis: {
-          unit_tests: 'passing',
-          e2e_tests: 'blocked_by_infrastructure',
-          test_file: 'opportunity-to-venture-bridge.spec.ts',
-          test_loc: 547
-        }
-      },
-      {
         sub_agent_code: 'VALIDATION_GATE',
         sub_agent_name: 'Validation Sub-Agent',
         verdict: 'PASS',

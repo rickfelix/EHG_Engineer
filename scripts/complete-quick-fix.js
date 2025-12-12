@@ -33,7 +33,116 @@ const MAX_REFINEMENT_ATTEMPTS = 3;
 const MIN_PASS_SCORE = 90;
 const MIN_WARN_SCORE = 70;
 
+// Test execution constants
+const TEST_TIMEOUT_UNIT = 120000; // 2 minutes for unit tests
+const TEST_TIMEOUT_E2E = 300000;  // 5 minutes for E2E tests
+
 dotenv.config();
+
+/**
+ * Run tests programmatically and return results
+ * @param {string} testType - 'unit' or 'e2e'
+ * @param {object} options - Test options
+ * @returns {object} Test results with passed, output, exitCode
+ */
+function runTests(testType, options = {}) {
+  const testCommands = {
+    unit: 'npm run test:unit',
+    e2e: 'npm run test:e2e -- --grep="smoke" --reporter=list'
+  };
+
+  const timeouts = {
+    unit: TEST_TIMEOUT_UNIT,
+    e2e: TEST_TIMEOUT_E2E
+  };
+
+  const command = testCommands[testType];
+  const timeout = timeouts[testType];
+
+  if (!command) {
+    return { passed: false, output: `Unknown test type: ${testType}`, exitCode: 1 };
+  }
+
+  console.log(`   🧪 Running ${testType} tests...`);
+  console.log(`      Command: ${command}`);
+  console.log(`      Timeout: ${timeout / 1000}s\n`);
+
+  try {
+    const output = execSync(command, {
+      encoding: 'utf-8',
+      timeout,
+      stdio: 'pipe',
+      cwd: process.cwd()
+    });
+
+    // Check for common pass indicators
+    const passIndicators = [
+      /Tests:\s+\d+ passed/i,
+      /\d+ passed/i,
+      /All specs passed/i,
+      /passed \(\d+/i
+    ];
+
+    const hasPassIndicator = passIndicators.some(pattern => pattern.test(output));
+
+    return {
+      passed: true,
+      output: output.substring(0, 2000), // Truncate for storage
+      exitCode: 0,
+      summary: extractTestSummary(output, testType)
+    };
+  } catch (err) {
+    // execSync throws on non-zero exit code
+    const output = err.stdout?.toString() || err.stderr?.toString() || err.message;
+
+    // Check if it's a timeout
+    if (err.killed || err.signal === 'SIGTERM') {
+      return {
+        passed: false,
+        output: `Test timed out after ${timeout / 1000}s`,
+        exitCode: 124,
+        timedOut: true
+      };
+    }
+
+    return {
+      passed: false,
+      output: output.substring(0, 2000),
+      exitCode: err.status || 1,
+      summary: extractTestSummary(output, testType)
+    };
+  }
+}
+
+/**
+ * Extract test summary from output
+ * @param {string} output - Test output
+ * @param {string} testType - Type of test
+ * @returns {object} Summary object
+ */
+function extractTestSummary(output, testType) {
+  const summary = { passed: 0, failed: 0, skipped: 0, total: 0 };
+
+  if (testType === 'unit') {
+    // Jest output format: Tests: X passed, Y failed, Z total
+    const testsMatch = output.match(/Tests:\s+(\d+)\s+passed(?:,\s+(\d+)\s+failed)?(?:,\s+(\d+)\s+skipped)?(?:,\s+(\d+)\s+total)?/i);
+    if (testsMatch) {
+      summary.passed = parseInt(testsMatch[1]) || 0;
+      summary.failed = parseInt(testsMatch[2]) || 0;
+      summary.skipped = parseInt(testsMatch[3]) || 0;
+      summary.total = parseInt(testsMatch[4]) || summary.passed + summary.failed;
+    }
+  } else if (testType === 'e2e') {
+    // Playwright output format: X passed, Y failed
+    const passedMatch = output.match(/(\d+)\s+passed/i);
+    const failedMatch = output.match(/(\d+)\s+failed/i);
+    if (passedMatch) summary.passed = parseInt(passedMatch[1]);
+    if (failedMatch) summary.failed = parseInt(failedMatch[1]);
+    summary.total = summary.passed + summary.failed;
+  }
+
+  return summary;
+}
 
 function prompt(question) {
   const rl = readline.createInterface({
@@ -169,23 +278,131 @@ async function completeQuickFix(qfId, options = {}) {
     }
   }
 
-  // Test verification
-  if (options.testsPass === undefined) {
-    const testsInput = await prompt('\nBoth unit and E2E tests passing? (yes/no): ');
-    testsPass = testsInput.toLowerCase().startsWith('y');
-  } else {
+  // Test verification - PROGRAMMATIC (not self-reported)
+  console.log('\n🧪 PROGRAMMATIC TEST VERIFICATION\n');
+  console.log('   Running tests to verify fix quality (not self-reported)...\n');
+
+  let unitTestResult = null;
+  let e2eTestResult = null;
+
+  // Allow skipping if explicitly passed and --skip-tests flag
+  if (options.testsPass !== undefined && options.skipTestRun) {
+    console.log('   ⚠️  Using cached test results (--skip-tests flag)\n');
     testsPass = options.testsPass;
+  } else {
+    // Run unit tests
+    console.log('━━━ Unit Tests ━━━\n');
+    unitTestResult = runTests('unit');
+
+    if (unitTestResult.passed) {
+      console.log('   ✅ Unit tests PASSED');
+      if (unitTestResult.summary) {
+        console.log(`      ${unitTestResult.summary.passed} passed, ${unitTestResult.summary.failed} failed`);
+      }
+    } else {
+      console.log('   ❌ Unit tests FAILED');
+      if (unitTestResult.timedOut) {
+        console.log(`      Timed out after ${TEST_TIMEOUT_UNIT / 1000}s`);
+      }
+      if (unitTestResult.summary && unitTestResult.summary.failed > 0) {
+        console.log(`      ${unitTestResult.summary.passed} passed, ${unitTestResult.summary.failed} failed`);
+      }
+      // Show truncated output for debugging
+      if (unitTestResult.output) {
+        console.log('\n   📋 Test Output (truncated):');
+        const lines = unitTestResult.output.split('\n').slice(-15);
+        lines.forEach(line => console.log(`      ${line}`));
+      }
+    }
+
+    console.log('\n━━━ E2E Smoke Tests ━━━\n');
+    e2eTestResult = runTests('e2e');
+
+    if (e2eTestResult.passed) {
+      console.log('   ✅ E2E tests PASSED');
+      if (e2eTestResult.summary) {
+        console.log(`      ${e2eTestResult.summary.passed} passed, ${e2eTestResult.summary.failed} failed`);
+      }
+    } else {
+      console.log('   ❌ E2E tests FAILED');
+      if (e2eTestResult.timedOut) {
+        console.log(`      Timed out after ${TEST_TIMEOUT_E2E / 1000}s`);
+      }
+      if (e2eTestResult.summary && e2eTestResult.summary.failed > 0) {
+        console.log(`      ${e2eTestResult.summary.passed} passed, ${e2eTestResult.summary.failed} failed`);
+      }
+      // Show truncated output for debugging
+      if (e2eTestResult.output) {
+        console.log('\n   📋 Test Output (truncated):');
+        const lines = e2eTestResult.output.split('\n').slice(-15);
+        lines.forEach(line => console.log(`      ${line}`));
+      }
+    }
+
+    // Determine overall pass/fail
+    testsPass = unitTestResult.passed && e2eTestResult.passed;
+    console.log();
   }
 
   if (!testsPass) {
     console.log('\n❌ CANNOT COMPLETE - TESTS NOT PASSING\n');
-    console.log('   Quick-fixes REQUIRE both test suites to pass (Tier 1 smoke tests).\n');
-    console.log('📋 Next steps:');
-    console.log('   1. Run: npm run test:unit');
-    console.log('   2. Run: npm run test:e2e');
-    console.log('   3. Fix any failures');
-    console.log('   4. Re-run this script\n');
+    console.log('   Quick-fixes REQUIRE both test suites to pass (programmatically verified).\n');
+    console.log('📊 Test Results:');
+    console.log(`   Unit Tests:  ${unitTestResult?.passed ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`   E2E Tests:   ${e2eTestResult?.passed ? '✅ PASS' : '❌ FAIL'}`);
+    console.log('\n📋 Next steps:');
+    console.log('   1. Review test output above');
+    console.log('   2. Fix failing tests');
+    console.log('   3. Re-run this script\n');
     process.exit(1);
+  }
+
+  console.log('✅ All tests passed (programmatically verified)\n');
+
+  // TypeScript verification - PROGRAMMATIC
+  console.log('📘 TYPESCRIPT VERIFICATION\n');
+
+  let tscResult = null;
+  if (!options.skipTypeCheck) {
+    console.log('   🔍 Running TypeScript compiler check...');
+    console.log('      Command: npx tsc --noEmit');
+    console.log('      Timeout: 60s\n');
+
+    try {
+      execSync('npx tsc --noEmit', {
+        encoding: 'utf-8',
+        timeout: 60000,
+        stdio: 'pipe',
+        cwd: process.cwd()
+      });
+      tscResult = { passed: true };
+      console.log('   ✅ TypeScript compilation PASSED\n');
+    } catch (err) {
+      const output = err.stdout?.toString() || err.stderr?.toString() || err.message;
+      tscResult = { passed: false, output };
+
+      console.log('   ❌ TypeScript compilation FAILED\n');
+
+      // Show truncated output for debugging
+      if (output) {
+        console.log('   📋 TypeScript Errors (truncated):');
+        const lines = output.split('\n').slice(0, 20);
+        lines.forEach(line => console.log(`      ${line}`));
+        if (output.split('\n').length > 20) {
+          console.log(`      ... and ${output.split('\n').length - 20} more lines`);
+        }
+      }
+
+      console.log('\n❌ CANNOT COMPLETE - TYPESCRIPT ERRORS\n');
+      console.log('   Quick-fixes must not introduce TypeScript errors.\n');
+      console.log('📋 Next steps:');
+      console.log('   1. Run: npx tsc --noEmit');
+      console.log('   2. Fix all TypeScript errors');
+      console.log('   3. Re-run this script\n');
+      process.exit(1);
+    }
+  } else {
+    console.log('   ⚠️  TypeScript check skipped (--skip-typecheck flag)\n');
   }
 
   // UAT verification
@@ -918,13 +1135,26 @@ Options:
   --branch-name         Git branch name (auto-detected if not provided)
   --actual-loc          Actual lines of code changed (auto-detected from git diff)
   --pr-url              GitHub PR URL (REQUIRED)
-  --tests-pass          Tests passing (yes/no, will prompt if not provided)
+  --skip-tests          Skip running tests (use with --tests-pass to use cached results)
+  --tests-pass          Use cached test result (requires --skip-tests flag)
+  --skip-typecheck      Skip TypeScript verification (not recommended)
   --uat-verified        UAT verified (yes/no, will prompt if not provided)
   --verification-notes  Optional notes about verification
   --help, -h            Show this help
 
+Programmatic Verification:
+  The script runs these checks automatically (not self-reported):
+
+  1. Unit tests: npm run test:unit (2 min timeout)
+  2. E2E smoke tests: npm run test:e2e --grep="smoke" (5 min timeout)
+  3. TypeScript: npx tsc --noEmit (1 min timeout)
+
+  All checks MUST pass. Use --skip-tests or --skip-typecheck ONLY if
+  these were just run externally (e.g., in CI pipeline).
+
 Requirements:
-  - Both unit and E2E tests MUST pass
+  - Both unit and E2E tests MUST pass (programmatically verified)
+  - TypeScript MUST compile without errors (programmatically verified)
   - UAT MUST be verified (manual testing)
   - Actual LOC MUST be ≤ 50 (hard cap)
   - PR MUST be created (no direct merge)
@@ -932,7 +1162,7 @@ Requirements:
 Examples:
   node scripts/complete-quick-fix.js QF-20251117-001
   node scripts/complete-quick-fix.js QF-20251117-001 --pr-url https://github.com/org/repo/pull/123
-  node scripts/complete-quick-fix.js QF-20251117-001 --actual-loc 15 --pr-url https://... --tests-pass yes --uat-verified yes
+  node scripts/complete-quick-fix.js QF-20251117-001 --skip-tests --tests-pass yes --pr-url https://...
   `);
   process.exit(0);
 }
@@ -951,8 +1181,12 @@ for (let i = 1; i < args.length; i++) {
     options.actualLoc = parseInt(args[++i]);
   } else if (arg === '--pr-url') {
     options.prUrl = args[++i];
+  } else if (arg === '--skip-tests') {
+    options.skipTestRun = true;
   } else if (arg === '--tests-pass') {
     options.testsPass = args[++i].toLowerCase().startsWith('y');
+  } else if (arg === '--skip-typecheck') {
+    options.skipTypeCheck = true;
   } else if (arg === '--uat-verified') {
     options.uatVerified = args[++i].toLowerCase().startsWith('y');
   } else if (arg === '--verification-notes') {

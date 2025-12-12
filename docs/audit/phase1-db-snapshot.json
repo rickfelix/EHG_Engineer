@@ -1,0 +1,562 @@
+{
+  "generated_at": "2025-12-11T19:27:54.218Z",
+  "generated_by": "Claude Code for AntiGravity Phase 1 Audit",
+  "purpose": "SD-VISION-TRANSITION-001 Migration Verification",
+  "lifecycle_stages": {
+    "count": 25,
+    "expected": 25,
+    "pass": true,
+    "data": [
+      {
+        "stage_number": 1,
+        "stage_name": "Draft Idea & Chairman Review",
+        "phase_name": "THE TRUTH",
+        "sd_required": false,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 2,
+        "stage_name": "AI Multi-Model Critique",
+        "phase_name": "THE TRUTH",
+        "sd_required": false,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 3,
+        "stage_name": "Market Validation & RAT",
+        "phase_name": "THE TRUTH",
+        "sd_required": false,
+        "advisory_enabled": true
+      },
+      {
+        "stage_number": 4,
+        "stage_name": "Competitive Intelligence",
+        "phase_name": "THE TRUTH",
+        "sd_required": false,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 5,
+        "stage_name": "Profitability Forecasting",
+        "phase_name": "THE TRUTH",
+        "sd_required": false,
+        "advisory_enabled": true
+      },
+      {
+        "stage_number": 6,
+        "stage_name": "Risk Evaluation Matrix",
+        "phase_name": "THE ENGINE",
+        "sd_required": false,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 7,
+        "stage_name": "Pricing Strategy",
+        "phase_name": "THE ENGINE",
+        "sd_required": false,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 8,
+        "stage_name": "Business Model Canvas",
+        "phase_name": "THE ENGINE",
+        "sd_required": false,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 9,
+        "stage_name": "Exit-Oriented Design",
+        "phase_name": "THE ENGINE",
+        "sd_required": false,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 10,
+        "stage_name": "Strategic Naming",
+        "phase_name": "THE IDENTITY",
+        "sd_required": true,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 11,
+        "stage_name": "Go-to-Market Strategy",
+        "phase_name": "THE IDENTITY",
+        "sd_required": false,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 12,
+        "stage_name": "Sales & Success Logic",
+        "phase_name": "THE IDENTITY",
+        "sd_required": false,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 13,
+        "stage_name": "Tech Stack Interrogation",
+        "phase_name": "THE BLUEPRINT",
+        "sd_required": false,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 14,
+        "stage_name": "Data Model & Architecture",
+        "phase_name": "THE BLUEPRINT",
+        "sd_required": true,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 15,
+        "stage_name": "Epic & User Story Breakdown",
+        "phase_name": "THE BLUEPRINT",
+        "sd_required": true,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 16,
+        "stage_name": "Spec-Driven Schema Generation",
+        "phase_name": "THE BLUEPRINT",
+        "sd_required": true,
+        "advisory_enabled": true
+      },
+      {
+        "stage_number": 17,
+        "stage_name": "Environment & Agent Config",
+        "phase_name": "THE BUILD LOOP",
+        "sd_required": true,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 18,
+        "stage_name": "MVP Development Loop",
+        "phase_name": "THE BUILD LOOP",
+        "sd_required": true,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 19,
+        "stage_name": "Integration & API Layer",
+        "phase_name": "THE BUILD LOOP",
+        "sd_required": true,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 20,
+        "stage_name": "Security & Performance",
+        "phase_name": "THE BUILD LOOP",
+        "sd_required": true,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 21,
+        "stage_name": "QA & UAT",
+        "phase_name": "LAUNCH & LEARN",
+        "sd_required": true,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 22,
+        "stage_name": "Deployment & Infrastructure",
+        "phase_name": "LAUNCH & LEARN",
+        "sd_required": true,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 23,
+        "stage_name": "Production Launch",
+        "phase_name": "LAUNCH & LEARN",
+        "sd_required": false,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 24,
+        "stage_name": "Analytics & Feedback",
+        "phase_name": "LAUNCH & LEARN",
+        "sd_required": false,
+        "advisory_enabled": false
+      },
+      {
+        "stage_number": 25,
+        "stage_name": "Optimization & Scale",
+        "phase_name": "LAUNCH & LEARN",
+        "sd_required": true,
+        "advisory_enabled": false
+      }
+    ]
+  },
+  "sd_hierarchy": {
+    "count": 13,
+    "data": [
+      {
+        "id": "SD-VISION-TRANSITION-001",
+        "title": "Venture Vision v2.0 Migration (PARENT ORCHESTRATOR)",
+        "status": "active",
+        "progress": 0,
+        "phase": "EXEC",
+        "type": "infrastructure",
+        "parent": null
+      },
+      {
+        "id": "SD-VISION-TRANSITION-001A",
+        "title": "Documentation Archive (40-Stage Legacy Files)",
+        "status": "completed",
+        "progress": 100,
+        "phase": "LEAD_FINAL",
+        "type": "documentation",
+        "parent": "SD-VISION-TRANSITION-001"
+      },
+      {
+        "id": "SD-VISION-TRANSITION-001B",
+        "title": "SD Database Cleanup (Archive Stage SDs, Delete Test SDs)",
+        "status": "completed",
+        "progress": 100,
+        "phase": "LEAD_FINAL",
+        "type": "database",
+        "parent": "SD-VISION-TRANSITION-001"
+      },
+      {
+        "id": "SD-VISION-TRANSITION-001C",
+        "title": "Code Integration Updates (40→25 Constraints & Schemas)",
+        "status": "completed",
+        "progress": 100,
+        "phase": "LEAD_FINAL",
+        "type": "infrastructure",
+        "parent": "SD-VISION-TRANSITION-001"
+      },
+      {
+        "id": "SD-VISION-TRANSITION-001D",
+        "title": "Venture Vision v2.0 Stage Definition (stages_v2.yaml)",
+        "status": "completed",
+        "progress": 100,
+        "phase": "COMPLETED",
+        "type": "infrastructure",
+        "parent": "SD-VISION-TRANSITION-001"
+      },
+      {
+        "id": "SD-VISION-TRANSITION-001D1",
+        "title": "Phase 1 Stages: THE TRUTH (Stages 1-5)",
+        "status": "completed",
+        "progress": 100,
+        "phase": "EXEC_COMPLETE",
+        "type": "feature",
+        "parent": "SD-VISION-TRANSITION-001D"
+      },
+      {
+        "id": "SD-VISION-TRANSITION-001D2",
+        "title": "Phase 2 Stages: THE ENGINE (Stages 6-9)",
+        "status": "completed",
+        "progress": 100,
+        "phase": "DONE",
+        "type": "feature",
+        "parent": "SD-VISION-TRANSITION-001D"
+      },
+      {
+        "id": "SD-VISION-TRANSITION-001D3",
+        "title": "Phase 3 Stages: THE IDENTITY (Stages 10-12)",
+        "status": "completed",
+        "progress": 100,
+        "phase": "DONE",
+        "type": "feature",
+        "parent": "SD-VISION-TRANSITION-001D"
+      },
+      {
+        "id": "SD-VISION-TRANSITION-001D4",
+        "title": "Phase 4 Stages: THE BLUEPRINT (Stages 13-16) - Kochel Firewall",
+        "status": "completed",
+        "progress": 100,
+        "phase": "DONE",
+        "type": "infrastructure",
+        "parent": "SD-VISION-TRANSITION-001D"
+      },
+      {
+        "id": "SD-VISION-TRANSITION-001D5",
+        "title": "Phase 5 Stages: THE BUILD LOOP (Stages 17-20)",
+        "status": "completed",
+        "progress": 100,
+        "phase": "LEAD_FINAL_APPROVAL_COMPLETE",
+        "type": "infrastructure",
+        "parent": "SD-VISION-TRANSITION-001D"
+      },
+      {
+        "id": "SD-VISION-TRANSITION-001D6",
+        "title": "Phase 6 Stages: LAUNCH & LEARN (Stages 21-25)",
+        "status": "completed",
+        "progress": 75,
+        "phase": "LEAD",
+        "type": "infrastructure",
+        "parent": "SD-VISION-TRANSITION-001D"
+      },
+      {
+        "id": "SD-VISION-TRANSITION-001E",
+        "title": "Verification & Validation (Migration Complete)",
+        "status": "active",
+        "progress": 0,
+        "phase": "LEAD_APPROVAL",
+        "type": "infrastructure",
+        "parent": "SD-VISION-TRANSITION-001"
+      },
+      {
+        "id": "SD-VISION-TRANSITION-001F",
+        "title": "Shared Services API Contracts (CrewAI Wiring)",
+        "status": "draft",
+        "progress": 0,
+        "phase": "LEAD",
+        "type": "feature",
+        "parent": "SD-VISION-TRANSITION-001"
+      }
+    ]
+  },
+  "prd_status": {
+    "count": 12,
+    "data": [
+      {
+        "directive_id": "SD-VISION-TRANSITION-001",
+        "status": "in_progress",
+        "phase": "EXEC"
+      },
+      {
+        "directive_id": "SD-VISION-TRANSITION-001A",
+        "status": "completed",
+        "phase": "approval"
+      },
+      {
+        "directive_id": "SD-VISION-TRANSITION-001B",
+        "status": "completed",
+        "phase": "approval"
+      },
+      {
+        "directive_id": "SD-VISION-TRANSITION-001C",
+        "status": "in_progress",
+        "phase": "EXEC"
+      },
+      {
+        "directive_id": "SD-VISION-TRANSITION-001D",
+        "status": "completed",
+        "phase": "completed"
+      },
+      {
+        "directive_id": "SD-VISION-TRANSITION-001D1",
+        "status": "approved",
+        "phase": "EXEC"
+      },
+      {
+        "directive_id": "SD-VISION-TRANSITION-001D2",
+        "status": "completed",
+        "phase": "EXEC"
+      },
+      {
+        "directive_id": "SD-VISION-TRANSITION-001D3",
+        "status": "completed",
+        "phase": "LEAD_APPROVAL"
+      },
+      {
+        "directive_id": "SD-VISION-TRANSITION-001D4",
+        "status": "approved",
+        "phase": "LEAD_APPROVAL"
+      },
+      {
+        "directive_id": "SD-VISION-TRANSITION-001D5",
+        "status": "completed",
+        "phase": "COMPLETE"
+      },
+      {
+        "directive_id": "SD-VISION-TRANSITION-001D6",
+        "status": "pending_approval",
+        "phase": "LEAD_APPROVAL"
+      },
+      {
+        "directive_id": "SD-VISION-TRANSITION-001E",
+        "status": "planning",
+        "phase": "planning"
+      }
+    ]
+  },
+  "user_stories_summary": {
+    "SD-VISION-TRANSITION-001A": {
+      "total": 6,
+      "completed": 6,
+      "validated": 6
+    },
+    "SD-VISION-TRANSITION-001B": {
+      "total": 4,
+      "completed": 4,
+      "validated": 0
+    },
+    "SD-VISION-TRANSITION-001C": {
+      "total": 8,
+      "completed": 8,
+      "validated": 8
+    },
+    "SD-VISION-TRANSITION-001D6": {
+      "total": 9,
+      "completed": 9,
+      "validated": 0
+    },
+    "SD-VISION-TRANSITION-001D": {
+      "total": 5,
+      "completed": 5,
+      "validated": 5
+    },
+    "SD-VISION-TRANSITION-001D1": {
+      "total": 5,
+      "completed": 5,
+      "validated": 5
+    },
+    "SD-VISION-TRANSITION-001D2": {
+      "total": 6,
+      "completed": 6,
+      "validated": 6
+    },
+    "SD-VISION-TRANSITION-001D3": {
+      "total": 6,
+      "completed": 0,
+      "validated": 0
+    },
+    "SD-VISION-TRANSITION-001D4": {
+      "total": 10,
+      "completed": 10,
+      "validated": 0
+    },
+    "SD-VISION-TRANSITION-001D5": {
+      "total": 6,
+      "completed": 6,
+      "validated": 0
+    },
+    "SD-VISION-TRANSITION-001": {
+      "total": 6,
+      "completed": 0,
+      "validated": 0
+    }
+  },
+  "handoffs_summary": {
+    "SD-VISION-TRANSITION-001D3": {
+      "accepted": [
+        "LEAD-TO-PLAN",
+        "PLAN-TO-EXEC",
+        "EXEC-TO-PLAN",
+        "PLAN-TO-LEAD"
+      ],
+      "rejected_count": 29
+    },
+    "SD-VISION-TRANSITION-001C": {
+      "accepted": [
+        "PLAN-TO-EXEC",
+        "EXEC-TO-PLAN",
+        "LEAD-TO-PLAN"
+      ],
+      "rejected_count": 1
+    },
+    "SD-VISION-TRANSITION-001D4": {
+      "accepted": [
+        "LEAD-TO-PLAN",
+        "PLAN-TO-EXEC",
+        "EXEC-TO-PLAN",
+        "EXEC-TO-PLAN",
+        "PLAN-TO-LEAD"
+      ],
+      "rejected_count": 17
+    },
+    "SD-VISION-TRANSITION-001D2": {
+      "accepted": [
+        "LEAD-TO-PLAN",
+        "PLAN-TO-EXEC",
+        "EXEC-TO-PLAN"
+      ],
+      "rejected_count": 7
+    },
+    "SD-VISION-TRANSITION-001D": {
+      "accepted": [
+        "LEAD-TO-PLAN",
+        "EXEC-TO-PLAN",
+        "PLAN-TO-LEAD"
+      ],
+      "rejected_count": 4
+    },
+    "SD-VISION-TRANSITION-001D1": {
+      "accepted": [
+        "PLAN-TO-EXEC",
+        "LEAD-TO-PLAN",
+        "EXEC-TO-PLAN"
+      ],
+      "rejected_count": 12
+    },
+    "SD-VISION-TRANSITION-001": {
+      "accepted": [
+        "LEAD-TO-PLAN",
+        "PLAN-TO-EXEC"
+      ],
+      "rejected_count": 6
+    },
+    "SD-VISION-TRANSITION-001E": {
+      "accepted": [
+        "LEAD-TO-PLAN"
+      ],
+      "rejected_count": 4
+    },
+    "SD-VISION-TRANSITION-001D5": {
+      "accepted": [
+        "PLAN-TO-EXEC",
+        "LEAD-TO-PLAN",
+        "EXEC-TO-PLAN",
+        "PLAN-TO-LEAD"
+      ],
+      "rejected_count": 13
+    },
+    "SD-VISION-TRANSITION-001A": {
+      "accepted": [
+        "LEAD-TO-PLAN",
+        "PLAN-TO-EXEC",
+        "EXEC-TO-PLAN"
+      ],
+      "rejected_count": 2
+    },
+    "SD-VISION-TRANSITION-001D6": {
+      "accepted": [
+        "LEAD-TO-PLAN",
+        "EXEC-TO-PLAN",
+        "PLAN-TO-LEAD"
+      ],
+      "rejected_count": 9
+    },
+    "SD-VISION-TRANSITION-001B": {
+      "accepted": [
+        "LEAD-TO-PLAN",
+        "PLAN-TO-EXEC"
+      ],
+      "rejected_count": 4
+    }
+  },
+  "crewai_contracts": {
+    "count": 4,
+    "data": [
+      {
+        "id": "8f1f428c-c3d4-4689-abe7-616fa1b52570",
+        "name": "journey-map-generator-v1",
+        "kind": "jsonschema",
+        "version": "1.0.0",
+        "validation_status": "valid"
+      },
+      {
+        "id": "c8d5017b-154d-433d-95a5-eaa4882ac87c",
+        "name": "route-map-suggester-v1",
+        "kind": "jsonschema",
+        "version": "1.0.0",
+        "validation_status": "valid"
+      },
+      {
+        "id": "cf3d1d1f-7238-446a-98ff-2692c84e2c3b",
+        "name": "epic-planner-v1",
+        "kind": "jsonschema",
+        "version": "1.0.0",
+        "validation_status": "valid"
+      },
+      {
+        "id": "8c1fe081-1add-43c1-aac5-ce6f9c7bb3fe",
+        "name": "build-planner-v1",
+        "kind": "jsonschema",
+        "version": "1.0.0",
+        "validation_status": "valid"
+      }
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2025-12-05 9:24:37 AM
+**Generated**: 2025-12-12 7:24:51 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
@@ -500,6 +500,72 @@ LEAD MUST answer these questions BEFORE approval:
 
 **SCOPE LOCK**: Once LEAD approves an SD, the scope is LOCKED. LEAD commits to delivering the approved scope.
 
+## Parent-Child Decomposition Approval
+
+### When PLAN Proposes Decomposition
+
+PLAN agent will propose decomposition when:
+- Parent SD has ≥8 user stories
+- Work spans 3+ distinct phases
+- Duration estimate exceeds 1-2 weeks
+
+### LEAD Review of Parent SD
+
+When approving parent SD, LEAD should:
+- [ ] Understand this will create child SDs
+- [ ] Review proposed child structure in parent PRD
+- [ ] Validate decomposition makes sense
+- [ ] Approve parent SD (which creates children)
+
+**Note**: Approving parent SD does NOT approve children. Children need individual LEAD approval.
+
+### LEAD Review of Each Child SD
+
+**After parent PLAN completes**, each child goes to LEAD individually:
+
+#### Child A LEAD Review Checklist
+- [ ] Strategic value: Is this child worth building?
+- [ ] Scope: Is child scope clear and locked?
+- [ ] Dependencies: Is parent complete enough to start this child?
+- [ ] Risks: What are the specific risks for this child?
+- [ ] Resources: Do we have what we need?
+
+Repeat for Child B, Child C, etc.
+
+### Why Individual Child Approval Matters
+
+Each child represents different strategic decisions:
+- **Child A (Foundation)**: Architecture decisions, tech stack validation
+- **Child B (Features)**: Feature priority, user value validation
+- **Child C (Polish)**: UX investment, quality bar validation
+
+These are **different strategic questions** requiring separate LEAD approval.
+
+### Rejecting a Child
+
+LEAD can approve parent but reject a specific child:
+- Approve Child A and Child B
+- Reject Child C (not worth it)
+- Update parent's `dependency_chain` to remove Child C
+
+### Parent Completion Approval
+
+Parent completes automatically after last child, but LEAD should verify:
+- [ ] All approved children have status = 'completed'
+- [ ] Parent progress = 100%
+- [ ] Orchestration learnings documented (optional)
+
+### Anti-Pattern: Batch Approval
+
+**❌ Don't do this**:
+> "All 3 children look good, approve them all at once"
+
+**✅ Do this instead**:
+> "Approve Child A. After Child A completes, we'll review Child B with updated context."
+
+Sequential LEAD approval allows learning from earlier children to inform later decisions.
+
+
 ## Parent-Child SD Phase Governance
 
 ## Parent-Child SD Phase Governance (PAT-PARENT-CHILD-001)
@@ -628,6 +694,6 @@ npm run sd:status    # Overall progress by track
 
 ---
 
-*Generated from database: 2025-12-05*
+*Generated from database: 2025-12-12*
 *Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

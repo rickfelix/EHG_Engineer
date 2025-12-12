@@ -31,7 +31,8 @@
       "supabase_operations",
       "database_column_reference",
       "pattern_search_guide",
-      "ai_quality_russian_judge"
+      "ai_quality_russian_judge",
+      "parent_child_overview"
     ]
   },
   "CLAUDE_LEAD.md": {
@@ -48,6 +49,7 @@
       "sd_evaluation",
       "knowledge_retrieval",
       "parent_child_sd_governance",
+      "parent_child_lead",
       "multi_track_parallel_execution"
     ]
   },
@@ -62,6 +64,7 @@
       "plan_test_infrastructure_gate",
       "testing_tier_strategy",
       "testing_tier_strategy_updated",
+      "test_evidence_architecture",
       "plan_cicd_verification",
       "plan_visual_documentation_examples",
       "plan_presentation_template",
@@ -74,7 +77,8 @@
       "schema_documentation_access",
       "schema_documentation_reference",
       "database_schema_overview",
-      "handoff_quality_gates"
+      "handoff_quality_gates",
+      "parent_child_plan"
     ]
   },
   "CLAUDE_EXEC.md": {
@@ -95,7 +99,8 @@
       "exec_ui_parity_verification",
       "exec_edge_case_testing_checklist",
       "testing_tools",
-      "e2e_testing_mode_configuration"
+      "e2e_testing_mode_configuration",
+      "parent_child_exec"
     ]
   },
   "SHARED": {

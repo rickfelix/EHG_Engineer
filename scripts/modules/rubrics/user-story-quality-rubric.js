@@ -187,7 +187,7 @@ ${this.formatStoryText(userStory)}
 ${this.formatAcceptanceCriteria(userStory.acceptance_criteria)}
 
 ## Given-When-Then Scenarios
-${this.formatGivenWhenThen(userStory.scenarios || userStory.test_scenarios || userStory.testing_scenarios)}
+${this.formatGivenWhenThen(userStory.scenarios || userStory.test_scenarios || userStory.testing_scenarios || this.extractGwtFromAcceptanceCriteria(userStory.acceptance_criteria))}
 
 ## Additional Context
 Priority: ${userStory.priority || 'Not set'}
@@ -291,6 +291,25 @@ SD Link: ${userStory.sd_id || 'Not linked'}`;
   }
 
   /**
+   * Extract Given-When-Then scenarios from acceptance_criteria if they contain GWT format
+   * This handles cases where GWT is stored in acceptance_criteria instead of a separate scenarios field
+   */
+  extractGwtFromAcceptanceCriteria(acceptanceCriteria) {
+    if (!acceptanceCriteria || !Array.isArray(acceptanceCriteria)) {
+      return null;
+    }
+
+    // Filter to only acceptance criteria that have given/when/then fields
+    const gwtCriteria = acceptanceCriteria.filter(ac =>
+      ac && typeof ac === 'object' && (ac.given || ac.when || ac.then)
+    );
+
+    // Return null if no GWT format found (let formatGivenWhenThen show "No scenarios")
+    // Return the array if we found GWT format in acceptance criteria
+    return gwtCriteria.length > 0 ? gwtCriteria : null;
+  }
+
+  /**
    * Format Given-When-Then scenarios for evaluation
    */
   formatGivenWhenThen(scenarios) {
@@ -362,8 +381,14 @@ SD Link: ${userStory.sd_id || 'Not linked'}`;
       // Format user story for evaluation (with PRD context if available)
       const formattedContent = this.formatUserStoryForEvaluation(userStory, prd);
 
-      // Get User Story ID
-      const storyId = userStory.id || userStory.story_id;
+      // Get User Story ID - try multiple possible field names
+      // Primary: id (UUID from database), fallback: story_id, story_key
+      const storyId = userStory.id || userStory.story_id || userStory.story_key || null;
+
+      if (!storyId) {
+        console.warn('[UserStoryQualityRubric] Warning: User story has no identifiable ID field');
+        console.warn('  Available fields:', Object.keys(userStory).join(', '));
+      }
 
       // Run AI evaluation with sd_type awareness
       // Pass sd object for dynamic threshold and type-specific guidance

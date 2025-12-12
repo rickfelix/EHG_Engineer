@@ -92,3 +92,6 @@ src/client/dist/
 
 # Claude instance locks (prevents multi-instance conflicts)
 .claude-locks/
+
+# Token logging (local budget tracking, not version controlled)
+.token-log.json

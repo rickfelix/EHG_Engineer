@@ -46,7 +46,8 @@ jobs:
         run: |
           echo "Running E2E tests..."
           echo "Environment: ${{ github.event.inputs.environment || 'staging' }}"
-          npx playwright test --reporter=list || echo "Tests completed with failures"
+          # Tests MUST pass - this blocks PR merge if tests fail
+          npx playwright test --reporter=list
 
       - name: Upload test results
         if: always()

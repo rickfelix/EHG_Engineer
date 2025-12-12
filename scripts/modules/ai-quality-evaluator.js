@@ -90,7 +90,12 @@ export class AIQualityEvaluator {
     const startTime = Date.now();
 
     try {
-      // Build evaluation prompt with sd_type context
+      // Enrich SD with orchestrator context if needed
+      if (sd && !sd._orchestratorChecked) {
+        sd = await this.enrichWithOrchestratorContext(sd);
+      }
+
+      // Build evaluation prompt with sd_type and orchestrator context
       const messages = this.buildPrompt(content, sd);
 
       // Call OpenAI API
@@ -140,6 +145,8 @@ export class AIQualityEvaluator {
         passed,
         threshold,
         sd_type: sd?.sd_type || 'unknown',
+        is_orchestrator: sd?._isOrchestrator || false,
+        child_count: sd?._childCount || 0,
         duration,
         cost
       };
@@ -170,10 +177,14 @@ export class AIQualityEvaluator {
     // Add SD type context if available
     let sdTypeContext = '';
     if (sd?.sd_type) {
-      sdTypeContext = `\n\n**SD Type**: ${sd.sd_type}
+      const typeLabel = sd._isOrchestrator
+        ? `${sd.sd_type} (ORCHESTRATOR - ${sd._childCount} children)`
+        : sd.sd_type;
+
+      sdTypeContext = `\n\n**SD Type**: ${typeLabel}
 
 **Evaluation Adjustments for ${sd.sd_type.toUpperCase()} SDs:**
-${this.getTypeSpecificGuidance(sd.sd_type)}`;
+${this.getTypeSpecificGuidance(sd.sd_type, sd)}`;
     }
 
     return `You are a quality evaluator for LEO Protocol deliverables.
@@ -212,12 +223,14 @@ Your task is to score content across multiple criteria using a 0-10 scale:
 4. Avoid **grade inflation** - if something is mediocre, score it 4-6
 5. **Penalize placeholders heavily** - "To be defined" should score 0-3
 6. **Adjust strictness based on SD type** - apply the guidance above appropriately
+7. **ALWAYS provide improvement suggestions** for scores below 8 - be specific about WHAT to change
 
 Return ONLY valid JSON in this exact format:
 {
   "criterion_name": {
     "score": <number 0-10>,
-    "reasoning": "<1-2 sentence explanation>"
+    "reasoning": "<1-2 sentence explanation of why this score>",
+    "improvement": "<REQUIRED for scores <8: specific, actionable suggestion to improve this criterion. Example: 'Add baselines and targets to success metrics like: Baseline: 0% → Target: 80% coverage'. Leave empty string if score >= 8>"
   }
 }
 
@@ -228,7 +241,7 @@ NO additional text, explanations, or markdown - ONLY the JSON object.`;
    * Get type-specific evaluation guidance for different SD types
    * Helps the AI understand when to be lenient vs strict
    */
-  getTypeSpecificGuidance(sdType) {
+  getTypeSpecificGuidance(sdType, sd = null) {
     const guidance = {
       documentation: `- Relax technical architecture requirements (focus on clarity, not code design)
 - Don't penalize for missing code-related details (UI components, API endpoints)
@@ -261,7 +274,28 @@ NO additional text, explanations, or markdown - ONLY the JSON object.`;
 - No assumptions about "secure by default" - require explicit security measures`
     };
 
-    return guidance[sdType] || guidance.feature;
+    let baseGuidance = guidance[sdType] || guidance.feature;
+
+    // Add orchestrator-specific guidance if applicable
+    if (sd?._isOrchestrator) {
+      const orchestratorGuidance = `
+
+**ORCHESTRATOR SD CONTEXT (${sd._childCount} child SDs, ${sd._completedChildCount} completed):**
+- This is a PARENT/ORCHESTRATOR SD that coordinates multiple child SDs
+- It does NOT directly produce code, tests, or deliverables itself
+- Children handle the actual implementation work
+- Evaluate based on COORDINATION quality, not direct deliverable quality
+- For 'improvement_area_depth': Focus on coordination patterns, dependency management, and child SD orchestration lessons - NOT missing test evidence (children handle testing)
+- For 'learning_specificity': Lessons should be about orchestration patterns, parallel execution, child SD management
+- For 'action_item_actionability': Actions should relate to improving future orchestration, not fixing code
+- Do NOT penalize for "missing test evidence" - orchestrators delegate testing to children
+- Score 7-8 for retrospectives that capture coordination insights even without deep root-cause analysis
+- The value of an orchestrator retrospective is in meta-lessons about multi-SD coordination`;
+
+      baseGuidance += orchestratorGuidance;
+    }
+
+    return baseGuidance;
   }
 
   /**
@@ -292,7 +326,55 @@ NO additional text, explanations, or markdown - ONLY the JSON object.`;
       security: 65
     };
 
+    // Orchestrator SDs get even more lenient threshold (coordination, not direct work)
+    if (sd._isOrchestrator) {
+      return 50; // Very lenient - orchestrators coordinate, not produce
+    }
+
     return thresholds[sd.sd_type] || 60; // Default to lenient
+  }
+
+  /**
+   * Enrich SD object with orchestrator context
+   * Detects if SD is a parent with children and adds relevant metadata
+   *
+   * @param {Object} sd - Strategic Directive object
+   * @returns {Promise<Object>} Enriched SD object
+   */
+  async enrichWithOrchestratorContext(sd) {
+    if (!sd || !sd.id) return sd;
+
+    try {
+      // Check if this SD has children
+      const { data: children, error } = await this.supabase
+        .from('strategic_directives_v2')
+        .select('id, title, status, progress_percentage')
+        .eq('parent_sd_id', sd.id);
+
+      if (error) {
+        console.warn(`Could not check orchestrator status for ${sd.id}:`, error.message);
+        sd._orchestratorChecked = true;
+        return sd;
+      }
+
+      const isOrchestrator = children && children.length > 0;
+      const completedChildren = children?.filter(c => c.status === 'completed').length || 0;
+      const totalChildren = children?.length || 0;
+
+      // Enrich SD with orchestrator metadata
+      return {
+        ...sd,
+        _orchestratorChecked: true,
+        _isOrchestrator: isOrchestrator,
+        _childCount: totalChildren,
+        _completedChildCount: completedChildren,
+        _childrenAllComplete: totalChildren > 0 && completedChildren === totalChildren
+      };
+    } catch (err) {
+      console.warn(`Orchestrator check failed for ${sd.id}:`, err.message);
+      sd._orchestratorChecked = true;
+      return sd;
+    }
   }
 
   /**
@@ -381,6 +463,7 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
   generateFeedback(scores, criteria = null) {
     const required = [];
     const recommended = [];
+    const improvements = []; // NEW: Actionable improvement suggestions
 
     // Build weight lookup from criteria config
     const weightLookup = {};
@@ -393,7 +476,18 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
     for (const [criterionName, scoreData] of Object.entries(scores)) {
       const score = scoreData.score;
       const reasoning = scoreData.reasoning;
+      const improvement = scoreData.improvement || ''; // NEW: Get improvement suggestion
       const weight = weightLookup[criterionName] || 0.10; // Default to 10% if unknown
+
+      // Collect improvement suggestions for any score < 8
+      if (score < 8 && improvement) {
+        improvements.push({
+          criterion: criterionName,
+          score,
+          weight,
+          suggestion: improvement
+        });
+      }
 
       // Low-weight criteria (<10%) NEVER block, regardless of score
       // This is critical for Phase 1 calibration (e.g., given_when_then_format at 5%)
@@ -422,7 +516,7 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
       // Scores 7+ are good, no feedback needed
     }
 
-    return { required, recommended };
+    return { required, recommended, improvements };
   }
 
   /**
@@ -443,6 +537,13 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
    * Store assessment in database with sd_type and threshold tracking
    */
   async storeAssessment(contentId, scores, weightedScore, feedback, duration, tokensUsed, cost, sd = null, threshold = 70) {
+    // Guard: Skip storage if contentId is null/undefined (prevents NOT NULL constraint violation)
+    if (!contentId) {
+      console.warn(`[AIQualityEvaluator] Skipping assessment storage: content_id is ${contentId === null ? 'null' : 'undefined'} for content_type=${this.rubricConfig.contentType}`);
+      console.warn(`[AIQualityEvaluator] This may indicate a missing 'id' field in the evaluated content. Score: ${weightedScore}%`);
+      return;
+    }
+
     try {
       const { error } = await this.supabase
         .from('ai_quality_assessments')

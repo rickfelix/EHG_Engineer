@@ -15,6 +15,7 @@
 
 import { SDQualityRubric } from './rubrics/sd-quality-rubric.js';
 import { RetrospectiveQualityRubric } from './rubrics/retrospective-quality-rubric.js';
+import { getScoringWeights, isInfrastructureSDSync } from './sd-type-checker.js';
 
 // ============================================
 // BOILERPLATE DETECTION PATTERNS
@@ -182,9 +183,10 @@ export async function validateSDQuality(sd) {
 /**
  * Validate retrospective quality using AI-powered Russian Judge rubric
  * @param {Object} retrospective - Retrospective object from database
+ * @param {Object} sd - Strategic Directive (optional, enables orchestrator-aware evaluation)
  * @returns {Promise<Object>} Validation result (async now - calls OpenAI)
  */
-export async function validateRetrospectiveQuality(retrospective) {
+export async function validateRetrospectiveQuality(retrospective, sd = null) {
   const retroId = retrospective?.id || 'Unknown';
   const sdId = retrospective?.sd_id || 'Unknown';
 
@@ -204,8 +206,9 @@ export async function validateRetrospectiveQuality(retrospective) {
 
   try {
     // Use AI-powered Russian Judge rubric
+    // Pass SD for orchestrator-aware evaluation (affects threshold and criteria guidance)
     const rubric = new RetrospectiveQualityRubric();
-    const result = await rubric.validateRetrospectiveQuality(retrospective);
+    const result = await rubric.validateRetrospectiveQuality(retrospective, sd);
 
     // Parse arrays for backward compatibility
     let keyLearnings = retrospective.key_learnings || [];
@@ -228,6 +231,9 @@ export async function validateRetrospectiveQuality(retrospective) {
     if (!Array.isArray(improvements)) improvements = [];
 
     // Convert to legacy format for backward compatibility
+    // NEW: Include improvement suggestions from AI feedback
+    const aiImprovements = result.details?.improvements || [];
+
     return {
       retro_id: retroId,
       sd_id: sdId,
@@ -236,6 +242,7 @@ export async function validateRetrospectiveQuality(retrospective) {
       score: result.score,
       issues: result.issues,
       warnings: result.warnings,
+      improvements: aiImprovements, // NEW: Actionable improvement suggestions
       details: {
         ...result.details,
         // Add counts for backward compatibility
@@ -278,6 +285,7 @@ export async function validateSDCompletionReadiness(sd, retrospective = null) {
     score: 0,
     issues: [],
     warnings: [],
+    improvements: [], // NEW: Actionable improvement suggestions
     sdQuality: null,
     retroQuality: null
   };
@@ -295,14 +303,31 @@ export async function validateSDCompletionReadiness(sd, retrospective = null) {
   result.warnings.push(...sdQuality.warnings);
 
   // Validate retrospective if provided (async now)
+  // Pass SD for orchestrator-aware evaluation (orchestrators get lenient scoring)
   if (retrospective) {
-    const retroQuality = await validateRetrospectiveQuality(retrospective);
+    const retroQuality = await validateRetrospectiveQuality(retrospective, sd);
     result.retroQuality = retroQuality;
     result.issues.push(...retroQuality.issues);
     result.warnings.push(...retroQuality.warnings);
 
-    // Combined score (weighted: SD 60%, Retro 40%)
-    result.score = Math.round(sdQuality.score * 0.6 + retroQuality.score * 0.4);
+    // NEW: Collect improvement suggestions from retrospective validation
+    if (retroQuality.improvements?.length > 0) {
+      result.improvements.push(...retroQuality.improvements);
+    }
+
+    // SD-type aware scoring weights using centralized sd-type-checker
+    // Infrastructure/documentation/process SDs: Retrospective quality weighted higher
+    // because these SDs are simpler by design and the retrospective captures the real value
+    // Standard feature SDs: SD quality weighted higher because objectives matter more
+    const weights = await getScoringWeights(sd, { useAI: false });
+    const sdWeight = weights.sdWeight;
+    const retroWeight = weights.retroWeight;
+
+    const isInfrastructure = isInfrastructureSDSync(sd);
+    const sdType = sd.sd_type || sd.category || 'feature';
+    console.log(`   📊 SD Type '${sdType}' (infrastructure=${isInfrastructure}): weights SD=${sdWeight}, Retro=${retroWeight}`);
+
+    result.score = Math.round(sdQuality.score * sdWeight + retroQuality.score * retroWeight);
   } else {
     // No retrospective = gate blocked for completion
     if (sd.status === 'completed' || sd.status === 'active') {
@@ -343,7 +368,7 @@ export function getSDImprovementGuidance(validationResult) {
       guidance.recommended.push('Identify at least one risk with mitigation strategy');
     }
 
-    if (sd.issues.some(i => i.includes('description'))) {
+    if (sd.issues?.some(i => i.includes('description'))) {
       guidance.required.push('Expand description to explain business value and technical approach');
     }
   }
@@ -352,21 +377,21 @@ export function getSDImprovementGuidance(validationResult) {
   if (validationResult.retroQuality) {
     const retro = validationResult.retroQuality;
 
-    if (retro.issues.some(i => i.includes('key_learnings'))) {
+    if (retro.issues?.some(i => i.includes('key_learnings'))) {
       guidance.required.push('Add specific, non-boilerplate key learnings from this SD');
     }
 
-    if (retro.issues.some(i => i.includes('boilerplate'))) {
+    if (retro.issues?.some(i => i.includes('boilerplate'))) {
       guidance.required.push('Replace boilerplate learnings with SD-specific insights');
     }
 
-    if (retro.warnings.some(w => w.includes('improvement'))) {
+    if (retro.warnings?.some(w => w.includes('improvement'))) {
       guidance.recommended.push('Identify at least one area that could be improved');
     }
   }
 
   // Gate enforcement
-  if (validationResult.issues.some(i => i.includes('No retrospective found'))) {
+  if (validationResult.issues?.some(i => i.includes('No retrospective found'))) {
     guidance.required.push('Create retrospective before marking SD as complete');
     guidance.required.push('Run: node scripts/execute-subagent.js --code RETRO --sd-id <SD-ID>');
   }

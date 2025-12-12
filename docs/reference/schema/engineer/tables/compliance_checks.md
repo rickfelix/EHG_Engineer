@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-04T22:29:13.796Z
-**Rows**: 2
+**Generated**: 2025-12-06T23:43:48.160Z
+**Rows**: 3
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -23,7 +23,7 @@
 | run_type | `text` | **NO** | - | scheduled=P7D cron, manual=human triggered, on_demand=API triggered |
 | started_at | `timestamp with time zone` | **NO** | `now()` | - |
 | completed_at | `timestamp with time zone` | YES | - | - |
-| total_stages | `integer(32)` | **NO** | `40` | - |
+| total_stages | `integer(32)` | **NO** | `25` | - |
 | passed | `integer(32)` | YES | `0` | - |
 | failed | `integer(32)` | YES | `0` | - |
 | skipped | `integer(32)` | YES | `0` | - |

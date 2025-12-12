@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-05 9:24:37 AM
+**Generated**: 2025-12-12 7:24:51 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -687,6 +687,87 @@ Patterns exceeding these thresholds auto-create CRITICAL SDs:
 
 **Weekly Maintenance:** `npm run pattern:maintenance` (also runs via GitHub Action)
 
+## Parent-Child SD Hierarchy
+
+### Overview
+
+The LEO Protocol supports hierarchical SDs for multi-phase work. Parent SDs coordinate children; **every child goes through full LEAD→PLAN→EXEC**.
+
+### Relationship Types
+
+| Type | Description | Workflow | Use Case |
+|------|-------------|----------|----------|
+| `standalone` | Default | LEAD→PLAN→EXEC | Normal SDs |
+| `parent` | Orchestrator | LEAD→PLAN→waits→Complete | Multi-phase coordinator |
+| `child` | Has parent | LEAD→PLAN→EXEC→Complete | Sequential execution units |
+
+### Key Rules
+
+1. **Every child gets full LEAD→PLAN→EXEC** - complete workflow, no shortcuts
+2. **Parent PLAN creates children** - PLAN agent proposes decomposition during parent PRD
+3. **Each child needs LEAD approval** - validates strategic value, scope, risks per child
+4. **Children execute sequentially** - Child B waits for Child A to complete
+5. **Parent progress = weighted child progress** - auto-calculated
+6. **Parent completes last** - after all children finish
+
+### Workflow Diagram
+
+```
+PARENT SD:
+  LEAD (approve multi-phase initiative)
+    ↓
+  PLAN (discover 15 user stories → propose 3 children)
+    ↓
+  Parent enters "orchestrator/waiting" state
+
+CHILDREN (sequential):
+  Child A: LEAD → PLAN → EXEC → Complete
+           ↓
+  Child B: LEAD → PLAN → EXEC → Complete
+           ↓
+  Child C: LEAD → PLAN → EXEC → Complete
+
+PARENT SD:
+  After last child → Auto-complete (progress = 100%)
+```
+
+### Why Children Need LEAD
+
+Each child SD needs LEAD approval because:
+- **Strategic validation**: Is THIS child the right thing to build?
+- **Scope lock**: What exactly does THIS child deliver?
+- **Risk assessment**: What are the risks for THIS specific child?
+- **Resource check**: Do we have what we need for THIS child?
+
+LEAD is not redundant - it's essential validation per child.
+
+### Progress Calculation
+
+Parent progress = weighted average of child progress:
+
+| Child Priority | Weight |
+|----------------|--------|
+| critical | 40% |
+| high | 30% |
+| medium | 20% |
+| low | 10% |
+
+**Formula**: `Σ(child.progress × weight) / Σ(weight)`
+
+### Database Functions
+
+```sql
+-- View family hierarchy
+SELECT * FROM sd_family_tree WHERE parent_id = 'SD-PARENT-001';
+
+-- Calculate parent progress
+SELECT calculate_parent_sd_progress('SD-PARENT-001');
+
+-- Get next child to execute
+SELECT get_next_child_sd('SD-PARENT-001');
+```
+
+
 ## Database-First Enforcement - Expanded
 
 **Database-First Enforcement (MANDATORY)**:
@@ -719,26 +800,42 @@ Two handoff-related tables exist - use the correct one:
 ## 🗄️ Supabase Database Operations
 
 ### Connection Details (CONSOLIDATED DATABASE)
-
-> **NOTE (SD-ARCH-EHG-006)**: As of 2025-11-30, both EHG and EHG_Engineer use the **CONSOLIDATED** database.
-
 - **Project URL**: https://dedlbzhpgkmetvhbkyzq.supabase.co
 - **Project ID**: dedlbzhpgkmetvhbkyzq
 - **Connection**: Via Supabase client using environment variables
 
-### Environment Variables Required
-```bash
-# CONSOLIDATED Database (used by both EHG and EHG_Engineer)
-SUPABASE_URL=https://dedlbzhpgkmetvhbkyzq.supabase.co
-SUPABASE_ANON_KEY=[anon-key]
-SUPABASE_SERVICE_ROLE_KEY=[service-role-key]
-SUPABASE_POOLER_URL=postgresql://postgres.dedlbzhpgkmetvhbkyzq:[password]@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+### ⚠️ CRITICAL: Database Connection Pattern
 
-# EHG Application vars (same consolidated database)
-EHG_SUPABASE_URL=https://dedlbzhpgkmetvhbkyzq.supabase.co
-EHG_SUPABASE_ANON_KEY=[anon-key]
-EHG_SUPABASE_SERVICE_ROLE_KEY=[service-role-key]
+**NEVER use raw psql to direct Supabase URL** - it will timeout:
+```bash
+# ❌ WRONG - Times out after 30+ seconds
+psql 'postgresql://postgres.PROJECT:password@PROJECT.supabase.co:5432/postgres'
 ```
+
+**ALWAYS use connection helpers from `scripts/lib/supabase-connection.js`**:
+
+#### For SQL Queries (raw PostgreSQL):
+```javascript
+import { createDatabaseClient } from './scripts/lib/supabase-connection.js';
+const client = await createDatabaseClient();
+const result = await client.query('SELECT * FROM table_name WHERE id = $1', ['value']);
+await client.end();
+```
+
+#### For Supabase-style Queries (recommended):
+```javascript
+import { createSupabaseServiceClient } from './scripts/lib/supabase-connection.js';
+const client = await createSupabaseServiceClient();
+const { data, error } = await client.from('table_name').select('*').eq('id', 'value');
+```
+
+**Why?** The helpers use the connection pooler URL (`aws-1-us-east-1.pooler.supabase.com`) which handles connection management properly, while direct URLs timeout due to connection limits.
+
+### Running SQL Migrations
+For SQL migrations, use the Supabase CLI or dashboard SQL editor:
+- **Dashboard**: Project > SQL Editor > paste and run
+- **CLI**: `npx supabase db push` (if set up)
+- **Script**: Create a .mjs script using `createDatabaseClient()`
 
 ## 🔧 CRITICAL DEVELOPMENT WORKFLOW
 
@@ -1100,16 +1197,16 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. Chairman Circuit Breaker System - Retrospective ⭐
-**Category**: PERFORMANCE_OPTIMIZATION | **Date**: 12/3/2025 | **Score**: 100
+### 1. SD-EVA-DECISION-001 Completion Retrospective ⭐
+**Category**: DATABASE_SCHEMA | **Date**: 12/4/2025 | **Score**: 100
 
 **Key Improvements**:
-- Could add integration tests with actual Supabase calls
-- Dashboard visualization for circuit breaker states not yet implemented
+- Database connection issues - psql timeouts required switching to Node.js Supabase client
+- RLS policy blocks for LEO protocol section inserts - needed service role key
 
 **Action Items**:
-- [ ] Apply withCircuitBreaker wrapper to EVA API calls in production
-- [ ] Create dashboard widget showing circuit breaker states
+- [ ] Use git worktrees for parallel SD work to prevent stash/branch conflicts
+- [ ] Always use database agent with service role for operations when RLS policies blo...
 
 ### 2. SD-STAGE-09-001 Retrospective: EVA L0 Integration for Gap Analysis ⭐
 **Category**: APPLICATION_ISSUE | **Date**: 12/4/2025 | **Score**: 100
@@ -1133,27 +1230,27 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 - [ ] Create SD-TESTING-INFRASTRUCTURE-FIX-001 for unit test timeout resolution
 - [ ] Fix E2E mock API configuration (28/32 test failures)
 
-### 4. SD-EVA-DECISION-001 Completion Retrospective ⭐
-**Category**: DATABASE_SCHEMA | **Date**: 12/4/2025 | **Score**: 100
+### 4. SD-VISION-TRANSITION-001F Completion: CrewAI Integration Wiring ⭐
+**Category**: APPLICATION_ISSUE | **Date**: 12/11/2025 | **Score**: 100
 
 **Key Improvements**:
-- Database connection issues - psql timeouts required switching to Node.js Supabase client
-- RLS policy blocks for LEO protocol section inserts - needed service role key
+- Initial hesitation to start LEO stack instead of explaining why tests could not run - mindset issue
+- E2E tests require live CrewAI platform for full integration testing - should document dependencies
 
 **Action Items**:
-- [ ] Use git worktrees for parallel SD work to prevent stash/branch conflicts
-- [ ] Always use database agent with service role for operations when RLS policies blo...
+- [ ] Always run leo-stack.sh status before claiming E2E tests cannot run
+- [ ] When implementing new auto-classifiers, create migration to reclassify existing ...
 
-### 5. Playwright Authentication Troubleshooting - Password Reset Solution ⭐
-**Category**: APPLICATION_ISSUE | **Date**: 11/19/2025 | **Score**: 100
+### 5. Chairman Circuit Breaker System - Retrospective ⭐
+**Category**: PERFORMANCE_OPTIMIZATION | **Date**: 12/3/2025 | **Score**: 100
 
 **Key Improvements**:
-- Initial confusion about which service_role key to use (EHG vs EHG_Engineer)
-- Multiple attempts with invalid service_role key before getting correct one
+- Could add integration tests with actual Supabase calls
+- Dashboard visualization for circuit breaker states not yet implemented
 
 **Action Items**:
-- [ ] Add reset-password.cjs script to EHG repository for future use
-- [ ] Document Supabase Admin API authentication troubleshooting in testing guide
+- [ ] Apply withCircuitBreaker wrapper to EVA API calls in production
+- [ ] Create dashboard widget showing circuit breaker states
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1213,7 +1310,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ---
 
-*Generated from database: 2025-12-05*
+*Generated from database: 2025-12-12*
 *Protocol Version: 4.3.3*
 *Includes: Hot Patterns (5) + Recent Lessons (5)*
 *Load this file first in all sessions*

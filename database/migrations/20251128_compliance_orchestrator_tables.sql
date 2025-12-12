@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS compliance_checks (
 CREATE TABLE IF NOT EXISTS compliance_violations (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   check_id UUID NOT NULL REFERENCES compliance_checks(id) ON DELETE CASCADE,
-  stage_number INTEGER NOT NULL CHECK (stage_number BETWEEN 1 AND 40),
+  stage_number INTEGER NOT NULL CHECK (stage_number BETWEEN 1 AND 25),
   violation_type TEXT NOT NULL,
   severity TEXT NOT NULL CHECK (severity IN ('critical', 'high', 'medium', 'low', 'info')),
   rule_id TEXT,

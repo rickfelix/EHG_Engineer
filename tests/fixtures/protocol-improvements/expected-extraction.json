@@ -1,0 +1,41 @@
+{
+  "from_protocol_improvements": [
+    {
+      "category": "VALIDATION",
+      "improvement": "Add pre-flight PRD validation before LEAD-TO-PLAN handoff",
+      "evidence": "3 failed handoffs due to missing PRD fields (functional_requirements, success_criteria)",
+      "impact": "Would prevent ~80% of LEAD-TO-PLAN handoff failures",
+      "affected_phase": "LEAD",
+      "target_table": "leo_handoff_templates",
+      "source": "protocol_improvements"
+    },
+    {
+      "category": "DOCUMENTATION",
+      "improvement": "Clarify required fields in CLAUDE_PLAN.md PRD section",
+      "evidence": "Confusion about which PRD fields are mandatory vs optional",
+      "impact": "Reduces cognitive load during PLAN phase, clearer expectations",
+      "affected_phase": "PLAN",
+      "target_table": "leo_protocol_sections",
+      "source": "protocol_improvements"
+    }
+  ],
+  "from_failure_patterns": [
+    {
+      "pattern_id": "PAT-PRD-VALIDATION-001",
+      "improvement": "Add validation to catch missing PRD fields before handoff",
+      "evidence": "3 occurrences of PRD validation failures",
+      "impact": "high",
+      "target_table": "leo_handoff_templates",
+      "source": "failure_patterns"
+    }
+  ],
+  "target_table_mapping": {
+    "leo_handoff_templates": [
+      "Add pre-flight PRD validation before LEAD-TO-PLAN handoff",
+      "Add validation to catch missing PRD fields before handoff"
+    ],
+    "leo_protocol_sections": [
+      "Clarify required fields in CLAUDE_PLAN.md PRD section"
+    ]
+  }
+}

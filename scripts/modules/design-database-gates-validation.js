@@ -7,10 +7,14 @@
  * Integration: unified-handoff-system.js (PLAN→EXEC handoff)
  * Created: 2025-10-28
  * Part of: SD-DESIGN-DATABASE-VALIDATION-001
+ *
+ * v1.1.0: Added AI-powered SD type classification to replace keyword matching
  */
 
 import { calculateAdaptiveThreshold } from './adaptive-threshold-calculator.js';
 import { getPatternStats } from './pattern-tracking.js';
+// Import centralized SD type checking (replaces local shouldValidateDesignDatabase)
+import { requiresDesignDatabaseGates } from './sd-type-checker.js';
 
 /**
  * Validate DESIGN→DATABASE workflow for PLAN→EXEC handoff
@@ -480,27 +484,21 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
 }
 
 /**
- * Helper: Check if SD requires DESIGN→DATABASE validation
+ * Helper: Check if SD requires DESIGN→DATABASE validation (Async with AI Classification)
+ *
+ * REFACTORED: Now uses centralized sd-type-checker.js module for consistent
+ * SD type detection across all LEO Protocol components.
  *
  * @param {Object} sd - Strategic Directive object
- * @returns {boolean} True if validation required
+ * @returns {Promise<boolean>} True if validation required
+ * @see ./sd-type-checker.js - Single source of truth for SD type logic
  */
-export function shouldValidateDesignDatabase(sd) {
-  if (!sd) return false;
-
-  // Check category field
-  const hasDesignCategory = sd.category?.includes('design');
-  const hasDatabaseCategory = sd.category?.includes('database');
-
-  // Check scope/description for keywords (word boundary regex to avoid false positives)
-  const scope = (sd.scope || '').toLowerCase();
-  const description = (sd.description || '').toLowerCase();
-
-  const hasUIKeywords = /\b(ui|ux|component)\b/i.test(scope) ||
-                        /\b(ui|ux|component)\b/i.test(description);
-  const hasDatabaseKeywords = /\b(database|schema|table)\b/i.test(scope) ||
-                              /\b(database|schema|table)\b/i.test(description);
-
-  return (hasDesignCategory && hasDatabaseCategory) ||
-         (hasUIKeywords && hasDatabaseKeywords);
+export async function shouldValidateDesignDatabase(sd) {
+  // Delegate to centralized SD type checker
+  // requiresDesignDatabaseGates handles:
+  // - Fast path: declared sd_type check
+  // - AI classification via SDTypeClassifier (GPT-5 Mini)
+  // - Fallback logic for low confidence results
+  // - Caching for repeated calls
+  return requiresDesignDatabaseGates(sd);
 }

@@ -1,0 +1,497 @@
+{
+  "metadata": {
+    "sd_id": "SD-VISION-TRANSITION-001",
+    "sd_uuid": "f86a2cde-70fd-44d5-aa0b-c06b4d898d3a",
+    "title": "Venture Vision v2.0 Migration",
+    "version": "1.0.0",
+    "generated_at": "2025-12-06T19:02:27.657Z",
+    "total_story_points": 24,
+    "story_count": 6,
+    "invest_compliance": true,
+    "fr_coverage": [
+      "FR-1",
+      "FR-2",
+      "FR-3",
+      "FR-4",
+      "FR-5",
+      "FR-6",
+      "FR-7",
+      "FR-8"
+    ]
+  },
+  "user_stories": [
+    {
+      "story_key": "SD-VISION-TRANSITION-001:US-001",
+      "prd_id": "PRD-SD-VISION-TRANSITION-001",
+      "sd_id": "SD-VISION-TRANSITION-001",
+      "title": "Legacy Documentation Archive Script",
+      "user_role": "Platform Engineer",
+      "user_want": "run an automated script that archives all 412+ legacy 40-stage documentation files to a clearly labeled backup directory with full inventory manifest",
+      "user_benefit": "I can safely preserve the complete historical context of the original system design while clearing the active codebase, enabling future audits or reference without cluttering current development workflows or risking accidental use of outdated documentation",
+      "story_points": 3,
+      "priority": "critical",
+      "status": "draft",
+      "acceptance_criteria": [
+        "Happy path - Archive script execution: Given I am in the project root directory AND the archive script exists at scripts/archive-legacy-stages.mjs AND 412+ documentation files exist in docs/stages/ directory, When I run `node scripts/archive-legacy-stages.mjs`, Then The script: (1) creates archive/legacy-40-stages-YYYYMMDD/ directory, (2) moves all files from docs/stages/ to archive directory, (3) generates manifest.json listing all archived files with checksums, (4) outputs \"Archived 412 files to archive/legacy-40-stages-20251206/\", (5) completes in under 30 seconds",
+        "Verification - Archive manifest format: Given The archive script has completed successfully, When I open archive/legacy-40-stages-YYYYMMDD/manifest.json, Then The manifest contains: (1) timestamp of archive operation, (2) total_files count matching archived files, (3) array of file objects with {path, size_bytes, sha256_checksum}, (4) source_directory path, (5) archive_reason description referencing SD-VISION-TRANSITION-001",
+        "Safety check - Prevents double archiving: Given The archive script has already been run once AND docs/stages/ directory is empty, When I run the archive script again, Then The script: (1) detects empty source directory, (2) outputs warning \"No files to archive in docs/stages/ - already archived?\", (3) exits with code 0 (success, not error), (4) does NOT create new archive directory",
+        "Error handling - Missing permissions: Given The archive directory exists but is read-only, When I run the archive script, Then The script: (1) catches permission error, (2) outputs actionable error message \"Cannot write to archive/ - check permissions: sudo chmod 755 archive/\", (3) exits with code 1, (4) does NOT partially archive files",
+        "Rollback support - Restore capability: Given Archives exist in archive/legacy-40-stages-20251206/ AND I need to restore files, When I run `node scripts/archive-legacy-stages.mjs --restore 20251206`, Then The script: (1) validates manifest.json exists in target archive, (2) restores all files to original locations, (3) verifies checksums match manifest, (4) outputs \"Restored 412 files from archive/legacy-40-stages-20251206/\""
+      ],
+      "definition_of_done": [
+        "Archive script implemented with manifest generation",
+        "Checksum verification for archive integrity",
+        "Restore functionality for rollback support",
+        "Unit tests for file operations",
+        "Script tested with actual 412+ files",
+        "Documentation updated with archive location"
+      ],
+      "depends_on": [],
+      "blocks": [],
+      "technical_notes": "Use Node.js crypto for SHA256 checksums. Archive to archive/ directory (gitignored). Manifest format matches LEO protocol artifact standards. FR-1: Archive legacy 40-stage documentation (412+ files). BLOCKS: US-003 (CHECK constraints), US-006 (verification)",
+      "implementation_approach": "1. Create archive directory structure. 2. Generate file inventory with checksums. 3. Move files preserving directory structure. 4. Generate manifest.json. 5. Add restore command option.",
+      "test_scenarios": [
+        {
+          "id": "TC-001-1",
+          "type": "unit",
+          "description": "Manifest generation includes all files with correct checksums"
+        },
+        {
+          "id": "TC-001-2",
+          "type": "unit",
+          "description": "Restore validates checksums before overwriting"
+        },
+        {
+          "id": "TC-001-3",
+          "type": "integration",
+          "description": "Full archive and restore cycle preserves all data"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/vision-transition/US-001-archive-script.spec.ts",
+      "e2e_test_status": "not_created",
+      "validation_status": "pending",
+      "implementation_context": {
+        "script_file": "scripts/archive-legacy-stages.mjs",
+        "archive_location": "archive/legacy-40-stages-YYYYMMDD/",
+        "manifest_format": "JSON with SHA256 checksums",
+        "source_files": "docs/stages/**/*.md (412+ files)",
+        "related_scripts": [
+          "scripts/verify-migration.mjs"
+        ],
+        "functional_requirement": "FR-1",
+        "dependency_notes": "No dependencies. Blocks US-003, US-006."
+      },
+      "architecture_references": [
+        "scripts/generate-claude-md-from-db.js (file manipulation pattern)",
+        "scripts/modules/safe-insert.js (checksum pattern)"
+      ],
+      "example_code_patterns": [
+        "const hash = crypto.createHash('sha256').update(content).digest('hex');",
+        "await fs.mkdir(archiveDir, { recursive: true });"
+      ],
+      "testing_scenarios": [],
+      "user_story": "As a Platform Engineer, I want to run an automated script that archives all 412+ legacy 40-stage documentation files to a clearly labeled backup directory with full inventory manifest, so that I can safely preserve the complete historical context of the original system design while clearing the active codebase, enabling future audits or reference without cluttering current development workflows or risking accidental use of outdated documentation"
+    },
+    {
+      "story_key": "SD-VISION-TRANSITION-001:US-002",
+      "prd_id": "PRD-SD-VISION-TRANSITION-001",
+      "sd_id": "SD-VISION-TRANSITION-001",
+      "title": "SD Record Database Cleanup with Audit Trail",
+      "user_role": "Database Administrator",
+      "user_want": "execute a database cleanup script that safely archives 38 obsolete SD-STAGE-* records and deletes 139 test SDs while maintaining a complete audit trail for compliance",
+      "user_benefit": "I can reduce database clutter by 95% (177 obsolete records) while preserving a complete audit history that satisfies SOC2 requirements, ensuring we can always trace what was removed and why without impacting query performance",
+      "story_points": 5,
+      "priority": "critical",
+      "status": "draft",
+      "acceptance_criteria": [
+        "Happy path - Archive obsolete SDs: Given I have database access AND 38 SD-STAGE-* records exist with status other than \"completed\" or \"active\", When I run `node scripts/cleanup-obsolete-sds.mjs --archive-only`, Then The script: (1) exports 38 records to archive/sd-archive-YYYYMMDD.json, (2) sets status=\"archived\" on matching records, (3) does NOT delete any records, (4) outputs \"Archived 38 SD-STAGE-* records\", (5) transaction completes atomically",
+        "Happy path - Delete test SDs: Given I have confirmed archive is complete AND 139 test SD records exist (sd_key LIKE \"test-%\" or metadata.is_test=true), When I run `node scripts/cleanup-obsolete-sds.mjs --delete-test-sds --confirm`, Then The script: (1) exports test SDs to archive/test-sds-YYYYMMDD.json before deletion, (2) deletes 139 test records via CASCADE (includes related PRDs, user_stories), (3) outputs deletion count per table, (4) updates sd_cleanup_audit table with operation details",
+        "Safety - Confirmation required for deletion: Given Test SDs exist for deletion, When I run `node scripts/cleanup-obsolete-sds.mjs --delete-test-sds` WITHOUT --confirm flag, Then The script: (1) lists SDs that WOULD be deleted (first 10 + count), (2) outputs \"Dry run: 139 test SDs would be deleted. Run with --confirm to execute.\", (3) exits with code 0, (4) makes NO database changes",
+        "Audit trail - Complete operation logging: Given Either archive or delete operation completes, When I query sd_cleanup_audit table, Then Audit record contains: (1) operation_type (\"archive\" or \"delete\"), (2) affected_count, (3) affected_ids array, (4) performed_by (user running script), (5) performed_at timestamp, (6) related_sd_id referencing SD-VISION-TRANSITION-001, (7) export_file_path pointing to backup JSON",
+        "Error handling - Foreign key violations: Given An SD has active dependencies that would violate foreign key constraints, When Delete is attempted, Then The script: (1) catches FK violation error, (2) identifies blocking dependency (e.g., \"SD-STAGE-05-001 has 3 incomplete handoffs\"), (3) outputs resolution steps (\"Complete or cancel handoffs first\"), (4) rolls back transaction, (5) reports which SDs were blocked vs successfully processed",
+        "Verification - Post-cleanup counts: Given Cleanup script has completed both archive and delete operations, When I run `node scripts/cleanup-obsolete-sds.mjs --verify`, Then The script outputs: (1) \"Remaining SD-STAGE-* records: 0 (38 archived)\", (2) \"Remaining test SDs: 0 (139 deleted)\", (3) \"Total active SDs: N\", (4) \"Cleanup audit records: 2\", (5) exits with code 0 if counts match expectations"
+      ],
+      "definition_of_done": [
+        "Cleanup script with archive and delete modes",
+        "Pre-deletion export to JSON files",
+        "Audit table with complete operation history",
+        "Dry-run mode for safe preview",
+        "Foreign key violation handling",
+        "Post-cleanup verification command",
+        "Integration tests with test database"
+      ],
+      "depends_on": [],
+      "blocks": [],
+      "technical_notes": "Use Supabase RPC for atomic transactions. Archive table may need creation (sd_cleanup_audit). Test SDs identified by metadata.is_test or naming convention. FR-2: Archive obsolete SD-STAGE-* records (38 SDs). FR-3: Delete test SD records (139 test SDs). BLOCKS: US-004 (Zod schemas), US-006 (verification)",
+      "implementation_approach": "1. Create sd_cleanup_audit table if not exists. 2. Build archive function with JSON export. 3. Build delete function with FK handling. 4. Add dry-run and confirm flags. 5. Create verification query.",
+      "test_scenarios": [
+        {
+          "id": "TC-002-1",
+          "type": "integration",
+          "description": "Archive operation sets status without deleting"
+        },
+        {
+          "id": "TC-002-2",
+          "type": "integration",
+          "description": "Delete operation cascades to related tables"
+        },
+        {
+          "id": "TC-002-3",
+          "type": "unit",
+          "description": "Audit record contains all required fields"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/vision-transition/US-002-sd-cleanup.spec.ts",
+      "e2e_test_status": "not_created",
+      "validation_status": "pending",
+      "implementation_context": {
+        "script_file": "scripts/cleanup-obsolete-sds.mjs",
+        "archive_table": "sd_cleanup_audit",
+        "export_location": "archive/",
+        "affected_tables": [
+          "strategic_directives_v2",
+          "product_requirements_v2",
+          "user_stories",
+          "handoffs"
+        ],
+        "sd_patterns": {
+          "obsolete": "sd_key LIKE \"SD-STAGE-%\"",
+          "test": "sd_key LIKE \"test-%\" OR metadata->>\"is_test\"=\"true\""
+        },
+        "functional_requirements": [
+          "FR-2",
+          "FR-3"
+        ],
+        "dependency_notes": "No dependencies. Blocks US-004, US-006."
+      },
+      "architecture_references": [
+        "database/schema/strategic_directives.sql",
+        "scripts/modules/safe-insert.js (transaction pattern)"
+      ],
+      "example_code_patterns": [],
+      "testing_scenarios": [],
+      "user_story": "As a Database Administrator, I want to execute a database cleanup script that safely archives 38 obsolete SD-STAGE-* records and deletes 139 test SDs while maintaining a complete audit trail for compliance, so that I can reduce database clutter by 95% (177 obsolete records) while preserving a complete audit history that satisfies SOC2 requirements, ensuring we can always trace what was removed and why without impacting query performance"
+    },
+    {
+      "story_key": "SD-VISION-TRANSITION-001:US-003",
+      "prd_id": "PRD-SD-VISION-TRANSITION-001",
+      "sd_id": "SD-VISION-TRANSITION-001",
+      "title": "Database CHECK Constraint Migration (40 to 25 Stages)",
+      "user_role": "Database Administrator",
+      "user_want": "update all database CHECK constraints from max(40) to max(25) stages through a reversible migration with pre/post validation",
+      "user_benefit": "I can enforce the new 25-stage lifecycle at the database level, preventing any code from accidentally creating or referencing invalid stage numbers, while maintaining the ability to rollback if issues are discovered during testing",
+      "story_points": 3,
+      "priority": "critical",
+      "status": "draft",
+      "acceptance_criteria": [
+        "Pre-migration - Identify affected constraints: Given I want to understand migration scope before execution, When I run `node scripts/migrate-stage-constraints.mjs --analyze`, Then The script outputs: (1) list of tables with stage-related CHECK constraints, (2) current constraint definitions (showing max=40), (3) count of records per table that would violate new max=25 constraint, (4) recommended action per table, (5) estimated migration time",
+        "Happy path - Constraint migration: Given No records exist with stage > 25 (pre-validated), When I run `node scripts/migrate-stage-constraints.mjs --execute`, Then The migration: (1) generates SQL ALTER statements, (2) drops old CHECK constraints, (3) adds new CHECK constraints with max=25, (4) verifies constraint is enforced by attempting invalid insert (which fails), (5) outputs \"Updated 4 CHECK constraints to max(25)\"",
+        "Blocking validation - Records exceed new limit: Given Records exist with stage=30 (above new limit of 25), When I run migration script, Then The script: (1) detects 3 records with stage>25 in ventures table, (2) outputs \"BLOCKED: 3 records exceed new stage limit. Run with --remap to migrate values.\", (3) lists affected record IDs and current stage values, (4) exits with code 1, (5) makes NO constraint changes",
+        "Data migration - Remap out-of-range values: Given Records exist with stage values > 25, When I run `node scripts/migrate-stage-constraints.mjs --remap`, Then The script: (1) applies stage mapping (stages 26-40 map to closest v2.0 equivalent per stages_v2.yaml), (2) updates records with new stage values, (3) logs all remappings to migration_audit table, (4) outputs \"Remapped 3 records to v2.0 stage values\", (5) constraint migration can now proceed",
+        "Rollback - Revert constraint changes: Given Migration was executed AND issues discovered in testing, When I run `node scripts/migrate-stage-constraints.mjs --rollback`, Then The rollback: (1) restores original CHECK constraints with max=40, (2) does NOT revert data changes (stage values remain remapped), (3) outputs \"Rolled back constraints to max(40)\", (4) logs rollback in migration_audit",
+        "Post-migration - Verification: Given Migration completed successfully, When I attempt INSERT INTO ventures (stage) VALUES (26), Then Database returns CHECK constraint violation error: \"new row violates check constraint: stage must be between 1 and 25\""
+      ],
+      "definition_of_done": [
+        "Migration script with analyze, execute, remap, rollback modes",
+        "Pre-migration validation for out-of-range values",
+        "Stage value remapping with audit trail",
+        "Rollback capability for constraint changes",
+        "Post-migration verification tests",
+        "Integration test with test database"
+      ],
+      "depends_on": [],
+      "blocks": [],
+      "technical_notes": "Supabase migrations in database/migrations/. Stage mapping defined in stages_v2.yaml. CHECK constraints on: ventures.stage, venture_evaluations.stage, lifecycle_progress.stage. FR-4: Update database CHECK constraints (40 -> 25). DEPENDS ON: US-001 (archive). BLOCKS: US-005 (stages config), US-006 (verification)",
+      "implementation_approach": "1. Query information_schema for current constraints. 2. Build remapping logic from stages_v2.yaml. 3. Generate ALTER TABLE statements. 4. Execute with transaction. 5. Verify with test insert.",
+      "test_scenarios": [
+        {
+          "id": "TC-003-1",
+          "type": "unit",
+          "description": "Analyze identifies all stage CHECK constraints"
+        },
+        {
+          "id": "TC-003-2",
+          "type": "integration",
+          "description": "New constraint rejects stage=26 insert"
+        },
+        {
+          "id": "TC-003-3",
+          "type": "integration",
+          "description": "Rollback restores original constraint"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/vision-transition/US-003-constraint-migration.spec.ts",
+      "e2e_test_status": "not_created",
+      "validation_status": "pending",
+      "implementation_context": {
+        "migration_file": "database/migrations/20251206_stage_constraint_25_max.sql",
+        "rollback_file": "database/migrations/20251206_stage_constraint_25_max_rollback.sql",
+        "affected_tables": [
+          "ventures",
+          "venture_evaluations",
+          "lifecycle_progress"
+        ],
+        "stage_mapping_source": "config/stages_v2.yaml",
+        "constraint_pattern": "CHECK (stage >= 1 AND stage <= 25)",
+        "functional_requirement": "FR-4",
+        "dependency_notes": "Depends on US-001. Blocks US-005, US-006."
+      },
+      "architecture_references": [
+        "database/migrations/*.sql (migration pattern)",
+        "supabase/migrations/*.sql (Supabase migration format)"
+      ],
+      "example_code_patterns": [
+        "ALTER TABLE ventures DROP CONSTRAINT ventures_stage_check;",
+        "ALTER TABLE ventures ADD CONSTRAINT ventures_stage_check CHECK (stage >= 1 AND stage <= 25);"
+      ],
+      "testing_scenarios": [],
+      "user_story": "As a Database Administrator, I want to update all database CHECK constraints from max(40) to max(25) stages through a reversible migration with pre/post validation, so that I can enforce the new 25-stage lifecycle at the database level, preventing any code from accidentally creating or referencing invalid stage numbers, while maintaining the ability to rollback if issues are discovered during testing"
+    },
+    {
+      "story_key": "SD-VISION-TRANSITION-001:US-004",
+      "prd_id": "PRD-SD-VISION-TRANSITION-001",
+      "sd_id": "SD-VISION-TRANSITION-001",
+      "title": "Zod Schema Validation Updates for 25-Stage Lifecycle",
+      "user_role": "Frontend Developer",
+      "user_want": "update all Zod validation schemas from .max(40) to .max(25) with comprehensive test coverage verifying the new constraints",
+      "user_benefit": "I can catch invalid stage values at the application layer before they reach the database, providing immediate user feedback and preventing runtime errors, while TypeScript inference ensures compile-time safety",
+      "story_points": 3,
+      "priority": "high",
+      "status": "draft",
+      "acceptance_criteria": [
+        "Discovery - Identify all schemas requiring update: Given I want to find all Zod schemas with stage validation, When I run `grep -r \".max(40)\" src/schemas/`, Then Results show files containing stage max constraints: (1) src/schemas/ventures.ts, (2) src/schemas/evaluations.ts, (3) src/schemas/lifecycle.ts, (4) potentially others based on codebase",
+        "Happy path - Schema updates applied: Given All schema files have been identified, When I review src/schemas/ventures.ts after the update, Then The schema shows: (1) stage: z.number().int().min(1).max(25) (changed from 40), (2) JSDoc comment explaining the constraint, (3) TypeScript type inference still works correctly",
+        "Validation - Invalid stage rejected: Given Updated VentureSchema is imported in a form component, When User enters stage=26 in a form field AND submits, Then Zod validation: (1) rejects with error { path: [\"stage\"], message: \"Number must be less than or equal to 25\" }, (2) form displays error to user, (3) submission is blocked, (4) no API call is made",
+        "Valid boundary - Edge case acceptance: Given Updated schema with max(25) constraint, When I call VentureSchema.parse({ stage: 25, ...otherValidFields }), Then Validation passes, returns parsed object with stage=25, no errors thrown",
+        "Test coverage - All constraints verified: Given Unit tests exist for each updated schema, When I run `npm run test src/schemas/`, Then Tests verify: (1) stage=1 passes (minimum), (2) stage=25 passes (new maximum), (3) stage=26 fails with correct error message, (4) stage=40 fails (old maximum now invalid), (5) non-integer stage fails",
+        "Type safety - TypeScript inference: Given Schema update is complete, When I use z.infer<typeof VentureSchema> in code, Then TypeScript: (1) correctly infers stage type as number, (2) provides autocomplete for schema fields, (3) no type errors in dependent files after update"
+      ],
+      "definition_of_done": [
+        "All Zod schemas updated from max(40) to max(25)",
+        "JSDoc comments added explaining constraint",
+        "Unit tests for boundary conditions (1, 25, 26)",
+        "TypeScript compilation passes",
+        "No regression in dependent components",
+        "Schema changelog updated"
+      ],
+      "depends_on": [],
+      "blocks": [],
+      "technical_notes": "Schemas in src/schemas/. Use Zod v3.x. Ensure TypeScript strict mode compatibility. Update related API validation if using tRPC. FR-5: Update Zod validation schemas (.max(40) -> .max(25)). DEPENDS ON: US-002 (SD cleanup). BLOCKS: US-006 (verification)",
+      "implementation_approach": "1. Grep for all .max(40) occurrences. 2. Update each schema file. 3. Add JSDoc comments. 4. Write/update unit tests. 5. Run TypeScript compiler. 6. Test dependent components.",
+      "test_scenarios": [
+        {
+          "id": "TC-004-1",
+          "type": "unit",
+          "description": "VentureSchema rejects stage=26"
+        },
+        {
+          "id": "TC-004-2",
+          "type": "unit",
+          "description": "VentureSchema accepts stage=25"
+        },
+        {
+          "id": "TC-004-3",
+          "type": "unit",
+          "description": "EvaluationSchema has matching constraint"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/vision-transition/US-004-zod-validation.spec.ts",
+      "e2e_test_status": "not_created",
+      "validation_status": "pending",
+      "implementation_context": {
+        "schema_files": [
+          "src/schemas/ventures.ts",
+          "src/schemas/evaluations.ts",
+          "src/schemas/lifecycle.ts"
+        ],
+        "test_files": [
+          "tests/unit/schemas/ventures.test.ts",
+          "tests/unit/schemas/evaluations.test.ts"
+        ],
+        "constraint_change": ".max(40) -> .max(25)",
+        "functional_requirement": "FR-5",
+        "dependency_notes": "Depends on US-002. Blocks US-006."
+      },
+      "architecture_references": [
+        "src/schemas/adaptive-naming.ts (Zod pattern example)",
+        "tests/unit/brand-variants.validation.test.js (test pattern)"
+      ],
+      "example_code_patterns": [
+        "const stageSchema = z.number().int().min(1).max(25).describe('Venture lifecycle stage (1-25)');",
+        "expect(() => schema.parse({ stage: 26 })).toThrow()"
+      ],
+      "testing_scenarios": [],
+      "user_story": "As a Frontend Developer, I want to update all Zod validation schemas from .max(40) to .max(25) with comprehensive test coverage verifying the new constraints, so that I can catch invalid stage values at the application layer before they reach the database, providing immediate user feedback and preventing runtime errors, while TypeScript inference ensures compile-time safety"
+    },
+    {
+      "story_key": "SD-VISION-TRANSITION-001:US-005",
+      "prd_id": "PRD-SD-VISION-TRANSITION-001",
+      "sd_id": "SD-VISION-TRANSITION-001",
+      "title": "Stages v2.0 Configuration Generation and Database Table",
+      "user_role": "Platform Engineer",
+      "user_want": "generate a stages_v2.yaml configuration file and create a lifecycle_stage_config database table that define the new 25-stage venture lifecycle",
+      "user_benefit": "I have a single source of truth for stage definitions that both documentation and code can reference, ensuring consistency between frontend display, backend validation, and database constraints, eliminating the 40% configuration drift we experienced with the previous system",
+      "story_points": 5,
+      "priority": "high",
+      "status": "draft",
+      "acceptance_criteria": [
+        "Configuration generation - YAML file creation: Given I want to define the new 25-stage lifecycle, When I create config/stages_v2.yaml with complete stage definitions, Then The YAML file contains for each of 25 stages: (1) stage_number (1-25), (2) stage_name (e.g., \"Ideation\"), (3) phase (DISCOVERY/VALIDATION/GROWTH/SCALE/MATURITY), (4) description, (5) entry_criteria array, (6) exit_criteria array, (7) typical_duration_weeks range, (8) key_metrics array",
+        "Database table creation - Migration: Given stages_v2.yaml is complete and validated, When I run the database migration for lifecycle_stage_config, Then Table is created with columns: (1) stage_number INT PRIMARY KEY, (2) stage_name VARCHAR(100) UNIQUE, (3) phase VARCHAR(50), (4) description TEXT, (5) entry_criteria JSONB, (6) exit_criteria JSONB, (7) typical_duration_weeks JSONB { min, max }, (8) key_metrics JSONB, (9) is_active BOOLEAN DEFAULT true, (10) created_at, updated_at timestamps",
+        "Data seeding - YAML to database sync: Given lifecycle_stage_config table exists AND stages_v2.yaml is valid, When I run `node scripts/seed-lifecycle-stages.mjs`, Then The script: (1) parses stages_v2.yaml, (2) inserts 25 records into lifecycle_stage_config, (3) validates all required fields present, (4) outputs \"Seeded 25 stage configurations\", (5) handles idempotent re-runs via upsert",
+        "Validation - Schema enforcement: Given stages_v2.yaml has a typo (missing required field), When I run the seeding script, Then The script: (1) validates YAML against JSON schema, (2) reports \"Stage 14: missing required field exit_criteria\", (3) exits with code 1, (4) makes NO database changes",
+        "Query access - Frontend retrieval: Given lifecycle_stage_config is populated, When Frontend calls API GET /api/lifecycle/stages, Then API returns: (1) array of 25 stage objects, (2) sorted by stage_number, (3) filtered to is_active=true, (4) response cached for 1 hour (immutable config)",
+        "Migration mapping - v1 to v2 stage correspondence: Given stages_v2.yaml includes legacy_stage_mappings section, When I need to convert old stage 35 to new system, Then YAML section shows: legacy_stage_mappings: { 35: 22, 40: 25, ... } allowing code to look up the v2.0 equivalent for any v1.0 stage number"
+      ],
+      "definition_of_done": [
+        "stages_v2.yaml with all 25 stage definitions",
+        "JSON schema for YAML validation",
+        "Database migration for lifecycle_stage_config",
+        "Seed script for YAML to database sync",
+        "API endpoint for stage retrieval",
+        "Legacy stage mapping included",
+        "Integration tests for seed and query"
+      ],
+      "depends_on": [],
+      "blocks": [],
+      "technical_notes": "Use js-yaml for parsing. JSON schema for validation. Consider generating TypeScript types from YAML. RLS policy: stages config is public read. FR-6: Generate stages_v2.yaml (25 stages). FR-7: Create lifecycle_stage_config table. DEPENDS ON: US-003 (constraints). BLOCKS: US-006 (verification)",
+      "implementation_approach": "1. Design YAML schema structure. 2. Write 25 stage definitions collaboratively. 3. Create JSON schema validator. 4. Write database migration. 5. Create seed script. 6. Add API endpoint.",
+      "test_scenarios": [
+        {
+          "id": "TC-005-1",
+          "type": "unit",
+          "description": "YAML parses without errors"
+        },
+        {
+          "id": "TC-005-2",
+          "type": "integration",
+          "description": "Seed script populates 25 records"
+        },
+        {
+          "id": "TC-005-3",
+          "type": "e2e",
+          "description": "API returns correct stage data"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/vision-transition/US-005-stages-config.spec.ts",
+      "e2e_test_status": "not_created",
+      "validation_status": "pending",
+      "implementation_context": {
+        "config_file": "config/stages_v2.yaml",
+        "schema_file": "config/schemas/stages_v2.schema.json",
+        "migration_file": "database/migrations/20251206_lifecycle_stage_config.sql",
+        "seed_script": "scripts/seed-lifecycle-stages.mjs",
+        "api_endpoint": "/api/lifecycle/stages",
+        "functional_requirements": [
+          "FR-6",
+          "FR-7"
+        ],
+        "dependency_notes": "Depends on US-003. Blocks US-006."
+      },
+      "architecture_references": [
+        "config/leo-protocol.yaml (YAML pattern)",
+        "database/seed/ (seed data pattern)"
+      ],
+      "example_code_patterns": [
+        "stages:\n  - stage_number: 1\n    stage_name: Ideation\n    phase: DISCOVERY\n    description: ...",
+        "await supabase.from('lifecycle_stage_config').upsert(stages, { onConflict: 'stage_number' })"
+      ],
+      "testing_scenarios": [],
+      "user_story": "As a Platform Engineer, I want to generate a stages_v2.yaml configuration file and create a lifecycle_stage_config database table that define the new 25-stage venture lifecycle, so that I have a single source of truth for stage definitions that both documentation and code can reference, ensuring consistency between frontend display, backend validation, and database constraints, eliminating the 40% configuration drift we experienced with the previous system"
+    },
+    {
+      "story_key": "SD-VISION-TRANSITION-001:US-006",
+      "prd_id": "PRD-SD-VISION-TRANSITION-001",
+      "sd_id": "SD-VISION-TRANSITION-001",
+      "title": "Migration Integrity Verification and Zero Broken References Check",
+      "user_role": "QA Engineer",
+      "user_want": "run a comprehensive verification script that validates all migration steps completed successfully with zero broken references across the entire system",
+      "user_benefit": "I can confidently approve the migration for production deployment knowing that every reference is valid, every constraint is enforced, and every component reflects the new 25-stage lifecycle, reducing post-deployment issues by 100%",
+      "story_points": 5,
+      "priority": "critical",
+      "status": "draft",
+      "acceptance_criteria": [
+        "Happy path - Full verification pass: Given All migration steps (US-001 through US-005) have been completed, When I run `node scripts/verify-migration.mjs --full`, Then The script outputs verification report: (1) \"Documentation archive: PASS (412 files archived)\", (2) \"SD cleanup: PASS (177 records processed)\", (3) \"CHECK constraints: PASS (4 tables updated to max=25)\", (4) \"Zod schemas: PASS (3 files updated)\", (5) \"Stage config: PASS (25 stages in database)\", (6) \"Broken references: PASS (0 found)\", (7) Overall: MIGRATION VERIFIED",
+        "Reference check - Foreign key integrity: Given Database has active ventures with stage references, When Verification runs FK integrity check, Then The check validates: (1) all ventures.stage values exist in lifecycle_stage_config, (2) all venture_evaluations.stage values are valid, (3) no orphaned records in related tables, (4) outputs \"Foreign key integrity: PASS\"",
+        "Reference check - Code references to old stages: Given Codebase may still reference stages 26-40, When Verification runs code analysis, Then The check: (1) greps for stage values > 25 in src/, (2) greps for \"stage: 40\" or \"stage: 35\" etc., (3) identifies any hardcoded old stage references, (4) outputs \"Code references: PASS (0 hardcoded stage>25 found)\" or lists violations",
+        "Failure mode - Broken reference detected: Given A venture record has stage=30 (invalid after migration), When I run verification script, Then The script: (1) detects invalid stage reference, (2) outputs \"FAIL: 1 venture with invalid stage [venture_id: xxx, stage: 30]\", (3) provides remediation: \"Run: UPDATE ventures SET stage=22 WHERE id=xxx (mapping per stages_v2.yaml)\", (4) overall status: MIGRATION INCOMPLETE",
+        "Verification report - JSON output: Given Verification script runs with --json flag, When Script completes, Then JSON report written to reports/migration-verification-YYYYMMDD.json containing: (1) timestamp, (2) checks array with { name, status, details, duration_ms }, (3) overall_status, (4) broken_references array (empty if pass), (5) remediation_steps (if any failures)",
+        "CI integration - Exit codes: Given Verification script is run in CI pipeline, When All checks pass, Then Script exits with code 0, CI pipeline continues",
+        "CI integration - Failure exit code: Given Any verification check fails, When Script completes with failures, Then Script exits with code 1, CI pipeline blocks deployment"
+      ],
+      "definition_of_done": [
+        "Verification script with all check categories",
+        "FK integrity validation",
+        "Code reference scanning",
+        "JSON report generation",
+        "CI-compatible exit codes",
+        "Remediation steps for failures",
+        "Integration test with mock failures"
+      ],
+      "depends_on": [],
+      "blocks": [],
+      "technical_notes": "Final verification gate. Should be run before EXEC->PLAN handoff. Report format matches LEO protocol validation output. FR-8: Verify zero broken references. DEPENDS ON: All previous stories (US-001 through US-005)",
+      "implementation_approach": "1. Create check runner framework. 2. Implement each check category. 3. Build report generator. 4. Add remediation suggestions. 5. Integrate with CI.",
+      "test_scenarios": [
+        {
+          "id": "TC-006-1",
+          "type": "unit",
+          "description": "Check runner executes all checks in order"
+        },
+        {
+          "id": "TC-006-2",
+          "type": "integration",
+          "description": "FK check detects invalid stage reference"
+        },
+        {
+          "id": "TC-006-3",
+          "type": "e2e",
+          "description": "Full verification passes on clean migration"
+        }
+      ],
+      "e2e_test_path": "tests/e2e/vision-transition/US-006-verification.spec.ts",
+      "e2e_test_status": "not_created",
+      "validation_status": "pending",
+      "implementation_context": {
+        "script_file": "scripts/verify-migration.mjs",
+        "report_location": "reports/migration-verification-YYYYMMDD.json",
+        "check_categories": [
+          "documentation_archive",
+          "sd_cleanup",
+          "check_constraints",
+          "zod_schemas",
+          "stage_config",
+          "broken_references"
+        ],
+        "ci_integration": ".github/workflows/migration-gate.yml",
+        "functional_requirement": "FR-8",
+        "dependency_notes": "Depends on US-001, US-002, US-003, US-004, US-005."
+      },
+      "architecture_references": [
+        "scripts/verify-handoff-plan-to-exec.js (verification pattern)",
+        "scripts/modules/handoff/executors/ (check framework)"
+      ],
+      "example_code_patterns": [
+        "const checks = [archiveCheck, cleanupCheck, constraintCheck, zodCheck, stageCheck, refCheck];",
+        "for (const check of checks) { results.push(await check.run()); }"
+      ],
+      "testing_scenarios": [],
+      "user_story": "As a QA Engineer, I want to run a comprehensive verification script that validates all migration steps completed successfully with zero broken references across the entire system, so that I can confidently approve the migration for production deployment knowing that every reference is valid, every constraint is enforced, and every component reflects the new 25-stage lifecycle, reducing post-deployment issues by 100%"
+    }
+  ],
+  "summary": {
+    "priority_breakdown": {
+      "critical": 4,
+      "high": 2,
+      "medium": 0,
+      "low": 0
+    },
+    "implementation_sequence": [
+      "US-001 (archive docs) - No dependencies - FR-1",
+      "US-002 (SD cleanup) - No dependencies - FR-2, FR-3",
+      "US-003 (CHECK constraints) - Depends on US-001 - FR-4",
+      "US-004 (Zod schemas) - Depends on US-002 - FR-5",
+      "US-005 (stages config) - Depends on US-003 - FR-6, FR-7",
+      "US-006 (verification) - Depends on US-001 through US-005 - FR-8"
+    ]
+  }
+}
