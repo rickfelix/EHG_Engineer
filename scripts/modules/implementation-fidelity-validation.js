@@ -23,6 +23,74 @@ import {
 
 const execAsync = promisify(exec);
 
+// Cache for SD search terms to avoid repeated database queries
+const searchTermsCache = new Map();
+
+/**
+ * Get search terms for an SD (UUID + legacy_id)
+ * SD-VENTURE-STAGE0-UI-001: Commits use legacy_id, not UUID
+ *
+ * @param {string} sd_id - Strategic Directive UUID
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<string[]>} - Array of search terms [uuid, legacy_id]
+ */
+async function getSDSearchTerms(sd_id, supabase) {
+  // Check cache first
+  if (searchTermsCache.has(sd_id)) {
+    return searchTermsCache.get(sd_id);
+  }
+
+  const searchTerms = [sd_id];
+
+  try {
+    if (supabase) {
+      const { data: sd } = await supabase
+        .from('strategic_directives_v2')
+        .select('legacy_id')
+        .eq('id', sd_id)
+        .single();
+      if (sd?.legacy_id) {
+        searchTerms.push(sd.legacy_id);
+      }
+    }
+  } catch (_e) {
+    // Continue with UUID only if can't get legacy_id
+  }
+
+  // Cache the result
+  searchTermsCache.set(sd_id, searchTerms);
+  return searchTerms;
+}
+
+/**
+ * Execute git log search for any of the SD search terms
+ * Returns the combined results for UUID and legacy_id
+ *
+ * @param {string} cmd - Git command template with ${TERM} placeholder
+ * @param {string[]} searchTerms - Array of search terms
+ * @param {Object} options - execAsync options
+ * @returns {Promise<string>} - Combined stdout from all searches
+ */
+async function gitLogForSD(cmdTemplate, searchTerms, options = {}) {
+  const results = [];
+
+  for (const term of searchTerms) {
+    try {
+      const cmd = cmdTemplate.replace(/\$\{TERM\}/g, term);
+      const { stdout } = await execAsync(cmd, options);
+      if (stdout.trim()) {
+        results.push(stdout.trim());
+      }
+    } catch (_e) {
+      // Continue to next term
+    }
+  }
+
+  // Return unique lines combined from all searches
+  const allLines = results.join('\n').split('\n').filter(Boolean);
+  return [...new Set(allLines)].join('\n');
+}
+
 /**
  * Detect which repository contains the implementation for this SD
  * Returns the root path of the implementation repository
@@ -42,21 +110,9 @@ async function detectImplementationRepo(sd_id, supabase) {
 
   // SD-VENTURE-STAGE0-UI-001: Also search by legacy_id (SD-XXX-001 format)
   // since commits often use legacy_id instead of UUID
-  let searchTerms = [sd_id];
-  try {
-    if (supabase) {
-      const { data: sd } = await supabase
-        .from('strategic_directives_v2')
-        .select('legacy_id, title')
-        .eq('id', sd_id)
-        .single();
-      if (sd?.legacy_id) {
-        searchTerms.push(sd.legacy_id);
-        console.log(`   📋 Also searching for legacy_id: ${sd.legacy_id}`);
-      }
-    }
-  } catch (_e) {
-    // Continue with UUID only if can't get legacy_id
+  const searchTerms = await getSDSearchTerms(sd_id, supabase);
+  if (searchTerms.length > 1) {
+    console.log(`   📋 Also searching for legacy_id: ${searchTerms[1]}`);
   }
 
   for (const repo of repos) {
@@ -191,10 +247,17 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
   // ===================================================================
   console.log('\n[PREFLIGHT] Checking for unresolved ambiguities...');
 
+  // SD-VENTURE-STAGE0-UI-001: Search by both UUID and legacy_id
   try {
     // Get all changes for this SD
-    const { stdout: gitLog } = await execAsync(`git log --all --grep="${sd_id}" --format="%H" -n 1`);
-    const commitHash = gitLog.trim();
+    const searchTerms = await getSDSearchTerms(sd_id, supabase);
+    const implementationRepo = await detectImplementationRepo(sd_id, supabase);
+    const gitLog = await gitLogForSD(
+      `git -C "${implementationRepo}" log --all --grep="\${TERM}" --format="%H" -n 1`,
+      searchTerms,
+      { timeout: 10000 }
+    );
+    const commitHash = gitLog.trim().split('\n')[0]; // Take first commit if multiple
 
     if (commitHash) {
       // Get diff of the commit to check for problematic comments
@@ -296,10 +359,17 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
   // ===================================================================
   console.log('\n[PREFLIGHT] Checking for stubbed/incomplete code...');
 
+  // SD-VENTURE-STAGE0-UI-001: Search by both UUID and legacy_id
   try {
-    // Get all changes for this SD
-    const { stdout: gitLog } = await execAsync(`git log --all --grep="${sd_id}" --format="%H" -n 1`);
-    const commitHash = gitLog.trim();
+    // Get all changes for this SD (reuse cached searchTerms)
+    const searchTermsStub = await getSDSearchTerms(sd_id, supabase);
+    const implementationRepoStub = await detectImplementationRepo(sd_id, supabase);
+    const gitLogStub = await gitLogForSD(
+      `git -C "${implementationRepoStub}" log --all --grep="\${TERM}" --format="%H" -n 1`,
+      searchTermsStub,
+      { timeout: 10000 }
+    );
+    const commitHash = gitLogStub.trim().split('\n')[0]; // Take first commit if multiple
 
     if (commitHash) {
       // Get diff of the commit to check for stubbed code
@@ -525,10 +595,13 @@ async function validateDesignFidelity(sd_id, designAnalysis, validation, supabas
   console.log('\n   [A1] UI Components Implementation...');
 
   // Look for component files in git commits (use detected repo)
+  // SD-VENTURE-STAGE0-UI-001: Search by both UUID and legacy_id
   try {
     const implementationRepo = await detectImplementationRepo(sd_id, supabase);
-    const { stdout: gitLog } = await execAsync(
-      `git -C "${implementationRepo}" log --all --grep="${sd_id}" --name-only --pretty=format:""`,
+    const searchTerms = await getSDSearchTerms(sd_id, supabase);
+    const gitLog = await gitLogForSD(
+      `git -C "${implementationRepo}" log --all --grep="\${TERM}" --name-only --pretty=format:""`,
+      searchTerms,
       { timeout: 10000 }
     );
 
@@ -589,10 +662,14 @@ async function validateDesignFidelity(sd_id, designAnalysis, validation, supabas
   console.log('\n   [A3] User Actions Support...');
 
   // Look for CRUD-related code changes
+  // SD-VENTURE-STAGE0-UI-001: Search by both UUID and legacy_id
   try {
-    const { stdout: gitDiff } = await execAsync(
-      `git log --all --grep="${sd_id}" --pretty=format:"" --patch`,
-      { cwd: process.cwd(), timeout: 15000 }
+    const searchTerms = await getSDSearchTerms(sd_id, supabase);
+    const implementationRepo = await detectImplementationRepo(sd_id, supabase);
+    const gitDiff = await gitLogForSD(
+      `git -C "${implementationRepo}" log --all --grep="\${TERM}" --pretty=format:"" --patch`,
+      searchTerms,
+      { timeout: 15000 }
     );
 
     const hasCRUD = gitDiff.toLowerCase().includes('create') ||
@@ -756,10 +833,14 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
   // B2: Check for RLS policies (5 points)
   console.log('\n   [B2] RLS Policies...');
 
+  // SD-VENTURE-STAGE0-UI-001: Search by both UUID and legacy_id
   try {
-    const { stdout: gitDiff } = await execAsync(
-      `git log --all --grep="${sd_id}" --pretty=format:"" --patch`,
-      { cwd: process.cwd(), timeout: 15000 }
+    const searchTerms = await getSDSearchTerms(sd_id, supabase);
+    const implementationRepo = await detectImplementationRepo(sd_id, supabase);
+    const gitDiff = await gitLogForSD(
+      `git -C "${implementationRepo}" log --all --grep="\${TERM}" --pretty=format:"" --patch`,
+      searchTerms,
+      { timeout: 15000 }
     );
 
     const hasRLS = gitDiff.includes('CREATE POLICY') ||
@@ -826,87 +907,71 @@ async function validateDataFlowAlignment(sd_id, designAnalysis, databaseAnalysis
   // C1: Check for database query code (10 points)
   console.log('\n   [C1] Database Query Integration...');
 
+  // SD-VENTURE-STAGE0-UI-001: Search by both UUID and legacy_id, and get patch data once for all C checks
+  let gitDiff = '';
   try {
-    const { stdout: gitDiff } = await execAsync(
-      `git log --all --grep="${sd_id}" --pretty=format:"" --patch`,
-      { cwd: process.cwd(), timeout: 15000 }
+    const searchTerms = await getSDSearchTerms(sd_id, supabase);
+    const implementationRepo = await detectImplementationRepo(sd_id, supabase);
+    gitDiff = await gitLogForSD(
+      `git -C "${implementationRepo}" log --all --grep="\${TERM}" --pretty=format:"" --patch`,
+      searchTerms,
+      { timeout: 15000 }
     );
+  } catch (_e) {
+    gitDiff = '';
+  }
 
-    const hasQueries = gitDiff.includes('.select(') ||
-                       gitDiff.includes('.insert(') ||
-                       gitDiff.includes('.update(') ||
-                       gitDiff.includes('.from(');
+  const hasQueries = gitDiff.includes('.select(') ||
+                     gitDiff.includes('.insert(') ||
+                     gitDiff.includes('.update(') ||
+                     gitDiff.includes('.from(');
 
-    if (hasQueries) {
-      sectionScore += 10;
-      sectionDetails.database_queries_found = true;
-      console.log('   ✅ Database queries found in code changes');
-    } else {
-      validation.warnings.push('[C1] No database queries detected in code');
-      sectionScore += 5; // Partial credit
-      console.log('   ⚠️  No database queries detected (5/10)');
-    }
-  } catch (_error) {
-    sectionScore += 5; // Partial credit on error
-    console.log('   ⚠️  Cannot verify database queries (5/10)');
+  if (hasQueries) {
+    sectionScore += 10;
+    sectionDetails.database_queries_found = true;
+    console.log('   ✅ Database queries found in code changes');
+  } else {
+    validation.warnings.push('[C1] No database queries detected in code');
+    sectionScore += 5; // Partial credit
+    console.log('   ⚠️  No database queries detected (5/10)');
   }
 
   // C2: Check for form/UI integration (10 points)
   console.log('\n   [C2] Form/UI Integration...');
 
-  try {
-    const { stdout: gitDiff } = await execAsync(
-      `git log --all --grep="${sd_id}" --pretty=format:"" --patch`,
-      { cwd: process.cwd(), timeout: 15000 }
-    );
+  const hasFormIntegration = gitDiff.includes('useState') ||
+                              gitDiff.includes('useForm') ||
+                              gitDiff.includes('onSubmit') ||
+                              gitDiff.includes('<form') ||
+                              gitDiff.includes('Input') ||
+                              gitDiff.includes('Button');
 
-    const hasFormIntegration = gitDiff.includes('useState') ||
-                                gitDiff.includes('useForm') ||
-                                gitDiff.includes('onSubmit') ||
-                                gitDiff.includes('<form') ||
-                                gitDiff.includes('Input') ||
-                                gitDiff.includes('Button');
-
-    if (hasFormIntegration) {
-      sectionScore += 10;
-      sectionDetails.form_integration_found = true;
-      console.log('   ✅ Form/UI integration found');
-    } else {
-      validation.warnings.push('[C2] No form/UI integration detected');
-      sectionScore += 5; // Partial credit
-      console.log('   ⚠️  No form/UI integration detected (5/10)');
-    }
-  } catch (_error) {
-    sectionScore += 5; // Partial credit on error
-    console.log('   ⚠️  Cannot verify form integration (5/10)');
+  if (hasFormIntegration) {
+    sectionScore += 10;
+    sectionDetails.form_integration_found = true;
+    console.log('   ✅ Form/UI integration found');
+  } else {
+    validation.warnings.push('[C2] No form/UI integration detected');
+    sectionScore += 5; // Partial credit
+    console.log('   ⚠️  No form/UI integration detected (5/10)');
   }
 
   // C3: Check for data validation (5 points)
   console.log('\n   [C3] Data Validation...');
 
-  try {
-    const { stdout: gitDiff } = await execAsync(
-      `git log --all --grep="${sd_id}" --pretty=format:"" --patch`,
-      { cwd: process.cwd(), timeout: 15000 }
-    );
+  const hasValidation = gitDiff.includes('zod') ||
+                        gitDiff.includes('validate') ||
+                        gitDiff.includes('schema') ||
+                        gitDiff.includes('.required()');
 
-    const hasValidation = gitDiff.includes('zod') ||
-                          gitDiff.includes('validate') ||
-                          gitDiff.includes('schema') ||
-                          gitDiff.includes('.required()');
-
-    if (hasValidation) {
-      sectionScore += 5;
-      sectionDetails.data_validation_found = true;
-      console.log('   ✅ Data validation found');
-    } else {
-      validation.warnings.push('[C3] No data validation detected');
-      sectionScore += 3; // Partial credit
-      console.log('   ⚠️  No data validation detected (3/5)');
-    }
-  } catch (_error) {
-    sectionScore += 3; // Partial credit on error
-    console.log('   ⚠️  Cannot verify data validation (3/5)');
+  if (hasValidation) {
+    sectionScore += 5;
+    sectionDetails.data_validation_found = true;
+    console.log('   ✅ Data validation found');
+  } else {
+    validation.warnings.push('[C3] No data validation detected');
+    sectionScore += 3; // Partial credit
+    console.log('   ⚠️  No data validation detected (3/5)');
   }
 
   validation.score += sectionScore;
@@ -1024,10 +1089,14 @@ async function validateEnhancedTesting(sd_id, designAnalysis, databaseAnalysis, 
   // D2: Check for database migration tests (2 points - MINOR)
   console.log('\n   [D2] Database Migration Tests...');
 
+  // SD-VENTURE-STAGE0-UI-001: Search by both UUID and legacy_id
   try {
-    const { stdout: gitLog } = await execAsync(
-      `git log --all --grep="${sd_id}" --name-only --pretty=format:""`,
-      { cwd: process.cwd(), timeout: 10000 }
+    const searchTerms = await getSDSearchTerms(sd_id, supabase);
+    const implementationRepo = await detectImplementationRepo(sd_id, supabase);
+    const gitLog = await gitLogForSD(
+      `git -C "${implementationRepo}" log --all --grep="\${TERM}" --name-only --pretty=format:""`,
+      searchTerms,
+      { timeout: 10000 }
     );
 
     const hasMigrationTests = gitLog.includes('migration') && gitLog.includes('test');
