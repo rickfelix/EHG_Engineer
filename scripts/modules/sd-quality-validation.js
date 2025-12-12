@@ -183,9 +183,10 @@ export async function validateSDQuality(sd) {
 /**
  * Validate retrospective quality using AI-powered Russian Judge rubric
  * @param {Object} retrospective - Retrospective object from database
+ * @param {Object} sd - Strategic Directive (optional, enables orchestrator-aware evaluation)
  * @returns {Promise<Object>} Validation result (async now - calls OpenAI)
  */
-export async function validateRetrospectiveQuality(retrospective) {
+export async function validateRetrospectiveQuality(retrospective, sd = null) {
   const retroId = retrospective?.id || 'Unknown';
   const sdId = retrospective?.sd_id || 'Unknown';
 
@@ -205,8 +206,9 @@ export async function validateRetrospectiveQuality(retrospective) {
 
   try {
     // Use AI-powered Russian Judge rubric
+    // Pass SD for orchestrator-aware evaluation (affects threshold and criteria guidance)
     const rubric = new RetrospectiveQualityRubric();
-    const result = await rubric.validateRetrospectiveQuality(retrospective);
+    const result = await rubric.validateRetrospectiveQuality(retrospective, sd);
 
     // Parse arrays for backward compatibility
     let keyLearnings = retrospective.key_learnings || [];
@@ -301,8 +303,9 @@ export async function validateSDCompletionReadiness(sd, retrospective = null) {
   result.warnings.push(...sdQuality.warnings);
 
   // Validate retrospective if provided (async now)
+  // Pass SD for orchestrator-aware evaluation (orchestrators get lenient scoring)
   if (retrospective) {
-    const retroQuality = await validateRetrospectiveQuality(retrospective);
+    const retroQuality = await validateRetrospectiveQuality(retrospective, sd);
     result.retroQuality = retroQuality;
     result.issues.push(...retroQuality.issues);
     result.warnings.push(...retroQuality.warnings);

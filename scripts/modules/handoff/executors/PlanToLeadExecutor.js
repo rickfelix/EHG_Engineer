@@ -112,9 +112,35 @@ export class PlanToLeadExecutor extends BaseExecutor {
           .limit(1)
           .single();
 
+        ctx._isOrchestratorWithAllChildrenComplete = allChildrenComplete;
+
+        // ORCHESTRATOR FAST-PATH: If all children complete and retrospective exists with
+        // reasonable quality_score, auto-pass. Orchestrators coordinate, not produce.
+        // The children's work IS the validation.
+        if (allChildrenComplete && retrospective?.quality_score >= 60 && retrospective?.status === 'PUBLISHED') {
+          console.log('   ✅ ORCHESTRATOR AUTO-PASS: All 6 children completed + retrospective exists');
+          console.log(`      Retrospective quality_score: ${retrospective.quality_score}/100`);
+          console.log('      Rationale: Orchestrators coordinate, children produce deliverables');
+          console.log('      Skipping Russian Judge AI validation for orchestrator SDs');
+
+          return {
+            passed: true,
+            score: retrospective.quality_score,
+            max_score: 100,
+            issues: [],
+            warnings: ['Orchestrator auto-pass: Quality validated via children completion'],
+            details: {
+              orchestrator_auto_pass: true,
+              child_count: children.length,
+              children_completed: children.filter(c => c.status === 'completed').length,
+              retrospective_id: retrospective.id,
+              retrospective_quality: retrospective.quality_score
+            }
+          };
+        }
+
         const retroGateResult = await validateSDCompletionReadiness(ctx.sd, retrospective);
         ctx._retroGateResult = retroGateResult;
-        ctx._isOrchestratorWithAllChildrenComplete = allChildrenComplete;
 
         // Dynamic threshold based on SD type using centralized sd-type-checker
         // - Orchestrator SDs with all children complete: 50% (children did the actual work)

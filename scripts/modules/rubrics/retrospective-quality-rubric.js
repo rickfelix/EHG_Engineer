@@ -378,6 +378,8 @@ Duration: ${retrospective.duration_days || 'Unknown'} days`;
           weighted_score: assessment.weightedScore,
           threshold: assessment.threshold, // Dynamic threshold based on sd_type
           sd_type: assessment.sd_type,
+          is_orchestrator: assessment.is_orchestrator, // Orchestrator awareness
+          child_count: assessment.child_count, // Number of child SDs
           cost_usd: assessment.cost,
           duration_ms: assessment.duration,
           sd_context_included: !!sd,
