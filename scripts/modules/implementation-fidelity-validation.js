@@ -34,23 +34,44 @@ const execAsync = promisify(exec);
  * @param {string} sd_id - Strategic Directive ID
  * @returns {Promise<string>} - Root path of implementation repository
  */
-async function detectImplementationRepo(sd_id) {
+async function detectImplementationRepo(sd_id, supabase) {
   const repos = [
     '/mnt/c/_EHG/ehg',           // Application repo (priority)
     '/mnt/c/_EHG/EHG_Engineer'   // Governance repo (fallback)
   ];
 
-  for (const repo of repos) {
-    try {
-      // Check if this repo has commits for this SD
-      const { stdout } = await execAsync(`git -C "${repo}" log --all --grep="${sd_id}" --format="%H" -n 1 2>/dev/null || echo ""`);
-      if (stdout.trim()) {
-        console.log(`   💡 Implementation detected in: ${repo}`);
-        return repo;
+  // SD-VENTURE-STAGE0-UI-001: Also search by legacy_id (SD-XXX-001 format)
+  // since commits often use legacy_id instead of UUID
+  let searchTerms = [sd_id];
+  try {
+    if (supabase) {
+      const { data: sd } = await supabase
+        .from('strategic_directives_v2')
+        .select('legacy_id, title')
+        .eq('id', sd_id)
+        .single();
+      if (sd?.legacy_id) {
+        searchTerms.push(sd.legacy_id);
+        console.log(`   📋 Also searching for legacy_id: ${sd.legacy_id}`);
       }
-    } catch (_error) {
-      // Repo might not exist or not accessible, continue to next
-      continue;
+    }
+  } catch (_e) {
+    // Continue with UUID only if can't get legacy_id
+  }
+
+  for (const repo of repos) {
+    for (const term of searchTerms) {
+      try {
+        // Check if this repo has commits for this SD
+        const { stdout } = await execAsync(`git -C "${repo}" log --all --grep="${term}" --format="%H" -n 1 2>/dev/null || echo ""`);
+        if (stdout.trim()) {
+          console.log(`   💡 Implementation detected in: ${repo} (matched: ${term})`);
+          return repo;
+        }
+      } catch (_error) {
+        // Repo might not exist or not accessible, continue to next
+        continue;
+      }
     }
   }
 
@@ -505,7 +526,7 @@ async function validateDesignFidelity(sd_id, designAnalysis, validation, supabas
 
   // Look for component files in git commits (use detected repo)
   try {
-    const implementationRepo = await detectImplementationRepo(sd_id);
+    const implementationRepo = await detectImplementationRepo(sd_id, supabase);
     const { stdout: gitLog } = await execAsync(
       `git -C "${implementationRepo}" log --all --grep="${sd_id}" --name-only --pretty=format:""`,
       { timeout: 10000 }
@@ -909,7 +930,7 @@ async function validateEnhancedTesting(sd_id, designAnalysis, databaseAnalysis, 
 
   try {
     // Detect which repository contains the implementation
-    const implementationRepo = await detectImplementationRepo(sd_id);
+    const implementationRepo = await detectImplementationRepo(sd_id, supabase);
 
     const testDirs = [
       'tests/e2e',
