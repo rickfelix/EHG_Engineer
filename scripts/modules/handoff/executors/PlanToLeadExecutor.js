@@ -321,11 +321,99 @@ export class PlanToLeadExecutor extends BaseExecutor {
   }
 
   async executeSpecific(sdId, sd, options, gateResults) {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ORCHESTRATOR FAST-PATH: Parent SDs that coordinate children don't have PRDs
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Orchestrator SDs:
+    // - Don't produce code directly (children do)
+    // - Don't have their own PRDs (children have PRDs)
+    // - Don't have user stories (children have them)
+    // - Complete when ALL children complete
+    // - Already passed RETROSPECTIVE_QUALITY_GATE via orchestrator auto-pass
+    //
+    // For orchestrators, we skip PRD/user story validation entirely and proceed
+    // directly to status transitions.
+    // ═══════════════════════════════════════════════════════════════════════════
+    const { data: children } = await this.supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_id, title, status')
+      .eq('parent_sd_id', sdId);
+
+    const isOrchestrator = children && children.length > 0;
+    const allChildrenComplete = isOrchestrator && children.every(c => c.status === 'completed');
+
+    if (isOrchestrator && allChildrenComplete) {
+      console.log('\n📂 ORCHESTRATOR SD COMPLETION PATH');
+      console.log('═'.repeat(50));
+      console.log(`   This is a PARENT ORCHESTRATOR with ${children.length} child SDs`);
+      console.log('   All children completed - orchestrator validates via children');
+      console.log('   Skipping PRD/user story validation (orchestrators coordinate, not produce)');
+      console.log('\n   Child SDs:');
+      children.forEach(c => console.log(`   ✅ ${c.sd_id}: ${c.title} [${c.status}]`));
+
+      // Orchestrator-specific state transitions
+      const handoffId = `PLAN-to-LEAD-ORCHESTRATOR-${sdId}-${Date.now()}`;
+
+      console.log('\n📊 STATE TRANSITIONS: Orchestrator Final Status Updates');
+      console.log('-'.repeat(50));
+
+      // Update SD status to completed (orchestrators go straight to completed)
+      const { error: sdError } = await this.supabase
+        .from('strategic_directives_v2')
+        .update({
+          status: 'completed',
+          current_phase: 'LEAD',
+          progress_percentage: 100,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', sdId);
+
+      if (sdError) {
+        console.log(`   ⚠️  SD update error: ${sdError.message}`);
+      } else {
+        console.log('   ✅ Orchestrator SD status transitioned: → completed');
+        console.log('   ✅ Progress set to 100% (all children complete)');
+      }
+
+      console.log('\n🎉 ORCHESTRATOR COMPLETION: All children finished, parent SD marked complete');
+      console.log('📊 Handoff ID:', handoffId);
+
+      return {
+        success: true,
+        sdId: sdId,
+        handoffId: handoffId,
+        orchestrator: true,
+        childCount: children.length,
+        validation: {
+          complete: true,
+          score: 100,
+          issues: [],
+          warnings: [],
+          orchestrator_completion: true
+        },
+        qualityScore: 100
+      };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STANDARD SD PATH: Regular feature/infrastructure SDs with PRDs
+    // ═══════════════════════════════════════════════════════════════════════════
+
     // Load PRD
     const sdUuid = sd.uuid_id || sd.id;
     const prd = await this.prdRepo?.getBySdUuid(sdUuid);
 
     if (!prd) {
+      // For non-orchestrator SDs, missing PRD is an error
+      // But provide helpful context if this might be an orchestrator with incomplete children
+      if (isOrchestrator && !allChildrenComplete) {
+        const incomplete = children.filter(c => c.status !== 'completed');
+        return ResultBuilder.rejected(
+          'ORCHESTRATOR_CHILDREN_INCOMPLETE',
+          `Orchestrator SD has ${incomplete.length} incomplete child SDs - complete children first`,
+          { incompleteChildren: incomplete.map(c => ({ sd_id: c.sd_id, title: c.title, status: c.status })) }
+        );
+      }
       return ResultBuilder.rejected('NO_PRD', 'No PRD found - cannot verify work');
     }
 
