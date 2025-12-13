@@ -129,7 +129,7 @@ export class PlanToExecExecutor extends BaseExecutor {
     // Validates that PRD has exploration_summary with ≥3 file references
     gates.push({
       name: 'GATE_EXPLORATION_AUDIT',
-      validator: async (ctx) => {
+      validator: async (_ctx) => {
         console.log('\n📚 GATE: Exploration Audit');
         console.log('-'.repeat(50));
         return this._validateExplorationAudit(sd);

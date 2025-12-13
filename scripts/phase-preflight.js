@@ -68,14 +68,14 @@ async function validateDiscoveryGate(sdId) {
   const ADEQUATE_FILES = 10;
 
   // Check for existing PRD with exploration evidence
-  const { data: prd, error: prdError } = await supabase
+  const { data: prd } = await supabase
     .from('product_requirements_v2')
     .select('id, exploration_summary, metadata')
     .eq('directive_id', sdId)
     .single();
 
   // Also check SD metadata for exploration evidence
-  const { data: sd, error: sdError } = await supabase
+  const { data: sd } = await supabase
     .from('strategic_directives_v2')
     .select('metadata')
     .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
