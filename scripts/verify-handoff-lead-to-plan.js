@@ -88,11 +88,54 @@ class LeadToPlanVerifier {
         });
       }
 
-      // 3.5. AI Quality Assessment (Russian Judge)
+      // 3.5. AI SD Type Classification (GPT-4o Mini)
+      // Validates sd_type matches actual scope/content with worst-case handoff enforcement
+      try {
+        console.log('\n🤖 AI SD TYPE CLASSIFICATION');
+        console.log('-'.repeat(50));
+
+        const { default: SDTypeClassifier } = await import('./modules/sd-type-classifier.js');
+        const classifier = new SDTypeClassifier();
+        const classification = await classifier.classify(sd);
+
+        console.log(`   Declared Type: ${classification.declaredType}`);
+        console.log(`   Detected Type: ${classification.detectedType}`);
+        console.log(`   Confidence: ${classification.confidence}%`);
+        console.log(`   Reasoning: ${classification.reasoning}`);
+
+        if (classification.mismatch) {
+          console.log('\n   ⚠️  TYPE MISMATCH DETECTED');
+          console.log(`   ${classification.recommendation}`);
+
+          if (classification.confidence >= 80) {
+            // High confidence mismatch - add as warning (not blocking in Phase 1)
+            sdValidation.warnings.push(
+              `sd_type mismatch: declared '${classification.declaredType}' but AI detected '${classification.detectedType}' ` +
+              `with ${classification.confidence}% confidence. ${classification.reasoning}`
+            );
+          }
+        }
+
+        if (classification.usedWorstCase) {
+          console.log('\n   ⚠️  WORST-CASE HANDOFFS APPLIED');
+          console.log(`   Due to low confidence (${classification.confidence}%), using most restrictive handoff requirements:`);
+          console.log(`   ${classification.effectiveHandoffs.join(' → ')}`);
+
+          // Store effective handoffs in SD metadata for later enforcement
+          sdValidation.effectiveHandoffs = classification.effectiveHandoffs;
+        }
+
+        console.log('\n   ✅ Classification complete');
+      } catch (classifierError) {
+        console.log(`\n   ⚠️  AI Classification unavailable: ${classifierError.message}`);
+        console.log('   Falling back to keyword-based validation');
+      }
+
+      // 3.6. AI Quality Assessment (Russian Judge)
       const russianJudgeEnabled = process.env.RUSSIAN_JUDGE_ENABLED === 'true';
       if (russianJudgeEnabled) {
         try {
-          console.log('\\n🤖 AI QUALITY ASSESSMENT (Russian Judge)');
+          console.log('\n🤖 AI QUALITY ASSESSMENT (Russian Judge)');
           console.log('-'.repeat(50));
 
           const { SDQualityRubric } = await import('./modules/rubrics/sd-quality-rubric.js');
@@ -125,8 +168,11 @@ class LeadToPlanVerifier {
       }
 
       // 4. Check Strategic Directive status
-      if (sd.status !== 'active' && sd.status !== 'approved' && sd.status !== 'in_progress') {
-        return this.rejectHandoff(sdId, 'SD_STATUS', `SD status is '${sd.status}', expected 'active', 'approved', or 'in_progress'`);
+      // Accept 'draft' for new SDs (LEAD-TO-PLAN is the first transition)
+      // Note: 'approved' is not a valid DB status - removed from check
+      const validStatuses = ['draft', 'active', 'in_progress'];
+      if (!validStatuses.includes(sd.status)) {
+        return this.rejectHandoff(sdId, 'SD_STATUS', `SD status is '${sd.status}', expected one of: ${validStatuses.join(', ')}`);
       }
       
       // 5. Validate business impact and feasibility
@@ -294,11 +340,163 @@ class LeadToPlanVerifier {
       if (!sd.risks) validation.errors.push('Missing risk assessment');
       validation.valid = false;
     }
-    
+
+    // =========================================================================
+    // EARLY VALIDATION GATES (Added per SD-VISION-TRANSITION-001D6 retrospective)
+    // These validations prevent issues from being caught only at SD closure
+    // =========================================================================
+
+    // GATE: target_application vs deliverable type validation
+    // Root cause: SD-D6 had target_application=EHG_Engineer but UI components were in EHG app
+    if (sd.target_application && sd.scope) {
+      const scope = (sd.scope || '').toLowerCase();
+      const targetApp = sd.target_application;
+
+      // Patterns that suggest EHG app (frontend/UI work)
+      const ehgPatterns = ['ui', 'component', 'form', 'page', 'dialog', 'dashboard', 'stage', 'frontend', 'react'];
+      // Patterns that suggest EHG_Engineer (tooling/infrastructure)
+      const engineerPatterns = ['script', 'tooling', 'migration', 'protocol', 'handoff', 'agent', 'cli', 'database migration'];
+
+      const suggestsEHG = ehgPatterns.some(p => scope.includes(p));
+      const suggestsEngineer = engineerPatterns.some(p => scope.includes(p));
+
+      if (suggestsEHG && !suggestsEngineer && targetApp === 'EHG_Engineer') {
+        validation.warnings.push('target_application is \'EHG_Engineer\' but scope suggests UI/frontend work (EHG app). Verify target_application is correct.');
+      } else if (suggestsEngineer && !suggestsEHG && targetApp === 'EHG') {
+        validation.warnings.push('target_application is \'EHG\' but scope suggests tooling/infrastructure work (EHG_Engineer). Verify target_application is correct.');
+      }
+    }
+
+    // GATE: strategic_objectives SMART criteria validation
+    // Root cause: SD-D6 had generic objectives without Owner/Target/Baseline/Deadline
+    if (sd.strategic_objectives && Array.isArray(sd.strategic_objectives)) {
+      const smartKeywords = ['owner:', 'target:', 'baseline:', 'deadline:', 'due:'];
+      let smartObjectiveCount = 0;
+
+      sd.strategic_objectives.forEach((obj, index) => {
+        const objText = (typeof obj === 'string' ? obj : obj.description || '').toLowerCase();
+        const hasSmart = smartKeywords.some(kw => objText.includes(kw));
+
+        if (hasSmart) {
+          smartObjectiveCount++;
+        }
+      });
+
+      const smartRatio = smartObjectiveCount / sd.strategic_objectives.length;
+
+      if (smartRatio < 0.5) {
+        validation.warnings.push(`Only ${Math.round(smartRatio * 100)}% of strategic_objectives have SMART criteria (Owner/Target/Baseline/Deadline). Consider enhancing objectives for measurability.`);
+      }
+    }
+
+    // GATE: sd_type classification validation
+    // Root cause: SD-D6 was blocked because infrastructure SDs had wrong handoff requirements
+    // This gate validates that sd_type matches the actual scope/content of the SD
+    if (sd.sd_type && sd.scope) {
+      const detectedType = this.autoDetectSdType(sd);
+
+      if (detectedType.type !== sd.sd_type && detectedType.confidence >= 0.70) {
+        const confidencePercent = Math.round(detectedType.confidence * 100);
+        validation.warnings.push(
+          `sd_type is '${sd.sd_type}' but scope suggests '${detectedType.type}' (${confidencePercent}% confidence). ` +
+          `Matched keywords: ${detectedType.matchedKeywords.join(', ')}. ` +
+          'Verify sd_type is correct - wrong classification affects validation requirements.'
+        );
+      }
+    }
+
     validation.percentage = Math.round(validation.score);
     return validation;
   }
-  
+
+  /**
+   * Auto-detect SD type based on scope, title, and description keywords
+   * Returns: { type: string, confidence: number (0-1), matchedKeywords: string[] }
+   */
+  autoDetectSdType(sd) {
+    const text = `${sd.title || ''} ${sd.scope || ''} ${sd.description || ''}`.toLowerCase();
+
+    // Keyword patterns for each SD type (ordered by specificity)
+    const typePatterns = {
+      security: {
+        keywords: ['auth', 'authentication', 'authorization', 'rls', 'row level security',
+                   'permission', 'role', 'rbac', 'vulnerability', 'cve', 'owasp',
+                   'encryption', 'credential', 'secret', 'token', 'jwt', 'session'],
+        weight: 1.2 // Higher weight for security (specific domain)
+      },
+      database: {
+        keywords: ['schema', 'migration', 'table', 'column', 'index', 'postgres', 'supabase',
+                   'sql', 'query', 'rls policy', 'foreign key', 'constraint', 'trigger',
+                   'stored procedure', 'function', 'view', 'materialized'],
+        weight: 1.1
+      },
+      infrastructure: {
+        keywords: ['ci/cd', 'pipeline', 'github action', 'workflow', 'deploy', 'docker',
+                   'script', 'tooling', 'automation', 'build', 'bundle', 'lint', 'prettier',
+                   'eslint', 'pre-commit', 'hook', 'protocol', 'handoff', 'agent system',
+                   'mcp', 'leo protocol', 'devops', 'monitoring', 'logging'],
+        weight: 1.0
+      },
+      documentation: {
+        keywords: ['documentation', 'docs', 'readme', 'guide', 'tutorial', 'comment',
+                   'jsdoc', 'api doc', 'changelog', 'contributing', 'onboarding'],
+        weight: 0.9 // Lower weight - easily confused with other types
+      },
+      bugfix: {
+        keywords: ['bug', 'fix', 'error', 'issue', 'broken', 'crash', 'regression',
+                   'hotfix', 'patch', 'resolve', 'repair'],
+        weight: 1.0
+      },
+      refactor: {
+        keywords: ['refactor', 'restructure', 'reorganize', 'cleanup', 'technical debt',
+                   'code quality', 'architecture', 'modularize', 'extract', 'simplify'],
+        weight: 1.0
+      },
+      performance: {
+        keywords: ['performance', 'optimize', 'speed', 'latency', 'cache', 'memory',
+                   'cpu', 'load time', 'bundle size', 'lazy load', 'memoize', 'index'],
+        weight: 1.0
+      },
+      feature: {
+        keywords: ['feature', 'ui', 'component', 'page', 'form', 'dialog', 'modal',
+                   'dashboard', 'button', 'input', 'frontend', 'react', 'user interface',
+                   'ux', 'user experience', 'screen', 'view', 'layout', 'stage'],
+        weight: 0.8 // Lower weight - default fallback
+      }
+    };
+
+    let bestMatch = { type: 'feature', confidence: 0, matchedKeywords: [] };
+
+    for (const [type, config] of Object.entries(typePatterns)) {
+      const matchedKeywords = config.keywords.filter(kw => text.includes(kw));
+
+      if (matchedKeywords.length > 0) {
+        // Calculate confidence based on matches and weight
+        const baseConfidence = Math.min(matchedKeywords.length / 3, 1); // Cap at 3 keywords = 100%
+        const weightedConfidence = baseConfidence * config.weight;
+
+        if (weightedConfidence > bestMatch.confidence) {
+          bestMatch = {
+            type,
+            confidence: Math.min(weightedConfidence, 1), // Cap at 1.0
+            matchedKeywords
+          };
+        }
+      }
+    }
+
+    // If no strong match, default to feature with low confidence
+    if (bestMatch.confidence < 0.3) {
+      bestMatch = {
+        type: 'feature',
+        confidence: 0.3,
+        matchedKeywords: ['(default - no strong keyword matches)']
+      };
+    }
+
+    return bestMatch;
+  }
+
   /**
    * Validate strategic feasibility
    */

@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2025-12-11 7:40:40 PM
+**Generated**: 2025-12-13 8:09:22 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
@@ -326,8 +326,8 @@ This question is MANDATORY for all SDs that produce user-facing data. It should 
 **Run this command before creating PRD**:
 
 ```bash
-node scripts/phase-preflight.js --phase PLAN --sd-id <SD_UUID>
-node scripts/enrich-prd-with-research.js <SD_UUID>  # If available
+node scripts/phase-preflight.js --phase PLAN --sd-id <SD_ID>
+node scripts/enrich-prd-with-research.js <SD_ID>  # If available
 ```
 
 ## What This Does
@@ -383,10 +383,10 @@ Verify enrichment appears in PRD's "Reference Materials" section:
 
 ```bash
 # Before creating PRD (MANDATORY)
-node scripts/phase-preflight.js --phase PLAN --sd-id <SD_UUID>
+node scripts/phase-preflight.js --phase PLAN --sd-id <SD_ID>
 
 # Enrich PRD with research (if script exists)
-node scripts/enrich-prd-with-research.js <SD_UUID>
+node scripts/enrich-prd-with-research.js <SD_ID>
 
 # View category-specific lessons
 cat docs/summaries/lessons/<category>-lessons.md
@@ -566,6 +566,48 @@ Parent completes automatically after last child, but LEAD should verify:
 Sequential LEAD approval allows learning from earlier children to inform later decisions.
 
 
+## Vision V2 SD Handling (SD-VISION-V2-*)
+
+### MANDATORY: Vision Spec Reference Check
+
+**For ALL SDs with ID matching `SD-VISION-V2-*`:**
+
+Before LEAD approval, you MUST:
+
+1. **Read the SD's metadata.vision_spec_references** field
+2. **Read ALL files listed in `must_read_before_prd`**
+3. **Verify scope aligns with referenced spec sections**
+
+### Vision Document Locations
+
+| Spec | Path | Content |
+|------|------|---------|
+| Database Schema | `docs/vision/specs/01-database-schema.md` | Tables, RLS, functions |
+| API Contracts | `docs/vision/specs/02-api-contracts.md` | Endpoints, TypeScript interfaces |
+| UI Components | `docs/vision/specs/03-ui-components.md` | React components, layouts |
+| EVA Orchestration | `docs/vision/specs/04-eva-orchestration.md` | EVA modes, token budgets |
+| Agent Hierarchy | `docs/vision/specs/06-hierarchical-agent-architecture.md` | LTREE, CEOs, VPs |
+| Glass Cockpit | `VISION_V2_GLASS_COCKPIT.md` | Design philosophy |
+
+### LEAD Approval Gate for Vision V2 SDs
+
+**Additional questions for Vision V2 SDs:**
+
+1. **Spec Alignment**: Does the SD scope match the referenced spec sections?
+2. **25-Stage Insulation**: If SD touches agents/CEOs, does it maintain READ-ONLY access to venture_stage_work?
+3. **Vision Document Traceability**: Are specific spec sections cited in the SD description?
+
+### Implementation Guidance
+
+All Vision V2 SDs contain this metadata:
+```json
+"implementation_guidance": {
+  "critical_instruction": "REVIEW ALL VISION FILES REFERENCED BEFORE ANY IMPLEMENTATION",
+  "creation_mode": "CREATE_FROM_NEW",
+  "note": "Similar files may exist in the codebase that you can learn from, but we are creating from new."
+}
+```
+
 ## Parent-Child SD Phase Governance
 
 ## Parent-Child SD Phase Governance (PAT-PARENT-CHILD-001)
@@ -694,6 +736,6 @@ npm run sd:status    # Overall progress by track
 
 ---
 
-*Generated from database: 2025-12-11*
+*Generated from database: 2025-12-13*
 *Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

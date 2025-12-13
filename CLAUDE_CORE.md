@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-11 7:40:40 PM
+**Generated**: 2025-12-13 8:09:22 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -967,8 +967,8 @@ Strategic Directive (SD)
 ```
 
 **Implementation**:
-- PRD validation: Fetches SD via `prd.sd_uuid → strategic_directives_v2.uuid_id`
-- User Story validation: Fetches PRD via `user_story.prd_id → prds.id`
+- PRD validation: Fetches SD via `prd.sd_id → strategic_directives_v2.id`
+- User Story validation: Fetches PRD via `user_story.prd_id → product_requirements_v2.id`
 - Retrospective validation: Fetches SD via `retrospective.sd_id → strategic_directives_v2.sd_id`
 
 **Why**: Prevents locally optimal but strategically misaligned deliverables. For example, a PRD might have perfect technical architecture (score 10/10) but completely miss the strategic business objective (SD context reveals misalignment).
@@ -1125,7 +1125,7 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 2. **User calls**: `npm run handoff` (PLAN → EXEC)
 3. **validate-plan-handoff.js runs**:
    - Fetches PRD from database
-   - Fetches parent SD via `prd.sd_uuid`
+   - Fetches parent SD via `prd.sd_id`
    - Calls `PRDQualityRubric.validatePRDQuality(prd, sd)`
 4. **AI evaluator**:
    - Formats PRD content + SD context
@@ -1162,10 +1162,8 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 | Pattern ID | Category | Severity | Count | Trend | Top Solution |
 |------------|----------|----------|-------|-------|--------------|
 | PAT-003 | security | 🟠 high | 3 | 📉 | Add auth.uid() check to RLS policy USING |
-| PAT-AUTH-PW-001 | testing | 🟠 high | 2 | ➡️ | Use Supabase Admin API with service_role |
 | PAT-008 | deployment | 🟠 high | 2 | ➡️ | Check GitHub Actions secrets and package |
-| PAT-E2E-UI-001 | testing | 🟠 high | 1 | ➡️ | Verify UI exists before writing E2E test |
-| PAT-INTEG-GAP-001 | implementation | 🟠 high | 1 | ➡️ | Verify end-to-end flow manually before c |
+| PAT-MD-001 | database | 🔴 critical | 1 | ➡️ | Key Insight: PostgreSQL direct connectio |
 
 ### Prevention Checklists
 
@@ -1174,86 +1172,20 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 - [ ] Test with authenticated user context
 - [ ] Check policy applies to correct operations
 
-**testing**:
-- [ ] Store service_role key in .env file for programmatic user management
-- [ ] Add verify-test-user.cjs script to test suite for authentication validation
-- [ ] Run authentication verification BEFORE running E2E tests
-
 **deployment**:
 - [ ] Verify all required secrets are set in GitHub
 - [ ] Test locally with same Node version as CI
 - [ ] Check package-lock.json is committed
 
-**implementation**:
-- [ ] Include UI verification checkpoint in EXEC phase
-- [ ] Trace full stack before marking FR complete
-- [ ] Manual smoke test before E2E automation
+**database**:
+- [ ] Check SUPABASE_POOLER_URL availability in .env
+- [ ] Verify migration file exists before execution
+- [ ] Use SSL with rejectUnauthorized: false
 
 
 *Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
 
 
-## 📝 Recent Lessons (Last 30 Days)
-
-**From Published Retrospectives** - Apply these learnings proactively.
-
-### 1. Chairman Circuit Breaker System - Retrospective ⭐
-**Category**: PERFORMANCE_OPTIMIZATION | **Date**: 12/3/2025 | **Score**: 100
-
-**Key Improvements**:
-- Could add integration tests with actual Supabase calls
-- Dashboard visualization for circuit breaker states not yet implemented
-
-**Action Items**:
-- [ ] Apply withCircuitBreaker wrapper to EVA API calls in production
-- [ ] Create dashboard widget showing circuit breaker states
-
-### 2. SD-STAGE-09-001 Retrospective: EVA L0 Integration for Gap Analysis ⭐
-**Category**: APPLICATION_ISSUE | **Date**: 12/4/2025 | **Score**: 100
-
-**Key Improvements**:
-- SD missing success_metrics and key_principles - caused LEAD handoff rejection
-- User stories table has specific column requirements (user_role, user_want, user_benefit) - not intui...
-
-**Action Items**:
-- [ ] Document SD required fields (success_metrics, key_principles) in CLAUDE_LEAD.md
-- [ ] Add user_stories column requirements to CLAUDE_PLAN.md
-
-### 3. SD-STAGE4-AI-FIRST-UX-001 Comprehensive Retrospective ⭐
-**Category**: APPLICATION_ISSUE | **Date**: 11/15/2025 | **Score**: 100
-
-**Key Improvements**:
-- Unit test timeouts: 11/18 tests timing out (vitest async)
-- E2E test infrastructure: 28/32 failures (mock API config)
-
-**Action Items**:
-- [ ] Create SD-TESTING-INFRASTRUCTURE-FIX-001 for unit test timeout resolution
-- [ ] Fix E2E mock API configuration (28/32 test failures)
-
-### 4. SD-EVA-DECISION-001 Completion Retrospective ⭐
-**Category**: DATABASE_SCHEMA | **Date**: 12/4/2025 | **Score**: 100
-
-**Key Improvements**:
-- Database connection issues - psql timeouts required switching to Node.js Supabase client
-- RLS policy blocks for LEO protocol section inserts - needed service role key
-
-**Action Items**:
-- [ ] Use git worktrees for parallel SD work to prevent stash/branch conflicts
-- [ ] Always use database agent with service role for operations when RLS policies blo...
-
-### 5. Playwright Authentication Troubleshooting - Password Reset Solution ⭐
-**Category**: APPLICATION_ISSUE | **Date**: 11/19/2025 | **Score**: 100
-
-**Key Improvements**:
-- Initial confusion about which service_role key to use (EHG vs EHG_Engineer)
-- Multiple attempts with invalid service_role key before getting correct one
-
-**Action Items**:
-- [ ] Add reset-password.cjs script to EHG repository for future use
-- [ ] Document Supabase Admin API authentication troubleshooting in testing guide
-
-
-*Lessons auto-generated from `retrospectives` table. Query for full details.*
 
 
 ## Agent Responsibilities
@@ -1310,7 +1242,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ---
 
-*Generated from database: 2025-12-11*
+*Generated from database: 2025-12-13*
 *Protocol Version: 4.3.3*
-*Includes: Hot Patterns (5) + Recent Lessons (5)*
+*Includes: Hot Patterns (3) + Recent Lessons (0)*
 *Load this file first in all sessions*

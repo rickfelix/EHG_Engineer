@@ -3,11 +3,41 @@
  * Part of LEO Protocol Unified Handoff System refactor
  *
  * Manages recording of successful/failed handoffs and creates artifacts.
+ *
+ * IMPORTANT DISTINCTION (Root Cause Fix - SD-VENTURE-STAGE0-UI-001):
+ * - Phase TRANSITIONS (LEAD-TO-PLAN, PLAN-TO-EXEC, etc.) create artifacts in sd_phase_handoffs
+ *   because they transfer work from one phase to another with from_phase → to_phase
+ * - COMPLETION actions (LEAD-FINAL-APPROVAL) only record in leo_handoff_executions
+ *   because they don't transfer work - they complete the SD lifecycle
+ *
+ * The sd_phase_handoffs table has a constraint: to_phase IN ('LEAD', 'PLAN', 'EXEC')
+ * LEAD-FINAL-APPROVAL would parse to to_phase='APPROVAL' which violates this constraint.
+ * Instead of forcing it, we recognize that completion actions are fundamentally different.
  */
 
 import { randomUUID } from 'crypto';
 import ContentBuilder from '../content/ContentBuilder.js';
 import ValidationOrchestrator from '../validation/ValidationOrchestrator.js';
+
+/**
+ * Handoff types that are COMPLETION actions, not phase transitions.
+ * These only record in leo_handoff_executions, not sd_phase_handoffs.
+ *
+ * Why: sd_phase_handoffs has constraint to_phase IN ('LEAD', 'PLAN', 'EXEC')
+ * Completion actions don't have a valid to_phase - they end the lifecycle.
+ */
+const COMPLETION_ACTIONS = [
+  'LEAD-FINAL-APPROVAL'  // Completes SD lifecycle after PLAN-TO-LEAD
+];
+
+/**
+ * Check if a handoff type is a completion action (not a phase transition)
+ * @param {string} handoffType - Handoff type to check
+ * @returns {boolean} True if this is a completion action
+ */
+function isCompletionAction(handoffType) {
+  return COMPLETION_ACTIONS.includes(handoffType.toUpperCase());
+}
 
 export class HandoffRecorder {
   constructor(supabase, options = {}) {
@@ -17,6 +47,32 @@ export class HandoffRecorder {
     this.supabase = supabase;
     this.contentBuilder = options.contentBuilder || new ContentBuilder();
     this.validationOrchestrator = options.validationOrchestrator || new ValidationOrchestrator(supabase);
+  }
+
+  /**
+   * Resolve SD ID to UUID if it's a legacy_id
+   * SD-VENTURE-STAGE0-UI-001: Foreign keys require UUID, not legacy_id
+   * @param {string} sdId - Strategic Directive ID (UUID or legacy_id)
+   * @returns {Promise<string>} UUID
+   */
+  async _resolveToUUID(sdId) {
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
+    if (isUUID) {
+      return sdId;
+    }
+
+    const { data: sd } = await this.supabase
+      .from('strategic_directives_v2')
+      .select('id')
+      .eq('legacy_id', sdId)
+      .single();
+
+    if (sd) {
+      return sd.id;
+    }
+
+    // Return original if not found (will fail FK constraint, but with clear error)
+    return sdId;
   }
 
   /**
@@ -50,6 +106,9 @@ export class HandoffRecorder {
   async recordSuccess(handoffType, sdId, result, template = null) {
     const executionId = randomUUID();
 
+    // SD-VENTURE-STAGE0-UI-001: Resolve to UUID for FK constraints
+    const sdUuid = await this._resolveToUUID(sdId);
+
     // Normalize validation score
     const rawScore = result.qualityScore || result.totalScore || 100;
     const normalizedScore = this._normalizeValidationScore(rawScore);
@@ -61,7 +120,7 @@ export class HandoffRecorder {
       template_id: template?.id,
       from_agent: handoffType.split('-')[0],
       to_agent: handoffType.split('-')[2],
-      sd_id: sdId,
+      sd_id: sdUuid,
       prd_id: result.prdId,
       handoff_type: handoffType,
       status: 'accepted',
@@ -96,8 +155,17 @@ export class HandoffRecorder {
 
       console.log(`📝 Success recorded: ${executionId}`);
 
-      // Create the actual handoff artifact
-      await this.createArtifact(handoffType, sdId, result, executionId);
+      // Create handoff artifact ONLY for phase transitions, not completion actions
+      // Root Cause Fix (SD-VENTURE-STAGE0-UI-001):
+      // - Completion actions (LEAD-FINAL-APPROVAL) don't have a valid to_phase
+      // - sd_phase_handoffs requires to_phase IN ('LEAD', 'PLAN', 'EXEC')
+      // - Completion actions end the lifecycle, they don't transition to another phase
+      if (isCompletionAction(handoffType)) {
+        console.log(`ℹ️  ${handoffType} is a completion action - skipping sd_phase_handoffs artifact`);
+        console.log(`   (Completion recorded in leo_handoff_executions: ${executionId})`);
+      } else {
+        await this.createArtifact(handoffType, sdId, result, executionId);
+      }
 
       return executionId;
 
@@ -117,6 +185,9 @@ export class HandoffRecorder {
   async recordFailure(handoffType, sdId, result, template = null) {
     const executionId = randomUUID();
 
+    // SD-VENTURE-STAGE0-UI-001: Resolve to UUID for FK constraints
+    const sdUuid = await this._resolveToUUID(sdId);
+
     const rejectionContent = this.contentBuilder.buildRejection(handoffType, sdId, result);
 
     // Normalize validation score
@@ -128,7 +199,7 @@ export class HandoffRecorder {
       template_id: template?.id,
       from_phase: handoffType.split('-')[0],
       to_phase: handoffType.split('-')[2],
-      sd_id: sdId,
+      sd_id: sdUuid,
       handoff_type: handoffType,
       status: 'rejected',
       ...rejectionContent,
@@ -186,9 +257,12 @@ export class HandoffRecorder {
   async recordSystemError(handoffType, sdId, errorMessage) {
     const executionId = randomUUID();
 
+    // SD-VENTURE-STAGE0-UI-001: Resolve to UUID for FK constraints
+    const sdUuid = await this._resolveToUUID(sdId);
+
     const execution = {
       id: executionId,
-      sd_id: sdId,
+      sd_id: sdUuid,
       handoff_type: handoffType,
       status: 'failed',
       executive_summary: `System error during ${handoffType} handoff: ${errorMessage}`,
@@ -232,11 +306,14 @@ export class HandoffRecorder {
    */
   async createArtifact(handoffType, sdId, result, executionId) {
     try {
-      // Get SD details
+      // SD-VENTURE-STAGE0-UI-001: Resolve to UUID for FK constraints and queries
+      const sdUuid = await this._resolveToUUID(sdId);
+
+      // Get SD details (using UUID)
       const { data: sd } = await this.supabase
         .from('strategic_directives_v2')
         .select('*')
-        .eq('id', sdId)
+        .eq('id', sdUuid)
         .single();
 
       if (!sd) {
@@ -244,11 +321,11 @@ export class HandoffRecorder {
         return null;
       }
 
-      // Get sub-agent results
+      // Get sub-agent results (using UUID)
       const { data: subAgentResults } = await this.supabase
         .from('sub_agent_execution_results')
         .select('*')
-        .eq('sd_id', sdId)
+        .eq('sd_id', sdUuid)
         .order('created_at', { ascending: false })
         .limit(10);
 
@@ -263,7 +340,7 @@ export class HandoffRecorder {
       const handoffId = randomUUID();
       const handoffRecord = {
         id: handoffId,
-        sd_id: sdId,
+        sd_id: sdUuid,
         from_phase: fromPhase,
         to_phase: toPhase,
         handoff_type: handoffType,

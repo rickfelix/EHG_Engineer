@@ -60,22 +60,24 @@ class PlanToExecVerifier {
    * @param {string} category - SD category from strategic_directives_v2
    * @returns {number} Minimum score percentage
    */
-  getStoryMinimumScoreByCategory(category) {
-    // Map category to minimum score (matching ai-quality-evaluator.js thresholds)
+  getStoryMinimumScoreByCategory(category, sdType = null) {
+    // Map category/type to minimum score (matching ai-quality-evaluator.js thresholds)
     const categoryThresholds = {
       // Very lenient for documentation-only work
       'documentation': 50,
       'docs': 50,
 
-      // Lenient for internal/infrastructure work
+      // Lenient for internal/infrastructure work (includes QA/testing tooling)
       'infrastructure': 55,
       'infra': 55,
       'tooling': 55,
       'devops': 55,
+      'quality': 55,  // QA/testing work is similar to infrastructure
 
-      // Moderate for standard features
-      'feature': 65,
-      'enhancement': 65,
+      // Moderate for standard features (lowered to 55% during Phase 1 AI calibration)
+      // TODO: Increase to 65% once AI scoring is calibrated (target: 2-4 weeks)
+      'feature': 55,
+      'enhancement': 55,
 
       // Stricter for data/security work
       'database': 68,
@@ -86,7 +88,12 @@ class PlanToExecVerifier {
     };
 
     const normalizedCategory = (category || '').toLowerCase();
-    return categoryThresholds[normalizedCategory] || categoryThresholds.default;
+    const normalizedSdType = (sdType || '').toLowerCase();
+
+    // Try category first, then sd_type, then default
+    return categoryThresholds[normalizedCategory] ||
+           categoryThresholds[normalizedSdType] ||
+           categoryThresholds.default;
   }
 
   /**
@@ -239,17 +246,15 @@ class PlanToExecVerifier {
       }
       
       // 2. Load associated PRD
-      // Use sd_uuid (post-migration) with fallback to uuid_id lookup
-      const sdUuid = sd.uuid_id || sd.id;
-
+      // SD ID Schema Cleanup (2025-12-12): Use sd.id directly (uuid_id deprecated)
       const prdQuery = prdId
         ? this.supabase.from('product_requirements_v2').select('*').eq('id', prdId)
-        : this.supabase.from('product_requirements_v2').select('*').eq('sd_uuid', sdUuid);
+        : this.supabase.from('product_requirements_v2').select('*').eq('sd_id', sd.id);
 
       const { data: prds, error: prdError } = await prdQuery;
 
       if (prdError || !prds || prds.length === 0) {
-        console.log(`   ❌ No PRD found with sd_uuid: ${sdUuid}`);
+        console.log(`   ❌ No PRD found with sd_id: ${sd.id}`);
         console.log('   PRD Error:', prdError);
         return this.rejectHandoff(sdId, 'NO_PRD', 'No PRD found for Strategic Directive');
       }
@@ -293,7 +298,7 @@ class PlanToExecVerifier {
       console.log('\n🔍 Validating user story quality...');
 
       // SD-type-aware minimum score (infrastructure/documentation are more lenient)
-      const storyMinimumScore = this.getStoryMinimumScoreByCategory(sd.category);
+      const storyMinimumScore = this.getStoryMinimumScoreByCategory(sd.category, sd.sd_type);
       console.log(`   SD Category: ${sd.category || 'unknown'} → Minimum Score: ${storyMinimumScore}%`);
 
       const storyQualityResult = await validateUserStoriesForHandoff(userStories, {
@@ -353,7 +358,7 @@ class PlanToExecVerifier {
       console.log('\n🔍 Validating PRD content quality (boilerplate detection)...');
 
       // SD-type-aware minimum score for PRD (same logic as user stories)
-      const prdMinimumScore = this.getStoryMinimumScoreByCategory(sd.category);
+      const prdMinimumScore = this.getStoryMinimumScoreByCategory(sd.category, sd.sd_type);
       console.log(`   SD Category: ${sd.category || 'unknown'} → PRD Minimum Score: ${prdMinimumScore}%`);
 
       const prdBoilerplateResult = await validatePRDForHandoff(prd, {

@@ -44,6 +44,21 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
   console.log('\n🚪 GATE 3: End-to-End Traceability Validation (PLAN→LEAD)');
   console.log('='.repeat(60));
 
+  // SD-VENTURE-STAGE0-UI-001: Resolve UUID from legacy_id if needed
+  // Handoffs are stored with UUID, so we need to resolve the ID first
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sd_id);
+  let sdUuid = sd_id;
+  if (!isUUID) {
+    const { data: sd } = await supabase
+      .from('strategic_directives_v2')
+      .select('id')
+      .eq('legacy_id', sd_id)
+      .single();
+    if (sd) {
+      sdUuid = sd.id;
+    }
+  }
+
   const validation = {
     passed: true,
     score: 0,
@@ -63,10 +78,11 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
 
   try {
     // Verify Gate 2 (EXEC→PLAN) passed
+    // SD-VENTURE-STAGE0-UI-001: Use sdUuid instead of sd_id for handoff lookup
     const { data: gate2Handoff } = await supabase
       .from('sd_phase_handoffs')
       .select('metadata')
-      .eq('sd_id', sd_id)
+      .eq('sd_id', sdUuid)
       .eq('handoff_type', 'EXEC-TO-PLAN')
       .order('created_at', { ascending: false })
       .limit(1);
@@ -138,7 +154,7 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
       const { data: handoffData } = await supabase
         .from('sd_phase_handoffs')
         .select('metadata')
-        .eq('sd_id', sd_id)
+        .eq('sd_id', sdUuid)
         .eq('handoff_type', 'EXEC-TO-PLAN')
         .order('created_at', { ascending: false })
         .limit(1);
@@ -196,7 +212,7 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
     const { data: handoffs } = await supabase
       .from('sd_phase_handoffs')
       .select('handoff_type, metadata')
-      .eq('sd_id', sd_id)
+      .eq('sd_id', sdUuid)
       .in('handoff_type', ['PLAN-TO-EXEC', 'EXEC-TO-PLAN'])
       .order('created_at', { ascending: false });
 
@@ -371,7 +387,7 @@ async function validateImplementationQuality(sd_id, gate2Data, validation, supab
   const { data: handoffData } = await supabase
     .from('sd_phase_handoffs')
     .select('metadata, deliverables')
-    .eq('sd_id', sd_id)
+    .eq('sd_id', sdUuid)
     .eq('handoff_type', 'EXEC-TO-PLAN')
     .order('created_at', { ascending: false })
     .limit(1);
@@ -415,7 +431,7 @@ async function validateImplementationQuality(sd_id, gate2Data, validation, supab
  * Validate Traceability Mapping (Section C - 25 points - MAJOR)
  * Phase-aware: Traceability important but not critical
  */
-async function validateTraceabilityMapping(sd_id, designAnalysis, databaseAnalysis, validation, _supabase) {
+async function validateTraceabilityMapping(sd_id, designAnalysis, databaseAnalysis, validation, supabase) {
   let sectionScore = 0;
   const sectionDetails = {};
 
@@ -455,7 +471,7 @@ async function validateTraceabilityMapping(sd_id, designAnalysis, databaseAnalys
     const { data: handoffData } = await supabase
       .from('sd_phase_handoffs')
       .select('deliverables')
-      .eq('sd_id', sd_id)
+      .eq('sd_id', sdUuid)
       .eq('handoff_type', 'EXEC-TO-PLAN')
       .order('created_at', { ascending: false })
       .limit(1);
@@ -492,7 +508,7 @@ async function validateTraceabilityMapping(sd_id, designAnalysis, databaseAnalys
     const { data: handoffData } = await supabase
       .from('sd_phase_handoffs')
       .select('deliverables')
-      .eq('sd_id', sd_id)
+      .eq('sd_id', sdUuid)
       .eq('handoff_type', 'EXEC-TO-PLAN')
       .order('created_at', { ascending: false })
       .limit(1);
@@ -546,7 +562,7 @@ async function validateSubAgentEffectiveness(sd_id, validation, supabase) {
   const { data: subAgentResults, error: subAgentError } = await supabase
     .from('sub_agent_execution_results')
     .select('sub_agent_name, execution_time_ms, status, created_at')
-    .eq('sd_id', sd_id)
+    .eq('sd_id', sdUuid)
     .in('sub_agent_name', ['DESIGN', 'DATABASE', 'STORIES']);
 
   if (subAgentError) {
@@ -579,7 +595,7 @@ async function validateSubAgentEffectiveness(sd_id, validation, supabase) {
     const { data: resultsWithOutput } = await supabase
       .from('sub_agent_execution_results')
       .select('result')
-      .eq('sd_id', sd_id)
+      .eq('sd_id', sdUuid)
       .in('sub_agent_name', ['DESIGN', 'DATABASE']);
 
     if (resultsWithOutput && resultsWithOutput.length > 0) {
@@ -635,7 +651,7 @@ async function validateLessonsCaptured(sd_id, designAnalysis, databaseAnalysis, 
   const { data: handoffData } = await supabase
     .from('sd_phase_handoffs')
     .select('metadata, deliverables')
-    .eq('sd_id', sd_id)
+    .eq('sd_id', sdUuid)
     .eq('handoff_type', 'PLAN-TO-LEAD')
     .order('created_at', { ascending: false })
     .limit(1);
@@ -667,7 +683,7 @@ async function validateLessonsCaptured(sd_id, designAnalysis, databaseAnalysis, 
   const { data: execHandoff } = await supabase
     .from('sd_phase_handoffs')
     .select('metadata, deliverables')
-    .eq('sd_id', sd_id)
+    .eq('sd_id', sdUuid)
     .eq('handoff_type', 'EXEC-TO-PLAN')
     .order('created_at', { ascending: false })
     .limit(1);

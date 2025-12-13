@@ -8,3 +8,4 @@ export { PlanToExecExecutor } from './PlanToExecExecutor.js';
 export { ExecToPlanExecutor } from './ExecToPlanExecutor.js';
 export { PlanToLeadExecutor } from './PlanToLeadExecutor.js';
 export { LeadToPlanExecutor } from './LeadToPlanExecutor.js';
+export { LeadFinalApprovalExecutor } from './LeadFinalApprovalExecutor.js';

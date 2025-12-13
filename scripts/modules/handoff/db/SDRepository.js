@@ -18,7 +18,9 @@ export class SDRepository {
 
   /**
    * Get Strategic Directive by ID
-   * @param {string} sdId - Strategic Directive ID
+   * SD-VENTURE-STAGE0-UI-001: Support both UUID and legacy_id lookups
+   *
+   * @param {string} sdId - Strategic Directive ID (UUID or legacy_id)
    * @param {string} columns - Columns to select (default: '*')
    * @returns {Promise<object>} SD record
    * @throws {Error} If SD not found
@@ -28,10 +30,14 @@ export class SDRepository {
     const cached = this._getFromCache(cacheKey);
     if (cached) return cached;
 
+    // SD-VENTURE-STAGE0-UI-001: Check if sdId is UUID or legacy_id
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
+    const queryField = isUUID ? 'id' : 'legacy_id';
+
     const { data: sd, error } = await this.supabase
       .from('strategic_directives_v2')
       .select(columns)
-      .eq('id', sdId)
+      .eq(queryField, sdId)
       .single();
 
     if (error || !sd) {
@@ -46,18 +52,41 @@ export class SDRepository {
    * Verify SD exists in database (blocking gate)
    * Used to prevent work on non-existent SDs (SD-TEST-MOCK-001 prevention)
    *
-   * @param {string} sdId - Strategic Directive ID
+   * SD-VENTURE-STAGE0-UI-001: Support both UUID and legacy_id lookups
+   *
+   * @param {string} sdId - Strategic Directive ID (UUID or legacy_id)
    * @returns {Promise<object>} SD record with basic info
    * @throws {Error} With detailed remediation if SD not found
    */
   async verifyExists(sdId) {
     console.log(`🔍 Verifying SD exists in database: ${sdId}`);
 
-    const { data: sd, error } = await this.supabase
-      .from('strategic_directives_v2')
-      .select('id, title, status, category')
-      .eq('id', sdId)
-      .single();
+    // SD-VENTURE-STAGE0-UI-001: Try UUID first, then legacy_id
+    let sd = null;
+    let error = null;
+
+    // Check if sdId looks like a UUID
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
+
+    if (isUUID) {
+      // Query by UUID id field
+      const result = await this.supabase
+        .from('strategic_directives_v2')
+        .select('id, legacy_id, title, status, category')
+        .eq('id', sdId)
+        .single();
+      sd = result.data;
+      error = result.error;
+    } else {
+      // Query by legacy_id (e.g., SD-VENTURE-STAGE0-UI-001)
+      const result = await this.supabase
+        .from('strategic_directives_v2')
+        .select('id, legacy_id, title, status, category')
+        .eq('legacy_id', sdId)
+        .single();
+      sd = result.data;
+      error = result.error;
+    }
 
     if (error || !sd) {
       const errorMsg = [

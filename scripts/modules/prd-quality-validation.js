@@ -103,7 +103,103 @@ function isBoilerplate(text, patterns) {
 }
 
 /**
+ * Fast heuristic validation for PRD (no AI calls)
+ * @param {Object} prd - PRD object from database
+ * @returns {Object} { valid: boolean, issues: array, warnings: array, score: number }
+ */
+function validatePRDHeuristic(prd) {
+  const prdId = prd?.id || 'Unknown';
+  const issues = [];
+  const warnings = [];
+  let score = 100;
+
+  // Check functional requirements
+  const funcReqs = prd.functional_requirements || [];
+  if (!Array.isArray(funcReqs) || funcReqs.length < 3) {
+    issues.push(`${prdId}: Insufficient functional requirements (${funcReqs.length}, min 3)`);
+    score -= 15;
+  } else {
+    const placeholderReqs = funcReqs.filter(req => {
+      const text = typeof req === 'string' ? req : (req.requirement || JSON.stringify(req));
+      return containsPlaceholder(text) || isBoilerplate(text, BOILERPLATE_REQUIREMENTS);
+    });
+    if (placeholderReqs.length > 0) {
+      issues.push(`${prdId}: ${placeholderReqs.length} placeholder/boilerplate requirements`);
+      score -= 10 * placeholderReqs.length;
+    }
+  }
+
+  // Check acceptance criteria
+  const accCriteria = prd.acceptance_criteria || [];
+  if (!Array.isArray(accCriteria) || accCriteria.length < 3) {
+    issues.push(`${prdId}: Insufficient acceptance criteria (${accCriteria.length}, min 3)`);
+    score -= 15;
+  } else {
+    const boilerplateAC = accCriteria.filter(ac => {
+      const text = typeof ac === 'string' ? ac : (ac.criterion || JSON.stringify(ac));
+      return isBoilerplate(text, BOILERPLATE_ACCEPTANCE_CRITERIA);
+    });
+    if (boilerplateAC.length > 0) {
+      warnings.push(`${prdId}: ${boilerplateAC.length} boilerplate acceptance criteria`);
+      score -= 5 * boilerplateAC.length;
+    }
+  }
+
+  // Check test scenarios
+  const testScenarios = prd.test_scenarios || [];
+  if (!Array.isArray(testScenarios) || testScenarios.length < 3) {
+    warnings.push(`${prdId}: Few test scenarios (${testScenarios.length})`);
+    score -= 5;
+  }
+
+  // Check system_architecture
+  if (!prd.system_architecture || Object.keys(prd.system_architecture).length === 0) {
+    warnings.push(`${prdId}: Missing system_architecture`);
+    score -= 5;
+  }
+
+  // Check implementation_approach
+  if (!prd.implementation_approach || Object.keys(prd.implementation_approach).length === 0) {
+    warnings.push(`${prdId}: Missing implementation_approach`);
+    score -= 5;
+  }
+
+  // Check risks
+  const risks = prd.risks || [];
+  if (!Array.isArray(risks) || risks.length === 0) {
+    warnings.push(`${prdId}: No risks identified`);
+    score -= 5;
+  }
+
+  // Check executive_summary
+  const summary = prd.executive_summary || '';
+  if (summary.length < 50) {
+    warnings.push(`${prdId}: Short executive summary`);
+    score -= 5;
+  }
+
+  score = Math.max(0, Math.min(100, score));
+  const passed = score >= 65 && issues.length === 0;
+
+  return {
+    prd_id: prdId,
+    valid: passed,
+    passed,
+    score,
+    issues,
+    warnings,
+    boilerplateDetails: {
+      functional_requirements: { total: funcReqs.length, placeholder: 0 },
+      acceptance_criteria: { total: accCriteria.length, boilerplate: 0 },
+      test_scenarios: { total: testScenarios.length, placeholder: 0 }
+    },
+    details: { method: 'heuristic' }
+  };
+}
+
+/**
  * Validate a single PRD for quality using AI-powered Russian Judge rubric
+ * Set PRD_VALIDATION_MODE=heuristic to use fast non-AI validation
  * @param {Object} prd - PRD object from database
  * @returns {Promise<Object>} { valid: boolean, issues: array, warnings: array, score: number }
  */
@@ -125,6 +221,11 @@ export async function validatePRDQuality(prd) {
         test_scenarios: { total: 0, placeholder: 0 }
       }
     };
+  }
+
+  // Use heuristic validation if AI is disabled
+  if (process.env.PRD_VALIDATION_MODE === 'heuristic') {
+    return validatePRDHeuristic(prd);
   }
 
   try {

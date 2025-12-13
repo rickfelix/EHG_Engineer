@@ -40,6 +40,7 @@ export { PlanToExecExecutor } from './executors/PlanToExecExecutor.js';
 export { ExecToPlanExecutor } from './executors/ExecToPlanExecutor.js';
 export { PlanToLeadExecutor } from './executors/PlanToLeadExecutor.js';
 export { LeadToPlanExecutor } from './executors/LeadToPlanExecutor.js';
+export { LeadFinalApprovalExecutor } from './executors/LeadFinalApprovalExecutor.js';
 
 // Re-export existing modules for compatibility
 export { autoCompleteDeliverables, checkDeliverablesNeedCompletion } from './auto-complete-deliverables.js';

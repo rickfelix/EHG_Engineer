@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2025-12-11 7:40:40 PM
+**Generated**: 2025-12-13 8:09:22 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
@@ -961,6 +961,44 @@ When implementing tests, ensure coverage for:
 - [ ] State rollback on error
 - [ ] Partial success scenarios
 
+## Vision V2 Implementation Requirements (SD-VISION-V2-*)
+
+### MANDATORY: Vision Spec Consultation Before Implementation
+
+**For ALL implementations of SDs matching `SD-VISION-V2-*`:**
+
+Before writing any code, you MUST:
+
+1. **Query SD metadata for vision spec references**
+2. **Read ALL files listed in `must_read_before_exec`**
+3. **Follow patterns and structures defined in specs**
+
+### Implementation Requirements for Vision V2
+
+| Requirement | Description |
+|-------------|-------------|
+| **Spec Compliance** | Code MUST match spec definitions exactly (table names, column types, API shapes) |
+| **25-Stage Insulation** | CEO Runtime MUST be OBSERVER-COMMITTER only - no direct venture_stage_work writes |
+| **Glass Cockpit Design** | UI MUST follow progressive disclosure, minimal chrome philosophy |
+| **Token Budget Enforcement** | All agent operations MUST respect venture token budgets |
+
+### CREATE_FROM_NEW Policy
+
+All Vision V2 SDs have this implementation guidance:
+- **REVIEW** all vision files before implementation
+- **CREATE FROM NEW** - similar files may exist to learn from, but implement fresh
+- **DO NOT MODIFY** existing files - create new implementations per vision specs
+
+### 25-Stage Insulation Checklist (SD-VISION-V2-005 CRITICAL)
+
+**Before marking SD-VISION-V2-005 complete:**
+
+- [ ] Zero direct INSERT/UPDATE/DELETE on `venture_stage_work`
+- [ ] All stage transitions via `fn_advance_venture_stage()` only
+- [ ] Gate types (auto/advisory/hard) respected
+- [ ] E2E test verifies no direct writes to stage tables
+- [ ] No new columns added to existing stage tables
+
 ## Database Schema Constraints Reference
 
 **CRITICAL**: These constraints are enforced by the database. Agents MUST use valid values to avoid insert failures.
@@ -1132,6 +1170,6 @@ Verifies LEAD to PLAN handoff requirements are met before allowing transition.
 
 ---
 
-*Generated from database: 2025-12-11*
+*Generated from database: 2025-12-13*
 *Protocol Version: 4.3.3*
 *Load when: User mentions EXEC, implementation, coding, or testing*

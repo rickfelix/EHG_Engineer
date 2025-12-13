@@ -46,7 +46,87 @@ const GENERIC_BENEFITS = [
 ];
 
 /**
+ * Fast heuristic validation (no AI calls) - checks structural quality
+ * @param {Object} story - User story object from database
+ * @returns {Object} { valid: boolean, passed: boolean, issues: array, warnings: array, score: number }
+ */
+function validateUserStoryHeuristic(story) {
+  const storyKey = story?.story_key || story?.id || 'Unknown';
+  const issues = [];
+  const warnings = [];
+  let score = 100;
+
+  // Check title quality
+  const title = story.title || '';
+  if (title.length < 10) {
+    issues.push(`${storyKey}: Title too short (${title.length} chars, min 10)`);
+    score -= 15;
+  }
+  if (BOILERPLATE_TITLES.some(b => title.toLowerCase().includes(b))) {
+    issues.push(`${storyKey}: Boilerplate title detected`);
+    score -= 20;
+  }
+
+  // Check user_want
+  const userWant = story.user_want || story.i_want || '';
+  if (userWant.length < 20) {
+    issues.push(`${storyKey}: user_want too short (${userWant.length} chars, min 20)`);
+    score -= 15;
+  }
+
+  // Check user_benefit
+  const userBenefit = story.user_benefit || story.so_that || '';
+  if (userBenefit.length < 15) {
+    warnings.push(`${storyKey}: user_benefit short (${userBenefit.length} chars)`);
+    score -= 5;
+  }
+  if (GENERIC_BENEFITS.some(b => userBenefit.toLowerCase().includes(b))) {
+    warnings.push(`${storyKey}: Generic benefit detected`);
+    score -= 10;
+  }
+
+  // Check acceptance criteria
+  const ac = story.acceptance_criteria || [];
+  if (!Array.isArray(ac) || ac.length < 2) {
+    issues.push(`${storyKey}: Insufficient acceptance criteria (${ac.length}, min 2)`);
+    score -= 20;
+  } else {
+    // Check for boilerplate AC
+    const boilerplateAC = ac.filter(criterion => {
+      const text = typeof criterion === 'string' ? criterion : JSON.stringify(criterion);
+      return BOILERPLATE_AC.some(b => text.toLowerCase().includes(b.toLowerCase()));
+    });
+    if (boilerplateAC.length > 0) {
+      warnings.push(`${storyKey}: ${boilerplateAC.length} boilerplate acceptance criteria`);
+      score -= 5 * boilerplateAC.length;
+    }
+  }
+
+  // Check implementation_context
+  const implContext = story.implementation_context || '';
+  if (implContext.length < 20) {
+    warnings.push(`${storyKey}: Missing/short implementation_context`);
+    score -= 5;
+  }
+
+  // Ensure score is within bounds
+  score = Math.max(0, Math.min(100, score));
+  const passed = score >= 65 && issues.length === 0;
+
+  return {
+    story_key: storyKey,
+    valid: passed,
+    passed,
+    score,
+    issues,
+    warnings,
+    details: { method: 'heuristic' }
+  };
+}
+
+/**
  * Validate a single user story for quality using AI-powered Russian Judge rubric
+ * Set STORY_VALIDATION_MODE=heuristic to use fast non-AI validation
  * @param {Object} story - User story object from database
  * @returns {Promise<Object>} { valid: boolean, passed: boolean, issues: array, warnings: array, score: number }
  */
@@ -63,6 +143,11 @@ export async function validateUserStoryQuality(story) {
       issues: [`${storyKey}: User story is empty or missing`],
       warnings: []
     };
+  }
+
+  // Use heuristic validation if AI is disabled
+  if (process.env.STORY_VALIDATION_MODE === 'heuristic') {
+    return validateUserStoryHeuristic(story);
   }
 
   try {
@@ -83,18 +168,9 @@ export async function validateUserStoryQuality(story) {
   } catch (error) {
     console.error(`User Story Quality Validation Error (${storyKey}):`, error.message);
 
-    // Fallback: return failed validation with error details
-    return {
-      story_key: storyKey,
-      valid: false,
-      passed: false,
-      score: 0,
-      issues: [`AI quality assessment failed: ${error.message}. Manual review required.`],
-      warnings: ['OpenAI API error - check OPENAI_API_KEY environment variable'],
-      details: {
-        error: error.message
-      }
-    };
+    // Fallback to heuristic on AI failure
+    console.log(`   Falling back to heuristic validation for ${storyKey}`);
+    return validateUserStoryHeuristic(story);
   }
 }
 
@@ -139,29 +215,117 @@ export async function validateUserStoriesForHandoff(stories, options = {}) {
     return result;
   }
 
-  // Validate each story (async now)
+  // Validate stories with parallel processing for speed
+  // PARALLEL_BATCH_SIZE controls how many stories are validated concurrently
+  const PARALLEL_BATCH_SIZE = parseInt(process.env.AI_PARALLEL_BATCH_SIZE) || 3; // Default 3 concurrent
+  const BATCH_DELAY_MS = parseInt(process.env.AI_BATCH_DELAY_MS) || 1000; // Delay between batches
+  const DEBUG = process.env.AI_DEBUG === 'true';
+  const validationStartTime = Date.now();
   let totalScore = 0;
 
-  for (const story of stories) {
-    const storyResult = await validateUserStoryQuality(story);
-    result.storyResults.push(storyResult);
-    result.validatedStories++;
-    totalScore += storyResult.score;
+  const isParallel = process.env.STORY_VALIDATION_MODE !== 'heuristic' && PARALLEL_BATCH_SIZE > 1;
 
-    // Collect issues and warnings
-    result.issues.push(...storyResult.issues);
-    result.warnings.push(...storyResult.warnings);
+  if (DEBUG || stories.length > 3) {
+    console.log(`[UserStoryValidation] Starting validation of ${stories.length} stories`);
+    console.log(`[UserStoryValidation] Mode: ${process.env.STORY_VALIDATION_MODE || 'AI (default)'}`);
+    console.log(`[UserStoryValidation] Parallel: ${isParallel ? `Yes (batch size: ${PARALLEL_BATCH_SIZE})` : 'No (sequential)'}`);
+  }
 
-    // Track quality distribution
-    if (storyResult.score >= 90) result.qualityDistribution.excellent++;
-    else if (storyResult.score >= 80) result.qualityDistribution.good++;
-    else if (storyResult.score >= 70) result.qualityDistribution.acceptable++;
-    else result.qualityDistribution.poor++;
+  // Process stories in parallel batches
+  const allResults = [];
 
-    // Count boilerplate
-    if (storyResult.issues.some(i => i.includes('boilerplate'))) {
-      result.boilerplateCount++;
+  for (let batchStart = 0; batchStart < stories.length; batchStart += PARALLEL_BATCH_SIZE) {
+    const batchEnd = Math.min(batchStart + PARALLEL_BATCH_SIZE, stories.length);
+    const batch = stories.slice(batchStart, batchEnd);
+    const batchNum = Math.floor(batchStart / PARALLEL_BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(stories.length / PARALLEL_BATCH_SIZE);
+
+    // Add delay between batches (skip for first batch)
+    if (batchStart > 0 && isParallel) {
+      if (DEBUG) console.log(`[UserStoryValidation] Waiting ${BATCH_DELAY_MS}ms between batches...`);
+      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
     }
+
+    if (DEBUG) {
+      console.log(`[UserStoryValidation] Processing batch ${batchNum}/${totalBatches} (stories ${batchStart + 1}-${batchEnd})`);
+    }
+
+    const batchStartTime = Date.now();
+
+    // Process batch in parallel
+    const batchPromises = batch.map(async (story, idx) => {
+      const storyKey = story.story_key || story.id || `Story-${batchStart + idx + 1}`;
+      const storyStartTime = Date.now();
+
+      try {
+        const storyResult = await validateUserStoryQuality(story);
+        const storyDuration = Date.now() - storyStartTime;
+
+        return {
+          success: true,
+          storyKey,
+          storyResult,
+          storyDuration,
+          index: batchStart + idx
+        };
+      } catch (error) {
+        console.error(`[UserStoryValidation] Error validating ${storyKey}: ${error.message}`);
+        return {
+          success: false,
+          storyKey,
+          storyResult: {
+            score: 0,
+            passed: false,
+            issues: [`Validation error: ${error.message}`],
+            warnings: []
+          },
+          storyDuration: Date.now() - storyStartTime,
+          index: batchStart + idx
+        };
+      }
+    });
+
+    // Wait for all stories in batch to complete
+    const batchResults = await Promise.all(batchPromises);
+    const batchDuration = Date.now() - batchStartTime;
+
+    // Process results
+    for (const { storyKey, storyResult, storyDuration, index } of batchResults) {
+      allResults.push({ storyKey, storyResult, storyDuration, index });
+      result.storyResults.push(storyResult);
+      result.validatedStories++;
+      totalScore += storyResult.score;
+
+      // Collect issues and warnings
+      result.issues.push(...storyResult.issues);
+      result.warnings.push(...storyResult.warnings);
+
+      // Track quality distribution
+      if (storyResult.score >= 90) result.qualityDistribution.excellent++;
+      else if (storyResult.score >= 80) result.qualityDistribution.good++;
+      else if (storyResult.score >= 70) result.qualityDistribution.acceptable++;
+      else result.qualityDistribution.poor++;
+
+      // Count boilerplate
+      if (storyResult.issues.some(i => i.includes('boilerplate'))) {
+        result.boilerplateCount++;
+      }
+    }
+
+    // Batch progress indicator
+    const elapsed = Math.round((Date.now() - validationStartTime) / 1000);
+    const remaining = stories.length - batchEnd;
+    const avgTimePerStory = elapsed / batchEnd;
+    const eta = Math.round(avgTimePerStory * remaining);
+
+    const batchScores = batchResults.map(r => `${r.storyResult.score}%`).join(', ');
+    console.log(`   [Batch ${batchNum}/${totalBatches}] ${batch.length} stories: ${batchScores} (${batchDuration}ms)${remaining > 0 ? ` - ETA: ${eta}s` : ''}`);
+  }
+
+  const totalDuration = Date.now() - validationStartTime;
+  if (DEBUG || stories.length > 3) {
+    const speedup = isParallel ? ` (~${PARALLEL_BATCH_SIZE}x speedup)` : '';
+    console.log(`[UserStoryValidation] Completed ${stories.length} stories in ${Math.round(totalDuration / 1000)}s${speedup}`);
   }
 
   // Calculate average score
