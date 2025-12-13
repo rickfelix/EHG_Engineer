@@ -79,12 +79,20 @@ CREATE TABLE IF NOT EXISTS product_requirements_v2 (
       process.exit(1);
     }
 
-    // FIX: Get SD uuid_id to populate sd_uuid field (prevents handoff validation failures)
-    // Also fetch SD metadata for component recommendations and sd_type detection
+    // SD ID SCHEMA CLEANUP (2025-12-12):
+    // - strategic_directives_v2.id is the canonical identifier (PRIMARY KEY)
+    // - uuid_id column is DEPRECATED - do not use for FK relationships
+    // - product_requirements_v2.sd_id references strategic_directives_v2.id
+    //
+    // Query supports both legacy_id (SD-XXX-001) and UUID formats.
+    // The SD's "id" column is used for the PRD's sd_id foreign key.
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
+    const queryField = isUUID ? 'id' : 'legacy_id';
+
     const { data: sdData, error: sdError } = await supabase
       .from('strategic_directives_v2')
-      .select('uuid_id, scope, description, strategic_objectives, title, sd_type, category')
-      .eq('id', sdId)
+      .select('id, legacy_id, scope, description, strategic_objectives, title, sd_type, category')
+      .eq(queryField, sdId)
       .single();
 
     if (sdError || !sdData) {
@@ -93,8 +101,10 @@ CREATE TABLE IF NOT EXISTS product_requirements_v2 (
       process.exit(1);
     }
 
-    const sdUuid = sdData.uuid_id;
-    console.log(`   SD uuid_id: ${sdUuid}`);
+    // Use SD.id (the primary key) for FK relationships
+    const sdIdValue = sdData.id;
+    console.log(`   SD ID: ${sdIdValue}`);
+    console.log(`   SD legacy_id: ${sdData.legacy_id}`);
 
     // SD-TECH-DEBT-DOCS-001: Auto-detect sd_type and warn if documentation-only
     const typeDetection = autoDetectSdType(sdData);
@@ -146,7 +156,7 @@ CREATE TABLE IF NOT EXISTS product_requirements_v2 (
       .insert({
         id: prdId,
         directive_id: sdId,
-        sd_uuid: sdUuid,  // FIX: Populate sd_uuid for handoff validation
+        sd_id: sdIdValue,  // Canonical FK to strategic_directives_v2.id
         title: prdTitle || `Product Requirements for ${sdId}`,
         status: 'planning',
         category: 'technical',

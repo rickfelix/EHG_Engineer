@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-12 7:24:51 PM
+**Generated**: 2025-12-13 8:09:22 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -43,6 +43,27 @@ EHG_Engineer (Management)          EHG App (Implementation)
 └── Dashboard Views          ←     No changes here!
 ```
 
+## 🚀 Session Verification & Quick Start (MANDATORY)
+
+## Session Start Checklist
+
+### Required Verification
+1. **Check Priority**: `npm run prio:top3`
+2. **Git Status**: Clean working directory?
+3. **Context Load**: CLAUDE_CORE.md + phase file
+
+### Before Starting Work
+- Verify SD is in correct phase
+- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
+- Review recent handoffs if continuing
+
+### Key Commands
+| Command | Purpose |
+|---------|---------|
+| `npm run prio:top3` | Top priority SDs |
+| `git status` | Working tree status |
+| `npm run handoff:latest` | Latest handoff |
+
 ## 🔍 Session Start Verification (MANDATORY)
 
 **Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
@@ -77,27 +98,6 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 - If records don't exist, CREATE them before proceeding
 
 **Pattern Reference**: PAT-SESS-VER-001
-
-## 🚀 Session Verification & Quick Start (MANDATORY)
-
-## Session Start Checklist
-
-### Required Verification
-1. **Check Priority**: `npm run prio:top3`
-2. **Git Status**: Clean working directory?
-3. **Context Load**: CLAUDE_CORE.md + phase file
-
-### Before Starting Work
-- Verify SD is in correct phase
-- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
-- Review recent handoffs if continuing
-
-### Key Commands
-| Command | Purpose |
-|---------|---------|
-| `npm run prio:top3` | Top priority SDs |
-| `git status` | Working tree status |
-| `npm run handoff:latest` | Latest handoff |
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -227,39 +227,6 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 *Added: SD-EVA-DECISION-001 to prevent haiku model usage*
 
 
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
-
 ## Execution Philosophy
 
 ## 🧠 EXECUTION PHILOSOPHY (Read First!)
@@ -317,6 +284,39 @@ These principles override default behavior and must be internalized before start
 
 **REMEMBER**: The goal is NOT to complete SDs quickly. The goal is to complete SDs CORRECTLY. A properly implemented SD that takes 8 hours is infinitely better than a rushed implementation that takes 4 hours but requires 6 hours of fixes.
 
+
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## 🎯 Skill Integration (Claude Code Skills)
 
@@ -967,8 +967,8 @@ Strategic Directive (SD)
 ```
 
 **Implementation**:
-- PRD validation: Fetches SD via `prd.sd_uuid → strategic_directives_v2.uuid_id`
-- User Story validation: Fetches PRD via `user_story.prd_id → prds.id`
+- PRD validation: Fetches SD via `prd.sd_id → strategic_directives_v2.id`
+- User Story validation: Fetches PRD via `user_story.prd_id → product_requirements_v2.id`
 - Retrospective validation: Fetches SD via `retrospective.sd_id → strategic_directives_v2.sd_id`
 
 **Why**: Prevents locally optimal but strategically misaligned deliverables. For example, a PRD might have perfect technical architecture (score 10/10) but completely miss the strategic business objective (SD context reveals misalignment).
@@ -1125,7 +1125,7 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 2. **User calls**: `npm run handoff` (PLAN → EXEC)
 3. **validate-plan-handoff.js runs**:
    - Fetches PRD from database
-   - Fetches parent SD via `prd.sd_uuid`
+   - Fetches parent SD via `prd.sd_id`
    - Calls `PRDQualityRubric.validatePRDQuality(prd, sd)`
 4. **AI evaluator**:
    - Formats PRD content + SD context
@@ -1162,10 +1162,8 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 | Pattern ID | Category | Severity | Count | Trend | Top Solution |
 |------------|----------|----------|-------|-------|--------------|
 | PAT-003 | security | 🟠 high | 3 | 📉 | Add auth.uid() check to RLS policy USING |
-| PAT-AUTH-PW-001 | testing | 🟠 high | 2 | ➡️ | Use Supabase Admin API with service_role |
 | PAT-008 | deployment | 🟠 high | 2 | ➡️ | Check GitHub Actions secrets and package |
-| PAT-E2E-UI-001 | testing | 🟠 high | 1 | ➡️ | Verify UI exists before writing E2E test |
-| PAT-INTEG-GAP-001 | implementation | 🟠 high | 1 | ➡️ | Verify end-to-end flow manually before c |
+| PAT-MD-001 | database | 🔴 critical | 1 | ➡️ | Key Insight: PostgreSQL direct connectio |
 
 ### Prevention Checklists
 
@@ -1174,86 +1172,20 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 - [ ] Test with authenticated user context
 - [ ] Check policy applies to correct operations
 
-**testing**:
-- [ ] Store service_role key in .env file for programmatic user management
-- [ ] Add verify-test-user.cjs script to test suite for authentication validation
-- [ ] Run authentication verification BEFORE running E2E tests
-
 **deployment**:
 - [ ] Verify all required secrets are set in GitHub
 - [ ] Test locally with same Node version as CI
 - [ ] Check package-lock.json is committed
 
-**implementation**:
-- [ ] Include UI verification checkpoint in EXEC phase
-- [ ] Trace full stack before marking FR complete
-- [ ] Manual smoke test before E2E automation
+**database**:
+- [ ] Check SUPABASE_POOLER_URL availability in .env
+- [ ] Verify migration file exists before execution
+- [ ] Use SSL with rejectUnauthorized: false
 
 
 *Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
 
 
-## 📝 Recent Lessons (Last 30 Days)
-
-**From Published Retrospectives** - Apply these learnings proactively.
-
-### 1. SD-EVA-DECISION-001 Completion Retrospective ⭐
-**Category**: DATABASE_SCHEMA | **Date**: 12/4/2025 | **Score**: 100
-
-**Key Improvements**:
-- Database connection issues - psql timeouts required switching to Node.js Supabase client
-- RLS policy blocks for LEO protocol section inserts - needed service role key
-
-**Action Items**:
-- [ ] Use git worktrees for parallel SD work to prevent stash/branch conflicts
-- [ ] Always use database agent with service role for operations when RLS policies blo...
-
-### 2. SD-STAGE-09-001 Retrospective: EVA L0 Integration for Gap Analysis ⭐
-**Category**: APPLICATION_ISSUE | **Date**: 12/4/2025 | **Score**: 100
-
-**Key Improvements**:
-- SD missing success_metrics and key_principles - caused LEAD handoff rejection
-- User stories table has specific column requirements (user_role, user_want, user_benefit) - not intui...
-
-**Action Items**:
-- [ ] Document SD required fields (success_metrics, key_principles) in CLAUDE_LEAD.md
-- [ ] Add user_stories column requirements to CLAUDE_PLAN.md
-
-### 3. SD-STAGE4-AI-FIRST-UX-001 Comprehensive Retrospective ⭐
-**Category**: APPLICATION_ISSUE | **Date**: 11/15/2025 | **Score**: 100
-
-**Key Improvements**:
-- Unit test timeouts: 11/18 tests timing out (vitest async)
-- E2E test infrastructure: 28/32 failures (mock API config)
-
-**Action Items**:
-- [ ] Create SD-TESTING-INFRASTRUCTURE-FIX-001 for unit test timeout resolution
-- [ ] Fix E2E mock API configuration (28/32 test failures)
-
-### 4. SD-VISION-TRANSITION-001F Completion: CrewAI Integration Wiring ⭐
-**Category**: APPLICATION_ISSUE | **Date**: 12/11/2025 | **Score**: 100
-
-**Key Improvements**:
-- Initial hesitation to start LEO stack instead of explaining why tests could not run - mindset issue
-- E2E tests require live CrewAI platform for full integration testing - should document dependencies
-
-**Action Items**:
-- [ ] Always run leo-stack.sh status before claiming E2E tests cannot run
-- [ ] When implementing new auto-classifiers, create migration to reclassify existing ...
-
-### 5. Chairman Circuit Breaker System - Retrospective ⭐
-**Category**: PERFORMANCE_OPTIMIZATION | **Date**: 12/3/2025 | **Score**: 100
-
-**Key Improvements**:
-- Could add integration tests with actual Supabase calls
-- Dashboard visualization for circuit breaker states not yet implemented
-
-**Action Items**:
-- [ ] Apply withCircuitBreaker wrapper to EVA API calls in production
-- [ ] Create dashboard widget showing circuit breaker states
-
-
-*Lessons auto-generated from `retrospectives` table. Query for full details.*
 
 
 ## Agent Responsibilities
@@ -1310,7 +1242,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ---
 
-*Generated from database: 2025-12-12*
+*Generated from database: 2025-12-13*
 *Protocol Version: 4.3.3*
-*Includes: Hot Patterns (5) + Recent Lessons (5)*
+*Includes: Hot Patterns (3) + Recent Lessons (0)*
 *Load this file first in all sessions*

@@ -24,11 +24,11 @@ async function createPRD() {
     throw new Error('SD not found');
   }
 
+  // SD ID Schema Cleanup (2025-12-12): Use sd.id directly
   const prd = {
     id: 'PRD-VIF-TIER-001',
-    sd_id: sdId,
-    sd_uuid: sd.uuid_id || sd.id,
-    directive_id: sd.id,
+    sd_id: sd.id,  // Canonical FK to strategic_directives_v2.id
+    directive_id: sd.id,  // Legacy column
     title: 'Tiered Ideation Engine - Product Requirements',
     version: '1.0',
     status: 'approved',

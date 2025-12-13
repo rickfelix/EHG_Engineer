@@ -339,7 +339,8 @@ async function seedData() {
     const sd = await createSD(sdConfig);
 
     // Create PRD
-    const prd = await createPRD(sd.id, sd.uuid_id || sd.id);
+    // SD ID Schema Cleanup (2025-12-12): Use sd.id directly
+    const prd = await createPRD(sd.id, sd.id);
 
     console.log(`   ✅ Created test data for ${sdConfig.id} (ready for validation testing)`);
   }

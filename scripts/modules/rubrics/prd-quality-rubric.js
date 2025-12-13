@@ -456,13 +456,15 @@ SD UUID: ${prd.sd_uuid || 'Not linked'}`;
    */
   async validatePRDQuality(prd, sd = null) {
     try {
-      // Fetch SD context if not provided but PRD has sd_uuid
-      if (!sd && prd.sd_uuid) {
+      // Fetch SD context if not provided but PRD has sd_id
+      // SD ID Schema Cleanup (2025-12-12): Use sd_id which references SD.id
+      if (!sd && (prd.sd_id || prd.directive_id)) {
         try {
+          const sdIdValue = prd.sd_id || prd.directive_id;
           const { data: sdData } = await this.supabase
             .from('strategic_directives_v2')
             .select('sd_id, id, title, description, strategic_objectives, success_metrics, problem_statement, business_context')
-            .eq('uuid_id', prd.sd_uuid)
+            .eq('id', sdIdValue)
             .single();
 
           sd = sdData;

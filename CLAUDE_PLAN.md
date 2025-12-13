@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-12-12 7:24:51 PM
+**Generated**: 2025-12-13 8:09:22 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -188,6 +188,23 @@ node scripts/detect-stubbed-code.js <SD-ID>
 **Exit Requirement**: Zero stubbed code in production files, OR documented in "Known Issues" with follow-up SD created.
 
 
+## Enhanced QA Engineering Director v2.0 - Testing-First Edition
+
+**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
+
+**Core Capabilities:**
+1. Professional test case generation from user stories
+2. Pre-test build validation (saves 2-3 hours)
+3. Database migration verification (prevents 1-2 hours debugging)
+4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
+5. Test infrastructure discovery and reuse
+
+**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
+
+**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
+
+**Full Guide**: See `docs/reference/qa-director-guide.md`
+
 ## ✅ Scope Verification with Explore (PLAN_VERIFY)
 
 ## Scope Verification with Explore
@@ -258,23 +275,6 @@ This change [describe]. Options:
 
 Which do you prefer?"
 ```
-
-## Enhanced QA Engineering Director v2.0 - Testing-First Edition
-
-**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
-
-**Core Capabilities:**
-1. Professional test case generation from user stories
-2. Pre-test build validation (saves 2-3 hours)
-3. Database migration verification (prevents 1-2 hours debugging)
-4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
-5. Test infrastructure discovery and reuse
-
-**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
-
-**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
-
-**Full Guide**: See `docs/reference/qa-director-guide.md`
 
 ## Database Schema Documentation
 
@@ -415,33 +415,6 @@ From retrospectives:
 **From SD-UAT-020**:
 > "Created 100+ test checklist but didn't execute manually. Time spent on unused documentation."
 
-## 🔬 BMAD Method Enhancements
-
-## BMAD Enhancements
-
-### 6 Key Improvements
-1. **Unified Handoff System** - All handoffs via `handoff.js`
-2. **Database-First PRDs** - PRDs stored in database, not markdown
-3. **Validation Gates** - 4-gate validation before EXEC
-4. **Progress Tracking** - Automatic progress % calculation
-5. **Context Management** - Proactive monitoring, compression strategies
-6. **Sub-Agent Compression** - 3-tier output reduction
-
-### Using Handoff System
-```bash
-node scripts/handoff.js create "{message}"
-```
-
-### PRD Creation
-```bash
-node scripts/add-prd-to-database.js {SD-ID}
-```
-
-### Never Bypass
-- ⚠️ Always use process scripts
-- ⚠️ Never create PRDs as markdown files
-- ⚠️ Never skip validation gates
-
 ## Research Lookup Before PRD Creation
 
 ## Research Lookup Before PRD Creation (MANDATORY)
@@ -540,20 +513,32 @@ node scripts/add-prd-to-database.js SD-RESEARCH-106
 ```
 
 
-## CI/CD Pipeline Verification
+## 🔬 BMAD Method Enhancements
 
-## CI/CD Pipeline Verification (MANDATORY)
+## BMAD Enhancements
 
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+### 6 Key Improvements
+1. **Unified Handoff System** - All handoffs via `handoff.js`
+2. **Database-First PRDs** - PRDs stored in database, not markdown
+3. **Validation Gates** - 4-gate validation before EXEC
+4. **Progress Tracking** - Automatic progress % calculation
+5. **Context Management** - Proactive monitoring, compression strategies
+6. **Sub-Agent Compression** - 3-tier output reduction
 
-### Verification Process
+### Using Handoff System
+```bash
+node scripts/handoff.js create "{message}"
+```
 
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+### PRD Creation
+```bash
+node scripts/add-prd-to-database.js {SD-ID}
+```
 
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
+### Never Bypass
+- ⚠️ Always use process scripts
+- ⚠️ Never create PRDs as markdown files
+- ⚠️ Never skip validation gates
 
 ## DESIGN→DATABASE Validation Gates
 
@@ -606,6 +591,21 @@ Retroactive audit at SD closure:
 
 **Reference**: `scripts/modules/design-database-gates-validation.js`
 
+
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## 🚪 Gate 2.5: Human Inspectability Validation
 
@@ -662,6 +662,83 @@ When creating EXEC → PLAN handoff, include:
   }
 }
 ```
+
+## Child SD Field Requirements for LEAD Evaluation
+
+### Required Fields for Child SDs
+
+> **CRITICAL**: Child SDs MUST include ALL fields required for LEAD evaluation.
+> LEAD's `autoScore()` function analyzes: title, description, scope, strategic_intent, strategic_objectives.
+> Children with minimal fields will receive "hollow" LEAD evaluations and may pass incorrectly.
+
+| Field | Required | LEAD Evaluation Impact |
+|-------|----------|------------------------|
+| `id` | **YES** | Identification |
+| `title` | **YES** | Scored by autoScore() |
+| `description` | **YES** | Scored by autoScore() - CRITICAL |
+| `scope` | **YES** | Scored by autoScore() - CRITICAL |
+| `rationale` | **YES** | Strategic validation |
+| `category` | **YES** | SD classification |
+| `priority` | **YES** | Execution order |
+| `parent_sd_id` | **YES** | Parent reference |
+| `relationship_type` | **YES** | Must be 'child' |
+| `status` | **YES** | Must be 'draft' |
+| `sd_key` | **YES** | Unique key |
+| `sequence_rank` | **YES** | Execution sequence |
+| `strategic_objectives` | **YES** | Scored by autoScore() |
+| `success_criteria` | **YES** | Completion validation |
+| `key_changes` | Recommended | Change documentation |
+| `risks` | Recommended | Risk assessment |
+| `dependencies` | Recommended | Dependency tracking |
+
+### Validation Before LEAD Handoff
+
+Before handing child SDs to LEAD, validate they have sufficient content:
+
+```javascript
+function validateChildSDForLead(childSD) {
+  const errors = [];
+
+  // Required text fields for autoScore()
+  if (!childSD.description || childSD.description.length < 100) {
+    errors.push('description must be >= 100 chars for proper LEAD evaluation');
+  }
+  if (!childSD.scope || childSD.scope.length < 50) {
+    errors.push('scope must be >= 50 chars for proper LEAD evaluation');
+  }
+  if (!childSD.rationale || childSD.rationale.length < 30) {
+    errors.push('rationale required for strategic validation');
+  }
+
+  // Required arrays
+  if (!childSD.strategic_objectives?.length) {
+    errors.push('strategic_objectives required for LEAD scoring');
+  }
+  if (!childSD.success_criteria?.length) {
+    errors.push('success_criteria required for completion validation');
+  }
+
+  // Relationship fields
+  if (!childSD.parent_sd_id) {
+    errors.push('parent_sd_id required for child SD');
+  }
+  if (childSD.relationship_type !== 'child') {
+    errors.push('relationship_type must be "child"');
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+```
+
+### Use Validation Script
+
+Run the validation script before submitting children to LEAD:
+
+```bash
+node scripts/validate-child-sd-completeness.js <parent_sd_id>
+node scripts/validate-child-sd-completeness.js --all-children
+```
+
 
 ## Pre-Implementation Plan Presentation Template
 
@@ -1008,6 +1085,88 @@ Parent completes when:
 ```
 
 
+### Metadata Inheritance Requirement
+
+When creating child SDs, the parent's metadata MUST be inherited to provide full vision context.
+
+**Required Inheritance:**
+- vision_spec_references (all specs and philosophy docs)
+- governance (strangler pattern, workflow policies)
+- prd_requirements (spec reference requirements)
+- implementation_guidance (creation mode, critical instructions)
+
+**Implementation:**
+```javascript
+// After creating child SD records, inherit parent metadata
+const { data: parent } = await supabase
+  .from('strategic_directives_v2')
+  .select('metadata')
+  .eq('id', parentId)
+  .single();
+
+// Update each child with inherited metadata
+for (const childId of childIds) {
+  await supabase
+    .from('strategic_directives_v2')
+    .update({
+      metadata: {
+        ...childMetadata,
+        inherited_from_parent: {
+          vision_spec_references: parent.metadata.vision_spec_references,
+          governance: parent.metadata.governance,
+          prd_requirements: parent.metadata.prd_requirements,
+          implementation_guidance: parent.metadata.implementation_guidance
+        }
+      }
+    })
+    .eq('id', childId);
+}
+```
+
+> **NOTE**: A database trigger (trg_inherit_parent_metadata) also enforces this automatically as a safety net.
+
+
+## Vision V2 PRD Requirements (SD-VISION-V2-*)
+
+### MANDATORY: Vision Spec Integration in PRDs
+
+**For ALL PRDs for SDs matching `SD-VISION-V2-*`:**
+
+Before creating a PRD, you MUST:
+
+1. **Query SD metadata for vision spec references**
+2. **Read ALL files listed in `must_read_before_prd`**
+3. **Include vision spec citations in PRD sections**
+
+### PRD Section Requirements for Vision V2
+
+| PRD Section | Vision Spec Requirement |
+|-------------|------------------------|
+| `technical_context` | MUST cite specific spec sections that define the implementation |
+| `implementation_approach` | MUST reference spec patterns/examples |
+| `acceptance_criteria` | MUST include "Matches spec Section X" criteria |
+| `metadata` | MUST include `vision_spec_references` from parent SD |
+
+### PRD Template for Vision V2
+
+Add this to PRD's `technical_context`:
+
+```markdown
+### Vision Specification References
+
+This PRD implements requirements from:
+- **Primary Spec**: [spec-name.md](path/to/spec) - Sections X, Y, Z
+- **Design Philosophy**: [VISION_V2_GLASS_COCKPIT.md](VISION_V2_GLASS_COCKPIT.md)
+
+Key spec requirements addressed:
+1. [Requirement from spec Section X]
+2. [Requirement from spec Section Y]
+```
+
+### Implementation Guidance (from SD metadata)
+
+All Vision V2 SDs have `creation_mode: CREATE_FROM_NEW` - implement fresh per specs, learn from existing code but do not modify it.
+
 ## Visual Documentation Best Practices
 
 When creating PRDs and technical specifications, consider adding:
@@ -1079,7 +1238,7 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 
 **What Happens**:
 1. Handoff script fetches PRD from database
-2. If `prd.sd_uuid` exists, fetches parent SD from `strategic_directives_v2`
+2. If `prd.sd_id` exists, fetches parent SD from `strategic_directives_v2`
 3. Passes both PRD + SD context to AI evaluator
 4. AI evaluates PRD requirements against SD strategic objectives
 5. Returns holistic assessment ("PRD architecture is solid but doesn't address SD's cost reduction objective")
@@ -1127,9 +1286,9 @@ const assessment = await userStoryRubric.validateUserStoryQuality(userStory, prd
 
 ### Integration with PRD Schema
 
-**PRD Database Schema** (`prds` table):
+**PRD Database Schema** (`product_requirements_v2` table):
 - `id`: PRD identifier
-- `sd_uuid`: Foreign key to parent Strategic Directive
+- `sd_id`: Foreign key to parent Strategic Directive
 - `functional_requirements`: JSONB array of requirements
 - `ui_ux_requirements`: JSONB array of UI requirements
 - `technical_architecture`: JSONB object (overview, components, data_flow, integration_points)
@@ -1194,7 +1353,7 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
 **Traditional Validation** (still used):
 - Field presence: "Does `functional_requirements` exist?"
 - Data types: "Is `test_scenarios` a JSONB array?"
-- Foreign keys: "Does `sd_uuid` reference a valid Strategic Directive?"
+- Foreign keys: "Does `sd_id` reference a valid Strategic Directive?"
 
 **AI Quality Assessment** (new):
 - Content depth: "Are requirements specific or generic?"
@@ -1240,7 +1399,7 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
 - `/scripts/modules/rubrics/user-story-quality-rubric.js`
 
 **Database Tables**:
-- `prds`: Product Requirements Documents
+- `product_requirements_v2`: Product Requirements Documents
 - `user_stories`: User Stories linked to PRDs
 - `ai_quality_assessments`: Assessment history and scores
 - `handoffs`: Handoff status tracking (includes quality gate results)
@@ -1383,6 +1542,6 @@ Required: [object Object], [object Object], [object Object], [object Object], [o
 
 ---
 
-*Generated from database: 2025-12-12*
+*Generated from database: 2025-12-13*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

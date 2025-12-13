@@ -4,32 +4,32 @@
 
 pillars:
   quality:
-    quality_gate_min_pct: 85         # Gate pass rate target (from vision doc line 16)
+    quality_gate_min_pct: 85         # Gate pass rate target (see `docs/vision/00_VISION_V2_CHAIRMAN_OS.md` → "Gate Architecture")
     backlog_accuracy_target_pct: 80  # % stories with AC + trace links
-    qa_gate_enforcement: true         # No EXEC without Gate 3 validation
+    qa_gate_enforcement: true         # No execution past decision gates without recorded decision (Stages 3,5,13,16,23,25)
     truth_over_polish: true           # Evidence-based decisions only
 
   efficiency:
-    rule_of_40_floor: 40             # Growth + margin heuristic (line 79)
-    burn_multiple_cap: 2.0           # Exception trigger threshold (line 39)
+    rule_of_40_floor: 40             # Growth + margin heuristic (see Vision doc: "Design Principles")
+    burn_multiple_cap: 2.0           # Exception trigger threshold (see Vision doc: "Tokens are capital" / budget guardrails)
     cac_payback_months_max: 12      # Max acceptable payback period
     runway_months_min: 12            # Minimum cash runway requirement
 
   automation:
-    automation_coverage_target_pct: 60  # % work executed by agents vs humans (line 72)
-    agent_alignment_target_pct: 80      # Outputs match strategic rubric (line 74)
+    automation_coverage_target_pct: 60  # % work executed by agents vs humans (see Vision doc: "Automation" principles)
+    agent_alignment_target_pct: 80      # Outputs match strategic rubric (see Vision doc: "EVA" / "Chain of Command")
     agent_decision_quality_min: 85      # Min quality for autonomous decisions
     human_intervention_max_pct: 20      # Max human override rate
 
   governance:
-    evidence_chain_required: true       # DB-sourced, audit-ready (line 77)
+    evidence_chain_required: true       # DB-sourced, audit-ready (see `docs/vision/specs/12-ops-debugging.md` → "End-to-End Traceability")
     sd_prd_required_per_stage: true     # SD/PRD presence at gated stages
     decision_logging_mandatory: true    # All decisions require rationale + evidence
     rubric_scoring_required: true       # Arguments must be scored objectively
 
   growth:
     arr_growth_yoy_min_pct: 100         # Minimum year-over-year growth
-    nrr_floor_pct: 100                  # Net Revenue Retention minimum (line 39)
+    nrr_floor_pct: 100                  # Net Revenue Retention minimum (see Vision doc: growth guardrails)
     grr_floor_pct: 90                   # Gross Revenue Retention minimum
     pipeline_coverage_min: 3.0          # Pipeline to quota ratio
 
@@ -50,12 +50,12 @@ metrics_notes:
   - "DB-first only; if metric not present, mark 'unknown' (do not fail)."
   - "Trace from SD -> PRD -> stories -> backlog -> stage readiness."
   - "Two-app boundary enforced: EHG reads v_eng_* exports only."
-  - "All metrics must have test plans and hypotheses (line 167)."
-  - "Weekly exceptions-only reporting to chairman (line 139)."
-  - "Evidence chain must be provable from database (line 179)."
+  - "All metrics must have test plans and hypotheses (see Vision doc: testing/hypothesis principles)."
+  - "Weekly exceptions-only reporting to chairman (see Vision doc: reporting cadence)."
+  - "Evidence chain must be provable from database (see `docs/vision/specs/12-ops-debugging.md`)."
 
 decision_matrix:
-  # From vision document section 8, line 118-127
+  # From Vision doc: authority boundaries / decision escalation
   ai_inform_only:
     - "Minor plan adjustments within guardrails"
     - "Feature-level prioritization"
@@ -81,7 +81,7 @@ decision_matrix:
     - "Bylaws, litigation over threshold"
 
 operating_principles:
-  # From vision document section 11, line 163-169
+  # From Vision doc: operating principles / governance
   - "Author constraints, not tasks."
   - "Decide with numbers, not narratives."
   - "Default to async; meet only to decide irreversible things."
@@ -89,7 +89,7 @@ operating_principles:
   - "Document once, automate forever."
 
 acceptance_criteria:
-  # From vision document section 12, line 172-179
+  # From Vision doc: acceptance criteria / definition of done
   dashboard:
     - "Growth / Efficiency / Quality pillars online with alerting"
     - "Live DB views with drill-through evidence"

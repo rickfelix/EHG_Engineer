@@ -86,12 +86,17 @@ const PLAN_VERIFY_BY_SD_TYPE = {
 
 /**
  * Query SD details from database
+ * SD-VENTURE-STAGE0-UI-001: Support both UUID and legacy_id lookups
  */
 async function getSDDetails(sdId) {
+  // Check if sdId is a UUID or legacy_id
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
+  const queryField = isUUID ? 'id' : 'legacy_id';
+
   const { data, error } = await supabase
     .from('strategic_directives_v2')
     .select('*')
-    .eq('id', sdId)
+    .eq(queryField, sdId)
     .single();
 
   if (error) {

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-04T23:01:42.129Z
-**Rows**: 515
+**Generated**: 2025-12-12T14:41:05.962Z
+**Rows**: 395
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (71 total)
+## Columns (72 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -74,7 +74,8 @@
 | current_phase | `text` | YES | `'LEAD_APPROVAL'::text` | CURRENT PHASE: Current LEO Protocol workflow phase. Valid values: LEAD_APPROVAL, PLAN_PRD, EXEC_IMPLEMENTATION, PLAN_VERIFY, LEAD_FINAL. Default: LEAD_APPROVAL. |
 | phase_progress | `integer(32)` | YES | `0` | PHASE PROGRESS: Progress within current phase (0-100). Resets to 0 when moving to next phase. Used for granular progress tracking. |
 | is_working_on | `boolean` | YES | `false` | IS WORKING ON: Boolean flag indicating if an agent is actively working on this SD. Used to prevent concurrent modifications. Default: FALSE. |
-| uuid_id | `uuid` | **NO** | `gen_random_uuid()` | INTERNAL UUID: Auto-generated UUID for internal database relationships and foreign keys. Use this for new FK relationships in other tables. Not displayed to users. |
+| uuid_id | `uuid` | **NO** | `gen_random_uuid()` | DEPRECATED (2025-12-12): Do not use for FK relationships.
+Use the id column instead - it is the canonical identifier. |
 | progress_percentage | `integer(32)` | YES | `0` | PROGRESS PERCENTAGE: Current completion percentage (0-100). Calculated from LEO Protocol 5-phase workflow progress. Auto-updated by handoffs. |
 | confidence_score | `integer(32)` | YES | - | CONFIDENCE SCORE: Overall quality/confidence score (0-100) from sub-agent verification. Aggregated from TESTING, SECURITY, DATABASE, etc. NULL until verification complete. |
 | checkpoint_plan | `jsonb` | YES | - | CHECKPOINT PLAN: BMAD Enhancement - Checkpoint breakdown for large SDs (>8 user stories). Structure: { checkpoints: [{ id: 1, user_stories: ["US-001"], estimated_hours: 3, milestone: "Description" }], total_checkpoints: 3 }. NULL for small SDs. |
@@ -89,6 +90,7 @@
 | deprecates_capabilities | `jsonb` | YES | `'[]'::jsonb` | Array of capability_keys to mark as deprecated when SD completes. Format: [{capability_key, reason}] |
 | active_session_id | `text` | YES | - | - |
 | complexity_level | `character varying(20)` | YES | `'moderate'::character varying` | SD complexity level for effort policy lookup: simple, moderate, complex, critical |
+| dependency_chain | `jsonb` | YES | - | For parent SDs: ordered list of child SD IDs with dependencies. Format: {"children": [{"sd_id": "SD-X", "order": 1, "depends_on": null}]} |
 
 ## Constraints
 
@@ -110,7 +112,7 @@
 - `strategic_directives_v2_priority_check`: CHECK (((priority)::text = ANY ((ARRAY['critical'::character varying, 'high'::character varying, 'medium'::character varying, 'low'::character varying])::text[])))
 - `strategic_directives_v2_progress_check`: CHECK (((progress >= 0) AND (progress <= 100)))
 - `strategic_directives_v2_progress_percentage_check`: CHECK (((progress_percentage >= 0) AND (progress_percentage <= 100)))
-- `strategic_directives_v2_relationship_type_check`: CHECK ((relationship_type = ANY (ARRAY['standalone'::text, 'parent'::text, 'child_phase'::text, 'child_independent'::text])))
+- `strategic_directives_v2_relationship_type_check`: CHECK ((relationship_type = ANY (ARRAY['standalone'::text, 'parent'::text, 'child'::text])))
 - `strategic_directives_v2_scope_reduction_check`: CHECK (((scope_reduction_percentage >= 0) AND (scope_reduction_percentage <= 100)))
 - `strategic_directives_v2_status_check`: CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'in_progress'::character varying, 'active'::character varying, 'pending_approval'::character varying, 'completed'::character varying, 'deferred'::character varying, 'cancelled'::character varying])::text[])))
 
@@ -326,6 +328,16 @@
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION fn_handle_capability_lifecycle()`
 
+### trg_check_contract_requirements
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION check_contract_requirements()`
+
+### trg_check_contract_requirements
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION check_contract_requirements()`
+
 ### trg_enforce_metadata_object
 
 - **Timing**: BEFORE INSERT
@@ -335,6 +347,16 @@
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION enforce_metadata_object()`
+
+### trg_inherit_contracts_on_insert
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION inherit_parent_contracts()`
+
+### trg_inherit_contracts_on_update
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION inherit_parent_contracts()`
 
 ### update_sd_timestamp
 
@@ -346,15 +368,10 @@
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION update_updated_at_column()`
 
-### validate_child_sd_phase
-
-- **Timing**: BEFORE INSERT
-- **Action**: `EXECUTE FUNCTION validate_child_sd_phase_transition()`
-
-### validate_child_sd_phase
+### validate_child_sd_sequence
 
 - **Timing**: BEFORE UPDATE
-- **Action**: `EXECUTE FUNCTION validate_child_sd_phase_transition()`
+- **Action**: `EXECUTE FUNCTION validate_child_sd_sequence()`
 
 ## Usage Examples
 
