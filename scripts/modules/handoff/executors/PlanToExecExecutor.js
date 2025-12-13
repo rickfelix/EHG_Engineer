@@ -808,7 +808,7 @@ export class PlanToExecExecutor extends BaseExecutor {
    *
    * 5 Whys Analysis: See SD-QA-STAGES-21-25-001 retrospective
    */
-  async _transitionPrdToExec(prd, sdId) {
+  async _transitionPrdToExec(prd, _sdId) {
     if (!prd) {
       console.log('\n   ⚠️  No PRD to transition');
       return;
