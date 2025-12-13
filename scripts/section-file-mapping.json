@@ -32,7 +32,8 @@
       "database_column_reference",
       "pattern_search_guide",
       "ai_quality_russian_judge",
-      "parent_child_overview"
+      "parent_child_overview",
+      "negative_constraints_global"
     ]
   },
   "CLAUDE_LEAD.md": {
@@ -81,7 +82,9 @@
       "handoff_quality_gates",
       "parent_child_plan",
       "parent_child_validation",
-      "vision_v2_plan"
+      "vision_v2_plan",
+      "negative_constraints_plan",
+      "prd_template_scaffold"
     ]
   },
   "CLAUDE_EXEC.md": {
@@ -104,7 +107,8 @@
       "testing_tools",
       "e2e_testing_mode_configuration",
       "parent_child_exec",
-      "vision_v2_exec"
+      "vision_v2_exec",
+      "negative_constraints_exec"
     ]
   },
   "SHARED": {

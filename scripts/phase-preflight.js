@@ -52,6 +52,113 @@ const PHASE_STRATEGIES = {
 };
 
 /**
+ * SD-LEO-GEMINI-001: Discovery Gate (US-001)
+ *
+ * Validates that ≥5 files have been read before PRD creation begins.
+ * This gate ensures PLAN agents explore the codebase before writing PRDs.
+ *
+ * @param {string} sdId - The Strategic Directive ID
+ * @returns {Object} Discovery gate result with pass/fail and file count
+ */
+async function validateDiscoveryGate(sdId) {
+  console.log('\n🔍 DISCOVERY GATE: Exploration Verification');
+  console.log('='.repeat(60));
+
+  const MINIMUM_FILES = 5;
+  const ADEQUATE_FILES = 10;
+
+  // Check for existing PRD with exploration evidence
+  const { data: prd, error: prdError } = await supabase
+    .from('product_requirements_v2')
+    .select('id, exploration_summary, metadata')
+    .eq('directive_id', sdId)
+    .single();
+
+  // Also check SD metadata for exploration evidence
+  const { data: sd, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('metadata')
+    .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
+    .single();
+
+  // Count files from exploration_summary (preferred) or metadata
+  let filesExplored = [];
+  let source = 'none';
+
+  if (prd?.exploration_summary && Array.isArray(prd.exploration_summary)) {
+    filesExplored = prd.exploration_summary;
+    source = 'prd.exploration_summary';
+  } else if (prd?.metadata?.files_explored && Array.isArray(prd.metadata.files_explored)) {
+    filesExplored = prd.metadata.files_explored;
+    source = 'prd.metadata.files_explored';
+  } else if (sd?.metadata?.exploration_files && Array.isArray(sd.metadata.exploration_files)) {
+    filesExplored = sd.metadata.exploration_files;
+    source = 'sd.metadata.exploration_files';
+  }
+
+  const fileCount = filesExplored.length;
+
+  console.log('\n📊 Discovery Gate Assessment:');
+  console.log(`   Files documented: ${fileCount}`);
+  console.log(`   Minimum required: ${MINIMUM_FILES}`);
+  console.log(`   Source: ${source}`);
+
+  // Determine rating and status
+  let rating, passed, message;
+
+  if (fileCount >= ADEQUATE_FILES) {
+    rating = 'COMPREHENSIVE';
+    passed = true;
+    message = `🎉 Excellent exploration! ${fileCount} files documented.`;
+    console.log(`\n✅ ${message}`);
+  } else if (fileCount >= MINIMUM_FILES) {
+    rating = 'ADEQUATE';
+    passed = true;
+    message = `✅ Adequate exploration (${fileCount} files). Consider exploring more for complex SDs.`;
+    console.log(`\n⚠️  ${message}`);
+  } else if (fileCount > 0) {
+    rating = 'INSUFFICIENT';
+    passed = false;
+    message = `❌ Insufficient exploration: ${fileCount} files documented, minimum ${MINIMUM_FILES} required.`;
+    console.log(`\n${message}`);
+    console.log('\n📋 TO PROCEED:');
+    console.log(`   1. Read at least ${MINIMUM_FILES - fileCount} more relevant files`);
+    console.log('   2. Document exploration in PRD metadata or exploration_summary');
+    console.log('   3. Re-run phase preflight');
+  } else {
+    rating = 'NONE';
+    passed = false;
+    message = `❌ No exploration documented. Read ≥${MINIMUM_FILES} files before creating PRD.`;
+    console.log(`\n${message}`);
+    console.log('\n📋 REQUIRED ACTIONS:');
+    console.log('   1. Use Glob/Read tools to explore codebase');
+    console.log('   2. Document findings in exploration_summary');
+    console.log(`   3. Minimum ${MINIMUM_FILES} files with documented findings`);
+  }
+
+  // Show explored files if any
+  if (fileCount > 0 && fileCount <= 15) {
+    console.log('\n📁 Files Explored:');
+    filesExplored.slice(0, 15).forEach((f, i) => {
+      const filePath = typeof f === 'string' ? f : f.file_path || f.path;
+      console.log(`   ${i + 1}. ${filePath}`);
+    });
+  }
+
+  console.log('\n' + '='.repeat(60));
+
+  return {
+    passed,
+    rating,
+    fileCount,
+    minimumRequired: MINIMUM_FILES,
+    message,
+    filesExplored: filesExplored.map(f => typeof f === 'string' ? f : f.file_path || f.path),
+    source
+  };
+}
+
+/**
  * Get SD metadata
  */
 async function getSDMetadata(sdId) {
@@ -288,6 +395,27 @@ async function main() {
     // Get SD metadata
     const sd = await getSDMetadata(sdId);
     const strategy = PHASE_STRATEGIES[phase];
+
+    // SD-LEO-GEMINI-001 (US-001): Discovery Gate for PLAN phase
+    // Validates that ≥5 files have been explored before PRD creation
+    if (phase === 'PLAN') {
+      const discoveryResult = await validateDiscoveryGate(sdId);
+
+      if (!discoveryResult.passed) {
+        console.log('\n❌ DISCOVERY GATE FAILED');
+        console.log('   Cannot proceed to PLAN phase without adequate codebase exploration.');
+        console.log(`   Status: ${discoveryResult.rating}`);
+        console.log(`   Files documented: ${discoveryResult.fileCount}/${discoveryResult.minimumRequired}`);
+        console.log('\n💡 Run exploration first:');
+        console.log('   1. Use Glob to find relevant files');
+        console.log('   2. Use Read to examine ≥5 files');
+        console.log('   3. Document findings in exploration_summary');
+        console.log('   4. Re-run: node scripts/phase-preflight.js --phase PLAN --sd-id ' + sdId);
+        process.exit(1);
+      }
+
+      console.log(`\n✅ Discovery Gate: ${discoveryResult.rating} (${discoveryResult.fileCount} files)`);
+    }
 
     // Search issue patterns
     const patterns = await searchIssuePatterns(sd.category || sd.title, strategy);

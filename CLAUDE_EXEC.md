@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2025-12-13 8:09:22 PM
+**Generated**: 2025-12-13 8:41:25 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
@@ -215,6 +215,39 @@ If `research_confidence_score = 0.00`, you skipped this step.
 | Simulate sub-agents | 15% quality loss | Execute actual tools |
 
 **Pattern References**: PAT-RECURSION-001 through PAT-RECURSION-005
+
+## EXEC Phase Negative Constraints
+
+## 🚫 EXEC Phase Negative Constraints
+
+<negative_constraints phase="EXEC">
+These anti-patterns are specific to the EXEC phase. Violating them leads to failed tests and rejected handoffs.
+
+### NC-EXEC-001: No Scope Creep
+**Anti-Pattern**: Implementing features not in PRD, "improving" unrelated code, adding "nice to have" features
+**Why Wrong**: Scope creep derails timelines, introduces untested changes, confuses review
+**Correct Approach**: Implement ONLY what's in the PRD. Create new SD for additional work.
+
+### NC-EXEC-002: No Wrong Application Directory
+**Anti-Pattern**: Working in EHG_Engineer when target is ehg app (or vice versa)
+**Why Wrong**: Changes applied to wrong codebase, tests fail in CI, deployment issues
+**Correct Approach**: Verify pwd matches PRD target_application before ANY changes
+
+### NC-EXEC-003: No Tests Without Execution
+**Anti-Pattern**: Claiming "tests exist" without actually running them
+**Why Wrong**: 30-minute gaps between "complete" and discovering failures (SD-EXPORT-001)
+**Correct Approach**: Run BOTH npm run test:unit AND npm run test:e2e, document results
+
+### NC-EXEC-004: No Manual Sub-Agent Simulation
+**Anti-Pattern**: Manually creating sub-agent results instead of executing actual tools
+**Why Wrong**: 15% quality delta between manual (75%) and tool-executed (60%) confidence
+**Correct Approach**: Sub-agent results must have tool_executed: true with real output
+
+### NC-EXEC-005: No UI Without Visibility
+**Anti-Pattern**: Backend implementation without corresponding UI to display results
+**Why Wrong**: LEO v4.3.3 UI Parity Gate blocks features users can't see
+**Correct Approach**: Every backend field must have corresponding UI component
+</negative_constraints>
 
 ## 📚 Skill Integration (EXEC Phase)
 

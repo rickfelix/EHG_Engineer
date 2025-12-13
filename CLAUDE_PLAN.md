@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-12-13 8:09:22 PM
+**Generated**: 2025-12-13 8:41:25 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -139,6 +139,98 @@ VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
 - Set realistic priority (critical items shouldn't be deferred)
 - Max 5 deferred items per SD
 
+## PLAN Phase Negative Constraints
+
+## 🚫 PLAN Phase Negative Constraints
+
+<negative_constraints phase="PLAN">
+These anti-patterns are specific to the PLAN phase. Violating them leads to incomplete PRDs and blocked handoffs.
+
+### NC-PLAN-001: No Implementation in PLAN Phase
+**Anti-Pattern**: Writing actual code (components, services, migrations) during PLAN
+**Why Wrong**: PLAN is for specification, not execution. Code written here won't be tracked.
+**Correct Approach**: Document requirements, architecture, and test scenarios. Save coding for EXEC.
+
+### NC-PLAN-002: No PRD Without Exploration
+**Anti-Pattern**: Creating PRD immediately after SD approval without reading codebase
+**Why Wrong**: PRDs miss existing infrastructure, create duplicate work, conflict with patterns
+**Correct Approach**: Read ≥5 relevant files, document findings in exploration_summary
+
+### NC-PLAN-003: No Boilerplate Acceptance Criteria
+**Anti-Pattern**: Using generic criteria like "all tests pass", "code review done", "meets requirements"
+**Why Wrong**: Russian Judge detects boilerplate (≤50% score), blocks PLAN→EXEC handoff
+**Correct Approach**: Write specific, measurable criteria tied to functional requirements
+
+### NC-PLAN-004: No Skipping Sub-Agents
+**Anti-Pattern**: Creating PRD without running DESIGN, DATABASE sub-agents
+**Why Wrong**: Gate 1 blocks handoff if sub-agent execution not recorded
+**Correct Approach**: Execute sub-agents via lib/sub-agent-executor.js, store results in database
+
+### NC-PLAN-005: No Placeholder Requirements
+**Anti-Pattern**: Using "TBD", "to be defined", "will be determined" in requirements
+**Why Wrong**: PRD validator blocks placeholders, signals incomplete planning
+**Correct Approach**: If truly unknown, use AskUserQuestion to clarify before PRD creation
+</negative_constraints>
+
+## PRD Template Scaffolding
+
+## 📋 PRD Template Scaffolding
+
+When creating a PRD, use this scaffold as a starting point. Fill in each section with specific, measurable content.
+
+### PRD Creation Checklist
+
+Before running `node scripts/add-prd-to-database.js`:
+
+1. **Exploration Complete?** (Discovery Gate)
+   - [ ] Read ≥5 relevant files
+   - [ ] Documented findings in exploration_summary
+   - [ ] Identified existing patterns to follow
+
+2. **Requirements Specific?** (Russian Judge)
+   - [ ] No "TBD" or placeholder text
+   - [ ] Each requirement has acceptance criteria
+   - [ ] Test scenarios are concrete (not "verify it works")
+
+3. **Architecture Defined?**
+   - [ ] Integration points identified
+   - [ ] Data flow documented
+   - [ ] Dependencies listed
+
+### PRD Section Guide
+
+| Section | Guiding Questions | Example |
+|---------|-------------------|---------|
+| **executive_summary** | What? Why? Impact? | "This PRD defines X to solve Y, reducing Z by N%" |
+| **functional_requirements** | What must it do? How measured? | FR-1: System shall display X when Y occurs |
+| **technical_requirements** | What technologies? Constraints? | Must integrate with existing Supabase RLS |
+| **system_architecture** | How do components interact? | Data flows: API → Service → Database |
+| **test_scenarios** | How do we verify? Edge cases? | TS-1: Given empty input, should show validation error |
+| **acceptance_criteria** | How do we know it's done? | All E2E tests pass, Russian Judge ≥70% |
+| **risks** | What could go wrong? Mitigations? | Risk: API rate limits. Mitigation: caching layer |
+
+### PRD Script Usage
+
+```bash
+# Create PRD with all required fields
+node scripts/add-prd-to-database.js \
+  --sd-id SD-XXX-001 \
+  --title "Feature Name" \
+  --status planning
+
+# Or use the generated script template:
+node scripts/create-prd-sd-xxx-001.js
+```
+
+### Self-Critique Before Handoff
+
+Before submitting PLAN→EXEC handoff, ask yourself:
+- **Confidence (1-10)**: How confident am I this PRD is complete?
+- **Gaps**: What areas might need clarification during EXEC?
+- **Assumptions**: What am I assuming that should be validated?
+
+If confidence < 7, revisit the PRD before handoff.
+
 ## Stubbed/Mocked Code Detection
 
 
@@ -187,23 +279,6 @@ node scripts/detect-stubbed-code.js <SD-ID>
 
 **Exit Requirement**: Zero stubbed code in production files, OR documented in "Known Issues" with follow-up SD created.
 
-
-## Enhanced QA Engineering Director v2.0 - Testing-First Edition
-
-**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
-
-**Core Capabilities:**
-1. Professional test case generation from user stories
-2. Pre-test build validation (saves 2-3 hours)
-3. Database migration verification (prevents 1-2 hours debugging)
-4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
-5. Test infrastructure discovery and reuse
-
-**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
-
-**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
-
-**Full Guide**: See `docs/reference/qa-director-guide.md`
 
 ## ✅ Scope Verification with Explore (PLAN_VERIFY)
 
@@ -275,6 +350,23 @@ This change [describe]. Options:
 
 Which do you prefer?"
 ```
+
+## Enhanced QA Engineering Director v2.0 - Testing-First Edition
+
+**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
+
+**Core Capabilities:**
+1. Professional test case generation from user stories
+2. Pre-test build validation (saves 2-3 hours)
+3. Database migration verification (prevents 1-2 hours debugging)
+4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
+5. Test infrastructure discovery and reuse
+
+**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
+
+**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
+
+**Full Guide**: See `docs/reference/qa-director-guide.md`
 
 ## Database Schema Documentation
 
