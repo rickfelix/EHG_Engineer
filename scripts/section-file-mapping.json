@@ -33,7 +33,8 @@
       "pattern_search_guide",
       "ai_quality_russian_judge",
       "parent_child_overview",
-      "negative_constraints_global"
+      "negative_constraints_global",
+      "sd_type_workflow_paths"
     ]
   },
   "CLAUDE_LEAD.md": {

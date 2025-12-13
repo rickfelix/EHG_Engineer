@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-13 8:41:25 PM
+**Generated**: 2025-12-13 9:19:32 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -227,39 +227,6 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 *Added: SD-EVA-DECISION-001 to prevent haiku model usage*
 
 
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
-
 ## Execution Philosophy
 
 ## 🧠 EXECUTION PHILOSOPHY (Read First!)
@@ -317,6 +284,39 @@ These principles override default behavior and must be internalized before start
 
 **REMEMBER**: The goal is NOT to complete SDs quickly. The goal is to complete SDs CORRECTLY. A properly implemented SD that takes 8 hours is infinitely better than a rushed implementation that takes 4 hours but requires 6 hours of fixes.
 
+
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## 🎯 Skill Integration (Claude Code Skills)
 
@@ -801,6 +801,39 @@ SELECT get_next_child_sd('SD-PARENT-001');
 ```
 
 
+## SD Type-Aware Workflow Paths
+
+**IMPORTANT**: Different SD types have different required handoffs. Always check the workflow before executing handoffs.
+
+### Workflow Command
+```bash
+# Check recommended workflow for any SD
+node scripts/handoff.js workflow SD-XXX-001
+```
+
+### Workflow by SD Type
+
+| SD Type | Required Handoffs | Optional | Skipped Validation |
+|---------|-------------------|----------|-------------------|
+| **feature** | LEAD→PLAN→EXEC→PLAN (verify)→LEAD (final) | None | None |
+| **infrastructure** | LEAD→PLAN→EXEC→LEAD (final) | EXEC-TO-PLAN | TESTING, GITHUB, E2E, Gates 3&4 |
+| **documentation** | LEAD→PLAN→EXEC→LEAD (final) | EXEC-TO-PLAN | All code validation |
+| **database** | Full workflow | None | Some E2E (UI-dependent) |
+| **security** | Full workflow | None | None |
+
+### Key Rules
+
+1. **Feature SDs**: Full 5-handoff workflow with all validation gates
+2. **Infrastructure SDs**: Can skip EXEC-TO-PLAN (no code to validate)
+3. **Documentation SDs**: Can skip EXEC-TO-PLAN (no implementation to verify)
+4. **Database/Security SDs**: Full workflow but may skip UI-dependent E2E tests
+
+### Pre-Handoff Check
+Before executing any handoff:
+1. Run `node scripts/handoff.js workflow SD-ID` to see the recommended path
+2. The execute command will warn you if a handoff is optional
+3. Infrastructure/docs SDs can proceed directly from EXEC to PLAN-TO-LEAD
+
 ## Database-First Enforcement - Expanded
 
 **Database-First Enforcement (MANDATORY)**:
@@ -1219,6 +1252,23 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 *Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
 
 
+## 📝 Recent Lessons (Last 30 Days)
+
+**From Published Retrospectives** - Apply these learnings proactively.
+
+### 1. LEO Protocol Enhancement: Discovery Gate & Quality Improvements - Retrospective ⭐
+**Category**: TESTING_STRATEGY | **Date**: 12/12/2025 | **Score**: 100
+
+**Key Improvements**:
+- RETRO sub-agent accumulates duplicates - needs deduplication logic
+- Infrastructure SDs lack unified test evidence - need alternative validation
+
+**Action Items**:
+- [ ] RETRO Deduplication | Owner: LEO Team | Due: 2025-01-15 | Acceptance: No duplica...
+- [ ] Infrastructure Test Validation | Owner: LEO Team | Due: 2025-01-31 | Acceptance:...
+
+
+*Lessons auto-generated from `retrospectives` table. Query for full details.*
 
 
 ## Agent Responsibilities
@@ -1277,5 +1327,5 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 *Generated from database: 2025-12-13*
 *Protocol Version: 4.3.3*
-*Includes: Hot Patterns (3) + Recent Lessons (0)*
+*Includes: Hot Patterns (3) + Recent Lessons (1)*
 *Load this file first in all sessions*
