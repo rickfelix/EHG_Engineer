@@ -67,8 +67,8 @@ export class PlanToExecExecutor extends BaseExecutor {
         console.log('-'.repeat(50));
 
         // Get PRD for validation
-        const sdUuid = sd.uuid_id || sd.id;
-        const prd = await this.prdRepo?.getBySdUuid(sdUuid);
+        // SD ID Schema Cleanup: Use sd.id directly (uuid_id deprecated)
+        const prd = await this.prdRepo?.getBySdId(sd.id);
 
         if (!prd) {
           console.log('   ⚠️  No PRD found - skipping contract validation');
@@ -173,8 +173,8 @@ export class PlanToExecExecutor extends BaseExecutor {
     console.log('\n📦 Step 1.5: Auto-Populate Deliverables from PRD');
     console.log('-'.repeat(50));
 
-    const sdUuid = sd.uuid_id || sd.id;
-    const prd = await this.prdRepo?.getBySdUuid(sdUuid);
+    // SD ID Schema Cleanup: Use sd.id directly (uuid_id deprecated)
+    const prd = await this.prdRepo?.getBySdId(sd.id);
 
     if (prd) {
       try {

@@ -105,10 +105,13 @@ export class PlanToLeadExecutor extends BaseExecutor {
         }
 
         // Load retrospective for this SD
+        // SD-VENTURE-STAGE0-UI-001: Use UUID (ctx.sd.id) not legacy_id (ctx.sdId)
+        // because retrospectives are stored with the SD's UUID
+        const sdUuid = ctx.sd?.id || ctx.sdId;
         const { data: retrospective } = await this.supabase
           .from('retrospectives')
           .select('*')
-          .eq('sd_id', ctx.sdId)
+          .eq('sd_id', sdUuid)
           .order('created_at', { ascending: false })
           .limit(1)
           .single();
@@ -429,8 +432,8 @@ export class PlanToLeadExecutor extends BaseExecutor {
     // ═══════════════════════════════════════════════════════════════════════════
 
     // Load PRD
-    const sdUuid = sd.uuid_id || sd.id;
-    const prd = await this.prdRepo?.getBySdUuid(sdUuid);
+    // SD ID Schema Cleanup: Use sd.id directly (uuid_id deprecated)
+    const prd = await this.prdRepo?.getBySdId(sd.id);
 
     if (!prd) {
       // For non-orchestrator SDs, missing PRD is an error

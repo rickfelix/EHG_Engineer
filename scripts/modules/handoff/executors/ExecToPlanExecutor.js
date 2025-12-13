@@ -125,8 +125,8 @@ export class ExecToPlanExecutor extends BaseExecutor {
 
   async executeSpecific(sdId, sd, options, gateResults) {
     // Load PRD
-    const sdUuid = sd.uuid_id || sd.id;
-    const prd = await this.prdRepo?.getBySdUuid(sdUuid);
+    // SD ID Schema Cleanup: Use sd.id directly (uuid_id deprecated)
+    const prd = await this.prdRepo?.getBySdId(sd.id);
 
     if (!prd) {
       console.warn('⚠️  No PRD found for SD');
@@ -303,7 +303,8 @@ export class ExecToPlanExecutor extends BaseExecutor {
     await this._transitionUserStoriesToValidated(sdId);
 
     // 6b. Update PRD status to verification
-    const prdForTransition = await this.prdRepo?.getBySdUuid(sd.uuid_id || sd.id);
+    // SD ID Schema Cleanup: Use sd.id directly (uuid_id deprecated)
+    const prdForTransition = await this.prdRepo?.getBySdId(sd.id);
     await this._transitionPrdToVerification(prdForTransition);
 
     // 6c. Update SD status (may fail due to progress trigger - that's expected)

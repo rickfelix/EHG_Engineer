@@ -41,7 +41,8 @@ export class HandoffOrchestrator {
       'LEAD-TO-PLAN',
       'PLAN-TO-EXEC',
       'EXEC-TO-PLAN',
-      'PLAN-TO-LEAD'
+      'PLAN-TO-LEAD',
+      'LEAD-FINAL-APPROVAL'
     ];
 
     // Executors (will be lazy loaded or injected)
@@ -152,6 +153,7 @@ export class HandoffOrchestrator {
     const { ExecToPlanExecutor } = await import('./executors/ExecToPlanExecutor.js');
     const { PlanToLeadExecutor } = await import('./executors/PlanToLeadExecutor.js');
     const { LeadToPlanExecutor } = await import('./executors/LeadToPlanExecutor.js');
+    const { LeadFinalApprovalExecutor } = await import('./executors/LeadFinalApprovalExecutor.js');
 
     // Create executor instances with shared dependencies
     const executorDeps = {
@@ -166,7 +168,8 @@ export class HandoffOrchestrator {
       'LEAD-TO-PLAN': new LeadToPlanExecutor(executorDeps),
       'PLAN-TO-EXEC': new PlanToExecExecutor(executorDeps),
       'EXEC-TO-PLAN': new ExecToPlanExecutor(executorDeps),
-      'PLAN-TO-LEAD': new PlanToLeadExecutor(executorDeps)
+      'PLAN-TO-LEAD': new PlanToLeadExecutor(executorDeps),
+      'LEAD-FINAL-APPROVAL': new LeadFinalApprovalExecutor(executorDeps)
     };
   }
 

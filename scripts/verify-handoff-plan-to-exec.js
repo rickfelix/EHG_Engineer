@@ -246,17 +246,15 @@ class PlanToExecVerifier {
       }
       
       // 2. Load associated PRD
-      // Use sd_uuid (post-migration) with fallback to uuid_id lookup
-      const sdUuid = sd.uuid_id || sd.id;
-
+      // SD ID Schema Cleanup (2025-12-12): Use sd.id directly (uuid_id deprecated)
       const prdQuery = prdId
         ? this.supabase.from('product_requirements_v2').select('*').eq('id', prdId)
-        : this.supabase.from('product_requirements_v2').select('*').eq('sd_uuid', sdUuid);
+        : this.supabase.from('product_requirements_v2').select('*').eq('sd_id', sd.id);
 
       const { data: prds, error: prdError } = await prdQuery;
 
       if (prdError || !prds || prds.length === 0) {
-        console.log(`   ❌ No PRD found with sd_uuid: ${sdUuid}`);
+        console.log(`   ❌ No PRD found with sd_id: ${sd.id}`);
         console.log('   PRD Error:', prdError);
         return this.rejectHandoff(sdId, 'NO_PRD', 'No PRD found for Strategic Directive');
       }

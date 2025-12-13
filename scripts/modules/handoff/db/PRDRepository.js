@@ -3,6 +3,11 @@
  * Part of LEO Protocol Unified Handoff System refactor
  *
  * Consolidates all PRD query patterns into a single, testable module.
+ *
+ * SD ID SCHEMA CLEANUP (2025-12-12):
+ * - sd_uuid column has been dropped
+ * - sd_id column now contains strategic_directives_v2.id values
+ * - All lookups now use sd_id as the canonical column
  */
 
 export class PRDRepository {
@@ -14,22 +19,56 @@ export class PRDRepository {
   }
 
   /**
-   * Get PRD by SD UUID
-   * @param {string} sdUuid - Strategic Directive UUID
+   * Get PRD by SD ID
+   *
+   * @param {string} sdId - Strategic Directive ID (SD.id value, e.g., "SD-050" or UUID)
    * @returns {Promise<object|null>} PRD record or null
    */
-  async getBySdUuid(sdUuid) {
+  async getBySdId(sdId) {
+    // Primary lookup by sd_id (canonical column after schema cleanup)
     const { data: prds, error } = await this.supabase
       .from('product_requirements_v2')
       .select('*')
-      .eq('sd_uuid', sdUuid);
+      .eq('sd_id', sdId);
 
     if (error) {
-      console.warn(`PRD query error: ${error.message}`);
-      return null;
+      console.warn(`PRD query error (sd_id): ${error.message}`);
     }
 
-    return prds?.[0] || null;
+    if (prds && prds.length > 0) {
+      return prds[0];
+    }
+
+    // Fallback: Try directive_id column (for very old PRDs created before standardization)
+    const { data: fallback, error: fallbackErr } = await this.supabase
+      .from('product_requirements_v2')
+      .select('*')
+      .eq('directive_id', sdId);
+
+    if (fallbackErr) {
+      console.warn(`PRD query error (directive_id): ${fallbackErr.message}`);
+    }
+
+    if (fallback && fallback.length > 0) {
+      console.log('   ℹ️  PRD found via directive_id column (legacy fallback)');
+      return fallback[0];
+    }
+
+    return null;
+  }
+
+  /**
+   * Get PRD by SD UUID (deprecated - use getBySdId instead)
+   *
+   * @deprecated Use getBySdId() instead. This method is kept for backward
+   * compatibility during the transition period.
+   *
+   * @param {string} sdUuid - Strategic Directive UUID (now equivalent to SD.id)
+   * @returns {Promise<object|null>} PRD record or null
+   */
+  async getBySdUuid(sdUuid) {
+    console.warn('DEPRECATED: getBySdUuid() - use getBySdId() instead');
+    return this.getBySdId(sdUuid);
   }
 
   /**
@@ -76,14 +115,14 @@ export class PRDRepository {
 
   /**
    * Get exec_checklist from PRD
-   * @param {string} sdUuid - Strategic Directive UUID
+   * @param {string} sdId - Strategic Directive ID
    * @returns {Promise<object|null>} exec_checklist object
    */
-  async getExecChecklist(sdUuid) {
+  async getExecChecklist(sdId) {
     const { data: prd, error } = await this.supabase
       .from('product_requirements_v2')
       .select('exec_checklist')
-      .eq('sd_uuid', sdUuid)
+      .eq('sd_id', sdId)
       .single();
 
     if (error || !prd) {
@@ -95,16 +134,26 @@ export class PRDRepository {
 
   /**
    * Check if PRD exists for SD
-   * @param {string} sdUuid - Strategic Directive UUID
+   *
+   * @param {string} sdId - Strategic Directive ID
    * @returns {Promise<boolean>}
    */
-  async existsForSd(sdUuid) {
-    const { count, error } = await this.supabase
+  async existsForSd(sdId) {
+    // Check sd_id (canonical)
+    const { count: count1 } = await this.supabase
       .from('product_requirements_v2')
       .select('id', { count: 'exact', head: true })
-      .eq('sd_uuid', sdUuid);
+      .eq('sd_id', sdId);
 
-    return !error && count > 0;
+    if (count1 > 0) return true;
+
+    // Fallback: check directive_id (legacy)
+    const { count: count2 } = await this.supabase
+      .from('product_requirements_v2')
+      .select('id', { count: 'exact', head: true })
+      .eq('directive_id', sdId);
+
+    return count2 > 0;
   }
 }
 
