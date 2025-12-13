@@ -168,8 +168,11 @@ class LeadToPlanVerifier {
       }
 
       // 4. Check Strategic Directive status
-      if (sd.status !== 'active' && sd.status !== 'approved' && sd.status !== 'in_progress') {
-        return this.rejectHandoff(sdId, 'SD_STATUS', `SD status is '${sd.status}', expected 'active', 'approved', or 'in_progress'`);
+      // Accept 'draft' for new SDs (LEAD-TO-PLAN is the first transition)
+      // Note: 'approved' is not a valid DB status - removed from check
+      const validStatuses = ['draft', 'active', 'in_progress'];
+      if (!validStatuses.includes(sd.status)) {
+        return this.rejectHandoff(sdId, 'SD_STATUS', `SD status is '${sd.status}', expected one of: ${validStatuses.join(', ')}`);
       }
       
       // 5. Validate business impact and feasibility
