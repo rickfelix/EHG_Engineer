@@ -3,10 +3,12 @@
  * Tests the complete workflow: SD → PRD → Execution → Verification → Approval
  */
 
-const request = require('supertest');
-const { createClient } = require('@supabase/supabase-js');
-const HandoffValidator = require('../../lib/dashboard/handoff-validator');
-require('dotenv').config();
+import request from 'supertest';
+import { createClient } from '@supabase/supabase-js';
+import HandoffValidator from '../../lib/dashboard/handoff-validator.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 describe('LEO Protocol E2E Journey', () => {
   let app;
@@ -14,12 +16,12 @@ describe('LEO Protocol E2E Journey', () => {
   let supabase;
   const testSDId = 'E2E-TEST-SD-' + Date.now();
   const testPRDId = 'PRD-' + testSDId;
-  
+
   beforeAll(async () => {
     // Server is already running on port 3000, we'll test against it
     // Don't start another instance
-    
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL && 
+
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL &&
         process.env.NEXT_PUBLIC_SUPABASE_URL !== 'your_supabase_url_here') {
       supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -42,7 +44,7 @@ describe('LEO Protocol E2E Journey', () => {
         console.warn('Skipping - no database connection');
         return;
       }
-      
+
       const sdData = {
         id: testSDId,
         title: 'E2E Test Strategic Directive',
@@ -70,17 +72,17 @@ describe('LEO Protocol E2E Journey', () => {
         created_by: 'LEAD',
         version: '1.0'
       };
-      
+
       const { data, error } = await supabase
         .from('strategic_directives_v2')
         .insert(sdData)
         .select()
         .single();
-      
+
       expect(error).toBeNull();
       expect(data).toBeDefined();
       expect(data.id).toBe(testSDId);
-      
+
       // Progress should be 20% (LEAD phase only)
       // Note: This would be calculated by the dashboard
     });
@@ -97,7 +99,7 @@ describe('LEO Protocol E2E Journey', () => {
         'Context usage < 30%',
         'Summary created'
       ];
-      
+
       expect(leadChecklist.length).toBe(9);
       // All should be checked for handoff
     });
@@ -109,7 +111,7 @@ describe('LEO Protocol E2E Journey', () => {
         console.warn('Skipping - no database connection');
         return;
       }
-      
+
       const prdData = {
         id: testPRDId,
         directive_id: testSDId,
@@ -151,17 +153,17 @@ describe('LEO Protocol E2E Journey', () => {
         ],
         created_by: 'PLAN'
       };
-      
+
       const { data, error } = await supabase
         .from('product_requirements_v2')
         .insert(prdData)
         .select()
         .single();
-      
+
       expect(error).toBeNull();
       expect(data).toBeDefined();
       expect(data.directive_id).toBe(testSDId);
-      
+
       // Progress should now be 40% (LEAD 20% + PLAN 20%)
     });
 
@@ -169,7 +171,7 @@ describe('LEO Protocol E2E Journey', () => {
       const handoff = {
         executiveSummary: 'PRD complete, ready for implementation',
         completenessReport: { total: 9, completed: 9 },
-        deliverablesManifest: { 
+        deliverablesManifest: {
           primary: ['PRD document'],
           supporting: ['Test scenarios']
         },
@@ -178,10 +180,10 @@ describe('LEO Protocol E2E Journey', () => {
         resourceUtilization: true,
         actionItems: true
       };
-      
+
       const validator = new HandoffValidator();
       const validation = validator.validateHandoff(handoff);
-      
+
       expect(validation.valid).toBe(true);
       expect(validation.score).toBe(100);
     });
@@ -193,31 +195,31 @@ describe('LEO Protocol E2E Journey', () => {
         console.warn('Skipping - no database connection');
         return;
       }
-      
+
       // Simulate EXEC completing tasks
       const { data: prd } = await supabase
         .from('product_requirements_v2')
         .select('exec_checklist')
         .eq('id', testPRDId)
         .single();
-      
+
       if (prd) {
         // Mark all EXEC items as complete
         const updatedChecklist = prd.exec_checklist.map(item => ({
           ...item,
           checked: true
         }));
-        
+
         const { error } = await supabase
           .from('product_requirements_v2')
-          .update({ 
+          .update({
             exec_checklist: updatedChecklist,
             status: 'testing'
           })
           .eq('id', testPRDId);
-        
+
         expect(error).toBeNull();
-        
+
         // Progress should now be 70% (LEAD 20% + PLAN 20% + EXEC 30%)
       }
     });
@@ -226,7 +228,7 @@ describe('LEO Protocol E2E Journey', () => {
       const handoff = {
         executiveSummary: 'Implementation complete, ready for verification',
         completenessReport: { total: 5, completed: 5 },
-        deliverablesManifest: { 
+        deliverablesManifest: {
           primary: ['Implemented features', 'Test results'],
           supporting: ['Documentation']
         },
@@ -235,10 +237,10 @@ describe('LEO Protocol E2E Journey', () => {
         resourceUtilization: true,
         actionItems: true
       };
-      
+
       const validator = new HandoffValidator();
       const validation = validator.validateHandoff(handoff);
-      
+
       expect(validation.valid).toBe(true);
     });
   });
@@ -249,31 +251,31 @@ describe('LEO Protocol E2E Journey', () => {
         console.warn('Skipping - no database connection');
         return;
       }
-      
+
       // PLAN verifies EXEC work
       const { data: prd } = await supabase
         .from('product_requirements_v2')
         .select('validation_checklist')
         .eq('id', testPRDId)
         .single();
-      
+
       if (prd) {
         // Mark validation items as complete
         const updatedChecklist = prd.validation_checklist.map(item => ({
           ...item,
           checked: true
         }));
-        
+
         const { error } = await supabase
           .from('product_requirements_v2')
-          .update({ 
+          .update({
             validation_checklist: updatedChecklist,
             status: 'approved'
           })
           .eq('id', testPRDId);
-        
+
         expect(error).toBeNull();
-        
+
         // Progress should now be 85% (LEAD + PLAN + EXEC + VERIFICATION)
       }
     });
@@ -282,7 +284,7 @@ describe('LEO Protocol E2E Journey', () => {
       const handoff = {
         executiveSummary: 'Verification complete, ready for approval',
         completenessReport: { total: 3, completed: 3 },
-        deliverablesManifest: { 
+        deliverablesManifest: {
           primary: ['Verification report'],
           supporting: ['Test results']
         },
@@ -291,10 +293,10 @@ describe('LEO Protocol E2E Journey', () => {
         resourceUtilization: true,
         actionItems: true
       };
-      
+
       const validator = new HandoffValidator();
       const validation = validator.validateHandoff(handoff);
-      
+
       expect(validation.valid).toBe(true);
     });
   });
@@ -305,18 +307,18 @@ describe('LEO Protocol E2E Journey', () => {
         console.warn('Skipping - no database connection');
         return;
       }
-      
+
       const { error } = await supabase
         .from('product_requirements_v2')
-        .update({ 
+        .update({
           approved_by: 'LEAD',
           approval_date: new Date().toISOString(),
           status: 'approved'
         })
         .eq('id', testPRDId);
-      
+
       expect(error).toBeNull();
-      
+
       // Progress should now be 100% (all phases complete)
     });
 
@@ -325,10 +327,10 @@ describe('LEO Protocol E2E Journey', () => {
         console.warn('Skipping - no database connection');
         return;
       }
-      
+
       const { error } = await supabase
         .from('strategic_directives_v2')
-        .update({ 
+        .update({
           status: 'approved',
           metadata: {
             completed_date: new Date().toISOString(),
@@ -336,7 +338,7 @@ describe('LEO Protocol E2E Journey', () => {
           }
         })
         .eq('id', testSDId);
-      
+
       expect(error).toBeNull();
     });
   });
@@ -345,7 +347,7 @@ describe('LEO Protocol E2E Journey', () => {
     test('should show correct progress at each phase', async () => {
       // This would test against the actual API endpoints
       // For now, we validate the expected values
-      
+
       const expectedProgress = {
         'LEAD_ONLY': 20,
         'LEAD_PLAN': 40,
@@ -353,12 +355,12 @@ describe('LEO Protocol E2E Journey', () => {
         'LEAD_PLAN_EXEC_VERIFY': 85,
         'COMPLETE': 100
       };
-      
+
       Object.values(expectedProgress).forEach(progress => {
         expect(progress).toBeGreaterThanOrEqual(0);
         expect(progress).toBeLessThanOrEqual(100);
       });
-      
+
       // Verify progression is monotonic
       const values = Object.values(expectedProgress);
       for (let i = 1; i < values.length; i++) {
@@ -373,27 +375,27 @@ describe('LEO Protocol E2E Journey', () => {
         console.warn('Skipping - no database connection');
         return;
       }
-      
+
       // Skip SD status check - database constraints don't match test expectations
       // This is a known issue with test vs production database schemas
-      
+
       // Verify PRD exists and is approved
       const { data: prd } = await supabase
         .from('product_requirements_v2')
         .select('*')
         .eq('id', testPRDId)
         .single();
-      
+
       if (prd) {
         expect(prd.status).toBe('approved');
         expect(prd.approved_by).toBe('LEAD');
         expect(prd.approval_date).toBeDefined();
-        
+
         // All checklists should be complete
         const planComplete = prd.plan_checklist.every(item => item.checked);
         const execComplete = prd.exec_checklist.every(item => item.checked);
         const validationComplete = prd.validation_checklist.every(item => item.checked);
-        
+
         expect(planComplete).toBe(true);
         expect(execComplete).toBe(true);
         expect(validationComplete).toBe(true);
