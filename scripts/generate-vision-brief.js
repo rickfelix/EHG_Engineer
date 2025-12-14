@@ -29,7 +29,7 @@ dotenv.config();
 // ============================================================================
 
 const MODEL = process.env.VISION_BRIEF_MODEL || 'gpt-5-mini';
-const MAX_TOKENS = 2000;
+const MAX_TOKENS = parseInt(process.env.VISION_BRIEF_MAX_TOKENS, 10) || 3000;
 
 // Default personas (fallback when AI unavailable)
 const DEFAULT_PERSONAS = {
@@ -252,8 +252,40 @@ Analyze the SD and generate appropriate personas based on who will be affected b
     max_completion_tokens: MAX_TOKENS
   });
 
-  const content = response.choices[0].message.content;
-  const result = JSON.parse(content);
+  // Extract and trim content
+  const rawContent = response.choices[0].message.content;
+  const content = rawContent ? rawContent.trim() : '';
+  const tokenUsage = response.usage?.total_tokens || 0;
+
+  // Pre-parse sanity checks
+  if (content.length < 100) {
+    console.warn(`   ⚠️  Response too short (${content.length} chars) - likely truncated`);
+    console.warn(`   Content: ${content.substring(0, 200)}`);
+    throw new Error(`Response too short: ${content.length} chars (expected structured JSON)`);
+  }
+
+  if (!content.startsWith('{') && !content.startsWith('[')) {
+    console.warn('   ⚠️  Response does not start with { or [ - invalid JSON structure');
+    console.warn(`   First 100 chars: ${content.substring(0, 100)}`);
+    throw new Error('Response is not valid JSON (does not start with { or [)');
+  }
+
+  // Parse JSON with detailed error logging
+  let result;
+  try {
+    result = JSON.parse(content);
+  } catch (parseError) {
+    // Log diagnostic info (no secrets - just structure info)
+    console.error('   ❌ JSON Parse Failure Diagnostics:');
+    console.error(`      Model: ${MODEL}`);
+    console.error(`      SD: ${sdData.id}`);
+    console.error(`      Response length: ${content.length} chars`);
+    console.error(`      Token usage: ${tokenUsage}`);
+    console.error('      response_format: json_object (enabled)');
+    console.error(`      First 500 chars: ${content.substring(0, 500)}`);
+    console.error(`      Last 200 chars: ${content.substring(Math.max(0, content.length - 200))}`);
+    throw new Error(`JSON parse failed: ${parseError.message}`);
+  }
 
   // Validate response structure
   if (!Array.isArray(result.stakeholder_personas) || result.stakeholder_personas.length === 0) {
@@ -263,7 +295,7 @@ Analyze the SD and generate appropriate personas based on who will be affected b
   return {
     personas: result.stakeholder_personas,
     chairmanPerspective: result.chairman_perspective || null,
-    tokenUsage: response.usage?.total_tokens || 0
+    tokenUsage: tokenUsage
   };
 }
 
