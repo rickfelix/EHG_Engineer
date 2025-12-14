@@ -80,7 +80,9 @@ jobs:
           FAILURE_COUNT=0
           while IFS= read -r conclusion; do
             if [[ "$conclusion" == "failure" ]]; then
-              ((FAILURE_COUNT++))
+              # Use safe arithmetic that works with bash -e (set -e)
+              # ((FAILURE_COUNT++)) returns exit code 1 when incrementing from 0
+              FAILURE_COUNT=$((FAILURE_COUNT + 1))
             else
               break
             fi
