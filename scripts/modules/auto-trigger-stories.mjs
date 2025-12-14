@@ -6,12 +6,236 @@
  * Automatically generates user stories after PRD creation
  * Part of Phase 3.2: Enhanced user story validation enforcement
  *
+ * SD-TYPE-AWARE GENERATION (v1.1.0):
+ * Now aligns story generation with validation expectations by SD type.
+ * - FEATURE/SECURITY: Strict - Given-When-Then format with edge cases
+ * - DOCUMENTATION: Lenient - Simple criteria, focus on completeness
+ * - INFRASTRUCTURE/DATABASE: Moderate - Allow technical benefits
+ *
  * Usage:
  *   import { autoTriggerStories } from './modules/auto-trigger-stories.mjs';
  *   await autoTriggerStories(supabase, sdId, prdId);
  */
 
 import { randomUUID } from 'crypto';
+import { isPersonaStoryRoleEnabled } from '../lib/persona-extractor.js';
+
+// ============================================
+// SD-TYPE-AWARE ACCEPTANCE CRITERIA (v1.1.0)
+// Aligns generation with user-story-quality-rubric.js validation
+// ============================================
+
+/**
+ * Get SD type from database
+ * @param {object} supabase - Supabase client
+ * @param {string} sdId - Strategic Directive ID
+ * @returns {Promise<string>} SD type (feature, documentation, infrastructure, database, security)
+ */
+async function getSDType(supabase, sdId) {
+  try {
+    const { data: sd, error } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_type, category')
+      .eq('legacy_id', sdId)
+      .single();
+
+    if (error || !sd) {
+      console.log(`   ⚠️  Could not fetch SD type, defaulting to 'feature'`);
+      return 'feature';
+    }
+
+    // sd_type takes precedence over category
+    return sd.sd_type || sd.category || 'feature';
+  } catch (err) {
+    console.log(`   ⚠️  SD type lookup error: ${err.message}, defaulting to 'feature'`);
+    return 'feature';
+  }
+}
+
+/**
+ * Transform acceptance criteria based on SD type
+ * Aligns with user-story-quality-rubric.js validation expectations
+ *
+ * @param {Array} criteria - Original acceptance criteria from PRD
+ * @param {string} sdType - SD type (feature, documentation, infrastructure, etc.)
+ * @param {object} context - Additional context (requirement text, etc.)
+ * @returns {Array} Transformed acceptance criteria
+ */
+function transformAcceptanceCriteria(criteria, sdType, context = {}) {
+  if (!Array.isArray(criteria) || criteria.length === 0) {
+    // Generate default criteria based on SD type
+    return generateDefaultCriteria(sdType, context);
+  }
+
+  const normalizedType = (sdType || 'feature').toLowerCase();
+
+  // LENIENT: Documentation SDs - keep criteria simple
+  if (normalizedType === 'documentation') {
+    return criteria.map(ac => normalizeAcceptanceCriterion(ac, 'documentation'));
+  }
+
+  // MODERATE: Infrastructure/Database - allow technical focus
+  if (normalizedType === 'infrastructure' || normalizedType === 'database') {
+    return criteria.map(ac => normalizeAcceptanceCriterion(ac, normalizedType));
+  }
+
+  // STRICT: Feature/Security - ensure Given-When-Then with specificity
+  return criteria.map(ac => {
+    const normalized = normalizeAcceptanceCriterion(ac, normalizedType);
+    return ensureGivenWhenThen(normalized, normalizedType);
+  });
+}
+
+/**
+ * Normalize an acceptance criterion to standard object format
+ */
+function normalizeAcceptanceCriterion(ac, sdType) {
+  // Already in object format
+  if (typeof ac === 'object' && ac !== null) {
+    return {
+      id: ac.id || `AC-${randomUUID().substring(0, 8)}`,
+      criteria: ac.criteria || ac.description || ac.text || String(ac),
+      type: ac.type || inferCriteriaType(ac.criteria || '', sdType)
+    };
+  }
+
+  // String format - convert to object
+  return {
+    id: `AC-${randomUUID().substring(0, 8)}`,
+    criteria: String(ac),
+    type: inferCriteriaType(String(ac), sdType)
+  };
+}
+
+/**
+ * Infer criteria type from content
+ */
+function inferCriteriaType(criteriaText, sdType) {
+  const text = (criteriaText || '').toLowerCase();
+
+  if (text.includes('performance') || text.includes('load') || text.includes('response time')) {
+    return 'performance';
+  }
+  if (text.includes('error') || text.includes('fail') || text.includes('invalid')) {
+    return 'edge-case';
+  }
+  if (text.includes('mobile') || text.includes('responsive') || text.includes('viewport')) {
+    return 'responsive';
+  }
+  if (text.includes('api') || text.includes('endpoint') || text.includes('database')) {
+    return 'integration';
+  }
+  if (text.includes('display') || text.includes('show') || text.includes('render')) {
+    return 'ui';
+  }
+
+  // Default based on SD type
+  if (sdType === 'infrastructure') return 'technical';
+  if (sdType === 'documentation') return 'completeness';
+  if (sdType === 'database') return 'data-integrity';
+  if (sdType === 'security') return 'security';
+
+  return 'functional';
+}
+
+/**
+ * Ensure criteria follows Given-When-Then format for strict SD types
+ */
+function ensureGivenWhenThen(criterion, sdType) {
+  const text = criterion.criteria || '';
+
+  // Already in Given-When-Then format
+  if (/given\s+.+,?\s*when\s+.+,?\s*then\s+/i.test(text)) {
+    return criterion;
+  }
+
+  // Convert to Given-When-Then format
+  const converted = convertToGivenWhenThen(text, sdType);
+
+  return {
+    ...criterion,
+    criteria: converted,
+    original_format: text // Preserve original for reference
+  };
+}
+
+/**
+ * Convert plain text criteria to Given-When-Then format
+ */
+function convertToGivenWhenThen(text, sdType) {
+  // If already formatted, return as-is
+  if (/given\s+/i.test(text)) {
+    return text;
+  }
+
+  // Common patterns to convert
+  const textLower = text.toLowerCase();
+
+  // "X should Y" pattern
+  if (textLower.includes('should')) {
+    const parts = text.split(/\s+should\s+/i);
+    if (parts.length === 2) {
+      return `Given ${parts[0].trim()}, When the action is performed, Then it should ${parts[1].trim()}`;
+    }
+  }
+
+  // "When X, Y happens" pattern
+  if (textLower.startsWith('when ')) {
+    const afterWhen = text.substring(5);
+    const commaParts = afterWhen.split(',');
+    if (commaParts.length >= 2) {
+      return `Given the system is ready, When ${commaParts[0].trim()}, Then ${commaParts.slice(1).join(',').trim()}`;
+    }
+    return `Given the system is ready, ${text}`;
+  }
+
+  // "X must Y" pattern
+  if (textLower.includes('must')) {
+    const parts = text.split(/\s+must\s+/i);
+    if (parts.length === 2) {
+      return `Given ${parts[0].trim()} exists, When validated, Then it must ${parts[1].trim()}`;
+    }
+  }
+
+  // Default: wrap in Given-When-Then
+  if (sdType === 'security') {
+    return `Given a security context, When the feature is used, Then ${text}`;
+  }
+
+  return `Given the feature is implemented, When the user interacts with it, Then ${text}`;
+}
+
+/**
+ * Generate default criteria when none provided
+ */
+function generateDefaultCriteria(sdType, context) {
+  const requirement = context.requirement || 'the feature';
+
+  const defaults = {
+    documentation: [
+      { id: 'AC-001', criteria: `Given the documentation update, When reviewed, Then all content is accurate and complete`, type: 'completeness' },
+      { id: 'AC-002', criteria: `Given the documentation, When accessed by users, Then it is findable and readable`, type: 'functional' }
+    ],
+    infrastructure: [
+      { id: 'AC-001', criteria: `Given ${requirement} is deployed, When under normal load, Then response time is < 500ms`, type: 'performance' },
+      { id: 'AC-002', criteria: `Given ${requirement}, When monitored, Then metrics are visible in the dashboard`, type: 'technical' }
+    ],
+    database: [
+      { id: 'AC-001', criteria: `Given the migration runs, When executed, Then data integrity is preserved`, type: 'data-integrity' },
+      { id: 'AC-002', criteria: `Given the migration, When it fails, Then rollback restores previous state`, type: 'edge-case' }
+    ],
+    security: [
+      { id: 'AC-001', criteria: `Given unauthorized access attempt, When detected, Then access is denied and logged`, type: 'security' },
+      { id: 'AC-002', criteria: `Given valid credentials, When authenticating, Then access is granted within security policy`, type: 'functional' }
+    ],
+    feature: [
+      { id: 'AC-001', criteria: `Given the user accesses ${requirement}, When the page loads, Then the expected content is displayed`, type: 'functional' },
+      { id: 'AC-002', criteria: `Given an error occurs, When the user sees the error, Then a helpful message guides next steps`, type: 'edge-case' }
+    ]
+  };
+
+  return defaults[sdType] || defaults.feature;
+}
 
 /**
  * Validate that sdId is a valid SD key format, not a UUID
@@ -53,7 +277,8 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
   const {
     skipIfExists = true,
     notifyOnSkip = true,
-    logExecution = true
+    logExecution = true,
+    personaContext = []
   } = options;
 
   // Validate sdId format FIRST before any database operations
@@ -136,7 +361,8 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
     console.log('🤖 Step 3: Generating user stories from PRD...\n');
 
     // Generate user stories from PRD functional requirements
-    const userStories = await generateUserStoriesFromPRD(prd, sdId, prdId);
+    // Now SD-type-aware (v1.1.0) - passes supabase to fetch SD type for criteria transformation
+    const userStories = await generateUserStoriesFromPRD(supabase, prd, sdId, prdId, personaContext);
 
     if (userStories.length === 0) {
       console.log('   ⚠️  No functional requirements found in PRD');
@@ -219,8 +445,20 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
 
 /**
  * Generate user stories from PRD functional requirements
+ *
+ * SD-TYPE-AWARE (v1.1.0):
+ * Now fetches SD type and transforms acceptance criteria to match validation expectations.
+ * - FEATURE/SECURITY: Ensures Given-When-Then format
+ * - DOCUMENTATION: Keeps criteria simple
+ * - INFRASTRUCTURE/DATABASE: Allows technical focus
+ *
+ * @param {object} supabase - Supabase client for SD type lookup
+ * @param {object} prd - PRD record
+ * @param {string} sdId - Strategic directive ID
+ * @param {string} prdId - PRD ID
+ * @param {Array} personaContext - Optional array of persona objects
  */
-async function generateUserStoriesFromPRD(prd, sdId, prdId) {
+async function generateUserStoriesFromPRD(supabase, prd, sdId, prdId, personaContext = []) {
   const userStories = [];
 
   // Extract functional requirements if available
@@ -229,6 +467,10 @@ async function generateUserStoriesFromPRD(prd, sdId, prdId) {
   if (functionalRequirements.length === 0) {
     return userStories;
   }
+
+  // SD-TYPE-AWARE: Fetch SD type for criteria transformation
+  const sdType = await getSDType(supabase, sdId);
+  console.log(`   📋 SD Type: ${sdType} (criteria will be ${sdType === 'feature' || sdType === 'security' ? 'STRICT' : sdType === 'documentation' ? 'LENIENT' : 'MODERATE'})`);
 
   for (let i = 0; i < functionalRequirements.length; i++) {
     const fr = functionalRequirements[i];
@@ -241,10 +483,18 @@ async function generateUserStoriesFromPRD(prd, sdId, prdId) {
                         fr.priority === 'MEDIUM' ? 2 : 1;
 
     // Determine user role from requirement or default to stakeholder
-    const userRole = extractUserRole(fr.requirement, prd.category);
+    // Now uses persona context when available (feature-flagged)
+    const userRole = extractUserRole(fr.requirement, prd.category, personaContext);
 
     // Convert priority to lowercase for user story status
     const priority = (fr.priority || 'medium').toLowerCase();
+
+    // SD-TYPE-AWARE: Transform acceptance criteria based on SD type
+    const transformedCriteria = transformAcceptanceCriteria(
+      fr.acceptance_criteria || [],
+      sdType,
+      { requirement: fr.requirement }
+    );
 
     const userStory = {
       id: randomUUID(),
@@ -258,10 +508,16 @@ async function generateUserStoriesFromPRD(prd, sdId, prdId) {
       story_points: storyPoints,
       priority: priority,
       status: 'ready',
-      acceptance_criteria: fr.acceptance_criteria || [],
+      acceptance_criteria: transformedCriteria, // Now SD-type-aware
       implementation_context: fr.description || fr.requirement || 'Implementation details to be defined during EXEC phase',
       technical_notes: fr.rationale || '',
-      created_by: 'PRODUCT_REQUIREMENTS_EXPERT'
+      created_by: 'PRODUCT_REQUIREMENTS_EXPERT',
+      // Track that criteria were transformed (for debugging/audit)
+      metadata: {
+        sd_type_at_generation: sdType,
+        criteria_transformation_applied: true,
+        generation_version: '1.1.0'
+      }
     };
 
     userStories.push(userStory);
@@ -271,9 +527,64 @@ async function generateUserStoriesFromPRD(prd, sdId, prdId) {
 }
 
 /**
- * Extract user role from requirement text or category
+ * Lookup user role from persona context
+ * Matches requirement keywords against persona names/needs
+ * @param {string} requirementText - The requirement text to analyze
+ * @param {Array} personaContext - Array of persona objects
+ * @returns {string|null} - Matched persona name or null if no match
  */
-function extractUserRole(requirement, category) {
+function lookupPersonaRole(requirementText, personaContext) {
+  if (!Array.isArray(personaContext) || personaContext.length === 0) {
+    return null;
+  }
+
+  const textLower = (requirementText || '').toLowerCase();
+  if (!textLower) return null;
+
+  // Try to match against persona names and needs
+  for (const persona of personaContext) {
+    const personaName = (persona.name || '').toLowerCase();
+    const personaId = (persona.persona_id || '').toLowerCase();
+
+    // Direct name match (e.g., "chairman" in text matches Chairman persona)
+    if (personaName && textLower.includes(personaId)) {
+      return persona.name;
+    }
+
+    // Match against persona needs keywords
+    if (Array.isArray(persona.needs)) {
+      for (const need of persona.needs) {
+        const needKeywords = (need || '').toLowerCase().split(/\s+/);
+        // If any significant keyword (>4 chars) from needs appears in text
+        for (const keyword of needKeywords) {
+          if (keyword.length > 4 && textLower.includes(keyword)) {
+            return persona.name;
+          }
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract user role from requirement text or category
+ * Now supports persona context with feature flag
+ * @param {string} requirement - The requirement text
+ * @param {string} category - The SD category
+ * @param {Array} personaContext - Optional array of persona objects
+ */
+function extractUserRole(requirement, category, personaContext = []) {
+  // STEP 1: Try persona-based role lookup (feature-flagged)
+  if (isPersonaStoryRoleEnabled() && personaContext.length > 0) {
+    const personaRole = lookupPersonaRole(requirement, personaContext);
+    if (personaRole) {
+      return personaRole;
+    }
+  }
+
+  // STEP 2: Fallback to keyword extraction
   const requirementLower = (requirement || '').toLowerCase();
 
   // Role keywords mapping
