@@ -36,7 +36,13 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   // Test directory - excludes venture-creation (those use playwright-ehg.config.js)
   testDir: './tests/e2e',
-  testIgnore: ['**/venture-creation/**'],
+  // Exclude Jest-style tests (.test.js) - those run via Jest, not Playwright
+  // Playwright tests use .spec.ts/.spec.js naming convention
+  testIgnore: [
+    '**/venture-creation/**',
+    '**/*.test.js',      // Jest convention - run via npm test, not Playwright
+    '**/*.test.ts',      // Jest convention
+  ],
 
   // Run tests in files in parallel
   fullyParallel: true,
