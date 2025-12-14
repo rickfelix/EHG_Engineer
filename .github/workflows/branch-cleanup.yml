@@ -87,17 +87,15 @@ jobs:
               else summary.abandoned++;
             }
 
-            const summaryText = `
-## Open PR Age Distribution
-
-| Age | Count |
-|-----|-------|
-| Fresh (< 7 days) | ${summary.fresh} |
-| Aging (7-14 days) | ${summary.aging} |
-| Stale (14-30 days) | ${summary.stale} |
-| Abandoned (> 30 days) | ${summary.abandoned} |
-
-**Total open PRs:** ${prs.data.length}
-`;
-            core.summary.addRaw(summaryText);
-            await core.summary.write();
+            // Build summary using core.summary API (avoids YAML parsing issues)
+            await core.summary
+              .addHeading('Open PR Age Distribution', 2)
+              .addTable([
+                [{data: 'Age', header: true}, {data: 'Count', header: true}],
+                ['Fresh (< 7 days)', summary.fresh.toString()],
+                ['Aging (7-14 days)', summary.aging.toString()],
+                ['Stale (14-30 days)', summary.stale.toString()],
+                ['Abandoned (> 30 days)', summary.abandoned.toString()]
+              ])
+              .addRaw(`\n**Total open PRs:** ${prs.data.length}\n`)
+              .write();
