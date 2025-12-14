@@ -111,7 +111,7 @@ export class SemanticTargetApplicationValidator {
     // Test model availability, fall back if needed
     try {
       await this._testModel(this.model);
-    } catch (error) {
+    } catch (_error) {
       console.warn(`   ⚠️  Model ${this.model} not available, falling back to ${FALLBACK_MODEL}`);
       this.model = FALLBACK_MODEL;
     }
@@ -252,7 +252,7 @@ Determine the correct target_application with confidence score.`;
       let result;
       try {
         result = JSON.parse(rawResponse);
-      } catch (parseError) {
+      } catch (_parseError) {
         console.error('   ❌ Failed to parse LLM response as JSON');
         return {
           pass: false,
