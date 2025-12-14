@@ -24,8 +24,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
+import { validateTargetApplication } from '../validators/semantic-target-application-validator.js';
 
 dotenv.config();
+
+// Configuration: Set to true to enable semantic target_application validation
+const ENABLE_SEMANTIC_VALIDATION = process.env.ENABLE_SEMANTIC_TARGET_VALIDATION !== 'false';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -252,6 +256,49 @@ async function createStrategicDirective() {
   };
 
   try {
+    // ══════════════════════════════════════════════════════════════════════════
+    // STEP 1: SEMANTIC TARGET APPLICATION VALIDATION (HARD GATE)
+    // ══════════════════════════════════════════════════════════════════════════
+    if (ENABLE_SEMANTIC_VALIDATION) {
+      console.log('\n🎯 Running semantic target_application validation...\n');
+
+      const validationResult = await validateTargetApplication(strategicDirective);
+
+      if (!validationResult.pass) {
+        console.error('');
+        console.error('╔═══════════════════════════════════════════════════════════════════════╗');
+        console.error('║  ⛔ SD CREATION BLOCKED: target_application validation failed         ║');
+        console.error('╠═══════════════════════════════════════════════════════════════════════╣');
+        console.error(`║  Confidence: ${String(validationResult.confidence + '%').padEnd(58)}║`);
+        console.error(`║  Reasoning: ${validationResult.reasoning.substring(0, 57).padEnd(58)}║`);
+        console.error('╠═══════════════════════════════════════════════════════════════════════╣');
+        console.error('║  To proceed, either:                                                  ║');
+        console.error('║  1. Set target_application explicitly in the SD definition           ║');
+        console.error('║  2. Clarify the SD scope/description and retry                        ║');
+        console.error('║  3. Set ENABLE_SEMANTIC_TARGET_VALIDATION=false to skip (not advised)║');
+        console.error('╚═══════════════════════════════════════════════════════════════════════╝');
+        console.error('');
+        throw new Error(`target_application validation failed (confidence: ${validationResult.confidence}%)`);
+      }
+
+      // Auto-set target_application if not already set
+      if (!strategicDirective.target_application || strategicDirective.target_application.includes('[')) {
+        console.log(`   ✅ Auto-setting target_application = "${validationResult.target_application}"`);
+        strategicDirective.target_application = validationResult.target_application;
+      } else if (validationResult.mismatch) {
+        console.warn(`   ⚠️  Warning: Set value "${strategicDirective.target_application}" differs from LLM recommendation "${validationResult.target_application}"`);
+        console.warn('   Proceeding with explicit value. Review if issues arise.');
+      }
+
+      console.log('');
+    } else {
+      console.log('   ⚠️  Semantic target_application validation DISABLED');
+      console.log('   Set ENABLE_SEMANTIC_TARGET_VALIDATION=true to enable\n');
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // STEP 2: CHECK IF SD EXISTS
+    // ══════════════════════════════════════════════════════════════════════════
     // Check if SD already exists
     const { data: existing, error: checkError } = await supabase
       .from('strategic_directives_v2')
