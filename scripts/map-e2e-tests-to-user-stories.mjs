@@ -25,9 +25,10 @@ import path from 'path';
 
 dotenv.config();
 
+// Use service role key for write operations (anon key is read-only due to RLS)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
 const EHG_APP_PATH = '/mnt/c/_EHG/ehg';
