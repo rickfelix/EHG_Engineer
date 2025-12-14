@@ -93,7 +93,7 @@ async function main() {
   console.log('');
 
   // Initialize Supabase client
-  const supabase = createSupabaseServiceClient('engineer');
+  const supabase = await createSupabaseServiceClient('engineer');
 
   // Step 1: Fetch SD record
   console.log('Step 1: Fetching SD record...');

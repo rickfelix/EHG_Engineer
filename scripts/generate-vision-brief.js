@@ -164,7 +164,10 @@ function generateChairmanPerspective(sdData) {
 function extractPrimaryKpi(sdData) {
   const objectives = sdData.strategic_objectives;
   if (Array.isArray(objectives) && objectives.length > 0) {
-    return objectives[0].substring(0, 100);
+    const first = objectives[0];
+    // Handle both string and object formats
+    const text = typeof first === 'string' ? first : (first?.objective || first?.description || JSON.stringify(first));
+    return text.substring(0, 100);
   }
   if (sdData.description) {
     return sdData.description.substring(0, 100);
@@ -246,7 +249,7 @@ Analyze the SD and generate appropriate personas based on who will be affected b
       { role: 'user', content: userPrompt }
     ],
     response_format: { type: 'json_object' },
-    max_tokens: MAX_TOKENS
+    max_completion_tokens: MAX_TOKENS
   });
 
   const content = response.choices[0].message.content;
@@ -294,7 +297,7 @@ async function main() {
   console.log('');
 
   // Initialize Supabase client
-  const supabase = createSupabaseServiceClient('engineer');
+  const supabase = await createSupabaseServiceClient('engineer');
 
   // Step 1: Fetch SD record
   console.log('Step 1: Fetching SD record...');
