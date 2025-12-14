@@ -236,6 +236,13 @@ async function main() {
   console.log(`   Model:     ${providerInfo.model}`);
   console.log(`   Reason:    ${providerInfo.reason}`);
   console.log(`   Available: ${providerInfo.available ? 'YES' : 'NO'}`);
+
+  // Preflight warning: auto mode but Gemini not configured
+  if (providerMode === ProviderMode.AUTO && !process.env.GEMINI_API_KEY && process.env.OPENAI_API_KEY) {
+    console.log('');
+    console.log('   ⚠️  Gemini not configured (GEMINI_API_KEY missing)');
+    console.log('   → Will use OpenAI as fallback');
+  }
   console.log('');
 
   // Check provider availability early
