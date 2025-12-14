@@ -21,6 +21,14 @@ import {
   shouldSkipCodeValidation,
   getValidationRequirements
 } from '../lib/utils/sd-type-validation.js';
+import {
+  extractPersonasFromSD,
+  isPersonaIngestionEnabled,
+  isPersonaPromptInjectionEnabled,
+  isPersonaSoftGateEnabled,
+  isVisionBriefApproved,
+  buildPersonaContextString
+} from './lib/persona-extractor.js';
 dotenv.config();
 
 async function addPRDToDatabase(sdId, prdTitle) {
@@ -91,7 +99,7 @@ CREATE TABLE IF NOT EXISTS product_requirements_v2 (
 
     const { data: sdData, error: sdError } = await supabase
       .from('strategic_directives_v2')
-      .select('id, legacy_id, scope, description, strategic_objectives, title, sd_type, category')
+      .select('id, legacy_id, scope, description, strategic_objectives, title, sd_type, category, metadata')
       .eq(queryField, sdId)
       .single();
 
@@ -150,6 +158,67 @@ CREATE TABLE IF NOT EXISTS product_requirements_v2 (
       console.log('      /quick-fix [describe the documentation task]');
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // PERSONA INGESTION (Vision Discovery Pipeline)
+    // ═══════════════════════════════════════════════════════════
+    let stakeholderPersonas = [];
+    let personaSource = 'disabled';
+
+    if (isPersonaIngestionEnabled()) {
+      const personaResult = extractPersonasFromSD(sdData);
+      stakeholderPersonas = personaResult.personas;
+      personaSource = personaResult.source;
+
+      if (personaResult.source === 'metadata') {
+        console.log(`\n   👥 PERSONA_INGESTION: found ${personaResult.count} personas in SD.metadata`);
+        stakeholderPersonas.forEach(p => console.log(`      - ${p.name}`));
+      } else if (personaResult.source === 'defaults') {
+        console.log(`\n   👥 PERSONA_INGESTION: using ${personaResult.count} defaults (reason: missing/empty in metadata)`);
+        stakeholderPersonas.forEach(p => console.log(`      - ${p.name}`));
+      }
+    } else {
+      console.log('\n   ℹ️  PERSONA_INGESTION: disabled via PERSONA_INGESTION_ENABLED=false');
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // SOFT GATE: Feature SDs require approved vision brief
+    // ═══════════════════════════════════════════════════════════
+    const effectiveSdType = sdData.sd_type || 'unknown';
+    const hasRealPersonas = personaSource === 'metadata'; // From SD.metadata, not auto-generated defaults
+    const briefApproved = isVisionBriefApproved(sdData);
+    const skipVisionBrief = process.argv.includes('--skip-vision-brief');
+
+    // Gate requires: soft gate enabled + ingestion enabled + feature type
+    // Must have BOTH: real personas from metadata AND approved vision brief
+    if (isPersonaSoftGateEnabled() && isPersonaIngestionEnabled() && effectiveSdType === 'feature') {
+      const gatePass = hasRealPersonas && briefApproved;
+
+      if (!gatePass && !skipVisionBrief) {
+        console.log('\n   ⚠️  PERSONA SOFT GATE: Feature SD requires approved vision brief');
+
+        if (!hasRealPersonas) {
+          // Case 1: No persona payload at all
+          console.log('      No persona payload found in SD.metadata.vision_discovery');
+          console.log('      Feature SDs benefit from stakeholder personas for better PRD quality.\n');
+          console.log('   💡 Generate vision brief:');
+          console.log('      node scripts/generate-vision-brief.js ' + sdId + ' --confirm\n');
+        } else if (!briefApproved) {
+          // Case 2: Personas exist but not approved
+          const currentStatus = sdData?.metadata?.vision_discovery?.approval?.status || 'unknown';
+          console.log(`      Persona payload exists but is not approved (status: ${currentStatus})`);
+          console.log('      Chairman must approve vision brief before PRD creation.\n');
+          console.log('   💡 Approve vision brief:');
+          console.log('      node scripts/approve-vision-brief.js ' + sdId + '\n');
+        }
+
+        console.log('   🚫 Blocking PRD creation. To proceed without approval:');
+        console.log('      node scripts/add-prd-to-database.js ' + sdId + ' --skip-vision-brief\n');
+        process.exit(1);
+      } else if (!gatePass && skipVisionBrief) {
+        console.log('\n   ⏭️  Proceeding without approved vision brief (--skip-vision-brief flag provided)\n');
+      }
+    }
+
     // Create PRD entry
     const { data, error } = await supabase
       .from('product_requirements_v2')
@@ -204,6 +273,7 @@ CREATE TABLE IF NOT EXISTS product_requirements_v2 (
           { id: 'TS-1', scenario: 'To be defined during planning', test_type: 'unit' }
         ],
         progress: 10,
+        stakeholders: stakeholderPersonas,
         content: `# Product Requirements Document
 
 ## Strategic Directive
@@ -247,6 +317,24 @@ This PRD defines the technical requirements and implementation approach for ${sd
     console.log('Database record:', JSON.stringify(data, null, 2));
 
     // ═══════════════════════════════════════════════════════════
+    // BUILD PERSONA CONTEXT FOR SUB-AGENT PROMPTS
+    // ═══════════════════════════════════════════════════════════
+    let personaContextBlock = '';
+
+    if (isPersonaPromptInjectionEnabled() && stakeholderPersonas.length > 0) {
+      const { context, truncated } = buildPersonaContextString(stakeholderPersonas);
+      personaContextBlock = context;
+
+      if (truncated) {
+        console.log('\n   ⚠️  PERSONA_PROMPT_INJECTION: context truncated (exceeded max length)');
+      } else {
+        console.log(`\n   ✅ PERSONA_PROMPT_INJECTION: built context for ${stakeholderPersonas.length} personas`);
+      }
+    } else if (!isPersonaPromptInjectionEnabled()) {
+      console.log('\n   ℹ️  PERSONA_PROMPT_INJECTION: disabled via PERSONA_PROMPT_INJECTION_ENABLED=false');
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // PHASE 1: DESIGN ANALYSIS (UI/UX workflows → informs user stories)
     // ═══════════════════════════════════════════════════════════
     console.log('\n═══════════════════════════════════════════════════');
@@ -260,14 +348,14 @@ This PRD defines the technical requirements and implementation approach for ${sd
 
       const { execSync } = await import('child_process');
 
-      // Prepare context for design agent
+      // Prepare context for design agent (with persona injection if available)
       const designPrompt = `Analyze UI/UX design and user workflows for Strategic Directive: ${sdId}
 
 **SD Title**: ${sdData.title || 'N/A'}
 **SD Scope**: ${sdData.scope || 'N/A'}
 **SD Description**: ${sdData.description || 'N/A'}
 **SD Objectives**: ${sdData.strategic_objectives || 'N/A'}
-
+${personaContextBlock ? `\n${personaContextBlock}` : ''}
 **Task**:
 1. Identify user workflows and interaction patterns
 2. Determine UI components and layouts needed
@@ -343,14 +431,14 @@ Please analyze user workflows and design requirements.`;
 
       const { execSync } = await import('child_process');
 
-      // Prepare context for database agent (including design analysis if available)
+      // Prepare context for database agent (including design analysis and personas if available)
       const dbAgentPrompt = `Analyze database schema for Strategic Directive: ${sdId}
 
 **SD Title**: ${sdData.title || 'N/A'}
 **SD Scope**: ${sdData.scope || 'N/A'}
 **SD Description**: ${sdData.description || 'N/A'}
 **SD Objectives**: ${sdData.strategic_objectives || 'N/A'}
-
+${personaContextBlock ? `\n${personaContextBlock}` : ''}
 ${designAnalysis ? `
 **DESIGN ANALYSIS CONTEXT** (from DESIGN sub-agent):
 ${designAnalysis}
@@ -578,7 +666,8 @@ Please analyze and provide structured recommendations.`;
       const storiesResult = await autoTriggerStories(supabase, sdId, prdId, {
         skipIfExists: true,
         notifyOnSkip: true,
-        logExecution: true
+        logExecution: true,
+        personaContext: stakeholderPersonas
       });
 
       if (storiesResult.skipped) {
