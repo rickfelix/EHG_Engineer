@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-12-14 12:48:13 PM
+**Generated**: 2025-12-14 2:43:55 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -291,52 +291,6 @@ node scripts/detect-stubbed-code.js <SD-ID>
 
 **Exit Requirement**: Zero stubbed code in production files, OR documented in "Known Issues" with follow-up SD created.
 
-
-## PLAN-TO-EXEC Checklist (MANDATORY)
-
-## 🚪 PLAN-TO-EXEC Checklist (MANDATORY)
-
-Before running `node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX`, verify ALL items:
-
-### 1. PRD Complete ✅
-- [ ] PRD created via `node scripts/add-prd-to-database.js` or generated script
-- [ ] No placeholder text ("TBD", "to be defined")
-- [ ] Functional requirements have acceptance criteria
-- [ ] Technical architecture documented
-
-### 2. User Stories Generated ✅
-- [ ] User stories generated from PRD (auto-trigger or manual)
-- [ ] **≥80% of stories have implementation_context** (BMAD requirement)
-- [ ] Each story has: technical_approach, files_to_create/modify, dependencies, estimated_effort
-
-```bash
-# Generate user stories from PRD
-node scripts/modules/auto-trigger-stories.mjs <SD-ID> <PRD-ID>
-# Or use the Task tool with stories-agent
-Task(subagent_type="stories-agent", prompt="Generate user stories for SD-XXX...")
-```
-
-### 3. Sub-Agents Executed ✅ (GATE 1 Requirement)
-- [ ] **DESIGN sub-agent** executed and results stored
-- [ ] **DATABASE sub-agent** executed and results stored
-
-```
-# CORRECT - Use Task tool (NOT sub-agent-executor.js)
-Task(subagent_type="design-agent", prompt="Execute DESIGN analysis for SD-XXX...")
-Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XXX...")
-```
-
-### 4. Validation Gates Pass ✅
-- **BMAD Validation**: User story context ≥80%
-- **GATE 1**: DESIGN + DATABASE sub-agents executed
-
-### Common Failures and Fixes
-
-| Error | Cause | Fix |
-|-------|-------|-----|
-| "User story context engineering requires ≥80%" | Stories missing implementation_context | Add implementation_context to all stories |
-| "DESIGN sub-agent not executed" | Didn't run design-agent | Use Task tool with design-agent |
-| "DATABASE sub-agent not executed" | Didn't run database-agent | Use Task tool with database-agent |
 
 ## Enhanced QA Engineering Director v2.0 - Testing-First Edition
 

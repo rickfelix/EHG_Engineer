@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-14 12:48:13 PM
+**Generated**: 2025-12-14 2:43:55 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -913,6 +913,38 @@ For SQL migrations, use the Supabase CLI or dashboard SQL editor:
 
 **Complete Guide**: See `docs/reference/development-workflow.md`
 
+## Background Task Output Retrieval
+
+## Background Task Output - DO NOT Block
+
+**NEVER** use TaskOutput with blocking waits (`block: true`). This causes timeout cascades when network is slow.
+
+### Correct Pattern
+When running background commands (`run_in_background: true`):
+
+1. Note the task_id returned (e.g., `bf98126`)
+2. Output is written to: `/tmp/claude/tasks/<task_id>.output`
+3. Read results directly: `Read { file_path: "/tmp/claude/tasks/bf98126.output" }`
+4. If file doesn't exist yet, wait briefly and Read again
+
+### Why This Matters
+- TaskOutput with `block: true` waits until timeout (30-180 seconds)
+- If network is slow, you'll hit timeout after timeout
+- Reading the file directly is instant - you either get content or "file not found"
+- This pattern is especially critical during Supabase connectivity issues
+
+### Anti-Pattern (DO NOT DO THIS)
+```
+// BAD: Blocks and causes timeout cascades
+TaskOutput { task_id: "abc123", block: true, timeout: 60000 }
+```
+
+### Correct Pattern
+```
+// GOOD: Instant read, clear feedback
+Read { file_path: "/tmp/claude/tasks/abc123.output" }
+```
+
 ## 📊 Database Column Quick Reference
 
 ### Priority Column (strategic_directives_v2)
@@ -1267,6 +1299,17 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 - [ ] RETRO Deduplication | Owner: LEO Team | Due: 2025-01-15 | Acceptance: No duplica...
 - [ ] Infrastructure Test Validation | Owner: LEO Team | Due: 2025-01-31 | Acceptance:...
 
+### 2. 25-Stage Artifact Integration + Stage-Gated Runtime Consumption - Retrospective ⭐
+**Category**: DATABASE_SCHEMA | **Date**: 12/13/2025 | **Score**: 90
+
+**Key Improvements**:
+- No unified test evidence found - consider running comprehensive E2E tests
+- No unified test evidence found - consider running comprehensive E2E tests
+
+**Action Items**:
+- [ ] Update TESTING sub-agent to execute real Playwright tests
+- [ ] Fix mapping script to always use service role key for database writes
+
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
 
@@ -1327,5 +1370,5 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 *Generated from database: 2025-12-14*
 *Protocol Version: 4.3.3*
-*Includes: Hot Patterns (3) + Recent Lessons (1)*
+*Includes: Hot Patterns (3) + Recent Lessons (2)*
 *Load this file first in all sessions*
