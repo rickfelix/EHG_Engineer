@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS product_requirements_v2 (
 
     const { data: sdData, error: sdError } = await supabase
       .from('strategic_directives_v2')
-      .select('id, legacy_id, scope, description, strategic_objectives, title, sd_type, category, metadata')
+      .select('id, legacy_id, scope, description, strategic_objectives, title, sd_type, category, metadata, target_application')
       .eq(queryField, sdId)
       .single();
 

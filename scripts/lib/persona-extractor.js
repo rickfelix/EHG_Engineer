@@ -37,6 +37,13 @@ const DEFAULT_PERSONAS = {
     needs: ['Reliable deployments', 'Clear monitoring', 'Fast rollback'],
     pain_points: ['Flaky pipelines', 'Missing logs', 'Configuration drift'],
     success_criteria: ['Zero-downtime deploys', 'Full observability', 'Fast recovery']
+  },
+  solo_entrepreneur: {
+    persona_id: 'solo_entrepreneur',
+    name: 'Solo Entrepreneur',
+    needs: ['Time efficiency', 'Clear priorities', 'Low cognitive overhead'],
+    pain_points: ['Context switching', 'Feature bloat', 'Complex workflows'],
+    success_criteria: ['Quick wins visible', 'Minimal learning curve', 'Self-service capable']
   }
 };
 
@@ -47,6 +54,31 @@ const EVA_KEYWORDS = [
   'orchestration', 'automation', 'agent', 'eva', 'ai', 'autonomous',
   'workflow', 'crew', 'crewai', 'pipeline', 'scheduled', 'recurring'
 ];
+
+/**
+ * Application-specific persona defaults.
+ * Determines mandatory personas based on target_application + sd_type.
+ *
+ * - EHG (runtime app): Chairman + Solo Entrepreneur for feature SDs
+ * - EHG_Engineer (governance): Chairman + DevOps for infrastructure
+ * - unknown: Conservative fallback (chairman-only + warning)
+ */
+const APPLICATION_PERSONA_DEFAULTS = {
+  'EHG': {
+    mandatory: ['chairman', 'solo_entrepreneur'],
+    optional_trigger: { eva: 'automation' }
+  },
+  'EHG_Engineer': {
+    mandatory: ['chairman'],
+    optional_trigger: { devops_engineer: 'infra', eva: 'automation' }
+  },
+  'unknown': {
+    // Safe fallback when target_application is missing
+    // Chairman-only to avoid assuming incorrect personas
+    mandatory: ['chairman'],
+    optional_trigger: { eva: 'automation' }
+  }
+};
 
 /**
  * Check if persona payload is enabled via feature flag
@@ -186,38 +218,61 @@ function mentionsAutomation(sdData) {
 function generateDefaultPersonas(sdData) {
   const personas = [];
   const sdType = sdData.sd_type || 'feature';
+  const targetApp = sdData.target_application || 'unknown';
 
-  // Chairman is ALWAYS included (Solo Entrepreneur model)
-  personas.push({ ...DEFAULT_PERSONAS.chairman });
-
-  // Add type-specific personas
-  switch (sdType) {
-    case 'feature':
-      personas.push({ ...DEFAULT_PERSONAS.venture_end_user });
-      break;
-    case 'infrastructure':
-      personas.push({ ...DEFAULT_PERSONAS.devops_engineer });
-      break;
-    case 'database':
-      // Database changes affect both DevOps and End Users
-      personas.push({ ...DEFAULT_PERSONAS.devops_engineer });
-      break;
-    case 'security':
-      // Security affects all users
-      personas.push({ ...DEFAULT_PERSONAS.venture_end_user });
-      break;
-    case 'documentation':
-      // Documentation primarily serves developers, but still affects end users
-      personas.push({ ...DEFAULT_PERSONAS.venture_end_user });
-      break;
-    default:
-      // Default to end user for unknown types
-      personas.push({ ...DEFAULT_PERSONAS.venture_end_user });
+  // ═══════════════════════════════════════════════════════════════════════════
+  // WARNING: Missing target_application
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (!sdData.target_application && sdType === 'feature') {
+    console.warn('');
+    console.warn('   ════════════════════════════════════════════════════════════');
+    console.warn('   ⚠️  WARNING: target_application NOT SET');
+    console.warn(`   SD: ${sdData.id || sdData.legacy_id || 'unknown'}`);
+    console.warn('   Using fallback persona defaults (chairman-only).');
+    console.warn('   To fix: Run LEAD-TO-PLAN phase or set target_application in DB.');
+    console.warn('   ════════════════════════════════════════════════════════════');
+    console.warn('');
   }
 
-  // Add EVA if automation/orchestration is mentioned
-  if (mentionsAutomation(sdData)) {
-    personas.push({ ...DEFAULT_PERSONAS.eva });
+  // Get application-specific config (falls back to 'unknown' config)
+  const appConfig = APPLICATION_PERSONA_DEFAULTS[targetApp]
+    || APPLICATION_PERSONA_DEFAULTS['unknown'];
+
+  // Add mandatory personas for this application
+  const addedMandatory = [];
+  for (const personaId of appConfig.mandatory) {
+    if (DEFAULT_PERSONAS[personaId]) {
+      personas.push({ ...DEFAULT_PERSONAS[personaId] });
+      addedMandatory.push(personaId);
+    }
+  }
+
+  // Add optional personas based on triggers
+  const triggeredOptional = [];
+  if (appConfig.optional_trigger) {
+    for (const [personaId, trigger] of Object.entries(appConfig.optional_trigger)) {
+      let shouldAdd = false;
+
+      if (trigger === 'always') {
+        shouldAdd = true;
+      } else if (trigger === 'automation' && mentionsAutomation(sdData)) {
+        shouldAdd = true;
+      } else if (trigger === 'infra' && (sdType === 'infrastructure' || sdType === 'database')) {
+        shouldAdd = true;
+      }
+
+      if (shouldAdd && DEFAULT_PERSONAS[personaId]) {
+        personas.push({ ...DEFAULT_PERSONAS[personaId] });
+        triggeredOptional.push(`${personaId} (${trigger})`);
+      }
+    }
+  }
+
+  // Audit logging for persona selection
+  console.log(`   📋 Persona defaults: target_app=${targetApp}, sd_type=${sdType}`);
+  console.log(`   → Mandatory: ${addedMandatory.join(', ') || 'none'}`);
+  if (triggeredOptional.length > 0) {
+    console.log(`   → Optional triggered: ${triggeredOptional.join(', ')}`);
   }
 
   return personas;

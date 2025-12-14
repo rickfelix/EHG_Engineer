@@ -206,9 +206,12 @@ For EACH persona, provide:
 
 IMPORTANT RULES:
 1. ALWAYS include "Chairman (Solo Entrepreneur)" as the first persona - they care about ROI, efficiency, and strategic alignment
-2. For "feature" type SDs, include end users who will interact with the UI
-3. For "infrastructure" type SDs, include DevOps/engineering personas
-4. If the SD mentions automation, AI, or orchestration, include an EVA/AI persona
+2. Check the TARGET APPLICATION to determine persona requirements:
+   - If target_application = "EHG" (runtime app): ALWAYS include Chairman + Solo Entrepreneur as primary personas
+   - If target_application = "EHG_Engineer" (governance): Include Chairman, add DevOps for infra work
+   - Include EVA ONLY if automation/orchestration is directly involved in the SD scope
+3. For "feature" type SDs targeting EHG, include end users who will interact with the UI
+4. For "infrastructure" type SDs, include DevOps/engineering personas
 5. Keep descriptions concise but specific to the SD context
 
 Return ONLY valid JSON in this exact format:
@@ -236,11 +239,12 @@ NO additional text or markdown - ONLY the JSON object.`;
 **SD ID:** ${sdData.id}
 **Title:** ${sdData.title || 'N/A'}
 **Type:** ${sdData.sd_type || 'feature'}
+**Target Application:** ${sdData.target_application || 'unknown'}
 **Scope:** ${sdData.scope || 'N/A'}
 **Description:** ${sdData.description || 'N/A'}
 **Strategic Objectives:** ${JSON.stringify(sdData.strategic_objectives || [])}
 
-Analyze the SD and generate appropriate personas based on who will be affected by this work.`;
+Analyze the SD and generate appropriate personas based on the target application and who will be affected by this work.`;
 
   const response = await openai.chat.completions.create({
     model: MODEL,
@@ -335,7 +339,7 @@ async function main() {
   console.log('Step 1: Fetching SD record...');
   const { data: sdData, error: fetchError } = await supabase
     .from('strategic_directives_v2')
-    .select('id, title, scope, description, sd_type, strategic_objectives, metadata')
+    .select('id, title, scope, description, sd_type, strategic_objectives, metadata, target_application')
     .eq('id', sdId)
     .single();
 
