@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-12-13 9:19:32 PM
+**Generated**: 2025-12-14 12:48:13 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -89,11 +89,18 @@ Task(subagent_type="Plan", prompt="Design from EXTENSIBILITY perspective: What d
 node scripts/add-prd-to-database.js --sd-id=<SD-ID>
 ```
 
-**Step 5: Validate PRD**
-```bash
-node lib/sub-agent-executor.js DATABASE <SD-ID>
-node lib/sub-agent-executor.js DESIGN <SD-ID>
+**Step 5: Validate PRD with Sub-Agents (MANDATORY)**
+
+⚠️ **CRITICAL**: Use Task tool with specialized sub-agents, NOT the sub-agent-executor script:
+
 ```
+# CORRECT - Use Task tool with subagent_type
+Task(subagent_type="design-agent", prompt="Execute DESIGN analysis for SD-XXX. Analyze UI components, patterns, accessibility. Store results in sub_agent_execution_results table.")
+
+Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XXX. Verify schema, RLS policies, query patterns. Store results in sub_agent_execution_results table.")
+```
+
+**Why Task tool?** The sub-agent-executor.js is a framework for automated pipelines. For interactive sessions, the Task tool properly invokes agents with full context and stores results.
 
 ### Perspective Examples by Task Type
 
@@ -114,6 +121,30 @@ Launch 1-3 Plan agents based on complexity:
 - **3 agents**: Complex decision with multiple valid paths
 
 Do NOT launch 3 agents for every task—that wastes time on simple decisions.
+
+## Deferred Work Management
+
+### What Gets Deferred
+- Technical debt discovered during implementation
+- Edge cases not critical for MVP
+- Performance optimizations for later
+- Nice-to-have features
+
+### Creating Deferred Items
+```sql
+INSERT INTO deferred_work (sd_id, title, reason, priority)
+VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
+```
+
+### Tracking
+- Deferred items linked to parent SD
+- Reviewed during retrospective
+- May become new SDs if significant
+
+### Rules
+- Document WHY deferred, not just WHAT
+- Set realistic priority (critical items shouldn't be deferred)
+- Max 5 deferred items per SD
 
 ## PLAN Phase Negative Constraints
 
@@ -140,37 +171,18 @@ These anti-patterns are specific to the PLAN phase. Violating them leads to inco
 ### NC-PLAN-004: No Skipping Sub-Agents
 **Anti-Pattern**: Creating PRD without running DESIGN, DATABASE sub-agents
 **Why Wrong**: Gate 1 blocks handoff if sub-agent execution not recorded
-**Correct Approach**: Execute sub-agents via lib/sub-agent-executor.js, store results in database
+**Correct Approach**: Use Task tool with specialized sub-agents:
+```
+Task(subagent_type="design-agent", prompt="Execute DESIGN analysis for SD-XXX...")
+Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XXX...")
+```
+⚠️ Do NOT use `node lib/sub-agent-executor.js` in interactive sessions - use Task tool instead.
 
 ### NC-PLAN-005: No Placeholder Requirements
 **Anti-Pattern**: Using "TBD", "to be defined", "will be determined" in requirements
 **Why Wrong**: PRD validator blocks placeholders, signals incomplete planning
 **Correct Approach**: If truly unknown, use AskUserQuestion to clarify before PRD creation
 </negative_constraints>
-
-## Deferred Work Management
-
-### What Gets Deferred
-- Technical debt discovered during implementation
-- Edge cases not critical for MVP
-- Performance optimizations for later
-- Nice-to-have features
-
-### Creating Deferred Items
-```sql
-INSERT INTO deferred_work (sd_id, title, reason, priority)
-VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
-```
-
-### Tracking
-- Deferred items linked to parent SD
-- Reviewed during retrospective
-- May become new SDs if significant
-
-### Rules
-- Document WHY deferred, not just WHAT
-- Set realistic priority (critical items shouldn't be deferred)
-- Max 5 deferred items per SD
 
 ## PRD Template Scaffolding
 
@@ -279,6 +291,52 @@ node scripts/detect-stubbed-code.js <SD-ID>
 
 **Exit Requirement**: Zero stubbed code in production files, OR documented in "Known Issues" with follow-up SD created.
 
+
+## PLAN-TO-EXEC Checklist (MANDATORY)
+
+## 🚪 PLAN-TO-EXEC Checklist (MANDATORY)
+
+Before running `node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX`, verify ALL items:
+
+### 1. PRD Complete ✅
+- [ ] PRD created via `node scripts/add-prd-to-database.js` or generated script
+- [ ] No placeholder text ("TBD", "to be defined")
+- [ ] Functional requirements have acceptance criteria
+- [ ] Technical architecture documented
+
+### 2. User Stories Generated ✅
+- [ ] User stories generated from PRD (auto-trigger or manual)
+- [ ] **≥80% of stories have implementation_context** (BMAD requirement)
+- [ ] Each story has: technical_approach, files_to_create/modify, dependencies, estimated_effort
+
+```bash
+# Generate user stories from PRD
+node scripts/modules/auto-trigger-stories.mjs <SD-ID> <PRD-ID>
+# Or use the Task tool with stories-agent
+Task(subagent_type="stories-agent", prompt="Generate user stories for SD-XXX...")
+```
+
+### 3. Sub-Agents Executed ✅ (GATE 1 Requirement)
+- [ ] **DESIGN sub-agent** executed and results stored
+- [ ] **DATABASE sub-agent** executed and results stored
+
+```
+# CORRECT - Use Task tool (NOT sub-agent-executor.js)
+Task(subagent_type="design-agent", prompt="Execute DESIGN analysis for SD-XXX...")
+Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XXX...")
+```
+
+### 4. Validation Gates Pass ✅
+- **BMAD Validation**: User story context ≥80%
+- **GATE 1**: DESIGN + DATABASE sub-agents executed
+
+### Common Failures and Fixes
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| "User story context engineering requires ≥80%" | Stories missing implementation_context | Add implementation_context to all stories |
+| "DESIGN sub-agent not executed" | Didn't run design-agent | Use Task tool with design-agent |
+| "DATABASE sub-agent not executed" | Didn't run database-agent | Use Task tool with database-agent |
 
 ## Enhanced QA Engineering Director v2.0 - Testing-First Edition
 
@@ -507,6 +565,33 @@ From retrospectives:
 **From SD-UAT-020**:
 > "Created 100+ test checklist but didn't execute manually. Time spent on unused documentation."
 
+## 🔬 BMAD Method Enhancements
+
+## BMAD Enhancements
+
+### 6 Key Improvements
+1. **Unified Handoff System** - All handoffs via `handoff.js`
+2. **Database-First PRDs** - PRDs stored in database, not markdown
+3. **Validation Gates** - 4-gate validation before EXEC
+4. **Progress Tracking** - Automatic progress % calculation
+5. **Context Management** - Proactive monitoring, compression strategies
+6. **Sub-Agent Compression** - 3-tier output reduction
+
+### Using Handoff System
+```bash
+node scripts/handoff.js create "{message}"
+```
+
+### PRD Creation
+```bash
+node scripts/add-prd-to-database.js {SD-ID}
+```
+
+### Never Bypass
+- ⚠️ Always use process scripts
+- ⚠️ Never create PRDs as markdown files
+- ⚠️ Never skip validation gates
+
 ## Research Lookup Before PRD Creation
 
 ## Research Lookup Before PRD Creation (MANDATORY)
@@ -604,33 +689,6 @@ node scripts/add-prd-to-database.js SD-RESEARCH-106
 # → PRD includes research findings in technical_approach
 ```
 
-
-## 🔬 BMAD Method Enhancements
-
-## BMAD Enhancements
-
-### 6 Key Improvements
-1. **Unified Handoff System** - All handoffs via `handoff.js`
-2. **Database-First PRDs** - PRDs stored in database, not markdown
-3. **Validation Gates** - 4-gate validation before EXEC
-4. **Progress Tracking** - Automatic progress % calculation
-5. **Context Management** - Proactive monitoring, compression strategies
-6. **Sub-Agent Compression** - 3-tier output reduction
-
-### Using Handoff System
-```bash
-node scripts/handoff.js create "{message}"
-```
-
-### PRD Creation
-```bash
-node scripts/add-prd-to-database.js {SD-ID}
-```
-
-### Never Bypass
-- ⚠️ Always use process scripts
-- ⚠️ Never create PRDs as markdown files
-- ⚠️ Never skip validation gates
 
 ## DESIGN→DATABASE Validation Gates
 
@@ -1634,6 +1692,6 @@ Required: [object Object], [object Object], [object Object], [object Object], [o
 
 ---
 
-*Generated from database: 2025-12-13*
+*Generated from database: 2025-12-14*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*
