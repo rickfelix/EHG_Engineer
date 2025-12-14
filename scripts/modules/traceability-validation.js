@@ -176,7 +176,7 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
     console.log('\n[B] Implementation Quality');
     console.log('-'.repeat(60));
 
-    await validateImplementationQuality(sd_id, gate2Data, validation, supabase);
+    await validateImplementationQuality(sd_id, sdUuid, gate2Data, validation, supabase);
 
     // ===================================================================
     // SECTION C: Traceability Mapping (20 points)
@@ -184,7 +184,7 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
     console.log('\n[C] Traceability Mapping');
     console.log('-'.repeat(60));
 
-    await validateTraceabilityMapping(sd_id, designAnalysis, databaseAnalysis, validation, supabase);
+    await validateTraceabilityMapping(sd_id, sdUuid, designAnalysis, databaseAnalysis, validation, supabase);
 
     // ===================================================================
     // SECTION D: Sub-Agent Effectiveness (20 points)
@@ -192,7 +192,7 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
     console.log('\n[D] Sub-Agent Effectiveness');
     console.log('-'.repeat(60));
 
-    await validateSubAgentEffectiveness(sd_id, validation, supabase);
+    await validateSubAgentEffectiveness(sd_id, sdUuid, validation, supabase);
 
     // ===================================================================
     // SECTION E: Lessons Captured (20 points)
@@ -200,7 +200,7 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
     console.log('\n[E] Lessons Captured');
     console.log('-'.repeat(60));
 
-    await validateLessonsCaptured(sd_id, designAnalysis, databaseAnalysis, validation, supabase);
+    await validateLessonsCaptured(sd_id, sdUuid, designAnalysis, databaseAnalysis, validation, supabase);
 
     // ===================================================================
     // FINAL VALIDATION RESULT (with Adaptive Threshold)
@@ -281,7 +281,7 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
 /**
  * Validate Recommendation Adherence (Section A - 20 points)
  */
-async function validateRecommendationAdherence(sd_id, designAnalysis, databaseAnalysis, gate2Data, validation, supabase) {
+async function validateRecommendationAdherence(_sd_id, designAnalysis, databaseAnalysis, gate2Data, validation, _supabase) {
   let sectionScore = 0;
   const sectionDetails = {};
 
@@ -349,7 +349,7 @@ async function validateRecommendationAdherence(sd_id, designAnalysis, databaseAn
  * Validate Implementation Quality (Section B - 30 points - CRITICAL)
  * Phase-aware: LEAD cares if work is good quality
  */
-async function validateImplementationQuality(sd_id, gate2Data, validation, supabase) {
+async function validateImplementationQuality(sd_id, sdUuid, gate2Data, validation, supabase) {
   let sectionScore = 0;
   const sectionDetails = {};
 
@@ -386,7 +386,7 @@ async function validateImplementationQuality(sd_id, gate2Data, validation, supab
   // Check for test results in handoff or CI/CD
   const { data: handoffData } = await supabase
     .from('sd_phase_handoffs')
-    .select('metadata, deliverables')
+    .select('metadata, deliverables_manifest')
     .eq('sd_id', sdUuid)
     .eq('handoff_type', 'EXEC-TO-PLAN')
     .order('created_at', { ascending: false })
@@ -394,7 +394,7 @@ async function validateImplementationQuality(sd_id, gate2Data, validation, supab
 
   if (handoffData?.[0]) {
     const metadata = handoffData[0].metadata || {};
-    const deliverables = handoffData[0].deliverables || {};
+    const deliverables = handoffData[0].deliverables_manifest || {};
 
     // Look for test coverage in metadata or deliverables
     const metadataStr = JSON.stringify(metadata).toLowerCase();
@@ -431,7 +431,7 @@ async function validateImplementationQuality(sd_id, gate2Data, validation, supab
  * Validate Traceability Mapping (Section C - 25 points - MAJOR)
  * Phase-aware: Traceability important but not critical
  */
-async function validateTraceabilityMapping(sd_id, designAnalysis, databaseAnalysis, validation, supabase) {
+async function validateTraceabilityMapping(sd_id, sdUuid, designAnalysis, databaseAnalysis, validation, supabase) {
   let sectionScore = 0;
   const sectionDetails = {};
 
@@ -458,7 +458,7 @@ async function validateTraceabilityMapping(sd_id, designAnalysis, databaseAnalys
       validation.warnings.push('[C1] No commits found referencing SD ID');
       console.log('   ⚠️  No commits reference SD ID (3/7)');
     }
-  } catch (_error) {
+  } catch {
     sectionScore += 3; // Partial credit on error
     console.log('   ⚠️  Cannot verify git commits (3/7)');
   }
@@ -470,14 +470,14 @@ async function validateTraceabilityMapping(sd_id, designAnalysis, databaseAnalys
     // Check if handoff references design analysis
     const { data: handoffData } = await supabase
       .from('sd_phase_handoffs')
-      .select('deliverables')
+      .select('deliverables_manifest')
       .eq('sd_id', sdUuid)
       .eq('handoff_type', 'EXEC-TO-PLAN')
       .order('created_at', { ascending: false })
       .limit(1);
 
-    if (handoffData?.[0]?.deliverables) {
-      const deliverablesStr = JSON.stringify(handoffData[0].deliverables).toLowerCase();
+    if (handoffData?.[0]?.deliverables_manifest) {
+      const deliverablesStr = JSON.stringify(handoffData[0].deliverables_manifest).toLowerCase();
       const hasDesignMention = deliverablesStr.includes('design') ||
                                 deliverablesStr.includes('ui') ||
                                 deliverablesStr.includes('component');
@@ -507,14 +507,14 @@ async function validateTraceabilityMapping(sd_id, designAnalysis, databaseAnalys
     // Check if handoff references database changes
     const { data: handoffData } = await supabase
       .from('sd_phase_handoffs')
-      .select('deliverables')
+      .select('deliverables_manifest')
       .eq('sd_id', sdUuid)
       .eq('handoff_type', 'EXEC-TO-PLAN')
       .order('created_at', { ascending: false })
       .limit(1);
 
-    if (handoffData?.[0]?.deliverables) {
-      const deliverablesStr = JSON.stringify(handoffData[0].deliverables).toLowerCase();
+    if (handoffData?.[0]?.deliverables_manifest) {
+      const deliverablesStr = JSON.stringify(handoffData[0].deliverables_manifest).toLowerCase();
       const hasDatabaseMention = deliverablesStr.includes('database') ||
                                   deliverablesStr.includes('migration') ||
                                   deliverablesStr.includes('schema') ||
@@ -550,7 +550,7 @@ async function validateTraceabilityMapping(sd_id, designAnalysis, databaseAnalys
  * Validate Sub-Agent Effectiveness (Section D - 10 points - MINOR)
  * Phase-aware: Meta-analysis less important than actual results
  */
-async function validateSubAgentEffectiveness(sd_id, validation, supabase) {
+async function validateSubAgentEffectiveness(sd_id, sdUuid, validation, supabase) {
   let sectionScore = 0;
   const sectionDetails = {};
 
@@ -559,11 +559,11 @@ async function validateSubAgentEffectiveness(sd_id, validation, supabase) {
   // D1: Sub-agent execution metrics (10 points)
   console.log('\n   [D1] Sub-Agent Execution Metrics...');
 
+  // Query all sub-agents for this SD (not just specific ones)
   const { data: subAgentResults, error: subAgentError } = await supabase
     .from('sub_agent_execution_results')
-    .select('sub_agent_name, execution_time_ms, status, created_at')
-    .eq('sd_id', sdUuid)
-    .in('sub_agent_name', ['DESIGN', 'DATABASE', 'STORIES']);
+    .select('sub_agent_name, execution_time, verdict, created_at')
+    .eq('sd_id', sdUuid);
 
   if (subAgentError) {
     sectionScore += 5;
@@ -572,12 +572,12 @@ async function validateSubAgentEffectiveness(sd_id, validation, supabase) {
     sectionScore += 10;
     sectionDetails.sub_agents_executed = subAgentResults.length;
 
-    const totalTime = subAgentResults.reduce((sum, r) => sum + (r.execution_time_ms || 0), 0);
+    const totalTime = subAgentResults.reduce((sum, r) => sum + (r.execution_time || 0), 0);
     sectionDetails.total_execution_time_ms = totalTime;
     sectionDetails.sub_agent_details = subAgentResults.map(r => ({
       name: r.sub_agent_name,
-      time_ms: r.execution_time_ms,
-      status: r.status
+      time_ms: r.execution_time,
+      verdict: r.verdict
     }));
 
     console.log(`   ✅ ${subAgentResults.length} sub-agents executed in ${totalTime}ms`);
@@ -594,16 +594,18 @@ async function validateSubAgentEffectiveness(sd_id, validation, supabase) {
   if (subAgentResults && subAgentResults.length > 0) {
     const { data: resultsWithOutput } = await supabase
       .from('sub_agent_execution_results')
-      .select('result')
-      .eq('sd_id', sdUuid)
-      .in('sub_agent_name', ['DESIGN', 'DATABASE']);
+      .select('recommendations, detailed_analysis')
+      .eq('sd_id', sdUuid);
 
     if (resultsWithOutput && resultsWithOutput.length > 0) {
       let hasSubstantialOutput = false;
 
       for (const record of resultsWithOutput) {
-        const resultStr = JSON.stringify(record.result || '');
-        if (resultStr.length > 500) { // Substantial output
+        const combinedOutput = JSON.stringify({
+          recommendations: record.recommendations,
+          detailed_analysis: record.detailed_analysis
+        });
+        if (combinedOutput.length > 500) { // Substantial output
           hasSubstantialOutput = true;
           break;
         }
@@ -639,7 +641,7 @@ async function validateSubAgentEffectiveness(sd_id, validation, supabase) {
  * Validate Lessons Captured (Section E - 5 points - MINOR)
  * Phase-aware: Retrospective prep least important at handoff
  */
-async function validateLessonsCaptured(sd_id, designAnalysis, databaseAnalysis, validation, supabase) {
+async function validateLessonsCaptured(sd_id, sdUuid, designAnalysis, databaseAnalysis, validation, supabase) {
   let sectionScore = 0;
   const sectionDetails = {};
 
@@ -650,7 +652,7 @@ async function validateLessonsCaptured(sd_id, designAnalysis, databaseAnalysis, 
 
   const { data: handoffData } = await supabase
     .from('sd_phase_handoffs')
-    .select('metadata, deliverables')
+    .select('metadata, deliverables_manifest')
     .eq('sd_id', sdUuid)
     .eq('handoff_type', 'PLAN-TO-LEAD')
     .order('created_at', { ascending: false })
@@ -682,7 +684,7 @@ async function validateLessonsCaptured(sd_id, designAnalysis, databaseAnalysis, 
   // Check if EXEC→PLAN handoff mentions workflow effectiveness
   const { data: execHandoff } = await supabase
     .from('sd_phase_handoffs')
-    .select('metadata, deliverables')
+    .select('metadata, deliverables_manifest')
     .eq('sd_id', sdUuid)
     .eq('handoff_type', 'EXEC-TO-PLAN')
     .order('created_at', { ascending: false })
@@ -691,7 +693,7 @@ async function validateLessonsCaptured(sd_id, designAnalysis, databaseAnalysis, 
   if (execHandoff?.[0]) {
     const combinedStr = JSON.stringify({
       ...execHandoff[0].metadata,
-      ...execHandoff[0].deliverables
+      ...execHandoff[0].deliverables_manifest
     }).toLowerCase();
 
     const hasWorkflowNotes = combinedStr.includes('workflow') ||
