@@ -8,7 +8,7 @@
  * Related: generate-vision-visualization.js
  *
  * @module visualization-provider
- * @version 1.0.0
+ * @version 1.1.0
  */
 
 import OpenAI from 'openai';
@@ -17,9 +17,12 @@ import OpenAI from 'openai';
 // CONFIGURATION
 // ============================================================================
 
+// Gemini: Default to Nano Banana (Gemini 2.5 Flash Image)
+const GEMINI_IMAGE_MODEL = process.env.VISION_VISUALIZATION_MODEL || 'gemini-2.5-flash-image';
+
+// OpenAI: DALL-E 3 as fallback
 const OPENAI_IMAGE_MODEL = process.env.VISION_IMAGE_MODEL || 'dall-e-3';
 const OPENAI_IMAGE_SIZE = process.env.VISION_IMAGE_SIZE || '1024x1024';
-const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.0-flash-preview-image-generation';
 
 // ============================================================================
 // PROVIDER INTERFACE
@@ -162,39 +165,125 @@ class GeminiProvider {
 // ============================================================================
 
 /**
- * Get the appropriate visualization provider based on environment configuration
- *
- * Priority:
- * 1. GEMINI_API_KEY => Gemini provider
- * 2. OPENAI_API_KEY => OpenAI provider
- * 3. Neither => throw error
- *
- * @returns {{ provider: OpenAIProvider | GeminiProvider, name: string }}
+ * Provider selection modes
+ * @readonly
+ * @enum {string}
  */
-export function getVisualizationProvider() {
-  // Priority 1: Gemini
-  if (process.env.GEMINI_API_KEY) {
+export const ProviderMode = {
+  AUTO: 'auto',      // Gemini first, fallback to OpenAI
+  GEMINI: 'gemini',  // Gemini only, fail if unavailable
+  OPENAI: 'openai'   // OpenAI only, fail if unavailable
+};
+
+/**
+ * Get the appropriate visualization provider based on mode and environment
+ *
+ * @param {string} mode - Provider mode: 'auto' | 'gemini' | 'openai'
+ * @returns {{ provider: OpenAIProvider | GeminiProvider, reason: string }}
+ */
+export function getVisualizationProvider(mode = ProviderMode.AUTO) {
+  const hasGemini = !!process.env.GEMINI_API_KEY;
+  const hasOpenAI = !!process.env.OPENAI_API_KEY;
+
+  // Log available providers
+  console.log(`   Available providers: ${[hasGemini ? 'gemini' : null, hasOpenAI ? 'openai' : null].filter(Boolean).join(', ') || 'none'}`);
+
+  // Explicit provider selection
+  if (mode === ProviderMode.GEMINI) {
+    if (!hasGemini) {
+      throw new Error('Gemini requested but GEMINI_API_KEY not configured');
+    }
+    const provider = new GeminiProvider();
+    const reason = 'explicit --provider gemini';
+    console.log(`   Selected: ${provider.name} (${reason})`);
+    console.log(`   Model: ${provider.model}`);
+    return { provider, reason };
+  }
+
+  if (mode === ProviderMode.OPENAI) {
+    if (!hasOpenAI) {
+      throw new Error('OpenAI requested but OPENAI_API_KEY not configured');
+    }
+    const provider = new OpenAIProvider();
+    const reason = 'explicit --provider openai';
+    console.log(`   Selected: ${provider.name} (${reason})`);
+    console.log(`   Model: ${provider.model}`);
+    return { provider, reason };
+  }
+
+  // Auto mode: Gemini first, OpenAI fallback
+  if (hasGemini) {
     try {
       const provider = new GeminiProvider();
-      console.log('   Provider: Gemini (GEMINI_API_KEY configured)');
-      return provider;
+      const reason = 'auto: GEMINI_API_KEY configured (primary)';
+      console.log(`   Selected: ${provider.name} (${reason})`);
+      console.log(`   Model: ${provider.model}`);
+      return { provider, reason };
     } catch (error) {
-      console.warn(`   Gemini initialization failed: ${error.message}`);
-      // Fall through to OpenAI
+      console.warn(`   Gemini init failed: ${error.message}`);
+      if (!hasOpenAI) {
+        throw new Error(`Gemini failed and no OpenAI fallback: ${error.message}`);
+      }
+      console.log('   Falling back to OpenAI...');
     }
   }
 
-  // Priority 2: OpenAI
-  if (process.env.OPENAI_API_KEY) {
+  if (hasOpenAI) {
     const provider = new OpenAIProvider();
-    console.log('   Provider: OpenAI DALL-E (OPENAI_API_KEY configured)');
-    return provider;
+    const reason = hasGemini
+      ? 'auto: fallback after Gemini failure'
+      : 'auto: only OPENAI_API_KEY configured';
+    console.log(`   Selected: ${provider.name} (${reason})`);
+    console.log(`   Model: ${provider.model}`);
+    return { provider, reason };
   }
 
-  // No provider available
   throw new Error(
     'No visualization provider configured. Set GEMINI_API_KEY or OPENAI_API_KEY in environment.'
   );
+}
+
+/**
+ * Generate image with automatic fallback (for auto mode)
+ *
+ * @param {string} prompt - Image generation prompt
+ * @param {string} mode - Provider mode
+ * @returns {Promise<ImageGenerationResult & { reason: string }>}
+ */
+export async function generateWithFallback(prompt, mode = ProviderMode.AUTO) {
+  const { provider, reason } = getVisualizationProvider(mode);
+
+  // For explicit modes, no fallback
+  if (mode !== ProviderMode.AUTO) {
+    const result = await provider.generateImage(prompt);
+    return { ...result, reason };
+  }
+
+  // Auto mode: try primary, fallback on failure
+  try {
+    const result = await provider.generateImage(prompt);
+    return { ...result, reason };
+  } catch (primaryError) {
+    console.warn(`   Primary provider (${provider.name}) failed: ${primaryError.message}`);
+
+    // Check if fallback is available
+    const hasOpenAI = !!process.env.OPENAI_API_KEY;
+    if (provider.name === 'gemini' && hasOpenAI) {
+      console.log('   Attempting OpenAI fallback...');
+      try {
+        const fallbackProvider = new OpenAIProvider();
+        const result = await fallbackProvider.generateImage(prompt);
+        return {
+          ...result,
+          reason: `auto: fallback to openai after gemini error (${primaryError.message.substring(0, 50)})`
+        };
+      } catch (fallbackError) {
+        throw new Error(`Both providers failed. Gemini: ${primaryError.message}. OpenAI: ${fallbackError.message}`);
+      }
+    }
+
+    throw primaryError;
+  }
 }
 
 /**
@@ -206,13 +295,57 @@ export function isVisualizationAvailable() {
 }
 
 /**
- * Get provider name without initializing
- * @returns {string}
+ * Get provider info without initializing (for preview/dry-run)
+ * @param {string} mode - Provider mode
+ * @returns {{ name: string, model: string, reason: string }}
  */
-export function getProviderName() {
-  if (process.env.GEMINI_API_KEY) return 'gemini';
-  if (process.env.OPENAI_API_KEY) return 'openai';
-  return 'none';
+export function getProviderInfo(mode = ProviderMode.AUTO) {
+  const hasGemini = !!process.env.GEMINI_API_KEY;
+  const hasOpenAI = !!process.env.OPENAI_API_KEY;
+
+  if (mode === ProviderMode.GEMINI) {
+    return {
+      name: 'gemini',
+      model: GEMINI_IMAGE_MODEL,
+      reason: 'explicit --provider gemini',
+      available: hasGemini
+    };
+  }
+
+  if (mode === ProviderMode.OPENAI) {
+    return {
+      name: 'openai',
+      model: OPENAI_IMAGE_MODEL,
+      reason: 'explicit --provider openai',
+      available: hasOpenAI
+    };
+  }
+
+  // Auto mode
+  if (hasGemini) {
+    return {
+      name: 'gemini',
+      model: GEMINI_IMAGE_MODEL,
+      reason: 'auto: GEMINI_API_KEY configured (primary)',
+      available: true
+    };
+  }
+
+  if (hasOpenAI) {
+    return {
+      name: 'openai',
+      model: OPENAI_IMAGE_MODEL,
+      reason: 'auto: only OPENAI_API_KEY configured',
+      available: true
+    };
+  }
+
+  return {
+    name: 'none',
+    model: 'n/a',
+    reason: 'no API keys configured',
+    available: false
+  };
 }
 
 export default getVisualizationProvider;

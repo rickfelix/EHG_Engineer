@@ -14,16 +14,22 @@
  *   node scripts/generate-vision-visualization.js SD-FEATURE-001
  *   node scripts/generate-vision-visualization.js SD-FEATURE-001 --dry-run
  *   node scripts/generate-vision-visualization.js SD-FEATURE-001 --confirm
+ *   node scripts/generate-vision-visualization.js SD-FEATURE-001 --confirm --provider openai
  *   node scripts/generate-vision-visualization.js SD-FEATURE-001 --allow-draft
  *
  * @module generate-vision-visualization
- * @version 1.0.0
+ * @version 1.1.0
  */
 
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { createSupabaseServiceClient } from './lib/supabase-connection.js';
-import { getVisualizationProvider, isVisualizationAvailable, getProviderName } from './lib/visualization-provider.js';
+import {
+  generateWithFallback,
+  isVisualizationAvailable,
+  getProviderInfo,
+  ProviderMode
+} from './lib/visualization-provider.js';
 
 dotenv.config();
 
@@ -47,7 +53,23 @@ function parseArgs() {
   const confirm = args.includes('--confirm');
   const allowDraft = args.includes('--allow-draft');
 
-  return { sdId, dryRun, confirm, allowDraft };
+  // Parse --provider flag
+  let providerMode = ProviderMode.AUTO;
+  const providerIndex = args.indexOf('--provider');
+  if (providerIndex !== -1 && args[providerIndex + 1]) {
+    const requested = args[providerIndex + 1].toLowerCase();
+    if (requested === 'gemini') {
+      providerMode = ProviderMode.GEMINI;
+    } else if (requested === 'openai') {
+      providerMode = ProviderMode.OPENAI;
+    } else if (requested !== 'auto') {
+      console.error(`Invalid --provider value: ${requested}`);
+      console.error('Valid values: auto, gemini, openai');
+      process.exit(1);
+    }
+  }
+
+  return { sdId, dryRun, confirm, allowDraft, providerMode };
 }
 
 /**
@@ -171,22 +193,33 @@ async function uploadToStorage(supabase, sdId, imageBuffer, mimeType) {
 // ============================================================================
 
 async function main() {
-  const { sdId, dryRun, confirm, allowDraft } = parseArgs();
+  const { sdId, dryRun, confirm, allowDraft, providerMode } = parseArgs();
 
   // Validate input
   if (!sdId) {
     console.log('Usage: node scripts/generate-vision-visualization.js <SD-ID> [options]');
     console.log('');
     console.log('Options:');
-    console.log('  --dry-run      Preview prompt without generating image');
-    console.log('  --confirm      Actually generate and upload (required for writes)');
-    console.log('  --allow-draft  Allow visualization of draft (unapproved) briefs');
+    console.log('  --dry-run              Preview prompt without generating image');
+    console.log('  --confirm              Actually generate and upload (required for writes)');
+    console.log('  --allow-draft          Allow visualization of draft (unapproved) briefs');
+    console.log('  --provider <mode>      Provider selection: auto (default), gemini, openai');
+    console.log('');
+    console.log('Provider modes:');
+    console.log('  auto     Gemini first, fallback to OpenAI on failure (default)');
+    console.log('  gemini   Force Gemini only, fail if unavailable');
+    console.log('  openai   Force OpenAI only, fail if unavailable');
     console.log('');
     console.log('Environment variables:');
-    console.log('  GEMINI_API_KEY   Gemini API key (primary provider)');
-    console.log('  OPENAI_API_KEY   OpenAI API key (fallback provider)');
+    console.log('  GEMINI_API_KEY              Gemini API key (primary provider)');
+    console.log('  OPENAI_API_KEY              OpenAI API key (fallback provider)');
+    console.log('  VISION_VISUALIZATION_MODEL  Override Gemini model (default: gemini-2.5-flash-image)');
+    console.log('  VISION_IMAGE_MODEL          Override OpenAI model (default: dall-e-3)');
     process.exit(1);
   }
+
+  // Get provider info for display
+  const providerInfo = getProviderInfo(providerMode);
 
   console.log('');
   console.log('='.repeat(60));
@@ -196,13 +229,25 @@ async function main() {
   console.log(`   SD: ${sdId}`);
   console.log(`   Mode: ${dryRun ? 'DRY-RUN' : (confirm ? 'GENERATE' : 'PREVIEW')}`);
   console.log(`   Allow Draft: ${allowDraft ? 'YES' : 'NO'}`);
-  console.log(`   Provider: ${getProviderName()}`);
+  console.log('');
+  console.log('Provider Selection:');
+  console.log(`   Requested: --provider ${providerMode}`);
+  console.log(`   Selected:  ${providerInfo.name}`);
+  console.log(`   Model:     ${providerInfo.model}`);
+  console.log(`   Reason:    ${providerInfo.reason}`);
+  console.log(`   Available: ${providerInfo.available ? 'YES' : 'NO'}`);
   console.log('');
 
   // Check provider availability early
   if (!dryRun && !isVisualizationAvailable()) {
     console.error('ERROR: No visualization provider configured.');
     console.error('Set GEMINI_API_KEY or OPENAI_API_KEY in environment.');
+    process.exit(1);
+  }
+
+  if (!dryRun && !providerInfo.available) {
+    console.error(`ERROR: Requested provider '${providerInfo.name}' is not available.`);
+    console.error(`Reason: ${providerInfo.reason}`);
     process.exit(1);
   }
 
@@ -294,6 +339,12 @@ async function main() {
   // Step 6: Handle dry-run / preview / confirm modes
   if (dryRun) {
     console.log('DRY-RUN: Would generate visualization with above prompt.');
+    console.log('');
+    console.log('Would use:');
+    console.log(`   Provider: ${providerInfo.name}`);
+    console.log(`   Model: ${providerInfo.model}`);
+    console.log(`   Prompt hash: ${promptHash}`);
+    console.log('');
     console.log('No image generated, no changes made.');
     process.exit(0);
   }
@@ -301,20 +352,25 @@ async function main() {
   if (!confirm) {
     console.log('PREVIEW: Prompt ready for visualization.');
     console.log('');
+    console.log('Would use:');
+    console.log(`   Provider: ${providerInfo.name}`);
+    console.log(`   Model: ${providerInfo.model}`);
+    console.log(`   Prompt hash: ${promptHash}`);
+    console.log('');
     console.log('To generate and upload, re-run with --confirm');
     process.exit(1);
   }
 
-  // Step 7: Generate image
+  // Step 7: Generate image with fallback support
   console.log('Step 5: Generating visualization...');
-  let provider;
   let result;
 
   try {
-    provider = getVisualizationProvider();
-    result = await provider.generateImage(prompt);
+    result = await generateWithFallback(prompt, providerMode);
     console.log(`   Generated successfully (${result.imageBuffer.length} bytes)`);
-    console.log(`   Provider: ${result.provider}, Model: ${result.model}`);
+    console.log(`   Provider: ${result.provider}`);
+    console.log(`   Model: ${result.model}`);
+    console.log(`   Selection: ${result.reason}`);
   } catch (genError) {
     console.error(`   ERROR: Image generation failed: ${genError.message}`);
     process.exit(1);
@@ -342,6 +398,7 @@ async function main() {
       url: publicUrl,
       provider: result.provider,
       model: result.model,
+      selection_reason: result.reason,
       generated_at: new Date().toISOString(),
       generated_by: 'generate-vision-visualization.js',
       version: newVersion
