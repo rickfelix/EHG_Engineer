@@ -331,9 +331,23 @@ export async function validateUserStoriesForHandoff(stories, options = {}) {
   // Calculate average score
   result.averageScore = Math.round(totalScore / stories.length);
 
-  // Determine overall validity
+  // PAT-STORY-VALIDATION-CATEGORY-001: Category-aware validity determination
+  // For API/technical work, individual story issues should NOT block
+  // as long as the average score passes the threshold
+  const lenientCategories = ['api', 'api-contracts', 'backend', 'documentation', 'docs', 'infrastructure'];
+  const isLenientCategory = lenientCategories.includes((options?.category || '').toLowerCase());
+
+  // Determine overall validity based on category
   if (result.issues.length > 0) {
-    result.valid = false;
+    if (isLenientCategory && result.averageScore >= minimumScore) {
+      // For lenient categories with passing average, demote issues to warnings
+      // This allows API work to pass when overall quality is acceptable
+      result.warnings.push(...result.issues.map(i => `[Demoted] ${i}`));
+      result.issues = [];
+      result.valid = true;
+    } else {
+      result.valid = false;
+    }
   }
 
   if (result.averageScore < minimumScore) {

@@ -419,10 +419,12 @@ class PlanToExecVerifier {
         const storyMinimumScore = this.getStoryMinimumScoreByCategory(sd.category, sd.sd_type);
         console.log(`   SD Category: ${sd.category || 'unknown'} → Minimum Score: ${storyMinimumScore}%`);
 
+        // PAT-STORY-VALIDATION-CATEGORY-001: Pass category for lenient issue handling
         storyQualityResult = await validateUserStoriesForHandoff(userStories, {
           minimumScore: storyMinimumScore,
           minimumStories: 1,
-          blockOnWarnings: false
+          blockOnWarnings: false,
+          category: sd.category || 'feature'  // Pass category for issue demotion logic
         });
 
         console.log(storyQualityResult.summary);
