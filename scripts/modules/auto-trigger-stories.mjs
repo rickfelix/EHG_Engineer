@@ -40,6 +40,62 @@ const LLM_CONFIG = {
   enabled: process.env.LLM_STORY_GENERATION !== 'false'  // Enabled by default
 };
 
+// ============================================
+// E2E Test Path Generation (v1.3.0)
+// Auto-generates test paths based on SD type
+// ============================================
+
+/**
+ * Generate E2E test path based on SD type and story details
+ * @param {string} sdId - Strategic directive ID
+ * @param {string} sdType - SD type (feature, infrastructure, documentation, etc.)
+ * @param {string} storyNumber - Story number (e.g., '001')
+ * @param {string} storyTitle - Story title for slug generation
+ * @returns {Object} - { path: string, status: string }
+ */
+function generateE2ETestPath(sdId, sdType, storyNumber, storyTitle) {
+  // Normalize SD ID to create slug (e.g., SD-VISION-V2-003 -> vision-v2-003)
+  const sdSlug = sdId.toLowerCase().replace(/^sd-/, '').replace(/[^a-z0-9]+/g, '-');
+
+  // Generate title slug for readable test names
+  const titleSlug = (storyTitle || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .substring(0, 30)
+    .replace(/-+$/, '');
+
+  // SD-type-specific path patterns
+  const pathPatterns = {
+    // Feature SDs: Individual E2E test per story
+    feature: `tests/e2e/${sdSlug}-us-${storyNumber}.spec.ts`,
+
+    // Security SDs: Security-focused test directory
+    security: `tests/e2e/security/${sdSlug}-us-${storyNumber}.spec.ts`,
+
+    // Infrastructure SDs: Grouped by SD (multiple stories in one test file)
+    infrastructure: `tests/e2e/infra/${sdSlug}.spec.ts`,
+
+    // Documentation SDs: No E2E tests required
+    documentation: 'N/A - documentation SD (no E2E required)',
+
+    // Database SDs: Integration test path
+    database: `tests/e2e/db/${sdSlug}-us-${storyNumber}.spec.ts`,
+
+    // API SDs: API test directory
+    api: `tests/e2e/api/${sdSlug}-us-${storyNumber}.spec.ts`,
+
+    // Default: Standard E2E test path
+    default: `tests/e2e/${sdSlug}-us-${storyNumber}.spec.ts`
+  };
+
+  const path = pathPatterns[sdType] || pathPatterns.default;
+
+  // Determine initial status based on SD type
+  const status = sdType === 'documentation' ? 'not_applicable' : 'not_created';
+
+  return { path, status };
+}
+
 /**
  * Initialize OpenAI client for story generation
  */
@@ -856,12 +912,16 @@ async function generateUserStoriesFromPRD(supabase, prd, sdId, prdId, personaCon
       { requirement: fr.requirement }
     );
 
+    // E2E Test Path Generation (v1.3.0): Auto-generate test paths based on SD type
+    const storyTitle = fr.requirement || `Implement ${fr.id}`;
+    const e2eConfig = generateE2ETestPath(sdId, sdType, storyNumber, storyTitle);
+
     const userStory = {
       id: randomUUID(),
       story_key: storyKey,
       sd_id: sdId,
       prd_id: prdId,
-      title: fr.requirement || `Implement ${fr.id}`,
+      title: storyTitle,
       user_role: userRole,
       user_want: fr.description || `to implement ${fr.requirement}`,
       user_benefit: extractUserBenefit(fr.description, fr.rationale),
@@ -872,11 +932,15 @@ async function generateUserStoriesFromPRD(supabase, prd, sdId, prdId, personaCon
       implementation_context: fr.description || fr.requirement || 'Implementation details to be defined during EXEC phase',
       technical_notes: fr.rationale || '',
       created_by: 'PRODUCT_REQUIREMENTS_EXPERT',
+      // E2E Test Path (v1.3.0): Auto-populated based on SD type
+      e2e_test_path: e2eConfig.path,
+      e2e_test_status: e2eConfig.status,
       // Track that criteria were transformed (for debugging/audit)
       metadata: {
         sd_type_at_generation: sdType,
         criteria_transformation_applied: true,
-        generation_version: '1.1.0'
+        e2e_path_auto_generated: true,
+        generation_version: '1.3.0'
       }
     };
 
