@@ -47,7 +47,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     return null;
   }
 
-  getRequiredGates(sd, options) {
+  getRequiredGates(_sd, _options) {
     const gates = [];
 
     // Gate 1: Verify PLAN-TO-LEAD handoff exists and was accepted

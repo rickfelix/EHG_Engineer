@@ -374,9 +374,9 @@ export class ExecToPlanExecutor extends BaseExecutor {
         warnings: [],
         gate_status: 'PASS'
       };
-    } catch (_error) {
+    } catch (error) {
       // Table might not exist
-      console.log('   ℹ️  RCA gate check skipped (table may not exist)');
+      console.log(`   ℹ️  RCA gate check skipped: ${error.message || 'table may not exist'}`);
       return {
         passed: true,
         score: 100,
