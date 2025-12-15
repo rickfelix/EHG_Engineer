@@ -12,6 +12,7 @@ import BaseExecutor from './BaseExecutor.js';
 import { execSync } from 'child_process';
 import path from 'path';
 import readline from 'readline';
+import { SDTypeClassifier } from '../../sd-type-classifier.js';
 
 // External verifier (will be lazy loaded)
 let LeadToPlanVerifier;
@@ -46,6 +47,20 @@ export class LeadToPlanExecutor extends BaseExecutor {
       },
       required: true,
       remediation: 'Set target_application to match the files in scope (EHG or EHG_Engineer)'
+    });
+
+    // PAT-SD-CATEGORY-001: Intelligent Category Detection
+    // Auto-detect and correct SD category to ensure proper quality thresholds
+    // during PLAN-TO-EXEC (API work vs feature work have different thresholds)
+    gates.push({
+      name: 'CATEGORY_DETECTION',
+      validator: async (ctx) => {
+        console.log('\n🏷️  GATE: Category Detection (PAT-SD-CATEGORY-001)');
+        console.log('-'.repeat(50));
+        return this._validateAndCorrectCategory(ctx.sd);
+      },
+      required: false,  // Informational, auto-corrects when possible
+      remediation: 'Review SD category manually if auto-detection failed'
     });
 
     return gates;
@@ -190,6 +205,32 @@ export class LeadToPlanExecutor extends BaseExecutor {
       pass: true,
       score: 100,
       issues: []
+    };
+  }
+
+  /**
+   * PAT-SD-CATEGORY-001: Validate and auto-correct SD category
+   *
+   * Detects whether an SD is API work, feature work, infrastructure, etc.
+   * and auto-corrects the category if needed. This ensures proper quality
+   * thresholds are applied during PLAN-TO-EXEC handoff.
+   *
+   * Example: SD titled "API Contracts for Chairman Operations" should have
+   * category "api" not "feature" - API work has different quality thresholds.
+   */
+  async _validateAndCorrectCategory(sd) {
+    const classifier = new SDTypeClassifier();
+    const result = await classifier.autoCorrectCategory(sd, this.supabase);
+
+    // Always pass - this is informational/auto-correcting
+    return {
+      pass: true,
+      score: result.updated ? 90 : (result.mismatch ? 70 : 100),
+      issues: [],
+      warnings: result.mismatch && !result.updated
+        ? [`Category may need manual review: current '${result.currentCategory}' vs detected '${result.detectedCategory}'`]
+        : [],
+      categoryResult: result
     };
   }
 

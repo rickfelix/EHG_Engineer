@@ -31,6 +31,63 @@ const VALID_SD_TYPES = [
   'performance'
 ];
 
+// ============================================================================
+// PAT-SD-CATEGORY-001: Intelligent Category Detection
+// Categories affect user story quality thresholds during PLAN-TO-EXEC handoff
+// API/technical work has different acceptance criteria than user-facing features
+// ============================================================================
+const VALID_CATEGORIES = [
+  'feature',        // User-facing features (60% threshold)
+  'api',            // API contracts, endpoints (50% threshold)
+  'api-contracts',  // Explicit API contract work (50% threshold)
+  'backend',        // Backend services (50% threshold)
+  'infrastructure', // CI/CD, tooling (55% threshold)
+  'documentation',  // Docs-only work (50% threshold)
+  'bugfix',         // Bug fixes (55% threshold)
+  'database',       // Schema work (55% threshold)
+  'security'        // Security work (55% threshold)
+];
+
+// Category detection patterns - maps keywords to categories
+const CATEGORY_PATTERNS = {
+  'api': {
+    keywords: ['api contract', 'api endpoint', 'rest api', 'graphql', 'endpoint', 'api route', 'api design', 'openapi', 'swagger', 'api specification', 'api-contracts'],
+    weight: 1.5  // Highest priority for explicit API work
+  },
+  'api-contracts': {
+    keywords: ['api contract', 'contract', 'api spec', 'specification'],
+    weight: 1.4
+  },
+  'backend': {
+    keywords: ['backend', 'server', 'service layer', 'microservice', 'edge function', 'serverless'],
+    weight: 1.3
+  },
+  'documentation': {
+    keywords: ['documentation', 'docs', 'readme', 'guide', 'tutorial', 'onboarding'],
+    weight: 1.2
+  },
+  'infrastructure': {
+    keywords: ['ci/cd', 'pipeline', 'github action', 'deploy', 'docker', 'kubernetes', 'terraform', 'tooling', 'automation', 'devops'],
+    weight: 1.1
+  },
+  'database': {
+    keywords: ['schema', 'migration', 'table', 'rls', 'postgres', 'supabase', 'database'],
+    weight: 1.0
+  },
+  'security': {
+    keywords: ['security', 'auth', 'authentication', 'authorization', 'rls policy', 'jwt', 'oauth', 'rbac'],
+    weight: 1.0
+  },
+  'bugfix': {
+    keywords: ['bug', 'fix', 'error', 'broken', 'crash', 'regression', 'patch'],
+    weight: 0.9
+  },
+  'feature': {
+    keywords: ['ui', 'component', 'page', 'form', 'dialog', 'dashboard', 'frontend', 'react', 'user interface', 'user experience', 'ux'],
+    weight: 0.8  // Lowest priority - default fallback
+  }
+};
+
 // Handoff requirements by SD type (from database sd_type_validation_profiles)
 const HANDOFF_REQUIREMENTS = {
   feature: ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD'],
@@ -345,6 +402,101 @@ Analyze the SD carefully and classify it based on what is actually being BUILT o
       recommendation: this.generateRecommendation(declaredType, bestMatch.type, bestMatch.confidence, usedWorstCase),
       fallbackMode: true
     };
+  }
+
+  /**
+   * PAT-SD-CATEGORY-001: Intelligent Category Detection
+   *
+   * Detects the appropriate category for an SD based on title/scope/description.
+   * Categories affect user story quality thresholds during PLAN-TO-EXEC handoff:
+   * - api, api-contracts, backend, documentation: 50% threshold (technical specs)
+   * - infrastructure, bugfix, database, security: 55% threshold
+   * - feature: 60% threshold (user-facing work)
+   *
+   * This should be called during LEAD-TO-PLAN handoff to auto-set category.
+   *
+   * @param {Object} sd - Strategic Directive object
+   * @returns {Object} Category classification result
+   */
+  classifyCategory(sd) {
+    const text = `${sd.title || ''} ${sd.scope || ''} ${sd.description || ''}`.toLowerCase();
+    const currentCategory = sd.category || 'feature';
+
+    let bestMatch = { category: 'feature', score: 0, keywords: [], confidence: 30 };
+
+    for (const [category, config] of Object.entries(CATEGORY_PATTERNS)) {
+      const matchedKeywords = config.keywords.filter(kw => text.includes(kw));
+      if (matchedKeywords.length > 0) {
+        const baseScore = matchedKeywords.length * config.weight;
+
+        if (baseScore > bestMatch.score) {
+          bestMatch = {
+            category,
+            score: baseScore,
+            keywords: matchedKeywords,
+            confidence: Math.min(Math.round((matchedKeywords.length / 2) * 100 * config.weight), 100)
+          };
+        }
+      }
+    }
+
+    const mismatch = currentCategory !== bestMatch.category;
+    const shouldUpdate = mismatch && bestMatch.confidence >= 60;
+
+    return {
+      currentCategory,
+      detectedCategory: bestMatch.category,
+      confidence: bestMatch.confidence,
+      matchedKeywords: bestMatch.keywords,
+      mismatch,
+      shouldUpdate,
+      recommendation: shouldUpdate
+        ? `⚠️ Category mismatch: Current '${currentCategory}' but detected '${bestMatch.category}' (${bestMatch.confidence}% confidence). Auto-updating.`
+        : mismatch
+          ? `ℹ️ Possible category mismatch: '${currentCategory}' vs detected '${bestMatch.category}' (${bestMatch.confidence}% confidence). Review manually.`
+          : `✅ Category '${currentCategory}' validated.`
+    };
+  }
+
+  /**
+   * PAT-SD-CATEGORY-001: Auto-update SD category if mismatch detected
+   *
+   * Called during LEAD-TO-PLAN handoff to ensure category is correct
+   * before user stories are generated and quality thresholds applied.
+   *
+   * @param {Object} sd - Strategic Directive object
+   * @param {Object} supabase - Supabase client for database updates
+   * @returns {Promise<Object>} Update result
+   */
+  async autoCorrectCategory(sd, supabase) {
+    const classification = this.classifyCategory(sd);
+
+    console.log('\n🏷️  CATEGORY DETECTION (PAT-SD-CATEGORY-001)');
+    console.log('-'.repeat(50));
+    console.log(`   Current category: ${classification.currentCategory}`);
+    console.log(`   Detected category: ${classification.detectedCategory}`);
+    console.log(`   Confidence: ${classification.confidence}%`);
+    if (classification.matchedKeywords.length > 0) {
+      console.log(`   Matched keywords: ${classification.matchedKeywords.slice(0, 5).join(', ')}`);
+    }
+    console.log(`   ${classification.recommendation}`);
+
+    if (classification.shouldUpdate && supabase) {
+      const { error } = await supabase
+        .from('strategic_directives_v2')
+        .update({ category: classification.detectedCategory })
+        .eq('id', sd.id);
+
+      if (error) {
+        console.log(`   ❌ Failed to update category: ${error.message}`);
+        return { updated: false, error: error.message, ...classification };
+      }
+
+      console.log(`   ✅ Category auto-updated: ${classification.currentCategory} → ${classification.detectedCategory}`);
+      return { updated: true, newCategory: classification.detectedCategory, ...classification };
+    }
+
+    return { updated: false, ...classification };
   }
 }
 
