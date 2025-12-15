@@ -338,7 +338,8 @@ export class ExecToPlanExecutor extends BaseExecutor {
       test_evidence: testEvidenceResult, // LEO v4.3.4: Unified test evidence
       deliverables: deliverablesStatus,
       commit_verification: commitVerification,
-      qualityScore: gateResults.totalScore
+      // Use normalized score (weighted average 0-100%) instead of summed totalScore
+      qualityScore: gateResults.normalizedScore ?? Math.round((gateResults.totalScore / gateResults.totalMaxScore) * 100)
     };
   }
 

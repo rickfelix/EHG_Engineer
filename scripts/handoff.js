@@ -155,6 +155,201 @@ function displayWorkflowRecommendation(workflowInfo, currentHandoff = null) {
   console.log('');
 }
 
+/**
+ * SYSTEMIC FIX (PAT-WF-NEXT-001): Verify SD completion
+ * Checks all required handoffs exist and SD is truly completed
+ */
+async function verifySDCompletion(sdId) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+
+  // Get SD details
+  const { data: sd, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, legacy_id, title, status, current_phase, sd_type, category')
+    .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
+    .single();
+
+  if (sdError || !sd) {
+    return { error: `SD not found: ${sdId}`, isComplete: false };
+  }
+
+  // Get workflow requirements for this SD type
+  const workflowInfo = await getSDWorkflow(sd.legacy_id || sd.id);
+  const requiredHandoffs = workflowInfo.workflow?.required || [];
+
+  // Get existing handoffs for this SD
+  const { data: handoffs } = await supabase
+    .from('leo_handoff_executions')
+    .select('handoff_type, status, created_at')
+    .eq('sd_id', sd.id)
+    .eq('status', 'accepted')
+    .order('created_at', { ascending: true });
+
+  const existingHandoffs = (handoffs || []).map(h => h.handoff_type.toUpperCase());
+
+  // Check which required handoffs are missing
+  const missingHandoffs = requiredHandoffs.filter(
+    h => !existingHandoffs.includes(h.toUpperCase())
+  );
+
+  // Check if LEAD-FINAL-APPROVAL exists
+  const hasFinalApproval = existingHandoffs.includes('LEAD-FINAL-APPROVAL');
+
+  // Determine completion status
+  const isComplete = sd.status === 'completed' && missingHandoffs.length === 0 && hasFinalApproval;
+
+  return {
+    sd,
+    isComplete,
+    status: sd.status,
+    requiredHandoffs,
+    existingHandoffs,
+    missingHandoffs,
+    hasFinalApproval,
+    workflow: workflowInfo.workflow
+  };
+}
+
+/**
+ * Get SDs stuck in pending_approval status
+ */
+async function getPendingApprovalSDs() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+
+  const { data: sds, error } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, legacy_id, title, status, current_phase, sd_type, updated_at')
+    .eq('status', 'pending_approval')
+    .eq('is_active', true)
+    .order('updated_at', { ascending: true });
+
+  if (error) {
+    return { error: error.message, sds: [] };
+  }
+
+  return { sds: sds || [] };
+}
+
+/**
+ * Display SDs stuck in pending_approval
+ */
+function displayPendingSDs(result) {
+  console.log('');
+  console.log('⏳ SDs AWAITING FINAL APPROVAL');
+  console.log('═'.repeat(60));
+
+  if (result.error) {
+    console.log(`   ❌ Error: ${result.error}`);
+    console.log('═'.repeat(60));
+    return;
+  }
+
+  if (result.sds.length === 0) {
+    console.log('   ✅ No SDs stuck in pending_approval');
+    console.log('═'.repeat(60));
+    return;
+  }
+
+  console.log(`   Found ${result.sds.length} SD(s) awaiting LEAD-FINAL-APPROVAL:`);
+  console.log('');
+
+  for (const sd of result.sds) {
+    const hoursPending = Math.round((Date.now() - new Date(sd.updated_at).getTime()) / (1000 * 60 * 60));
+    console.log(`   📋 ${sd.legacy_id || sd.id}`);
+    console.log(`      Title: ${sd.title}`);
+    console.log(`      Type: ${sd.sd_type || 'unknown'}`);
+    console.log(`      Pending: ${hoursPending} hours`);
+    console.log(`      Action: node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${sd.legacy_id || sd.id}`);
+    console.log('');
+  }
+
+  console.log('─'.repeat(60));
+  console.log('   ⚠️  These SDs are NOT complete until LEAD-FINAL-APPROVAL is run');
+  console.log('═'.repeat(60));
+  console.log('');
+}
+
+/**
+ * Display completion verification results
+ */
+function displayCompletionVerification(result) {
+  console.log('');
+  console.log('🔍 SD COMPLETION VERIFICATION');
+  console.log('═'.repeat(60));
+
+  if (result.error) {
+    console.log(`   ❌ Error: ${result.error}`);
+    console.log('═'.repeat(60));
+    return;
+  }
+
+  const { sd, isComplete, status, requiredHandoffs, existingHandoffs, missingHandoffs, hasFinalApproval } = result;
+
+  console.log(`   SD: ${sd.legacy_id || sd.id}`);
+  console.log(`   Title: ${sd.title}`);
+  console.log(`   Status: ${status.toUpperCase()}`);
+  console.log('');
+
+  // Status check
+  if (status === 'completed') {
+    console.log('   ✅ Status Check: COMPLETED');
+  } else {
+    console.log(`   ❌ Status Check: ${status.toUpperCase()} (not completed)`);
+  }
+
+  // Final approval check
+  if (hasFinalApproval) {
+    console.log('   ✅ Final Approval: LEAD-FINAL-APPROVAL executed');
+  } else {
+    console.log('   ❌ Final Approval: LEAD-FINAL-APPROVAL NOT found');
+  }
+
+  // Handoff check
+  console.log('');
+  console.log('   REQUIRED HANDOFFS:');
+  for (const handoff of requiredHandoffs) {
+    const exists = existingHandoffs.includes(handoff.toUpperCase());
+    const icon = exists ? '✅' : '❌';
+    console.log(`      ${icon} ${handoff}`);
+  }
+
+  if (missingHandoffs.length > 0) {
+    console.log('');
+    console.log('   ⚠️  MISSING HANDOFFS:');
+    for (const missing of missingHandoffs) {
+      console.log(`      • ${missing}`);
+    }
+  }
+
+  // Final verdict
+  console.log('');
+  console.log('─'.repeat(60));
+  if (isComplete) {
+    console.log('   🎉 VERDICT: SD IS COMPLETE');
+    console.log('      You may now claim this SD is done.');
+  } else {
+    console.log('   ⛔ VERDICT: SD IS NOT COMPLETE');
+    console.log('      DO NOT claim this SD is done!');
+    if (!hasFinalApproval) {
+      console.log('');
+      console.log('   ➡️  NEXT ACTION: Run LEAD-FINAL-APPROVAL');
+      console.log(`      node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${sd.legacy_id || sd.id}`);
+    } else if (missingHandoffs.length > 0) {
+      console.log('');
+      console.log(`   ➡️  NEXT ACTION: Run ${missingHandoffs[0]}`);
+      console.log(`      node scripts/handoff.js execute ${missingHandoffs[0]} ${sd.legacy_id || sd.id}`);
+    }
+  }
+  console.log('═'.repeat(60));
+  console.log('');
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
@@ -183,6 +378,34 @@ async function main() {
       }
 
       displayWorkflowRecommendation(workflowInfo);
+      break;
+    }
+
+    case 'verify': {
+      // SYSTEMIC FIX (PAT-WF-NEXT-001): Verify SD completion before claiming done
+      const sdId = args[1];
+
+      if (!sdId) {
+        console.log('Usage: node scripts/handoff.js verify SD-ID');
+        console.log('');
+        console.log('Verifies that an SD is truly complete by checking:');
+        console.log('  1. SD status is "completed"');
+        console.log('  2. All required handoffs exist');
+        console.log('  3. LEAD-FINAL-APPROVAL was executed');
+        console.log('');
+        console.log('Use this BEFORE claiming an SD is done!');
+        process.exit(1);
+      }
+
+      const verifyResult = await verifySDCompletion(sdId);
+      displayCompletionVerification(verifyResult);
+      process.exit(verifyResult.isComplete ? 0 : 1);
+    }
+
+    case 'pending': {
+      // SYSTEMIC FIX (PAT-WF-NEXT-001): Show SDs stuck in pending_approval
+      const pendingSDs = await getPendingApprovalSDs();
+      displayPendingSDs(pendingSDs);
       break;
     }
 
@@ -231,9 +454,45 @@ async function main() {
         console.log('='.repeat(50));
         console.log(`   Type: ${handoffType.toUpperCase()}`);
         console.log(`   SD: ${sdId}`);
-        console.log(`   Score: ${result.totalScore || result.qualityScore || 'N/A'}%`);
+        // Use normalized score (weighted average 0-100%) instead of summed score
+        const displayScore = result.normalizedScore ?? result.qualityScore ?? Math.round((result.totalScore / result.maxScore) * 100) ?? 'N/A';
+        console.log(`   Score: ${displayScore}%`);
+        // Show gate breakdown if available
+        if (result.gateResults && Object.keys(result.gateResults).length > 0) {
+          console.log(`   Gates: ${Object.keys(result.gateResults).length} evaluated`);
+          for (const [gateName, gateResult] of Object.entries(result.gateResults)) {
+            const gatePercent = gateResult.maxScore > 0 ? Math.round((gateResult.score / gateResult.maxScore) * 100) : 0;
+            const status = gateResult.passed ? '✓' : '✗';
+            console.log(`      ${status} ${gateName}: ${gatePercent}%`);
+          }
+        }
         if (result.warnings?.length > 0) {
           console.log(`   Warnings: ${result.warnings.length}`);
+        }
+
+        // SYSTEMIC FIX: Show next step in workflow to prevent premature completion claims
+        // PAT-WORKFLOW-NEXT-001: Always show what comes next after a handoff
+        const nextStepMap = {
+          'LEAD-TO-PLAN': { next: 'PLAN-TO-EXEC', status: 'planning', message: 'Create PRD, then run PLAN-TO-EXEC' },
+          'PLAN-TO-EXEC': { next: 'EXEC-TO-PLAN', status: 'in_progress', message: 'Implement features, then run EXEC-TO-PLAN' },
+          'EXEC-TO-PLAN': { next: 'PLAN-TO-LEAD', status: 'review', message: 'Verify implementation, then run PLAN-TO-LEAD' },
+          'PLAN-TO-LEAD': { next: 'LEAD-FINAL-APPROVAL', status: 'pending_approval', message: '⚠️  SD is NOT complete! Run LEAD-FINAL-APPROVAL to finish' },
+          'LEAD-FINAL-APPROVAL': { next: null, status: 'completed', message: '🎉 SD is now COMPLETE!' }
+        };
+
+        const nextStep = nextStepMap[handoffType.toUpperCase()];
+        if (nextStep) {
+          console.log('');
+          console.log('─'.repeat(50));
+          console.log(`   📍 SD Status: ${nextStep.status.toUpperCase()}`);
+          if (nextStep.next) {
+            console.log(`   ➡️  NEXT STEP: ${nextStep.next}`);
+            console.log(`      ${nextStep.message}`);
+            console.log('');
+            console.log('   ⚠️  DO NOT claim completion until LEAD-FINAL-APPROVAL is done');
+          } else {
+            console.log(`   ${nextStep.message}`);
+          }
         }
       } else {
         console.log('');
@@ -317,6 +576,8 @@ async function main() {
       console.log('');
       console.log('COMMANDS:');
       console.log('  workflow SD-ID         - Show recommended workflow for SD type');
+      console.log('  verify SD-ID           - Verify SD is truly complete (PAT-WF-NEXT-001)');
+      console.log('  pending                - Show SDs stuck in pending_approval');
       console.log('  execute TYPE SD-ID     - Execute handoff');
       console.log('  list [SD-ID]           - List handoff executions');
       console.log('  stats                  - Show system statistics');

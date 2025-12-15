@@ -67,18 +67,30 @@ export class ValidationOrchestrator {
    * Run multiple gates in sequence, stopping on first failure
    * @param {array} gates - Array of gate definitions
    * @param {object} context - Shared context
-   * @returns {Promise<object>} Combined result
+   * @returns {Promise<object>} Combined result with normalized scoring
+   *
+   * SCORING SYSTEM (Fixed: was summing scores, now uses weighted average)
+   * - Each gate contributes a score (0-100) and optional weight
+   * - Default weight is 1.0 for all gates
+   * - normalizedScore = weighted average of all gate scores (0-100%)
+   * - totalScore/totalMaxScore preserved for backward compatibility
    */
   async validateGates(gates, context = {}) {
     const results = {
       passed: true,
-      totalScore: 0,
-      totalMaxScore: 0,
+      totalScore: 0,           // Sum of raw scores (backward compat)
+      totalMaxScore: 0,        // Sum of max scores (backward compat)
+      normalizedScore: 0,      // NEW: Weighted average percentage (0-100)
+      gateCount: 0,            // NEW: Number of gates evaluated
       gateResults: {},
       failedGate: null,
       issues: [],
       warnings: []
     };
+
+    // Track weighted scores for normalization
+    let weightedScoreSum = 0;
+    let totalWeight = 0;
 
     for (const gate of gates) {
       // Check condition if provided
@@ -89,8 +101,21 @@ export class ValidationOrchestrator {
 
       const gateResult = await this.validateGate(gate.name, gate.validator, context);
       results.gateResults[gate.name] = gateResult;
+
+      // Backward compat: sum raw scores
       results.totalScore += gateResult.score;
       results.totalMaxScore += gateResult.maxScore;
+      results.gateCount++;
+
+      // NEW: Calculate weighted contribution
+      // Gate weight defaults to 1.0, can be customized per gate
+      const gateWeight = gate.weight || 1.0;
+      const gatePercentage = gateResult.maxScore > 0
+        ? (gateResult.score / gateResult.maxScore) * 100
+        : 0;
+      weightedScoreSum += gatePercentage * gateWeight;
+      totalWeight += gateWeight;
+
       results.warnings.push(...gateResult.warnings);
 
       if (!gateResult.passed && gate.required !== false) {
@@ -100,6 +125,11 @@ export class ValidationOrchestrator {
         break; // Stop on first required failure
       }
     }
+
+    // Calculate normalized score as weighted average (0-100%)
+    results.normalizedScore = totalWeight > 0
+      ? Math.round(weightedScoreSum / totalWeight)
+      : 0;
 
     return results;
   }

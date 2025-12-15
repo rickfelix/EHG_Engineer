@@ -74,8 +74,11 @@ export class BaseExecutor {
         success: true,
         ...executionResult,
         gateResults: gateResults.gateResults,
+        // Scoring: normalized is the weighted average (0-100%), totalScore/maxScore for backward compat
+        normalizedScore: gateResults.normalizedScore,
         totalScore: gateResults.totalScore,
         maxScore: gateResults.totalMaxScore,
+        gateCount: gateResults.gateCount,
         warnings: gateResults.warnings
       };
 

@@ -340,7 +340,8 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       sdId: sdId,
       handoffId: handoffId,
       message: 'SD completed successfully',
-      qualityScore: gateResults.totalScore
+      // Use normalized score (weighted average 0-100%) instead of summed totalScore
+      qualityScore: gateResults.normalizedScore ?? Math.round((gateResults.totalScore / gateResults.totalMaxScore) * 100)
     };
   }
 

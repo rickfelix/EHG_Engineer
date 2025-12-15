@@ -109,11 +109,21 @@ export class HandoffRecorder {
     // SD-VENTURE-STAGE0-UI-001: Resolve to UUID for FK constraints
     const sdUuid = await this._resolveToUUID(sdId);
 
-    // Normalize validation score
-    const rawScore = result.qualityScore || result.totalScore || 100;
+    // Use normalizedScore (weighted average) if available, otherwise calculate from totalScore/maxScore
+    // This fixes the bug where summed scores (266) were being clamped to 100
+    let rawScore;
+    if (result.normalizedScore !== undefined) {
+      rawScore = result.normalizedScore;
+    } else if (result.qualityScore !== undefined) {
+      rawScore = result.qualityScore;
+    } else if (result.totalScore !== undefined && result.maxScore !== undefined && result.maxScore > 0) {
+      rawScore = Math.round((result.totalScore / result.maxScore) * 100);
+    } else {
+      rawScore = result.totalScore || 100;
+    }
     const normalizedScore = this._normalizeValidationScore(rawScore);
 
-    console.log(`🔍 Validation score normalization: ${rawScore} (${typeof rawScore}) → ${normalizedScore} (${typeof normalizedScore})`);
+    console.log(`🔍 Validation score: ${rawScore}% (normalized: ${normalizedScore}%)`);
 
     const execution = {
       id: executionId,
@@ -333,8 +343,17 @@ export class HandoffRecorder {
       const [fromPhase, , toPhase] = handoffType.split('-');
       const handoffContent = this.contentBuilder.build(handoffType, sd, result, subAgentResults);
 
-      // Normalize validation score
-      const rawScore = result.qualityScore || result.totalScore || 100;
+      // Use normalizedScore (weighted average) if available, otherwise calculate from totalScore/maxScore
+      let rawScore;
+      if (result.normalizedScore !== undefined) {
+        rawScore = result.normalizedScore;
+      } else if (result.qualityScore !== undefined) {
+        rawScore = result.qualityScore;
+      } else if (result.totalScore !== undefined && result.maxScore !== undefined && result.maxScore > 0) {
+        rawScore = Math.round((result.totalScore / result.maxScore) * 100);
+      } else {
+        rawScore = result.totalScore || 100;
+      }
       const normalizedScore = this._normalizeValidationScore(rawScore);
 
       const handoffId = randomUUID();
