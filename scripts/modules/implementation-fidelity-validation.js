@@ -837,7 +837,7 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
           // But for UI-only SDs, there may be no migrations to run - give partial credit
           // Only block if migration files contain the full SD ID (indicating SD-specific migrations)
           const hasSDSpecificMigrations = migrationFiles.some(m =>
-            m.file.toLowerCase().includes(options.sdId?.toLowerCase().replace(/^sd-/, ''))
+            m.file.toLowerCase().includes(sdIdLower)
           );
 
           if (hasSDSpecificMigrations) {
