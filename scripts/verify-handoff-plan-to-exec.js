@@ -159,7 +159,77 @@ class PlanToExecVerifier {
     validation.percentage = Math.round((validation.score / 70) * 100); // Adjust for available points
     return validation;
   }
-  
+
+  /**
+   * PAT-PARENT-DET: Validate parent orchestrator PRD
+   * Parent orchestrators have different requirements than implementation PRDs:
+   * - Focus on decomposition structure and children coordination
+   * - Don't need system_architecture or implementation_approach
+   * - Need metadata.is_orchestrator_prd and decomposition_structure
+   */
+  validateParentOrchestratorPRD(prd) {
+    const validation = {
+      valid: true,
+      score: 0,
+      maxScore: 100,
+      errors: [],
+      warnings: [],
+      percentage: 0
+    };
+
+    // Required fields for parent orchestrator PRD
+    const requiredFields = [
+      'id',
+      'title',
+      'executive_summary',
+      'functional_requirements'
+    ];
+
+    // Check required fields
+    let fieldScore = 0;
+    requiredFields.forEach(field => {
+      const value = prd[field];
+      const isPresent = value !== null && value !== undefined;
+
+      if (!isPresent) {
+        validation.errors.push(`Missing required field: ${field}`);
+        validation.valid = false;
+      } else if (typeof value === 'string' && !value.trim()) {
+        validation.errors.push(`Empty required field: ${field}`);
+        validation.valid = false;
+      } else if (Array.isArray(value) && value.length === 0) {
+        validation.errors.push(`Empty array for required field: ${field}`);
+        validation.valid = false;
+      } else {
+        fieldScore += 20; // 20 points per field, 80 total for 4 fields
+      }
+    });
+
+    // Check for orchestrator metadata
+    if (prd.metadata?.is_orchestrator_prd === true) {
+      fieldScore += 10;
+    } else {
+      validation.warnings.push('PRD metadata.is_orchestrator_prd not set to true');
+    }
+
+    // Check for decomposition_structure
+    if (prd.metadata?.decomposition_structure) {
+      fieldScore += 10;
+    } else {
+      validation.warnings.push('PRD metadata.decomposition_structure not present');
+    }
+
+    validation.score = fieldScore;
+    validation.percentage = Math.min(100, fieldScore);
+
+    // Parent orchestrator PRDs pass with 80% (functional requirements present)
+    if (validation.percentage >= 80 || validation.errors.length === 0) {
+      validation.valid = true;
+    }
+
+    return validation;
+  }
+
   /**
    * Validate plan_presentation structure in handoff metadata
    * SD-PLAN-PRESENT-001: Ensures PLAN→EXEC handoffs include implementation guidance
@@ -244,7 +314,16 @@ class PlanToExecVerifier {
       if (sdError || !sd) {
         throw new Error(`Strategic Directive ${sdId} not found: ${sdError?.message}`);
       }
-      
+
+      // PAT-PARENT-DET: Detect parent orchestrator SDs
+      // Parent orchestrators coordinate children - they don't need implementation validation
+      const isParentOrchestrator = sd.metadata?.is_parent === true;
+      if (isParentOrchestrator) {
+        console.log('\n   🎯 PARENT ORCHESTRATOR DETECTED');
+        console.log('      Skipping implementation-specific validation (user stories, workflow review)');
+        console.log('      Work is delegated to child SDs');
+      }
+
       // 2. Load associated PRD
       // SD ID Schema Cleanup (2025-12-12): Use sd.id directly (uuid_id deprecated)
       // SYSTEMIC FIX: Add fallback to directive_id column (matches PRDRepository.getBySdId behavior)
@@ -292,120 +371,182 @@ class PlanToExecVerifier {
         .single();
 
       // 3a. MANDATORY: Check User Stories Exist
-      console.log('\n📝 Checking for user stories...');
-      const { data: userStories, error: userStoriesError } = await this.supabase
-        .from('user_stories')
-        .select('id, story_key, title, status, user_role, user_want, user_benefit, acceptance_criteria, story_points, implementation_context, sd_id')
-        .eq('sd_id', sdId);
+      // PAT-PARENT-DET: Skip for parent orchestrators - children have user stories
+      let userStories = [];
+      let completedStories = 0;
 
-      if (userStoriesError) {
-        return this.rejectHandoff(sdId, 'USER_STORIES_ERROR', `Error querying user stories: ${userStoriesError.message}`);
+      if (isParentOrchestrator) {
+        console.log('\n📝 User stories check: SKIPPED (parent orchestrator)');
+        console.log('   ℹ️  User stories belong to child SDs, not parent orchestrator');
+      } else {
+        console.log('\n📝 Checking for user stories...');
+        const { data: stories, error: userStoriesError } = await this.supabase
+          .from('user_stories')
+          .select('id, story_key, title, status, user_role, user_want, user_benefit, acceptance_criteria, story_points, implementation_context, sd_id')
+          .eq('sd_id', sdId);
+
+        if (userStoriesError) {
+          return this.rejectHandoff(sdId, 'USER_STORIES_ERROR', `Error querying user stories: ${userStoriesError.message}`);
+        }
+
+        if (!stories || stories.length === 0) {
+          console.log('   ❌ No user stories found');
+          return this.rejectHandoff(sdId, 'NO_USER_STORIES', 'User stories are MANDATORY before EXEC phase. Product Requirements Expert must generate user stories from PRD.', {
+            userStoriesCount: 0,
+            requiredMinimum: 1
+          });
+        }
+
+        userStories = stories;
+        console.log(`   ✅ User stories found: ${userStories.length}`);
+        completedStories = userStories.filter(s => s.status === 'completed').length;
+        console.log(`   📊 Status: ${completedStories}/${userStories.length} completed`);
       }
-
-      if (!userStories || userStories.length === 0) {
-        console.log('   ❌ No user stories found');
-        return this.rejectHandoff(sdId, 'NO_USER_STORIES', 'User stories are MANDATORY before EXEC phase. Product Requirements Expert must generate user stories from PRD.', {
-          userStoriesCount: 0,
-          requiredMinimum: 1
-        });
-      }
-
-      console.log(`   ✅ User stories found: ${userStories.length}`);
-      const completedStories = userStories.filter(s => s.status === 'completed').length;
-      console.log(`   📊 Status: ${completedStories}/${userStories.length} completed`);
 
       // 3a-2. NEW: User Story Quality Validation (SD-CAPABILITY-LIFECYCLE-001)
       // Prevents boilerplate and low-quality stories from reaching EXEC
-      console.log('\n🔍 Validating user story quality...');
+      // PAT-PARENT-DET: Skip for parent orchestrators
+      let storyQualityResult = { valid: true, averageScore: 100, warnings: [] };
 
-      // SD-type-aware minimum score (infrastructure/documentation are more lenient)
-      const storyMinimumScore = this.getStoryMinimumScoreByCategory(sd.category, sd.sd_type);
-      console.log(`   SD Category: ${sd.category || 'unknown'} → Minimum Score: ${storyMinimumScore}%`);
+      if (isParentOrchestrator) {
+        console.log('\n🔍 User story quality check: SKIPPED (parent orchestrator)');
+      } else {
+        console.log('\n🔍 Validating user story quality...');
 
-      const storyQualityResult = await validateUserStoriesForHandoff(userStories, {
-        minimumScore: storyMinimumScore,
-        minimumStories: 1,
-        blockOnWarnings: false
-      });
+        // SD-type-aware minimum score (infrastructure/documentation are more lenient)
+        const storyMinimumScore = this.getStoryMinimumScoreByCategory(sd.category, sd.sd_type);
+        console.log(`   SD Category: ${sd.category || 'unknown'} → Minimum Score: ${storyMinimumScore}%`);
 
-      console.log(storyQualityResult.summary);
-
-      if (!storyQualityResult.valid) {
-        const guidance = getUserStoryImprovementGuidance(storyQualityResult);
-        console.log('\n   ❌ User story quality validation failed');
-        return this.rejectHandoff(sdId, 'USER_STORY_QUALITY', 'User stories do not meet quality standards for EXEC phase', {
-          qualityValidation: storyQualityResult,
-          improvements: guidance
+        storyQualityResult = await validateUserStoriesForHandoff(userStories, {
+          minimumScore: storyMinimumScore,
+          minimumStories: 1,
+          blockOnWarnings: false
         });
-      }
 
-      console.log(`   ✅ User story quality passed (average score: ${storyQualityResult.averageScore}%)`);
-      if (storyQualityResult.warnings.length > 0) {
-        console.log(`   ⚠️  ${storyQualityResult.warnings.length} warnings (non-blocking)`);
+        console.log(storyQualityResult.summary);
+
+        if (!storyQualityResult.valid) {
+          const guidance = getUserStoryImprovementGuidance(storyQualityResult);
+          console.log('\n   ❌ User story quality validation failed');
+          return this.rejectHandoff(sdId, 'USER_STORY_QUALITY', 'User stories do not meet quality standards for EXEC phase', {
+            qualityValidation: storyQualityResult,
+            improvements: guidance
+          });
+        }
+
+        console.log(`   ✅ User story quality passed (average score: ${storyQualityResult.averageScore}%)`);
+        if (storyQualityResult.warnings.length > 0) {
+          console.log(`   ⚠️  ${storyQualityResult.warnings.length} warnings (non-blocking)`);
+        }
       }
 
       // 3b. MANDATORY: Workflow Review Validation (SD-DESIGN-WORKFLOW-REVIEW-001)
-      console.log('\n📋 Checking workflow review analysis...');
-      const workflowReviewResult = await this.validateWorkflowReview(sdId);
+      // PAT-PARENT-DET: Skip for parent orchestrators
+      let workflowReviewResult = { valid: true, status: 'SKIPPED' };
 
-      if (!workflowReviewResult.valid) {
-        return this.rejectHandoff(sdId, 'WORKFLOW_REVIEW_FAILED', workflowReviewResult.message, {
-          workflowAnalysis: workflowReviewResult.analysis,
-          requiredActions: workflowReviewResult.requiredActions
-        });
-      }
+      if (isParentOrchestrator) {
+        console.log('\n📋 Workflow review check: SKIPPED (parent orchestrator)');
+        console.log('   ℹ️  Workflow review applies to child SDs with implementations');
+      } else {
+        console.log('\n📋 Checking workflow review analysis...');
+        workflowReviewResult = await this.validateWorkflowReview(sdId);
 
-      console.log(`   ✅ Workflow review passed: ${workflowReviewResult.status}`);
-      if (workflowReviewResult.uxScore !== undefined) {
-        console.log(`   📊 UX Impact Score: ${workflowReviewResult.uxScore}/10`);
+        if (!workflowReviewResult.valid) {
+          return this.rejectHandoff(sdId, 'WORKFLOW_REVIEW_FAILED', workflowReviewResult.message, {
+            workflowAnalysis: workflowReviewResult.analysis,
+            requiredActions: workflowReviewResult.requiredActions
+          });
+        }
+
+        console.log(`   ✅ Workflow review passed: ${workflowReviewResult.status}`);
+        if (workflowReviewResult.uxScore !== undefined) {
+          console.log(`   📊 UX Impact Score: ${workflowReviewResult.uxScore}/10`);
+        }
       }
 
       // 4. Validate PRD Quality
-      const prdValidator = await this.loadPRDValidator();
-      const prdValidation = await prdValidator(prd);
+      // PAT-PARENT-DET: Parent orchestrators use simplified validation
+      let prdValidation;
 
-      console.log(`\\n📊 PRD Quality Score: ${prdValidation.percentage || prdValidation.score}%`);
+      if (isParentOrchestrator) {
+        console.log('\n📊 Parent Orchestrator PRD Validation (simplified)...');
+        prdValidation = this.validateParentOrchestratorPRD(prd);
+        console.log(`   Score: ${prdValidation.percentage}%`);
 
-      if (!prdValidation.valid || (prdValidation.percentage || prdValidation.score) < this.prdRequirements.minimumScore) {
-        return this.rejectHandoff(sdId, 'PRD_QUALITY', 'PRD does not meet quality standards', {
-          prdValidation,
-          requiredScore: this.prdRequirements.minimumScore,
-          actualScore: prdValidation.percentage || prdValidation.score
-        });
+        if (!prdValidation.valid) {
+          console.log('   ❌ Parent orchestrator PRD validation failed');
+          prdValidation.errors.forEach(err => console.log(`      • ${err}`));
+          return this.rejectHandoff(sdId, 'PRD_QUALITY', 'Parent orchestrator PRD missing required fields', {
+            prdValidation,
+            requiredScore: 80,
+            actualScore: prdValidation.percentage
+          });
+        }
+        console.log('   ✅ Parent orchestrator PRD validation passed');
+      } else {
+        const prdValidator = await this.loadPRDValidator();
+        prdValidation = await prdValidator(prd);
+
+        console.log(`\\n📊 PRD Quality Score: ${prdValidation.percentage || prdValidation.score}%`);
+
+        if (!prdValidation.valid || (prdValidation.percentage || prdValidation.score) < this.prdRequirements.minimumScore) {
+          return this.rejectHandoff(sdId, 'PRD_QUALITY', 'PRD does not meet quality standards', {
+            prdValidation,
+            requiredScore: this.prdRequirements.minimumScore,
+            actualScore: prdValidation.percentage || prdValidation.score
+          });
+        }
       }
 
       // 4a. NEW: PRD Boilerplate/Placeholder Detection (SD-CAPABILITY-LIFECYCLE-001)
       // Prevents placeholder text like "To be defined" from reaching EXEC
-      console.log('\n🔍 Validating PRD content quality (boilerplate detection)...');
+      // PAT-PARENT-DET: Skip for parent orchestrators - their PRDs have decomposition content
+      let prdBoilerplateResult = { valid: true, score: 100, warnings: [] };
 
-      // SD-type-aware minimum score for PRD (same logic as user stories)
-      const prdMinimumScore = this.getStoryMinimumScoreByCategory(sd.category, sd.sd_type);
-      console.log(`   SD Category: ${sd.category || 'unknown'} → PRD Minimum Score: ${prdMinimumScore}%`);
+      if (isParentOrchestrator) {
+        console.log('\n🔍 PRD boilerplate check: SKIPPED (parent orchestrator)');
+        console.log('   ℹ️  Parent orchestrator PRDs use decomposition format');
+      } else {
+        console.log('\n🔍 Validating PRD content quality (boilerplate detection)...');
 
-      const prdBoilerplateResult = await validatePRDForHandoff(prd, {
-        minimumScore: prdMinimumScore,
-        blockOnWarnings: false
-      });
+        // SD-type-aware minimum score for PRD (same logic as user stories)
+        const prdMinimumScore = this.getStoryMinimumScoreByCategory(sd.category, sd.sd_type);
+        console.log(`   SD Category: ${sd.category || 'unknown'} → PRD Minimum Score: ${prdMinimumScore}%`);
 
-      console.log(prdBoilerplateResult.summary);
-
-      if (!prdBoilerplateResult.valid) {
-        const guidance = getPRDImprovementGuidance(prdBoilerplateResult);
-        console.log('\n   ❌ PRD content quality validation failed');
-        return this.rejectHandoff(sdId, 'PRD_BOILERPLATE', 'PRD contains placeholder or boilerplate content', {
-          qualityValidation: prdBoilerplateResult,
-          improvements: guidance
+        prdBoilerplateResult = await validatePRDForHandoff(prd, {
+          minimumScore: prdMinimumScore,
+          blockOnWarnings: false
         });
-      }
 
-      console.log(`   ✅ PRD content quality passed (score: ${prdBoilerplateResult.score}%)`);
-      if (prdBoilerplateResult.warnings.length > 0) {
-        console.log(`   ⚠️  ${prdBoilerplateResult.warnings.length} warnings (non-blocking)`);
+        console.log(prdBoilerplateResult.summary);
+
+        if (!prdBoilerplateResult.valid) {
+          const guidance = getPRDImprovementGuidance(prdBoilerplateResult);
+          console.log('\n   ❌ PRD content quality validation failed');
+          return this.rejectHandoff(sdId, 'PRD_BOILERPLATE', 'PRD contains placeholder or boilerplate content', {
+            qualityValidation: prdBoilerplateResult,
+            improvements: guidance
+          });
+        }
+
+        console.log(`   ✅ PRD content quality passed (score: ${prdBoilerplateResult.score}%)`);
+        if (prdBoilerplateResult.warnings.length > 0) {
+          console.log(`   ⚠️  ${prdBoilerplateResult.warnings.length} warnings (non-blocking)`);
+        }
       }
 
       // 5. Check PLAN phase completion
-      if (prd.status !== 'approved' && prd.status !== 'ready_for_exec') {
-        return this.rejectHandoff(sdId, 'PLAN_INCOMPLETE', `PRD status is '${prd.status}', expected 'approved' or 'ready_for_exec'`);
+      // PAT-PARENT-DET: Parent orchestrators can have 'planning' status since they don't implement
+      const validStatuses = isParentOrchestrator
+        ? ['approved', 'ready_for_exec', 'planning', 'draft']
+        : ['approved', 'ready_for_exec'];
+
+      if (!validStatuses.includes(prd.status)) {
+        return this.rejectHandoff(sdId, 'PLAN_INCOMPLETE', `PRD status is '${prd.status}', expected one of: ${validStatuses.join(', ')}`);
+      }
+
+      if (isParentOrchestrator && (prd.status === 'planning' || prd.status === 'draft')) {
+        console.log(`\n   ℹ️  Parent orchestrator PRD status: ${prd.status} (accepted for orchestrator)`);
       }
       
       // 6. Validate handoff content (if provided)
