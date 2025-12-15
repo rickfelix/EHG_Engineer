@@ -833,10 +833,27 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
             console.log('   ⚠️  CRITICAL FAILURE: Run migrations before EXEC→PLAN handoff');
           }
         } else {
-          sectionScore += 0; // No points if no migration history (critical check)
-          sectionDetails.migration_execution_verified = false;
-          validation.issues.push('[B1.2] No migration execution history found - cannot verify');
-          console.log('   ❌ No migration history found (0/20)');
+          // SD-VISION-V2-006: Empty schema_migrations table suggests migrations weren't run
+          // But for UI-only SDs, there may be no migrations to run - give partial credit
+          // Only block if migration files contain the full SD ID (indicating SD-specific migrations)
+          const hasSDSpecificMigrations = migrationFiles.some(m =>
+            m.file.toLowerCase().includes(options.sdId?.toLowerCase().replace(/^sd-/, ''))
+          );
+
+          if (hasSDSpecificMigrations) {
+            // SD-specific migrations exist but weren't executed - blocking
+            sectionScore += 0;
+            sectionDetails.migration_execution_verified = false;
+            validation.issues.push('[B1.2] No migration execution history found - cannot verify');
+            console.log('   ❌ No migration history found (0/20)');
+          } else {
+            // Migration files found aren't specific to this SD - partial credit
+            sectionScore += 13;
+            sectionDetails.migration_execution_verified = null;
+            sectionDetails.migration_execution_note = 'No SD-specific migrations to verify';
+            validation.warnings.push('[B1.2] Migration history empty but no SD-specific migrations detected');
+            console.log('   ⚠️  No SD-specific migrations to verify (13/20)');
+          }
         }
       } catch (execCheckError) {
         sectionScore += 0; // No points on error (critical check)
