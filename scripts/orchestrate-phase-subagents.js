@@ -156,9 +156,10 @@ async function getPhaseSubAgentsForSd(phase, sd) {
     const skipCode = shouldSkipCodeValidation(sd);
 
     if (skipCode) {
-      // Use reduced validation for documentation/non-code SDs
-      phaseAgentCodes = PLAN_VERIFY_BY_SD_TYPE[sdType] || PLAN_VERIFY_BY_SD_TYPE.documentation;
-      console.log(`   📋 SD Type: ${sdType} (skip code validation: YES)`);
+      // PAT-SD-API-CATEGORY-002: When skipCodeValidation=true, ALWAYS use reduced list
+      // regardless of sd_type value (fixes bug where sd_type='feature' but category='api')
+      phaseAgentCodes = PLAN_VERIFY_BY_SD_TYPE.documentation;
+      console.log(`   📋 SD Type: ${sdType} (skip code validation: YES - using reduced list)`);
       console.log(`   📋 Using reduced PLAN_VERIFY sub-agents: ${phaseAgentCodes.join(', ')}`);
     } else {
       // Use full validation for code-impacting SDs
