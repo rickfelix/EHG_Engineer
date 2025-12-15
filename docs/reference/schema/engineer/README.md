@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-04T23:01:42.129Z
-**Tables**: 228
+**Generated**: 2025-12-15T17:31:21.178Z
+**Tables**: 258
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (228)
+## All Tables (258)
 
 ### LEO Protocol
 
@@ -60,6 +60,9 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sd_capabilities](tables/sd_capabilities.md)
 - [sd_claims](tables/sd_claims.md)
 - [sd_conflict_matrix](tables/sd_conflict_matrix.md)
+- [sd_contract_exceptions](tables/sd_contract_exceptions.md)
+- [sd_contract_violations](tables/sd_contract_violations.md)
+- [sd_data_contracts](tables/sd_data_contracts.md)
 - [sd_dependency_graph](tables/sd_dependency_graph.md)
 - [sd_exec_file_operations](tables/sd_exec_file_operations.md)
 - [sd_execution_actuals](tables/sd_execution_actuals.md)
@@ -73,6 +76,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sd_state_transitions](tables/sd_state_transitions.md)
 - [sd_subagent_deliverable_mapping](tables/sd_subagent_deliverable_mapping.md)
 - [sd_testing_status](tables/sd_testing_status.md)
+- [sd_type_validation_profiles](tables/sd_type_validation_profiles.md)
+- [sd_ux_contracts](tables/sd_ux_contracts.md)
 - [strategic_directives_v2](tables/strategic_directives_v2.md)
 - [working_sd_sessions](tables/working_sd_sessions.md)
 
@@ -91,6 +96,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [handoff_audit_log](tables/handoff_audit_log.md)
 - [handoff_validation_rules](tables/handoff_validation_rules.md)
 - [handoff_verification_gates](tables/handoff_verification_gates.md)
+- [lifecycle_phases](tables/lifecycle_phases.md)
 
 ### Sub-Agents
 
@@ -113,6 +119,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 ### Other
 
 - [activity_logs](tables/activity_logs.md)
+- [advisory_checkpoints](tables/advisory_checkpoints.md)
+- [agent_artifacts](tables/agent_artifacts.md)
 - [agent_avatars](tables/agent_avatars.md)
 - [agent_coordination_state](tables/agent_coordination_state.md)
 - [agent_departments](tables/agent_departments.md)
@@ -121,14 +129,21 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [agent_intelligence_insights](tables/agent_intelligence_insights.md)
 - [agent_learning_outcomes](tables/agent_learning_outcomes.md)
 - [agent_performance_metrics](tables/agent_performance_metrics.md)
+- [agent_task_contracts](tables/agent_task_contracts.md)
 - [agent_tools](tables/agent_tools.md)
 - [agentic_reviews](tables/agentic_reviews.md)
+- [agents](tables/agents.md)
+- [ai_quality_assessments](tables/ai_quality_assessments.md)
+- [archetype_benchmarks](tables/archetype_benchmarks.md)
+- [assumption_sets](tables/assumption_sets.md)
 - [backlog_item_completion](tables/backlog_item_completion.md)
 - [blueprint_board_submissions](tables/blueprint_board_submissions.md)
 - [blueprint_selection_signals](tables/blueprint_selection_signals.md)
 - [board_meeting_attendance](tables/board_meeting_attendance.md)
 - [board_meetings](tables/board_meetings.md)
 - [board_members](tables/board_members.md)
+- [chairman_approval_requests](tables/chairman_approval_requests.md)
+- [chairman_decisions](tables/chairman_decisions.md)
 - [chairman_feedback](tables/chairman_feedback.md)
 - [chairman_interests](tables/chairman_interests.md)
 - [claude_sessions](tables/claude_sessions.md)
@@ -149,6 +164,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [crewai_flow_templates](tables/crewai_flow_templates.md)
 - [crewai_flows](tables/crewai_flows.md)
 - [cross_agent_correlations](tables/cross_agent_correlations.md)
+- [cultural_design_styles](tables/cultural_design_styles.md)
 - [defect_taxonomy](tables/defect_taxonomy.md)
 - [directive_submissions](tables/directive_submissions.md)
 - [documentation_health_checks](tables/documentation_health_checks.md)
@@ -185,9 +201,11 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [interaction_history](tables/interaction_history.md)
 - [lead_evaluations](tables/lead_evaluations.md)
 - [learning_configurations](tables/learning_configurations.md)
+- [lifecycle_stage_config](tables/lifecycle_stage_config.md)
 - [llm_models](tables/llm_models.md)
 - [llm_providers](tables/llm_providers.md)
 - [market_segments](tables/market_segments.md)
+- [model_usage_log](tables/model_usage_log.md)
 - [nav_preferences](tables/nav_preferences.md)
 - [nav_routes](tables/nav_routes.md)
 - [operations_audit_log](tables/operations_audit_log.md)
@@ -215,6 +233,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [proposal_approvals](tables/proposal_approvals.md)
 - [proposal_notifications](tables/proposal_notifications.md)
 - [proposal_state_transitions](tables/proposal_state_transitions.md)
+- [protocol_improvement_audit_log](tables/protocol_improvement_audit_log.md)
+- [protocol_improvement_queue](tables/protocol_improvement_queue.md)
 - [quick_fixes](tables/quick_fixes.md)
 - [rca_learning_records](tables/rca_learning_records.md)
 - [recursion_events](tables/recursion_events.md)
@@ -228,8 +248,12 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sdip_ai_analysis](tables/sdip_ai_analysis.md)
 - [sdip_groups](tables/sdip_groups.md)
 - [sdip_submissions](tables/sdip_submissions.md)
+- [stage13_assessments](tables/stage13_assessments.md)
+- [stage13_substage_states](tables/stage13_substage_states.md)
+- [stage13_valuations](tables/stage13_valuations.md)
 - [stage_data_contracts](tables/stage_data_contracts.md)
 - [stage_events](tables/stage_events.md)
+- [story_test_mappings](tables/story_test_mappings.md)
 - [sub_agent_execution_batches](tables/sub_agent_execution_batches.md)
 - [sub_agent_execution_results](tables/sub_agent_execution_results.md)
 - [sub_agent_executions](tables/sub_agent_executions.md)
@@ -239,11 +263,14 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [submission_groups](tables/submission_groups.md)
 - [submission_screenshots](tables/submission_screenshots.md)
 - [submission_steps](tables/submission_steps.md)
+- [substage_transition_log](tables/substage_transition_log.md)
 - [system_alerts](tables/system_alerts.md)
 - [system_health](tables/system_health.md)
 - [tech_stack_references](tables/tech_stack_references.md)
 - [test_coverage_policies](tables/test_coverage_policies.md)
 - [test_plans](tables/test_plans.md)
+- [test_results](tables/test_results.md)
+- [test_runs](tables/test_runs.md)
 - [uat_cases](tables/uat_cases.md)
 - [uat_credential_history](tables/uat_credential_history.md)
 - [uat_credentials](tables/uat_credentials.md)
@@ -261,9 +288,12 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [user_stories](tables/user_stories.md)
 - [validation_evidence](tables/validation_evidence.md)
 - [venture_archetypes](tables/venture_archetypes.md)
+- [venture_artifacts](tables/venture_artifacts.md)
 - [venture_documents](tables/venture_documents.md)
 - [venture_drafts](tables/venture_drafts.md)
 - [venture_raid_summary](tables/venture_raid_summary.md)
+- [venture_stage_work](tables/venture_stage_work.md)
+- [venture_token_ledger](tables/venture_token_ledger.md)
 - [ventures](tables/ventures.md)
 - [voice_cached_responses](tables/voice_cached_responses.md)
 - [voice_conversations](tables/voice_conversations.md)

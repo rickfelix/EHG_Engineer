@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-12T14:41:05.962Z
-**Rows**: 395
+**Generated**: 2025-12-15T17:31:21.178Z
+**Rows**: 11
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -357,6 +357,16 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION inherit_parent_contracts()`
+
+### trg_inherit_parent_metadata
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION inherit_parent_metadata()`
+
+### trg_inherit_parent_metadata_update
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION inherit_parent_metadata()`
 
 ### update_sd_timestamp
 
