@@ -180,6 +180,186 @@ async function getSDMetadata(sdId) {
 }
 
 /**
+ * PAT-PARENT-DET: Parent/Child SD Detection
+ * Detects and displays parent/child hierarchy early in the workflow.
+ * For parent SDs: shows children status
+ * For child SDs: verifies parent is in correct phase
+ */
+async function detectParentChildHierarchy(sd) {
+  console.log('\n🔗 PARENT/CHILD SD DETECTION');
+  console.log('='.repeat(60));
+
+  const isParent = sd.metadata?.is_parent === true;
+  const hasParent = !!sd.parent_sd_id;
+
+  if (!isParent && !hasParent) {
+    console.log('   📋 SD Type: STANDALONE (no parent/child relationship)');
+    console.log('='.repeat(60));
+    return { type: 'standalone', sd };
+  }
+
+  if (isParent) {
+    console.log('   🎯 SD Type: PARENT ORCHESTRATOR');
+    console.log(`   📋 SD: ${sd.legacy_id || sd.id}`);
+    console.log(`   📄 Title: ${sd.title}`);
+    console.log(`   📊 Status: ${sd.status} | Phase: ${sd.current_phase}`);
+
+    // Get children
+    const { data: children } = await supabase
+      .from('strategic_directives_v2')
+      .select('legacy_id, title, status, current_phase, progress_percentage')
+      .eq('parent_sd_id', sd.id)
+      .order('legacy_id', { ascending: true });
+
+    if (children && children.length > 0) {
+      console.log(`\n   👶 CHILD SDs (${children.length}):`);
+      let completedCount = 0;
+      children.forEach(c => {
+        const icon = c.status === 'completed' ? '✅' :
+                     c.status === 'in_progress' ? '🔄' : '📋';
+        if (c.status === 'completed') completedCount++;
+        console.log(`      ${icon} ${c.legacy_id} [${c.status}] ${c.progress_percentage}%`);
+      });
+      console.log(`\n   📊 Progress: ${completedCount}/${children.length} children completed`);
+
+      // Check if parent should be in EXEC phase for children to work
+      if (completedCount > 0 && sd.status === 'draft') {
+        console.log('\n   ⚠️  WORKFLOW WARNING:');
+        console.log('      Child SDs have progressed but parent is still in DRAFT.');
+        console.log('      Parent should go through LEAD-TO-PLAN → PLAN-TO-EXEC');
+        console.log('      to enter ORCHESTRATOR/WAITING state before children execute.');
+      }
+    }
+
+    console.log('\n' + '='.repeat(60));
+    return { type: 'parent', sd, children };
+  }
+
+  if (hasParent) {
+    console.log('   🔗 SD Type: CHILD SD');
+    console.log(`   📋 SD: ${sd.legacy_id || sd.id}`);
+    console.log(`   📄 Title: ${sd.title}`);
+
+    // Get parent info
+    const { data: parent } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, legacy_id, title, status, current_phase')
+      .eq('id', sd.parent_sd_id)
+      .single();
+
+    if (parent) {
+      console.log('\n   👆 PARENT SD:');
+      console.log(`      📋 ${parent.legacy_id || parent.id}`);
+      console.log(`      📄 ${parent.title}`);
+      console.log(`      📊 Status: ${parent.status} | Phase: ${parent.current_phase}`);
+
+      // LEO Protocol rule: Parent must be in EXEC phase for child to be activated
+      // (per PAT-PARENT-CHILD-001 in CLAUDE_LEAD.md)
+      if (parent.status !== 'in_progress' && parent.current_phase !== 'EXEC') {
+        console.log('\n   ⚠️  PARENT STATUS WARNING:');
+        console.log('      LEO Protocol requires parent to be in EXEC phase');
+        console.log('      before child SDs can be activated.');
+        console.log(`      Current parent status: ${parent.status} / ${parent.current_phase}`);
+        console.log('      Consider: node scripts/handoff.js execute PLAN-TO-EXEC ' + (parent.legacy_id || parent.id));
+      }
+    }
+
+    console.log('\n' + '='.repeat(60));
+    return { type: 'child', sd, parent };
+  }
+}
+
+/**
+ * Display workflow guidance for PARENT orchestrator SDs
+ */
+function displayParentWorkflowGuidance(sd, children, _currentPhase) {
+  console.log('\n📖 PARENT ORCHESTRATOR WORKFLOW GUIDANCE');
+  console.log('─'.repeat(60));
+  console.log(`
+  PARENT SD LIFECYCLE:
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1. LEAD → PLAN    : Get approval, create PRD with child decomposition
+  2. PLAN → EXEC    : Parent enters ORCHESTRATOR/WAITING state
+  3. Children work  : Each child goes through full LEAD→PLAN→EXEC
+  4. Auto-complete  : Parent completes when all children finish
+
+  CURRENT STATE: ${sd.status} / ${sd.current_phase}
+  `);
+
+  // Determine next action based on state
+  const completedChildren = (children || []).filter(c => c.status === 'completed').length;
+  const totalChildren = (children || []).length;
+
+  if (sd.status === 'draft' && sd.current_phase === 'LEAD_APPROVAL') {
+    console.log('  📍 NEXT ACTION: Run LEAD-TO-PLAN handoff for parent');
+    console.log(`     node scripts/handoff.js execute LEAD-TO-PLAN ${sd.legacy_id || sd.id}`);
+  } else if (sd.status === 'planning' || sd.current_phase === 'PLAN') {
+    console.log('  📍 NEXT ACTION: Complete PRD, then run PLAN-TO-EXEC');
+    console.log(`     node scripts/handoff.js execute PLAN-TO-EXEC ${sd.legacy_id || sd.id}`);
+    console.log('     This puts parent in ORCHESTRATOR/WAITING state');
+  } else if (sd.status === 'in_progress' || sd.current_phase === 'EXEC') {
+    console.log('  📍 PARENT IS IN ORCHESTRATOR/WAITING STATE');
+    console.log(`     Children completed: ${completedChildren}/${totalChildren}`);
+    if (completedChildren < totalChildren) {
+      const nextChild = (children || []).find(c => c.status === 'draft' || c.status === 'planning');
+      if (nextChild) {
+        console.log(`\n     Next child to work on: ${nextChild.legacy_id}`);
+        console.log(`     node scripts/phase-preflight.js --phase LEAD --sd-id ${nextChild.legacy_id}`);
+      }
+    } else {
+      console.log('\n     All children completed! Parent can be finalized.');
+      console.log(`     node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${sd.legacy_id || sd.id}`);
+    }
+  }
+
+  console.log('\n' + '─'.repeat(60));
+}
+
+/**
+ * Display workflow guidance for CHILD SDs
+ */
+function displayChildWorkflowGuidance(sd, parent, _currentPhase) {
+  console.log('\n📖 CHILD SD WORKFLOW GUIDANCE');
+  console.log('─'.repeat(60));
+  console.log(`
+  CHILD SD LIFECYCLE:
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PREREQUISITE: Parent must be in EXEC phase (orchestrator state)
+
+  1. LEAD approval  : Validate strategic value for this child
+  2. PLAN phase     : Create child-specific PRD
+  3. EXEC phase     : Implement child deliverables
+  4. Completion     : PLAN-TO-LEAD → LEAD-FINAL-APPROVAL
+
+  PARENT STATE: ${parent?.status || 'UNKNOWN'} / ${parent?.current_phase || 'UNKNOWN'}
+  `);
+
+  // Check if parent blocks child work
+  if (parent && parent.status !== 'in_progress' && parent.current_phase !== 'EXEC') {
+    console.log('  ⛔ BLOCKED: Parent is NOT in EXEC phase');
+    console.log('     Child SDs cannot be activated until parent is in orchestrator state.');
+    console.log('\n     TO UNBLOCK: Progress parent SD first:');
+    console.log(`     node scripts/handoff.js execute PLAN-TO-EXEC ${parent.legacy_id || parent.id}`);
+  } else {
+    console.log('  ✅ Parent is in EXEC (orchestrator) state - child can proceed');
+
+    // Determine next action
+    if (sd.status === 'draft') {
+      console.log('\n  📍 NEXT ACTION: Run LEAD-TO-PLAN for this child');
+      console.log(`     node scripts/handoff.js execute LEAD-TO-PLAN ${sd.legacy_id || sd.id}`);
+    } else if (sd.status === 'planning') {
+      console.log('\n  📍 NEXT ACTION: Complete PRD, then run PLAN-TO-EXEC');
+      console.log(`     node scripts/handoff.js execute PLAN-TO-EXEC ${sd.legacy_id || sd.id}`);
+    } else if (sd.status === 'in_progress') {
+      console.log('\n  📍 NEXT ACTION: Implement, then run EXEC-TO-PLAN');
+      console.log(`     node scripts/handoff.js execute EXEC-TO-PLAN ${sd.legacy_id || sd.id}`);
+    }
+  }
+
+  console.log('\n' + '─'.repeat(60));
+}
+
+/**
  * Search issue patterns relevant to phase and SD category
  */
 async function searchIssuePatterns(sdCategory, phaseStrategy) {
@@ -399,6 +579,17 @@ async function main() {
     // Get SD metadata
     const sd = await getSDMetadata(sdId);
     const strategy = PHASE_STRATEGIES[phase];
+
+    // PAT-PARENT-DET: Detect parent/child hierarchy FIRST
+    // This ensures proper workflow handling before any phase work begins
+    const hierarchy = await detectParentChildHierarchy(sd);
+
+    // Display workflow guidance based on SD type
+    if (hierarchy.type === 'parent') {
+      displayParentWorkflowGuidance(sd, hierarchy.children, phase);
+    } else if (hierarchy.type === 'child') {
+      displayChildWorkflowGuidance(sd, hierarchy.parent, phase);
+    }
 
     // SD-LEO-GEMINI-001 (US-001): Discovery Gate for PLAN phase
     // Validates that ≥5 files have been explored before PRD creation
