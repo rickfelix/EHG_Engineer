@@ -14,14 +14,14 @@
   "confirmation_modals": [
     {
       "pattern": "Confirmation Dialog",
-      "count": 329,
+      "count": 399,
       "confidence": "high"
     }
   ],
   "form_validation": [
     {
       "pattern": "Form validation (zod)",
-      "count": 70,
+      "count": 101,
       "library": "zod",
       "confidence": "high"
     }
@@ -29,16 +29,16 @@
   "loading_patterns": [
     {
       "pattern": "Loading states (isLoading, Skeleton)",
-      "count": 1401,
+      "count": 1597,
       "confidence": "high"
     }
   ],
   "navigation": [
     {
       "pattern": "Programmatic navigation",
-      "count": 166,
+      "count": 173,
       "confidence": "high"
     }
   ],
-  "last_scan": "2025-11-21T15:12:07.844Z"
+  "last_scan": "2025-12-15T02:37:48.371Z"
 }
