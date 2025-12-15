@@ -23,7 +23,8 @@ const classificationCache = new Map();
 // SD type categories for different behaviors
 export const SD_TYPE_CATEGORIES = {
   // SDs that don't produce code changes - skip TESTING, GITHUB, E2E validation
-  NON_CODE: ['infrastructure', 'documentation', 'process'],
+  // PAT-SD-API-CATEGORY-003: API/backend SDs produce code but need unit/integration tests, not E2E Playwright
+  NON_CODE: ['infrastructure', 'documentation', 'process', 'api', 'backend'],
 
   // SDs that produce code and need full validation
   CODE_PRODUCING: ['feature', 'bugfix', 'refactor', 'performance'],
@@ -45,6 +46,10 @@ export const SCORING_WEIGHTS = {
   documentation: { sdWeight: 0.30, retroWeight: 0.70 },
   process: { sdWeight: 0.30, retroWeight: 0.70 },
 
+  // PAT-SD-API-CATEGORY-003: API/backend SDs weight retrospective higher (implementation-focused)
+  api: { sdWeight: 0.40, retroWeight: 0.60 },
+  backend: { sdWeight: 0.40, retroWeight: 0.60 },
+
   // Feature: SD quality (objectives, metrics) matters more
   feature: { sdWeight: 0.60, retroWeight: 0.40 },
   bugfix: { sdWeight: 0.50, retroWeight: 0.50 },
@@ -63,6 +68,10 @@ export const THRESHOLD_PROFILES = {
   infrastructure: { retrospectiveQuality: 55, sdCompletion: 55 },
   documentation: { retrospectiveQuality: 50, sdCompletion: 50 },
   process: { retrospectiveQuality: 55, sdCompletion: 55 },
+
+  // PAT-SD-API-CATEGORY-003: API/backend SDs have lower thresholds (focus on endpoint implementation)
+  api: { retrospectiveQuality: 55, sdCompletion: 55 },
+  backend: { retrospectiveQuality: 55, sdCompletion: 55 },
 
   // Feature SDs have standard thresholds
   feature: { retrospectiveQuality: 65, sdCompletion: 65 },
@@ -101,6 +110,19 @@ export async function getEffectiveSDType(sd, options = {}) {
 
   // Fast path: Use declared sd_type if available and valid
   const declaredType = (sd.sd_type || '').toLowerCase();
+  const category = (sd.category || '').toLowerCase();
+
+  // PAT-SD-API-CATEGORY-003: If sd_type='feature' (generic) but category is more specific
+  // (api, backend, infrastructure, etc.), prefer the category for threshold/validation decisions
+  if (category && isValidSDType(category) && SD_TYPE_CATEGORIES.NON_CODE.includes(category)) {
+    // Category indicates non-code SD - use category instead of generic 'feature'
+    if (declaredType === 'feature' || !declaredType) {
+      const result = { type: category, confidence: 90, source: 'category_override' };
+      if (useCache && sdId) classificationCache.set(sdId, result);
+      return result;
+    }
+  }
+
   if (declaredType && isValidSDType(declaredType)) {
     const result = { type: declaredType, confidence: 100, source: 'declared' };
     if (useCache && sdId) classificationCache.set(sdId, result);
@@ -130,8 +152,7 @@ export async function getEffectiveSDType(sd, options = {}) {
     }
   }
 
-  // Fallback: Use category field
-  const category = (sd.category || '').toLowerCase();
+  // Fallback: Use category field (category already declared above)
   if (category && isValidSDType(category)) {
     const result = { type: category, confidence: 70, source: 'category' };
     if (useCache && sdId) classificationCache.set(sdId, result);
@@ -150,7 +171,8 @@ export async function getEffectiveSDType(sd, options = {}) {
 function isValidSDType(type) {
   const validTypes = [
     'feature', 'infrastructure', 'database', 'security',
-    'documentation', 'bugfix', 'refactor', 'performance', 'process'
+    'documentation', 'bugfix', 'refactor', 'performance', 'process',
+    'api', 'backend'  // PAT-SD-API-CATEGORY-003
   ];
   return validTypes.includes(type.toLowerCase());
 }
@@ -170,14 +192,28 @@ export async function isNonCodeSD(sd, options = {}) {
 /**
  * Check if SD is infrastructure type (sync version for simple checks)
  * Uses declared sd_type only - no AI call
+ * PAT-SD-API-CATEGORY-003: Also checks category='api'/'backend' which skip E2E validation
  *
  * @param {Object} sd - Strategic Directive object
- * @returns {boolean} True if infrastructure/documentation/process type
+ * @returns {boolean} True if infrastructure/documentation/process/api/backend type
  */
 export function isInfrastructureSDSync(sd) {
   if (!sd) return false;
-  const declaredType = (sd.sd_type || sd.category || '').toLowerCase();
-  return SD_TYPE_CATEGORIES.NON_CODE.includes(declaredType);
+
+  // Check sd_type first
+  const sdType = (sd.sd_type || '').toLowerCase();
+  if (SD_TYPE_CATEGORIES.NON_CODE.includes(sdType)) {
+    return true;
+  }
+
+  // PAT-SD-API-CATEGORY-003: Check category='api'/'backend' even if sd_type='feature'
+  // API SDs don't need E2E validation (unit/integration tests instead)
+  const category = (sd.category || '').toLowerCase();
+  if (SD_TYPE_CATEGORIES.NON_CODE.includes(category)) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
