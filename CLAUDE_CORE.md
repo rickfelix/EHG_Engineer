@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-15 7:36:14 PM
+**Generated**: 2025-12-15 8:04:17 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -1277,6 +1277,7 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 | PAT-003 | security | 🟠 high | 3 | 📉 | Add auth.uid() check to RLS policy USING |
 | PAT-008 | deployment | 🟠 high | 2 | ➡️ | Check GitHub Actions secrets and package |
 | PAT-MD-001 | database | 🔴 critical | 1 | ➡️ | Key Insight: PostgreSQL direct connectio |
+| PAT-EXEC-IMPL-001 | workflow | 🟠 high | 1 | ➡️ | See details |
 
 ### Prevention Checklists
 
@@ -1294,6 +1295,11 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 - [ ] Check SUPABASE_POOLER_URL availability in .env
 - [ ] Verify migration file exists before execution
 - [ ] Use SSL with rejectUnauthorized: false
+
+**workflow**:
+- [ ] [
+- [ ] "
+- [ ] Q
 
 
 *Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
@@ -1385,5 +1391,5 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 *Generated from database: 2025-12-15*
 *Protocol Version: 4.3.3*
-*Includes: Hot Patterns (3) + Recent Lessons (2)*
+*Includes: Hot Patterns (4) + Recent Lessons (2)*
 *Load this file first in all sessions*
