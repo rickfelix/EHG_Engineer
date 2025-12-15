@@ -56,10 +56,18 @@ class PlanToExecVerifier {
    */
   getStoryMinimumScoreByCategory(category, sdType = null) {
     // Map category/type to minimum score (matching ai-quality-evaluator.js thresholds)
+    // PAT-STORY-THRESHOLD-001: Added API/technical categories with lenient thresholds
     const categoryThresholds = {
       // Very lenient for documentation-only work
       'documentation': 50,
       'docs': 50,
+
+      // Very lenient for API/technical work (PAT-STORY-THRESHOLD-001)
+      // API contracts focus on technical specifications, not user-facing acceptance criteria
+      'api': 50,
+      'api-contracts': 50,
+      'contracts': 50,
+      'backend': 50,
 
       // Lenient for internal/infrastructure work (includes QA/testing tooling)
       'infrastructure': 55,
