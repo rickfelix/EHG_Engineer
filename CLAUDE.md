@@ -64,7 +64,7 @@ This command provides:
 - `bash scripts/leo-stack.sh stop` - Stop all servers
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2025-12-14 2:43:55 PM
+**Last Generated**: 2025-12-15 7:36:14 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -104,6 +104,6 @@ This command provides:
 
 ---
 
-*Router generated from database: 2025-12-14*
+*Router generated from database: 2025-12-15*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*

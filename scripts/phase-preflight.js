@@ -81,13 +81,17 @@ async function validateDiscoveryGate(sdId) {
     .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
     .single();
 
-  // Count files from exploration_summary (preferred) or metadata
+  // Count files from exploration_summary (check multiple locations for backward compatibility)
   let filesExplored = [];
   let source = 'none';
 
   if (prd?.exploration_summary && Array.isArray(prd.exploration_summary)) {
     filesExplored = prd.exploration_summary;
     source = 'prd.exploration_summary';
+  } else if (prd?.metadata?.exploration_summary && Array.isArray(prd.metadata.exploration_summary)) {
+    // SYSTEMIC FIX: Also check metadata.exploration_summary (common storage location)
+    filesExplored = prd.metadata.exploration_summary;
+    source = 'prd.metadata.exploration_summary';
   } else if (prd?.metadata?.files_explored && Array.isArray(prd.metadata.files_explored)) {
     filesExplored = prd.metadata.files_explored;
     source = 'prd.metadata.files_explored';

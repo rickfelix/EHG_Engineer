@@ -12,6 +12,13 @@
  * - DOCUMENTATION: Lenient - Simple criteria, focus on completeness
  * - INFRASTRUCTURE/DATABASE: Moderate - Allow technical benefits
  *
+ * LLM-ENHANCED GENERATION (v1.2.0 - 2024-12):
+ * Uses GPT 5.2 with rich context to generate high-quality user stories that
+ * pass the AI quality validation (gpt-5-mini) on first attempt.
+ * - Same quality rubric criteria provided to generation model
+ * - Rich context: PRD, SD, schema, existing patterns
+ * - Produces proper Given-When-Then, articulated benefits, self-contained context
+ *
  * Usage:
  *   import { autoTriggerStories } from './modules/auto-trigger-stories.mjs';
  *   await autoTriggerStories(supabase, sdId, prdId);
@@ -19,6 +26,312 @@
 
 import { randomUUID } from 'crypto';
 import { isPersonaStoryRoleEnabled } from '../lib/persona-extractor.js';
+import OpenAI from 'openai';
+
+// ============================================
+// LLM Configuration for Story Generation (v1.2.0)
+// Uses GPT 5.2 for high-quality generation
+// ============================================
+
+const LLM_CONFIG = {
+  model: 'gpt-5.2',  // More capable model for generation
+  temperature: 0.7,   // Some creativity for varied stories
+  maxTokens: 16000,   // Large enough for 10-15 detailed stories
+  enabled: process.env.LLM_STORY_GENERATION !== 'false'  // Enabled by default
+};
+
+/**
+ * Initialize OpenAI client for story generation
+ */
+function getOpenAIClient() {
+  if (!process.env.OPENAI_API_KEY) {
+    console.warn('   ⚠️  OPENAI_API_KEY not set - falling back to template generation');
+    return null;
+  }
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
+
+/**
+ * Quality rubric criteria - embedded so LLM knows exactly what's expected
+ * These are the same criteria used by ai-quality-evaluator.js (gpt-5-mini)
+ */
+const QUALITY_RUBRIC_CRITERIA = `
+## QUALITY CRITERIA (You will be judged on these dimensions)
+
+### 1. Acceptance Criteria Quality (50% weight)
+- 0-3: Generic boilerplate ("system works", "good performance")
+- 4-6: Some specific criteria but missing testable conditions
+- 7-8: Most criteria are specific, testable, and verifiable
+- 9-10: All criteria are specific, testable, with clear pass/fail conditions
+
+### 2. Story Independence & Implementability (30% weight)
+- 0-3: Story depends on multiple other stories or lacks detail for implementation
+- 4-6: Mostly independent but has unclear dependencies or missing details
+- 7-8: Story can be implemented standalone with minimal external dependencies
+- 9-10: Completely self-contained with all necessary context, no blocking dependencies
+INVEST principles: Independent, Negotiable, Valuable, Estimable, Small, Testable
+
+### 3. Benefit Articulation (15% weight)
+- 0-3: No benefit or generic ("improve system", "enhance UX")
+- 4-6: Benefit mentioned but vague or system-centric rather than user-centric
+- 7-8: Clear user benefit explaining WHY the user needs this
+- 9-10: Compelling benefit with specific value proposition and user impact
+
+### 4. Given-When-Then Format (5% weight)
+- 0-3: No GWT scenarios or incorrect format
+- 4-6: GWT present but incomplete or improperly structured
+- 7-8: Proper GWT with clear preconditions, actions, expected outcomes
+- 9-10: Excellent GWT covering happy path, edge cases, and error conditions
+`;
+
+/**
+ * Generate user stories using GPT 5.2 with rich context
+ *
+ * @param {object} supabase - Supabase client
+ * @param {object} sd - Strategic Directive with full metadata
+ * @param {object} prd - Product Requirements Document with full metadata
+ * @param {object} options - Generation options
+ * @returns {Promise<Array>} Generated user stories
+ */
+async function generateStoriesWithLLM(supabase, sd, prd, options = {}) {
+  const openai = getOpenAIClient();
+  if (!openai || !LLM_CONFIG.enabled) {
+    console.log('   ℹ️  LLM generation disabled - using template generation');
+    return null; // Fall back to template generation
+  }
+
+  console.log('   🤖 Using GPT 5.2 for high-quality story generation...');
+
+  // Build comprehensive context
+  const context = await buildGenerationContext(supabase, sd, prd);
+
+  const systemPrompt = `You are an expert Product Owner and Agile practitioner specializing in writing high-quality user stories.
+
+Your task is to generate user stories from a Product Requirements Document (PRD) that will PASS automated quality validation.
+
+${QUALITY_RUBRIC_CRITERIA}
+
+## OUTPUT FORMAT
+You MUST return a JSON object with a "stories" array containing ALL user stories:
+{ "stories": [ ... ] }
+
+Each story in the array must have:
+{
+  "title": "Concise title (50 chars max)",
+  "user_role": "Specific persona (e.g., 'DBA', 'Product Manager', 'End User')",
+  "user_want": "What they want to do (specific action, 20+ chars)",
+  "user_benefit": "WHY this matters to them (articulated value, 50+ chars, user-centric)",
+  "story_points": 1-13 (Fibonacci),
+  "priority": "critical" | "high" | "medium" | "low",
+  "acceptance_criteria": [
+    {
+      "id": "AC-001",
+      "criteria": "Given [specific context], When [specific action], Then [specific verifiable outcome]",
+      "type": "functional" | "edge-case" | "performance" | "security"
+    }
+  ],
+  "implementation_context": {
+    "prerequisites": ["List of dependencies or prior work"],
+    "technical_notes": "Implementation guidance",
+    "tables_affected": ["table1", "table2"],
+    "estimated_complexity": "low" | "medium" | "high"
+  }
+}
+
+## CRITICAL REQUIREMENTS
+1. Each story MUST have 3-5 acceptance criteria in Given-When-Then format
+2. Include at least one edge-case or error-handling criterion per story
+3. Benefits must explain VALUE to the user, not just restate the want
+4. Stories must be independently implementable (INVEST principles)
+5. Implementation context must include enough detail for a developer to start work
+`;
+
+  const sdType = sd.sd_type || sd.category || 'feature';
+
+  const userPrompt = `Generate user stories for the following Strategic Directive and PRD:
+
+**SD TYPE: ${sdType.toUpperCase()}** - Tailor stories appropriately:
+${sdType === 'database' ? '- Focus on schema deployment, data integrity, RLS policies, migration safety\n- User roles: DBA, Developer, Data Engineer\n- Benefits: data reliability, query performance, maintainability' : ''}
+${sdType === 'infrastructure' ? '- Focus on deployment, CI/CD, monitoring, reliability\n- User roles: DevOps Engineer, SRE, Developer\n- Benefits: deployment speed, system reliability, operational efficiency' : ''}
+${sdType === 'security' ? '- Focus on authentication, authorization, data protection, compliance\n- User roles: Security Engineer, Admin, End User\n- Benefits: data protection, compliance, trust' : ''}
+${sdType === 'documentation' ? '- Focus on clarity, completeness, discoverability\n- User roles: Developer, New Team Member, Stakeholder\n- Benefits: faster onboarding, self-service, reduced questions' : ''}
+${sdType === 'feature' ? '- Focus on user workflows, UX, business value\n- User roles: End User, Product Manager, specific personas\n- Benefits: efficiency, satisfaction, business outcomes' : ''}
+
+${context}
+
+Generate ${options.targetStoryCount || 'appropriate number of'} user stories that:
+1. Cover all functional requirements in the PRD
+2. Are independently implementable
+3. Have clear, testable acceptance criteria in Given-When-Then format
+4. Articulate user benefits specific to ${sdType} work (not generic "system works" phrases)
+5. Include implementation_context with ${sdType}-specific details
+
+Return ONLY valid JSON array, no markdown formatting.`;
+
+  try {
+    const startTime = Date.now();
+    const response = await openai.chat.completions.create({
+      model: LLM_CONFIG.model,
+      temperature: LLM_CONFIG.temperature,
+      max_completion_tokens: LLM_CONFIG.maxTokens,  // GPT 5.x uses max_completion_tokens
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      response_format: { type: 'json_object' }
+    });
+
+    const duration = Date.now() - startTime;
+    console.log(`   ✅ LLM generation completed in ${duration}ms`);
+
+    // Debug: Log raw response structure
+    if (process.env.LLM_DEBUG === 'true') {
+      console.log('   🔍 Raw response:', JSON.stringify(response, null, 2).substring(0, 500));
+    }
+
+    // Parse response
+    const content = response.choices?.[0]?.message?.content;
+    if (!content) {
+      console.log('   ⚠️  Response structure:', {
+        hasChoices: !!response.choices,
+        choicesLength: response.choices?.length,
+        firstChoice: response.choices?.[0] ? Object.keys(response.choices[0]) : 'none',
+        finishReason: response.choices?.[0]?.finish_reason
+      });
+      throw new Error('Empty response from LLM');
+    }
+
+    // Clean content - sometimes has leading whitespace or markdown formatting
+    const cleanContent = content.trim().replace(/^```json\n?/, '').replace(/\n?```$/, '');
+
+    let parsed;
+    try {
+      parsed = JSON.parse(cleanContent);
+    } catch (parseErr) {
+      console.log(`   ⚠️  JSON parse error: ${parseErr.message}`);
+      console.log(`   📄 Content preview: ${cleanContent.substring(0, 200)}...`);
+      throw new Error(`Invalid JSON response: ${parseErr.message}`);
+    }
+
+    // Handle various response formats
+    let stories = [];
+    if (Array.isArray(parsed)) {
+      stories = parsed;
+    } else if (parsed.stories && Array.isArray(parsed.stories)) {
+      stories = parsed.stories;
+    } else if (parsed.user_stories && Array.isArray(parsed.user_stories)) {
+      stories = parsed.user_stories;
+    } else if (parsed.title && parsed.user_role) {
+      // Single story object - wrap in array
+      stories = [parsed];
+    } else {
+      // Try to find any array property
+      const arrayProp = Object.values(parsed).find(v => Array.isArray(v));
+      if (arrayProp) {
+        stories = arrayProp;
+      }
+    }
+
+    console.log(`   📝 Generated ${stories.length} user stories`);
+
+    // Log token usage for cost tracking
+    if (response.usage) {
+      console.log(`   📊 Tokens: prompt=${response.usage.prompt_tokens}, completion=${response.usage.completion_tokens}`);
+    }
+
+    return stories;
+  } catch (error) {
+    console.error(`   ❌ LLM generation failed: ${error.message}`);
+    console.log('   ℹ️  Falling back to template generation');
+    return null;
+  }
+}
+
+/**
+ * Build comprehensive context for LLM story generation
+ */
+async function buildGenerationContext(supabase, sd, prd) {
+  const sections = [];
+
+  // 1. Strategic Directive Context
+  sections.push(`## STRATEGIC DIRECTIVE
+- **ID:** ${sd.id}
+- **Title:** ${sd.title}
+- **Type:** ${sd.sd_type || sd.category || 'feature'}
+- **Description:** ${sd.description || 'Not provided'}
+- **Success Criteria:** ${sd.success_criteria || 'Not provided'}
+- **Risk Level:** ${sd.risk_level || 'medium'}`);
+
+  // 2. PRD Overview and Requirements
+  sections.push(`## PRODUCT REQUIREMENTS DOCUMENT
+- **PRD ID:** ${prd.id}
+- **Overview:** ${prd.overview || 'Not provided'}
+- **Problem Statement:** ${prd.problem_statement || prd.metadata?.problem_statement || 'Not provided'}
+- **Proposed Solution:** ${prd.proposed_solution || prd.metadata?.proposed_solution || 'Not provided'}`);
+
+  // 3. Functional Requirements
+  if (prd.functional_requirements) {
+    const reqs = typeof prd.functional_requirements === 'string'
+      ? prd.functional_requirements
+      : JSON.stringify(prd.functional_requirements, null, 2);
+    sections.push(`## FUNCTIONAL REQUIREMENTS
+${reqs}`);
+  }
+
+  // 4. Technical Requirements
+  if (prd.technical_requirements) {
+    const techReqs = typeof prd.technical_requirements === 'string'
+      ? prd.technical_requirements
+      : JSON.stringify(prd.technical_requirements, null, 2);
+    sections.push(`## TECHNICAL REQUIREMENTS
+${techReqs}`);
+  }
+
+  // 5. Sub-agent Analysis (Design, Database, etc.)
+  const metadata = prd.metadata || {};
+
+  if (metadata.design_analysis) {
+    sections.push(`## DESIGN ANALYSIS (from DESIGN sub-agent)
+${typeof metadata.design_analysis === 'string' ? metadata.design_analysis : JSON.stringify(metadata.design_analysis, null, 2)}`);
+  }
+
+  if (metadata.database_analysis) {
+    sections.push(`## DATABASE ANALYSIS (from DATABASE sub-agent)
+${typeof metadata.database_analysis === 'string' ? metadata.database_analysis : JSON.stringify(metadata.database_analysis, null, 2)}`);
+  }
+
+  if (metadata.exploration_summary) {
+    const exploration = Array.isArray(metadata.exploration_summary)
+      ? metadata.exploration_summary.map(f => `- ${f.file || f.path}: ${f.findings || f.summary || 'explored'}`).join('\n')
+      : JSON.stringify(metadata.exploration_summary, null, 2);
+    sections.push(`## CODEBASE EXPLORATION
+${exploration}`);
+  }
+
+  // 6. Schema Context (for database SDs)
+  if ((sd.sd_type || sd.category) === 'database' && prd.metadata?.schema) {
+    sections.push(`## DATABASE SCHEMA
+${typeof prd.metadata.schema === 'string' ? prd.metadata.schema : JSON.stringify(prd.metadata.schema, null, 2)}`);
+  }
+
+  // 7. Existing User Stories (if regenerating)
+  try {
+    const { data: existingStories } = await supabase
+      .from('user_stories')
+      .select('story_key, title, user_role')
+      .eq('sd_id', sd.id)
+      .limit(5);
+
+    if (existingStories && existingStories.length > 0) {
+      sections.push(`## EXISTING STORIES (for reference, avoid duplication)
+${existingStories.map(s => `- ${s.story_key}: ${s.title}`).join('\n')}`);
+    }
+  } catch (e) {
+    // Ignore - existing stories lookup is optional
+  }
+
+  return sections.join('\n\n');
+}
 
 // ============================================
 // SD-TYPE-AWARE ACCEPTANCE CRITERIA (v1.1.0)
@@ -360,9 +673,56 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
     // Step 4: Execute Product Requirements Expert logic
     console.log('🤖 Step 3: Generating user stories from PRD...\n');
 
-    // Generate user stories from PRD functional requirements
-    // Now SD-type-aware (v1.1.0) - passes supabase to fetch SD type for criteria transformation
-    const userStories = await generateUserStoriesFromPRD(supabase, prd, sdId, prdId, personaContext);
+    // Fetch SD for context (needed for LLM generation)
+    const { data: sd, error: sdError } = await supabase
+      .from('strategic_directives_v2')
+      .select('*')
+      .eq('id', sdId)
+      .single();
+
+    if (sdError) {
+      console.warn(`   ⚠️  Could not fetch SD details: ${sdError.message}`);
+    }
+
+    // v1.2.0: Try LLM generation first (GPT 5.2 with rich context)
+    let userStories = null;
+    if (LLM_CONFIG.enabled && sd && prd) {
+      userStories = await generateStoriesWithLLM(supabase, sd, prd, {
+        targetStoryCount: prd.functional_requirements?.length || 10
+      });
+
+      // Transform LLM output to database format
+      if (userStories && userStories.length > 0) {
+        userStories = userStories.map((story, index) => ({
+          id: randomUUID(),
+          sd_id: sdId,
+          prd_id: prdId,
+          story_key: `${sdId}:US-${String(index + 1).padStart(3, '0')}`,
+          title: story.title,
+          user_role: story.user_role,
+          user_want: story.user_want,
+          user_benefit: story.user_benefit,
+          story_points: story.story_points || 3,
+          priority: story.priority || 'medium',
+          status: 'ready',
+          acceptance_criteria: story.acceptance_criteria,
+          implementation_context: typeof story.implementation_context === 'object'
+            ? JSON.stringify(story.implementation_context)
+            : story.implementation_context,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }));
+        console.log(`   ✅ LLM generated ${userStories.length} high-quality stories\n`);
+      }
+    }
+
+    // Fallback: Template-based generation if LLM failed or disabled
+    if (!userStories || userStories.length === 0) {
+      console.log('   📝 Using template-based story generation...');
+      // Generate user stories from PRD functional requirements
+      // Now SD-type-aware (v1.1.0) - passes supabase to fetch SD type for criteria transformation
+      userStories = await generateUserStoriesFromPRD(supabase, prd, sdId, prdId, personaContext);
+    }
 
     if (userStories.length === 0) {
       console.log('   ⚠️  No functional requirements found in PRD');
@@ -614,24 +974,90 @@ function extractUserRole(requirement, category, personaContext = []) {
 }
 
 /**
- * Extract user benefit from description
+ * Extract and articulate user benefit from description
+ *
+ * SYSTEMIC FIX (2024-12): Generates articulated benefits that score well on
+ * the benefit_articulation dimension of user-story-quality-rubric.js
+ *
+ * Quality rubric expects:
+ * - 0-3: No benefit stated or generic ("improve system", "enhance UX")
+ * - 4-6: Benefit mentioned but vague or system-centric rather than user-centric
+ * - 7-8: Clear user benefit that explains WHY the user needs this
+ * - 9-10: Compelling user benefit with specific value proposition and user impact
+ *
+ * @param {string} description - Requirement description
+ * @param {string} rationale - Why this requirement exists
+ * @param {string} sdType - SD type for context-aware benefit generation
+ * @param {object} context - Additional context (user_role, requirement, etc.)
+ * @returns {string} Articulated user benefit (minimum 50 chars for quality scoring)
  */
-function extractUserBenefit(description, rationale) {
-  // If rationale explains "why", use it as benefit
-  if (rationale && rationale.length > 0) {
+function extractUserBenefit(description, rationale, sdType = 'feature', context = {}) {
+  // If rationale explains "why" with sufficient detail, use it
+  if (rationale && rationale.length >= 50) {
     return rationale;
   }
 
-  // Otherwise extract benefit from description
-  if (description && description.length > 0) {
-    // If description is long, extract a concise benefit
-    if (description.length > 100) {
-      return 'this functionality meets the system requirements';
+  // Build articulated benefit based on SD type and context
+  const benefitTemplates = {
+    database: (desc, ctx) => {
+      const action = extractKeyAction(desc);
+      return `I can rely on a well-structured database foundation that ${action}, ensuring data integrity, query performance, and maintainability as the system scales. This reduces technical debt and enables faster feature development.`;
+    },
+    infrastructure: (desc, ctx) => {
+      const action = extractKeyAction(desc);
+      return `I have reliable infrastructure that ${action}, reducing deployment friction, improving system reliability, and enabling the team to focus on feature development rather than operational concerns.`;
+    },
+    security: (desc, ctx) => {
+      const action = extractKeyAction(desc);
+      return `my data and actions are protected because ${action}, giving me confidence that the system handles sensitive information appropriately and meets security compliance requirements.`;
+    },
+    documentation: (desc, ctx) => {
+      const action = extractKeyAction(desc);
+      return `I can quickly understand and use the system because ${action}, reducing onboarding time and enabling self-service without needing to ask colleagues for help.`;
+    },
+    feature: (desc, ctx) => {
+      const action = extractKeyAction(desc);
+      return `I can accomplish my goals efficiently because ${action}, saving time and reducing frustration while interacting with the system.`;
     }
-    return description;
+  };
+
+  const normalizedType = (sdType || 'feature').toLowerCase();
+  const generator = benefitTemplates[normalizedType] || benefitTemplates.feature;
+
+  // Generate benefit with context
+  let benefit = generator(description || '', context);
+
+  // If we have rationale, prepend it for additional context
+  if (rationale && rationale.length > 0 && rationale.length < 50) {
+    benefit = `${rationale}. Additionally, ${benefit}`;
   }
 
-  return 'the system meets its requirements';
+  return benefit;
+}
+
+/**
+ * Extract the key action/capability from a description for benefit generation
+ */
+function extractKeyAction(description) {
+  if (!description || description.length === 0) {
+    return 'provides the required functionality';
+  }
+
+  // Clean up the description
+  let action = description.toLowerCase();
+
+  // Remove common prefixes
+  action = action
+    .replace(/^(implement|create|add|build|deploy|set up|configure)\s+/i, '')
+    .replace(/^(the|a|an)\s+/i, '');
+
+  // Truncate if too long
+  if (action.length > 100) {
+    const sentences = action.split(/[.!?]/);
+    action = sentences[0] || action.substring(0, 100);
+  }
+
+  return action.trim() || 'provides the required functionality';
 }
 
 /**

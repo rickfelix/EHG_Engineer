@@ -398,13 +398,18 @@ export class PlanToExecExecutor extends BaseExecutor {
         };
       }
 
-      // Check for exploration_summary (JSONB array) or metadata.files_explored
+      // Check for exploration_summary in multiple locations (backward compatibility)
+      // Priority: top-level > metadata.exploration_summary > metadata.files_explored
       let filesExplored = [];
       let source = 'none';
 
       if (prd.exploration_summary && Array.isArray(prd.exploration_summary)) {
         filesExplored = prd.exploration_summary;
         source = 'exploration_summary';
+      } else if (prd.metadata?.exploration_summary && Array.isArray(prd.metadata.exploration_summary)) {
+        // SYSTEMIC FIX: Also check metadata.exploration_summary (common storage location)
+        filesExplored = prd.metadata.exploration_summary;
+        source = 'metadata.exploration_summary';
       } else if (prd.metadata?.files_explored && Array.isArray(prd.metadata.files_explored)) {
         filesExplored = prd.metadata.files_explored;
         source = 'metadata.files_explored';

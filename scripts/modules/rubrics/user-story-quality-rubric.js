@@ -178,6 +178,11 @@ ${this.formatArchitectureSummary(prd.technical_architecture)}
 `;
     }
 
+    // SYSTEMIC FIX: Include implementation_context for story_independence_implementability scoring
+    const implementationContext = userStory.implementation_context
+      ? `\n## Implementation Context\n${this.formatImplementationContext(userStory.implementation_context)}\n`
+      : '';
+
     return `# User Story: ${userStory.title || userStory.id}
 
 ${prdContext}## Story
@@ -188,7 +193,7 @@ ${this.formatAcceptanceCriteria(userStory.acceptance_criteria)}
 
 ## Given-When-Then Scenarios
 ${this.formatGivenWhenThen(userStory.scenarios || userStory.test_scenarios || userStory.testing_scenarios || this.extractGwtFromAcceptanceCriteria(userStory.acceptance_criteria))}
-
+${implementationContext}
 ## Additional Context
 Priority: ${userStory.priority || 'Not set'}
 Status: ${userStory.status || 'Not set'}
@@ -334,6 +339,46 @@ SD Link: ${userStory.sd_id || 'Not linked'}`;
     }
 
     return JSON.stringify(scenarios);
+  }
+
+  /**
+   * Format implementation_context for evaluation
+   * SYSTEMIC FIX: This field contains critical implementation details that affect
+   * story_independence_implementability scoring but was previously ignored
+   */
+  formatImplementationContext(context) {
+    if (!context) {
+      return 'No implementation context provided';
+    }
+
+    if (typeof context === 'string') {
+      // Truncate to 1500 chars to avoid token bloat while keeping essential info
+      return context.length > 1500
+        ? context.substring(0, 1500) + '\n... (truncated - full context available in database)'
+        : context;
+    }
+
+    if (typeof context === 'object') {
+      // Format structured implementation context
+      const parts = [];
+
+      if (context.prerequisites) {
+        parts.push(`**Prerequisites:** ${JSON.stringify(context.prerequisites)}`);
+      }
+      if (context.tables) {
+        parts.push(`**Tables:** ${context.tables.join(', ')}`);
+      }
+      if (context.ddl) {
+        parts.push(`**DDL Available:** Yes (${context.ddl.length} chars)`);
+      }
+      if (context.steps) {
+        parts.push(`**Implementation Steps:** ${context.steps.length} defined`);
+      }
+
+      return parts.length > 0 ? parts.join('\n') : JSON.stringify(context).substring(0, 500);
+    }
+
+    return String(context).substring(0, 500);
   }
 
   /**

@@ -247,11 +247,32 @@ class PlanToExecVerifier {
       
       // 2. Load associated PRD
       // SD ID Schema Cleanup (2025-12-12): Use sd.id directly (uuid_id deprecated)
-      const prdQuery = prdId
-        ? this.supabase.from('product_requirements_v2').select('*').eq('id', prdId)
-        : this.supabase.from('product_requirements_v2').select('*').eq('sd_id', sd.id);
+      // SYSTEMIC FIX: Add fallback to directive_id column (matches PRDRepository.getBySdId behavior)
+      let prds = null;
+      let prdError = null;
+      let prdSource = 'sd_id';
 
-      const { data: prds, error: prdError } = await prdQuery;
+      if (prdId) {
+        const result = await this.supabase.from('product_requirements_v2').select('*').eq('id', prdId);
+        prds = result.data;
+        prdError = result.error;
+        prdSource = 'id';
+      } else {
+        // Primary lookup by sd_id
+        const result = await this.supabase.from('product_requirements_v2').select('*').eq('sd_id', sd.id);
+        prds = result.data;
+        prdError = result.error;
+
+        // Fallback: Try directive_id column (for older PRDs created before standardization)
+        if ((!prds || prds.length === 0) && !prdError) {
+          const fallback = await this.supabase.from('product_requirements_v2').select('*').eq('directive_id', sd.id);
+          if (fallback.data && fallback.data.length > 0) {
+            prds = fallback.data;
+            prdSource = 'directive_id (legacy)';
+            console.log('   ℹ️  PRD found via directive_id column (legacy fallback)');
+          }
+        }
+      }
 
       if (prdError || !prds || prds.length === 0) {
         console.log(`   ❌ No PRD found with sd_id: ${sd.id}`);
@@ -260,7 +281,7 @@ class PlanToExecVerifier {
       }
       
       const prd = Array.isArray(prds) ? prds[0] : prds;
-      console.log(`PRD Found: ${prd.id}`);
+      console.log(`PRD Found: ${prd.id} (via ${prdSource})`);
       
       // 3. Load handoff template
       const { data: template } = await this.supabase

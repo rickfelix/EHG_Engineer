@@ -79,6 +79,103 @@ export class AIQualityEvaluator {
   }
 
   /**
+   * SYSTEMIC FIX: Check for cached recent assessment to avoid redundant AI calls
+   * Returns cached result if assessment exists within TTL and content unchanged
+   *
+   * @param {string} contentId - ID of content being assessed
+   * @param {string} contentHash - Hash of content to detect changes
+   * @returns {Promise<Object|null>} Cached assessment or null
+   */
+  async getCachedAssessment(contentId, contentHash) {
+    const CACHE_TTL_HOURS = parseInt(process.env.AI_CACHE_TTL_HOURS) || 24;
+    const DEBUG = process.env.AI_DEBUG === 'true';
+
+    try {
+      const { data, error } = await this.supabase
+        .from('ai_quality_assessments')
+        .select('*')
+        .eq('content_id', contentId)
+        .eq('content_type', this.rubricConfig.contentType)
+        .gte('assessed_at', new Date(Date.now() - CACHE_TTL_HOURS * 60 * 60 * 1000).toISOString())
+        .order('assessed_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error || !data) {
+        return null;
+      }
+
+      // SYSTEMIC FIX: Improved cache invalidation logic
+      // Case 1: Both hashes exist but differ → content changed → invalidate
+      // Case 2: Old entry has NO hash but we have new hash → can't verify → invalidate
+      // Case 3: Both hashes exist and match → content unchanged → use cache
+      // Case 4: Neither has hash → legacy mode → use cache (will be replaced on next fresh eval)
+      if (contentHash) {
+        if (data.content_hash && data.content_hash !== contentHash) {
+          if (DEBUG) console.log(`[AI-Eval] Cache invalidated: content hash changed for ${contentId}`);
+          return null;
+        }
+        if (!data.content_hash) {
+          if (DEBUG) console.log(`[AI-Eval] Cache invalidated: old entry has no hash, can't verify content for ${contentId}`);
+          return null;
+        }
+      }
+
+      if (DEBUG) console.log(`[AI-Eval] Cache HIT for ${contentId} (age: ${Math.round((Date.now() - new Date(data.assessed_at).getTime()) / 60000)}min)`);
+
+      return {
+        scores: data.scores,
+        weightedScore: data.weighted_score,
+        feedback: data.feedback,
+        passed: data.weighted_score >= (data.pass_threshold || 70),
+        threshold: data.pass_threshold || 70,
+        sd_type: data.sd_type || 'unknown',
+        cached: true,
+        cached_at: data.assessed_at
+      };
+    } catch (err) {
+      // Cache lookup failed, proceed with fresh evaluation
+      return null;
+    }
+  }
+
+  /**
+   * Generate content hash for cache invalidation
+   * SYSTEMIC FIX: Sample from multiple positions to detect changes anywhere in content
+   */
+  generateContentHash(content) {
+    if (!content) return null;
+
+    const len = content.length;
+
+    // Sample from 5 positions: start, 25%, 50%, 75%, end
+    // Each sample is 50 chars (or less if content is short)
+    const sampleSize = Math.min(50, Math.floor(len / 5));
+    const positions = [
+      0,                           // Start
+      Math.floor(len * 0.25),      // 25%
+      Math.floor(len * 0.5),       // Middle
+      Math.floor(len * 0.75),      // 75%
+      Math.max(0, len - sampleSize) // End
+    ];
+
+    // Build sample string from multiple positions
+    const samples = positions.map(pos =>
+      content.substring(pos, pos + sampleSize)
+    );
+    const sample = len + ':' + samples.join(':');
+
+    // Generate hash using djb2 algorithm
+    let hash = 5381;
+    for (let i = 0; i < sample.length; i++) {
+      const char = sample.charCodeAt(i);
+      hash = ((hash << 5) + hash) + char; // hash * 33 + char
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash.toString(16);
+  }
+
+  /**
    * Main evaluation entry point
    *
    * @param {string} content - Formatted content to evaluate
@@ -94,6 +191,19 @@ export class AIQualityEvaluator {
     if (DEBUG) {
       console.log(`${logPrefix} Starting evaluation...`);
       console.log(`${logPrefix} Content length: ${content?.length || 0} chars`);
+    }
+
+    // SYSTEMIC FIX: Generate content hash for caching and cache invalidation
+    const contentHash = this.generateContentHash(content);
+
+    // SYSTEMIC FIX: Check cache first to avoid redundant AI calls
+    const SKIP_CACHE = process.env.AI_SKIP_CACHE === 'true';
+    if (!SKIP_CACHE) {
+      const cached = await this.getCachedAssessment(contentId, contentHash);
+      if (cached) {
+        if (DEBUG) console.log(`${logPrefix} Using cached assessment (score: ${cached.weightedScore}%)`);
+        return cached;
+      }
     }
 
     try {
@@ -154,7 +264,7 @@ export class AIQualityEvaluator {
         console.log(`${logPrefix} Cost: $${cost.toFixed(6)}`);
       }
 
-      // Store assessment in database
+      // Store assessment in database (with content hash for cache validation)
       const storeStart = Date.now();
       await this.storeAssessment(
         contentId,
@@ -165,7 +275,8 @@ export class AIQualityEvaluator {
         tokensUsed,
         cost,
         sd,
-        threshold
+        threshold,
+        contentHash
       );
       if (DEBUG) console.log(`${logPrefix} Assessment stored in ${Date.now() - storeStart}ms`);
 
@@ -608,9 +719,10 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
   }
 
   /**
-   * Store assessment in database with sd_type and threshold tracking
+   * Store assessment in database with sd_type, threshold tracking, and content hash
+   * SYSTEMIC FIX: Added content_hash parameter for cache invalidation
    */
-  async storeAssessment(contentId, scores, weightedScore, feedback, duration, tokensUsed, cost, sd = null, threshold = 70) {
+  async storeAssessment(contentId, scores, weightedScore, feedback, duration, tokensUsed, cost, sd = null, threshold = 70, contentHash = null) {
     // Guard: Skip storage if contentId is null/undefined (prevents NOT NULL constraint violation)
     if (!contentId) {
       console.warn(`[AIQualityEvaluator] Skipping assessment storage: content_id is ${contentId === null ? 'null' : 'undefined'} for content_type=${this.rubricConfig.contentType}`);
@@ -619,26 +731,44 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
     }
 
     try {
+      const insertData = {
+        content_type: this.rubricConfig.contentType,
+        content_id: contentId,
+        model: this.model,
+        temperature: this.temperature,
+        scores,
+        weighted_score: weightedScore,
+        feedback,
+        assessment_duration_ms: duration,
+        tokens_used: tokensUsed,
+        cost_usd: cost,
+        rubric_version: 'v1.1.0-sd-type-aware',
+        sd_type: sd?.sd_type || null,
+        pass_threshold: threshold
+      };
+
+      // SYSTEMIC FIX: Include content_hash for cache invalidation (if column exists)
+      if (contentHash) {
+        insertData.content_hash = contentHash;
+      }
+
       const { error } = await this.supabase
         .from('ai_quality_assessments')
-        .insert({
-          content_type: this.rubricConfig.contentType,
-          content_id: contentId,
-          model: this.model,
-          temperature: this.temperature,
-          scores,
-          weighted_score: weightedScore,
-          feedback,
-          assessment_duration_ms: duration,
-          tokens_used: tokensUsed,
-          cost_usd: cost,
-          rubric_version: 'v1.1.0-sd-type-aware',  // Updated version
-          sd_type: sd?.sd_type || null,
-          pass_threshold: threshold
-        });
+        .insert(insertData);
 
       if (error) {
-        console.error('Failed to store assessment:', error);
+        // If content_hash column doesn't exist, retry without it (backward compatible)
+        if (error.message?.includes('content_hash')) {
+          delete insertData.content_hash;
+          const { error: retryError } = await this.supabase
+            .from('ai_quality_assessments')
+            .insert(insertData);
+          if (retryError) {
+            console.error('Failed to store assessment (retry):', retryError);
+          }
+        } else {
+          console.error('Failed to store assessment:', error);
+        }
         // Don't throw - assessment succeeded even if storage failed
       }
     } catch (error) {

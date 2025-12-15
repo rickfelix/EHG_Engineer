@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-14 2:43:55 PM
+**Generated**: 2025-12-15 7:36:14 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -43,27 +43,6 @@ EHG_Engineer (Management)          EHG App (Implementation)
 └── Dashboard Views          ←     No changes here!
 ```
 
-## 🚀 Session Verification & Quick Start (MANDATORY)
-
-## Session Start Checklist
-
-### Required Verification
-1. **Check Priority**: `npm run prio:top3`
-2. **Git Status**: Clean working directory?
-3. **Context Load**: CLAUDE_CORE.md + phase file
-
-### Before Starting Work
-- Verify SD is in correct phase
-- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
-- Review recent handoffs if continuing
-
-### Key Commands
-| Command | Purpose |
-|---------|---------|
-| `npm run prio:top3` | Top priority SDs |
-| `git status` | Working tree status |
-| `npm run handoff:latest` | Latest handoff |
-
 ## 🔍 Session Start Verification (MANDATORY)
 
 **Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
@@ -98,6 +77,27 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 - If records don't exist, CREATE them before proceeding
 
 **Pattern Reference**: PAT-SESS-VER-001
+
+## 🚀 Session Verification & Quick Start (MANDATORY)
+
+## Session Start Checklist
+
+### Required Verification
+1. **Check Priority**: `npm run prio:top3`
+2. **Git Status**: Clean working directory?
+3. **Context Load**: CLAUDE_CORE.md + phase file
+
+### Before Starting Work
+- Verify SD is in correct phase
+- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
+- Review recent handoffs if continuing
+
+### Key Commands
+| Command | Purpose |
+|---------|---------|
+| `npm run prio:top3` | Top priority SDs |
+| `git status` | Working tree status |
+| `npm run handoff:latest` | Latest handoff |
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -486,6 +486,21 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 **Anti-Pattern**: Implementing quick fixes without understanding why something fails
 **Why Wrong**: 2-3x time multiplier, masks real issues, accumulates technical debt
 **Correct Approach**: Identify root cause first, then fix. Document if workaround needed.
+
+
+### NC-006: No Background Execution or TaskOutput
+**Anti-Pattern**: Using `run_in_background: true` or TaskOutput tool for validation/handoff commands
+**Why Wrong**: Slows down workflow, requires extra round-trips, breaks conversational flow
+**Correct Approach**:
+- Run all commands inline with appropriate timeouts (up to 180000ms for long validations)
+- NEVER use `run_in_background` parameter for handoff.js, validation scripts, or any LEO process scripts
+- If command output is long, use direct execution and let it complete
+- Avoid piping (`| grep`, `| tail`) on long-running commands as it can trigger background execution
+**Affected Commands** (MUST run inline):
+- `node scripts/handoff.js execute ...`
+- `node scripts/add-prd-to-database.js ...`
+- `node scripts/phase-preflight.js ...`
+- Any validation or quality gate scripts
 </negative_constraints>
 
 ## 🔄 Git Commit Guidelines
@@ -1368,7 +1383,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ---
 
-*Generated from database: 2025-12-14*
+*Generated from database: 2025-12-15*
 *Protocol Version: 4.3.3*
 *Includes: Hot Patterns (3) + Recent Lessons (2)*
 *Load this file first in all sessions*

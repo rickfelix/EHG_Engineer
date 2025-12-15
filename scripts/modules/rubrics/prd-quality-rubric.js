@@ -315,6 +315,7 @@ SD UUID: ${prd.sd_uuid || 'Not linked'}`;
 
   /**
    * Format technical architecture for evaluation
+   * SYSTEMIC FIX: Support all LLM-generated fields including trade_offs
    */
   formatTechnicalArchitecture(architecture) {
     if (!architecture) {
@@ -329,9 +330,16 @@ SD UUID: ${prd.sd_uuid || 'Not linked'}`;
       }
 
       if (architecture.components && architecture.components.length > 0) {
-        sections.push(`Components:\n${architecture.components.map((c, i) =>
-          `${i + 1}. ${typeof c === 'string' ? c : c.name || JSON.stringify(c)}`
-        ).join('\n')}`);
+        sections.push(`Components:\n${architecture.components.map((c, i) => {
+          if (typeof c === 'string') {
+            return `${i + 1}. ${c}`;
+          } else if (c.name) {
+            const responsibility = c.responsibility ? ` - ${c.responsibility}` : '';
+            const tech = c.technology ? ` [${c.technology}]` : '';
+            return `${i + 1}. ${c.name}${responsibility}${tech}`;
+          }
+          return `${i + 1}. ${JSON.stringify(c)}`;
+        }).join('\n')}`);
       }
 
       if (architecture.data_flow) {
@@ -342,6 +350,11 @@ SD UUID: ${prd.sd_uuid || 'Not linked'}`;
         sections.push(`Integration Points:\n${architecture.integration_points.map((p, i) =>
           `${i + 1}. ${typeof p === 'string' ? p : JSON.stringify(p)}`
         ).join('\n')}`);
+      }
+
+      // SYSTEMIC FIX: Include trade_offs analysis
+      if (architecture.trade_offs) {
+        sections.push(`Trade-offs:\n${architecture.trade_offs}`);
       }
 
       return sections.join('\n\n') || JSON.stringify(architecture);
@@ -356,6 +369,8 @@ SD UUID: ${prd.sd_uuid || 'Not linked'}`;
 
   /**
    * Format test scenarios for evaluation
+   * SYSTEMIC FIX: Support both legacy (type, steps, expected_result) and
+   * new LLM-generated format (test_type, given, when, then)
    */
   formatTestScenarios(scenarios) {
     if (!scenarios || scenarios.length === 0) {
@@ -367,14 +382,37 @@ SD UUID: ${prd.sd_uuid || 'Not linked'}`;
         if (typeof scenario === 'string') {
           return `${idx + 1}. ${scenario}`;
         } else if (scenario.scenario) {
-          const type = scenario.type ? ` [${scenario.type}]` : '';
-          const steps = scenario.steps && scenario.steps.length > 0
-            ? `\n   Steps: ${scenario.steps.join('; ')}`
+          // Support both field naming conventions
+          const type = scenario.test_type || scenario.type;
+          const typeStr = type ? ` [${type}]` : '';
+
+          // Build details array
+          const details = [];
+
+          // Given/When/Then format (new LLM-generated format)
+          if (scenario.given) {
+            details.push(`Given: ${scenario.given}`);
+          }
+          if (scenario.when) {
+            details.push(`When: ${scenario.when}`);
+          }
+          if (scenario.then) {
+            details.push(`Then: ${scenario.then}`);
+          }
+
+          // Legacy format (steps, expected_result)
+          if (scenario.steps && scenario.steps.length > 0) {
+            details.push(`Steps: ${scenario.steps.join('; ')}`);
+          }
+          if (scenario.expected_result) {
+            details.push(`Expected: ${scenario.expected_result}`);
+          }
+
+          const detailsStr = details.length > 0
+            ? '\n   ' + details.join('\n   ')
             : '';
-          const expected = scenario.expected_result
-            ? `\n   Expected: ${scenario.expected_result}`
-            : '';
-          return `${idx + 1}. ${scenario.scenario}${type}${steps}${expected}`;
+
+          return `${idx + 1}. ${scenario.scenario}${typeStr}${detailsStr}`;
         }
         return `${idx + 1}. ${JSON.stringify(scenario)}`;
       }).join('\n\n');
@@ -424,6 +462,7 @@ SD UUID: ${prd.sd_uuid || 'Not linked'}`;
 
   /**
    * Format risks for evaluation
+   * SYSTEMIC FIX: Support all LLM-generated fields (risk, probability, impact, mitigation, rollback_plan, monitoring)
    */
   formatRisks(risks) {
     if (!risks || risks.length === 0) {
@@ -435,10 +474,31 @@ SD UUID: ${prd.sd_uuid || 'Not linked'}`;
         if (typeof risk === 'string') {
           return `${idx + 1}. ${risk}`;
         } else if (risk.risk) {
-          const mitigation = risk.mitigation ? `\n   Mitigation: ${risk.mitigation}` : '';
-          const rollback = risk.rollback_plan ? `\n   Rollback: ${risk.rollback_plan}` : '';
-          const probability = risk.probability ? ` (Probability: ${risk.probability})` : '';
-          return `${idx + 1}. ${risk.risk}${probability}${mitigation}${rollback}`;
+          // Build details array for all fields
+          const details = [];
+
+          // Probability and Impact (inline with risk name)
+          const probability = risk.probability ? `Probability: ${risk.probability}` : '';
+          const impact = risk.impact ? `Impact: ${risk.impact}` : '';
+          const riskMeta = [probability, impact].filter(Boolean).join(', ');
+          const riskMetaStr = riskMeta ? ` (${riskMeta})` : '';
+
+          // Detailed fields
+          if (risk.mitigation) {
+            details.push(`Mitigation: ${risk.mitigation}`);
+          }
+          if (risk.rollback_plan) {
+            details.push(`Rollback: ${risk.rollback_plan}`);
+          }
+          if (risk.monitoring) {
+            details.push(`Monitoring: ${risk.monitoring}`);
+          }
+
+          const detailsStr = details.length > 0
+            ? '\n   ' + details.join('\n   ')
+            : '';
+
+          return `${idx + 1}. ${risk.risk}${riskMetaStr}${detailsStr}`;
         }
         return `${idx + 1}. ${JSON.stringify(risk)}`;
       }).join('\n\n');
