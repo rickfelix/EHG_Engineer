@@ -279,6 +279,10 @@ export class PlanToExecExecutor extends BaseExecutor {
     // Root cause fix: Handoffs should act as state machine transitions, not just validation gates
     await this._transitionPrdToExec(prd, sdId);
 
+    // STATE TRANSITION: Update SD current_phase to EXEC
+    // Root cause fix: SD phase was not being updated after handoff approval
+    await this._transitionSdToExec(sdId, sd);
+
     // Display EXEC phase requirements (proactive guidance)
     await this._displayExecPhaseRequirements(sdId, prd);
 
@@ -840,6 +844,47 @@ export class PlanToExecExecutor extends BaseExecutor {
       }
     } catch (error) {
       console.log(`   ⚠️  PRD transition error: ${error.message}`);
+    }
+  }
+
+  /**
+   * STATE TRANSITION: Update SD current_phase on successful PLAN-TO-EXEC handoff
+   *
+   * Root cause fix: When handoff was approved, SD current_phase remained at 'PLAN'
+   * even though PRD was transitioned. This caused phase tracking to be out of sync
+   * and blocked downstream processes that check SD phase.
+   *
+   * SYSTEMIC FIX: SD state machine now transitions alongside PRD state machine.
+   */
+  async _transitionSdToExec(sdId, sd) {
+    console.log('\n📊 STATE TRANSITION: SD Phase Update');
+    console.log('-'.repeat(50));
+
+    try {
+      // Determine the correct SD ID field (UUID vs legacy_id)
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
+      const queryField = isUUID ? 'id' : 'legacy_id';
+
+      const { error } = await this.supabase
+        .from('strategic_directives_v2')
+        .update({
+          current_phase: 'EXEC',
+          status: 'active',
+          is_working_on: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq(queryField, sdId);
+
+      if (error) {
+        console.log(`   ⚠️  Could not update SD phase: ${error.message}`);
+      } else {
+        const oldPhase = sd?.current_phase || 'PLAN';
+        console.log(`   ✅ SD phase transitioned: ${oldPhase} → EXEC`);
+        console.log('   ✅ SD status transitioned: → active');
+        console.log('   ✅ SD marked as working_on: true');
+      }
+    } catch (error) {
+      console.log(`   ⚠️  SD transition error: ${error.message}`);
     }
   }
 
