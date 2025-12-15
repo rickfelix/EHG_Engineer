@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-04T23:01:42.129Z
-**Rows**: 225
+**Generated**: 2025-12-15T17:31:21.178Z
+**Rows**: 25
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (59 total)
+## Columns (60 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -78,6 +78,7 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 | content_embedding | `USER-DEFINED` | YES | - | OpenAI text-embedding-3-small vector (1536 dimensions) for semantic search. Generated from title + key_learnings + action_items. |
 | unnecessary_work_identified | `jsonb` | YES | `'[]'::jsonb` | Array of items that could have been deleted but were not. Used to improve future Q8 decisions. |
 | protocol_improvements | `jsonb` | YES | `'[]'::jsonb` | Array of LEO Protocol improvement suggestions. Each object: { category: string, improvement: string, evidence: string, impact: string, affected_phase: LEAD|PLAN|EXEC|null } |
+| retrospective_type | `text` | YES | `'SD_COMPLETION'::text` | Type of retrospective: LEAD_TO_PLAN (approval phase), PLAN_TO_EXEC (validation phase), SD_COMPLETION (full SD retrospective) |
 
 ## Constraints
 
@@ -96,6 +97,7 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 - `retrospectives_generated_by_check`: CHECK ((generated_by = ANY (ARRAY['MANUAL'::text, 'SUB_AGENT'::text, 'TRIGGER'::text, 'SCHEDULED'::text])))
 - `retrospectives_quality_score_check`: CHECK (((quality_score IS NULL) OR ((quality_score >= 0) AND (quality_score <= 100))))
 - `retrospectives_retro_type_check`: CHECK ((retro_type = ANY (ARRAY['SPRINT'::text, 'SD_COMPLETION'::text, 'INCIDENT'::text, 'MILESTONE'::text, 'WEEKLY'::text, 'MONTHLY'::text, 'ARCHITECTURE_DECISION'::text, 'RELEASE'::text])))
+- `retrospectives_retrospective_type_check`: CHECK ((retrospective_type = ANY (ARRAY['LEAD_TO_PLAN'::text, 'PLAN_TO_EXEC'::text, 'SD_COMPLETION'::text])))
 - `retrospectives_risk_accuracy_score_check`: CHECK (((risk_accuracy_score >= 0) AND (risk_accuracy_score <= 100)))
 - `retrospectives_status_check`: CHECK ((status = ANY (ARRAY['DRAFT'::text, 'PUBLISHED'::text, 'ARCHIVED'::text])))
 - `retrospectives_team_satisfaction_check`: CHECK (((team_satisfaction >= 1) AND (team_satisfaction <= 10)))
@@ -150,6 +152,10 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
   ```sql
   CREATE INDEX idx_retrospectives_retro_type ON public.retrospectives USING btree (retro_type)
   ```
+- `idx_retrospectives_retrospective_type`
+  ```sql
+  CREATE INDEX idx_retrospectives_retrospective_type ON public.retrospectives USING btree (retrospective_type)
+  ```
 - `idx_retrospectives_sd_id`
   ```sql
   CREATE INDEX idx_retrospectives_sd_id ON public.retrospectives USING btree (sd_id)
@@ -194,6 +200,16 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION update_retrospective_timestamp()`
+
+### trg_extract_protocol_improvements
+
+- **Timing**: AFTER INSERT
+- **Action**: `EXECUTE FUNCTION extract_protocol_improvements_from_retro()`
+
+### trg_extract_protocol_improvements
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION extract_protocol_improvements_from_retro()`
 
 ### trigger_auto_populate_retrospective_fields
 

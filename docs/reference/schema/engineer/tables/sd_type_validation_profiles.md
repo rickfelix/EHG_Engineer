@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-11T11:29:46.338Z
+**Generated**: 2025-12-15T17:31:21.178Z
 **Rows**: 8
-**RLS**: Disabled
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (18 total)
+## Columns (19 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -36,6 +36,7 @@
 | requires_e2e_in_acceptance_criteria | `boolean` | YES | `false` | If true, user stories for this SD type MUST include E2E test criteria in acceptance_criteria field |
 | e2e_acceptance_criteria_template | `jsonb` | YES | - | Template JSON for E2E acceptance criteria that should be included in user stories |
 | story_e2e_guidance | `text` | YES | - | Guidance text shown when creating user stories for this SD type |
+| required_handoff_types | `ARRAY` | YES | `ARRAY['LEAD-TO-PLAN'::text, 'PLAN-TO-EXEC'::text, 'EXEC-TO-PLAN'::text]` | - |
 
 ## Constraints
 
@@ -57,6 +58,24 @@
   ```sql
   CREATE UNIQUE INDEX sd_type_validation_profiles_pkey ON public.sd_type_validation_profiles USING btree (sd_type)
   ```
+
+## RLS Policies
+
+### 1. sd_type_validation_profiles_insert (INSERT)
+
+- **Roles**: {authenticated}
+- **With Check**: `true`
+
+### 2. sd_type_validation_profiles_select (SELECT)
+
+- **Roles**: {public}
+- **Using**: `true`
+
+### 3. sd_type_validation_profiles_update (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-04T23:01:42.129Z
-**Rows**: 17
+**Generated**: 2025-12-15T17:31:21.178Z
+**Rows**: 21
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -33,7 +33,7 @@
 - `leo_validation_rules_pkey`: PRIMARY KEY (id)
 
 ### Check Constraints
-- `leo_validation_rules_gate_check`: CHECK ((gate = ANY (ARRAY['0'::text, '1'::text, '2A'::text, '2B'::text, '2C'::text, '2D'::text, '3'::text])))
+- `leo_validation_rules_gate_check`: CHECK ((gate = ANY (ARRAY['0'::text, '1'::text, 'Q'::text, '2A'::text, '2B'::text, '2C'::text, '2D'::text, '3'::text])))
 - `leo_validation_rules_weight_check`: CHECK (((weight >= (0)::numeric) AND (weight <= (1)::numeric)))
 
 ## Indexes

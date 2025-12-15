@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-11T11:29:46.338Z
+**Generated**: 2025-12-15T17:31:21.178Z
 **Rows**: 25
-**RLS**: Disabled
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -59,6 +59,24 @@
   ```sql
   CREATE UNIQUE INDEX lifecycle_stage_config_pkey ON public.lifecycle_stage_config USING btree (stage_number)
   ```
+
+## RLS Policies
+
+### 1. lifecycle_stage_config_insert (INSERT)
+
+- **Roles**: {authenticated}
+- **With Check**: `true`
+
+### 2. lifecycle_stage_config_select (SELECT)
+
+- **Roles**: {public}
+- **Using**: `true`
+
+### 3. lifecycle_stage_config_update (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 

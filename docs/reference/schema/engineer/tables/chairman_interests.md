@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-04T23:01:42.129Z
+**Generated**: 2025-12-15T17:31:21.178Z
 **Rows**: 0
 **RLS**: Enabled (5 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (9 total)
+## Columns (13 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -27,6 +27,10 @@
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
 | notes | `text` | YES | - | Optional notes/context for this interest entry |
+| story_beats | `jsonb` | YES | `'[]'::jsonb` | Array of story beat objects for scenario-driven interests. Structure: [{"sequence": int, "description": "string", "acceptance_criteria": ["string"]}]. Default: [] |
+| vision_signals | `jsonb` | YES | `'[]'::jsonb` | Array of vision signal objects for strategic validation. Structure: [{"signal_type": "string", "target_metric": "string", "measurement_method": "string"}]. Default: [] |
+| coverage_nav_item_ids | `jsonb` | YES | `'[]'::jsonb` | Array of venture_stages_nav_items UUIDs tracking coverage. Structure: ["uuid1", "uuid2", ...]. Default: [] |
+| feasibility_score | `integer(32)` | YES | - | Russian Judge scoring 0-10 for implementation feasibility. NULL = not scored yet. CHECK constraint: 0-10 inclusive. |
 
 ## Constraints
 
@@ -37,6 +41,7 @@
 - `chairman_interests_user_id_fkey`: user_id → users(id)
 
 ### Check Constraints
+- `chairman_interests_feasibility_score_check`: CHECK (((feasibility_score >= 0) AND (feasibility_score <= 10)))
 - `chairman_interests_interest_type_check`: CHECK ((interest_type = ANY (ARRAY['market'::text, 'customer_segment'::text, 'focus_area'::text, 'exclusion'::text])))
 - `chairman_interests_priority_check`: CHECK (((priority >= 1) AND (priority <= 10)))
 

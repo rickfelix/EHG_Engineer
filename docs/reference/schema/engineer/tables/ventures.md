@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-04T23:01:42.129Z
-**Rows**: 669
+**Generated**: 2025-12-15T17:31:21.178Z
+**Rows**: 689
 **RLS**: Enabled (5 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (51 total)
+## Columns (64 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -69,6 +69,22 @@
 | competitor_ref | `text` | YES | - | - |
 | blueprint_id | `text` | YES | - | - |
 | solution | `text` | YES | - | - |
+| brand_variants | `jsonb` | YES | `'[]'::jsonb` | Array of brand name variants for adaptive naming and multi-market localization. |
+| current_lifecycle_stage | `integer(32)` | YES | `1` | - |
+| venture_code | `character varying(20)` | YES | - | - |
+| archetype | `character varying(50)` | YES | - | - |
+| deployment_target | `character varying(50)` | YES | - | - |
+| deployment_url | `text` | YES | - | - |
+| repo_url | `text` | YES | - | - |
+| decision_due_at | `timestamp with time zone` | YES | - | - |
+| kill_reason | `text` | YES | - | - |
+| killed_at | `timestamp with time zone` | YES | - | - |
+| cultural_design_style | `USER-DEFINED` | YES | - | Cultural design style selected during Stage 10 (Strategic Naming).
+Determines UI aesthetic variance applied by the design sub-agent.
+Reference: docs/02_api/design_system_handcrafted.md |
+| design_style_config | `jsonb` | YES | - | Optional JSON configuration for design style customization.
+Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true} |
+| ceo_agent_id | `uuid` | YES | - | - |
 
 ## Constraints
 
@@ -76,11 +92,24 @@
 - `ventures_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `ventures_archetype_fkey`: archetype → archetype_benchmarks(archetype)
+- `ventures_ceo_agent_id_fkey`: ceo_agent_id → agents(id)
 - `ventures_company_id_fkey`: company_id → companies(id)
 - `ventures_portfolio_id_fkey`: portfolio_id → portfolios(id)
 
+### Check Constraints
+- `ventures_current_lifecycle_stage_check`: CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 25)))
+
 ## Indexes
 
+- `idx_ventures_brand_variants`
+  ```sql
+  CREATE INDEX idx_ventures_brand_variants ON public.ventures USING gin (brand_variants)
+  ```
+- `idx_ventures_code`
+  ```sql
+  CREATE INDEX idx_ventures_code ON public.ventures USING btree (venture_code)
+  ```
 - `idx_ventures_company`
   ```sql
   CREATE INDEX idx_ventures_company ON public.ventures USING btree (company_id)
@@ -88,6 +117,14 @@
 - `idx_ventures_created_by`
   ```sql
   CREATE INDEX idx_ventures_created_by ON public.ventures USING btree (created_by)
+  ```
+- `idx_ventures_cultural_design_style`
+  ```sql
+  CREATE INDEX idx_ventures_cultural_design_style ON public.ventures USING btree (cultural_design_style) WHERE (cultural_design_style IS NOT NULL)
+  ```
+- `idx_ventures_lifecycle_stage`
+  ```sql
+  CREATE INDEX idx_ventures_lifecycle_stage ON public.ventures USING btree (current_lifecycle_stage)
   ```
 - `idx_ventures_origin_type`
   ```sql
@@ -104,6 +141,14 @@
 - `idx_ventures_status`
   ```sql
   CREATE INDEX idx_ventures_status ON public.ventures USING btree (status)
+  ```
+- `idx_ventures_variants_awaiting_approval`
+  ```sql
+  CREATE INDEX idx_ventures_variants_awaiting_approval ON public.ventures USING gin (brand_variants) WHERE (brand_variants @> '[{"lifecycle_status": "AWAITING_APPROVAL"}]'::jsonb)
+  ```
+- `ventures_ceo_agent_id_idx`
+  ```sql
+  CREATE INDEX ventures_ceo_agent_id_idx ON public.ventures USING btree (ceo_agent_id) WHERE (ceo_agent_id IS NOT NULL)
   ```
 - `ventures_pkey`
   ```sql
@@ -143,6 +188,13 @@
 - **With Check**: `((company_id IN ( SELECT user_company_access.company_id
    FROM user_company_access
   WHERE (user_company_access.user_id = auth.uid()))) OR (created_by = auth.uid()))`
+
+## Triggers
+
+### update_ventures_updated_at
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION update_ventures_updated_at()`
 
 ---
 

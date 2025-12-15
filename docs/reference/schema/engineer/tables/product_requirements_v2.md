@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-12T14:40:50.099Z
-**Rows**: 283
+**Generated**: 2025-12-15T17:31:21.178Z
+**Rows**: 7
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -183,16 +183,6 @@
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION update_planning_section_from_reasoning()`
-
-### trigger_auto_populate_prd_sd_uuid
-
-- **Timing**: BEFORE INSERT
-- **Action**: `EXECUTE FUNCTION auto_populate_prd_sd_uuid()`
-
-### trigger_auto_populate_prd_sd_uuid
-
-- **Timing**: BEFORE UPDATE
-- **Action**: `EXECUTE FUNCTION auto_populate_prd_sd_uuid()`
 
 ### trigger_sync_prd_sd_linking
 
