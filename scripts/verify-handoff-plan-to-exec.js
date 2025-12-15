@@ -98,7 +98,7 @@ class PlanToExecVerifier {
       const validatorPath = path.join(__dirname, 'prd-validation-checklist.js');
       const { validatePRD } = require(validatorPath);
       return validatePRD;
-    } catch (_error) {
+    } catch {
       console.warn('⚠️  PRD validator not found, using basic validation');
       return this.basicPRDValidation.bind(this);
     }
