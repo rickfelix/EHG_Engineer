@@ -726,6 +726,8 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
     ];
 
     let migrationFiles = [];
+    // Move sdIdLower outside for loop so it's available throughout the function scope
+    const sdIdLower = sd_id.replace('SD-', '').toLowerCase();
     for (const dir of migrationDirs) {
       const fullPath = path.join(process.cwd(), dir);
       if (existsSync(fullPath)) {
@@ -733,7 +735,6 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
         // SD-VENTURE-STAGE0-UI-001: Improved migration detection
         // Only match by SD ID, not by today's date (which could match unrelated migrations)
         // The date-based matching was causing false positives for UI-only SDs
-        const sdIdLower = sd_id.replace('SD-', '').toLowerCase();
         const sdMigrations = files.filter(f => {
           const fileLower = f.toLowerCase();
           // Must contain part of the SD ID (UUID or SD number)
