@@ -964,13 +964,13 @@ export class PlanToExecExecutor extends BaseExecutor {
    * 2. Children are properly linked
    * 3. No implementation gates (DESIGN, DATABASE, BRANCH)
    */
-  _getParentOrchestratorGates(sd, options) {
+  _getParentOrchestratorGates(sd, _options) {
     const gates = [];
 
     // Gate 1: PRD Exists with proper metadata
     gates.push({
       name: 'PARENT_PRD_EXISTS',
-      validator: async (ctx) => {
+      validator: async (_ctx) => {
         console.log('\n📋 GATE: Parent Orchestrator PRD Validation');
         console.log('-'.repeat(50));
 
@@ -1013,7 +1013,7 @@ export class PlanToExecExecutor extends BaseExecutor {
     // Gate 2: Children Structure Validated
     gates.push({
       name: 'CHILDREN_STRUCTURE_VALID',
-      validator: async (ctx) => {
+      validator: async (_ctx) => {
         console.log('\n👶 GATE: Children Structure Validation');
         console.log('-'.repeat(50));
 
