@@ -92,6 +92,35 @@ export class PRDQualityRubric extends AIQualityEvaluator {
       }
     };
 
+    // PAT-PRD-CATEGORY-001: Category-specific weight adjustments
+    // API contracts focus on technical specs, not user-facing acceptance criteria
+    const categoryWeights = {
+      'api': {
+        requirements: 0.30,      // API specs don't need user-facing requirements depth
+        architecture: 0.45,      // MORE weight on API design/architecture
+        test_scenarios: 0.15,    // Integration/contract testing
+        risk_analysis: 0.10      // Standard
+      },
+      'api-contracts': {
+        requirements: 0.30,
+        architecture: 0.45,
+        test_scenarios: 0.15,
+        risk_analysis: 0.10
+      },
+      'backend': {
+        requirements: 0.35,      // Service specs
+        architecture: 0.40,      // Service architecture
+        test_scenarios: 0.15,    // Integration testing
+        risk_analysis: 0.10
+      }
+    };
+
+    // Category takes precedence over sd_type for weight selection
+    // (more granular classification for quality thresholds)
+    if (sd.category && categoryWeights[sd.category]) {
+      return categoryWeights[sd.category];
+    }
+
     return typeWeights[sd.sd_type] || defaultWeights;
   }
 

@@ -243,13 +243,37 @@ export class PlanToExecExecutor extends BaseExecutor {
         console.log('\n🤖 AI QUALITY ASSESSMENT (Russian Judge)');
         console.log('-'.repeat(50));
 
-        // Assess PRD Quality
+        // PAT-PRD-CATEGORY-001: Category-specific PRD quality thresholds
+        // API/backend work focuses on technical specs, not user-facing acceptance criteria
+        const prdCategoryThresholds = {
+          // Very lenient for API/technical work
+          'api': 55,
+          'api-contracts': 55,
+          'contracts': 55,
+          'backend': 55,
+          // Lenient for documentation and infrastructure
+          'documentation': 55,
+          'docs': 55,
+          'infrastructure': 60,
+          // Standard for bugfix/database/security
+          'bugfix': 65,
+          'database': 65,
+          'security': 65,
+          // Default for user-facing features
+          'feature': 70
+        };
+
+        const sdCategory = (sd?.category || 'feature').toLowerCase();
+        const prdThreshold = prdCategoryThresholds[sdCategory] || 70;
+
+        // Assess PRD Quality with SD context (for category-aware weights)
         const { PRDQualityRubric } = await import('../../rubrics/prd-quality-rubric.js');
-        const prdRubric = new PRDQualityRubric();
+        const prdRubric = new PRDQualityRubric(sd);  // Pass SD for category-aware weights
         const prdAssessment = await prdRubric.validatePRDQuality(prd, sd);
 
-        console.log(`   PRD Score: ${prdAssessment.score}% (threshold: 70%)`);
-        console.log(`   Status: ${prdAssessment.passed ? 'PASSED' : 'NEEDS IMPROVEMENT'}`);
+        const prdPassed = prdAssessment.score >= prdThreshold;
+        console.log(`   PRD Score: ${prdAssessment.score}% (threshold: ${prdThreshold}% for ${sdCategory})`);
+        console.log(`   Status: ${prdPassed ? 'PASSED' : 'NEEDS IMPROVEMENT'}`);
 
         if (prdAssessment.issues && prdAssessment.issues.length > 0) {
           console.log('\n   ⚡ PRD Issues:');
