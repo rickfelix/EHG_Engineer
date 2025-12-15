@@ -755,21 +755,46 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
 
       try {
         // Query Supabase schema_migrations table to check execution
-        const { data: executedMigrations, error: migrationError } = await supabase
+        // Try with common column names first, fall back to * if schema differs
+        let executedMigrations = null;
+        let migrationError = null;
+
+        // Try standard Supabase migration schema first
+        const { data: data1, error: error1 } = await supabase
           .from('schema_migrations')
           .select('version, name');
+
+        if (error1 && error1.message.includes('column') && error1.message.includes('does not exist')) {
+          // Schema differs - try selecting all columns instead
+          const { data: data2, error: error2 } = await supabase
+            .from('schema_migrations')
+            .select('*');
+          executedMigrations = data2;
+          migrationError = error2;
+        } else {
+          executedMigrations = data1;
+          migrationError = error1;
+        }
 
         if (migrationError) {
           // SD-VENTURE-STAGE0-UI-001: Handle non-existent schema_migrations table gracefully
           // If table doesn't exist, this is likely a project without migration tracking
           // Don't block - give partial credit and warn instead
           const tableNotExistsMsg = "Could not find the table 'public.schema_migrations'";
+          const columnNotExistsMsg = 'column';
           if (migrationError.message.includes(tableNotExistsMsg)) {
             console.log('   ⚠️  schema_migrations table does not exist - cannot verify (13/20)');
             sectionScore += 13; // Partial credit - can't verify but not a blocking issue
             sectionDetails.migration_execution_verified = null; // Unknown
             sectionDetails.migration_execution_note = 'No schema_migrations table - manual verification required';
             validation.warnings.push('[B1.2] Migration execution could not be auto-verified - no schema_migrations table');
+          } else if (migrationError.message.includes(columnNotExistsMsg)) {
+            // Schema mismatch - table exists but has different columns
+            console.log('   ⚠️  schema_migrations has non-standard schema - cannot auto-verify (13/20)');
+            sectionScore += 13; // Partial credit - schema differs
+            sectionDetails.migration_execution_verified = null;
+            sectionDetails.migration_execution_note = 'Non-standard schema_migrations schema - manual verification required';
+            validation.warnings.push('[B1.2] Migration execution could not be auto-verified - schema mismatch');
           } else {
             console.log(`   ⚠️  Cannot query schema_migrations: ${migrationError.message} (0/20)`);
             sectionScore += 0; // No points if can't verify (critical check)
