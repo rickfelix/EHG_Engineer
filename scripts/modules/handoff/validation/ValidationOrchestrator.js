@@ -38,8 +38,11 @@ export class ValidationOrchestrator {
       const result = await validator(context);
 
       // Normalize result structure
+      // FIX: Accept both 'pass' and 'passed' field names for compatibility
+      // ROOT CAUSE: Some validators return { pass: true } while others return { passed: true }
+      // This caused gates to fail even when validators returned pass: true (SD-VISION-V2-005 fix)
       const normalizedResult = {
-        passed: result.passed ?? (result.score >= (result.max_score || result.maxScore || 100)),
+        passed: result.passed ?? result.pass ?? (result.score >= (result.max_score || result.maxScore || 100)),
         score: result.score ?? 0,
         maxScore: result.max_score || result.maxScore || 100,
         issues: result.issues || [],
