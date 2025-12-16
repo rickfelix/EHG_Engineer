@@ -84,10 +84,12 @@ export class PlanToExecExecutor extends BaseExecutor {
         console.log('-'.repeat(50));
 
         // Query for an accepted LEAD-TO-PLAN handoff for this SD
+        // Use UUID (ctx.sd.id) not legacy_id (ctx.sdId) - handoffs are stored by UUID
+        const sdUuid = ctx.sd?.id || ctx.sdId;
         const { data: leadToPlanHandoff, error } = await this.supabase
           .from('sd_phase_handoffs')
           .select('id, status, created_at, validation_score')
-          .eq('sd_id', ctx.sdId)
+          .eq('sd_id', sdUuid)
           .eq('handoff_type', 'LEAD-TO-PLAN')
           .eq('status', 'accepted')
           .order('created_at', { ascending: false })

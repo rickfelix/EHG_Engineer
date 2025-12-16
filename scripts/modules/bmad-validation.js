@@ -52,10 +52,14 @@ export async function validateBMADForPlanToExec(sd_id, supabase) {
     // ================================================
     // 1. FETCH SD AND USER STORIES
     // ================================================
+    // SD ID Schema Fix: Handle both UUID and legacy_id
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sd_id);
+    const queryField = isUUID ? 'id' : 'legacy_id';
+
     const { data: sd, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .select('id, title, checkpoint_plan')
-      .eq('id', sd_id)
+      .eq(queryField, sd_id)
       .single();
 
     if (sdError || !sd) {
@@ -64,10 +68,13 @@ export async function validateBMADForPlanToExec(sd_id, supabase) {
       return validation;
     }
 
+    // Use the actual UUID for user stories query
+    const sdUuid = sd.id;
+
     const { data: userStories, error: storiesError } = await supabase
       .from('user_stories')
       .select('id, story_key, implementation_context, architecture_references, example_code_patterns, testing_scenarios')
-      .eq('sd_id', sd_id);
+      .eq('sd_id', sdUuid);
 
     if (storiesError) {
       validation.warnings.push(`Could not fetch user stories: ${storiesError.message}`);
