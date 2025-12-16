@@ -49,6 +49,80 @@ export class ExecToPlanExecutor extends BaseExecutor {
   getRequiredGates(_sd, _options) {
     const gates = [];
 
+    // ROOT CAUSE FIX: Prerequisite handoff validation
+    // SD-VISION-V2-009 identified gap: EXEC-TO-PLAN could proceed without accepted PLAN-TO-EXEC
+    // This gate ensures the LEO Protocol handoff chain is enforced sequentially
+    gates.push({
+      name: 'PREREQUISITE_HANDOFF_CHECK',
+      validator: async (ctx) => {
+        console.log('\n🔐 PREREQUISITE CHECK: PLAN-TO-EXEC Handoff Required');
+        console.log('-'.repeat(50));
+
+        // Query for an accepted PLAN-TO-EXEC handoff
+        const { data: planToExecHandoff, error } = await this.supabase
+          .from('sd_phase_handoffs')
+          .select('id, status, created_at, validation_score')
+          .eq('sd_id', ctx.sdId)
+          .eq('handoff_type', 'PLAN-TO-EXEC')
+          .eq('status', 'accepted')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (error) {
+          console.log(`   ⚠️  Error checking prerequisite: ${error.message}`);
+          return {
+            passed: false,
+            score: 0,
+            max_score: 100,
+            issues: [`Failed to verify PLAN-TO-EXEC prerequisite: ${error.message}`],
+            warnings: []
+          };
+        }
+
+        if (!planToExecHandoff || planToExecHandoff.length === 0) {
+          console.log('   ❌ No accepted PLAN-TO-EXEC handoff found');
+          console.log('   ⚠️  LEO Protocol requires PLAN-TO-EXEC before EXEC-TO-PLAN');
+          console.log('\n   REMEDIATION:');
+          console.log('   1. Complete PLAN phase prerequisites (PRD, user stories, design analysis)');
+          console.log('   2. Run: node scripts/handoff.js execute PLAN-TO-EXEC <SD-ID>');
+          console.log('   3. Address any validation failures');
+          console.log('   4. Retry EXEC-TO-PLAN after PLAN-TO-EXEC is accepted');
+
+          return {
+            passed: false,
+            score: 0,
+            max_score: 100,
+            issues: ['BLOCKING: No accepted PLAN-TO-EXEC handoff found - LEO Protocol violation'],
+            warnings: [],
+            remediation: 'Complete PLAN-TO-EXEC handoff before attempting EXEC-TO-PLAN'
+          };
+        }
+
+        const handoff = planToExecHandoff[0];
+        console.log(`   ✅ PLAN-TO-EXEC handoff found: ${handoff.id.slice(0, 8)}...`);
+        console.log(`      Status: ${handoff.status}`);
+        console.log(`      Score: ${handoff.validation_score}%`);
+        console.log(`      Date: ${new Date(handoff.created_at).toLocaleString()}`);
+
+        // Store for later reference
+        ctx._planToExecHandoff = handoff;
+
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [],
+          details: {
+            handoff_id: handoff.id,
+            validation_score: handoff.validation_score,
+            created_at: handoff.created_at
+          }
+        };
+      },
+      required: true
+    });
+
     // Sub-Agent Orchestration
     gates.push({
       name: 'SUB_AGENT_ORCHESTRATION',
