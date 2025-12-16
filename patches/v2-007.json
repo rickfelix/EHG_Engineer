@@ -1,0 +1,80 @@
+{
+  "sd_id": "SD-VISION-V2-007",
+  "sd_title": "Vision V2: Integration Verification",
+  "parent_sd_id": "SD-VISION-V2-000",
+  "generated_at": "2025-12-14T01:26:21.166Z",
+  "operator": "Chairman",
+  "carry_forward": {
+    "version": "1.0",
+    "lineage": {
+      "root_sd_id": "SD-VISION-V2-000",
+      "ancestor_chain": [
+        "SD-VISION-V2-000"
+      ],
+      "from_parent": "SD-VISION-V2-000",
+      "split_depth": 1
+    },
+    "split_metadata": {
+      "split_date": "2025-12-14",
+      "split_reason": "Isolated integration verification to provide cross-cutting validation of all Vision V2 components"
+    },
+    "dependency_policy": {
+      "policy": "EDGES_REQUIRED",
+      "no_edges_reason": null,
+      "declared_dependencies": ["SD-VISION-V2-001", "SD-VISION-V2-002", "SD-VISION-V2-003", "SD-VISION-V2-004", "SD-VISION-V2-005", "SD-VISION-V2-006"]
+    },
+    "inherited_anchors": {
+      "anchors": [
+        {
+          "why": "Foundation database schema spec",
+          "path": "docs/vision/specs/01-database-schema.md",
+          "spec": "01-database-schema.md",
+          "sections": [
+            "all"
+          ]
+        },
+        {
+          "why": "EVA orchestration spec",
+          "path": "docs/vision/specs/04-eva-orchestration.md",
+          "spec": "04-eva-orchestration.md",
+          "sections": [
+            "all"
+          ]
+        }
+      ],
+      "source": "intersection",
+      "confirmed": true,
+      "note": "Intersection of parent (3) and child (3) anchors"
+    },
+    "inherited_provenance": {
+      "provenance": [
+        {
+          "why": "Audit trail for Dec-13 governance intake",
+          "date": "2025-12-13",
+          "path": "docs/governance/decisions/intake-dec-13-closure.md",
+          "artifact_type": "intake_closure"
+        }
+      ],
+      "source": "parent",
+      "note": "Inherited from parent at split time"
+    },
+    "inherited_context_closure": {
+      "declared_dependencies": [],
+      "note": "Populate during PRD creation"
+    },
+    "non_propagation": {
+      "prd_artifacts": "do_not_inherit",
+      "implementation_state": "do_not_inherit"
+    },
+    "validation_status": {
+      "last_validated": null,
+      "gates_passed": []
+    }
+  },
+  "_warnings": [],
+  "_required_fields": [
+    "carry_forward.split_metadata.split_reason",
+    "carry_forward.dependency_policy.policy"
+  ],
+  "_checksum": "859bfc5eda2ad9f6"
+}

@@ -1,0 +1,72 @@
+{
+  "sd_id": "SD-VISION-V2-003",
+  "sd_title": "Vision V2: EVA Orchestration Layer",
+  "parent_sd_id": "SD-VISION-V2-000",
+  "generated_at": "2025-12-14T01:26:16.250Z",
+  "operator": "Chairman",
+  "carry_forward": {
+    "version": "1.0",
+    "lineage": {
+      "root_sd_id": "SD-VISION-V2-000",
+      "ancestor_chain": [
+        "SD-VISION-V2-000"
+      ],
+      "from_parent": "SD-VISION-V2-000",
+      "split_depth": 1
+    },
+    "split_metadata": {
+      "split_date": "2025-12-14",
+      "split_reason": "Isolated EVA orchestration layer to enable focused agent coordination development"
+    },
+    "dependency_policy": {
+      "policy": "EDGES_REQUIRED",
+      "no_edges_reason": null,
+      "declared_dependencies": ["SD-VISION-V2-001", "SD-VISION-V2-004"]
+    },
+    "inherited_anchors": {
+      "anchors": [
+        {
+          "why": "EVA orchestration spec",
+          "path": "docs/vision/specs/04-eva-orchestration.md",
+          "spec": "04-eva-orchestration.md",
+          "sections": [
+            "all"
+          ]
+        }
+      ],
+      "source": "intersection",
+      "confirmed": true,
+      "note": "Intersection of parent (3) and child (1) anchors"
+    },
+    "inherited_provenance": {
+      "provenance": [
+        {
+          "why": "Audit trail for Dec-13 governance intake",
+          "date": "2025-12-13",
+          "path": "docs/governance/decisions/intake-dec-13-closure.md",
+          "artifact_type": "intake_closure"
+        }
+      ],
+      "source": "parent",
+      "note": "Inherited from parent at split time"
+    },
+    "inherited_context_closure": {
+      "declared_dependencies": [],
+      "note": "Populate during PRD creation"
+    },
+    "non_propagation": {
+      "prd_artifacts": "do_not_inherit",
+      "implementation_state": "do_not_inherit"
+    },
+    "validation_status": {
+      "last_validated": null,
+      "gates_passed": []
+    }
+  },
+  "_warnings": [],
+  "_required_fields": [
+    "carry_forward.split_metadata.split_reason",
+    "carry_forward.dependency_policy.policy"
+  ],
+  "_checksum": "4d2660e741c4d203"
+}
