@@ -166,10 +166,11 @@ async function validateDiscoveryGate(sdId) {
  * Get SD metadata
  */
 async function getSDMetadata(sdId) {
+  // Support both UUID and legacy_id lookups
   const { data: sd, error } = await supabase
     .from('strategic_directives_v2')
     .select('*')
-    .eq('id', sdId)
+    .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
     .single();
 
   if (error || !sd) {

@@ -73,10 +73,11 @@ async function getSDWorkflow(sdId) {
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
 
+  // Support both UUID and legacy_id lookups
   const { data: sd, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, title, sd_type, category, current_phase, status')
-    .eq('id', sdId)
+    .select('id, legacy_id, title, sd_type, category, current_phase, status')
+    .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
     .single();
 
   if (error || !sd) {
