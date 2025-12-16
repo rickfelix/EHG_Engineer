@@ -62,12 +62,82 @@ export class PlanToLeadExecutor extends BaseExecutor {
     gates.push({
       name: 'PREREQUISITE_HANDOFF_CHECK',
       validator: async (ctx) => {
-        console.log('\n🔐 PREREQUISITE CHECK: EXEC-TO-PLAN Handoff Required');
+        console.log('\n🔐 PREREQUISITE CHECK: EXEC-TO-PLAN Handoff');
         console.log('-'.repeat(50));
 
-        // Query for an accepted EXEC-TO-PLAN handoff for this SD
         // Use UUID (ctx.sd.id) not legacy_id (ctx.sdId) - handoffs are stored by UUID
         const sdUuid = ctx.sd?.id || ctx.sdId;
+
+        // PARENT SD DETECTION: Parent orchestrator SDs don't have their own EXEC phase
+        // Their completion is defined by all children completing, not their own execution.
+        const { data: childSDs, error: childError } = await this.supabase
+          .from('strategic_directives_v2')
+          .select('id, legacy_id, status')
+          .eq('parent_sd_id', sdUuid);
+
+        if (!childError && childSDs && childSDs.length > 0) {
+          console.log(`   ℹ️  Parent SD detected with ${childSDs.length} children`);
+
+          const completedChildren = childSDs.filter(c => c.status === 'completed');
+          const incompleteChildren = childSDs.filter(c => c.status !== 'completed');
+
+          console.log(`   ✅ Completed: ${completedChildren.length}/${childSDs.length}`);
+
+          if (incompleteChildren.length > 0) {
+            console.log('   ❌ Incomplete children:');
+            incompleteChildren.forEach(c => {
+              console.log(`      - ${c.legacy_id || c.id}: ${c.status}`);
+            });
+            return {
+              passed: false,
+              score: 0,
+              max_score: 100,
+              issues: [`Parent SD has ${incompleteChildren.length} incomplete children`],
+              warnings: [],
+              remediation: `Complete all child SDs before finalizing parent: ${incompleteChildren.map(c => c.legacy_id || c.id).join(', ')}`
+            };
+          }
+
+          console.log('   ✅ All children completed - parent SD ready for final approval');
+          return {
+            passed: true,
+            score: 100,
+            max_score: 100,
+            issues: [],
+            warnings: [],
+            details: {
+              is_parent_sd: true,
+              total_children: childSDs.length,
+              completed_children: completedChildren.length,
+              workflow_modification: 'Parent SD - completion based on children'
+            }
+          };
+        }
+
+        // SD-TYPE-AWARE: Infrastructure/documentation SDs can skip EXEC-TO-PLAN
+        // This aligns with the workflow recommendation that marks EXEC-TO-PLAN as OPTIONAL
+        // for non-code SDs. The LEO Protocol allows modified workflows based on SD type.
+        const isInfrastructure = isInfrastructureSDSync(ctx.sd);
+        if (isInfrastructure) {
+          console.log('   ℹ️  SD Type: infrastructure/documentation');
+          console.log('   ✅ EXEC-TO-PLAN is OPTIONAL for this SD type');
+          console.log('   📝 Modified LEO workflow allows direct PLAN-TO-LEAD');
+          return {
+            passed: true,
+            score: 100,
+            max_score: 100,
+            issues: [],
+            warnings: ['EXEC-TO-PLAN skipped - infrastructure SD type uses modified workflow'],
+            details: {
+              sd_type: ctx.sd?.sd_type || ctx.sd?.category,
+              workflow_modification: 'EXEC-TO-PLAN optional for infrastructure'
+            }
+          };
+        }
+
+        console.log('   SD Type: feature/standard - EXEC-TO-PLAN required');
+
+        // Query for an accepted EXEC-TO-PLAN handoff for this SD
         const { data: execToPlanHandoff, error } = await this.supabase
           .from('sd_phase_handoffs')
           .select('id, status, created_at, validation_score')
@@ -310,6 +380,37 @@ export class PlanToLeadExecutor extends BaseExecutor {
       validator: async (ctx) => {
         console.log('\n🔒 GATE 5: Git Commit Enforcement');
         console.log('-'.repeat(50));
+
+        // PARENT SD DETECTION: Parent orchestrator SDs don't have their own commits
+        // Their implementation work is tracked via children's commits
+        const sdUuid = ctx.sd?.id || ctx.sdId;
+        const { data: childSDs } = await this.supabase
+          .from('strategic_directives_v2')
+          .select('id, legacy_id, status')
+          .eq('parent_sd_id', sdUuid);
+
+        if (childSDs && childSDs.length > 0) {
+          const completedChildren = childSDs.filter(c => c.status === 'completed');
+          console.log(`   ℹ️  Parent orchestrator SD detected with ${childSDs.length} children`);
+          console.log(`   ✅ Completed children: ${completedChildren.length}/${childSDs.length}`);
+          console.log('   📝 Skipping commit enforcement - children have their own commits');
+          console.log('   📝 Parent orchestrators coordinate; children implement');
+
+          return {
+            passed: true,
+            score: 100,
+            max_score: 100,
+            issues: [],
+            warnings: ['Parent orchestrator SD - commits tracked via children'],
+            details: {
+              is_parent_sd: true,
+              child_count: childSDs.length,
+              completed_children: completedChildren.length,
+              workflow_modification: 'Commit enforcement via children, not parent'
+            }
+          };
+        }
+
         console.log(`   Target repository: ${appPath}`);
 
         // SD-VENTURE-STAGE0-UI-001: Pass legacy_id for commit search
@@ -630,6 +731,60 @@ export class PlanToLeadExecutor extends BaseExecutor {
       issues: [],
       warnings: []
     };
+
+    // PARENT SD DETECTION: Check if this is an orchestrator SD
+    const { data: childSDs } = await this.supabase
+      .from('strategic_directives_v2')
+      .select('id, legacy_id, status')
+      .eq('parent_sd_id', sd.id);
+
+    const isParentSD = childSDs && childSDs.length > 0;
+    const allChildrenComplete = isParentSD && childSDs.every(c => c.status === 'completed');
+
+    // For parent SDs with all children complete, use modified validation
+    if (isParentSD && allChildrenComplete) {
+      console.log(`   ℹ️  Parent orchestrator SD: ${childSDs.length} children, all completed`);
+      console.log('   📝 Using modified validation (children completion = EXEC complete)');
+
+      // Parent SDs: PRD status check is relaxed - 'in_progress' is acceptable
+      // since the "work" is coordinating children, not implementing
+      if (prd.status === 'verification' || prd.status === 'completed' || prd.status === 'in_progress') {
+        validation.score += 30;
+      } else {
+        validation.issues.push(`PRD status is '${prd.status}', expected 'verification', 'completed', or 'in_progress' for parent SD`);
+      }
+
+      // Parent SDs: Children completion substitutes for EXEC-TO-PLAN
+      validation.score += 40;
+      validation.warnings.push(`Parent SD: ${childSDs.length} completed children substitutes for EXEC-TO-PLAN`);
+
+      // Parent SDs: User stories check (may not have any if work is in children)
+      const { data: userStories } = await this.supabase
+        .from('user_stories')
+        .select('id, status')
+        .eq('prd_id', prd.id);
+
+      if (!userStories || userStories.length === 0) {
+        // Parent SDs may not have direct user stories
+        validation.score += 30;
+        validation.warnings.push('Parent SD has no direct user stories (work tracked via children)');
+      } else {
+        const completedStories = userStories.filter(s =>
+          s.status === 'completed' || s.status === 'validated'
+        );
+        if (completedStories.length === userStories.length) {
+          validation.score += 30;
+        } else {
+          validation.warnings.push(`${completedStories.length}/${userStories.length} user stories completed`);
+          validation.score += Math.round(30 * (completedStories.length / userStories.length));
+        }
+      }
+
+      validation.complete = validation.score >= 70;
+      return validation;
+    }
+
+    // STANDARD VALIDATION for non-parent SDs
 
     // Check PRD status
     if (prd.status === 'verification' || prd.status === 'completed') {
