@@ -1,0 +1,21 @@
+{
+  "schema_version": "ehg_master_recommendations_v1.0",
+  "run_date": "2025-12-13",
+  "id_format": "REC-20251213-FF-SS-KK-II",
+  "defaults": {
+    "include_next_steps": true,
+    "include_concrete_artifacts": false,
+    "dedupe_similarity_threshold": 0.86
+  },
+  "redundancy_thresholds": {
+    "medium": 0.22,
+    "high": 0.32
+  },
+  "calibration_plan": {
+    "sample_n": 10,
+    "random_seed": "dec13-v1-calibration",
+    "notes": "Review 10 sampled recs, tune thresholds once, then freeze."
+  }
+}
+
+

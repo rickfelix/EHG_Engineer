@@ -600,8 +600,9 @@ async function validateExecutiveApproval(sd_id, gateResults, validation, supabas
   console.log('\n   [D2] Quality Thresholds...');
 
   // Check if retrospective exists
+  // NOTE: Table is 'retrospectives' not 'sd_retrospectives'
   const { data: retroData } = await supabase
-    .from('sd_retrospectives')
+    .from('retrospectives')
     .select('id, quality_score')
     .eq('sd_id', sd_id)
     .single();
