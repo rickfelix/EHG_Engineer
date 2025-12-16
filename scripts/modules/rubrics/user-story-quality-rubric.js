@@ -392,12 +392,13 @@ SD Link: ${userStory.sd_id || 'Not linked'}`;
   async validateUserStoryQuality(userStory, prd = null, sd = null) {
     try {
       // Fetch SD context if not provided but user story has SD link
+      // SYSTEMIC FIX: Column name is 'id', not 'sd_id' in strategic_directives_v2
       if (!sd && userStory.sd_id) {
         try {
           const { data: sdData } = await this.supabase
             .from('strategic_directives_v2')
-            .select('id, sd_id, title, sd_type, scope')
-            .eq('sd_id', userStory.sd_id)
+            .select('id, title, sd_type, scope')
+            .eq('id', userStory.sd_id)
             .single();
 
           sd = sdData;

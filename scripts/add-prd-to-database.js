@@ -300,8 +300,8 @@ ${formatArrayField(sd.success_criteria, 'success criterion')}
 ### Key Changes
 ${formatArrayField(sd.key_changes, 'key change')}
 
-### Expected Outcomes
-${formatArrayField(sd.expected_outcomes, 'expected outcome')}
+### Success Metrics
+${formatArrayField(sd.success_metrics, 'success metric')}
 
 ### Dependencies
 ${formatArrayField(sd.dependencies, 'dependency')}
@@ -759,7 +759,7 @@ CREATE TABLE IF NOT EXISTS product_requirements_v2 (
     // Fetch ALL SD fields for comprehensive PRD generation
     const { data: sdData, error: sdError } = await supabase
       .from('strategic_directives_v2')
-      .select('id, legacy_id, scope, description, strategic_objectives, title, sd_type, category, metadata, target_application, priority, status, rationale, success_criteria, key_changes, expected_outcomes, dependencies, risks')
+      .select('id, legacy_id, scope, description, strategic_objectives, title, sd_type, category, metadata, target_application, priority, status, rationale, success_criteria, key_changes, dependencies, risks, strategic_intent, success_metrics')
       .eq(queryField, sdId)
       .single();
 
@@ -1037,8 +1037,8 @@ ${formatArrayField(sdData.success_criteria, 'criterion')}
 **Key Changes**:
 ${formatArrayField(sdData.key_changes, 'change')}
 
-**Expected Outcomes**:
-${formatArrayField(sdData.expected_outcomes, 'outcome')}
+**Success Metrics**:
+${formatArrayField(sdData.success_metrics, 'metric')}
 
 **Dependencies**:
 ${formatArrayField(sdData.dependencies, 'dependency')}
@@ -1150,8 +1150,8 @@ ${formatArrayField(sdData.success_criteria, 'criterion')}
 **Key Changes**:
 ${formatArrayField(sdData.key_changes, 'change')}
 
-**Expected Outcomes**:
-${formatArrayField(sdData.expected_outcomes, 'outcome')}
+**Success Metrics**:
+${formatArrayField(sdData.success_metrics, 'metric')}
 
 **Dependencies**:
 ${formatArrayField(sdData.dependencies, 'dependency')}

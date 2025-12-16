@@ -246,8 +246,8 @@ export class AIQualityEvaluator {
       // Calculate weighted score
       const weightedScore = this.calculateWeightedScore(scores);
 
-      // Generate feedback (pass criteria config to enable weight-based blocking logic)
-      const feedback = this.generateFeedback(scores, this.rubricConfig.criteria);
+      // Generate feedback (pass criteria config and sd for SD-type-aware blocking logic)
+      const feedback = this.generateFeedback(scores, this.rubricConfig.criteria, sd);
 
       // Get dynamic pass threshold based on sd_type
       const threshold = this.getPassThreshold(this.rubricConfig.contentType, sd);
@@ -645,10 +645,16 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
    *
    * Phase 1 (ADVISORY): Calibrating thresholds based on empirical data
    */
-  generateFeedback(scores, criteria = null) {
+  generateFeedback(scores, criteria = null, sd = null) {
     const required = [];
     const recommended = [];
     const improvements = []; // NEW: Actionable improvement suggestions
+
+    // SD-TYPE-AWARE BLOCKING THRESHOLDS (Systemic Fix v1.1)
+    // Infrastructure/documentation SDs get more lenient blocking thresholds
+    // This aligns blocking behavior with the already SD-type-aware pass thresholds
+    const sdType = sd?.sd_type || 'feature';
+    const blockingConfig = this._getBlockingThresholds(sdType);
 
     // Build weight lookup from criteria config
     const weightLookup = {};
@@ -685,11 +691,11 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
         continue;
       }
 
-      // For medium+ weight criteria (>=10%)
-      if (score < 3 && weight >= 0.10) {
+      // For medium+ weight criteria (>=10%) - SD-TYPE-AWARE BLOCKING
+      if (score < blockingConfig.severeThreshold && weight >= 0.10) {
         // Severe failure on medium+ weight criteria - blocking
         required.push(`${criterionName}: Needs significant improvement (${score}/10) - ${reasoning}`);
-      } else if (score < 5 && weight >= 0.15) {
+      } else if (score < blockingConfig.majorThreshold && weight >= 0.15) {
         // Major criterion failure - blocking only for high-weight criteria
         required.push(`${criterionName}: Needs significant improvement (${score}/10) - ${reasoning}`);
       } else if (score < 5) {
@@ -702,6 +708,36 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
     }
 
     return { required, recommended, improvements };
+  }
+
+  /**
+   * Get SD-type-aware blocking thresholds for generateFeedback
+   * Aligns blocking behavior with pass thresholds by SD type
+   *
+   * @param {string} sdType - SD type (feature, infrastructure, documentation, etc.)
+   * @returns {Object} { severeThreshold, majorThreshold }
+   */
+  _getBlockingThresholds(sdType) {
+    // SD-type-aware blocking thresholds
+    // More lenient for infrastructure/documentation SDs
+    const thresholds = {
+      // Documentation SDs: Very lenient - almost never block on criterion scores
+      documentation: { severeThreshold: 1, majorThreshold: 2 },
+
+      // Infrastructure SDs: Lenient - only block on truly severe failures
+      infrastructure: { severeThreshold: 2, majorThreshold: 3 },
+
+      // Feature SDs: Standard thresholds (default behavior)
+      feature: { severeThreshold: 3, majorThreshold: 5 },
+
+      // Database SDs: Moderate
+      database: { severeThreshold: 3, majorThreshold: 4 },
+
+      // Security SDs: Strict - maintain high standards
+      security: { severeThreshold: 3, majorThreshold: 5 }
+    };
+
+    return thresholds[sdType] || thresholds.feature;
   }
 
   /**
