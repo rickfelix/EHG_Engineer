@@ -13,7 +13,7 @@
  */
 
 import { createSupabaseServiceClient } from './lib/supabase-connection.js';
-import { randomUUID } from 'crypto';
+// SD ID Schema Cleanup: Removed uuid_id generation - column is deprecated
 
 const SDS = [
   // ═══════════════════════════════════════════════════════════════════════════
@@ -22,7 +22,6 @@ const SDS = [
   {
     id: 'SD-FOUNDATION-V3-000',
     sd_key: 'SD-FOUNDATION-V3-000',
-    uuid_id: randomUUID(),
     title: 'Foundation V3: Vision V2 Stabilization & Completion',
     description: `Post-Vision V2 foundation work to stabilize the Chairman's Operating System.
 
@@ -105,7 +104,6 @@ OUT OF SCOPE:
   {
     id: 'SD-FOUNDATION-V3-001',
     sd_key: 'SD-FOUNDATION-V3-001',
-    uuid_id: randomUUID(),
     title: 'Data Integrity & Schema Remediation',
     description: `Fix UUID/VARCHAR ID mismatch in strategic_directives_v2 and establish
 canonical column names for all Vision V2 tables.
@@ -164,7 +162,6 @@ OUT OF SCOPE:
   {
     id: 'SD-FOUNDATION-V3-002',
     sd_key: 'SD-FOUNDATION-V3-002',
-    uuid_id: randomUUID(),
     title: 'Legacy Protocol Cleanup (The Exorcism)',
     description: `Remove all Stage26-Stage52 components and routes from the codebase.
 The 25-stage protocol is canonical; legacy 52-stage code creates confusion.
@@ -229,7 +226,6 @@ OUT OF SCOPE:
   {
     id: 'SD-FOUNDATION-V3-003',
     sd_key: 'SD-FOUNDATION-V3-003',
-    uuid_id: randomUUID(),
     title: 'QA System Resurrection',
     description: `Fix broken integration test runner. Current errors:
 - docFindings.map is not a function
@@ -290,7 +286,6 @@ OUT OF SCOPE:
   {
     id: 'SD-FOUNDATION-V3-004',
     sd_key: 'SD-FOUNDATION-V3-004',
-    uuid_id: randomUUID(),
     title: 'Contract Reconciliation (DB ↔ App)',
     description: `Create canonical mapping for all Vision V2 tables/columns/views.
 Update all API endpoints, state machines, and UI hooks to match.
@@ -360,7 +355,6 @@ OUT OF SCOPE:
   {
     id: 'SD-FOUNDATION-V3-005',
     sd_key: 'SD-FOUNDATION-V3-005',
-    uuid_id: randomUUID(),
     title: 'EVA Directive Execution Engine',
     description: `Implement the backend handler for chairman directives.
 Currently POST /api/v2/chairman/directive creates a row and returns
@@ -427,7 +421,6 @@ OUT OF SCOPE:
   {
     id: 'SD-FOUNDATION-V3-006',
     sd_key: 'SD-FOUNDATION-V3-006',
-    uuid_id: randomUUID(),
     title: '25-Stage Crew Mapping Completion',
     description: `Extend STAGE_CREW_MAP in evaTaskContracts.ts to support all 25 stages.
 Currently only stages 1-6 are mapped - system stalls after stage 6.
@@ -488,7 +481,6 @@ OUT OF SCOPE:
   {
     id: 'SD-FOUNDATION-V3-007',
     sd_key: 'SD-FOUNDATION-V3-007',
-    uuid_id: randomUUID(),
     title: 'Chairman Dashboard E2E Test Suite',
     description: `Create comprehensive Playwright E2E tests for the Chairman's Glass Cockpit.
 Cover the full user journey: create venture → decision → advance → evidence.
@@ -550,7 +542,6 @@ OUT OF SCOPE:
   {
     id: 'SD-FOUNDATION-V3-008',
     sd_key: 'SD-FOUNDATION-V3-008',
-    uuid_id: randomUUID(),
     title: 'Four Buckets Decision Evidence End-to-End',
     description: `Wire chairman decision evidence from real data sources:
 - venture_artifacts.epistemic_* fields

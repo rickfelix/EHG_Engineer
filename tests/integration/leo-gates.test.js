@@ -81,7 +81,8 @@ describe('LEO Gates Integration Tests', () => {
     }
 
     testSDLegacyId = sd.id;
-    testSDUUID = sd.uuid_id;
+    // SD ID Schema Cleanup: uuid_id column is deprecated, use sd.id
+    testSDUUID = sd.id; // Using id for compatibility with test assertions
 
     // Create test PRD with all required fields
     // NOTE: Supabase client automatically converts JS objects/arrays to JSONB
@@ -96,7 +97,7 @@ describe('LEO Gates Integration Tests', () => {
       .insert({
         id: randomUUID(),
         sd_id: testSDLegacyId,
-        sd_uuid: testSDUUID,
+        // SD ID Schema Cleanup: sd_uuid column was DROPPED (2025-12-12)
         title: 'Test PRD for LEO Gates',
         executive_summary: 'Test PRD for LEO gate validation',
         status: 'draft',

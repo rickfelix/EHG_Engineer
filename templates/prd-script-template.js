@@ -49,9 +49,10 @@ async function createPRD() {
 
   console.log('\n1️⃣  Fetching Strategic Directive...');
 
+  // SD ID Schema Cleanup: Use SD.id directly (uuid_id is deprecated)
   const { data: sdData, error: sdError } = await supabase
     .from('strategic_directives_v2')
-    .select('uuid_id, id, title, category, priority')
+    .select('id, title, category, priority')
     .eq('id', SD_ID)
     .single();
 
@@ -63,7 +64,7 @@ async function createPRD() {
   }
 
   console.log(`✅ Found SD: ${sdData.title}`);
-  console.log(`   UUID: ${sdData.uuid_id}`);
+  console.log(`   ID: ${sdData.id}`);
   console.log(`   Category: ${sdData.category}`);
   console.log(`   Priority: ${sdData.priority}`);
 
@@ -77,9 +78,11 @@ async function createPRD() {
 
   const prdData = {
     // Primary Keys & Foreign Keys (REQUIRED)
+    // SD ID Schema Cleanup: sd_uuid column was DROPPED (2025-12-12)
+    // sd_id is now the canonical FK to strategic_directives_v2.id
     id: prdId,
-    sd_uuid: sdData.uuid_id,        // CRITICAL: Required for handoff validation
-    directive_id: SD_ID,             // Backward compatibility
+    sd_id: SD_ID,                   // FK to strategic_directives_v2.id (canonical)
+    directive_id: SD_ID,            // Backward compatibility
 
     // Core Metadata (REQUIRED)
     title: PRD_TITLE,
@@ -406,7 +409,7 @@ async function createPRD() {
   console.log('\n✅ PRD created successfully!');
   console.log('='.repeat(70));
   console.log(`   PRD ID: ${insertedPRD.id}`);
-  console.log(`   SD UUID: ${insertedPRD.sd_uuid}`);
+  console.log(`   SD ID: ${insertedPRD.sd_id || insertedPRD.sd_uuid}`);
   console.log(`   Title: ${insertedPRD.title}`);
   console.log(`   Status: ${insertedPRD.status}`);
   console.log(`   Phase: ${insertedPRD.phase}`);

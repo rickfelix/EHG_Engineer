@@ -72,7 +72,8 @@ describe('Gate 1: Unit Test Integration - Integration Tests', () => {
     }
 
     testSDLegacyId = sd.id;
-    testSDUUID = sd.uuid_id;
+    // SD ID Schema Cleanup: uuid_id column is deprecated, use sd.id
+    testSDUUID = sd.id; // Using id for compatibility with test assertions
 
     // Create test PRD
     const prdId = `PRD-TEST-GATE1-${timestamp}`;
@@ -81,7 +82,7 @@ describe('Gate 1: Unit Test Integration - Integration Tests', () => {
       .insert({
         id: prdId,
         sd_id: testSDLegacyId,
-        sd_uuid: testSDUUID,
+        // SD ID Schema Cleanup: sd_uuid column was DROPPED (2025-12-12)
         title: 'Test PRD for Gate 1',
         executive_summary: 'Test PRD for Gate 1 unit test integration validation',
         status: 'draft',

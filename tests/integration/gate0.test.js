@@ -75,7 +75,8 @@ describe('Gate 0: Static Analysis Verification - Integration Tests', () => {
     }
 
     testSDLegacyId = sd.id;
-    testSDUUID = sd.uuid_id;
+    // SD ID Schema Cleanup: uuid_id column is deprecated, use sd.id
+    testSDUUID = sd.id; // Using id for compatibility with test assertions
 
     // Create test PRD
     const prdId = `PRD-TEST-GATE0-${timestamp}`;
@@ -84,7 +85,7 @@ describe('Gate 0: Static Analysis Verification - Integration Tests', () => {
       .insert({
         id: prdId,
         sd_id: testSDLegacyId,
-        sd_uuid: testSDUUID,
+        // SD ID Schema Cleanup: sd_uuid column was DROPPED (2025-12-12)
         title: 'Test PRD for Gate 0',
         executive_summary: 'Test PRD for Gate 0 static analysis validation',
         status: 'draft',

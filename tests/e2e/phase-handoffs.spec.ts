@@ -70,8 +70,9 @@ test.describe('Phase Handoff System E2E Tests', () => {
       throw new Error(`Failed to create test SD: ${sdError.message}`);
     }
 
-    testSDUuid = sd.uuid_id;
-    console.log(`Created test SD: ${testSDId} (UUID: ${testSDUuid})`);
+    // SD ID Schema Cleanup: uuid_id column is deprecated, use sd.id
+    testSDUuid = sd.id;
+    console.log(`Created test SD: ${testSDId} (ID: ${testSDUuid})`);
   });
 
   test.afterAll(async () => {
@@ -458,8 +459,8 @@ test.describe('Phase Handoff System E2E Tests', () => {
       await supabase
         .from('product_requirements_v2')
         .insert({
-          prd_id: noDocsPRDId,
-          sd_uuid: sd.uuid_id,
+          id: noDocsPRDId, // Fixed: use 'id' not 'prd_id'
+          sd_id: sd.id, // SD ID Schema Cleanup: sd_uuid column was DROPPED (2025-12-12)
           title: 'PRD without docs',
           description: 'Test PRD',
           status: 'implemented',
