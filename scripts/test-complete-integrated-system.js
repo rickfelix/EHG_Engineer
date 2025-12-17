@@ -17,14 +17,15 @@ import fs from 'fs';
 import path from 'path';
 
 // Import all components
-import DocumentationSubAgentV2 from '../lib/agents/documentation-sub-agent-v2';
-import TestingSubAgentV2 from '../lib/agents/testing-sub-agent-v2';
-import APISubAgent from '../lib/agents/api-sub-agent';
-import DependencySubAgent from '../lib/agents/dependency-sub-agent';
-import { SharedIntelligenceHub, getInstance: getHubInstance } from '../lib/agents/shared-intelligence-hub';
-import PriorityEngine from '../lib/agents/priority-engine';
-import AutoFixEngine from '../lib/agents/auto-fix-engine';
-import { TypeMapper, getInstance: getTypeMapperInstance } from '../lib/agents/type-mapping';
+// SD-FOUNDATION-V3-003: Updated to use existing V1 agents (V2 versions don't exist)
+import SecuritySubAgent from '../lib/agents/security-sub-agent.js';  // Replaces DocumentationSubAgentV2
+import TestingSubAgent from '../lib/agents/testing-sub-agent.js';   // Replaces TestingSubAgentV2
+import APISubAgent from '../lib/agents/api-sub-agent.js';
+import DependencySubAgent from '../lib/agents/dependency-sub-agent.js';
+import { SharedIntelligenceHub, getInstance as getHubInstance } from '../lib/agents/shared-intelligence-hub.js';
+import PriorityEngine from '../lib/agents/priority-engine.js';
+import AutoFixEngine from '../lib/agents/auto-fix-engine.js';
+import { TypeMapper, getInstance as getTypeMapperInstance } from '../lib/agents/type-mapping.js';
 
 console.log('🧪 LEO Protocol Complete Integrated System Test');
 console.log('Testing all 4 new sub-agents with full improvements\n');
@@ -47,8 +48,9 @@ async function testCompleteSystem() {
     const typeMapper = getTypeMapperInstance();
     
     // Initialize agents
-    const docAgent = new DocumentationSubAgentV2();
-    const testAgent = new TestingSubAgentV2();
+    // SD-FOUNDATION-V3-003: Using SecuritySubAgent instead of non-existent DocumentationSubAgentV2
+    const securityAgent = new SecuritySubAgent();
+    const testAgent = new TestingSubAgent();
     const apiAgent = new APISubAgent();
     const depAgent = new DependencySubAgent();
     
@@ -57,29 +59,29 @@ async function testCompleteSystem() {
     // Test each agent individually
     console.log('🔍 Testing individual agents...\n');
     
-    // 1. Documentation Agent Test
-    console.log('📚 Testing Documentation Sub-Agent...');
+    // 1. Security Agent Test (SD-FOUNDATION-V3-003: Replaced non-existent DocumentationSubAgentV2)
+    console.log('🔒 Testing Security Sub-Agent...');
     try {
-      const docResult = await docAgent.execute('/mnt/c/_EHG/EHG_Engineer');
-      const docFindings = docResult.findings || [];
-      results.agents.documentation = {
-        findings: docFindings.length,
-        types: [...new Set(docFindings.map(f => f.type))],
-        confidence: docFindings.length > 0 ? (docFindings.reduce((sum, f) => sum + f.confidence, 0) / docFindings.length).toFixed(2) : 0,
-        score: docResult.score,
-        status: docResult.status
+      const securityResult = await securityAgent.execute('/mnt/c/_EHG/EHG_Engineer');
+      const securityFindings = securityResult.findings || [];
+      results.agents.security = {
+        findings: securityFindings.length,
+        types: [...new Set(securityFindings.map(f => f.type))],
+        confidence: securityFindings.length > 0 ? (securityFindings.reduce((sum, f) => sum + f.confidence, 0) / securityFindings.length).toFixed(2) : 0,
+        score: securityResult.score,
+        status: securityResult.status
       };
-      console.log(`  Found ${docFindings.length} documentation findings (Score: ${docResult.score}, Status: ${docResult.status})`);
-      
+      console.log(`  Found ${securityFindings.length} security findings (Score: ${securityResult.score}, Status: ${securityResult.status})`);
+
       // Share findings with hub
-      docFindings.forEach(finding => hub.shareFinding(finding, 'documentation'));
-      
+      securityFindings.forEach(finding => hub.shareFinding('security', finding));
+
     } catch (error) {
-      results.errors.push(`Documentation Agent: ${error.message}`);
+      results.errors.push(`Security Agent: ${error.message}`);
       console.log(`  ❌ Error: ${error.message}`);
     }
 
-    // 2. Testing Agent Test
+    // 2. Testing Agent Test (SD-FOUNDATION-V3-003: Using V1 TestingSubAgent)
     console.log('🧪 Testing Testing Sub-Agent...');
     try {
       const testResult = await testAgent.execute('/mnt/c/_EHG/EHG_Engineer');
@@ -92,10 +94,10 @@ async function testCompleteSystem() {
         status: testResult.status
       };
       console.log(`  Found ${testFindings.length} testing findings (Score: ${testResult.score}, Status: ${testResult.status})`);
-      
-      // Share findings with hub
-      testFindings.forEach(finding => hub.shareFinding(finding, 'testing'));
-      
+
+      // Share findings with hub (SD-FOUNDATION-V3-003: Fixed argument order - agentName first)
+      testFindings.forEach(finding => hub.shareFinding('testing', finding));
+
     } catch (error) {
       results.errors.push(`Testing Agent: ${error.message}`);
       console.log(`  ❌ Error: ${error.message}`);
@@ -114,10 +116,10 @@ async function testCompleteSystem() {
         status: apiResult.status
       };
       console.log(`  Found ${apiFindings.length} API findings (Score: ${apiResult.score}, Status: ${apiResult.status})`);
-      
-      // Share findings with hub
-      apiFindings.forEach(finding => hub.shareFinding(finding, 'api'));
-      
+
+      // Share findings with hub (SD-FOUNDATION-V3-003: Fixed argument order - agentName first)
+      apiFindings.forEach(finding => hub.shareFinding('api', finding));
+
     } catch (error) {
       results.errors.push(`API Agent: ${error.message}`);
       console.log(`  ❌ Error: ${error.message}`);
@@ -136,10 +138,10 @@ async function testCompleteSystem() {
         status: depResult.status
       };
       console.log(`  Found ${depFindings.length} dependency findings (Score: ${depResult.score}, Status: ${depResult.status})`);
-      
-      // Share findings with hub
-      depFindings.forEach(finding => hub.shareFinding(finding, 'dependencies'));
-      
+
+      // Share findings with hub (SD-FOUNDATION-V3-003: Fixed argument order - agentName first)
+      depFindings.forEach(finding => hub.shareFinding('dependencies', finding));
+
     } catch (error) {
       results.errors.push(`Dependency Agent: ${error.message}`);
       console.log(`  ❌ Error: ${error.message}`);

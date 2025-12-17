@@ -121,7 +121,7 @@ async function createTestData() {
     .from('product_requirements_v2')
     .upsert({
       id: TEST_PRD_UUID,
-      sd_uuid: sd.uuid_id,
+      sd_id: sd.id, // SD ID Schema Cleanup: sd_uuid column was DROPPED (2025-12-12)
       title: 'Intelligent Workflow Test PRD',
       executive_summary: 'Test intelligent analysis with diverse risk profiles',
       functional_requirements: [

@@ -58,14 +58,15 @@ async function createTestData() {
     console.error('❌ Error creating SD:', sdError);
     return false;
   }
-  console.log(`✅ SD created: ${TEST_SD_ID} (UUID: ${sd.uuid_id})`);
+  // SD ID Schema Cleanup: uuid_id column is deprecated
+  console.log(`✅ SD created: ${TEST_SD_ID} (ID: ${sd.id})`);
 
   // 2. Create test PRD (using admin client to bypass RLS)
   const { data: prd, error: prdError } = await supabaseAdmin
     .from('product_requirements_v2')
     .upsert({
       id: TEST_PRD_UUID,
-      sd_uuid: sd.uuid_id,
+      sd_id: sd.id, // SD ID Schema Cleanup: sd_uuid column was DROPPED (2025-12-12)
       title: 'Customer Support Dashboard Redesign PRD',
       executive_summary: 'Consolidate support into unified dashboard',
       functional_requirements: [
