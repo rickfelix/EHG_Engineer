@@ -1,13 +1,71 @@
 {
-  "agents": {},
-  "integration": {},
+  "agents": {
+    "security": {
+      "findings": 165,
+      "types": [
+        "SENSITIVE_DATA_LOGGING",
+        "HARDCODED_SECRET",
+        "MISSING_AUTH_CHECK"
+      ],
+      "confidence": "0.81",
+      "score": 0,
+      "status": "CRITICAL"
+    },
+    "testing": {
+      "findings": 21,
+      "types": [
+        "LOW_TEST_COVERAGE",
+        "LOW_ASSERTION_DENSITY",
+        "CONSOLE_LOG_IN_TESTS",
+        "SKIPPED_TESTS",
+        "CRITICAL_FILES_UNTESTED",
+        "LOW_TEST_RATIO",
+        "TEST_PERFORMANCE_RECOMMENDATION"
+      ],
+      "confidence": "0.91",
+      "score": 3,
+      "status": "CRITICAL"
+    },
+    "api": {
+      "findings": 1,
+      "types": [
+        "NO_API_ENDPOINTS"
+      ],
+      "confidence": "0.90",
+      "score": 90,
+      "status": "EXCELLENT"
+    },
+    "dependencies": {
+      "findings": 7,
+      "types": [
+        "INCOMPLETE_PACKAGE_JSON",
+        "DEV_DEPENDENCIES_IN_PRODUCTION",
+        "MISSING_ENGINES_FIELD",
+        "MISSING_PROJECT_LICENSE",
+        "UNUSED_DEPENDENCIES",
+        "HEAVY_DEPENDENCY",
+        "OUTDATED_LOCK_FILE"
+      ],
+      "confidence": "0.86",
+      "score": 76,
+      "status": "GOOD"
+    }
+  },
+  "integration": {
+    "hub": {
+      "totalFindings": 0,
+      "correlations": 0,
+      "compoundInsights": 0,
+      "agents": []
+    }
+  },
   "fixes": {},
   "priorities": {},
   "errors": [
-    "Documentation Agent: docFindings.map is not a function",
-    "Testing Agent: testFindings.map is not a function",
-    "API Agent: apiFindings.map is not a function",
-    "Dependency Agent: depFindings.map is not a function",
-    "System Error: hub.getAllFindings is not a function"
+    "Security Agent: require is not defined",
+    "Testing Agent: require is not defined",
+    "API Agent: require is not defined",
+    "Dependency Agent: require is not defined",
+    "System Error: priorities.forEach is not a function"
   ]
 }
