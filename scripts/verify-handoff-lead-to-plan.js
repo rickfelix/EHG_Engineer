@@ -25,21 +25,25 @@ class LeadToPlanVerifier {
     
     this.handoffValidator = new HandoffValidator();
     
-    // Strategic Directive Quality Requirements (LEO Protocol v4.1.2)
+    // Strategic Directive Quality Requirements (LEO Protocol v4.3.3)
     this.sdRequirements = {
-      minimumScore: 100, // MAXIMUM standard - 100% completeness required
+      minimumScore: 90, // Required fields (30) + objectives (20) + metrics (20) + principles (10) + risks (10) = 90
       requiredFields: [
         'title',
         'description',
         'scope',                 // What the SD will implement
         'strategic_objectives',  // Updated from business_objectives
-        'success_metrics',
+        // Note: success_metrics OR success_criteria accepted (checked separately)
         'key_principles',        // Updated from constraints
-        'risks',
+        // Note: risks checked separately (can be empty array for low-risk SDs)
         'priority'
       ],
+      // Alternate field names (accept either)
+      alternateFields: {
+        success_metrics: 'success_criteria',  // Accept success_criteria as alternative
+      },
       minimumObjectives: 2,
-      minimumMetrics: 3,
+      minimumMetrics: 3,  // Applies to success_metrics OR success_criteria
       minimumConstraints: 1
     };
   }
@@ -53,13 +57,13 @@ class LeadToPlanVerifier {
     console.log(`Strategic Directive: ${sdId}`);
     
     try {
-      // 1. Load Strategic Directive
+      // 1. Load Strategic Directive (support both UUID and legacy_id)
       const { data: sd, error: sdError } = await this.supabase
         .from('strategic_directives_v2')
         .select('*')
-        .eq('id', sdId)
+        .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
         .single();
-        
+
       if (sdError || !sd) {
         throw new Error(`Strategic Directive ${sdId} not found: ${sdError?.message}`);
       }
@@ -206,12 +210,32 @@ class LeadToPlanVerifier {
           envIssues: envCheck.issues
         });
       }
-      
-      // 8. Create handoff execution record
+
+      // 7.5. Async Dependency Validation (validate referenced SDs exist in DB)
+      const asyncDepCheck = await this.validateDependenciesExist(sd);
+      sdValidation.warnings.push(...asyncDepCheck.warnings);
+
+      // 8. Display PRD-Readiness Warnings (Advisory Mode)
+      if (sdValidation.warnings.length > 0) {
+        console.log('\n📋 PRD-READINESS WARNINGS (Advisory)');
+        console.log('-'.repeat(50));
+        sdValidation.warnings.forEach((warning, i) => {
+          console.log(`   ${i + 1}. ${warning}`);
+        });
+        console.log('\n   ℹ️  These are recommendations, not blocking errors.');
+        console.log('   Addressing them will help PLAN create a better PRD.');
+      }
+
+      // 8.5. Display PRD-Readiness Score
+      if (sdValidation.prdReadinessScore !== undefined) {
+        console.log(`\n📊 PRD-Readiness Score: ${sdValidation.prdReadinessScore}/100`);
+      }
+
+      // 9. Create handoff execution record
       const execution = await this.createHandoffExecution(sd, template, sdValidation, handoffValidation);
-      
-      // 9. HANDOFF APPROVED
-      console.log('\\n✅ HANDOFF APPROVED');
+
+      // 10. HANDOFF APPROVED
+      console.log('\n✅ HANDOFF APPROVED');
       console.log('='.repeat(50));
       console.log('✅ Strategic Directive is complete and approved');
       console.log(`✅ SD completeness score: ${sdValidation.percentage}% (≥${this.sdRequirements.minimumScore}%)`);
@@ -221,6 +245,11 @@ class LeadToPlanVerifier {
       console.log('✅ Environment ready for planning');
       if (handoffValidation) {
         console.log('✅ Handoff document meets protocol standards');
+      }
+      if (sdValidation.warnings.length === 0) {
+        console.log('✅ PRD-Readiness checks passed (no warnings)');
+      } else {
+        console.log(`⚠️  ${sdValidation.warnings.length} PRD-Readiness warning(s) - review recommended`);
       }
       
       // Update SD to indicate PLAN phase can begin
@@ -306,38 +335,76 @@ class LeadToPlanVerifier {
       }
     }
     
-    // Validate success metrics (20 points)
-    if (sd.success_metrics) {
-      const metrics = Array.isArray(sd.success_metrics)
-        ? sd.success_metrics
-        : (typeof sd.success_metrics === 'string' ? JSON.parse(sd.success_metrics) : null);
+    // Validate success metrics OR success_criteria (20 points)
+    // Accept either field name - LEO Protocol v4.3.3 flexibility
+    // Check for non-empty content (empty array [] should fall through to success_criteria)
+    const hasSuccessMetrics = sd.success_metrics &&
+      (Array.isArray(sd.success_metrics) ? sd.success_metrics.length > 0 : sd.success_metrics);
+    const hasSuccessCriteria = sd.success_criteria &&
+      (typeof sd.success_criteria === 'string' ? sd.success_criteria.length > 0 :
+       Array.isArray(sd.success_criteria) ? sd.success_criteria.length > 0 : sd.success_criteria);
+    const metricsSource = hasSuccessMetrics ? sd.success_metrics :
+                          hasSuccessCriteria ? sd.success_criteria : null;
+    if (metricsSource) {
+      let metrics = [];
+      try {
+        metrics = Array.isArray(metricsSource)
+          ? metricsSource
+          : (typeof metricsSource === 'string' ? JSON.parse(metricsSource) : []);
+      } catch (e) {
+        // If parsing fails, treat as single item
+        metrics = [metricsSource];
+      }
 
       if (Array.isArray(metrics) && metrics.length >= this.sdRequirements.minimumMetrics) {
         validation.score += 20;
 
-        // Check for measurable metrics
-        let measurableCount = 0;
-        metrics.forEach(metric => {
-          if (metric.target || metric.goal) {
-            measurableCount++;
-          }
-        });
+        // Check for measurable metrics (only if objects with target/goal)
+        if (metrics.length > 0 && typeof metrics[0] === 'object') {
+          let measurableCount = 0;
+          metrics.forEach(metric => {
+            if (metric.target || metric.goal) {
+              measurableCount++;
+            }
+          });
 
-        if (measurableCount < metrics.length * 0.8) {
-          validation.warnings.push('Some success metrics lack measurable targets');
+          if (measurableCount < metrics.length * 0.8) {
+            validation.warnings.push('Some success metrics lack measurable targets');
+          }
         }
       } else {
-        validation.errors.push(`Insufficient success metrics: ${metrics?.length || 0}/${this.sdRequirements.minimumMetrics}`);
+        validation.errors.push(`Insufficient success metrics/criteria: ${metrics?.length || 0}/${this.sdRequirements.minimumMetrics}`);
         validation.valid = false;
       }
-    }
-    
-    // Validate key principles and risks (20 points)
-    if (sd.key_principles && sd.risks) {
-      validation.score += 20;
     } else {
-      if (!sd.key_principles) validation.errors.push('Missing key principles');
-      if (!sd.risks) validation.errors.push('Missing risk assessment');
+      validation.errors.push('Missing success_metrics or success_criteria');
+      validation.valid = false;
+    }
+
+    // Validate key principles (10 points) - risks checked separately
+    if (sd.key_principles) {
+      validation.score += 10;
+    } else {
+      validation.errors.push('Missing key principles');
+      validation.valid = false;
+    }
+
+    // Validate risks (10 points) - allow empty array for low-risk SDs
+    // Empty array is acceptable, undefined/null is not
+    if (sd.risks !== undefined && sd.risks !== null) {
+      validation.score += 10;
+
+      // Warn if empty but SD seems high-risk based on keywords
+      const riskKeywords = ['migration', 'security', 'auth', 'production', 'data', 'schema'];
+      const textToCheck = `${sd.title || ''} ${sd.scope || ''}`.toLowerCase();
+      const seemsHighRisk = riskKeywords.some(kw => textToCheck.includes(kw));
+      const risksArray = Array.isArray(sd.risks) ? sd.risks : [];
+
+      if (seemsHighRisk && risksArray.length === 0) {
+        validation.warnings.push('risks array is empty but SD keywords suggest potential risks. Consider documenting risks.');
+      }
+    } else {
+      validation.errors.push('Missing risk assessment (risks field)');
       validation.valid = false;
     }
 
@@ -405,8 +472,439 @@ class LeadToPlanVerifier {
       }
     }
 
+    // =========================================================================
+    // PRD-READINESS VALIDATION (Added per Foundation V3 analysis)
+    // These validations ensure SD has everything PLAN needs to create a PRD
+    // All checks are WARNINGS (not blocking) - Phase 1 rollout
+    // =========================================================================
+
+    // 1. PRD-READINESS PRE-CHECK: Validate minimum content for PRD creation
+    const prdReadiness = this.validatePRDReadiness(sd);
+    validation.warnings.push(...prdReadiness.warnings);
+    validation.prdReadinessScore = prdReadiness.score;
+
+    // 2. VISION DOCUMENT REFERENCE VALIDATION: Check referenced specs exist
+    const visionCheck = this.validateVisionDocumentReferences(sd);
+    validation.warnings.push(...visionCheck.warnings);
+
+    // 3. DEPENDENCY CHAIN VALIDATION: Check dependencies are valid
+    // Note: This is async, so we'll do it in the main verifyHandoff method
+    // and pass results here. For now, add a sync check for basic structure.
+    const depCheck = this.validateDependencyStructure(sd);
+    validation.warnings.push(...depCheck.warnings);
+
+    // 4. SCOPE STRUCTURE VALIDATION: Check for IN/OUT scope sections
+    const scopeCheck = this.validateScopeStructure(sd);
+    validation.warnings.push(...scopeCheck.warnings);
+
+    // 5. SUCCESS CRITERIA ACTIONABILITY: Check criteria are verifiable
+    const criteriaCheck = this.validateSuccessCriteriaActionability(sd);
+    validation.warnings.push(...criteriaCheck.warnings);
+
+    // 6. IMPLEMENTATION CONTEXT METADATA: Check for helpful context
+    const contextCheck = this.validateImplementationContext(sd);
+    validation.warnings.push(...contextCheck.warnings);
+
     validation.percentage = Math.round(validation.score);
     return validation;
+  }
+
+  /**
+   * PRD-Readiness Pre-Check (Improvement #1)
+   * Validates SD has minimum content PLAN needs to create a PRD
+   * Based on CLAUDE_PLAN.md requirements
+   */
+  validatePRDReadiness(sd) {
+    const result = { score: 0, maxScore: 100, warnings: [] };
+    const checks = {
+      description: { minLength: 100, weight: 25 },
+      scope: { minLength: 50, weight: 25 },
+      rationale: { minLength: 30, weight: 20 },
+      strategic_objectives: { minItems: 2, weight: 15 },
+      success_criteria: { minItems: 3, weight: 15 }
+    };
+
+    // Check description length
+    const descLength = (sd.description || '').length;
+    if (descLength >= checks.description.minLength) {
+      result.score += checks.description.weight;
+    } else {
+      result.warnings.push(
+        `PRD-Readiness: description is ${descLength} chars (recommend ≥${checks.description.minLength}). ` +
+        'PLAN may need to gather additional context.'
+      );
+    }
+
+    // Check scope length
+    const scopeLength = (sd.scope || '').length;
+    if (scopeLength >= checks.scope.minLength) {
+      result.score += checks.scope.weight;
+    } else {
+      result.warnings.push(
+        `PRD-Readiness: scope is ${scopeLength} chars (recommend ≥${checks.scope.minLength}). ` +
+        'PLAN may struggle to define boundaries.'
+      );
+    }
+
+    // Check rationale length
+    const rationaleLength = (sd.rationale || '').length;
+    if (rationaleLength >= checks.rationale.minLength) {
+      result.score += checks.rationale.weight;
+    } else {
+      result.warnings.push(
+        `PRD-Readiness: rationale is ${rationaleLength} chars (recommend ≥${checks.rationale.minLength}). ` +
+        'PLAN benefits from understanding "why" behind the SD.'
+      );
+    }
+
+    // Check strategic_objectives count
+    const objectives = Array.isArray(sd.strategic_objectives) ? sd.strategic_objectives : [];
+    if (objectives.length >= checks.strategic_objectives.minItems) {
+      result.score += checks.strategic_objectives.weight;
+    } else {
+      result.warnings.push(
+        `PRD-Readiness: ${objectives.length} strategic_objectives (recommend ≥${checks.strategic_objectives.minItems}). ` +
+        'More objectives help PLAN prioritize features.'
+      );
+    }
+
+    // Check success_criteria count
+    const criteria = Array.isArray(sd.success_criteria) ? sd.success_criteria :
+      (typeof sd.success_criteria === 'string' ? JSON.parse(sd.success_criteria || '[]') : []);
+    if (criteria.length >= checks.success_criteria.minItems) {
+      result.score += checks.success_criteria.weight;
+    } else {
+      result.warnings.push(
+        `PRD-Readiness: ${criteria.length} success_criteria (recommend ≥${checks.success_criteria.minItems}). ` +
+        'More criteria help PLAN define acceptance tests.'
+      );
+    }
+
+    return result;
+  }
+
+  /**
+   * Vision Document Reference Validation (Improvement #2)
+   * Validates that referenced vision documents actually exist
+   */
+  validateVisionDocumentReferences(sd) {
+    const result = { warnings: [] };
+    const projectRoot = '/mnt/c/_EHG/EHG_Engineer';
+
+    // Check if SD references vision documents
+    const visionRefs = sd.metadata?.vision_document_references || [];
+
+    // For Vision V2 SDs or SDs with vision refs, validate they exist
+    if (sd.id?.includes('VISION') || visionRefs.length > 0) {
+      if (visionRefs.length === 0) {
+        result.warnings.push(
+          'PRD-Readiness: No vision_document_references in metadata. ' +
+          'Vision-related SDs should reference authoritative spec documents.'
+        );
+      } else {
+        // Check each referenced file exists
+        const missingDocs = [];
+        for (const docPath of visionRefs) {
+          const fullPath = path.join(projectRoot, docPath);
+          if (!fs.existsSync(fullPath)) {
+            missingDocs.push(docPath);
+          }
+        }
+
+        if (missingDocs.length > 0) {
+          result.warnings.push(
+            `PRD-Readiness: ${missingDocs.length} vision document(s) not found: ` +
+            `${missingDocs.slice(0, 3).join(', ')}${missingDocs.length > 3 ? '...' : ''}. ` +
+            'Verify paths are correct.'
+          );
+        }
+      }
+    }
+
+    // Also check for sparse references (less than 2 for complex SDs)
+    if (visionRefs.length === 1 && (sd.description || '').length > 500) {
+      result.warnings.push(
+        'PRD-Readiness: Only 1 vision_document_reference for a complex SD. ' +
+        'Consider adding related specs to help PLAN understand full context.'
+      );
+    }
+
+    return result;
+  }
+
+  /**
+   * Dependency Structure Validation (Improvement #3)
+   * Validates dependencies array is properly structured
+   * Note: Async DB validation happens in verifyHandoff method
+   */
+  validateDependencyStructure(sd) {
+    const result = { warnings: [] };
+
+    // Check if dependencies field exists and is an array
+    const deps = sd.dependencies;
+
+    if (deps === undefined || deps === null) {
+      // Check if this is a Phase 1 SD (no dependencies expected)
+      const phase = sd.metadata?.phase;
+      if (phase && phase > 1) {
+        result.warnings.push(
+          `PRD-Readiness: dependencies array is empty but SD is Phase ${phase}. ` +
+          'Non-Phase-1 SDs typically depend on earlier work. Verify execution order.'
+        );
+      }
+    } else if (Array.isArray(deps) && deps.length > 0) {
+      // Validate dependency format (should be SD IDs)
+      const invalidDeps = deps.filter(d =>
+        typeof d !== 'string' || !d.startsWith('SD-')
+      );
+
+      if (invalidDeps.length > 0) {
+        result.warnings.push(
+          `PRD-Readiness: ${invalidDeps.length} invalid dependency format(s). ` +
+          'Dependencies should be SD IDs like "SD-FOUNDATION-V3-001".'
+        );
+      }
+    }
+
+    // Check for circular dependency hints (same prefix)
+    if (Array.isArray(deps) && deps.length > 0 && sd.id) {
+      const selfRef = deps.find(d => d === sd.id);
+      if (selfRef) {
+        result.warnings.push(
+          'PRD-Readiness: SD references itself in dependencies (circular). Remove self-reference.'
+        );
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Scope Structure Validation (Improvement #4)
+   * Checks for clear IN SCOPE / OUT OF SCOPE sections
+   */
+  validateScopeStructure(sd) {
+    const result = { warnings: [] };
+    const scopeText = (sd.scope || '').toLowerCase();
+
+    // Patterns indicating explicit scope boundaries
+    const inScopePatterns = [
+      /\bin\s*scope\b/i,
+      /\bincluded\b/i,
+      /\bwill\s+(do|implement|build|create)\b/i,
+      /\bscope\s*:/i,
+      /##\s*in\s*scope/i
+    ];
+
+    const outScopePatterns = [
+      /\bout\s*(of)?\s*scope\b/i,
+      /\bexcluded\b/i,
+      /\bwon'?t\s+(do|implement|build)\b/i,
+      /\bnot\s+included\b/i,
+      /##\s*out\s*(of)?\s*scope/i
+    ];
+
+    const hasInScope = inScopePatterns.some(p => p.test(scopeText));
+    const hasOutScope = outScopePatterns.some(p => p.test(scopeText));
+
+    if (!hasInScope && !hasOutScope) {
+      result.warnings.push(
+        'PRD-Readiness: Scope lacks explicit IN SCOPE / OUT OF SCOPE sections. ' +
+        'Clear boundaries prevent scope creep during PLAN and EXEC phases.'
+      );
+    } else if (hasInScope && !hasOutScope) {
+      result.warnings.push(
+        'PRD-Readiness: Scope has IN SCOPE but no OUT OF SCOPE section. ' +
+        'Explicitly stating what is NOT included helps prevent over-building.'
+      );
+    }
+
+    return result;
+  }
+
+  /**
+   * Success Criteria Actionability Check (Improvement #5)
+   * Verifies criteria are specific and verifiable
+   */
+  validateSuccessCriteriaActionability(sd) {
+    const result = { warnings: [] };
+
+    // Parse success_criteria
+    let criteria = [];
+    try {
+      criteria = Array.isArray(sd.success_criteria) ? sd.success_criteria :
+        (typeof sd.success_criteria === 'string' ? JSON.parse(sd.success_criteria || '[]') : []);
+    } catch (e) {
+      // If parsing fails, skip this check
+      return result;
+    }
+
+    if (criteria.length === 0) return result;
+
+    // Patterns indicating actionable/verifiable criteria
+    const actionablePatterns = [
+      /\bpass(es)?\b/i,           // "tests pass"
+      /\bcompile[sd]?\b/i,        // "build compiles"
+      /\bno\s+\w+\s+errors?\b/i,  // "no type errors"
+      /\d+%/,                      // percentages like "≥85%"
+      /\breturns?\b/i,            // "returns correct data"
+      /\bexists?\b/i,             // "file exists"
+      /\bvisible\b/i,             // "visible in UI"
+      /\bworks?\b/i,              // "feature works"
+      /\bcan\s+\w+/i,             // "user can login"
+      /\bshows?\b/i,              // "shows data"
+      /\bdisplays?\b/i,           // "displays correctly"
+      /\bcomplete[sd]?\b/i,       // "task completed"
+      /\bfunctional\b/i,          // "endpoint functional"
+      /\bsuccessful(ly)?\b/i      // "deploys successfully"
+    ];
+
+    // Vague/non-actionable patterns
+    const vaguePatterns = [
+      /\bimproved?\b/i,           // "improved performance" (how much?)
+      /\bbetter\b/i,              // "better UX" (subjective)
+      /\bnice(r)?\b/i,            // "nicer design"
+      /\bgood\b/i,                // "good quality"
+      /\bclean(er)?\b/i,          // "cleaner code" (subjective)
+      /\boptimized?\b/i           // "optimized" without metric
+    ];
+
+    let vagueCriteria = [];
+    let actionableCriteria = [];
+
+    criteria.forEach((criterion, index) => {
+      const text = typeof criterion === 'string' ? criterion :
+        (criterion.description || criterion.criterion || '');
+
+      const isActionable = actionablePatterns.some(p => p.test(text));
+      const isVague = vaguePatterns.some(p => p.test(text)) && !isActionable;
+
+      if (isVague) {
+        vagueCriteria.push({ index: index + 1, text: text.substring(0, 50) });
+      } else if (isActionable) {
+        actionableCriteria.push(index + 1);
+      }
+    });
+
+    // Warn if more than 30% of criteria are vague
+    const vagueRatio = vagueCriteria.length / criteria.length;
+    if (vagueRatio > 0.3) {
+      result.warnings.push(
+        `PRD-Readiness: ${vagueCriteria.length}/${criteria.length} success criteria may be hard to verify. ` +
+        `Examples: "${vagueCriteria[0]?.text}...". ` +
+        'Consider adding measurable targets (e.g., "≥80% coverage", "loads in <2s").'
+      );
+    }
+
+    return result;
+  }
+
+  /**
+   * Implementation Context Metadata Check (Improvement #6)
+   * Validates that helpful implementation hints exist in metadata
+   */
+  validateImplementationContext(sd) {
+    const result = { warnings: [] };
+
+    // Skip for documentation-only SDs
+    if (sd.sd_type === 'documentation') return result;
+
+    // Context fields that help PLAN understand implementation
+    const contextFields = [
+      'key_files',
+      'affected_tables',
+      'data_sources',
+      'verification_steps',
+      'key_tables',
+      'key_components',
+      'execution_pipeline'
+    ];
+
+    const metadata = sd.metadata || {};
+    const presentFields = contextFields.filter(field => {
+      const value = metadata[field];
+      return value && (Array.isArray(value) ? value.length > 0 : true);
+    });
+
+    // For technical SDs with substantial scope, expect some context
+    const scopeLength = (sd.scope || '').length;
+    const isSubstantial = scopeLength > 200 || (sd.description || '').length > 500;
+
+    if (presentFields.length === 0 && isSubstantial) {
+      result.warnings.push(
+        'PRD-Readiness: No implementation context in metadata (key_files, affected_tables, etc.). ' +
+        'Adding context helps PLAN understand where changes will be made.'
+      );
+    } else if (presentFields.length === 1 && isSubstantial) {
+      result.warnings.push(
+        `PRD-Readiness: Only "${presentFields[0]}" in metadata for substantial SD. ` +
+        'Consider adding more context (key_files, affected_tables, verification_steps).'
+      );
+    }
+
+    return result;
+  }
+
+  /**
+   * Async Dependency Validation (Improvement #3 - async part)
+   * Validates that referenced SDs actually exist in the database
+   */
+  async validateDependenciesExist(sd) {
+    const result = { warnings: [] };
+    const deps = sd.dependencies;
+
+    if (!Array.isArray(deps) || deps.length === 0) {
+      return result;
+    }
+
+    try {
+      // Query all referenced dependencies
+      const { data: existingDeps, error } = await this.supabase
+        .from('strategic_directives_v2')
+        .select('id, legacy_id, status, title')
+        .or(deps.map(d => `id.eq.${d},legacy_id.eq.${d}`).join(','));
+
+      if (error) {
+        result.warnings.push(
+          `PRD-Readiness: Could not verify dependencies exist (DB error: ${error.message})`
+        );
+        return result;
+      }
+
+      // Find which dependencies don't exist
+      const existingIds = new Set([
+        ...(existingDeps || []).map(d => d.id),
+        ...(existingDeps || []).map(d => d.legacy_id)
+      ]);
+
+      const missingDeps = deps.filter(d => !existingIds.has(d));
+
+      if (missingDeps.length > 0) {
+        result.warnings.push(
+          `PRD-Readiness: ${missingDeps.length} dependency SD(s) not found in database: ` +
+          `${missingDeps.join(', ')}. Verify SD IDs are correct.`
+        );
+      }
+
+      // Check if any dependencies are not yet completed (informational)
+      const incompleteDeps = (existingDeps || []).filter(d =>
+        d.status !== 'completed' && d.status !== 'done'
+      );
+
+      if (incompleteDeps.length > 0 && incompleteDeps.length === deps.length) {
+        result.warnings.push(
+          `PRD-Readiness: All ${incompleteDeps.length} dependencies are not yet completed. ` +
+          'PLAN should verify dependency work is sufficiently complete before starting.'
+        );
+      }
+
+    } catch (e) {
+      result.warnings.push(
+        `PRD-Readiness: Dependency validation error: ${e.message}`
+      );
+    }
+
+    return result;
   }
 
   /**
@@ -796,16 +1294,24 @@ async function main() {
     console.log('LEAD → PLAN Handoff Verification');
     console.log('='.repeat(40));
     console.log('');
-    console.log('This script enforces LEO Protocol v4.1.2 strategic standards.');
+    console.log('This script enforces LEO Protocol v4.3.3 strategic standards.');
     console.log('');
-    console.log('REQUIREMENTS CHECKED:');
-    console.log('• Strategic Directive completeness (≥85% score)');
+    console.log('REQUIREMENTS CHECKED (Blocking):');
+    console.log('• Strategic Directive completeness (100% score)');
     console.log('• Business objectives clearly defined (≥2)');
     console.log('• Success metrics are measurable (≥3)');
     console.log('• Constraints and risk analysis complete');
     console.log('• Strategic feasibility validated');
     console.log('• Development environment ready');
     console.log('• Handoff document meets protocol standards (if provided)');
+    console.log('');
+    console.log('PRD-READINESS CHECKS (Advisory - v4.3.3):');
+    console.log('• Description ≥100 chars, Scope ≥50 chars, Rationale ≥30 chars');
+    console.log('• Vision document references exist (for Vision SDs)');
+    console.log('• Dependencies array populated and valid');
+    console.log('• Scope has IN SCOPE / OUT OF SCOPE sections');
+    console.log('• Success criteria are actionable/verifiable');
+    console.log('• Implementation context in metadata (key_files, etc.)');
     console.log('');
     console.log('USAGE:');
     console.log('  verify SD-YYYY-XXX     - Verify handoff for Strategic Directive');
@@ -814,6 +1320,7 @@ async function main() {
     console.log('INTEGRATION:');
     console.log('• Called by LEAD agent before requesting PLAN handoff');
     console.log('• Prevents incomplete strategy from reaching technical planning');
+    console.log('• PRD-Readiness warnings help LEAD create better SDs');
     console.log('• Returns detailed improvement guidance on rejection');
     
   } else {

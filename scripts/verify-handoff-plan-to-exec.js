@@ -298,13 +298,13 @@ class PlanToExecVerifier {
     console.log(`Strategic Directive: ${sdId}`);
     
     try {
-      // 1. Load Strategic Directive
+      // 1. Load Strategic Directive (support both UUID and legacy_id)
       const { data: sd, error: sdError } = await this.supabase
         .from('strategic_directives_v2')
         .select('*')
-        .eq('id', sdId)
+        .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
         .single();
-        
+
       if (sdError || !sd) {
         throw new Error(`Strategic Directive ${sdId} not found: ${sdError?.message}`);
       }
@@ -374,10 +374,11 @@ class PlanToExecVerifier {
         console.log('   ℹ️  User stories belong to child SDs, not parent orchestrator');
       } else {
         console.log('\n📝 Checking for user stories...');
+        // Use sd.id (UUID) not sdId (legacy_id) for user stories query
         const { data: stories, error: userStoriesError } = await this.supabase
           .from('user_stories')
           .select('id, story_key, title, status, user_role, user_want, user_benefit, acceptance_criteria, story_points, implementation_context, sd_id')
-          .eq('sd_id', sdId);
+          .eq('sd_id', sd.id);
 
         if (userStoriesError) {
           return this.rejectHandoff(sdId, 'USER_STORIES_ERROR', `Error querying user stories: ${userStoriesError.message}`);

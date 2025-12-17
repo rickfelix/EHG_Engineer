@@ -227,7 +227,9 @@ export class PlanToExecExecutor extends BaseExecutor {
         validator: async (ctx) => {
           console.log('\n🚪 GATE 1: DESIGN→DATABASE Workflow Validation');
           console.log('-'.repeat(50));
-          return validateGate1PlanToExec(ctx.sdId, this.supabase);
+          // Use UUID (ctx.sd.id) not legacy_id (ctx.sdId) for database queries
+          const sdUuidForQuery = ctx.sd?.id || ctx.sdId;
+          return validateGate1PlanToExec(sdUuidForQuery, this.supabase);
         },
         required: true
       });
@@ -298,7 +300,8 @@ export class PlanToExecExecutor extends BaseExecutor {
 
     if (prd) {
       try {
-        const deliverablesResult = await extractAndPopulateDeliverables(sdId, prd, this.supabase, {
+        // Use sd.id (UUID) for foreign key compatibility, not sdId (string key)
+        const deliverablesResult = await extractAndPopulateDeliverables(sd.id, prd, this.supabase, {
           skipIfExists: true
         });
 

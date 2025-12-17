@@ -199,10 +199,11 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
     // ===================================================================
     console.log('\n[3/9] Checking if DATABASE was informed by DESIGN context (CRITICAL)...');
 
+    // Query by sd_id (UUID FK) - directive_id is legacy and may contain string key
     const { data: prdData, error: prdError } = await supabase
       .from('product_requirements_v2')
       .select('metadata')
-      .eq('directive_id', sd_id)
+      .eq('sd_id', sd_id)
       .single();
 
     if (prdError) {
