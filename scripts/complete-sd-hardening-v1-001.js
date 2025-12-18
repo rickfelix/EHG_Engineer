@@ -41,22 +41,22 @@ async function main() {
         RETURNING id
       `, [
         JSON.stringify([
-          { category: "Security", description: "fn_is_chairman() SECURITY DEFINER pattern prevents RLS recursion" },
-          { category: "Data Safety", description: "Migration applied without data loss" },
-          { category: "Rollback Support", description: "Proper rollback section included in migration" },
-          { category: "Access Control", description: "Hardened policies use specific access controls instead of permissive USING(true)" }
+          { category: 'Security', description: 'fn_is_chairman() SECURITY DEFINER pattern prevents RLS recursion' },
+          { category: 'Data Safety', description: 'Migration applied without data loss' },
+          { category: 'Rollback Support', description: 'Proper rollback section included in migration' },
+          { category: 'Access Control', description: 'Hardened policies use specific access controls instead of permissive USING(true)' }
         ]),
         JSON.stringify([
-          { category: "Testing", description: "Could add more comprehensive E2E testing for RLS policies" },
-          { category: "Performance", description: "Could implement app_config caching for performance" }
+          { category: 'Testing', description: 'Could add more comprehensive E2E testing for RLS policies' },
+          { category: 'Performance', description: 'Could implement app_config caching for performance' }
         ]),
         JSON.stringify([
-          { description: "SD-HARDENING-V1-002: Apply similar patterns to EHG_Engineer repo", priority: "high", assignee: "claude-code" }
+          { description: 'SD-HARDENING-V1-002: Apply similar patterns to EHG_Engineer repo', priority: 'high', assignee: 'claude-code' }
         ]),
         JSON.stringify([
-          { learning: "SECURITY DEFINER with SET search_path is essential for RLS helper functions", impact: "high" },
-          { learning: "Always check if dependent views/tables exist before referencing them", impact: "medium" },
-          { learning: "Migration scripts should use DO blocks for conditional operations", impact: "medium" }
+          { learning: 'SECURITY DEFINER with SET search_path is essential for RLS helper functions', impact: 'high' },
+          { learning: 'Always check if dependent views/tables exist before referencing them', impact: 'medium' },
+          { learning: 'Migration scripts should use DO blocks for conditional operations', impact: 'medium' }
         ])
       ]);
     } else {
@@ -107,51 +107,51 @@ async function main() {
     `, [
       JSON.stringify([
         {
-          category: "Security",
-          description: "fn_is_chairman() SECURITY DEFINER pattern prevents RLS recursion"
+          category: 'Security',
+          description: 'fn_is_chairman() SECURITY DEFINER pattern prevents RLS recursion'
         },
         {
-          category: "Data Safety",
-          description: "Migration applied without data loss"
+          category: 'Data Safety',
+          description: 'Migration applied without data loss'
         },
         {
-          category: "Rollback Support",
-          description: "Proper rollback section included in migration"
+          category: 'Rollback Support',
+          description: 'Proper rollback section included in migration'
         },
         {
-          category: "Access Control",
-          description: "Hardened policies use specific access controls instead of permissive USING(true)"
+          category: 'Access Control',
+          description: 'Hardened policies use specific access controls instead of permissive USING(true)'
         }
       ]),
       JSON.stringify([
         {
-          category: "Testing",
-          description: "Could add more comprehensive E2E testing for RLS policies"
+          category: 'Testing',
+          description: 'Could add more comprehensive E2E testing for RLS policies'
         },
         {
-          category: "Performance",
-          description: "Could implement app_config caching for performance"
+          category: 'Performance',
+          description: 'Could implement app_config caching for performance'
         }
       ]),
       JSON.stringify([
         {
-          description: "SD-HARDENING-V1-002: Apply similar patterns to EHG_Engineer repo",
-          priority: "high",
-          assignee: "claude-code"
+          description: 'SD-HARDENING-V1-002: Apply similar patterns to EHG_Engineer repo',
+          priority: 'high',
+          assignee: 'claude-code'
         }
       ]),
       JSON.stringify([
         {
-          learning: "SECURITY DEFINER with SET search_path is essential for RLS helper functions",
-          impact: "high"
+          learning: 'SECURITY DEFINER with SET search_path is essential for RLS helper functions',
+          impact: 'high'
         },
         {
-          learning: "Always check if dependent views/tables exist before referencing them",
-          impact: "medium"
+          learning: 'Always check if dependent views/tables exist before referencing them',
+          impact: 'medium'
         },
         {
-          learning: "Migration scripts should use DO blocks for conditional operations",
-          impact: "medium"
+          learning: 'Migration scripts should use DO blocks for conditional operations',
+          impact: 'medium'
         }
       ])
     ]);
@@ -193,25 +193,25 @@ async function main() {
       `, [
         JSON.stringify([
           {
-            name: "20251218_rls_security_hardening.sql",
-            type: "migration",
-            path: "supabase/migrations/20251218_rls_security_hardening.sql",
-            description: "RLS hardening migration with fn_is_chairman() and hardened policies"
+            name: '20251218_rls_security_hardening.sql',
+            type: 'migration',
+            path: 'supabase/migrations/20251218_rls_security_hardening.sql',
+            description: 'RLS hardening migration with fn_is_chairman() and hardened policies'
           },
           {
-            name: "fn_is_chairman()",
-            type: "database_function",
-            description: "SECURITY DEFINER function to identify chairman user"
+            name: 'fn_is_chairman()',
+            type: 'database_function',
+            description: 'SECURITY DEFINER function to identify chairman user'
           },
           {
-            name: "fn_user_has_company_access(UUID)",
-            type: "database_function",
-            description: "Helper function for company-scoped access"
+            name: 'fn_user_has_company_access(UUID)',
+            type: 'database_function',
+            description: 'Helper function for company-scoped access'
           },
           {
-            name: "fn_user_has_venture_access(UUID)",
-            type: "database_function",
-            description: "Helper function for venture-scoped access"
+            name: 'fn_user_has_venture_access(UUID)',
+            type: 'database_function',
+            description: 'Helper function for venture-scoped access'
           }
         ])
       ]);
@@ -221,7 +221,7 @@ async function main() {
     }
 
     // 5. Check progress breakdown
-    const progressResult = await client.query(`SELECT get_progress_breakdown('SD-HARDENING-V1-001')`);
+    const progressResult = await client.query('SELECT get_progress_breakdown(\'SD-HARDENING-V1-001\')');
     const progress = progressResult.rows[0].get_progress_breakdown;
     console.log('\nProgress breakdown:');
     console.log('  Total progress:', progress.total_progress + '%');

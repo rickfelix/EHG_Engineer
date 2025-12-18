@@ -49,7 +49,7 @@ async function main() {
     console.log('✅ EXEC-TO-LEAD handoff created:', handoffResult.rows[0]);
 
     // Check progress again
-    const progResult = await client.query(`SELECT get_progress_breakdown('SD-HARDENING-V1-001')`);
+    const progResult = await client.query('SELECT get_progress_breakdown(\'SD-HARDENING-V1-001\')');
     const prog = progResult.rows[0].get_progress_breakdown;
     console.log('\nNew progress:', prog.total_progress + '%');
     console.log('Can complete:', prog.can_complete);
