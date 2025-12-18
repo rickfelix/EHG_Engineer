@@ -28,7 +28,7 @@ node scripts/generate-workflow-docs.js --sd-id <SD-ID>
 
 ### For Targeted Sub-Agent Execution
 ```bash
-node lib/sub-agent-executor.js DOCMON <SD-ID>
+node scripts/execute-subagent.js --code DOCMON --sd-id <SD-ID>
 ```
 
 **When to use**:

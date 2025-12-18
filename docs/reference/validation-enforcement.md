@@ -334,8 +334,8 @@ node scripts/test-validation-framework.js all SD-2025-001
 
 **Fix:**
 ```bash
-node lib/sub-agent-executor.js DESIGN SD-ID
-node lib/sub-agent-executor.js DATABASE SD-ID
+node scripts/execute-subagent.js --code DESIGN --sd-id SD-ID
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 ```
 
 #### Gate 2 Fails

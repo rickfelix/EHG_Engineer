@@ -192,7 +192,7 @@ console.log('API agent included:', result.recommended.some(r => r.code === 'API'
 **Test Steps:**
 ```bash
 # Execute API agent directly
-node lib/sub-agent-executor.js API SD-TEST-API-001
+node scripts/execute-subagent.js --code API --sd-id SD-TEST-API-001
 ```
 
 **Expected Result:**
@@ -262,7 +262,7 @@ console.log('DEPENDENCY agent included:', result.recommended.some(r => r.code ==
 **Test Steps:**
 ```bash
 # Execute DEPENDENCY agent directly
-node lib/sub-agent-executor.js DEPENDENCY SD-TEST-DEPENDENCY-001
+node scripts/execute-subagent.js --code DEPENDENCY --sd-id SD-TEST-DEPENDENCY-001
 ```
 
 **Expected Result:**

@@ -205,7 +205,7 @@ When user asks general questions, provide expert guidance directly.
 
 ## Execution Mode
 When user provides SD-ID, invoke scripts:
-- `node lib/sub-agent-executor.js DATABASE <SD-ID>`
+- `node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>`
 - `node scripts/orchestrate-phase-subagents.js <PHASE> <SD-ID>`
 
 [Full instructions...]

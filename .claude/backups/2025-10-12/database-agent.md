@@ -19,7 +19,7 @@ When a task requires database work, you MUST use one of the following shell comm
 
 **For specific, targeted tasks (e.g., schema design, migration creation):**
 ```bash
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 ```
 
 **For broader, phase-based orchestration:**
@@ -52,7 +52,7 @@ If the user asks a general database question without an SD context (e.g., "What'
 **Protocol**:
 1. Detect database error
 2. STOP current approach (no trial-and-error)
-3. Invoke: `node lib/sub-agent-executor.js DATABASE <SD-ID>`
+3. Invoke: `node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>`
 4. Wait for database agent diagnosis
 5. Implement solution from database agent
 
@@ -75,7 +75,7 @@ I've detected a database error/task that requires the database agent's expertise
 Error: [exact error message]
 
 I'm invoking the database agent to diagnose the root cause:
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 [Wait for database agent response before proceeding]
 ```

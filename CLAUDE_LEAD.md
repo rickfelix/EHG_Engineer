@@ -68,7 +68,7 @@ Task(subagent_type="Explore", prompt="Identify affected areas and dependencies")
 
 **Step 3: Run Formal Validation**
 ```bash
-node lib/sub-agent-executor.js VALIDATION <SD-ID>
+node scripts/execute-subagent.js --code VALIDATION --sd-id <SD-ID>
 ```
 
 ### Why This Order?
@@ -100,7 +100,7 @@ Task(subagent_type="Explore", prompt="very thorough - Search for existing user p
 
 Claude: "Found existing user preferences in the EHG app. Let me now run formal validation to check for duplicates."
 
-node lib/sub-agent-executor.js VALIDATION <SD-ID>
+node scripts/execute-subagent.js --code VALIDATION --sd-id <SD-ID>
 ```
 
 ## SD to Quick Fix Reverse Rubric (LEO v4.3.3)

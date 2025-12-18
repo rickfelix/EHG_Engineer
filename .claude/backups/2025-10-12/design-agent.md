@@ -28,7 +28,7 @@ node scripts/design-subagent-evaluation.js <SD-ID>
 
 ### For Targeted Sub-Agent Execution
 ```bash
-node lib/sub-agent-executor.js DESIGN <SD-ID>
+node scripts/execute-subagent.js --code DESIGN --sd-id <SD-ID>
 ```
 
 **When to use**:

@@ -73,7 +73,7 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
       validation.failed_gates.push('DESIGN_EXECUTION');
       validation.passed = false;
       console.log('   ❌ DESIGN sub-agent NOT executed - BLOCKING');
-      console.log('   ⚠️  Run: node lib/sub-agent-executor.js DESIGN ' + sd_id);
+      console.log('   ⚠️  Run: node scripts/execute-subagent.js --code DESIGN --sd-id ' + sd_id);
       console.log('='.repeat(60));
       return validation; // Block immediately
     } else {
@@ -93,7 +93,7 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
       validation.failed_gates.push('DATABASE_EXECUTION');
       validation.passed = false;
       console.log('   ❌ DATABASE sub-agent NOT executed - BLOCKING');
-      console.log('   ⚠️  Run: node lib/sub-agent-executor.js DATABASE ' + sd_id);
+      console.log('   ⚠️  Run: node scripts/execute-subagent.js --code DATABASE --sd-id ' + sd_id);
       console.log('='.repeat(60));
       return validation; // Block immediately
     } else {
@@ -133,7 +133,7 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
       console.log('   ❌ DESIGN sub-agent query failed (0/20)');
     } else if (!designResults || designResults.length === 0) {
       validation.issues.push('CRITICAL: DESIGN sub-agent has not been executed for this SD');
-      validation.issues.push('Run: node lib/sub-agent-executor.js DESIGN ' + sd_id);
+      validation.issues.push('Run: node scripts/execute-subagent.js --code DESIGN --sd-id ' + sd_id);
       validation.failed_gates.push('DESIGN_EXECUTION');
       console.log('   ❌ DESIGN sub-agent NOT executed - BLOCKING (0/20)');
     } else {
@@ -173,7 +173,7 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
       console.log('   ❌ DATABASE sub-agent query failed (0/20)');
     } else if (!databaseResults || databaseResults.length === 0) {
       validation.issues.push('CRITICAL: DATABASE sub-agent has not been executed for this SD');
-      validation.issues.push('Run: node lib/sub-agent-executor.js DATABASE ' + sd_id);
+      validation.issues.push('Run: node scripts/execute-subagent.js --code DATABASE --sd-id ' + sd_id);
       validation.failed_gates.push('DATABASE_EXECUTION');
       console.log('   ❌ DATABASE sub-agent NOT executed - BLOCKING (0/20)');
     } else {
@@ -252,7 +252,7 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
       console.log('   ⚠️  STORIES query failed - partial credit (2/3)');
     } else if (!storiesResults || storiesResults.length === 0) {
       validation.warnings.push('STORIES sub-agent has not been executed (recommended but not blocking)');
-      validation.warnings.push('Run: node lib/sub-agent-executor.js STORIES ' + sd_id);
+      validation.warnings.push('Run: node scripts/execute-subagent.js --code STORIES --sd-id ' + sd_id);
       validation.score += 2; // Partial credit - not blocking (MINOR)
       validation.gate_scores.stories_execution = 2;
       console.log('   ⚠️  STORIES sub-agent NOT executed - recommended (2/3)');
@@ -393,7 +393,7 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
       console.log('   ⚠️  Cannot query user stories (5/10)');
     } else if (!userStories || userStories.length === 0) {
       validation.warnings.push('No user stories found for this SD');
-      validation.warnings.push('Run: node lib/sub-agent-executor.js STORIES ' + sd_id);
+      validation.warnings.push('Run: node scripts/execute-subagent.js --code STORIES --sd-id ' + sd_id);
       validation.score += 5; // Partial credit (MAJOR)
       validation.gate_scores.stories_context_coverage = 5;
       console.log('   ⚠️  No user stories found (5/10)');
@@ -416,7 +416,7 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
         console.log(`   ✅ User stories context coverage: ${coverage.toFixed(1)}% (≥80% required) (10/10)`);
       } else {
         validation.warnings.push(`User stories context coverage only ${coverage.toFixed(1)}% (≥80% required)`);
-        validation.warnings.push('Run: node lib/sub-agent-executor.js STORIES ' + sd_id);
+        validation.warnings.push('Run: node scripts/execute-subagent.js --code STORIES --sd-id ' + sd_id);
         const proportionalScore = Math.round((coverage / 80) * 10); // Proportional credit
         validation.score += proportionalScore;
         validation.gate_scores.stories_context_coverage = proportionalScore;

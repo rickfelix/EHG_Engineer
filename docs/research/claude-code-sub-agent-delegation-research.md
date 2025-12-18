@@ -134,7 +134,7 @@ model: inherit
 When triggered, invoke the existing database-driven infrastructure:
 
 ```bash
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 ```
 
 Or via orchestrator:

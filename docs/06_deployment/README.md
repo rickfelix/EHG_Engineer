@@ -178,7 +178,7 @@ npx supabase migration list
 npx supabase db reset
 
 # Invoke database agent for complex issues
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 ```
 
 **2. Build Failures**

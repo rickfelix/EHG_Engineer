@@ -61,7 +61,7 @@ node scripts/systems-analyst-codebase-audit.js <SD-ID>
 
 ### For Targeted Sub-Agent Execution
 ```bash
-node lib/sub-agent-executor.js VALIDATION <SD-ID>
+node scripts/execute-subagent.js --code VALIDATION --sd-id <SD-ID>
 ```
 
 **When to use**:
@@ -454,7 +454,7 @@ mcp__ide__getDiagnostics({})
 3. If errors found, fix before proceeding
 
 4. Run validation agent for gate verification:
-   → node lib/sub-agent-executor.js VALIDATION <SD-ID>
+   → node scripts/execute-subagent.js --code VALIDATION --sd-id <SD-ID>
 ```
 
 ## Remember

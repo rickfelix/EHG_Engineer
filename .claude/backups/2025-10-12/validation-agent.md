@@ -28,7 +28,7 @@ node scripts/systems-analyst-codebase-audit.js <SD-ID>
 
 ### For Targeted Sub-Agent Execution
 ```bash
-node lib/sub-agent-executor.js VALIDATION <SD-ID>
+node scripts/execute-subagent.js --code VALIDATION --sd-id <SD-ID>
 ```
 
 **When to use**:

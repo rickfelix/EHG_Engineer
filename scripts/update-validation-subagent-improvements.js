@@ -131,7 +131,7 @@ RED FLAGS - If you're doing these, STOP and validate first:
 
 **Invocation**:
 \`\`\`bash
-node lib/sub-agent-executor.js VALIDATION <SD-ID>
+node scripts/execute-subagent.js --code VALIDATION --sd-id <SD-ID>
 \`\`\`
 
 **PLAN Verification - STOP and validate BEFORE claiming completion**

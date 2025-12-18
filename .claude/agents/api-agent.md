@@ -45,7 +45,7 @@ This agent works with companion **Claude Code Skills** for creative guidance. Sk
 
 ### For Targeted Sub-Agent Execution
 ```bash
-node lib/sub-agent-executor.js API <SD-ID>
+node scripts/execute-subagent.js --code API --sd-id <SD-ID>
 ```
 
 **When to use**:
@@ -246,7 +246,7 @@ Before documenting API:
 3. Implement endpoint with validated patterns
 
 4. Run API agent validation:
-   → node lib/sub-agent-executor.js API <SD-ID>
+   → node scripts/execute-subagent.js --code API --sd-id <SD-ID>
 ```
 
 ## Remember

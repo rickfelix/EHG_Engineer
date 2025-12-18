@@ -184,7 +184,7 @@ Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for 
 |------|-----|---------|
 | "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
 | "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
-| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
+| "Is this schema valid?" | Sub-agent | `node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>` |
 | "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
 | "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
 

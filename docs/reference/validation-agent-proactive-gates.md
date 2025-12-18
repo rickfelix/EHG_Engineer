@@ -74,7 +74,7 @@ node scripts/orchestrate-phase-subagents.js PLAN_PRD <SD-ID>
 
 # Manual
 node scripts/systems-analyst-codebase-audit.js <SD-ID>
-node lib/sub-agent-executor.js VALIDATION <SD-ID>
+node scripts/execute-subagent.js --code VALIDATION --sd-id <SD-ID>
 ```
 
 **Blocks When**:
@@ -106,7 +106,7 @@ node lib/sub-agent-executor.js VALIDATION <SD-ID>
 **Invocation**:
 ```bash
 # Quick duplicate check before coding
-node lib/sub-agent-executor.js VALIDATION <SD-ID>
+node scripts/execute-subagent.js --code VALIDATION --sd-id <SD-ID>
 
 # Search for similar implementations
 grep -r "feature_name" /mnt/c/_EHG/ehg/src
@@ -210,7 +210,7 @@ ORDER BY created_at;
 node scripts/systems-analyst-codebase-audit.js <SD-ID>
 
 # For targeted sub-agent execution
-node lib/sub-agent-executor.js VALIDATION <SD-ID>
+node scripts/execute-subagent.js --code VALIDATION --sd-id <SD-ID>
 
 # For phase-based orchestration (recommended)
 node scripts/orchestrate-phase-subagents.js <PHASE> <SD-ID>
@@ -346,7 +346,7 @@ node scripts/orchestrate-phase-subagents.js PLAN_PRD <SD-ID>
 
 **Action**:
 ```bash
-node lib/sub-agent-executor.js VALIDATION <SD-ID>
+node scripts/execute-subagent.js --code VALIDATION --sd-id <SD-ID>
 ```
 
 **Warns**: Minor pattern deviations (requires documentation)

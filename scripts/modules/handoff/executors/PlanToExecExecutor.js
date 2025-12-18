@@ -1022,9 +1022,9 @@ export class PlanToExecExecutor extends BaseExecutor {
       ].join('\n'),
       'GATE1_DESIGN_DATABASE': [
         'Execute DESIGN and DATABASE sub-agents:',
-        '1. Run DESIGN sub-agent: node lib/sub-agent-executor.js DESIGN <SD-ID>',
-        '2. Run DATABASE sub-agent: node lib/sub-agent-executor.js DATABASE <SD-ID>',
-        '3. Run STORIES sub-agent: node lib/sub-agent-executor.js STORIES <SD-ID>',
+        '1. Run DESIGN sub-agent: node scripts/execute-subagent.js --code DESIGN --sd-id <SD-ID>',
+        '2. Run DATABASE sub-agent: node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>',
+        '3. Run STORIES sub-agent: node scripts/execute-subagent.js --code STORIES --sd-id <SD-ID>',
         '4. Re-run this handoff'
       ].join('\n'),
       'GATE6_BRANCH_ENFORCEMENT': [

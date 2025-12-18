@@ -39,7 +39,7 @@ const bmadContent = `## 🔬 BMAD Method Enhancements
 - **Purpose**: Multi-domain risk scoring before approval
 - **Domains**: Technical Complexity (1-10), Security Risk (1-10), Performance Risk (1-10), Integration Risk (1-10), Data Migration Risk (1-10), UI/UX Risk (1-10)
 - **Storage**: risk_assessments table
-- **Script**: node lib/sub-agent-executor.js RISK SD-ID
+- **Script**: node scripts/execute-subagent.js --code RISK --sd-id <SD-ID>
 - **Benefit**: Early risk identification prevents 4-6 hours rework per SD
 
 **2. User Story Context Engineering (STORIES)**
@@ -47,7 +47,7 @@ const bmadContent = `## 🔬 BMAD Method Enhancements
 - **Purpose**: Hyper-detailed implementation context for each user story
 - **Fields Added**: implementation_context, architecture_references, example_code_patterns, testing_scenarios
 - **Storage**: user_stories table columns
-- **Script**: node lib/sub-agent-executor.js STORIES SD-ID
+- **Script**: node scripts/execute-subagent.js --code STORIES --sd-id <SD-ID>
 - **Benefit**: Reduces EXEC confusion by 30-40% through front-loaded guidance
 - **Validation**: PLAN→EXEC handoff checks for ≥80% coverage
 
@@ -106,10 +106,10 @@ const bmadContent = `## 🔬 BMAD Method Enhancements
 
 \`\`\`bash
 # 1. Risk Assessment (LEAD_PRE_APPROVAL)
-node lib/sub-agent-executor.js RISK SD-ID
+node scripts/execute-subagent.js --code RISK --sd-id <SD-ID>
 
 # 2. User Story Context Engineering (PLAN_PRD)
-node lib/sub-agent-executor.js STORIES SD-ID
+node scripts/execute-subagent.js --code STORIES --sd-id <SD-ID>
 
 # 3. Retrospective Review (LEAD_PRE_APPROVAL)
 node scripts/retrospective-review-for-lead.js SD-ID

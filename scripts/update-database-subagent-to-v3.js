@@ -255,13 +255,13 @@ import { createDatabaseClient } from '../lib/supabase-connection.js';
 
 \`\`\`bash
 # STEP 1: Database agent validates
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 # STEP 2: Execute validated migration
 node scripts/apply-migration-validated.js
 
 # STEP 3: Verify
-node lib/sub-agent-executor.js DATABASE <SD-ID> --verify
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID> --verify
 \`\`\`
 
 ### Success: SD-BACKEND-002C
@@ -298,7 +298,7 @@ node lib/sub-agent-executor.js DATABASE <SD-ID> --verify
 
 **Step 3: INVOKE**
 \`\`\`bash
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 \`\`\`
 
 **Step 4: PROVIDE CONTEXT**
@@ -460,7 +460,7 @@ WITH CHECK (auth.uid() = user_id);
 
 \`\`\`bash
 # Specific task
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 # Phase orchestration
 node scripts/orchestrate-phase-subagents.js <PHASE> <SD-ID>

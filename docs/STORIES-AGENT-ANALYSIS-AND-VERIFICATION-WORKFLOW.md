@@ -267,7 +267,7 @@ if (!storyError && stories) {
 
 1. **Test STORIES Agent** on existing SD:
    ```bash
-   node lib/sub-agent-executor.js STORIES SD-VISION-TRANSITION-001A
+   node scripts/execute-subagent.js --code STORIES --sd-id SD-VISION-TRANSITION-001A
    ```
    - Should show "Already Complete: 6"
    - Should return PASS verdict

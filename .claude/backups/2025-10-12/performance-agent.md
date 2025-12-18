@@ -28,7 +28,7 @@ node scripts/performance-engineering-lead.js <SD-ID>
 
 ### For Targeted Sub-Agent Execution
 ```bash
-node lib/sub-agent-executor.js PERFORMANCE <SD-ID>
+node scripts/execute-subagent.js --code PERFORMANCE --sd-id <SD-ID>
 ```
 
 **When to use**:

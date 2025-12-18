@@ -187,7 +187,7 @@ WHERE proname = 'trigger_function_name';
 ### Protocol
 1. Detect database error
 2. STOP current approach (no trial-and-error)
-3. Invoke: \`node lib/sub-agent-executor.js DATABASE <SD-ID>\`
+3. Invoke: \`node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>\`
 4. Wait for database agent diagnosis
 5. Implement solution from database agent
 
@@ -210,7 +210,7 @@ I've detected a database error that requires the database agent's expertise.
 Error: [exact error message]
 
 Invoking database agent for root cause diagnosis:
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 [Wait for database agent response before proceeding]
 \`\`\`
@@ -250,7 +250,7 @@ node lib/sub-agent-executor.js DATABASE <SD-ID>
 
 **For specific database tasks**:
 \`\`\`bash
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 \`\`\`
 
 **For phase-based orchestration**:

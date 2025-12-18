@@ -107,15 +107,15 @@ export class ResultBuilder {
     const remediations = {
       // BMAD validations
       'BMAD_VALIDATION_FAILED': 'Run STORIES sub-agent to generate user stories with proper acceptance criteria.',
-      'BMAD_PLAN_TO_EXEC_FAILED': 'Run STORIES sub-agent: node lib/sub-agent-executor.js STORIES <SD-ID>',
+      'BMAD_PLAN_TO_EXEC_FAILED': 'Run STORIES sub-agent: node scripts/execute-subagent.js --code STORIES --sd-id <SD-ID>',
       'BMAD_EXEC_TO_PLAN_FAILED': 'Ensure all test plans are complete and E2E test coverage is 100%.',
 
       // Gate validations
       'GATE1_VALIDATION_FAILED': [
         'Execute DESIGN and DATABASE sub-agents:',
-        '1. Run DESIGN sub-agent: node lib/sub-agent-executor.js DESIGN <SD-ID>',
-        '2. Run DATABASE sub-agent: node lib/sub-agent-executor.js DATABASE <SD-ID>',
-        '3. Run STORIES sub-agent: node lib/sub-agent-executor.js STORIES <SD-ID>',
+        '1. Run DESIGN sub-agent: node scripts/execute-subagent.js --code DESIGN --sd-id <SD-ID>',
+        '2. Run DATABASE sub-agent: node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>',
+        '3. Run STORIES sub-agent: node scripts/execute-subagent.js --code STORIES --sd-id <SD-ID>',
         '4. Re-run this handoff'
       ].join('\n'),
       'GATE2_VALIDATION_FAILED': 'Review implementation fidelity. Ensure code matches PRD requirements.',

@@ -57,7 +57,7 @@ node scripts/security-architect-assessment.js <SD-ID>
 
 ### For Targeted Sub-Agent Execution
 ```bash
-node lib/sub-agent-executor.js SECURITY <SD-ID>
+node scripts/execute-subagent.js --code SECURITY --sd-id <SD-ID>
 ```
 
 **When to use**:
@@ -169,7 +169,7 @@ Before session handling:
 3. Implement with validated, version-accurate API
 
 4. Run security agent validation:
-   → node lib/sub-agent-executor.js SECURITY <SD-ID>
+   → node scripts/execute-subagent.js --code SECURITY --sd-id <SD-ID>
 ```
 
 ## Remember

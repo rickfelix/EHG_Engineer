@@ -999,7 +999,7 @@ class PlanToExecVerifier {
           'OR manually fix issues:',
           `   1. Review ${allIssues.length} workflow issue(s) (${criticalCount} CRITICAL, ${highCount} HIGH)`,
           '   2. Update user story acceptance_criteria or implementation_context',
-          '   3. Re-run Design Sub-Agent: node lib/sub-agent-executor.js DESIGN <SD-ID> --workflow-review',
+          '   3. Re-run Design Sub-Agent: node scripts/execute-subagent.js --code DESIGN --sd-id <SD-ID> --workflow-review',
           '   4. Retry PLAN→EXEC handoff'
         ];
 

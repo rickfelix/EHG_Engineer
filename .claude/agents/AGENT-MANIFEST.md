@@ -47,19 +47,19 @@ These agents are archived but can be re-enabled instantly or invoked via scripts
 - **Reason**: Only needed during performance optimization work
 - **Usage**: Situational (performance analysis, load testing, caching strategies)
 - **Re-enable**: `mv .claude/agents/_archived/performance-agent.md .claude/agents/`
-- **Script invocation**: `node lib/sub-agent-executor.js PERFORMANCE <SD-ID>`
+- **Script invocation**: `node scripts/execute-subagent.js --code PERFORMANCE --sd-id <SD-ID>`
 
 ### 2. **uat-agent**
 - **Reason**: Only needed during UAT testing phases
 - **Usage**: Situational (user acceptance testing, validation workflows)
 - **Re-enable**: `mv .claude/agents/_archived/uat-agent.md .claude/agents/`
-- **Script invocation**: `node lib/sub-agent-executor.js UAT <SD-ID>`
+- **Script invocation**: `node scripts/execute-subagent.js --code UAT --sd-id <SD-ID>`
 
 ### 3. **retro-agent** (Continuous Improvement Coach)
 - **Reason**: Auto-triggers at SD completion, doesn't need pre-loading
 - **Usage**: Automatic (generates retrospectives after SD completion)
 - **Re-enable**: `mv .claude/agents/_archived/retro-agent.md .claude/agents/`
-- **Script invocation**: `node lib/sub-agent-executor.js RETRO <SD-ID>`
+- **Script invocation**: `node scripts/execute-subagent.js --code RETRO --sd-id <SD-ID>`
 
 ---
 
@@ -92,7 +92,7 @@ mv .claude/agents/performance-agent.md .claude/agents/_archived/
 #### Method 2: Direct Script Invocation (No Re-Enable Needed)
 ```bash
 # Execute sub-agent directly via script
-node lib/sub-agent-executor.js PERFORMANCE SD-ABC-001
+node scripts/execute-subagent.js --code PERFORMANCE --sd-id SD-ABC-001
 
 # Results stored in database: sub_agent_execution_results table
 ```

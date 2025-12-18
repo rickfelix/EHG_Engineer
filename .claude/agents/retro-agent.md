@@ -114,7 +114,7 @@ If the user asks a general retrospective question without an SD context (e.g., "
 **Protocol**:
 1. Detect retrospective error
 2. STOP current approach (no trial-and-error)
-3. Invoke: `node lib/sub-agent-executor.js RETRO <SD-ID>`
+3. Invoke: `node scripts/execute-subagent.js --code RETRO --sd-id <SD-ID>`
 4. Wait for retro agent diagnosis
 5. Implement solution from retro agent
 
@@ -137,7 +137,7 @@ I've detected a retrospective error/task that requires the retro agent's experti
 Error: [exact error message]
 
 I'm invoking the retro agent to diagnose the root cause:
-node lib/sub-agent-executor.js RETRO <SD-ID>
+node scripts/execute-subagent.js --code RETRO --sd-id <SD-ID>
 
 [Wait for retro agent response before proceeding]
 ```
@@ -325,7 +325,7 @@ node scripts/generate-comprehensive-retrospective.js <SD-ID>
 
 ### For Targeted Sub-Agent Execution
 ```bash
-node lib/sub-agent-executor.js RETRO <SD-ID>
+node scripts/execute-subagent.js --code RETRO --sd-id <SD-ID>
 ```
 
 **When to use**:

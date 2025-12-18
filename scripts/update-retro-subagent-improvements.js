@@ -227,7 +227,7 @@ node scripts/generate-comprehensive-retrospective.js <SD-ID>
 
 **For targeted sub-agent execution**:
 \`\`\`bash
-node lib/sub-agent-executor.js RETRO <SD-ID>
+node scripts/execute-subagent.js --code RETRO --sd-id <SD-ID>
 \`\`\`
 
 **For phase-based orchestration**:

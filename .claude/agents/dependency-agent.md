@@ -28,7 +28,7 @@ When invoked for dependency-related tasks, you provide comprehensive analysis of
 
 ### For Targeted Sub-Agent Execution
 ```bash
-node lib/sub-agent-executor.js DEPENDENCY <SD-ID>
+node scripts/execute-subagent.js --code DEPENDENCY --sd-id <SD-ID>
 ```
 
 **When to use**:

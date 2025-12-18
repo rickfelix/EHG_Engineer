@@ -237,7 +237,7 @@ node scripts/orchestrate-phase-subagents.js PLAN_PRD SD-XXX
 User: "What's the best index strategy for this query?"
 
 # Pattern 2: Final validation before handoff
-node lib/sub-agent-executor.js DATABASE SD-XXX
+node scripts/execute-subagent.js --code DATABASE --sd-id SD-XXX
 ```
 
 **PLAN Verification**:
@@ -350,7 +350,7 @@ node scripts/orchestrate-phase-subagents.js LEAD_FINAL SD-XXX
 **Example Commands**:
 ```bash
 ✅ node scripts/orchestrate-phase-subagents.js PLAN_VERIFY SD-XXX
-✅ node lib/sub-agent-executor.js DATABASE SD-XXX
+✅ node scripts/execute-subagent.js --code DATABASE --sd-id SD-XXX
 ✅ node scripts/orchestrate-phase-subagents.js LEAD_FINAL SD-XXX
 
 ❌ Expecting native sub-agents to run these automatically
@@ -377,7 +377,7 @@ node scripts/orchestrate-phase-subagents.js LEAD_FINAL SD-XXX
 
 3. **Validation Phase** (Pattern 2):
    ```bash
-   node lib/sub-agent-executor.js DATABASE SD-XXX
+   node scripts/execute-subagent.js --code DATABASE --sd-id SD-XXX
    ```
 
 4. **Review Results**:
@@ -458,7 +458,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 **Diagnosis**:
 ```bash
 # Verify script execution manually
-node lib/sub-agent-executor.js DATABASE SD-XXX
+node scripts/execute-subagent.js --code DATABASE --sd-id SD-XXX
 
 # Check for errors in output
 # Verify database connection

@@ -101,7 +101,7 @@ BMAD enhances the existing 5-phase LEO workflow with:
 
 **How to Apply**:
 - Run RISK sub-agent during LEAD_PRE_APPROVAL
-- Command: `node lib/sub-agent-executor.js RISK <SD-ID>`
+- Command: `node scripts/execute-subagent.js --code RISK --sd-id <SD-ID>`
 - Review risk scores before approving SD
 
 ---
@@ -146,7 +146,7 @@ BMAD enhances the existing 5-phase LEO workflow with:
 
 **Execution**:
 ```bash
-node lib/sub-agent-executor.js RISK <SD-ID>
+node scripts/execute-subagent.js --code RISK --sd-id <SD-ID>
 ```
 
 **Output**: Risk assessment stored in `risk_assessments` table with:
@@ -186,7 +186,7 @@ Verdict: PASS (85% confidence)
 
 **Execution**:
 ```bash
-node lib/sub-agent-executor.js STORIES <SD-ID>
+node scripts/execute-subagent.js --code STORIES --sd-id <SD-ID>
 ```
 
 **Output**: Enhances each user story with:
@@ -574,10 +574,10 @@ Verdict: PASS - Ready for PLAN verification
 **Manual Execution** (when needed):
 ```bash
 # Risk assessment
-node lib/sub-agent-executor.js RISK <SD-ID>
+node scripts/execute-subagent.js --code RISK --sd-id <SD-ID>
 
 # User story context engineering
-node lib/sub-agent-executor.js STORIES <SD-ID>
+node scripts/execute-subagent.js --code STORIES --sd-id <SD-ID>
 
 # Checkpoint plan generation
 node scripts/generate-checkpoint-plan.js <SD-ID>
@@ -632,7 +632,7 @@ supabase.from('test_plans').select('*').eq('sd_id', 'SD-XXX').then(r => console.
 ### LEAD Phase Integration
 
 **Pre-Approval Checklist**:
-1. Run RISK sub-agent: `node lib/sub-agent-executor.js RISK <SD-ID>`
+1. Run RISK sub-agent: `node scripts/execute-subagent.js --code RISK --sd-id <SD-ID>`
 2. Review risk scores and mitigations
 3. (Optional) Run retrospective review: `node scripts/retrospective-review-for-lead.js <SD-ID>`
 4. Make approval decision based on risk profile
@@ -640,7 +640,7 @@ supabase.from('test_plans').select('*').eq('sd_id', 'SD-XXX').then(r => console.
 **Example Workflow**:
 ```bash
 # Step 1: Risk assessment
-node lib/sub-agent-executor.js RISK SD-NEW-FEATURE-001
+node scripts/execute-subagent.js --code RISK --sd-id SD-NEW-FEATURE-001
 
 # Step 2: Review output
 node -e "
@@ -663,7 +663,7 @@ supabase.from('risk_assessments').select('*').eq('sd_id', 'SD-NEW-FEATURE-001').
 
 **PRD Creation Checklist**:
 1. Create PRD in `product_requirements_v2` table
-2. Run STORIES sub-agent: `node lib/sub-agent-executor.js STORIES <SD-ID>`
+2. Run STORIES sub-agent: `node scripts/execute-subagent.js --code STORIES --sd-id <SD-ID>`
 3. If >8 stories, run Checkpoint Generator: `node scripts/generate-checkpoint-plan.js <SD-ID>`
 4. Validate BMAD requirements: `node scripts/modules/bmad-validation.js validatePlanToExec <SD-ID>`
 5. Create PLAN→EXEC handoff only if validation passes
@@ -673,7 +673,7 @@ supabase.from('risk_assessments').select('*').eq('sd_id', 'SD-NEW-FEATURE-001').
 # Step 1: User stories generated (automatic during PRD creation)
 
 # Step 2: Context engineering
-node lib/sub-agent-executor.js STORIES SD-NEW-FEATURE-001
+node scripts/execute-subagent.js --code STORIES --sd-id SD-NEW-FEATURE-001
 
 # Step 3: Check story count
 node -e "
@@ -799,7 +799,7 @@ Verdict: BLOCKED - Cannot proceed to EXEC
 **Solution**:
 ```bash
 # Step 1: Run STORIES sub-agent manually
-node lib/sub-agent-executor.js STORIES SD-XXX
+node scripts/execute-subagent.js --code STORIES --sd-id SD-XXX
 
 # Step 2: Verify context added
 node -e "
@@ -898,7 +898,7 @@ Verdict: CONDITIONAL PASS (missing risk assessment)
 **Solution**:
 ```bash
 # Step 1: Run RISK sub-agent manually
-node lib/sub-agent-executor.js RISK SD-XXX
+node scripts/execute-subagent.js --code RISK --sd-id SD-XXX
 
 # Step 2: Verify risk assessment exists
 node -e "
@@ -1055,10 +1055,10 @@ grep "sd_id" scripts/generate-checkpoint-plan.js
 
 ```bash
 # Risk Assessment (LEAD phase)
-node lib/sub-agent-executor.js RISK <SD-ID>
+node scripts/execute-subagent.js --code RISK --sd-id <SD-ID>
 
 # User Story Context Engineering (PLAN phase)
-node lib/sub-agent-executor.js STORIES <SD-ID>
+node scripts/execute-subagent.js --code STORIES --sd-id <SD-ID>
 
 # Checkpoint Plan Generation (PLAN phase, if >8 stories)
 node scripts/generate-checkpoint-plan.js <SD-ID>

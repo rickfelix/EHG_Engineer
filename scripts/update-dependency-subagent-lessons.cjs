@@ -30,7 +30,7 @@ When invoked for dependency-related tasks, you provide comprehensive analysis of
 
 ### For Targeted Sub-Agent Execution
 \`\`\`bash
-node lib/sub-agent-executor.js DEPENDENCY <SD-ID>
+node scripts/execute-subagent.js --code DEPENDENCY --sd-id <SD-ID>
 \`\`\`
 
 **When to use**:
@@ -605,7 +605,7 @@ async function updateDependencySubAgent() {
 
     console.log('Next steps:');
     console.log('  1. Regenerate .claude/agents/dependency-agent.md from database');
-    console.log('  2. Test with: node lib/sub-agent-executor.js DEPENDENCY <SD-ID>');
+    console.log('  2. Test with: node scripts/execute-subagent.js --code DEPENDENCY --sd-id <SD-ID>');
     console.log('  3. Commit changes to repository\n');
 
     return data[0];

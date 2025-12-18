@@ -61,7 +61,7 @@ node scripts/qa-engineering-director-enhanced.js <SD-ID> --full-e2e
 
 ### For Targeted Sub-Agent Execution
 ```bash
-node lib/sub-agent-executor.js TESTING <SD-ID>
+node scripts/execute-subagent.js --code TESTING --sd-id <SD-ID>
 ```
 
 **When to use**:

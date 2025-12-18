@@ -170,7 +170,7 @@ node scripts/generate-workflow-docs.js --sd-id <SD-ID>
 
 **For targeted sub-agent execution**:
 \`\`\`bash
-node lib/sub-agent-executor.js DOCMON <SD-ID>
+node scripts/execute-subagent.js --code DOCMON --sd-id <SD-ID>
 \`\`\`
 
 **For phase-based orchestration**:

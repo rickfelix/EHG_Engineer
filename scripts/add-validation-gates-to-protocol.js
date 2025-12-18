@@ -91,7 +91,7 @@ node scripts/orchestrate-phase-subagents.js LEAD_PRE_APPROVAL <SD-ID>
 
 **Command**:
 \`\`\`bash
-node lib/sub-agent-executor.js VALIDATION <SD-ID>
+node scripts/execute-subagent.js --code VALIDATION --sd-id <SD-ID>
 \`\`\`
 
 **Blocks**: Cannot create PLAN→EXEC handoff until validation passes
@@ -409,7 +409,7 @@ grep -A 10 -B 10 "claimed issue" /mnt/c/_EHG/ehg/src/component.tsx
 **Schema Validation** ✅:
 \`\`\`bash
 # If PRD mentions tables/columns, validate they exist
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 # Or query directly
 node -e "

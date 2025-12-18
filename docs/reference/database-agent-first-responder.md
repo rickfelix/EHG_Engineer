@@ -73,7 +73,7 @@ Migration Errors:
 
 ```bash
 # For specific database task
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 # For phase-based orchestration
 node scripts/orchestrate-phase-subagents.js <PHASE> <SD-ID>
@@ -136,7 +136,7 @@ Do NOT attempt manual fixes, workarounds, or trial-and-error
 Copy exact error message, SQL statement, context
 
 **Step 3**: Invoke database agent
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 **Step 4**: Provide context
 Share error message, what you were trying to do, relevant code
@@ -177,7 +177,7 @@ Follow database agent's guidance exactly
 CREATE TABLE users_new ...
 
 # RIGHT: Invoke database agent
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 # Database agent will:
 # - Check existing table schema
@@ -194,7 +194,7 @@ node lib/sub-agent-executor.js DATABASE <SD-ID>
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
 
 # RIGHT: Invoke database agent
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 # Database agent will:
 # - Validate entire table schema
@@ -211,7 +211,7 @@ node lib/sub-agent-executor.js DATABASE <SD-ID>
 const supabase = createClient(url, SERVICE_ROLE_KEY)
 
 // RIGHT: Invoke database agent
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 // Database agent will:
 // - Review RLS policy design
@@ -245,7 +245,7 @@ const client = await createDatabaseClient('engineer', { verify: true });
 
 **Action**:
 ```bash
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 ```
 
 **Include in**: Parallel sub-agent execution with Security, Design, Systems Analyst
@@ -262,7 +262,7 @@ node lib/sub-agent-executor.js DATABASE <SD-ID>
 **Action**:
 ```bash
 # FIRST thing in PLAN phase
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 ```
 
 **Blocks**: PRD creation if critical database issues found
@@ -280,7 +280,7 @@ node lib/sub-agent-executor.js DATABASE <SD-ID>
 
 **Action**:
 ```bash
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 ```
 
 **Provides**: Migration patterns, connection helpers, schema validation
@@ -295,7 +295,7 @@ node lib/sub-agent-executor.js DATABASE <SD-ID>
 
 **Action**:
 ```bash
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 ```
 
 **Confirms**: Migrations successful, schema correct, RLS policies working
@@ -407,7 +407,7 @@ const { data } = await supabase
 ### One-Line Decision
 
 ```
-Database task or error? → node lib/sub-agent-executor.js DATABASE <SD-ID>
+Database task or error? → node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 ```
 
 ### Three Rules

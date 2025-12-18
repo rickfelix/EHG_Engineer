@@ -73,7 +73,7 @@ CREATE TABLE webhook_events_new (
 **Right Approach**:
 ```bash
 # STOP: Invoke database agent
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 # Database agent will:
 # 1. Check existing table schema
@@ -110,7 +110,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP;
 **Right Approach**:
 ```bash
 # STOP: Invoke database agent FIRST
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 # Database agent will:
 # 1. Query current schema: SELECT column_name, data_type FROM information_schema.columns
@@ -152,7 +152,7 @@ const supabase = createClient(
 **Right Approach**:
 ```bash
 # STOP: Invoke database agent
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 # Database agent will:
 # 1. Review RLS policy design
@@ -196,7 +196,7 @@ psql -c "CREATE TABLE analytics_v2 ..."
 **Right Approach**:
 ```bash
 # STOP after FIRST error: Invoke database agent
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 # Database agent will:
 # 1. Diagnose permission issue (wrong user, wrong database)
@@ -235,7 +235,7 @@ try {
 **Right Approach**:
 ```bash
 # BEFORE executing migration: Invoke database agent
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 # Database agent will:
 # 1. Validate SQL syntax
@@ -318,7 +318,7 @@ await client.query('INSERT INTO users (name, email) VALUES (...)');
 **Right Approach**:
 ```bash
 # STOP on "already exists": Invoke database agent
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 # Database agent will:
 # 1. Query existing table schema
@@ -479,7 +479,7 @@ Implement solution
 
 ```bash
 # For specific task with SD context
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 # For phase-based orchestration
 node scripts/orchestrate-phase-subagents.js <PHASE> <SD-ID>

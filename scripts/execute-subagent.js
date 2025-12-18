@@ -123,20 +123,10 @@ async function listSubAgents() {
 
     console.log(`   Total: ${agents.length}\n`);
 
-    // Group by activation type
-    const automatic = agents.filter(a => a.activation === 'automatic');
-    const manual = agents.filter(a => a.activation === 'manual');
-
-    console.log(`   🤖 Automatic (${automatic.length}):`);
-    automatic.forEach(agent => {
+    // List all agents by priority (highest first)
+    agents.forEach(agent => {
       const version = agent.metadata?.version || '1.0.0';
-      console.log(`      - ${agent.code.padEnd(15)} ${agent.name} (v${version}) [Priority: ${agent.priority}]`);
-    });
-
-    console.log(`\n   👤 Manual (${manual.length}):`);
-    manual.forEach(agent => {
-      const version = agent.metadata?.version || '1.0.0';
-      console.log(`      - ${agent.code.padEnd(15)} ${agent.name} (v${version}) [Priority: ${agent.priority}]`);
+      console.log(`   ${agent.code.padEnd(15)} ${agent.name} (v${version}) [Priority: ${agent.priority}]`);
     });
 
     console.log('\n   💡 Tip: Run with --code <CODE> --sd-id <SD-ID> to execute');

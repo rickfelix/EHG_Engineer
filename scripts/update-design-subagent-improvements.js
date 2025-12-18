@@ -356,7 +356,7 @@ node scripts/design-subagent-evaluation.js <SD-ID>
 
 **For targeted sub-agent execution**:
 \`\`\`bash
-node lib/sub-agent-executor.js DESIGN <SD-ID>
+node scripts/execute-subagent.js --code DESIGN --sd-id <SD-ID>
 \`\`\`
 
 **For phase-based orchestration**:

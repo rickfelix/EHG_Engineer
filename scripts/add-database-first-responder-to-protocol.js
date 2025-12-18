@@ -100,7 +100,7 @@ async function addDatabaseFirstResponder() {
 2. Document the exact error message
 3. Invoke database agent:
    \`\`\`bash
-   node lib/sub-agent-executor.js DATABASE <SD-ID>
+   node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
    \`\`\`
 4. Provide error context to database agent
 5. Implement database agent's solution
@@ -135,7 +135,7 @@ async function addDatabaseFirstResponder() {
 CREATE TABLE webhook_events_new ...
 
 -- RIGHT: Use database agent to diagnose why table exists
-node lib/sub-agent-executor.js DATABASE <SD-ID>
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 \`\`\`
 
 **❌ Anti-Pattern 2: Column Existence Guards**
@@ -303,7 +303,7 @@ postgresql://postgres.PROJECT:PASSWORD@aws-1... // try this?
 - IF SD mentions: database, migration, schema, table, RLS, SQL, Postgres
 - THEN: Database agent included in parallel sub-agent execution
 - \`\`\`bash
-  node lib/sub-agent-executor.js DATABASE <SD-ID>
+  node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
   \`\`\`
 
 **PLAN PRD Creation Phase**:

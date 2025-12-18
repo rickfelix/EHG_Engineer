@@ -28,7 +28,7 @@ node scripts/uat-test-executor.js <SD-ID>
 
 ### For Targeted Sub-Agent Execution
 ```bash
-node lib/sub-agent-executor.js UAT <SD-ID>
+node scripts/execute-subagent.js --code UAT --sd-id <SD-ID>
 ```
 
 **When to use**:

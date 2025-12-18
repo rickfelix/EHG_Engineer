@@ -28,7 +28,7 @@ node scripts/security-architect-assessment.js <SD-ID>
 
 ### For Targeted Sub-Agent Execution
 ```bash
-node lib/sub-agent-executor.js SECURITY <SD-ID>
+node scripts/execute-subagent.js --code SECURITY --sd-id <SD-ID>
 ```
 
 **When to use**:
