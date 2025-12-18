@@ -54,6 +54,10 @@ import {
   getPlanVerifySubAgents,
   logSdTypeValidationMode
 } from '../lib/utils/sd-type-validation.js';
+// LEO Protocol v4.3.4: LLM-based intelligent impact analysis
+import { analyzeSDImpact, enhanceSubAgentSelection, getImpactBasedSubAgents } from '../lib/intelligent-impact-analyzer.js';
+// LEO Protocol v4.3.4: Pattern-based learning from retrospectives
+import { getPatternBasedSubAgents, analyzeSDAgainstPatterns } from '../lib/learning/pattern-to-subagent-mapper.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -72,16 +76,36 @@ const PHASE_SUBAGENT_MAP = {
 };
 
 // SD type-aware PLAN_VERIFY mapping (SD-TECH-DEBT-DOCS-001 resilience improvement)
-// Documentation/infrastructure SDs skip TESTING and GITHUB sub-agents
+// LEO Protocol v4.3.4: SECURITY + PERFORMANCE now MANDATORY for code-impacting SDs
+// Rationale: SD-HARDENING-V1 revealed that optional SECURITY/PERFORMANCE sub-agents
+// allowed RLS gaps and N+1 queries to slip through. Making them mandatory prevents this.
 const PLAN_VERIFY_BY_SD_TYPE = {
-  // Full validation for code-impacting SDs
+  // Full validation for code-impacting SDs - SECURITY + PERFORMANCE are MANDATORY
   feature: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'API', 'DEPENDENCY'],
-  database: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY'],
-  security: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY'],
+  database: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE'],  // Added PERFORMANCE for N+1 detection
+  security: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE'],  // Added PERFORMANCE
+  api: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'API'],  // New type for API work
 
   // Reduced validation for non-code SDs (skip TESTING, GITHUB)
   documentation: ['DOCMON', 'STORIES'],
-  infrastructure: ['DOCMON', 'STORIES', 'GITHUB']  // Infrastructure keeps GITHUB for CI/CD validation
+  infrastructure: ['DOCMON', 'STORIES', 'GITHUB', 'SECURITY']  // Infrastructure keeps SECURITY for RLS validation
+};
+
+// MANDATORY sub-agents that ALWAYS run regardless of keyword matching
+// LEO Protocol v4.3.4: Ensures critical validations can't be skipped
+const MANDATORY_SUBAGENTS_BY_PHASE = {
+  LEAD_PRE_APPROVAL: ['VALIDATION', 'RISK'],  // Always check for duplicates and risks
+  PLAN_PRD: ['DATABASE', 'STORIES'],  // Always validate schema and user stories
+  PLAN_VERIFY: {
+    // SD-type specific mandatory agents
+    feature: ['TESTING', 'SECURITY', 'PERFORMANCE'],
+    database: ['TESTING', 'DATABASE', 'SECURITY', 'PERFORMANCE'],
+    security: ['TESTING', 'SECURITY'],
+    api: ['TESTING', 'SECURITY', 'PERFORMANCE', 'API'],
+    documentation: ['DOCMON'],
+    infrastructure: ['GITHUB', 'SECURITY']
+  },
+  LEAD_FINAL: ['RETRO']  // Always generate retrospective
 };
 
 /**
@@ -624,6 +648,110 @@ async function orchestrate(phase, sdId, options = {}) {
       } else {
         console.log(`   ⏭️  ${code}: ${reason}`);
         skippedSubAgents.push({ ...subAgent, reason });
+      }
+    }
+
+    // Step 3B: LEO Protocol v4.3.4 - LLM Impact Analysis Enhancement
+    // Use LLM to identify validation needs that keyword matching might miss
+    console.log('\n🧠 Step 3B: Running LLM intelligent impact analysis...');
+    let llmRequiredAgents = [];
+    try {
+      llmRequiredAgents = await getImpactBasedSubAgents(sd);
+      if (llmRequiredAgents.length > 0) {
+        console.log(`   LLM identified ${llmRequiredAgents.length} additional concerns:`);
+        for (const agent of llmRequiredAgents) {
+          console.log(`   🔍 ${agent.code}: ${agent.reason}`);
+          // Add if not already required
+          const alreadyRequired = requiredSubAgents.some(sa =>
+            (sa.sub_agent_code || sa.code) === agent.code
+          );
+          if (!alreadyRequired) {
+            const subAgent = phaseSubAgents.find(sa =>
+              (sa.sub_agent_code || sa.code) === agent.code
+            );
+            if (subAgent) {
+              requiredSubAgents.push({ ...subAgent, reason: agent.reason, source: 'llm_impact' });
+              // Remove from skipped if it was there
+              const skippedIdx = skippedSubAgents.findIndex(sa =>
+                (sa.sub_agent_code || sa.code) === agent.code
+              );
+              if (skippedIdx >= 0) {
+                skippedSubAgents.splice(skippedIdx, 1);
+              }
+            }
+          }
+        }
+      } else {
+        console.log('   No additional concerns identified by LLM analysis');
+      }
+    } catch (llmError) {
+      console.warn(`   ⚠️ LLM impact analysis failed (non-blocking): ${llmError.message}`);
+    }
+
+    // Step 3C: LEO Protocol v4.3.4 - Pattern-Based Learning Enhancement
+    // Use learned patterns from retrospectives to require sub-agents
+    console.log('\n📚 Step 3C: Checking learned patterns from retrospectives...');
+    let patternRequiredAgents = [];
+    try {
+      patternRequiredAgents = await getPatternBasedSubAgents(sd);
+      if (patternRequiredAgents.length > 0) {
+        console.log(`   Patterns require ${patternRequiredAgents.length} sub-agents:`);
+        for (const agent of patternRequiredAgents) {
+          console.log(`   📖 ${agent.code}: ${agent.reason}`);
+          // Add if not already required
+          const alreadyRequired = requiredSubAgents.some(sa =>
+            (sa.sub_agent_code || sa.code) === agent.code
+          );
+          if (!alreadyRequired) {
+            const subAgent = phaseSubAgents.find(sa =>
+              (sa.sub_agent_code || sa.code) === agent.code
+            );
+            if (subAgent) {
+              requiredSubAgents.push({ ...subAgent, reason: agent.reason, source: 'pattern_learning' });
+              // Remove from skipped if it was there
+              const skippedIdx = skippedSubAgents.findIndex(sa =>
+                (sa.sub_agent_code || sa.code) === agent.code
+              );
+              if (skippedIdx >= 0) {
+                skippedSubAgents.splice(skippedIdx, 1);
+              }
+            }
+          }
+        }
+      } else {
+        console.log('   No additional requirements from learned patterns');
+      }
+    } catch (patternError) {
+      console.warn(`   ⚠️ Pattern analysis failed (non-blocking): ${patternError.message}`);
+    }
+
+    // Step 3D: Apply mandatory sub-agents by SD type
+    console.log('\n🔒 Step 3D: Applying mandatory sub-agents for SD type...');
+    const sdType = sd.sd_type || 'feature';
+    const mandatoryForPhase = MANDATORY_SUBAGENTS_BY_PHASE[phase];
+    const mandatoryAgents = typeof mandatoryForPhase === 'object' && !Array.isArray(mandatoryForPhase)
+      ? (mandatoryForPhase[sdType] || mandatoryForPhase.feature || [])
+      : (mandatoryForPhase || []);
+
+    for (const mandatoryCode of mandatoryAgents) {
+      const alreadyRequired = requiredSubAgents.some(sa =>
+        (sa.sub_agent_code || sa.code) === mandatoryCode
+      );
+      if (!alreadyRequired) {
+        const subAgent = phaseSubAgents.find(sa =>
+          (sa.sub_agent_code || sa.code) === mandatoryCode
+        );
+        if (subAgent) {
+          console.log(`   🔒 ${mandatoryCode}: Mandatory for ${sdType} SDs in ${phase}`);
+          requiredSubAgents.push({ ...subAgent, reason: `Mandatory for ${sdType} SDs`, source: 'mandatory_matrix' });
+          // Remove from skipped
+          const skippedIdx = skippedSubAgents.findIndex(sa =>
+            (sa.sub_agent_code || sa.code) === mandatoryCode
+          );
+          if (skippedIdx >= 0) {
+            skippedSubAgents.splice(skippedIdx, 1);
+          }
+        }
       }
     }
 

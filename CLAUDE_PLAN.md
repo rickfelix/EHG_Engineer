@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-12-15 8:04:17 PM
+**Generated**: 2025-12-18 9:02:33 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -122,6 +122,30 @@ Launch 1-3 Plan agents based on complexity:
 
 Do NOT launch 3 agents for every task—that wastes time on simple decisions.
 
+## Deferred Work Management
+
+### What Gets Deferred
+- Technical debt discovered during implementation
+- Edge cases not critical for MVP
+- Performance optimizations for later
+- Nice-to-have features
+
+### Creating Deferred Items
+```sql
+INSERT INTO deferred_work (sd_id, title, reason, priority)
+VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
+```
+
+### Tracking
+- Deferred items linked to parent SD
+- Reviewed during retrospective
+- May become new SDs if significant
+
+### Rules
+- Document WHY deferred, not just WHAT
+- Set realistic priority (critical items shouldn't be deferred)
+- Max 5 deferred items per SD
+
 ## PLAN Phase Negative Constraints
 
 ## 🚫 PLAN Phase Negative Constraints
@@ -159,30 +183,6 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 **Why Wrong**: PRD validator blocks placeholders, signals incomplete planning
 **Correct Approach**: If truly unknown, use AskUserQuestion to clarify before PRD creation
 </negative_constraints>
-
-## Deferred Work Management
-
-### What Gets Deferred
-- Technical debt discovered during implementation
-- Edge cases not critical for MVP
-- Performance optimizations for later
-- Nice-to-have features
-
-### Creating Deferred Items
-```sql
-INSERT INTO deferred_work (sd_id, title, reason, priority)
-VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
-```
-
-### Tracking
-- Deferred items linked to parent SD
-- Reviewed during retrospective
-- May become new SDs if significant
-
-### Rules
-- Document WHY deferred, not just WHAT
-- Set realistic priority (critical items shouldn't be deferred)
-- Max 5 deferred items per SD
 
 ## PRD Template Scaffolding
 
@@ -519,6 +519,33 @@ From retrospectives:
 **From SD-UAT-020**:
 > "Created 100+ test checklist but didn't execute manually. Time spent on unused documentation."
 
+## 🔬 BMAD Method Enhancements
+
+## BMAD Enhancements
+
+### 6 Key Improvements
+1. **Unified Handoff System** - All handoffs via `handoff.js`
+2. **Database-First PRDs** - PRDs stored in database, not markdown
+3. **Validation Gates** - 4-gate validation before EXEC
+4. **Progress Tracking** - Automatic progress % calculation
+5. **Context Management** - Proactive monitoring, compression strategies
+6. **Sub-Agent Compression** - 3-tier output reduction
+
+### Using Handoff System
+```bash
+node scripts/handoff.js create "{message}"
+```
+
+### PRD Creation
+```bash
+node scripts/add-prd-to-database.js {SD-ID}
+```
+
+### Never Bypass
+- ⚠️ Always use process scripts
+- ⚠️ Never create PRDs as markdown files
+- ⚠️ Never skip validation gates
+
 ## Research Lookup Before PRD Creation
 
 ## Research Lookup Before PRD Creation (MANDATORY)
@@ -616,33 +643,6 @@ node scripts/add-prd-to-database.js SD-RESEARCH-106
 # → PRD includes research findings in technical_approach
 ```
 
-
-## 🔬 BMAD Method Enhancements
-
-## BMAD Enhancements
-
-### 6 Key Improvements
-1. **Unified Handoff System** - All handoffs via `handoff.js`
-2. **Database-First PRDs** - PRDs stored in database, not markdown
-3. **Validation Gates** - 4-gate validation before EXEC
-4. **Progress Tracking** - Automatic progress % calculation
-5. **Context Management** - Proactive monitoring, compression strategies
-6. **Sub-Agent Compression** - 3-tier output reduction
-
-### Using Handoff System
-```bash
-node scripts/handoff.js create "{message}"
-```
-
-### PRD Creation
-```bash
-node scripts/add-prd-to-database.js {SD-ID}
-```
-
-### Never Bypass
-- ⚠️ Always use process scripts
-- ⚠️ Never create PRDs as markdown files
-- ⚠️ Never skip validation gates
 
 ## DESIGN→DATABASE Validation Gates
 
@@ -1646,6 +1646,6 @@ Required: [object Object], [object Object], [object Object], [object Object], [o
 
 ---
 
-*Generated from database: 2025-12-15*
+*Generated from database: 2025-12-18*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

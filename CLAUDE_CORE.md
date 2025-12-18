@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-15 8:04:17 PM
+**Generated**: 2025-12-18 9:02:33 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -227,39 +227,6 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 *Added: SD-EVA-DECISION-001 to prevent haiku model usage*
 
 
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
-
 ## Execution Philosophy
 
 ## 🧠 EXECUTION PHILOSOPHY (Read First!)
@@ -317,6 +284,39 @@ These principles override default behavior and must be internalized before start
 
 **REMEMBER**: The goal is NOT to complete SDs quickly. The goal is to complete SDs CORRECTLY. A properly implemented SD that takes 8 hours is infinitely better than a rushed implementation that takes 4 hours but requires 6 hours of fixes.
 
+
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## 🎯 Skill Integration (Claude Code Skills)
 
@@ -1277,7 +1277,8 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 | PAT-003 | security | 🟠 high | 3 | 📉 | Add auth.uid() check to RLS policy USING |
 | PAT-008 | deployment | 🟠 high | 2 | ➡️ | Check GitHub Actions secrets and package |
 | PAT-MD-001 | database | 🔴 critical | 1 | ➡️ | Key Insight: PostgreSQL direct connectio |
-| PAT-EXEC-IMPL-001 | workflow | 🟠 high | 1 | ➡️ | See details |
+| PAT-DB-SD-E2E-001 | testing | 🟠 high | 1 | ➡️ | Update TESTING sub-agent to check SD cat |
+| PAT-EXEC-IMPL-001 | workflow | 🟠 high | 1 | ➡️ | Query database for existing tables/funct |
 
 ### Prevention Checklists
 
@@ -1296,10 +1297,15 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 - [ ] Verify migration file exists before execution
 - [ ] Use SSL with rejectUnauthorized: false
 
+**testing**:
+- [ ] Check SD category before requiring E2E tests
+- [ ] For database SDs: validate tables exist via SQL
+- [ ] For infrastructure SDs: validate config/setup
+
 **workflow**:
-- [ ] [
-- [ ] "
-- [ ] Q
+- [ ] Query DB for existing tables FIRST
+- [ ] Check migration files in repo
+- [ ] Check git log for SD commits
 
 
 *Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
@@ -1309,7 +1315,29 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. LEO Protocol Enhancement: Discovery Gate & Quality Improvements - Retrospective ⭐
+### 1. Vision V2: Chairman's Dashboard UI - Retrospective ⭐
+**Category**: TESTING_STRATEGY | **Date**: 12/14/2025 | **Score**: 100
+
+**Key Improvements**:
+- No unified test evidence found - consider running comprehensive E2E tests
+- No unified test evidence found - consider running comprehensive E2E tests
+
+**Action Items**:
+- [ ] Complete PLAN-TO-LEAD handoff
+- [ ] Merge PR to main branch
+
+### 2. Legacy Protocol Cleanup (The Exorcism) - Retrospective ⭐
+**Category**: DEPLOYMENT_ISSUE | **Date**: 12/16/2025 | **Score**: 100
+
+**Key Improvements**:
+- Should have documented rollback procedure before starting
+- E2E tests could verify UI still renders Stage1-25 correctly
+
+**Action Items**:
+- [ ] Create rollback procedure for stage component deletions
+- [ ] Add E2E test verifying Stage1-25 UI renders correctly
+
+### 3. LEO Protocol Enhancement: Discovery Gate & Quality Improvements - Retrospective ⭐
 **Category**: TESTING_STRATEGY | **Date**: 12/12/2025 | **Score**: 100
 
 **Key Improvements**:
@@ -1320,16 +1348,27 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 - [ ] RETRO Deduplication | Owner: LEO Team | Due: 2025-01-15 | Acceptance: No duplica...
 - [ ] Infrastructure Test Validation | Owner: LEO Team | Due: 2025-01-31 | Acceptance:...
 
-### 2. 25-Stage Artifact Integration + Stage-Gated Runtime Consumption - Retrospective ⭐
-**Category**: DATABASE_SCHEMA | **Date**: 12/13/2025 | **Score**: 90
+### 4. Vision V2: EVA Orchestration Layer - Retrospective ⭐
+**Category**: DATABASE_SCHEMA | **Date**: 12/14/2025 | **Score**: 100
 
 **Key Improvements**:
 - No unified test evidence found - consider running comprehensive E2E tests
 - No unified test evidence found - consider running comprehensive E2E tests
 
 **Action Items**:
-- [ ] Update TESTING sub-agent to execute real Playwright tests
-- [ ] Fix mapping script to always use service role key for database writes
+- [ ] Add reset_sd_phase RPC function for administrative phase corrections
+- [ ] Maintain E2E test path auto-generation for all SD types
+
+### 5. Vision V2: Database Schema Foundation - Retrospective ⭐
+**Category**: DATABASE_SCHEMA | **Date**: 12/14/2025 | **Score**: 90
+
+**Key Improvements**:
+- No unified test evidence found - consider running comprehensive E2E tests
+- No unified test evidence found - consider running comprehensive E2E tests
+
+**Action Items**:
+- [ ] Merge Vision V2 Database Schema PR
+- [ ] Document PAT-DB-SD-E2E-001 pattern for future database SDs
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1358,30 +1397,30 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 | Sub-Agent | Trigger Keywords | Priority | Description |
 |-----------|------------------|----------|-------------|
-| Information Architecture Lead | LEAD_SD_CREATION, LEAD_HANDOFF_CREATION, | 95 | ## Information Architecture Lead v3.0.0 - Database-First Enf... |
 | Quick-Fix Orchestrator ("LEO Lite" Field Medic) | N/A | 95 | Lightweight triage and resolution for small UAT-discovered i... |
 | Root Cause Analysis Agent | sub_agent_blocked, ci_pipeline_failure,  | 95 | Forensic intelligence agent for defect triage, root cause de... |
-| UAT Test Executor | uat test, execute test, run uat, test ex | 90 | Interactive UAT test execution guide for manual testing work... |
+| Information Architecture Lead | LEAD_SD_CREATION, LEAD_HANDOFF_CREATION, | 95 | ## Information Architecture Lead v3.0.0 - Database-First Enf... |
 | DevOps Platform Architect | EXEC_IMPLEMENTATION_COMPLETE, create pul | 90 | # DevOps Platform Architect Sub-Agent
 
 **Identity**: You are... |
+| Chief Security Architect | authentication, security, security auth  | 90 | Former NSA security architect with 25 years experience secur... |
+| UAT Test Executor | uat test, execute test, run uat, test ex | 90 | Interactive UAT test execution guide for manual testing work... |
+| Performance Engineering Lead | optimization | 85 | Performance engineering lead with 20+ years optimizing high-... |
 | Continuous Improvement Coach | LEAD_APPROVAL_COMPLETE, LEAD_REJECTION,  | 85 | ## Continuous Improvement Coach v4.0.0 - Quality-First Editi... |
 | API Architecture Sub-Agent | API, REST, RESTful, GraphQL, endpoint, r | 75 | ## API Sub-Agent v1.0.0
 
 **Mission**: REST/GraphQL endpoint ... |
-| Senior Design Sub-Agent | component, visual, design system, stylin | 70 | ## Senior Design Sub-Agent v6.0.0 - Lessons Learned Edition
-... |
 | Dependency Management Sub-Agent | dependency, dependencies, npm, yarn, pnp | 70 | # Dependency Management Specialist Sub-Agent
 
 **Identity**: ... |
+| Senior Design Sub-Agent | component, visual, design system, stylin | 70 | ## Senior Design Sub-Agent v6.0.0 - Lessons Learned Edition
+... |
 | User Story Context Engineering Sub-Agent | user story, user stories, acceptance cri | 50 | ## User Story Context Engineering v2.0.0 - Lessons Learned E... |
 | Risk Assessment Sub-Agent | high risk, complex, refactor, migration, | 8 | ## Risk Assessment Sub-Agent v1.0.0
 
 **BMAD Enhancement**: M... |
-| Chief Security Architect | authentication, security, security auth  | 7 | Former NSA security architect with 25 years experience secur... |
 | Principal Database Architect | schema, migration, EXEC_IMPLEMENTATION_C | 6 | ## Principal Database Architect v2.0.0 - Lessons Learned Edi... |
 | QA Engineering Director | coverage, protected route, build error,  | 5 | ## Enhanced QA Engineering Director v2.4.0 - Retrospective-I... |
-| Performance Engineering Lead | optimization | 4 | Performance engineering lead with 20+ years optimizing high-... |
 | Principal Systems Analyst | existing implementation, duplicate, conf | N/A | ## Principal Systems Analyst v3.0.0 - Retrospective-Informed... |
 
 **Note**: Sub-agent results MUST be persisted to `sub_agent_execution_results` table.
@@ -1389,7 +1428,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ---
 
-*Generated from database: 2025-12-15*
+*Generated from database: 2025-12-18*
 *Protocol Version: 4.3.3*
-*Includes: Hot Patterns (4) + Recent Lessons (2)*
+*Includes: Hot Patterns (5) + Recent Lessons (5)*
 *Load this file first in all sessions*
