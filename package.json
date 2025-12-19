@@ -155,7 +155,16 @@
     "protocol:apply-auto": "node scripts/protocol-improvements.js apply-auto",
     "protocol:effectiveness": "node scripts/protocol-improvements.js effectiveness",
     "protocol:rescan": "node scripts/protocol-improvements.js rescan",
-    "protocol:stats": "node scripts/protocol-improvements.js stats"
+    "protocol:stats": "node scripts/protocol-improvements.js stats",
+    "evidence:manifest": "node lib/evidence/manifest-generator.js",
+    "evidence:verify": "node lib/evidence/manifest-generator.js --verify",
+    "trace:cleanup": "node scripts/cleanup-passing-traces.js",
+    "trace:cleanup:dry": "node scripts/cleanup-passing-traces.js --dry-run",
+    "trace:cleanup:verbose": "node scripts/cleanup-passing-traces.js --verbose",
+    "leo:artifacts:clean": "node scripts/leo-artifact-cleaner.js",
+    "leo:artifacts:clean:dry": "node scripts/leo-artifact-cleaner.js --dry-run",
+    "leo:artifacts:clean:full": "node scripts/leo-artifact-cleaner.js --full",
+    "leo:artifacts:clean:verbose": "node scripts/leo-artifact-cleaner.js --verbose"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",

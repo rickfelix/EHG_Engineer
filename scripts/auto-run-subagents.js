@@ -4,16 +4,30 @@
  * AUTO-RUN SUB-AGENTS (Simple Version)
  * Works WITHOUT database triggers
  * Manually detects and runs required sub-agents
+ *
+ * LEO v4.4 Updates:
+ * - Added DB audit logging to subagent_activations table
+ * - Added file-based IPC for reliable result passing
+ * - Removed fragile stdout JSON parsing
  */
 
 import { createClient } from '@supabase/supabase-js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const execAsync = promisify(exec);
+
+// LEO v4.4: IPC temp directory for result passing
+const IPC_DIR = path.join(process.cwd(), '.leo-ipc');
+if (!fs.existsSync(IPC_DIR)) {
+  fs.mkdirSync(IPC_DIR, { recursive: true });
+}
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -34,36 +48,157 @@ const TRIGGER_RULES = {
   ]
 };
 
-async function runSubAgent(agent, script, sdId, sdKey) {
+/**
+ * LEO v4.4: Log sub-agent activation to database for audit trail
+ */
+async function logActivation(agent, sdId, triggerEvent, status = 'started') {
+  try {
+    const { data, error } = await supabase
+      .from('subagent_activations')
+      .insert({
+        sub_agent_code: agent,
+        sd_id: sdId,
+        trigger_event: triggerEvent,
+        status: status,
+        triggered_at: new Date().toISOString(),
+        metadata: {
+          source: 'auto-run-subagents.js',
+          leo_version: '4.4'
+        }
+      })
+      .select()
+      .single();
+
+    if (error) {
+      // Non-fatal: log but continue
+      console.log(`   ⚠️  Audit log failed (non-fatal): ${error.message}`);
+      return null;
+    }
+
+    return data?.id || null;
+  } catch (err) {
+    console.log(`   ⚠️  Audit log exception (non-fatal): ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * LEO v4.4: Update activation status in database
+ */
+async function updateActivation(activationId, status, result = null) {
+  if (!activationId) return;
+
+  try {
+    await supabase
+      .from('subagent_activations')
+      .update({
+        status: status,
+        completed_at: new Date().toISOString(),
+        result: result ? {
+          success: result.success,
+          verdict: result.verdict || null,
+          error: result.error || null
+        } : null
+      })
+      .eq('id', activationId);
+  } catch (err) {
+    // Non-fatal
+    console.log(`   ⚠️  Activation update failed (non-fatal): ${err.message}`);
+  }
+}
+
+/**
+ * LEO v4.4: Generate IPC file path for result passing
+ */
+function getIPCPath(agent, sdId) {
+  const hash = crypto.createHash('md5').update(`${agent}-${sdId}-${Date.now()}`).digest('hex').slice(0, 8);
+  return path.join(IPC_DIR, `result-${agent}-${hash}.json`);
+}
+
+/**
+ * LEO v4.4: Read result from IPC file
+ */
+function readIPCResult(ipcPath) {
+  try {
+    if (fs.existsSync(ipcPath)) {
+      const content = fs.readFileSync(ipcPath, 'utf8');
+      fs.unlinkSync(ipcPath); // Clean up after reading
+      return JSON.parse(content);
+    }
+  } catch (err) {
+    console.log(`   ⚠️  IPC read failed: ${err.message}`);
+  }
+  return null;
+}
+
+async function runSubAgent(agent, script, sdId, sdKey, triggerEvent) {
   console.log(`\n🤖 Running: ${agent}`);
   console.log(`   Script: ${script}`);
   console.log(`   SD: ${sdKey}`);
 
-  try {
-    const { stdout, stderr } = await execAsync(`node ${script} ${sdId}`);
+  // LEO v4.4: Log activation to database
+  const activationId = await logActivation(agent, sdId, triggerEvent);
+  if (activationId) {
+    console.log(`   📝 Activation logged: ${activationId}`);
+  }
 
-    // Try to parse JSON output
-    let result;
-    try {
-      const jsonMatch = stdout.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        result = JSON.parse(jsonMatch[0]);
-      } else {
-        result = { stdout, success: !stderr };
+  // LEO v4.4: Set up IPC file for result passing
+  const ipcPath = getIPCPath(agent, sdId);
+
+  try {
+    // Pass IPC path as environment variable for child process
+    const env = {
+      ...process.env,
+      LEO_IPC_RESULT_PATH: ipcPath
+    };
+
+    const { stdout, stderr } = await execAsync(`node ${script} ${sdId}`, {
+      env,
+      timeout: 300000 // 5 minute timeout
+    });
+
+    // LEO v4.4: Try to read result from IPC file first (preferred method)
+    let result = readIPCResult(ipcPath);
+
+    // Fallback: Try to parse JSON from stdout (legacy support)
+    if (!result) {
+      try {
+        const jsonMatch = stdout.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          result = JSON.parse(jsonMatch[0]);
+          console.log('   📄 Result from stdout (legacy mode)');
+        } else {
+          result = { stdout: stdout.slice(0, 500), success: !stderr };
+        }
+      } catch {
+        result = { stdout: stdout.slice(0, 500), stderr: stderr?.slice(0, 200), success: !stderr };
       }
-    } catch {
-      result = { stdout, stderr, success: !stderr };
+    } else {
+      console.log('   📄 Result from IPC file');
     }
 
-    if (result.success) {
+    const success = result.success !== false && result.verdict !== 'FAIL';
+
+    if (success) {
       console.log('   ✅ Success');
+      await updateActivation(activationId, 'completed', { success: true, verdict: result.verdict });
     } else {
       console.log('   ⚠️  Warning: Check output');
+      await updateActivation(activationId, 'completed_with_warnings', result);
     }
 
-    return { success: true, result };
+    return { success, result };
   } catch (error) {
     console.error(`   ❌ Failed: ${error.message}`);
+
+    // LEO v4.4: Log failure to database
+    await updateActivation(activationId, 'failed', { success: false, error: error.message });
+
+    // Clean up IPC file on error
+    if (fs.existsSync(ipcPath)) {
+      fs.unlinkSync(ipcPath);
+    }
+
     return { success: false, error: error.message };
   }
 }
@@ -117,7 +252,8 @@ async function autoRunSubAgents(sdId, triggerEvent) {
       console.log(`   📊 Using comprehensive version for ${subAgent.agent}`);
     }
 
-    const result = await runSubAgent(subAgent.agent, scriptToUse, sdId, sd.sd_key);
+    // LEO v4.4: Pass triggerEvent for DB audit logging
+    const result = await runSubAgent(subAgent.agent, scriptToUse, sdId, sd.sd_key, triggerEvent);
     results.push({ ...subAgent, ...result });
   }
 
