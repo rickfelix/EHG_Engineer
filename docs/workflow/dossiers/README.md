@@ -1,14 +1,19 @@
 # Stage Operating Dossiers — Index
 
 **Generated**: 2025-11-05
-**Protocol**: Stage Operating Dossier System v1.0
-**Purpose**: Comprehensive operational documentation for all 40 venture workflow stages
+**Updated**: 2025-12-19 (25-stage Vision V2 model)
+**Protocol**: Stage Operating Dossier System v2.0
+**Purpose**: Comprehensive operational documentation for all 25 venture workflow stages
+
+> **NOTE**: The legacy 40-stage model has been archived. Stages 26-40 are preserved at
+> `docs/archive/v1-40-stage-workflow/` for historical reference. The 25-stage Vision V2
+> model is now the single source of truth. See SD-HARDENING-V2-004A for migration details.
 
 ---
 
 ## Overview
 
-This directory contains detailed operating dossiers for each of the 40 stages in the EHG venture creation workflow. Each dossier consolidates:
+This directory contains detailed operating dossiers for each of the 25 stages in the EHG venture creation workflow. Each dossier consolidates:
 
 - Canonical YAML definitions from `stages.yaml`
 - Assessment scores from critique files
@@ -51,35 +56,18 @@ This directory contains detailed operating dossiers for each of the 40 stages in
 | 23 | Continuous Feedback Loops | `stage-23/` | ✅ PASS | 96/100 | 2025-11-05 |
 | 24 | MVP Engine: Automated Feedback Iteration | `stage-24/` | ✅ PASS | 96/100 | 2025-11-05 |
 | 25 | Quality Assurance | `stage-25/` | ✅ PASS | 100/100 | 2025-11-06 |
-| 26 | Security & Compliance Certification | `stage-26/` | ✅ PASS | 100/100 | 2025-11-06 |
-| 27 | Actor Model & Saga Transaction Integration | `stage-27/` | ✅ PASS | 100/100 | 2025-11-06 |
-| 28 | Development Excellence & Caching Optimizations | `stage-28/` | ✅ PASS | 100/100 | 2025-11-06 |
-| 29 | Final Polish | `stage-29/` | ✅ PASS | 100/100 | 2025-11-06 |
-| 30 | Production Deployment | `stage-30/` | ✅ PASS | 100/100 | 2025-11-06 |
-| 31 | MVP Launch | `stage-31/` | ✅ PASS | 100/100 | 2025-11-06 |
-| 32 | Customer Success & Retention Engineering | `stage-32/` | ✅ PASS | 100/100 | 2025-11-06 |
-| 33 | Post-MVP Expansion | `stage-33/` | ✅ PASS | 100/100 | 2025-11-06 |
-| 34 | Creative Media Automation | `stage-34/` | ✅ PASS | 100/100 | 2025-11-06 |
-| 35 | GTM Timing Intelligence | `stage-35/` | ✅ PASS | 100/100 | 2025-11-06 |
-| 36 | Parallel Exploration | `stage-36/` | ✅ PASS | 100/100 | 2025-11-06 |
-| 37 | Strategic Risk Forecasting | `stage-37/` | ✅ PASS | 100/100 | 2025-11-06 |
-| 38 | Timing Optimization | `stage-38/` | ✅ PASS | 100/100 | 2025-11-06 |
-| 39 | Multi-Venture Coordination | `stage-39/` | ✅ PASS | 100/100 | 2025-11-06 |
-| 40 | Venture Active | `stage-40/` | ✅ PASS | 96/100 | 2025-11-06 |
 
-**Progress**: 40/40 Complete (100%) ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-**Overall Average**: 99/100 ✅
+**Progress**: 25/25 Complete (100%) ■■■■■■■■■■■■■■■■■■■■■■■■■
+**Overall Average**: 96/100 ✅
 **Phase 3 Average**: 90/100 ✅ (Stages 2-4)
 **Phase 4 Average**: 93/100 ✅ (Stages 5-7)
 **Phase 5 Average**: 100/100 ✅ (Stages 8-10) ⭐ PERFECT
 **Phase 6 Average**: 100/100 ✅ (Stages 11-13) ⭐ PERFECT
 **Phase 7 Average**: 100/100 ✅ (Stages 14-16) ⭐ PERFECT
 **Phase 8 Average**: 100/100 ✅ (Stages 17-19) ⭐ PERFECT
-**Phase 9 Average**: 96/100 ✅ (Stages 20-24) ⭐ EXCELLENT
-**Phase 10 Average**: 100/100 ✅ (Stages 25-28) ⭐ PERFECT — 70% MILESTONE
-**Phase 11 Average**: 100/100 ✅ (Stages 29-32) ⭐ PERFECT — 80% MILESTONE
-**Phase 12 Average**: 100/100 ✅ (Stages 33-36) ⭐ PERFECT — 90% MILESTONE
-**Phase 13 Average**: 99/100 ✅ (Stages 37-40) ⭐ EXCELLENT — 100% MILESTONE 🎉
+**Phase 9 Average**: 97/100 ✅ (Stages 20-25) ⭐ EXCELLENT — 100% MILESTONE
+
+> **Archived Stages (26-40)**: See `docs/archive/v1-40-stage-workflow/` for historical content.
 
 **Legend**:
 - ✅ PASS: Dossier complete, scored ≥85
@@ -133,30 +121,25 @@ This directory contains detailed operating dossiers for each of the 40 stages in
 - Generated all 11 files with full evidence trail
 - Scored 88/100, approved with minor gaps
 
-### Completed Phases:
+### Completed Phases (25-Stage Vision V2):
 - **Phase 3**: ✅ Generated Stages 2, 3, 4 (batch of 3) — 2025-11-05 — Avg: 90/100
 - **Phase 4**: ✅ Generated Stages 5, 6, 7 (batch of 3) — 2025-11-05 — Avg: 93/100
 - **Phase 5**: ✅ Generated Stages 8, 9, 10 (batch of 3) — 2025-11-05 — Avg: 100/100 ⭐ PERFECT
 - **Phase 6**: ✅ Generated Stages 11, 12, 13 (batch of 3) — 2025-11-05 — Avg: 100/100 ⭐ PERFECT
 - **Phase 7**: ✅ Generated Stages 14, 15, 16 (batch of 3) — 2025-11-05 — Avg: 100/100 ⭐ PERFECT
 - **Phase 8**: ✅ Generated Stages 17, 18, 19 (batch of 3) — 2025-11-05 — Avg: 100/100 ⭐ PERFECT
-- **Phase 9**: ✅ Generated Stages 20, 21, 22, 23, 24 (accelerated batch of 5) — 2025-11-05 — Avg: 96/100 ⭐ EXCELLENT
+- **Phase 9**: ✅ Generated Stages 20-25 (accelerated batch) — 2025-11-05/06 — Avg: 97/100 ⭐ EXCELLENT — **100% MILESTONE**
 
-### Completed Phases (Continued):
-- **Phase 10**: ✅ Generated Stages 25, 26, 27, 28 (batch of 4) — 2025-11-06 — Avg: 100/100 ⭐ PERFECT — **70% MILESTONE**
-- **Phase 11**: ✅ Generated Stages 29, 30, 31, 32 (batch of 4) — 2025-11-06 — Avg: 100/100 ⭐ PERFECT — **80% MILESTONE**
-- **Phase 12**: ✅ Generated Stages 33, 34, 35, 36 (batch of 4) — 2025-11-06 — Avg: 100/100 ⭐ PERFECT — **90% MILESTONE**
-- **Phase 13**: ✅ Generated Stages 37, 38, 39, 40 (final batch of 4) — 2025-11-06 — Avg: 99/100 ⭐ EXCELLENT — **100% MILESTONE 🎉**
+> **Note**: Phases 10-13 (Stages 26-40) are archived. See `docs/archive/v1-40-stage-workflow/README.md`.
 
 ### Next Phases:
 - **Phase 14**: FINAL_SUMMARY_REPORT.md — Comprehensive retrospective & aggregate analysis (replaces Phase 14 separate kickoff)
 - **Phase 15**: Execute SD-RECURSION-ENGINE-001, SD-METRICS-FRAMEWORK-001, SD-CRITIQUE-TEMPLATE-UPDATE-001 (Wave 1)
 
-### Mid-Point Retrospective:
-- **Triggered**: 70% milestone (28/40 stages complete)
-- **Document**: `MIDPOINT_REVIEW.md` (auto-generated in Phase 10)
-- **Scope**: Quality trends, recursion taxonomy, agent/crew growth, SD backlog prioritization
-- **Wave 1 Preparation**: 3 SDs queued for LEAD phase (see Phase 11 summary)
+### Mid-Point Retrospective (Historical):
+- **Triggered**: Originally at 70% milestone (28/40 stages in legacy model)
+- **Document**: `MIDPOINT_REVIEW.md` (preserved for historical context)
+- **Note**: This retrospective was generated during the 40-stage era. The 25-stage Vision V2 model is now canonical.
 
 ---
 
@@ -190,5 +173,5 @@ cat docs/workflow/critique/stage-01.md
 
 ---
 
-**Last Updated**: 2025-11-05
+**Last Updated**: 2025-12-19
 **Contact**: See SD-CREWAI-ARCHITECTURE-001 for agent/crew infrastructure questions
