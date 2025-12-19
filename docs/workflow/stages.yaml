@@ -1,3 +1,10 @@
+# ============================================================================
+# DEPRECATED: This 40-stage configuration is archived.
+# Use stages_v2.yaml (25-stage model) for all new work.
+# See: docs/archive/v1-40-stage-workflow/README.md for history
+# Archived by: SD-HARDENING-V2-004A (2025-12-19)
+# ============================================================================
+
 stages:
   - id: 1
     title: Draft Idea
