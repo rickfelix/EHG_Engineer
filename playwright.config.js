@@ -71,14 +71,21 @@ export default defineConfig({
     // Base URL - EHG_Engineer dashboard runs on port 3001
     baseURL: process.env.BASE_URL || 'http://localhost:3001',
 
-    // Collect trace when retrying the failed test
-    trace: 'on-first-retry',
+    // LEO v4.4: Always capture trace for Evidence Pack (cleanup script handles retention)
+    trace: 'on',
 
-    // Record video on failure
-    video: 'retain-on-failure',
+    // Record video on failure (CI) or first-retry (local)
+    video: process.env.CI ? 'retain-on-failure' : 'on-first-retry',
 
     // Take screenshot on failure
     screenshot: 'only-on-failure',
+
+    // LEO v4.4: Capture HAR for API verification (minimal mode for storage efficiency)
+    recordHar: {
+      path: 'test-results/har/',
+      mode: 'minimal',
+      urlFilter: '**/api/**'
+    },
 
     // Ignore HTTPS errors
     ignoreHTTPSErrors: true,
@@ -148,9 +155,10 @@ export default defineConfig({
 
   // Metadata for LEO Protocol compliance
   metadata: {
-    protocol: 'LEO v4.1',
+    protocol: 'LEO v4.4',
     purpose: 'EHG_Engineer Dashboard E2E Testing',
     testingSubAgent: 'activated',
     coverage: 'e2e-dashboard',
+    evidencePack: 'enabled',
   },
 });

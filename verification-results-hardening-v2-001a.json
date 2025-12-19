@@ -1,0 +1,59 @@
+{
+  "tests": [
+    {
+      "name": "US-001: Chairman email configured",
+      "status": "PASS",
+      "expected": "rickfelix2000@gmail.com",
+      "actual": "rickfelix2000@gmail.com"
+    },
+    {
+      "name": "US-001: fn_is_chairman() function exists with correct logic",
+      "status": "PASS",
+      "exists": true,
+      "checksConfig": true,
+      "checksChairmanEmail": true
+    },
+    {
+      "name": "US-002/US-003: strategic_directives_v2 RLS policies",
+      "status": "PASS",
+      "policyCount": 4,
+      "hasAnonymousRead": true,
+      "policies": [
+        "anon_read_strategic_directives_v2",
+        "authenticated_read_strategic_directives_v2",
+        "service_role_all_strategic_directives_v2",
+        "strategic_directives_v2_service_role_access"
+      ]
+    },
+    {
+      "name": "US-002/US-003: leo_protocol_sections RLS policies",
+      "status": "PASS",
+      "policyCount": 4,
+      "hasAnonymousRead": true,
+      "policies": [
+        "anon_read_leo_protocol_sections",
+        "authenticated_read_leo_protocol_sections",
+        "leo_protocol_sections_service_role_access",
+        "service_role_all_leo_protocol_sections"
+      ]
+    },
+    {
+      "name": "US-002/US-003: board_members RLS policies",
+      "status": "PASS",
+      "policyCount": 2,
+      "hasAnonymousRead": true,
+      "policies": [
+        "anon_read_board_members",
+        "board_members_service_role_access"
+      ]
+    },
+    {
+      "name": "US-004: service_role can perform all operations",
+      "status": "PASS",
+      "selectCount": "48",
+      "canInsert": true
+    }
+  ],
+  "passed": 6,
+  "failed": 0
+}

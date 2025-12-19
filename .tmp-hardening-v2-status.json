@@ -1,0 +1,181 @@
+{
+  "query_date": "2025-12-18T22:30:17.012Z",
+  "total_sds": 14,
+  "sds": [
+    {
+      "id": "SD-HARDENING-V2-000",
+      "title": "Hardening V2: Post-Assessment Security, Correctness & Vision Alignment",
+      "status": "active",
+      "current_phase": "EXEC",
+      "progress_percentage": 0,
+      "parent_sd_id": null,
+      "is_working_on": true,
+      "description": "Root orchestrator for the comprehensive hardening initiative following the cross-review synthesis of three independent AI assessments (Claude Opus 4.5, Antigravity, OpenAI Codex).\n\n**Mission**: Transform the EHG Chairman's Operating System from its current \"schizophrenic state\" (mockware + legacy artifacts) into a production-ready Glass Cockpit that honors all Ground Truth Constraints.\n\n**Assessment Summary**:\n- 18 verified action items across 5 phases\n- 6 P0 critical findings (governance + tran...",
+      "success_criteria": "[\"Chairman can authenticate and access /chairman dashboard\",\"fn_advance_venture_stage() passes idempotency tests\",\"EVA displays real data from agent_task_contracts table\",\"Zero active references to stages >25\"]",
+      "updated_at": "2025-12-18T17:13:56.458Z"
+    },
+    {
+      "id": "SD-HARDENING-V2-001",
+      "title": "Governance Boundary Enforcement",
+      "status": "active",
+      "current_phase": "EXEC",
+      "progress_percentage": 20,
+      "parent_sd_id": "SD-HARDENING-V2-000",
+      "is_working_on": true,
+      "description": "Phase 1 of Hardening V2: Fix all C4 constraint violations (Security Posture).\n\n**Problem Statement**:\nThe Chairman cannot reliably access their own system due to:\n- fn_is_chairman() comparing JWT sub to agent UUID (never matches real user)\n- RLS policies blocking authenticated users (fn_is_service_role() too restrictive)\n- WebSocket accepting unauthenticated mutations (any client can change SDs)\n- service_role key accessible from client code paths\n\n**Assessment Sources**:\n- OpenAI F-01: RLS hard...",
+      "success_criteria": "[\"fn_is_chairman() returns true for Rick's authenticated session\",\"RLS matrix test passes: Chairman read=✓, write=✗; service_role read=✓, write=✓\",\"WebSocket rejects messages without valid Chairman JWT\",\"Build bundle contains zero service_role references\"]",
+      "updated_at": "2025-12-18T17:41:03.575Z"
+    },
+    {
+      "id": "SD-HARDENING-V2-001A",
+      "title": "Chairman Identity & RLS Policy Restructure",
+      "status": "draft",
+      "current_phase": "LEAD_APPROVAL",
+      "progress_percentage": 60,
+      "parent_sd_id": "SD-HARDENING-V2-001",
+      "is_working_on": false,
+      "description": "Fix fn_is_chairman() and restructure RLS policies to properly distinguish Chairman from service_role.\n\n**Findings Addressed**:\n- GOV-01: fn_is_chairman() compares JWT to agent UUID\n- GOV-02: RLS policies block Chairman\n\n**Implementation**:\n1. ALTER fn_is_chairman() to check auth.users.email = 'rick@ehg.com' (or config table)\n2. Split RLS policies: Chairman (authenticated) gets read access, service_role gets full access\n3. Add RLS matrix test suite...",
+      "success_criteria": [
+        "fn_is_chairman() returns TRUE when authenticated as rick@ehg.com via Supabase Auth",
+        "fn_is_chairman() returns FALSE for all other authenticated users",
+        "Chairman can successfully SELECT from strategic_directives_v2, leo_protocol_sections, board_members",
+        "Chairman INSERT/UPDATE/DELETE operations are blocked by RLS on protected tables",
+        "service_role operations bypass RLS correctly for backend system operations",
+        "All existing functionality continues to work without regression"
+      ],
+      "updated_at": "2025-12-18T17:45:34.040Z"
+    },
+    {
+      "id": "SD-HARDENING-V2-001B",
+      "title": "WebSocket Authentication Enforcement",
+      "status": "draft",
+      "current_phase": "LEAD_APPROVAL",
+      "progress_percentage": 60,
+      "parent_sd_id": "SD-HARDENING-V2-001",
+      "is_working_on": false,
+      "description": "Add JWT validation to WebSocket handler to prevent unauthenticated governance mutations.\n\n**Finding Addressed**:\n- GOV-03: Unauthenticated WebSocket mutates SDs\n\n**Implementation**:\n1. Extract JWT from WS connection handshake\n2. Validate JWT using Supabase auth.getUser()\n3. Reject all messages from unauthenticated connections\n4. Add rate limiting for authenticated connections...",
+      "success_criteria": "[\"WS connection without JWT is rejected\",\"setActiveSD message requires valid Chairman JWT\",\"Unauthenticated client receives 401 error\"]",
+      "updated_at": "2025-12-18T16:32:55.374Z"
+    },
+    {
+      "id": "SD-HARDENING-V2-001C",
+      "title": "Service Role Isolation",
+      "status": "draft",
+      "current_phase": "LEAD_APPROVAL",
+      "progress_percentage": 60,
+      "parent_sd_id": "SD-HARDENING-V2-001",
+      "is_working_on": false,
+      "description": "Eliminate service_role key access from client-reachable code paths.\n\n**Findings Addressed**:\n- GOV-04: service_role fallback in supabase-client.js\n- GOV-05: UAT tests expect no-auth access\n\n**Implementation**:\n1. Remove SUPABASE_SERVICE_ROLE_KEY fallback from createSupabaseClient()\n2. Hard-fail if NEXT_PUBLIC_SUPABASE_ANON_KEY is missing\n3. Add CI check: grep for service_role in client bundle\n4. Update UAT tests to authenticate before accessing protected routes...",
+      "success_criteria": "[\"supabase-client.js throws if anon key missing\",\"Build bundle contains zero service_role references\",\"UAT tests authenticate before accessing /chairman\"]",
+      "updated_at": "2025-12-18T16:32:55.415Z"
+    },
+    {
+      "id": "SD-HARDENING-V2-002",
+      "title": "Stage Transition Safety",
+      "status": "draft",
+      "current_phase": "LEAD_APPROVAL",
+      "progress_percentage": 0,
+      "parent_sd_id": "SD-HARDENING-V2-000",
+      "is_working_on": false,
+      "description": "Phase 2 of Hardening V2: Fix all C2 constraint violations (Agent Hierarchy Wrapper).\n\n**Problem Statement**:\nStage transitions are unsafe and unauditable:\n- venture-state-machine.js queries non-existent column (stage_id vs lifecycle_stage)\n- Direct UPDATE fallback bypasses fn_advance_venture_stage audit trail\n- fn_advance_venture_stage lacks idempotency (retries create duplicates)\n- Pending handoffs stored in memory (lost on restart)\n\n**Assessment Sources**:\n- Opus F-001: stage_id column mismatc...",
+      "success_criteria": "[\"venture_stage_work queries return correct data\",\"fn_advance_venture_stage handles duplicate calls safely\",\"Zero direct UPDATE paths exist outside the RPC\",\"Agent restart preserves pending CEO approvals\"]",
+      "updated_at": "2025-12-18T16:32:55.469Z"
+    },
+    {
+      "id": "SD-HARDENING-V2-002A",
+      "title": "Schema Field Alignment",
+      "status": "draft",
+      "current_phase": "LEAD_APPROVAL",
+      "progress_percentage": 60,
+      "parent_sd_id": "SD-HARDENING-V2-002",
+      "is_working_on": false,
+      "description": "Fix column name and type mismatches between database schema and application code.\n\n**Findings Addressed**:\n- STG-03: stage_id vs lifecycle_stage mismatch (VERIFIED P0)\n- STG-04: health_score INT vs VARCHAR mismatch\n\n**Implementation**:\n1. Update venture-state-machine.js to use 'lifecycle_stage' instead of 'stage_id'\n2. Align health_score: either change column to INT or function to use VARCHAR values\n3. Add schema validation tests...",
+      "success_criteria": "[\"venture_stage_work.select() returns correct rows\",\"health_score updates succeed without constraint violation\",\"Schema validation tests pass\"]",
+      "updated_at": "2025-12-18T16:32:55.469Z"
+    },
+    {
+      "id": "SD-HARDENING-V2-002B",
+      "title": "Gateway Enforcement",
+      "status": "draft",
+      "current_phase": "LEAD_APPROVAL",
+      "progress_percentage": 60,
+      "parent_sd_id": "SD-HARDENING-V2-002",
+      "is_working_on": false,
+      "description": "Remove direct UPDATE fallback to ensure ALL stage transitions go through fn_advance_venture_stage.\n\n**Finding Addressed**:\n- STG-02: Direct UPDATE fallback bypasses gateway\n\n**Implementation**:\n1. Delete _directStageAdvance() method from VentureStateMachine\n2. Change RPC failure handling: throw error instead of fallback\n3. Add logging for RPC failures\n4. Ensure venture_stage_transitions table captures ALL transitions...",
+      "success_criteria": "[\"Zero code paths update ventures.current_lifecycle_stage directly\",\"RPC failure throws error (not silent fallback)\",\"All transitions appear in venture_stage_transitions\"]",
+      "updated_at": "2025-12-18T16:32:55.513Z"
+    },
+    {
+      "id": "SD-HARDENING-V2-002C",
+      "title": "Idempotency & Persistence",
+      "status": "draft",
+      "current_phase": "LEAD_APPROVAL",
+      "progress_percentage": 60,
+      "parent_sd_id": "SD-HARDENING-V2-002",
+      "is_working_on": false,
+      "description": "Add idempotency to stage transitions and persist pending handoffs to database.\n\n**Findings Addressed**:\n- STG-01: fn_advance_venture_stage lacks idempotency\n- STG-05: Pending handoffs not persisted (memory only)\n\n**Implementation**:\n1. Add idempotency_key parameter to fn_advance_venture_stage\n2. Add UNIQUE constraint on (venture_id, idempotency_key) to venture_stage_transitions\n3. Replace pendingHandoffs Map() with database table query\n4. Add status='pending_ceo_review' to venture_stage_work sch...",
+      "success_criteria": "[\"Duplicate calls with same idempotency_key are no-op\",\"Agent restart preserves pending CEO approvals\",\"venture_stage_transitions has no duplicate entries\"]",
+      "updated_at": "2025-12-18T16:32:55.556Z"
+    },
+    {
+      "id": "SD-HARDENING-V2-003",
+      "title": "Orchestration Reality",
+      "status": "draft",
+      "current_phase": "LEAD_APPROVAL",
+      "progress_percentage": 0,
+      "parent_sd_id": "SD-HARDENING-V2-000",
+      "is_working_on": false,
+      "description": "Phase 3 of Hardening V2: Replace EVA mockware with real database connections.\n\n**Problem Statement**:\nThe EVA Orchestration Engine is currently \"cosmetic\" - it displays hardcoded mockWorkflows instead of real agent/venture state. The Chairman sees lies.\n\n**Assessment Sources**:\n- Antigravity RISK-01: \"Orchestration is Mockware\" (P0)\n- Opus F-005: \"EVA lacks orchestration runtime\" (P1)\n\n**Vision V2 Requirement**:\nEVA is a \"Stateful Orchestration Engine\" with three functions:\n1. INTERPRETER: Parse...",
+      "success_criteria": "[\"EVA Morning Briefing shows real venture data\",\"Decision Stack displays actual pending decisions\",\"Agent status reflects database state, not hardcoded values\",\"Token Burn metrics come from actual telemetry\"]",
+      "updated_at": "2025-12-18T16:32:55.596Z"
+    },
+    {
+      "id": "SD-HARDENING-V2-003A",
+      "title": "EVA Real-Time Data Connection",
+      "status": "draft",
+      "current_phase": "LEAD_APPROVAL",
+      "progress_percentage": 20,
+      "parent_sd_id": "SD-HARDENING-V2-003",
+      "is_working_on": false,
+      "description": "Replace EVA mockWorkflows with real database queries.\n\n**Findings Addressed**:\n- ORC-01: EVA is Mockware (Antigravity RISK-01)\n\n**Implementation**:\n1. Create useAgentTaskContracts hook querying agent_task_contracts table\n2. Create useVentureStageTransitions hook querying venture_stage_transitions table\n3. Replace mockWorkflows constant with real data hooks\n4. Implement Supabase real-time subscriptions for live updates\n5. Add loading/error states for data fetching...",
+      "success_criteria": "[\"EVA displays actual venture count from database\",\"Decision Stack shows real pending decisions\",\"Changes in database reflect in UI within 2 seconds\"]",
+      "updated_at": "2025-12-18T16:32:55.596Z"
+    },
+    {
+      "id": "SD-HARDENING-V2-004",
+      "title": "25-Stage Canon Enforcement",
+      "status": "draft",
+      "current_phase": "LEAD_APPROVAL",
+      "progress_percentage": 0,
+      "parent_sd_id": "SD-HARDENING-V2-000",
+      "is_working_on": false,
+      "description": "Phase 4 of Hardening V2: Fix all C1 constraint violations (25-Stage Canon).\n\n**Problem Statement**:\nMultiple \"truths\" exist in the codebase:\n- SD-ARCH-EHG-003 defines 40-stage contracts\n- docs/workflow/dossiers/ contains Stage 26-40 directories\n- VenturesManager.jsx hardcodes 7 stages\n- Ghost routes (/phase2-*, /phase3-*) leak into production\n\n**Assessment Sources**:\n- OpenAI F-12: 40-stage SDs still active\n- OpenAI F-13: 40-stage docs in active path\n- Antigravity RISK-03: Ghost routes\n- Antigra...",
+      "success_criteria": "[\"Zero active SDs reference >25 stages\",\"Zero active docs in docs/workflow/ reference >25 stages\",\"Ghost routes return 404\",\"VenturesManager displays all 25 stages dynamically\"]",
+      "updated_at": "2025-12-18T16:32:55.644Z"
+    },
+    {
+      "id": "SD-HARDENING-V2-004A",
+      "title": "Legacy Artifact Archival",
+      "status": "draft",
+      "current_phase": "LEAD_APPROVAL",
+      "progress_percentage": 0,
+      "parent_sd_id": "SD-HARDENING-V2-004",
+      "is_working_on": false,
+      "description": "Archive all >25 stage artifacts to establish single source of truth.\n\n**Findings Addressed**:\n- CAN-01: SD-ARCH-EHG-003 defines 40 stages\n- CAN-02: Stage 26-40 docs in active path\n\n**Implementation**:\n1. UPDATE SD-ARCH-EHG-003 SET status = 'deprecated'\n2. Create docs/archive/legacy-40-stage/ directory\n3. mv docs/workflow/dossiers/stage-{26..40}/ docs/archive/legacy-40-stage/\n4. Add .gitkeep to archive directory\n5. Update any SD references to point to archive...",
+      "success_criteria": "[\"SD-ARCH-EHG-003 status = deprecated\",\"Zero stage >25 directories in docs/workflow/\",\"Archive contains all legacy artifacts\"]",
+      "updated_at": "2025-12-18T16:32:55.794Z"
+    },
+    {
+      "id": "SD-HARDENING-V2-004B",
+      "title": "UI Canon Alignment",
+      "status": "draft",
+      "current_phase": "LEAD_APPROVAL",
+      "progress_percentage": 0,
+      "parent_sd_id": "SD-HARDENING-V2-004",
+      "is_working_on": false,
+      "description": "Update UI components to reflect 25-stage canon.\n\n**Findings Addressed**:\n- CAN-03: Ghost routes (/phase2-*, /phase3-*)\n- CAN-04: VenturesManager shows 7 stages (not 25)\n\n**Implementation**:\n1. Remove /phase2-testing, /phase2-dashboard, /phase3-* routes from App.tsx\n2. Delete associated page components (or move to archive)\n3. Update VenturesManager.jsx to query lifecycle_stage_config\n4. Replace hardcoded 7-stage labels with dynamic stage names...",
+      "success_criteria": "[\"/phase2-testing returns 404\",\"VenturesManager displays all 25 stage options\",\"Stage labels match lifecycle_stage_config.stage_name\"]",
+      "updated_at": "2025-12-18T16:32:55.845Z"
+    }
+  ]
+}
