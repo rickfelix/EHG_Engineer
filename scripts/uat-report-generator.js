@@ -10,14 +10,14 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createSupabaseClient } from '../lib/supabase-client.js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 class UATReportGenerator {
   constructor() {
-    this.supabase = createSupabaseClient();
+    this.supabase = createSupabaseServiceClient();
     this.reportId = `UAT-${new Date().toISOString().slice(0, 19).replace(/[:]/g, '-')}`;
     this.timestamp = new Date().toISOString();
   }

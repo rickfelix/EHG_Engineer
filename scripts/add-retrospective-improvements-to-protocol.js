@@ -7,9 +7,9 @@
  * Adds critical protocol sections identified from recurring patterns
  */
 
-import { createSupabaseClient } from '../lib/supabase-client.js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 
-const supabase = createSupabaseClient();
+const supabase = createSupabaseServiceClient();
 
 async function addSections() {
   console.log('\n🔍 RETROSPECTIVE IMPROVEMENTS TO LEO PROTOCOL');

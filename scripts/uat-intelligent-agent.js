@@ -15,7 +15,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createSupabaseClient } from '../lib/supabase-client.js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import chalk from 'chalk';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -23,7 +23,7 @@ const __dirname = path.dirname(__filename);
 
 class UATIntelligentAgent {
   constructor(options = {}) {
-    this.supabase = createSupabaseClient();
+    this.supabase = createSupabaseServiceClient();
     this.agentId = `UAT-AGENT-${Date.now()}`;
     this.options = {
       analysisDepth: options.analysisDepth || 'comprehensive', // basic, standard, comprehensive

@@ -1,6 +1,6 @@
-import { createSupabaseClient, fetchSD } from '../lib/supabase-client.js';
+import { createSupabaseServiceClient, fetchSD } from '../lib/supabase-client.js';
 
-const supabase = createSupabaseClient();
+const supabase = createSupabaseServiceClient();
 
 async function debugSDVisibility() {
   console.log('🔍 Debugging SD-UAT-001 Visibility\n');

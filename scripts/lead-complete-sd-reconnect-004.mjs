@@ -1,6 +1,6 @@
-import { createSupabaseClient } from '../lib/supabase-client.js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 
-const supabase = createSupabaseClient();
+const supabase = createSupabaseServiceClient();
 
 console.log('=== LEAD Agent: Completing SD-RECONNECT-004 ===\n');
 

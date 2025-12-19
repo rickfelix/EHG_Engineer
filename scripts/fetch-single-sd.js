@@ -1,4 +1,4 @@
-import { createSupabaseClient } from '../lib/supabase-client.js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 
 const sdIdentifier = process.argv[2];
 
@@ -8,7 +8,7 @@ if (!sdIdentifier) {
   process.exit(1);
 }
 
-const supabase = createSupabaseClient();
+const supabase = createSupabaseServiceClient();
 
 // Try id column first (newer SDs like SD-BACKEND-003 use this)
 let { data, error } = await supabase
