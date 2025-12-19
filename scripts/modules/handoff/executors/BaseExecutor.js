@@ -41,8 +41,11 @@ export class BaseExecutor {
         return setupResult;
       }
 
+      // Step 2.5: Auto-claim SD for this session (sets is_working_on = true)
+      await this._claimSDForSession(sdId, sd);
+
       // Step 3: Run required gates
-      const gates = this.getRequiredGates(sd, options);
+      const gates = await this.getRequiredGates(sd, options);
       const gateResults = await this.validationOrchestrator.validateGates(gates, {
         sdId,
         sd,
@@ -101,9 +104,9 @@ export class BaseExecutor {
    * Get required gates for this handoff type
    * @param {object} sd - Strategic Directive
    * @param {object} options - Options
-   * @returns {array} Array of gate definitions
+   * @returns {Promise<array>} Array of gate definitions
    */
-  getRequiredGates(_sd, _options) {
+  async getRequiredGates(_sd, _options) {
     throw new Error('Subclass must implement getRequiredGates()');
   }
 
@@ -142,6 +145,66 @@ export class BaseExecutor {
   }
 
   // ============ Helper methods ============
+
+  /**
+   * Auto-claim SD for the current session
+   * This ensures is_working_on is set at the START of any handoff
+   *
+   * Non-blocking: Errors are logged but handoff continues
+   * @param {string} sdId - SD ID
+   * @param {object} sd - SD record
+   */
+  async _claimSDForSession(sdId, sd) {
+    try {
+      // Dynamic imports to avoid circular dependencies
+      const sessionManager = await import('../../../../lib/session-manager.mjs');
+      const conflictChecker = await import('../../../../lib/session-conflict-checker.mjs');
+
+      // Get or create session for this terminal
+      const session = await sessionManager.getOrCreateSession();
+
+      if (!session) {
+        console.log('   [Claim] No session available - skipping auto-claim');
+        return;
+      }
+
+      // Determine which ID to use for claiming (legacy_id or id)
+      const claimId = sd.legacy_id || sdId;
+
+      // Check if already claimed by this session
+      const claimStatus = await conflictChecker.isSDClaimed(claimId, session.session_id);
+
+      if (claimStatus.claimed && claimStatus.claimedBy === session.session_id) {
+        // Already claimed by us - just update heartbeat
+        await sessionManager.updateHeartbeat(session.session_id);
+        console.log('   [Claim] SD already claimed by this session');
+        return;
+      }
+
+      if (claimStatus.claimed) {
+        // Claimed by another session - warn but don't block
+        console.log(`   [Claim] ⚠️ SD claimed by another session (${claimStatus.claimedBy})`);
+        console.log('   [Claim] Proceeding with handoff - claim conflict will not block');
+        return;
+      }
+
+      // Attempt to claim the SD
+      const result = await conflictChecker.claimSD(claimId, session.session_id);
+
+      if (result.success) {
+        console.log(`   [Claim] ✅ SD ${claimId} claimed for session - is_working_on=true`);
+        if (result.warnings?.length > 0) {
+          result.warnings.forEach(w => console.log(`   [Claim] ⚠️ ${w.message}`));
+        }
+      } else {
+        console.log(`   [Claim] ⚠️ Could not claim SD: ${result.error || 'Unknown error'}`);
+        console.log('   [Claim] Proceeding with handoff - claim failure will not block');
+      }
+    } catch (error) {
+      // Non-fatal - allow handoff to proceed
+      console.log(`   [Claim] ⚠️ Auto-claim error (non-blocking): ${error.message}`);
+    }
+  }
 
   /**
    * Determine target repository based on SD

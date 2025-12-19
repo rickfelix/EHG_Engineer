@@ -133,6 +133,7 @@
     "pattern:alert": "node scripts/pattern-alert-sd-creator.js",
     "pattern:alert:dry": "node scripts/pattern-alert-sd-creator.js --dry-run",
     "sd:next": "node scripts/sd-next.js",
+    "sd:start": "node scripts/sd-start.js",
     "sd:baseline": "node scripts/sd-baseline.js",
     "sd:baseline:create": "node scripts/sd-baseline.js create",
     "sd:baseline:view": "node scripts/sd-baseline.js view",
