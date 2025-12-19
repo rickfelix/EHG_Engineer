@@ -6,13 +6,13 @@
  * Date: 2025-10-30
  */
 
-import { createSupabaseClient } from '../lib/supabase-client.js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 
 async function diagnosePolicies() {
   console.log('🔍 Diagnosing RLS Policies for intelligence_analysis and activity_logs\n');
   console.log('=' .repeat(80));
 
-  const supabase = createSupabaseClient();
+  const supabase = createSupabaseServiceClient();
 
   // Query 1: Check policies on intelligence_analysis
   console.log('\n📊 INTELLIGENCE_ANALYSIS POLICIES:');

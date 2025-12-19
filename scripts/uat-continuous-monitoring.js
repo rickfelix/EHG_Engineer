@@ -17,7 +17,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
-import { createSupabaseClient } from '../lib/supabase-client.js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import chalk from 'chalk';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -25,7 +25,7 @@ const __dirname = path.dirname(__filename);
 
 class UATContinuousMonitoring {
   constructor(options = {}) {
-    this.supabase = createSupabaseClient();
+    this.supabase = createSupabaseServiceClient();
     this.options = {
       scheduledInterval: options.scheduledInterval || 6 * 60 * 60 * 1000, // 6 hours
       qualityGateThreshold: options.qualityGateThreshold || 85, // 85% pass rate

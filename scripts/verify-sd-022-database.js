@@ -11,13 +11,13 @@
  * Expected: No migrations needed (retroactive compliance SD)
  */
 
-import { createSupabaseClient } from '../lib/supabase-client.js';
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import fs from 'fs/promises';
 
 async function verifyRecords() {
   console.log('=== SD-022-PROTOCOL-REMEDIATION-001 Database Verification ===\n');
 
-  const supabase = createSupabaseClient();
+  const supabase = createSupabaseServiceClient();
 
   // Check strategic directive (use 'id' column, not 'sd_id')
   const { data: sd, error: sdError } = await supabase

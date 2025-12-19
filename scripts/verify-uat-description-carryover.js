@@ -1,6 +1,6 @@
-import { createSupabaseClient, fetchSD } from '../lib/supabase-client.js';
+import { createSupabaseServiceClient, fetchSD } from '../lib/supabase-client.js';
 
-const supabase = createSupabaseClient();
+const supabase = createSupabaseServiceClient();
 
 async function verifyDescriptionCarryover() {
   console.log('🔍 Verifying UAT test description carryover to Strategic Directive\n');
