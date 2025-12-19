@@ -34,6 +34,9 @@ import { defineConfig, devices } from '@playwright/test';
  *   ./scripts/leo-stack.sh restart
  */
 export default defineConfig({
+  // LEO v4.4: Global teardown for backup evidence pack generation
+  globalTeardown: './tests/e2e/setup/global-teardown.js',
+
   // Test directory - excludes venture-creation (those use playwright-ehg.config.js)
   testDir: './tests/e2e',
   // Exclude Jest-style tests (.test.js) - those run via Jest, not Playwright
