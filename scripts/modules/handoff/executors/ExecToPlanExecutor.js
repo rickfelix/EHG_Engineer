@@ -134,8 +134,12 @@ export class ExecToPlanExecutor extends BaseExecutor {
 
         // EXEC-TO-PLAN validates completed work, so use retrospective mode
         // This allows TESTING to use CONDITIONAL_PASS when evidence exists
+        // security_baseline: Query from sd_baseline_issues table for known pre-existing issues
+        const securityBaseline = await this._getSecurityBaseline();
+
         const result = await orchestrate('PLAN_VERIFY', ctx.sdId, {
-          validation_mode: 'retrospective'
+          validation_mode: 'retrospective',
+          security_baseline: securityBaseline
         });
         ctx._orchestrationResult = result;
 
@@ -555,6 +559,63 @@ export class ExecToPlanExecutor extends BaseExecutor {
       }
     } catch (error) {
       console.log(`   ⚠️  PRD transition error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get security baseline from sd_baseline_issues table
+   *
+   * Queries the baseline issues table for known pre-existing security issues
+   * that should not block EXEC-TO-PLAN handoffs for unrelated SDs.
+   *
+   * @returns {Object} Baseline counts by issue type
+   */
+  async _getSecurityBaseline() {
+    const defaultBaseline = {
+      sql_concatenation: 0,
+      eval_usage: 0,
+      dangerous_html: 0
+    };
+
+    try {
+      // Query baseline issues for security category
+      const { data: issues, error } = await this.supabase
+        .from('sd_baseline_issues')
+        .select('description, metadata')
+        .eq('category', 'security')
+        .in('status', ['open', 'acknowledged', 'in_progress']);
+
+      if (error) {
+        // Table may not exist yet - return empty baseline
+        console.log(`   ℹ️  Security baseline query: ${error.message}`);
+        return defaultBaseline;
+      }
+
+      if (!issues || issues.length === 0) {
+        return defaultBaseline;
+      }
+
+      // Count issues by type based on description patterns
+      const baseline = { ...defaultBaseline };
+
+      for (const issue of issues) {
+        const desc = (issue.description || '').toLowerCase();
+        const issueType = issue.metadata?.issue_type;
+
+        if (issueType === 'sql_concatenation' || desc.includes('sql') || desc.includes('concatenat')) {
+          baseline.sql_concatenation++;
+        } else if (issueType === 'eval_usage' || desc.includes('eval')) {
+          baseline.eval_usage++;
+        } else if (issueType === 'dangerous_html' || desc.includes('innerhtml') || desc.includes('dangerous')) {
+          baseline.dangerous_html++;
+        }
+      }
+
+      console.log(`   📊 Security baseline loaded: ${issues.length} known issues`);
+      return baseline;
+    } catch (error) {
+      console.log(`   ⚠️  Security baseline error: ${error.message}`);
+      return defaultBaseline;
     }
   }
 

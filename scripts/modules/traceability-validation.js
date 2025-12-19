@@ -46,17 +46,23 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
 
   // SD-VENTURE-STAGE0-UI-001: Resolve UUID from legacy_id if needed
   // Handoffs are stored with UUID, so we need to resolve the ID first
+  // Also fetch SD category for SD-type aware validation (Gate 3 traceability)
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sd_id);
   let sdUuid = sd_id;
-  if (!isUUID) {
-    const { data: sd } = await supabase
-      .from('strategic_directives_v2')
-      .select('id')
-      .eq('legacy_id', sd_id)
-      .single();
-    if (sd) {
-      sdUuid = sd.id;
-    }
+  let sdCategory = null;
+
+  // Fetch SD data for both UUID resolution and category (for SD-type aware validation)
+  const { data: sdData } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, category, metadata')
+    .or(`legacy_id.eq.${sd_id},id.eq.${sd_id}`)
+    .single();
+
+  if (sdData) {
+    sdUuid = sdData.id;
+    // Get category from direct field or metadata
+    sdCategory = sdData.category?.toLowerCase() || sdData.metadata?.category?.toLowerCase() || null;
+    console.log(`   SD Category: ${sdCategory || 'unknown'}`);
   }
 
   const validation = {
@@ -180,11 +186,12 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
 
     // ===================================================================
     // SECTION C: Traceability Mapping (20 points)
+    // SD-type aware: Security SDs check for security terms, not design/database terms
     // ===================================================================
     console.log('\n[C] Traceability Mapping');
     console.log('-'.repeat(60));
 
-    await validateTraceabilityMapping(sd_id, sdUuid, designAnalysis, databaseAnalysis, validation, supabase);
+    await validateTraceabilityMapping(sd_id, sdUuid, designAnalysis, databaseAnalysis, validation, supabase, sdCategory);
 
     // ===================================================================
     // SECTION D: Sub-Agent Effectiveness (20 points)
@@ -430,12 +437,29 @@ async function validateImplementationQuality(sd_id, sdUuid, gate2Data, validatio
 /**
  * Validate Traceability Mapping (Section C - 25 points - MAJOR)
  * Phase-aware: Traceability important but not critical
+ * SD-type aware: Security SDs use security terms, not generic design/database terms
+ *
+ * @param {string} sd_id - Strategic Directive ID
+ * @param {string} sdUuid - Resolved UUID for the SD
+ * @param {Object} designAnalysis - Design analysis from PRD
+ * @param {Object} databaseAnalysis - Database analysis from PRD
+ * @param {Object} validation - Validation result object to accumulate
+ * @param {Object} supabase - Supabase client
+ * @param {string|null} sdCategory - SD category (e.g., 'security', 'feature', 'database')
  */
-async function validateTraceabilityMapping(sd_id, sdUuid, designAnalysis, databaseAnalysis, validation, supabase) {
+async function validateTraceabilityMapping(sd_id, sdUuid, designAnalysis, databaseAnalysis, validation, supabase, sdCategory = null) {
   let sectionScore = 0;
   const sectionDetails = {};
 
+  // Determine if this is a security SD (check for 'security' in category)
+  const isSecuritySD = sdCategory === 'security' ||
+                        sdCategory === 'authentication' ||
+                        sdCategory === 'authorization';
+
   console.log('\n   [C] Traceability Mapping...');
+  if (isSecuritySD) {
+    console.log('   ℹ️  Security SD detected - using security-specific terms');
+  }
 
   // C1: PRD → Implementation mapping (7 points)
   console.log('\n   [C1] PRD → Implementation Mapping...');
@@ -464,6 +488,7 @@ async function validateTraceabilityMapping(sd_id, sdUuid, designAnalysis, databa
   }
 
   // C2: Design analysis → Code mapping (7 points)
+  // For security SDs: Check for security terms instead of UI/design terms
   console.log('\n   [C2] Design Analysis → Code Mapping...');
 
   if (designAnalysis) {
@@ -478,18 +503,36 @@ async function validateTraceabilityMapping(sd_id, sdUuid, designAnalysis, databa
 
     if (handoffData?.[0]?.deliverables_manifest) {
       const deliverablesStr = JSON.stringify(handoffData[0].deliverables_manifest).toLowerCase();
-      const hasDesignMention = deliverablesStr.includes('design') ||
-                                deliverablesStr.includes('ui') ||
-                                deliverablesStr.includes('component');
 
-      if (hasDesignMention) {
+      let hasMention = false;
+      if (isSecuritySD) {
+        // Security SDs: Look for security-relevant terms
+        hasMention = deliverablesStr.includes('security') ||
+                     deliverablesStr.includes('auth') ||
+                     deliverablesStr.includes('enforcement') ||
+                     deliverablesStr.includes('validation') ||
+                     deliverablesStr.includes('hardening') ||
+                     deliverablesStr.includes('vulnerability') ||
+                     deliverablesStr.includes('websocket') ||
+                     deliverablesStr.includes('rls') ||
+                     deliverablesStr.includes('policy');
+      } else {
+        // Standard SDs: Look for design terms
+        hasMention = deliverablesStr.includes('design') ||
+                     deliverablesStr.includes('ui') ||
+                     deliverablesStr.includes('component');
+      }
+
+      if (hasMention) {
         sectionScore += 7;
         sectionDetails.design_code_mapping = true;
-        console.log('   ✅ Design concepts mentioned in deliverables');
+        const termType = isSecuritySD ? 'Security' : 'Design';
+        console.log(`   ✅ ${termType} concepts mentioned in deliverables`);
       } else {
         sectionScore += 4;
-        validation.warnings.push('[C2] Design concepts not clearly mentioned in deliverables');
-        console.log('   ⚠️  Design not clearly mentioned (4/7)');
+        const termType = isSecuritySD ? 'Security' : 'Design';
+        validation.warnings.push(`[C2] ${termType} concepts not clearly mentioned in deliverables`);
+        console.log(`   ⚠️  ${termType} not clearly mentioned (4/7)`);
       }
     } else {
       sectionScore += 4; // Partial credit
@@ -501,6 +544,9 @@ async function validateTraceabilityMapping(sd_id, sdUuid, designAnalysis, databa
   }
 
   // C3: Database analysis → Schema mapping (6 points)
+  // For security SDs: Check for security-related database terms (RLS, policies, access control)
+  // Security SDs that pass C2 (security concepts present) get full credit for C3 if no
+  // database changes were required (common for application-level security hardening)
   console.log('\n   [C3] Database Analysis → Schema Mapping...');
 
   if (databaseAnalysis) {
@@ -515,19 +561,52 @@ async function validateTraceabilityMapping(sd_id, sdUuid, designAnalysis, databa
 
     if (handoffData?.[0]?.deliverables_manifest) {
       const deliverablesStr = JSON.stringify(handoffData[0].deliverables_manifest).toLowerCase();
-      const hasDatabaseMention = deliverablesStr.includes('database') ||
-                                  deliverablesStr.includes('migration') ||
-                                  deliverablesStr.includes('schema') ||
-                                  deliverablesStr.includes('table');
 
-      if (hasDatabaseMention) {
-        sectionScore += 6;
-        sectionDetails.database_schema_mapping = true;
-        console.log('   ✅ Database changes mentioned in deliverables');
+      let hasMention = false;
+      if (isSecuritySD) {
+        // Security SDs: Look for security-related database terms OR acknowledge no DB changes needed
+        hasMention = deliverablesStr.includes('rls') ||
+                     deliverablesStr.includes('policy') ||
+                     deliverablesStr.includes('permission') ||
+                     deliverablesStr.includes('access') ||
+                     deliverablesStr.includes('security') ||
+                     deliverablesStr.includes('enforce') ||
+                     deliverablesStr.includes('database') ||
+                     deliverablesStr.includes('migration') ||
+                     deliverablesStr.includes('schema');
+
+        // For security SDs: If no database mentions but C2 passed (sectionDetails.design_code_mapping),
+        // give full credit because security hardening often doesn't require DB changes
+        if (!hasMention && sectionDetails.design_code_mapping) {
+          sectionScore += 6;
+          sectionDetails.database_schema_mapping = true;
+          sectionDetails.security_no_db_changes = true;
+          console.log('   ✅ Security SD with no database changes (application-level hardening)');
+        } else if (hasMention) {
+          sectionScore += 6;
+          sectionDetails.database_schema_mapping = true;
+          console.log('   ✅ Security/database changes mentioned in deliverables');
+        } else {
+          sectionScore += 3;
+          validation.warnings.push('[C3] Security/database changes not clearly mentioned in deliverables');
+          console.log('   ⚠️  Security/database not clearly mentioned (3/6)');
+        }
       } else {
-        sectionScore += 3;
-        validation.warnings.push('[C3] Database changes not clearly mentioned in deliverables');
-        console.log('   ⚠️  Database not clearly mentioned (3/6)');
+        // Standard SDs: Look for database terms
+        hasMention = deliverablesStr.includes('database') ||
+                     deliverablesStr.includes('migration') ||
+                     deliverablesStr.includes('schema') ||
+                     deliverablesStr.includes('table');
+
+        if (hasMention) {
+          sectionScore += 6;
+          sectionDetails.database_schema_mapping = true;
+          console.log('   ✅ Database changes mentioned in deliverables');
+        } else {
+          sectionScore += 3;
+          validation.warnings.push('[C3] Database changes not clearly mentioned in deliverables');
+          console.log('   ⚠️  Database not clearly mentioned (3/6)');
+        }
       }
     } else {
       sectionScore += 3; // Partial credit
@@ -648,34 +727,50 @@ async function validateLessonsCaptured(sd_id, sdUuid, designAnalysis, databaseAn
   console.log('\n   [E] Lessons Captured...');
 
   // E1: Check for retrospective preparation (10 points)
+  // Fix: Check retrospectives table and EXEC-TO-PLAN handoff, not PLAN-TO-LEAD (which we're creating)
   console.log('\n   [E1] Retrospective Preparation...');
 
-  const { data: handoffData } = await supabase
-    .from('sd_phase_handoffs')
-    .select('metadata, deliverables_manifest')
-    .eq('sd_id', sdUuid)
-    .eq('handoff_type', 'PLAN-TO-LEAD')
+  // First, check if a retrospective exists in the retrospectives table
+  const { data: retrospective } = await supabase
+    .from('retrospectives')
+    .select('id, quality_score, publication_status')
+    .eq('sd_id', sd_id)
     .order('created_at', { ascending: false })
     .limit(1);
 
-  if (handoffData?.[0]?.metadata) {
-    const metadataStr = JSON.stringify(handoffData[0].metadata).toLowerCase();
-    const hasRetroPrep = metadataStr.includes('lesson') ||
-                         metadataStr.includes('retrospective') ||
-                         metadataStr.includes('improvement');
+  // Also check EXEC-TO-PLAN handoff for retrospective prep keywords
+  const { data: execToplanHandoff } = await supabase
+    .from('sd_phase_handoffs')
+    .select('metadata')
+    .eq('sd_id', sdUuid)
+    .eq('handoff_type', 'EXEC-TO-PLAN')
+    .order('created_at', { ascending: false })
+    .limit(1);
 
-    if (hasRetroPrep) {
-      sectionScore += 10;
-      sectionDetails.retrospective_prepared = true;
-      console.log('   ✅ Retrospective preparation found in handoff');
-    } else {
-      sectionScore += 5;
-      validation.warnings.push('[E1] No retrospective preparation detected');
-      console.log('   ⚠️  No retrospective prep detected (5/10)');
-    }
+  const hasRetrospective = retrospective && retrospective.length > 0;
+  let hasRetroPrep = false;
+
+  if (execToplanHandoff?.[0]?.metadata) {
+    const metadataStr = JSON.stringify(execToplanHandoff[0].metadata).toLowerCase();
+    hasRetroPrep = metadataStr.includes('lesson') ||
+                   metadataStr.includes('retrospective') ||
+                   metadataStr.includes('improvement');
+  }
+
+  if (hasRetrospective) {
+    sectionScore += 10;
+    sectionDetails.retrospective_prepared = true;
+    sectionDetails.retrospective_id = retrospective[0].id;
+    sectionDetails.quality_score = retrospective[0].quality_score;
+    console.log(`   ✅ Retrospective found (quality score: ${retrospective[0].quality_score || 'N/A'})`);
+  } else if (hasRetroPrep) {
+    sectionScore += 8;
+    sectionDetails.retrospective_prepared = true;
+    console.log('   ✅ Retrospective preparation found in EXEC→PLAN handoff (8/10)');
   } else {
-    sectionScore += 5; // Partial credit
-    console.log('   ⚠️  No PLAN→LEAD handoff found (5/10)');
+    sectionScore += 5;
+    validation.warnings.push('[E1] No retrospective preparation detected');
+    console.log('   ⚠️  No retrospective prep detected (5/10)');
   }
 
   // E2: Workflow effectiveness notes (10 points)

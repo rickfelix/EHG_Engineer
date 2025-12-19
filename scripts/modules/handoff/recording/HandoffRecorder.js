@@ -357,6 +357,31 @@ export class HandoffRecorder {
       const normalizedScore = this._normalizeValidationScore(rawScore);
 
       const handoffId = randomUUID();
+
+      // Build metadata with gate-specific validation results for downstream handoffs
+      // PlanToLeadExecutor expects metadata.gate2_validation from EXEC-TO-PLAN
+      // LeadFinalApprovalExecutor expects metadata.gate1_validation from PLAN-TO-EXEC
+      const metadata = {
+        execution_id: executionId,
+        quality_score: normalizedScore,
+        created_via: 'unified-handoff-system',
+        sub_agent_count: subAgentResults?.length || 0
+      };
+
+      // Extract gate validation results for cross-handoff traceability
+      if (result.gateResults) {
+        // EXEC-TO-PLAN: Store Gate 2 results for PLAN-TO-LEAD
+        if (handoffType === 'EXEC-TO-PLAN' && result.gateResults.GATE2_IMPLEMENTATION_FIDELITY) {
+          metadata.gate2_validation = result.gateResults.GATE2_IMPLEMENTATION_FIDELITY;
+        }
+        // PLAN-TO-EXEC: Store Gate 1 results for LEAD-FINAL-APPROVAL
+        if (handoffType === 'PLAN-TO-EXEC' && result.gateResults.GATE1_PRD_QUALITY) {
+          metadata.gate1_validation = result.gateResults.GATE1_PRD_QUALITY;
+        }
+        // Store all gate results for comprehensive audit trail
+        metadata.gate_results = result.gateResults;
+      }
+
       const handoffRecord = {
         id: handoffId,
         sd_id: sdUuid,
@@ -368,12 +393,7 @@ export class HandoffRecorder {
         validation_score: normalizedScore,
         validation_passed: result.success !== false,
         validation_details: result.validation || {},
-        metadata: {
-          execution_id: executionId,
-          quality_score: normalizedScore,
-          created_via: 'unified-handoff-system',
-          sub_agent_count: subAgentResults?.length || 0
-        },
+        metadata,
         created_by: 'UNIFIED-HANDOFF-SYSTEM'
       };
 
