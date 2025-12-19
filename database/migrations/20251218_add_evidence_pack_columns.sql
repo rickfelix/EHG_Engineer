@@ -2,12 +2,16 @@
 -- Migration: Add Evidence Pack Columns to test_runs
 -- Version: LEO Protocol v4.4 - Unified Test Evidence Architecture
 -- Created: 2025-12-18
+-- Applied: 2025-12-18 ✅
 --
 -- Purpose:
 -- Adds evidence_pack_id and evidence_manifest columns to test_runs table
 -- for automatic evidence pack generation and storage by leo-playwright-reporter.
 --
 -- Part of LEO-PATCH-001-BrowserEvidencePack implementation.
+--
+-- NOTE: Original line 68 had syntax error (chained ->> operators).
+-- Fixed version applied successfully. See 20251218_add_evidence_pack_columns_APPLIED.md
 -- ============================================================================
 
 -- Add evidence_pack_id column
@@ -65,7 +69,8 @@ SELECT DISTINCT ON (sd_id)
     -- Evidence pack fields (LEO v4.4)
     tr.evidence_pack_id,
     tr.evidence_manifest IS NOT NULL AS has_evidence_manifest,
-    (tr.evidence_manifest->>'artifacts'->>'count')::INTEGER AS evidence_artifact_count,
+    -- FIXED: Use -> for JSONB navigation, then ->> for final text extraction
+    ((tr.evidence_manifest->'artifacts')->>'count')::INTEGER AS evidence_artifact_count,
     -- Freshness calculation
     EXTRACT(EPOCH FROM (NOW() - tr.completed_at)) / 60 AS age_minutes,
     CASE
