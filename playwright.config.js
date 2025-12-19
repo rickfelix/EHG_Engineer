@@ -60,13 +60,17 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
 
   // Reporter to use
-  // LEO v4.3.4: Added custom reporter for unified test evidence architecture
+  // LEO v4.4: Custom reporter with evidence pack generation
   reporter: [
     ['html', { outputFolder: 'test-results/html-report' }],
     ['json', { outputFile: 'test-results/results.json' }],
     ['list'],
-    // LEO Protocol: Unified test evidence capture (writes to test_runs/test_results tables)
-    ['./lib/reporters/leo-playwright-reporter.js']
+    // LEO Protocol: Unified test evidence capture with auto evidence pack
+    ['./lib/reporters/leo-playwright-reporter.js', {
+      generateEvidencePack: true,
+      cleanupPassingTraces: true,
+      cleanupMaxAgeDays: 7
+    }]
   ],
 
   // Shared settings for all the projects below
