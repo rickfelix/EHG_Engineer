@@ -492,6 +492,11 @@ class SDNextSelector {
         console.log(`  ${colors.red}!${colors.reset} ${c.sd_id_a} + ${c.sd_id_b}: ${c.conflict_type}`);
       });
     }
+
+    // Show how to begin work
+    console.log(`\n${colors.bold}TO BEGIN WORK:${colors.reset}`);
+    console.log(`  ${colors.cyan}npm run sd:start <SD-ID>${colors.reset}  ${colors.dim}(recommended - claims SD and shows info)${colors.reset}`);
+    console.log(`  ${colors.dim}OR: node scripts/handoff.js execute LEAD-TO-PLAN <SD-ID>${colors.reset}`);
   }
 
   async displayParallelOpportunities() {

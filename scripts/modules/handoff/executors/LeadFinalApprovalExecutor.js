@@ -307,6 +307,8 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         status: 'completed',
         current_phase: 'COMPLETED',
         progress_percentage: 100,
+        is_working_on: false,  // Release the SD from "working on" tracking
+        active_session_id: null,  // Clear session claim
         updated_at: new Date().toISOString()
       })
       .eq('id', sd.id);
@@ -321,7 +323,11 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
 
     console.log('   ✅ SD status transitioned: pending_approval → completed');
     console.log('   ✅ Progress set to 100%');
+    console.log('   ✅ is_working_on released (set to false)');
     console.log('   ✅ Completion timestamp recorded');
+
+    // Release the session claim
+    await this._releaseSessionClaim(sd);
 
     // Check if this SD has a parent that should be auto-completed
     if (sd.parent_sd_id) {
@@ -413,6 +419,44 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     };
 
     return remediations[gateName] || null;
+  }
+
+  /**
+   * Release the session claim when SD is completed
+   * @param {object} sd - SD record
+   */
+  async _releaseSessionClaim(sd) {
+    try {
+      const sessionManager = await import('../../../../lib/session-manager.mjs');
+
+      // Get current session
+      const session = await sessionManager.getOrCreateSession();
+
+      if (!session) {
+        console.log('   [Release] No session to release');
+        return;
+      }
+
+      const claimId = sd.legacy_id || sd.id;
+
+      // Check if this session has the claim
+      if (session.sd_id === claimId) {
+        // Release via database
+        const { error } = await this.supabase.rpc('release_sd', {
+          p_session_id: session.session_id,
+          p_release_reason: 'completed'
+        });
+
+        if (error) {
+          console.log(`   [Release] Warning: Could not release claim: ${error.message}`);
+        } else {
+          console.log('   [Release] ✅ Session claim released');
+        }
+      }
+    } catch (error) {
+      // Non-fatal
+      console.log(`   [Release] Warning: ${error.message}`);
+    }
   }
 }
 

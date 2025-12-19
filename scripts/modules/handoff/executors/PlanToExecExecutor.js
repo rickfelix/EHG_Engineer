@@ -150,6 +150,135 @@ export class PlanToExecExecutor extends BaseExecutor {
       required: true
     });
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CATASTROPHIC PREVENTION: Architecture Verification (SD-BACKEND-002A Lesson)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Problem: EXEC phase started implementing Next.js API routes in a Vite SPA,
+    // wasting 30-52 hours of work that had to be completely discarded.
+    //
+    // Fix: Verify application architecture BEFORE any implementation begins.
+    // This gate runs first in PLAN-TO-EXEC to catch mismatches early.
+    // ═══════════════════════════════════════════════════════════════════════════
+    gates.push({
+      name: 'GATE_ARCHITECTURE_VERIFICATION',
+      validator: async (ctx) => {
+        console.log('\n🏗️  GATE: Architecture Verification (Catastrophic Prevention)');
+        console.log('-'.repeat(50));
+        console.log('   Reference: SD-BACKEND-002A (30-52h rework prevented)');
+
+        try {
+          // Dynamically import the architecture verifier
+          const { verifyArchitecture } = await import('../../../../scripts/verify-app-architecture.js');
+
+          // Get the target application path
+          const targetPath = ctx.options?._appPath || this.determineTargetRepository(ctx.sd);
+
+          console.log(`\n   Target: ${targetPath}`);
+
+          // Run architecture verification
+          const archResult = await verifyArchitecture(targetPath);
+
+          if (!archResult.success) {
+            console.log('\n   ❌ ARCHITECTURE VERIFICATION FAILED');
+            return {
+              passed: false,
+              score: 0,
+              max_score: 100,
+              issues: [
+                'BLOCKING: Could not verify application architecture',
+                ...archResult.errors
+              ],
+              warnings: archResult.warnings,
+              remediation: [
+                'Verify the target application path exists and contains package.json',
+                'Run: node scripts/verify-app-architecture.js --app-path <path>',
+                'Ensure PRD specifies correct target_application'
+              ].join('\n')
+            };
+          }
+
+          // Store architecture info for later use in EXEC phase
+          ctx._architectureProfile = archResult;
+
+          // Check for critical warnings that should block (Vite SPA with API route intentions)
+          const prd = await this.prdRepo?.getBySdId(ctx.sd?.id);
+          const prdContent = prd?.implementation_details || prd?.technical_approach || '';
+          const hasApiRouteIntention = /api.route|NextRequest|NextResponse|pages\/api|app\/api/i.test(prdContent);
+
+          if (archResult.framework === 'VITE_SPA' && hasApiRouteIntention) {
+            console.log('\n   🚨 CRITICAL MISMATCH DETECTED');
+            console.log('      PRD mentions API routes but target is Vite SPA!');
+            console.log('      This is EXACTLY what caused SD-BACKEND-002A failure.');
+
+            return {
+              passed: false,
+              score: 0,
+              max_score: 100,
+              issues: [
+                'BLOCKING: PRD specifies API routes but target is Vite SPA',
+                'This mismatch caused 30-52 hours of wasted work in SD-BACKEND-002A',
+                'Vite SPAs use Supabase client directly, NOT API routes'
+              ],
+              warnings: archResult.warnings,
+              remediation: [
+                'STOP: Do not proceed with implementation',
+                'UPDATE PRD: Remove API route references',
+                'USE: Supabase client calls directly from React components',
+                'PATTERN: src/lib/supabase.ts → createClient → direct queries'
+              ].join('\n'),
+              details: {
+                detectedFramework: archResult.framework,
+                intendedApproach: 'API Routes',
+                conflict: 'Vite SPA cannot use Next.js API routes'
+              }
+            };
+          }
+
+          // Success - architecture verified
+          console.log('\n   ✅ Architecture verified successfully');
+          console.log(`      Framework: ${archResult.framework}`);
+          console.log(`      API Mechanism: ${archResult.apiMechanism}`);
+          console.log(`      Build Tool: ${archResult.buildTool}`);
+
+          if (archResult.warnings.length > 0) {
+            console.log('\n   ⚠️  Warnings (non-blocking):');
+            archResult.warnings.forEach(w => console.log(`      • ${w}`));
+          }
+
+          return {
+            passed: true,
+            score: 100,
+            max_score: 100,
+            issues: [],
+            warnings: archResult.warnings,
+            details: {
+              framework: archResult.framework,
+              apiMechanism: archResult.apiMechanism,
+              buildTool: archResult.buildTool,
+              profile: archResult.profile?.description
+            }
+          };
+
+        } catch (error) {
+          console.log(`\n   ⚠️  Architecture verification error: ${error.message}`);
+
+          // Non-blocking on script errors - allow manual override
+          return {
+            passed: true,
+            score: 50,
+            max_score: 100,
+            issues: [],
+            warnings: [
+              `Architecture verification script error: ${error.message}`,
+              'Proceeding with manual verification recommended'
+            ],
+            details: { error: error.message }
+          };
+        }
+      },
+      required: true
+    });
+
     // PAT-PARENT-DET: Parent orchestrators get simplified gates
     if (isParentOrchestrator) {
       console.log('\n   📋 PARENT ORCHESTRATOR GATE SET (simplified)');
@@ -1001,6 +1130,24 @@ export class PlanToExecExecutor extends BaseExecutor {
 
   getRemediation(gateName) {
     const remediations = {
+      'GATE_ARCHITECTURE_VERIFICATION': [
+        'ARCHITECTURE MISMATCH DETECTED (SD-BACKEND-002A Prevention)',
+        '',
+        'This gate prevents the catastrophic 30-52 hour rework that occurred when',
+        'Next.js API routes were implemented in a Vite SPA application.',
+        '',
+        'STEPS TO RESOLVE:',
+        '1. Run: node scripts/verify-app-architecture.js --app-path <target-app>',
+        '2. Review the detected framework vs PRD implementation approach',
+        '3. If mismatch: Update PRD to match actual framework',
+        '',
+        'COMMON FIXES:',
+        '• Vite SPA → Use Supabase client directly, NOT API routes',
+        '• Next.js → Can use app/api/ or pages/api/ routes',
+        '• Remix → Use loader/action functions in routes',
+        '',
+        'If architecture is correct but gate fails: Check target_application in SD'
+      ].join('\n'),
       'BMAD_PLAN_TO_EXEC': 'Run STORIES sub-agent to generate user stories with proper acceptance criteria.',
       'GATE_CONTRACT_COMPLIANCE': [
         'PRD violates parent SD contract boundaries:',
