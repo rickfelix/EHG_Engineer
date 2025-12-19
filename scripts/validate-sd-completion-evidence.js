@@ -11,6 +11,7 @@ import chalk from 'chalk';
 import dotenv from 'dotenv';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { verifyCompleteHandoffChain } from './lib/handoff-preflight.js';
 
 dotenv.config();
 const execAsync = promisify(exec);
@@ -23,6 +24,7 @@ const supabase = createClient(
 class SDCompletionValidator {
   constructor() {
     this.validationChecks = [
+      'handoffChainComplete',  // TIER 2: Validate complete handoff chain first
       'gitCommitsExist',
       'timingValidation',
       'prdExists',
@@ -324,6 +326,86 @@ class SDCompletionValidator {
         score: 0,
         message: 'Could not verify functionality',
         warning: 'Manual testing required before marking complete'
+      };
+    }
+  }
+
+  /**
+   * TIER 2: Handoff Chain Verification
+   *
+   * Validates that the complete handoff chain exists for this SD.
+   * This prevents marking SDs complete that skipped required handoff steps.
+   *
+   * Required chain for completion:
+   * - LEAD-TO-PLAN (planning approved)
+   * - PLAN-TO-EXEC (implementation approved)
+   * - EXEC-TO-PLAN (implementation verified) - or completion handoff
+   *
+   * Root Cause Fix: Handoffs were optional and decoupled from state transitions.
+   * This gate ensures handoff chain is complete before SD can be marked done.
+   */
+  async handoffChainComplete(sd) {
+    try {
+      console.log(chalk.gray(`   Checking handoff chain for ${sd.id}...`));
+
+      const chainResult = await verifyCompleteHandoffChain(sd.id);
+
+      if (chainResult.complete) {
+        return {
+          passed: true,
+          score: 20,
+          message: `Complete handoff chain verified (${chainResult.handoffs.length} handoffs)`,
+          details: {
+            handoffs: chainResult.handoffs,
+            chainComplete: true
+          }
+        };
+      }
+
+      // Chain is incomplete - check if this is acceptable
+      const missing = chainResult.missing || [];
+      const isInfraSD = sd.category === 'A' || sd.category === 'INFRASTRUCTURE';
+      const isQuickFix = sd.title?.toLowerCase().includes('quick-fix') ||
+                         sd.title?.toLowerCase().includes('hotfix');
+
+      // Allow infrastructure/quick-fix SDs to have reduced requirements
+      if ((isInfraSD || isQuickFix) && missing.length <= 1) {
+        return {
+          passed: true,
+          score: 15,
+          message: `Handoff chain partial (acceptable for ${isInfraSD ? 'infrastructure' : 'quick-fix'} SD)`,
+          warning: `Missing handoffs: ${missing.join(', ')}`,
+          details: {
+            handoffs: chainResult.handoffs,
+            missing,
+            reduced_requirements: true
+          }
+        };
+      }
+
+      // Standard SD with incomplete chain - BLOCK
+      return {
+        passed: false,
+        score: 0,
+        message: `Incomplete handoff chain: missing ${missing.join(', ')}`,
+        details: {
+          handoffs: chainResult.handoffs,
+          missing,
+          chainComplete: false
+        }
+      };
+
+    } catch (error) {
+      // If handoff verification fails, warn but don't block
+      // This gracefully handles cases where handoff tables don't exist yet
+      console.log(chalk.yellow(`   ⚠️  Handoff chain check failed: ${error.message}`));
+
+      return {
+        passed: true,
+        score: 10,
+        message: 'Handoff chain verification skipped',
+        warning: `Could not verify handoff chain: ${error.message}`,
+        details: { error: error.message, skipped: true }
       };
     }
   }

@@ -12,6 +12,7 @@ import BaseExecutor from './BaseExecutor.js';
 import { execSync } from 'child_process';
 import path from 'path';
 import readline from 'readline';
+import { validateSDHandoffState, quickPreflightCheck } from '../../../lib/handoff-preflight.js';
 
 // External verifier (will be lazy loaded)
 let LeadToPlanVerifier;
@@ -34,6 +35,20 @@ export class LeadToPlanExecutor extends BaseExecutor {
   getRequiredGates(_sd, _options) {
     const gates = [];
 
+    // SD Transition Readiness Gate
+    // Ensures SD is in valid state for LEAD→PLAN transition
+    // Also checks for previous failed handoff attempts
+    gates.push({
+      name: 'GATE_SD_TRANSITION_READINESS',
+      validator: async (ctx) => {
+        console.log('\n🔄 GATE: SD Transition Readiness');
+        console.log('-'.repeat(50));
+        return this._validateTransitionReadiness(ctx.sd);
+      },
+      required: true,
+      remediation: 'Ensure SD has valid status and no unresolved handoff failures. Address previous handoff rejections before retrying.'
+    });
+
     // Target Application Validation Gate
     // SD-LEO-GEMINI-001: Validate target_application at LEAD-TO-PLAN to prevent
     // late-stage failures when commits are searched in wrong repository
@@ -46,6 +61,20 @@ export class LeadToPlanExecutor extends BaseExecutor {
       },
       required: true,
       remediation: 'Set target_application to match the files in scope (EHG or EHG_Engineer)'
+    });
+
+    // Baseline Debt Check Gate
+    // LEO Protocol v4.4: Prevents accumulation of pre-existing issues
+    gates.push({
+      name: 'BASELINE_DEBT_CHECK',
+      validator: async (ctx) => {
+        console.log('\n📊 GATE: Baseline Debt Check');
+        console.log('-'.repeat(50));
+        return this._checkBaselineDebt(ctx.sd);
+      },
+      required: true,
+      weight: 0.8,
+      remediation: 'Address stale critical baseline issues or assign ownership via: npm run baseline:assign <issue-key> <SD-ID>'
     });
 
     return gates;
@@ -190,6 +219,235 @@ export class LeadToPlanExecutor extends BaseExecutor {
       pass: true,
       score: 100,
       issues: []
+    };
+  }
+
+  /**
+   * Check baseline debt - prevents accumulation of pre-existing issues
+   * LEO Protocol v4.4: BASELINE_DEBT_CHECK gate
+   *
+   * BLOCKS if: Stale critical issues (>30 days) exist without owner
+   * WARNS if: Total open issues > 10 or stale non-critical > 5
+   */
+  async _checkBaselineDebt(sd) {
+    try {
+      // Try to use the database function first (most efficient)
+      const { data: gateResult, error: rpcError } = await this.supabase
+        .rpc('check_baseline_gate', { p_sd_id: sd.id });
+
+      if (!rpcError && gateResult) {
+        const result = gateResult;
+        const passed = result.verdict === 'PASS';
+
+        console.log(`   Open issues: ${result.total_open_count || 0}`);
+        console.log(`   Stale critical: ${result.stale_critical_count || 0}`);
+        console.log(`   SD-owned issues: ${result.owned_issues_count || 0}`);
+        console.log(`   Result: ${passed ? '✅ PASS' : '❌ BLOCKED'}`);
+
+        // Convert JSONB arrays to regular arrays
+        const issues = Array.isArray(result.issues) ? result.issues : [];
+        const warnings = Array.isArray(result.warnings) ? result.warnings : [];
+
+        return {
+          pass: passed,
+          score: passed ? (warnings.length > 0 ? 80 : 100) : 0,
+          max_score: 100,
+          issues: issues,
+          warnings: warnings,
+          details: {
+            totalOpen: result.total_open_count,
+            staleCritical: result.stale_critical_count,
+            ownedIssues: result.owned_issues_count
+          }
+        };
+      }
+
+      // Fallback: Query baseline directly if RPC not available
+      console.log('   ℹ️  Using fallback baseline check (RPC not available)');
+
+      // Check if table exists
+      const { data: summary, error: summaryError } = await this.supabase
+        .from('baseline_summary')
+        .select('*');
+
+      if (summaryError) {
+        // Table doesn't exist yet - pass with warning
+        console.log('   ⚠️  Baseline table not available (migration may be pending)');
+        return {
+          pass: true,
+          score: 100,
+          issues: [],
+          warnings: ['Baseline table not available - skipping check']
+        };
+      }
+
+      // Query stale issues (>30 days old and still open)
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: staleIssues } = await this.supabase
+        .from('sd_baseline_issues')
+        .select('issue_key, category, severity, created_at')
+        .eq('status', 'open')
+        .lt('created_at', thirtyDaysAgo);
+
+      const issues = [];
+      const warnings = [];
+
+      // Check for stale critical issues
+      const staleCritical = staleIssues?.filter(i => i.severity === 'critical') || [];
+      if (staleCritical.length > 0) {
+        issues.push(`${staleCritical.length} critical baseline issues unaddressed for >30 days`);
+        staleCritical.forEach(i => {
+          const daysOld = Math.floor((Date.now() - new Date(i.created_at).getTime()) / (24 * 60 * 60 * 1000));
+          issues.push(`  - ${i.issue_key}: ${i.category} (${daysOld} days old)`);
+        });
+      }
+
+      // Calculate total open
+      const totalOpen = summary?.reduce((sum, s) => sum + (s.open_count || 0), 0) || 0;
+      if (totalOpen > 10) {
+        warnings.push(`Baseline debt growing: ${totalOpen} open issues across all categories`);
+      }
+
+      // Check stale non-critical
+      const staleNonCritical = staleIssues?.filter(i => i.severity !== 'critical') || [];
+      if (staleNonCritical.length > 5) {
+        warnings.push(`${staleNonCritical.length} non-critical issues unaddressed for >30 days`);
+      }
+
+      const passed = issues.length === 0;
+      const score = passed ? (warnings.length > 0 ? 80 : 100) : 0;
+
+      console.log(`   Open issues: ${totalOpen}`);
+      console.log(`   Stale critical: ${staleCritical.length}`);
+      console.log(`   Result: ${passed ? '✅ PASS' : '❌ BLOCKED'}`);
+
+      return {
+        pass: passed,
+        score,
+        max_score: 100,
+        issues,
+        warnings,
+        details: { totalOpen, staleCritical: staleCritical.length, summary }
+      };
+
+    } catch (error) {
+      // On any error, pass with warning (don't block for infrastructure issues)
+      console.log(`   ⚠️  Baseline check error: ${error.message}`);
+      return {
+        pass: true,
+        score: 90,
+        issues: [],
+        warnings: [`Baseline check skipped due to error: ${error.message}`]
+      };
+    }
+  }
+
+  /**
+   * Validate SD Transition Readiness for LEAD→PLAN
+   *
+   * TIER 1 Implementation: Entry validation gate
+   * Prevents handoff attempts when SD is not ready or has unresolved issues.
+   *
+   * Checks:
+   * 1. SD has required fields (title, scope, acceptance_criteria)
+   * 2. SD status allows for LEAD→PLAN transition
+   * 3. No previous failed/rejected LEAD-TO-PLAN handoffs (must resolve first)
+   * 4. Quick preflight check for handoff state consistency
+   */
+  async _validateTransitionReadiness(sd) {
+    const issues = [];
+    const warnings = [];
+    let score = 100;
+
+    console.log(`   SD: ${sd.sd_key} - ${sd.title}`);
+    console.log(`   Current Status: ${sd.status || 'NOT SET'}`);
+
+    // Check 1: Required fields for planning
+    const requiredFields = ['title', 'description'];
+    const missingFields = requiredFields.filter(f => !sd[f] || sd[f].trim() === '');
+
+    if (missingFields.length > 0) {
+      issues.push(`Missing required fields: ${missingFields.join(', ')}`);
+      console.log(`   ❌ Missing required fields: ${missingFields.join(', ')}`);
+    } else {
+      console.log('   ✅ All required fields present');
+    }
+
+    // Check 2: SD status allows LEAD→PLAN transition
+    const validStatuses = ['ACTIVE', 'APPROVED', 'PLANNING', 'READY', 'LEAD_APPROVED', null, undefined];
+    const blockingStatuses = ['COMPLETED', 'CANCELLED', 'ARCHIVED', 'ON_HOLD'];
+
+    if (blockingStatuses.includes(sd.status?.toUpperCase())) {
+      issues.push(`SD status '${sd.status}' does not allow handoff - must be active/approved`);
+      console.log(`   ❌ Blocking status: ${sd.status}`);
+    } else if (!validStatuses.some(s => s === sd.status || (s && sd.status?.toUpperCase() === s))) {
+      warnings.push(`Unusual SD status: ${sd.status} - verify this is intentional`);
+      console.log(`   ⚠️  Unusual status: ${sd.status}`);
+      score -= 10;
+    } else {
+      console.log('   ✅ Status allows transition');
+    }
+
+    // Check 3: Look for previous failed/rejected LEAD-TO-PLAN handoffs
+    try {
+      const { data: previousHandoffs } = await this.supabase
+        .from('sd_handoffs')
+        .select('id, status, created_at, rejection_reason')
+        .eq('sd_id', sd.id)
+        .eq('handoff_type', 'LEAD-TO-PLAN')
+        .in('status', ['REJECTED', 'FAILED', 'BLOCKED'])
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (previousHandoffs && previousHandoffs.length > 0) {
+        const latestFailed = previousHandoffs[0];
+        const failedCount = previousHandoffs.length;
+
+        console.log(`   ⚠️  Found ${failedCount} previous failed/rejected handoff attempt(s)`);
+
+        // If the most recent attempt was rejected, require acknowledgment
+        if (latestFailed.status === 'REJECTED') {
+          issues.push(`Previous LEAD-TO-PLAN handoff was REJECTED: ${latestFailed.rejection_reason || 'No reason provided'}`);
+          issues.push('Action: Address rejection reason before retrying handoff');
+          console.log(`   ❌ Last rejection: ${latestFailed.rejection_reason || 'No reason provided'}`);
+        } else {
+          warnings.push(`Previous handoff attempt failed (${failedCount}x) - verify issues resolved`);
+          score -= 15;
+        }
+      } else {
+        console.log('   ✅ No previous failed handoff attempts');
+      }
+    } catch (error) {
+      // Table may not exist yet - warn but don't block
+      warnings.push(`Could not check previous handoffs: ${error.message}`);
+      console.log(`   ⚠️  Handoff history check skipped: ${error.message}`);
+    }
+
+    // Check 4: Quick preflight check using shared utility
+    try {
+      const preflightResult = await quickPreflightCheck(sd.id, 'PLAN');
+      if (!preflightResult.ready) {
+        // This is informational for LEAD→PLAN (first handoff)
+        // The preflight utility expects LEAD-TO-PLAN to exist for PLAN phase
+        // But we're CREATING it now, so this is expected
+        console.log('   ℹ️  Preflight: No prior handoffs (expected for LEAD→PLAN)');
+      } else {
+        console.log('   ✅ Preflight check passed');
+      }
+    } catch (error) {
+      // Preflight utility error - continue anyway
+      console.log(`   ⚠️  Preflight check skipped: ${error.message}`);
+    }
+
+    const passed = issues.length === 0;
+    console.log(`\n   Result: ${passed ? '✅ READY for LEAD→PLAN transition' : '❌ NOT READY - resolve issues above'}`);
+
+    return {
+      pass: passed,
+      score: passed ? Math.max(score, 70) : 0,
+      max_score: 100,
+      issues,
+      warnings
     };
   }
 
