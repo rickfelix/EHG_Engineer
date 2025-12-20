@@ -439,6 +439,34 @@ export class LeadToPlanExecutor extends BaseExecutor {
       console.log(`   ⚠️  Preflight check skipped: ${error.message}`);
     }
 
+    // QF-20251220-426: Check 5: success_metrics must be populated
+    // Root cause: Empty success_metrics caused RETROSPECTIVE_QUALITY_GATE failures
+    // at PLAN-TO-LEAD. Catching this at LEAD-TO-PLAN prevents downstream issues.
+    const successMetrics = sd.success_metrics;
+    if (!successMetrics || (Array.isArray(successMetrics) && successMetrics.length === 0)) {
+      issues.push('success_metrics is empty - must define at least one measurable success metric');
+      console.log('   ❌ success_metrics is empty or missing');
+    } else if (Array.isArray(successMetrics)) {
+      // Validate structure: each metric should have metric, target, baseline
+      const validMetrics = successMetrics.filter(m =>
+        m && typeof m === 'object' && m.metric && m.target
+      );
+      if (validMetrics.length === 0) {
+        issues.push('success_metrics has invalid structure - each metric needs metric and target fields');
+        console.log('   ❌ success_metrics has no valid entries');
+      } else if (validMetrics.length < successMetrics.length) {
+        warnings.push(`${successMetrics.length - validMetrics.length} success_metrics entries have invalid structure`);
+        console.log(`   ⚠️  ${validMetrics.length}/${successMetrics.length} success_metrics are valid`);
+        score -= 10;
+      } else {
+        console.log(`   ✅ success_metrics validated (${validMetrics.length} metrics)`);
+      }
+    } else {
+      warnings.push('success_metrics is not an array - may cause downstream issues');
+      console.log('   ⚠️  success_metrics is not an array');
+      score -= 10;
+    }
+
     const passed = issues.length === 0;
     console.log(`\n   Result: ${passed ? '✅ READY for LEAD→PLAN transition' : '❌ NOT READY - resolve issues above'}`);
 
