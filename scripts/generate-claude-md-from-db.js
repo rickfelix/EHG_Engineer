@@ -62,6 +62,9 @@ class CLAUDEMDGeneratorV3 {
       const hotPatterns = await this.getHotPatterns(5);
       const recentRetrospectives = await this.getRecentRetrospectives(30, 5);
 
+      // LEO Protocol Enhancement: Gate health metrics for self-improvement
+      const gateHealth = await this.getGateHealth();
+
       const data = {
         protocol,
         agents,
@@ -71,7 +74,8 @@ class CLAUDEMDGeneratorV3 {
         schemaConstraints,
         processScripts,
         hotPatterns,
-        recentRetrospectives
+        recentRetrospectives,
+        gateHealth
       };
 
       // Generate each file
@@ -247,6 +251,59 @@ class CLAUDEMDGeneratorV3 {
     return data || [];
   }
 
+  /**
+   * Fetch gate health metrics for self-improvement monitoring
+   * Shows gates with pass rates below threshold
+   */
+  async getGateHealth() {
+    try {
+      // Try the materialized view first
+      const { data, error } = await supabase
+        .from('v_gate_health_metrics')
+        .select('*')
+        .lt('pass_rate', 80)
+        .order('pass_rate', { ascending: true })
+        .limit(5);
+
+      if (error) {
+        // View might not exist, try direct query
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('leo_gate_reviews')
+          .select('gate, score')
+          .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+
+        if (fallbackError) {
+          console.warn('⚠️  Could not load gate health (tables may not exist yet)');
+          return [];
+        }
+
+        // Aggregate manually if view doesn't exist
+        const byGate = {};
+        (fallbackData || []).forEach(r => {
+          if (!byGate[r.gate]) byGate[r.gate] = { passes: 0, failures: 0 };
+          if (r.score >= 85) byGate[r.gate].passes++;
+          else byGate[r.gate].failures++;
+        });
+
+        return Object.entries(byGate)
+          .map(([gate, stats]) => ({
+            gate,
+            pass_rate: Math.round(100 * stats.passes / (stats.passes + stats.failures)),
+            total_attempts: stats.passes + stats.failures,
+            failures: stats.failures
+          }))
+          .filter(g => g.pass_rate < 80)
+          .sort((a, b) => a.pass_rate - b.pass_rate)
+          .slice(0, 5);
+      }
+
+      return data || [];
+    } catch (err) {
+      console.warn('⚠️  Could not load gate health:', err.message);
+      return [];
+    }
+  }
+
   getSectionsByMapping(sections, fileKey) {
     const mappedTypes = this.fileMapping[fileKey]?.sections || [];
     return sections.filter(s => mappedTypes.includes(s.section_type));
@@ -311,7 +368,7 @@ ${smartRouter ? smartRouter.content : '## Context Router\n\n**Load Strategy**: R
   }
 
   generateCore(data) {
-    const { protocol, agents, subAgents, hotPatterns, recentRetrospectives } = data;
+    const { protocol, agents, subAgents, hotPatterns, recentRetrospectives, gateHealth } = data;
     const sections = protocol.sections;
     const { today, time } = this.getMetadata(protocol);
 
@@ -326,6 +383,9 @@ ${smartRouter ? smartRouter.content : '## Context Router\n\n**Load Strategy**: R
     const hotPatternsSection = this.generateHotPatternsSection(hotPatterns);
     const recentLessonsSection = this.generateRecentLessonsSection(recentRetrospectives);
 
+    // Gate health section for self-improvement
+    const gateHealthSection = this.generateGateHealthSection(gateHealth);
+
     return `# CLAUDE_CORE.md - LEO Protocol Core Context
 
 **Generated**: ${today} ${time}
@@ -337,6 +397,8 @@ ${smartRouter ? smartRouter.content : '## Context Router\n\n**Load Strategy**: R
 ${coreContent}
 
 ${hotPatternsSection}
+
+${gateHealthSection}
 
 ${recentLessonsSection}
 
@@ -688,6 +750,45 @@ ${scriptsSection}
 
     section += `
 *Lessons auto-generated from \`retrospectives\` table. Query for full details.*
+`;
+
+    return section;
+  }
+
+  /**
+   * Generate Gate Health section for CLAUDE_CORE.md
+   * Shows gates with low pass rates that need attention
+   */
+  generateGateHealthSection(gateHealth) {
+    if (!gateHealth || gateHealth.length === 0) {
+      return '';
+    }
+
+    let section = `## 🏥 Gate Health Monitor (Auto-Updated)
+
+**ATTENTION**: These gates are below the 80% pass rate threshold and may need remediation.
+
+| Gate | Pass Rate | Attempts | Failures | Status |
+|------|-----------|----------|----------|--------|
+`;
+
+    gateHealth.forEach(g => {
+      const statusIcon = g.pass_rate < 50 ? '🔴' : g.pass_rate < 70 ? '🟠' : '🟡';
+      const status = g.pass_rate < 50 ? 'Critical' : g.pass_rate < 70 ? 'Warning' : 'Monitor';
+
+      section += `| Gate ${g.gate} | ${g.pass_rate}% | ${g.total_attempts} | ${g.failures} | ${statusIcon} ${status} |\n`;
+    });
+
+    section += `
+### Remediation Actions
+
+When gates consistently fail:
+1. Run \`npm run gate:health\` for detailed analysis
+2. Review validation rules in \`leo_validation_rules\` table
+3. Check if rules are too strict or outdated
+4. Create remediation SD if pass rate < 70% for 2+ weeks
+
+*Gate health auto-updated from \`v_gate_health_metrics\`. Run \`npm run gate:health\` for details.*
 `;
 
     return section;
