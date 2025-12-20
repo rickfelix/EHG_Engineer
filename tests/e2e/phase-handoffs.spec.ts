@@ -59,7 +59,11 @@ test.describe('Phase Handoff System E2E Tests', () => {
         status: 'draft',
         current_phase: 'LEAD',
         strategic_objectives: ['Test LEAD→PLAN handoff', 'Test PLAN→EXEC handoff', 'Test EXEC→PLAN handoff'],
-        success_metrics: ['All handoffs complete', 'Data persisted correctly', 'Status transitions accurate'],
+        success_metrics: [
+          { metric: 'All handoffs complete', target: '100% handoff success rate', baseline: '0 handoffs' },
+          { metric: 'Data persisted correctly', target: 'All handoff data in sd_phase_handoffs', baseline: 'No data' },
+          { metric: 'Status transitions accurate', target: 'All status updates correct', baseline: 'Draft status' }
+        ],
         risks: ['Test data cleanup'],
         target_application: 'EHG_Engineer'
       })
@@ -312,7 +316,7 @@ test.describe('Phase Handoff System E2E Tests', () => {
           current_phase: 'PLAN',
           rationale: 'Test BMAD failure',
           strategic_objectives: ['Test'],
-          success_metrics: ['Test'],
+          success_metrics: [{ metric: 'Test metric', target: 'Test target', baseline: 'N/A' }],
           risks: []
         });
 
@@ -450,7 +454,7 @@ test.describe('Phase Handoff System E2E Tests', () => {
           current_phase: 'EXEC',
           rationale: 'Test docs failure',
           strategic_objectives: ['Test'],
-          success_metrics: ['Test'],
+          success_metrics: [{ metric: 'Test metric', target: 'Test target', baseline: 'N/A' }],
           risks: []
         })
         .select()
