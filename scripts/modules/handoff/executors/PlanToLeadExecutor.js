@@ -637,6 +637,11 @@ export class PlanToLeadExecutor extends BaseExecutor {
       return ResultBuilder.rejected('NO_PRD', 'No PRD found - cannot verify work');
     }
 
+    // QF-20251220-816: Finalize user stories BEFORE validation
+    // Root cause: Validation checks story status, but finalization ran AFTER validation.
+    // If stories weren't already marked complete, validation failed and finalization never ran.
+    await this._finalizeUserStories(prd.id, sdId);
+
     // Validate PLAN verification completeness
     const planValidation = await this._validatePlanVerification(prd, sd);
 
@@ -662,7 +667,9 @@ export class PlanToLeadExecutor extends BaseExecutor {
     console.log('\n📊 STATE TRANSITIONS: Final Status Updates');
     console.log('-'.repeat(50));
 
-    // 1. Mark all user stories as completed (ensure none are left behind)
+    // 1. Safety net: Ensure all user stories are completed
+    // Note: Primary call is now BEFORE validation (QF-20251220-816)
+    // This is a no-op if stories are already finalized, but provides defense-in-depth
     await this._finalizeUserStories(prd.id, sdId);
 
     // 2. Update PRD status to completed
