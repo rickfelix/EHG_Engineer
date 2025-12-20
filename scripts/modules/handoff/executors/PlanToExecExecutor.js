@@ -1067,23 +1067,28 @@ export class PlanToExecExecutor extends BaseExecutor {
     console.log('-'.repeat(50));
 
     try {
+      // QF-20251220-860: Use valid status 'in_progress' instead of 'ready_for_exec'
+      // Valid statuses: approved, completed, draft, in_progress, planning
       const { error } = await this.supabase
         .from('product_requirements_v2')
         .update({
-          status: 'ready_for_exec',
+          status: 'in_progress',
           phase: 'exec',
           updated_at: new Date().toISOString()
         })
         .eq('id', prd.id);
 
       if (error) {
-        console.log(`   ⚠️  Could not update PRD status: ${error.message}`);
+        // QF-20251220-860: Make status update failure blocking instead of silent warning
+        console.error(`   ❌ BLOCKING: Could not update PRD status: ${error.message}`);
+        throw new Error(`PRD status update failed: ${error.message}. Cannot proceed with inconsistent state.`);
       } else {
-        console.log('   ✅ PRD status transitioned: approved → ready_for_exec');
+        console.log('   ✅ PRD status transitioned: approved → in_progress');
         console.log('   ✅ PRD phase transitioned: → exec');
       }
     } catch (error) {
-      console.log(`   ⚠️  PRD transition error: ${error.message}`);
+      console.error(`   ❌ PRD transition error: ${error.message}`);
+      throw error; // Re-throw to block handoff
     }
   }
 
