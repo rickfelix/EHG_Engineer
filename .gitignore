@@ -80,6 +80,17 @@ database/*.json
 # One-off root level scripts
 audit_rls.js
 
+# Root-level session artifacts (never commit)
+/*_APPLIED.md
+/*-quality-report.md
+/*-stories-summary.json
+/credential-scan-results.json
+/SD-*-README.md
+
+# Root-level temp directories
+/sub-agents/
+/validation/
+
 # Build artifacts (rebuild when needed)
 src/client/dist/
 

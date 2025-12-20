@@ -170,7 +170,9 @@
     "leo:artifacts:clean": "node scripts/leo-artifact-cleaner.js",
     "leo:artifacts:clean:dry": "node scripts/leo-artifact-cleaner.js --dry-run",
     "leo:artifacts:clean:full": "node scripts/leo-artifact-cleaner.js --full",
-    "leo:artifacts:clean:verbose": "node scripts/leo-artifact-cleaner.js --verbose"
+    "leo:artifacts:clean:verbose": "node scripts/leo-artifact-cleaner.js --verbose",
+    "leo:cleanup:root": "node scripts/cleanup-root-temp-files.js",
+    "leo:cleanup:root:force": "node scripts/cleanup-root-temp-files.js --force"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",

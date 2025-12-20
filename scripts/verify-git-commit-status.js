@@ -75,6 +75,26 @@ class GitCommitVerifier {
   }
 
   /**
+   * Check if file is a root-level temp file that should be ignored
+   * These are session artifacts that shouldn't block handoffs
+   */
+  isRootTempFile(filePath) {
+    // Only check root-level files (no directory separator)
+    if (filePath.includes('/')) return false;
+
+    // Root-level session artifact patterns
+    const tempPatterns = [
+      /_APPLIED\.md$/,
+      /-quality-report\.md$/,
+      /-stories-summary\.json$/,
+      /^credential-scan-results\.json$/,
+      /^SD-.*-README\.md$/
+    ];
+
+    return tempPatterns.some(p => p.test(filePath));
+  }
+
+  /**
    * Check 1: Clean working directory (no uncommitted changes)
    */
   async checkCleanWorkingDirectory() {
@@ -107,6 +127,8 @@ class GitCommitVerifier {
     // Filter to only source code files (ignore temp/coverage/test artifact files)
     const sourceFiles = this.results.uncommittedFiles.filter(item => {
       const file = item.file;
+      // Skip root-level session artifacts
+      if (this.isRootTempFile(file)) return false;
       return !file.includes('node_modules') &&
              !file.includes('coverage') &&
              !file.includes('.tmp') &&
