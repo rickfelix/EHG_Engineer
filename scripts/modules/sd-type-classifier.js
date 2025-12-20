@@ -28,7 +28,8 @@ const VALID_SD_TYPES = [
   'documentation',
   'bugfix',
   'refactor',
-  'performance'
+  'performance',
+  'orchestrator'  // Parent SDs with children - auto-set by trigger
 ];
 
 // Handoff requirements by SD type (from database sd_type_validation_profiles)
@@ -40,7 +41,8 @@ const HANDOFF_REQUIREMENTS = {
   bugfix: ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD'],
   refactor: ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD'],
   security: ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD'],
-  performance: ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD']
+  performance: ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD'],
+  orchestrator: []  // Parent SDs - progress derived from child SD completion, no direct handoffs
 };
 
 // JSON schema for GPT-5 Mini response (no function calling support)

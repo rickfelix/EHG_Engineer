@@ -35,7 +35,10 @@ export const SD_TYPE_CATEGORIES = {
   SECURITY_IMPACTING: ['security', 'feature'],
 
   // SDs that need UI/design validation (Gates 3 & 4)
-  DESIGN_DATABASE_GATES: ['feature', 'database']
+  DESIGN_DATABASE_GATES: ['feature', 'database'],
+
+  // Parent SDs - progress derived from child SD completion
+  ORCHESTRATOR: ['orchestrator']
 };
 
 // Scoring weight profiles by SD type
@@ -52,6 +55,9 @@ export const SCORING_WEIGHTS = {
   database: { sdWeight: 0.50, retroWeight: 0.50 },
   security: { sdWeight: 0.50, retroWeight: 0.50 },
   performance: { sdWeight: 0.50, retroWeight: 0.50 },
+
+  // Orchestrator: Parent SDs - progress derived from child completion
+  orchestrator: { sdWeight: 0.0, retroWeight: 0.0 },  // No direct scoring - uses child SD progress
 
   // Default
   default: { sdWeight: 0.60, retroWeight: 0.40 }
@@ -71,6 +77,9 @@ export const THRESHOLD_PROFILES = {
   database: { retrospectiveQuality: 65, sdCompletion: 65 },
   security: { retrospectiveQuality: 70, sdCompletion: 70 },
   performance: { retrospectiveQuality: 60, sdCompletion: 60 },
+
+  // Orchestrator: Parent SDs - thresholds based on child completion
+  orchestrator: { retrospectiveQuality: 55, sdCompletion: 100 },  // Must have all children complete
 
   // Default
   default: { retrospectiveQuality: 65, sdCompletion: 65 }
@@ -150,7 +159,8 @@ export async function getEffectiveSDType(sd, options = {}) {
 function isValidSDType(type) {
   const validTypes = [
     'feature', 'infrastructure', 'database', 'security',
-    'documentation', 'bugfix', 'refactor', 'performance', 'process'
+    'documentation', 'bugfix', 'refactor', 'performance', 'process',
+    'orchestrator'  // Parent SDs with children - auto-set by trigger
   ];
   return validTypes.includes(type.toLowerCase());
 }
