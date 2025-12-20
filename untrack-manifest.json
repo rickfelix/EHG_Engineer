@@ -1,0 +1,1000 @@
+{
+  "generated_at": "2025-12-20T13:11:47.462Z",
+  "summary": {
+    "total_tracked": 5760,
+    "to_untrack": 160,
+    "whitelisted": 0,
+    "by_category": {
+      "Screenshot": 31,
+      "Report JSON": 12,
+      "One-off .cjs script": 8,
+      "One-off .mjs script": 45,
+      "Cancel script": 3,
+      "Capture script": 3,
+      "Check script": 5,
+      "Complete script": 1,
+      "Compliance file": 2,
+      "Cost file": 1,
+      "Creation script": 1,
+      "Debug script": 2,
+      "Demo script": 2,
+      "Directive file": 2,
+      "Doc file": 1,
+      "Progress file": 1,
+      "Enhance script": 1,
+      "Handoff artifact": 10,
+      "Lead script": 4,
+      "Metrics file": 1,
+      "Query script": 1,
+      "Reject script": 3,
+      "Temp script": 1,
+      "Test script": 12,
+      "Toggle script": 1,
+      "Verification file": 1,
+      "Verify script": 5
+    }
+  },
+  "files_to_untrack": [
+    {
+      "path": "cancel-sd-reconnect-009-p2.js",
+      "reason": "Cancel script",
+      "size": 2067,
+      "lastModified": "2025-12-18T02:21:16.127Z"
+    },
+    {
+      "path": "cancel-sd-reconnect-014b.js",
+      "reason": "Cancel script",
+      "size": 2035,
+      "lastModified": "2025-12-18T02:21:16.131Z"
+    },
+    {
+      "path": "cancel-select-optimization.js",
+      "reason": "Cancel script",
+      "size": 2057,
+      "lastModified": "2025-12-18T02:21:16.136Z"
+    },
+    {
+      "path": "capture-current-layout.js",
+      "reason": "Capture script",
+      "size": 2618,
+      "lastModified": "2025-12-18T02:21:16.141Z"
+    },
+    {
+      "path": "capture-dashboard.js",
+      "reason": "Capture script",
+      "size": 3118,
+      "lastModified": "2025-12-18T02:21:16.145Z"
+    },
+    {
+      "path": "capture-padding-issue.js",
+      "reason": "Capture script",
+      "size": 3091,
+      "lastModified": "2025-12-18T02:21:16.151Z"
+    },
+    {
+      "path": "check-active-in-progress-sds.js",
+      "reason": "Check script",
+      "size": 2226,
+      "lastModified": "2025-12-18T02:21:16.162Z"
+    },
+    {
+      "path": "check-reconnect-009-original.js",
+      "reason": "Check script",
+      "size": 777,
+      "lastModified": "2025-12-18T02:21:16.190Z"
+    },
+    {
+      "path": "check-reconnect-009-retro-simple.js",
+      "reason": "Check script",
+      "size": 551,
+      "lastModified": "2025-12-18T02:21:16.195Z"
+    },
+    {
+      "path": "check-reconnect-009-retro.js",
+      "reason": "Check script",
+      "size": 1211,
+      "lastModified": "2025-12-18T02:21:16.200Z"
+    },
+    {
+      "path": "check-valid-statuses.js",
+      "reason": "Check script",
+      "size": 564,
+      "lastModified": "2025-12-18T02:21:16.210Z"
+    },
+    {
+      "path": "complete-sd-nav-refactor.js",
+      "reason": "Complete script",
+      "size": 1249,
+      "lastModified": "2025-12-18T02:21:16.263Z"
+    },
+    {
+      "path": "compliance-audit-SD-STAGE-08-001-1764854525631.json",
+      "reason": "Compliance file",
+      "size": 1652,
+      "lastModified": "2025-12-04T18:06:34.091Z"
+    },
+    {
+      "path": "compliance-audit-SD-STAGE-08-001-1764854608454.json",
+      "reason": "Compliance file",
+      "size": 1938,
+      "lastModified": "2025-12-04T18:06:34.095Z"
+    },
+    {
+      "path": "cost-analysis.json",
+      "reason": "Cost file",
+      "size": 135166,
+      "lastModified": "2025-10-24T13:00:54.910Z"
+    },
+    {
+      "path": "create-sd-agent-admin-003.js",
+      "reason": "Creation script",
+      "size": 16665,
+      "lastModified": "2025-12-18T02:21:16.359Z"
+    },
+    {
+      "path": "debug-dark-mode-deep.js",
+      "reason": "Debug script",
+      "size": 4318,
+      "lastModified": "2025-12-18T02:21:16.482Z"
+    },
+    {
+      "path": "debug-submissions.js",
+      "reason": "Debug script",
+      "size": 3287,
+      "lastModified": "2025-12-18T02:21:16.491Z"
+    },
+    {
+      "path": "demo-documentation-agent.js",
+      "reason": "Demo script",
+      "size": 12656,
+      "lastModified": "2025-12-18T02:21:16.496Z"
+    },
+    {
+      "path": "demo-enhanced-subagents.js",
+      "reason": "Demo script",
+      "size": 10442,
+      "lastModified": "2025-12-18T02:21:16.503Z"
+    },
+    {
+      "path": "directive-lab-analysis-improved.json",
+      "reason": "Directive file",
+      "size": 1374,
+      "lastModified": "2025-10-24T13:00:55.875Z"
+    },
+    {
+      "path": "directive-lab-ui-analysis.json",
+      "reason": "Directive file",
+      "size": 37441,
+      "lastModified": "2025-10-24T13:00:55.883Z"
+    },
+    {
+      "path": "documentation-analysis.json",
+      "reason": "Doc file",
+      "size": 105,
+      "lastModified": "2025-10-24T13:00:57.757Z"
+    },
+    {
+      "path": "enhance-sd-agent-admin-003.js",
+      "reason": "Enhance script",
+      "size": 3451,
+      "lastModified": "2025-12-18T02:21:28.430Z"
+    },
+    {
+      "path": "handoff-EXEC-PLAN-auto-prologue.json",
+      "reason": "Handoff artifact",
+      "size": 5225,
+      "lastModified": "2025-10-24T13:00:57.833Z"
+    },
+    {
+      "path": "handoff-EXEC-PLAN-axios-security-fix.json",
+      "reason": "Handoff artifact",
+      "size": 3737,
+      "lastModified": "2025-10-24T13:00:57.834Z"
+    },
+    {
+      "path": "handoff-EXEC-PLAN-boundary-examples.json",
+      "reason": "Handoff artifact",
+      "size": 2421,
+      "lastModified": "2025-10-24T13:00:57.835Z"
+    },
+    {
+      "path": "handoff-EXEC-PLAN-context-economy.json",
+      "reason": "Handoff artifact",
+      "size": 4019,
+      "lastModified": "2025-10-24T13:00:57.836Z"
+    },
+    {
+      "path": "handoff-EXEC-PLAN-dep-policy.json",
+      "reason": "Handoff artifact",
+      "size": 2336,
+      "lastModified": "2025-10-24T13:00:57.837Z"
+    },
+    {
+      "path": "handoff-EXEC-PLAN-error-recovery.json",
+      "reason": "Handoff artifact",
+      "size": 2523,
+      "lastModified": "2025-10-24T13:00:57.838Z"
+    },
+    {
+      "path": "handoff-EXEC-PLAN-hardening-ratchets.json",
+      "reason": "Handoff artifact",
+      "size": 4137,
+      "lastModified": "2025-10-24T13:00:57.840Z"
+    },
+    {
+      "path": "handoff-EXEC-PLAN-priority-fetcher.json",
+      "reason": "Handoff artifact",
+      "size": 2501,
+      "lastModified": "2025-10-24T13:00:57.841Z"
+    },
+    {
+      "path": "handoff-EXEC-PLAN-session-prologue.json",
+      "reason": "Handoff artifact",
+      "size": 2420,
+      "lastModified": "2025-10-24T13:00:57.842Z"
+    },
+    {
+      "path": "handoff-EXEC-PLAN-visual-regression.json",
+      "reason": "Handoff artifact",
+      "size": 4146,
+      "lastModified": "2025-10-24T13:00:57.844Z"
+    },
+    {
+      "path": "lead-evaluate-reconnect-009-p2.js",
+      "reason": "Lead script",
+      "size": 4326,
+      "lastModified": "2025-12-18T02:21:28.572Z"
+    },
+    {
+      "path": "lead-evaluate-reconnect-014b.js",
+      "reason": "Lead script",
+      "size": 3137,
+      "lastModified": "2025-12-18T02:21:28.576Z"
+    },
+    {
+      "path": "lead-evaluate-select-optimization.js",
+      "reason": "Lead script",
+      "size": 2801,
+      "lastModified": "2025-12-18T02:21:28.581Z"
+    },
+    {
+      "path": "lead-session-summary.js",
+      "reason": "Lead script",
+      "size": 4955,
+      "lastModified": "2025-12-18T02:21:28.585Z"
+    },
+    {
+      "path": "performance-metrics.json",
+      "reason": "Metrics file",
+      "size": 1774356,
+      "lastModified": "2025-10-24T13:00:58.348Z"
+    },
+    {
+      "path": "analyze-priorities-temp.cjs",
+      "reason": "One-off .cjs script",
+      "size": 3989,
+      "lastModified": "2025-12-18T02:21:16.019Z"
+    },
+    {
+      "path": "complete-sd-nav-refactor.cjs",
+      "reason": "One-off .cjs script",
+      "size": 1255,
+      "lastModified": "2025-12-18T02:21:16.258Z"
+    },
+    {
+      "path": "create-sd-agent-admin-002.cjs",
+      "reason": "One-off .cjs script",
+      "size": 4203,
+      "lastModified": "2025-12-18T02:21:16.353Z"
+    },
+    {
+      "path": "create-sd-final.cjs",
+      "reason": "One-off .cjs script",
+      "size": 4965,
+      "lastModified": "2025-12-18T02:21:16.364Z"
+    },
+    {
+      "path": "temp_query_sd.cjs",
+      "reason": "One-off .cjs script",
+      "size": 1762,
+      "lastModified": "2025-12-18T02:21:12.882Z"
+    },
+    {
+      "path": "temp-get-sd-uuid.cjs",
+      "reason": "One-off .cjs script",
+      "size": 615,
+      "lastModified": "2025-12-18T02:21:12.764Z"
+    },
+    {
+      "path": "temp-query-sd-002.cjs",
+      "reason": "One-off .cjs script",
+      "size": 2907,
+      "lastModified": "2025-12-18T02:21:12.769Z"
+    },
+    {
+      "path": "test-responsive-button.cjs",
+      "reason": "One-off .cjs script",
+      "size": 3641,
+      "lastModified": "2025-12-18T02:21:12.933Z"
+    },
+    {
+      "path": "analyze_excel.mjs",
+      "reason": "One-off .mjs script",
+      "size": 4644,
+      "lastModified": "2025-12-18T02:21:16.069Z"
+    },
+    {
+      "path": "analyze-root-causes.mjs",
+      "reason": "One-off .mjs script",
+      "size": 3815,
+      "lastModified": "2025-12-18T02:21:16.024Z"
+    },
+    {
+      "path": "analyze-sd012-backlog.mjs",
+      "reason": "One-off .mjs script",
+      "size": 2672,
+      "lastModified": "2025-12-18T02:21:16.031Z"
+    },
+    {
+      "path": "analyze-sd012-v2.mjs",
+      "reason": "One-off .mjs script",
+      "size": 1627,
+      "lastModified": "2025-12-18T02:21:16.040Z"
+    },
+    {
+      "path": "analyze-sd012.mjs",
+      "reason": "One-off .mjs script",
+      "size": 1323,
+      "lastModified": "2025-12-18T02:21:16.051Z"
+    },
+    {
+      "path": "analyze-stage18.mjs",
+      "reason": "One-off .mjs script",
+      "size": 4547,
+      "lastModified": "2025-12-18T02:21:16.057Z"
+    },
+    {
+      "path": "archive-sd012-as-complete.mjs",
+      "reason": "One-off .mjs script",
+      "size": 3127,
+      "lastModified": "2025-12-18T02:21:16.121Z"
+    },
+    {
+      "path": "check-enum.mjs",
+      "reason": "One-off .mjs script",
+      "size": 669,
+      "lastModified": "2025-12-18T02:21:16.167Z"
+    },
+    {
+      "path": "check-handoff-schema.mjs",
+      "reason": "One-off .mjs script",
+      "size": 1502,
+      "lastModified": "2025-12-18T02:21:16.171Z"
+    },
+    {
+      "path": "check-handoffs.mjs",
+      "reason": "One-off .mjs script",
+      "size": 4245,
+      "lastModified": "2025-12-18T02:21:16.177Z"
+    },
+    {
+      "path": "check-prd-tables.mjs",
+      "reason": "One-off .mjs script",
+      "size": 1439,
+      "lastModified": "2025-12-18T02:21:16.181Z"
+    },
+    {
+      "path": "check-prd-test-data.mjs",
+      "reason": "One-off .mjs script",
+      "size": 990,
+      "lastModified": "2025-12-18T02:21:16.186Z"
+    },
+    {
+      "path": "check-subagents.mjs",
+      "reason": "One-off .mjs script",
+      "size": 1774,
+      "lastModified": "2025-12-18T02:21:16.205Z"
+    },
+    {
+      "path": "check-verification-data.mjs",
+      "reason": "One-off .mjs script",
+      "size": 590,
+      "lastModified": "2025-12-18T02:21:16.215Z"
+    },
+    {
+      "path": "complete-creative-001.mjs",
+      "reason": "One-off .mjs script",
+      "size": 9543,
+      "lastModified": "2025-12-18T02:21:16.253Z"
+    },
+    {
+      "path": "comprehensive_evidence_report.mjs",
+      "reason": "One-off .mjs script",
+      "size": 10199,
+      "lastModified": "2025-12-18T02:21:16.269Z"
+    },
+    {
+      "path": "create-exec-plan-handoff-creative-001.mjs",
+      "reason": "One-off .mjs script",
+      "size": 14688,
+      "lastModified": "2025-12-18T02:21:16.314Z"
+    },
+    {
+      "path": "create-lead-plan-handoff-creative-001.mjs",
+      "reason": "One-off .mjs script",
+      "size": 11131,
+      "lastModified": "2025-12-18T02:21:16.320Z"
+    },
+    {
+      "path": "create-plan-exec-handoff-creative-001.mjs",
+      "reason": "One-off .mjs script",
+      "size": 13415,
+      "lastModified": "2025-12-18T02:21:16.326Z"
+    },
+    {
+      "path": "create-plan-lead-handoff-creative-001.mjs",
+      "reason": "One-off .mjs script",
+      "size": 13995,
+      "lastModified": "2025-12-18T02:21:16.331Z"
+    },
+    {
+      "path": "create-prd-creative-001-phase1.mjs",
+      "reason": "One-off .mjs script",
+      "size": 20787,
+      "lastModified": "2025-12-18T02:21:16.337Z"
+    },
+    {
+      "path": "create-prd-creative-001-v2.mjs",
+      "reason": "One-off .mjs script",
+      "size": 15663,
+      "lastModified": "2025-12-18T02:21:16.343Z"
+    },
+    {
+      "path": "create-retrospective-creative-001.mjs",
+      "reason": "One-off .mjs script",
+      "size": 5130,
+      "lastModified": "2025-12-18T02:21:16.348Z"
+    },
+    {
+      "path": "detailed_evidence_part2.mjs",
+      "reason": "One-off .mjs script",
+      "size": 11663,
+      "lastModified": "2025-12-18T02:21:16.536Z"
+    },
+    {
+      "path": "detailed_evidence_report.mjs",
+      "reason": "One-off .mjs script",
+      "size": 10085,
+      "lastModified": "2025-12-18T02:21:16.543Z"
+    },
+    {
+      "path": "fetch-sd-creative-001.mjs",
+      "reason": "One-off .mjs script",
+      "size": 1405,
+      "lastModified": "2025-12-18T02:21:28.460Z"
+    },
+    {
+      "path": "final_evidence_sections.mjs",
+      "reason": "One-off .mjs script",
+      "size": 13497,
+      "lastModified": "2025-12-18T02:21:28.466Z"
+    },
+    {
+      "path": "find-handoff-source.mjs",
+      "reason": "One-off .mjs script",
+      "size": 910,
+      "lastModified": "2025-12-18T02:21:28.472Z"
+    },
+    {
+      "path": "generate_csv_tables.mjs",
+      "reason": "One-off .mjs script",
+      "size": 10517,
+      "lastModified": "2025-12-18T02:21:28.490Z"
+    },
+    {
+      "path": "get-test-scenarios.mjs",
+      "reason": "One-off .mjs script",
+      "size": 763,
+      "lastModified": "2025-12-18T02:21:28.494Z"
+    },
+    {
+      "path": "lead-approve-creative-001.mjs",
+      "reason": "One-off .mjs script",
+      "size": 5956,
+      "lastModified": "2025-12-18T02:21:28.567Z"
+    },
+    {
+      "path": "map_bundles_to_code.mjs",
+      "reason": "One-off .mjs script",
+      "size": 12222,
+      "lastModified": "2025-12-18T02:21:29.642Z"
+    },
+    {
+      "path": "plan-verify-creative-001.mjs",
+      "reason": "One-off .mjs script",
+      "size": 10542,
+      "lastModified": "2025-12-18T02:20:11.329Z"
+    },
+    {
+      "path": "prepare-plan-lead-handoff.mjs",
+      "reason": "One-off .mjs script",
+      "size": 1941,
+      "lastModified": "2025-12-18T02:20:11.372Z"
+    },
+    {
+      "path": "query-retrospectives-schema.mjs",
+      "reason": "One-off .mjs script",
+      "size": 565,
+      "lastModified": "2025-12-18T02:20:13.573Z"
+    },
+    {
+      "path": "query-sd-realtime-001.mjs",
+      "reason": "One-off .mjs script",
+      "size": 1766,
+      "lastModified": "2025-12-18T02:20:13.578Z"
+    },
+    {
+      "path": "reconstruct-sd012-backlog.mjs",
+      "reason": "One-off .mjs script",
+      "size": 4070,
+      "lastModified": "2025-12-18T02:20:13.594Z"
+    },
+    {
+      "path": "rollback-lead-approval.mjs",
+      "reason": "One-off .mjs script",
+      "size": 2082,
+      "lastModified": "2025-12-18T02:20:13.645Z"
+    },
+    {
+      "path": "run-migration.mjs",
+      "reason": "One-off .mjs script",
+      "size": 1971,
+      "lastModified": "2025-12-18T02:20:13.650Z"
+    },
+    {
+      "path": "store-corrective-action.mjs",
+      "reason": "One-off .mjs script",
+      "size": 1717,
+      "lastModified": "2025-12-18T02:21:12.714Z"
+    },
+    {
+      "path": "store-verification-verdicts.mjs",
+      "reason": "One-off .mjs script",
+      "size": 3065,
+      "lastModified": "2025-12-18T02:21:12.719Z"
+    },
+    {
+      "path": "sync-sd-vwc-phase1-001.mjs",
+      "reason": "One-off .mjs script",
+      "size": 3774,
+      "lastModified": "2025-12-18T02:21:12.755Z"
+    },
+    {
+      "path": "update-retrospective-architecture-findings.mjs",
+      "reason": "One-off .mjs script",
+      "size": 6684,
+      "lastModified": "2025-12-18T02:21:13.974Z"
+    },
+    {
+      "path": "update-retrospective.mjs",
+      "reason": "One-off .mjs script",
+      "size": 3105,
+      "lastModified": "2025-12-18T02:21:13.978Z"
+    },
+    {
+      "path": "update-sd-creative-001-revised.mjs",
+      "reason": "One-off .mjs script",
+      "size": 9575,
+      "lastModified": "2025-12-18T02:21:13.983Z"
+    },
+    {
+      "path": "embedding-generation-progress.json",
+      "reason": "Progress file",
+      "size": 3526,
+      "lastModified": "2025-10-24T13:00:57.761Z"
+    },
+    {
+      "path": "query-top-priority-sds.js",
+      "reason": "Query script",
+      "size": 1500,
+      "lastModified": "2025-12-18T02:20:13.584Z"
+    },
+    {
+      "path": "reject-sd-reconnect-009-p2-final.js",
+      "reason": "Reject script",
+      "size": 1567,
+      "lastModified": "2025-12-18T02:20:13.605Z"
+    },
+    {
+      "path": "reject-sd-reconnect-009-p2-simple.js",
+      "reason": "Reject script",
+      "size": 1222,
+      "lastModified": "2025-12-18T02:20:13.610Z"
+    },
+    {
+      "path": "reject-sd-reconnect-009-p2.js",
+      "reason": "Reject script",
+      "size": 1075,
+      "lastModified": "2025-12-18T02:20:13.615Z"
+    },
+    {
+      "path": "all-subagents-dynamic-report.json",
+      "reason": "Report JSON",
+      "size": 147135,
+      "lastModified": "2025-10-24T13:00:54.739Z"
+    },
+    {
+      "path": "cost-report-ehg.json",
+      "reason": "Report JSON",
+      "size": 94999,
+      "lastModified": "2025-10-24T13:00:54.912Z"
+    },
+    {
+      "path": "database-report-ehg.json",
+      "reason": "Report JSON",
+      "size": 32244,
+      "lastModified": "2025-10-24T13:00:55.225Z"
+    },
+    {
+      "path": "design-audit-report.json",
+      "reason": "Report JSON",
+      "size": 2593,
+      "lastModified": "2025-10-24T13:00:55.861Z"
+    },
+    {
+      "path": "design-report-ehg.json",
+      "reason": "Report JSON",
+      "size": 575585,
+      "lastModified": "2025-10-24T13:00:55.871Z"
+    },
+    {
+      "path": "documentation-report-dynamic.json",
+      "reason": "Report JSON",
+      "size": 60661,
+      "lastModified": "2025-10-24T13:00:57.759Z"
+    },
+    {
+      "path": "documentation-report-ehg.json",
+      "reason": "Report JSON",
+      "size": 11921,
+      "lastModified": "2025-10-24T13:00:57.760Z"
+    },
+    {
+      "path": "performance-report-ehg.json",
+      "reason": "Report JSON",
+      "size": 1774353,
+      "lastModified": "2025-10-24T13:00:58.362Z"
+    },
+    {
+      "path": "security-report-dynamic.json",
+      "reason": "Report JSON",
+      "size": 130891,
+      "lastModified": "2025-10-24T13:01:02.884Z"
+    },
+    {
+      "path": "security-report-ehg.json",
+      "reason": "Report JSON",
+      "size": 1228,
+      "lastModified": "2025-10-24T13:01:02.886Z"
+    },
+    {
+      "path": "subagent-test-report.json",
+      "reason": "Report JSON",
+      "size": 893,
+      "lastModified": "2025-10-24T13:01:03.519Z"
+    },
+    {
+      "path": "subagent-verification-report.json",
+      "reason": "Report JSON",
+      "size": 1417,
+      "lastModified": "2025-10-24T13:01:03.521Z"
+    },
+    {
+      "path": "after-manual-toggle.png",
+      "reason": "Screenshot",
+      "size": 222615,
+      "lastModified": "2025-10-24T13:00:54.720Z"
+    },
+    {
+      "path": "after-toggle-click.png",
+      "reason": "Screenshot",
+      "size": 222638,
+      "lastModified": "2025-10-24T13:00:54.723Z"
+    },
+    {
+      "path": "button-collapsed-hover.png",
+      "reason": "Screenshot",
+      "size": 115312,
+      "lastModified": "2025-10-24T13:00:54.862Z"
+    },
+    {
+      "path": "button-collapsed.png",
+      "reason": "Screenshot",
+      "size": 119516,
+      "lastModified": "2025-10-24T13:00:54.865Z"
+    },
+    {
+      "path": "button-expanded.png",
+      "reason": "Screenshot",
+      "size": 138425,
+      "lastModified": "2025-10-24T13:00:54.868Z"
+    },
+    {
+      "path": "compact-layout-final.png",
+      "reason": "Screenshot",
+      "size": 113830,
+      "lastModified": "2025-10-24T13:00:54.892Z"
+    },
+    {
+      "path": "current-layout-issue.png",
+      "reason": "Screenshot",
+      "size": 115642,
+      "lastModified": "2025-10-24T13:00:55.206Z"
+    },
+    {
+      "path": "current-state-verification.png",
+      "reason": "Screenshot",
+      "size": 136270,
+      "lastModified": "2025-10-24T13:00:55.208Z"
+    },
+    {
+      "path": "dark-mode-final.png",
+      "reason": "Screenshot",
+      "size": 102848,
+      "lastModified": "2025-10-24T13:00:55.212Z"
+    },
+    {
+      "path": "dark-mode-initial.png",
+      "reason": "Screenshot",
+      "size": 102098,
+      "lastModified": "2025-10-24T13:00:55.214Z"
+    },
+    {
+      "path": "dark-mode-toggled.png",
+      "reason": "Screenshot",
+      "size": 101965,
+      "lastModified": "2025-10-24T13:00:55.217Z"
+    },
+    {
+      "path": "dashboard-current-state.png",
+      "reason": "Screenshot",
+      "size": 223707,
+      "lastModified": "2025-10-24T13:00:55.220Z"
+    },
+    {
+      "path": "dashboard-main.png",
+      "reason": "Screenshot",
+      "size": 138364,
+      "lastModified": "2025-10-24T13:00:55.223Z"
+    },
+    {
+      "path": "debug-deep-dive.png",
+      "reason": "Screenshot",
+      "size": 140556,
+      "lastModified": "2025-10-24T13:00:55.847Z"
+    },
+    {
+      "path": "default-theme-test.png",
+      "reason": "Screenshot",
+      "size": 222960,
+      "lastModified": "2025-10-24T13:00:55.852Z"
+    },
+    {
+      "path": "directive-lab-compact.png",
+      "reason": "Screenshot",
+      "size": 107796,
+      "lastModified": "2025-10-24T13:00:55.877Z"
+    },
+    {
+      "path": "directive-lab-full.png",
+      "reason": "Screenshot",
+      "size": 107711,
+      "lastModified": "2025-10-24T13:00:55.881Z"
+    },
+    {
+      "path": "fresh-browser-dark-mode.png",
+      "reason": "Screenshot",
+      "size": 223995,
+      "lastModified": "2025-10-24T13:00:57.780Z"
+    },
+    {
+      "path": "full-width-layout.png",
+      "reason": "Screenshot",
+      "size": 111830,
+      "lastModified": "2025-10-24T13:00:57.782Z"
+    },
+    {
+      "path": "navigation-repositioned.png",
+      "reason": "Screenshot",
+      "size": 115414,
+      "lastModified": "2025-10-24T13:00:58.156Z"
+    },
+    {
+      "path": "padding-fixed-desktop.png",
+      "reason": "Screenshot",
+      "size": 115633,
+      "lastModified": "2025-10-24T13:00:58.315Z"
+    },
+    {
+      "path": "padding-fixed-mobile.png",
+      "reason": "Screenshot",
+      "size": 57219,
+      "lastModified": "2025-10-24T13:00:58.317Z"
+    },
+    {
+      "path": "padding-issue-full.png",
+      "reason": "Screenshot",
+      "size": 115486,
+      "lastModified": "2025-10-24T13:00:58.319Z"
+    },
+    {
+      "path": "padding-issue-top.png",
+      "reason": "Screenshot",
+      "size": 115492,
+      "lastModified": "2025-10-24T13:00:58.321Z"
+    },
+    {
+      "path": "progress-desktop-1920.png",
+      "reason": "Screenshot",
+      "size": 115697,
+      "lastModified": "2025-10-24T13:00:58.419Z"
+    },
+    {
+      "path": "progress-desktop-small-1024.png",
+      "reason": "Screenshot",
+      "size": 92771,
+      "lastModified": "2025-10-24T13:00:58.423Z"
+    },
+    {
+      "path": "progress-mobile-375.png",
+      "reason": "Screenshot",
+      "size": 53726,
+      "lastModified": "2025-10-24T13:00:58.424Z"
+    },
+    {
+      "path": "progress-tablet-768.png",
+      "reason": "Screenshot",
+      "size": 108826,
+      "lastModified": "2025-10-24T13:00:58.426Z"
+    },
+    {
+      "path": "progress-tablet-small-640.png",
+      "reason": "Screenshot",
+      "size": 67118,
+      "lastModified": "2025-10-24T13:00:58.428Z"
+    },
+    {
+      "path": "sd-page-with-all-filter.png",
+      "reason": "Screenshot",
+      "size": 132919,
+      "lastModified": "2025-10-24T13:01:02.880Z"
+    },
+    {
+      "path": "strategic-directives-page.png",
+      "reason": "Screenshot",
+      "size": 123950,
+      "lastModified": "2025-10-24T13:01:03.518Z"
+    },
+    {
+      "path": "temp-check-current-status.js",
+      "reason": "Temp script",
+      "size": 4862,
+      "lastModified": "2025-12-18T02:21:12.760Z"
+    },
+    {
+      "path": "test-clean-dark.js",
+      "reason": "Test script",
+      "size": 2254,
+      "lastModified": "2025-12-18T02:21:12.887Z"
+    },
+    {
+      "path": "test-compact-layout.js",
+      "reason": "Test script",
+      "size": 2047,
+      "lastModified": "2025-12-18T02:21:12.892Z"
+    },
+    {
+      "path": "test-dark-default.js",
+      "reason": "Test script",
+      "size": 1606,
+      "lastModified": "2025-12-18T02:21:12.897Z"
+    },
+    {
+      "path": "test-dbloader-direct.js",
+      "reason": "Test script",
+      "size": 993,
+      "lastModified": "2025-12-18T02:21:12.902Z"
+    },
+    {
+      "path": "test-directive-lab-integration.js",
+      "reason": "Test script",
+      "size": 5629,
+      "lastModified": "2025-12-18T02:21:12.908Z"
+    },
+    {
+      "path": "test-fresh-dark-mode.js",
+      "reason": "Test script",
+      "size": 2354,
+      "lastModified": "2025-12-18T02:21:12.913Z"
+    },
+    {
+      "path": "test-playwright-basic.spec.js",
+      "reason": "Test script",
+      "size": 847,
+      "lastModified": "2025-12-18T02:21:12.917Z"
+    },
+    {
+      "path": "test-playwright-mapper.js",
+      "reason": "Test script",
+      "size": 4034,
+      "lastModified": "2025-12-18T02:21:12.923Z"
+    },
+    {
+      "path": "test-responsive-progress.js",
+      "reason": "Test script",
+      "size": 3053,
+      "lastModified": "2025-12-18T02:21:12.939Z"
+    },
+    {
+      "path": "test-story-agent-e2e.js",
+      "reason": "Test script",
+      "size": 5412,
+      "lastModified": "2025-12-18T02:21:13.093Z"
+    },
+    {
+      "path": "test-subagents-demo.js",
+      "reason": "Test script",
+      "size": 10440,
+      "lastModified": "2025-12-18T02:21:13.099Z"
+    },
+    {
+      "path": "test-subagents-on-ehg.js",
+      "reason": "Test script",
+      "size": 7398,
+      "lastModified": "2025-12-18T02:21:13.104Z"
+    },
+    {
+      "path": "toggle-dark-mode.js",
+      "reason": "Toggle script",
+      "size": 1926,
+      "lastModified": "2025-12-18T02:21:13.879Z"
+    },
+    {
+      "path": "verification-results-hardening-v2-001a.json",
+      "reason": "Verification file",
+      "size": 1614,
+      "lastModified": "2025-12-19T00:12:26.600Z"
+    },
+    {
+      "path": "verify-compact-layout.js",
+      "reason": "Verify script",
+      "size": 2328,
+      "lastModified": "2025-12-18T02:21:13.989Z"
+    },
+    {
+      "path": "verify-full-width.js",
+      "reason": "Verify script",
+      "size": 2209,
+      "lastModified": "2025-12-18T02:21:13.993Z"
+    },
+    {
+      "path": "verify-migrations.js",
+      "reason": "Verify script",
+      "size": 3041,
+      "lastModified": "2025-12-18T02:21:13.997Z"
+    },
+    {
+      "path": "verify-navigation-position.js",
+      "reason": "Verify script",
+      "size": 2792,
+      "lastModified": "2025-12-18T02:21:14.003Z"
+    },
+    {
+      "path": "verify-padding-fixed.js",
+      "reason": "Verify script",
+      "size": 3157,
+      "lastModified": "2025-12-18T02:21:14.008Z"
+    }
+  ],
+  "files_whitelisted": []
+}

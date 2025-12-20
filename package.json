@@ -175,7 +175,10 @@
     "leo:artifacts:clean:full": "node scripts/leo-artifact-cleaner.js --full",
     "leo:artifacts:clean:verbose": "node scripts/leo-artifact-cleaner.js --verbose",
     "leo:cleanup:root": "node scripts/cleanup-root-temp-files.js",
-    "leo:cleanup:root:force": "node scripts/cleanup-root-temp-files.js --force"
+    "leo:cleanup:root:force": "node scripts/cleanup-root-temp-files.js --force",
+    "untrack:manifest": "node scripts/generate-untrack-manifest.js",
+    "untrack:execute": "node scripts/execute-untrack-manifest.js",
+    "untrack:execute:force": "node scripts/execute-untrack-manifest.js --force"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",
