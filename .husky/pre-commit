@@ -214,5 +214,26 @@ if [ "$BRANCH" != "main" ]; then
 fi
 
 echo "✅ Work accumulation check complete"
+
+# ============================================================================
+# STAGE 6: Root Temp File Warning (NON-BLOCKING)
+# ============================================================================
+echo ""
+echo "🧹 Checking for root temp files..."
+
+# Count root-level temp files (one-off scripts and reports)
+ROOT_TEMPS=$(ls -1 *.mjs *.cjs 2>/dev/null | wc -l)
+ROOT_JSONS=$(ls -1 *-report*.json handoff-*.json 2>/dev/null | wc -l)
+ROOT_TOTAL=$((ROOT_TEMPS + ROOT_JSONS))
+
+if [ "$ROOT_TOTAL" -gt 10 ]; then
+  echo ""
+  echo "⚠️  WARNING: $ROOT_TOTAL temp files detected at repository root"
+  echo "   Consider running: npm run leo:cleanup:root"
+  echo ""
+else
+  echo "✅ Root temp file check passed ($ROOT_TOTAL files)"
+fi
+
 echo ""
 echo "✅ Pre-commit checks passed. Proceeding with commit."

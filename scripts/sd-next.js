@@ -21,6 +21,7 @@ import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import dotenv from 'dotenv';
+import { warnIfTempFilesExceedThreshold } from '../lib/root-temp-checker.mjs';
 
 // Load environment from EHG_Engineer regardless of cwd
 const envPath = '/mnt/c/_EHG/EHG_Engineer/.env';
@@ -120,6 +121,9 @@ class SDNextSelector {
     try {
       // Cleanup stale sessions first
       await sessionManager.cleanupStaleSessions();
+
+      // Check for accumulated temp files
+      await warnIfTempFilesExceedThreshold(10);
 
       // Get or create session (auto-registers and updates heartbeat)
       this.currentSession = await sessionManager.getOrCreateSession();
