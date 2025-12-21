@@ -18,6 +18,7 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { SovereignAlert, SEVERITY, ALERT_TYPE } from '../../lib/services/sovereign-alert.js';
 
 // =============================================================================
 // CONSTANTS: Thresholds & Multipliers
@@ -331,6 +332,21 @@ export class CalibrationService {
 
     // Normalize
     const normalized = await this.normalizeCalibrationDelta(rawDelta, vertical);
+
+    // Industrial Hardening v3.0: Fire SovereignAlert if delta below emergency threshold
+    // Emergency threshold: normalized_accuracy < 0.5 (i.e., normalized_delta > 0.5)
+    if (normalized.normalized_delta > 0.5) {
+      try {
+        await SovereignAlert.fireCalibrationEmergency(ventureId, normalized.normalized_delta, {
+          venture_name: venture.name,
+          vertical_category: vertical,
+          raw_delta: normalized.raw_delta,
+          health_status: normalized.health_status
+        });
+      } catch (alertError) {
+        console.error(`[CalibrationService] Failed to fire SovereignAlert: ${alertError.message}`);
+      }
+    }
 
     return {
       success: true,
