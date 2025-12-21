@@ -20,8 +20,8 @@ const implementationSpec = {
     description: 'Comprehensive specification for implementing Agent Engineering Department Admin Tooling',
     total_story_points: 115,
     total_sprints: '8-10',
-    implementation_approach: 'Greenfield implementation in /mnt/c/_EHG/ehg application',
-    target_directory: '/mnt/c/_EHG/ehg',
+    implementation_approach: 'Greenfield implementation in /mnt/c/_EHG/EHG application',
+    target_directory: '/mnt/c/_EHG/EHG',
     estimated_loc: '~8,000 lines (components + tests + migrations)',
     dependencies_to_install: [
       '@monaco-editor/react',
@@ -32,7 +32,7 @@ const implementationSpec = {
   },
 
   database_migrations: {
-    location: '/mnt/c/_EHG/ehg/supabase/migrations/',
+    location: '/mnt/c/_EHG/EHG/supabase/migrations/',
     files: [
       {
         filename: '001_create_agent_configs.sql',
@@ -283,7 +283,7 @@ CREATE INDEX ON agent_execution_metrics_daily (agent_key, date DESC);
   },
 
   file_structure: {
-    root: '/mnt/c/_EHG/ehg/src',
+    root: '/mnt/c/_EHG/EHG/src',
     structure: {
       'pages/admin/agents/': [
         'PresetLibrary.tsx',

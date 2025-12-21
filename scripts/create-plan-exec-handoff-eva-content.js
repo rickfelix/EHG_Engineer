@@ -35,11 +35,11 @@ async function createHandoff() {
 - BP-EVA-CONTENT-006: EVA Conversation Integration (22h) → US-007, US-008
 - BP-EVA-CONTENT-007: Settings Panel & E2E Tests (16h) → US-009, US-010
 
-**Target Implementation**: http://localhost:8080/eva-assistant (EHG application at /mnt/c/_EHG/ehg)
+**Target Implementation**: http://localhost:8080/eva-assistant (EHG application at /mnt/c/_EHG/EHG)
 
 **CRITICAL Pre-Implementation Requirements**:
 1. ⚠️ VERIFY: Navigate to http://localhost:8080/eva-assistant BEFORE any code changes
-2. ⚠️ VERIFY: You are in /mnt/c/_EHG/ehg (NOT EHG_Engineer)
+2. ⚠️ VERIFY: You are in /mnt/c/_EHG/EHG (NOT EHG_Engineer)
 3. ⚠️ APPLY MIGRATION FIRST: 20251011_eva_content_catalogue_mvp.sql to EHG database
 4. ⚠️ MANDATORY TESTING: Both npm run test:unit AND npm run test:e2e must pass`,
 
@@ -108,7 +108,7 @@ async function createHandoff() {
 
 4. Technical Specifications:
    - Target URL: http://localhost:8080/eva-assistant (MUST VERIFY FIRST)
-   - Application Path: /mnt/c/_EHG/ehg (NOT EHG_Engineer!)
+   - Application Path: /mnt/c/_EHG/EHG (NOT EHG_Engineer!)
    - Database: liapbndqlqxdcgpwntbv (Supabase EHG database)
    - Migration: 20251011_eva_content_catalogue_mvp.sql (MUST APPLY FIRST)
    - Dependencies: react-markdown, react-table, recharts, framer-motion
@@ -147,7 +147,7 @@ Rationale: All components depend on 9 tables from migration file. Attempting to 
 Rationale: Human explicitly specified http://localhost:8080/eva-assistant as target. EXEC MUST navigate to URL and verify accessibility BEFORE any code changes. Screenshot required as evidence in EXEC→PLAN handoff.
 
 **Decision 6: Two-Application Context**
-Rationale: EHG_Engineer (/mnt/c/_EHG/EHG_Engineer) is management dashboard, EHG (/mnt/c/_EHG/ehg) is implementation target. EXEC must work in EHG application for all code changes. This is documented in CLAUDE.md "Application Architecture" section.
+Rationale: EHG_Engineer (/mnt/c/_EHG/EHG_Engineer) is management dashboard, EHG (/mnt/c/_EHG/EHG) is implementation target. EXEC must work in EHG application for all code changes. This is documented in CLAUDE.md "Application Architecture" section.
 
 **Decision 7: Dual Test Requirement (Unit + E2E)**
 Rationale: LEO Protocol enforces BOTH test types. EXEC cannot create EXEC→PLAN handoff without running 'npm run test:unit' AND 'npm run test:e2e' with passing results. Evidence required in handoff deliverables manifest.`,
@@ -226,8 +226,8 @@ Rationale: LEO Protocol enforces BOTH test types. EXEC cannot create EXEC→PLAN
     action_items: `**CRITICAL Priority** (BLOCKING - Must Complete Before ANY Code):
 
 1. ⚠️ **APPLICATION VERIFICATION** (MANDATORY FIRST STEP)
-   - [ ] Verify current directory: Run 'pwd', confirm output is '/mnt/c/_EHG/ehg'
-   - [ ] If in wrong directory: Navigate to 'cd /mnt/c/_EHG/ehg'
+   - [ ] Verify current directory: Run 'pwd', confirm output is '/mnt/c/_EHG/EHG'
+   - [ ] If in wrong directory: Navigate to 'cd /mnt/c/_EHG/EHG'
    - [ ] Verify GitHub remote: Run 'git remote -v', confirm 'rickfelix/ehg.git'
    - [ ] If in EHG_Engineer: STOP - You are in the WRONG application!
 
@@ -316,7 +316,7 @@ Rationale: LEO Protocol enforces BOTH test types. EXEC cannot create EXEC→PLAN
    - [ ] GIN indexes performing as expected
 
 **EXEC CHECKLIST FROM PRD** (Reference):
-1. ✅ Verify application: /mnt/c/_EHG/ehg (NOT EHG_Engineer)
+1. ✅ Verify application: /mnt/c/_EHG/EHG (NOT EHG_Engineer)
 2. ✅ Apply migration to EHG database
 3. ✅ Navigate to http://localhost:8080/eva-assistant
 4. ✅ Install dependencies

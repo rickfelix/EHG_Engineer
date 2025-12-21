@@ -248,7 +248,7 @@ RecursionHistoryPanel is a complex component with:
 ### Run Tests Locally
 ```bash
 # Run all unit tests
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 npm run test:unit
 
 # Run specific test file

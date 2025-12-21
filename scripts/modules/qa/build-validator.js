@@ -17,7 +17,7 @@ import path from 'path';
  */
 export async function validateBuild(targetApp = 'ehg') {
   const appPath = targetApp === 'ehg'
-    ? '/mnt/c/_EHG/ehg'
+    ? '/mnt/c/_EHG/EHG'
     : '/mnt/c/_EHG/EHG_Engineer';
 
   console.log(`🔍 Build Validator: Checking ${targetApp} build...`);

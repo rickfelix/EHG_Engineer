@@ -9,7 +9,7 @@ Clear architectural boundaries and explicit separation of concerns are critical 
 
 ### Application Boundaries
 
-#### EHG Application (`/mnt/c/_EHG/ehg`)
+#### EHG Application (`/mnt/c/_EHG/EHG`)
 **Purpose**: Main portfolio management and venture operations
 
 **Responsibilities**:
@@ -193,7 +193,7 @@ Standardized format for agent handoffs:
 ### Component Architecture
 
 #### Core Components Location
-- **EHG App**: `/mnt/c/_EHG/ehg/src/components/`
+- **EHG App**: `/mnt/c/_EHG/EHG/src/components/`
 - **EHG_Engineer**: `/mnt/c/_EHG/EHG_Engineer/src/client/src/components/`
 
 #### Design System Principles

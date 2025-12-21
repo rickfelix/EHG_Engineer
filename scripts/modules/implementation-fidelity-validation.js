@@ -96,7 +96,7 @@ async function gitLogForSD(cmdTemplate, searchTerms, options = {}) {
  * Returns the root path of the implementation repository
  *
  * Strategy:
- * 1. Check if SD has commits in /mnt/c/_EHG/ehg (application repo)
+ * 1. Check if SD has commits in /mnt/c/_EHG/EHG (application repo)
  * 2. If not found, default to /mnt/c/_EHG/EHG_Engineer (governance repo)
  *
  * @param {string} sd_id - Strategic Directive ID
@@ -104,7 +104,7 @@ async function gitLogForSD(cmdTemplate, searchTerms, options = {}) {
  */
 async function detectImplementationRepo(sd_id, supabase) {
   const repos = [
-    '/mnt/c/_EHG/ehg',           // Application repo (priority)
+    '/mnt/c/_EHG/EHG',           // Application repo (priority)
     '/mnt/c/_EHG/EHG_Engineer'   // Governance repo (fallback)
   ];
 
@@ -221,7 +221,7 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
 
     // Expected directory: /mnt/c/_EHG/EHG_Engineer
     const expectedDir = '/mnt/c/_EHG/EHG_Engineer';
-    const wrongDir = '/mnt/c/_EHG/ehg';
+    const wrongDir = '/mnt/c/_EHG/EHG';
 
     if (workingDirectory === wrongDir) {
       validation.issues.push('[PREFLIGHT] CRITICAL: EXEC worked in wrong codebase (ehg instead of EHG_Engineer)');

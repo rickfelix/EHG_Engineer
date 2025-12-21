@@ -9,7 +9,7 @@ const technicalDesign = {
   database: {
     table: 'executive_reports',
     migration_created: true,
-    migration_location: '/mnt/c/_EHG/ehg/database/migrations/create-executive-reports.sql',
+    migration_location: '/mnt/c/_EHG/EHG/database/migrations/create-executive-reports.sql',
     columns: {
       id: 'UUID PK',
       user_id: 'UUID FK',

@@ -1,49 +1,86 @@
-# IMPORTANT: Database Distinction
+# IMPORTANT: Unified Database Architecture
 
-## Two Separate Databases - Don't Confuse Them!
+> **ARCHITECTURE UPDATE (SD-ARCH-EHG-007)**: As of December 2024, EHG and EHG_Engineer
+> now share a **consolidated database**. The old EHG database has been deprecated.
 
-### 1. 🛠️ EHG_Engineer Database (ID: dedlbzhpgkmetvhbkyzq)
-- **Purpose**: Powers the EHG_Engineer application itself
-- **What it's for**: This is the database for the LEO Protocol system you're currently using
-- **Contains**: LEO Protocol data, configurations, agent states, etc.
-- **This is NOT your project database**
+## Consolidated Architecture
 
-### 2. 🎯 EHG Database (ID: liapbndqlqxdcgpwntbv)
-- **Purpose**: The actual EHG project/application database
-- **What it's for**: This is the database for the EHG application being built
-- **Contains**: EHG application data (users, ventures, portfolio, etc.)
-- **This IS your project database**
+### Single Database (ID: dedlbzhpgkmetvhbkyzq)
 
-## Simple Rule:
-- **EHG_Engineer** = The tool you're using to build
-- **EHG** = The project you're building
+Both applications now use the **same consolidated database**:
 
-## In LEO Protocol Context:
+| Application | Port | Purpose | Database |
+|-------------|------|---------|----------|
+| **EHG** | 8080 | Unified frontend (user + admin features) | dedlbzhpgkmetvhbkyzq |
+| **EHG_Engineer** | 3000 | Backend API + LEO Protocol engine | dedlbzhpgkmetvhbkyzq |
 
-When working with the EHG project in LEO Protocol:
-- The LEO system uses: `ehg_engineer` database
-- Your project uses: `ehg` database
+### What Changed
 
-## Supabase Projects Mapping:
+**Before (Pre-SD-ARCH-EHG-007)**:
+- EHG_Engineer: Had its own frontend dashboard + database
+- EHG: Separate customer-facing app + database
 
-| Project Name | Supabase ID | Purpose | 
-|-------------|-------------|---------|
-| ehg_engineer | dedlbzhpgkmetvhbkyzq | LEO Protocol/Builder Tool |
-| ehg | liapbndqlqxdcgpwntbv | The actual EHG application |
-| ehg-platform | nxchardjdnvvlufhrumr | Alternative/staging version |
-| ehg-platform-dev | jmqfmjadlvgyduupeexl | Development version |
+**After (Current)**:
+- EHG: Unified frontend with user features + admin dashboard at `/admin/*`
+- EHG_Engineer: Backend API only (no standalone frontend)
+- Database: Consolidated into `dedlbzhpgkmetvhbkyzq`
 
-## When Connecting:
+## Current Architecture
 
-### For LEO Protocol operations:
+### EHG (Unified Frontend - Port 8080)
+- **Purpose**: All user-facing AND admin features
+- **Routes**:
+  - `/` - User dashboard, venture creation
+  - `/ventures` - Venture management
+  - `/admin` - Admin dashboard (migrated from EHG_Engineer)
+  - `/admin/directives` - Strategic Directives management
+  - `/admin/prds` - PRD management
+  - `/admin/ventures` - Admin ventures view
+- **Stack**: Vite + React + Shadcn + TypeScript
+- **GitHub**: rickfelix/ehg.git
+
+### EHG_Engineer (Backend API - Port 3000)
+- **Purpose**: Backend API server + LEO Protocol execution engine
+- **Provides**:
+  - REST API endpoints (`/api/sd`, `/api/prd`, etc.)
+  - LEO Protocol scripts (`handoff.js`, `add-prd-to-database.js`)
+  - WebSocket connections for real-time updates
+- **NO standalone frontend** (admin UI migrated to EHG)
+- **GitHub**: rickfelix/EHG_Engineer.git
+
+## Supabase Projects Mapping
+
+| Project Name | Supabase ID | Status | Purpose |
+|-------------|-------------|--------|---------|
+| **ehg_engineer** | dedlbzhpgkmetvhbkyzq | **ACTIVE** | Consolidated database for both apps |
+| ehg | liapbndqlqxdcgpwntbv | **DEPRECATED** | Old EHG database (do not use) |
+| ehg-platform | nxchardjdnvvlufhrumr | Staging | Alternative/staging version |
+| ehg-platform-dev | jmqfmjadlvgyduupeexl | Development | Development version |
+
+## When Connecting
+
+### For ALL operations (both apps use same database):
 ```bash
-supabase link --project-ref dedlbzhpgkmetvhbkyzq  # EHG_Engineer
+supabase link --project-ref dedlbzhpgkmetvhbkyzq
 ```
 
-### For EHG project development:
+### DEPRECATED - Do NOT use:
 ```bash
-supabase link --project-ref liapbndqlqxdcgpwntbv  # EHG (the actual project)
+# OLD: supabase link --project-ref liapbndqlqxdcgpwntbv  # DEPRECATED
 ```
 
-## Remember:
-**Never confuse the builder tool (EHG_Engineer) with the project being built (EHG)**
+## Implementation Targets
+
+| Feature Type | Target Directory | Repository |
+|--------------|------------------|------------|
+| User UI features | `/mnt/c/_EHG/EHG/src/` | rickfelix/ehg.git |
+| Admin UI features | `/mnt/c/_EHG/EHG/src/components/admin/` | rickfelix/ehg.git |
+| Stage components | `/mnt/c/_EHG/EHG/src/components/stages/admin/` | rickfelix/ehg.git |
+| Backend API | `/mnt/c/_EHG/EHG_Engineer/` | rickfelix/EHG_Engineer.git |
+
+## Remember
+
+- **ALL UI changes** go to EHG (unified frontend)
+- **Only backend API/script changes** go to EHG_Engineer
+- **Both apps share** the consolidated database (dedlbzhpgkmetvhbkyzq)
+- **Old database ID** (liapbndqlqxdcgpwntbv) is **DEPRECATED**

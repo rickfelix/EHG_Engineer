@@ -169,7 +169,7 @@ async function runWorkflowReview() {
       { name: 'DESIGN', code: 'DESIGN' },
       {
         workflow_review: true,
-        repo_path: '/mnt/c/_EHG/ehg',
+        repo_path: '/mnt/c/_EHG/EHG',
         supabaseClient: supabaseAdmin
       }
     );

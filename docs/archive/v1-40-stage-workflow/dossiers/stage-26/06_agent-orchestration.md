@@ -196,7 +196,7 @@ sequenceDiagram
 
 ## Crew Configuration (Proposed)
 
-**File**: `/mnt/c/_EHG/ehg/agent-platform/app/crews/security_compliance_crew.py` (to be created)
+**File**: `/mnt/c/_EHG/EHG/agent-platform/app/crews/security_compliance_crew.py` (to be created)
 
 ```python
 # Proposed structure (not implemented)

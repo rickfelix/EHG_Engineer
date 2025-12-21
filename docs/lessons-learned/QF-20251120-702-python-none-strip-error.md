@@ -48,7 +48,7 @@ target_customer = (venture_data.get("target_customer") or "").strip()
 
 ## Files Fixed
 
-### 1. `/mnt/c/_EHG/ehg/agent-platform/app/services/venture_input_validator.py`
+### 1. `/mnt/c/_EHG/EHG/agent-platform/app/services/venture_input_validator.py`
 **Lines 94-99** - Primary bug location
 
 ```python
@@ -67,7 +67,7 @@ target_customer = (venture_data.get("target_customer") or "").strip()
 geography = (venture_data.get("geography") or "").strip()
 ```
 
-### 2. `/mnt/c/_EHG/ehg/agent-platform/app/services/input_enhancement.py`
+### 2. `/mnt/c/_EHG/EHG/agent-platform/app/services/input_enhancement.py`
 **Lines 126-130** - Defensive fix for API responses
 
 ```python

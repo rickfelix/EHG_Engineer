@@ -95,36 +95,36 @@
 
 ### Code Files Created
 
-**UI Components** (`/mnt/c/_EHG/ehg/src/components/ventures/`):
+**UI Components** (`/mnt/c/_EHG/EHG/src/components/ventures/`):
 1. `ProgressStepper.tsx` (172 lines)
-   - Location: `/mnt/c/_EHG/ehg/src/components/ventures/ProgressStepper.tsx`
+   - Location: `/mnt/c/_EHG/EHG/src/components/ventures/ProgressStepper.tsx`
    - Purpose: 5-step workflow visualization
    - Status: ✅ Complete & Tested
 
 2. `VentureCreationPage.tsx` (608 lines)
-   - Location: `/mnt/c/_EHG/ehg/src/components/ventures/VentureCreationPage.tsx`
+   - Location: `/mnt/c/_EHG/EHG/src/components/ventures/VentureCreationPage.tsx`
    - Purpose: Main orchestration component
    - Status: ✅ Complete & Tested
 
 3. `ResearchAgentsPanel.tsx` (414 lines)
-   - Location: `/mnt/c/_EHG/ehg/src/components/ventures/ResearchAgentsPanel.tsx`
+   - Location: `/mnt/c/_EHG/EHG/src/components/ventures/ResearchAgentsPanel.tsx`
    - Purpose: AI research agents display & control
    - Status: ✅ Complete & Tested
 
 4. `ResearchResultsView.tsx` (335 lines)
-   - Location: `/mnt/c/_EHG/ehg/src/components/ventures/ResearchResultsView.tsx`
+   - Location: `/mnt/c/_EHG/EHG/src/components/ventures/ResearchResultsView.tsx`
    - Purpose: Research findings display
    - Status: ✅ Complete & Tested
 
 5. `ChairmanReviewEditor.tsx` (284 lines)
-   - Location: `/mnt/c/_EHG/ehg/src/components/ventures/ChairmanReviewEditor.tsx`
+   - Location: `/mnt/c/_EHG/EHG/src/components/ventures/ChairmanReviewEditor.tsx`
    - Purpose: Chairman review & edit interface
    - Status: ✅ Complete & Tested
 
 **Total UI Code**: 1,813 lines React/TypeScript
 
 **Database Schema**:
-- File: `/mnt/c/_EHG/ehg/database/migrations/008_crewai_venture_research.sql`
+- File: `/mnt/c/_EHG/EHG/database/migrations/008_crewai_venture_research.sql`
 - Lines: 237
 - Tables: 4 (crewai_agents, crewai_crews, crewai_tasks, venture_drafts)
 - Policies: 12 RLS policies
@@ -133,20 +133,20 @@
 - Status: ✅ Complete & Ready
 
 **Route Configuration**:
-- File: `/mnt/c/_EHG/ehg/src/App.tsx`
+- File: `/mnt/c/_EHG/EHG/src/App.tsx`
 - Route: `/ventures/new` → VentureCreationPage
 - Lazy Loading: ✅ Configured
 - Protected Route: ✅ Authentication required
 - Status: ✅ Complete
 
 **Testing**:
-- File: `/mnt/c/_EHG/ehg/tests/smoke/venture-creation.test.tsx`
+- File: `/mnt/c/_EHG/EHG/tests/smoke/venture-creation.test.tsx`
 - Tests: 7 smoke tests (5 required + 2 bonus)
 - Coverage: Component render, validation, navigation
 - Status: ✅ Complete
 
 **Documentation**:
-- File: `/mnt/c/_EHG/ehg/docs/VENTURE_CREATION_BACKEND_REQUIREMENTS.md`
+- File: `/mnt/c/_EHG/EHG/docs/VENTURE_CREATION_BACKEND_REQUIREMENTS.md`
 - Lines: ~430
 - Sections: 9 comprehensive sections
 - Details: API specs, security, integrations, deployment
@@ -366,7 +366,7 @@
 **Success Criteria**: All smoke tests pass, manual navigation successful
 
 #### 2. Database Schema Verification
-- [ ] Review migration file: `/mnt/c/_EHG/ehg/database/migrations/008_crewai_venture_research.sql`
+- [ ] Review migration file: `/mnt/c/_EHG/EHG/database/migrations/008_crewai_venture_research.sql`
 - [ ] Verify 4 tables created (crewai_agents, crewai_crews, crewai_tasks, venture_drafts)
 - [ ] Verify 4 agents seeded in crewai_agents
 - [ ] Verify RLS policies active
@@ -388,7 +388,7 @@
 **Success Criteria**: Route accessible when authenticated, protected when not
 
 #### 4. Documentation Completeness
-- [ ] Review backend requirements: `/mnt/c/_EHG/ehg/docs/VENTURE_CREATION_BACKEND_REQUIREMENTS.md`
+- [ ] Review backend requirements: `/mnt/c/_EHG/EHG/docs/VENTURE_CREATION_BACKEND_REQUIREMENTS.md`
 - [ ] Verify API specs present (5 endpoints defined)
 - [ ] Verify security requirements documented
 - [ ] Verify deployment checklist complete

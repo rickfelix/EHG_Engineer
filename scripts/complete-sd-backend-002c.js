@@ -78,7 +78,7 @@ async function completeSDBACKEND002C() {
 
     console.log('📋 Manual Migration Required:');
     console.log('  The database migrations must be applied manually via Supabase Dashboard.');
-    console.log('  See: /mnt/c/_EHG/ehg/database/migrations/README-BACKEND-002C.md\n');
+    console.log('  See: /mnt/c/_EHG/EHG/database/migrations/README-BACKEND-002C.md\n');
 
     console.log('✅ SD-BACKEND-002C is ready for LEAD approval!\n');
 

@@ -41,7 +41,7 @@ async function storeVerdict() {
           issue: 'E2E test coverage at 54% (below 80% target)',
           severity: 'MEDIUM',
           recommendation: 'Sprint 4 must prioritize E2E test fixes',
-          location: '/mnt/c/_EHG/ehg/tests/e2e/ab-testing-sprint3.spec.ts'
+          location: '/mnt/c/_EHG/EHG/tests/e2e/ab-testing-sprint3.spec.ts'
         },
         {
           issue: '9 unintegrated components detected',

@@ -2,7 +2,7 @@
 **Strategic Directive**: Stage 10 Technical Review - Architecture Validation
 **Test Agent**: QA Engineering Director
 **Test Date**: 2025-12-04
-**Test Location**: `/mnt/c/_EHG/ehg/tests/e2e/`
+**Test Location**: `/mnt/c/_EHG/EHG/tests/e2e/`
 
 ---
 
@@ -124,7 +124,7 @@ const recursionCheck = engine.shouldTriggerRecursion(readiness);
 ## Implementation Verification
 
 ### Architecture Rules (AR-001 to AR-005) ✅
-**File**: `/mnt/c/_EHG/ehg/src/services/technical-review/validationRules/architecture.rules.ts`
+**File**: `/mnt/c/_EHG/EHG/src/services/technical-review/validationRules/architecture.rules.ts`
 
 - **AR-001**: System Architecture Completeness ✅
 - **AR-002**: Database Design Validation ✅
@@ -133,7 +133,7 @@ const recursionCheck = engine.shouldTriggerRecursion(readiness);
 - **AR-005**: Technology Stack Alignment ✅
 
 ### Security Rules (SE-001 to SE-005) ✅
-**File**: `/mnt/c/_EHG/ehg/src/services/technical-review/validationRules/security.rules.ts`
+**File**: `/mnt/c/_EHG/EHG/src/services/technical-review/validationRules/security.rules.ts`
 
 - **SE-001**: Authentication Strategy ✅
 - **SE-002**: Authorization Access Control ✅
@@ -142,7 +142,7 @@ const recursionCheck = engine.shouldTriggerRecursion(readiness);
 - **SE-005**: Vulnerability Assessment ✅
 
 ### Scalability Rules (SC-001 to SC-005) ✅
-**File**: `/mnt/c/_EHG/ehg/src/services/technical-review/validationRules/scalability.rules.ts`
+**File**: `/mnt/c/_EHG/EHG/src/services/technical-review/validationRules/scalability.rules.ts`
 
 - **SC-001**: Load Capacity Planning ✅
 - **SC-002**: Database Scaling Validation ✅
@@ -151,7 +151,7 @@ const recursionCheck = engine.shouldTriggerRecursion(readiness);
 - **SC-005**: CDN Static Asset Optimization ✅
 
 ### Maintainability Rules (MA-001 to MA-004) ✅
-**File**: `/mnt/c/_EHG/ehg/src/services/technical-review/validationRules/maintainability.rules.ts`
+**File**: `/mnt/c/_EHG/EHG/src/services/technical-review/validationRules/maintainability.rules.ts`
 
 - **MA-001**: Code Quality Standards ✅
 - **MA-002**: Testing Strategy Completeness ✅
@@ -248,7 +248,7 @@ Four recursion scenarios are defined for handling technical review failures:
 
 ### Test Location
 ```
-/mnt/c/_EHG/ehg/tests/e2e/
+/mnt/c/_EHG/EHG/tests/e2e/
 ├── technical-review-simple.spec.ts    ✅ PASS (2/2)
 ├── technical-review-core.spec.ts      📋 COMPREHENSIVE
 └── technical-review-validation.spec.ts 📋 FULL E2E

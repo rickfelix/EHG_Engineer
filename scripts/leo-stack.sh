@@ -2,7 +2,7 @@
 # LEO Stack Management Script - Enhanced Resilient Version
 # Manages all three servers in the LEO Stack with WSL crash prevention
 #   - EHG_Engineer (port 3000): LEO Protocol Framework & Backend API
-#   - EHG App (port 8080): Frontend UI & User Interface
+#   - EHG App (port 8080): Unified Frontend (User + Admin with /admin routes)
 #   - Agent Platform (port 8000): AI Research Backend for Venture Creation
 
 set -e
@@ -36,8 +36,8 @@ WSL_RECOVERY_DELAY=3  # Extra delay after detecting WSL stress
 
 # Directories
 ENGINEER_DIR="/mnt/c/_EHG/EHG_Engineer"
-APP_DIR="/mnt/c/_EHG/ehg"
-AGENT_DIR="/mnt/c/_EHG/ehg/agent-platform"
+APP_DIR="/mnt/c/_EHG/EHG"
+AGENT_DIR="/mnt/c/_EHG/EHG/agent-platform"
 
 # PID file locations
 PID_DIR="$ENGINEER_DIR/.pids"

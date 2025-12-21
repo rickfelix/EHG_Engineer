@@ -37,56 +37,56 @@ const handoffContent = {
     implementation_steps: [
       {
         step: 1,
-        file: '/mnt/c/_EHG/ehg/src/hooks/useExecutiveReports.ts',
+        file: '/mnt/c/_EHG/EHG/src/hooks/useExecutiveReports.ts',
         description: 'React Query hook for CRUD operations',
         estimated_loc: 120,
         dependencies: []
       },
       {
         step: 2,
-        file: '/mnt/c/_EHG/ehg/src/components/reports/ReportTemplateSelector.tsx',
+        file: '/mnt/c/_EHG/EHG/src/components/reports/ReportTemplateSelector.tsx',
         description: 'Template selection component (3 cards)',
         estimated_loc: 80,
         dependencies: []
       },
       {
         step: 3,
-        file: '/mnt/c/_EHG/ehg/src/components/reports/ReportSectionEditor.tsx',
+        file: '/mnt/c/_EHG/EHG/src/components/reports/ReportSectionEditor.tsx',
         description: 'Dynamic section editing',
         estimated_loc: 100,
         dependencies: []
       },
       {
         step: 4,
-        file: '/mnt/c/_EHG/ehg/src/components/reports/ReportPreview.tsx',
+        file: '/mnt/c/_EHG/EHG/src/components/reports/ReportPreview.tsx',
         description: 'Live report preview',
         estimated_loc: 80,
         dependencies: []
       },
       {
         step: 5,
-        file: '/mnt/c/_EHG/ehg/src/pages/ReportBuilderPage.tsx',
+        file: '/mnt/c/_EHG/EHG/src/pages/ReportBuilderPage.tsx',
         description: 'Main builder page',
         estimated_loc: 150,
         dependencies: ['steps 2-4']
       },
       {
         step: 6,
-        file: '/mnt/c/_EHG/ehg/src/components/reports/PDFExportButton.tsx',
+        file: '/mnt/c/_EHG/EHG/src/components/reports/PDFExportButton.tsx',
         description: 'PDF generation and download',
         estimated_loc: 60,
         dependencies: ['@react-pdf/renderer']
       },
       {
         step: 7,
-        file: '/mnt/c/_EHG/ehg/src/pages/ReportHistoryPage.tsx',
+        file: '/mnt/c/_EHG/EHG/src/pages/ReportHistoryPage.tsx',
         description: 'Report list view',
         estimated_loc: 100,
         dependencies: ['step 1']
       },
       {
         step: 8,
-        file: '/mnt/c/_EHG/ehg/src/App.tsx (modifications)',
+        file: '/mnt/c/_EHG/EHG/src/App.tsx (modifications)',
         description: 'Add 2 routes: /reports/builder, /reports',
         estimated_loc: 20,
         dependencies: ['steps 5, 7']
@@ -173,8 +173,8 @@ const handoffContent = {
   action_items_for_exec: [
     {
       priority: 'CRITICAL',
-      action: 'Verify target app: /mnt/c/_EHG/ehg/',
-      details: 'cd /mnt/c/_EHG/ehg && pwd to confirm',
+      action: 'Verify target app: /mnt/c/_EHG/EHG/',
+      details: 'cd /mnt/c/_EHG/EHG && pwd to confirm',
       estimated_effort: '1 minute'
     },
     {

@@ -42,10 +42,10 @@ async function createHandoffs() {
       executive_summary: 'PRD created with 3 user stories. Implementation ready to begin.',
       completeness_report: 'PRD: PRD-SD-2025-1020-E2E-SELECTORS created. 3 UI/UX requirements defined. 7 acceptance criteria established.',
       deliverables_manifest: 'PRD in database, user stories in metadata, branch created: feat/SD-2025-1020-E2E-SELECTORS-align-e2e-test-selectors-with-venture-cr',
-      key_decisions: 'Store user stories in PRD metadata (user_stories table had schema issues). Target EHG app (/mnt/c/_EHG/ehg).',
+      key_decisions: 'Store user stories in PRD metadata (user_stories table had schema issues). Target EHG app (/mnt/c/_EHG/EHG).',
       known_issues: 'User stories table validation blocking - worked around by using PRD metadata.',
       resource_utilization: 'Context: 50k chars (25% of budget) - HEALTHY',
-      action_items: 'EXEC: Navigate to /mnt/c/_EHG/ehg, add 3 test-ids, commit changes, verify no functional changes.'
+      action_items: 'EXEC: Navigate to /mnt/c/_EHG/EHG, add 3 test-ids, commit changes, verify no functional changes.'
     },
     {
       sd_id: sdId,

@@ -32,7 +32,7 @@
 #### Issue Details
 - **Failing Tests**: 2/18 (tab switching in NodePalette)
 - **Error**: `TimeoutError: locator.waitFor: Timeout 5000ms exceeded`
-- **Location**: `/mnt/c/_EHG/ehg/tests/e2e/workflow-builder.spec.ts:127`
+- **Location**: `/mnt/c/_EHG/EHG/tests/e2e/workflow-builder.spec.ts:127`
 - **Root Cause**: Shadcn Tabs transition delay after switching from Templates → Node Types
 
 #### Automated Fix Strategy
@@ -40,7 +40,7 @@
 **Step 1: Apply Quick Fix (5 minutes)**
 ```bash
 # Use Edit tool to increase timeout
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 ```
 
 **Edit workflow-builder.spec.ts:127**:
@@ -70,7 +70,7 @@ node scripts/qa-engineering-director-enhanced.js SD-BOARD-VISUAL-BUILDER-002 --s
 
 **Verification Command**:
 ```bash
-cd /mnt/c/_EHG/ehg && npm run test:e2e -- workflow-builder.spec.ts --reporter=line
+cd /mnt/c/_EHG/EHG && npm run test:e2e -- workflow-builder.spec.ts --reporter=line
 ```
 
 ---
@@ -144,7 +144,7 @@ node scripts/database-architect-schema-review.js SD-BOARD-VISUAL-BUILDER-002
 **Fix C: Test Coverage Enforcement** (if threshold not met)
 ```bash
 # Check current coverage
-cd /mnt/c/_EHG/ehg && npm run test:coverage
+cd /mnt/c/_EHG/EHG && npm run test:coverage
 
 # Add missing tests or adjust threshold in workflow config
 ```
@@ -152,7 +152,7 @@ cd /mnt/c/_EHG/ehg && npm run test:coverage
 **Fix D: UAT Testing Pipeline** (if infrastructure issue)
 ```bash
 # Run UAT tests locally to diagnose
-cd /mnt/c/_EHG/ehg && npm run test:uat
+cd /mnt/c/_EHG/EHG && npm run test:uat
 
 # Fix any broken test infrastructure
 ```
@@ -192,7 +192,7 @@ node scripts/github-actions-verifier.js SD-BOARD-VISUAL-BUILDER-002
 **Step 1: Run Accessibility Audit (10 minutes)**
 ```bash
 # If axe-core is available
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 npm run test:a11y -- --grep "workflow"
 
 # OR use Playwright accessibility testing
@@ -352,7 +352,7 @@ node scripts/unified-handoff-system.js execute PLAN-to-LEAD SD-BOARD-VISUAL-BUIL
 **Full Automated Remediation** (recommended):
 ```bash
 # Step 1: Fix E2E test timeout (manual edit required)
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 # Edit tests/e2e/workflow-builder.spec.ts:127
 # Change timeout from 5000 to 10000
 
@@ -375,7 +375,7 @@ node scripts/unified-handoff-system.js execute PLAN-to-LEAD SD-BOARD-VISUAL-BUIL
 **Manual Sequential Approach** (if orchestrator unavailable):
 ```bash
 # Task 1: Fix E2E tests
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 # Edit tests/e2e/workflow-builder.spec.ts:127 (increase timeout)
 npm run test:e2e -- workflow-builder.spec.ts
 
@@ -386,7 +386,7 @@ gh run view 18436526919 --log
 # Apply fixes based on logs
 
 # Task 3: Accessibility audit
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 npm run test:a11y -- --grep "workflow"
 # Apply ARIA labels, keyboard navigation fixes
 

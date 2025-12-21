@@ -48,15 +48,15 @@ Mark foundation phase complete. Python implementation requires specialized CrewA
 ### Database Schema ✅
 - **Status**: Complete and documented
 - **Files**:
-  - /mnt/c/_EHG/ehg/database/migrations/008_agent_platform_schema.sql (367 lines)
-  - /mnt/c/_EHG/ehg/apply-agent-platform-migration.mjs (69 lines)
+  - /mnt/c/_EHG/EHG/database/migrations/008_agent_platform_schema.sql (367 lines)
+  - /mnt/c/_EHG/EHG/apply-agent-platform-migration.mjs (69 lines)
 - **Tables**: 8 tables (agent_departments, crewai_agents, crewai_crews, crew_members, research_sessions, agent_knowledge, api_cache, agent_tools)
 - **Features**: pgvector extension, RLS policies, seed data (11 departments, 8 tools)
 - **Application**: Manual (via Supabase SQL Editor or psql)
 
 ### Implementation Guide ✅
 - **Status**: Complete with code samples
-- **File**: /mnt/c/_EHG/ehg/docs/SD-AGENT-PLATFORM-001_IMPLEMENTATION_GUIDE.md (1000+ lines)
+- **File**: /mnt/c/_EHG/EHG/docs/SD-AGENT-PLATFORM-001_IMPLEMENTATION_GUIDE.md (1000+ lines)
 - **Contents**:
   - Architecture overview with diagrams
   - Complete database schema documentation
@@ -96,7 +96,7 @@ Mark foundation phase complete. Python implementation requires specialized CrewA
 ## Deliverables Completed
 
 ### 1. Database Migration (008_agent_platform_schema.sql)
-- **Location**: /mnt/c/_EHG/ehg/database/migrations/008_agent_platform_schema.sql
+- **Location**: /mnt/c/_EHG/EHG/database/migrations/008_agent_platform_schema.sql
 - **Size**: 367 lines
 - **Status**: Complete, requires manual application
 - **Contents**:
@@ -109,13 +109,13 @@ Mark foundation phase complete. Python implementation requires specialized CrewA
   - Migration validation block
 
 ### 2. Migration Application Script (apply-agent-platform-migration.mjs)
-- **Location**: /mnt/c/_EHG/ehg/apply-agent-platform-migration.mjs
+- **Location**: /mnt/c/_EHG/EHG/apply-agent-platform-migration.mjs
 - **Size**: 69 lines
 - **Status**: Complete
 - **Purpose**: Instructs manual migration application via Supabase SQL Editor
 
 ### 3. Implementation Guide (SD-AGENT-PLATFORM-001_IMPLEMENTATION_GUIDE.md)
-- **Location**: /mnt/c/_EHG/ehg/docs/SD-AGENT-PLATFORM-001_IMPLEMENTATION_GUIDE.md
+- **Location**: /mnt/c/_EHG/EHG/docs/SD-AGENT-PLATFORM-001_IMPLEMENTATION_GUIDE.md
 - **Size**: 1000+ lines
 - **Status**: Complete
 - **Sections**:
@@ -387,7 +387,7 @@ Mark foundation phase complete. Python implementation requires specialized CrewA
 - **Action**: Apply database migration to Supabase
 - **Steps**:
   1. Navigate to https://dedlbzhpgkmetvhbkyzq.supabase.co/project/default/sql/new
-  2. Copy contents of /mnt/c/_EHG/ehg/database/migrations/008_agent_platform_schema.sql
+  2. Copy contents of /mnt/c/_EHG/EHG/database/migrations/008_agent_platform_schema.sql
   3. Paste into SQL Editor
   4. Click "Run"
   5. Verify: SELECT * FROM agent_departments; should return 11 rows

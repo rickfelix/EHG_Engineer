@@ -56,7 +56,7 @@ async function verifyVIFSDs() {
   console.log('\n🎯 Next Steps:');
   console.log('   1. View in dashboard: http://localhost:3000/strategic-directives');
   console.log('   2. Run LEAD pre-approval validation');
-  console.log('   3. Navigate to /mnt/c/_EHG/ehg/ for implementation');
+  console.log('   3. Navigate to /mnt/c/_EHG/EHG/ for implementation');
 }
 
 verifyVIFSDs().catch(console.error);

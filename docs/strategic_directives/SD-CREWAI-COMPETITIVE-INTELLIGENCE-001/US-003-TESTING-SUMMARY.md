@@ -32,7 +32,7 @@ Comprehensive testing strategy implemented for Stage 4 CrewAI Competitive Intell
 
 ### Backend Tests (Python/pytest) ✅
 
-**File 1**: `/mnt/c/_EHG/ehg/agent-platform/tests/test_deep_competitive_routing.py`
+**File 1**: `/mnt/c/_EHG/EHG/agent-platform/tests/test_deep_competitive_routing.py`
 - **Lines**: 250
 - **Tests**: 4
 - **Status**: ✅ ALL PASSED (2.22 sec)
@@ -44,7 +44,7 @@ Comprehensive testing strategy implemented for Stage 4 CrewAI Competitive Intell
 3. `test_deep_competitive_result_structure` - Validates JSONB schema structure
 4. `test_deep_crew_structured_output_variants` - Validates 3 CrewAI output formats
 
-**File 2**: `/mnt/c/_EHG/ehg/agent-platform/tests/test_deep_competitive_integration.py`
+**File 2**: `/mnt/c/_EHG/EHG/agent-platform/tests/test_deep_competitive_integration.py`
 - **Lines**: 350
 - **Tests**: 3
 - **Status**: ✅ CREATED (Not executed)
@@ -57,7 +57,7 @@ Comprehensive testing strategy implemented for Stage 4 CrewAI Competitive Intell
 
 ### Frontend Tests (TypeScript/Vitest) ✅
 
-**File 3**: `/mnt/c/_EHG/ehg/src/services/__tests__/ventureResearch.test.ts`
+**File 3**: `/mnt/c/_EHG/EHG/src/services/__tests__/ventureResearch.test.ts`
 - **Lines**: 300
 - **Tests**: 8
 - **Status**: ✅ CREATED (Needs relocation to `tests/unit/`)
@@ -80,7 +80,7 @@ Comprehensive testing strategy implemented for Stage 4 CrewAI Competitive Intell
 ### TS-UNIT-001: Backend Routing Validation ✅
 
 ```bash
-cd /mnt/c/_EHG/ehg/agent-platform
+cd /mnt/c/_EHG/EHG/agent-platform
 python3 -m pytest tests/test_deep_competitive_routing.py -v --tb=short --no-cov
 ```
 
@@ -375,9 +375,9 @@ python3 -m pytest tests/test_deep_competitive_routing.py --no-cov
 ## Files Created
 
 ### Test Files
-1. `/mnt/c/_EHG/ehg/agent-platform/tests/test_deep_competitive_routing.py` (250 lines)
-2. `/mnt/c/_EHG/ehg/agent-platform/tests/test_deep_competitive_integration.py` (350 lines)
-3. `/mnt/c/_EHG/ehg/src/services/__tests__/ventureResearch.test.ts` (300 lines)
+1. `/mnt/c/_EHG/EHG/agent-platform/tests/test_deep_competitive_routing.py` (250 lines)
+2. `/mnt/c/_EHG/EHG/agent-platform/tests/test_deep_competitive_integration.py` (350 lines)
+3. `/mnt/c/_EHG/EHG/src/services/__tests__/ventureResearch.test.ts` (300 lines)
 
 ### Documentation Files
 4. `docs/strategic_directives/SD-CREWAI-COMPETITIVE-INTELLIGENCE-001/testing-strategy.md` (366 lines)
@@ -416,15 +416,15 @@ US-003 Comprehensive Testing Strategy implementation has successfully delivered:
 
 ```bash
 # Run Tier 1 Backend Tests (MANDATORY)
-cd /mnt/c/_EHG/ehg/agent-platform
+cd /mnt/c/_EHG/EHG/agent-platform
 python3 -m pytest tests/test_deep_competitive_routing.py -v --no-cov
 
 # Run Tier 1 Frontend Tests (MANDATORY)
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 mv src/services/__tests__/ventureResearch.test.ts tests/unit/ventureResearch.test.ts
 npx vitest run tests/unit/ventureResearch.test.ts
 
 # Run All Tier 1 Tests
-cd /mnt/c/_EHG/ehg/agent-platform && python3 -m pytest tests/test_deep_competitive_*.py -v --no-cov
-cd /mnt/c/_EHG/ehg && npx vitest run tests/unit/ventureResearch.test.ts
+cd /mnt/c/_EHG/EHG/agent-platform && python3 -m pytest tests/test_deep_competitive_*.py -v --no-cov
+cd /mnt/c/_EHG/EHG && npx vitest run tests/unit/ventureResearch.test.ts
 ```

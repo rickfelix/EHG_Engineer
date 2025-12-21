@@ -462,7 +462,7 @@ Create SD-AGENT-ADMIN-003 to ensure proper LEO Protocol flow (LEAD→PLAN→EXEC
 
     // $24: exec_checklist (JSONB array)
     JSON.stringify([
-      { item: 'Navigate to /mnt/c/_EHG/ehg/ (verify pwd)', status: 'PENDING' },
+      { item: 'Navigate to /mnt/c/_EHG/EHG/ (verify pwd)', status: 'PENDING' },
       { item: 'Install npm dependencies (@monaco-editor/react, jstat, date-fns)', status: 'PENDING' },
       { item: 'Create 6 new database tables', status: 'PENDING' },
       { item: 'Insert seed data (28 records)', status: 'PENDING' },
@@ -517,7 +517,7 @@ Create SD-AGENT-ADMIN-003 to ensure proper LEO Protocol flow (LEAD→PLAN→EXEC
       'Database migrations must include validation scripts',
       'RLS policies must be tested with both anon and authenticated contexts',
       'E2E test coverage: 100% user stories (57 tests minimum)',
-      'Target application: EHG (/mnt/c/_EHG/ehg/)',
+      'Target application: EHG (/mnt/c/_EHG/EHG/)',
       'LEO Protocol compliance: All phases (LEAD→PLAN→EXEC→PLAN→LEAD)'
     ]),
 
@@ -553,7 +553,7 @@ Create SD-AGENT-ADMIN-003 to ensure proper LEO Protocol flow (LEAD→PLAN→EXEC
       created_by: 'PLAN Agent (Database Sub-Agent Pattern)',
       leo_protocol_version: 'v4.2.0',
       target_application: 'EHG',
-      target_path: '/mnt/c/_EHG/ehg/'
+      target_path: '/mnt/c/_EHG/EHG/'
     })
   ];
 

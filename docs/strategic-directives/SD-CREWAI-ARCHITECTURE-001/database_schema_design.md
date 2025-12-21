@@ -801,9 +801,9 @@ CREATE TABLE IF NOT EXISTS leo_to_crewai_agent_mapping (
 ## Files Referenced
 
 **Current Schema Files**:
-- `/mnt/c/_EHG/ehg/supabase/migrations/20251008000000_agent_platform_schema.sql`
-- `/mnt/c/_EHG/ehg/supabase/migrations/20251009000000_crewai_venture_research.sql`
-- `/mnt/c/_EHG/ehg/supabase/migrations/20251011000000_board_of_directors_and_workflows.sql`
+- `/mnt/c/_EHG/EHG/supabase/migrations/20251008000000_agent_platform_schema.sql`
+- `/mnt/c/_EHG/EHG/supabase/migrations/20251009000000_crewai_venture_research.sql`
+- `/mnt/c/_EHG/EHG/supabase/migrations/20251011000000_board_of_directors_and_workflows.sql`
 
 **PRD Files**:
 - `/mnt/c/_EHG/EHG_Engineer/docs/strategic-directives/SD-CREWAI-ARCHITECTURE-001/prd_expansion_summary.md`

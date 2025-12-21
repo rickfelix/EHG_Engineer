@@ -165,35 +165,35 @@ async function main() {
       const deliverables = [
         {
           deliverable_type: 'COMPONENT',
-          file_path: '/mnt/c/_EHG/ehg/src/features/ventures/pages/VentureCreationPage.tsx',
+          file_path: '/mnt/c/_EHG/EHG/src/features/ventures/pages/VentureCreationPage.tsx',
           description: 'Venture Creation Page component',
           lines_of_code: 201,
           status: 'completed'
         },
         {
           deliverable_type: 'COMPONENT',
-          file_path: '/mnt/c/_EHG/ehg/src/features/opportunities/components/OpportunitySourcingDashboard.jsx',
+          file_path: '/mnt/c/_EHG/EHG/src/features/opportunities/components/OpportunitySourcingDashboard.jsx',
           description: 'Opportunity Sourcing Dashboard component',
           lines_of_code: 186,
           status: 'completed'
         },
         {
           deliverable_type: 'MODULE',
-          file_path: '/mnt/c/_EHG/ehg/src/features/ventures/adapters/opportunityToVentureAdapter.ts',
+          file_path: '/mnt/c/_EHG/EHG/src/features/ventures/adapters/opportunityToVentureAdapter.ts',
           description: 'Opportunity to Venture adapter with business logic',
           lines_of_code: 156,
           status: 'completed'
         },
         {
           deliverable_type: 'TEST',
-          file_path: '/mnt/c/_EHG/ehg/src/features/ventures/adapters/opportunity-to-venture-bridge.spec.ts',
+          file_path: '/mnt/c/_EHG/EHG/src/features/ventures/adapters/opportunity-to-venture-bridge.spec.ts',
           description: 'Comprehensive unit tests for adapter logic',
           lines_of_code: 547,
           status: 'completed'
         },
         {
           deliverable_type: 'ENHANCEMENT',
-          file_path: '/mnt/c/_EHG/ehg/src/features/ventures/components/VentureForm.tsx',
+          file_path: '/mnt/c/_EHG/EHG/src/features/ventures/components/VentureForm.tsx',
           description: 'Accessibility improvements (ARIA labels, keyboard nav)',
           lines_of_code: 50,
           status: 'completed'

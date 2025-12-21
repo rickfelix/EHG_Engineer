@@ -133,8 +133,8 @@ Manual override applied due to RETROSPECTIVE_QUALITY_GATE score (62%) being belo
 - useChairmanDashboardData.ts: +30 lines (real team capacity calculation)
 
 FILES MODIFIED:
-- /mnt/c/_EHG/ehg/src/pages/api/v2/chairman/briefing.ts
-- /mnt/c/_EHG/ehg/src/hooks/useChairmanDashboardData.ts
+- /mnt/c/_EHG/EHG/src/pages/api/v2/chairman/briefing.ts
+- /mnt/c/_EHG/EHG/src/hooks/useChairmanDashboardData.ts
 
 E2E TESTS:
 - chairman-dashboard-v2.spec.ts: 30/30 passed

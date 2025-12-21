@@ -21,7 +21,7 @@ Backend API integration for Phase 5 (Agent Wizard & Crew Builder) has been succe
 
 ### 1. Backend API Endpoint Added
 
-**File**: `/mnt/c/_EHG/ehg/agent-platform/app/api/crews.py`
+**File**: `/mnt/c/_EHG/EHG/agent-platform/app/api/crews.py`
 
 **New Endpoint**: `POST /api/crews/generate`
 
@@ -57,7 +57,7 @@ class CrewCodeGenerationResponse(BaseModel):
 
 ### 2. Agent Wizard Frontend Integration
 
-**File**: `/mnt/c/_EHG/ehg/src/components/agents/AgentWizard/Step6ReviewGenerate.tsx`
+**File**: `/mnt/c/_EHG/EHG/src/components/agents/AgentWizard/Step6ReviewGenerate.tsx`
 
 **Changes**: Updated `handleGenerateCode()` function
 
@@ -79,7 +79,7 @@ class CrewCodeGenerationResponse(BaseModel):
 
 ### 3. Crew Builder Frontend Integration
 
-**File**: `/mnt/c/_EHG/ehg/src/components/crews/CrewBuilder/VisualPreview.tsx`
+**File**: `/mnt/c/_EHG/EHG/src/components/crews/CrewBuilder/VisualPreview.tsx`
 
 **Changes**: Added `handleGenerateCodeViaAPI()` function
 
@@ -93,7 +93,7 @@ class CrewCodeGenerationResponse(BaseModel):
 
 ---
 
-**File**: `/mnt/c/_EHG/ehg/src/components/crews/CrewBuilder/CrewBuilder.tsx`
+**File**: `/mnt/c/_EHG/EHG/src/components/crews/CrewBuilder/CrewBuilder.tsx`
 
 **Changes**: Updated `handleSaveCrew()` function
 
@@ -574,7 +574,7 @@ server: {
 
 ### Backend Files
 
-1. `/mnt/c/_EHG/ehg/agent-platform/app/api/crews.py`
+1. `/mnt/c/_EHG/EHG/agent-platform/app/api/crews.py`
    - Added `POST /api/crews/generate` endpoint
    - Added `CrewCodeGenerationRequest` model
    - Added `CrewCodeGenerationResponse` model
@@ -582,17 +582,17 @@ server: {
 
 ### Frontend Files
 
-1. `/mnt/c/_EHG/ehg/src/components/agents/AgentWizard/Step6ReviewGenerate.tsx`
+1. `/mnt/c/_EHG/EHG/src/components/agents/AgentWizard/Step6ReviewGenerate.tsx`
    - Updated `handleGenerateCode()` - Lines 110-192
    - Updated `handleDeployAgent()` - Lines 195-218
    - Changes: ~80 LOC
 
-2. `/mnt/c/_EHG/ehg/src/components/crews/CrewBuilder/VisualPreview.tsx`
+2. `/mnt/c/_EHG/EHG/src/components/crews/CrewBuilder/VisualPreview.tsx`
    - Added `handleGenerateCodeViaAPI()` - Lines 211-259
    - Updated "Generate Full Code" button
    - Changes: ~50 LOC
 
-3. `/mnt/c/_EHG/ehg/src/components/crews/CrewBuilder/CrewBuilder.tsx`
+3. `/mnt/c/_EHG/EHG/src/components/crews/CrewBuilder/CrewBuilder.tsx`
    - Updated `handleSaveCrew()` - Lines 148-194
    - Changes: ~45 LOC
 

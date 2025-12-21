@@ -63,8 +63,8 @@ Agent: "I didn't know it existed"
 node scripts/systems-analyst-codebase-audit.js <SD-ID>
 
 # Manual search if needed
-grep -r "authentication|auth|login" /mnt/c/_EHG/ehg/src
-find /mnt/c/_EHG/ehg/src -name "*auth*"
+grep -r "authentication|auth|login" /mnt/c/_EHG/EHG/src
+find /mnt/c/_EHG/EHG/src -name "*auth*"
 
 # Check both applications
 grep -r "authentication" /mnt/c/_EHG/EHG_Engineer/src
@@ -141,7 +141,7 @@ EXEC: "Issues A, C, E don't exist in the code. Only B and D are real."
 ```bash
 # LEAD code review for UI/UX SDs (MANDATORY)
 # Read actual source code
-cat /mnt/c/_EHG/ehg/src/components/Dashboard.tsx | grep -A 10 "Issue A description"
+cat /mnt/c/_EHG/EHG/src/components/Dashboard.tsx | grep -A 10 "Issue A description"
 
 # Verify each claim
 for issue in A B C D E; do
@@ -233,7 +233,7 @@ supabase.from('user_stories').select('id').eq('strategic_directive_id', 'SD-XXX'
 "
 
 # Check E2E tests
-grep -r "US-[0-9]\+" /mnt/c/_EHG/ehg/tests/e2e/*.spec.ts | wc -l
+grep -r "US-[0-9]\+" /mnt/c/_EHG/EHG/tests/e2e/*.spec.ts | wc -l
 
 # Validate 100% coverage
 # Every user story MUST have ≥1 E2E test

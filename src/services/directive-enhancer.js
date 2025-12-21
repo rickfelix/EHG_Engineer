@@ -250,7 +250,7 @@ Generate comprehensive description (200-300 words, flowing paragraphs, NO Q&A fo
           const componentResults = await searchService.searchComponents(
             keyword,
             ['.tsx', '.jsx'],
-            ['/mnt/c/_EHG/ehg/src', '/mnt/c/_EHG/EHG_Engineer/src']
+            ['/mnt/c/_EHG/EHG/src', '/mnt/c/_EHG/EHG_Engineer/src']
           );
 
           componentResults.forEach(result => {

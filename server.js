@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * EHG_Engineer Unified Application Server
- * Combines LEO Protocol Dashboard with main application
- * Single server for all features - no more separate processes
+ * EHG_Engineer Backend API Server
+ * SD-ARCH-EHG-007: Backend API + LEO Protocol engine (no standalone UI)
+ * All UI is in EHG unified frontend at port 8080
  */
 
 import express from 'express';
@@ -86,12 +86,12 @@ if (process.env.OPENAI_API_KEY) {
 }
 
 // Middleware
-// SD-ARCH-EHG-006: Configure CORS for EHG frontend access
+// SD-ARCH-EHG-007: Configure CORS for EHG unified frontend access
+// Note: EHG_Engineer is backend API only - no separate frontend client
 app.use(cors({
   origin: [
-    'http://localhost:8080',  // EHG production frontend (Vite)
+    'http://localhost:8080',  // EHG unified frontend (Vite)
     'http://localhost:8081',  // EHG fallback port
-    'http://localhost:3001',  // EHG_Engineer dev client
     /^https:\/\/.*\.ehg\.com$/  // Production EHG domains
   ],
   credentials: true,
@@ -100,8 +100,8 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Serve static files from the client build
-app.use(express.static(path.join(__dirname, 'src/client/dist')));
+// SD-ARCH-EHG-007: Static file serving removed - all UI is in EHG unified frontend
+// EHG_Engineer is backend API only (port 3000)
 
 // State management
 let dashboardState = {
@@ -2265,13 +2265,9 @@ app.post('/api/competitor-analysis', asyncHandler(async (req, res) => {
 }));
 
 // =============================================================================
-// CLIENT SERVING
+// SD-ARCH-EHG-007: Client serving removed - EHG_Engineer is backend API only
+// All UI is served by EHG unified frontend at port 8080
 // =============================================================================
-
-// Serve the React app for all other routes (catch-all)
-app.use((req, res) => {
-  res.sendFile(path.join(__dirname, 'src/client/dist/index.html'));
-});
 
 // =============================================================================
 // FILE WATCHING (Development)

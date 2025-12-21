@@ -48,7 +48,7 @@ async function verifyDevOps(sdId) {
   // Check GitHub Actions status (if in EHG repo)
   try {
     console.log('\n📊 Checking GitHub Actions...');
-    const { stdout } = await execAsync('cd /mnt/c/_EHG/ehg && gh run list --limit 5 --json conclusion,status,name,createdAt');
+    const { stdout } = await execAsync('cd /mnt/c/_EHG/EHG && gh run list --limit 5 --json conclusion,status,name,createdAt');
     const runs = JSON.parse(stdout);
 
     const latestRun = runs[0];
@@ -68,8 +68,8 @@ async function verifyDevOps(sdId) {
   // Check git status
   try {
     console.log('\n📝 Checking Git status...');
-    const { stdout: gitLog } = await execAsync('cd /mnt/c/_EHG/ehg && git log --oneline -1');
-    const { stdout: gitStatus } = await execAsync('cd /mnt/c/_EHG/ehg && git status --porcelain');
+    const { stdout: gitLog } = await execAsync('cd /mnt/c/_EHG/EHG && git log --oneline -1');
+    const { stdout: gitStatus } = await execAsync('cd /mnt/c/_EHG/EHG && git status --porcelain');
 
     verification.checks.git = {
       latest_commit: gitLog.trim(),

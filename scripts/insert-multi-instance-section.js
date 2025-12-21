@@ -23,12 +23,12 @@ When multiple Claude Code instances may run concurrently on different SDs:
 
 #### Before Starting EXEC Phase:
 \`\`\`bash
-# 1. Create isolated worktree (NOT shared /mnt/c/_EHG/ehg)
-cd /mnt/c/_EHG/ehg
-git worktree add /mnt/c/_EHG/ehg-worktrees/\${SD_ID} -b feat/\${SD_ID}-branch
+# 1. Create isolated worktree (NOT shared /mnt/c/_EHG/EHG)
+cd /mnt/c/_EHG/EHG
+git worktree add /mnt/c/_EHG/EHG-worktrees/\${SD_ID} -b feat/\${SD_ID}-branch
 
 # 2. Work ONLY in worktree directory
-cd /mnt/c/_EHG/ehg-worktrees/\${SD_ID}
+cd /mnt/c/_EHG/EHG-worktrees/\${SD_ID}
 
 # 3. All git operations happen here
 git add . && git commit -m "feat(\${SD_ID}): description"
@@ -38,8 +38,8 @@ git push origin feat/\${SD_ID}-branch
 #### After PR Merged:
 \`\`\`bash
 # Cleanup worktree
-cd /mnt/c/_EHG/ehg
-git worktree remove /mnt/c/_EHG/ehg-worktrees/\${SD_ID}
+cd /mnt/c/_EHG/EHG
+git worktree remove /mnt/c/_EHG/EHG-worktrees/\${SD_ID}
 \`\`\`
 
 ### Forbidden Operations (Multi-Instance)
@@ -48,7 +48,7 @@ git worktree remove /mnt/c/_EHG/ehg-worktrees/\${SD_ID}
 |-----------|---------------|-------------|
 | \`git stash pop\` across SDs | Mixes changes between instances | Use worktrees |
 | \`git checkout\` to different SD branch | Switches shared directory | Use worktrees |
-| Working in \`/mnt/c/_EHG/ehg\` during parallel execution | Shared state conflicts | Use worktree path |
+| Working in \`/mnt/c/_EHG/EHG\` during parallel execution | Shared state conflicts | Use worktree path |
 | Branch switching mid-operation | Interrupts other instance | Complete or stash first |
 
 ### Quick Reference

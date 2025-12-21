@@ -52,7 +52,7 @@ async function applyMigration() {
     console.log('  3. Paste and run the SQL');
     console.log('');
     console.log('Option 2: Supabase CLI');
-    console.log('  cd /mnt/c/_EHG/ehg');
+    console.log('  cd /mnt/c/_EHG/EHG');
     console.log('  npx supabase link --project-ref liapbndqlqxdcgpwntbv');
     console.log('  npx supabase db push');
     console.log('');

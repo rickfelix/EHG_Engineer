@@ -175,8 +175,8 @@ This dossier was generated using the following read-only commands:
 
 4. **Verify Agent Mappings**:
    ```bash
-   ls /mnt/c/_EHG/ehg/agent-platform/app/agents/*.py | grep -i decomp
-   ls /mnt/c/_EHG/ehg/agent-platform/app/crews/*.py | grep -i decomp
+   ls /mnt/c/_EHG/EHG/agent-platform/app/agents/*.py | grep -i decomp
+   ls /mnt/c/_EHG/EHG/agent-platform/app/crews/*.py | grep -i decomp
    ```
 
 All commands are **read-only** and require no database writes.

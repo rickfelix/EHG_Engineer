@@ -1,43 +1,44 @@
 # Multi-Application Testing Architecture
 
+> **ARCHITECTURE UPDATE (SD-ARCH-EHG-007)**: EHG is now the **unified frontend** (user + admin via `/admin` routes). EHG_Engineer is **backend API only**. Both share the consolidated database (`dedlbzhpgkmetvhbkyzq`).
+
 ## Overview
 
-The EHG ecosystem consists of **two separate applications** with **independent test suites**, databases, and GitHub repositories. Understanding this architecture is critical for accurate test execution and coverage reporting.
+The EHG ecosystem consists of a **unified frontend (EHG)** and **backend API (EHG_Engineer)** with coordinated test suites sharing the consolidated database. Understanding this architecture is critical for accurate test execution and coverage reporting.
 
 ## Applications
 
-### 1. EHG_Engineer (Management Dashboard)
+### 1. EHG_Engineer (Backend API + LEO Protocol Engine)
 
-**Purpose**: LEO Protocol dashboard for managing Strategic Directives and PRDs
+**Purpose**: Backend REST API and LEO Protocol execution engine (no standalone UI)
 
 **Location**: `/mnt/c/_EHG/EHG_Engineer/`
 
 **Test Configuration**:
 - **Test Directory**: `/mnt/c/_EHG/EHG_Engineer/tests/`
 - **Test Framework**: Vitest + Jest
-- **Coverage Target**: 50% minimum for management features
-- **Test Types**: Unit tests, integration tests for LEO Protocol
+- **Coverage Target**: 50% minimum for API and LEO Protocol features
+- **Test Types**: Unit tests, integration tests for LEO Protocol, API tests
 - **Run Command**: `npm run test` (from EHG_Engineer directory)
 
 **What We Test**:
-- Strategic Directive management
-- PRD tracking and generation
-- Dashboard functionality
-- LEO Protocol workflow
+- REST API endpoints (`/api/sd`, `/api/prd`, etc.)
+- LEO Protocol workflow execution
 - Database operations (Supabase: dedlbzhpgkmetvhbkyzq)
+- Sub-agent and skill execution
 
 **GitHub**: https://github.com/rickfelix/EHG_Engineer.git
 
 ---
 
-### 2. EHG (Business Application)
+### 2. EHG (Unified Frontend - User + Admin)
 
-**Purpose**: Customer-facing business application with venture management features
+**Purpose**: Unified frontend with user features AND admin dashboard at `/admin/*` routes
 
-**Location**: `/mnt/c/_EHG/ehg/`
+**Location**: `/mnt/c/_EHG/EHG/`
 
 **Test Configuration**:
-- **Test Directory**: `/mnt/c/_EHG/ehg/tests/`
+- **Test Directory**: `/mnt/c/_EHG/EHG/tests/`
 - **Test Framework**: Vitest (unit), Playwright (E2E)
 - **Coverage Targets**:
   - Unit: 50% minimum
@@ -47,7 +48,7 @@ The EHG ecosystem consists of **two separate applications** with **independent t
 **Test Structure**:
 ```
 tests/
-├── unit/              # Vitest unit tests (4 files currently)
+├── unit/              # Vitest unit tests
 ├── integration/       # Integration tests
 ├── e2e/              # Playwright E2E tests (extensive)
 ├── a11y/             # Accessibility tests
@@ -62,11 +63,12 @@ tests/
 - `npm run test:a11y` - Accessibility tests
 
 **What We Test**:
-- Customer-facing features
+- User-facing features (ventures, dashboard)
+- Admin features at `/admin/*` routes (SD management, PRDs, backlog)
 - Business logic and services
 - User experience flows
 - Authentication and security
-- Database operations (Supabase: liapbndqlqxdcgpwntbv)
+- Database operations (Supabase: dedlbzhpgkmetvhbkyzq - CONSOLIDATED)
 
 **GitHub**: https://github.com/rickfelix/ehg.git
 
@@ -76,17 +78,17 @@ tests/
 
 ### Before Running ANY Tests
 
-1. **Read SD Description** - Which application is the SD targeting?
-   - SD mentions "dashboard", "LEO Protocol", "SD management" → EHG_Engineer
-   - SD mentions "customer features", "business logic", "user experience" → EHG
+1. **Read SD Description** - Which layer is the SD targeting?
+   - SD mentions "backend API", "LEO Protocol scripts", "REST endpoints" → EHG_Engineer
+   - SD mentions "UI", "user features", "admin dashboard", "/admin routes" → EHG
 
 2. **Navigate to Correct Directory**:
    ```bash
-   # For EHG_Engineer tests:
+   # For EHG_Engineer API/backend tests:
    cd /mnt/c/_EHG/EHG_Engineer && npm run test
 
-   # For EHG application tests:
-   cd /mnt/c/_EHG/ehg && npm run test:unit
+   # For EHG unified frontend tests:
+   cd /mnt/c/_EHG/EHG && npm run test:unit
    ```
 
 3. **Verify Test Location**:
@@ -97,8 +99,8 @@ tests/
 
 **Coverage metrics are INDEPENDENT** - report separately:
 
-- **EHG_Engineer Coverage**: Dashboard/management features only
-- **EHG Application Coverage**: Customer-facing features only
+- **EHG_Engineer Coverage**: Backend API and LEO Protocol engine
+- **EHG Coverage**: Unified frontend (user + admin features)
 
 **DO NOT** combine coverage metrics across applications!
 
@@ -112,7 +114,8 @@ tests/
 | Running tests in wrong application directory | Navigate to correct app before test execution |
 | Combining coverage metrics across applications | Report coverage per application separately |
 | Claiming "zero test coverage" without checking both apps | Verify test suite in correct application first |
-| Looking for tests in EHG_Engineer for EHG features | Check application context in SD description |
+| Looking for admin UI tests in EHG_Engineer | Admin UI is in EHG at `/admin/*` routes |
+| Looking for API tests in EHG | Backend API tests are in EHG_Engineer |
 
 ---
 
@@ -131,10 +134,10 @@ When QA sub-agent is triggered:
 ```bash
 # Step 1: Identify target from SD
 # SD-QUALITY-001 mentions "EHG application business logic"
-# Target: /mnt/c/_EHG/ehg/
+# Target: /mnt/c/_EHG/EHG/
 
 # Step 2: Navigate
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 
 # Step 3: Run appropriate tests
 npm run test:unit
@@ -220,7 +223,7 @@ npm run test                    # All tests
 npm run test:coverage           # With coverage
 
 # EHG Application Tests
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 npm run test:unit               # Unit tests
 npm run test:integration        # Integration tests
 npm run test:e2e                # E2E tests (Playwright)
@@ -235,21 +238,21 @@ find ./tests -name "*.test.*" -o -name "*.spec.*" | wc -l
 
 ## Database Context
 
-Each application has its own Supabase database:
+Both applications share the consolidated Supabase database (SD-ARCH-EHG-007):
 
-| Application | Database Project ID | Connection |
-|------------|---------------------|------------|
-| **EHG_Engineer** | dedlbzhpgkmetvhbkyzq | Pooler: aws-1-us-east-1 |
-| **EHG** | liapbndqlqxdcgpwntbv | Pooler: aws-0-us-east-1 |
+| Application | Database Project ID | Purpose |
+|------------|---------------------|---------|
+| **EHG** | dedlbzhpgkmetvhbkyzq | Unified frontend (user + admin) |
+| **EHG_Engineer** | dedlbzhpgkmetvhbkyzq | Backend API + LEO Protocol |
 
 ---
 
 ## Summary
 
-**Key Takeaway**: EHG ecosystem has **two independent applications** with **separate test suites**. Always identify target application from SD context before running tests or reporting coverage.
+**Key Takeaway**: EHG ecosystem has a **unified frontend (EHG)** and **backend API (EHG_Engineer)** sharing the consolidated database. Identify target layer from SD context before running tests or reporting coverage.
 
 **When in doubt**:
-1. Check SD description for application context
+1. Check SD description for application layer (UI vs API)
 2. Navigate to correct directory
 3. Verify test location before execution
 4. Report coverage per application separately

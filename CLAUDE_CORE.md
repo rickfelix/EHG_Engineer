@@ -1,46 +1,73 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-19 7:27:49 AM
+**Generated**: 2025-12-21 10:23:54 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
 ---
 
-## 🏗️ Application Architecture - CRITICAL CONTEXT
+## 🏗️ Application Architecture - UNIFIED FRONTEND
 
-### Two Distinct Applications (CONSOLIDATED DATABASE):
-1. **EHG_Engineer** (Management Dashboard) - WHERE YOU ARE NOW
-   - **Path**: `/mnt/c/_EHG/EHG_Engineer/`
-   - **Purpose**: LEO Protocol dashboard for managing Strategic Directives & PRDs
+### Unified Application Architecture (CONSOLIDATED)
+
+#### System Overview
+The EHG ecosystem consists of two primary components sharing a consolidated database:
+
+1. **EHG** (Unified Frontend) - PORT 8080
+   - **Path**: `/mnt/c/_EHG/EHG/`
+   - **Purpose**: Complete application frontend (user features + admin dashboard)
    - **Database**: dedlbzhpgkmetvhbkyzq (Supabase) - CONSOLIDATED
-   - **GitHub**: https://github.com/rickfelix/EHG_Engineer.git
-   - **Port**: 3000-3001
-   - **Role**: MANAGEMENT TOOL ONLY - no customer features here!
-
-2. **EHG** (Business Application) - IMPLEMENTATION TARGET
-   - **Path**: `/mnt/c/_EHG/ehg/`
-   - **Purpose**: The actual customer-facing business application
-   - **Database**: dedlbzhpgkmetvhbkyzq (Supabase) - CONSOLIDATED (SD-ARCH-EHG-006)
    - **GitHub**: https://github.com/rickfelix/ehg.git
    - **Built with**: Vite + React + Shadcn + TypeScript
-   - **Role**: WHERE ALL FEATURES GET IMPLEMENTED
+   - **Routes**:
+     - `/` - User-facing venture creation and management
+     - `/admin` - Admin dashboard (LEO Protocol management)
+     - `/admin/directives` - Strategic Directives (SDManager)
+     - `/admin/prds` - PRD Management
+     - `/admin/ventures` - Ventures Admin View
+   - **Role**: ALL UI FEATURES - both user and admin
 
-> **NOTE (SD-ARCH-EHG-006)**: As of 2025-11-30, both applications use the **CONSOLIDATED** database (dedlbzhpgkmetvhbkyzq). The old EHG database (liapbndqlqxdcgpwntbv) has been deprecated.
+2. **EHG_Engineer** (Backend API) - PORT 3000
+   - **Path**: `/mnt/c/_EHG/EHG_Engineer/`
+   - **Purpose**: Backend API server + LEO Protocol scripts
+   - **Database**: dedlbzhpgkmetvhbkyzq (Supabase) - CONSOLIDATED
+   - **GitHub**: https://github.com/rickfelix/EHG_Engineer.git
+   - **Provides**:
+     - REST API endpoints (`/api/sd`, `/api/prd`, etc.)
+     - LEO Protocol scripts (`handoff.js`, `add-prd-to-database.js`)
+     - WebSocket connections for real-time updates
+   - **Role**: BACKEND SERVICES ONLY - no standalone frontend
+
+3. **Agent Platform** (AI Backend) - PORT 8000
+   - **Path**: `/mnt/c/_EHG/EHG/agent-platform/`
+   - **Purpose**: AI research backend for venture creation
+   - **Built with**: FastAPI + Python
+
+> **NOTE (SD-ARCH-EHG-007)**: Admin components (SDManager, PRDManager, VenturesManager, Stage Components) have been migrated from EHG_Engineer to EHG as part of the unified frontend initiative.
 
 ### ⚠️ CRITICAL: During EXEC Phase Implementation
-1. **Read PRD** from EHG_Engineer database
-2. **Navigate** to `/mnt/c/_EHG/ehg/` for implementation
-3. **Make code changes** in EHG application (NOT in EHG_Engineer!)
-4. **Push changes** to EHG's GitHub repo: `rickfelix/ehg.git`
-5. **Track progress** in EHG_Engineer dashboard
+1. **Read PRD** from EHG_Engineer database (or via API)
+2. **Navigate** to `/mnt/c/_EHG/EHG/` for ALL frontend work
+3. **For admin features**: Implement in `/src/components/admin/` or `/src/pages/admin/`
+4. **For user features**: Implement in `/src/components/` or `/src/pages/`
+5. **Push changes** to EHG's GitHub repo: `rickfelix/ehg.git`
+6. **For backend API changes**: Navigate to `/mnt/c/_EHG/EHG_Engineer/`
 
 ### 🔄 Workflow Relationship
 ```
-EHG_Engineer (Management)          EHG App (Implementation)
-├── Strategic Directives     →     Features implemented here
-├── PRDs                     →     Code changes made here
-├── Progress Tracking        ←     Results verified from here
-└── Dashboard Views          ←     No changes here!
+EHG_Engineer (Backend)              EHG (Unified Frontend)
+├── REST API /api/*          →     Consumed by both user & admin UI
+├── LEO Protocol Scripts     →     Manage SDs, PRDs, handoffs
+├── WebSocket Server         →     Real-time updates to UI
+└── No UI (API only)               ALL UI here (user + /admin routes)
+```
+
+### Stack Startup
+```bash
+bash scripts/leo-stack.sh restart   # Starts all 3 servers
+# Port 3000: EHG_Engineer backend API
+# Port 8080: EHG unified frontend
+# Port 8000: Agent Platform AI backend
 ```
 
 ## 🔍 Session Start Verification (MANDATORY)
@@ -304,7 +331,7 @@ These principles override default behavior and must be internalized before start
 
 ### Application-Aware (VERIFICATION)
 **Verify directory BEFORE writing ANY code.**
-- `cd /mnt/c/_EHG/ehg && pwd` for customer features
+- `cd /mnt/c/_EHG/EHG && pwd` for customer features
 - `git remote -v` to confirm correct repository
 - Wrong directory = STOP immediately
 
@@ -1311,6 +1338,29 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 *Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
 
 
+## 🏥 Gate Health Monitor (Auto-Updated)
+
+**ATTENTION**: These gates are below the 80% pass rate threshold and may need remediation.
+
+| Gate | Pass Rate | Attempts | Failures | Status |
+|------|-----------|----------|----------|--------|
+| Gate 0 | 0% | 36 | 36 | 🔴 Critical |
+| Gate 1 | 0% | 1 | 1 | 🔴 Critical |
+| Gate 3 | 0% | 57 | 57 | 🔴 Critical |
+| Gate 2B | 0% | 57 | 57 | 🔴 Critical |
+| Gate 2D | 0% | 57 | 57 | 🔴 Critical |
+
+### Remediation Actions
+
+When gates consistently fail:
+1. Run `npm run gate:health` for detailed analysis
+2. Review validation rules in `leo_validation_rules` table
+3. Check if rules are too strict or outdated
+4. Create remediation SD if pass rate < 70% for 2+ weeks
+
+*Gate health auto-updated from `v_gate_health_metrics`. Run `npm run gate:health` for details.*
+
+
 ## 📝 Recent Lessons (Last 30 Days)
 
 **From Published Retrospectives** - Apply these learnings proactively.
@@ -1359,16 +1409,16 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 - [ ] Add reset_sd_phase RPC function for administrative phase corrections
 - [ ] Maintain E2E test path auto-generation for all SD types
 
-### 5. Vision V2: Database Schema Foundation - Retrospective ⭐
-**Category**: DATABASE_SCHEMA | **Date**: 12/14/2025 | **Score**: 90
+### 5. UI Canon Alignment - Retrospective ⭐
+**Category**: TESTING_STRATEGY | **Date**: 12/19/2025 | **Score**: 100
 
 **Key Improvements**:
-- No unified test evidence found - consider running comprehensive E2E tests
-- No unified test evidence found - consider running comprehensive E2E tests
+- E2E test timeout configuration for mock mode
+- Deprecation enforcement for legacy stage constants
 
 **Action Items**:
-- [ ] Merge Vision V2 Database Schema PR
-- [ ] Document PAT-DB-SD-E2E-001 pattern for future database SDs
+- [ ] Add eslint rule to deprecate IDEATION_STAGES import and suggest VENTURE_STAGES
+- [ ] Configure separate Playwright timeouts for mock-mode tests (30s) vs real-mode te...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1398,23 +1448,32 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 | Sub-Agent | Trigger Keywords | Priority | Description |
 |-----------|------------------|----------|-------------|
 | Quick-Fix Orchestrator ("LEO Lite" Field Medic) | N/A | 95 | Lightweight triage and resolution for small UAT-discovered i... |
-| Root Cause Analysis Agent | sub_agent_blocked, ci_pipeline_failure,  | 95 | Forensic intelligence agent for defect triage, root cause de... |
 | Information Architecture Lead | LEAD_SD_CREATION, LEAD_HANDOFF_CREATION, | 95 | ## Information Architecture Lead v3.0.0 - Database-First Enf... |
+| Root Cause Analysis Agent | sub_agent_blocked, ci_pipeline_failure,  | 95 | Forensic intelligence agent for defect triage, root cause de... |
+| Chief Security Architect | authentication, security, security auth  | 90 | Former NSA security architect with 25 years experience secur... |
+| UAT Test Executor | uat test, execute test, run uat, test ex | 90 | Interactive UAT test execution guide for manual testing work... |
 | DevOps Platform Architect | EXEC_IMPLEMENTATION_COMPLETE, create pul | 90 | # DevOps Platform Architect Sub-Agent
 
 **Identity**: You are... |
-| Chief Security Architect | authentication, security, security auth  | 90 | Former NSA security architect with 25 years experience secur... |
-| UAT Test Executor | uat test, execute test, run uat, test ex | 90 | Interactive UAT test execution guide for manual testing work... |
-| Performance Engineering Lead | optimization | 85 | Performance engineering lead with 20+ years optimizing high-... |
 | Continuous Improvement Coach | LEAD_APPROVAL_COMPLETE, LEAD_REJECTION,  | 85 | ## Continuous Improvement Coach v4.0.0 - Quality-First Editi... |
+| Launch Orchestration Sub-Agent | launch, go-live, production launch, depl | 85 | Handles production launch orchestration, go-live checklists,... |
+| Performance Engineering Lead | optimization | 85 | Performance engineering lead with 20+ years optimizing high-... |
+| Financial Modeling Sub-Agent | financial, P&L, profit and loss, cash fl | 80 | Handles financial projections, P&L modeling, cash flow analy... |
+| Monitoring Sub-Agent | uptime, incident, observability, logging | 80 | Handles monitoring setup, alerting, SLA definition, health c... |
+| Analytics Sub-Agent | analytics, metrics, dashboard, AARRR, fu | 75 | Handles analytics setup, metrics definition, dashboard creat... |
 | API Architecture Sub-Agent | API, REST, RESTful, GraphQL, endpoint, r | 75 | ## API Sub-Agent v1.0.0
 
 **Mission**: REST/GraphQL endpoint ... |
+| Pricing Strategy Sub-Agent | pricing, price point, pricing strategy,  | 75 | Handles pricing model development, unit economics, pricing t... |
+| Valuation Sub-Agent | valuation, exit, exit strategy, acquisit | 70 | Handles exit valuation modeling, comparable analysis, DCF ca... |
+| Senior Design Sub-Agent | component, visual, design system, stylin | 70 | ## Senior Design Sub-Agent v6.0.0 - Lessons Learned Edition
+... |
 | Dependency Management Sub-Agent | dependency, dependencies, npm, yarn, pnp | 70 | # Dependency Management Specialist Sub-Agent
 
 **Identity**: ... |
-| Senior Design Sub-Agent | component, visual, design system, stylin | 70 | ## Senior Design Sub-Agent v6.0.0 - Lessons Learned Edition
-... |
+| Marketing & GTM Sub-Agent | marketing, go-to-market, GTM, campaign,  | 70 | Handles go-to-market strategy, marketing campaigns, channel ... |
+| Sales Process Sub-Agent | sales, sales playbook, sales process, pi | 70 | Handles sales playbook development, pipeline management, obj... |
+| CRM Sub-Agent | CRM, customer relationship, contact mana | 65 | Handles customer relationship management, lead tracking, cus... |
 | User Story Context Engineering Sub-Agent | user story, user stories, acceptance cri | 50 | ## User Story Context Engineering v2.0.0 - Lessons Learned E... |
 | Risk Assessment Sub-Agent | high risk, complex, refactor, migration, | 8 | ## Risk Assessment Sub-Agent v1.0.0
 
@@ -1428,7 +1487,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ---
 
-*Generated from database: 2025-12-19*
+*Generated from database: 2025-12-21*
 *Protocol Version: 4.3.3*
 *Includes: Hot Patterns (5) + Recent Lessons (5)*
 *Load this file first in all sessions*

@@ -12,7 +12,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { createDatabaseClient } from '/mnt/c/_EHG/ehg/scripts/lib/supabase-connection.js';
+import { createDatabaseClient } from '/mnt/c/_EHG/EHG/scripts/lib/supabase-connection.js';
 import dotenv from 'dotenv';
 
 dotenv.config();

@@ -78,13 +78,13 @@ PORT=3000 node server.js
 
 ### EHG App (Port 8080)
 ```bash
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 PORT=8080 npm run dev -- --host 0.0.0.0
 ```
 
 ### Agent Platform (Port 8000)
 ```bash
-cd /mnt/c/_EHG/ehg/agent-platform
+cd /mnt/c/_EHG/EHG/agent-platform
 source venv/bin/activate
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
@@ -102,7 +102,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 **First-time setup for Agent Platform:**
 ```bash
-cd /mnt/c/_EHG/ehg/agent-platform
+cd /mnt/c/_EHG/EHG/agent-platform
 bash INSTALL.sh
 ```
 
@@ -139,7 +139,7 @@ If localhost:8080 doesn't load in Windows browser:
 
 **Check if virtual environment exists:**
 ```bash
-cd /mnt/c/_EHG/ehg/agent-platform
+cd /mnt/c/_EHG/EHG/agent-platform
 ls -la venv/
 ```
 
@@ -150,7 +150,7 @@ bash INSTALL.sh
 
 **Check if dependencies are installed:**
 ```bash
-cd /mnt/c/_EHG/ehg/agent-platform
+cd /mnt/c/_EHG/EHG/agent-platform
 source venv/bin/activate
 pip list | grep fastapi
 ```

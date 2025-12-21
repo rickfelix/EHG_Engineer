@@ -10,7 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 
-const AGENT_PLATFORM_PATH = '/mnt/c/_EHG/ehg/agent-platform';
+const AGENT_PLATFORM_PATH = '/mnt/c/_EHG/EHG/agent-platform';
 const OUTPUT_DIR = '/mnt/c/_EHG/EHG_Engineer/docs/strategic-directives/SD-CREWAI-ARCHITECTURE-001/discovery/artifacts';
 
 // Ensure output directory exists
@@ -57,7 +57,7 @@ crewFiles.forEach((filePath, index) => {
   crewInventory.push({
     index: index + 1,
     file_name: fileName,
-    file_path: filePath.replace('/mnt/c/_EHG/ehg/', ''),
+    file_path: filePath.replace('/mnt/c/_EHG/EHG/', ''),
     class_name: className,
     agent_count: agentCount,
     line_count: lineCount,
@@ -123,7 +123,7 @@ agentFiles.forEach((filePath, index) => {
   agentInventory.push({
     index: index + 1,
     file_name: fileName,
-    file_path: filePath.replace('/mnt/c/_EHG/ehg/', ''),
+    file_path: filePath.replace('/mnt/c/_EHG/EHG/', ''),
     class_name: className,
     category: category,
     role: role,

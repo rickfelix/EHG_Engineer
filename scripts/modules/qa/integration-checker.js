@@ -18,7 +18,7 @@ import path from 'path';
  */
 export async function verifyComponentIntegration(componentPaths, targetApp = 'ehg') {
   const appPath = targetApp === 'ehg'
-    ? '/mnt/c/_EHG/ehg'
+    ? '/mnt/c/_EHG/EHG'
     : '/mnt/c/_EHG/EHG_Engineer';
 
   console.log(`🔍 Integration Checker: Verifying ${componentPaths.length} component(s)...`);
@@ -126,7 +126,7 @@ function extractComponentName(filePath) {
  */
 export async function findNewComponents(targetApp = 'ehg') {
   const appPath = targetApp === 'ehg'
-    ? '/mnt/c/_EHG/ehg/src/components'
+    ? '/mnt/c/_EHG/EHG/src/components'
     : '/mnt/c/_EHG/EHG_Engineer/src/client/src/components';
 
   try {

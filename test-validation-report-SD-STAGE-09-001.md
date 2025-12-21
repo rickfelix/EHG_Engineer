@@ -72,7 +72,7 @@
 
 #### 4.1 evaStageEvents.ts ✅
 
-**Location**: `/mnt/c/_EHG/ehg/src/services/evaStageEvents.ts`
+**Location**: `/mnt/c/_EHG/EHG/src/services/evaStageEvents.ts`
 
 **Added Function**: `generateStage9Recommendation()`
 
@@ -106,7 +106,7 @@
 
 #### 4.2 Stage9GapAnalysis.tsx ✅
 
-**Location**: `/mnt/c/_EHG/ehg/src/components/stages/Stage9GapAnalysis.tsx`
+**Location**: `/mnt/c/_EHG/EHG/src/components/stages/Stage9GapAnalysis.tsx`
 
 **EVA Integration Points**:
 - ✅ Imports useEVAAdvisory hook correctly
@@ -154,7 +154,7 @@ But Stage 9 is passing a `gapAnalysisForEVA` object. The hook only has special h
 
 #### 4.3 useRecursionHandling.ts ✅
 
-**Location**: `/mnt/c/_EHG/ehg/src/hooks/useRecursionHandling.ts`
+**Location**: `/mnt/c/_EHG/EHG/src/hooks/useRecursionHandling.ts`
 
 **Added Trigger Codes**:
 - ✅ GAP-001: Timeline Gap → Stage 7
@@ -177,7 +177,7 @@ But Stage 9 is passing a `gapAnalysisForEVA` object. The hook only has special h
 
 #### 4.4 useEVAAdvisory.ts ⚠️
 
-**Location**: `/mnt/c/_EHG/ehg/src/hooks/useEVAAdvisory.ts`
+**Location**: `/mnt/c/_EHG/EHG/src/hooks/useEVAAdvisory.ts`
 
 **Current Logic** (lines 115-130):
 ```typescript
@@ -229,8 +229,8 @@ export function generateStage9Recommendation(...) ✅
 ```
 
 **Path Resolution**:
-- ✅ `@/services` resolves to `/mnt/c/_EHG/ehg/src/services`
-- ✅ `@/hooks` resolves to `/mnt/c/_EHG/ehg/src/hooks`
+- ✅ `@/services` resolves to `/mnt/c/_EHG/EHG/src/services`
+- ✅ `@/hooks` resolves to `/mnt/c/_EHG/EHG/src/hooks`
 - ✅ All imports are absolute paths using project alias
 
 ---
@@ -274,7 +274,7 @@ interface EVARecommendation {
 
 ### 8. Existing Test Suite
 
-**Test File Found**: `/mnt/c/_EHG/ehg/tests/dev/gap-closure-validation.spec.ts`
+**Test File Found**: `/mnt/c/_EHG/EHG/tests/dev/gap-closure-validation.spec.ts`
 
 **Analysis**:
 - This is a Playwright E2E test for venture page gaps
@@ -301,7 +301,7 @@ interface EVARecommendation {
 
 **Severity**: High
 **Impact**: EVA recommendation will use generic logic instead of Stage 9 logic
-**File**: `/mnt/c/_EHG/ehg/src/hooks/useEVAAdvisory.ts`
+**File**: `/mnt/c/_EHG/EHG/src/hooks/useEVAAdvisory.ts`
 
 **Problem**:
 - Stage9GapAnalysis passes gap analysis data to `generateRecommendation()`

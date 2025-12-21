@@ -132,7 +132,7 @@ async function insertGTMRoutes() {
     console.log('\nNext steps:');
     console.log('1. Run verification script: node scripts/verify-gtm-navigation-routes.js');
     console.log('2. Test navigation links in UI');
-    console.log('3. Code cleanup in /mnt/c/_EHG/ehg/src/App.tsx:');
+    console.log('3. Code cleanup in /mnt/c/_EHG/EHG/src/App.tsx:');
     console.log('   - DELETE line 111: GTMStrategistPage lazy load');
     console.log('   - DELETE lines 963-974: /gtm-strategist route definition');
     console.log('');
@@ -151,7 +151,7 @@ async function insertGTMRoutes() {
       console.error('   EHG_SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...');
       console.error('\n🔄 Alternative:');
       console.error('Execute migration manually via Supabase dashboard SQL editor');
-      console.error('File: /mnt/c/_EHG/ehg/database/migrations/fix-gtm-navigation-routes.sql');
+      console.error('File: /mnt/c/_EHG/EHG/database/migrations/fix-gtm-navigation-routes.sql');
     } else if (error.message.includes('RLS')) {
       console.error('\n🔧 RLS Policy Error:');
       console.error('This should not happen with SERVICE_ROLE_KEY.');

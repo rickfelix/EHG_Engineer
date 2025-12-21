@@ -127,7 +127,7 @@ Pass Rate = PASS / (PASS + FAIL + BLOCKED)
 ## 🏗️ ARCHITECTURE
 
 ### Strict Application Boundary:
-- **EHG** (`/mnt/c/_EHG/ehg/`): System under test, customer application
+- **EHG** (`/mnt/c/_EHG/EHG/`): System under test, customer application
 - **EHG_Engineer** (`/mnt/c/_EHG/EHG_Engineer/`): Governance layer, UAT system
 
 ### Database-First Approach:

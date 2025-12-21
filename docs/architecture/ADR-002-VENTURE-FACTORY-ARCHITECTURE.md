@@ -459,7 +459,7 @@ The **Leo Dashboard** is the existing UI in EHG_Engineer for managing Strategic 
 
 #### 0.10.2 The Integration Vision: Unified Chairman Console
 
-The Leo Dashboard should be **absorbed into** the EHG Factory Console (`/mnt/c/_EHG/ehg/`) to create a unified Chairman experience. The vision:
+The Leo Dashboard should be **absorbed into** the EHG Factory Console (`/mnt/c/_EHG/EHG/`) to create a unified Chairman experience. The vision:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐

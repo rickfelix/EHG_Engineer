@@ -29,7 +29,7 @@ const supabase = createClient(
 
 // Configuration
 const CONFIG = {
-  ehgPath: process.env.EHG_APP_PATH || '/mnt/c/_EHG/ehg',
+  ehgPath: process.env.EHG_APP_PATH || '/mnt/c/_EHG/EHG',
   ehgPort: process.env.EHG_APP_PORT || 5173,
   dashboardPort: process.env.DASHBOARD_PORT || 3000,
   headless: process.env.HEADLESS === 'true',

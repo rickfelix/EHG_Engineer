@@ -105,7 +105,7 @@ Manual (default). System learns from Chairman feedback over time to suggest Auto
 
 **Alternative Implementation**: Strategic Context fields (Vision Alignment, Strategic Focus, Performance Drive Phase) implemented instead of documented substages 1.2-1.3.
 
-**Implementation Location**: `/mnt/c/_EHG/ehg/src/components/stages/Stage1DraftIdea.tsx` (EHG repository)
+**Implementation Location**: `/mnt/c/_EHG/EHG/src/components/stages/Stage1DraftIdea.tsx` (EHG repository)
 
 ## Notes / Open Questions
 - PRD mapping: Stage 1 is currently pre-PRD phase; PRD creation begins in Stage 2 (AI Review)

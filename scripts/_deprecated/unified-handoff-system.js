@@ -642,7 +642,7 @@ class UnifiedHandoffSystem {
           targetApp === 'ehg app' ||
           targetApp === 'ehg-app') {
         console.log(`   Repository determined by target_application: "${sd.target_application}" → EHG`);
-        return '/mnt/c/_EHG/ehg';
+        return '/mnt/c/_EHG/EHG';
       }
 
       // If target_application is set but doesn't match, warn and fall through to heuristics
@@ -679,7 +679,7 @@ class UnifiedHandoffSystem {
     }
 
     // Default to EHG application for customer-facing features
-    return '/mnt/c/_EHG/ehg';
+    return '/mnt/c/_EHG/EHG';
   }
 
   /**

@@ -81,8 +81,8 @@ head -n 42 docs/workflow/stages.yaml
 cat docs/workflow/critique/stage-01.md
 
 # 4. Scan for agent/crew references
-ls /mnt/c/_EHG/ehg/agent-platform/app/agents/
-ls /mnt/c/_EHG/ehg/agent-platform/app/crews/
+ls /mnt/c/_EHG/EHG/agent-platform/app/agents/
+ls /mnt/c/_EHG/EHG/agent-platform/app/crews/
 
 # 5. Generate dossier files (this document and 10 others)
 ```
@@ -96,8 +96,8 @@ ls /mnt/c/_EHG/ehg/agent-platform/app/crews/
 ## Implementation Gaps
 
 **What IS Implemented** (~85% complete):
-- ✅ Core idea capture form (title, description, category) - `/mnt/c/_EHG/ehg/src/components/stages/Stage1DraftIdea.tsx`
-- ✅ Comprehensive quality scoring algorithm (100-point scale) - `/mnt/c/_EHG/ehg/src/services/evaValidation.ts`
+- ✅ Core idea capture form (title, description, category) - `/mnt/c/_EHG/EHG/src/components/stages/Stage1DraftIdea.tsx`
+- ✅ Comprehensive quality scoring algorithm (100-point scale) - `/mnt/c/_EHG/EHG/src/services/evaValidation.ts`
 - ✅ Database schema with validation constraints - `ideas` and `ventures` tables
 - ✅ Frontend validation logic (3-120 chars title, 20-2000 chars description)
 - ✅ API endpoints for venture creation

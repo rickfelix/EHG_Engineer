@@ -296,7 +296,7 @@ Target DB: liapbndqlqxdcgpwntbv (EHG Supabase)
 - Route: Implement at http://localhost:8080/eva-assistant`,
 
     system_architecture: `**Application Context**:
-- Target: EHG application (/mnt/c/_EHG/ehg/)
+- Target: EHG application (/mnt/c/_EHG/EHG/)
 - NOT EHG_Engineer dashboard
 - Port: 8080 (Playwright tests) / 5173 (dev server)
 
@@ -502,7 +502,7 @@ const { data, error } = await supabase
 - [ ] Navigate to http://localhost:8080/eva-assistant
 - [ ] Confirm page accessible (screenshot BEFORE changes)
 - [ ] Identify target component (EVA assistant page)
-- [ ] Verify application: /mnt/c/_EHG/ehg (NOT EHG_Engineer)
+- [ ] Verify application: /mnt/c/_EHG/EHG (NOT EHG_Engineer)
 - [ ] Verify port: 8080 (Playwright) / 5173 (dev)
 - [ ] Verify GitHub remote: rickfelix/ehg.git`,
 
@@ -729,8 +729,8 @@ test('US-003: User can save settings', async ({ page }) => {
 
 🔴 **STEP 0: Application Context Validation** (MOST CRITICAL)
 - [ ] Read SD description: Target is EHG application (customer-facing)
-- [ ] Navigate to /mnt/c/_EHG/ehg (NOT /mnt/c/_EHG/EHG_Engineer)
-- [ ] Run: pwd (should show /mnt/c/_EHG/ehg)
+- [ ] Navigate to /mnt/c/_EHG/EHG (NOT /mnt/c/_EHG/EHG_Engineer)
+- [ ] Run: pwd (should show /mnt/c/_EHG/EHG)
 - [ ] Run: git remote -v (should show rickfelix/ehg.git)
 - [ ] If wrong directory → STOP immediately, correct before proceeding
 

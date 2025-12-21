@@ -234,7 +234,7 @@ However, the codebase still contains Stage26 through Stage52 component files fro
 
 ## Files to Delete
 
-Location: /mnt/c/_EHG/ehg/src/components/stages/
+Location: /mnt/c/_EHG/EHG/src/components/stages/
 - Stage26OperationalExcellence.tsx
 - Stage40VentureActive.tsx
 - Stage52DataManagementKB.tsx

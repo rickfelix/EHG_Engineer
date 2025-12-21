@@ -185,4 +185,4 @@ The Agent Platform loads heavyweight AI components:
 
 - Full details: `scripts/README-LEO-STACK.md`
 - Script location: `scripts/leo-stack.sh`
-- Agent Platform setup: `/mnt/c/_EHG/ehg/agent-platform/INSTALL.sh`
+- Agent Platform setup: `/mnt/c/_EHG/EHG/agent-platform/INSTALL.sh`

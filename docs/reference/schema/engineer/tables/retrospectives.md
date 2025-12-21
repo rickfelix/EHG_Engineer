@@ -67,7 +67,7 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 | checkpoint_effectiveness | `smallint(16)` | YES | - | BMAD Enhancement: How effective were checkpoints in catching issues early (0-100, null if no checkpoints used) |
 | context_efficiency_rating | `smallint(16)` | YES | - | BMAD Enhancement: How well did context engineering reduce EXEC confusion (0-100) |
 | bmad_insights | `jsonb` | YES | `'{}'::jsonb` | BMAD Enhancement: Structured insights: { risk_lessons: [], checkpoint_lessons: [], context_lessons: [] } |
-| target_application | `text` | **NO** | - | Target application context: EHG_engineer (management dashboard), EHG (customer app), or venture_* (venture-specific apps) |
+| target_application | `text` | **NO** | - | Target application context: EHG (unified frontend with user + /admin routes), EHG_Engineer (backend API only), or venture_* (venture-specific apps). Note: As of SD-ARCH-EHG-007, all UI goes to EHG. |
 | learning_category | `text` | **NO** | - | Type of learning: APPLICATION_ISSUE, PROCESS_IMPROVEMENT, TESTING_STRATEGY, DATABASE_SCHEMA, DEPLOYMENT_ISSUE, PERFORMANCE_OPTIMIZATION, USER_EXPERIENCE, SECURITY_VULNERABILITY, DOCUMENTATION |
 | applies_to_all_apps | `boolean` | YES | `false` | Auto-populated: TRUE for PROCESS_IMPROVEMENT category, FALSE otherwise |
 | related_files | `ARRAY` | YES | `'{}'::text[]` | Array of file paths related to this retrospective (e.g., ["src/components/Auth.tsx", "scripts/migrate.js"]) |

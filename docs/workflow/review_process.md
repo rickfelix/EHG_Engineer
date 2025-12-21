@@ -998,7 +998,7 @@ Read file_path: "/mnt/c/_EHG/EHG_Engineer/docs/workflow/critique/stage-04.md"
 
 **Read Component**:
 ```bash
-Read file_path: "/mnt/c/_EHG/ehg/src/components/ventures/VentureCard.tsx"
+Read file_path: "/mnt/c/_EHG/EHG/src/components/ventures/VentureCard.tsx"
 ```
 
 ---

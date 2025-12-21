@@ -137,7 +137,7 @@ async function createExecPlanHandoff() {
    - Demonstrates value of comprehensive unit testing
 
 4. **Legacy SD Markdown Files**:
-   - DOCMON detecting 14 legacy SD markdown files in /mnt/c/_EHG/ehg
+   - DOCMON detecting 14 legacy SD markdown files in /mnt/c/_EHG/EHG
    - Files pre-date database-first architecture
    - Not created by Checkpoint 2 work
    - Cleanup should be separate SD for tech debt remediation`,

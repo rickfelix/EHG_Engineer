@@ -145,8 +145,8 @@ class URLVerifier {
     const portMappings = {
       '3000': '/mnt/c/_EHG/EHG_Engineer',
       '3456': '/mnt/c/_EHG/EHG_Engineer',
-      '8080': '/mnt/c/_EHG/ehg',
-      '5173': '/mnt/c/_EHG/ehg', // Vite default
+      '8080': '/mnt/c/_EHG/EHG',
+      '5173': '/mnt/c/_EHG/EHG', // Vite default
     };
     
     this.results.applicationPath = portMappings[this.results.port] || 'Unknown';

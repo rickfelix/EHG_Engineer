@@ -125,7 +125,7 @@ class SDCompletionValidator {
     try {
       const repos = [
         { name: 'EHG_Engineer', path: '/mnt/c/_EHG/EHG_Engineer' },
-        { name: 'EHG', path: '/mnt/c/_EHG/ehg' }
+        { name: 'EHG', path: '/mnt/c/_EHG/EHG' }
       ];
 
       let totalCommits = 0;
@@ -256,7 +256,7 @@ class SDCompletionValidator {
     try {
       // Check for actual file changes in the EHG application
       const { stdout } = await execAsync(
-        `cd /mnt/c/_EHG/ehg && git log --name-status --since="30 days ago" --grep="${sd.id}" --all`,
+        `cd /mnt/c/_EHG/EHG && git log --name-status --since="30 days ago" --grep="${sd.id}" --all`,
         { timeout: 10000 }
       );
 
@@ -301,7 +301,7 @@ class SDCompletionValidator {
     // For now, we'll check if the implementation looks substantial
     try {
       const { stdout } = await execAsync(
-        'cd /mnt/c/_EHG/ehg && git diff --stat HEAD~5 HEAD | grep "files changed"',
+        'cd /mnt/c/_EHG/EHG && git diff --stat HEAD~5 HEAD | grep "files changed"',
         { timeout: 5000 }
       );
 

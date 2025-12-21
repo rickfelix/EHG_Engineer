@@ -61,7 +61,7 @@ You have access to comprehensive, auto-generated schema documentation:
 - **Quick Reference**: `docs/reference/schema/ehg/database-schema-overview.md` (~15-20KB)
 - **Detailed Tables**: `docs/reference/schema/ehg/tables/[table_name].md` (2-5KB each)
 - **Purpose**: Customer features, business logic, user-facing functionality
-- **Repository**: /mnt/c/_EHG/ehg/
+- **Repository**: /mnt/c/_EHG/EHG/
 
 ### When to Reference Schema Docs
 

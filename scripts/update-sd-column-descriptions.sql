@@ -165,9 +165,9 @@ COMMENT ON COLUMN public.strategic_directives_v2.governance_metadata IS
 COMMENT ON COLUMN public.strategic_directives_v2.metadata IS
   'METADATA: Flexible JSONB object for additional custom fields not covered by schema. Use sparingly - prefer structured columns.';
 
--- Application Targeting
+-- Application Targeting (SD-ARCH-EHG-007)
 COMMENT ON COLUMN public.strategic_directives_v2.target_application IS
-  'TARGET APPLICATION: Which application this SD targets. Valid values: "EHG" (customer-facing app) or "EHG_Engineer" (management dashboard). Default: EHG.';
+  'TARGET APPLICATION: Which application this SD targets. Valid values: "EHG" (unified frontend with user + admin at /admin/*) or "EHG_Engineer" (backend API only). Default: EHG.';
 
 -- Progress Tracking
 COMMENT ON COLUMN public.strategic_directives_v2.progress IS

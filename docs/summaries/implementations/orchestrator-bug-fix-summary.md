@@ -117,7 +117,7 @@ Result: Only marked complete after verified implementation with git commits
    ```
    🛑 IMPLEMENTATION BLOCKER:
    You MUST:
-   1. Navigate to /mnt/c/_EHG/ehg/
+   1. Navigate to /mnt/c/_EHG/EHG/
    2. Implement the user stories above
    3. Make git commits with the SD-ID
    4. Run validation to verify implementation

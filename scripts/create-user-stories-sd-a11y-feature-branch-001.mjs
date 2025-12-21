@@ -23,7 +23,7 @@ const stories = [
     status: 'draft',
     acceptance_criteria: ['Parsing error in AnalyticsDashboard.tsx resolved', 'ESLint runs without syntax errors', 'Component still functions correctly'],
     implementation_context: 'Review syntax in AnalyticsDashboard.tsx lines 1-50 for missing brackets, unclosed JSX tags, or invalid syntax. Common causes: missing closing tags, unclosed template literals, incorrect JSX nesting. Use ESLint output to identify exact line number.',
-    architecture_references: ['/mnt/c/_EHG/ehg/src/components/analytics/AnalyticsDashboard.tsx'],
+    architecture_references: ['/mnt/c/_EHG/EHG/src/components/analytics/AnalyticsDashboard.tsx'],
     example_code_patterns: ['Check for patterns like: <div>...</div> (all tags closed)', '{...} (all braces matched)', '() (all parens matched)'],
     testing_scenarios: [
       { scenario: 'Run npm run lint', expected: 'Parsing error resolved' },
@@ -98,7 +98,7 @@ const stories = [
       '0 jsx-a11y/media-has-caption violations'
     ],
     implementation_context: 'Add <track kind="captions" src="captions.vtt" /> to audio/video elements. Or add aria-label describing audio content. Affected files: AudioPlayer.tsx. Pattern: Provide text alternative for media content.',
-    architecture_references: ['/mnt/c/_EHG/ehg/src/components/audio/AudioPlayer.tsx', 'WebVTT caption format'],
+    architecture_references: ['/mnt/c/_EHG/EHG/src/components/audio/AudioPlayer.tsx', 'WebVTT caption format'],
     example_code_patterns: ['<audio controls><source src="audio.mp3" /><track kind="captions" src="captions.vtt" srclang="en" label="English" /></audio>'],
     testing_scenarios: [
       { scenario: 'Verify media elements have caption tracks or text alternatives', expected: 'All media has captions or aria-labels' },

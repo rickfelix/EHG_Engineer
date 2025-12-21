@@ -31,7 +31,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-const EHG_APP_PATH = '/mnt/c/_EHG/ehg';
+const EHG_APP_PATH = '/mnt/c/_EHG/EHG';
 const E2E_TEST_DIR = `${EHG_APP_PATH}/tests/e2e`;
 
 /**

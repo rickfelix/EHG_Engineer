@@ -45,7 +45,7 @@ const prdData = {
 
     target_url: 'http://localhost:5173/ventures',
     component_name: 'DocumentsSection',
-    app_path: '/mnt/c/_EHG/ehg',
+    app_path: '/mnt/c/_EHG/EHG',
     port: 5173,
 
     content: `# Product Requirements Document: Venture Documents
@@ -415,7 +415,7 @@ CREATE POLICY "Users can delete own documents"
 
 ### File Structure
 \`\`\`
-/mnt/c/_EHG/ehg/
+/mnt/c/_EHG/EHG/
 ├── database/migrations/
 │   └── create-venture-documents-tables.sql
 ├── src/

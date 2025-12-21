@@ -569,7 +569,7 @@ Impact: Activates hidden infrastructure (471 LOC service + 5 database tables + c
     ],
 
     exec_checklist: [
-      { text: 'Development environment setup (EHG app, /mnt/c/_EHG/ehg/)', checked: false },
+      { text: 'Development environment setup (EHG app, /mnt/c/_EHG/EHG/)', checked: false },
       { text: 'Adapter service implemented (opportunityToVentureAdapter.ts)', checked: false },
       { text: 'VentureCreationPage modified (browse button + pre-fill)', checked: false },
       { text: 'OpportunitySourcingDashboard modified (Create Venture button)', checked: false },
@@ -784,7 +784,7 @@ Impact: Activates hidden infrastructure (471 LOC service + 5 database tables + c
   console.log('\n📝 Next Steps:');
   console.log('   1. Generate user stories: (Auto-triggered by PRD creation)');
   console.log('   2. Create PLAN→EXEC handoff when ready');
-  console.log('   3. Begin implementation in EHG app (/mnt/c/_EHG/ehg/)');
+  console.log('   3. Begin implementation in EHG app (/mnt/c/_EHG/EHG/)');
   console.log('');
 }
 

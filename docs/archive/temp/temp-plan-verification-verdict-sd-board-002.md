@@ -111,7 +111,7 @@ Phase 4 verification for SD-BOARD-VISUAL-BUILDER-002 reveals **PARTIAL COMPLETIO
    - Automated testing infrastructure in place
 
 3. **Implementation Location** ✅
-   - Correctly implemented in EHG app (`/mnt/c/_EHG/ehg/`)
+   - Correctly implemented in EHG app (`/mnt/c/_EHG/EHG/`)
    - Route: `/ai-agents` → Workflows tab
    - No code in EHG_Engineer (management tool)
 

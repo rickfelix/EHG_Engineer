@@ -22,7 +22,7 @@
  *
  * Usage:
  *   node scripts/verify-git-branch-status.js SD-XXX "Title" /path/to/app
- *   node scripts/verify-git-branch-status.js SD-XXX "Title"  # defaults to /mnt/c/_EHG/ehg
+ *   node scripts/verify-git-branch-status.js SD-XXX "Title"  # defaults to /mnt/c/_EHG/EHG
  */
 
 import { exec } from 'child_process';
@@ -33,7 +33,7 @@ import fs from 'fs';
 const execAsync = promisify(exec);
 
 class GitBranchVerifier {
-  constructor(sdId, sdTitle, appPath = '/mnt/c/_EHG/ehg') {
+  constructor(sdId, sdTitle, appPath = '/mnt/c/_EHG/EHG') {
     this.sdId = sdId;
     this.sdTitle = sdTitle || '';
     this.appPath = appPath;
@@ -581,11 +581,11 @@ async function main() {
     console.log('Arguments:');
     console.log('  SD-XXX     Strategic Directive ID (required)');
     console.log('  "SD Title" Strategic Directive title for branch naming (required)');
-    console.log('  APP_PATH   Path to application directory (default: /mnt/c/_EHG/ehg)');
+    console.log('  APP_PATH   Path to application directory (default: /mnt/c/_EHG/EHG)');
     console.log('');
     console.log('Examples:');
     console.log('  node verify-git-branch-status.js SD-EXPORT-001 "Data Export Feature"');
-    console.log('  node verify-git-branch-status.js SD-EXPORT-001 "Data Export Feature" /mnt/c/_EHG/ehg');
+    console.log('  node verify-git-branch-status.js SD-EXPORT-001 "Data Export Feature" /mnt/c/_EHG/EHG');
     console.log('');
     console.log('Features:');
     console.log('  • Auto-creates branch if missing');
@@ -602,7 +602,7 @@ async function main() {
 
   const sdId = args[0];
   const sdTitle = args[1] || '';
-  const appPath = args[2] || '/mnt/c/_EHG/ehg';
+  const appPath = args[2] || '/mnt/c/_EHG/EHG';
 
   const verifier = new GitBranchVerifier(sdId, sdTitle, appPath);
   const results = await verifier.verify();

@@ -50,7 +50,7 @@ Before creating EXEC→PLAN handoff, EXEC MUST run:
 
 #### 1. Unit Tests (Business Logic Validation)
 \`\`\`bash
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 npm run test:unit
 \`\`\`
 - **What it validates**: Service layer, business logic, data transformations
@@ -60,7 +60,7 @@ npm run test:unit
 
 #### 2. E2E Tests (UI/Integration Validation)
 \`\`\`bash
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 npm run test:e2e
 \`\`\`
 - **What it validates**: User flows, component rendering, integration

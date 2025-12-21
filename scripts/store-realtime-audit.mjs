@@ -31,14 +31,14 @@ const auditReport = {
     active_channels: 4,
 
     file_list: [
-      '/mnt/c/_EHG/ehg/src/hooks/useCollaboration.ts',
-      '/mnt/c/_EHG/ehg/src/hooks/useNotifications.ts',
-      '/mnt/c/_EHG/ehg/src/hooks/useBusinessAgents.ts',
-      '/mnt/c/_EHG/ehg/src/hooks/useAgents.ts',
-      '/mnt/c/_EHG/ehg/src/App.tsx',
-      '/mnt/c/_EHG/ehg/src/components/creative-media/VenturePromptPanel.tsx',
-      '/mnt/c/_EHG/ehg/src/components/creative-media/VideoPromptStudio.tsx',
-      '/mnt/c/_EHG/ehg/src/contexts/CompanyContext.tsx'
+      '/mnt/c/_EHG/EHG/src/hooks/useCollaboration.ts',
+      '/mnt/c/_EHG/EHG/src/hooks/useNotifications.ts',
+      '/mnt/c/_EHG/EHG/src/hooks/useBusinessAgents.ts',
+      '/mnt/c/_EHG/EHG/src/hooks/useAgents.ts',
+      '/mnt/c/_EHG/EHG/src/App.tsx',
+      '/mnt/c/_EHG/EHG/src/components/creative-media/VenturePromptPanel.tsx',
+      '/mnt/c/_EHG/EHG/src/components/creative-media/VideoPromptStudio.tsx',
+      '/mnt/c/_EHG/EHG/src/contexts/CompanyContext.tsx'
     ],
 
     patterns: [

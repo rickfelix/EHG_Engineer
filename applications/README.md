@@ -24,8 +24,8 @@ The `codebase/` directories in each APP folder should **NEVER** be used for dire
 **Always work in the actual repository location specified in each APP's `config.json` under `local_path`.**
 
 Example:
-- APP001 `config.json` specifies: `"local_path": "/mnt/c/_EHG/ehg"`
-- Therefore, **always** work in `/mnt/c/_EHG/ehg`, **never** in `APP001/codebase/`
+- APP001 `config.json` specifies: `"local_path": "/mnt/c/_EHG/EHG"`
+- Therefore, **always** work in `/mnt/c/_EHG/EHG`, **never** in `APP001/codebase/`
 
 This architecture ensures:
 - Single source of truth (the actual git repository)

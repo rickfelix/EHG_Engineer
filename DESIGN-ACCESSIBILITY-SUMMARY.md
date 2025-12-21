@@ -37,23 +37,23 @@
 
 | File | Path | Inputs Fixed | Status |
 |------|------|--------------|--------|
-| **AgentInstructions.tsx** | `/mnt/c/_EHG/ehg/src/components/chairman/feedback/` | 4 textareas | ✅ Complete |
-| **FeedbackForm.tsx** | `/mnt/c/_EHG/ehg/src/components/chairman/feedback/` | 1 textarea, 4 selects | ✅ Complete |
-| **BoardMemberManagement.tsx** | `/mnt/c/_EHG/ehg/src/components/board/` | 5 inputs, 1 select | ✅ Complete |
+| **AgentInstructions.tsx** | `/mnt/c/_EHG/EHG/src/components/chairman/feedback/` | 4 textareas | ✅ Complete |
+| **FeedbackForm.tsx** | `/mnt/c/_EHG/EHG/src/components/chairman/feedback/` | 1 textarea, 4 selects | ✅ Complete |
+| **BoardMemberManagement.tsx** | `/mnt/c/_EHG/EHG/src/components/board/` | 5 inputs, 1 select | ✅ Complete |
 
 #### Priority 2: Agent Configuration Forms
 
 | File | Path | Inputs Fixed | Status |
 |------|------|--------------|--------|
-| **AgentDeployDialog.tsx** | `/mnt/c/_EHG/ehg/src/components/agents/` | 1 select | ⚠️ Partial |
-| **AgentPresetsTab.tsx** | `/mnt/c/_EHG/ehg/src/components/agents/` | 1 select, 1 search input | ⚠️ Partial |
-| **ABTestingTab.tsx** | `/mnt/c/_EHG/ehg/src/components/agents/` | ~8-12 inputs | ⚠️ Needs Verification |
+| **AgentDeployDialog.tsx** | `/mnt/c/_EHG/EHG/src/components/agents/` | 1 select | ⚠️ Partial |
+| **AgentPresetsTab.tsx** | `/mnt/c/_EHG/EHG/src/components/agents/` | 1 select, 1 search input | ⚠️ Partial |
+| **ABTestingTab.tsx** | `/mnt/c/_EHG/EHG/src/components/agents/` | ~8-12 inputs | ⚠️ Needs Verification |
 
 #### Priority 3: Analytics & Admin Forms
 
 | File | Path | Inputs Fixed | Status |
 |------|------|--------------|--------|
-| **DecisionHistoryTable.tsx** | `/mnt/c/_EHG/ehg/src/components/analytics/` | 2 search inputs | ⚠️ Partial |
+| **DecisionHistoryTable.tsx** | `/mnt/c/_EHG/EHG/src/components/analytics/` | 2 search inputs | ⚠️ Partial |
 
 **Total Summary**:
 - **Files fully fixed**: 3
@@ -375,13 +375,13 @@ Screen reader users can now:
 ## Files Modified
 
 ### Confirmed Changes
-1. `/mnt/c/_EHG/ehg/src/components/chairman/feedback/AgentInstructions.tsx`
-2. `/mnt/c/_EHG/ehg/src/components/chairman/feedback/FeedbackForm.tsx`
-3. `/mnt/c/_EHG/ehg/src/components/board/BoardMemberManagement.tsx`
-4. `/mnt/c/_EHG/ehg/src/components/agents/AgentDeployDialog.tsx`
-5. `/mnt/c/_EHG/ehg/src/components/agents/AgentPresetsTab.tsx`
-6. `/mnt/c/_EHG/ehg/src/components/agents/ABTestingTab.tsx`
-7. `/mnt/c/_EHG/ehg/src/components/analytics/DecisionHistoryTable.tsx`
+1. `/mnt/c/_EHG/EHG/src/components/chairman/feedback/AgentInstructions.tsx`
+2. `/mnt/c/_EHG/EHG/src/components/chairman/feedback/FeedbackForm.tsx`
+3. `/mnt/c/_EHG/EHG/src/components/board/BoardMemberManagement.tsx`
+4. `/mnt/c/_EHG/EHG/src/components/agents/AgentDeployDialog.tsx`
+5. `/mnt/c/_EHG/EHG/src/components/agents/AgentPresetsTab.tsx`
+6. `/mnt/c/_EHG/EHG/src/components/agents/ABTestingTab.tsx`
+7. `/mnt/c/_EHG/EHG/src/components/analytics/DecisionHistoryTable.tsx`
 
 ### New Files Created
 1. `/mnt/c/_EHG/EHG_Engineer/scripts/fix-accessibility-labels.py` - Automated fix tool

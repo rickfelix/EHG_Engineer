@@ -563,7 +563,7 @@ async function generateAllTests() {
   console.log('\n🚀 Next Steps:');
   console.log('1. Install Playwright: cd /mnt/c/_EHG/EHG_Engineer && npm install @playwright/test');
   console.log('2. Install browsers: npx playwright install');
-  console.log('3. Start EHG app: cd /mnt/c/_EHG/ehg && npm run dev');
+  console.log('3. Start EHG app: cd /mnt/c/_EHG/EHG && npm run dev');
   console.log('4. Run tests: npx playwright test');
 
   return true;

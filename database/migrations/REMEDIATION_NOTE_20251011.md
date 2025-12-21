@@ -30,7 +30,7 @@ The SD target_application field specifies "EHG" (business application) but imple
 **Correct Action**:
 - Applied crewai_flows migration to EHG database (liapbndqlqxdcgpwntbv)
 - EHG database already has board tables from SD-BOARD-GOVERNANCE-001
-- Visual workflow builder implemented in `/mnt/c/_EHG/ehg/`
+- Visual workflow builder implemented in `/mnt/c/_EHG/EHG/`
 
 ## Tables That Exist in WRONG Database (EHG_Engineer)
 

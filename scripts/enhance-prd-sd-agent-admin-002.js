@@ -20,7 +20,7 @@ async function enhancePRD() {
     .from('product_requirements_v2')
     .update({
       system_architecture: `
-**Target Application**: EHG (Business Application) at /mnt/c/_EHG/ehg/
+**Target Application**: EHG (Business Application) at /mnt/c/_EHG/EHG/
 **Route**: /ai-agents page (NOT /agents)
 **UI Framework**: React 18+ with Hooks
 **Component Library**: Shadcn UI (Radix UI + Tailwind CSS)

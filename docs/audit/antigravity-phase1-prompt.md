@@ -6,7 +6,7 @@ You are auditing the SD-VISION-TRANSITION-001 migration (40-stage to 25-stage li
 ## Context
 - **Migration Goal**: Replace legacy 40-stage venture lifecycle with new 25-stage system
 - **Database Snapshot**: `docs/audit/phase1-db-snapshot.json` (generated 2025-12-11)
-- **EHG App Codebase**: `/mnt/c/_EHG/ehg` (has ~20 files with 40-stage references - known, will be addressed in E)
+- **EHG App Codebase**: `/mnt/c/_EHG/EHG` (has ~20 files with 40-stage references - known, will be addressed in E)
 
 ## Audit Scope (Phase 1 - Limited)
 

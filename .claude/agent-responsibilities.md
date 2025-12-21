@@ -102,7 +102,7 @@ Implementation based on PRD
 - Focus on delivering working code
 
 ### ⚠️ CRITICAL: Application Context
-**Implementations happen in `/mnt/c/_EHG/ehg/` (EHG app), NOT in EHG_Engineer!**
+**Implementations happen in `/mnt/c/_EHG/EHG/` (EHG app), NOT in EHG_Engineer!**
 - Always `cd` to target app before coding
 - Verify correct repository before making changes
 - Check `git remote -v` to confirm repository
@@ -124,8 +124,8 @@ Implementation based on PRD
 ### MANDATORY Pre-Implementation Verification
 
 **STEP 0: APPLICATION CHECK** ⚠️ CRITICAL
-- Confirm target app: `/mnt/c/_EHG/ehg/` (NOT EHG_Engineer!)
-- Verify: `cd /mnt/c/_EHG/ehg && pwd` should show `/mnt/c/_EHG/ehg`
+- Confirm target app: `/mnt/c/_EHG/EHG/` (NOT EHG_Engineer!)
+- Verify: `cd /mnt/c/_EHG/EHG && pwd` should show `/mnt/c/_EHG/EHG`
 - Check GitHub: `git remote -v` should show `rickfelix/ehg.git`
 - **Load file trees from memory** to identify correct paths
 

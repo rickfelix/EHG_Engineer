@@ -79,7 +79,7 @@ Bash('wc -l GeneralSettings.tsx DatabaseSettings.tsx IntegrationSettings.tsx Sys
 **What Happened**:
 ```bash
 # Sequential execution
-Bash('cd /mnt/c/_EHG/ehg && pwd')
+Bash('cd /mnt/c/_EHG/EHG && pwd')
 Bash('git remote -v')
 Bash('lsof -i :5173')
 ```
@@ -90,7 +90,7 @@ Bash('lsof -i :5173')
 ```bash
 # Parallel execution
 [
-  Bash('cd /mnt/c/_EHG/ehg && pwd'),
+  Bash('cd /mnt/c/_EHG/EHG && pwd'),
   Bash('git remote -v'),
   Bash('lsof -i :5173')
 ]

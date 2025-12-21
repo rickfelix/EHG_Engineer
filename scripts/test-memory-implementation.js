@@ -190,7 +190,7 @@ class MemoryImplementationTest {
 
     try {
       const content = `- File trees: ✅ Fresh (loaded)
-- PWD: /mnt/c/_EHG/ehg
+- PWD: /mnt/c/_EHG/EHG
 - Git branch: feature/SD-TEST-001-memory-test
 - Target files: src/components/TestComponent.tsx, src/services/test-service.ts`;
 
@@ -251,7 +251,7 @@ class MemoryImplementationTest {
       }
 
       // Check EXEC context is present
-      if (state.raw.includes('/mnt/c/_EHG/ehg')) {
+      if (state.raw.includes('/mnt/c/_EHG/EHG')) {
         this.pass('EXEC context persisted');
       } else {
         this.fail('EXEC context not found');

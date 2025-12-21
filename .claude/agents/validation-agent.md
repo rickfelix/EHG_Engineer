@@ -114,8 +114,8 @@ From retrospectives:
 
 **Component Search**:
 ```bash
-find /mnt/c/_EHG/ehg/src -name "*ComponentName*"
-grep -r "specific feature" /mnt/c/_EHG/ehg/src
+find /mnt/c/_EHG/EHG/src -name "*ComponentName*"
+grep -r "specific feature" /mnt/c/_EHG/EHG/src
 ```
 
 **Database Table Search**:
@@ -132,8 +132,8 @@ const { createDatabaseClient } = require('./scripts/lib/supabase-connection.js')
 
 **Script/Utility Search**:
 ```bash
-find /mnt/c/_EHG/ehg/scripts -name "*keyword*"
-grep -r "function name" /mnt/c/_EHG/ehg/src/lib
+find /mnt/c/_EHG/EHG/scripts -name "*keyword*"
+grep -r "function name" /mnt/c/_EHG/EHG/src/lib
 ```
 
 ## Mandatory Validation Gates (NEW - CRITICAL)
@@ -430,7 +430,7 @@ After code changes:
 **Example: Validate Integration**:
 ```
 // Check specific file for errors
-mcp__ide__getDiagnostics({ uri: "file:///mnt/c/_EHG/ehg/src/components/ventures/CreateVentureDialog.tsx" })
+mcp__ide__getDiagnostics({ uri: "file:///mnt/c/_EHG/EHG/src/components/ventures/CreateVentureDialog.tsx" })
 
 // Check all diagnostics (useful after refactoring)
 mcp__ide__getDiagnostics({})

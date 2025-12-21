@@ -17,7 +17,7 @@ class ImplementationValidator {
   constructor() {
     this.currentDir = process.cwd();
     this.ehgEngineerPath = '/mnt/c/_EHG/EHG_Engineer';
-    this.ehgAppPath = '/mnt/c/_EHG/ehg';
+    this.ehgAppPath = '/mnt/c/_EHG/EHG';
   }
 
   checkCurrentLocation() {
@@ -70,20 +70,20 @@ class ImplementationValidator {
     // Determine the context
     if (location.isInEhgEngineer) {
       console.log(chalk.yellow.bold('\n⚠️  WARNING: You are in EHG_Engineer!\n'));
-      console.log(chalk.yellow('This is the management dashboard for:'));
-      console.log(chalk.yellow('  • Strategic Directives'));
-      console.log(chalk.yellow('  • PRDs'));
-      console.log(chalk.yellow('  • Progress Tracking'));
-      console.log(chalk.red.bold('\n❌ DO NOT implement customer features here!\n'));
+      console.log(chalk.yellow('This is the backend API + LEO Protocol engine:'));
+      console.log(chalk.yellow('  • REST API endpoints'));
+      console.log(chalk.yellow('  • LEO Protocol scripts'));
+      console.log(chalk.yellow('  • Database migrations'));
+      console.log(chalk.red.bold('\n❌ DO NOT implement UI features here!\n'));
 
-      console.log(chalk.green.bold('✅ For feature implementation, navigate to:'));
+      console.log(chalk.green.bold('✅ For UI implementation (user + admin), navigate to:'));
       console.log(chalk.green(`   cd ${this.ehgAppPath}\n`));
 
       console.log(chalk.cyan('📝 Appropriate activities in EHG_Engineer:'));
-      console.log('  • View/create Strategic Directives');
-      console.log('  • Generate PRDs');
-      console.log('  • Update dashboard components');
-      console.log('  • Modify LEO Protocol tools\n');
+      console.log('  • Create/modify API endpoints');
+      console.log('  • Update LEO Protocol scripts');
+      console.log('  • Run database migrations');
+      console.log('  • Modify backend services\n');
 
       return false;
     }
@@ -121,9 +121,9 @@ class ImplementationValidator {
     const table = [
       ['Task', 'Location', 'Path'],
       ['─────────────────────────', '──────────', '─────────────────────'],
-      ['Implement new feature', 'EHG App', '/mnt/c/_EHG/ehg'],
-      ['Fix customer bug', 'EHG App', '/mnt/c/_EHG/ehg'],
-      ['Update UI components', 'EHG App', '/mnt/c/_EHG/ehg'],
+      ['Implement new feature', 'EHG App', '/mnt/c/_EHG/EHG'],
+      ['Fix customer bug', 'EHG App', '/mnt/c/_EHG/EHG'],
+      ['Update UI components', 'EHG App', '/mnt/c/_EHG/EHG'],
       ['Create Strategic Directive', 'EHG_Engineer', '/mnt/c/_EHG/EHG_Engineer'],
       ['Generate PRD', 'EHG_Engineer', '/mnt/c/_EHG/EHG_Engineer'],
       ['Update dashboard', 'EHG_Engineer', '/mnt/c/_EHG/EHG_Engineer'],

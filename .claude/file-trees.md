@@ -2994,11 +2994,11 @@
 
 ---
 
-## EHG (Business Application)
+## EHG (Unified Frontend - SD-ARCH-EHG-007)
 
-**Path**: `/mnt/c/_EHG/ehg`
-**Purpose**: Customer-facing business application (IMPLEMENTATION TARGET)
-**Database**: liapbndqlqxdcgpwntbv (Supabase)
+**Path**: `/mnt/c/_EHG/EHG`
+**Purpose**: Unified frontend (user + admin features at /admin/*)
+**Database**: dedlbzhpgkmetvhbkyzq (CONSOLIDATED)
 **Files**: 1339
 
 ```

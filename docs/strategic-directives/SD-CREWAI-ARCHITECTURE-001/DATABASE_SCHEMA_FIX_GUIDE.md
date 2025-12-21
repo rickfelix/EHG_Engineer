@@ -33,7 +33,7 @@ Add the `crew_key` column to the `crewai_crews` table with proper constraints an
 
 ### 1. Supabase Migration File
 
-**Location**: `/mnt/c/_EHG/ehg/supabase/migrations/20251107000000_add_crew_key_column.sql`
+**Location**: `/mnt/c/_EHG/EHG/supabase/migrations/20251107000000_add_crew_key_column.sql`
 
 **Status**: ✅ Created, awaiting application
 
@@ -74,7 +74,7 @@ ON crewai_crews(crew_key);
 
 ### 2. JavaScript Migration Script
 
-**Location**: `/mnt/c/_EHG/ehg/scripts/apply-crew-key-migration.mjs`
+**Location**: `/mnt/c/_EHG/EHG/scripts/apply-crew-key-migration.mjs`
 
 **Status**: ✅ Created, requires Supabase service role key
 
@@ -143,7 +143,7 @@ ON crewai_crews(crew_key);
 ### Method 2: Via Supabase CLI (If Available)
 
 ```bash
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 npx supabase db push
 ```
 
@@ -161,7 +161,7 @@ npx supabase db push
 
 **Steps**:
 ```bash
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 node scripts/apply-crew-key-migration.mjs
 ```
 
@@ -327,7 +327,7 @@ If you encounter issues:
 
 2. **Check backend logs**
    ```bash
-   tail -f /mnt/c/_EHG/ehg/agent-platform/logs/backend.log
+   tail -f /mnt/c/_EHG/EHG/agent-platform/logs/backend.log
    ```
 
 3. **Re-read error messages** - Most errors are self-explanatory

@@ -194,7 +194,7 @@ Transform startup ideas into validated, scalable, and strategically aligned vent
 
 ### External References
 - Database: `dedlbzhpgkmetvhbkyzq.supabase.co`
-- EHG App: `/mnt/c/_EHG/ehg`
+- EHG App: `/mnt/c/_EHG/EHG`
 - EHG_Engineer: `/mnt/c/_EHG/EHG_Engineer`
 - Mission Source: `/mnt/c/Users/rickf/Dropbox/_EHG/_EHG/Mission_v3.txt`
 

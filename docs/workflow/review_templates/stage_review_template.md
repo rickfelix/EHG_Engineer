@@ -153,7 +153,7 @@ Grep pattern: "[function/class name]" output_mode: "files_with_matches"
 **Verification**:
 ```bash
 # Check .env files
-cat /mnt/c/_EHG/ehg/.env | grep [VAR_NAME]
+cat /mnt/c/_EHG/EHG/.env | grep [VAR_NAME]
 cat /mnt/c/_EHG/EHG_Engineer/.env | grep [VAR_NAME]
 ```
 

@@ -23,7 +23,7 @@
 3. User selects category from predefined list
 4. System validates all fields meet criteria (frontend + database + API validation)
 
-**Implementation**: `/mnt/c/_EHG/ehg/src/components/stages/Stage1DraftIdea.tsx` (lines 199-283)
+**Implementation**: `/mnt/c/_EHG/EHG/src/components/stages/Stage1DraftIdea.tsx` (lines 199-283)
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:25-30
 
 ### Substage 1.2: Assumption Listing ❌ NOT IMPLEMENTED

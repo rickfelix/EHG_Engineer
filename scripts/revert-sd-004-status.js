@@ -95,7 +95,7 @@ async function revertSD004() {
     console.log(chalk.blue.bold('\n📋 SD-004 is now ready for proper implementation!'));
     console.log(chalk.gray('Next steps:'));
     console.log(chalk.gray('1. Review PRD requirements'));
-    console.log(chalk.gray('2. Navigate to /mnt/c/_EHG/ehg/ for implementation'));
+    console.log(chalk.gray('2. Navigate to /mnt/c/_EHG/EHG/ for implementation'));
     console.log(chalk.gray('3. Make actual code changes'));
     console.log(chalk.gray('4. Only mark complete after real implementation'));
 

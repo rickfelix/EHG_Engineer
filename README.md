@@ -1,19 +1,18 @@
-# EHG_Engineer - LEO Protocol Builder Tool
+# EHG_Engineer - LEO Protocol Backend & Engine
 
-## ⚠️ CRITICAL DISTINCTION - READ THIS FIRST!
+> **ARCHITECTURE UPDATE (SD-ARCH-EHG-007)**: As of December 2024, EHG is the **unified frontend** (user + admin features via `/admin` routes). EHG_Engineer is now **backend API only**. Both share the consolidated database.
 
-### Two Separate Applications, One Consolidated Database:
+## Current Architecture
 
-| System | Database ID | Purpose |
-|--------|------------|---------|
-| **EHG_Engineer** | dedlbzhpgkmetvhbkyzq | The LEO Protocol tool you're using RIGHT NOW to build applications |
-| **EHG** | dedlbzhpgkmetvhbkyzq | The actual EHG portfolio application being built |
+| System | Port | Purpose | Database |
+|--------|------|---------|----------|
+| **EHG** | 8080 | Unified frontend (user features + admin dashboard at `/admin/*`) | dedlbzhpgkmetvhbkyzq |
+| **EHG_Engineer** | 3000 | Backend API + LEO Protocol engine (no standalone frontend) | dedlbzhpgkmetvhbkyzq |
 
-> **NOTE (SD-ARCH-EHG-006)**: As of 2025-11-30, both applications use the **CONSOLIDATED** database (dedlbzhpgkmetvhbkyzq). The old EHG database (liapbndqlqxdcgpwntbv) has been deprecated.
-
-**Remember**:
-- EHG_Engineer = The hammer 🔨
-- EHG = The house you're building 🏠
+**Key Points**:
+- All UI (user + admin) is in EHG
+- EHG_Engineer provides REST APIs consumed by EHG
+- Admin routes: `/admin/directives`, `/admin/prds`, `/admin/ventures`
 
 ---
 

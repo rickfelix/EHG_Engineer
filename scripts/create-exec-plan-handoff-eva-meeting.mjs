@@ -81,28 +81,28 @@ Ready for PLAN verification phase.`,
     implementation_files: [
       {
         name: 'EVAAssistantPage.tsx',
-        location: '/mnt/c/_EHG/ehg/src/pages/EVAAssistantPage.tsx',
+        location: '/mnt/c/_EHG/EHG/src/pages/EVAAssistantPage.tsx',
         status: 'Complete',
         loc: 261,
         features: ['Meeting layout', 'Voice integration', 'Dashboard display', 'Controls']
       },
       {
         name: 'EVARealtimeVoice component (reused)',
-        location: '/mnt/c/_EHG/ehg/src/components/eva/EVARealtimeVoice.tsx',
+        location: '/mnt/c/_EHG/EHG/src/components/eva/EVARealtimeVoice.tsx',
         status: 'Reused',
         loc: 148,
         integration: 'Voice waveform, preferences'
       },
       {
         name: 'EVAOrchestrationDashboard component (reused)',
-        location: '/mnt/c/_EHG/ehg/src/components/eva/EVAOrchestrationDashboard.tsx',
+        location: '/mnt/c/_EHG/EHG/src/components/eva/EVAOrchestrationDashboard.tsx',
         status: 'Reused',
         loc: 394,
         integration: 'Live venture metrics'
       },
       {
         name: 'EnhancedCharts component (reused)',
-        location: '/mnt/c/_EHG/ehg/src/components/charts/EnhancedCharts.tsx',
+        location: '/mnt/c/_EHG/EHG/src/components/charts/EnhancedCharts.tsx',
         status: 'Reused',
         loc: 457,
         integration: 'Dashboard visualizations'
@@ -112,7 +112,7 @@ Ready for PLAN verification phase.`,
     test_evidence: [
       {
         name: 'E2E Test Suite',
-        location: '/mnt/c/_EHG/ehg/tests/e2e/eva-meeting-sd-eva-meeting-001.spec.ts',
+        location: '/mnt/c/_EHG/EHG/tests/e2e/eva-meeting-sd-eva-meeting-001.spec.ts',
         status: 'Complete',
         coverage: '6/6 user stories (100%)',
         total_tests: 12,
@@ -120,14 +120,14 @@ Ready for PLAN verification phase.`,
       },
       {
         name: 'Test Screenshots',
-        location: '/mnt/c/_EHG/ehg/tests/e2e/evidence/SD-EVA-MEETING-001/',
+        location: '/mnt/c/_EHG/EHG/tests/e2e/evidence/SD-EVA-MEETING-001/',
         status: 'Complete',
         count: 6,
         format: 'PNG (full page)'
       },
       {
         name: 'Playwright HTML Report',
-        location: '/mnt/c/_EHG/ehg/playwright-report/',
+        location: '/mnt/c/_EHG/EHG/playwright-report/',
         status: 'Complete',
         results: '12/12 passing'
       }
@@ -296,7 +296,7 @@ Ready for PLAN verification phase.`,
       {
         priority: 'HIGH',
         action: 'Verify E2E tests passing',
-        verification_method: 'Run: cd /mnt/c/_EHG/ehg && npm run test:e2e -- eva-meeting-sd-eva-meeting-001.spec.ts',
+        verification_method: 'Run: cd /mnt/c/_EHG/EHG && npm run test:e2e -- eva-meeting-sd-eva-meeting-001.spec.ts',
         expected_result: '12/12 tests passing',
         acceptance_criteria: 'All 6 user stories validated via E2E tests'
       },

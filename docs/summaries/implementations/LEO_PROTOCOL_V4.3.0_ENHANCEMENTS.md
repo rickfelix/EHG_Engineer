@@ -31,7 +31,7 @@ Both gaps caused handoff validation failures and required manual intervention. T
 **New Module**: `scripts/modules/handoff/map-e2e-tests-to-stories.js`
 
 **Functionality**:
-- Scans `/mnt/c/_EHG/ehg/tests/e2e/**/*.spec.ts` for US-XXX references
+- Scans `/mnt/c/_EHG/EHG/tests/e2e/**/*.spec.ts` for US-XXX references
 - Extracts test names matching `test('US-XXX: Description')`
 - Maps test file paths to `user_stories.e2e_test_path` column
 - Updates `e2e_test_status` to 'created'

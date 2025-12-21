@@ -116,11 +116,12 @@ describe('Smoke Tests - Critical System Validation', () => {
       expect(packageJson.scripts['test:coverage']).toBeDefined();
     });
 
-    test('should have build:client script', async () => {
+    // SD-ARCH-EHG-007: build:client removed - EHG_Engineer is backend API only
+    test('should have test:e2e script', async () => {
       const fs = await import('fs/promises');
       const packageJson = JSON.parse(await fs.readFile('./package.json', 'utf-8'));
 
-      expect(packageJson.scripts['build:client']).toBeDefined();
+      expect(packageJson.scripts['test:e2e']).toBeDefined();
     });
 
     test('should have leo:status script', async () => {

@@ -25,7 +25,7 @@ Phase 5 (Frontend UI - Agent Wizard & Crew Builder) has been **fully implemented
 
 ### 1. Backend API Endpoint Created
 
-**File**: `/mnt/c/_EHG/ehg/agent-platform/app/api/crews.py`
+**File**: `/mnt/c/_EHG/EHG/agent-platform/app/api/crews.py`
 **Lines**: 534-683 (150 LOC added)
 
 **New Endpoint**: `POST /api/crews/generate`
@@ -212,24 +212,24 @@ CREATE INDEX idx_crewai_crews_crew_key ON crewai_crews(crew_key);
 ## Files Modified
 
 ### Backend (1 file)
-1. `/mnt/c/_EHG/ehg/agent-platform/app/api/crews.py`
+1. `/mnt/c/_EHG/EHG/agent-platform/app/api/crews.py`
    - Added: `POST /api/crews/generate` endpoint
    - Added: `CrewCodeGenerationRequest` model
    - Added: `CrewCodeGenerationResponse` model
    - Lines: +150 LOC
 
 ### Frontend (3 files)
-1. `/mnt/c/_EHG/ehg/src/components/agents/AgentWizard/Step6ReviewGenerate.tsx`
+1. `/mnt/c/_EHG/EHG/src/components/agents/AgentWizard/Step6ReviewGenerate.tsx`
    - Updated: `handleGenerateCode()` function
    - Updated: `handleDeployAgent()` function
    - Lines: ~80 LOC changed
 
-2. `/mnt/c/_EHG/ehg/src/components/crews/CrewBuilder/VisualPreview.tsx`
+2. `/mnt/c/_EHG/EHG/src/components/crews/CrewBuilder/VisualPreview.tsx`
    - Added: `handleGenerateCodeViaAPI()` function
    - Updated: "Generate Full Code" button
    - Lines: ~50 LOC added
 
-3. `/mnt/c/_EHG/ehg/src/components/crews/CrewBuilder/CrewBuilder.tsx`
+3. `/mnt/c/_EHG/EHG/src/components/crews/CrewBuilder/CrewBuilder.tsx`
    - Updated: `handleSaveCrew()` function
    - Lines: ~45 LOC changed
 

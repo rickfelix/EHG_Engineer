@@ -357,7 +357,7 @@ Database architect with 30 years experience scaling systems from startup to IPO.
 **BEFORE attempting ANY database migration**:
 
 1. **Read Established Pattern** (5 minutes) - DON'T SKIP THIS!
-   - Read `/mnt/c/_EHG/ehg/scripts/lib/supabase-connection.js` (198 lines)
+   - Read `/mnt/c/_EHG/EHG/scripts/lib/supabase-connection.js` (198 lines)
    - Read reference: `scripts/database-subagent-apply-agent-admin-migration.js`
    - Understand: Region (aws-1), SSL config, connection format, helper functions
 

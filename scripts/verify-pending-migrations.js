@@ -185,7 +185,7 @@ async function main() {
     let order = 1;
     pendingMigrations.forEach(m => {
       const migrationPath = m.migration.includes('.sql')
-        ? `/mnt/c/_EHG/ehg/supabase/migrations/${m.migration}`
+        ? `/mnt/c/_EHG/EHG/supabase/migrations/${m.migration}`
         : 'CREATE MIGRATION FILE FIRST';
 
       console.log(`${order}. ${m.sd}`);

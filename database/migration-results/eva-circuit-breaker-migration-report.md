@@ -1,7 +1,7 @@
 # EVA Circuit Breaker Migration Report
 
 **Date**: 2025-12-04
-**Migration File**: `/mnt/c/_EHG/ehg/database/migrations/20251204_eva_circuit_breaker.sql`
+**Migration File**: `/mnt/c/_EHG/EHG/database/migrations/20251204_eva_circuit_breaker.sql`
 **Database**: dedlbzhpgkmetvhbkyzq.supabase.co
 **Status**: ✅ **SUCCESSFUL**
 
@@ -195,7 +195,7 @@ ORDER BY created_at DESC;
 
 ## Files Created
 
-1. `/mnt/c/_EHG/ehg/database/migrations/20251204_eva_circuit_breaker.sql` - Migration SQL
+1. `/mnt/c/_EHG/EHG/database/migrations/20251204_eva_circuit_breaker.sql` - Migration SQL
 2. `/mnt/c/_EHG/EHG_Engineer/scripts/run-eva-circuit-migration.js` - Migration executor
 3. `/mnt/c/_EHG/EHG_Engineer/scripts/verify-eva-circuit-migration.js` - Verification script
 4. `/mnt/c/_EHG/EHG_Engineer/scripts/test-eva-circuit-breaker.js` - Functional tests

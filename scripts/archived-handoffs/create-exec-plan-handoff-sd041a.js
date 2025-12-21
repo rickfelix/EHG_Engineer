@@ -52,10 +52,10 @@ const handoff = {
 
   deliverables_manifest: {
     code_changes: [
-      '/mnt/c/_EHG/ehg/database/migrations/20251003-create-knowledge-base-tables.sql (new, 650 lines)',
-      '/mnt/c/_EHG/ehg/scripts/apply-knowledge-base-migration.js (new, 160 lines)',
-      '/mnt/c/_EHG/ehg/src/lib/services/knowledgeManagementService.ts (modified, +35 lines)',
-      '/mnt/c/_EHG/ehg/src/components/knowledge-management/KnowledgeManagementDashboard.tsx (modified, +180 lines)'
+      '/mnt/c/_EHG/EHG/database/migrations/20251003-create-knowledge-base-tables.sql (new, 650 lines)',
+      '/mnt/c/_EHG/EHG/scripts/apply-knowledge-base-migration.js (new, 160 lines)',
+      '/mnt/c/_EHG/EHG/src/lib/services/knowledgeManagementService.ts (modified, +35 lines)',
+      '/mnt/c/_EHG/EHG/src/components/knowledge-management/KnowledgeManagementDashboard.tsx (modified, +180 lines)'
     ],
     database_changes: [
       'knowledge_patterns table (with AI agent + chairman fields)',
@@ -66,7 +66,7 @@ const handoff = {
       'pattern_relationships table (causal graph)'
     ],
     documentation: [
-      '/mnt/c/_EHG/ehg/scripts/MIGRATION_INSTRUCTIONS.md (created)',
+      '/mnt/c/_EHG/EHG/scripts/MIGRATION_INSTRUCTIONS.md (created)',
       'Git commit with detailed implementation notes'
     ]
   },

@@ -30,7 +30,7 @@
 
 ### TS-UNIT-001: Backend Routing Validation ✅
 
-**File**: `/mnt/c/_EHG/ehg/agent-platform/tests/test_deep_competitive_routing.py`
+**File**: `/mnt/c/_EHG/EHG/agent-platform/tests/test_deep_competitive_routing.py`
 **Execution Time**: 2.22 seconds
 **Tests Created**: 4
 **Pass Rate**: 100% (4/4)
@@ -78,7 +78,7 @@ app/services/research_orchestrator.py: _execute_deep_competitive() method
 
 ### TS-INT-001: Backend Integration Test ✅
 
-**File**: `/mnt/c/_EHG/ehg/agent-platform/tests/test_deep_competitive_integration.py`
+**File**: `/mnt/c/_EHG/EHG/agent-platform/tests/test_deep_competitive_integration.py`
 **Status**: TEST FILES CREATED (Execution pending full environment setup)
 **Tests Created**: 3
 
@@ -111,7 +111,7 @@ app/services/research_orchestrator.py: _execute_deep_competitive() method
 
 ### TS-UNIT-002 & TS-UNIT-003: Frontend Service Layer ✅
 
-**File**: `/mnt/c/_EHG/ehg/src/services/__tests__/ventureResearch.test.ts`
+**File**: `/mnt/c/_EHG/EHG/src/services/__tests__/ventureResearch.test.ts`
 **Status**: TEST FILES CREATED
 **Tests Created**: 8
 
@@ -591,9 +591,9 @@ The US-003 Comprehensive Testing Strategy implementation has successfully delive
 
 | File Path | Lines | Tests | Status |
 |-----------|-------|-------|--------|
-| `/mnt/c/_EHG/ehg/agent-platform/tests/test_deep_competitive_routing.py` | 250 | 4 | ✅ EXECUTED |
-| `/mnt/c/_EHG/ehg/agent-platform/tests/test_deep_competitive_integration.py` | 350 | 3 | ✅ CREATED |
-| `/mnt/c/_EHG/ehg/src/services/__tests__/ventureResearch.test.ts` | 300 | 8 | ✅ CREATED |
+| `/mnt/c/_EHG/EHG/agent-platform/tests/test_deep_competitive_routing.py` | 250 | 4 | ✅ EXECUTED |
+| `/mnt/c/_EHG/EHG/agent-platform/tests/test_deep_competitive_integration.py` | 350 | 3 | ✅ CREATED |
+| `/mnt/c/_EHG/EHG/src/services/__tests__/ventureResearch.test.ts` | 300 | 8 | ✅ CREATED |
 
 ### Documented Test Files (Not Created)
 

@@ -246,7 +246,7 @@ Timeline: 4-5 hours implementation + budget for WCAG training if needed ($100-$3
     ],
 
     system_architecture: JSON.stringify({
-      target_application: '/mnt/c/_EHG/ehg/',
+      target_application: '/mnt/c/_EHG/EHG/',
       target_component: 'src/components/ventures/VentureCreationPage.tsx',
       component_lines: '81-126',
       parent_sd: 'SD-VWC-A11Y-001 (Phase 1 - completed 100%)',
@@ -439,7 +439,7 @@ Timeline: 4-5 hours implementation + budget for WCAG training if needed ($100-$3
     ],
 
     constraints: [
-      'Target application: /mnt/c/_EHG/ehg/ (EHG app)',
+      'Target application: /mnt/c/_EHG/EHG/ (EHG app)',
       'Target component: src/components/ventures/VentureCreationPage.tsx:81-126',
       'WCAG 2.1 AA compliance mandatory (not AAA)',
       'Color contrast: 4.5:1 normal text, 3:1 UI components',
@@ -464,7 +464,7 @@ Timeline: 4-5 hours implementation + budget for WCAG training if needed ($100-$3
     ],
 
     exec_checklist: [
-      { text: 'Navigate to /mnt/c/_EHG/ehg/ (NOT EHG_Engineer)', checked: false },
+      { text: 'Navigate to /mnt/c/_EHG/EHG/ (NOT EHG_Engineer)', checked: false },
       { text: 'Install axe DevTools browser extension', checked: false },
       { text: 'Audit color contrast for all text elements', checked: false },
       { text: 'Audit color contrast for all UI components', checked: false },

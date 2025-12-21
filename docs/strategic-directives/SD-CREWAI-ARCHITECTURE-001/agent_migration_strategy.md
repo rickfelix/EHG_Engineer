@@ -26,7 +26,7 @@ This document defines the strategy for migrating 40+ existing Python CrewAI agen
 
 ### Python Codebase Inventory
 
-**Location**: `/mnt/c/_EHG/ehg/agent-platform/app/agents/`
+**Location**: `/mnt/c/_EHG/EHG/agent-platform/app/agents/`
 
 **Expected Structure**:
 ```

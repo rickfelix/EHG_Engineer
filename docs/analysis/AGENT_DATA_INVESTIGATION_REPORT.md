@@ -145,7 +145,7 @@ ON CONFLICT (tool_name) DO NOTHING;
 **Action**:
 ```bash
 # Navigate to EHG application
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 
 # Apply seed data directly via psql
 psql $DATABASE_URL -f database/migrations/seed_agent_data.sql
@@ -448,7 +448,7 @@ Crews Tab:
 - `/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/src/hooks/useAgents.ts`
 
 **Backend**:
-- `/mnt/c/_EHG/ehg/database/migrations/20251008000000_agent_platform_schema.sql`
+- `/mnt/c/_EHG/EHG/database/migrations/20251008000000_agent_platform_schema.sql`
 
 **Investigation Scripts** (created during this investigation):
 - `/mnt/c/_EHG/EHG_Engineer/scripts/investigate-agent-data.cjs`

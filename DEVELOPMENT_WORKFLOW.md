@@ -12,7 +12,7 @@ The EHG_Engineer repository serves as the **LEO Protocol orchestration layer** f
    - Houses Strategic Directives and retrospectives
    - Provides tooling for orchestration across all ventures
 
-2. **`/mnt/c/_EHG/ehg/`** - APP001 (ehg Application)
+2. **`/mnt/c/_EHG/EHG/`** - APP001 (ehg Application)
    - The actual ehg portfolio application source code
    - Primary development location for ehg features
    - Separate git repository
@@ -24,13 +24,13 @@ The EHG_Engineer repository serves as the **LEO Protocol orchestration layer** f
 EHG_Engineer (Orchestration)
     ├── LEO Protocol Tooling
     ├── Multi-App Management
-    │   ├── APP001 config → points to /mnt/c/_EHG/ehg
+    │   ├── APP001 config → points to /mnt/c/_EHG/EHG
     │   ├── APP002 config → future venture repo
     │   └── APP003 config → future venture repo
     └── Strategic Directives, Agents, Scripts
 
 Actual Application Repos (Separate Git Repos)
-    ├── /mnt/c/_EHG/ehg (APP001)
+    ├── /mnt/c/_EHG/EHG (APP001)
     ├── /path/to/future-venture-1 (APP002)
     └── /path/to/future-venture-2 (APP003)
 ```
@@ -41,7 +41,7 @@ Actual Application Repos (Separate Git Repos)
 
 1. **Navigate to actual repository**
    ```bash
-   cd /mnt/c/_EHG/ehg
+   cd /mnt/c/_EHG/EHG
    ```
 
 2. **Start development server**
@@ -51,7 +51,7 @@ Actual Application Repos (Separate Git Repos)
 
 3. **Make changes, test, commit**
    ```bash
-   # Edit files in /mnt/c/_EHG/ehg
+   # Edit files in /mnt/c/_EHG/EHG
    git add .
    git commit -m "feat: your feature"
    git push
@@ -86,7 +86,7 @@ Actual Application Repos (Separate Git Repos)
 Before starting any development work, verify:
 
 - [ ] Check current directory with `pwd`
-- [ ] For ehg development: ensure you're in `/mnt/c/_EHG/ehg`
+- [ ] For ehg development: ensure you're in `/mnt/c/_EHG/EHG`
 - [ ] For LEO tooling: ensure you're in `/mnt/c/_EHG/EHG_Engineer`
 - [ ] Never edit files in `applications/APP001/codebase/`
 - [ ] Verify config.json points to correct `local_path`
@@ -99,7 +99,7 @@ Each APP has a `config.json` that specifies:
 {
   "id": "APP001",
   "name": "ehg",
-  "local_path": "/mnt/c/_EHG/ehg",  // ← Actual repo location
+  "local_path": "/mnt/c/_EHG/EHG",  // ← Actual repo location
   "github": {
     "owner": "rickfelix",
     "repo": "ehg.git",
@@ -124,7 +124,7 @@ npm run dev  # ← Wrong location!
 
 ```bash
 # DO THIS:
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 npm run dev  # ← Correct location!
 ```
 
@@ -169,7 +169,7 @@ This will check:
 
 | Task | Directory | Command |
 |------|-----------|---------|
-| ehg development | `/mnt/c/_EHG/ehg` | `PORT=8080 npm run dev` |
+| ehg development | `/mnt/c/_EHG/EHG` | `PORT=8080 npm run dev` |
 | LEO tooling | `/mnt/c/_EHG/EHG_Engineer` | Edit CLAUDE.md, agents, scripts |
 | View app configs | `/mnt/c/_EHG/EHG_Engineer/applications` | Check `config.json` files |
 | Register new app | `/mnt/c/_EHG/EHG_Engineer` | `npm run register-app` |

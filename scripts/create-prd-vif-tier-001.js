@@ -300,7 +300,7 @@ Target: Enable Chairman to capture simple ideas in 15 minutes while preserving d
 
       // Constraints
       constraints: [
-        'Target application: /mnt/c/_EHG/ehg/ (EHG app, NOT EHG_Engineer)',
+        'Target application: /mnt/c/_EHG/EHG/ (EHG app, NOT EHG_Engineer)',
         'No database schema migration allowed (use JSONB metadata only)',
         'Maintain existing VentureCreationDialog structure (no rebuild)',
         'Component sizing: 300-600 LOC optimal (enforce via code review)',
@@ -348,7 +348,7 @@ Target: Enable Chairman to capture simple ideas in 15 minutes while preserving d
 
       // System Architecture
       system_architecture: {
-        target_application: '/mnt/c/_EHG/ehg/',
+        target_application: '/mnt/c/_EHG/EHG/',
         database: 'Supabase PostgreSQL (liapbndqlqxdcgpwntbv)',
         frontend_stack: 'Vite + React 18 + TypeScript 5 + Shadcn',
         backend_services: ['intelligenceAgents.ts (complexity assessment)'],
@@ -486,7 +486,7 @@ Target: Enable Chairman to capture simple ideas in 15 minutes while preserving d
       ],
 
       exec_checklist: [
-        { text: 'Navigate to /mnt/c/_EHG/ehg/ (NOT EHG_Engineer)', checked: false },
+        { text: 'Navigate to /mnt/c/_EHG/EHG/ (NOT EHG_Engineer)', checked: false },
         { text: 'Create TierIndicator.tsx component (~150 LOC)', checked: false },
         { text: 'Implement assessComplexity() in intelligenceAgents.ts', checked: false },
         { text: 'Modify VentureCreationDialog - add tier selection step', checked: false },

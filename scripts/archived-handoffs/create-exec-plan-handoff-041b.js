@@ -165,12 +165,12 @@ async function createHandoff() {
       timestamp: new Date().toISOString(),
       protocol_version: 'v4.2.0_story_gates',
       files_created: [
-        '/mnt/c/_EHG/ehg/database/migrations/20251003-create-venture-ideation-tables.sql',
-        '/mnt/c/_EHG/ehg/src/services/ventureIdeationService.ts',
-        '/mnt/c/_EHG/ehg/scripts/apply-venture-ideation-migration.js'
+        '/mnt/c/_EHG/EHG/database/migrations/20251003-create-venture-ideation-tables.sql',
+        '/mnt/c/_EHG/EHG/src/services/ventureIdeationService.ts',
+        '/mnt/c/_EHG/EHG/scripts/apply-venture-ideation-migration.js'
       ],
       files_modified: [
-        '/mnt/c/_EHG/ehg/src/components/stages/Stage4CompetitiveIntelligence.tsx (+141 lines)'
+        '/mnt/c/_EHG/EHG/src/components/stages/Stage4CompetitiveIntelligence.tsx (+141 lines)'
       ],
       implementation_time_minutes: 155,
       lines_of_code_added: 631,

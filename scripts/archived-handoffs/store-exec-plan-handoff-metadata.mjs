@@ -39,17 +39,17 @@ const handoffContent = {
   // 3. Deliverables Manifest
   deliverables_manifest: {
     files_created: [
-      '/mnt/c/_EHG/ehg/src/hooks/useChairmanConfig.ts (154 lines)',
-      '/mnt/c/_EHG/ehg/src/components/chairman/KPISelector.tsx (125 lines)',
-      '/mnt/c/_EHG/ehg/src/components/chairman/AlertConfiguration.tsx (118 lines)',
-      '/mnt/c/_EHG/ehg/src/pages/ChairmanSettingsPage.tsx (195 lines)'
+      '/mnt/c/_EHG/EHG/src/hooks/useChairmanConfig.ts (154 lines)',
+      '/mnt/c/_EHG/EHG/src/components/chairman/KPISelector.tsx (125 lines)',
+      '/mnt/c/_EHG/EHG/src/components/chairman/AlertConfiguration.tsx (118 lines)',
+      '/mnt/c/_EHG/EHG/src/pages/ChairmanSettingsPage.tsx (195 lines)'
     ],
     files_modified: [
-      '/mnt/c/_EHG/ehg/src/App.tsx (+13 lines: route & lazy import)',
-      '/mnt/c/_EHG/ehg/src/components/ventures/ChairmanDashboard.tsx (+9 lines: settings button)'
+      '/mnt/c/_EHG/EHG/src/App.tsx (+13 lines: route & lazy import)',
+      '/mnt/c/_EHG/EHG/src/components/ventures/ChairmanDashboard.tsx (+9 lines: settings button)'
     ],
     migrations_created: [
-      '/mnt/c/_EHG/ehg/database/migrations/create-chairman-dashboard-config.sql'
+      '/mnt/c/_EHG/EHG/database/migrations/create-chairman-dashboard-config.sql'
     ]
   },
 
@@ -78,7 +78,7 @@ const handoffContent = {
       issue: 'Database table chairman_dashboard_config does not exist',
       severity: 'HIGH',
       impact: 'Settings save to localStorage only, no multi-device sync',
-      mitigation: 'Migration created at /mnt/c/_EHG/ehg/database/migrations/create-chairman-dashboard-config.sql',
+      mitigation: 'Migration created at /mnt/c/_EHG/EHG/database/migrations/create-chairman-dashboard-config.sql',
       resolution_timeline: 'Apply migration before Week 2 or production'
     },
     {

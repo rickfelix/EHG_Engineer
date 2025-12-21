@@ -10,7 +10,7 @@
 
 ```bash
 # Navigate to agent-platform directory
-cd /mnt/c/_EHG/ehg/agent-platform
+cd /mnt/c/_EHG/EHG/agent-platform
 
 # Run TS-UNIT-001: Backend routing validation
 python3 -m pytest tests/test_deep_competitive_routing.py -v --tb=short --no-cov
@@ -33,7 +33,7 @@ python3 -m pytest tests/test_deep_competitive_integration.py -v --tb=short --no-
 
 ```bash
 # Navigate to ehg directory
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 
 # FIRST: Move test file to correct location
 mkdir -p tests/unit
@@ -70,14 +70,14 @@ npx vitest run tests/unit/ventureResearch.test.ts
 
 ```bash
 # Start application (in separate terminals)
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 npm run dev  # Terminal 1 (port 5173)
 
-cd /mnt/c/_EHG/ehg/agent-platform
+cd /mnt/c/_EHG/EHG/agent-platform
 uvicorn main:app --reload  # Terminal 2 (port 8000)
 
 # Run E2E tests
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 npx playwright test tests/e2e/stage4-crewai-integration.spec.ts  # TS-E2E-001
 npx playwright test tests/e2e/stage4-crewai-fallback.spec.ts     # TS-E2E-002
 npx playwright test tests/e2e/stage4-feature-flag.spec.ts        # TS-E2E-003
@@ -100,7 +100,7 @@ npx playwright test tests/e2e/stage4-crewai-*.spec.ts
 # ⚠️ WARNING: TS-PERF-001 takes ~8 hours to execute (20 runs with real crew)
 # Only run in staging environment or on-demand
 
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 
 # Run P95 SLA validation (8 hours)
 npx playwright test tests/performance/stage4-crewai-sla.spec.ts
@@ -190,10 +190,10 @@ VALUES (
 
 ```bash
 # Create test fixtures directory
-mkdir -p /mnt/c/_EHG/ehg/tests/mocks/crew-responses
+mkdir -p /mnt/c/_EHG/EHG/tests/mocks/crew-responses
 
 # Copy sample mock response
-cat > /mnt/c/_EHG/ehg/tests/mocks/crew-responses/marketing-department-crew-success.json <<EOF
+cat > /mnt/c/_EHG/EHG/tests/mocks/crew-responses/marketing-department-crew-success.json <<EOF
 {
   "pain_points": [
     {"problem": "High CAC", "severity": "critical"}
@@ -221,7 +221,7 @@ EOF
 
 ```bash
 # Create GitHub Actions workflow directory
-mkdir -p /mnt/c/_EHG/ehg/.github/workflows
+mkdir -p /mnt/c/_EHG/EHG/.github/workflows
 
 # Copy workflow template
 cp /mnt/c/_EHG/EHG_Engineer/docs/strategic_directives/SD-CREWAI-COMPETITIVE-INTELLIGENCE-001/testing-strategy.md .github/workflows/stage4-crewai-tests.yml
@@ -236,7 +236,7 @@ git push origin main
 
 ```bash
 # Create pre-commit hook
-cat > /mnt/c/_EHG/ehg/.git/hooks/pre-commit <<'EOF'
+cat > /mnt/c/_EHG/EHG/.git/hooks/pre-commit <<'EOF'
 #!/bin/bash
 echo "Running Tier 1 smoke tests..."
 cd agent-platform && python3 -m pytest tests/test_deep_competitive_routing.py --tb=short --no-cov || exit 1
@@ -245,7 +245,7 @@ echo "✅ All tests passed!"
 EOF
 
 # Make executable
-chmod +x /mnt/c/_EHG/ehg/.git/hooks/pre-commit
+chmod +x /mnt/c/_EHG/EHG/.git/hooks/pre-commit
 ```
 
 ---

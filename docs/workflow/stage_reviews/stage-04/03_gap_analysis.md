@@ -293,7 +293,7 @@ Marketing Department Crew (4 agents, sequential)
 - Migration: `20251106150159_sd_crewai_architecture_001_phase1.sql`
 
 **Agent Scan**: ✅ COMPLETE
-- File: `/mnt/c/_EHG/ehg/agent-platform/agent_scan_results.json`
+- File: `/mnt/c/_EHG/EHG/agent-platform/agent_scan_results.json`
 - Date: 2025-11-06 20:19:22 UTC
 - Agents Found: 44 agents (0 errors)
 

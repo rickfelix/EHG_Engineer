@@ -5,8 +5,8 @@
 **Sub-Agent**: Principal Database Architect (DATABASE, Priority: 6)
 **Strategic Directive**: SD-CUSTOMER-INTEL-001
 **Phase**: PLAN (Technical Design Review)
-**Migration File**: `/mnt/c/_EHG/ehg/database/migrations/20251011_customer_intelligence_schema.sql` (18,542 bytes)
-**Review Request**: `/mnt/c/_EHG/ehg/database/migrations/20251011_customer_intelligence_schema_REVIEW_REQUEST.md`
+**Migration File**: `/mnt/c/_EHG/EHG/database/migrations/20251011_customer_intelligence_schema.sql` (18,542 bytes)
+**Review Request**: `/mnt/c/_EHG/EHG/database/migrations/20251011_customer_intelligence_schema_REVIEW_REQUEST.md`
 
 ---
 
@@ -235,7 +235,7 @@ venture_id IN (
 ### Pre-Flight Checklist ✅
 
 ✅ **Read Established Pattern**
-- Migration follows `/mnt/c/_EHG/ehg/scripts/lib/supabase-connection.js` pattern
+- Migration follows `/mnt/c/_EHG/EHG/scripts/lib/supabase-connection.js` pattern
 - Uses `createDatabaseClient()` helper function
 - Handles `splitPostgreSQLStatements()` for $$ delimiters
 
@@ -258,19 +258,19 @@ venture_id IN (
 
 **Option 1: Automated (Recommended)**
 ```bash
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 node scripts/lib/apply-customer-intelligence-migration.js
 ```
 
 **Option 2: Supabase CLI**
 ```bash
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 supabase db push database/migrations/20251011_customer_intelligence_schema.sql
 ```
 
 **Option 3: Manual (psql)**
 ```bash
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 psql "$EHG_POOLER_URL" -f database/migrations/20251011_customer_intelligence_schema.sql
 ```
 
@@ -368,7 +368,7 @@ WHERE persona_name = 'Test Persona';
 **Verdict**: ✅ **APPROVED - Proceed to Implementation**
 **Next Phase**: PLAN→EXEC Handoff
 
-**Migration File**: `/mnt/c/_EHG/ehg/database/migrations/20251011_customer_intelligence_schema.sql`
+**Migration File**: `/mnt/c/_EHG/EHG/database/migrations/20251011_customer_intelligence_schema.sql`
 **Execution**: Pending EXEC phase approval
 
 ---

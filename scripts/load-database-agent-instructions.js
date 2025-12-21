@@ -28,7 +28,7 @@ async function main() {
   try {
     const result = await executeSubAgent('DATABASE', 'SD-USER-PROFILES-FIX-001', {
       task: 'apply_migration',
-      migration_file: '/mnt/c/_EHG/ehg/database/migrations/009_create_profiles_table.sql',
+      migration_file: '/mnt/c/_EHG/EHG/database/migrations/009_create_profiles_table.sql',
       database: 'liapbndqlqxdcgpwntbv',
       app: 'EHG',
       verify_rls: true,

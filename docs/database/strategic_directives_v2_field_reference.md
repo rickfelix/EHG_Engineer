@@ -132,7 +132,7 @@
 
 | Field | Type | Purpose |
 |-------|------|---------|
-| `target_application` | VARCHAR(20) | "EHG" (customer app) or "EHG_Engineer" (management dashboard). Default: EHG |
+| `target_application` | VARCHAR(20) | "EHG" (unified frontend with user + /admin routes) or "EHG_Engineer" (backend API only). Default: EHG. Note: As of SD-ARCH-EHG-007, all UI (user + admin) goes to EHG. |
 
 ---
 

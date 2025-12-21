@@ -27,7 +27,7 @@ Checkpoint 3 (CP3) work is **100% complete** and fully compliant, but CI/CD pipe
 ### Step 1: Create Clean Branch from Main
 
 ```bash
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 
 # Fetch latest from remote
 git fetch origin

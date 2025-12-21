@@ -67,7 +67,7 @@ async function applyMigration() {
     console.log('Direct SQL execution not available via RPC');
     console.log('Please apply the migration manually in Supabase SQL Editor:');
     console.log('---');
-    console.log('File: /mnt/c/_EHG/ehg/supabase/migrations/20251217_create_venture_decisions_table.sql');
+    console.log('File: /mnt/c/_EHG/EHG/supabase/migrations/20251217_create_venture_decisions_table.sql');
     console.log('---');
     console.log('\nOr run: npx supabase db push --include-all');
     return;

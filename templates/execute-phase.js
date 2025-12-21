@@ -190,7 +190,7 @@ class UniversalPhaseExecutor {
 
   async executeEXECPhase(sd, options) {
     console.log('   💻 EXEC Phase: ACTUAL IMPLEMENTATION REQUIRED');
-    console.log(chalk.red('   🚨 CRITICAL: This phase requires REAL code changes in /mnt/c/_EHG/ehg/'));
+    console.log(chalk.red('   🚨 CRITICAL: This phase requires REAL code changes in /mnt/c/_EHG/EHG/'));
 
     // MANDATORY: Verify we have a PRD to implement
     const { data: prd } = await supabase
@@ -216,22 +216,22 @@ class UniversalPhaseExecutor {
     } catch (parseError) {
       console.log(chalk.red(`\n   ❌ PRD Format Error: ${prd.id}`));
       console.log(chalk.red(`   Content preview: ${prd.content.substring(0, 100)}...`));
-      console.log(chalk.yellow(`\n   🔧 To fix this PRD:`));
-      console.log(chalk.cyan(`   1. Run: node scripts/prd-format-validator.js --fix`));
+      console.log(chalk.yellow('\n   🔧 To fix this PRD:'));
+      console.log(chalk.cyan('   1. Run: node scripts/prd-format-validator.js --fix'));
       console.log(chalk.cyan(`   2. Or use: node scripts/unified-consolidated-prd.js ${sd.id} --force`));
-      console.log(chalk.cyan(`   3. Then retry the orchestrator`));
+      console.log(chalk.cyan('   3. Then retry the orchestrator'));
       throw new Error(`PRD ${prd.id} has invalid JSON content: ${parseError.message}`);
     }
 
     // Validate required JSON structure
     if (!content.user_stories) {
       console.log(chalk.red(`\n   ❌ PRD Structure Error: ${prd.id}`));
-      console.log(chalk.red(`   Missing 'user_stories' array in JSON content`));
-      console.log(chalk.yellow(`\n   🔧 To fix this PRD:`));
+      console.log(chalk.red('   Missing \'user_stories\' array in JSON content'));
+      console.log(chalk.yellow('\n   🔧 To fix this PRD:'));
       console.log(chalk.cyan(`   node scripts/unified-consolidated-prd.js ${sd.id} --force`));
       throw new Error(`PRD ${prd.id} missing required 'user_stories' field.`);
     }
-    console.log(chalk.cyan(`\n   📄 Implementation Requirements:`));
+    console.log(chalk.cyan('\n   📄 Implementation Requirements:'));
     console.log(`     PRD: ${prd.title}`);
     console.log(`     User Stories: ${content.user_stories?.length || 0}`);
 
@@ -249,7 +249,7 @@ class UniversalPhaseExecutor {
     console.log(chalk.red.bold('\n   🛑 IMPLEMENTATION BLOCKER:'));
     console.log(chalk.red('   This EXEC phase will NOT automatically mark as complete.'));
     console.log(chalk.red('   You MUST:'));
-    console.log(chalk.red('     1. Navigate to /mnt/c/_EHG/ehg/'));
+    console.log(chalk.red('     1. Navigate to /mnt/c/_EHG/EHG/'));
     console.log(chalk.red('     2. Implement the user stories above'));
     console.log(chalk.red('     3. Make git commits with the SD-ID'));
     console.log(chalk.red('     4. Run validation to verify implementation'));
@@ -487,7 +487,7 @@ class UniversalPhaseExecutor {
       // Check both repos for git commits mentioning the SD-ID
       const repos = [
         '/mnt/c/_EHG/EHG_Engineer',
-        '/mnt/c/_EHG/ehg'
+        '/mnt/c/_EHG/EHG'
       ];
 
       let totalCommits = 0;
@@ -616,7 +616,7 @@ class UniversalPhaseExecutor {
         console.log(chalk.yellow(`   ⚠️  Could not update SD status: ${sdError.message}`));
       } else {
         console.log(chalk.green(`   ✅ ${sdId} marked as completed`));
-        console.log(chalk.gray(`   Status: completed | Working On: false | Progress: 100%`));
+        console.log(chalk.gray('   Status: completed | Working On: false | Progress: 100%'));
       }
 
       // Update associated PRDs
@@ -632,7 +632,7 @@ class UniversalPhaseExecutor {
       if (prdError) {
         console.log(chalk.yellow(`   ⚠️  Could not update PRD status: ${prdError.message}`));
       } else {
-        console.log(chalk.green(`   ✅ Associated PRDs marked as approved`));
+        console.log(chalk.green('   ✅ Associated PRDs marked as approved'));
       }
 
     } catch (error) {
@@ -656,7 +656,7 @@ class UniversalPhaseExecutor {
 
     if (phase === 'PLAN') {
       console.log(chalk.yellow('\n   📍 CRITICAL for EXEC phase:'));
-      console.log('     • Navigate to /mnt/c/_EHG/ehg/ for implementation');
+      console.log('     • Navigate to /mnt/c/_EHG/EHG/ for implementation');
       console.log('     • Review PRD before starting');
       console.log('     • Implement based on priority order');
     }
@@ -752,7 +752,7 @@ class UniversalPhaseExecutor {
       }
     };
 
-    console.log(chalk.gray(`      📝 Retrospective analysis completed`));
+    console.log(chalk.gray('      📝 Retrospective analysis completed'));
     console.log(chalk.gray(`      📊 Quality Score: ${retrospective.metrics.quality_score}%`));
 
     return {
@@ -790,7 +790,7 @@ class UniversalPhaseExecutor {
       created_at: new Date().toISOString()
     };
 
-    console.log(chalk.gray(`      📦 Deployment plan prepared`));
+    console.log(chalk.gray('      📦 Deployment plan prepared'));
     console.log(chalk.gray(`      🎯 Target: ${deploymentPlan.target_environment}`));
 
     return {
@@ -825,7 +825,7 @@ class UniversalPhaseExecutor {
       created_at: new Date().toISOString()
     };
 
-    console.log(chalk.gray(`      📝 Documentation updates completed`));
+    console.log(chalk.gray('      📝 Documentation updates completed'));
 
     return {
       status: 'success',
@@ -862,13 +862,13 @@ class UniversalPhaseExecutor {
 
       if (error) {
         // Don't show error messages - just log success
-        console.log(chalk.gray(`      📊 Sub-agent execution logged`));
+        console.log(chalk.gray('      📊 Sub-agent execution logged'));
       } else {
-        console.log(chalk.gray(`      📊 Sub-agent result stored in database`));
+        console.log(chalk.gray('      📊 Sub-agent result stored in database'));
       }
     } catch (error) {
       // Silently handle storage errors - sub-agent execution is more important
-      console.log(chalk.gray(`      📊 Sub-agent execution completed`));
+      console.log(chalk.gray('      📊 Sub-agent execution completed'));
     }
   }
 }

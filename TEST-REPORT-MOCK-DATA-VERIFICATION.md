@@ -572,21 +572,21 @@ The Stage 2 research mock data verification system has been successfully impleme
 ### Code Verification
 
 **Files Reviewed**:
-- ✅ `/mnt/c/_EHG/ehg/src/services/ventureResearch.ts` (805 lines)
+- ✅ `/mnt/c/_EHG/EHG/src/services/ventureResearch.ts` (805 lines)
   - Line 18-74: `verifyBackendConnection()` implementation
   - Line 302-308: `createMockResearchSession()` function
   - Line 464-519: `createResearchSession()` with no auto-fallback
 
-- ✅ `/mnt/c/_EHG/ehg/src/components/ventures/MockDataConfirmationDialog.tsx` (90 lines)
+- ✅ `/mnt/c/_EHG/EHG/src/components/ventures/MockDataConfirmationDialog.tsx` (90 lines)
   - Line 29-89: Complete dialog component implementation
 
-- ✅ `/mnt/c/_EHG/ehg/src/components/ventures/VentureCreationPage/VentureCreationPage.tsx` (1903 lines)
+- ✅ `/mnt/c/_EHG/EHG/src/components/ventures/VentureCreationPage/VentureCreationPage.tsx` (1903 lines)
   - Line 156-158: State declarations for dialog/connection
   - Line 863-922: Mock data and cancel handlers
   - Line 924-1215: `startResearch()` with backend verification
   - Line 1891-1896: Dialog component rendering
 
-- ✅ `/mnt/c/_EHG/ehg/src/components/ventures/VentureCreationPage/ValidationPanel.tsx` (512 lines)
+- ✅ `/mnt/c/_EHG/EHG/src/components/ventures/VentureCreationPage/ValidationPanel.tsx` (512 lines)
   - Line 79-81: Backend status state
   - Line 217-234: Connection check useEffect
   - Line 252-277: Status indicator rendering

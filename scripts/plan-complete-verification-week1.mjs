@@ -15,10 +15,10 @@ const verificationReport = {
     code_files: {
       status: 'PASS',
       items: [
-        { file: '/mnt/c/_EHG/ehg/src/hooks/useChairmanConfig.ts', verified: true },
-        { file: '/mnt/c/_EHG/ehg/src/components/chairman/KPISelector.tsx', verified: true },
-        { file: '/mnt/c/_EHG/ehg/src/components/chairman/AlertConfiguration.tsx', verified: true },
-        { file: '/mnt/c/_EHG/ehg/src/pages/ChairmanSettingsPage.tsx', verified: true }
+        { file: '/mnt/c/_EHG/EHG/src/hooks/useChairmanConfig.ts', verified: true },
+        { file: '/mnt/c/_EHG/EHG/src/components/chairman/KPISelector.tsx', verified: true },
+        { file: '/mnt/c/_EHG/EHG/src/components/chairman/AlertConfiguration.tsx', verified: true },
+        { file: '/mnt/c/_EHG/EHG/src/pages/ChairmanSettingsPage.tsx', verified: true }
       ]
     },
     route_integration: {
@@ -31,7 +31,7 @@ const verificationReport = {
     },
     database_migration: {
       status: 'CREATED',
-      details: 'Migration SQL created at /mnt/c/_EHG/ehg/database/migrations/create-chairman-dashboard-config.sql',
+      details: 'Migration SQL created at /mnt/c/_EHG/EHG/database/migrations/create-chairman-dashboard-config.sql',
       action_required: 'Manual application to EHG database required'
     }
   },

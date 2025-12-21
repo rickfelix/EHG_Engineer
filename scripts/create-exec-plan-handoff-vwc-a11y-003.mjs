@@ -65,7 +65,7 @@ const handoffData = {
   completeness_report: `
 **EXEC Phase Checklist**:
 
-✅ Application verified: /mnt/c/_EHG/ehg (correct location)
+✅ Application verified: /mnt/c/_EHG/EHG (correct location)
 ✅ PLAN→EXEC handoff accepted (ID: 2caedbe8-ec6e-4199-8a38-7786a4bbb30a)
 ✅ All 3 deliverables implemented and tested
 ✅ E2E accessibility tests passing (zero violations)

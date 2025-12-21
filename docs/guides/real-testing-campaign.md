@@ -36,7 +36,7 @@ node scripts/apply-testing-schema-enhancement.cjs
 Ensure test suites are available:
 
 ```bash
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 
 # Verify unit tests
 npm run test:unit -- --run
@@ -246,7 +246,7 @@ Real campaign will show:
 
 ```bash
 # Rebuild EHG app
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 npm run build
 ```
 

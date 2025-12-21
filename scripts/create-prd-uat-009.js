@@ -39,7 +39,7 @@ The Venture Portfolio Management Dashboard currently uses hardcoded mock data in
 **This PRD defines the implementation to replace ALL mock data with live database queries.**
 
 ## Target Application
-**EHG Application** (/mnt/c/_EHG/ehg)
+**EHG Application** (/mnt/c/_EHG/EHG)
 - Database: liapbndqlqxdcgpwntbv.supabase.co
 - Component: src/components/venture/VentureGrid.tsx
 - Page: src/pages/Ventures.tsx`,
@@ -332,7 +332,7 @@ If issues arise:
 
 ### Database Connection
 The EHG application uses Supabase database: liapbndqlqxdcgpwntbv
-Verify connection credentials in /mnt/c/_EHG/ehg/.env
+Verify connection credentials in /mnt/c/_EHG/EHG/.env
 
 ### Schema Discovery
 First step is to query the ventures table and document its schema.

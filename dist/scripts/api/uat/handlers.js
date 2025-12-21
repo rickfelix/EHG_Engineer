@@ -186,90 +186,90 @@ function inferSuspectedFiles(case_id) {
     const fileMap = {
         AUTH: [
             {
-                path: '/mnt/c/_EHG/ehg/src/pages/LoginPage.tsx',
+                path: '/mnt/c/_EHG/EHG/src/pages/LoginPage.tsx',
                 reason: 'Authentication test failed - login component',
                 confidence: 0.9
             },
             {
-                path: '/mnt/c/_EHG/ehg/src/contexts/AuthContext.tsx',
+                path: '/mnt/c/_EHG/EHG/src/contexts/AuthContext.tsx',
                 reason: 'Authentication context may have issues',
                 confidence: 0.7
             }
         ],
         DASH: [
             {
-                path: '/mnt/c/_EHG/ehg/src/pages/Index.tsx',
+                path: '/mnt/c/_EHG/EHG/src/pages/Index.tsx',
                 reason: 'Dashboard test failed - main dashboard component',
                 confidence: 0.9
             },
             {
-                path: '/mnt/c/_EHG/ehg/src/components/Dashboard',
+                path: '/mnt/c/_EHG/EHG/src/components/Dashboard',
                 reason: 'Dashboard components directory',
                 confidence: 0.6
             }
         ],
         VENT: [
             {
-                path: '/mnt/c/_EHG/ehg/src/pages/VenturesPage.tsx',
+                path: '/mnt/c/_EHG/EHG/src/pages/VenturesPage.tsx',
                 reason: 'Ventures test failed - ventures page component',
                 confidence: 0.9
             },
             {
-                path: '/mnt/c/_EHG/ehg/src/pages/VentureDetail.tsx',
+                path: '/mnt/c/_EHG/EHG/src/pages/VentureDetail.tsx',
                 reason: 'Venture detail component may be affected',
                 confidence: 0.7
             }
         ],
         PORT: [
             {
-                path: '/mnt/c/_EHG/ehg/src/pages/PortfoliosPage.tsx',
+                path: '/mnt/c/_EHG/EHG/src/pages/PortfoliosPage.tsx',
                 reason: 'Portfolio test failed - portfolio component',
                 confidence: 0.9
             }
         ],
         AI: [
             {
-                path: '/mnt/c/_EHG/ehg/src/pages/EVAAssistantPage.tsx',
+                path: '/mnt/c/_EHG/EHG/src/pages/EVAAssistantPage.tsx',
                 reason: 'AI/EVA test failed - EVA assistant component',
                 confidence: 0.9
             },
             {
-                path: '/mnt/c/_EHG/ehg/src/pages/AIAgentsPage.tsx',
+                path: '/mnt/c/_EHG/EHG/src/pages/AIAgentsPage.tsx',
                 reason: 'AI agents page may be affected',
                 confidence: 0.7
             }
         ],
         GOV: [
             {
-                path: '/mnt/c/_EHG/ehg/src/pages/Governance.tsx',
+                path: '/mnt/c/_EHG/EHG/src/pages/Governance.tsx',
                 reason: 'Governance test failed - governance component',
                 confidence: 0.8
             }
         ],
         TEAM: [
             {
-                path: '/mnt/c/_EHG/ehg/src/pages/TeamPage.tsx',
+                path: '/mnt/c/_EHG/EHG/src/pages/TeamPage.tsx',
                 reason: 'Team test failed - team management component',
                 confidence: 0.8
             }
         ],
         RPT: [
             {
-                path: '/mnt/c/_EHG/ehg/src/pages/Reports.tsx',
+                path: '/mnt/c/_EHG/EHG/src/pages/Reports.tsx',
                 reason: 'Reports test failed - reports component',
                 confidence: 0.8
             }
         ],
         SET: [
             {
-                path: '/mnt/c/_EHG/ehg/src/pages/settings.tsx',
+                path: '/mnt/c/_EHG/EHG/src/pages/settings.tsx',
                 reason: 'Settings test failed - settings component',
                 confidence: 0.9
             }
         ],
         NOT: [
             {
-                path: '/mnt/c/_EHG/ehg/src/pages/Notifications.tsx',
+                path: '/mnt/c/_EHG/EHG/src/pages/Notifications.tsx',
                 reason: 'Notifications test failed - notifications component',
                 confidence: 0.9
             }
@@ -277,7 +277,7 @@ function inferSuspectedFiles(case_id) {
     };
     return fileMap[section] || [
         {
-            path: '/mnt/c/_EHG/ehg/src',
+            path: '/mnt/c/_EHG/EHG/src',
             reason: `Test in ${section} section failed - check relevant components`,
             confidence: 0.5
         }

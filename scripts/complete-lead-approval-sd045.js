@@ -399,7 +399,7 @@ async function completeLeadApproval() {
   console.log('- ROI: 🏆 EXCEPTIONAL');
 
   console.log('\n📋 Implementation Summary:');
-  console.log('- File: /mnt/c/_EHG/ehg/src/pages/Agents.tsx');
+  console.log('- File: /mnt/c/_EHG/EHG/src/pages/Agents.tsx');
   console.log('- Lines: 17 → 757 (740 added)');
   console.log('- Agents: 5 (EVA, LEAD, PLAN, EXEC, AI_CEO)');
   console.log('- Components: 15+ Shadcn UI components');

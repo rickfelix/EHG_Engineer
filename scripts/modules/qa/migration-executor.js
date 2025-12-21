@@ -23,7 +23,7 @@ export async function executePendingMigrations(pendingMigrations, targetApp = 'e
   console.log(`🚀 Migration Executor: Applying ${pendingMigrations.length} pending migration(s)...`);
 
   const appPath = targetApp === 'ehg'
-    ? '/mnt/c/_EHG/ehg'
+    ? '/mnt/c/_EHG/EHG'
     : '/mnt/c/_EHG/EHG_Engineer';
 
   // NOTE: As of SD-ARCH-EHG-006 (2025-11-30), both apps use CONSOLIDATED database

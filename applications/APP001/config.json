@@ -2,7 +2,7 @@
   "id": "APP001",
   "name": "ehg",
   "description": "EHG customer-facing business application (IMPLEMENTATION TARGET)",
-  "local_path": "/mnt/c/_EHG/ehg",
+  "local_path": "/mnt/c/_EHG/EHG",
   "github": {
     "owner": "rickfelix",
     "repo": "ehg.git",

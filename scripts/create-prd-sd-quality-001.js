@@ -74,7 +74,7 @@ Focus exclusively on adding unit test coverage for business logic:
 ## 1. Context & Background
 
 ### Current Test Infrastructure
-**Location**: \`/mnt/c/_EHG/ehg/tests/\`
+**Location**: \`/mnt/c/_EHG/EHG/tests/\`
 
 **Existing Tests** (63 files):
 - \`tests/e2e/\` - Extensive Playwright end-to-end tests ✅
@@ -432,7 +432,7 @@ export const createMockSupabaseClient = () => ({
 5. **6-week implementation timeline** (weekly milestones)
 
 ### EXEC Action Items
-1. Navigate to \`/mnt/c/_EHG/ehg/\` (NOT EHG_Engineer!)
+1. Navigate to \`/mnt/c/_EHG/EHG/\` (NOT EHG_Engineer!)
 2. Run existing tests to establish baseline
 3. Create test infrastructure (factories, mocks, utilities)
 4. Implement unit tests per priority list
@@ -462,7 +462,7 @@ export const createMockSupabaseClient = () => ({
     ],
 
     exec_checklist: [
-      { text: 'Navigate to /mnt/c/_EHG/ehg/ and verify context', checked: false },
+      { text: 'Navigate to /mnt/c/_EHG/EHG/ and verify context', checked: false },
       { text: 'Run existing 63 tests to establish baseline', checked: false },
       { text: 'Create test infrastructure (factories, mocks, utilities)', checked: false },
       { text: 'Week 1: Implement 5 Priority 1 service tests', checked: false },

@@ -19,7 +19,7 @@
  * Options:
  *   --max-iterations=N    Max iterations (default: 3)
  *   --auto-apply-threshold=N  Confidence threshold for auto-apply (default: 0.90)
- *   --repo-path=PATH      Path to codebase (default: /mnt/c/_EHG/ehg)
+ *   --repo-path=PATH      Path to codebase (default: /mnt/c/_EHG/EHG)
  *
  * Added: 2025-01-15 (SD-DESIGN-WORKFLOW-REVIEW-001)
  */
@@ -56,7 +56,7 @@ const supabaseAdmin = createClient(
 const config = {
   maxIterations: 3,
   autoApplyThreshold: 0.90,
-  repoPath: '/mnt/c/_EHG/ehg'
+  repoPath: '/mnt/c/_EHG/EHG'
 };
 
 /**

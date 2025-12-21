@@ -31,7 +31,7 @@ async function completeExecPhase() {
           status: 'completed',
           implementation_summary: {
             files_modified: 1,
-            target_file: '/mnt/c/_EHG/ehg/src/pages/Agents.tsx',
+            target_file: '/mnt/c/_EHG/EHG/src/pages/Agents.tsx',
             lines_added: 740,
             lines_before: 17,
             lines_after: 757,
@@ -149,7 +149,7 @@ async function completeExecPhase() {
             {
               step: 2,
               task: 'Run TypeScript build verification',
-              command: 'cd /mnt/c/_EHG/ehg && npm run build',
+              command: 'cd /mnt/c/_EHG/EHG && npm run build',
               expected: 'No TypeScript errors',
               status: 'pending'
             },
@@ -208,7 +208,7 @@ async function completeExecPhase() {
   console.log('- Progress: 40% → 70%');
   console.log('- Current Phase: PLAN_DESIGN → PLAN_VERIFICATION');
   console.log('\n💻 Implementation Summary:');
-  console.log('- File: /mnt/c/_EHG/ehg/src/pages/Agents.tsx');
+  console.log('- File: /mnt/c/_EHG/EHG/src/pages/Agents.tsx');
   console.log('- Lines: 17 → 757 (740 lines added)');
   console.log('- Mock Agents: 5 (EVA, LEAD, PLAN, EXEC, AI_CEO)');
   console.log('- UI Components: 15+');

@@ -3,7 +3,7 @@
   "analysis_timestamp": "2025-11-30T13:00:00.000Z",
   "analyst": "Principal Database Architect (Sub-Agent)",
   "target_database": "EHG (liapbndqlqxdcgpwntbv)",
-  "target_repository": "/mnt/c/_EHG/ehg/",
+  "target_repository": "/mnt/c/_EHG/EHG/",
 
   "schema_analysis": {
     "existing_table_assessment": {

@@ -79,14 +79,14 @@ Protocol Enhancement Achievements:
     primary_artifacts: [
       {
         name: 'EVA Assistant Page Implementation',
-        location: '/mnt/c/_EHG/ehg/src/pages/EVAAssistantPage.tsx',
+        location: '/mnt/c/_EHG/EHG/src/pages/EVAAssistantPage.tsx',
         status: 'Complete',
         loc: 261,
         features: '2-panel layout, voice integration, dashboard display, controls'
       },
       {
         name: 'E2E Test Suite',
-        location: '/mnt/c/_EHG/ehg/tests/e2e/eva-meeting-sd-eva-meeting-001.spec.ts',
+        location: '/mnt/c/_EHG/EHG/tests/e2e/eva-meeting-sd-eva-meeting-001.spec.ts',
         status: 'Complete',
         coverage: '6/6 user stories (100%)',
         results: '12/12 tests passing'
@@ -100,7 +100,7 @@ Protocol Enhancement Achievements:
       },
       {
         name: 'Test Evidence',
-        location: '/mnt/c/_EHG/ehg/tests/e2e/evidence/SD-EVA-MEETING-001/',
+        location: '/mnt/c/_EHG/EHG/tests/e2e/evidence/SD-EVA-MEETING-001/',
         status: 'Complete',
         screenshots: 6,
         playwright_report: 'HTML report generated'

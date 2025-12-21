@@ -25,49 +25,49 @@ const handoffContent = {
     all_deliverables_complete: true,
     deliverables_summary: {
       data_layer: {
-        file: '/mnt/c/_EHG/ehg/src/hooks/useExecutiveReports.ts',
+        file: '/mnt/c/_EHG/EHG/src/hooks/useExecutiveReports.ts',
         lines: 200,
         status: 'COMPLETE',
         features: ['CRUD operations', 'React Query integration', 'localStorage fallback', 'Toast notifications']
       },
       templates: {
-        file: '/mnt/c/_EHG/ehg/src/components/reports/ReportTemplateSelector.tsx',
+        file: '/mnt/c/_EHG/EHG/src/components/reports/ReportTemplateSelector.tsx',
         lines: 83,
         status: 'COMPLETE',
         features: ['3 pre-built templates', 'Board Update (5 sections)', 'Financial Summary (4 sections)', 'Portfolio Review (4 sections)']
       },
       section_editor: {
-        file: '/mnt/c/_EHG/ehg/src/components/reports/ReportSectionEditor.tsx',
+        file: '/mnt/c/_EHG/EHG/src/components/reports/ReportSectionEditor.tsx',
         lines: 128,
         status: 'COMPLETE',
         features: ['Text content editing', 'Metrics selector (6 KPIs)', 'Chart configuration', 'Section delete']
       },
       preview: {
-        file: '/mnt/c/_EHG/ehg/src/components/reports/ReportPreview.tsx',
+        file: '/mnt/c/_EHG/EHG/src/components/reports/ReportPreview.tsx',
         lines: 101,
         status: 'COMPLETE',
         features: ['Live preview', 'Mock data display', 'Section rendering by type', 'Metrics grid layout']
       },
       builder_page: {
-        file: '/mnt/c/_EHG/ehg/src/pages/ReportBuilderPage.tsx',
+        file: '/mnt/c/_EHG/EHG/src/pages/ReportBuilderPage.tsx',
         lines: 175,
         status: 'COMPLETE',
         features: ['2-step flow (template→builder)', 'Split view (editor+preview)', 'Add/edit sections', 'Save as draft']
       },
       pdf_export: {
-        file: '/mnt/c/_EHG/ehg/src/components/reports/PDFExportButton.tsx',
+        file: '/mnt/c/_EHG/EHG/src/components/reports/PDFExportButton.tsx',
         lines: 163,
         status: 'COMPLETE',
         features: ['@react-pdf/renderer integration', 'Professional PDF layout', 'Metric formatting', 'Download trigger']
       },
       history_page: {
-        file: '/mnt/c/_EHG/ehg/src/pages/ReportHistoryPage.tsx',
+        file: '/mnt/c/_EHG/EHG/src/pages/ReportHistoryPage.tsx',
         lines: 150,
         status: 'COMPLETE',
         features: ['Report list view', 'Status badges', 'Delete confirmation', 'PDF export per report', 'Empty state']
       },
       routes: {
-        file: '/mnt/c/_EHG/ehg/src/App.tsx',
+        file: '/mnt/c/_EHG/EHG/src/App.tsx',
         modifications: 'Added 2 routes',
         status: 'COMPLETE',
         routes: ['/reports (history)', '/reports/builder (create new)']
@@ -92,49 +92,49 @@ const handoffContent = {
   deliverables_manifest: {
     files_created: [
       {
-        path: '/mnt/c/_EHG/ehg/src/hooks/useExecutiveReports.ts',
+        path: '/mnt/c/_EHG/EHG/src/hooks/useExecutiveReports.ts',
         purpose: 'Data layer - React Query hook for reports CRUD',
         lines: 200,
         key_exports: ['useExecutiveReports', 'ExecutiveReport', 'ReportSection', 'ReportType', 'ReportStatus'],
         dependencies: ['@tanstack/react-query', '@/integrations/supabase/client']
       },
       {
-        path: '/mnt/c/_EHG/ehg/src/components/reports/ReportTemplateSelector.tsx',
+        path: '/mnt/c/_EHG/EHG/src/components/reports/ReportTemplateSelector.tsx',
         purpose: 'Template selection UI',
         lines: 83,
         key_exports: ['ReportTemplateSelector'],
         dependencies: ['@/components/ui/card', '@/components/ui/button', 'lucide-react']
       },
       {
-        path: '/mnt/c/_EHG/ehg/src/components/reports/ReportSectionEditor.tsx',
+        path: '/mnt/c/_EHG/EHG/src/components/reports/ReportSectionEditor.tsx',
         purpose: 'Section editing with dynamic UI by type',
         lines: 128,
         key_exports: ['ReportSectionEditor'],
         dependencies: ['@/components/ui/card', '@/components/ui/input', '@/components/ui/checkbox']
       },
       {
-        path: '/mnt/c/_EHG/ehg/src/components/reports/ReportPreview.tsx',
+        path: '/mnt/c/_EHG/EHG/src/components/reports/ReportPreview.tsx',
         purpose: 'Live preview of report as built',
         lines: 101,
         key_exports: ['ReportPreview'],
         dependencies: ['@/components/ui/card', '@/components/ui/badge']
       },
       {
-        path: '/mnt/c/_EHG/ehg/src/pages/ReportBuilderPage.tsx',
+        path: '/mnt/c/_EHG/EHG/src/pages/ReportBuilderPage.tsx',
         purpose: 'Main builder page with split editor/preview',
         lines: 175,
         key_exports: ['ReportBuilderPage'],
         dependencies: ['All report components', 'useExecutiveReports', 'react-router-dom']
       },
       {
-        path: '/mnt/c/_EHG/ehg/src/components/reports/PDFExportButton.tsx',
+        path: '/mnt/c/_EHG/EHG/src/components/reports/PDFExportButton.tsx',
         purpose: 'PDF generation and download',
         lines: 163,
         key_exports: ['PDFExportButton'],
         dependencies: ['@react-pdf/renderer', '@/hooks/useExecutiveReports']
       },
       {
-        path: '/mnt/c/_EHG/ehg/src/pages/ReportHistoryPage.tsx',
+        path: '/mnt/c/_EHG/EHG/src/pages/ReportHistoryPage.tsx',
         purpose: 'Report list with management actions',
         lines: 150,
         key_exports: ['ReportHistoryPage'],
@@ -143,7 +143,7 @@ const handoffContent = {
     ],
     files_modified: [
       {
-        path: '/mnt/c/_EHG/ehg/src/App.tsx',
+        path: '/mnt/c/_EHG/EHG/src/App.tsx',
         changes: [
           'Added lazy imports: ReportBuilderPage, ReportHistoryPage',
           'Added route: /reports (history page)',
@@ -154,7 +154,7 @@ const handoffContent = {
     ],
     database_migrations_needed: [
       {
-        file: '/mnt/c/_EHG/ehg/database/migrations/create-executive-reports.sql',
+        file: '/mnt/c/_EHG/EHG/database/migrations/create-executive-reports.sql',
         status: 'Created but not applied',
         priority: 'MEDIUM',
         reason: 'App works with localStorage fallback for development',
@@ -279,7 +279,7 @@ const handoffContent = {
     {
       priority: 'CRITICAL',
       action: 'Apply executive_reports migration to database',
-      details: 'Run /mnt/c/_EHG/ehg/database/migrations/create-executive-reports.sql',
+      details: 'Run /mnt/c/_EHG/EHG/database/migrations/create-executive-reports.sql',
       verification: 'Query table to confirm schema matches ExecutiveReport interface',
       estimated_effort: '5 minutes',
       blocking: false,

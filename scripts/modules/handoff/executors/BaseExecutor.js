@@ -225,7 +225,7 @@ export class BaseExecutor {
           targetApp === 'app' ||
           targetApp === 'application') {
         console.log(`   Repository determined by target_application: "${sd.target_application}" → EHG`);
-        return '/mnt/c/_EHG/ehg';
+        return '/mnt/c/_EHG/EHG';
       }
 
       console.warn(`   ⚠️  Unknown target_application value: "${sd.target_application}"`);
@@ -256,7 +256,7 @@ export class BaseExecutor {
       }
     }
 
-    return '/mnt/c/_EHG/ehg';
+    return '/mnt/c/_EHG/EHG';
   }
 }
 

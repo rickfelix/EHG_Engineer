@@ -6,7 +6,7 @@
 
 ### Agent Scan Results
 
-Scanned `/mnt/c/_EHG/ehg/agent-platform/app/agents/` and `/app/crews/`:
+Scanned `/mnt/c/_EHG/EHG/agent-platform/app/agents/` and `/app/crews/`:
 
 **Agents Found** (15+):
 - base_agent.py

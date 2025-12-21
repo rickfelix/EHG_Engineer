@@ -9,7 +9,7 @@
 ## ✅ Completed Tasks
 
 ### 1. Component Structure Created
-- ✅ **Directory**: `/mnt/c/_EHG/ehg/src/components/ventures/intelligence/`
+- ✅ **Directory**: `/mnt/c/_EHG/EHG/src/components/ventures/intelligence/`
 - ✅ **5 TypeScript files** created with full typing
 - ✅ **Barrel export** (index.ts) for clean imports
 - ✅ **TypeScript compilation** verified (no errors)
@@ -17,7 +17,7 @@
 
 ### 2. Files Created
 
-#### `/mnt/c/_EHG/ehg/src/components/ventures/intelligence/types.ts` (96 LOC)
+#### `/mnt/c/_EHG/EHG/src/components/ventures/intelligence/types.ts` (96 LOC)
 **Purpose**: TypeScript interfaces for all intelligence components
 
 **Key Types**:
@@ -35,7 +35,7 @@
 - `TabValue` - 'execute' | 'sta' | 'gcia'
 - `IntelligenceState` - Component state management
 
-#### `/mnt/c/_EHG/ehg/src/components/ventures/intelligence/IntelligenceDrawer.tsx` (289 LOC)
+#### `/mnt/c/_EHG/EHG/src/components/ventures/intelligence/IntelligenceDrawer.tsx` (289 LOC)
 **Purpose**: Main drawer component with Sheet, Tabs, and state management
 
 **Features**:
@@ -55,7 +55,7 @@
 - Updates progress bar during execution
 - Displays error messages with retry option
 
-#### `/mnt/c/_EHG/ehg/src/components/ventures/intelligence/ExecuteAnalysisTab.tsx` (217 LOC)
+#### `/mnt/c/_EHG/EHG/src/components/ventures/intelligence/ExecuteAnalysisTab.tsx` (217 LOC)
 **Purpose**: Agent execution interface with 3 buttons and loading states
 
 **Features**:
@@ -81,7 +81,7 @@
 - Icons: Sparkles (STA), Globe (GCIA), Zap (Both)
 - Responsive hover states with color transitions
 
-#### `/mnt/c/_EHG/ehg/src/components/ventures/intelligence/SystemsThinkingResults.tsx` (271 LOC)
+#### `/mnt/c/_EHG/EHG/src/components/ventures/intelligence/SystemsThinkingResults.tsx` (271 LOC)
 **Purpose**: Display STA analysis results with accordion sections
 
 **Features**:
@@ -114,7 +114,7 @@
 - Hover effects on list items (subtle background)
 - Responsive layout with flex wrapping
 
-#### `/mnt/c/_EHG/ehg/src/components/ventures/intelligence/CompetitiveIntelResults.tsx` (273 LOC)
+#### `/mnt/c/_EHG/EHG/src/components/ventures/intelligence/CompetitiveIntelResults.tsx` (273 LOC)
 **Purpose**: Display GCIA market intelligence results with accordion sections
 
 **Features**:
@@ -151,7 +151,7 @@
 - Hover effects on list items (themed backgrounds)
 - Responsive layout with flex wrapping
 
-#### `/mnt/c/_EHG/ehg/src/components/ventures/intelligence/index.ts` (25 LOC)
+#### `/mnt/c/_EHG/EHG/src/components/ventures/intelligence/index.ts` (25 LOC)
 **Purpose**: Barrel export for clean imports
 
 **Exports**:

@@ -37,9 +37,9 @@ async function completePlanPhase() {
             metrics_tracked: ['tasks_completed', 'success_rate', 'uptime', 'response_time']
           },
           implementation_guide: {
-            target_file: '/mnt/c/_EHG/ehg/src/pages/Agents.tsx',
-            reference_pattern: '/mnt/c/_EHG/ehg/src/components/team/TeamManagementInterface.tsx',
-            type_definitions: '/mnt/c/_EHG/ehg/src/types/agents.ts',
+            target_file: '/mnt/c/_EHG/EHG/src/pages/Agents.tsx',
+            reference_pattern: '/mnt/c/_EHG/EHG/src/components/team/TeamManagementInterface.tsx',
+            type_definitions: '/mnt/c/_EHG/EHG/src/types/agents.ts',
             estimated_lines: 400,
             ui_components: ['Card', 'Badge', 'Tabs', 'Avatar', 'Select', 'Button', 'Dialog'],
             icons_needed: ['Bot', 'Activity', 'Zap', 'Settings', 'AlertCircle', 'Brain', 'Code', 'Clipboard', 'Sparkles', 'Crown']
@@ -69,7 +69,7 @@ async function completePlanPhase() {
             ]
           },
           critical_reminders: [
-            '⚠️ MUST cd to /mnt/c/_EHG/ehg before coding',
+            '⚠️ MUST cd to /mnt/c/_EHG/EHG before coding',
             '⚠️ MUST verify pwd shows correct directory',
             '⚠️ MUST restart dev server after changes',
             '⚠️ MUST use TypeScript strict mode',
@@ -80,19 +80,19 @@ async function completePlanPhase() {
             {
               step: 1,
               task: 'Verify application directory',
-              command: 'cd /mnt/c/_EHG/ehg && pwd',
-              expected: '/mnt/c/_EHG/ehg'
+              command: 'cd /mnt/c/_EHG/EHG && pwd',
+              expected: '/mnt/c/_EHG/EHG'
             },
             {
               step: 2,
               task: 'Read reference pattern',
-              file: '/mnt/c/_EHG/ehg/src/components/team/TeamManagementInterface.tsx',
+              file: '/mnt/c/_EHG/EHG/src/components/team/TeamManagementInterface.tsx',
               purpose: 'Understand UI pattern and component structure'
             },
             {
               step: 3,
               task: 'Read TypeScript interfaces',
-              file: '/mnt/c/_EHG/ehg/src/types/agents.ts',
+              file: '/mnt/c/_EHG/EHG/src/types/agents.ts',
               purpose: 'Understand AIAgent, AgentTask, AgentPerformanceMetrics types'
             },
             {
@@ -104,7 +104,7 @@ async function completePlanPhase() {
             {
               step: 5,
               task: 'Implement Agents.tsx',
-              file: '/mnt/c/_EHG/ehg/src/pages/Agents.tsx',
+              file: '/mnt/c/_EHG/EHG/src/pages/Agents.tsx',
               estimated_lines: 400,
               components: 'Card-based layout with tabs, status badges, metrics display'
             },
@@ -148,7 +148,7 @@ async function completePlanPhase() {
   console.log('- ✅ Icons selected');
   console.log('- ✅ Layout responsive');
   console.log('\n🔧 Implementation Guide Ready:');
-  console.log('- Target: /mnt/c/_EHG/ehg/src/pages/Agents.tsx');
+  console.log('- Target: /mnt/c/_EHG/EHG/src/pages/Agents.tsx');
   console.log('- Reference: TeamManagementInterface.tsx');
   console.log('- Types: agents.ts');
   console.log('- Estimated: 400 lines');

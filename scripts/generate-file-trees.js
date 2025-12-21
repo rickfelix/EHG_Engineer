@@ -88,7 +88,7 @@ class FileTreeGenerator {
       );
 
       const ehgTree = await this.generateTree(
-        '/mnt/c/_EHG/ehg',
+        '/mnt/c/_EHG/EHG',
         'EHG (Business Application)'
       );
 

@@ -341,7 +341,7 @@ async function createHandoff() {
             priority: 'HIGH - Day 1',
             action: 'Verify application context',
             checklist: [
-              'Confirm target app: /mnt/c/_EHG/EHG_Engineer (NOT /mnt/c/_EHG/ehg)',
+              'Confirm target app: /mnt/c/_EHG/EHG_Engineer (NOT /mnt/c/_EHG/EHG)',
               'Verify route: /board-visual-builder will be added',
               'Check GitHub remote: rickfelix/EHG_Engineer.git',
               'Verify database: dedlbzhpgkmetvhbkyzq (EHG_Engineer Supabase)'

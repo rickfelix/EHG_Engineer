@@ -146,8 +146,8 @@ This ensures all existing imports continue to work without modification.
 
 ### Files Modified
 
-1. `/mnt/c/_EHG/ehg/src/components/stages/Stage15PricingStrategy.tsx` - Now re-export
-2. Created `/mnt/c/_EHG/ehg/src/components/stages/Stage15PricingStrategy/` folder
+1. `/mnt/c/_EHG/EHG/src/components/stages/Stage15PricingStrategy.tsx` - Now re-export
+2. Created `/mnt/c/_EHG/EHG/src/components/stages/Stage15PricingStrategy/` folder
 3. Created 3 new component files + index.ts
 4. Backup created: `Stage15PricingStrategy.tsx.backup`
 

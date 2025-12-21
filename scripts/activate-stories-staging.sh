@@ -92,12 +92,9 @@ fi
 # Phase 5: UI Check
 echo -e "\n${YELLOW}Phase 5: UI Verification${NC}"
 
-if grep -q "VITE_FEATURE_STORY_UI=true" .env; then
-  echo -e "${GREEN}✓ UI feature flag enabled${NC}"
-  echo "  Remember to rebuild client: npm run build:client"
-else
-  echo -e "${RED}✗ UI feature flag disabled${NC}"
-fi
+# SD-ARCH-EHG-007: Stories UI is now in EHG unified frontend
+echo -e "${GREEN}✓ Stories API ready on EHG_Engineer (port 3000)${NC}"
+echo "  Stories UI is available in EHG at http://localhost:8080/admin/stories"
 
 # Phase 6: Smoke Test Checklist
 echo -e "\n${YELLOW}Phase 6: Activation Checklist${NC}"
@@ -105,13 +102,12 @@ echo "Manual steps to complete:"
 echo ""
 echo "[ ] 1. Apply migration in Supabase SQL Editor"
 echo "[ ] 2. Enable FEATURE_AUTO_STORIES=true in .env"
-echo "[ ] 3. Enable VITE_FEATURE_STORY_UI=true in .env"
-echo "[ ] 4. Rebuild client: npm run build:client"
-echo "[ ] 5. Restart server: PORT=3000 node server.js"
-echo "[ ] 6. Test story generation via API"
-echo "[ ] 7. Navigate to /stories in browser"
-echo "[ ] 8. Run Playwright test with story annotations"
-echo "[ ] 9. Execute webhook mapper: node tools/post-playwright-results.mjs --dry-run"
+echo "[ ] 3. Restart EHG_Engineer API: PORT=3000 node server.js"
+echo "[ ] 4. Ensure EHG frontend running: cd /mnt/c/_EHG/EHG && npm run dev"
+echo "[ ] 5. Test story generation via API"
+echo "[ ] 6. Navigate to http://localhost:8080/admin/stories in browser"
+echo "[ ] 7. Run Playwright test with story annotations"
+echo "[ ] 8. Execute webhook mapper: node tools/post-playwright-results.mjs --dry-run"
 echo "[ ] 10. Check release gates: node scripts/check-story-gates.js"
 echo ""
 echo "======================================"

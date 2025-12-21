@@ -42,7 +42,7 @@ const NEW_SECTIONS = [
 
 **CRITICAL FIRST STEP**: Determine which application this SD targets:
 
-- **EHG** (\`/mnt/c/_EHG/ehg/\`) - Customer-facing features (MOST IMPLEMENTATIONS)
+- **EHG** (\`/mnt/c/_EHG/EHG/\`) - Customer-facing features (MOST IMPLEMENTATIONS)
   - Database: liapbndqlqxdcgpwntbv (Supabase)
   - GitHub: rickfelix/ehg.git
   - Stack: Vite + React + Shadcn + TypeScript
@@ -110,7 +110,7 @@ These principles override default behavior and must be internalized before start
 
 ### Application-Aware
 **Verify directory BEFORE writing ANY code.**
-- \`cd /mnt/c/_EHG/ehg && pwd\` for customer features
+- \`cd /mnt/c/_EHG/EHG && pwd\` for customer features
 - \`git remote -v\` to confirm correct repository
 - Wrong directory = STOP immediately
 

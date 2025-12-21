@@ -169,8 +169,8 @@ const handleApplyAISuggestions = (selectedImprovements: FieldImprovement[]) => {
 ```
 
 **Files to Edit**:
-- `/mnt/c/_EHG/ehg/src/components/ventures/VentureCreationPage/VentureCreationPage.tsx`
-- `/mnt/c/_EHG/ehg/src/components/ventures/VentureCreationPage/VentureForm.tsx` (add onImproveWithAI prop)
+- `/mnt/c/_EHG/EHG/src/components/ventures/VentureCreationPage/VentureCreationPage.tsx`
+- `/mnt/c/_EHG/EHG/src/components/ventures/VentureCreationPage/VentureForm.tsx` (add onImproveWithAI prop)
 
 ---
 
@@ -265,7 +265,7 @@ Return JSON with this structure:
 
 **Deployment**:
 ```bash
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 supabase functions deploy improve-venture-description
 ```
 

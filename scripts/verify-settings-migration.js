@@ -21,7 +21,7 @@ const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('❌ Missing Supabase credentials');
-  console.error('   Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in /mnt/c/_EHG/ehg/.env');
+  console.error('   Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in /mnt/c/_EHG/EHG/.env');
   process.exit(1);
 }
 
@@ -106,7 +106,7 @@ async function verifyMigration() {
     console.log('   Execute migration SQL in Supabase Dashboard:');
     console.log('   1. Go to: https://supabase.com/dashboard/project/liapbndqlqxdcgpwntbv');
     console.log('   2. Navigate to SQL Editor');
-    console.log('   3. Copy contents of: /mnt/c/_EHG/ehg/supabase/migrations/20251001140000_create_settings_tables.sql');
+    console.log('   3. Copy contents of: /mnt/c/_EHG/EHG/supabase/migrations/20251001140000_create_settings_tables.sql');
     console.log('   4. Execute the SQL');
     console.log('   5. Re-run this verification script\n');
     return false;

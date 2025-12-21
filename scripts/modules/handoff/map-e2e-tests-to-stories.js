@@ -11,7 +11,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-const EHG_APP_PATH = '/mnt/c/_EHG/ehg';
+const EHG_APP_PATH = '/mnt/c/_EHG/EHG';
 const E2E_TEST_DIR = `${EHG_APP_PATH}/tests/e2e`;
 
 /**

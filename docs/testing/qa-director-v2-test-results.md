@@ -273,7 +273,7 @@ const recentComponents = await findNewComponents(targetApp); // Already filtered
 ```javascript
 // Load correct .env file based on target app
 if (targetApp === 'ehg') {
-  dotenv.config({ path: '/mnt/c/_EHG/ehg/.env' });
+  dotenv.config({ path: '/mnt/c/_EHG/EHG/.env' });
 } else {
   dotenv.config(); // Default EHG_Engineer .env
 }

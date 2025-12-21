@@ -51,7 +51,7 @@ These principles override default behavior and must be internalized before start
 
 ### Application-Aware (VERIFICATION)
 **Verify directory BEFORE writing ANY code.**
-- \`cd /mnt/c/_EHG/ehg && pwd\` for customer features
+- \`cd /mnt/c/_EHG/EHG && pwd\` for customer features
 - \`git remote -v\` to confirm correct repository
 - Wrong directory = STOP immediately
 

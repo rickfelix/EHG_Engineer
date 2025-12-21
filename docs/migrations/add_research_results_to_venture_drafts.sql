@@ -3,7 +3,7 @@
 -- User Story: US-001
 -- Purpose: Store versioned CrewAI competitive intelligence research results
 -- Database: EHG app database (liapbndqlqxdcgpwntbv)
--- Repository: /mnt/c/_EHG/ehg/
+-- Repository: /mnt/c/_EHG/EHG/
 -- Date: 2025-11-07
 -- Database Agent Verdict: CONDITIONAL_PASS (88% confidence)
 

@@ -17,7 +17,7 @@ dotenv.config();
 
 // Also load EHG app .env to have both sets of credentials available
 // Using override: false ensures EHG_Engineer vars take precedence
-dotenv.config({ path: '/mnt/c/_EHG/ehg/.env', override: false });
+dotenv.config({ path: '/mnt/c/_EHG/EHG/.env', override: false });
 
 /**
  * Verify database migrations for SD
@@ -99,7 +99,7 @@ export async function verifyDatabaseMigrations(sd_id, targetApp = 'ehg') {
  */
 async function findSDMigrationFiles(sd_id, targetApp) {
   const migrationsPath = targetApp === 'ehg'
-    ? '/mnt/c/_EHG/ehg/supabase/migrations'
+    ? '/mnt/c/_EHG/EHG/supabase/migrations'
     : '/mnt/c/_EHG/EHG_Engineer/database/migrations';
 
   try {

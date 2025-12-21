@@ -120,9 +120,9 @@ The Venture Creation Wizard (VentureCreationPage.tsx, 1,183 LOC) has foundationa
 
     technical_context: `
 **Existing Infrastructure**:
-- Main wizard: /mnt/c/_EHG/ehg/src/components/ventures/VentureCreationPage.tsx (1,183 LOC)
-- IntelligenceDrawer: /mnt/c/_EHG/ehg/src/components/ventures/IntelligenceDrawer.tsx (452 LOC, 5 tabs)
-- TierGraduationModal: /mnt/c/_EHG/ehg/src/components/ventures/TierGraduationModal.tsx (160 LOC)
+- Main wizard: /mnt/c/_EHG/EHG/src/components/ventures/VentureCreationPage.tsx (1,183 LOC)
+- IntelligenceDrawer: /mnt/c/_EHG/EHG/src/components/ventures/IntelligenceDrawer.tsx (452 LOC, 5 tabs)
+- TierGraduationModal: /mnt/c/_EHG/EHG/src/components/ventures/TierGraduationModal.tsx (160 LOC)
 - Tier 0 button: VentureCreationPage.tsx lines 747-761 (COMPLETE)
 - useKeyboardNav hook: Exists but minimal integration
 - wizardAnalytics: Existing activity logging infrastructure
@@ -911,7 +911,7 @@ Usage: const { t } = useTranslation('ventureWizard');
   console.log('   1. Review PRD in EHG_Engineer dashboard');
   console.log('   2. Run STORIES sub-agent to generate implementation contexts');
   console.log('   3. Create PLAN→EXEC handoff when ready');
-  console.log('   4. Begin implementation in /mnt/c/_EHG/ehg/');
+  console.log('   4. Begin implementation in /mnt/c/_EHG/EHG/');
   console.log('');
   console.log('='.repeat(80));
 }

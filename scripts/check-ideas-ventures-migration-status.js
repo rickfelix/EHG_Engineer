@@ -118,15 +118,15 @@ async function checkMigrationStatus() {
       console.log('   - Recommend: Check with SERVICE_ROLE_KEY or Supabase Dashboard');
     } else {
       console.log('❌ Migration appears NOT APPLIED or has issues');
-      console.log('   - Check migration files in /mnt/c/_EHG/ehg/supabase/migrations/');
+      console.log('   - Check migration files in /mnt/c/_EHG/EHG/supabase/migrations/');
       console.log('   - Expected files:');
       console.log('     * 20251103_03_migrate_ideas_to_ventures.sql');
       console.log('     * 20251103_04_create_ideas_backward_compat_view.sql');
     }
 
     console.log('\n📁 Migration Files Location:');
-    console.log('   /mnt/c/_EHG/ehg/supabase/migrations/20251103_03_migrate_ideas_to_ventures.sql');
-    console.log('   /mnt/c/_EHG/ehg/supabase/migrations/20251103_04_create_ideas_backward_compat_view.sql');
+    console.log('   /mnt/c/_EHG/EHG/supabase/migrations/20251103_03_migrate_ideas_to_ventures.sql');
+    console.log('   /mnt/c/_EHG/EHG/supabase/migrations/20251103_04_create_ideas_backward_compat_view.sql');
 
     console.log('\n✅ Validation check complete\n');
 

@@ -48,7 +48,7 @@ async function enrichUserStories() {
       implementation_context: `
 IMPLEMENTATION GUIDANCE:
 
-1. File: /mnt/c/_EHG/ehg/agent-platform/app/services/research_orchestrator.py
+1. File: /mnt/c/_EHG/EHG/agent-platform/app/services/research_orchestrator.py
    Location: Add _execute_deep_competitive() method to ResearchOrchestrator class
 
 2. Routing Logic:
@@ -122,7 +122,7 @@ IMPLEMENTATION GUIDANCE:
       implementation_context: `
 IMPLEMENTATION GUIDANCE:
 
-1. File: /mnt/c/_EHG/ehg/src/components/ventures/Stage4CompetitiveIntelResults.tsx
+1. File: /mnt/c/_EHG/EHG/src/components/ventures/Stage4CompetitiveIntelResults.tsx
    Or: Create new component if reusing existing CompetitiveIntelResults.tsx
 
 2. Auto-Trigger on Mount:

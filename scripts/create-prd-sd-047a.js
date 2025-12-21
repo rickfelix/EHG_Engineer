@@ -366,8 +366,8 @@ const prdContent = {
 
   technical_specifications: JSON.stringify({
     architecture: {
-      component_path: '/mnt/c/_EHG/ehg/src/components/ventures/VentureTimelineView.tsx',
-      parent_component: '/mnt/c/_EHG/ehg/src/pages/VenturesPage.tsx',
+      component_path: '/mnt/c/_EHG/EHG/src/components/ventures/VentureTimelineView.tsx',
+      parent_component: '/mnt/c/_EHG/EHG/src/pages/VenturesPage.tsx',
       integration_point: 'Tabs component (4th tab after Grid/Kanban/Table)'
     },
     database: {

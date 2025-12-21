@@ -17,7 +17,7 @@ import { join } from 'path';
  */
 export async function discoverAndRecommend(targetApp = 'ehg') {
   const appPath = targetApp === 'ehg'
-    ? '/mnt/c/_EHG/ehg'
+    ? '/mnt/c/_EHG/EHG'
     : '/mnt/c/_EHG/EHG_Engineer';
 
   console.log(`🔍 Infrastructure Discovery: Scanning ${targetApp} test infrastructure...`);

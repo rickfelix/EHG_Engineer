@@ -27,7 +27,7 @@ testExecutionResults.smoke = {
 **After**: Real test execution with parsed results
 ```javascript
 const output = execSync('npm run test:unit', {
-  cwd: '/mnt/c/_EHG/ehg',
+  cwd: '/mnt/c/_EHG/EHG',
   encoding: 'utf8',
   timeout: 300000
 });
@@ -232,7 +232,7 @@ The 99.9% pass rate was **completely fabricated**:
 
 ### Verify Test Infrastructure
 ```bash
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 
 # Check unit tests work
 npm run test:unit

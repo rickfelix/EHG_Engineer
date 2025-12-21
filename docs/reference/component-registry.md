@@ -7,7 +7,7 @@ Reference document for locating UI components created by Strategic Directives.
 ### DecisionDeck.tsx
 **Purpose**: Read-only visibility component for the Glass Cockpit (Pillar 1)
 
-**Location**: `/mnt/c/_EHG/ehg/src/components/decision-deck/DecisionDeck.tsx`
+**Location**: `/mnt/c/_EHG/EHG/src/components/decision-deck/DecisionDeck.tsx`
 
 **Repository**: EHG (main application, not EHG_Engineer)
 
@@ -22,7 +22,7 @@ while backend tooling, scripts, and migrations belong in `EHG_Engineer`.
 
 **Verification**:
 ```bash
-ls -la /mnt/c/_EHG/ehg/src/components/decision-deck/
+ls -la /mnt/c/_EHG/EHG/src/components/decision-deck/
 ```
 
 ---

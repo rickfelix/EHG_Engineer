@@ -141,20 +141,20 @@ async function createHandoff() {
         status: 'ANALYZED',
         files: ['decisions.ts', 'deltas.ts'],
         endpoints: 5,
-        location: '/mnt/c/_EHG/ehg/src/api/'
+        location: '/mnt/c/_EHG/EHG/src/api/'
       },
       {
         deliverable: 'Database Schema Documentation',
         status: 'VERIFIED',
         tables: 4,
         migration_file: '011_decision_log_schema.sql',
-        location: '/mnt/c/_EHG/ehg/database/migrations/'
+        location: '/mnt/c/_EHG/EHG/database/migrations/'
       },
       {
         deliverable: 'TypeScript Interfaces (to create)',
         status: 'PENDING',
         interfaces: ['DecisionLogEntry', 'ThresholdDelta', 'CalibrationSession', 'RationaleTag'],
-        location: 'Will create in /mnt/c/_EHG/ehg/src/types/decisions.ts'
+        location: 'Will create in /mnt/c/_EHG/EHG/src/types/decisions.ts'
       }
     ],
 
@@ -286,7 +286,7 @@ async function createHandoff() {
         action: 'APPLICATION CHECK - Verify target application',
         priority: 'CRITICAL',
         deadline: 'Before ANY code',
-        details: 'cd /mnt/c/_EHG/ehg && pwd (should show /mnt/c/_EHG/ehg). Verify git remote shows rickfelix/ehg.git. DO NOT implement in EHG_Engineer!',
+        details: 'cd /mnt/c/_EHG/EHG && pwd (should show /mnt/c/_EHG/EHG). Verify git remote shows rickfelix/ehg.git. DO NOT implement in EHG_Engineer!',
         estimated_effort: '1 min'
       },
       {
@@ -300,7 +300,7 @@ async function createHandoff() {
         action: 'Create TypeScript interfaces from API schemas',
         priority: 'CRITICAL',
         deadline: 'Before component creation',
-        details: 'Create /mnt/c/_EHG/ehg/src/types/decisions.ts with DecisionLogEntry, ThresholdDelta, CalibrationSession, RationaleTag interfaces based on decisions.ts and deltas.ts schemas',
+        details: 'Create /mnt/c/_EHG/EHG/src/types/decisions.ts with DecisionLogEntry, ThresholdDelta, CalibrationSession, RationaleTag interfaces based on decisions.ts and deltas.ts schemas',
         estimated_effort: '2 hours'
       },
       {

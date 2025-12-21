@@ -22,7 +22,7 @@
 ## Files Fixed
 
 ### 1. **AgentInstructions.tsx** ✅
-**Path**: `/mnt/c/_EHG/ehg/src/components/chairman/feedback/AgentInstructions.tsx`  
+**Path**: `/mnt/c/_EHG/EHG/src/components/chairman/feedback/AgentInstructions.tsx`  
 **Issues Fixed**: 4 textareas  
 **Changes**:
 - Converted `<label>` to `<Label>` component (shadcn/ui)
@@ -47,7 +47,7 @@
 ---
 
 ### 2. **FeedbackForm.tsx** ✅
-**Path**: `/mnt/c/_EHG/ehg/src/components/chairman/feedback/FeedbackForm.tsx`  
+**Path**: `/mnt/c/_EHG/EHG/src/components/chairman/feedback/FeedbackForm.tsx`  
 **Issues Fixed**: 5 inputs (1 textarea, 4 selects)  
 **Changes**:
 - Added `<Label htmlFor="feedback-text" className="sr-only">` for main textarea
@@ -75,7 +75,7 @@
 ---
 
 ### 3. **BoardMemberManagement.tsx** ✅
-**Path**: `/mnt/c/_EHG/ehg/src/components/board/BoardMemberManagement.tsx`  
+**Path**: `/mnt/c/_EHG/EHG/src/components/board/BoardMemberManagement.tsx`  
 **Issues Fixed**: 6 inputs (5 Input components, 1 select)  
 **Changes**:
 - Added `htmlFor` to all Label components
@@ -102,7 +102,7 @@
 ---
 
 ### 4. **AgentDeployDialog.tsx** ✅ (Partial)
-**Path**: `/mnt/c/_EHG/ehg/src/components/agents/AgentDeployDialog.tsx`  
+**Path**: `/mnt/c/_EHG/EHG/src/components/agents/AgentDeployDialog.tsx`  
 **Issues Fixed**: 1 SelectTrigger  
 **Changes**:
 - Added `id` attribute to agent type Select
@@ -110,7 +110,7 @@
 ---
 
 ### 5. **AgentPresetsTab.tsx** ✅ (Partial)
-**Path**: `/mnt/c/_EHG/ehg/src/components/agents/AgentPresetsTab.tsx`  
+**Path**: `/mnt/c/_EHG/EHG/src/components/agents/AgentPresetsTab.tsx`  
 **Issues Fixed**: 2 inputs  
 **Changes**:
 - Added `id` to SelectTrigger for category filter
@@ -119,7 +119,7 @@
 ---
 
 ### 6. **DecisionHistoryTable.tsx** ✅ (Partial)
-**Path**: `/mnt/c/_EHG/ehg/src/components/analytics/DecisionHistoryTable.tsx`  
+**Path**: `/mnt/c/_EHG/EHG/src/components/analytics/DecisionHistoryTable.tsx`  
 **Issues Fixed**: 2 search inputs  
 **Changes**:
 - Added `aria-label` to standalone search/filter inputs
@@ -127,7 +127,7 @@
 ---
 
 ### 7. **ABTestingTab.tsx** ⚠️ (Needs Verification)
-**Path**: `/mnt/c/_EHG/ehg/src/components/agents/ABTestingTab.tsx`  
+**Path**: `/mnt/c/_EHG/EHG/src/components/agents/ABTestingTab.tsx`  
 **Issues Attempted**: 8-12 inputs  
 **Status**: Automated fixes applied, needs manual verification  
 **Note**: Complex file with wizard steps, variant inputs, and traffic splits

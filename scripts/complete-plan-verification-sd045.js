@@ -56,7 +56,7 @@ async function completePlanVerification() {
             activity_log_placeholder: true
           },
           technical_verification: {
-            file_location: '/mnt/c/_EHG/ehg/src/pages/Agents.tsx',
+            file_location: '/mnt/c/_EHG/EHG/src/pages/Agents.tsx',
             lines_implemented: 757,
             typescript_interfaces_used: true,
             shadcn_components_used: true,

@@ -102,7 +102,7 @@ export async function checkCrossSDDependencies(sd_id, targetApp = 'ehg') {
  */
 async function analyzeSDImports(sd_id, targetApp) {
   const appPath = targetApp === 'ehg'
-    ? '/mnt/c/_EHG/ehg/src'
+    ? '/mnt/c/_EHG/EHG/src'
     : '/mnt/c/_EHG/EHG_Engineer/src';
 
   try {

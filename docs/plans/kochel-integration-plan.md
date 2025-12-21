@@ -432,7 +432,7 @@ SD-VISION-TRANSITION-001 (GRANDPARENT - Root Orchestrator)
 | Schema migrations | `database/migrations/` |
 | Governance contracts | `sd_data_contracts`, `sd_ux_contracts` |
 
-## [Shared Services] - `/mnt/c/_EHG/ehg/agent-platform/`
+## [Shared Services] - `/mnt/c/_EHG/EHG/agent-platform/`
 
 | Deliverable | Location |
 |-------------|----------|
@@ -441,7 +441,7 @@ SD-VISION-TRANSITION-001 (GRANDPARENT - Root Orchestrator)
 | Service implementations | `app/services/` |
 | API endpoints | `app/api/` |
 
-## [Venture App] - `/mnt/c/_EHG/ehg/`
+## [Venture App] - `/mnt/c/_EHG/EHG/`
 
 | Deliverable | Location |
 |-------------|----------|
@@ -2219,8 +2219,8 @@ Review and refine the draft prompt for transforming a CrewAI Shared Services vis
 **Recommendation**:
 - Keep the three labels but document mapping to actual directories
 - [EHG_Engineering] = `/mnt/c/_EHG/EHG_Engineer/`
-- [Shared Services Platform] = `/mnt/c/_EHG/ehg/agent-platform/`
-- [Venture Runtime] = `/mnt/c/_EHG/ehg/` (app consuming services)
+- [Shared Services Platform] = `/mnt/c/_EHG/EHG/agent-platform/`
+- [Venture Runtime] = `/mnt/c/_EHG/EHG/` (app consuming services)
 
 ### Issue 5: Contract Types Mismatch ⚠️
 **Problem**: Prompt asks for "data contracts" but means API/service contracts (job submission, results). EHG already has `sd_data_contracts` which are governance contracts (table/column boundaries).
@@ -2282,8 +2282,8 @@ All outputs must align with the existing EHG governance system:
 ```
 **Directory Mapping**:
 - [EHG_Engineering] → `/mnt/c/_EHG/EHG_Engineer/`
-- [Shared Services Platform] → `/mnt/c/_EHG/ehg/agent-platform/`
-- [Venture Runtime] → `/mnt/c/_EHG/ehg/` (React app)
+- [Shared Services Platform] → `/mnt/c/_EHG/EHG/agent-platform/`
+- [Venture Runtime] → `/mnt/c/_EHG/EHG/` (React app)
 ```
 
 ### 3. Contract Strategy Clarification
@@ -2406,8 +2406,8 @@ I am the **Chairman and Solopreneur** of ExecHoldings Global (EHG). We are build
 | Label | Directory | Purpose |
 |-------|-----------|---------|
 | **[EHG_Engineering]** | `/mnt/c/_EHG/EHG_Engineer/` | Governance + product-building (SD → PRD → Backlog under LEO Protocol) |
-| **[Shared Services]** | `/mnt/c/_EHG/ehg/agent-platform/` | Reusable CrewAI services + APIs + observability |
-| **[Venture App]** | `/mnt/c/_EHG/ehg/` | React app consuming governed outputs and calling shared services |
+| **[Shared Services]** | `/mnt/c/_EHG/EHG/agent-platform/` | Reusable CrewAI services + APIs + observability |
+| **[Venture App]** | `/mnt/c/_EHG/EHG/` | React app consuming governed outputs and calling shared services |
 
 Every section you produce must be labeled with one of these ownership tags.
 

@@ -6,11 +6,12 @@ claude-enforcing:
   - feature/*
 
 # Component labels based on file changes
-frontend:
-  - src/client/**/*
-  - src/components/**/*
-  - '*.jsx'
-  - '*.tsx'
+# SD-ARCH-EHG-007: Frontend code is now in EHG unified frontend
+# EHG_Engineer is backend API only
+api:
+  - src/api/**/*
+  - src/services/**/*
+  - src/middleware/**/*
 
 backend:
   - server.js

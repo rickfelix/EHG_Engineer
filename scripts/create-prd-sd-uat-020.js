@@ -121,7 +121,7 @@ const prdContent = {
     status: 'approved',
     target_url: 'http://localhost:8080/settings',
     component_name: 'SettingsPage',
-    app_path: '/mnt/c/_EHG/ehg',
+    app_path: '/mnt/c/_EHG/EHG',
     port: 8080,
     metadata: {
       priority: 'CRITICAL',

@@ -114,7 +114,7 @@ npx playwright test --debug
 The EHG application must be running before tests execute:
 
 ```bash
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 npm run dev  # Should start on port 8080
 ```
 
@@ -320,7 +320,7 @@ Run `npm run lint:e2e` to check for selector violations.
 **Cause**: Application is not running
 **Solution**: Start the EHG application before running tests:
 ```bash
-cd /mnt/c/_EHG/ehg
+cd /mnt/c/_EHG/EHG
 npm run dev
 ```
 

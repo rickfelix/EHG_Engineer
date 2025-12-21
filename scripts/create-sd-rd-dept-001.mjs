@@ -34,7 +34,7 @@ async function createRDDepartmentSD() {
 
 First use case: Deep research for viral video creation workflow (Sora integration).
 
-Target Application: EHG (/mnt/c/_EHG/ehg)`,
+Target Application: EHG (/mnt/c/_EHG/EHG)`,
 
     strategic_intent: `Transform research operations from manual, siloed, inconsistent processes into an automated, high-quality, reusable research infrastructure that supports data-driven decision making across all departments.`,
 
@@ -183,7 +183,7 @@ Desired state: Automated, high-quality, reusable research infrastructure.
       first_use_case: 'Viral video research for Sora workflow',
       related_sds: ['SD-CREATIVE-001', 'SD-LLM-CENTRAL-001'],
       target_application: 'EHG',
-      implementation_path: '/mnt/c/_EHG/ehg',
+      implementation_path: '/mnt/c/_EHG/EHG',
       agent_count: 7,
       table_count: 5,
       component_count: 6
@@ -223,7 +223,7 @@ Desired state: Automated, high-quality, reusable research infrastructure.
   console.log('  3. Create LEAD→PLAN handoff:');
   console.log('     node scripts/unified-handoff-system.js execute LEAD-to-PLAN SD-RD-DEPT-001');
   console.log('  4. PLAN creates PRD with technical specifications');
-  console.log('  5. Begin EXEC phase implementation in /mnt/c/_EHG/ehg');
+  console.log('  5. Begin EXEC phase implementation in /mnt/c/_EHG/EHG');
 
   return data[0];
 }

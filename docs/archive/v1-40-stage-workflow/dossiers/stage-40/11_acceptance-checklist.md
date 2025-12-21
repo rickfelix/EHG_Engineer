@@ -202,7 +202,7 @@
 
 ### 1. Validate Agent Crew Design (Optional)
 
-**Action**: If EHG codebase accessible, cross-reference VentureActiveCrew design with existing agent patterns in `/mnt/c/_EHG/ehg/agent-platform/`
+**Action**: If EHG codebase accessible, cross-reference VentureActiveCrew design with existing agent patterns in `/mnt/c/_EHG/EHG/agent-platform/`
 
 **Benefit**: Confirm proposed agents align with CrewAI framework usage
 

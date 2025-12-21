@@ -1,6 +1,8 @@
 # EHG_Engineer Documentation
 
-Centralized documentation for the EHG_Engineer application (LEO Protocol management dashboard).
+> **ARCHITECTURE UPDATE (SD-ARCH-EHG-007)**: EHG_Engineer is now **backend API only**. All UI (including admin dashboard) has moved to EHG unified frontend at `/admin/*` routes.
+
+Centralized documentation for the EHG_Engineer application (LEO Protocol backend API and execution engine).
 
 ## Documentation Structure
 

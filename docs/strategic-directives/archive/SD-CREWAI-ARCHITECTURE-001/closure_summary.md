@@ -62,7 +62,7 @@ Beyond its technical deliverables, SD-CREWAI-ARCHITECTURE-001 holds **exceptiona
 **Status**: ✅ Completed
 
 **Deliverables**:
-- Fixed `/mnt/c/_EHG/ehg/agent-platform/scripts/migrate_agents_to_database.py`
+- Fixed `/mnt/c/_EHG/EHG/agent-platform/scripts/migrate_agents_to_database.py`
   - Corrected schema column naming (`llm_model` vs `llm`)
   - Implemented service role key pattern for RLS bypass
   - Added DO blocks for PostgreSQL policy creation compatibility
@@ -82,18 +82,18 @@ Beyond its technical deliverables, SD-CREWAI-ARCHITECTURE-001 holds **exceptiona
 **Status**: ✅ Completed
 
 **Deliverables**:
-- `/mnt/c/_EHG/ehg/src/components/agents/AgentWizard/Step4ToolsKnowledge.tsx` (543 lines)
+- `/mnt/c/_EHG/EHG/src/components/agents/AgentWizard/Step4ToolsKnowledge.tsx` (543 lines)
   - Knowledge source management interface
   - Embedder configuration panel (OpenAI/Cohere/HuggingFace)
   - Model selection with appropriate dimensions (1536/1024/384)
   - File upload support for document ingestion
   - URL input for web-based knowledge sources
   - Form validation and state management
-- `/mnt/c/_EHG/ehg/src/App.tsx`
+- `/mnt/c/_EHG/EHG/src/App.tsx`
   - Added `/agents/new` route with AgentWizard component
   - Protected route implementation with authentication
   - Lazy loading configuration
-- `/mnt/c/_EHG/ehg/src/pages/AIAgentsPage.tsx`
+- `/mnt/c/_EHG/EHG/src/pages/AIAgentsPage.tsx`
   - Added "Create Agent" button with navigation to `/agents/new`
   - Improved agent workflow discoverability
   - Git commit: `c0b0582`
@@ -145,7 +145,7 @@ LEO sub-agent orchestration scripts (DOCMON, GITHUB, TESTING, DATABASE, STORIES)
 **Status**: ✅ Completed
 
 **Deliverables**:
-- E2E test suite: `/mnt/c/_EHG/ehg/tests/e2e/agent-wizard-knowledge-sources.spec.ts` (569 lines)
+- E2E test suite: `/mnt/c/_EHG/EHG/tests/e2e/agent-wizard-knowledge-sources.spec.ts` (569 lines)
   - 16 test cases covering full Agent Wizard workflow
   - Authentication setup: Applied `storageState` pattern from existing tests
   - Coverage: Navigation, knowledge source management, embedder configuration, form validation
@@ -222,24 +222,24 @@ Given the phased multi-session implementation that predates the Child SD Pattern
 ### 1. Implementation Code (EHG Application)
 
 #### Agent Migration
-- **File**: `/mnt/c/_EHG/ehg/agent-platform/scripts/migrate_agents_to_database.py`
+- **File**: `/mnt/c/_EHG/EHG/agent-platform/scripts/migrate_agents_to_database.py`
 - **Size**: ~250 lines (estimated)
 - **Purpose**: Migrate 44 Python-based CrewAI agents to database
 - **Status**: ✅ Executed successfully (44/44 agents migrated)
 
 #### Knowledge Sources UI
-- **File**: `/mnt/c/_EHG/ehg/src/components/agents/AgentWizard/Step4ToolsKnowledge.tsx`
+- **File**: `/mnt/c/_EHG/EHG/src/components/agents/AgentWizard/Step4ToolsKnowledge.tsx`
 - **Size**: 543 lines
 - **Purpose**: Agent Wizard Step 4 - Knowledge source and embedder management
 - **Technologies**: React, TypeScript, shadcn/ui, react-hook-form
 - **Status**: ✅ Complete with full functionality
 
 #### Application Routing
-- **File**: `/mnt/c/_EHG/ehg/src/App.tsx`
+- **File**: `/mnt/c/_EHG/EHG/src/App.tsx`
 - **Changes**: Added `/agents/new` route with lazy loading
 - **Status**: ✅ Integrated
 
-- **File**: `/mnt/c/_EHG/ehg/src/pages/AIAgentsPage.tsx`
+- **File**: `/mnt/c/_EHG/EHG/src/pages/AIAgentsPage.tsx`
 - **Changes**: Added "Create Agent" button with navigation
 - **Status**: ✅ Committed (`c0b0582`)
 
@@ -264,7 +264,7 @@ Given the phased multi-session implementation that predates the Child SD Pattern
 ### 3. Testing Artifacts
 
 #### E2E Test Suite
-- **File**: `/mnt/c/_EHG/ehg/tests/e2e/agent-wizard-knowledge-sources.spec.ts`
+- **File**: `/mnt/c/_EHG/EHG/tests/e2e/agent-wizard-knowledge-sources.spec.ts`
 - **Size**: 569 lines
 - **Coverage**: 16 test cases for Agent Wizard workflow
 - **Authentication**: Applied `storageState` pattern

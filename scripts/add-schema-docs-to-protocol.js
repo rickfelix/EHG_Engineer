@@ -37,7 +37,7 @@ const planSchemaContent = `## 📊 Database Schema Documentation Access
 - **Detailed Tables**: \`docs/reference/schema/ehg/tables/[table_name].md\` (2-5KB each)
 - **Coverage**: ~200 tables (requires pooler credentials to generate)
 - **Purpose**: Customer features, business logic, user-facing functionality
-- **Repository**: /mnt/c/_EHG/ehg/
+- **Repository**: /mnt/c/_EHG/EHG/
 - **Database**: liapbndqlqxdcgpwntbv
 
 ### When to Use Schema Docs

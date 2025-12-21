@@ -27,7 +27,7 @@ Utility and cross-cutting documentation:
 | `archive/` | Historical documents, deprecated content |
 | `database/` | Database schema, RLS policies, architecture |
 | `EHG/` | EHG application-specific documentation |
-| `EHG_Engineering/` | EHG_Engineer management dashboard docs |
+| `EHG_Engineering/` | EHG_Engineer backend API and LEO Protocol docs |
 | `examples/` | Code examples, sample implementations |
 | `guides/` | How-to guides, tutorials, quick starts |
 | `handoffs/` | Inter-agent handoff documentation |

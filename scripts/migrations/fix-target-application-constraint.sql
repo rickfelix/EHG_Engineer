@@ -140,7 +140,7 @@ CHECK (target_application IN ('EHG'));
 --    - Migration updates these rows first, then adds constraint
 --
 -- 2. Two Applications in Ecosystem:
---    - EHG: Customer-facing business application (/mnt/c/_EHG/ehg/)
+--    - EHG: Customer-facing business application (/mnt/c/_EHG/EHG/)
 --    - EHG_Engineer: Management dashboard & tooling (/mnt/c/_EHG/EHG_Engineer/)
 --
 -- 3. SD Targeting Rules:
@@ -149,7 +149,7 @@ CHECK (target_application IN ('EHG'));
 --
 -- 4. Git Verification Impact:
 --    - Correct targeting enables proper repository verification
---    - EHG → checks /mnt/c/_EHG/ehg/ commits
+--    - EHG → checks /mnt/c/_EHG/EHG/ commits
 --    - EHG_Engineer → checks /mnt/c/_EHG/EHG_Engineer/ commits
 --
 -- 5. Value Distribution Before Migration:

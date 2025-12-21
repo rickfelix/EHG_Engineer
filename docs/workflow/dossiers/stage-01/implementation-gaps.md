@@ -50,8 +50,8 @@
 - Stage 1 can remain focused on core text-based input
 
 **Implementation Available Elsewhere**:
-- ✅ VoiceRecorder component: `/mnt/c/_EHG/ehg/src/components/chairman/feedback/VoiceRecorder.tsx` (66 lines)
-- ✅ Transcription API operational: `/mnt/c/_EHG/ehg/src/app/api/transcribe/route.ts` (OpenAI Whisper)
+- ✅ VoiceRecorder component: `/mnt/c/_EHG/EHG/src/components/chairman/feedback/VoiceRecorder.tsx` (66 lines)
+- ✅ Transcription API operational: `/mnt/c/_EHG/EHG/src/app/api/transcribe/route.ts` (OpenAI Whisper)
 - ✅ Database fields exist: `title_voice_url`, `description_voice_url` in `ideas` table
 - ✅ Used in Chairman Feedback workflow
 
@@ -162,7 +162,7 @@ substages:
 **Actual Implementation**:
 - ✅ Frontend validation: Stage1DraftIdea.tsx lines 68-74 (enforces limits)
 - ✅ Database constraints: Migration SQL line 4-5 (CHECK constraints)
-- ❌ API validation: `/mnt/c/_EHG/ehg/app/api/ventures/create/route.ts` only checks if fields exist, not length
+- ❌ API validation: `/mnt/c/_EHG/EHG/app/api/ventures/create/route.ts` only checks if fields exist, not length
 
 **Evidence**:
 ```typescript

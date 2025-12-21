@@ -208,7 +208,7 @@ function matchFileToDeliverable(filePath, deliverables) {
  * Sync deliverables from git history
  */
 async function syncDeliverables(sdId, options = {}) {
-  const { repoPath = '/mnt/c/_EHG/ehg', silent = false } = options;
+  const { repoPath = '/mnt/c/_EHG/EHG', silent = false } = options;
 
   if (!silent) {
     console.log('\n📊 Sync Deliverables from Git');
@@ -369,7 +369,7 @@ async function main() {
 Usage: node scripts/sync-deliverables-from-git.js <SD-ID> [options]
 
 Options:
-  --repo-path <path>  Path to git repository (default: /mnt/c/_EHG/ehg)
+  --repo-path <path>  Path to git repository (default: /mnt/c/_EHG/EHG)
   --help              Show this help message
 
 Example:
@@ -380,7 +380,7 @@ Example:
 
   const sdId = args[0];
   const repoPathIdx = args.indexOf('--repo-path');
-  const repoPath = repoPathIdx !== -1 ? args[repoPathIdx + 1] : '/mnt/c/_EHG/ehg';
+  const repoPath = repoPathIdx !== -1 ? args[repoPathIdx + 1] : '/mnt/c/_EHG/EHG';
 
   await syncDeliverables(sdId, { repoPath });
 }

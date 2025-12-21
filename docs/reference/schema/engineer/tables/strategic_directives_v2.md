@@ -68,7 +68,7 @@
 | archived_at | `timestamp without time zone` | YES | - | ARCHIVED AT: Timestamp when this directive was archived. NULL if currently active. Set when is_active changes to FALSE. |
 | archived_by | `character varying(100)` | YES | - | ARCHIVED BY: User/agent who archived this directive. NULL if not archived. |
 | governance_metadata | `jsonb` | YES | `'{}'::jsonb` | GOVERNANCE METADATA: Flexible JSONB object for governance-related data (compliance, approvals, audit trails). Structure varies by org policy. |
-| target_application | `character varying(20)` | YES | `'EHG'::character varying` | TARGET APPLICATION: Which application this SD targets. Valid values: "EHG" (customer-facing app) or "EHG_Engineer" (management dashboard). Default: EHG. |
+| target_application | `character varying(20)` | YES | `'EHG'::character varying` | TARGET APPLICATION: Which application this SD targets. Valid values: "EHG" (unified frontend with user + /admin routes) or "EHG_Engineer" (backend API only). Default: EHG. Note: As of SD-ARCH-EHG-007, all UI goes to EHG. |
 | progress | `integer(32)` | YES | `0` | PROGRESS (LEGACY): Old progress field (0-100 integer). DEPRECATED - use progress_percentage instead. Kept for backward compatibility. |
 | completion_date | `timestamp with time zone` | YES | - | COMPLETION DATE: Timestamp when status changed to "completed". NULL if not yet complete. Auto-set by LEAD final approval. |
 | current_phase | `text` | YES | `'LEAD_APPROVAL'::text` | CURRENT PHASE: Current LEO Protocol workflow phase. Valid values: LEAD_APPROVAL, PLAN_PRD, EXEC_IMPLEMENTATION, PLAN_VERIFY, LEAD_FINAL. Default: LEAD_APPROVAL. |

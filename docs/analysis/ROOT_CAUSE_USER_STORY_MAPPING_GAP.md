@@ -34,7 +34,7 @@ Despite:
 
 2. **E2E Test Analysis** - Confirmed tests DO follow US-XXX naming:
    ```typescript
-   // /mnt/c/_EHG/ehg/tests/e2e/customer-intelligence.spec.ts
+   // /mnt/c/_EHG/EHG/tests/e2e/customer-intelligence.spec.ts
    test('US-001: User can see Customer Intelligence tab in Stage 3', async ({ page }) => {
    test('US-002: User sees "Generate" button when no data exists', async ({ page }) => {
    test('US-003: User can generate customer personas (mock data)', async ({ page }) => {
@@ -106,7 +106,7 @@ Step 3: ??? Map tests back to user stories ❌ MISSING
 
 2. **E2E Test Creation** (EXEC phase)
    - Tests created manually following US-XXX convention
-   - Tests stored in `/mnt/c/_EHG/ehg/tests/e2e/*.spec.ts`
+   - Tests stored in `/mnt/c/_EHG/EHG/tests/e2e/*.spec.ts`
    - No automation to link tests back to database
 
 3. **Manual Mapping Examples** (found in some SDs)
@@ -124,7 +124,7 @@ Step 3: ??? Map tests back to user stories ❌ MISSING
 ### What's Missing
 
 **An automated script that:**
-1. Scans all E2E test files (`/mnt/c/_EHG/ehg/tests/e2e/**/*.spec.ts`)
+1. Scans all E2E test files (`/mnt/c/_EHG/EHG/tests/e2e/**/*.spec.ts`)
 2. Extracts US-XXX references from test names: `test('US-001: ...')`
 3. Maps each US-XXX to its file path
 4. Updates `user_stories` table:
@@ -193,7 +193,7 @@ async function mapE2ETestsToUserStories(sdId) {
     .eq('sd_id', sdId);
 
   // 2. Scan E2E test files
-  const testDir = '/mnt/c/_EHG/ehg/tests/e2e';
+  const testDir = '/mnt/c/_EHG/EHG/tests/e2e';
   const testFiles = await glob(`${testDir}/**/*.spec.ts`);
 
   // 3. Extract US-XXX references from each file
@@ -204,7 +204,7 @@ async function mapE2ETestsToUserStories(sdId) {
 
     for (const match of matches) {
       const storyKey = match[1];
-      const relativePath = file.replace('/mnt/c/_EHG/ehg/', '');
+      const relativePath = file.replace('/mnt/c/_EHG/EHG/', '');
 
       mapping.push({
         story_key: storyKey,

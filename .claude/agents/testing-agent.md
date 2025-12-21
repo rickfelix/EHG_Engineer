@@ -125,11 +125,11 @@ For tests in `tests/e2e/venture-creation/` (and future EHG app tests):
 
 **Modern Playwright Capabilities** (2025 Quick Wins):
 - **Role-Based Locators**: Use `getByRole()`, `getByLabel()` for resilient, accessible selectors
-  - Reference: `/mnt/c/_EHG/ehg/docs/testing/locator-strategy-guide.md`
+  - Reference: `/mnt/c/_EHG/EHG/docs/testing/locator-strategy-guide.md`
 - **Visual Regression**: Use `toHaveScreenshot()` to catch unintended UI changes
-  - Reference: `/mnt/c/_EHG/ehg/docs/testing/visual-regression-guide.md`
+  - Reference: `/mnt/c/_EHG/EHG/docs/testing/visual-regression-guide.md`
 - **UI Mode Debugging**: Interactive test runner with `npm run test:e2e:ui`
-  - Reference: `/mnt/c/_EHG/ehg/docs/testing/ui-mode-debugging.md`
+  - Reference: `/mnt/c/_EHG/EHG/docs/testing/ui-mode-debugging.md`
 - **Enhanced Reporting**: JSON output, HAR recording, automatic traces on failure
 - **Configuration**: Multiple playwright configs for different targets
 

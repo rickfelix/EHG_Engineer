@@ -35,7 +35,7 @@ async function populatePRD() {
 
 **Target Users**: Chairman, Portfolio Managers, Investment Analysts`,
 
-    technical_context: `**Application**: EHG (/mnt/c/_EHG/ehg)
+    technical_context: `**Application**: EHG (/mnt/c/_EHG/EHG)
 **Database**: liapbndqlqxdcgpwntbv.supabase.co
 **Component**: src/components/venture/VentureGrid.tsx (lines 40-120 contain mock data)
 **Page**: src/pages/Ventures.tsx
@@ -63,7 +63,7 @@ async function populatePRD() {
     implementation_approach: `## Step-by-Step Implementation
 
 ### PHASE 1: Database Schema Discovery (30 min)
-1. Navigate to /mnt/c/_EHG/ehg
+1. Navigate to /mnt/c/_EHG/EHG
 2. Check .env for database credentials
 3. Query ventures table: SELECT * FROM ventures LIMIT 1
 4. Document schema (columns, types)
@@ -168,7 +168,7 @@ async function populatePRD() {
 Replace hardcoded mock data in VentureGrid component with live database queries from EHG Supabase database.
 
 ## Target Application
-**EHG Application** (/mnt/c/_EHG/ehg)
+**EHG Application** (/mnt/c/_EHG/EHG)
 - Database: liapbndqlqxdcgpwntbv.supabase.co
 - Component: src/components/venture/VentureGrid.tsx
 - Page: src/pages/Ventures.tsx
@@ -201,7 +201,7 @@ Replace hardcoded mock data in VentureGrid component with live database queries 
 ✅ RLS policies enforced
 
 ## EXEC Agent Checklist
-- [ ] Navigate to /mnt/c/_EHG/ehg (NOT EHG_Engineer!)
+- [ ] Navigate to /mnt/c/_EHG/EHG (NOT EHG_Engineer!)
 - [ ] Verify database schema for ventures table
 - [ ] Check Supabase client configuration
 - [ ] Remove mockVentures array

@@ -602,8 +602,8 @@ interface Stage1Metadata {
 \`\`\`
 
 ## Evidence
-- Ideas table defined: /mnt/c/_EHG/ehg/db/migrations/001_initial_schema.sql:53-67
-- Current storage: /mnt/c/_EHG/ehg/src/components/ventures/VentureCreationDialog.tsx:107-112
+- Ideas table defined: /mnt/c/_EHG/EHG/db/migrations/001_initial_schema.sql:53-67
+- Current storage: /mnt/c/_EHG/EHG/src/components/ventures/VentureCreationDialog.tsx:107-112
 - Decision rationale: Avoid migration complexity for MVP; ventures.metadata sufficient
 
 ## Related SDs

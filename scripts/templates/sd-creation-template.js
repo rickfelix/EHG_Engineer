@@ -104,10 +104,10 @@ async function createStrategicDirective() {
     sd_key: '[SD-KEY]',
 
     /**
-     * target_application: Which application this SD targets
-     * Values: 'EHG' (customer app) or 'EHG_engineer' (management dashboard)
+     * target_application: Which application this SD targets (SD-ARCH-EHG-007)
+     * Values: 'EHG' (unified frontend with user + admin at /admin/*) or 'EHG_Engineer' (backend API only)
      */
-    target_application: '[EHG or EHG_engineer]',
+    target_application: '[EHG or EHG_Engineer]',
 
     /**
      * current_phase: Current LEO Protocol phase

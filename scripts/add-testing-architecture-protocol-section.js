@@ -72,7 +72,7 @@ The EHG ecosystem consists of two separate applications with **independent test 
 - **Purpose**: Testing SD management, PRD tracking, dashboard functionality
 
 #### 2. EHG Application (Business Application)
-- **Test Location**: \`/mnt/c/_EHG/ehg/tests/\`
+- **Test Location**: \`/mnt/c/_EHG/EHG/tests/\`
 - **Test Framework**: Vitest (unit), Playwright (E2E)
 - **Coverage Targets**:
   - Unit: 50% minimum
@@ -103,7 +103,7 @@ The EHG ecosystem consists of two separate applications with **independent test 
    cd /mnt/c/_EHG/EHG_Engineer && npm run test
 
    # For EHG application tests:
-   cd /mnt/c/_EHG/ehg && npm run test:unit
+   cd /mnt/c/_EHG/EHG && npm run test:unit
    \`\`\`
 
 3. **Verify Test Location**:

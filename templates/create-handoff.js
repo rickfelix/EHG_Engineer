@@ -83,7 +83,7 @@ class UniversalHandoffCreator {
             prd_id: prd.id,
             prd_title: prd.title,
             user_story_count: content.user_stories?.length || 0,
-            target_app: '/mnt/c/_EHG/ehg/',
+            target_app: '/mnt/c/_EHG/EHG/',
             priorities: this.getPriorityDistribution(content.user_stories)
           };
         }
@@ -151,7 +151,7 @@ class UniversalHandoffCreator {
       '{sd_title}': sd.title,
       '{sd_id}': sd.id,
       '{user_story_count}': context.user_story_count || 'N/A',
-      '{target_app}': context.target_app || '/mnt/c/_EHG/ehg/',
+      '{target_app}': context.target_app || '/mnt/c/_EHG/EHG/',
       '{prd_id}': context.prd_id || '',
       '{prd_title}': context.prd_title || ''
     };

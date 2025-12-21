@@ -49,7 +49,7 @@ Successfully implemented comprehensive WCAG 2.1 AA accessibility compliance for 
 ## Implementation Deliverables
 
 ### 1. Accessibility CSS (330 lines)
-**File**: \`/mnt/c/_EHG/ehg/src/components/ventures/venture-creation-a11y.css\`
+**File**: \`/mnt/c/_EHG/EHG/src/components/ventures/venture-creation-a11y.css\`
 **Purpose**: Comprehensive WCAG 2.1 AA compliance stylesheet
 
 **Features**:
@@ -63,7 +63,7 @@ Successfully implemented comprehensive WCAG 2.1 AA accessibility compliance for 
 **Evidence**: Lines 1-330, imported in VentureCreationPage.tsx:22
 
 ### 2. E2E Accessibility Tests (428 lines)
-**File**: \`/mnt/c/_EHG/ehg/tests/e2e/venture-creation-a11y.spec.ts\`
+**File**: \`/mnt/c/_EHG/EHG/tests/e2e/venture-creation-a11y.spec.ts\`
 **Purpose**: Automated WCAG 2.1 AA verification
 
 **Test Coverage**:
@@ -97,7 +97,7 @@ Successfully implemented comprehensive WCAG 2.1 AA accessibility compliance for 
 **Evidence**: Complete developer reference with code examples
 
 ### 4. Component Modifications (5 lines)
-**File**: \`/mnt/c/_EHG/ehg/src/components/ventures/VentureCreationPage.tsx\`
+**File**: \`/mnt/c/_EHG/EHG/src/components/ventures/VentureCreationPage.tsx\`
 
 **Changes**:
 - Line 22: Added CSS import
@@ -107,7 +107,7 @@ Successfully implemented comprehensive WCAG 2.1 AA accessibility compliance for 
 **Impact**: Applies all accessibility enhancements to component
 
 ### 5. Syntax Fix
-**File**: \`/mnt/c/_EHG/ehg/src/components/ventures/RecursionIndicator.tsx\`
+**File**: \`/mnt/c/_EHG/EHG/src/components/ventures/RecursionIndicator.tsx\`
 **Change**: Line 138 - Fixed template literal syntax
 **Impact**: Unblocked build process
 

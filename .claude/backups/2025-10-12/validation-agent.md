@@ -79,8 +79,8 @@ From retrospectives:
 
 **Component Search**:
 ```bash
-find /mnt/c/_EHG/ehg/src -name "*ComponentName*"
-grep -r "specific feature" /mnt/c/_EHG/ehg/src
+find /mnt/c/_EHG/EHG/src -name "*ComponentName*"
+grep -r "specific feature" /mnt/c/_EHG/EHG/src
 ```
 
 **Database Table Search**:
@@ -97,8 +97,8 @@ const { createDatabaseClient } = require('./scripts/lib/supabase-connection.js')
 
 **Script/Utility Search**:
 ```bash
-find /mnt/c/_EHG/ehg/scripts -name "*keyword*"
-grep -r "function name" /mnt/c/_EHG/ehg/src/lib
+find /mnt/c/_EHG/EHG/scripts -name "*keyword*"
+grep -r "function name" /mnt/c/_EHG/EHG/src/lib
 ```
 
 ## Mandatory Validation Gates (NEW - CRITICAL)

@@ -50,34 +50,34 @@ const handoff = {
     deliverables_manifest: {
       files_created: [
         {
-          path: '/mnt/c/_EHG/ehg/src/hooks/useChairmanConfig.ts',
+          path: '/mnt/c/_EHG/EHG/src/hooks/useChairmanConfig.ts',
           lines: 154,
           purpose: 'React Query hook for chairman dashboard configuration with database integration'
         },
         {
-          path: '/mnt/c/_EHG/ehg/src/components/chairman/KPISelector.tsx',
+          path: '/mnt/c/_EHG/EHG/src/components/chairman/KPISelector.tsx',
           lines: 125,
           purpose: 'KPI selection component with categorized checkboxes'
         },
         {
-          path: '/mnt/c/_EHG/ehg/src/components/chairman/AlertConfiguration.tsx',
+          path: '/mnt/c/_EHG/EHG/src/components/chairman/AlertConfiguration.tsx',
           lines: 118,
           purpose: 'Alert configuration component with notification toggles and thresholds'
         },
         {
-          path: '/mnt/c/_EHG/ehg/src/pages/ChairmanSettingsPage.tsx',
+          path: '/mnt/c/_EHG/EHG/src/pages/ChairmanSettingsPage.tsx',
           lines: 195,
           purpose: 'Main settings page with 3-tab interface and save/reset functionality'
         }
       ],
       files_modified: [
         {
-          path: '/mnt/c/_EHG/ehg/src/App.tsx',
+          path: '/mnt/c/_EHG/EHG/src/App.tsx',
           changes: 'Added lazy import for ChairmanSettingsPage and /chairman/settings route',
           lines_added: 13
         },
         {
-          path: '/mnt/c/_EHG/ehg/src/components/ventures/ChairmanDashboard.tsx',
+          path: '/mnt/c/_EHG/EHG/src/components/ventures/ChairmanDashboard.tsx',
           changes: 'Added useNavigate hook and Dashboard Settings button',
           lines_added: 9
         }
@@ -182,7 +182,7 @@ const handoff = {
       {
         priority: 'MEDIUM',
         action: 'Verify TypeScript compilation passes (already done: PASSED)',
-        details: 'Confirm no new type errors introduced. Run: cd /mnt/c/_EHG/ehg && npx tsc --noEmit',
+        details: 'Confirm no new type errors introduced. Run: cd /mnt/c/_EHG/EHG && npx tsc --noEmit',
         estimated_effort: '15 minutes'
       },
       {

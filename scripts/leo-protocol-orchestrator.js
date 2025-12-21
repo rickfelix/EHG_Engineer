@@ -430,7 +430,7 @@ class LEOProtocolOrchestrator {
     const { appConfirmed } = await inquirer.prompt([{
       type: 'confirm',
       name: 'appConfirmed',
-      message: 'Are you in /mnt/c/_EHG/ehg/ (NOT EHG_Engineer)?',
+      message: 'Are you in /mnt/c/_EHG/EHG/ (NOT EHG_Engineer)?',
       default: false
     }]);
     checklist.appVerified = appConfirmed;

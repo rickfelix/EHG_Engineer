@@ -78,7 +78,7 @@ Successfully refreshed the EHG knowledge base into exactly 5 comprehensive Markd
    - leo_protocols (v4.1.2 active protocol)
 
 ### Repository Sources
-- EHG application (`/mnt/c/_EHG/ehg`)
+- EHG application (`/mnt/c/_EHG/EHG`)
 - EHG_Engineer (`/mnt/c/_EHG/EHG_Engineer`)
 - Workflow stages.yaml
 - DAY_IN_THE_LIFE_EHG_1.5_YEAR.md

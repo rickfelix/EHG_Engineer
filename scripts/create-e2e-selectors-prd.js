@@ -71,7 +71,7 @@ async function createPRD() {
       { text: 'PLAN→EXEC handoff created', checked: false }
     ],
     exec_checklist: [
-      { text: 'Navigate to /mnt/c/_EHG/ehg and verify git remote', checked: false },
+      { text: 'Navigate to /mnt/c/_EHG/EHG and verify git remote', checked: false },
       { text: 'Add venture-description-input test-id', checked: false },
       { text: 'Add override-warning test-id (create alert if needed)', checked: false },
       { text: 'Add create-venture-button test-id', checked: false },

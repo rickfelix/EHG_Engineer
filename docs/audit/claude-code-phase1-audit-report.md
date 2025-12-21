@@ -153,7 +153,7 @@ The 40-to-25 stage migration has been successfully completed in the database. Al
 ## 6. Audit Methodology
 
 - **Database queries**: Executed via Supabase client using `@supabase/supabase-js`
-- **Codebase search**: Used `grep -r` for 40-stage patterns in `/mnt/c/_EHG/ehg/src`
+- **Codebase search**: Used `grep -r` for 40-stage patterns in `/mnt/c/_EHG/EHG/src`
 - **Pattern matching**: `stageNumber.*40|\.max(40)|out of 40|1-40|stages 1-40`
 - **Cross-reference**: Compared actual database state against expected SD hierarchy
 

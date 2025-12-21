@@ -78,7 +78,7 @@ Priority: CRITICAL (score: 90)`,
 
 ### Pre-Implementation (MANDATORY)
 1. ✅ Read PRD-RECURSION-AI-001 from product_requirements_v2 table
-2. ✅ Verify application context: /mnt/c/_EHG/ehg/ (NOT EHG_Engineer!)
+2. ✅ Verify application context: /mnt/c/_EHG/EHG/ (NOT EHG_Engineer!)
 3. ✅ Review existing infrastructure (recursionEngine.ts, 553 tests, UI components)
 4. ✅ NEW v4.3.0 - Review implementation_context (manual creation required)
 5. ✅ NEW v4.3.0 - Check issue_patterns for infrastructure category (none found)

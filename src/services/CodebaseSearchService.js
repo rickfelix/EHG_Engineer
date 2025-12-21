@@ -26,7 +26,7 @@ import path from 'path';
 export class CodebaseSearchService {
   constructor(options = {}) {
     this.defaultPaths = options.paths || [
-      '/mnt/c/_EHG/ehg/src',
+      '/mnt/c/_EHG/EHG/src',
       '/mnt/c/_EHG/EHG_Engineer/src'
     ];
     this.maxResults = options.maxResults || 10;

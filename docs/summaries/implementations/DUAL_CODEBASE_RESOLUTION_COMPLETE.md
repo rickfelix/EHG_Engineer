@@ -9,7 +9,7 @@
 During UI/UX improvements to the Ventures page, we discovered two separate codebases for the ehg application:
 
 1. `/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase/` - Stale clone with outdated code
-2. `/mnt/c/_EHG/ehg` - Actual git repository with current code
+2. `/mnt/c/_EHG/EHG` - Actual git repository with current code
 
 This caused confusion when editing files, as changes were sometimes applied to the wrong location.
 
@@ -33,14 +33,14 @@ The stale `APP001/codebase/` directory violated this architecture and created a 
 
 1. **Deleted stale APP001/codebase directory**
    - Removed outdated code clone
-   - No data loss (all real work in `/mnt/c/_EHG/ehg`)
+   - No data loss (all real work in `/mnt/c/_EHG/EHG`)
 
 2. **Verified .gitignore rules**
    - Confirmed `*/codebase/` is gitignored (line 4 of `.gitignore`)
    - Prevents future accidental commits
 
 3. **Validated APP001 configuration**
-   - Confirmed `config.json` correctly points to `/mnt/c/_EHG/ehg`
+   - Confirmed `config.json` correctly points to `/mnt/c/_EHG/EHG`
    - Git repository is healthy and active
 
 ### Phase 2: Safeguards ✅
@@ -97,7 +97,7 @@ The stale `APP001/codebase/` directory violated this architecture and created a 
 - ✅ `migrations/`, `docs/`, `retrospectives/`
 
 ### Application Repositories (Separate Git Repos)
-**APP001 Location**: `/mnt/c/_EHG/ehg`
+**APP001 Location**: `/mnt/c/_EHG/EHG`
 
 **Purpose**:
 - The actual ehg portfolio application
@@ -116,7 +116,7 @@ The stale `APP001/codebase/` directory violated this architecture and created a 
 EHG_Engineer                    Application Repos
   (Orchestration)                  (Source Code)
        │                                │
-       ├── APP001/config.json    ─────→ /mnt/c/_EHG/ehg
+       ├── APP001/config.json    ─────→ /mnt/c/_EHG/EHG
        │   (points to repo)             (actual code)
        │
        ├── APP002/config.json    ─────→ /future/venture-2
@@ -150,7 +150,7 @@ Running `node scripts/validate-app-configs.mjs`:
 ```
 📦 Validating APP001 (ehg)...
   ✅ config.json is valid JSON
-  ✅ local_path exists: /mnt/c/_EHG/ehg
+  ✅ local_path exists: /mnt/c/_EHG/EHG
   ✅ local_path is a valid git repository
   ✅ codebase/ contains only placeholder (correct)
   ✅ Git remote matches configuration
@@ -160,7 +160,7 @@ Running `node scripts/validate-app-configs.mjs`:
 
 ### For ehg Development:
 ```bash
-cd /mnt/c/_EHG/ehg          # ✅ CORRECT
+cd /mnt/c/_EHG/EHG          # ✅ CORRECT
 PORT=8080 npm run dev
 # Make changes, commit, push
 ```
@@ -184,7 +184,7 @@ node scripts/validate-app-configs.mjs
 
 ## Success Criteria
 
-- [x] Single source of truth for ehg code: `/mnt/c/_EHG/ehg`
+- [x] Single source of truth for ehg code: `/mnt/c/_EHG/EHG`
 - [x] No stale copies in EHG_Engineer
 - [x] Clear documentation prevents future confusion
 - [x] Validation script catches configuration issues

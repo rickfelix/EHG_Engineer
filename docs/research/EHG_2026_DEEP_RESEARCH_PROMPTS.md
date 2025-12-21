@@ -166,11 +166,13 @@ Technical specification with: Contract Schema Design, Versioning Model, TypeScri
 
 **Context:**
 
-Currently, EHG and EHG_Engineer are two separate applications:
-- **EHG_Engineer**: LEO Protocol dashboard for managing SDs & PRDs
-- **EHG**: The actual customer-facing business application
+> **UPDATE (SD-ARCH-EHG-007)**: This research has been IMPLEMENTED. EHG is now the unified frontend.
 
-EHG will become the unified interface hosting:
+Current architecture:
+- **EHG**: Unified frontend (user features + admin dashboard at /admin/*)
+- **EHG_Engineer**: Backend API + LEO Protocol engine (no standalone UI)
+
+EHG now serves as the unified interface hosting:
 - Venture workflows (40-stage pipeline)
 - EVA orchestration (AI decision-making)
 - SD/PRD governance (strategic planning)

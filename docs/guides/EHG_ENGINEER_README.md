@@ -1,17 +1,18 @@
-# EHG_Engineer - LEO Protocol Builder Tool
+# EHG_Engineer - LEO Protocol Backend & Engine
 
-## ⚠️ CRITICAL DISTINCTION - READ THIS FIRST!
+> **ARCHITECTURE UPDATE (SD-ARCH-EHG-007)**: EHG is now the **unified frontend** (user + admin features at `/admin/*` routes). EHG_Engineer is **backend API only**. Both share the consolidated database.
 
-### Two Separate Systems:
+## Current Architecture
 
-| System | Database ID | Purpose |
-|--------|------------|---------|
-| **EHG_Engineer** | dedlbzhpgkmetvhbkyzq | The LEO Protocol tool you're using RIGHT NOW to build applications |
-| **EHG** | liapbndqlqxdcgpwntbv | The actual EHG portfolio application being built |
+| System | Port | Database | Purpose |
+|--------|------|----------|---------|
+| **EHG** | 8080 | dedlbzhpgkmetvhbkyzq | Unified frontend (user + admin UI) |
+| **EHG_Engineer** | 3000 | dedlbzhpgkmetvhbkyzq | Backend API + LEO Protocol engine |
 
-**Remember**: 
-- EHG_Engineer = The hammer 🔨
-- EHG = The house you're building 🏠
+**Key Points**:
+- All UI (user + admin) is in EHG
+- EHG_Engineer provides REST APIs consumed by EHG
+- Both use the CONSOLIDATED database
 
 ---
 

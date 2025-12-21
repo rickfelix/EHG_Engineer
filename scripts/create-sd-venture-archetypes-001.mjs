@@ -324,18 +324,18 @@ Artisanal Automation specifically addresses growing market trend: consumers crav
       ],
 
       target_application_context: {
-        implementation_path: '/mnt/c/_EHG/ehg/',
+        implementation_path: '/mnt/c/_EHG/EHG/',
         database: 'liapbndqlqxdcgpwntbv',
         github_repo: 'rickfelix/ehg.git',
         port: 8080,
-        critical_check: 'MUST verify pwd shows /mnt/c/_EHG/ehg before ANY code changes!'
+        critical_check: 'MUST verify pwd shows /mnt/c/_EHG/EHG before ANY code changes!'
       },
 
       // Codebase context from initial exploration
       initial_codebase_findings: {
         venture_creation_dialogs: {
           VentureCreationDialog: {
-            location: '/mnt/c/_EHG/ehg/src/components/ventures/VentureCreationDialog.tsx',
+            location: '/mnt/c/_EHG/EHG/src/components/ventures/VentureCreationDialog.tsx',
             lines: 365,
             capabilities: [
               'EVA validation (calculateEVAQualityScore)',
@@ -348,7 +348,7 @@ Artisanal Automation specifically addresses growing market trend: consumers crav
             integration_point: 'Add archetype selector before category selection or after description'
           },
           CreateVentureDialog: {
-            location: '/mnt/c/_EHG/ehg/src/components/ventures/CreateVentureDialog.tsx',
+            location: '/mnt/c/_EHG/EHG/src/components/ventures/CreateVentureDialog.tsx',
             lines: 191,
             capabilities: [
               'Simpler creation flow',
@@ -359,7 +359,7 @@ Artisanal Automation specifically addresses growing market trend: consumers crav
           }
         },
         venture_types: {
-          location: '/mnt/c/_EHG/ehg/src/types/venture.ts',
+          location: '/mnt/c/_EHG/EHG/src/types/venture.ts',
           metadata_field: 'metadata: Record<string, any>',
           extensibility: 'HIGHLY EXTENSIBLE - can store archetype snapshot',
           current_usage: 'Stores assumptions, successCriteria, stage1_complete',
@@ -413,14 +413,14 @@ Artisanal Automation specifically addresses growing market trend: consumers crav
   console.log('   4. Archetype-Driven Visual Theming System');
   console.log('   5. Workflow & Value Proposition Alignment');
   console.log('\n📍 CRITICAL: Implementation Target');
-  console.log('   Application: EHG (/mnt/c/_EHG/ehg/)');
+  console.log('   Application: EHG (/mnt/c/_EHG/EHG/)');
   console.log('   Database: liapbndqlqxdcgpwntbv');
   console.log('   GitHub: rickfelix/ehg.git');
   console.log('\n🚀 Next Steps:');
   console.log('   1. Execute 5 analysis prompts to enhance SD with comprehensive codebase findings');
   console.log('   2. LEAD review and approval');
   console.log('   3. PLAN creates comprehensive PRD');
-  console.log('   4. EXEC implements in /mnt/c/_EHG/ehg/ (NOT EHG_Engineer!)');
+  console.log('   4. EXEC implements in /mnt/c/_EHG/EHG/ (NOT EHG_Engineer!)');
 }
 
 createStrategicDirective().catch(console.error);

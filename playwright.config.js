@@ -6,15 +6,17 @@ import { defineConfig, devices } from '@playwright/test';
  * LEO STACK PLAYWRIGHT CONFIGURATION
  * ============================================================================
  *
- * IMPORTANT: This is the DEFAULT config for EHG_Engineer dashboard tests.
+ * ARCHITECTURE (SD-ARCH-EHG-007):
+ * - EHG (port 8080): Unified frontend (user + admin features at /admin/*)
+ * - EHG_Engineer (port 3000): Backend API only (no standalone UI)
  *
  * TEST TARGETS:
  * ┌──────────────────────┬────────────────────────────────────────────────────┐
  * │ Config File          │ Target App & Tests                                 │
  * ├──────────────────────┼────────────────────────────────────────────────────┤
- * │ playwright.config.js │ EHG_Engineer Dashboard (port 3001)                 │
+ * │ playwright.config.js │ EHG Unified Frontend (port 8080)                   │
  * │ (THIS FILE)          │ Tests: tests/e2e/ (excluding venture-creation/)    │
- * │                      │ Starts: src/client automatically                   │
+ * │                      │ Requires: LEO Stack running                        │
  * ├──────────────────────┼────────────────────────────────────────────────────┤
  * │ playwright-ehg.config│ EHG Venture App (port 8080)                        │
  * │                      │ Tests: tests/e2e/venture-creation/                 │
@@ -26,11 +28,11 @@ import { defineConfig, devices } from '@playwright/test';
  * └──────────────────────┴────────────────────────────────────────────────────┘
  *
  * NPM SCRIPTS:
- *   npm run test:e2e           - EHG_Engineer dashboard tests (this config)
+ *   npm run test:e2e           - EHG unified frontend tests (this config)
  *   npm run test:e2e:ehg       - EHG Venture app tests (venture-creation)
  *   npm run test:uat           - EHG App UAT tests (authenticated)
  *
- * PREREQUISITE FOR EHG TESTS:
+ * PREREQUISITE:
  *   ./scripts/leo-stack.sh restart
  */
 export default defineConfig({
@@ -75,8 +77,8 @@ export default defineConfig({
 
   // Shared settings for all the projects below
   use: {
-    // Base URL - EHG_Engineer dashboard runs on port 3001
-    baseURL: process.env.BASE_URL || 'http://localhost:3001',
+    // Base URL - EHG unified frontend runs on port 8080 (SD-ARCH-EHG-007)
+    baseURL: process.env.BASE_URL || 'http://localhost:8080',
 
     // LEO v4.4: Always capture trace for Evidence Pack (cleanup script handles retention)
     trace: 'on',
@@ -130,15 +132,9 @@ export default defineConfig({
     },
   ],
 
-  // Starts EHG_Engineer client (dashboard) on port 3001
-  webServer: [
-    {
-      command: 'cd src/client && PORT=3001 npm run dev',
-      port: 3001,
-      reuseExistingServer: !process.env.CI,
-      timeout: 30000,
-    }
-  ],
+  // SD-ARCH-EHG-007: EHG_Engineer has no frontend - tests require LEO Stack running
+  // Start with: ./scripts/leo-stack.sh restart (starts EHG on 8080, API on 3000)
+  webServer: [],
 
   // Visual testing specific configuration
   expect: {

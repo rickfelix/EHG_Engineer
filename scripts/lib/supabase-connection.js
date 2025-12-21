@@ -40,7 +40,7 @@ export const DB_CONFIGS = {
     description: 'EHG Consolidated Database (Business App + Governance)',
   },
 
-  // EHG_Engineer Application (management dashboard)
+  // EHG_Engineer Application (backend API + LEO Protocol engine)
   engineer: {
     projectId: 'dedlbzhpgkmetvhbkyzq',
     region: 'aws-1-us-east-1',

@@ -14,7 +14,7 @@
 ## Files Fixed (Completed)
 
 ### 1. AgentInstructions.tsx
-**Path**: `/mnt/c/_EHG/ehg/src/components/chairman/feedback/AgentInstructions.tsx`
+**Path**: `/mnt/c/_EHG/EHG/src/components/chairman/feedback/AgentInstructions.tsx`
 **Issues Fixed**: 4 textareas without proper label association
 **Solution Applied**:
 - Converted `<label>` to `<Label>` component (shadcn/ui)
@@ -23,7 +23,7 @@
 - **Pattern**: `<Label htmlFor="lead-agent-instructions">` + `<Textarea id="lead-agent-instructions">`
 
 ### 2. FeedbackForm.tsx  
-**Path**: `/mnt/c/_EHG/ehg/src/components/chairman/feedback/FeedbackForm.tsx`
+**Path**: `/mnt/c/_EHG/EHG/src/components/chairman/feedback/FeedbackForm.tsx`
 **Issues Fixed**: 5 inputs/selects without proper labels
 **Solution Applied**:
 - Added `<Label htmlFor="">` for main textarea (using sr-only class for hidden label)
@@ -32,7 +32,7 @@
 - **Pattern**: Visible labels use `htmlFor`, invisible inputs use `sr-only` labels
 
 ### 3. ABTestingTab.tsx (Partial)
-**Path**: `/mnt/c/_EHG/ehg/src/components/agents/ABTestingTab.tsx`
+**Path**: `/mnt/c/_EHG/EHG/src/components/agents/ABTestingTab.tsx`
 **Issues Fixed**: Automated script applied (needs verification)
 **Solution Applied**: Attempted automated fixes for traffic split inputs and variant textareas
 

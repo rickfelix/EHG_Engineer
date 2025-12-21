@@ -42,12 +42,12 @@ async function addExplorationSummary() {
         relevance: 'critical - security issue'
       },
       {
-        path: '/mnt/c/_EHG/ehg/src/pages/api/v2/chairman/decisions.ts',
+        path: '/mnt/c/_EHG/EHG/src/pages/api/v2/chairman/decisions.ts',
         findings: 'Queries venture_decisions table. N+1 query pattern at lines 93-134 - loops through decisions calling getDecisionEvidence per-decision instead of batch.',
         relevance: 'high - performance and split-brain issue'
       },
       {
-        path: '/mnt/c/_EHG/ehg/src/services/evaStateMachines.ts',
+        path: '/mnt/c/_EHG/EHG/src/services/evaStateMachines.ts',
         findings: 'Venture state machine maps status to states. Uses ventures table for status. Split-brain concern - UI writes to venture_decisions, state machine reads from ventures.',
         relevance: 'high - correctness issue'
       },
@@ -57,12 +57,12 @@ async function addExplorationSummary() {
         relevance: 'medium - consistency issue'
       },
       {
-        path: '/mnt/c/_EHG/ehg/src/services/chairmanEvidenceService.ts',
+        path: '/mnt/c/_EHG/EHG/src/services/chairmanEvidenceService.ts',
         findings: 'Multiple as any casts at lines 129, 142, 202, 220 for epistemic_evidence JSONB field. Type safety compromised.',
         relevance: 'medium - type safety issue'
       },
       {
-        path: '/mnt/c/_EHG/ehg/database/migrations/20251030_RLS_PROPER_PATTERN.sql',
+        path: '/mnt/c/_EHG/EHG/database/migrations/20251030_RLS_PROPER_PATTERN.sql',
         findings: 'Shows documented pattern for RLS - uses USING(true) for public read, authenticated full access. Pattern confirmed across multiple files.',
         relevance: 'critical - confirms security pattern'
       }

@@ -202,8 +202,8 @@ Stage 40 is primarily venture operations (EHG app domain). Governance integratio
 **Status**: ⚠️ **PROPOSED** - Not yet implemented
 
 **Next Steps**:
-1. Create `VentureActiveCrew` in `/mnt/c/_EHG/ehg/agent-platform/app/crews/venture_active_crew.py`
-2. Implement 4 agent classes in `/mnt/c/_EHG/ehg/agent-platform/app/agents/`
+1. Create `VentureActiveCrew` in `/mnt/c/_EHG/EHG/agent-platform/app/crews/venture_active_crew.py`
+2. Implement 4 agent classes in `/mnt/c/_EHG/EHG/agent-platform/app/agents/`
 3. Define crew execution workflow
 4. Integrate with ventures table (Stage 40 trigger)
 5. Test with pilot venture

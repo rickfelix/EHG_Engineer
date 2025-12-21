@@ -39,7 +39,7 @@
 1. Ensure working directory is set correctly before npm commands:
    ```javascript
    const targetApp = process.argv[3] || 'ehg';
-   const appPath = targetApp === 'ehg' ? '/mnt/c/_EHG/ehg' : '/mnt/c/_EHG/EHG_Engineer';
+   const appPath = targetApp === 'ehg' ? '/mnt/c/_EHG/EHG' : '/mnt/c/_EHG/EHG_Engineer';
    process.chdir(appPath); // Set working directory BEFORE test commands
    ```
 

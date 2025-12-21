@@ -199,7 +199,7 @@ async function createChildSDs() {
     .update({
       metadata: JSON.stringify({
         created_from: 'SD-LEO-v4.3.3-UI-PARITY governance analysis',
-        reference_document: '/mnt/c/_EHG/ehg/docs/IDEATION_UI_UX_ASSESSMENT_REPORT.md',
+        reference_document: '/mnt/c/_EHG/EHG/docs/IDEATION_UI_UX_ASSESSMENT_REPORT.md',
         governance_trigger: 'Stage 7 Hard Block',
         ui_coverage_target: '80%',
         component_count: 25,

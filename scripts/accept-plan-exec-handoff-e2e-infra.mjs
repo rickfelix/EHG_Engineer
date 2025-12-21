@@ -83,7 +83,7 @@ console.log('');
 
 console.log('📋 EXEC PHASE ACTION ITEMS (from handoff):');
 console.log('───────────────────────────────────────────────────────────');
-console.log('1. Navigate to /mnt/c/_EHG/ehg (EHG application)');
+console.log('1. Navigate to /mnt/c/_EHG/EHG (EHG application)');
 console.log('2. Implement selector utilities (~200 LOC)');
 console.log('3. Refactor auth fixture (~150 LOC)');
 console.log('4. Standardize wait patterns (~100 LOC)');
@@ -95,6 +95,6 @@ console.log('9. Wait for CI/CD green');
 console.log('10. Create EXEC→PLAN handoff');
 console.log('');
 console.log('🎯 Load Context: CLAUDE_EXEC.md (20k chars)');
-console.log('📍 Implementation Directory: /mnt/c/_EHG/ehg');
+console.log('📍 Implementation Directory: /mnt/c/_EHG/EHG');
 console.log('⏱️  Estimated Duration: 7-10 hours');
 console.log('');

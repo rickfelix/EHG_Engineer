@@ -135,17 +135,17 @@
 
 | Agent ID | Agent Name | Role | Crew Membership | Status | File Path |
 |----------|-----------|------|-----------------|--------|-----------|
-| competitive_analysis_agent | Competitive Analysis Agent | Competitive Intelligence Analyst | Marketing Department Crew | ✅ Active | `/mnt/c/_EHG/ehg/agent-platform/app/agents/marketing/competitive_analysis_agent.py` |
-| market_positioning_agent | Market Positioning Agent | Brand Strategist | Marketing Department Crew | ✅ Active | `/mnt/c/_EHG/ehg/agent-platform/app/agents/marketing/market_positioning_agent.py` |
-| pain_point_analysis_agent | Pain Point Analysis Agent | Customer Research Lead | Marketing Department Crew | ✅ Active | `/mnt/c/_EHG/ehg/agent-platform/app/agents/marketing/pain_point_analysis_agent.py` |
-| customer_segmentation_agent | Customer Segmentation Agent | Marketing Department | Marketing Department Crew | ✅ Active | `/mnt/c/_EHG/ehg/agent-platform/app/agents/marketing/customer_segmentation_agent.py` |
+| competitive_analysis_agent | Competitive Analysis Agent | Competitive Intelligence Analyst | Marketing Department Crew | ✅ Active | `/mnt/c/_EHG/EHG/agent-platform/app/agents/marketing/competitive_analysis_agent.py` |
+| market_positioning_agent | Market Positioning Agent | Brand Strategist | Marketing Department Crew | ✅ Active | `/mnt/c/_EHG/EHG/agent-platform/app/agents/marketing/market_positioning_agent.py` |
+| pain_point_analysis_agent | Pain Point Analysis Agent | Customer Research Lead | Marketing Department Crew | ✅ Active | `/mnt/c/_EHG/EHG/agent-platform/app/agents/marketing/pain_point_analysis_agent.py` |
+| customer_segmentation_agent | Customer Segmentation Agent | Marketing Department | Marketing Department Crew | ✅ Active | `/mnt/c/_EHG/EHG/agent-platform/app/agents/marketing/customer_segmentation_agent.py` |
 
 #### Research Category Agents
 
 | Agent ID | Agent Name | Role | Crew Membership | Status | File Path |
 |----------|-----------|------|-----------------|--------|-----------|
-| competitive_mapper | Competitive Mapper Agent | Competitive Intelligence Analyst | Quick Validation Crew | ✅ Active | `/mnt/c/_EHG/ehg/agent-platform/app/agents/research/competitive_mapper.py` |
-| customer_intelligence_agent | Customer Intelligence Agent | Senior Customer Research Analyst | Research Department | ✅ Active | `/mnt/c/_EHG/ehg/agent-platform/app/agents/research/customer_intelligence_agent.py` |
+| competitive_mapper | Competitive Mapper Agent | Competitive Intelligence Analyst | Quick Validation Crew | ✅ Active | `/mnt/c/_EHG/EHG/agent-platform/app/agents/research/competitive_mapper.py` |
+| customer_intelligence_agent | Customer Intelligence Agent | Senior Customer Research Analyst | Research Department | ✅ Active | `/mnt/c/_EHG/EHG/agent-platform/app/agents/research/customer_intelligence_agent.py` |
 
 **Total Stage 4-Relevant Agents**: 6 agents across 2 categories
 
@@ -162,7 +162,7 @@
   3. **market_positioning_agent** ⭐ (USP and differentiation)
   4. customer_segmentation_agent
 - **Stage 4 Relevance**: **HIGH** - Agents #2 and #3 directly map to Stage 4 deliverables
-- **File Path**: `/mnt/c/_EHG/ehg/agent-platform/app/crews/marketing_department_crew.py`
+- **File Path**: `/mnt/c/_EHG/EHG/agent-platform/app/crews/marketing_department_crew.py`
 - **Integration Status**: ❌ **NOT INVOKED BY STAGE 4**
 
 #### 2. Quick Validation Crew
@@ -174,7 +174,7 @@
   3. **competitive_mapper** ⭐ (Competitive landscape mapping)
   4. strategic_fit_analyzer
 - **Stage 4 Relevance**: **MEDIUM** - Agent #3 supports competitive intelligence
-- **File Path**: `/mnt/c/_EHG/ehg/agent-platform/app/crews/quick_validation_crew.py`
+- **File Path**: `/mnt/c/_EHG/EHG/agent-platform/app/crews/quick_validation_crew.py`
 - **Integration Status**: ✅ **USED BY STAGE 2** (not Stage 4)
 
 #### 3. Deep Research Crew
@@ -182,7 +182,7 @@
 - **Process Type**: Sequential
 - **Agents**: Includes all department crews (Marketing, Research, Finance, Legal, Product, etc.)
 - **Stage 4 Relevance**: **LOW** - Comprehensive analysis includes competitive intelligence as subset
-- **File Path**: `/mnt/c/_EHG/ehg/agent-platform/app/crews/deep_research_crew.py`
+- **File Path**: `/mnt/c/_EHG/EHG/agent-platform/app/crews/deep_research_crew.py`
 - **Integration Status**: ❌ **NOT INVOKED BY STAGE 4**
 
 ---
@@ -258,7 +258,7 @@ agent-platform API (NEW: route 'competitive' to Marketing Department Crew)
 4. `agent_memory_configs` - Memory system configurations
 
 #### Agent Scan Results
-**Scan File**: `/mnt/c/_EHG/ehg/agent-platform/agent_scan_results.json`
+**Scan File**: `/mnt/c/_EHG/EHG/agent-platform/agent_scan_results.json`
 **Scan Date**: 2025-11-06 20:19:22 UTC
 **Total Agents Found**: 44 agents
 **Scan Errors**: 0
@@ -295,7 +295,7 @@ agent-platform API (NEW: route 'competitive' to Marketing Department Crew)
 #### Gap 2: competitive-intelligence Edge Function Bypasses Agent-Platform
 **Status**: ❌ **INTEGRATION GAP**
 
-**Current Implementation**: `/mnt/c/_EHG/ehg/supabase/functions/competitive-intelligence/index.ts`
+**Current Implementation**: `/mnt/c/_EHG/EHG/supabase/functions/competitive-intelligence/index.ts`
 - Direct OpenAI API calls
 - No agent-platform routing
 - Simpler but less sophisticated analysis
@@ -323,7 +323,7 @@ const response = await fetch('http://localhost:8000/api/research/sessions', {
 **Missing Session Type**:
 - `competitive` - Should route to Marketing Department Crew or competitive-only subset
 
-**Implementation Required**: `/mnt/c/_EHG/ehg/agent-platform/app/api/research.py`
+**Implementation Required**: `/mnt/c/_EHG/EHG/agent-platform/app/api/research.py`
 
 ---
 

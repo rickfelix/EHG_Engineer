@@ -135,18 +135,19 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 - Create tables: `npm run db:create`
 - LEO schema: `npm run db:leo`
 
-## Application Paths
+## Application Paths (SD-ARCH-EHG-007)
 
-### EHG_Engineer (Management)
-- **Path**: `/mnt/c/_EHG/EHG_Engineer/`
-- **Purpose**: LEO Protocol dashboard
-- **Database**: dedlbzhpgkmetvhbkyzq (Supabase)
-- **Port**: 3000-3001
-- **Role**: Management tool only
-
-### EHG (Business Application)
-- **Path**: `/mnt/c/_EHG/ehg/`
-- **Purpose**: Customer-facing application
-- **Database**: liapbndqlqxdcgpwntbv (Supabase)
+### EHG (Unified Frontend)
+- **Path**: `/mnt/c/_EHG/EHG/`
+- **Purpose**: Unified frontend (user + admin features at /admin/*)
+- **Database**: dedlbzhpgkmetvhbkyzq (CONSOLIDATED)
+- **Port**: 8080
 - **Stack**: Vite + React + Shadcn + TypeScript
-- **Role**: Feature implementation target
+- **Role**: All UI implementation
+
+### EHG_Engineer (Backend API)
+- **Path**: `/mnt/c/_EHG/EHG_Engineer/`
+- **Purpose**: Backend API + LEO Protocol engine (no standalone UI)
+- **Database**: dedlbzhpgkmetvhbkyzq (CONSOLIDATED)
+- **Port**: 3000
+- **Role**: REST API and LEO Protocol scripts

@@ -11,7 +11,7 @@ const path = require('path');
 const { glob } = require('glob');
 
 // Configuration
-const BASE_PATH = '/mnt/c/_EHG/ehg/src/components';
+const BASE_PATH = '/mnt/c/_EHG/EHG/src/components';
 const DRY_RUN = process.argv.includes('--dry-run');
 const VERBOSE = process.argv.includes('--verbose');
 

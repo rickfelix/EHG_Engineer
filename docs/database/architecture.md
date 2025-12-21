@@ -1,8 +1,10 @@
 # Multi-Database Architecture for EHG_Engineer
 
+> **ARCHITECTURE UPDATE (SD-ARCH-EHG-007)**: Both EHG and EHG_Engineer now use the **consolidated database** (`dedlbzhpgkmetvhbkyzq`). The old EHG database (`liapbndqlqxdcgpwntbv`) is DEPRECATED.
+
 ## Executive Summary
 
-EHG_Engineer now implements a robust multi-database architecture that enables programmatic table creation and dynamic database switching across multiple Supabase instances. This solution resolves the critical limitation of the Supabase client SDK's inability to execute DDL statements by implementing direct PostgreSQL connections using the `pg` library.
+EHG_Engineer implements a robust multi-database architecture that enables programmatic table creation and dynamic database switching across multiple Supabase instances. This solution resolves the critical limitation of the Supabase client SDK's inability to execute DDL statements by implementing direct PostgreSQL connections using the `pg` library.
 
 ## Critical Table Relationships for SD/Backlog Operations
 
