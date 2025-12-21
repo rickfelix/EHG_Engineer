@@ -1,9 +1,12 @@
 /**
  * Refresh API - Handles database refresh and server restart requests
+ *
+ * SOVEREIGN PIPE v3.7.0: Replaced spawn/exec with ProcessManager
  */
 
-import {  spawn, exec  } from 'child_process';
+// SOVEREIGN PIPE v3.7.0: Removed child_process - using ProcessManager
 import path from 'path';
+import { getProcessManager } from './CodebaseSearchService.js';
 
 class RefreshAPI {
   constructor(server, dbLoader) {
@@ -176,50 +179,50 @@ class RefreshAPI {
     }
   }
 
-  restartServer() {
-    console.log('🔄 Initiating server restart...');
-    
-    // Get current working directory and script path
-    const cwd = process.cwd();
-    const scriptPath = process.argv[1]; // Current script being run
-    const args = process.argv.slice(2); // Arguments passed to current script
-    
-    console.log(`Restarting: ${process.execPath} ${scriptPath} ${args.join(' ')}`);
-    console.log(`Working directory: ${cwd}`);
-    
+  /**
+   * Request server restart
+   *
+   * SOVEREIGN PIPE v3.7.0: No shell spawning from API layer.
+   * Instead, we request restart through ProcessManager which
+   * signals the orchestration layer to handle restart safely.
+   */
+  async restartServer() {
+    console.log('🔄 Requesting server restart...');
+
+    const processManager = getProcessManager();
+
+    // Check if running under PM2
+    const isPM2 = await processManager.isPM2Available();
+
+    if (isPM2) {
+      console.log('📦 Running under PM2 - restart will be handled by PM2');
+    }
+
+    // Request graceful restart through ProcessManager
+    const result = await processManager.requestRestart();
+    console.log(`✅ ${result.message}`);
+
     // Close current server connections gracefully
     if (this.server) {
       this.server.close(() => {
         console.log('✅ Server closed gracefully');
       });
     }
-    
-    // Spawn new process with same arguments
-    const child = spawn(process.execPath, [scriptPath, ...args], {
-      cwd: cwd,
-      detached: true,
-      stdio: 'inherit'
-    });
-    
-    child.unref(); // Allow parent to exit
-    
-    // Exit current process
+
+    // Signal restart request (let orchestration layer handle)
     setTimeout(() => {
       console.log('👋 Current process exiting for restart...');
       process.exit(0);
     }, 500);
   }
 
-  // Alternative restart method using pm2 if available
-  restartWithPM2() {
-    exec('pm2 restart leo-dashboard', (error, stdout, stderr) => {
-      if (error) {
-        console.log('PM2 not available, using direct restart');
-        this.restartServer();
-      } else {
-        console.log('✅ Server restarted via PM2');
-      }
-    });
+  /**
+   * Alternative restart method using PM2 if available
+   *
+   * SOVEREIGN PIPE v3.7.0: Delegates to restartServer which uses ProcessManager
+   */
+  async restartWithPM2() {
+    await this.restartServer();
   }
 }
 

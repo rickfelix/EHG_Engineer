@@ -10,9 +10,10 @@
  * Runs silently in the background after chairman submits feedback.
  */
 
-import { execSync } from 'child_process';
+// SOVEREIGN PIPE v3.7.0: Removed execSync - using CodebaseSearchService
 import fs from 'fs';
 import path from 'path';
+import { getCodebaseSearchService } from './CodebaseSearchService.js';
 
 export class DirectiveEnhancer {
   constructor(openai, dbLoader) {
@@ -84,10 +85,10 @@ export class DirectiveEnhancer {
    */
   async extractIntent(chairmanInput) {
     const completion = await this.openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: 'gpt-3.5-turbo',
       messages: [
         {
-          role: "system",
+          role: 'system',
           content: `Extract a focused intent statement from the chairman's feedback. Requirements:
 - Maximum 80 words
 - Intent-first: focus on WHAT and WHY, not HOW
@@ -98,7 +99,7 @@ Example good intent: "Enable users to export analytics reports as PDF/Excel to s
 Example bad intent: "Build a comprehensive reporting system with dashboards, filters, charts, and multiple export formats..."`
         },
         {
-          role: "user",
+          role: 'user',
           content: chairmanInput
         }
       ],
@@ -115,10 +116,10 @@ Example bad intent: "Build a comprehensive reporting system with dashboards, fil
    */
   async generateDecisionQuestions(intent, chairmanInput) {
     const completion = await this.openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: 'gpt-3.5-turbo',
       messages: [
         {
-          role: "system",
+          role: 'system',
           content: `Generate exactly 5 decision-shaping questions for this intent. Each question must:
 1. Be specific to THIS intent (not generic)
 2. Have answers that would materially change the implementation approach
@@ -144,13 +145,13 @@ Format as JSON object with a "questions" array:
 Focus on: architecture choices, data decisions, integration boundaries, acceptance criteria, performance thresholds.`
         },
         {
-          role: "user",
+          role: 'user',
           content: `Intent: ${intent}\n\nOriginal feedback: ${chairmanInput.substring(0, 500)}`
         }
       ],
       temperature: 0.4,
       max_tokens: 600,
-      response_format: { type: "json_object" }
+      response_format: { type: 'json_object' }
     });
 
     try {
@@ -182,10 +183,10 @@ Focus on: architecture choices, data decisions, integration boundaries, acceptan
     }
 
     const completion = await this.openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: 'gpt-3.5-turbo',
       messages: [
         {
-          role: "system",
+          role: 'system',
           content: `Create a comprehensive Strategic Directive description (200-300 words) that:
 
 1. Starts with the concise intent statement (provided below)
@@ -202,7 +203,7 @@ Structure:
 Keep it concise but comprehensive. Focus on decisions that materially change implementation approach.`
         },
         {
-          role: "user",
+          role: 'user',
           content: `Intent (80 words): ${intent}
 
 Decision Questions to Answer:
@@ -224,6 +225,8 @@ Generate comprehensive description (200-300 words, flowing paragraphs, NO Q&A fo
   /**
    * Lightweight codebase alignment scan
    * Find relevant components, services, schemas, routes
+   *
+   * SOVEREIGN PIPE v3.7.0: Uses CodebaseSearchService instead of execSync
    */
   async scanCodebase(intent) {
     const findings = {
@@ -239,24 +242,24 @@ Generate comprehensive description (200-300 words, flowing paragraphs, NO Q&A fo
       const keywords = this.extractKeywords(intent);
       console.log('🔍 [ENHANCER] Searching for:', keywords.join(', '));
 
-      // Search both applications
-      const ehgPath = '/mnt/c/_EHG/ehg/src';
-      const engineerPath = '/mnt/c/_EHG/EHG_Engineer/src';
+      // Get CodebaseSearchService (no shell spawning)
+      const searchService = getCodebaseSearchService();
 
       for (const keyword of keywords.slice(0, 3)) { // Limit to top 3 keywords
-        // Search components
+        // Search components using native file search
         try {
-          const componentResults = execSync(
-            `find ${ehgPath} -name "*.tsx" -o -name "*.jsx" | xargs grep -l "${keyword}" | head -5`,
-            { encoding: 'utf8', timeout: 3000 }
-          ).trim().split('\n').filter(Boolean);
+          const componentResults = await searchService.searchComponents(
+            keyword,
+            ['.tsx', '.jsx'],
+            ['/mnt/c/_EHG/ehg/src', '/mnt/c/_EHG/EHG_Engineer/src']
+          );
 
-          componentResults.forEach(filepath => {
-            if (filepath && !findings.components.some(c => c.path === filepath)) {
+          componentResults.forEach(result => {
+            if (result.path && !findings.components.some(c => c.path === result.relativePath)) {
               findings.components.push({
-                path: filepath.replace('/mnt/c/_EHG/', ''),
+                path: result.relativePath,
                 relevance: `Contains "${keyword}"`,
-                recommendation: this.analyzeFileRecommendation(filepath)
+                recommendation: this.analyzeFileRecommendation(result.path)
               });
             }
           });
@@ -264,14 +267,11 @@ Generate comprehensive description (200-300 words, flowing paragraphs, NO Q&A fo
           // No results, continue
         }
 
-        // Search for existing routes
+        // Search for existing routes using native pattern search
         try {
-          const routeResults = execSync(
-            `grep -r "path.*${keyword}" ${ehgPath} | head -3`,
-            { encoding: 'utf8', timeout: 2000 }
-          ).trim();
+          const routeResults = await searchService.searchRoutes(keyword);
 
-          if (routeResults) {
+          if (routeResults.length > 0) {
             findings.routes.push({
               keyword,
               found: 'Existing routes match this keyword',
@@ -380,10 +380,10 @@ Generate comprehensive description (200-300 words, flowing paragraphs, NO Q&A fo
    */
   async prepareDatabaseReadySD(intent, questions, codebaseFindings, chairmanInput) {
     const completion = await this.openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: 'gpt-3.5-turbo',
       messages: [
         {
-          role: "system",
+          role: 'system',
           content: `Create a concise, database-ready Strategic Directive structure. Keep it LEAN - only include elements that directly support the intent. Format as JSON:
 {
   "title": "Clear, outcome-focused title (≤60 chars)",
@@ -402,7 +402,7 @@ Generate comprehensive description (200-300 words, flowing paragraphs, NO Q&A fo
 Focus on: measurable outcomes, real constraints, actual risks. Skip security/performance/accessibility unless REQUIRED by the intent.`
         },
         {
-          role: "user",
+          role: 'user',
           content: `Intent: ${intent}
 
 Codebase findings: ${JSON.stringify(codebaseFindings, null, 2)}
@@ -414,7 +414,7 @@ Generate database-ready SD structure (JSON only, no markdown).`
       ],
       temperature: 0.3,
       max_tokens: 800,
-      response_format: { type: "json_object" }
+      response_format: { type: 'json_object' }
     });
 
     try {
