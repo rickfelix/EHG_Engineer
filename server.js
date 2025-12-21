@@ -86,7 +86,18 @@ if (process.env.OPENAI_API_KEY) {
 }
 
 // Middleware
-app.use(cors());
+// SD-ARCH-EHG-006: Configure CORS for EHG frontend access
+app.use(cors({
+  origin: [
+    'http://localhost:8080',  // EHG production frontend (Vite)
+    'http://localhost:8081',  // EHG fallback port
+    'http://localhost:3001',  // EHG_Engineer dev client
+    /^https:\/\/.*\.ehg\.com$/  // Production EHG domains
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+}));
 app.use(express.json());
 
 // Serve static files from the client build
