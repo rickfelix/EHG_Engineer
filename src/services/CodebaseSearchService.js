@@ -63,7 +63,7 @@ export class CodebaseSearchService {
         results.push(...matches);
 
         if (results.length >= this.maxResults) break;
-      } catch (err) {
+      } catch {
         // Path may not exist, continue
         console.warn(`[CodebaseSearch] Path not accessible: ${searchPath}`);
       }
@@ -97,7 +97,7 @@ export class CodebaseSearchService {
         results.push(...matches);
 
         if (results.length >= this.maxResults) break;
-      } catch (err) {
+      } catch {
         console.warn(`[CodebaseSearch] Path not accessible: ${searchPath}`);
       }
     }
@@ -129,7 +129,7 @@ export class CodebaseSearchService {
         results.push(...matches);
 
         if (results.length >= this.maxResults) break;
-      } catch (err) {
+      } catch {
         console.warn(`[CodebaseSearch] Path not accessible: ${searchPath}`);
       }
     }
@@ -181,11 +181,11 @@ export class CodebaseSearchService {
               matched: keyword
             });
           }
-        } catch (readErr) {
+        } catch {
           // Skip unreadable files
         }
       });
-    } catch (walkErr) {
+    } catch {
       // Directory walk failed
     }
 
@@ -221,11 +221,11 @@ export class CodebaseSearchService {
               if (results.length >= limit) return;
             }
           }
-        } catch (readErr) {
+        } catch {
           // Skip unreadable files
         }
       });
-    } catch (walkErr) {
+    } catch {
       // Directory walk failed
     }
 
@@ -252,7 +252,7 @@ export class CodebaseSearchService {
           await callback(fullPath);
         }
       }
-    } catch (err) {
+    } catch {
       // Directory not accessible
     }
   }

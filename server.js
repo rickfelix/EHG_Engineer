@@ -16,7 +16,7 @@ import chokidar from 'chokidar';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
-import { spawn, execSync } from 'child_process';
+import { spawn } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,7 +43,7 @@ import { bootstrapRCAMonitoring, registerRCAShutdownHandlers } from './lib/rca-m
 // SOVEREIGN PIPE v3.7.0: Calibration and Error Handling
 import { getCalibrationService } from './src/services/CalibrationService.js';
 import { createEvaErrorHandler, asyncHandler } from './lib/middleware/eva-error-handler.js';
-import { requireVentureScope, requireChairmanForGlobal, optionalVentureScope } from './src/middleware/venture-scope.js';
+import { requireVentureScope, requireChairmanForGlobal } from './src/middleware/venture-scope.js';
 
 // Initialize Express app
 const app = express();

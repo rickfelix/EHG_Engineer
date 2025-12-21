@@ -263,7 +263,7 @@ Generate comprehensive description (200-300 words, flowing paragraphs, NO Q&A fo
               });
             }
           });
-        } catch (e) {
+        } catch {
           // No results, continue
         }
 
@@ -278,7 +278,7 @@ Generate comprehensive description (200-300 words, flowing paragraphs, NO Q&A fo
               recommendation: 'Review existing routes before creating new ones'
             });
           }
-        } catch (e) {
+        } catch {
           // No routes found
         }
       }
