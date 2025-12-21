@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-21T00:36:02.567Z
+**Generated**: 2025-12-21T02:30:10.452Z
 **Rows**: 5
-**RLS**: Disabled
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -39,6 +39,19 @@
   ```sql
   CREATE UNIQUE INDEX vertical_complexity_multipliers_pkey ON public.vertical_complexity_multipliers USING btree (vertical_category)
   ```
+
+## RLS Policies
+
+### 1. authenticated_read_vertical_complexity_multipliers (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 2. service_role_all_vertical_complexity_multipliers (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 
