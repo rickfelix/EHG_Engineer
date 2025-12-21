@@ -6,9 +6,9 @@ export default defineConfig({
   server: {
     port: 3001,
     proxy: {
-      '/api': 'http://localhost:3456',
+      '/api': 'http://localhost:3000',
       '/ws': {
-        target: 'ws://localhost:3456',
+        target: 'ws://localhost:3000',
         ws: true
       }
     }
