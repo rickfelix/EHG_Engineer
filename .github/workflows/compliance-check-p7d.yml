@@ -1,0 +1,351 @@
+name: Compliance Check - P7D Scheduled
+
+# SD-GOV-COMPLIANCE-READINESS-ORCHESTRATOR-001
+# FR-2: GitHub Actions P7D Compliance Workflow
+# Runs every 7 days to verify all 40 stages against compliance rules
+
+on:
+  schedule:
+    # Run every Sunday at 6 AM UTC (weekly P7D cadence)
+    - cron: '0 6 * * 0'
+  workflow_dispatch: # Allow manual trigger
+    inputs:
+      stages:
+        description: 'Comma-separated stage numbers to check (default: all 1-40)'
+        required: false
+        default: ''
+      run_type:
+        description: 'Run type for tracking'
+        required: false
+        default: 'on_demand'
+        type: choice
+        options:
+          - on_demand
+          - manual
+          - scheduled
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  compliance-check:
+    name: Run Compliance Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    outputs:
+      compliance_result: ${{ steps.compliance.outputs.compliance_result }}
+      violations_found: ${{ steps.compliance.outputs.violations_found }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Determine run type
+        id: run_type
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "run_type=scheduled" >> $GITHUB_OUTPUT
+          elif [ "${{ inputs.run_type }}" != "" ]; then
+            echo "run_type=${{ inputs.run_type }}" >> $GITHUB_OUTPUT
+          else
+            echo "run_type=manual" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run compliance check
+        id: compliance
+        run: |
+          # Build command with optional stages filter
+          STAGES_ARG=""
+          if [ "${{ inputs.stages }}" != "" ]; then
+            STAGES_ARG="--stages=${{ inputs.stages }}"
+          fi
+
+          # Run compliance check and capture output
+          node scripts/compliance-check.js \
+            --run-type=${{ steps.run_type.outputs.run_type }} \
+            $STAGES_ARG > compliance-output.txt 2>&1 || true
+
+          # Display output
+          cat compliance-output.txt
+
+          # Extract summary for GitHub Actions
+          VIOLATIONS=$(grep "Violations:" compliance-output.txt | awk '{print $2}' || echo "0")
+          PASSED=$(grep "Passed:" compliance-output.txt | awk '{print $2}' || echo "0")
+          FAILED=$(grep "Failed:" compliance-output.txt | awk '{print $2}' || echo "0")
+          CRITICAL_SCORE=$(grep "Critical Score:" compliance-output.txt | awk '{print $3}' | cut -d'/' -f1 || echo "0")
+          OVERALL_SCORE=$(grep "Overall Score:" compliance-output.txt | awk '{print $3}' | cut -d'/' -f1 || echo "0")
+
+          echo "violations_found=$VIOLATIONS" >> $GITHUB_OUTPUT
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "failed=$FAILED" >> $GITHUB_OUTPUT
+          echo "critical_score=$CRITICAL_SCORE" >> $GITHUB_OUTPUT
+          echo "overall_score=$OVERALL_SCORE" >> $GITHUB_OUTPUT
+
+          # Set exit code based on violations
+          if [ "$VIOLATIONS" != "0" ]; then
+            echo "violations_exist=true" >> $GITHUB_ENV
+          fi
+
+      - name: Generate compliance report
+        if: always()
+        run: |
+          # Create markdown report
+          cat > compliance-report.md << 'EOF'
+          # Compliance Check Report
+
+          **Run Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          **Run Type:** ${{ steps.run_type.outputs.run_type }}
+          **Trigger:** ${{ github.event_name }}
+
+          ## Summary
+
+          | Metric | Value |
+          |--------|-------|
+          | Stages Passed | ${{ steps.compliance.outputs.passed }} |
+          | Stages Failed | ${{ steps.compliance.outputs.failed }} |
+          | Violations Found | ${{ steps.compliance.outputs.violations_found }} |
+          | Critical Score | ${{ steps.compliance.outputs.critical_score }}/100 |
+          | Overall Score | ${{ steps.compliance.outputs.overall_score }}/100 |
+
+          ## Compliance Rules Checked
+
+          - **CREWAI-001**: CrewAI Agent Registration (Critical)
+          - **CREWAI-002**: CrewAI Crew Configuration (Critical)
+          - **CREWAI-003**: CrewAI Agent-Crew Assignments (High)
+          - **DOSSIER-001**: Stage Dossier Documentation (High)
+          - **SESSION-001**: Session Routing Compliance (Medium)
+          - **EXCEPTION-001**: Exception Documentation (Info)
+
+          ## References
+
+          - [CrewAI Compliance Policy](/docs/workflow/crewai_compliance_policy.md)
+          - [Universal Stage Review Framework](/docs/workflow/review_process.md)
+          - [Compliance Dashboard](#) (Coming Soon)
+
+          ---
+          *Auto-generated by Compliance Check P7D Workflow*
+          EOF
+
+          # Append raw output
+          echo "" >> compliance-report.md
+          echo "## Detailed Output" >> compliance-report.md
+          echo "" >> compliance-report.md
+          echo '```' >> compliance-report.md
+          cat compliance-output.txt >> compliance-report.md
+          echo '```' >> compliance-report.md
+
+      - name: Upload compliance reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compliance-report-${{ github.run_number }}
+          path: |
+            compliance-output.txt
+            compliance-report.md
+          retention-days: 90
+
+      - name: Create GitHub issue on failures
+        if: env.violations_exist == 'true' && steps.compliance.outputs.failed != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Read detailed report
+            let reportMd = '';
+            try {
+              reportMd = fs.readFileSync('compliance-report.md', 'utf8');
+            } catch (err) {
+              reportMd = 'Failed to read detailed report. Check workflow artifacts.';
+            }
+
+            const issueBody = [
+              '## Compliance Check Failed',
+              '',
+              `The scheduled P7D compliance check found **${{ steps.compliance.outputs.violations_found }}** violation(s).`,
+              '',
+              '### Summary',
+              '',
+              '| Metric | Value |',
+              '|--------|-------|',
+              `| Stages Failed | ${{ steps.compliance.outputs.failed }} |`,
+              `| Critical Score | ${{ steps.compliance.outputs.critical_score }}/100 |`,
+              `| Overall Score | ${{ steps.compliance.outputs.overall_score }}/100 |`,
+              '',
+              '### Action Required',
+              '',
+              'Review the violations and take one of the following actions:',
+              '',
+              '1. **Implement missing CrewAI components** - Create SD to implement agents/crews per dossier spec',
+              '2. **Document exception** - If compliance is not feasible, obtain Chairman-approved exception',
+              '',
+              '### Commands',
+              '',
+              '```bash',
+              '# View detailed compliance results',
+              'node scripts/compliance-check.js --run-type=manual',
+              '',
+              '# Check specific stages',
+              'node scripts/compliance-check.js --stages=1,2,3',
+              '```',
+              '',
+              '### References',
+              '',
+              '- [CrewAI Compliance Policy](docs/workflow/crewai_compliance_policy.md)',
+              '- [Exception Process](docs/governance/exceptions/README.md)',
+              '',
+              `[View Workflow Run](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+              '',
+              '---',
+              '**Auto-generated by Compliance Check P7D Workflow**',
+              '',
+              '<details>',
+              '<summary>Full Report</summary>',
+              '',
+              reportMd,
+              '',
+              '</details>'
+            ].join('\n');
+
+            // Check for existing open compliance issues
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'compliance,automated,crewai',
+              per_page: 5
+            });
+
+            if (existingIssues.data.length > 0) {
+              // Update existing issue with new comment
+              const existingIssue = existingIssues.data[0];
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: [
+                  `## P7D Update: ${new Date().toISOString().split('T')[0]}`,
+                  '',
+                  `**Violations:** ${{ steps.compliance.outputs.violations_found }}`,
+                  `**Critical Score:** ${{ steps.compliance.outputs.critical_score }}/100`,
+                  '',
+                  `[View Workflow Run](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`
+                ].join('\n')
+              });
+
+              console.log(`Updated existing issue #${existingIssue.number}`);
+            } else {
+              // Create new issue
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `Compliance Check Failed - ${new Date().toISOString().split('T')[0]}`,
+                body: issueBody,
+                labels: ['compliance', 'automated', 'crewai', 'governance']
+              });
+
+              console.log('Created new compliance issue');
+            }
+
+      - name: Post job summary
+        if: always()
+        run: |
+          echo "## Compliance Check Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Run Type | ${{ steps.run_type.outputs.run_type }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Stages Passed | ${{ steps.compliance.outputs.passed }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Stages Failed | ${{ steps.compliance.outputs.failed }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Violations | ${{ steps.compliance.outputs.violations_found }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Critical Score | ${{ steps.compliance.outputs.critical_score }}/100 |" >> $GITHUB_STEP_SUMMARY
+          echo "| Overall Score | ${{ steps.compliance.outputs.overall_score }}/100 |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ env.violations_exist }}" = "true" ]; then
+            echo "> **Warning:** Compliance violations detected. See workflow artifacts for details." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "> **Status:** All stages compliant." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Optional: Trigger child SD creation if critical violations
+  create-remediation-sd:
+    name: Create Remediation SD
+    needs: compliance-check
+    if: needs.compliance-check.outputs.violations_found != '0' && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check for existing remediation SD
+        id: check_sd
+        run: |
+          # Check if remediation SD already exists for recent violations
+          node -e "
+          const { createClient } = require('@supabase/supabase-js');
+          const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY
+          );
+
+          async function checkExistingSD() {
+            const { data, error } = await supabase
+              .from('strategic_directives_v2')
+              .select('id, status')
+              .eq('category', 'governance_automation')
+              .like('title', '%Compliance Remediation%')
+              .in('status', ['draft', 'active', 'in_progress'])
+              .limit(1);
+
+            if (data && data.length > 0) {
+              console.log('EXISTING_SD=true');
+              console.log('EXISTING_SD_ID=' + data[0].id);
+            } else {
+              console.log('EXISTING_SD=false');
+            }
+          }
+
+          checkExistingSD();
+          " >> $GITHUB_ENV
+
+      - name: Create child SD for remediation
+        if: env.EXISTING_SD != 'true'
+        run: |
+          echo "Child SD creation would be triggered here"
+          echo "Violations: ${{ needs.compliance-check.outputs.violations_found }}"
+          # TODO: Implement FR-4 - node scripts/create-compliance-child-sd.js
+
+      - name: Skip - SD already exists
+        if: env.EXISTING_SD == 'true'
+        run: |
+          echo "Skipping SD creation - existing remediation SD found: $EXISTING_SD_ID"
