@@ -3,6 +3,7 @@
  * Handles the multi-step venture creation flow with path selection
  *
  * Strategic Directive: SD-STAGE1-ENTRY-UX-001
+ * SD-IDEATION-GENESIS-AUDIT: Uses real competitor analysis with Four Buckets
  */
 
 import React, { useState, useCallback } from 'react';
@@ -66,6 +67,44 @@ function VentureCreationFlow({ onCancel, onVentureCreated }) {
     }
   }, [selectedPath, onVentureCreated]);
 
+  // IDEATION-GENESIS-AUDIT: Real competitor analysis with Four Buckets
+  const handleCompetitorAnalyze = useCallback(async (url) => {
+    const response = await fetch('/api/competitor-analysis', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to analyze competitor');
+    }
+
+    const data = await response.json();
+
+    // Return the venture suggestion from the analysis
+    return {
+      name: data.venture.name,
+      problem_statement: data.venture.problem_statement,
+      solution: data.venture.solution,
+      target_market: data.venture.target_market,
+      competitor_reference: data.venture.competitor_reference,
+    };
+  }, []);
+
+  // Handler for creating venture from competitor analysis
+  const handleCompetitorCreate = useCallback(async (ventureData) => {
+    await handleVentureSubmitted({
+      name: ventureData.name,
+      problem_statement: ventureData.problem_statement,
+      solution: ventureData.solution,
+      target_market: ventureData.target_market,
+      competitor_ref: ventureData.competitor_url,
+    });
+  }, [handleVentureSubmitted]);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
@@ -105,9 +144,9 @@ function VentureCreationFlow({ onCancel, onVentureCreated }) {
 
           {currentStep === 'competitor-clone' && (
             <CompetitorCloneForm
-              onSubmit={handleVentureSubmitted}
+              onAnalyze={handleCompetitorAnalyze}
+              onCreate={handleCompetitorCreate}
               onBack={handleBackToPathSelection}
-              onCancel={onCancel}
             />
           )}
 

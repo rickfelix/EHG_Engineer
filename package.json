@@ -195,6 +195,7 @@
     "express": "^5.1.0",
     "express-validator": "^7.2.1",
     "inquirer": "^12.9.6",
+    "js-yaml": "^4.1.1",
     "openai": "^5.22.0",
     "p-retry": "^7.0.0",
     "playwright": "^1.40.1",
