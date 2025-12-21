@@ -11,6 +11,7 @@ import DirectiveLab from './components/DirectiveLab';
 import BacklogManager from './components/BacklogManager';
 import PRReviews from './components/PRReviews';
 import VenturesManager from './components/VenturesManager';
+import VentureDetail from './components/VentureDetail';
 import BacklogImportView from './pages/BacklogImportView';
 import { UATDashboard } from './components/uat/UATDashboard';
 import logger from './utils/logger';
@@ -343,9 +344,8 @@ function App() {
             <Route
               path=":id"
               element={
-                <VenturesManager
+                <VentureDetail
                   isCompact={isCompactMode}
-                  detailMode={true}
                   onRefresh={refreshData}
                 />
               }

@@ -87,14 +87,39 @@ function VenturesManager({ isCompact, onRefresh }) {
   };
 
   const getStageLabel = (stage) => {
+    // 25-stage Venture Vision v2.0 lifecycle labels
     const labels = {
-      1: 'Ideation',
-      2: 'Validation',
-      3: 'Development',
-      4: 'Launch',
-      5: 'Growth',
-      6: 'Scale',
-      7: 'Exit'
+      // Phase 1: THE TRUTH (Stages 1-5)
+      1: 'Draft Idea',
+      2: 'AI Critique',
+      3: 'Market Validation',
+      4: 'Competitive Intel',
+      5: 'Profitability',
+      // Phase 2: THE ENGINE (Stages 6-9)
+      6: 'Risk Matrix',
+      7: 'Pricing Strategy',
+      8: 'Business Model',
+      9: 'Exit Design',
+      // Phase 3: THE IDENTITY (Stages 10-12)
+      10: 'Strategic Naming',
+      11: 'Go-to-Market',
+      12: 'Sales Logic',
+      // Phase 4: THE BLUEPRINT (Stages 13-16)
+      13: 'Tech Stack',
+      14: 'Data Model',
+      15: 'User Stories',
+      16: 'Schema Gen',
+      // Phase 5: THE BUILD LOOP (Stages 17-20)
+      17: 'Env Config',
+      18: 'MVP Dev',
+      19: 'Integration',
+      20: 'Security',
+      // Phase 6: LAUNCH & LEARN (Stages 21-25)
+      21: 'QA & UAT',
+      22: 'Deployment',
+      23: 'Launch',
+      24: 'Analytics',
+      25: 'Scale & Exit'
     };
     return labels[stage] || `Stage ${stage}`;
   };
@@ -180,13 +205,43 @@ function VenturesManager({ isCompact, onRefresh }) {
                 focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
             >
               <option value="all">All Stages</option>
-              <option value="1">Stage 1: Ideation</option>
-              <option value="2">Stage 2: Validation</option>
-              <option value="3">Stage 3: Development</option>
-              <option value="4">Stage 4: Launch</option>
-              <option value="5">Stage 5: Growth</option>
-              <option value="6">Stage 6: Scale</option>
-              <option value="7">Stage 7: Exit</option>
+              <optgroup label="THE TRUTH">
+                <option value="1">Stage 1: Draft Idea</option>
+                <option value="2">Stage 2: AI Critique</option>
+                <option value="3">Stage 3: Market Validation</option>
+                <option value="4">Stage 4: Competitive Intel</option>
+                <option value="5">Stage 5: Profitability</option>
+              </optgroup>
+              <optgroup label="THE ENGINE">
+                <option value="6">Stage 6: Risk Matrix</option>
+                <option value="7">Stage 7: Pricing Strategy</option>
+                <option value="8">Stage 8: Business Model</option>
+                <option value="9">Stage 9: Exit Design</option>
+              </optgroup>
+              <optgroup label="THE IDENTITY">
+                <option value="10">Stage 10: Strategic Naming</option>
+                <option value="11">Stage 11: Go-to-Market</option>
+                <option value="12">Stage 12: Sales Logic</option>
+              </optgroup>
+              <optgroup label="THE BLUEPRINT">
+                <option value="13">Stage 13: Tech Stack</option>
+                <option value="14">Stage 14: Data Model</option>
+                <option value="15">Stage 15: User Stories</option>
+                <option value="16">Stage 16: Schema Gen</option>
+              </optgroup>
+              <optgroup label="THE BUILD LOOP">
+                <option value="17">Stage 17: Env Config</option>
+                <option value="18">Stage 18: MVP Dev</option>
+                <option value="19">Stage 19: Integration</option>
+                <option value="20">Stage 20: Security</option>
+              </optgroup>
+              <optgroup label="LAUNCH & LEARN">
+                <option value="21">Stage 21: QA & UAT</option>
+                <option value="22">Stage 22: Deployment</option>
+                <option value="23">Stage 23: Launch</option>
+                <option value="24">Stage 24: Analytics</option>
+                <option value="25">Stage 25: Scale & Exit</option>
+              </optgroup>
             </select>
           </div>
         </div>
