@@ -800,19 +800,29 @@ export class PlanToLeadExecutor extends BaseExecutor {
       validation.issues.push(`PRD status is '${prd.status}', expected 'verification' or 'completed'`);
     }
 
-    // Check EXEC→PLAN handoff exists
-    const { data: execHandoff } = await this.supabase
-      .from('sd_phase_handoffs')
-      .select('id, status')
-      .eq('sd_id', sd.id)
-      .eq('handoff_type', 'EXEC-TO-PLAN')
-      .order('created_at', { ascending: false })
-      .limit(1);
+    // Check EXEC→PLAN handoff exists (or skip for infrastructure SDs)
+    // SD-RETRO-FIX-001: Infrastructure SDs have EXEC-TO-PLAN marked as OPTIONAL
+    const sdType = sd.sd_type || sd.category;
+    const isInfrastructure = sdType === 'infrastructure' || sdType === 'documentation' || sdType === 'process';
 
-    if (execHandoff && execHandoff.length > 0) {
+    if (isInfrastructure) {
+      // Infrastructure SDs get full points - EXEC-TO-PLAN is optional
       validation.score += 40;
+      validation.warnings.push(`Infrastructure SD: EXEC-TO-PLAN is OPTIONAL (sd_type='${sdType}')`);
     } else {
-      validation.issues.push('No EXEC→PLAN handoff found');
+      const { data: execHandoff } = await this.supabase
+        .from('sd_phase_handoffs')
+        .select('id, status')
+        .eq('sd_id', sd.id)
+        .eq('handoff_type', 'EXEC-TO-PLAN')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (execHandoff && execHandoff.length > 0) {
+        validation.score += 40;
+      } else {
+        validation.issues.push('No EXEC→PLAN handoff found');
+      }
     }
 
     // Check user stories validation

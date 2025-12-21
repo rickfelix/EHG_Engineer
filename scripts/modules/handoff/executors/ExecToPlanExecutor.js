@@ -132,6 +132,23 @@ export class ExecToPlanExecutor extends BaseExecutor {
         console.log('\n🤖 Step 0: Sub-Agent Orchestration (PLAN_VERIFY phase)');
         console.log('-'.repeat(50));
 
+        // SD-E2E-WEBSOCKET-AUTH-006 lesson: qa type SDs skip sub-agent orchestration
+        // qa validation profile has requires_sub_agents: false
+        const sdType = (ctx.sd?.sd_type || '').toLowerCase();
+        if (sdType === 'qa') {
+          console.log('   ℹ️  QA type SD - sub-agent orchestration SKIPPED');
+          console.log('   → qa validation profile has requires_sub_agents: false');
+          ctx._orchestrationResult = { can_proceed: true, passed: 0, total_agents: 0, skipped: true };
+          return {
+            passed: true,
+            score: 100,
+            max_score: 100,
+            issues: [],
+            warnings: ['Sub-agent orchestration skipped for qa type SD'],
+            details: { skipped: true, reason: 'qa type - requires_sub_agents: false' }
+          };
+        }
+
         // EXEC-TO-PLAN validates completed work, so use retrospective mode
         // This allows TESTING to use CONDITIONAL_PASS when evidence exists
         // security_baseline: Query from sd_baseline_issues table for known pre-existing issues
