@@ -18,7 +18,7 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import { SovereignAlert, SEVERITY, ALERT_TYPE } from '../../lib/services/sovereign-alert.js';
+import { SovereignAlert } from '../../lib/services/sovereign-alert.js';
 
 // =============================================================================
 // CONSTANTS: Thresholds & Multipliers
