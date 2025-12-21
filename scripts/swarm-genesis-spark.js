@@ -22,8 +22,16 @@ import { v4 as uuidv4 } from 'uuid';
 import {
   checkSemanticEntropy,
   validateSemanticKeywords,
-  validateArtifactQuality
+  validateArtifactQuality,
+  checkDesignFidelity
 } from '../lib/agents/golden-nugget-validator.js';
+import {
+  MEDSYNC_PERSONAS,
+  FINTRACK_PERSONAS,
+  EDTECH_PERSONAS,
+  PROPTECH_PERSONAS,
+  CHAIRMAN_PERSONA
+} from '../lib/agents/persona-templates.js';
 
 // ============================================================================
 // CONFIGURATION
@@ -108,6 +116,84 @@ const SWARM_FLEET = [
 ];
 
 // ============================================================================
+// MARKET-PULSE PERSONA HELPERS (v3.2.0)
+// ============================================================================
+
+const VENTURE_PERSONA_MAP = {
+  'MedSync': MEDSYNC_PERSONAS,
+  'FinTrack': FINTRACK_PERSONAS,
+  'EduPath': EDTECH_PERSONAS,
+  'LogiFlow': {
+    manager: {
+      name: 'Operations Director',
+      role: 'Supply Chain Manager',
+      goal: 'Optimize delivery routes without micromanaging',
+      frustration: 'Spreadsheets are always out of date. Drivers call me for every exception.',
+      delight: 'Real-time visibility with automatic exception handling'
+    },
+    driver: {
+      name: 'Route Driver',
+      role: 'Delivery Professional',
+      goal: 'Complete my routes efficiently without app confusion',
+      frustration: 'The app crashes when I need directions most',
+      delight: 'One-tap route start, voice navigation, offline mode'
+    }
+  }
+};
+
+function getPrimaryPersona(ventureName, _vertical) {
+  const personas = VENTURE_PERSONA_MAP[ventureName];
+  if (!personas) {
+    return {
+      name: 'End User',
+      role: 'Platform User',
+      goal: 'Accomplish tasks efficiently',
+      frustration: 'Confusing interfaces',
+      delight: 'Intuitive workflows'
+    };
+  }
+  // Return first persona as primary
+  const keys = Object.keys(personas);
+  return personas[keys[0]];
+}
+
+function getPersonaSection(ventureName, _vertical) {
+  const personas = VENTURE_PERSONA_MAP[ventureName];
+  if (!personas) {
+    return `| Platform User | General user of ${ventureName} | Task completion | Efficient workflows |`;
+  }
+
+  let section = '';
+  for (const [key, persona] of Object.entries(personas)) {
+    section += `**${key.charAt(0).toUpperCase() + key.slice(1)} - ${persona.name}**\n`;
+    section += `- Role: ${persona.role}\n`;
+    section += `- Goal: "${persona.goal}"\n`;
+    section += `- Frustration: "${persona.frustration}"\n`;
+    section += `- Delight: "${persona.delight}"\n\n`;
+  }
+  return section;
+}
+
+function getChairmanView(ventureName) {
+  return `${CHAIRMAN_PERSONA.role} (monitoring ${ventureName} portfolio health)`;
+}
+
+function getPersonaSummaryTable(ventureName, _vertical) {
+  const personas = VENTURE_PERSONA_MAP[ventureName];
+  if (!personas) {
+    return '| Platform User | Medium | Medium | High |\n';
+  }
+
+  let table = '';
+  for (const [_key, persona] of Object.entries(personas)) {
+    table += `| ${persona.role} | High | High | High |\n`;
+  }
+  // Add Chairman view
+  table += `| ${CHAIRMAN_PERSONA.role} | Medium | Low | Critical |\n`;
+  return table;
+}
+
+// ============================================================================
 // PRD CONTENT GENERATOR (Domain-Specific)
 // ============================================================================
 
@@ -185,6 +271,40 @@ Vendor cost fluctuations threaten profitability. Locked agreements and volume co
 **MKT-001: Competitive Intensity**
 The ${vertical.toLowerCase()} optimization landscape shows increasing competition. Differentiation rests on proprietary algorithms and partnership exclusivity. Patent protection and feature velocity maintain advantage.
 
+## HUMAN IMPACT ASSESSMENT (v3.2.0 Market-Pulse)
+
+Risks evaluated through end-user persona lens per the Market-Pulse framework.
+
+### ${name} User Personas
+
+${getPersonaSection(name, vertical)}
+
+### UX Risk Analysis
+
+**HUM-001: Dashboard Latency**
+Primary User: ${getPrimaryPersona(name, vertical).role}
+Threshold: 2-second Glanceability standard must be met for ${getPrimaryPersona(name, vertical).name}
+Control: Progressive disclosure, async loading, skeleton states
+
+**HUM-002: Information Overload**
+Threshold: Miller's Law compliance - max 3 concurrent metrics
+Control: Layer-based disclosure, priority sorting
+
+**HUM-003: Persona Mismatch**
+Risk: Building for technical staff instead of ${getPrimaryPersona(name, vertical).role}
+User Goal: "${getPrimaryPersona(name, vertical).goal}"
+Control: Market-Pulse story validation, forbidden persona gates
+
+**HUM-004: Experience Gap**
+${getChairmanView(name)} expects: "${getPrimaryPersona(name, vertical).delight}"
+Control: Design Fidelity validation, Glass Cockpit alignment
+
+### Human Layer Summary
+
+| Role | Goal Risk | UX Friction | Delight Potential |
+|------|-----------|-------------|-------------------|
+${getPersonaSummaryTable(name, vertical)}
+
 ## CONTINGENCY ARCHITECTURE
 
 For each elevated-severity hazard, specific response protocols exist:
@@ -192,6 +312,7 @@ For each elevated-severity hazard, specific response protocols exist:
 1. **Regulatory response**: Compliance team escalation within 24 hours of regulatory changes.
 2. **Technical accuracy fallback**: Rule-based processing maintains baseline functionality during AI recalibration.
 3. **Financial stress protocol**: Operating expense reduction playbook prioritizes runway extension.
+4. **Human experience fallback**: Simplified UI mode with reduced cognitive load for degraded performance scenarios.
 
 ## QUANTITATIVE SUCCESS METRICS
 
