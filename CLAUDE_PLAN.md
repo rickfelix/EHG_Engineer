@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-12-21 10:23:54 AM
+**Generated**: 2025-12-21 12:17:34 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -644,21 +644,6 @@ node scripts/add-prd-to-database.js SD-RESEARCH-106
 ```
 
 
-## CI/CD Pipeline Verification
-
-## CI/CD Pipeline Verification (MANDATORY)
-
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
-
-### Verification Process
-
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
-
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
-
 ## DESIGN→DATABASE Validation Gates
 
 **4 mandatory gates ensuring sub-agent execution and implementation fidelity.**
@@ -710,6 +695,21 @@ Retroactive audit at SD closure:
 
 **Reference**: `scripts/modules/design-database-gates-validation.js`
 
+
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## 🚪 Gate 2.5: Human Inspectability Validation
 
@@ -995,42 +995,40 @@ Dashboard automatically connects to database:
 ## Testing Tier Strategy (Updated)
 
 
-## Testing Requirements - Dual Test Execution (UPDATED)
+## Testing Requirements - Dual Test Execution (SD-ARCH-EHG-007 Updated)
 
 **Philosophy**: Comprehensive testing = Unit tests (logic) + E2E tests (user experience)
 
+### Architecture Context
+- **EHG_Engineer (Port 3000)**: Backend API tests only
+- **EHG (Port 8080)**: Frontend tests (E2E, A11y, Visual)
+
 ### Tier 1: Smoke Tests (MANDATORY) ✅
 - **Requirement**: BOTH unit tests AND E2E tests must pass
-- **Commands**:
-  - Unit: `npm run test:unit` (Vitest - business logic)
-  - E2E: `npm run test:e2e` (Playwright - user flows)
+- **EHG_Engineer Commands**:
+  - Unit: `npm run test:unit` (Jest - backend logic)
+  - E2E: `npm run test:e2e` (Playwright - API tests)
+- **EHG Commands** (frontend):
+  - Unit: `npm run test:unit` (Vitest)
+  - E2E: `npm run test:e2e` (Playwright - UI tests)
 - **Approval**: **BOTH test types REQUIRED for PLAN→LEAD approval**
-- **Execution Time**: Combined <5 minutes for smoke-level tests
-- **Coverage**:
-  - Unit: Service layer, business logic, utilities
-  - E2E: Critical user paths, authentication, navigation
 
 ### Tier 2: Comprehensive Testing (RECOMMENDED) 📋
-- **Requirement**: Full test suite with deep coverage
-- **Commands**:
-  - Unit: `npm run test:unit:coverage` (50%+ coverage target)
-  - E2E: All Playwright tests (30-50 scenarios)
-  - Integration: `npm run test:integration`
-  - A11y: `npm run test:a11y`
+- **EHG_Engineer**: Unit coverage, integration tests
+- **EHG (Frontend)**:
+  - E2E: Full Playwright suite
+  - A11y: Accessibility tests (in EHG repository)
+  - Integration: Component integration tests
 - **Approval**: Nice to have, **NOT blocking** but highly recommended
-- **Timing**: Can be refined post-deployment
 
 ### Tier 3: Manual Testing (SITUATIONAL) 🔍
-- **UI changes**: Visual regression testing
+- **UI changes**: Visual regression (EHG repository)
 - **Complex flows**: Multi-step wizards, payment flows
 - **Edge cases**: Rare scenarios not covered by automation
 
-### ⚠️ What Changed (From Protocol Enhancement)
-**Before**: "Tier 1 = 3-5 tests, <60s" (ambiguous - which tests?)
-**After**: "Tier 1 = Unit tests + E2E tests (explicit frameworks, explicit commands)"
-
-**Lesson Learned**: SD-AGENT-ADMIN-002 testing oversight (ran E2E only, missed unit test failures)
-
+### ⚠️ Architecture Note
+**SD-ARCH-EHG-007**: A11y and visual tests moved to EHG unified frontend.
+EHG_Engineer focuses on backend API testing only.
 
 ## Database Schema Documentation Access
 

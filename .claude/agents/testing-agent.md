@@ -106,22 +106,32 @@ The LEO Stack has TWO UI codebases that share a consolidated database:
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Test Commands by Target App
+### Test Commands by Target App (SD-ARCH-EHG-007 Updated)
 
 | Command | Target | Config | Notes |
 |---------|--------|--------|-------|
-| `npm run test:e2e` | EHG_Engineer Dashboard (3001) | playwright.config.js | Auto-starts server |
-| `npm run test:e2e:ehg` | EHG Venture App (8080) | playwright-ehg.config.js | Requires LEO Stack |
-| `npm run test:e2e:ehg:headed` | EHG Venture App (8080) | playwright-ehg.config.js | With browser UI |
-| `npm run test:uat` | EHG Venture App (8080) | playwright-uat.config.js | UAT with auth |
+| `npm run test:e2e` | EHG_Engineer API (3000) | playwright.config.js | API endpoint tests |
+| `npm run test:uat` | EHG Unified Frontend (8080) | playwright-uat.config.js | UAT with auth |
 
-### CRITICAL: Running EHG App Tests
+**Note**: UI E2E tests are now in the EHG repository (unified frontend).
 
-For tests in `tests/e2e/venture-creation/` (and future EHG app tests):
-1. **Start LEO Stack first**: `./scripts/leo-stack.sh restart`
-2. **Run EHG tests**: `npm run test:e2e:ehg`
+### CRITICAL: Test Location by Type
 
-**Do NOT use** `playwright.config.js` for EHG app tests - it will start the wrong server!
+**EHG_Engineer (Backend API)**:
+- Unit tests: `npm run test:unit`
+- API E2E tests: `npm run test:e2e`
+- Integration tests: `npm run test:integration`
+
+**EHG (Unified Frontend)**:
+- UI E2E tests: Run in `/mnt/c/_EHG/EHG/`
+- A11y tests: Run in `/mnt/c/_EHG/EHG/`
+- Visual tests: Run in `/mnt/c/_EHG/EHG/`
+
+### Running Tests
+
+1. **Start LEO Stack**: `./scripts/leo-stack.sh restart`
+2. **Run API tests**: `npm run test:e2e` (in EHG_Engineer)
+3. **Run UI tests**: `cd /mnt/c/_EHG/EHG && npm run test:e2e`
 
 **Modern Playwright Capabilities** (2025 Quick Wins):
 - **Role-Based Locators**: Use `getByRole()`, `getByLabel()` for resilient, accessible selectors

@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-21 10:23:54 AM
+**Generated**: 2025-12-21 12:17:34 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -331,7 +331,7 @@ These principles override default behavior and must be internalized before start
 
 ### Application-Aware (VERIFICATION)
 **Verify directory BEFORE writing ANY code.**
-- `cd /mnt/c/_EHG/EHG && pwd` for customer features
+- `cd /mnt/c/_EHG/ehg && pwd` for customer features
 - `git remote -v` to confirm correct repository
 - Wrong directory = STOP immediately
 
@@ -947,13 +947,16 @@ For SQL migrations, use the Supabase CLI or dashboard SQL editor:
 
 ## 🔧 CRITICAL DEVELOPMENT WORKFLOW
 
-**Development Workflow**: MANDATORY server restart after ANY changes
+**Development Workflow**: SD-ARCH-EHG-007 Architecture
 
-**Steps**: Kill server → Build client (`npm run build:client`) → Restart server → Hard refresh browser
-**Why**: No hot-reloading configured, dist/ serves compiled files
-**Commands**: `pkill -f "node server.js" && npm run build:client && PORT=3000 node server.js`
+**EHG_Engineer (Port 3000)**: Backend API only - no client build needed
+**EHG (Port 8080)**: Unified frontend (user + admin at /admin/*)
 
-**Complete Guide**: See `docs/reference/development-workflow.md`
+**API Changes**: Restart server → Test endpoints
+**Commands**: `pkill -f "node server.js" && PORT=3000 node server.js`
+
+**Frontend Changes**: Make changes in EHG repository (/mnt/c/_EHG/EHG/)
+**Complete Guide**: See `docs/01_architecture/UNIFIED-FRONTEND-ARCHITECTURE.md`
 
 ## Background Task Output Retrieval
 

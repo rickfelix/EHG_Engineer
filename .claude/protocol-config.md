@@ -119,11 +119,12 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 
 ## Commands
 
-### Build & Test
-- Build: `npm run build`
-- Build Client: `npm run build:client`
+### Build & Test (SD-ARCH-EHG-007)
+- Build: `npm run build` (TypeScript compilation)
 - Test: `npm test`
 - Coverage: `npm run test:coverage`
+- E2E: `npm run test:e2e` (API tests)
+- Note: UI builds are in EHG repository (/mnt/c/_EHG/EHG/)
 
 ### LEO Operations
 - Execute SD: `npm run leo:execute SD-ID`

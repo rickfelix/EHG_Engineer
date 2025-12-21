@@ -198,33 +198,32 @@ const announceToScreenReader = (message: string) => {
 
 ### Pattern 4: Dev Server Restart Protocol (PAT-004)
 
-**Critical Pattern**: Hot reload is NOT reliable for all UI changes
+**SD-ARCH-EHG-007 Architecture Update**:
+- **EHG_Engineer (Port 3000)**: Backend API only - no client build
+- **EHG (Port 8080)**: Unified frontend - all UI changes here
 
-**Proven Solution** (100% success rate, 4 applications, 5 min avg):
+**For Backend API Changes** (EHG_Engineer):
 ```bash
-# 1. Kill dev server
-pkill -f "vite"
+# Restart API server
+pkill -f "node server.js" && PORT=3000 node server.js
+```
 
-# 2. Rebuild client (for UI changes)
-npm run build:client
+**For UI Changes** (EHG repository):
+```bash
+# Navigate to EHG
+cd /mnt/c/_EHG/EHG
 
-# 3. Restart server
+# Start dev server (Vite hot reload)
 npm run dev
 
-# 4. Hard refresh browser
+# Hard refresh browser if needed
 # Ctrl+Shift+R (Windows) / Cmd+Shift+R (Mac)
 ```
 
-**When Required**:
-- New components added
-- Component imports changed
-- UI framework updates
-- Build configuration changes
-
 **Prevention Checklist**:
-- Always restart dev server after code changes
-- Run `npm run build:client` for UI changes
-- Hard refresh browser (not just F5)
+- UI changes go in EHG repository, not EHG_Engineer
+- API changes require server restart in EHG_Engineer
+- Use `./scripts/leo-stack.sh restart` to restart both
 
 ### Pattern 5: Build Path Configuration (PAT-005)
 
