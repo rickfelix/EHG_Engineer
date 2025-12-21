@@ -11,7 +11,6 @@
  */
 
 // SOVEREIGN PIPE v3.7.0: Removed execSync - using CodebaseSearchService
-import fs from 'fs';
 import path from 'path';
 import { getCodebaseSearchService } from './CodebaseSearchService.js';
 
