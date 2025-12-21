@@ -19,17 +19,11 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
-import {
-  checkSemanticEntropy,
-  validateSemanticKeywords,
-  validateArtifactQuality,
-  checkDesignFidelity
-} from '../lib/agents/golden-nugget-validator.js';
+import { checkSemanticEntropy } from '../lib/agents/golden-nugget-validator.js';
 import {
   MEDSYNC_PERSONAS,
   FINTRACK_PERSONAS,
   EDTECH_PERSONAS,
-  PROPTECH_PERSONAS,
   CHAIRMAN_PERSONA
 } from '../lib/agents/persona-templates.js';
 
@@ -198,7 +192,7 @@ function getPersonaSummaryTable(ventureName, _vertical) {
 // ============================================================================
 
 function generatePRDContent(venture) {
-  const { name, vertical, description, semantic_dna } = venture;
+  const { name, vertical, semantic_dna } = venture;
 
   // Generate domain-specific risk matrix content
   // Designed to pass v2.7.0 Semantic Gates (no buzzwords, proper keywords)
