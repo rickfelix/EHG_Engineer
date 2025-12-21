@@ -12,7 +12,8 @@ import {
   Package,
   GitPullRequest,
   ClipboardCheck,
-  Rocket
+  Rocket,
+  Upload
 } from 'lucide-react';
 import Breadcrumbs from './Breadcrumbs';
 import SmartRefreshButton from './SmartRefreshButton';
@@ -48,8 +49,12 @@ function AnimatedAppLayout({
   const navItems = [
     { path: '/', icon: Home, label: 'Strategic Directives', tooltip: 'Home' },
     { path: '/ventures', icon: Rocket, label: 'Ventures', tooltip: 'Ventures' },
+    { path: '/prds', icon: FileText, label: 'PRDs', tooltip: 'PRDs' },
     { path: '/backlog', icon: Package, label: 'Backlog', tooltip: 'Backlog' },
-    { path: '/uat-tests', icon: ClipboardCheck, label: 'UAT Tests', tooltip: 'UAT' }
+    { path: '/directive-lab', icon: FlaskConical, label: 'Directive Lab', tooltip: 'Lab' },
+    { path: '/pr-reviews', icon: GitPullRequest, label: 'PR Reviews', tooltip: 'PRs' },
+    { path: '/uat-tests', icon: ClipboardCheck, label: 'UAT Tests', tooltip: 'UAT' },
+    { path: '/backlog-import', icon: Upload, label: 'Import', tooltip: 'Import' }
   ];
 
   // Animation variants for sidebar
