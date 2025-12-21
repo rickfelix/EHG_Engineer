@@ -33,18 +33,40 @@ pillars:
     grr_floor_pct: 90                   # Gross Revenue Retention minimum
     pipeline_coverage_min: 3.0          # Pipeline to quota ratio
 
+  human_layer:  # Pillar 7 - The Human Layer (v3.2.0 Productization Package)
+    glanceability_target_sec: 2.0         # Max time to understand dashboard state (<2 sec = Glass Cockpit)
+    cognitive_load_max: 3                  # Max concurrent info elements per view (Miller's Law: 7±2, target low end)
+    wcag_compliance_level: 'AA'            # WCAG 2.1 AA minimum - no exceptions
+    design_system_coverage_pct: 80         # % components using design tokens (Tailwind + Shadcn)
+    persona_coverage_required: true        # All stories MUST have Founder/Customer/Investor personas
+    user_delight_over_migration: true      # Prioritize UX over "Migration Safety" - THE LAW
+    forbidden_personas:                    # BLOCKED: Stories written for these personas
+      - developer
+      - dba
+      - admin
+      - engineer
+      - ops
+
 thresholds:
   critical:  # Immediate chairman attention required
     quality_gate_pass_rate: 70          # Below this = critical failure
     nrr_threshold: 90                    # Below this = retention crisis
     burn_multiple_max: 3.0               # Above this = cash crisis
     runway_months_critical: 6            # Below this = funding emergency
+    # Pillar 7 - Human Layer critical thresholds
+    glanceability_sec: 5.0               # Above this = cognitive overload crisis
+    wcag_compliance: 'A'                 # Below AA = accessibility crisis (legal risk)
+    persona_violation_count: 3           # 3+ DBA/Developer stories = strategic drift
 
   warning:   # Proactive intervention needed
     quality_gate_pass_rate: 80          # Below target but not critical
     automation_coverage: 50              # Below target, needs improvement
     agent_alignment: 70                  # Degraded but functional
     backlog_accuracy: 70                 # Quality concerns emerging
+    # Pillar 7 - Human Layer warning thresholds
+    glanceability_sec: 3.0               # Approaching cognitive overload
+    design_system_coverage: 60           # Design debt accumulating
+    persona_violation_count: 1           # Any DBA/Developer story = warning
 
 metrics_notes:
   - "DB-first only; if metric not present, mark 'unknown' (do not fail)."
