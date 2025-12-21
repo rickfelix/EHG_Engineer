@@ -163,7 +163,8 @@ function isValidSDType(type) {
   const validTypes = [
     'feature', 'infrastructure', 'database', 'security',
     'documentation', 'bugfix', 'refactor', 'performance', 'process',
-    'orchestrator'  // Parent SDs with children - auto-set by trigger
+    'orchestrator',  // Parent SDs with children - auto-set by trigger
+    'qa'  // SD-E2E-WEBSOCKET-AUTH-006: test cleanup/review tasks
   ];
   return validTypes.includes(type.toLowerCase());
 }
