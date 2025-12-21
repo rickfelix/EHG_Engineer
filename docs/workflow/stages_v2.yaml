@@ -144,6 +144,8 @@ stages:
         - Title validated (3-120 chars)
         - Description validated (20-2000 chars)
         - Category assigned
+        - problem_statement populated  # IDEATION-GENESIS-AUDIT: Lock Chairman vision
+        - Chairman intent captured     # IDEATION-GENESIS-AUDIT: Immutable original recorded
 
   - id: 2
     title: "AI Multi-Model Critique"
@@ -308,6 +310,18 @@ stages:
     metrics:
       - Risks identified
       - Mitigation coverage
+    gates:
+      entry:
+        - Financial model complete (Stage 5)
+      exit:
+        - Risk matrix artifact present (≥200 chars)
+        - Epistemic classification complete (Facts/Assumptions/Simulations/Unknowns)
+        - HIGH+ risks have mitigation strategies
+    # COGNITIVE UPGRADE v2.6.0: Risk Matrix requires epistemic rigor
+    epistemic_classification:
+      required: true
+      note: "Risk matrix must classify all claims - Facts (from financial model), Assumptions (market/customer), Simulations (projections), Unknowns (deliberate gaps)"
+      validation_rule: "checkEpistemicClassification() in golden-nugget-validator.js"
 
   - id: 7
     title: "Pricing Strategy"

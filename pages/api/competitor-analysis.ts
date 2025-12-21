@@ -1,9 +1,10 @@
 /**
  * POST /api/competitor-analysis
  * SD-STAGE1-ENTRY-UX-001: Analyze competitor URL
+ * SD-IDEATION-GENESIS-AUDIT: Real market intelligence (not hallucinated)
  *
- * Analyzes a competitor URL and returns suggested venture data.
- * Currently returns stub response - AI integration TODO.
+ * Analyzes a competitor URL using REAL web fetching and AI analysis.
+ * Classifies all outputs using Four Buckets (Facts/Assumptions/Simulations/Unknowns).
  */
 
 import { NextApiRequest, NextApiResponse } from 'next';
@@ -11,12 +12,12 @@ import { z } from 'zod';
 
 // Request body validation schema
 const AnalyzeCompetitorSchema = z.object({
-  url: z.string().url('Please enter a valid URL')
+  url: z.string().url('Please enter a valid URL'),
+  include_full_analysis: z.boolean().optional().default(false)
 });
 
-// Stub response generator - TODO: Replace with AI integration
-function generateStubAnalysis(url: string) {
-  // Extract domain for competitor reference
+// Fallback stub for when real analysis fails
+function generateFallbackAnalysis(url: string, error: string) {
   let domain = '';
   try {
     domain = new URL(url).hostname;
@@ -26,10 +27,22 @@ function generateStubAnalysis(url: string) {
 
   return {
     name: `${domain.replace('www.', '').split('.')[0].toUpperCase()} Alternative`,
-    problem_statement: `The current market leader (${domain}) has high costs and limited customization options for small businesses.`,
-    solution: 'An AI-powered platform offering similar features at lower cost with better customization for SMBs.',
-    target_market: 'Small and medium businesses seeking affordable alternatives',
-    competitor_reference: url
+    problem_statement: `[Analysis failed: ${error}] - Unable to analyze competitor at ${domain}. Please try again or enter details manually.`,
+    solution: 'Manual entry required - competitor analysis unavailable',
+    target_market: 'To be determined',
+    competitor_reference: url,
+    four_buckets: {
+      facts: [],
+      assumptions: [],
+      simulations: [],
+      unknowns: [{ path: 'all', value: 'Analysis failed', evidence: error }]
+    },
+    quality: {
+      confidence_score: 0,
+      data_quality: 'failed',
+      analysis_notes: `Real-time analysis failed: ${error}`
+    },
+    _fallback: true
   };
 }
 
@@ -55,24 +68,76 @@ export default async function handler(
     });
   }
 
-  const { url } = parsed.data;
+  const { url, include_full_analysis } = parsed.data;
 
   try {
-    // TODO: Integrate with AI service (OpenAI/Anthropic) to analyze competitor website
-    // For now, return stub data that matches E2E test expectations
-    const ventureData = generateStubAnalysis(url);
+    // Dynamic import of the competitor intelligence service
+    const { default: CompetitorIntelligenceService } = await import('../../lib/research/competitor-intelligence.js');
+    const service = new CompetitorIntelligenceService();
+
+    console.log(`[competitor-analysis] Analyzing: ${url}`);
+    const startTime = Date.now();
+
+    // Perform REAL analysis
+    const analysis = await service.analyzeCompetitor(url);
+
+    console.log(`[competitor-analysis] Complete in ${Date.now() - startTime}ms`);
+
+    // Build response
+    const response: Record<string, unknown> = {
+      success: true,
+      venture: {
+        name: analysis.name,
+        problem_statement: analysis.problem_statement,
+        solution: analysis.solution,
+        target_market: analysis.target_market,
+        competitor_reference: analysis.competitor_reference
+      },
+      four_buckets_summary: {
+        facts_count: analysis.four_buckets?.facts?.length || 0,
+        assumptions_count: analysis.four_buckets?.assumptions?.length || 0,
+        simulations_count: analysis.four_buckets?.simulations?.length || 0,
+        unknowns_count: analysis.four_buckets?.unknowns?.length || 0
+      },
+      quality: analysis.quality,
+      metadata: analysis.metadata
+    };
+
+    // Include full analysis if requested
+    if (include_full_analysis) {
+      response.full_analysis = {
+        four_buckets: analysis.four_buckets,
+        competitive_intelligence: analysis.competitive_intelligence
+      };
+    }
+
+    return res.status(200).json(response);
+
+  } catch (error) {
+    console.error('[competitor-analysis] Error:', error);
+
+    // Return fallback with error info
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const fallback = generateFallbackAnalysis(url, errorMessage);
 
     return res.status(200).json({
       success: true,
-      venture: ventureData
-    });
-
-  } catch (error) {
-    console.error('Competitor analysis error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Unable to analyze competitor website',
-      message: error instanceof Error ? error.message : 'Unknown error'
+      venture: {
+        name: fallback.name,
+        problem_statement: fallback.problem_statement,
+        solution: fallback.solution,
+        target_market: fallback.target_market,
+        competitor_reference: fallback.competitor_reference
+      },
+      four_buckets_summary: {
+        facts_count: 0,
+        assumptions_count: 0,
+        simulations_count: 0,
+        unknowns_count: 1
+      },
+      quality: fallback.quality,
+      _fallback: true,
+      _error: errorMessage
     });
   }
 }

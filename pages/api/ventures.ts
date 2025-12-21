@@ -1,9 +1,12 @@
 /**
  * POST /api/ventures
  * SD-STAGE1-ENTRY-UX-001: Create venture with origin tracking
+ * SD-IDEATION-GENESIS-AUDIT: Capture raw_chairman_intent at creation
  *
  * Creates a new venture in Stage 1 with origin_type tracking
  * (manual, competitor_clone, or blueprint)
+ *
+ * Captures Chairman's original vision in raw_chairman_intent (immutable)
  */
 
 import { NextApiRequest, NextApiResponse } from 'next';
@@ -76,6 +79,9 @@ export default async function handler(
         .insert({
           name,
           problem_statement,
+          // IDEATION-GENESIS-AUDIT: Capture immutable Chairman vision
+          raw_chairman_intent: problem_statement,  // Lock original intent
+          problem_statement_locked_at: new Date().toISOString(),
           solution,
           target_market,
           stage: 1,
