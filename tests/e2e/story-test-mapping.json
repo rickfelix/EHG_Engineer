@@ -1,0 +1,88 @@
+{
+  "version": "1.0.0",
+  "description": "User Story to E2E Test Mapping Index - SD-E2E-STORY-MAPPING-001",
+  "lastUpdated": "2025-12-21",
+  "convention": {
+    "testIdFormat": "US-{STORY_ID}:{TEST_ID}",
+    "annotationPattern": "User Story: US-XXX",
+    "requiredForNewTests": true
+  },
+  "mappings": [
+    {
+      "storyId": "US-002",
+      "storyTitle": "Strategic Directives CRUD Operations",
+      "testFile": "tests/e2e/strategic-directives-crud.spec.ts",
+      "testCount": 20,
+      "coverage": "full",
+      "sdId": "SD-TESTING-COVERAGE-001"
+    },
+    {
+      "storyId": "US-003",
+      "storyTitle": "PRD Management Workflows",
+      "testFile": "tests/e2e/prd-management.spec.ts",
+      "testCount": 25,
+      "coverage": "full",
+      "sdId": "SD-TESTING-COVERAGE-001"
+    },
+    {
+      "storyId": "US-005",
+      "storyTitle": "Phase Handoffs",
+      "testFile": "tests/e2e/phase-handoffs.spec.ts",
+      "testCount": 15,
+      "coverage": "full",
+      "sdId": "SD-TESTING-COVERAGE-001"
+    },
+    {
+      "storyId": "BKS-001 to BKS-020",
+      "storyTitle": "Budget Kill-Switch Tests",
+      "testFile": "tests/e2e/agents/budget-kill-switch.spec.ts",
+      "testCount": 20,
+      "coverage": "full",
+      "sdId": "SD-INDUSTRIAL-HARDENING-V3",
+      "notes": "Uses BKS-XXX prefix convention specific to budget tests"
+    },
+    {
+      "storyId": "VLC-001 to VLC-027",
+      "storyTitle": "Venture Lifecycle Journey",
+      "testFile": "tests/e2e/venture-lifecycle/full-journey.spec.ts",
+      "testCount": 27,
+      "coverage": "full",
+      "sdId": "SD-VENTURE-LIFECYCLE-003",
+      "notes": "Stage-based naming convention"
+    }
+  ],
+  "unmappedTests": [
+    {
+      "testFile": "tests/e2e/venture-creation/entry-path-selector.spec.ts",
+      "reason": "Legacy test - needs story mapping",
+      "priority": "medium"
+    },
+    {
+      "testFile": "tests/e2e/venture-creation/manual-entry-path.spec.ts",
+      "reason": "Legacy test - needs story mapping",
+      "priority": "medium"
+    },
+    {
+      "testFile": "tests/e2e/brand-variants/*.spec.ts",
+      "reason": "Brand variant tests - needs story mapping",
+      "priority": "low"
+    },
+    {
+      "testFile": "tests/e2e/agents/*.spec.ts",
+      "reason": "Agent tests - partially mapped (budget-kill-switch done)",
+      "priority": "medium"
+    },
+    {
+      "testFile": "tests/e2e/state-machine/*.spec.ts",
+      "reason": "State machine tests - needs story mapping",
+      "priority": "medium"
+    }
+  ],
+  "statistics": {
+    "totalTestFiles": 36,
+    "mappedFiles": 5,
+    "unmappedFiles": 31,
+    "coveragePercentage": 13.9,
+    "lastValidated": "2025-12-22T05:18:28.636Z"
+  }
+}
