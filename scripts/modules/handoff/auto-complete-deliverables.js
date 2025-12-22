@@ -163,7 +163,7 @@ async function gatherVerificationEvidence(sdId) {
   // 2. Get sub-agent execution results (actual verification, not claims)
   const { data: subAgentResults } = await supabase
     .from('sub_agent_execution_results')
-    .select('sub_agent_tag, verdict, confidence, metadata, executed_at')
+    .select('sub_agent_code, verdict, confidence, metadata, executed_at')
     .eq('sd_id', sdId)
     .order('executed_at', { ascending: false });
 
@@ -222,23 +222,23 @@ function checkSource(source, evidence, deliverable) {
       return evidence.prdChecklist?.status === 'implemented' || evidence.prdChecklist?.status === 'completed';
 
     case 'SUB_AGENT_TESTING':
-      const testingResult = evidence.subAgentResults.find(r => r.sub_agent_tag === 'TESTING');
+      const testingResult = evidence.subAgentResults.find(r => r.sub_agent_code === 'TESTING');
       return testingResult && (testingResult.verdict === 'PASS' || testingResult.verdict === 'CONDITIONAL_PASS');
 
     case 'SUB_AGENT_DATABASE':
-      const dbResult = evidence.subAgentResults.find(r => r.sub_agent_tag === 'DATABASE');
+      const dbResult = evidence.subAgentResults.find(r => r.sub_agent_code === 'DATABASE');
       return dbResult && (dbResult.verdict === 'PASS' || dbResult.verdict === 'CONDITIONAL_PASS');
 
     case 'SUB_AGENT_DESIGN':
-      const designResult = evidence.subAgentResults.find(r => r.sub_agent_tag === 'DESIGN');
+      const designResult = evidence.subAgentResults.find(r => r.sub_agent_code === 'DESIGN');
       return designResult && (designResult.verdict === 'PASS' || designResult.verdict === 'CONDITIONAL_PASS');
 
     case 'SUB_AGENT_DOCMON':
-      const docResult = evidence.subAgentResults.find(r => r.sub_agent_tag === 'DOCMON');
+      const docResult = evidence.subAgentResults.find(r => r.sub_agent_code === 'DOCMON');
       return docResult && (docResult.verdict === 'PASS' || docResult.verdict === 'CONDITIONAL_PASS');
 
     case 'SUB_AGENT_GITHUB':
-      const ghResult = evidence.subAgentResults.find(r => r.sub_agent_tag === 'GITHUB');
+      const ghResult = evidence.subAgentResults.find(r => r.sub_agent_code === 'GITHUB');
       return ghResult && (ghResult.verdict === 'PASS' || ghResult.verdict === 'CONDITIONAL_PASS');
 
     case 'EXEC_HANDOFF_ACCEPTED':
@@ -431,7 +431,7 @@ export async function autoCompleteDeliverables(sdId, options = {}) {
       prdStatus: evidence.prdChecklist?.status,
       prdChecklistItems: evidence.prdChecklist?.checkedItems,
       subAgentCount: evidence.subAgentResults.length,
-      subAgents: evidence.subAgentResults.map(r => r.sub_agent_tag),
+      subAgents: evidence.subAgentResults.map(r => r.sub_agent_code),
       handoffCount: evidence.handoffs.length,
       handoffTypes: evidence.handoffs.map(h => h.handoff_type),
       userStoriesValidated: evidence.userStories?.validated,
@@ -440,7 +440,7 @@ export async function autoCompleteDeliverables(sdId, options = {}) {
 
     console.log(`    - PRD Status: ${evidence.prdChecklist?.status || 'unknown'}`);
     console.log(`    - PRD Checklist: ${evidence.prdChecklist?.checkedItems || 0}/${evidence.prdChecklist?.totalItems || 0} checked`);
-    console.log(`    - Sub-agents: ${evidence.subAgentResults.length} (${evidence.subAgentResults.map(r => r.sub_agent_tag).join(', ') || 'none'})`);
+    console.log(`    - Sub-agents: ${evidence.subAgentResults.length} (${evidence.subAgentResults.map(r => r.sub_agent_code).join(', ') || 'none'})`);
     console.log(`    - Handoffs: ${evidence.handoffs.length} (${evidence.handoffs.map(h => h.handoff_type).join(', ') || 'none'})`);
     console.log(`    - User Stories: ${evidence.userStories?.validated || 0}/${evidence.userStories?.total || 0} validated`);
 
