@@ -23,7 +23,8 @@ const classificationCache = new Map();
 // SD type categories for different behaviors
 export const SD_TYPE_CATEGORIES = {
   // SDs that don't produce code changes - skip TESTING, GITHUB, E2E validation
-  NON_CODE: ['infrastructure', 'documentation', 'process'],
+  // SD-E2E-WEBSOCKET-AUTH-006 lesson: qa type added for test cleanup/review tasks
+  NON_CODE: ['infrastructure', 'documentation', 'process', 'qa'],
 
   // SDs that produce code and need full validation
   CODE_PRODUCING: ['feature', 'bugfix', 'refactor', 'performance'],
@@ -47,6 +48,7 @@ export const SCORING_WEIGHTS = {
   infrastructure: { sdWeight: 0.30, retroWeight: 0.70 },
   documentation: { sdWeight: 0.30, retroWeight: 0.70 },
   process: { sdWeight: 0.30, retroWeight: 0.70 },
+  qa: { sdWeight: 0.30, retroWeight: 0.70 },  // SD-E2E-WEBSOCKET-AUTH-006: test cleanup/review
 
   // Feature: SD quality (objectives, metrics) matters more
   feature: { sdWeight: 0.60, retroWeight: 0.40 },
@@ -69,6 +71,7 @@ export const THRESHOLD_PROFILES = {
   infrastructure: { retrospectiveQuality: 55, sdCompletion: 55 },
   documentation: { retrospectiveQuality: 50, sdCompletion: 50 },
   process: { retrospectiveQuality: 55, sdCompletion: 55 },
+  qa: { retrospectiveQuality: 55, sdCompletion: 55 },  // SD-E2E-WEBSOCKET-AUTH-006
 
   // Feature SDs have standard thresholds
   feature: { retrospectiveQuality: 65, sdCompletion: 65 },
@@ -160,7 +163,8 @@ function isValidSDType(type) {
   const validTypes = [
     'feature', 'infrastructure', 'database', 'security',
     'documentation', 'bugfix', 'refactor', 'performance', 'process',
-    'orchestrator'  // Parent SDs with children - auto-set by trigger
+    'orchestrator',  // Parent SDs with children - auto-set by trigger
+    'qa'  // SD-E2E-WEBSOCKET-AUTH-006: test cleanup/review tasks
   ];
   return validTypes.includes(type.toLowerCase());
 }
