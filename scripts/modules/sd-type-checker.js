@@ -24,7 +24,8 @@ const classificationCache = new Map();
 export const SD_TYPE_CATEGORIES = {
   // SDs that don't produce code changes - skip TESTING, GITHUB, E2E validation
   // SD-E2E-WEBSOCKET-AUTH-006 lesson: qa type added for test cleanup/review tasks
-  NON_CODE: ['infrastructure', 'documentation', 'process', 'qa'],
+  // PAT-SD-API-CATEGORY-003: api/backend SDs produce code but need unit/integration tests, not E2E
+  NON_CODE: ['infrastructure', 'documentation', 'process', 'qa', 'api', 'backend'],
 
   // SDs that produce code and need full validation
   CODE_PRODUCING: ['feature', 'bugfix', 'refactor', 'performance'],
@@ -50,6 +51,10 @@ export const SCORING_WEIGHTS = {
   process: { sdWeight: 0.30, retroWeight: 0.70 },
   qa: { sdWeight: 0.30, retroWeight: 0.70 },  // SD-E2E-WEBSOCKET-AUTH-006: test cleanup/review
 
+  // PAT-SD-API-CATEGORY-003: API/backend SDs weight retrospective higher (implementation-focused)
+  api: { sdWeight: 0.40, retroWeight: 0.60 },
+  backend: { sdWeight: 0.40, retroWeight: 0.60 },
+
   // Feature: SD quality (objectives, metrics) matters more
   feature: { sdWeight: 0.60, retroWeight: 0.40 },
   bugfix: { sdWeight: 0.50, retroWeight: 0.50 },
@@ -72,6 +77,10 @@ export const THRESHOLD_PROFILES = {
   documentation: { retrospectiveQuality: 50, sdCompletion: 50 },
   process: { retrospectiveQuality: 55, sdCompletion: 55 },
   qa: { retrospectiveQuality: 55, sdCompletion: 55 },  // SD-E2E-WEBSOCKET-AUTH-006
+
+  // PAT-SD-API-CATEGORY-003: API/backend SDs have slightly lower thresholds (no E2E required)
+  api: { retrospectiveQuality: 55, sdCompletion: 55 },
+  backend: { retrospectiveQuality: 55, sdCompletion: 55 },
 
   // Feature SDs have standard thresholds
   feature: { retrospectiveQuality: 65, sdCompletion: 65 },
