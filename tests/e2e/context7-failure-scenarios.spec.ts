@@ -10,6 +10,10 @@
 
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import * as dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
