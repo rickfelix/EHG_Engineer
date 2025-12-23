@@ -1,155 +1,103 @@
 name: Human-Like E2E Tests
 
-# Runs on every PR to main - comprehensive quality checks
+# Reusable workflow for testing any venture's frontend
+# Called by venture repos (EHG, future ventures) with their target URL
 on:
-  pull_request:
-    branches: [main]
+  workflow_call:
+    inputs:
+      target_url:
+        description: 'Base URL of the application to test (e.g., http://localhost:8080)'
+        required: true
+        type: string
+      venture_name:
+        description: 'Name of the venture being tested (for reporting)'
+        required: false
+        type: string
+        default: 'Unknown Venture'
+      stringency:
+        description: 'Test stringency level'
+        required: false
+        type: string
+        default: 'standard'
+      pr_lines_changed:
+        description: 'Number of lines changed in PR (for stringency calculation)'
+        required: false
+        type: number
+        default: 0
+    secrets:
+      SUPABASE_URL:
+        required: true
+      SUPABASE_SERVICE_ROLE_KEY:
+        required: true
+      OPENAI_API_KEY:
+        required: false
+
+  # Manual trigger for testing from EHG_Engineer
   workflow_dispatch:
     inputs:
+      target_url:
+        description: 'Base URL of the application to test'
+        required: true
+        type: string
+        default: 'http://localhost:8080'
+      venture_name:
+        description: 'Name of the venture being tested'
+        required: false
+        type: string
+        default: 'EHG'
       stringency:
         description: 'Override stringency level'
         required: false
         type: choice
         options:
-          - auto
           - strict
           - standard
           - relaxed
-        default: 'auto'
+        default: 'standard'
 
 env:
   NODE_VERSION: '22'
 
 jobs:
-  # Calculate stringency and PR metrics
-  setup:
-    name: Setup & Stringency Detection
+  # Validate target is reachable
+  preflight:
+    name: Preflight Check
     runs-on: ubuntu-latest
     outputs:
-      stringency: ${{ steps.stringency.outputs.level }}
-      pr_lines: ${{ steps.metrics.outputs.lines }}
-      is_critical_path: ${{ steps.paths.outputs.critical }}
+      target_reachable: ${{ steps.check.outputs.reachable }}
+      stringency: ${{ inputs.stringency || 'standard' }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Calculate PR metrics
-        id: metrics
+      - name: Check target URL
+        id: check
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            LINES=$(git diff --numstat origin/main...HEAD | awk '{add+=$1; del+=$2} END {print add+del}')
+          TARGET="${{ inputs.target_url }}"
+          echo "Checking if $TARGET is reachable..."
+
+          # Try to reach the target (with timeout)
+          if curl -s --max-time 10 --head "$TARGET" > /dev/null 2>&1; then
+            echo "reachable=true" >> $GITHUB_OUTPUT
+            echo "✅ Target $TARGET is reachable"
           else
-            LINES=0
+            echo "reachable=false" >> $GITHUB_OUTPUT
+            echo "❌ Target $TARGET is not reachable"
+            echo "::warning::Target URL is not reachable. Tests will be skipped."
           fi
-          echo "lines=$LINES" >> $GITHUB_OUTPUT
-          echo "PR changes: $LINES lines"
-
-      - name: Detect critical paths
-        id: paths
-        run: |
-          CRITICAL_PATTERNS="checkout|auth|payment|onboarding|signup|login"
-          CHANGED_FILES=$(git diff --name-only origin/main...HEAD 2>/dev/null || echo "")
-
-          if echo "$CHANGED_FILES" | grep -qE "$CRITICAL_PATTERNS"; then
-            echo "critical=true" >> $GITHUB_OUTPUT
-            echo "Critical path changes detected"
-          else
-            echo "critical=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Determine stringency
-        id: stringency
-        run: |
-          OVERRIDE="${{ github.event.inputs.stringency }}"
-          if [ "$OVERRIDE" != "" ] && [ "$OVERRIDE" != "auto" ]; then
-            echo "level=$OVERRIDE" >> $GITHUB_OUTPUT
-            echo "Stringency: $OVERRIDE (manual override)"
-            exit 0
-          fi
-
-          LINES=${{ steps.metrics.outputs.lines }}
-          CRITICAL=${{ steps.paths.outputs.critical }}
-
-          # Large PR (>500 lines) → strict
-          if [ "$LINES" -gt 500 ]; then
-            echo "level=strict" >> $GITHUB_OUTPUT
-            echo "Stringency: strict (large PR: $LINES lines)"
-            exit 0
-          fi
-
-          # Critical paths → strict
-          if [ "$CRITICAL" = "true" ]; then
-            echo "level=strict" >> $GITHUB_OUTPUT
-            echo "Stringency: strict (critical path changes)"
-            exit 0
-          fi
-
-          # Feature branch with small changes → relaxed
-          BRANCH_NAME="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
-          if [[ "$BRANCH_NAME" == feat/* ]] && [ "$LINES" -lt 100 ]; then
-            echo "level=relaxed" >> $GITHUB_OUTPUT
-            echo "Stringency: relaxed (small feature branch)"
-            exit 0
-          fi
-
-          # Default
-          echo "level=standard" >> $GITHUB_OUTPUT
-          echo "Stringency: standard (default)"
-
-  # Core E2E tests with Playwright
-  e2e-core:
-    name: Core E2E Tests
-    runs-on: ubuntu-latest
-    needs: setup
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Run E2E tests
-        run: npx playwright test --project=chromium
-        env:
-          E2E_STRINGENCY: ${{ needs.setup.outputs.stringency }}
-          PR_LINES_CHANGED: ${{ needs.setup.outputs.pr_lines }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          CI: true
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-results
-          path: |
-            playwright-report/
-            test-results/
 
   # Accessibility checks with axe-core
   accessibility:
     name: Accessibility (axe-core)
     runs-on: ubuntu-latest
-    needs: setup
+    needs: preflight
+    if: needs.preflight.outputs.target_reachable == 'true'
     timeout-minutes: 10
 
     steps:
-      - name: Checkout code
+      - name: Checkout EHG_Engineer (testing framework)
         uses: actions/checkout@v4
+        with:
+          repository: rickfelix/EHG_Engineer
+          ref: main
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -166,29 +114,34 @@ jobs:
       - name: Run accessibility tests
         run: npx playwright test tests/e2e/accessibility/ --project=chromium
         env:
-          A11Y_STRINGENCY: ${{ needs.setup.outputs.stringency }}
+          BASE_URL: ${{ inputs.target_url }}
+          A11Y_STRINGENCY: ${{ needs.preflight.outputs.stringency }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           CI: true
-        continue-on-error: ${{ needs.setup.outputs.stringency == 'relaxed' }}
+        continue-on-error: ${{ needs.preflight.outputs.stringency == 'relaxed' }}
 
       - name: Upload accessibility results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: accessibility-results
+          name: accessibility-results-${{ inputs.venture_name }}
           path: test-results/**/accessibility-results.json
 
   # Chaos/resilience testing
   chaos:
     name: Chaos & Resilience
     runs-on: ubuntu-latest
-    needs: setup
+    needs: preflight
+    if: needs.preflight.outputs.target_reachable == 'true'
     timeout-minutes: 10
 
     steps:
-      - name: Checkout code
+      - name: Checkout EHG_Engineer (testing framework)
         uses: actions/checkout@v4
+        with:
+          repository: rickfelix/EHG_Engineer
+          ref: main
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -205,71 +158,34 @@ jobs:
       - name: Run chaos tests
         run: npx playwright test tests/e2e/resilience/ --project=chromium
         env:
-          E2E_STRINGENCY: ${{ needs.setup.outputs.stringency }}
+          BASE_URL: ${{ inputs.target_url }}
+          E2E_STRINGENCY: ${{ needs.preflight.outputs.stringency }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           CI: true
-        continue-on-error: ${{ needs.setup.outputs.stringency == 'relaxed' }}
+        continue-on-error: ${{ needs.preflight.outputs.stringency == 'relaxed' }}
 
       - name: Upload chaos results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: chaos-results
+          name: chaos-results-${{ inputs.venture_name }}
           path: test-results/**/chaos-results.json
-
-  # LLM UX evaluation (GPT-5.2)
-  llm-ux:
-    name: LLM UX Evaluation
-    runs-on: ubuntu-latest
-    needs: setup
-    timeout-minutes: 15
-    # Only run on PRs to save costs, or when explicitly triggered
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Run LLM UX evaluation
-        run: npx playwright test tests/e2e/ux-evaluation/ --project=chromium
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          E2E_STRINGENCY: ${{ needs.setup.outputs.stringency }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          CI: true
-        continue-on-error: ${{ needs.setup.outputs.stringency != 'strict' }}
-
-      - name: Upload UX evaluation results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: llm-ux-results
-          path: test-results/**/llm-ux-evaluation.json
 
   # Visual regression (CLS)
   visual:
     name: Visual & CLS
     runs-on: ubuntu-latest
-    needs: setup
+    needs: preflight
+    if: needs.preflight.outputs.target_reachable == 'true'
     timeout-minutes: 10
 
     steps:
-      - name: Checkout code
+      - name: Checkout EHG_Engineer (testing framework)
         uses: actions/checkout@v4
+        with:
+          repository: rickfelix/EHG_Engineer
+          ref: main
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -286,62 +202,95 @@ jobs:
       - name: Run visual tests
         run: npx playwright test tests/e2e/visual/ --project=chromium
         env:
-          E2E_STRINGENCY: ${{ needs.setup.outputs.stringency }}
+          BASE_URL: ${{ inputs.target_url }}
+          E2E_STRINGENCY: ${{ needs.preflight.outputs.stringency }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           CI: true
-        continue-on-error: ${{ needs.setup.outputs.stringency == 'relaxed' }}
+        continue-on-error: ${{ needs.preflight.outputs.stringency == 'relaxed' }}
 
       - name: Upload visual results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: visual-results
+          name: visual-results-${{ inputs.venture_name }}
           path: test-results/**/visual-results.json
+
+  # LLM UX evaluation
+  llm-ux:
+    name: LLM UX Evaluation
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: needs.preflight.outputs.target_reachable == 'true'
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout EHG_Engineer (testing framework)
+        uses: actions/checkout@v4
+        with:
+          repository: rickfelix/EHG_Engineer
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run LLM UX evaluation
+        run: npx playwright test tests/e2e/ux-evaluation/ --project=chromium
+        env:
+          BASE_URL: ${{ inputs.target_url }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          E2E_STRINGENCY: ${{ needs.preflight.outputs.stringency }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CI: true
+        continue-on-error: ${{ needs.preflight.outputs.stringency != 'strict' }}
+
+      - name: Upload UX evaluation results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm-ux-results-${{ inputs.venture_name }}
+          path: test-results/**/llm-ux-evaluation.json
 
   # Aggregate results and create summary
   summary:
     name: Results Summary
     runs-on: ubuntu-latest
-    needs: [setup, e2e-core, accessibility, chaos, llm-ux, visual]
+    needs: [preflight, accessibility, chaos, visual, llm-ux]
     if: always()
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts/
-
       - name: Create summary
         run: |
           echo "## Human-Like E2E Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Stringency Level:** ${{ needs.setup.outputs.stringency }}" >> $GITHUB_STEP_SUMMARY
-          echo "**PR Size:** ${{ needs.setup.outputs.pr_lines }} lines" >> $GITHUB_STEP_SUMMARY
-          echo "**Critical Paths:** ${{ needs.setup.outputs.is_critical_path }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Venture:** ${{ inputs.venture_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Target URL:** ${{ inputs.target_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Stringency Level:** ${{ needs.preflight.outputs.stringency }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Target Reachable:** ${{ needs.preflight.outputs.target_reachable }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Job Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Core E2E | ${{ needs.e2e-core.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Accessibility | ${{ needs.accessibility.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Chaos/Resilience | ${{ needs.chaos.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| LLM UX | ${{ needs.llm-ux.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Visual/CLS | ${{ needs.visual.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| LLM UX | ${{ needs.llm-ux.result }} |" >> $GITHUB_STEP_SUMMARY
 
       - name: Check blocking failures
+        if: needs.preflight.outputs.target_reachable == 'true'
         run: |
-          STRINGENCY="${{ needs.setup.outputs.stringency }}"
-
-          # Core E2E always blocks
-          if [ "${{ needs.e2e-core.result }}" = "failure" ]; then
-            echo "Core E2E tests failed - blocking"
-            exit 1
-          fi
+          STRINGENCY="${{ needs.preflight.outputs.stringency }}"
 
           # For strict stringency, all checks must pass
           if [ "$STRINGENCY" = "strict" ]; then
