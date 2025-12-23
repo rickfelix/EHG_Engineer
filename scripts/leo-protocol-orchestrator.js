@@ -3,10 +3,15 @@
 /**
  * LEO Protocol Master Orchestrator
  * Enforces complete protocol compliance with zero skipped steps
- * Version: 2.1.0 - Session Guardian Integration
+ * Version: 2.2.0 - Evidence Pack Integration
  *
  * This is the SINGLE ENTRY POINT for all Strategic Directive executions
  * It ensures every step is followed and nothing is missed
+ *
+ * v2.2.0 Changes:
+ * - Integrated Evidence Pack Generator for post-session audit
+ * - Evidence pack generated at session completion
+ * - Records SDs touched, gates executed, decisions made
  *
  * v2.1.0 Changes:
  * - Integrated Session Guardian for checkpointing and safe-stop
@@ -30,6 +35,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { execSync } from 'child_process';
 import { createSessionGuardian } from './lib/session-guardian.js';
+import { createEvidencePackGenerator } from './lib/evidence-pack-generator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -89,6 +95,9 @@ class LEOProtocolOrchestrator {
     // Session guardian for checkpointing and safe-stop (initialized in executeSD)
     this.sessionGuardian = null;
 
+    // Evidence pack generator for post-session audit (initialized in executeSD)
+    this.evidencePack = null;
+
     // Track execution state
     this.executionState = {
       sdId: null,
@@ -143,11 +152,12 @@ class LEOProtocolOrchestrator {
 
   /**
    * Main execution entry point
+   * v2.2.0: Evidence Pack integration for post-session audit
    * v2.1.0: Session Guardian integration for checkpointing and safe-stop
    * v2.0.0: Non-interactive - no prompts, deterministic execution
    */
   async executeSD(sdId, options = {}) {
-    console.log(chalk.blue.bold('\n🚀 LEO PROTOCOL ORCHESTRATOR v2.1.0 (Guardian Protected)'));
+    console.log(chalk.blue.bold('\n🚀 LEO PROTOCOL ORCHESTRATOR v2.2.0 (Evidence Pack)'));
     console.log(chalk.blue('━'.repeat(50)));
 
     try {
@@ -161,6 +171,10 @@ class LEOProtocolOrchestrator {
       // Initialize session guardian for checkpointing and safe-stop
       this.sessionGuardian = await createSessionGuardian(this.executionState.sessionId);
       this.sessionGuardian.setCurrentSD(sdId);
+
+      // Initialize evidence pack generator
+      this.evidencePack = await createEvidencePackGenerator(this.executionState.sessionId);
+      this.evidencePack.recordSD(sdId, 'started');
 
       // Check for existing checkpoint to resume from
       const existingCheckpoint = await this.sessionGuardian.loadCheckpoint();
@@ -226,10 +240,16 @@ class LEOProtocolOrchestrator {
           timestamp: new Date().toISOString()
         });
 
+        // Record gate in evidence pack
+        this.evidencePack.recordGate(`${phase}_GATE`, true, { sdId, phase });
+
         // Record phase completion
         await this.recordPhaseCompletion(phase, sdId);
         previousPhase = phase;
       }
+
+      // Mark SD as completed in evidence pack
+      this.evidencePack.recordSD(sdId, 'completed');
 
       // Step 4: Mandatory retrospective
       await this.enforceRetrospective(sdId);
@@ -241,6 +261,11 @@ class LEOProtocolOrchestrator {
       const logFile = await this.decisionLogger.save();
       console.log(chalk.gray(`\n📝 Decisions logged to: ${logFile}`));
 
+      // Copy decisions to evidence pack
+      for (const decision of this.decisionLogger.getDecisions()) {
+        this.evidencePack.recordDecision(decision);
+      }
+
       // Mark session guardian as complete (clears checkpoint)
       await this.sessionGuardian.complete();
       console.log(chalk.gray('\n🛡️  Session guardian summary:'));
@@ -248,6 +273,10 @@ class LEOProtocolOrchestrator {
       console.log(chalk.gray(`   Duration: ${summary.durationMinutes} minutes`));
       console.log(chalk.gray(`   Operations: ${summary.totalOperations}`));
       console.log(chalk.gray(`   Gates: ${summary.gatesCompleted}`));
+
+      // Generate evidence pack
+      const packPath = await this.evidencePack.generate();
+      console.log(chalk.gray(`\n📦 Evidence pack: ${packPath}`));
 
       console.log(chalk.green.bold('\n✅ SD EXECUTION COMPLETE WITH 100% COMPLIANCE'));
 
@@ -263,6 +292,30 @@ class LEOProtocolOrchestrator {
           phase: this.executionState.currentPhase
         });
         await this.decisionLogger.save();
+      }
+
+      // Record failure in evidence pack and generate it
+      if (this.evidencePack) {
+        this.evidencePack.recordSD(this.executionState.sdId, 'failed');
+        this.evidencePack.recordViolation({
+          type: 'EXECUTION_FAILURE',
+          description: error.message,
+          phase: this.executionState.currentPhase
+        });
+
+        // Copy decisions to evidence pack before generating
+        if (this.decisionLogger) {
+          for (const decision of this.decisionLogger.getDecisions()) {
+            this.evidencePack.recordDecision(decision);
+          }
+        }
+
+        try {
+          const packPath = await this.evidencePack.generate();
+          console.log(chalk.gray(`\n📦 Evidence pack (failure): ${packPath}`));
+        } catch (packError) {
+          console.warn('⚠️  Could not generate evidence pack:', packError.message);
+        }
       }
 
       // Save guardian checkpoint for recovery
