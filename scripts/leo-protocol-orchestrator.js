@@ -3,10 +3,16 @@
 /**
  * LEO Protocol Master Orchestrator
  * Enforces complete protocol compliance with zero skipped steps
- * Version: 2.0.0 - Non-interactive mode
+ * Version: 2.1.0 - Session Guardian Integration
  *
  * This is the SINGLE ENTRY POINT for all Strategic Directive executions
  * It ensures every step is followed and nothing is missed
+ *
+ * v2.1.0 Changes:
+ * - Integrated Session Guardian for checkpointing and safe-stop
+ * - Added checkpoint after each gate validation
+ * - Added safe-stop detection for dangerous commands
+ * - Added loop detection for stuck operations
  *
  * v2.0.0 Changes:
  * - Removed all interactive prompts (inquirer) for extended session support
@@ -23,6 +29,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { execSync } from 'child_process';
+import { createSessionGuardian } from './lib/session-guardian.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -79,6 +86,9 @@ class LEOProtocolOrchestrator {
     // Decision logger for audit trail (initialized in executeSD)
     this.decisionLogger = null;
 
+    // Session guardian for checkpointing and safe-stop (initialized in executeSD)
+    this.sessionGuardian = null;
+
     // Track execution state
     this.executionState = {
       sdId: null,
@@ -133,10 +143,11 @@ class LEOProtocolOrchestrator {
 
   /**
    * Main execution entry point
+   * v2.1.0: Session Guardian integration for checkpointing and safe-stop
    * v2.0.0: Non-interactive - no prompts, deterministic execution
    */
   async executeSD(sdId, options = {}) {
-    console.log(chalk.blue.bold('\n🚀 LEO PROTOCOL ORCHESTRATOR v2.0.0 (Non-Interactive)'));
+    console.log(chalk.blue.bold('\n🚀 LEO PROTOCOL ORCHESTRATOR v2.1.0 (Guardian Protected)'));
     console.log(chalk.blue('━'.repeat(50)));
 
     try {
@@ -147,6 +158,25 @@ class LEOProtocolOrchestrator {
       this.decisionLogger = new SessionDecisionLogger(this.executionState.sessionId);
       await this.decisionLogger.init();
 
+      // Initialize session guardian for checkpointing and safe-stop
+      this.sessionGuardian = await createSessionGuardian(this.executionState.sessionId);
+      this.sessionGuardian.setCurrentSD(sdId);
+
+      // Check for existing checkpoint to resume from
+      const existingCheckpoint = await this.sessionGuardian.loadCheckpoint();
+      if (existingCheckpoint && !options.force) {
+        console.log(chalk.yellow(`\n📍 Found checkpoint from ${existingCheckpoint.timestamp}`));
+        console.log(chalk.yellow(`   Last phase: ${existingCheckpoint.state?.currentPhase || 'unknown'}`));
+        console.log(chalk.yellow(`   Gates completed: ${existingCheckpoint.state?.gatesCompleted?.length || 0}`));
+        this.sessionGuardian.restoreFromCheckpoint(existingCheckpoint);
+        this.decisionLogger.log({
+          type: 'CHECKPOINT_RESTORE',
+          action: 'resumed',
+          reason: `Resuming from checkpoint at ${existingCheckpoint.timestamp}`,
+          lastPhase: existingCheckpoint.state?.currentPhase
+        });
+      }
+
       // Step 1: Mandatory session prologue
       await this.enforceSessionPrologue();
 
@@ -154,9 +184,16 @@ class LEOProtocolOrchestrator {
       await this.verifySDEligibility(sdId);
 
       // Step 3: Execute each phase with strict gates
+      let previousPhase = null;
       for (const phase of this.phases) {
         console.log(chalk.yellow(`\n📋 Phase: ${phase}`));
         console.log(chalk.gray('─'.repeat(40)));
+
+        // Check resource limits before each phase
+        const resourceCheck = this.sessionGuardian.checkResourceLimits();
+        if (resourceCheck.exceeded) {
+          throw new Error(`RESOURCE_LIMIT: ${resourceCheck.reason}`);
+        }
 
         // Check if phase can be skipped (only if already complete)
         const canSkip = await this.checkPhaseCompletion(sdId, phase);
@@ -171,14 +208,27 @@ class LEOProtocolOrchestrator {
           continue;
         }
 
+        // Record phase transition
+        if (previousPhase) {
+          await this.sessionGuardian.recordPhaseTransition(previousPhase, phase);
+        }
+
         // Execute the phase
         await this.executePhase(phase, sdId);
 
         // Enforce phase gate (blocking)
         await this.enforcePhaseGate(phase, sdId);
 
+        // Record gate passed and save checkpoint
+        await this.sessionGuardian.recordGatePassed(`${phase}_GATE`, {
+          sdId,
+          phase,
+          timestamp: new Date().toISOString()
+        });
+
         // Record phase completion
         await this.recordPhaseCompletion(phase, sdId);
+        previousPhase = phase;
       }
 
       // Step 4: Mandatory retrospective
@@ -190,6 +240,14 @@ class LEOProtocolOrchestrator {
       // Save decision log
       const logFile = await this.decisionLogger.save();
       console.log(chalk.gray(`\n📝 Decisions logged to: ${logFile}`));
+
+      // Mark session guardian as complete (clears checkpoint)
+      await this.sessionGuardian.complete();
+      console.log(chalk.gray('\n🛡️  Session guardian summary:'));
+      const summary = this.sessionGuardian.getSummary();
+      console.log(chalk.gray(`   Duration: ${summary.durationMinutes} minutes`));
+      console.log(chalk.gray(`   Operations: ${summary.totalOperations}`));
+      console.log(chalk.gray(`   Gates: ${summary.gatesCompleted}`));
 
       console.log(chalk.green.bold('\n✅ SD EXECUTION COMPLETE WITH 100% COMPLIANCE'));
 
@@ -205,6 +263,13 @@ class LEOProtocolOrchestrator {
           phase: this.executionState.currentPhase
         });
         await this.decisionLogger.save();
+      }
+
+      // Save guardian checkpoint for recovery
+      if (this.sessionGuardian) {
+        await this.sessionGuardian.fail(error.message);
+        console.log(chalk.yellow('\n📍 Checkpoint saved for recovery'));
+        console.log(chalk.yellow('   Restart orchestrator to resume from last checkpoint'));
       }
 
       await this.handleExecutionFailure(error);
@@ -233,6 +298,39 @@ class LEOProtocolOrchestrator {
       started_at: this.executionState.startTime,
       status: 'in_progress'
     });
+  }
+
+  /**
+   * Execute a command with session guardian checks
+   * Validates safe-stop patterns and tracks for loop detection
+   *
+   * @param {string} command - Command to execute
+   * @param {Object} options - execSync options
+   * @returns {Buffer|string} Command output
+   * @throws {Error} If command matches safe-stop pattern or loop detected
+   */
+  safeExec(command, options = {}) {
+    // Check safe-stop patterns
+    if (this.sessionGuardian) {
+      this.sessionGuardian.validateCommand(command);
+      this.sessionGuardian.checkLoop(`exec:${command.substring(0, 50)}`);
+    }
+
+    // Execute the command
+    return execSync(command, {
+      encoding: 'utf-8',
+      ...options
+    });
+  }
+
+  /**
+   * Track an operation for loop detection
+   * @param {string} operation - Operation identifier
+   */
+  trackOperation(operation) {
+    if (this.sessionGuardian) {
+      this.sessionGuardian.checkLoop(operation);
+    }
   }
 
   /**

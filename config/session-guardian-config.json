@@ -1,0 +1,67 @@
+{
+  "$schema": "./session-guardian-config.schema.json",
+  "_comment": "Session Guardian Configuration - All thresholds configurable",
+
+  "checkpoint": {
+    "enabled": true,
+    "afterGates": true,
+    "afterPhaseTransition": true,
+    "directory": "/tmp/leo-checkpoints",
+    "maxAge": "24h",
+    "format": "json"
+  },
+
+  "loopDetection": {
+    "enabled": true,
+    "threshold": 5,
+    "windowSeconds": 300,
+    "excludePatterns": [
+      "git status",
+      "npm run test",
+      "node scripts/handoff.js"
+    ]
+  },
+
+  "safeStop": {
+    "enabled": true,
+    "patterns": [
+      {
+        "pattern": "git push.*(main|master)",
+        "severity": "critical",
+        "message": "Direct push to main/master branch is prohibited. Use PR workflow."
+      },
+      {
+        "pattern": "git push.*(-f|--force)",
+        "severity": "critical",
+        "message": "Force push is prohibited. Resolve conflicts properly."
+      },
+      {
+        "pattern": "DROP TABLE|DROP DATABASE|TRUNCATE",
+        "severity": "critical",
+        "message": "Destructive database operations are prohibited. Use migrations."
+      },
+      {
+        "pattern": "rm -rf /|rm -rf ~",
+        "severity": "critical",
+        "message": "Destructive file system operations are prohibited."
+      },
+      {
+        "pattern": "git reset --hard.*origin",
+        "severity": "warning",
+        "message": "Hard reset to origin may lose local changes. Consider stashing first."
+      }
+    ]
+  },
+
+  "resourceLimits": {
+    "maxDurationMinutes": 480,
+    "maxGateRetries": 3,
+    "maxTotalOperations": 1000
+  },
+
+  "recovery": {
+    "enabled": true,
+    "autoResumeOnRestart": true,
+    "preserveDecisionLog": true
+  }
+}
