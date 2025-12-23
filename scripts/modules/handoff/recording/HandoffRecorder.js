@@ -136,8 +136,16 @@ export class HandoffRecorder {
       status: 'accepted',
       validation_score: normalizedScore,
       validation_passed: true,
+      // FIX: Store validation summary instead of full result to prevent bloat
       validation_details: {
-        result: result,
+        summary: {
+          passed: result.passed,
+          score: result.normalizedScore || result.totalScore,
+          gate_count: result.gateCount,
+          failed_gate: result.failedGate || null,
+          issue_count: (result.issues || []).length,
+          warning_count: (result.warnings || []).length
+        },
         verified_at: new Date().toISOString(),
         verifier: 'unified-handoff-system.js'
       },
@@ -215,8 +223,16 @@ export class HandoffRecorder {
       ...rejectionContent,
       validation_score: normalizedScore,
       validation_passed: false,
+      // FIX: Store validation summary instead of full result to prevent bloat
       validation_details: {
-        result: result,
+        summary: {
+          passed: false,
+          score: result.normalizedScore || result.actualScore || 0,
+          gate_count: result.gateCount,
+          failed_gate: result.failedGate || null,
+          issue_count: (result.issues || []).length,
+          warning_count: (result.warnings || []).length
+        },
         rejected_at: new Date().toISOString(),
         reason: result.reasonCode,
         message: result.message
