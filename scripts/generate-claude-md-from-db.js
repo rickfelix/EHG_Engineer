@@ -844,22 +844,80 @@ When gates consistently fail:
   }
 
   generateHandoffTemplates(templates) {
-    if (templates.length === 0) return 'No templates in database';
+    if (!templates || templates.length === 0) return 'No templates in database';
+
+    // Helper to safely stringify JSONB
+    const safeJson = (val, fallback = 'N/A') => {
+      if (val === null || val === undefined) return fallback;
+      if (typeof val === 'string') return val;
+      try {
+        return JSON.stringify(val, null, 2);
+      } catch {
+        return String(val);
+      }
+    };
+
+    // Helper to extract section names from template_structure JSONB
+    const extractSections = (templateStructure) => {
+      if (!templateStructure) return 'Not defined';
+      const sections = templateStructure.sections;
+      if (!sections) return 'Not defined';
+      if (Array.isArray(sections)) {
+        // Sections could be strings or objects with title/name
+        return sections.map(s => {
+          if (typeof s === 'string') return s;
+          if (s?.title) return s.title;
+          if (s?.name) return s.name;
+          return safeJson(s);
+        }).join(', ');
+      }
+      return safeJson(sections);
+    };
+
+    // Helper to format required_elements JSONB
+    const formatRequired = (requiredElements) => {
+      if (!requiredElements) return 'None specified';
+      if (Array.isArray(requiredElements)) {
+        return requiredElements.map(el => typeof el === 'string' ? el : safeJson(el)).join(', ');
+      }
+      return safeJson(requiredElements);
+    };
 
     return templates.map(t => `
-#### ${t.from_agent} → ${t.to_agent} (${t.handoff_type})
-Elements: ${t.template_structure.sections ? t.template_structure.sections.join(', ') : 'Not defined'}
-Required: ${t.required_elements ? t.required_elements.join(', ') : 'None'}
+#### ${t.from_agent || 'Unknown'} → ${t.to_agent || 'Unknown'} (${t.handoff_type || 'N/A'})
+- **Elements**: ${extractSections(t.template_structure)}
+- **Required**: ${formatRequired(t.required_elements)}
 `).join('\n');
   }
 
   generateValidationRules(rules) {
-    if (rules.length === 0) return 'No validation rules in database';
+    if (!rules || rules.length === 0) return 'No validation rules in database';
 
+    // Helper to safely stringify JSONB criteria
+    const formatCriteria = (criteria) => {
+      if (!criteria) return 'Not specified';
+      if (typeof criteria === 'string') return criteria;
+      try {
+        // If criteria is an object, show a summary
+        if (typeof criteria === 'object') {
+          const keys = Object.keys(criteria);
+          if (keys.length <= 3) {
+            return keys.map(k => `${k}: ${JSON.stringify(criteria[k])}`).join('; ');
+          }
+          return `${keys.length} criteria defined (${keys.slice(0, 3).join(', ')}...)`;
+        }
+        return JSON.stringify(criteria);
+      } catch {
+        return String(criteria);
+      }
+    };
+
+    // Schema: gate, rule_name, weight, criteria, required, active
     return rules.map(r => `
-- **${r.rule_name}** (${r.rule_type})
-  - Severity: ${r.severity}
-  - Definition: ${JSON.stringify(r.rule_definition)}
+- **${r.rule_name || 'Unnamed Rule'}** (Gate ${r.gate || 'N/A'})
+  - Weight: ${r.weight ?? 'N/A'}
+  - Required: ${r.required ? 'Yes' : 'No'}
+  - Criteria: ${formatCriteria(r.criteria)}
 `).join('\n');
   }
 }
