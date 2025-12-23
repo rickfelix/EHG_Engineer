@@ -394,7 +394,7 @@ async function main() {
   console.log(`\n📋 Analyzing results from: ${resultsFile}`);
 
   // Parse results
-  const { tests, totalDuration, raw } = parseResults(resultsFile);
+  const { tests, totalDuration } = parseResults(resultsFile);
 
   if (tests.length === 0) {
     console.log('⚠️  No test results found');
