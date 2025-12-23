@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2025-12-23 1:00:30 PM
+**Generated**: 2025-12-23 3:15:28 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
@@ -503,6 +503,90 @@ EXEC→PLAN handoffs now have **intelligent verification**:
 
 **Success Pattern** (SD-UAT-003):
 > "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
+
+## Human-Like E2E Testing Fixtures
+
+### Human-Like E2E Testing Enhancements (LEO v4.4)
+
+Enhanced Playwright fixtures for human-like testing that catches "feels wrong" issues, accessibility regressions, and failure-mode gaps.
+
+### Available Fixtures (`tests/e2e/fixtures/`)
+
+| Fixture | Purpose | Import Pattern |
+|---------|---------|----------------|
+| `accessibility.ts` | axe-core WCAG 2.1 AA testing | `import { test, a11y } from './fixtures/accessibility'` |
+| `keyboard-oracle.ts` | Tab order, focus traps, skip links | `import { test, keyboard } from './fixtures/keyboard-oracle'` |
+| `chaos-saboteur.ts` | Network failure simulation, resilience | `import { test, chaos } from './fixtures/chaos-saboteur'` |
+| `visual-oracle.ts` | CLS measurement, layout shift detection | `import { test, visual } from './fixtures/visual-oracle'` |
+| `llm-ux-oracle.ts` | GPT-5.2 multi-lens UX evaluation | `import { test, uxOracle } from './fixtures/llm-ux-oracle'` |
+| `stringency-resolver.ts` | Auto-determines test stringency | `import { determineStringency } from './fixtures/stringency-resolver'` |
+
+### Stringency Levels (Auto-Determined)
+
+| Level | Behavior | Triggers |
+|-------|----------|----------|
+| `strict` | Block any violation | Critical paths: /checkout, /auth, /payment |
+| `standard` | Block critical/serious, warn moderate | Default for most pages |
+| `relaxed` | Warn only, collect data | New features, /admin routes |
+
+### LLM UX Evaluation Lenses (~$20/month budget)
+
+| Lens | Evaluates |
+|------|-----------|
+| `first-time-user` | Is purpose clear? Are CTAs obvious? Is there guidance? |
+| `accessibility` | Visual a11y beyond automated WCAG checks |
+| `mobile-user` | Touch targets (44px min), thumb zones, scroll depth |
+| `error-recovery` | Helpful errors, clear recovery paths |
+| `cognitive-load` | Too many choices? Overwhelming forms? |
+
+### Chaos Testing Capabilities
+
+```typescript
+// Network failure injection (30% failure rate)
+await chaos.attachNetworkChaos(0.3, {
+  failureTypes: ['error'],
+  targetPatterns: ['**/api/**']
+});
+
+// Temporary offline simulation
+await chaos.simulateOffline(2000); // 2 seconds
+
+// Latency injection
+await chaos.injectLatency('**/api/**', 500); // 500ms
+
+// Double-submit idempotency test
+const result = await chaos.testDoubleSubmit('button[type="submit"]');
+assertNoDuplicateSubmit(result);
+
+// Recovery verification
+const recovery = await chaos.checkRecovery('body', 10000);
+expect(recovery.recovered).toBe(true);
+```
+
+### Sample Test Files
+
+| File | Tests |
+|------|-------|
+| `tests/e2e/accessibility/wcag-check.spec.ts` | WCAG 2.1 AA compliance, keyboard navigation |
+| `tests/e2e/resilience/chaos-testing.spec.ts` | Network failure recovery, idempotency |
+| `tests/e2e/ux-evaluation/llm-ux.spec.ts` | LLM-powered UX evaluation |
+
+### CI Workflow
+
+**File:** `.github/workflows/e2e-human-like.yml`
+
+Runs all human-like tests on PR:
+- Accessibility (axe-core) - ~1 min
+- Keyboard navigation - ~30 sec
+- Chaos/resilience - ~2 min
+- LLM UX evaluation (if OPENAI_API_KEY set) - ~2 min
+
+### Integration with Evidence Pack
+
+All human-like test results are automatically included in the LEO evidence pack:
+- `test_results.attachments.accessibility` - axe-core violations
+- `test_results.attachments.chaos` - resilience test results
+- `test_results.attachments.llm_ux` - LLM evaluation scores
 
 ## EXEC Dual Test Requirement
 

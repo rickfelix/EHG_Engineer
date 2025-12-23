@@ -107,6 +107,7 @@
       "exec_edge_case_testing_checklist",
       "testing_tools",
       "e2e_testing_mode_configuration",
+      "human_like_testing",
       "parent_child_exec",
       "vision_v2_exec",
       "negative_constraints_exec"
