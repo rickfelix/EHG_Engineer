@@ -22,7 +22,7 @@
  * 4. Lesson Applicability (10%) - Reusable patterns for future SDs
  *
  * @module rubrics/retrospective-quality-rubric
- * @version 1.1.0-sd-type-aware
+ * @version 1.2.0-scoring-bands
  */
 
 import { AIQualityEvaluator } from '../ai-quality-evaluator.js';
@@ -377,6 +377,10 @@ Duration: ${retrospective.duration_days || 'Unknown'} days`;
           criterion_scores: assessment.scores,
           weighted_score: assessment.weightedScore,
           threshold: assessment.threshold, // Dynamic threshold based on sd_type
+          // v1.2.0: Scoring bands for stable decisions
+          band: assessment.band,
+          confidence: assessment.confidence,
+          confidence_reasoning: assessment.confidence_reasoning,
           sd_type: assessment.sd_type,
           is_orchestrator: assessment.is_orchestrator, // Orchestrator awareness
           child_count: assessment.child_count, // Number of child SDs

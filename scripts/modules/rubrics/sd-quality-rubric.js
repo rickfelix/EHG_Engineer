@@ -195,7 +195,11 @@ Current Phase: ${sd.current_phase || 'Not set'}`;
         details: {
           criterion_scores: assessment.scores,
           weighted_score: assessment.weightedScore,
-          threshold: 70,
+          threshold: assessment.threshold || 70,
+          // v1.2.0: Scoring bands for stable decisions
+          band: assessment.band,
+          confidence: assessment.confidence,
+          confidence_reasoning: assessment.confidence_reasoning,
           cost_usd: assessment.cost,
           duration_ms: assessment.duration
         }

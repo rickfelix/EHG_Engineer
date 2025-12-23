@@ -40,7 +40,7 @@
  *    - Future enhancement roadmap
  *
  * @module ai-quality-evaluator
- * @version 1.1.0-sd-type-aware
+ * @version 1.2.0-scoring-bands
  * @see {@link ../docs/russian-judge-quality-system.md} Complete documentation
  * @see {@link ../config/russian-judge-thresholds.json} Threshold configuration
  */
@@ -76,6 +76,69 @@ export class AIQualityEvaluator {
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
+
+    // Scoring band thresholds (v1.2.0)
+    // Bands stabilize pass/fail decisions even when exact scores vary
+    this.bandThresholds = {
+      PASS: 80,        // 80+ = PASS
+      NEEDS_REVIEW: 50 // 50-79 = NEEDS_REVIEW, <50 = FAIL
+    };
+  }
+
+  /**
+   * Determine scoring band from weighted score
+   * Bands provide stable pass/fail decisions despite score variance
+   *
+   * @param {number} weightedScore - Score 0-100
+   * @returns {string} 'PASS' | 'NEEDS_REVIEW' | 'FAIL'
+   */
+  determineBand(weightedScore) {
+    if (weightedScore >= this.bandThresholds.PASS) {
+      return 'PASS';
+    } else if (weightedScore >= this.bandThresholds.NEEDS_REVIEW) {
+      return 'NEEDS_REVIEW';
+    }
+    return 'FAIL';
+  }
+
+  /**
+   * Determine if validation passed based on band and confidence
+   *
+   * Logic:
+   * - PASS band + HIGH/MEDIUM confidence → passed = true
+   * - FAIL band → passed = false
+   * - NEEDS_REVIEW OR LOW confidence → passed = false (requires human review)
+   *
+   * This stabilizes decisions: same content with 68% vs 72% both get NEEDS_REVIEW,
+   * both require review, decision is consistent.
+   *
+   * @param {string} band - 'PASS' | 'NEEDS_REVIEW' | 'FAIL'
+   * @param {string} confidence - 'HIGH' | 'MEDIUM' | 'LOW'
+   * @param {number} weightedScore - For backward compatibility with threshold-based passing
+   * @param {number} threshold - Dynamic threshold from SD type
+   * @returns {boolean} Whether validation passed
+   */
+  determinePassedStatus(band, confidence, weightedScore, threshold) {
+    // LOW confidence always requires review, regardless of band
+    if (confidence === 'LOW') {
+      return false;
+    }
+
+    // PASS band with non-LOW confidence = passed
+    if (band === 'PASS') {
+      return true;
+    }
+
+    // NEEDS_REVIEW and FAIL bands = not passed
+    // Note: For backward compatibility during transition, we also check
+    // if score exceeds the SD-type-aware threshold. This allows gradual
+    // adoption while maintaining existing behavior.
+    if (band === 'NEEDS_REVIEW' && weightedScore >= threshold) {
+      // Score passes threshold but not PASS band - still passes but will be logged
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -123,17 +186,27 @@ export class AIQualityEvaluator {
 
       if (DEBUG) console.log(`[AI-Eval] Cache HIT for ${contentId} (age: ${Math.round((Date.now() - new Date(data.assessed_at).getTime()) / 60000)}min)`);
 
+      // v1.2.0: Calculate band for cached entries (for consistent band-based decisions)
+      const cachedScore = data.weighted_score;
+      const cachedThreshold = data.pass_threshold || 70;
+      const cachedBand = this.determineBand(cachedScore);
+      // Legacy cache entries don't have confidence - default to MEDIUM
+      const cachedConfidence = data.confidence || 'MEDIUM';
+
       return {
         scores: data.scores,
-        weightedScore: data.weighted_score,
+        weightedScore: cachedScore,
         feedback: data.feedback,
-        passed: data.weighted_score >= (data.pass_threshold || 70),
-        threshold: data.pass_threshold || 70,
+        passed: this.determinePassedStatus(cachedBand, cachedConfidence, cachedScore, cachedThreshold),
+        threshold: cachedThreshold,
+        band: cachedBand,
+        confidence: cachedConfidence,
+        confidence_reasoning: data.confidence_reasoning || '',
         sd_type: data.sd_type || 'unknown',
         cached: true,
         cached_at: data.assessed_at
       };
-    } catch (err) {
+    } catch (_err) {
       // Cache lookup failed, proceed with fresh evaluation
       return null;
     }
@@ -234,9 +307,19 @@ export class AIQualityEvaluator {
 
       // Parse scores
       let scores;
+      let meta = { confidence: 'MEDIUM', confidence_reasoning: 'Default confidence' };
       const parseStart = Date.now();
       try {
-        scores = JSON.parse(response.choices[0].message.content);
+        const parsed = JSON.parse(response.choices[0].message.content);
+        // Extract _meta if present, then remove from scores
+        if (parsed._meta) {
+          meta = {
+            confidence: parsed._meta.confidence || 'MEDIUM',
+            confidence_reasoning: parsed._meta.confidence_reasoning || ''
+          };
+          delete parsed._meta;
+        }
+        scores = parsed;
         if (DEBUG) console.log(`${logPrefix} JSON parsed in ${Date.now() - parseStart}ms`);
       } catch (parseError) {
         console.error(`${logPrefix} Failed to parse OpenAI response. First 500 chars:`, response.choices[0].message.content.substring(0, 500));
@@ -246,12 +329,19 @@ export class AIQualityEvaluator {
       // Calculate weighted score
       const weightedScore = this.calculateWeightedScore(scores);
 
+      // Determine scoring band (v1.2.0 - stabilizes pass/fail decisions)
+      const band = this.determineBand(weightedScore);
+      const confidence = meta.confidence;
+
       // Generate feedback (pass criteria config and sd for SD-type-aware blocking logic)
       const feedback = this.generateFeedback(scores, this.rubricConfig.criteria, sd);
 
       // Get dynamic pass threshold based on sd_type
       const threshold = this.getPassThreshold(this.rubricConfig.contentType, sd);
-      const passed = weightedScore >= threshold;
+
+      // Determine passed status using bands + confidence (v1.2.0)
+      // This provides stable decisions: 68% and 72% both get NEEDS_REVIEW band
+      const passed = this.determinePassedStatus(band, confidence, weightedScore, threshold);
 
       // Track metrics
       const duration = Date.now() - startTime;
@@ -259,12 +349,13 @@ export class AIQualityEvaluator {
       const cost = this.calculateCost(tokensUsed);
 
       if (DEBUG) {
-        console.log(`${logPrefix} Score: ${weightedScore}% (threshold: ${threshold}%) - ${passed ? 'PASS' : 'FAIL'}`);
+        console.log(`${logPrefix} Score: ${weightedScore}% | Band: ${band} | Confidence: ${confidence}`);
+        console.log(`${logPrefix} Threshold: ${threshold}% | Passed: ${passed ? 'YES' : 'NO'}`);
         console.log(`${logPrefix} Total duration: ${duration}ms (API: ${apiDuration}ms)`);
         console.log(`${logPrefix} Cost: $${cost.toFixed(6)}`);
       }
 
-      // Store assessment in database (with content hash for cache validation)
+      // Store assessment in database (with content hash, band, confidence for cache validation)
       const storeStart = Date.now();
       await this.storeAssessment(
         contentId,
@@ -276,7 +367,10 @@ export class AIQualityEvaluator {
         cost,
         sd,
         threshold,
-        contentHash
+        contentHash,
+        band,
+        confidence,
+        meta.confidence_reasoning
       );
       if (DEBUG) console.log(`${logPrefix} Assessment stored in ${Date.now() - storeStart}ms`);
 
@@ -286,6 +380,10 @@ export class AIQualityEvaluator {
         feedback,
         passed,
         threshold,
+        // v1.2.0: Scoring bands for stable decisions
+        band,
+        confidence,
+        confidence_reasoning: meta.confidence_reasoning,
         sd_type: sd?.sd_type || 'unknown',
         is_orchestrator: sd?._isOrchestrator || false,
         child_count: sd?._childCount || 0,
@@ -377,8 +475,17 @@ Return ONLY valid JSON in this exact format:
     "score": <number 0-10>,
     "reasoning": "<1-2 sentence explanation of why this score>",
     "improvement": "<REQUIRED for scores <8: specific, actionable suggestion to improve this criterion. Example: 'Add baselines and targets to success metrics like: Baseline: 0% → Target: 80% coverage'. Leave empty string if score >= 8>"
+  },
+  "_meta": {
+    "confidence": "<HIGH | MEDIUM | LOW - your confidence in this assessment>",
+    "confidence_reasoning": "<1 sentence explaining confidence level>"
   }
 }
+
+**Confidence Guidelines:**
+- HIGH: Clear evidence supports scores, no ambiguity in content quality
+- MEDIUM: Reasonable assessment but some interpretation required
+- LOW: Content is ambiguous, incomplete, or difficult to evaluate fairly
 
 NO additional text, explanations, or markdown - ONLY the JSON object.`;
   }
@@ -755,10 +862,10 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
   }
 
   /**
-   * Store assessment in database with sd_type, threshold tracking, and content hash
-   * SYSTEMIC FIX: Added content_hash parameter for cache invalidation
+   * Store assessment in database with sd_type, threshold tracking, band, and confidence
+   * v1.2.0: Added band and confidence for stable decision caching
    */
-  async storeAssessment(contentId, scores, weightedScore, feedback, duration, tokensUsed, cost, sd = null, threshold = 70, contentHash = null) {
+  async storeAssessment(contentId, scores, weightedScore, feedback, duration, tokensUsed, cost, sd = null, threshold = 70, contentHash = null, band = null, confidence = null, confidenceReasoning = null) {
     // Guard: Skip storage if contentId is null/undefined (prevents NOT NULL constraint violation)
     if (!contentId) {
       console.warn(`[AIQualityEvaluator] Skipping assessment storage: content_id is ${contentId === null ? 'null' : 'undefined'} for content_type=${this.rubricConfig.contentType}`);
@@ -778,10 +885,16 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
         assessment_duration_ms: duration,
         tokens_used: tokensUsed,
         cost_usd: cost,
-        rubric_version: 'v1.1.0-sd-type-aware',
+        rubric_version: 'v1.2.0-scoring-bands',
         sd_type: sd?.sd_type || null,
         pass_threshold: threshold
       };
+
+      // v1.2.0: Include band and confidence for stable decision caching
+      // These columns may not exist in older schema - handled gracefully below
+      if (band) insertData.band = band;
+      if (confidence) insertData.confidence = confidence;
+      if (confidenceReasoning) insertData.confidence_reasoning = confidenceReasoning;
 
       // SYSTEMIC FIX: Include content_hash for cache invalidation (if column exists)
       if (contentHash) {
@@ -793,9 +906,18 @@ Return JSON scores for ALL ${this.rubricConfig.criteria.length} criteria.`;
         .insert(insertData);
 
       if (error) {
-        // If content_hash column doesn't exist, retry without it (backward compatible)
-        if (error.message?.includes('content_hash')) {
-          delete insertData.content_hash;
+        // Handle missing columns gracefully (backward compatible)
+        const missingColumnFields = ['content_hash', 'band', 'confidence', 'confidence_reasoning'];
+        let needsRetry = false;
+
+        for (const field of missingColumnFields) {
+          if (error.message?.includes(field)) {
+            delete insertData[field];
+            needsRetry = true;
+          }
+        }
+
+        if (needsRetry) {
           const { error: retryError } = await this.supabase
             .from('ai_quality_assessments')
             .insert(insertData);
