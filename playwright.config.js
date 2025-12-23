@@ -1,5 +1,9 @@
 // @ts-check
 import { defineConfig, devices } from '@playwright/test';
+import dotenv from 'dotenv';
+
+// Load environment variables for E2E tests
+dotenv.config();
 
 /**
  * ============================================================================
