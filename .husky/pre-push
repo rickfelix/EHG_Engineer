@@ -1,100 +1,209 @@
 #!/bin/sh
 # ============================================================================
-# Pre-Push Hook: SD Completion Check
+# Pre-Push Hook: Work Tracking Enforcement
 # ============================================================================
 #
-# This hook validates SD completion before allowing push to main.
-# It uses the same logic as the database trigger: calculate_sd_progress()
+# ALL pushes to main MUST be tracked as either:
+#   1. Strategic Directive (SD-*) - For substantial work (>50 LOC)
+#   2. Quick-Fix (QF-*) - For small fixes (≤50 LOC)
 #
-# Requirements for push to main:
-# - Retrospective exists with quality_score >= 70
-# - At least 3 handoffs with status='accepted'
-# - All 5 phases at 100% progress
+# This ensures:
+#   - All work is tracked in the database
+#   - Lessons learned are captured
+#   - Quality gates are enforced
+#   - Progress metrics are accurate
 #
-# Bypass: Use SKIP_SD_CHECK=1 git push (for emergencies only)
+# Branch naming:
+#   - SD: feat/SD-XXX-*, fix/SD-XXX-*, etc.
+#   - QF: quick-fix/QF-YYYYMMDD-NNN or QF-YYYYMMDD-NNN
+#
+# Emergency bypass (logged): EMERGENCY_PUSH="reason" git push
+# ============================================================================
 
 # Get the remote name and URL
 remote="$1"
 url="$2"
 
-# Check for bypass
-if [ "$SKIP_SD_CHECK" = "1" ]; then
-  echo "⚠️  SD completion check bypassed via SKIP_SD_CHECK=1"
+# Check for emergency bypass (with required reason)
+if [ -n "$EMERGENCY_PUSH" ]; then
+  echo ""
+  echo "⚠️  EMERGENCY PUSH - Bypassing work tracking requirement"
+  echo "   Reason: $EMERGENCY_PUSH"
+  echo ""
+
+  # Log the emergency bypass
+  if [ -f ".env" ]; then
+    export $(grep -E '^(SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY|NEXT_PUBLIC_SUPABASE_URL)=' .env | xargs 2>/dev/null)
+    if [ -z "$SUPABASE_URL" ] && [ -n "$NEXT_PUBLIC_SUPABASE_URL" ]; then
+      export SUPABASE_URL="$NEXT_PUBLIC_SUPABASE_URL"
+    fi
+  fi
+
+  # Log to database if possible
+  if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    COMMIT=$(git rev-parse HEAD)
+    node -e "
+      const { createClient } = require('@supabase/supabase-js');
+      const supabase = createClient('$SUPABASE_URL', '$SUPABASE_SERVICE_ROLE_KEY');
+      supabase.from('audit_log').insert({
+        action: 'EMERGENCY_PUSH',
+        details: {
+          branch: '$BRANCH',
+          commit: '$COMMIT',
+          reason: '$EMERGENCY_PUSH',
+          timestamp: new Date().toISOString()
+        }
+      }).then(() => process.exit(0)).catch(() => process.exit(0));
+    " 2>/dev/null || true
+  fi
+
+  echo "⚠️  Emergency bypass logged. Please create SD/QF retroactively."
+  echo ""
   exit 0
+fi
+
+# Legacy bypass (deprecated - shows warning)
+if [ "$SKIP_SD_CHECK" = "1" ]; then
+  echo ""
+  echo "⚠️  DEPRECATED: SKIP_SD_CHECK=1 is no longer supported"
+  echo ""
+  echo "All work must be tracked. Use one of:"
+  echo "  1. Create SD: npm run sd:create"
+  echo "  2. Create QF: node scripts/create-quick-fix.js --interactive"
+  echo "  3. Emergency: EMERGENCY_PUSH=\"critical hotfix for X\" git push"
+  echo ""
+  exit 1
 fi
 
 # Only check when pushing to main
 while read local_ref local_sha remote_ref remote_sha
 do
-  # Skip if not pushing to main (POSIX-compatible check)
+  # Skip if not pushing to main
   case "$remote_ref" in
     *refs/heads/main*) ;;
     *) continue ;;
   esac
 
   echo ""
-  echo "🔍 Pushing to main - checking SD completion..."
+  echo "🔍 Pushing to main - verifying work tracking..."
   echo ""
 
   # Get current branch name
   BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
-  # Extract SD ID from branch name (POSIX-compatible)
+  # Extract SD ID from branch name
   SD_ID=$(echo "$BRANCH" | grep -oE 'SD-[A-Z0-9-]+' | head -1 || echo "")
 
-  if [ -z "$SD_ID" ]; then
-    echo "✅ No SD ID in branch name - skipping completion check"
-    echo "   Branch: $BRANCH"
-    continue
-  fi
+  # Extract QF ID from branch name
+  QF_ID=$(echo "$BRANCH" | grep -oE 'QF-[0-9]+-[0-9]+' | head -1 || echo "")
 
-  echo "   SD ID: $SD_ID"
-  echo "   Branch: $BRANCH"
-  echo ""
-
-  # Check if environment variables are set
+  # Load environment variables
   if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-    # Try to load from .env file
     if [ -f ".env" ]; then
-      export $(grep -E '^(SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY|NEXT_PUBLIC_SUPABASE_URL)=' .env | xargs)
-      # Use NEXT_PUBLIC_SUPABASE_URL if SUPABASE_URL is not set
+      export $(grep -E '^(SUPABASE_URL|SUPABASE_SERVICE_ROLE_KEY|NEXT_PUBLIC_SUPABASE_URL)=' .env | xargs 2>/dev/null)
       if [ -z "$SUPABASE_URL" ] && [ -n "$NEXT_PUBLIC_SUPABASE_URL" ]; then
         export SUPABASE_URL="$NEXT_PUBLIC_SUPABASE_URL"
       fi
     fi
   fi
 
-  # Verify we have the required environment variables
-  if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-    echo "⚠️  Cannot verify SD completion - missing environment variables"
-    echo "   Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY"
-    echo "   Or bypass with: SKIP_SD_CHECK=1 git push"
+  # ========================================================================
+  # CASE 1: Strategic Directive (SD-*)
+  # ========================================================================
+  if [ -n "$SD_ID" ]; then
+    echo "   Type: Strategic Directive"
+    echo "   SD ID: $SD_ID"
+    echo "   Branch: $BRANCH"
     echo ""
-    # Don't block if we can't check - GitHub Action will catch it
+
+    if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+      echo "⚠️  Cannot verify SD completion - missing environment variables"
+      echo "   GitHub Action will verify on PR"
+      continue
+    fi
+
+    # Run SD verification
+    node scripts/verify-sd-completion.js "$SD_ID"
+
+    if [ $? -ne 0 ]; then
+      echo ""
+      echo "❌ Push blocked: SD completion check failed"
+      echo ""
+      echo "To complete the SD:"
+      echo "  1. npm run handoff exec-to-plan"
+      echo "  2. Verify retrospective was created"
+      echo "  3. Try push again"
+      echo ""
+      exit 1
+    fi
+
+    echo ""
+    echo "✅ SD completion verified - push allowed"
+    echo ""
     continue
   fi
 
-  # Run the verification script
-  node scripts/verify-sd-completion.js "$SD_ID"
+  # ========================================================================
+  # CASE 2: Quick-Fix (QF-*)
+  # ========================================================================
+  if [ -n "$QF_ID" ]; then
+    echo "   Type: Quick-Fix"
+    echo "   QF ID: $QF_ID"
+    echo "   Branch: $BRANCH"
+    echo ""
 
-  if [ $? -ne 0 ]; then
+    if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+      echo "⚠️  Cannot verify QF completion - missing environment variables"
+      echo "   GitHub Action will verify on PR"
+      continue
+    fi
+
+    # Run QF verification
+    node scripts/verify-qf-completion.js "$QF_ID"
+
+    if [ $? -ne 0 ]; then
+      echo ""
+      echo "❌ Push blocked: Quick-Fix completion check failed"
+      echo ""
+      echo "To complete the Quick-Fix:"
+      echo "  1. node scripts/complete-quick-fix.js $QF_ID --pr-url <PR_URL>"
+      echo "  2. Ensure tests pass and UAT verified"
+      echo "  3. Try push again"
+      echo ""
+      exit 1
+    fi
+
     echo ""
-    echo "❌ Push blocked: SD completion check failed"
+    echo "✅ Quick-Fix completion verified - push allowed"
     echo ""
-    echo "To complete the DONE phase:"
-    echo "  1. npm run handoff exec-to-plan"
-    echo "  2. Verify retrospective was created"
-    echo "  3. Try push again"
-    echo ""
-    echo "To bypass (emergencies only):"
-    echo "  SKIP_SD_CHECK=1 git push"
-    echo ""
-    exit 1
+    continue
   fi
 
+  # ========================================================================
+  # CASE 3: No tracking - BLOCKED
+  # ========================================================================
+  echo "❌ Push blocked: No work tracking found"
   echo ""
-  echo "✅ SD completion verified - push allowed"
+  echo "   Branch: $BRANCH"
   echo ""
+  echo "All changes to main must be tracked as either:"
+  echo ""
+  echo "  📋 STRATEGIC DIRECTIVE (for substantial work >50 LOC)"
+  echo "     npm run sd:create"
+  echo "     Then: git checkout -b feat/SD-XXX-description"
+  echo ""
+  echo "  🔧 QUICK-FIX (for small fixes ≤50 LOC)"
+  echo "     node scripts/create-quick-fix.js --interactive"
+  echo "     Then: git checkout -b quick-fix/QF-YYYYMMDD-NNN"
+  echo ""
+  echo "  🚨 EMERGENCY (with logged justification)"
+  echo "     EMERGENCY_PUSH=\"critical: reason\" git push"
+  echo ""
+  echo "This ensures all work is tracked, lessons are captured,"
+  echo "and quality gates are enforced."
+  echo ""
+  exit 1
 
 done
 
