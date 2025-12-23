@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-12-21 12:17:34 PM
+**Generated**: 2025-12-23 1:00:30 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -1510,140 +1510,203 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
 
 
 #### PLAN → EXEC (plan_presentation)
-Elements: [object Object], [object Object], [object Object], [object Object], [object Object]
-Required: goal_summary present and ≤300 chars, file_scope has at least one of: create, modify, delete, execution_plan has ≥1 step, testing_strategy has both unit_tests and e2e_tests defined
+- **Elements**: goal_summary, file_scope, execution_plan, dependency_impacts, testing_strategy
+- **Required**: goal_summary present and ≤300 chars, file_scope has at least one of: create, modify, delete, execution_plan has ≥1 step, testing_strategy has both unit_tests and e2e_tests defined
 
 
 #### EXEC → PLAN (EXEC-to-PLAN-VERIFICATION)
-Elements: Not defined
-Required: executive_summary, deliverables_manifest, key_decisions, known_issues, resource_utilization, action_items, completeness_report, rca_integration
+- **Elements**: Not defined
+- **Required**: executive_summary, deliverables_manifest, key_decisions, known_issues, resource_utilization, action_items, completeness_report, rca_integration
 
 
 #### LEAD → PLAN (strategic_to_technical)
-Elements: Executive Summary, Completeness Report, Deliverables Manifest, Key Decisions & Rationale, Known Issues & Risks, Resource Utilization, Action Items for Receiver
-Required: [object Object], [object Object], [object Object]
+- **Elements**: Executive Summary, Completeness Report, Deliverables Manifest, Key Decisions & Rationale, Known Issues & Risks, Resource Utilization, Action Items for Receiver
+- **Required**: {
+  "element": "SD created",
+  "required": true
+}, {
+  "element": "Objectives defined",
+  "required": true
+}, {
+  "element": "Priority set",
+  "required": true
+}
 
 
 #### PLAN → LEAD (verification_to_approval)
-Elements: Executive Summary, Completeness Report, Deliverables Manifest, Key Decisions & Rationale, Known Issues & Risks, Resource Utilization, Action Items for Receiver
-Required: [object Object], [object Object], [object Object]
+- **Elements**: Executive Summary, Completeness Report, Deliverables Manifest, Key Decisions & Rationale, Known Issues & Risks, Resource Utilization, Action Items for Receiver
+- **Required**: {
+  "element": "EXEC work complete",
+  "required": true
+}, {
+  "element": "Sub-agent verifications complete",
+  "required": true
+}, {
+  "element": "EXEC checklist >= 80%",
+  "required": true
+}
 
 
 #### EXEC → PLAN (implementation_to_verification)
-Elements: Executive Summary, Completeness Report, Deliverables Manifest, Key Decisions & Rationale, Known Issues & Risks, Resource Utilization, Action Items for Receiver
-Required: [object Object], [object Object], [object Object], [object Object], [object Object], [object Object]
+- **Elements**: Executive Summary, Completeness Report, Deliverables Manifest, Key Decisions & Rationale, Known Issues & Risks, Resource Utilization, Action Items for Receiver
+- **Required**: {
+  "element": "Implementation complete",
+  "required": true
+}, {
+  "element": "Tests passing",
+  "required": true
+}, {
+  "element": "Documentation updated",
+  "required": true
+}, {
+  "format": "Command + pass/fail count + coverage %",
+  "element": "Unit Test Results",
+  "evidence": "SD-EXPORT-001",
+  "required": true
+}, {
+  "format": "Command + pass/fail count + screenshot URL + Playwright report",
+  "element": "E2E Test Results",
+  "evidence": "SD-EXPORT-001, SD-EVA-MEETING-002",
+  "required": true
+}, {
+  "format": "Total stories / Validated stories / Coverage % (must be 100%)",
+  "element": "User Story Coverage",
+  "evidence": "SD-EVA-MEETING-001",
+  "required": true
+}
 
 
 ## Validation Rules
 
 
-- **hasADR** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **hasADR** (Gate 2A)
+  - Weight: 0.35
+  - Required: Yes
+  - Criteria: 
 
 
-- **hasInterfaces** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **hasInterfaces** (Gate 2A)
+  - Weight: 0.35
+  - Required: Yes
+  - Criteria: 
 
 
-- **hasTechDesign** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **hasTechDesign** (Gate 2A)
+  - Weight: 0.3
+  - Required: Yes
+  - Criteria: 
 
 
-- **designArtifacts** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **designArtifacts** (Gate 2B)
+  - Weight: 0.5
+  - Required: Yes
+  - Criteria: 
 
 
-- **dbSchemaReady** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **dbSchemaReady** (Gate 2B)
+  - Weight: 0.5
+  - Required: Yes
+  - Criteria: 
 
 
-- **securityScanClean** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **securityScanClean** (Gate 2C)
+  - Weight: 0.6
+  - Required: Yes
+  - Criteria: 
 
 
-- **riskSpikesClosed** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **riskSpikesClosed** (Gate 2C)
+  - Weight: 0.4
+  - Required: Yes
+  - Criteria: 
 
 
-- **nfrBudgetsPresent** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **nfrBudgetsPresent** (Gate 2D)
+  - Weight: 0.3
+  - Required: Yes
+  - Criteria: 
 
 
-- **coverageTargetSet** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **coverageTargetSet** (Gate 2D)
+  - Weight: 0.3
+  - Required: Yes
+  - Criteria: 
 
 
-- **testPlanMatrices** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **testPlanMatrices** (Gate 2D)
+  - Weight: 0.4
+  - Required: Yes
+  - Criteria: 
 
 
-- **supervisorChecklistPass** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **supervisorChecklistPass** (Gate 3)
+  - Weight: 1
+  - Required: Yes
+  - Criteria: 
 
 
-- **hasESLintPass** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **hasESLintPass** (Gate 0)
+  - Weight: 0.4
+  - Required: Yes
+  - Criteria: 5 criteria defined (command, timeout_ms, description...)
 
 
-- **hasTypeScriptPass** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **hasTypeScriptPass** (Gate 0)
+  - Weight: 0.4
+  - Required: Yes
+  - Criteria: 5 criteria defined (command, timeout_ms, description...)
 
 
-- **hasImportsPass** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **hasImportsPass** (Gate 0)
+  - Weight: 0.2
+  - Required: No
+  - Criteria: 5 criteria defined (command, blocking, timeout_ms...)
 
 
-- **hasUnitTestsExecuted** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **hasUnitTestsExecuted** (Gate 1)
+  - Weight: 0.4
+  - Required: Yes
+  - Criteria: 5 criteria defined (command, timeout, description...)
 
 
-- **hasUnitTestsPassing** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **hasUnitTestsPassing** (Gate 1)
+  - Weight: 0.4
+  - Required: Yes
+  - Criteria: 4 criteria defined (command, description, successCriteria...)
 
 
-- **hasCoverageThreshold** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **hasCoverageThreshold** (Gate 1)
+  - Weight: 0.2
+  - Required: No
+  - Criteria: 5 criteria defined (command, description, minCoverage...)
 
 
-- **hasTestEvidence** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **hasTestEvidence** (Gate Q)
+  - Weight: 0.35
+  - Required: Yes
+  - Criteria: 4 criteria defined (command, description, successCriteria...)
 
 
-- **hasDiffMinimality** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **hasDiffMinimality** (Gate Q)
+  - Weight: 0.25
+  - Required: No
+  - Criteria: 4 criteria defined (command, thresholds, description...)
 
 
-- **hasRollbackSafety** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **hasRollbackSafety** (Gate Q)
+  - Weight: 0.2
+  - Required: No
+  - Criteria: 4 criteria defined (command, description, migration_paths...)
 
 
-- **hasMigrationCorrectness** (undefined)
-  - Severity: undefined
-  - Definition: undefined
+- **hasMigrationCorrectness** (Gate Q)
+  - Weight: 0.2
+  - Required: No
+  - Criteria: 5 criteria defined (command, description, naming_pattern...)
 
 
 ---
 
-*Generated from database: 2025-12-21*
+*Generated from database: 2025-12-23*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

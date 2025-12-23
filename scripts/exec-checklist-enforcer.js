@@ -20,9 +20,19 @@ dotenv.config();
 
 class EXECChecklistEnforcer {
   constructor() {
+    // Require service role key for governance/audit writes (evidence collection)
+    // Anon key may fail silently under RLS on governance tables
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceKey) {
+      console.error('❌ SUPABASE_SERVICE_ROLE_KEY is required for exec-checklist-enforcer');
+      console.error('   Evidence writes to governance tables require service role permissions.');
+      console.error('   Set SUPABASE_SERVICE_ROLE_KEY in your .env file.');
+      process.exit(1);
+    }
+
     this.supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      serviceKey
     );
 
     // Mandatory checklist items
