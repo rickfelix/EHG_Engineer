@@ -40,6 +40,7 @@ This agent works with companion **Claude Code Skills** for creative guidance. Sk
 | `baseline-testing` | Capture pre-existing failures | Starting implementation | PAT-RECURSION-001, PAT-RECURSION-005 |
 | `e2e-ui-verification` | Verify UI exists before writing tests | Writing E2E tests | PAT-E2E-UI-001 |
 | `sd-classification` | Determine if E2E applicable | Infrastructure SDs | PAT-INFRA-E2E-001, PAT-QF-MULTI-001 |
+| `human-like-testing` | Accessibility, chaos, LLM UX fixtures | Human-like validation | "Feels wrong" issues |
 
 ### Agent-Skill Workflow
 1. **Creative Phase**: Model invokes skills for testing pattern guidance (how to write tests)
@@ -142,6 +143,33 @@ The LEO Stack has TWO UI codebases that share a consolidated database:
   - Reference: `/mnt/c/_EHG/EHG/docs/testing/ui-mode-debugging.md`
 - **Enhanced Reporting**: JSON output, HAR recording, automatic traces on failure
 - **Configuration**: Multiple playwright configs for different targets
+
+## Human-Like E2E Testing (LEO v4.4)
+
+Enhanced fixtures for testing beyond deterministic pass/fail checks:
+
+### Available Fixtures (`tests/e2e/fixtures/`)
+
+| Fixture | Purpose | Use For |
+|---------|---------|---------|
+| `accessibility.ts` | axe-core WCAG 2.1 AA | Accessibility compliance |
+| `keyboard-oracle.ts` | Tab order, focus traps | Keyboard navigation |
+| `chaos-saboteur.ts` | Network failure simulation | Resilience testing |
+| `visual-oracle.ts` | CLS measurement | Visual stability |
+| `llm-ux-oracle.ts` | GPT-5.2 multi-lens evaluation | UX assessment |
+| `stringency-resolver.ts` | Auto stringency | Context-aware strictness |
+
+### Sample Tests
+- `tests/e2e/accessibility/wcag-check.spec.ts` - WCAG compliance
+- `tests/e2e/resilience/chaos-testing.spec.ts` - Network resilience
+- `tests/e2e/ux-evaluation/llm-ux.spec.ts` - LLM UX evaluation
+
+### CI Workflow
+- **File:** `.github/workflows/e2e-human-like.yml`
+- **Runs:** On every PR (~10 min total)
+- **Budget:** ~$20/month for LLM UX evaluation (if OPENAI_API_KEY set)
+
+**Skill:** Use `/human-like-testing` for detailed patterns and examples.
 
 ## Key Success Patterns
 
