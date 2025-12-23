@@ -375,13 +375,43 @@ export class PlanToLeadExecutor extends BaseExecutor {
     });
 
     // Gate 5: Git Commit Enforcement
-    gates.push({
-      name: 'GATE5_GIT_COMMIT_ENFORCEMENT',
-      validator: async (ctx) => {
-        console.log('\n🔒 GATE 5: Git Commit Enforcement');
-        console.log('-'.repeat(50));
+    // SD-DOCS-ARCH-001: Documentation SDs skip strict git enforcement
+    // Documentation changes may be committed directly to main or as part of larger commits
+    // Check sd_type early for GATE5 conditional logic
+    const isNonCodeSD = isInfrastructureSDSync(sd);
+    if (isNonCodeSD) {
+      gates.push({
+        name: 'GATE5_GIT_COMMIT_ENFORCEMENT',
+        validator: async () => {
+          console.log('\n🔒 GATE 5: Git Commit Enforcement');
+          console.log('-'.repeat(50));
+          console.log('   ℹ️  Documentation/Infrastructure SD detected');
+          console.log('   ✅ Skipping strict commit enforcement');
+          console.log('   📝 Documentation SDs may commit directly to main');
 
-        // PARENT SD DETECTION: Parent orchestrator SDs don't have their own commits
+          return {
+            passed: true,
+            score: 100,
+            max_score: 100,
+            issues: [],
+            warnings: ['Documentation SD - commit enforcement relaxed'],
+            details: {
+              is_documentation_sd: true,
+              sd_type: sd.sd_type,
+              workflow_modification: 'Commit enforcement skipped for documentation SDs'
+            }
+          };
+        },
+        required: true
+      });
+    } else {
+      gates.push({
+        name: 'GATE5_GIT_COMMIT_ENFORCEMENT',
+        validator: async (ctx) => {
+          console.log('\n🔒 GATE 5: Git Commit Enforcement');
+          console.log('-'.repeat(50));
+
+          // PARENT SD DETECTION: Parent orchestrator SDs don't have their own commits
         // Their implementation work is tracked via children's commits
         const sdUuid = ctx.sd?.id || ctx.sdId;
         const { data: childSDs } = await this.supabase
@@ -442,11 +472,12 @@ export class PlanToLeadExecutor extends BaseExecutor {
       },
       required: true
     });
+    }  // Close else block for GATE5 non-documentation SDs
 
     // Gate 3 & 4: Only if design/database SD (conditional)
     // Use centralized sd-type-checker - sync check here, async AI check done inside gate validators
     // Non-code SDs (infrastructure, documentation, process) skip Gates 3 & 4
-    const isNonCodeSD = isInfrastructureSDSync(sd);
+    // Note: isNonCodeSD is already defined above for GATE5 check
     if (!isNonCodeSD) {
       // Gate 3: End-to-End Traceability
       gates.push({
