@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
-**Rows**: 11
-**RLS**: Enabled (3 policies)
+**Generated**: 2025-12-22T04:17:05.932Z
+**Rows**: 97
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (72 total)
+## Columns (73 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -68,7 +68,7 @@
 | archived_at | `timestamp without time zone` | YES | - | ARCHIVED AT: Timestamp when this directive was archived. NULL if currently active. Set when is_active changes to FALSE. |
 | archived_by | `character varying(100)` | YES | - | ARCHIVED BY: User/agent who archived this directive. NULL if not archived. |
 | governance_metadata | `jsonb` | YES | `'{}'::jsonb` | GOVERNANCE METADATA: Flexible JSONB object for governance-related data (compliance, approvals, audit trails). Structure varies by org policy. |
-| target_application | `character varying(20)` | YES | `'EHG'::character varying` | TARGET APPLICATION: Which application this SD targets. Valid values: "EHG" (unified frontend with user + /admin routes) or "EHG_Engineer" (backend API only). Default: EHG. Note: As of SD-ARCH-EHG-007, all UI goes to EHG. |
+| target_application | `character varying(20)` | YES | `'EHG'::character varying` | TARGET APPLICATION: Which application this SD targets. Valid values: "EHG" (customer-facing app) or "EHG_Engineer" (management dashboard). Default: EHG. |
 | progress | `integer(32)` | YES | `0` | PROGRESS (LEGACY): Old progress field (0-100 integer). DEPRECATED - use progress_percentage instead. Kept for backward compatibility. |
 | completion_date | `timestamp with time zone` | YES | - | COMPLETION DATE: Timestamp when status changed to "completed". NULL if not yet complete. Auto-set by LEAD final approval. |
 | current_phase | `text` | YES | `'LEAD_APPROVAL'::text` | CURRENT PHASE: Current LEO Protocol workflow phase. Valid values: LEAD_APPROVAL, PLAN_PRD, EXEC_IMPLEMENTATION, PLAN_VERIFY, LEAD_FINAL. Default: LEAD_APPROVAL. |
@@ -91,6 +91,7 @@ Use the id column instead - it is the canonical identifier. |
 | active_session_id | `text` | YES | - | - |
 | complexity_level | `character varying(20)` | YES | `'moderate'::character varying` | SD complexity level for effort policy lookup: simple, moderate, complex, critical |
 | dependency_chain | `jsonb` | YES | - | For parent SDs: ordered list of child SD IDs with dependencies. Format: {"children": [{"sd_id": "SD-X", "order": 1, "depends_on": null}]} |
+| exploration_summary | `jsonb` | YES | - | EXPLORATION SUMMARY: JSONB object containing exploration phase findings for orchestrator SDs. Structure: {files_explored: [], key_findings: [], patterns_identified: [], gaps_identified: [], exploration_date: "YYYY-MM-DD", explored_by: "Agent name"}. NULL for non-orchestrator SDs or pre-exploration phase. |
 
 ## Constraints
 
@@ -106,7 +107,7 @@ Use the id column instead - it is the canonical identifier. |
 ### Check Constraints
 - `check_target_application`: CHECK (((target_application)::text = ANY ((ARRAY['EHG'::character varying, 'EHG_Engineer'::character varying])::text[])))
 - `chk_sd_v2_triage`: CHECK (((rolled_triage IS NULL) OR (rolled_triage = ANY (ARRAY['High'::text, 'Medium'::text, 'Low'::text, 'Future'::text]))))
-- `sd_type_check`: CHECK (((sd_type)::text = ANY ((ARRAY['feature'::character varying, 'infrastructure'::character varying, 'database'::character varying, 'security'::character varying, 'documentation'::character varying])::text[])))
+- `sd_type_check`: CHECK (((sd_type)::text = ANY ((ARRAY['feature'::character varying, 'bugfix'::character varying, 'performance'::character varying, 'database'::character varying, 'docs'::character varying, 'documentation'::character varying, 'infrastructure'::character varying, 'refactor'::character varying, 'security'::character varying, 'orchestrator'::character varying, 'qa'::character varying])::text[])))
 - `strategic_directives_v2_complexity_level_check`: CHECK (((complexity_level)::text = ANY ((ARRAY['simple'::character varying, 'moderate'::character varying, 'complex'::character varying, 'critical'::character varying])::text[])))
 - `strategic_directives_v2_confidence_score_check`: CHECK (((confidence_score >= 0) AND (confidence_score <= 100)))
 - `strategic_directives_v2_priority_check`: CHECK (((priority)::text = ANY ((ARRAY['critical'::character varying, 'high'::character varying, 'medium'::character varying, 'low'::character varying])::text[])))
@@ -145,6 +146,10 @@ Use the id column instead - it is the canonical identifier. |
 - `idx_sd_v2_complexity`
   ```sql
   CREATE INDEX idx_sd_v2_complexity ON public.strategic_directives_v2 USING btree (complexity_level)
+  ```
+- `idx_sd_v2_exploration_summary`
+  ```sql
+  CREATE INDEX idx_sd_v2_exploration_summary ON public.strategic_directives_v2 USING gin (exploration_summary) WHERE (exploration_summary IS NOT NULL)
   ```
 - `idx_sd_v2_import_run`
   ```sql
@@ -240,6 +245,12 @@ Use the id column instead - it is the canonical identifier. |
 - **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
+
+### 4. strategic_directives_v2_service_role_access (ALL)
+
+- **Roles**: {authenticated}
+- **Using**: `fn_is_service_role()`
+- **With Check**: `fn_is_service_role()`
 
 ## Triggers
 

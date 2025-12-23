@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
-**Rows**: 7
-**RLS**: Enabled (4 policies)
+**Generated**: 2025-12-22T04:57:33.835Z
+**Rows**: 67
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (54 total)
+## Columns (55 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -72,6 +72,7 @@
 | reasoning_depth | `character varying(20)` | YES | `'standard'::character varying` | Depth of reasoning used (quick, standard, deep, ultra). Determines analysis thoroughness. |
 | confidence_score | `integer(32)` | YES | - | Confidence score (0-100) from reasoning analysis. Higher = more certain about planning accuracy. |
 | research_confidence_score | `numeric(3,2)` | YES | - | Confidence score for automated research results (0.7-0.85: human review, >0.85: auto-applied) |
+| exploration_summary | `jsonb` | YES | - | - |
 
 ## Constraints
 
@@ -136,22 +137,18 @@
 
 ## RLS Policies
 
-### 1. anon_insert_product_requirements_v2 (INSERT)
-
-- **Roles**: {anon}
-- **With Check**: `true`
-
-### 2. anon_read_product_requirements_v2 (SELECT)
-
-- **Roles**: {anon}
-- **Using**: `true`
-
-### 3. authenticated_read_product_requirements_v2 (SELECT)
+### 1. authenticated_read_product_requirements_v2 (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
 
-### 4. service_role_all_product_requirements_v2 (ALL)
+### 2. product_requirements_v2_service_role_access (ALL)
+
+- **Roles**: {authenticated}
+- **Using**: `fn_is_service_role()`
+- **With Check**: `fn_is_service_role()`
+
+### 3. service_role_all_product_requirements_v2 (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`

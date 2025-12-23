@@ -77,7 +77,7 @@ async function validateDiscoveryGate(sdId) {
   // Also check SD metadata for exploration evidence
   const { data: sd } = await supabase
     .from('strategic_directives_v2')
-    .select('metadata')
+    .select('exploration_summary, metadata')
     .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
     .single();
 
@@ -85,7 +85,11 @@ async function validateDiscoveryGate(sdId) {
   let filesExplored = [];
   let source = 'none';
 
-  if (prd?.exploration_summary && Array.isArray(prd.exploration_summary)) {
+  // FIX: Check sd.exploration_summary.files_explored FIRST (standard location)
+  if (sd?.exploration_summary?.files_explored && Array.isArray(sd.exploration_summary.files_explored)) {
+    filesExplored = sd.exploration_summary.files_explored;
+    source = 'sd.exploration_summary.files_explored';
+  } else if (prd?.exploration_summary && Array.isArray(prd.exploration_summary)) {
     filesExplored = prd.exploration_summary;
     source = 'prd.exploration_summary';
   } else if (prd?.metadata?.exploration_summary && Array.isArray(prd.metadata.exploration_summary)) {
