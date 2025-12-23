@@ -41,7 +41,7 @@
  * 4. Risk Analysis (25%) - HIGHEST weight (threat modeling)
  *
  * @module rubrics/prd-quality-rubric
- * @version 1.1.0-sd-type-aware
+ * @version 1.2.0-scoring-bands
  */
 
 import { AIQualityEvaluator } from '../ai-quality-evaluator.js';
@@ -554,6 +554,10 @@ SD UUID: ${prd.sd_uuid || 'Not linked'}`;
           criterion_scores: assessment.scores,
           weighted_score: assessment.weightedScore,
           threshold: assessment.threshold, // Dynamic threshold based on sd_type
+          // v1.2.0: Scoring bands for stable decisions
+          band: assessment.band,
+          confidence: assessment.confidence,
+          confidence_reasoning: assessment.confidence_reasoning,
           sd_type: assessment.sd_type,
           cost_usd: assessment.cost,
           duration_ms: assessment.duration,

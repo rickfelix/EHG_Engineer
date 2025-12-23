@@ -450,6 +450,10 @@ SD Link: ${userStory.sd_id || 'Not linked'}`;
           criterion_scores: assessment.scores,
           weighted_score: assessment.weightedScore,
           threshold: assessment.threshold, // Dynamic threshold based on sd_type
+          // v1.2.0: Scoring bands for stable decisions
+          band: assessment.band,
+          confidence: assessment.confidence,
+          confidence_reasoning: assessment.confidence_reasoning,
           sd_type: assessment.sd_type,
           cost_usd: assessment.cost,
           duration_ms: assessment.duration,
