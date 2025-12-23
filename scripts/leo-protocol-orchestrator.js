@@ -1364,15 +1364,54 @@ class LEOProtocolOrchestrator {
 
 // CLI execution
 if (import.meta.url === `file://${process.argv[1]}`) {
+  const args = process.argv.slice(2);
+
+  // Handle --help flag
+  if (args.includes('--help') || args.includes('-h')) {
+    console.log(`
+LEO Protocol Orchestrator v2.2.0
+
+Usage: node leo-protocol-orchestrator.js <SD-ID> [options]
+
+Arguments:
+  SD-ID           Strategic Directive ID to execute (e.g., SD-UAT-001)
+
+Options:
+  --force         Force re-execution of completed phases
+  --help, -h      Show this help message
+
+Features (v2.2.0):
+  - Non-interactive mode (no prompts)
+  - Session Guardian (checkpoint, safe-stop, loop detection)
+  - Evidence Pack generation for post-session audit
+  - Decision audit trail
+
+Examples:
+  node leo-protocol-orchestrator.js SD-UAT-001
+  node leo-protocol-orchestrator.js SD-UAT-001 --force
+
+Related Commands:
+  npm run sd:next        Show SD queue and recommendations
+  npm run sd:status      Show progress vs baseline
+  node scripts/handoff.js LEAD-TO-PLAN <SD-ID>
+`);
+    process.exit(0);
+  }
+
   const orchestrator = new LEOProtocolOrchestrator();
 
-  const sdId = process.argv[2];
+  const sdId = args[0];
+  const options = {
+    force: args.includes('--force')
+  };
+
   if (!sdId) {
     console.error(chalk.red('Usage: node leo-protocol-orchestrator.js <SD-ID>'));
+    console.error(chalk.gray('       Run with --help for more information'));
     process.exit(1);
   }
 
-  orchestrator.executeSD(sdId)
+  orchestrator.executeSD(sdId, options)
     .then(() => process.exit(0))
     .catch(() => process.exit(1));
 }
