@@ -1,0 +1,159 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "UX Evaluation Configuration",
+  "description": "Configuration for LLM-based UX evaluation in Human-Like E2E Tests",
+  "version": "1.0.0",
+
+  "model": {
+    "provider": "openai",
+    "name": "gpt-5.2",
+    "fallback": "gpt-4o",
+    "maxTokens": {
+      "standard": 1024,
+      "critical": 2048
+    }
+  },
+
+  "budget": {
+    "monthlyLimitUSD": 20,
+    "warningThresholdPercent": 80,
+    "costPerToken": 0.000003
+  },
+
+  "lenses": {
+    "first-time-user": {
+      "enabled": true,
+      "priority": 1,
+      "description": "Evaluates clarity and guidance for new users",
+      "checks": [
+        "Purpose clarity",
+        "CTA visibility",
+        "Onboarding guidance",
+        "Next action clarity",
+        "Terminology clarity"
+      ]
+    },
+    "accessibility": {
+      "enabled": true,
+      "priority": 1,
+      "description": "Visual accessibility beyond WCAG automation",
+      "checks": [
+        "Color contrast",
+        "Color-only meaning",
+        "Icon-only buttons",
+        "Text readability",
+        "Focus indicators"
+      ]
+    },
+    "mobile-user": {
+      "enabled": true,
+      "priority": 2,
+      "description": "Mobile usability and touch optimization",
+      "checks": [
+        "Touch target sizes (44px)",
+        "Thumb zone placement",
+        "Scroll depth",
+        "Pinch-zoom needs",
+        "Mobile navigation"
+      ]
+    },
+    "error-recovery": {
+      "enabled": true,
+      "priority": 2,
+      "description": "Error handling and recovery UX",
+      "checks": [
+        "Error message helpfulness",
+        "Recovery path clarity",
+        "State preservation",
+        "Error visibility",
+        "Guidance quality"
+      ]
+    },
+    "cognitive-load": {
+      "enabled": true,
+      "priority": 3,
+      "description": "Cognitive load and decision fatigue",
+      "checks": [
+        "Choice overload",
+        "Information density",
+        "Visual hierarchy",
+        "Progressive disclosure",
+        "Pattern consistency"
+      ]
+    }
+  },
+
+  "stringencyThresholds": {
+    "strict": {
+      "minScore": 70,
+      "blockOn": ["first-time-user", "accessibility"],
+      "warnOn": ["mobile-user", "error-recovery", "cognitive-load"]
+    },
+    "standard": {
+      "minScore": 50,
+      "blockOn": [],
+      "warnOn": ["first-time-user", "accessibility", "mobile-user", "error-recovery", "cognitive-load"]
+    },
+    "relaxed": {
+      "minScore": 0,
+      "blockOn": [],
+      "warnOn": []
+    }
+  },
+
+  "criticalPaths": [
+    "/checkout",
+    "/auth",
+    "/payment",
+    "/onboarding",
+    "/signup",
+    "/login",
+    "/register",
+    "/billing",
+    "/subscription"
+  ],
+
+  "edgeStates": {
+    "enabled": true,
+    "states": [
+      {
+        "name": "empty",
+        "description": "Empty state when no data exists",
+        "minScore": 60
+      },
+      {
+        "name": "error",
+        "description": "Error state when API fails",
+        "minScore": 50
+      },
+      {
+        "name": "loading",
+        "description": "Loading state during data fetch",
+        "minScore": 40
+      }
+    ]
+  },
+
+  "journeyEvaluation": {
+    "enabled": true,
+    "maxSteps": 10,
+    "dropOffRiskThresholds": {
+      "high": "Block on any high-risk drop-off point",
+      "medium": "Warn on medium-risk points",
+      "low": "Log for analysis"
+    }
+  },
+
+  "versionComparison": {
+    "enabled": true,
+    "regressionConfidenceThreshold": 60,
+    "blockOnRegression": true
+  },
+
+  "reporting": {
+    "attachToTestResults": true,
+    "separateBlockingReport": true,
+    "includeTokenUsage": true,
+    "includeCostEstimate": true
+  }
+}

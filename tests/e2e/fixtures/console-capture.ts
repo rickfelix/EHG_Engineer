@@ -196,3 +196,62 @@ export function assertNoJSErrors(consoleLogs: ConsoleCaptureData): void {
 export function getConsoleErrorCount(consoleLogs: ConsoleCaptureData): number {
   return consoleLogs.getErrorCount();
 }
+
+/**
+ * Assert no console.error() calls occurred
+ * (Different from page errors - these are explicit console.error() calls)
+ */
+export function assertNoConsoleErrors(consoleLogs: ConsoleCaptureData): void {
+  const consoleErrors = consoleLogs.logs.filter(log => log.type === 'error');
+  if (consoleErrors.length > 0) {
+    const errorMessages = consoleErrors.map(e => e.text).join('\n');
+    throw new Error(`Console errors detected:\n${errorMessages}`);
+  }
+}
+
+/**
+ * Assert no console warnings occurred
+ */
+export function assertNoWarnings(consoleLogs: ConsoleCaptureData): void {
+  if (consoleLogs.warnings.length > 0) {
+    const warningMessages = consoleLogs.warnings.map(w => w.text).join('\n');
+    throw new Error(`Console warnings detected:\n${warningMessages}`);
+  }
+}
+
+/**
+ * Assert console is clean (no errors, warnings, or page errors)
+ * Use for strict stringency mode
+ */
+export function assertCleanConsole(consoleLogs: ConsoleCaptureData): void {
+  assertNoJSErrors(consoleLogs);
+  assertNoConsoleErrors(consoleLogs);
+  assertNoWarnings(consoleLogs);
+}
+
+/**
+ * Get summary of console activity for reporting
+ */
+export function getConsoleSummary(consoleLogs: ConsoleCaptureData): {
+  hasIssues: boolean;
+  errorCount: number;
+  warningCount: number;
+  pageErrorCount: number;
+  summary: string;
+} {
+  const errorCount = consoleLogs.logs.filter(l => l.type === 'error').length;
+  const warningCount = consoleLogs.warnings.length;
+  const pageErrorCount = consoleLogs.errors.length;
+  const hasIssues = errorCount > 0 || warningCount > 0 || pageErrorCount > 0;
+
+  let summary = 'Console clean';
+  if (hasIssues) {
+    const parts: string[] = [];
+    if (pageErrorCount > 0) parts.push(`${pageErrorCount} page error(s)`);
+    if (errorCount > 0) parts.push(`${errorCount} console error(s)`);
+    if (warningCount > 0) parts.push(`${warningCount} warning(s)`);
+    summary = parts.join(', ');
+  }
+
+  return { hasIssues, errorCount, warningCount, pageErrorCount, summary };
+}

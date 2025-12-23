@@ -141,12 +141,18 @@ export default defineConfig({
   webServer: [],
 
   // Visual testing specific configuration
+  // LEO v4.4: Human-Like E2E Testing thresholds
   expect: {
     // Visual comparison threshold
     threshold: 0.2,
 
     // Animation handling for visual tests
     toHaveScreenshot: {
+      // LEO v4.4: Stringency-based thresholds
+      // strict: 1%, standard: 5%, relaxed: 20%
+      maxDiffPixelRatio: process.env.E2E_STRINGENCY === 'strict' ? 0.01 :
+                         process.env.E2E_STRINGENCY === 'relaxed' ? 0.20 : 0.05,
+      threshold: 0.2,
       mode: 'css',
       animations: 'disabled',
     },
@@ -167,5 +173,21 @@ export default defineConfig({
     testingSubAgent: 'activated',
     coverage: 'e2e-dashboard',
     evidencePack: 'enabled',
+    // LEO v4.4: Human-Like E2E Testing Enhancements
+    humanLikeTesting: {
+      enabled: true,
+      fixtures: [
+        'accessibility',      // axe-core WCAG testing
+        'keyboard-oracle',    // Tab order and focus testing
+        'console-capture',    // Console error assertions
+        'chaos-saboteur',     // Resilience testing
+        'visual-oracle',      // CLS measurement
+        'llm-ux-oracle',      // GPT-5.2 UX evaluation
+        'stringency-resolver' // Intelligent stringency
+      ],
+      stringency: process.env.E2E_STRINGENCY || 'standard',
+      llmModel: 'gpt-5.2',
+      budgetMonthlyUSD: 20
+    }
   },
 });
