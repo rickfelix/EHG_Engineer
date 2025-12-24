@@ -22,6 +22,30 @@ import readline from 'readline';
 
 dotenv.config();
 
+// Repository paths for target application detection
+const REPO_PATHS = {
+  EHG: '/mnt/c/_EHG/EHG',
+  EHG_Engineer: '/mnt/c/_EHG/EHG_Engineer'
+};
+
+/**
+ * Detect target application based on current working directory
+ * @returns {'EHG' | 'EHG_Engineer'} The detected target application
+ */
+function detectTargetApplication() {
+  const cwd = process.cwd();
+
+  if (cwd.includes('/EHG_Engineer') || cwd.includes('\\EHG_Engineer')) {
+    return 'EHG_Engineer';
+  }
+  if (cwd.includes('/EHG') || cwd.includes('\\EHG')) {
+    return 'EHG';
+  }
+
+  // Default to EHG (main app) if unable to detect
+  return 'EHG';
+}
+
 // Generate quick-fix ID: QF-YYYYMMDD-NNN
 function generateQuickFixId() {
   const now = new Date();
@@ -62,7 +86,12 @@ async function createQuickFix(options = {}) {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   // Interactive mode if no options provided
-  let title, type, severity, description, steps, expected, actual, estimatedLoc;
+  let title, type, severity, description, steps, expected, actual, estimatedLoc, targetApplication;
+
+  // Auto-detect or use provided target application
+  targetApplication = options.targetApplication || detectTargetApplication();
+  console.log(`🎯 Target Application: ${targetApplication}`);
+  console.log(`   (Run from ${targetApplication === 'EHG' ? 'EHG app' : 'EHG_Engineer'} directory or use --target-application)\n`);
 
   if (options.interactive || !options.title) {
     console.log('📝 Interactive Mode - Please provide details:\n');
@@ -138,6 +167,7 @@ async function createQuickFix(options = {}) {
         expected_behavior: expected,
         actual_behavior: actual,
         estimated_loc: estimatedLoc,
+        target_application: targetApplication,
         status: 'escalated',
         escalation_reason: `Estimated LOC (${estimatedLoc}) exceeds 50 line threshold`,
         created_at: new Date().toISOString()
@@ -169,6 +199,7 @@ async function createQuickFix(options = {}) {
       expected_behavior: expected,
       actual_behavior: actual,
       estimated_loc: estimatedLoc,
+      target_application: targetApplication,
       status: 'open',
       created_at: new Date().toISOString()
     })
@@ -185,6 +216,7 @@ async function createQuickFix(options = {}) {
   console.log(`   Title: ${title}`);
   console.log(`   Type: ${type}`);
   console.log(`   Severity: ${severity}`);
+  console.log(`   Target App: ${targetApplication}`);
   console.log(`   Estimated LOC: ${estimatedLoc}`);
   console.log(`   Status: ${data.status}\n`);
 
@@ -280,6 +312,13 @@ for (let i = 0; i < args.length; i++) {
     options.actual = args[++i];
   } else if (arg === '--estimated-loc') {
     options.estimatedLoc = parseInt(args[++i]);
+  } else if (arg === '--target-application' || arg === '--target-app') {
+    const val = args[++i];
+    if (!['EHG', 'EHG_Engineer'].includes(val)) {
+      console.error(`❌ Invalid target application: ${val}. Must be 'EHG' or 'EHG_Engineer'`);
+      process.exit(1);
+    }
+    options.targetApplication = val;
   } else if (arg === '--help' || arg === '-h') {
     console.log(`
 LEO Quick-Fix Workflow - Create Issue
@@ -298,6 +337,7 @@ Options:
   --expected             Expected behavior
   --actual               Actual behavior
   --estimated-loc        Estimated lines of code (default: 10)
+  --target-application   Target repo: 'EHG' or 'EHG_Engineer' (auto-detected from cwd)
   --help, -h             Show this help
 
 Examples:

@@ -37,12 +37,18 @@ const MIN_WARN_SCORE = 70;
 const TEST_TIMEOUT_UNIT = 120000; // 2 minutes for unit tests
 const TEST_TIMEOUT_E2E = 300000;  // 5 minutes for E2E tests
 
+// Repository paths for target application
+const REPO_PATHS = {
+  EHG: '/mnt/c/_EHG/EHG',
+  EHG_Engineer: '/mnt/c/_EHG/EHG_Engineer'
+};
+
 dotenv.config();
 
 /**
  * Run tests programmatically and return results
  * @param {string} testType - 'unit' or 'e2e'
- * @param {object} options - Test options
+ * @param {object} options - Test options including testDir for target application
  * @returns {object} Test results with passed, output, exitCode
  */
 function runTests(testType, options = {}) {
@@ -58,6 +64,7 @@ function runTests(testType, options = {}) {
 
   const command = testCommands[testType];
   const timeout = timeouts[testType];
+  const testDir = options.testDir || process.cwd();
 
   if (!command) {
     return { passed: false, output: `Unknown test type: ${testType}`, exitCode: 1 };
@@ -65,6 +72,7 @@ function runTests(testType, options = {}) {
 
   console.log(`   🧪 Running ${testType} tests...`);
   console.log(`      Command: ${command}`);
+  console.log(`      Directory: ${testDir}`);
   console.log(`      Timeout: ${timeout / 1000}s\n`);
 
   try {
@@ -72,7 +80,7 @@ function runTests(testType, options = {}) {
       encoding: 'utf-8',
       timeout,
       stdio: 'pipe',
-      cwd: process.cwd()
+      cwd: testDir
     });
 
     // Check for common pass indicators
@@ -183,8 +191,14 @@ async function completeQuickFix(qfId, options = {}) {
     process.exit(1);
   }
 
+  // Determine test directory from target_application
+  const targetApplication = qf.target_application || 'EHG';
+  const testDir = REPO_PATHS[targetApplication] || REPO_PATHS.EHG;
+
   console.log(`📋 Quick-Fix: ${qf.title}`);
   console.log(`   Type: ${qf.type}`);
+  console.log(`   Target App: ${targetApplication}`);
+  console.log(`   Test Dir: ${testDir}`);
   console.log(`   Status: ${qf.status}\n`);
 
   // Already completed?
@@ -203,17 +217,17 @@ async function completeQuickFix(qfId, options = {}) {
   // Gather completion data
   let commitSha, actualLoc, branchName, prUrl, testsPass, uatVerified;
 
-  // Try to auto-detect git info
+  // Try to auto-detect git info from target application directory
   try {
     if (!options.commitSha) {
-      commitSha = execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim();
+      commitSha = execSync('git rev-parse HEAD', { encoding: 'utf-8', cwd: testDir }).trim();
       console.log(`🔍 Auto-detected commit SHA: ${commitSha.substring(0, 7)}`);
     } else {
       commitSha = options.commitSha;
     }
 
     if (!options.branchName) {
-      branchName = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8' }).trim();
+      branchName = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8', cwd: testDir }).trim();
       console.log(`🔍 Auto-detected branch: ${branchName}`);
     } else {
       branchName = options.branchName;
@@ -222,7 +236,7 @@ async function completeQuickFix(qfId, options = {}) {
     // Get actual LOC from git diff
     if (!options.actualLoc) {
       try {
-        const diffStats = execSync('git diff origin/main --shortstat', { encoding: 'utf-8' }).trim();
+        const diffStats = execSync('git diff origin/main --shortstat', { encoding: 'utf-8', cwd: testDir }).trim();
         const match = diffStats.match(/(\d+) insertion/);
         if (match) {
           actualLoc = parseInt(match[1]);
@@ -290,9 +304,9 @@ async function completeQuickFix(qfId, options = {}) {
     console.log('   ⚠️  Using cached test results (--skip-tests flag)\n');
     testsPass = options.testsPass;
   } else {
-    // Run unit tests
+    // Run unit tests in target application directory
     console.log('━━━ Unit Tests ━━━\n');
-    unitTestResult = runTests('unit');
+    unitTestResult = runTests('unit', { testDir });
 
     if (unitTestResult.passed) {
       console.log('   ✅ Unit tests PASSED');
@@ -316,7 +330,7 @@ async function completeQuickFix(qfId, options = {}) {
     }
 
     console.log('\n━━━ E2E Smoke Tests ━━━\n');
-    e2eTestResult = runTests('e2e');
+    e2eTestResult = runTests('e2e', { testDir });
 
     if (e2eTestResult.passed) {
       console.log('   ✅ E2E tests PASSED');
@@ -366,6 +380,7 @@ async function completeQuickFix(qfId, options = {}) {
   if (!options.skipTypeCheck) {
     console.log('   🔍 Running TypeScript compiler check...');
     console.log('      Command: npx tsc --noEmit');
+    console.log(`      Directory: ${testDir}`);
     console.log('      Timeout: 60s\n');
 
     try {
@@ -373,7 +388,7 @@ async function completeQuickFix(qfId, options = {}) {
         encoding: 'utf-8',
         timeout: 60000,
         stdio: 'pipe',
-        cwd: process.cwd()
+        cwd: testDir
       });
       tscResult = { passed: true };
       console.log('   ✅ TypeScript compilation PASSED\n');
@@ -454,8 +469,8 @@ async function completeQuickFix(qfId, options = {}) {
   let diffAnalysis = {};
 
   try {
-    // Get files changed
-    const files = execSync('git diff origin/main --name-only', { encoding: 'utf-8' })
+    // Get files changed from target application directory
+    const files = execSync('git diff origin/main --name-only', { encoding: 'utf-8', cwd: testDir })
       .trim()
       .split('\n')
       .filter(f => f);
@@ -465,7 +480,7 @@ async function completeQuickFix(qfId, options = {}) {
     filesChanged.forEach(file => console.log(`      - ${file}`));
 
     // Get detailed diff stats
-    const diffStat = execSync('git diff origin/main --stat', { encoding: 'utf-8' });
+    const diffStat = execSync('git diff origin/main --stat', { encoding: 'utf-8', cwd: testDir });
     const insertions = diffStat.match(/(\d+) insertion/);
     const deletions = diffStat.match(/(\d+) deletion/);
 
@@ -824,11 +839,11 @@ Quick-Fix Workflow - LEO Protocol`;
   console.log('\n🔄 Git Commit & Push\n');
 
   try {
-    // Check if on quick-fix branch
-    const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8' }).trim();
+    // Check if on quick-fix branch (in target application directory)
+    const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8', cwd: testDir }).trim();
 
     // Show git status
-    const gitStatus = execSync('git status --short', { encoding: 'utf-8' }).trim();
+    const gitStatus = execSync('git status --short', { encoding: 'utf-8', cwd: testDir }).trim();
 
     if (gitStatus) {
       console.log(`   Current Branch: ${currentBranch}`);
@@ -865,16 +880,16 @@ Co-Authored-By: Claude <noreply@anthropic.com>`;
       const shouldCommit = await prompt('   Commit these changes? (yes/no): ');
 
       if (shouldCommit.toLowerCase().startsWith('y')) {
-        // Stage all changes
+        // Stage all changes (in target application directory)
         console.log('\n   📦 Staging changes...');
-        execSync('git add .', { stdio: 'inherit' });
+        execSync('git add .', { stdio: 'inherit', cwd: testDir });
 
         // Commit with formatted message
         console.log('   📝 Creating commit...');
-        execSync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, { stdio: 'inherit' });
+        execSync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, { stdio: 'inherit', cwd: testDir });
 
         // Get new commit SHA
-        const newCommitSha = execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim();
+        const newCommitSha = execSync('git rev-parse HEAD', { encoding: 'utf-8', cwd: testDir }).trim();
         commitSha = newCommitSha;
         console.log(`   ✅ Committed: ${newCommitSha.substring(0, 7)}\n`);
 
@@ -884,7 +899,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>`;
         if (shouldPush.toLowerCase().startsWith('y')) {
           console.log(`\n   🚀 Pushing to ${currentBranch}...`);
           try {
-            execSync(`git push -u origin ${currentBranch}`, { stdio: 'inherit' });
+            execSync(`git push -u origin ${currentBranch}`, { stdio: 'inherit', cwd: testDir });
             console.log('   ✅ Pushed successfully\n');
           } catch (pushErr) {
             console.log(`   ⚠️  Push failed: ${pushErr.message}`);
@@ -954,7 +969,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>`;
   console.log('🔀 Merge to Main\n');
 
   try {
-    const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8' }).trim();
+    const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf-8', cwd: testDir }).trim();
 
     // Check if PR is mergeable (CI passed)
     if (prUrl) {
@@ -962,7 +977,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>`;
       try {
         const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
         if (prNumber) {
-          const prStatus = execSync(`gh pr view ${prNumber} --json mergeable,statusCheckRollup`, { encoding: 'utf-8' });
+          const prStatus = execSync(`gh pr view ${prNumber} --json mergeable,statusCheckRollup`, { encoding: 'utf-8', cwd: testDir });
           const prData = JSON.parse(prStatus);
 
           if (prData.mergeable === 'MERGEABLE') {
@@ -986,36 +1001,36 @@ Co-Authored-By: Claude <noreply@anthropic.com>`;
         try {
           const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
           if (prNumber) {
-            execSync(`gh pr merge ${prNumber} --merge --delete-branch`, { stdio: 'inherit' });
+            execSync(`gh pr merge ${prNumber} --merge --delete-branch`, { stdio: 'inherit', cwd: testDir });
             console.log('   ✅ PR merged and branch deleted via GitHub\n');
           }
         } catch (ghMergeErr) {
           console.log(`   ⚠️  GitHub merge failed: ${ghMergeErr.message}`);
           console.log('   Attempting local merge...\n');
 
-          // Option 2: Local merge fallback
-          execSync('git checkout main', { stdio: 'inherit' });
-          execSync('git pull origin main', { stdio: 'inherit' });
-          execSync(`git merge --no-ff ${currentBranch} -m "Merge quick-fix/${qfId}: ${qf.title}"`, { stdio: 'inherit' });
-          execSync('git push origin main', { stdio: 'inherit' });
+          // Option 2: Local merge fallback (in target application directory)
+          execSync('git checkout main', { stdio: 'inherit', cwd: testDir });
+          execSync('git pull origin main', { stdio: 'inherit', cwd: testDir });
+          execSync(`git merge --no-ff ${currentBranch} -m "Merge quick-fix/${qfId}: ${qf.title}"`, { stdio: 'inherit', cwd: testDir });
+          execSync('git push origin main', { stdio: 'inherit', cwd: testDir });
           console.log('   ✅ Merged to main locally\n');
 
           // Delete the feature branch
-          execSync(`git branch -d ${currentBranch}`, { stdio: 'pipe' });
-          execSync(`git push origin --delete ${currentBranch}`, { stdio: 'pipe' });
+          execSync(`git branch -d ${currentBranch}`, { stdio: 'pipe', cwd: testDir });
+          execSync(`git push origin --delete ${currentBranch}`, { stdio: 'pipe', cwd: testDir });
           console.log(`   ✅ Deleted branch: ${currentBranch}\n`);
         }
       } else {
-        // No PR URL - do local merge
-        execSync('git checkout main', { stdio: 'inherit' });
-        execSync('git pull origin main', { stdio: 'inherit' });
-        execSync(`git merge --no-ff ${currentBranch} -m "Merge quick-fix/${qfId}: ${qf.title}"`, { stdio: 'inherit' });
-        execSync('git push origin main', { stdio: 'inherit' });
+        // No PR URL - do local merge (in target application directory)
+        execSync('git checkout main', { stdio: 'inherit', cwd: testDir });
+        execSync('git pull origin main', { stdio: 'inherit', cwd: testDir });
+        execSync(`git merge --no-ff ${currentBranch} -m "Merge quick-fix/${qfId}: ${qf.title}"`, { stdio: 'inherit', cwd: testDir });
+        execSync('git push origin main', { stdio: 'inherit', cwd: testDir });
         console.log('   ✅ Merged to main\n');
 
         // Delete the feature branch
-        execSync(`git branch -d ${currentBranch}`, { stdio: 'pipe' });
-        execSync(`git push origin --delete ${currentBranch}`, { stdio: 'pipe' });
+        execSync(`git branch -d ${currentBranch}`, { stdio: 'pipe', cwd: testDir });
+        execSync(`git push origin --delete ${currentBranch}`, { stdio: 'pipe', cwd: testDir });
         console.log(`   ✅ Deleted branch: ${currentBranch}\n`);
       }
     } else {
