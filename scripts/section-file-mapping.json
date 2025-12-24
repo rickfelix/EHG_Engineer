@@ -12,6 +12,7 @@
   "CLAUDE_CORE.md": {
     "description": "Essential context for ALL sessions (~15-20k chars)",
     "sections": [
+      "mandatory_agent_invocation",
       "application_architecture",
       "session_verification",
       "session_verification_quick_start",
