@@ -66,9 +66,7 @@ jobs:
 
       - name: Install cosign
         if: steps.extract.outputs.digests_found == 'true'
-        uses: sigstore/cosign-installer@v3
-        with:
-          cosign-release: 'v2.4.0'
+        uses: sigstore/cosign-installer@v4
 
       - name: Verify SLSA provenance
         if: steps.extract.outputs.digests_found == 'true'
