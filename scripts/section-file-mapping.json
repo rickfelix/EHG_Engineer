@@ -112,7 +112,8 @@
       "human_like_testing",
       "parent_child_exec",
       "vision_v2_exec",
-      "negative_constraints_exec"
+      "negative_constraints_exec",
+      "workflow"
     ]
   },
   "SHARED": {
