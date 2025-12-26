@@ -1,4 +1,8 @@
 {
+  "statusLine": {
+    "type": "command",
+    "command": "/mnt/c/_EHG/EHG_Engineer/.claude/statusline-context-tracker.sh"
+  },
   "hooks": {
     "SubagentStop": [
       {
