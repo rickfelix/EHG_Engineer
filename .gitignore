@@ -106,3 +106,4 @@ src/client/dist/
 
 # Token logging (local budget tracking, not version controlled)
 .token-log.json
+.claude/logs/
