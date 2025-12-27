@@ -1,13 +1,44 @@
-// DatabaseManager Service for Multi-Database Architecture
-// Manages connections to multiple Supabase instances with full DDL capabilities
+/**
+ * DatabaseManager Service for Multi-Database Architecture
+ * Manages connections to multiple Supabase instances with full DDL capabilities
+ *
+ * Refactored as part of SD-REFACTOR-2025-001-P1-005
+ * Pool management extracted to pool-manager.js
+ * Migration logic extracted to migration-runner.js
+ *
+ * @module DatabaseManager
+ * @version 2.0.0
+ */
 
-import { Pool } from 'pg';
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs/promises';
 import path from 'path';
 
-// node-pg-migrate will be dynamically imported when needed
-let pgMigrate;
+// Import extracted modules
+import {
+  createManagedPool,
+  createPoolFromConnectionString,
+  attachPoolErrorHandler,
+  testPoolConnection,
+  getPoolStatus,
+  closePools,
+  extractHostFromSupabaseUrl,
+  buildConnectionString,
+  DEFAULT_POOL_CONFIG
+} from './pool-manager.js';
+
+import {
+  runMigration as runMigrationImpl,
+  migrateUp,
+  migrateDown,
+  getMigrationStatus,
+  getPendingMigrationCount,
+  isMigrationAvailable
+} from './migration-runner.js';
+
+// Re-export for backward compatibility
+export { Pool } from 'pg';
+export { DEFAULT_POOL_CONFIG } from './pool-manager.js';
 
 export class DatabaseManager {
   constructor(databaseConfigurations = null) {
@@ -30,33 +61,16 @@ export class DatabaseManager {
     }
 
     console.log('🔌 Initializing DatabaseManager...');
-    
+
     for (const appName in this.configs) {
       const config = this.configs[appName];
-      
+
       // Initialize PostgreSQL connection pool for DDL operations
       if (config.dbHost && config.dbPassword) {
-        // Use individual connection parameters instead of connection string to avoid IPv6 issues
-        this.pools[appName] = new Pool({
-          host: config.dbHost,
-          port: config.dbPort || 5432,
-          database: config.dbName || 'postgres',
-          user: config.dbUser || 'postgres',
-          password: config.dbPassword,
-          ssl: { rejectUnauthorized: false }, // Required for Supabase
-          max: 10, // Maximum number of clients in the pool
-          idleTimeoutMillis: 30000,
-          connectionTimeoutMillis: 5000,
-        });
-
-        // Add error handler for the pool
-        this.pools[appName].on('error', (err) => {
-          console.error(`[POOL ERROR:${appName}]`, err.message);
-        });
-
+        this.pools[appName] = createManagedPool(config, appName);
         console.log(`  ✅ PostgreSQL pool created for: ${appName}`);
       }
-      
+
       // Initialize Supabase client for data operations
       if (config.projectUrl && config.anonKey) {
         this.supabaseClients[appName] = createClient(
@@ -83,7 +97,7 @@ export class DatabaseManager {
         projectUrl: process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
         anonKey: process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
         serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
-        dbHost: this.extractHostFromUrl(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL),
+        dbHost: extractHostFromSupabaseUrl(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL),
         dbUser: 'postgres',
         dbPassword: process.env.SUPABASE_DB_PASSWORD,
         dbPort: 5432,
@@ -97,7 +111,7 @@ export class DatabaseManager {
       const configData = await fs.readFile(configPath, 'utf-8');
       const additionalConfigs = JSON.parse(configData);
       Object.assign(envConfig, additionalConfigs);
-    } catch (error) {
+    } catch {
       // Config file not found or invalid, use env only
       console.log('📝 No additional database configs found, using environment only');
     }
@@ -107,16 +121,10 @@ export class DatabaseManager {
   }
 
   /**
-   * Extract host from Supabase URL
+   * Extract host from Supabase URL (delegated to pool-manager)
    */
   extractHostFromUrl(url) {
-    if (!url) return null;
-    // Convert https://xxx.supabase.co to db.xxx.supabase.co
-    const match = url.match(/https:\/\/([^.]+)\.supabase\.co/);
-    if (match) {
-      return `db.${match[1]}.supabase.co`;
-    }
-    return null;
+    return extractHostFromSupabaseUrl(url);
   }
 
   /**
@@ -138,13 +146,8 @@ export class DatabaseManager {
 
     // Test the connection
     if (this.currentPool) {
-      const client = await this.currentPool.connect();
-      try {
-        await client.query('SELECT NOW()');
-        console.log(`✅ Switched to database: ${appName}`);
-      } finally {
-        client.release();
-      }
+      await testPoolConnection(this.currentPool);
+      console.log(`✅ Switched to database: ${appName}`);
     }
 
     return true;
@@ -161,7 +164,7 @@ export class DatabaseManager {
     }
 
     const client = await this.currentPool.connect();
-    
+
     try {
       if (useTransaction) {
         await client.query('BEGIN');
@@ -209,7 +212,7 @@ export class DatabaseManager {
   }
 
   /**
-   * Run migrations programmatically
+   * Run migrations programmatically (delegated to migration-runner)
    * @param {string} direction - 'up' or 'down'
    * @param {number} count - Number of migrations to run
    */
@@ -218,57 +221,7 @@ export class DatabaseManager {
       throw new Error('No active database. Call switchDatabase() first.');
     }
 
-    // Dynamically import node-pg-migrate
-    if (!pgMigrate) {
-      try {
-        const module = await import('node-pg-migrate');
-        pgMigrate = module.default || module;
-      } catch (error) {
-        console.log('⚠️ node-pg-migrate not available, skipping migration functionality');
-        return [];
-      }
-    }
-
-    const client = await this.currentPool.connect();
-    
-    console.log(`🔄 Running migrations ${direction} on ${this.currentAppName}...`);
-
-    try {
-      const migrationsDir = path.join(process.cwd(), 'migrations');
-      
-      const options = {
-        dbClient: client,
-        direction: direction,
-        dir: migrationsDir,
-        migrationsTable: 'pgmigrations',
-        singleTransaction: true,
-        checkOrder: true,
-        count: count,
-        verbose: true,
-        log: (msg) => console.log(`  ${msg}`),
-        logger: {
-          info: (msg) => console.log(`  ℹ️ ${msg}`),
-          warn: (msg) => console.warn(`  ⚠️ ${msg}`),
-          error: (msg) => console.error(`  ❌ ${msg}`),
-        }
-      };
-
-      const completedMigrations = await pgMigrate(options);
-
-      if (completedMigrations.length > 0) {
-        console.log(`✅ Completed ${completedMigrations.length} migrations:`);
-        completedMigrations.forEach(m => console.log(`  - ${m.name}`));
-      } else {
-        console.log('ℹ️ No pending migrations');
-      }
-
-      return completedMigrations;
-    } catch (error) {
-      console.error('❌ Migration failed:', error.message);
-      throw error;
-    } finally {
-      client.release();
-    }
+    return runMigrationImpl(this.currentPool, this.currentAppName, direction, count);
   }
 
   /**
@@ -313,7 +266,7 @@ export class DatabaseManager {
     if (options.limit) query = query.limit(options.limit);
 
     const { data, error } = await query;
-    
+
     if (error) {
       throw new Error(`Supabase query error: ${error.message}`);
     }
@@ -336,7 +289,6 @@ export class DatabaseManager {
 
     // Perform application-level join if specified
     if (queryPlan.join) {
-      // Implementation of join logic would go here
       console.log('Cross-database join results:', results);
     }
 
@@ -353,16 +305,9 @@ export class DatabaseManager {
 
     // Initialize pool if PostgreSQL config provided
     if (config.dbHost && config.dbPassword) {
-      const connectionString = `postgresql://${config.dbUser || 'postgres'}:${config.dbPassword}@${config.dbHost}:${config.dbPort || 5432}/${config.dbName || 'postgres'}`;
-      
-      this.pools[appName] = new Pool({
-        connectionString,
-        ssl: { rejectUnauthorized: false },
-        max: 10,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000,
-      });
-
+      const connectionString = buildConnectionString(config);
+      this.pools[appName] = createPoolFromConnectionString(connectionString);
+      attachPoolErrorHandler(this.pools[appName], appName);
       console.log(`✅ Added PostgreSQL pool for: ${appName}`);
     }
 
@@ -377,15 +322,25 @@ export class DatabaseManager {
   }
 
   /**
+   * Get pool status for current database
+   */
+  getPoolStatus() {
+    if (!this.currentPool) {
+      return null;
+    }
+    return getPoolStatus(this.currentPool);
+  }
+
+  /**
    * Get schema information for current database
    */
   async getSchema(tableName = null) {
     const query = tableName
-      ? `SELECT column_name, data_type, is_nullable 
-         FROM information_schema.columns 
+      ? `SELECT column_name, data_type, is_nullable
+         FROM information_schema.columns
          WHERE table_name = $1 AND table_schema = 'public'`
-      : `SELECT table_name 
-         FROM information_schema.tables 
+      : `SELECT table_name
+         FROM information_schema.tables
          WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`;
 
     const params = tableName ? [tableName] : [];
@@ -399,8 +354,8 @@ export class DatabaseManager {
   async tableExists(tableName) {
     const result = await this.query(
       `SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
+        SELECT FROM information_schema.tables
+        WHERE table_schema = 'public'
         AND table_name = $1
       )`,
       [tableName]
@@ -409,16 +364,28 @@ export class DatabaseManager {
   }
 
   /**
-   * Gracefully shutdown all connections
+   * Get migration status for current database
+   */
+  async getMigrationStatus() {
+    if (!this.currentPool) {
+      throw new Error('No active database. Call switchDatabase() first.');
+    }
+    return getMigrationStatus(this.currentPool);
+  }
+
+  /**
+   * Check if migration functionality is available
+   */
+  async isMigrationAvailable() {
+    return isMigrationAvailable();
+  }
+
+  /**
+   * Gracefully shutdown all connections (delegated to pool-manager)
    */
   async shutdown() {
     console.log('🔌 Shutting down DatabaseManager...');
-    
-    for (const [appName, pool] of Object.entries(this.pools)) {
-      await pool.end();
-      console.log(`  ✅ Closed pool: ${appName}`);
-    }
-
+    await closePools(this.pools);
     this.initialized = false;
     console.log('👋 DatabaseManager shutdown complete');
   }
@@ -427,3 +394,7 @@ export class DatabaseManager {
 // Export singleton instance
 const databaseManager = new DatabaseManager();
 export default databaseManager;
+
+// Also export migration utilities for direct access
+export { migrateUp, migrateDown, getMigrationStatus, getPendingMigrationCount };
+export * from './pool-manager.js';
