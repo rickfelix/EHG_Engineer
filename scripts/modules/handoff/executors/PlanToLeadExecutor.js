@@ -246,10 +246,17 @@ export class PlanToLeadExecutor extends BaseExecutor {
 
         // Check if this is an orchestrator SD (has children with all completed)
         // Include sd_id and title for better logging in executeSpecific
-        const { data: children } = await this.supabase
+        // SD-UNIFIED-PATH-1.0: Use ctx.sd.id (consistent with PREREQUISITE_HANDOFF_CHECK)
+        const parentSdId = ctx.sd?.id || ctx.sdId;
+        // SD-UNIFIED-PATH-1.0: Fixed column name - sd_id doesn't exist, use 'id' (the primary key)
+        const { data: children, error: childError } = await this.supabase
           .from('strategic_directives_v2')
-          .select('id, sd_id, title, status')
-          .eq('parent_sd_id', ctx.sdId);
+          .select('id, title, status')
+          .eq('parent_sd_id', parentSdId);
+
+        if (childError) {
+          console.log(`   ⚠️ Child query error: ${childError.message}`);
+        }
 
         const isOrchestrator = children && children.length > 0;
         const allChildrenComplete = isOrchestrator && children.every(c => c.status === 'completed');
@@ -362,13 +369,22 @@ export class PlanToLeadExecutor extends BaseExecutor {
           retroGateResult.warnings.slice(0, 2).forEach(w => console.log(`   • ${w}`));
         }
 
+        // SD-UNIFIED-PATH-1.0: Always pass orchestrator context to executeSpecific
+        // Root cause fix: executeSpecific reads from details.children but we weren't passing it
         return {
           passed: true,
           score: retroGateResult.score,
           max_score: 100,
           issues: [],
           warnings: retroGateResult.warnings,
-          details: retroGateResult
+          details: {
+            ...retroGateResult,
+            // Pass orchestrator context so executeSpecific can use it
+            is_orchestrator: isOrchestrator,
+            all_children_complete: allChildrenComplete,
+            children: children || [],
+            child_count: children?.length || 0
+          }
         };
       },
       required: true
@@ -568,19 +584,22 @@ export class PlanToLeadExecutor extends BaseExecutor {
     // ═══════════════════════════════════════════════════════════════════════════
 
     // Check if gate already determined this is an orchestrator with all children complete
+    // SD-UNIFIED-PATH-1.0: Gate now always passes orchestrator context in details
     const retroGateDetails = gateResults.gateResults?.RETROSPECTIVE_QUALITY_GATE?.details;
     const orchestratorAutoPass = retroGateDetails?.orchestrator_auto_pass;
 
     // Use cached children data from gate to avoid re-query inconsistency
     let children = retroGateDetails?.children || [];
-    let isOrchestrator = orchestratorAutoPass || children.length > 0;
-    let allChildrenComplete = orchestratorAutoPass || (isOrchestrator && children.every(c => c.status === 'completed'));
+    // SD-UNIFIED-PATH-1.0: Also check is_orchestrator and all_children_complete from gate
+    let isOrchestrator = orchestratorAutoPass || retroGateDetails?.is_orchestrator || children.length > 0;
+    let allChildrenComplete = orchestratorAutoPass || retroGateDetails?.all_children_complete || (isOrchestrator && children.every(c => c.status === 'completed'));
 
     // Fallback: If gate didn't cache children, query now (but prefer cached data)
     if (!orchestratorAutoPass && children.length === 0) {
+      // SD-UNIFIED-PATH-1.0: Fixed column name - sd_id doesn't exist, use 'id'
       const { data: queriedChildren } = await this.supabase
         .from('strategic_directives_v2')
-        .select('id, sd_id, title, status')
+        .select('id, title, status')
         .eq('parent_sd_id', sdId);
 
       children = queriedChildren || [];

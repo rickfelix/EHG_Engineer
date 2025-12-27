@@ -25,7 +25,8 @@ export const SD_TYPE_CATEGORIES = {
   // SDs that don't produce code changes - skip TESTING, GITHUB, E2E validation
   // SD-E2E-WEBSOCKET-AUTH-006 lesson: qa type added for test cleanup/review tasks
   // PAT-SD-API-CATEGORY-003: api/backend SDs produce code but need unit/integration tests, not E2E
-  NON_CODE: ['infrastructure', 'documentation', 'process', 'qa', 'api', 'backend'],
+  // SD-UNIFIED-PATH-1.0: orchestrator added - parent SDs coordinate, children produce code
+  NON_CODE: ['infrastructure', 'documentation', 'process', 'qa', 'api', 'backend', 'orchestrator'],
 
   // SDs that produce code and need full validation
   CODE_PRODUCING: ['feature', 'bugfix', 'refactor', 'performance'],
@@ -63,8 +64,9 @@ export const SCORING_WEIGHTS = {
   security: { sdWeight: 0.50, retroWeight: 0.50 },
   performance: { sdWeight: 0.50, retroWeight: 0.50 },
 
-  // Orchestrator: Parent SDs - progress derived from child completion
-  orchestrator: { sdWeight: 0.0, retroWeight: 0.0 },  // No direct scoring - uses child SD progress
+  // Orchestrator: Parent SDs - validated via retrospective quality (coordination lessons learned)
+  // SD-UNIFIED-PATH-1.0: Changed from 0/0 to 0/1 to enable scoring when auto-pass fails
+  orchestrator: { sdWeight: 0.0, retroWeight: 1.0 },  // 100% retrospective - children did actual work
 
   // Default
   default: { sdWeight: 0.60, retroWeight: 0.40 }

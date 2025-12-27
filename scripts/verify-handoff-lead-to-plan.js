@@ -78,7 +78,108 @@ class LeadToPlanVerifier {
         .eq('from_agent', 'LEAD')
         .eq('to_agent', 'PLAN')
         .single();
-        
+
+      // 2.5. ORCHESTRATOR SD DETECTION
+      // SD-UNIFIED-PATH-1.0: Orchestrator SDs are validated by child completion, not SD fields
+      const isOrchestrator = (sd.sd_type || '').toLowerCase() === 'orchestrator';
+
+      if (isOrchestrator) {
+        console.log('\n🎭 ORCHESTRATOR SD DETECTED');
+        console.log('-'.repeat(50));
+
+        // Query child SDs
+        const { data: children, error: childError } = await this.supabase
+          .from('strategic_directives_v2')
+          .select('id, title, status')
+          .eq('parent_sd_id', sd.id);
+
+        if (childError) {
+          console.log(`   ⚠️  Could not query children: ${childError.message}`);
+        } else if (children && children.length > 0) {
+          const completedChildren = children.filter(c => c.status === 'completed');
+          console.log(`   Child SDs: ${children.length} total, ${completedChildren.length} completed`);
+
+          children.forEach(child => {
+            const status = child.status === 'completed' ? '✅' : '⏳';
+            console.log(`   ${status} ${child.id}: ${child.status}`);
+          });
+
+          if (completedChildren.length === children.length) {
+            // All children complete - auto-pass orchestrator validation
+            console.log('\n   ✅ All children complete - orchestrator validation PASSED');
+
+            const sdValidation = {
+              valid: true,
+              percentage: 100,
+              score: 100,
+              maxScore: 100,
+              errors: [],
+              warnings: ['Orchestrator SD validated via child completion'],
+              isOrchestrator: true,
+              childCount: children.length,
+              completedChildCount: completedChildren.length
+            };
+
+            // Skip to handoff approval (step 9+)
+            console.log(`\\n📊 SD Completeness Score: ${sdValidation.percentage}% (orchestrator auto-pass)`);
+
+            // Create handoff execution record
+            const execution = await this.createHandoffExecution(sd, template, sdValidation, null);
+
+            // HANDOFF APPROVED
+            console.log('\n✅ HANDOFF APPROVED (ORCHESTRATOR)');
+            console.log('='.repeat(50));
+            console.log('✅ Orchestrator SD validated via child completion');
+            console.log(`✅ All ${children.length} child SDs are complete`);
+            console.log('✅ Environment ready for planning');
+
+            // Update SD to indicate PLAN phase can begin
+            await this.supabase
+              .from('strategic_directives_v2')
+              .update({
+                status: 'active',
+                phase: 'PLAN',
+                updated_at: new Date().toISOString(),
+                metadata: {
+                  ...sd.metadata,
+                  handoff_to_plan: {
+                    verified_at: new Date().toISOString(),
+                    quality_score: 100,
+                    verifier: 'verify-handoff-lead-to-plan.js',
+                    orchestrator_auto_pass: true,
+                    child_count: children.length
+                  }
+                }
+              })
+              .eq('id', sd.id);
+
+            console.log('\\n🎯 PLAN PHASE AUTHORIZED (ORCHESTRATOR)');
+            console.log('Orchestrator SD handed off to PLAN for coordination');
+
+            return {
+              success: true,
+              executionId: execution.id,
+              sdId: sdId,
+              qualityScore: 100,
+              isOrchestrator: true
+            };
+          } else {
+            // Not all children complete - reject
+            const incompleteChildren = children.filter(c => c.status !== 'completed');
+            console.log('\n   ❌ Not all children complete - cannot proceed');
+
+            return this.rejectHandoff(sdId, 'CHILDREN_INCOMPLETE',
+              `Orchestrator SD has ${incompleteChildren.length} incomplete child SDs`, {
+              incompleteChildren: incompleteChildren.map(c => ({ id: c.id, status: c.status })),
+              requiredComplete: children.length,
+              actualComplete: completedChildren.length
+            });
+          }
+        } else {
+          console.log('   ⚠️  No child SDs found - proceeding with standard validation');
+        }
+      }
+
       // 3. Validate Strategic Directive Completeness
       const sdValidation = this.validateStrategicDirective(sd);
       
