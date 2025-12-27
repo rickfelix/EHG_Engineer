@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
+**Generated**: 2025-12-27T22:20:29.988Z
 **Rows**: 0
-**RLS**: Enabled (1 policy)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -84,7 +84,23 @@
 
 ## RLS Policies
 
-### 1. eva_comms_company_access (SELECT)
+### 1. Allow insert for authenticated (INSERT)
+
+- **Roles**: {authenticated}
+- **With Check**: `true`
+
+### 2. Allow update for authenticated (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+- **With Check**: `true`
+
+### 3. eva_agent_communications_delete (DELETE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 4. eva_comms_company_access (SELECT)
 
 - **Roles**: {public}
 - **Using**: `(session_id IN ( SELECT eva_orchestration_sessions.session_id

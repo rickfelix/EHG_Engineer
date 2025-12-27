@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
-**Rows**: 25
+**Generated**: 2025-12-27T22:20:29.988Z
+**Rows**: 195
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -67,7 +67,7 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 | checkpoint_effectiveness | `smallint(16)` | YES | - | BMAD Enhancement: How effective were checkpoints in catching issues early (0-100, null if no checkpoints used) |
 | context_efficiency_rating | `smallint(16)` | YES | - | BMAD Enhancement: How well did context engineering reduce EXEC confusion (0-100) |
 | bmad_insights | `jsonb` | YES | `'{}'::jsonb` | BMAD Enhancement: Structured insights: { risk_lessons: [], checkpoint_lessons: [], context_lessons: [] } |
-| target_application | `text` | **NO** | - | Target application context: EHG (unified frontend with user + /admin routes), EHG_Engineer (backend API only), or venture_* (venture-specific apps). Note: As of SD-ARCH-EHG-007, all UI goes to EHG. |
+| target_application | `text` | **NO** | - | Target application context: EHG_engineer (management dashboard), EHG (customer app), or venture_* (venture-specific apps) |
 | learning_category | `text` | **NO** | - | Type of learning: APPLICATION_ISSUE, PROCESS_IMPROVEMENT, TESTING_STRATEGY, DATABASE_SCHEMA, DEPLOYMENT_ISSUE, PERFORMANCE_OPTIMIZATION, USER_EXPERIENCE, SECURITY_VULNERABILITY, DOCUMENTATION |
 | applies_to_all_apps | `boolean` | YES | `false` | Auto-populated: TRUE for PROCESS_IMPROVEMENT category, FALSE otherwise |
 | related_files | `ARRAY` | YES | `'{}'::text[]` | Array of file paths related to this retrospective (e.g., ["src/components/Auth.tsx", "scripts/migrate.js"]) |
@@ -89,9 +89,12 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 - `retrospectives_sd_id_fkey`: sd_id → strategic_directives_v2(id)
 
 ### Check Constraints
+- `action_items_max_25`: CHECK (((action_items IS NULL) OR (jsonb_typeof(action_items) <> 'array'::text) OR (jsonb_array_length(action_items) <= 25)))
 - `check_learning_category`: CHECK ((learning_category = ANY (ARRAY['APPLICATION_ISSUE'::text, 'PROCESS_IMPROVEMENT'::text, 'TESTING_STRATEGY'::text, 'DATABASE_SCHEMA'::text, 'DEPLOYMENT_ISSUE'::text, 'PERFORMANCE_OPTIMIZATION'::text, 'USER_EXPERIENCE'::text, 'SECURITY_VULNERABILITY'::text, 'DOCUMENTATION'::text])))
 - `check_protocol_improvements_is_array`: CHECK (((jsonb_typeof(protocol_improvements) = 'array'::text) OR (protocol_improvements IS NULL)))
 - `check_target_application`: CHECK ((target_application = ANY (ARRAY['EHG'::text, 'EHG_Engineer'::text])))
+- `key_learnings_max_30`: CHECK (((key_learnings IS NULL) OR (jsonb_typeof(key_learnings) <> 'array'::text) OR (jsonb_array_length(key_learnings) <= 30)))
+- `protocol_improvements_max_25`: CHECK (((protocol_improvements IS NULL) OR (jsonb_typeof(protocol_improvements) <> 'array'::text) OR (jsonb_array_length(protocol_improvements) <= 25)))
 - `retrospectives_checkpoint_effectiveness_check`: CHECK (((checkpoint_effectiveness >= 0) AND (checkpoint_effectiveness <= 100)))
 - `retrospectives_context_efficiency_rating_check`: CHECK (((context_efficiency_rating >= 0) AND (context_efficiency_rating <= 100)))
 - `retrospectives_generated_by_check`: CHECK ((generated_by = ANY (ARRAY['MANUAL'::text, 'SUB_AGENT'::text, 'TRIGGER'::text, 'SCHEDULED'::text])))
@@ -101,6 +104,8 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 - `retrospectives_risk_accuracy_score_check`: CHECK (((risk_accuracy_score >= 0) AND (risk_accuracy_score <= 100)))
 - `retrospectives_status_check`: CHECK ((status = ANY (ARRAY['DRAFT'::text, 'PUBLISHED'::text, 'ARCHIVED'::text])))
 - `retrospectives_team_satisfaction_check`: CHECK (((team_satisfaction >= 1) AND (team_satisfaction <= 10)))
+- `what_needs_improvement_max_20`: CHECK (((what_needs_improvement IS NULL) OR (jsonb_typeof(what_needs_improvement) <> 'array'::text) OR (jsonb_array_length(what_needs_improvement) <= 20)))
+- `what_went_well_max_25`: CHECK (((what_went_well IS NULL) OR (jsonb_typeof(what_went_well) <> 'array'::text) OR (jsonb_array_length(what_went_well) <= 25)))
 
 ## Indexes
 

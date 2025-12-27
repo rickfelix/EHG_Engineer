@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
-**Rows**: 8
-**RLS**: Enabled (3 policies)
+**Generated**: 2025-12-27T22:20:29.988Z
+**Rows**: 11
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -61,17 +61,22 @@
 
 ## RLS Policies
 
-### 1. sd_type_validation_profiles_insert (INSERT)
+### 1. sd_type_validation_profiles_delete (DELETE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 2. sd_type_validation_profiles_insert (INSERT)
 
 - **Roles**: {authenticated}
 - **With Check**: `true`
 
-### 2. sd_type_validation_profiles_select (SELECT)
+### 3. sd_type_validation_profiles_select (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`
 
-### 3. sd_type_validation_profiles_update (UPDATE)
+### 4. sd_type_validation_profiles_update (UPDATE)
 
 - **Roles**: {authenticated}
 - **Using**: `true`

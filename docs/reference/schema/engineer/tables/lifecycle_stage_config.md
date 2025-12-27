@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
+**Generated**: 2025-12-27T22:20:29.988Z
 **Rows**: 25
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -62,17 +62,22 @@
 
 ## RLS Policies
 
-### 1. lifecycle_stage_config_insert (INSERT)
+### 1. lifecycle_stage_config_delete (DELETE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 2. lifecycle_stage_config_insert (INSERT)
 
 - **Roles**: {authenticated}
 - **With Check**: `true`
 
-### 2. lifecycle_stage_config_select (SELECT)
+### 3. lifecycle_stage_config_select (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`
 
-### 3. lifecycle_stage_config_update (UPDATE)
+### 4. lifecycle_stage_config_update (UPDATE)
 
 - **Roles**: {authenticated}
 - **Using**: `true`

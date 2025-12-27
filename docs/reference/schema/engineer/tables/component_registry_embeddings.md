@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
+**Generated**: 2025-12-27T22:20:29.988Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -65,10 +65,6 @@
 - `idx_component_category`
   ```sql
   CREATE INDEX idx_component_category ON public.component_registry_embeddings USING btree (component_category)
-  ```
-- `idx_component_embeddings_vector`
-  ```sql
-  CREATE INDEX idx_component_embeddings_vector ON public.component_registry_embeddings USING ivfflat (description_embedding vector_cosine_ops) WITH (lists='10')
   ```
 - `idx_component_name`
   ```sql

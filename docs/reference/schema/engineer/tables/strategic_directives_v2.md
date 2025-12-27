@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-22T04:17:05.932Z
-**Rows**: 97
+**Generated**: 2025-12-27T22:20:29.988Z
+**Rows**: 175
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -349,6 +349,16 @@ Use the id column instead - it is the canonical identifier. |
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION check_contract_requirements()`
 
+### trg_doctrine_constraint_sd
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION enforce_doctrine_of_constraint()`
+
+### trg_doctrine_constraint_sd
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_doctrine_of_constraint()`
+
 ### trg_enforce_metadata_object
 
 - **Timing**: BEFORE INSERT
@@ -358,6 +368,16 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION enforce_metadata_object()`
+
+### trg_enforce_parent_orchestrator_type
+
+- **Timing**: AFTER INSERT
+- **Action**: `EXECUTE FUNCTION enforce_parent_orchestrator_type()`
+
+### trg_enforce_parent_orchestrator_type
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_parent_orchestrator_type()`
 
 ### trg_inherit_contracts_on_insert
 

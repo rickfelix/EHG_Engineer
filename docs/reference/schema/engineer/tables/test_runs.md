@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
-**Rows**: 0
+**Generated**: 2025-12-27T22:20:29.988Z
+**Rows**: 1
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (20 total)
+## Columns (23 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -38,6 +38,9 @@
 | report_file_path | `character varying(500)` | YES | - | - |
 | environment | `jsonb` | YES | `'{}'::jsonb` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
+| evidence_pack_id | `character varying(100)` | YES | - | Unique evidence pack ID (EVP-{timestamp}-{hash}) linking to manifest artifacts. LEO v4.4 |
+| evidence_manifest | `jsonb` | YES | - | Full evidence pack manifest including artifact list, SHA-256 hashes, and integrity verification data. LEO v4.4 |
+| cleanup_stats | `jsonb` | YES | - | Statistics from automatic trace cleanup: tracesDeleted, bytesFreed, etc. LEO v4.4 |
 
 ## Constraints
 
@@ -57,6 +60,10 @@
 - `idx_test_runs_completed_at`
   ```sql
   CREATE INDEX idx_test_runs_completed_at ON public.test_runs USING btree (completed_at DESC)
+  ```
+- `idx_test_runs_evidence_pack_id`
+  ```sql
+  CREATE INDEX idx_test_runs_evidence_pack_id ON public.test_runs USING btree (evidence_pack_id) WHERE (evidence_pack_id IS NOT NULL)
   ```
 - `idx_test_runs_sd_id`
   ```sql

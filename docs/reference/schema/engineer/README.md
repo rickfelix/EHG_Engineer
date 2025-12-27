@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
-**Tables**: 258
+**Generated**: 2025-12-27T22:20:29.988Z
+**Tables**: 290
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (258)
+## All Tables (290)
 
 ### LEO Protocol
 
@@ -54,6 +54,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 - [cross_sd_utilization](tables/cross_sd_utilization.md)
 - [sd_backlog_map](tables/sd_backlog_map.md)
+- [sd_baseline_issues](tables/sd_baseline_issues.md)
 - [sd_baseline_items](tables/sd_baseline_items.md)
 - [sd_burn_rate_snapshots](tables/sd_burn_rate_snapshots.md)
 - [sd_business_evaluations](tables/sd_business_evaluations.md)
@@ -76,6 +77,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sd_state_transitions](tables/sd_state_transitions.md)
 - [sd_subagent_deliverable_mapping](tables/sd_subagent_deliverable_mapping.md)
 - [sd_testing_status](tables/sd_testing_status.md)
+- [sd_type_gate_exemptions](tables/sd_type_gate_exemptions.md)
 - [sd_type_validation_profiles](tables/sd_type_validation_profiles.md)
 - [sd_ux_contracts](tables/sd_ux_contracts.md)
 - [strategic_directives_v2](tables/strategic_directives_v2.md)
@@ -97,6 +99,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [handoff_validation_rules](tables/handoff_validation_rules.md)
 - [handoff_verification_gates](tables/handoff_verification_gates.md)
 - [lifecycle_phases](tables/lifecycle_phases.md)
+- [pending_ceo_handoffs](tables/pending_ceo_handoffs.md)
+- [venture_phase_budgets](tables/venture_phase_budgets.md)
 
 ### Sub-Agents
 
@@ -128,12 +132,17 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [agent_execution_cache](tables/agent_execution_cache.md)
 - [agent_intelligence_insights](tables/agent_intelligence_insights.md)
 - [agent_learning_outcomes](tables/agent_learning_outcomes.md)
+- [agent_memory_stores](tables/agent_memory_stores.md)
+- [agent_messages](tables/agent_messages.md)
 - [agent_performance_metrics](tables/agent_performance_metrics.md)
+- [agent_registry](tables/agent_registry.md)
+- [agent_relationships](tables/agent_relationships.md)
 - [agent_task_contracts](tables/agent_task_contracts.md)
 - [agent_tools](tables/agent_tools.md)
 - [agentic_reviews](tables/agentic_reviews.md)
 - [agents](tables/agents.md)
 - [ai_quality_assessments](tables/ai_quality_assessments.md)
+- [app_config](tables/app_config.md)
 - [archetype_benchmarks](tables/archetype_benchmarks.md)
 - [assumption_sets](tables/assumption_sets.md)
 - [backlog_item_completion](tables/backlog_item_completion.md)
@@ -142,10 +151,14 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [board_meeting_attendance](tables/board_meeting_attendance.md)
 - [board_meetings](tables/board_meetings.md)
 - [board_members](tables/board_members.md)
+- [brand_variants](tables/brand_variants.md)
+- [capital_transactions](tables/capital_transactions.md)
 - [chairman_approval_requests](tables/chairman_approval_requests.md)
 - [chairman_decisions](tables/chairman_decisions.md)
+- [chairman_directives](tables/chairman_directives.md)
 - [chairman_feedback](tables/chairman_feedback.md)
 - [chairman_interests](tables/chairman_interests.md)
+- [circuit_breaker_blocks](tables/circuit_breaker_blocks.md)
 - [claude_sessions](tables/claude_sessions.md)
 - [companies](tables/companies.md)
 - [competitors](tables/competitors.md)
@@ -157,7 +170,10 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [component_registry_embeddings](tables/component_registry_embeddings.md)
 - [content_types](tables/content_types.md)
 - [context_embeddings](tables/context_embeddings.md)
+- [context_usage_daily](tables/context_usage_daily.md)
+- [context_usage_log](tables/context_usage_log.md)
 - [crew_members](tables/crew_members.md)
+- [crew_semantic_diffs](tables/crew_semantic_diffs.md)
 - [crewai_agents](tables/crewai_agents.md)
 - [crewai_crews](tables/crewai_crews.md)
 - [crewai_flow_executions](tables/crewai_flow_executions.md)
@@ -167,6 +183,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [cultural_design_styles](tables/cultural_design_styles.md)
 - [defect_taxonomy](tables/defect_taxonomy.md)
 - [directive_submissions](tables/directive_submissions.md)
+- [doctrine_constraint_violations](tables/doctrine_constraint_violations.md)
 - [documentation_health_checks](tables/documentation_health_checks.md)
 - [documentation_inventory](tables/documentation_inventory.md)
 - [documentation_templates](tables/documentation_templates.md)
@@ -187,6 +204,9 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [exec_sub_agent_activations](tables/exec_sub_agent_activations.md)
 - [execution_sequences_v2](tables/execution_sequences_v2.md)
 - [feedback_events](tables/feedback_events.md)
+- [financial_models](tables/financial_models.md)
+- [financial_projections](tables/financial_projections.md)
+- [financial_scenarios](tables/financial_scenarios.md)
 - [folder_structure_snapshot](tables/folder_structure_snapshot.md)
 - [gate_requirements_templates](tables/gate_requirements_templates.md)
 - [github_operations](tables/github_operations.md)
@@ -212,6 +232,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [opportunities](tables/opportunities.md)
 - [opportunity_blueprints](tables/opportunity_blueprints.md)
 - [opportunity_categories](tables/opportunity_categories.md)
+- [opportunity_scans](tables/opportunity_scans.md)
 - [opportunity_scores](tables/opportunity_scores.md)
 - [opportunity_sources](tables/opportunity_sources.md)
 - [orchestration_metrics](tables/orchestration_metrics.md)
@@ -256,21 +277,27 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [story_test_mappings](tables/story_test_mappings.md)
 - [sub_agent_execution_batches](tables/sub_agent_execution_batches.md)
 - [sub_agent_execution_results](tables/sub_agent_execution_results.md)
+- [sub_agent_execution_results_archive](tables/sub_agent_execution_results_archive.md)
 - [sub_agent_executions](tables/sub_agent_executions.md)
 - [sub_agent_gate_requirements](tables/sub_agent_gate_requirements.md)
 - [subagent_activations](tables/subagent_activations.md)
 - [subagent_requirements](tables/subagent_requirements.md)
+- [subagent_validation_results](tables/subagent_validation_results.md)
 - [submission_groups](tables/submission_groups.md)
 - [submission_screenshots](tables/submission_screenshots.md)
 - [submission_steps](tables/submission_steps.md)
 - [substage_transition_log](tables/substage_transition_log.md)
 - [system_alerts](tables/system_alerts.md)
+- [system_events](tables/system_events.md)
 - [system_health](tables/system_health.md)
 - [tech_stack_references](tables/tech_stack_references.md)
 - [test_coverage_policies](tables/test_coverage_policies.md)
 - [test_plans](tables/test_plans.md)
 - [test_results](tables/test_results.md)
 - [test_runs](tables/test_runs.md)
+- [tool_access_grants](tables/tool_access_grants.md)
+- [tool_registry](tables/tool_registry.md)
+- [tool_usage_ledger](tables/tool_usage_ledger.md)
 - [uat_cases](tables/uat_cases.md)
 - [uat_credential_history](tables/uat_credential_history.md)
 - [uat_credentials](tables/uat_credentials.md)
@@ -289,12 +316,17 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [validation_evidence](tables/validation_evidence.md)
 - [venture_archetypes](tables/venture_archetypes.md)
 - [venture_artifacts](tables/venture_artifacts.md)
+- [venture_decisions](tables/venture_decisions.md)
 - [venture_documents](tables/venture_documents.md)
 - [venture_drafts](tables/venture_drafts.md)
 - [venture_raid_summary](tables/venture_raid_summary.md)
+- [venture_stage_transitions](tables/venture_stage_transitions.md)
 - [venture_stage_work](tables/venture_stage_work.md)
+- [venture_token_budgets](tables/venture_token_budgets.md)
 - [venture_token_ledger](tables/venture_token_ledger.md)
+- [venture_tool_quotas](tables/venture_tool_quotas.md)
 - [ventures](tables/ventures.md)
+- [vertical_complexity_multipliers](tables/vertical_complexity_multipliers.md)
 - [voice_cached_responses](tables/voice_cached_responses.md)
 - [voice_conversations](tables/voice_conversations.md)
 - [voice_function_calls](tables/voice_function_calls.md)

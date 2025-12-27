@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
+**Generated**: 2025-12-27T22:20:29.988Z
 **Rows**: 0
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -98,7 +98,7 @@
            FROM profiles
           WHERE (profiles.id = auth.uid())))))`
 
-### 2. Users can update assumption sets for accessible ventures (UPDATE)
+### 2. Users can delete assumption sets for accessible ventures (DELETE)
 
 - **Roles**: {public}
 - **Using**: `(venture_id IN ( SELECT ventures.id
@@ -107,7 +107,16 @@
            FROM profiles
           WHERE (profiles.id = auth.uid())))))`
 
-### 3. Users can view assumption sets for accessible ventures (SELECT)
+### 3. Users can update assumption sets for accessible ventures (UPDATE)
+
+- **Roles**: {public}
+- **Using**: `(venture_id IN ( SELECT ventures.id
+   FROM ventures
+  WHERE (ventures.company_id IN ( SELECT ventures.company_id
+           FROM profiles
+          WHERE (profiles.id = auth.uid())))))`
+
+### 4. Users can view assumption sets for accessible ventures (SELECT)
 
 - **Roles**: {public}
 - **Using**: `(venture_id IN ( SELECT ventures.id

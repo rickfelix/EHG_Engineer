@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
-**Rows**: 4,425
+**Generated**: 2025-12-27T22:20:29.988Z
+**Rows**: 4,892
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -50,9 +50,13 @@
 - `check_conditions_required`: CHECK (((verdict <> 'CONDITIONAL_PASS'::text) OR ((conditions IS NOT NULL) AND (jsonb_array_length(conditions) > 0))))
 - `check_justification_required`: CHECK (((verdict <> 'CONDITIONAL_PASS'::text) OR ((justification IS NOT NULL) AND (length(justification) >= 50))))
 - `check_validation_mode_values`: CHECK ((validation_mode = ANY (ARRAY['prospective'::text, 'retrospective'::text])))
+- `critical_issues_max_100`: CHECK (((critical_issues IS NULL) OR (jsonb_typeof(critical_issues) <> 'array'::text) OR (jsonb_array_length(critical_issues) <= 100)))
+- `metadata_max_size`: CHECK (((metadata IS NULL) OR (length((metadata)::text) <= 1048576)))
+- `recommendations_max_50`: CHECK (((recommendations IS NULL) OR (jsonb_typeof(recommendations) <> 'array'::text) OR (jsonb_array_length(recommendations) <= 50)))
 - `valid_confidence`: CHECK (((confidence >= 0) AND (confidence <= 100)))
 - `valid_execution_time`: CHECK ((execution_time >= 0))
 - `valid_verdict`: CHECK ((verdict = ANY (ARRAY['PASS'::text, 'FAIL'::text, 'BLOCKED'::text, 'CONDITIONAL_PASS'::text, 'WARNING'::text])))
+- `warnings_max_100`: CHECK (((warnings IS NULL) OR (jsonb_typeof(warnings) <> 'array'::text) OR (jsonb_array_length(warnings) <= 100)))
 
 ## Indexes
 
@@ -120,6 +124,16 @@
 - **Using**: `true`
 
 ## Triggers
+
+### strip_nested_findings_trigger
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION strip_nested_findings_from_metadata()`
+
+### strip_nested_findings_trigger
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION strip_nested_findings_from_metadata()`
 
 ### trigger_complete_deliverables_on_subagent
 

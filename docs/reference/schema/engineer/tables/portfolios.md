@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
+**Generated**: 2025-12-27T22:20:29.988Z
 **Rows**: 8
-**RLS**: Enabled (6 policies)
+**RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -79,12 +79,19 @@
 - **Using**: `true`
 - **With Check**: `true`
 
-### 5. anon_select_portfolios (SELECT)
+### 5. Company access portfolios (ALL)
+
+- **Roles**: {authenticated}
+- **Using**: `(company_id IN ( SELECT user_company_access.company_id
+   FROM user_company_access
+  WHERE (user_company_access.user_id = auth.uid())))`
+
+### 6. anon_select_portfolios (SELECT)
 
 - **Roles**: {anon}
 - **Using**: `true`
 
-### 6. authenticated_select_portfolios (SELECT)
+### 7. authenticated_select_portfolios (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`

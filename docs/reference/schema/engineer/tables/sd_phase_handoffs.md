@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
-**Rows**: 127
+**Generated**: 2025-12-27T22:20:29.988Z
+**Rows**: 1,373
 **RLS**: Enabled (8 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -59,6 +59,7 @@
 - `sd_phase_handoffs_status_check`: CHECK (((status)::text = ANY ((ARRAY['pending_acceptance'::character varying, 'accepted'::character varying, 'rejected'::character varying])::text[])))
 - `sd_phase_handoffs_to_phase_check`: CHECK (((to_phase)::text = ANY ((ARRAY['LEAD'::character varying, 'PLAN'::character varying, 'EXEC'::character varying])::text[])))
 - `sd_phase_handoffs_validation_score_check`: CHECK (((validation_score >= 0) AND (validation_score <= 100)))
+- `validation_details_max_size`: CHECK (((validation_details IS NULL) OR (length((validation_details)::text) <= 102400)))
 
 ## Indexes
 

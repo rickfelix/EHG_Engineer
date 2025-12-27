@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
+**Generated**: 2025-12-27T22:20:29.988Z
 **Rows**: 0
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -63,15 +63,38 @@
 
 ## RLS Policies
 
-### 1. chairman_decisions_insert (INSERT)
+### 1. chairman_decisions_delete_policy (DELETE)
 
-- **Roles**: {public}
-- **With Check**: `true`
+- **Roles**: {authenticated}
+- **Using**: `fn_is_chairman()`
 
-### 2. chairman_decisions_select (SELECT)
+### 2. chairman_decisions_insert_policy (INSERT)
 
-- **Roles**: {public}
-- **Using**: `true`
+- **Roles**: {authenticated}
+- **With Check**: `fn_is_chairman()`
+
+### 3. chairman_decisions_select_policy (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `fn_is_chairman()`
+
+### 4. chairman_decisions_update_policy (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `fn_is_chairman()`
+- **With Check**: `fn_is_chairman()`
+
+## Triggers
+
+### trg_doctrine_constraint_chairman
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION enforce_doctrine_of_constraint()`
+
+### trg_doctrine_constraint_chairman
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_doctrine_of_constraint()`
 
 ---
 

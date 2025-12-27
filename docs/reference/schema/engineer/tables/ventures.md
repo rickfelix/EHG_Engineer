@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
-**Rows**: 689
+**Generated**: 2025-12-27T22:20:29.988Z
+**Rows**: 5
 **RLS**: Enabled (5 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,14 +14,14 @@
 
 ---
 
-## Columns (64 total)
+## Columns (71 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
 | name | `character varying(255)` | **NO** | - | - |
 | description | `text` | YES | - | - |
-| stage | `USER-DEFINED` | **NO** | `'draft_idea'::venture_stage_enum` | - |
+| deprecated_stage | `USER-DEFINED` | **NO** | `'draft_idea'::venture_stage_enum` | DEPRECATED: Use current_lifecycle_stage instead. Preserved for data recovery only. |
 | status | `USER-DEFINED` | **NO** | `'active'::venture_status_enum` | - |
 | portfolio_id | `uuid` | YES | - | - |
 | company_id | `uuid` | YES | - | - |
@@ -32,7 +32,7 @@
 | projected_revenue | `numeric(15,2)` | YES | - | - |
 | projected_roi | `numeric(5,2)` | YES | - | - |
 | funding_required | `numeric(15,2)` | YES | - | - |
-| current_workflow_stage | `integer(32)` | YES | `1` | - |
+| deprecated_current_workflow_stage | `integer(32)` | YES | `1` | DEPRECATED: Use current_lifecycle_stage instead. Preserved for data recovery only. |
 | workflow_status | `USER-DEFINED` | YES | `'pending'::workflow_status_enum` | - |
 | ai_score | `numeric(3,2)` | YES | - | - |
 | validation_score | `numeric(3,2)` | YES | - | - |
@@ -41,7 +41,7 @@
 | created_by | `uuid` | YES | - | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | milestone | `character varying(100)` | YES | - | - |
-| current_stage | `integer(32)` | YES | - | - |
+| deprecated_current_stage | `integer(32)` | YES | - | DEPRECATED: Use current_lifecycle_stage instead. Preserved for data recovery only. |
 | attention_score | `numeric(3,2)` | YES | - | - |
 | dwell_days | `integer(32)` | YES | `0` | - |
 | gate_retries_7d | `integer(32)` | YES | `0` | - |
@@ -60,7 +60,7 @@
 | voice_description_url | `text` | YES | - | - |
 | unification_version | `character varying(50)` | YES | `'legacy'::character varying` | - |
 | category | `character varying(100)` | YES | - | - |
-| problem_statement | `text` | YES | - | - |
+| problem_statement | `text` | **NO** | - | - |
 | solution_approach | `text` | YES | - | - |
 | unique_value_proposition | `text` | YES | - | - |
 | strategic_context | `jsonb` | YES | `'{}'::jsonb` | - |
@@ -70,7 +70,9 @@
 | blueprint_id | `text` | YES | - | - |
 | solution | `text` | YES | - | - |
 | brand_variants | `jsonb` | YES | `'[]'::jsonb` | Array of brand name variants for adaptive naming and multi-market localization. |
-| current_lifecycle_stage | `integer(32)` | YES | `1` | - |
+| current_lifecycle_stage | `integer(32)` | YES | `1` | CANONICAL stage column (1-25 range). This is the ONLY stage column.
+   All other stage columns are DEPRECATED and prefixed with DEPRECATED_.
+   SD-UNIFIED-PATH-2.0: One Column Law |
 | venture_code | `character varying(20)` | YES | - | - |
 | archetype | `character varying(50)` | YES | - | - |
 | deployment_target | `character varying(50)` | YES | - | - |
@@ -85,6 +87,13 @@ Reference: docs/02_api/design_system_handcrafted.md |
 | design_style_config | `jsonb` | YES | - | Optional JSON configuration for design style customization.
 Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true} |
 | ceo_agent_id | `uuid` | YES | - | - |
+| updated_at | `timestamp with time zone` | YES | `now()` | - |
+| health_score | `numeric(3,2)` | YES | `0.5` | - |
+| calibration_delta | `numeric(5,3)` | YES | `0` | - |
+| health_status | `character varying(20)` | YES | - | - |
+| vertical_category | `text` | YES | `'other'::text` | Industry vertical for calibration multipliers. Values: healthcare (1.5x), fintech (1.3x), edtech (1.2x), logistics (1.0x), other (1.0x) |
+| raw_chairman_intent | `text` | YES | - | Immutable original Chairman input captured at venture creation. This field should NEVER be modified after initial creation. Use problem_statement for the working/editable version. |
+| problem_statement_locked_at | `timestamp with time zone` | YES | - | Timestamp when the problem_statement was locked (moved from draft to Stage 1). Once set, the raw_chairman_intent should be considered immutable. |
 
 ## Constraints
 
@@ -99,6 +108,8 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 
 ### Check Constraints
 - `ventures_current_lifecycle_stage_check`: CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 25)))
+- `ventures_health_status_check`: CHECK (((health_status)::text = ANY ((ARRAY['healthy'::character varying, 'warning'::character varying, 'critical'::character varying])::text[])))
+- `ventures_vertical_category_check`: CHECK ((vertical_category = ANY (ARRAY['healthcare'::text, 'fintech'::text, 'edtech'::text, 'logistics'::text, 'other'::text])))
 
 ## Indexes
 
@@ -122,6 +133,14 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
   ```sql
   CREATE INDEX idx_ventures_cultural_design_style ON public.ventures USING btree (cultural_design_style) WHERE (cultural_design_style IS NOT NULL)
   ```
+- `idx_ventures_current_lifecycle_stage`
+  ```sql
+  CREATE INDEX idx_ventures_current_lifecycle_stage ON public.ventures USING btree (current_lifecycle_stage)
+  ```
+- `idx_ventures_health_score`
+  ```sql
+  CREATE INDEX idx_ventures_health_score ON public.ventures USING btree (health_score)
+  ```
 - `idx_ventures_lifecycle_stage`
   ```sql
   CREATE INDEX idx_ventures_lifecycle_stage ON public.ventures USING btree (current_lifecycle_stage)
@@ -136,7 +155,11 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
   ```
 - `idx_ventures_stage`
   ```sql
-  CREATE INDEX idx_ventures_stage ON public.ventures USING btree (stage)
+  CREATE INDEX idx_ventures_stage ON public.ventures USING btree (deprecated_stage)
+  ```
+- `idx_ventures_stage_status`
+  ```sql
+  CREATE INDEX idx_ventures_stage_status ON public.ventures USING btree (current_lifecycle_stage, status) WHERE (status = 'active'::venture_status_enum)
   ```
 - `idx_ventures_status`
   ```sql
@@ -145,6 +168,10 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 - `idx_ventures_variants_awaiting_approval`
   ```sql
   CREATE INDEX idx_ventures_variants_awaiting_approval ON public.ventures USING gin (brand_variants) WHERE (brand_variants @> '[{"lifecycle_status": "AWAITING_APPROVAL"}]'::jsonb)
+  ```
+- `idx_ventures_vertical_category`
+  ```sql
+  CREATE INDEX idx_ventures_vertical_category ON public.ventures USING btree (vertical_category)
   ```
 - `ventures_ceo_agent_id_idx`
   ```sql
@@ -181,15 +208,32 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 
 ### 5. Company access ventures (ALL)
 
-- **Roles**: {public}
-- **Using**: `((company_id IN ( SELECT user_company_access.company_id
+- **Roles**: {authenticated}
+- **Using**: `(company_id IN ( SELECT user_company_access.company_id
    FROM user_company_access
-  WHERE (user_company_access.user_id = auth.uid()))) OR (created_by = auth.uid()))`
-- **With Check**: `((company_id IN ( SELECT user_company_access.company_id
-   FROM user_company_access
-  WHERE (user_company_access.user_id = auth.uid()))) OR (created_by = auth.uid()))`
+  WHERE (user_company_access.user_id = auth.uid())))`
 
 ## Triggers
+
+### enforce_tier0_stage_cap
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION prevent_tier0_stage_progression()`
+
+### enforce_tier0_stage_cap
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION prevent_tier0_stage_progression()`
+
+### trg_validate_stage_column
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION fn_validate_stage_column()`
+
+### trg_validate_stage_column
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION fn_validate_stage_column()`
 
 ### update_ventures_updated_at
 
