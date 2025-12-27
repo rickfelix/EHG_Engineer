@@ -32,6 +32,8 @@ jobs:
   update-schema-docs:
     name: Regenerate Schema Documentation
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required for git push to main
 
     steps:
       - name: Checkout repository
