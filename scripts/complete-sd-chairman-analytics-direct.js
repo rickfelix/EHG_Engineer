@@ -6,6 +6,7 @@
  */
 
 import { createDatabaseClient } from '../../ehg/scripts/lib/supabase-connection.js';
+import { logGovernanceBypass, BypassCategory, BypassSeverity } from './lib/governance-bypass-logger.js';
 
 async function completeSD() {
   console.log('\n🎯 LEAD FINAL APPROVAL: SD-CHAIRMAN-ANALYTICS-PROMOTE-001');
@@ -19,6 +20,21 @@ async function completeSD() {
     console.log('\n🔌 Connecting to EHG_Engineer database via PostgreSQL...');
     client = await createDatabaseClient('engineer');
     console.log('✅ Connection established (RLS bypassed)\n');
+
+    // Log the governance bypass for transparency and learning
+    await logGovernanceBypass({
+      category: BypassCategory.RLS_POLICY,
+      control: 'strategic_directives_v2_rls',
+      reason: 'Direct PostgreSQL connection to bypass RLS for SD completion - LEAD final approval',
+      changedBy: process.env.USER || 'script:complete-sd-chairman-analytics-direct',
+      severity: BypassSeverity.MEDIUM,
+      sdId: sdId,
+      context: {
+        script: 'complete-sd-chairman-analytics-direct.js',
+        action: 'complete_sd_via_direct_postgres',
+        phase: 'LEAD_FINAL_APPROVAL'
+      }
+    });
 
     // Step 1: Verify retrospective quality score
     console.log('📊 Step 1: Verifying retrospective quality...');

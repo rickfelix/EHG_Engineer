@@ -17,12 +17,29 @@
  */
 
 import { createDatabaseClient } from '../lib/supabase-connection.js';
+import { logGovernanceBypass, BypassCategory, BypassSeverity } from './lib/governance-bypass-logger.js';
 
 async function completeSD() {
   const client = await createDatabaseClient('engineer', { verify: false });
 
   try {
     console.log('Completing SD-VISION-V2-010 with trigger bypass...\n');
+
+    // Log the governance bypass for transparency and learning
+    await logGovernanceBypass({
+      category: BypassCategory.DATABASE_TRIGGER,
+      control: 'enforce_progress_trigger',
+      reason: 'Bypass to complete SD-VISION-V2-010 - trigger progress calc bug (shows 85% but phases sum to 100%)',
+      changedBy: process.env.USER || 'script:complete-sd-vision-v2-010-bypass',
+      severity: BypassSeverity.MEDIUM,
+      sdId: 'SD-VISION-V2-010',
+      context: {
+        script: 'complete-sd-vision-v2-010-bypass.js',
+        triggerIssue: 'progress_calculation_mismatch',
+        triggerProgress: 85,
+        actualProgress: 100
+      }
+    });
 
     const sdId = '52038e49-7612-4e98-bb9f-c8b5b97a9266';
 

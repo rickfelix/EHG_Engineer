@@ -1,6 +1,7 @@
 import pkg from 'pg';
 const { Client } = pkg;
 import dotenv from 'dotenv';
+import { logGovernanceBypass, BypassCategory, BypassSeverity } from './lib/governance-bypass-logger.js';
 dotenv.config();
 
 async function bypassValidationAndComplete() {
@@ -13,6 +14,20 @@ async function bypassValidationAndComplete() {
 
     await client.connect();
     console.log('✅ Connected to database\n');
+
+    // Log the governance bypass for transparency and learning
+    await logGovernanceBypass({
+      category: BypassCategory.DATABASE_TRIGGER,
+      control: 'enforce_progress_trigger',
+      reason: 'Manual bypass via postgres to complete SDs blocked by validation trigger - requires retrospective review',
+      changedBy: process.env.USER || 'script:bypass-validation-postgres',
+      severity: BypassSeverity.HIGH,
+      context: {
+        script: 'bypass-validation-postgres.js',
+        action: 'disable_trigger_complete_sds',
+        method: 'direct_postgres'
+      }
+    });
 
     const sdIds = [
       'SD-2025-1013-P5Z',

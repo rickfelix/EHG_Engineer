@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { logGovernanceBypass, BypassCategory, BypassSeverity } from './lib/governance-bypass-logger.js';
 dotenv.config();
 
 const supabase = createClient(
@@ -10,6 +11,19 @@ const supabase = createClient(
 async function bypassValidationAndComplete() {
   try {
     console.log('\n=== BYPASSING VALIDATION TO MARK SDs AS COMPLETED ===\n');
+
+    // Log the governance bypass for transparency and learning
+    await logGovernanceBypass({
+      category: BypassCategory.DATABASE_TRIGGER,
+      control: 'enforce_sd_completion_protocol',
+      reason: 'Manual bypass to complete SDs that are blocked by validation trigger - requires retrospective review',
+      changedBy: process.env.USER || 'script:bypass-validation-complete-sds',
+      severity: BypassSeverity.HIGH,
+      context: {
+        script: 'bypass-validation-complete-sds.js',
+        action: 'disable_trigger_complete_sds'
+      }
+    });
 
     const sdIds = [
       'SD-2025-1013-P5Z',
