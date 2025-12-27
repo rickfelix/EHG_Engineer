@@ -67,11 +67,21 @@ jobs:
 
       - name: Generate Engineer database schema docs
         if: github.event.inputs.target == 'engineer' || github.event.inputs.target == 'both' || github.event.inputs.target == ''
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
         run: npm run schema:docs:engineer
         continue-on-error: false
 
       - name: Generate EHG app database schema docs
         if: github.event.inputs.target == 'app' || github.event.inputs.target == 'both' || github.event.inputs.target == ''
+        env:
+          SUPABASE_URL: ${{ secrets.EHG_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.EHG_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.EHG_SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_POOLER_URL: ${{ secrets.EHG_POOLER_URL }}
         run: npm run schema:docs:app
         continue-on-error: true  # EHG app might not be configured yet
 
