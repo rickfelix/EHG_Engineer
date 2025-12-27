@@ -61,6 +61,28 @@ const WORKFLOW_BY_SD_TYPE = {
     optional: [],
     skippedValidation: [],
     note: 'Security SDs require SECURITY sub-agent validation'
+  },
+  refactor: {
+    name: 'Refactoring LEO Workflow (Intensity-Aware)',
+    description: 'Workflow varies by intensity level (cosmetic/structural/architectural)',
+    required: ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD'],
+    optional: ['LEAD-FINAL-APPROVAL'],
+    skippedValidation: [],
+    note: 'Refactor SDs require REGRESSION sub-agent. Intensity level REQUIRED.',
+    intensityOverrides: {
+      cosmetic: {
+        required: ['LEAD-TO-PLAN', 'PLAN-TO-LEAD'],
+        skippedValidation: ['E2E tests', 'REGRESSION (optional)', 'Full PRD']
+      },
+      structural: {
+        required: ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD'],
+        skippedValidation: ['Retrospective (optional)']
+      },
+      architectural: {
+        required: ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL'],
+        skippedValidation: []
+      }
+    }
   }
 };
 
