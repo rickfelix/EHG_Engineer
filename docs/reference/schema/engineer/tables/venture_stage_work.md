@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
-**Rows**: 0
-**RLS**: Enabled (2 policies)
+**Generated**: 2025-12-27T22:20:29.988Z
+**Rows**: 33
+**RLS**: Enabled (5 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -73,15 +73,31 @@
 
 ## RLS Policies
 
-### 1. venture_stage_work_modify (ALL)
+### 1. venture_stage_work_delete_policy (DELETE)
+
+- **Roles**: {authenticated}
+- **Using**: `fn_is_chairman()`
+
+### 2. venture_stage_work_insert_policy (INSERT)
+
+- **Roles**: {authenticated}
+- **With Check**: `fn_user_has_venture_access(venture_id)`
+
+### 3. venture_stage_work_modify (ALL)
 
 - **Roles**: {public}
 - **Using**: `true`
 
-### 2. venture_stage_work_select (SELECT)
+### 4. venture_stage_work_select_policy (SELECT)
 
-- **Roles**: {public}
-- **Using**: `true`
+- **Roles**: {authenticated}
+- **Using**: `fn_user_has_venture_access(venture_id)`
+
+### 5. venture_stage_work_update_policy (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `fn_user_has_venture_access(venture_id)`
+- **With Check**: `fn_user_has_venture_access(venture_id)`
 
 ## Triggers
 

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
-**Rows**: 17,438
+**Generated**: 2025-12-27T22:20:29.988Z
+**Rows**: 50,377
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -63,15 +63,16 @@
 
 ## RLS Policies
 
-### 1. anon_insert_governance_audit_log (INSERT)
-
-- **Roles**: {anon}
-- **With Check**: `true`
-
-### 2. authenticated_read_governance_audit_log (SELECT)
+### 1. authenticated_read_governance_audit_log (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
+
+### 2. governance_audit_log_service_role_access (ALL)
+
+- **Roles**: {authenticated}
+- **Using**: `fn_is_service_role()`
+- **With Check**: `fn_is_service_role()`
 
 ### 3. service_role_all_governance_audit_log (ALL)
 

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
-**Rows**: 239
+**Generated**: 2025-12-27T22:20:29.988Z
+**Rows**: 1,576
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (26 total)
+## Columns (28 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -44,6 +44,8 @@
 | created_by | `character varying(100)` | YES | `'system'::character varying` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | updated_at | `timestamp with time zone` | **NO** | `now()` | - |
+| completion_idempotency_key | `uuid` | YES | - | - |
+| completed_by_agent_id | `uuid` | YES | - | - |
 
 ## Constraints
 
@@ -62,6 +64,10 @@
 - `agent_task_contracts_pkey`
   ```sql
   CREATE UNIQUE INDEX agent_task_contracts_pkey ON public.agent_task_contracts USING btree (id)
+  ```
+- `idx_task_contracts_idempotency`
+  ```sql
+  CREATE UNIQUE INDEX idx_task_contracts_idempotency ON public.agent_task_contracts USING btree (id, completion_idempotency_key) WHERE (completion_idempotency_key IS NOT NULL)
   ```
 - `idx_task_contracts_pending`
   ```sql

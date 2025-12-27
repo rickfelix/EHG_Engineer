@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
-**Rows**: 13
+**Generated**: 2025-12-27T22:20:29.988Z
+**Rows**: 20
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (27 total)
+## Columns (28 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -45,6 +45,7 @@
 | started_at | `timestamp without time zone` | YES | - | - |
 | completed_at | `timestamp without time zone` | YES | - | - |
 | created_by | `text` | YES | `'UAT_AGENT'::text` | - |
+| target_application | `text` | YES | - | Target repository: EHG (main app) or EHG_Engineer (infrastructure). Used by complete-quick-fix.js to run tests in correct directory. |
 
 ## Constraints
 
@@ -62,6 +63,7 @@
 - `quick_fixes_found_during_check`: CHECK ((found_during = ANY (ARRAY['uat'::text, 'manual-testing'::text, 'code-review'::text])))
 - `quick_fixes_severity_check`: CHECK ((severity = ANY (ARRAY['critical'::text, 'high'::text, 'medium'::text, 'low'::text])))
 - `quick_fixes_status_check`: CHECK ((status = ANY (ARRAY['open'::text, 'in_progress'::text, 'completed'::text, 'escalated'::text])))
+- `quick_fixes_target_application_check`: CHECK ((target_application = ANY (ARRAY['EHG'::text, 'EHG_Engineer'::text])))
 - `quick_fixes_type_check`: CHECK ((type = ANY (ARRAY['bug'::text, 'polish'::text, 'typo'::text, 'documentation'::text])))
 
 ## Indexes

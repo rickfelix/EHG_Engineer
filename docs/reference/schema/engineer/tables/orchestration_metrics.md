@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
+**Generated**: 2025-12-27T22:20:29.988Z
 **Rows**: 0
-**RLS**: Enabled (1 policy)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -82,12 +82,28 @@
 
 ## RLS Policies
 
-### 1. eva_metrics_company_access (SELECT)
+### 1. Allow insert for authenticated (INSERT)
+
+- **Roles**: {authenticated}
+- **With Check**: `true`
+
+### 2. Allow update for authenticated (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+- **With Check**: `true`
+
+### 3. eva_metrics_company_access (SELECT)
 
 - **Roles**: {public}
 - **Using**: `(company_id IN ( SELECT user_company_access.company_id
    FROM user_company_access
   WHERE ((user_company_access.user_id = auth.uid()) AND (user_company_access.is_active = true))))`
+
+### 4. orchestration_metrics_delete (DELETE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
 
 ---
 

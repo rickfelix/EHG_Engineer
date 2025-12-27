@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
+**Generated**: 2025-12-27T22:20:29.988Z
 **Rows**: 0
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -57,15 +57,11 @@
 
 ## RLS Policies
 
-### 1. attendance_read_policy (SELECT)
+### 1. board_meeting_attendance_service_role_access (ALL)
 
-- **Roles**: {public}
-- **Using**: `true`
-
-### 2. attendance_write_policy (ALL)
-
-- **Roles**: {public}
-- **Using**: `(CURRENT_USER = 'service_role'::name)`
+- **Roles**: {authenticated}
+- **Using**: `fn_is_service_role()`
+- **With Check**: `fn_is_service_role()`
 
 ---
 

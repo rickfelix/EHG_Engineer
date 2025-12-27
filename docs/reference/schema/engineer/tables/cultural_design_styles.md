@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
+**Generated**: 2025-12-27T22:20:29.988Z
 **Rows**: 4
-**RLS**: Enabled (1 policy)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -41,7 +41,23 @@
 
 ## RLS Policies
 
-### 1. cultural_design_styles_select (SELECT)
+### 1. Allow insert for authenticated (INSERT)
+
+- **Roles**: {authenticated}
+- **With Check**: `true`
+
+### 2. Allow update for authenticated (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+- **With Check**: `true`
+
+### 3. cultural_design_styles_delete (DELETE)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+
+### 4. cultural_design_styles_select (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`

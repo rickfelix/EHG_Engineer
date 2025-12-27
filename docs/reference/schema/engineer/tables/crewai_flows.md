@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
+**Generated**: 2025-12-27T22:20:29.988Z
 **Rows**: 3
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (21 total)
+## Columns (24 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -39,6 +39,9 @@
 | is_template | `boolean` | YES | - | - |
 | template_category | `text` | YES | - | - |
 | avg_execution_time_ms | `integer(32)` | YES | - | - |
+| venture_id | `uuid` | YES | - | GOVERNED-ENGINE-v5.1.0: MANDATORY venture context for all flows |
+| prd_id | `uuid` | YES | - | GOVERNED-ENGINE-v5.1.0: PRD anchor for traceability |
+| sd_id | `character varying(50)` | YES | - | GOVERNED-ENGINE-v5.1.0: Strategic Directive anchor for governance |
 
 ## Constraints
 
@@ -47,6 +50,7 @@
 
 ### Foreign Keys
 - `crewai_flows_parent_flow_id_fkey`: parent_flow_id → crewai_flows(id)
+- `crewai_flows_venture_id_fkey`: venture_id → ventures(id)
 
 ### Unique Constraints
 - `crewai_flows_flow_key_key`: UNIQUE (flow_key)
@@ -71,6 +75,10 @@
 - `idx_crewai_flows_created_by`
   ```sql
   CREATE INDEX idx_crewai_flows_created_by ON public.crewai_flows USING btree (created_by)
+  ```
+- `idx_crewai_flows_governance`
+  ```sql
+  CREATE INDEX idx_crewai_flows_governance ON public.crewai_flows USING btree (venture_id, prd_id, sd_id)
   ```
 - `idx_crewai_flows_search`
   ```sql

@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
+**Generated**: 2025-12-27T22:20:29.988Z
 **Rows**: 0
 **RLS**: Enabled (1 policy)
 
@@ -51,14 +51,12 @@
 
 ### 1. Company access venture_documents (ALL)
 
-- **Roles**: {public}
-- **Using**: `((venture_id IN ( SELECT v.id
+- **Roles**: {authenticated}
+- **Using**: `(venture_id IN ( SELECT v.id
    FROM ventures v
   WHERE (v.company_id IN ( SELECT user_company_access.company_id
            FROM user_company_access
-          WHERE (user_company_access.user_id = auth.uid()))))) OR (EXISTS ( SELECT 1
-   FROM auth.users
-  WHERE (users.id = auth.uid()))))`
+          WHERE (user_company_access.user_id = auth.uid())))))`
 
 ---
 

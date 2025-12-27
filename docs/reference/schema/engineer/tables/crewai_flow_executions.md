@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
+**Generated**: 2025-12-27T22:20:29.988Z
 **Rows**: 0
 **RLS**: Enabled (5 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (18 total)
+## Columns (24 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -36,6 +36,12 @@
 | executed_by | `uuid` | YES | - | - |
 | execution_mode | `character varying(20)` | YES | `'manual'::character varying` | - |
 | metadata | `jsonb` | YES | - | - |
+| venture_id | `uuid` | YES | - | GOVERNED-ENGINE-v5.1.0: Venture context for execution |
+| prd_id | `uuid` | YES | - | - |
+| sd_id | `character varying(50)` | YES | - | - |
+| budget_consumed | `integer(32)` | YES | `0` | GOVERNED-ENGINE-v5.1.0: Tokens consumed during execution |
+| budget_limit | `integer(32)` | YES | - | - |
+| killed_by_budget | `boolean` | YES | `false` | GOVERNED-ENGINE-v5.1.0: TRUE if execution halted by budget kill-switch |
 
 ## Constraints
 
@@ -44,6 +50,7 @@
 
 ### Foreign Keys
 - `crewai_flow_executions_flow_id_fkey`: flow_id → crewai_flows(id)
+- `crewai_flow_executions_venture_id_fkey`: venture_id → ventures(id)
 
 ### Unique Constraints
 - `crewai_flow_executions_execution_key_key`: UNIQUE (execution_key)
@@ -61,6 +68,10 @@
 - `crewai_flow_executions_pkey`
   ```sql
   CREATE UNIQUE INDEX crewai_flow_executions_pkey ON public.crewai_flow_executions USING btree (id)
+  ```
+- `idx_crewai_flow_executions_governance`
+  ```sql
+  CREATE INDEX idx_crewai_flow_executions_governance ON public.crewai_flow_executions USING btree (venture_id, prd_id, sd_id)
   ```
 - `idx_flow_exec_board_meeting_id`
   ```sql

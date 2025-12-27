@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-20T21:31:21.824Z
-**Rows**: 31
+**Generated**: 2025-12-27T22:20:29.988Z
+**Rows**: 67
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (22 total)
+## Columns (23 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -40,6 +40,7 @@
 | prd_id | `character varying(50)` | YES | - | Foreign key to product_requirements_v2. Links events to specific PRD context for governance tracking. |
 | sd_id | `text` | YES | - | Strategic Directive identifier (e.g., SD-PARENT-4.0, SD-HARDENING-V2-002C). Links events to strategic context for governance tracking. |
 | directive_context | `jsonb` | YES | `'{}'::jsonb` | Additional governance metadata. Schema: { phase: "LEAD|PLAN|EXEC", priority: number, tags: string[], notes: string } |
+| details | `jsonb` | YES | - | JSONB column for storing event metadata, added for E2E test support |
 
 ## Constraints
 
@@ -131,15 +132,20 @@
 
 ## Triggers
 
-### trg_enforce_governance_linkage
+### trg_doctrine_system_events
 
 - **Timing**: BEFORE INSERT
-- **Action**: `EXECUTE FUNCTION enforce_governance_linkage()`
+- **Action**: `EXECUTE FUNCTION enforce_doctrine_on_system_events()`
 
-### trg_enforce_governance_linkage
+### trg_enforce_dual_domain_governance
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION enforce_dual_domain_governance()`
+
+### trg_enforce_dual_domain_governance
 
 - **Timing**: BEFORE UPDATE
-- **Action**: `EXECUTE FUNCTION enforce_governance_linkage()`
+- **Action**: `EXECUTE FUNCTION enforce_dual_domain_governance()`
 
 ### trg_ensure_idempotency
 

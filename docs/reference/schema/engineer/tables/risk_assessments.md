@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
-**Rows**: 0
+**Generated**: 2025-12-27T22:20:29.988Z
+**Rows**: 1
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -58,6 +58,9 @@
 - `risk_assessments_technical_complexity_check`: CHECK (((technical_complexity >= 1) AND (technical_complexity <= 10)))
 - `risk_assessments_ui_ux_risk_check`: CHECK (((ui_ux_risk >= 1) AND (ui_ux_risk <= 10)))
 - `risk_assessments_verdict_check`: CHECK ((verdict = ANY (ARRAY['PASS'::text, 'CONDITIONAL_PASS'::text, 'FAIL'::text, 'ESCALATE'::text])))
+- `risk_critical_issues_max_50`: CHECK (((critical_issues IS NULL) OR (jsonb_typeof(critical_issues) <> 'array'::text) OR (jsonb_array_length(critical_issues) <= 50)))
+- `risk_recommendations_max_30`: CHECK (((recommendations IS NULL) OR (jsonb_typeof(recommendations) <> 'array'::text) OR (jsonb_array_length(recommendations) <= 30)))
+- `risk_warnings_max_50`: CHECK (((warnings IS NULL) OR (jsonb_typeof(warnings) <> 'array'::text) OR (jsonb_array_length(warnings) <= 50)))
 
 ## Indexes
 

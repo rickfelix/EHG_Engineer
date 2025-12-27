@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-15T17:31:21.178Z
+**Generated**: 2025-12-27T22:20:29.988Z
 **Rows**: 3
-**RLS**: Enabled (5 policies)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -85,15 +85,11 @@
 - **Using**: `true`
 - **With Check**: `true`
 
-### 4. templates_create_user (INSERT)
+### 4. crewai_flow_templates_service_role_access (ALL)
 
-- **Roles**: {public}
-- **With Check**: `((auth.uid() = created_by) AND (is_official = false))`
-
-### 5. templates_read_all (SELECT)
-
-- **Roles**: {public}
-- **Using**: `true`
+- **Roles**: {authenticated}
+- **Using**: `fn_is_service_role()`
+- **With Check**: `fn_is_service_role()`
 
 ## Triggers
 
