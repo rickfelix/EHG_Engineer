@@ -50,28 +50,24 @@ jobs:
 
       - name: Set up environment variables
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
-          EHG_SUPABASE_URL: ${{ secrets.EHG_SUPABASE_URL }}
-          EHG_SUPABASE_ANON_KEY: ${{ secrets.EHG_SUPABASE_ANON_KEY }}
-          EHG_POOLER_URL: ${{ secrets.EHG_POOLER_URL }}
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_POOLER_URL: ${{ secrets.DATABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "Environment variables configured"
           echo "SUPABASE_URL=${SUPABASE_URL}" >> .env
           echo "SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}" >> .env
           echo "SUPABASE_POOLER_URL=${SUPABASE_POOLER_URL}" >> .env
-          echo "EHG_SUPABASE_URL=${EHG_SUPABASE_URL}" >> .env
-          echo "EHG_SUPABASE_ANON_KEY=${EHG_SUPABASE_ANON_KEY}" >> .env
-          echo "EHG_POOLER_URL=${EHG_POOLER_URL}" >> .env
+          echo "SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}" >> .env
 
       - name: Generate Engineer database schema docs
         if: github.event.inputs.target == 'engineer' || github.event.inputs.target == 'both' || github.event.inputs.target == ''
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          SUPABASE_POOLER_URL: ${{ secrets.DATABASE_URL }}
         run: npm run schema:docs:engineer
         continue-on-error: false
 
