@@ -1,11 +1,11 @@
-# sd_type_gate_exemptions Table
+# sd_intensity_gate_exemptions Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2025-12-27T22:36:33.744Z
-**Rows**: 57
+**Rows**: 21
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,12 +14,13 @@
 
 ---
 
-## Columns (7 total)
+## Columns (8 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
-| id | `integer(32)` | **NO** | `nextval('sd_type_gate_exemptions_id_seq'::regclass)` | - |
+| id | `integer(32)` | **NO** | `nextval('sd_intensity_gate_exemptions_id_seq'::regclass)` | - |
 | sd_type | `character varying(50)` | **NO** | - | - |
+| intensity_level | `character varying(20)` | **NO** | - | - |
 | gate_name | `character varying(100)` | **NO** | - | - |
 | exemption_type | `character varying(20)` | **NO** | - | - |
 | reason | `text` | **NO** | - | - |
@@ -29,23 +30,24 @@
 ## Constraints
 
 ### Primary Key
-- `sd_type_gate_exemptions_pkey`: PRIMARY KEY (id)
+- `sd_intensity_gate_exemptions_pkey`: PRIMARY KEY (id)
 
 ### Unique Constraints
-- `sd_type_gate_exemptions_sd_type_gate_name_key`: UNIQUE (sd_type, gate_name)
+- `sd_intensity_gate_exemptions_sd_type_intensity_level_gate_n_key`: UNIQUE (sd_type, intensity_level, gate_name)
 
 ### Check Constraints
-- `sd_type_gate_exemptions_exemption_type_check`: CHECK (((exemption_type)::text = ANY ((ARRAY['SKIP'::character varying, 'OPTIONAL'::character varying, 'REQUIRED'::character varying])::text[])))
+- `sd_intensity_gate_exemptions_exemption_type_check`: CHECK (((exemption_type)::text = ANY ((ARRAY['SKIP'::character varying, 'OPTIONAL'::character varying, 'REQUIRED'::character varying])::text[])))
+- `sd_intensity_gate_exemptions_intensity_level_check`: CHECK (((intensity_level)::text = ANY ((ARRAY['cosmetic'::character varying, 'structural'::character varying, 'architectural'::character varying])::text[])))
 
 ## Indexes
 
-- `sd_type_gate_exemptions_pkey`
+- `sd_intensity_gate_exemptions_pkey`
   ```sql
-  CREATE UNIQUE INDEX sd_type_gate_exemptions_pkey ON public.sd_type_gate_exemptions USING btree (id)
+  CREATE UNIQUE INDEX sd_intensity_gate_exemptions_pkey ON public.sd_intensity_gate_exemptions USING btree (id)
   ```
-- `sd_type_gate_exemptions_sd_type_gate_name_key`
+- `sd_intensity_gate_exemptions_sd_type_intensity_level_gate_n_key`
   ```sql
-  CREATE UNIQUE INDEX sd_type_gate_exemptions_sd_type_gate_name_key ON public.sd_type_gate_exemptions USING btree (sd_type, gate_name)
+  CREATE UNIQUE INDEX sd_intensity_gate_exemptions_sd_type_intensity_level_gate_n_key ON public.sd_intensity_gate_exemptions USING btree (sd_type, intensity_level, gate_name)
   ```
 
 ## RLS Policies
