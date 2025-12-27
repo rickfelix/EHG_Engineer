@@ -18,9 +18,9 @@ export class SDRepository {
 
   /**
    * Get Strategic Directive by ID
-   * SD-VENTURE-STAGE0-UI-001: Support both UUID and legacy_id lookups
+   * SD-VENTURE-STAGE0-UI-001: Support UUID, legacy_id, and sd_key lookups
    *
-   * @param {string} sdId - Strategic Directive ID (UUID or legacy_id)
+   * @param {string} sdId - Strategic Directive ID (UUID, legacy_id, or sd_key)
    * @param {string} columns - Columns to select (default: '*')
    * @returns {Promise<object>} SD record
    * @throws {Error} If SD not found
@@ -30,15 +30,28 @@ export class SDRepository {
     const cached = this._getFromCache(cacheKey);
     if (cached) return cached;
 
-    // SD-VENTURE-STAGE0-UI-001: Check if sdId is UUID or legacy_id
+    // SD-VENTURE-STAGE0-UI-001: Check if sdId is UUID or legacy_id/sd_key
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
-    const queryField = isUUID ? 'id' : 'legacy_id';
 
-    const { data: sd, error } = await this.supabase
-      .from('strategic_directives_v2')
-      .select(columns)
-      .eq(queryField, sdId)
-      .single();
+    let sd, error;
+    if (isUUID) {
+      const result = await this.supabase
+        .from('strategic_directives_v2')
+        .select(columns)
+        .eq('id', sdId)
+        .single();
+      sd = result.data;
+      error = result.error;
+    } else {
+      // Try legacy_id or sd_key
+      const result = await this.supabase
+        .from('strategic_directives_v2')
+        .select(columns)
+        .or(`legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+        .single();
+      sd = result.data;
+      error = result.error;
+    }
 
     if (error || !sd) {
       throw new Error(`Strategic Directive not found: ${sdId}`);
@@ -52,16 +65,16 @@ export class SDRepository {
    * Verify SD exists in database (blocking gate)
    * Used to prevent work on non-existent SDs (SD-TEST-MOCK-001 prevention)
    *
-   * SD-VENTURE-STAGE0-UI-001: Support both UUID and legacy_id lookups
+   * SD-VENTURE-STAGE0-UI-001: Support UUID, legacy_id, and sd_key lookups
    *
-   * @param {string} sdId - Strategic Directive ID (UUID or legacy_id)
+   * @param {string} sdId - Strategic Directive ID (UUID, legacy_id, or sd_key)
    * @returns {Promise<object>} SD record with basic info
    * @throws {Error} With detailed remediation if SD not found
    */
   async verifyExists(sdId) {
     console.log(`🔍 Verifying SD exists in database: ${sdId}`);
 
-    // SD-VENTURE-STAGE0-UI-001: Try UUID first, then legacy_id
+    // SD-VENTURE-STAGE0-UI-001: Try UUID first, then legacy_id/sd_key
     let sd = null;
     let error = null;
 
@@ -72,17 +85,17 @@ export class SDRepository {
       // Query by UUID id field
       const result = await this.supabase
         .from('strategic_directives_v2')
-        .select('id, legacy_id, title, status, category')
+        .select('id, legacy_id, sd_key, title, status, category, sd_type, intensity_level')
         .eq('id', sdId)
         .single();
       sd = result.data;
       error = result.error;
     } else {
-      // Query by legacy_id (e.g., SD-VENTURE-STAGE0-UI-001)
+      // Query by legacy_id or sd_key (e.g., SD-VENTURE-STAGE0-UI-001 or SD-REFACTOR-TEST-001)
       const result = await this.supabase
         .from('strategic_directives_v2')
-        .select('id, legacy_id, title, status, category')
-        .eq('legacy_id', sdId)
+        .select('id, legacy_id, sd_key, title, status, category, sd_type, intensity_level')
+        .or(`legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
         .single();
       sd = result.data;
       error = result.error;
