@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-27T22:20:29.988Z
+**Generated**: 2025-12-27T22:36:33.744Z
 **Rows**: 175
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (73 total)
+## Columns (74 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -92,6 +92,10 @@ Use the id column instead - it is the canonical identifier. |
 | complexity_level | `character varying(20)` | YES | `'moderate'::character varying` | SD complexity level for effort policy lookup: simple, moderate, complex, critical |
 | dependency_chain | `jsonb` | YES | - | For parent SDs: ordered list of child SD IDs with dependencies. Format: {"children": [{"sd_id": "SD-X", "order": 1, "depends_on": null}]} |
 | exploration_summary | `jsonb` | YES | - | EXPLORATION SUMMARY: JSONB object containing exploration phase findings for orchestrator SDs. Structure: {files_explored: [], key_findings: [], patterns_identified: [], gaps_identified: [], exploration_date: "YYYY-MM-DD", explored_by: "Agent name"}. NULL for non-orchestrator SDs or pre-exploration phase. |
+| intensity_level | `character varying(20)` | YES | - | Refactoring intensity level. Required for sd_type=refactor. Values:
+  - cosmetic: Variable renames, formatting, comment updates (<50 LOC)
+  - structural: Extract methods, file reorganization, import changes (50-500 LOC)
+  - architectural: Design pattern changes, module restructuring (>500 LOC) |
 
 ## Constraints
 
@@ -110,6 +114,7 @@ Use the id column instead - it is the canonical identifier. |
 - `sd_type_check`: CHECK (((sd_type)::text = ANY ((ARRAY['feature'::character varying, 'bugfix'::character varying, 'performance'::character varying, 'database'::character varying, 'docs'::character varying, 'documentation'::character varying, 'infrastructure'::character varying, 'refactor'::character varying, 'security'::character varying, 'orchestrator'::character varying, 'qa'::character varying])::text[])))
 - `strategic_directives_v2_complexity_level_check`: CHECK (((complexity_level)::text = ANY ((ARRAY['simple'::character varying, 'moderate'::character varying, 'complex'::character varying, 'critical'::character varying])::text[])))
 - `strategic_directives_v2_confidence_score_check`: CHECK (((confidence_score >= 0) AND (confidence_score <= 100)))
+- `strategic_directives_v2_intensity_level_check`: CHECK (((intensity_level)::text = ANY ((ARRAY['cosmetic'::character varying, 'structural'::character varying, 'architectural'::character varying])::text[])))
 - `strategic_directives_v2_priority_check`: CHECK (((priority)::text = ANY ((ARRAY['critical'::character varying, 'high'::character varying, 'medium'::character varying, 'low'::character varying])::text[])))
 - `strategic_directives_v2_progress_check`: CHECK (((progress >= 0) AND (progress <= 100)))
 - `strategic_directives_v2_progress_percentage_check`: CHECK (((progress_percentage >= 0) AND (progress_percentage <= 100)))
@@ -154,6 +159,10 @@ Use the id column instead - it is the canonical identifier. |
 - `idx_sd_v2_import_run`
   ```sql
   CREATE INDEX idx_sd_v2_import_run ON public.strategic_directives_v2 USING btree (import_run_id)
+  ```
+- `idx_sd_v2_intensity_level`
+  ```sql
+  CREATE INDEX idx_sd_v2_intensity_level ON public.strategic_directives_v2 USING btree (intensity_level) WHERE (intensity_level IS NOT NULL)
   ```
 - `idx_sd_v2_latest`
   ```sql
@@ -308,6 +317,11 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION auto_transition_status()`
+
+### tr_check_intensity_required
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION check_intensity_required()`
 
 ### tr_enforce_business_value_gate
 

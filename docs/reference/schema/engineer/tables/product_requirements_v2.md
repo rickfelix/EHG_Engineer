@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-27T22:20:29.988Z
+**Generated**: 2025-12-27T22:36:33.744Z
 **Rows**: 173
 **RLS**: Enabled (3 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (55 total)
+## Columns (56 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -73,6 +73,10 @@
 | confidence_score | `integer(32)` | YES | - | Confidence score (0-100) from reasoning analysis. Higher = more certain about planning accuracy. |
 | research_confidence_score | `numeric(3,2)` | YES | - | Confidence score for automated research results (0.7-0.85: human review, >0.85: auto-applied) |
 | exploration_summary | `jsonb` | YES | - | - |
+| document_type | `character varying(50)` | YES | `'prd'::character varying` | Type of requirements document:
+      - prd: Full Product Requirements Document (default)
+      - refactor_brief: Lightweight refactoring documentation
+      - architecture_decision_record: ADR for architectural decisions |
 
 ## Constraints
 
@@ -87,6 +91,7 @@
 - `acceptance_criteria_required`: CHECK (((acceptance_criteria IS NOT NULL) AND ((acceptance_criteria -> 0) IS NOT NULL)))
 - `functional_requirements_min_count`: CHECK (((functional_requirements IS NOT NULL) AND ((functional_requirements -> 0) IS NOT NULL) AND ((functional_requirements -> 1) IS NOT NULL) AND ((functional_requirements -> 2) IS NOT NULL)))
 - `product_requirements_v2_confidence_score_check`: CHECK (((confidence_score >= 0) AND (confidence_score <= 100)))
+- `product_requirements_v2_document_type_check`: CHECK (((document_type)::text = ANY ((ARRAY['prd'::character varying, 'refactor_brief'::character varying, 'architecture_decision_record'::character varying])::text[])))
 - `product_requirements_v2_reasoning_depth_check`: CHECK (((reasoning_depth)::text = ANY ((ARRAY['quick'::character varying, 'standard'::character varying, 'deep'::character varying, 'ultra'::character varying])::text[])))
 - `product_requirements_v2_research_confidence_score_check`: CHECK (((research_confidence_score >= (0)::numeric) AND (research_confidence_score <= (1)::numeric)))
 - `product_requirements_v2_status_check`: CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'planning'::character varying, 'approved'::character varying, 'in_progress'::character varying, 'pending_approval'::character varying, 'verification'::character varying, 'implemented'::character varying, 'testing'::character varying, 'completed'::character varying, 'archived'::character varying])::text[])))
