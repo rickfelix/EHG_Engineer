@@ -33,7 +33,8 @@ jobs:
     name: Regenerate Schema Documentation
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Required for git push to main
+      contents: write  # Required for creating PRs
+      pull-requests: write  # Required for creating PRs
 
     steps:
       - name: Checkout repository
@@ -96,53 +97,73 @@ jobs:
             echo "No changes to schema documentation"
           fi
 
-      - name: Log governance bypass and commit changes
+      - name: Create Pull Request for schema changes
         if: steps.check_changes.outputs.changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        id: create_pr
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: |
+            docs(schema): Auto-update schema documentation
+
+            Auto-generated schema documentation update triggered by:
+            - Event: ${{ github.event_name }}
+            - Branch: ${{ github.ref_name }}
+            - Commit: ${{ github.sha }}
+
+            🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+            Co-Authored-By: GitHub Actions <github-actions[bot]@users.noreply.github.com>
+          branch: automated/schema-docs-update
+          delete-branch: true
+          title: "docs(schema): Auto-update schema documentation"
+          body: |
+            ## Summary
+            Automated schema documentation regeneration.
+
+            ### Triggered by
+            - **Event**: ${{ github.event_name }}
+            - **Target**: ${{ github.event.inputs.target || 'both' }}
+            - **Commit**: ${{ github.sha }}
+
+            ### Changes
+            This PR updates the schema documentation in `docs/reference/schema/` to reflect the current database structure.
+
+            ---
+            🤖 Generated with [Claude Code](https://claude.com/claude-code)
+          labels: |
+            automated
+            documentation
+          add-paths: |
+            docs/reference/schema/**
+
+      - name: Log governance event
+        if: steps.check_changes.outputs.changes == 'true' && steps.create_pr.outputs.pull-request-number
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          # Log the governance bypass for transparency and learning
-          # This bypass is necessary because automated CI/CD commits need to bypass
-          # the pre-commit hook that blocks direct commits to main
+          # Log the automated schema update for governance transparency
           node scripts/log-governance-bypass.js \
-            --category PRE_COMMIT_HOOK \
-            --control "direct-commit-to-main-check" \
-            --reason "Automated CI/CD schema documentation update - legitimate bot commit" \
+            --category WORKFLOW_CHECK \
+            --control "schema-docs-auto-update" \
+            --reason "Automated CI/CD schema documentation update via PR #${{ steps.create_pr.outputs.pull-request-number }}" \
             --changed-by "github-actions[bot]" \
             --severity LOW \
-            --context "{\"workflow\": \"schema-docs-update.yml\", \"event\": \"${{ github.event_name }}\", \"branch\": \"${{ github.ref_name }}\", \"commit\": \"${{ github.sha }}\"}" \
-            || echo "Warning: Failed to log governance bypass (non-blocking)"
+            --pr-number "${{ steps.create_pr.outputs.pull-request-number }}" \
+            --context "{\"workflow\": \"schema-docs-update.yml\", \"event\": \"${{ github.event_name }}\", \"branch\": \"${{ github.ref_name }}\", \"pr_url\": \"${{ steps.create_pr.outputs.pull-request-url }}\"}" \
+            || echo "Warning: Failed to log governance event (non-blocking)"
 
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-
-          git add docs/reference/schema/
-
-          # Create commit message based on trigger
-          if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            COMMIT_TITLE="docs(schema): Weekly automatic schema documentation update"
-          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            COMMIT_TITLE="docs(schema): Manual schema documentation update (${{ github.event.inputs.target }})"
-          else
-            COMMIT_TITLE="docs(schema): Auto-update after migration changes"
-          fi
-
-          # Build commit message with proper formatting
-          # Use --no-verify to bypass pre-commit hooks (logged above for governance)
-          git commit --no-verify -m "${COMMIT_TITLE}" -m "Auto-generated schema documentation update triggered by:
-          - Event: ${{ github.event_name }}
-          - Branch: ${{ github.ref_name }}
-          - Commit: ${{ github.sha }}
-
-          Governance bypass logged to audit trail.
-
-          🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-          Co-Authored-By: GitHub Actions <github-actions[bot]@users.noreply.github.com>"
-
-          # Also use --no-verify for push to bypass pre-push hooks (governance logged above)
-          git push --no-verify
+      - name: Auto-merge PR
+        if: steps.check_changes.outputs.changes == 'true' && steps.create_pr.outputs.pull-request-number
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Enable auto-merge for the PR (will merge when checks pass)
+          gh pr merge ${{ steps.create_pr.outputs.pull-request-number }} \
+            --auto --squash \
+            --delete-branch \
+            || echo "Warning: Could not enable auto-merge (may require admin)"
 
       - name: Create summary
         if: always()
@@ -151,7 +172,13 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [[ "${{ steps.check_changes.outputs.changes }}" == "true" ]]; then
-            echo "✅ Schema documentation was updated and committed" >> $GITHUB_STEP_SUMMARY
+            if [[ -n "${{ steps.create_pr.outputs.pull-request-number }}" ]]; then
+              echo "✅ Schema documentation PR created: #${{ steps.create_pr.outputs.pull-request-number }}" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "🔗 [View PR](${{ steps.create_pr.outputs.pull-request-url }})" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "⚠️ Changes detected but PR creation may have failed" >> $GITHUB_STEP_SUMMARY
+            fi
           else
             echo "ℹ️ No changes to schema documentation (already up-to-date)" >> $GITHUB_STEP_SUMMARY
           fi
@@ -169,14 +196,3 @@ jobs:
             echo "- Manual workflow dispatch" >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Comment on PR (if applicable)
-        if: github.event_name == 'push' && github.event.pull_request && steps.check_changes.outputs.changes == 'true'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '🤖 **Schema Documentation Auto-Updated**\n\nThe schema documentation has been automatically regenerated based on the latest database migrations.\n\n📚 View updated docs: `docs/reference/schema/`'
-            })

@@ -96,9 +96,9 @@ export async function logGovernanceBypass({
     throw new Error('logGovernanceBypass requires: category, control, reason, changedBy');
   }
 
-  // Create Supabase client - use anon key since governance_audit_log allows anon INSERT
+  // Create Supabase client - prefer service_role_key for full write access to governance_audit_log
   const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
     console.warn('[GovernanceBypass] Missing Supabase credentials - logging to console only');
@@ -159,7 +159,7 @@ export async function logGovernanceBypass({
 /**
  * Generate learning opportunity text for retrospective analysis
  */
-function generateLearningOpportunity(category, control, reason) {
+function generateLearningOpportunity(category, _control, _reason) {
   const opportunities = {
     [BypassCategory.PRE_COMMIT_HOOK]:
       'Consider: Should this bypass be codified as an exception rule? Is the pre-commit hook too restrictive for automated processes?',
