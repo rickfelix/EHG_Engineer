@@ -221,6 +221,62 @@ If `research_confidence_score = 0.00`, you skipped this step.
 
 **Pattern References**: PAT-RECURSION-001 through PAT-RECURSION-005
 
+## SD-Type Gate Exemptions (2025-12-27)
+
+**Source**: Analysis of 57 retrospectives showed 21% of action items were inappropriate for SD type.
+
+Different SD types have different validation requirements. Use these exemptions to avoid inappropriate action items.
+
+### Gate Exemption Matrix
+
+| Gate | orchestrator | documentation | infrastructure | bugfix | feature |
+|------|--------------|---------------|----------------|--------|---------|
+| E2E_TESTING | SKIP | SKIP | OPTIONAL | REQUIRED | REQUIRED |
+| TESTING_SUBAGENT | SKIP | SKIP | OPTIONAL | REQUIRED | REQUIRED |
+| DELIVERABLES_CHECK | SKIP | SKIP | OPTIONAL | REQUIRED | REQUIRED |
+| CODE_VALIDATION | SKIP | SKIP | REQUIRED | REQUIRED | REQUIRED |
+| GIT_COMMIT_CHECK | SKIP | OPTIONAL | REQUIRED | REQUIRED | REQUIRED |
+| HANDOFF_CHAIN | OPTIONAL | OPTIONAL | OPTIONAL | OPTIONAL | REQUIRED |
+| PRD_REQUIRED | REQUIRED | OPTIONAL | REQUIRED | OPTIONAL | REQUIRED |
+| RETROSPECTIVE | REQUIRED | OPTIONAL | REQUIRED | OPTIONAL | REQUIRED |
+
+### Exemption Types
+
+| Type | Behavior | Example |
+|------|----------|---------|
+| **SKIP** | Gate completely bypassed | Orchestrator E2E testing |
+| **OPTIONAL** | Gate runs but failure non-blocking | Infrastructure E2E testing |
+| **REQUIRED** | Gate must pass | Feature E2E testing |
+
+### SD Type Rationale
+
+| SD Type | Why Exemptions? |
+|---------|-----------------|
+| **orchestrator** | Coordinates children, doesn't produce code. Children handle testing/deliverables. |
+| **documentation** | No code to test. Documentation IS the deliverable. |
+| **infrastructure** | Scripts/configs may not need E2E. Unit tests may suffice. |
+| **bugfix** | Quick fixes may skip PRD/retro. Still need testing. |
+| **feature** | Full validation required. No exemptions. |
+
+### Query Gate Exemptions
+
+```sql
+-- Check exemption for specific gate
+SELECT get_gate_exemption('orchestrator', 'E2E_TESTING');
+-- Returns: 'SKIP'
+
+-- Get all gates for SD type
+SELECT get_sd_type_gates('documentation');
+-- Returns JSONB with all gate exemptions
+```
+
+### Integration Points
+
+Gate exemptions are enforced in:
+- `lib/sub-agents/retro.js` - Filters inappropriate action items
+- `scripts/modules/handoff/executors/ExecToPlanExecutor.js` - Skips gates based on type
+- `database/migrations/20251227_sd_type_gate_exemptions.sql` - Source of truth
+
 ## EXEC Phase Negative Constraints
 
 ## 🚫 EXEC Phase Negative Constraints

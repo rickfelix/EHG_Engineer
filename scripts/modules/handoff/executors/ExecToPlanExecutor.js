@@ -132,14 +132,24 @@ export class ExecToPlanExecutor extends BaseExecutor {
         console.log('\n🤖 Step 0: Sub-Agent Orchestration (PLAN_VERIFY phase)');
         console.log('-'.repeat(50));
 
-        // SD-E2E-WEBSOCKET-AUTH-006 lesson: qa type SDs skip sub-agent orchestration
-        // qa validation profile has requires_sub_agents: false
-        // SD-NAV-CMD-001 lesson: bugfix SDs also skip sub-agent orchestration
+        // SD-TYPE-AWARE SUB-AGENT EXEMPTIONS (2025-12-27)
+        // Based on retrospective analysis: 21% of action items were inappropriate for SD type
+        // Exemptions defined in sd_type_validation_profiles.requires_sub_agents
         const sdType = (ctx.sd?.sd_type || '').toLowerCase();
-        const skipSubAgentTypes = ['qa', 'bugfix', 'bug_fix'];
+
+        // SD types exempt from sub-agent orchestration
+        // - qa/bugfix: requires_sub_agents: false in validation profile
+        // - orchestrator: children handle sub-agents
+        // - documentation/docs: no code to validate
+        const skipSubAgentTypes = ['qa', 'bugfix', 'bug_fix', 'orchestrator', 'documentation', 'docs'];
         if (skipSubAgentTypes.includes(sdType)) {
           console.log(`   ℹ️  ${sdType} type SD - sub-agent orchestration SKIPPED`);
           console.log(`   → ${sdType} validation profile has requires_sub_agents: false`);
+          if (sdType === 'orchestrator') {
+            console.log('   → Orchestrator SDs: children handle sub-agent validation');
+          } else if (['documentation', 'docs'].includes(sdType)) {
+            console.log('   → Documentation SDs: no code paths to validate');
+          }
           ctx._orchestrationResult = { can_proceed: true, passed: 0, total_agents: 0, skipped: true };
           return {
             passed: true,
@@ -236,7 +246,28 @@ export class ExecToPlanExecutor extends BaseExecutor {
     console.log('\n🧪 Step 2: Unified Test Evidence Validation (LEO v4.3.4)');
     console.log('-'.repeat(50));
 
-    try {
+    // SD-TYPE-AWARE E2E EXEMPTIONS (2025-12-27)
+    // Based on retrospective analysis: 21% of action items were inappropriate for SD type
+    const sdType = (sd?.sd_type || '').toLowerCase();
+    const EXEMPT_FROM_E2E = ['orchestrator', 'documentation', 'docs'];
+    const E2E_OPTIONAL = ['infrastructure'];
+
+    if (EXEMPT_FROM_E2E.includes(sdType)) {
+      console.log(`   ℹ️  ${sdType} type SD - E2E test validation SKIPPED`);
+      console.log(`   → Reason: ${sdType === 'orchestrator' ? 'Children handle testing' : 'No code to test'}`);
+      testEvidenceResult = {
+        skipped: true,
+        reason: `${sdType} type SD - exempt from E2E testing`,
+        total_stories: 0,
+        passing_count: 0,
+        all_passing: true
+      };
+    } else if (E2E_OPTIONAL.includes(sdType)) {
+      console.log(`   ℹ️  ${sdType} type SD - E2E testing is OPTIONAL`);
+      console.log('   → Unit tests may suffice for infrastructure changes');
+    }
+
+    if (!testEvidenceResult?.skipped) try {
       // Query v_story_test_coverage view for comprehensive test evidence
       testEvidenceResult = await getStoryTestCoverage(sdId);
 
@@ -371,7 +402,18 @@ export class ExecToPlanExecutor extends BaseExecutor {
     console.log('-'.repeat(50));
 
     let commitVerification = null;
-    try {
+
+    // SD-TYPE-AWARE GIT COMMIT EXEMPTIONS (2025-12-27)
+    // Documentation SDs may have no code commits (just markdown)
+    const GIT_COMMIT_OPTIONAL = ['documentation', 'docs'];
+
+    if (GIT_COMMIT_OPTIONAL.includes(sdType)) {
+      console.log(`   ℹ️  ${sdType} type SD - Git commit check is OPTIONAL`);
+      console.log('   → May only have markdown file changes');
+      commitVerification = { verdict: 'PASS', commit_count: 0, optional: true };
+    }
+
+    if (!commitVerification?.optional) try {
       const { default: GitCommitVerifier } = await import('../../../verify-git-commit-status.js');
       const appPath = this.determineTargetRepository(sd);
       // SD-VENTURE-STAGE0-UI-001: Pass legacy_id for commit search
