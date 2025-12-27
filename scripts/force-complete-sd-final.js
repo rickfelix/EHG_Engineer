@@ -7,6 +7,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { logGovernanceBypass, BypassCategory, BypassSeverity } from './lib/governance-bypass-logger.js';
 
 dotenv.config();
 
@@ -20,6 +21,21 @@ async function main() {
   console.log('║   🎯 Force Completing SD-LEO-LEARN-001                   ║');
   console.log('║   Reason: Process improvement SD - non-standard pattern  ║');
   console.log('╚═══════════════════════════════════════════════════════════╝\n');
+
+  // Log the governance bypass for transparency and learning
+  await logGovernanceBypass({
+    category: BypassCategory.SD_COMPLETION_CHECK,
+    control: 'enforce_progress_trigger',
+    reason: 'Force complete SD-LEO-LEARN-001 - process improvement SD with non-standard implementation pattern',
+    changedBy: process.env.USER || 'script:force-complete-sd-final',
+    severity: BypassSeverity.MEDIUM,
+    sdId: 'SD-LEO-LEARN-001',
+    context: {
+      script: 'force-complete-sd-final.js',
+      pattern: 'process_improvement',
+      similarTo: 'SD-A11Y-FEATURE-BRANCH-001'
+    }
+  });
 
   console.log('📋 Current Status:');
   const { data: before } = await supabase

@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import dotenv from 'dotenv';
+import { logGovernanceBypass, BypassCategory, BypassSeverity } from './lib/governance-bypass-logger.js';
+
 dotenv.config();
 
 const supabase = createClient(
@@ -11,6 +13,20 @@ const supabase = createClient(
 async function executeSqlMigration() {
   try {
     console.log('\n=== EXECUTING BYPASS MIGRATION ===\n');
+
+    // Log the governance bypass for transparency and learning
+    await logGovernanceBypass({
+      category: BypassCategory.DATABASE_TRIGGER,
+      control: 'sd_completion_validation',
+      reason: 'Executing bypass migration SQL to complete blocked SDs - requires retrospective review',
+      changedBy: process.env.USER || 'script:execute-bypass-migration',
+      severity: BypassSeverity.HIGH,
+      context: {
+        script: 'execute-bypass-migration.js',
+        migrationFile: 'temp_bypass_completion_validation.sql',
+        action: 'execute_bypass_sql'
+      }
+    });
 
     // Read the SQL file
     const sqlContent = readFileSync('database/migrations/temp_bypass_completion_validation.sql', 'utf8');
