@@ -18,9 +18,11 @@ dotenv.config();
 
 class LeadToPlanVerifier {
   constructor() {
+    // Use SERVICE_ROLE_KEY for admin operations (reading protected tables, writing handoffs)
+    // ANON_KEY has RLS restrictions that block access to strategic_directives_v2
     this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
     );
     
     this.handoffValidator = new HandoffValidator();

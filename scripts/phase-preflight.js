@@ -20,9 +20,11 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// FIX: Use service role key for server-side scripts that need full database access
+// The anon key may have RLS restrictions or be invalid for backend operations
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
 const kb = new IssueKnowledgeBase();
@@ -168,14 +170,54 @@ async function validateDiscoveryGate(sdId) {
 
 /**
  * Get SD metadata
+ * FIX: Use separate queries to avoid PostgREST filter parsing issues with dots in SD IDs
+ * Root cause: .or() filter interprets dots as syntax delimiters, not literal characters
  */
 async function getSDMetadata(sdId) {
-  // Support both UUID and legacy_id lookups
-  const { data: sd, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('*')
-    .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
-    .single();
+  // Detect if input is UUID format
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
+
+  let sd = null;
+  let error = null;
+
+  if (isUUID) {
+    // Query by UUID id column
+    const result = await supabase
+      .from('strategic_directives_v2')
+      .select('*')
+      .eq('id', sdId)
+      .single();
+    sd = result.data;
+    error = result.error;
+  } else {
+    // Try id column first (handles SD-PARENT-4.0 format)
+    let result = await supabase
+      .from('strategic_directives_v2')
+      .select('*')
+      .eq('id', sdId)
+      .maybeSingle();
+
+    if (!result.data) {
+      // Try legacy_id column
+      result = await supabase
+        .from('strategic_directives_v2')
+        .select('*')
+        .eq('legacy_id', sdId)
+        .maybeSingle();
+    }
+
+    if (!result.data) {
+      // Try sd_key column (handles SD-PARENT-4-0 format with hyphens)
+      result = await supabase
+        .from('strategic_directives_v2')
+        .select('*')
+        .eq('sd_key', sdId)
+        .maybeSingle();
+    }
+
+    sd = result.data;
+    error = result.error;
+  }
 
   if (error || !sd) {
     throw new Error(`SD not found: ${sdId}`);
