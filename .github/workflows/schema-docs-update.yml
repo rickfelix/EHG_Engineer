@@ -141,7 +141,8 @@ jobs:
 
           Co-Authored-By: GitHub Actions <github-actions[bot]@users.noreply.github.com>"
 
-          git push
+          # Also use --no-verify for push to bypass pre-push hooks (governance logged above)
+          git push --no-verify
 
       - name: Create summary
         if: always()

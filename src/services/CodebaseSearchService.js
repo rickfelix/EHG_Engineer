@@ -9,12 +9,21 @@
  *
  * Purpose: API-ready codebase search with no execSync/spawn.
  *
+ * Refactored as part of SD-REFACTOR-2025-001-P1-006
+ * ProcessManager extracted to process-manager.js for Single Responsibility
+ *
  * @module CodebaseSearchService
- * @version 3.7.0
+ * @version 3.8.0
  */
 
 import fs from 'fs';
 import path from 'path';
+
+// Import ProcessManager for re-export (backward compatibility)
+import { ProcessManager, getProcessManager } from './process-manager.js';
+
+// Re-export for backward compatibility
+export { ProcessManager, getProcessManager };
 
 // =============================================================================
 // CODEBASE SEARCH SERVICE
@@ -265,67 +274,8 @@ export class CodebaseSearchService {
   }
 }
 
-// =============================================================================
-// PROCESS MANAGER (Replaces spawn/exec for server restart)
-// =============================================================================
-
-/**
- * ProcessManager - Controlled process lifecycle without shell spawning
- */
-export class ProcessManager {
-  constructor() {
-    this.pm2Available = null;
-  }
-
-  /**
-   * Get server status without spawning shell
-   */
-  async getServerStatus() {
-    return {
-      pid: process.pid,
-      uptime: process.uptime(),
-      memory: process.memoryUsage(),
-      nodeVersion: process.version,
-      platform: process.platform
-    };
-  }
-
-  /**
-   * Request graceful restart
-   *
-   * Instead of spawning PM2, we signal the need for restart
-   * and let the orchestration layer handle it.
-   */
-  async requestRestart() {
-    return {
-      status: 'restart_requested',
-      message: 'Restart request queued. Orchestration layer will handle.',
-      timestamp: new Date().toISOString()
-    };
-  }
-
-  /**
-   * Check if PM2 is available (for informational purposes)
-   */
-  async isPM2Available() {
-    if (this.pm2Available !== null) {
-      return this.pm2Available;
-    }
-
-    try {
-      // Check if running under PM2 by environment variable
-      this.pm2Available = !!process.env.PM2_HOME || !!process.env.pm_id;
-      return this.pm2Available;
-    } catch {
-      this.pm2Available = false;
-      return false;
-    }
-  }
-}
-
-// Singleton instances
+// Singleton instance
 let searchInstance = null;
-let processInstance = null;
 
 /**
  * Get singleton CodebaseSearchService instance
@@ -337,14 +287,5 @@ export function getCodebaseSearchService() {
   return searchInstance;
 }
 
-/**
- * Get singleton ProcessManager instance
- */
-export function getProcessManager() {
-  if (!processInstance) {
-    processInstance = new ProcessManager();
-  }
-  return processInstance;
-}
-
+// Default export for backward compatibility
 export default { CodebaseSearchService, ProcessManager };
