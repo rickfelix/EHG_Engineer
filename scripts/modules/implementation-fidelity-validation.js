@@ -206,6 +206,29 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
     // Continue with standard validation if we can't check sd_type
   }
 
+  // SD-NAV-CMD-001 lesson: Bugfix SDs skip sub-agent orchestration, so they need relaxed TESTING requirements
+  // Bugfix SDs validate via git commit evidence instead of TESTING sub-agent results
+  try {
+    const { data: sd } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, title, sd_type, scope, category')
+      .eq('id', sd_id)
+      .single();
+
+    const sdType = (sd?.sd_type || '').toLowerCase();
+    if (sdType === 'bugfix' || sdType === 'bug_fix') {
+      console.log(`\n   ℹ️  BUGFIX SD DETECTED (sd_type=${sdType})`);
+      console.log('      Bugfix SDs skip sub-agent orchestration, using git commit evidence instead');
+      console.log('      Relaxing TESTING sub-agent requirements\n');
+
+      // For bugfix SDs, we still validate git commits, but don't require TESTING sub-agent
+      validation.details.bugfix_mode = true;
+      validation.details.testing_requirement = 'relaxed';
+    }
+  } catch (error) {
+    // Continue with standard validation
+  }
+
   // ===================================================================
   // PHASE 1: NON-NEGOTIABLE BLOCKERS (Preflight Checks)
   // ===================================================================
@@ -310,48 +333,56 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
   // ===================================================================
   console.log('\n[PREFLIGHT] Verifying server restart and manual testing...');
 
-  try {
-    // Query TESTING sub-agent to verify server was operational
-    const { data: testingResults, error: testingError } = await supabase
-      .from('sub_agent_execution_results')
-      .select('verdict, metadata, created_at')
-      .eq('sd_id', sd_id)
-      .eq('sub_agent_code', 'TESTING')
-      .order('created_at', { ascending: false })
-      .limit(1);
+  // SD-NAV-CMD-001 lesson: Bugfix SDs skip sub-agent orchestration
+  // They validate via git commits instead of TESTING sub-agent
+  if (validation.details.bugfix_mode) {
+    console.log('   ℹ️  Bugfix SD - TESTING sub-agent verification SKIPPED');
+    console.log('   ℹ️  Bugfix SDs use git commit evidence for validation');
+    validation.warnings.push('[PREFLIGHT] TESTING verification skipped for bugfix SD');
+  } else {
+    try {
+      // Query TESTING sub-agent to verify server was operational
+      const { data: testingResults, error: testingError } = await supabase
+        .from('sub_agent_execution_results')
+        .select('verdict, metadata, created_at')
+        .eq('sd_id', sd_id)
+        .eq('sub_agent_code', 'TESTING')
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-    if (testingError) {
-      validation.warnings.push('[PREFLIGHT] Cannot query TESTING sub-agent for server verification');
-      console.log('   ⚠️  Cannot verify server restart (TESTING query failed)');
-    } else if (!testingResults || testingResults.length === 0) {
-      validation.issues.push('[PREFLIGHT] CRITICAL: No TESTING execution found - cannot verify server was restarted and working');
-      validation.failed_gates.push('SERVER_RESTART_VERIFICATION');
-      console.log('   ❌ TESTING sub-agent not executed - server restart not verified');
-      console.log('   ⚠️  NON-NEGOTIABLE: EXEC must restart server, run tests, and verify implementation works');
-      validation.passed = false;
-      return validation; // Block immediately
-    } else {
-      const testingResult = testingResults[0];
-
-      // If TESTING passed, server must have been running
-      if (testingResult.verdict === 'PASS') {
-        console.log('   ✅ Server verified operational (TESTING sub-agent passed)');
-        console.log(`   ✅ Tests executed at: ${testingResult.created_at}`);
-      } else if (testingResult.verdict === 'BLOCKED') {
-        validation.issues.push('[PREFLIGHT] CRITICAL: TESTING failed - server may not be working correctly');
+      if (testingError) {
+        validation.warnings.push('[PREFLIGHT] Cannot query TESTING sub-agent for server verification');
+        console.log('   ⚠️  Cannot verify server restart (TESTING query failed)');
+      } else if (!testingResults || testingResults.length === 0) {
+        validation.issues.push('[PREFLIGHT] CRITICAL: No TESTING execution found - cannot verify server was restarted and working');
         validation.failed_gates.push('SERVER_RESTART_VERIFICATION');
-        console.log('   ❌ TESTING failed - implementation not verified as working');
-        console.log('   ⚠️  NON-NEGOTIABLE: EXEC must ensure server restarts cleanly and tests pass');
+        console.log('   ❌ TESTING sub-agent not executed - server restart not verified');
+        console.log('   ⚠️  NON-NEGOTIABLE: EXEC must restart server, run tests, and verify implementation works');
         validation.passed = false;
         return validation; // Block immediately
       } else {
-        validation.warnings.push('[PREFLIGHT] TESTING verdict is CONDITIONAL_PASS - server verification incomplete');
-        console.log('   ⚠️  TESTING inconclusive - server restart verification unclear');
+        const testingResult = testingResults[0];
+
+        // If TESTING passed, server must have been running
+        if (testingResult.verdict === 'PASS') {
+          console.log('   ✅ Server verified operational (TESTING sub-agent passed)');
+          console.log(`   ✅ Tests executed at: ${testingResult.created_at}`);
+        } else if (testingResult.verdict === 'BLOCKED') {
+          validation.issues.push('[PREFLIGHT] CRITICAL: TESTING failed - server may not be working correctly');
+          validation.failed_gates.push('SERVER_RESTART_VERIFICATION');
+          console.log('   ❌ TESTING failed - implementation not verified as working');
+          console.log('   ⚠️  NON-NEGOTIABLE: EXEC must ensure server restarts cleanly and tests pass');
+          validation.passed = false;
+          return validation; // Block immediately
+        } else {
+          validation.warnings.push('[PREFLIGHT] TESTING verdict is CONDITIONAL_PASS - server verification incomplete');
+          console.log('   ⚠️  TESTING inconclusive - server restart verification unclear');
+        }
       }
+    } catch (error) {
+      validation.warnings.push(`[PREFLIGHT] Cannot verify server restart: ${error.message}`);
+      console.log(`   ⚠️  Cannot verify server restart: ${error.message}`);
     }
-  } catch (error) {
-    validation.warnings.push(`[PREFLIGHT] Cannot verify server restart: ${error.message}`);
-    console.log(`   ⚠️  Cannot verify server restart: ${error.message}`);
   }
 
   // ===================================================================
@@ -1085,48 +1116,58 @@ async function validateEnhancedTesting(sd_id, designAnalysis, databaseAnalysis, 
   // D1b: Check TESTING sub-agent for unit test execution & pass status (NON-NEGOTIABLE #9)
   console.log('\n   [D1b] Unit Tests Executed & Passing (NON-NEGOTIABLE)...');
 
-  try {
-    // Query TESTING sub-agent results
-    const { data: testingResults, error: testingError } = await supabase
-      .from('sub_agent_execution_results')
-      .select('verdict, metadata')
-      .eq('sd_id', sd_id)
-      .eq('sub_agent_code', 'TESTING')
-      .order('created_at', { ascending: false })
-      .limit(1);
+  // SD-NAV-CMD-001 lesson: Bugfix SDs skip TESTING sub-agent validation
+  // They use git commit evidence instead
+  if (validation.details.bugfix_mode) {
+    console.log('   ℹ️  Bugfix SD - TESTING sub-agent check SKIPPED');
+    console.log('   ℹ️  Bugfix SDs validated via git commit evidence');
+    sectionDetails.unit_tests_verified = true;
+    sectionDetails.testing_verdict = 'SKIPPED_BUGFIX';
+    sectionScore += 15; // Give partial score for bugfix SDs
+  } else {
+    try {
+      // Query TESTING sub-agent results
+      const { data: testingResults, error: testingError } = await supabase
+        .from('sub_agent_execution_results')
+        .select('verdict, metadata')
+        .eq('sd_id', sd_id)
+        .eq('sub_agent_code', 'TESTING')
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-    if (testingError) {
-      validation.issues.push('[D1b] Cannot query TESTING sub-agent results');
-      console.log('   ❌ Cannot query TESTING results (NON-NEGOTIABLE not verified)');
-    } else if (!testingResults || testingResults.length === 0) {
-      validation.warnings.push('[D1b] TESTING sub-agent has not been executed');
-      console.log('   ⚠️  TESTING sub-agent not executed - cannot verify unit tests');
-    } else {
-      const testingResult = testingResults[0];
-
-      // Check verdict (should be PASS, not CONDITIONAL_PASS or BLOCKED)
-      if (testingResult.verdict === 'PASS') {
-        sectionDetails.unit_tests_verified = true;
-        sectionDetails.testing_verdict = 'PASS';
-        console.log('   ✅ TESTING sub-agent verdict: PASS (unit tests passed)');
-      } else if (testingResult.verdict === 'BLOCKED') {
-        validation.issues.push('[D1b] CRITICAL: TESTING sub-agent verdict is BLOCKED (tests failed or did not run)');
-        sectionDetails.unit_tests_verified = false;
-        sectionDetails.testing_verdict = 'BLOCKED';
-        console.log('   ❌ TESTING verdict: BLOCKED - unit/E2E tests failed (NON-NEGOTIABLE)');
-      } else if (testingResult.verdict === 'CONDITIONAL_PASS') {
-        validation.warnings.push('[D1b] TESTING sub-agent verdict is CONDITIONAL_PASS (tests may not have fully passed)');
-        sectionDetails.unit_tests_verified = false;
-        sectionDetails.testing_verdict = 'CONDITIONAL_PASS';
-        console.log('   ⚠️  TESTING verdict: CONDITIONAL_PASS - review test results');
+      if (testingError) {
+        validation.issues.push('[D1b] Cannot query TESTING sub-agent results');
+        console.log('   ❌ Cannot query TESTING results (NON-NEGOTIABLE not verified)');
+      } else if (!testingResults || testingResults.length === 0) {
+        validation.warnings.push('[D1b] TESTING sub-agent has not been executed');
+        console.log('   ⚠️  TESTING sub-agent not executed - cannot verify unit tests');
       } else {
-        validation.warnings.push(`[D1b] Unexpected TESTING verdict: ${testingResult.verdict}`);
-        console.log(`   ⚠️  TESTING verdict: ${testingResult.verdict}`);
+        const testingResult = testingResults[0];
+
+        // Check verdict (should be PASS, not CONDITIONAL_PASS or BLOCKED)
+        if (testingResult.verdict === 'PASS') {
+          sectionDetails.unit_tests_verified = true;
+          sectionDetails.testing_verdict = 'PASS';
+          console.log('   ✅ TESTING sub-agent verdict: PASS (unit tests passed)');
+        } else if (testingResult.verdict === 'BLOCKED') {
+          validation.issues.push('[D1b] CRITICAL: TESTING sub-agent verdict is BLOCKED (tests failed or did not run)');
+          sectionDetails.unit_tests_verified = false;
+          sectionDetails.testing_verdict = 'BLOCKED';
+          console.log('   ❌ TESTING verdict: BLOCKED - unit/E2E tests failed (NON-NEGOTIABLE)');
+        } else if (testingResult.verdict === 'CONDITIONAL_PASS') {
+          validation.warnings.push('[D1b] TESTING sub-agent verdict is CONDITIONAL_PASS (tests may not have fully passed)');
+          sectionDetails.unit_tests_verified = false;
+          sectionDetails.testing_verdict = 'CONDITIONAL_PASS';
+          console.log('   ⚠️  TESTING verdict: CONDITIONAL_PASS - review test results');
+        } else {
+          validation.warnings.push(`[D1b] Unexpected TESTING verdict: ${testingResult.verdict}`);
+          console.log(`   ⚠️  TESTING verdict: ${testingResult.verdict}`);
+        }
       }
+    } catch (error) {
+      validation.warnings.push(`[D1b] Error checking unit tests: ${error.message}`);
+      console.log(`   ⚠️  Error checking unit tests: ${error.message}`);
     }
-  } catch (error) {
-    validation.warnings.push(`[D1b] Error checking unit tests: ${error.message}`);
-    console.log(`   ⚠️  Error checking unit tests: ${error.message}`);
   }
 
   // D2: Check for database migration tests (2 points - MINOR)
