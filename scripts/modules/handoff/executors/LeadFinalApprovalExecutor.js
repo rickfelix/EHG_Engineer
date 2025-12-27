@@ -457,6 +457,10 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
 
   /**
    * Check and complete parent SD when all children are done
+   *
+   * PATTERN FIX: PAT-ORCH-AUTOCOMP-001
+   * Uses OrchestratorCompletionGuardian to ensure all artifacts exist
+   * before attempting completion (prevents silent failures)
    */
   async _checkAndCompleteParentSD(sd) {
     console.log('\n   Checking parent SD completion...');
@@ -464,7 +468,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     try {
       const { data: parentSD } = await this.supabase
         .from('strategic_directives_v2')
-        .select('id, title, status')
+        .select('id, title, status, sd_type')
         .eq('id', sd.parent_sd_id)
         .single();
 
@@ -481,22 +485,100 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       const allComplete = siblings.every(s => s.status === 'completed');
 
       if (allComplete) {
-        console.log(`   🎉 All ${siblings.length} children completed - auto-completing parent`);
+        console.log(`   🎉 All ${siblings.length} children completed - initiating parent completion`);
 
-        await this.supabase
-          .from('strategic_directives_v2')
-          .update({
-            status: 'completed',
-            progress_percentage: 100,
-            current_phase: 'COMPLETED',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', parentSD.id);
+        // Use OrchestratorCompletionGuardian for intelligent completion
+        // This ensures all artifacts exist and auto-creates missing ones
+        try {
+          const { OrchestratorCompletionGuardian } = await import('../orchestrator-completion-guardian.js');
+          const guardian = new OrchestratorCompletionGuardian(parentSD.id);
 
-        console.log(`   ✅ Parent SD "${parentSD.title}" auto-completed`);
+          const report = await guardian.validate();
+
+          if (report.canComplete) {
+            // All artifacts in place - complete directly
+            const result = await guardian.complete();
+            if (result.success) {
+              console.log(`   ✅ Parent SD "${parentSD.title}" completed via Guardian`);
+            } else {
+              console.log(`   ⚠️  Guardian completion failed: ${result.error}`);
+              // Fall back to recording attempt for investigation
+              await this._recordFailedCompletion(parentSD, result.error);
+            }
+          } else if (report.canAutoComplete) {
+            // Missing artifacts that can be auto-created
+            console.log(`   🔧 Auto-creating ${report.missingArtifacts.length} missing artifact(s)...`);
+            await guardian.autoCreateArtifacts();
+
+            const result = await guardian.complete();
+            if (result.success) {
+              console.log(`   ✅ Parent SD "${parentSD.title}" completed (with auto-created artifacts)`);
+            } else {
+              console.log(`   ⚠️  Completion failed after auto-fix: ${result.error}`);
+              await this._recordFailedCompletion(parentSD, result.error);
+            }
+          } else {
+            // Cannot auto-complete - log details for manual review
+            console.log(`   ⚠️  Cannot auto-complete parent - manual intervention required`);
+            const failedChecks = report.results.filter(r => !r.passed);
+            failedChecks.forEach(check => {
+              console.log(`      ❌ ${check.check}: ${check.message}`);
+            });
+            await this._recordFailedCompletion(parentSD, 'Manual intervention required', report);
+          }
+        } catch (guardianError) {
+          // Guardian not available - fall back to legacy behavior with better error handling
+          console.log(`   ⚠️  Guardian unavailable: ${guardianError.message}`);
+          console.log(`   📝 Attempting legacy completion (may fail if artifacts missing)...`);
+
+          const { error } = await this.supabase
+            .from('strategic_directives_v2')
+            .update({
+              status: 'completed',
+              progress_percentage: 100,
+              current_phase: 'COMPLETED',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', parentSD.id);
+
+          if (error) {
+            console.log(`   ❌ Legacy completion FAILED: ${error.message}`);
+            console.log(`   💡 Run: node scripts/modules/orchestrator-completion-guardian.js ${parentSD.id} --auto-fix --complete`);
+            await this._recordFailedCompletion(parentSD, error.message);
+          } else {
+            console.log(`   ✅ Parent SD "${parentSD.title}" auto-completed (legacy path)`);
+          }
+        }
       }
     } catch (error) {
       console.log(`   ⚠️  Parent check error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Record failed completion attempt for investigation and pattern learning
+   */
+  async _recordFailedCompletion(parentSD, errorMessage, report = null) {
+    try {
+      await this.supabase
+        .from('system_events')
+        .insert({
+          event_type: 'ORCHESTRATOR_COMPLETION_FAILED',
+          entity_type: 'strategic_directive',
+          entity_id: parentSD.id,
+          details: {
+            sd_id: parentSD.id,
+            title: parentSD.title,
+            error: errorMessage,
+            validation_report: report,
+            timestamp: new Date().toISOString(),
+            remediation: `node scripts/modules/orchestrator-completion-guardian.js ${parentSD.id} --auto-fix --complete`
+          },
+          severity: 'warning',
+          created_by: 'LEAD-FINAL-APPROVAL-EXECUTOR'
+        });
+    } catch (e) {
+      // Silent fail for logging - don't break the flow
     }
   }
 
