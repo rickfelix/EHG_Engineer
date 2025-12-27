@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2025-12-26 4:54:34 PM
+**Generated**: 2025-12-27 5:55:08 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -292,23 +292,6 @@ node scripts/detect-stubbed-code.js <SD-ID>
 **Exit Requirement**: Zero stubbed code in production files, OR documented in "Known Issues" with follow-up SD created.
 
 
-## Enhanced QA Engineering Director v2.0 - Testing-First Edition
-
-**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
-
-**Core Capabilities:**
-1. Professional test case generation from user stories
-2. Pre-test build validation (saves 2-3 hours)
-3. Database migration verification (prevents 1-2 hours debugging)
-4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
-5. Test infrastructure discovery and reuse
-
-**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
-
-**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
-
-**Full Guide**: See `docs/reference/qa-director-guide.md`
-
 ## ✅ Scope Verification with Explore (PLAN_VERIFY)
 
 ## Scope Verification with Explore
@@ -379,6 +362,23 @@ This change [describe]. Options:
 
 Which do you prefer?"
 ```
+
+## Enhanced QA Engineering Director v2.0 - Testing-First Edition
+
+**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
+
+**Core Capabilities:**
+1. Professional test case generation from user stories
+2. Pre-test build validation (saves 2-3 hours)
+3. Database migration verification (prevents 1-2 hours debugging)
+4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
+5. Test infrastructure discovery and reuse
+
+**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
+
+**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
+
+**Full Guide**: See `docs/reference/qa-director-guide.md`
 
 ## Database Schema Documentation
 
@@ -519,6 +519,33 @@ From retrospectives:
 **From SD-UAT-020**:
 > "Created 100+ test checklist but didn't execute manually. Time spent on unused documentation."
 
+## 🔬 BMAD Method Enhancements
+
+## BMAD Enhancements
+
+### 6 Key Improvements
+1. **Unified Handoff System** - All handoffs via `handoff.js`
+2. **Database-First PRDs** - PRDs stored in database, not markdown
+3. **Validation Gates** - 4-gate validation before EXEC
+4. **Progress Tracking** - Automatic progress % calculation
+5. **Context Management** - Proactive monitoring, compression strategies
+6. **Sub-Agent Compression** - 3-tier output reduction
+
+### Using Handoff System
+```bash
+node scripts/handoff.js create "{message}"
+```
+
+### PRD Creation
+```bash
+node scripts/add-prd-to-database.js {SD-ID}
+```
+
+### Never Bypass
+- ⚠️ Always use process scripts
+- ⚠️ Never create PRDs as markdown files
+- ⚠️ Never skip validation gates
+
 ## Research Lookup Before PRD Creation
 
 ## Research Lookup Before PRD Creation (MANDATORY)
@@ -617,48 +644,6 @@ node scripts/add-prd-to-database.js SD-RESEARCH-106
 ```
 
 
-## 🔬 BMAD Method Enhancements
-
-## BMAD Enhancements
-
-### 6 Key Improvements
-1. **Unified Handoff System** - All handoffs via `handoff.js`
-2. **Database-First PRDs** - PRDs stored in database, not markdown
-3. **Validation Gates** - 4-gate validation before EXEC
-4. **Progress Tracking** - Automatic progress % calculation
-5. **Context Management** - Proactive monitoring, compression strategies
-6. **Sub-Agent Compression** - 3-tier output reduction
-
-### Using Handoff System
-```bash
-node scripts/handoff.js create "{message}"
-```
-
-### PRD Creation
-```bash
-node scripts/add-prd-to-database.js {SD-ID}
-```
-
-### Never Bypass
-- ⚠️ Always use process scripts
-- ⚠️ Never create PRDs as markdown files
-- ⚠️ Never skip validation gates
-
-## CI/CD Pipeline Verification
-
-## CI/CD Pipeline Verification (MANDATORY)
-
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
-
-### Verification Process
-
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
-
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
-
 ## DESIGN→DATABASE Validation Gates
 
 **4 mandatory gates ensuring sub-agent execution and implementation fidelity.**
@@ -710,6 +695,21 @@ Retroactive audit at SD closure:
 
 **Reference**: `scripts/modules/design-database-gates-validation.js`
 
+
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## 🚪 Gate 2.5: Human Inspectability Validation
 
@@ -766,6 +766,124 @@ When creating EXEC → PLAN handoff, include:
   }
 }
 ```
+
+## Refactor Brief Documentation
+
+For refactoring SDs with `intensity_level` of cosmetic or structural, use a Refactor Brief instead of a full PRD.
+
+### When to Use Refactor Brief vs Full PRD
+
+| Intensity | Documentation Type | Generator Script |
+|-----------|-------------------|------------------|
+| cosmetic | Refactor Brief | `node scripts/create-refactor-brief.js SD-XXX` |
+| structural | Refactor Brief | `node scripts/create-refactor-brief.js SD-XXX` |
+| architectural | Full PRD | `node scripts/add-prd-to-database.js SD-XXX` |
+
+### Creating a Refactor Brief
+
+```bash
+# Basic usage
+node scripts/create-refactor-brief.js SD-REFACTOR-001
+
+# Interactive mode (prompts for details)
+node scripts/create-refactor-brief.js SD-REFACTOR-001 --interactive
+
+# With pre-specified options
+node scripts/create-refactor-brief.js SD-REFACTOR-001 --files "src/a.ts,src/b.ts" --smell "duplication"
+```
+
+### Refactor Brief Structure
+
+A Refactor Brief contains these lightweight sections:
+
+1. **Document Information**
+   - SD ID, Title, Intensity, Created Date, Status
+
+2. **Current State**
+   - Code location (primary files, related files)
+   - Current implementation description
+   - Code smell type being addressed
+
+3. **Desired State**
+   - Proposed structure after refactoring
+   - Key changes checklist
+   - Expected benefits
+
+4. **Files Affected**
+   - Table: File | Change Type | Risk Level | Notes
+   - Total files and estimated LOC
+
+5. **Risk Zones**
+   - Circular dependency risk
+   - Breaking import risk
+   - Public API change risk
+   - Test risks
+
+6. **Verification Criteria**
+   - Pre-refactor baseline (tests pass, build succeeds, lint clean)
+   - Post-refactor validation (same criteria + imports resolve)
+   - REGRESSION-VALIDATOR checklist
+
+7. **Rollback Plan**
+   - Git revert command
+   - Manual rollback steps if needed
+
+8. **Sign-off**
+   - LEAD approval, baseline captured, validation complete, REGRESSION verdict
+
+### REGRESSION-VALIDATOR Integration
+
+For structural and architectural refactoring, invoke the REGRESSION sub-agent:
+
+**Baseline Capture** (before refactoring):
+```bash
+# REGRESSION captures:
+# - Test suite results
+# - Public API signatures (exports)
+# - Import dependency graph
+# - Test coverage metrics
+```
+
+**Post-Refactor Validation** (after refactoring):
+```bash
+# REGRESSION compares:
+# - Tests pass without modification
+# - API signatures unchanged
+# - All imports resolve
+# - Coverage not decreased
+```
+
+**Verdict Types**:
+- **PASS**: All checks passed, refactoring is safe
+- **CONDITIONAL_PASS**: Minor issues found, document and proceed with caution
+- **FAIL**: Breaking changes detected, fix before proceeding
+
+### Refactoring Handoff Validation
+
+When transitioning phases for refactoring SDs:
+
+| Transition | Required for Refactoring |
+|------------|--------------------------|
+| LEAD-TO-PLAN | Intensity level set, code smell identified |
+| PLAN-TO-EXEC | Refactor Brief stored, files identified |
+| EXEC-TO-PLAN | REGRESSION baseline captured |
+| PLAN-TO-LEAD | REGRESSION verdict obtained, all tests pass |
+
+### Example: Structural Refactoring Workflow
+
+1. **LEAD Approval**: Sets intensity_level=structural, identifies code smell
+2. **PLAN Phase**:
+   - Run `node scripts/create-refactor-brief.js SD-XXX --interactive`
+   - Brief stored in `product_requirements_v2` with `document_type='refactor_brief'`
+3. **EXEC Phase**:
+   - REGRESSION captures baseline before changes
+   - Implement refactoring following brief
+   - Run tests continuously
+4. **VERIFY Phase**:
+   - REGRESSION compares before/after
+   - All tests must pass WITHOUT modification
+   - Verdict: PASS required for completion
+5. **LEAD Final**: Review REGRESSION verdict, approve closure
 
 ## Child SD Field Requirements for LEAD Evaluation
 
@@ -1707,6 +1825,6 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
 
 ---
 
-*Generated from database: 2025-12-26*
+*Generated from database: 2025-12-27*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

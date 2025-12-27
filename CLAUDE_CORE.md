@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-26 4:54:34 PM
+**Generated**: 2025-12-27 5:55:08 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -216,38 +216,6 @@ npm run handoff:compliance SD-ID  # Check specific SD
 3. Agent findings inform implementation
 4. Re-run agent AFTER changes to verify fixes
 
-## Work Tracking Policy
-
-**ALL changes to main must be tracked** as either:
-
-### Strategic Directive (SD) - For Substantial Work
-- Features, refactors, infrastructure (>50 LOC)
-- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
-- Command: `npm run sd:create`
-
-### Quick-Fix (QF) - For Small Fixes
-- Bugs, polish, docs (<=50 LOC)
-- Branch: `quick-fix/QF-YYYYMMDD-NNN`
-- Command: `node scripts/create-quick-fix.js --interactive`
-
-### Why This Matters
-- All work tracked in database
-- Lessons learned captured
-- Quality gates enforced
-- Progress metrics accurate
-
-### Emergency Bypass (Logged)
-```bash
-EMERGENCY_PUSH="critical: reason here" git push
-```
-This logs to audit_log and should be followed by retroactive SD/QF creation.
-
-### Pre-Push Enforcement
-The pre-push hook automatically:
-1. Detects SD/QF from branch name
-2. Verifies completion status in database
-3. Blocks if not ready for merge
-
 ## 🤖 Built-in Agent Integration
 
 ## Built-in Agent Integration
@@ -289,6 +257,38 @@ Task(subagent_type="Explore", prompt="Identify affected areas")
 ```
 
 This is faster than sequential exploration and provides comprehensive coverage.
+
+## Work Tracking Policy
+
+**ALL changes to main must be tracked** as either:
+
+### Strategic Directive (SD) - For Substantial Work
+- Features, refactors, infrastructure (>50 LOC)
+- Branch: `feat/SD-XXX-*`, `fix/SD-XXX-*`, etc.
+- Command: `npm run sd:create`
+
+### Quick-Fix (QF) - For Small Fixes
+- Bugs, polish, docs (<=50 LOC)
+- Branch: `quick-fix/QF-YYYYMMDD-NNN`
+- Command: `node scripts/create-quick-fix.js --interactive`
+
+### Why This Matters
+- All work tracked in database
+- Lessons learned captured
+- Quality gates enforced
+- Progress metrics accurate
+
+### Emergency Bypass (Logged)
+```bash
+EMERGENCY_PUSH="critical: reason here" git push
+```
+This logs to audit_log and should be followed by retroactive SD/QF creation.
+
+### Pre-Push Enforcement
+The pre-push hook automatically:
+1. Detects SD/QF from branch name
+2. Verifies completion status in database
+3. Blocks if not ready for merge
 
 ## Sub-Agent Model Routing
 
@@ -1369,9 +1369,9 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 |------------|----------|----------|-------|-------|--------------|
 | PAT-003 | security | 🟠 high | 3 | 📉 | Add auth.uid() check to RLS policy USING |
 | PAT-008 | deployment | 🟠 high | 2 | ➡️ | Check GitHub Actions secrets and package |
-| PAT-MD-001 | database | 🔴 critical | 1 | ➡️ | Key Insight: PostgreSQL direct connectio |
-| PAT-DB-SD-E2E-001 | testing | 🟠 high | 1 | ➡️ | Update TESTING sub-agent to check SD cat |
 | PAT-EXEC-IMPL-001 | workflow | 🟠 high | 1 | ➡️ | Query database for existing tables/funct |
+| PAT-PARENT-DET | workflow | 🟠 high | 1 | ➡️ | Add parent/child detection check in phas |
+| PAT-PW-NETIDLE-001 | testing | 🟠 high | 1 | ➡️ | Change waitUntil from 'networkidle' to ' |
 
 ### Prevention Checklists
 
@@ -1385,20 +1385,15 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 - [ ] Test locally with same Node version as CI
 - [ ] Check package-lock.json is committed
 
-**database**:
-- [ ] Check SUPABASE_POOLER_URL availability in .env
-- [ ] Verify migration file exists before execution
-- [ ] Use SSL with rejectUnauthorized: false
-
-**testing**:
-- [ ] Check SD category before requiring E2E tests
-- [ ] For database SDs: validate tables exist via SQL
-- [ ] For infrastructure SDs: validate config/setup
-
 **workflow**:
 - [ ] Query DB for existing tables FIRST
 - [ ] Check migration files in repo
 - [ ] Check git log for SD commits
+
+**testing**:
+- [ ] Never use waitUntil: 'networkidle' with Vite dev server
+- [ ] Use 'commit' or 'domcontentloaded' for navigation waits
+- [ ] Explicitly wait for specific elements instead of network idle
 
 
 *Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
@@ -1412,9 +1407,9 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 |------|-----------|----------|----------|--------|
 | Gate 0 | 0% | 36 | 36 | 🔴 Critical |
 | Gate 1 | 0% | 1 | 1 | 🔴 Critical |
-| Gate 3 | 0% | 57 | 57 | 🔴 Critical |
-| Gate 2B | 0% | 57 | 57 | 🔴 Critical |
-| Gate 2D | 0% | 57 | 57 | 🔴 Critical |
+| Gate 3 | 0% | 54 | 54 | 🔴 Critical |
+| Gate 2B | 0% | 54 | 54 | 🔴 Critical |
+| Gate 2D | 0% | 54 | 54 | 🔴 Critical |
 
 ### Remediation Actions
 
@@ -1513,32 +1508,33 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 | Sub-Agent | Trigger Keywords | Priority | Description |
 |-----------|------------------|----------|-------------|
-| Quick-Fix Orchestrator ("LEO Lite" Field Medic) | N/A | 95 | Lightweight triage and resolution for small UAT-discovered i... |
+| Regression Validator Sub-Agent | refactor, refactoring, backward compatib | 95 | Validates that refactoring changes maintain backward compati... |
 | Information Architecture Lead | LEAD_SD_CREATION, LEAD_HANDOFF_CREATION, | 95 | ## Information Architecture Lead v3.0.0 - Database-First Enf... |
 | Root Cause Analysis Agent | sub_agent_blocked, ci_pipeline_failure,  | 95 | Forensic intelligence agent for defect triage, root cause de... |
+| Quick-Fix Orchestrator ("LEO Lite" Field Medic) | N/A | 95 | Lightweight triage and resolution for small UAT-discovered i... |
 | Chief Security Architect | authentication, security, security auth  | 90 | Former NSA security architect with 25 years experience secur... |
 | UAT Test Executor | uat test, execute test, run uat, test ex | 90 | Interactive UAT test execution guide for manual testing work... |
 | DevOps Platform Architect | EXEC_IMPLEMENTATION_COMPLETE, create pul | 90 | # DevOps Platform Architect Sub-Agent
 
 **Identity**: You are... |
-| Continuous Improvement Coach | LEAD_APPROVAL_COMPLETE, LEAD_REJECTION,  | 85 | ## Continuous Improvement Coach v4.0.0 - Quality-First Editi... |
 | Launch Orchestration Sub-Agent | launch, go-live, production launch, depl | 85 | Handles production launch orchestration, go-live checklists,... |
 | Performance Engineering Lead | optimization | 85 | Performance engineering lead with 20+ years optimizing high-... |
+| Continuous Improvement Coach | LEAD_APPROVAL_COMPLETE, LEAD_REJECTION,  | 85 | ## Continuous Improvement Coach v4.0.0 - Quality-First Editi... |
 | Financial Modeling Sub-Agent | financial, P&L, profit and loss, cash fl | 80 | Handles financial projections, P&L modeling, cash flow analy... |
 | Monitoring Sub-Agent | uptime, incident, observability, logging | 80 | Handles monitoring setup, alerting, SLA definition, health c... |
+| Pricing Strategy Sub-Agent | pricing, price point, pricing strategy,  | 75 | Handles pricing model development, unit economics, pricing t... |
 | Analytics Sub-Agent | analytics, metrics, dashboard, AARRR, fu | 75 | Handles analytics setup, metrics definition, dashboard creat... |
 | API Architecture Sub-Agent | API, REST, RESTful, GraphQL, endpoint, r | 75 | ## API Sub-Agent v1.0.0
 
 **Mission**: REST/GraphQL endpoint ... |
-| Pricing Strategy Sub-Agent | pricing, price point, pricing strategy,  | 75 | Handles pricing model development, unit economics, pricing t... |
-| Valuation Sub-Agent | valuation, exit, exit strategy, acquisit | 70 | Handles exit valuation modeling, comparable analysis, DCF ca... |
-| Senior Design Sub-Agent | component, visual, design system, stylin | 70 | ## Senior Design Sub-Agent v6.0.0 - Lessons Learned Edition
-... |
 | Dependency Management Sub-Agent | dependency, dependencies, npm, yarn, pnp | 70 | # Dependency Management Specialist Sub-Agent
 
 **Identity**: ... |
+| Exit Valuation Sub-Agent | valuation, exit, exit strategy, acquisit | 70 | Handles exit valuation modeling, comparable analysis, acquis... |
 | Marketing & GTM Sub-Agent | marketing, go-to-market, GTM, campaign,  | 70 | Handles go-to-market strategy, marketing campaigns, channel ... |
 | Sales Process Sub-Agent | sales, sales playbook, sales process, pi | 70 | Handles sales playbook development, pipeline management, obj... |
+| Senior Design Sub-Agent | component, visual, design system, stylin | 70 | ## Senior Design Sub-Agent v6.0.0 - Lessons Learned Edition
+... |
 | CRM Sub-Agent | CRM, customer relationship, contact mana | 65 | Handles customer relationship management, lead tracking, cus... |
 | User Story Context Engineering Sub-Agent | user story, user stories, acceptance cri | 50 | ## User Story Context Engineering v2.0.0 - Lessons Learned E... |
 | Risk Assessment Sub-Agent | high risk, complex, refactor, migration, | 8 | ## Risk Assessment Sub-Agent v1.0.0
@@ -1553,7 +1549,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ---
 
-*Generated from database: 2025-12-26*
+*Generated from database: 2025-12-27*
 *Protocol Version: 4.3.3*
 *Includes: Hot Patterns (5) + Recent Lessons (5)*
 *Load this file first in all sessions*
