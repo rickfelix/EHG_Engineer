@@ -1,50 +1,10 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2025-12-26 4:54:34 PM
+**Generated**: 2025-12-27 5:55:08 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
 ---
-
-## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
-
-**Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions. Do NOT use database-agent to create handoffs directly.
-
-### ⛔ NEVER DO THIS:
-- Using `database-agent` to directly insert into `sd_phase_handoffs`
-- Creating handoff records without running validation scripts
-- Skipping preflight knowledge retrieval
-
-### ✅ ALWAYS DO THIS:
-
-#### LEAD → PLAN Transition
-```bash
-node scripts/phase-preflight.js --phase PLAN --sd-id SD-XXX-001
-node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001
-```
-
-#### PLAN → EXEC Transition
-```bash
-node scripts/phase-preflight.js --phase EXEC --sd-id SD-XXX-001
-node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001
-```
-
-#### EXEC → PLAN Transition (Verification)
-```bash
-node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
-```
-
-#### PLAN → LEAD Transition (Final Approval)
-```bash
-node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
-```
-
-### Compliance Check
-```bash
-npm run handoff:compliance SD-XXX-001
-```
-
-**Database trigger now BLOCKS direct inserts. You MUST use the scripts above.**
 
 ## Baseline Issues Management
 
@@ -91,6 +51,46 @@ security, testing, performance, database, documentation, accessibility, code_qua
 ### Functions
 - `check_baseline_gate(p_sd_id)`: Returns PASS/BLOCKED verdict for LEAD gate
 - `generate_baseline_issue_key(p_category)`: Generates unique issue key
+
+## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
+
+**Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions. Do NOT use database-agent to create handoffs directly.
+
+### ⛔ NEVER DO THIS:
+- Using `database-agent` to directly insert into `sd_phase_handoffs`
+- Creating handoff records without running validation scripts
+- Skipping preflight knowledge retrieval
+
+### ✅ ALWAYS DO THIS:
+
+#### LEAD → PLAN Transition
+```bash
+node scripts/phase-preflight.js --phase PLAN --sd-id SD-XXX-001
+node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001
+```
+
+#### PLAN → EXEC Transition
+```bash
+node scripts/phase-preflight.js --phase EXEC --sd-id SD-XXX-001
+node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001
+```
+
+#### EXEC → PLAN Transition (Verification)
+```bash
+node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
+```
+
+#### PLAN → LEAD Transition (Final Approval)
+```bash
+node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
+```
+
+### Compliance Check
+```bash
+npm run handoff:compliance SD-XXX-001
+```
+
+**Database trigger now BLOCKS direct inserts. You MUST use the scripts above.**
 
 ## 🔍 Explore Before Validation (LEAD Phase)
 
@@ -517,6 +517,80 @@ Thorough LEAD pre-approval validation:
 4. Reject false claims, document findings
 5. Update SD scope and priority
 
+## Refactoring SD Evaluation
+
+When evaluating refactoring SDs, LEAD must apply specialized criteria that differ from feature development.
+
+### SD Type Classification for Refactoring
+
+| sd_type | Description | Documentation |
+|---------|-------------|---------------|
+| refactor | Code restructuring, tech debt | Intensity-based (see below) |
+
+### Intensity Level Classification (REQUIRED for refactor SDs)
+
+The `intensity_level` field is **REQUIRED** for all refactoring SDs. LEAD must set this during approval.
+
+| Intensity | Scope | LOC Range | Documentation | E2E Testing | REGRESSION |
+|-----------|-------|-----------|---------------|-------------|------------|
+| cosmetic | Renames, formatting, comments | <50 | Refactor Brief | Optional | Optional |
+| structural | Extract method, file reorg, import cleanup | 50-500 | Refactor Brief + E2E | Required | Required |
+| architectural | Pattern changes, module boundaries | >500 | Full PRD + REGRESSION | Required | Required |
+
+### Refactoring-Specific LEAD Validation Questions
+
+Before approving a refactoring SD, LEAD must answer these questions:
+
+1. **Code Smell Identification**: What specific code smell or technical debt does this address?
+   - Valid answers: duplication, long_method, tight_coupling, deep_nesting, dead_code, other
+   - If "other", describe clearly
+
+2. **Scope Clarity**: Is the refactoring scope clearly bounded?
+   - Can you list the specific files affected?
+   - Are there clear boundaries for what IS and IS NOT being changed?
+
+3. **Behavior Preservation**: Is any behavior change expected?
+   - If YES: This is NOT a refactoring. Reject or reclassify as feature/bugfix.
+   - If NO: Proceed with refactoring workflow.
+
+4. **Intensity Classification** (REQUIRED): What is the intensity level?
+   - cosmetic / structural / architectural
+   - This MUST be set in the `intensity_level` column
+
+5. **Regression Risk**: What could break if this refactoring goes wrong?
+   - List potential impact areas
+   - This informs REGRESSION-VALIDATOR scope
+
+### Workflow Selection by Intensity
+
+```
+cosmetic:     LEAD-TO-PLAN → PLAN-TO-LEAD (skip E2E, REGRESSION optional)
+structural:   LEAD-TO-PLAN → PLAN-TO-EXEC → EXEC-TO-PLAN → PLAN-TO-LEAD (E2E + REGRESSION required)
+architectural: Full LEO workflow with REGRESSION-VALIDATOR mandatory
+```
+
+### Example: Approving a Refactoring SD
+
+**SD**: "Consolidate duplicate utility functions into shared module"
+
+**LEAD Evaluation**:
+1. Code Smell: duplication
+2. Scope: utility functions in 5 files, consolidating to 1 shared module
+3. Behavior Change: No - same functions, different location
+4. Intensity: structural (extract + consolidate, ~200 LOC)
+5. Regression Risk: Breaking imports in consuming files
+
+**Decision**: APPROVED with intensity_level=structural
+**Required Sub-agents**: REGRESSION-VALIDATOR
+**Documentation**: Refactor Brief (not full PRD)
+
+### Anti-Patterns to Reject
+
+- **Scope Creep**: "While refactoring, also add this feature..." → Split into separate SDs
+- **Behavior Change Disguised**: "Refactor the auth flow" (if it changes behavior) → Reclassify as feature
+- **No Clear Boundary**: "Improve code quality across the codebase" → Too vague, require specific scope
+- **Missing Intensity**: Any refactor SD without intensity_level → Block until set
+
 ## 🛡️ LEAD Pre-Approval Strategic Validation Gate
 
 ### MANDATORY Before Approving ANY Strategic Directive
@@ -782,6 +856,6 @@ npm run sd:status    # Overall progress by track
 
 ---
 
-*Generated from database: 2025-12-26*
+*Generated from database: 2025-12-27*
 *Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*
