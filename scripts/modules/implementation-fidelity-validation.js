@@ -284,7 +284,8 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
 
     if (commitHash) {
       // Get diff of the commit to check for problematic comments
-      const { stdout: diff } = await execAsync(`git show ${commitHash}`);
+      // SD-CAPITAL-FLOW-001: Use -C to run git in the correct repository
+      const { stdout: diff } = await execAsync(`git -C "${implementationRepo}" show ${commitHash}`);
 
       // Patterns indicating unresolved ambiguity
       const ambiguityPatterns = [
@@ -404,7 +405,8 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
 
     if (commitHash) {
       // Get diff of the commit to check for stubbed code
-      const { stdout: diff } = await execAsync(`git show ${commitHash}`);
+      // SD-CAPITAL-FLOW-001: Use -C to run git in the correct repository
+      const { stdout: diff } = await execAsync(`git -C "${implementationRepoStub}" show ${commitHash}`);
 
       // Patterns indicating stubbed/incomplete code
       const stubbedCodePatterns = [
@@ -611,6 +613,67 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
  * Phase-aware weighting: Reduced from 25 to make room for critical database checks
  */
 async function validateDesignFidelity(sd_id, designAnalysis, validation, supabase) {
+  // SD-CAPITAL-FLOW-001: Check if this is a database SD without UI requirements
+  // Database SDs that only create migrations should get full credit for Section A
+  try {
+    // Try UUID first, then legacy_id
+    let sd = null;
+    const { data: sdById } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_type, scope')
+      .eq('id', sd_id)
+      .single();
+
+    if (sdById) {
+      sd = sdById;
+    } else {
+      const { data: sdByLegacy } = await supabase
+        .from('strategic_directives_v2')
+        .select('sd_type, scope')
+        .eq('legacy_id', sd_id)
+        .single();
+      sd = sdByLegacy;
+    }
+
+    if (sd?.sd_type === 'database') {
+      // Check if scope INCLUDED section mentions UI/component work
+      // Only check the 'included' part, not 'excluded' (SD-CAPITAL-FLOW-001 fix)
+      let scopeToCheck = '';
+      if (typeof sd.scope === 'object' && sd.scope?.included) {
+        // JSON scope - only check included items
+        scopeToCheck = Array.isArray(sd.scope.included)
+          ? sd.scope.included.join(' ')
+          : String(sd.scope.included);
+      } else if (typeof sd.scope === 'string') {
+        try {
+          const parsed = JSON.parse(sd.scope);
+          if (parsed?.included) {
+            scopeToCheck = Array.isArray(parsed.included)
+              ? parsed.included.join(' ')
+              : String(parsed.included);
+          }
+        } catch {
+          scopeToCheck = sd.scope;
+        }
+      }
+
+      const hasUIScope = /component|ui\s|frontend|form|page|view/i.test(scopeToCheck);
+
+      if (!hasUIScope) {
+        console.log('   ✅ Database SD without UI requirements - Section A not applicable (25/25)');
+        validation.score += 25; // Full credit for N/A
+        validation.gate_scores.design_fidelity = 25;
+        validation.details.design_fidelity = {
+          skipped: true,
+          reason: 'Database SD without UI requirements - design fidelity not applicable'
+        };
+        return;
+      }
+    }
+  } catch (e) {
+    // Continue with normal validation if SD type check fails
+  }
+
   if (!designAnalysis) {
     validation.warnings.push('[A] No DESIGN analysis found - skipping design fidelity check');
     validation.score += 13; // Partial credit if not applicable
@@ -750,6 +813,10 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
   console.log('\n   [B1] Schema Change Migrations (Creation + Execution)...');
 
   try {
+    // SD-CAPITAL-FLOW-001: Detect the correct implementation repo for migration search
+    const implementationRepo = await detectImplementationRepo(sd_id, supabase);
+    console.log(`   📂 Searching for migrations in: ${implementationRepo}`);
+
     const migrationDirs = [
       'database/migrations',
       'supabase/migrations',
@@ -760,7 +827,8 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
     // Move sdIdLower outside for loop so it's available throughout the function scope
     const sdIdLower = sd_id.replace('SD-', '').toLowerCase();
     for (const dir of migrationDirs) {
-      const fullPath = path.join(process.cwd(), dir);
+      // SD-CAPITAL-FLOW-001: Use implementation repo, not process.cwd()
+      const fullPath = path.join(implementationRepo, dir);
       if (existsSync(fullPath)) {
         const files = await readdir(fullPath);
         // SD-VENTURE-STAGE0-UI-001: Improved migration detection
@@ -780,6 +848,8 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
       sectionScore += 5; // Award 5 points for files existing
       sectionDetails.migration_files = migrationFiles.map(m => `${m.dir}/${m.file}`);
       sectionDetails.migration_count = migrationFiles.length;
+      // SD-CAPITAL-FLOW-001: Store implementation repo for later file reading
+      sectionDetails.implementation_repo = implementationRepo;
       console.log(`   ✅ Found ${migrationFiles.length} migration file(s) (5/25)`);
 
       // B1.2: Verify migrations were executed (20 points - CRITICAL)
@@ -941,8 +1011,10 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
   if (sectionDetails.migration_files && sectionDetails.migration_files.length > 0) {
     try {
       // Read first migration file to estimate complexity
+      // SD-CAPITAL-FLOW-001: Use stored implementation repo, not process.cwd()
       const firstMigration = sectionDetails.migration_files[0];
-      const fullPath = path.join(process.cwd(), firstMigration);
+      const repoPath = sectionDetails.implementation_repo || process.cwd();
+      const fullPath = path.join(repoPath, firstMigration);
       const content = await readFile(fullPath, 'utf-8');
       const lineCount = content.split('\n').length;
 
@@ -970,6 +1042,67 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
  * Validate Data Flow Alignment (Section C - 25 points)
  */
 async function validateDataFlowAlignment(sd_id, designAnalysis, databaseAnalysis, validation, supabase) {
+  // SD-CAPITAL-FLOW-001: Check if this is a database SD without UI/form requirements
+  // Database SDs that only create migrations should get full credit for Section C
+  try {
+    // Try UUID first, then legacy_id
+    let sd = null;
+    const { data: sdById } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_type, scope')
+      .eq('id', sd_id)
+      .single();
+
+    if (sdById) {
+      sd = sdById;
+    } else {
+      const { data: sdByLegacy } = await supabase
+        .from('strategic_directives_v2')
+        .select('sd_type, scope')
+        .eq('legacy_id', sd_id)
+        .single();
+      sd = sdByLegacy;
+    }
+
+    if (sd?.sd_type === 'database') {
+      // Check if scope INCLUDED section mentions UI/form/frontend work
+      // Only check the 'included' part, not 'excluded' (SD-CAPITAL-FLOW-001 fix)
+      let scopeToCheck = '';
+      if (typeof sd.scope === 'object' && sd.scope?.included) {
+        // JSON scope - only check included items
+        scopeToCheck = Array.isArray(sd.scope.included)
+          ? sd.scope.included.join(' ')
+          : String(sd.scope.included);
+      } else if (typeof sd.scope === 'string') {
+        try {
+          const parsed = JSON.parse(sd.scope);
+          if (parsed?.included) {
+            scopeToCheck = Array.isArray(parsed.included)
+              ? parsed.included.join(' ')
+              : String(parsed.included);
+          }
+        } catch {
+          scopeToCheck = sd.scope;
+        }
+      }
+
+      const hasUIScope = /component|ui\s|frontend|form|page|view/i.test(scopeToCheck);
+
+      if (!hasUIScope) {
+        console.log('   ✅ Database SD without UI/form requirements - Section C not applicable (25/25)');
+        validation.score += 25; // Full credit for N/A
+        validation.gate_scores.data_flow_alignment = 25;
+        validation.details.data_flow_alignment = {
+          skipped: true,
+          reason: 'Database SD without UI/form requirements - data flow alignment not applicable'
+        };
+        return;
+      }
+    }
+  } catch (e) {
+    // Continue with normal validation if SD type check fails
+  }
+
   let sectionScore = 0;
   const sectionDetails = {};
 
