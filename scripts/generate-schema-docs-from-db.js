@@ -125,9 +125,13 @@ class SchemaDocumentationGenerator {
     this.supabase = createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
 
     // PostgreSQL client (for advanced queries)
+    // SSL config to handle self-signed certificates in CI/CD environments
     this.pgClient = new Client({
       connectionString: CONFIG.poolerUrl,
-      ssl: { rejectUnauthorized: false }
+      ssl: {
+        rejectUnauthorized: false,
+        checkServerIdentity: () => undefined
+      }
     });
 
     await this.pgClient.connect();
