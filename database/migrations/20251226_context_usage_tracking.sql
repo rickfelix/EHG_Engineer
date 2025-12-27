@@ -246,6 +246,21 @@ COMMENT ON FUNCTION get_compaction_analysis IS 'Analyzes compaction patterns to 
 COMMENT ON COLUMN context_usage_log.context_used IS 'Total tokens in context window (input + cache_creation + cache_read) - the accurate metric';
 COMMENT ON COLUMN context_usage_log.compaction_detected IS 'TRUE when context dropped from previous measurement, indicating compaction occurred';
 
+-- ============================================================================
+-- RLS POLICIES
+-- Enable RLS for security compliance (internal tooling access)
+-- ============================================================================
+ALTER TABLE context_usage_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE context_usage_daily ENABLE ROW LEVEL SECURITY;
+
+-- Allow all operations for authenticated users (internal tooling)
+CREATE POLICY "Allow all for authenticated" ON context_usage_log FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all for authenticated" ON context_usage_daily FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- Allow read access for anon (metrics viewing)
+CREATE POLICY "Allow select for anon" ON context_usage_log FOR SELECT TO anon USING (true);
+CREATE POLICY "Allow select for anon" ON context_usage_daily FOR SELECT TO anon USING (true);
+
 -- Grant permissions
 GRANT SELECT, INSERT ON context_usage_log TO authenticated;
 GRANT SELECT ON context_usage_daily TO authenticated;

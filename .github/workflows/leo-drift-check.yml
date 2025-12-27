@@ -250,24 +250,24 @@ jobs:
             echo "Attempt $attempt of $MAX_RETRIES..."
 
             # Test that anonymous users cannot write with connection timeout
-            if PGCONNECT_TIMEOUT=10 psql "$DATABASE_URL" << 'EOF' 2>&1
--- Set role to anonymous
-SET ROLE anon;
+            if PGCONNECT_TIMEOUT=10 psql "$DATABASE_URL" <<-'EOF' 2>&1
+            -- Set role to anonymous
+            SET ROLE anon;
 
--- This should fail with insufficient privilege
-DO $$
-BEGIN
-  INSERT INTO leo_gate_reviews (prd_id, gate, score, evidence)
-  VALUES ('test-prd', '2A', 50, '{}');
-  RAISE EXCEPTION 'ERROR: Anonymous insert was allowed!';
-EXCEPTION
-  WHEN insufficient_privilege THEN
-    RAISE NOTICE 'Anonymous insert correctly blocked';
-END $$;
+            -- This should fail with insufficient privilege
+            DO $$
+            BEGIN
+              INSERT INTO leo_gate_reviews (prd_id, gate, score, evidence)
+              VALUES ('test-prd', '2A', 50, '{}');
+              RAISE EXCEPTION 'ERROR: Anonymous insert was allowed!';
+            EXCEPTION
+              WHEN insufficient_privilege THEN
+                RAISE NOTICE 'Anonymous insert correctly blocked';
+            END $$;
 
--- Reset role
-RESET ROLE;
-EOF
+            -- Reset role
+            RESET ROLE;
+            EOF
             then
               echo "RLS permissions are properly restrictive"
               exit 0
