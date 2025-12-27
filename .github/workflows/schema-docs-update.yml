@@ -68,6 +68,7 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_POOLER_URL: ${{ secrets.DATABASE_URL }}
+          NODE_TLS_REJECT_UNAUTHORIZED: '0'
         run: npm run schema:docs:engineer
         continue-on-error: false
 
@@ -78,6 +79,7 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.EHG_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.EHG_SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_POOLER_URL: ${{ secrets.EHG_POOLER_URL }}
+          NODE_TLS_REJECT_UNAUTHORIZED: '0'
         run: npm run schema:docs:app
         continue-on-error: true  # EHG app might not be configured yet
 
