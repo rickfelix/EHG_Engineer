@@ -50,29 +50,35 @@ export class HandoffRecorder {
   }
 
   /**
-   * Resolve SD ID to UUID if it's a legacy_id
-   * SD-VENTURE-STAGE0-UI-001: Foreign keys require UUID, not legacy_id
-   * @param {string} sdId - Strategic Directive ID (UUID or legacy_id)
-   * @returns {Promise<string>} UUID
+   * Validate SD ID exists in database
+   *
+   * FIX (2025-12-27): strategic_directives_v2.id uses VARCHAR format (e.g., "SD-UNIFIED-PATH-3.1.1"),
+   * NOT UUIDs. The previous _resolveToUUID was incorrectly converting to UUIDs which caused
+   * FK constraint failures when storing handoffs in sd_phase_handoffs table.
+   *
+   * @param {string} sdId - Strategic Directive ID (VARCHAR format like "SD-XXX")
+   * @returns {Promise<string>} The validated SD ID (unchanged)
    */
   async _resolveToUUID(sdId) {
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
-    if (isUUID) {
+    // NOTE: Despite the method name, we do NOT convert to UUID.
+    // strategic_directives_v2.id is VARCHAR, not UUID.
+    // sd_phase_handoffs.sd_id references this VARCHAR column.
+    // We just validate the ID exists and return it unchanged.
+
+    const { data: sd, error } = await this.supabase
+      .from('strategic_directives_v2')
+      .select('id')
+      .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
+      .single();
+
+    if (error || !sd) {
+      console.warn(`⚠️  Could not verify SD exists: ${sdId}`);
+      // Return original - let FK constraint catch the error with clear message
       return sdId;
     }
 
-    const { data: sd } = await this.supabase
-      .from('strategic_directives_v2')
-      .select('id')
-      .eq('legacy_id', sdId)
-      .single();
-
-    if (sd) {
-      return sd.id;
-    }
-
-    // Return original if not found (will fail FK constraint, but with clear error)
-    return sdId;
+    // Return the canonical ID from the database (ensures exact match)
+    return sd.id;
   }
 
   /**
