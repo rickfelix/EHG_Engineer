@@ -13,7 +13,7 @@ import readline from 'readline';
 // External validators (will be injected or imported)
 let validateBMADForPlanToExec;
 let validateGate1PlanToExec;
-let shouldValidateDesignDatabase;
+let shouldValidateDesignDatabaseSync; // ROOT CAUSE FIX: Use sync version (SD-NAV-CMD-001A)
 let GitBranchVerifier;
 let PlanToExecVerifier;
 let extractAndPopulateDeliverables;
@@ -350,7 +350,9 @@ export class PlanToExecExecutor extends BaseExecutor {
     });
 
     // Gate 1: DESIGN→DATABASE Workflow (conditional)
-    if (shouldValidateDesignDatabase(sd)) {
+    // ROOT CAUSE FIX: Use sync version - async version was causing Promise-always-truthy bug (SD-NAV-CMD-001A)
+    // bugfix type SDs do NOT require DESIGN/DATABASE sub-agents (quick fixes don't need full architecture review)
+    if (shouldValidateDesignDatabaseSync(sd)) {
       gates.push({
         name: 'GATE1_DESIGN_DATABASE',
         validator: async (ctx) => {
@@ -362,6 +364,9 @@ export class PlanToExecExecutor extends BaseExecutor {
         },
         required: true
       });
+    } else {
+      console.log('\n   ℹ️  GATE1_DESIGN_DATABASE skipped: SD type does not require DESIGN/DATABASE sub-agents');
+      console.log(`      SD Type: ${sd.sd_type || sd.category || 'unknown'}`);
     }
 
     // SD-LEO-GEMINI-001 (US-002): Exploration Audit Gate
@@ -1304,7 +1309,8 @@ export class PlanToExecExecutor extends BaseExecutor {
     if (!validateGate1PlanToExec) {
       const designDb = await import('../../design-database-gates-validation.js');
       validateGate1PlanToExec = designDb.validateGate1PlanToExec;
-      shouldValidateDesignDatabase = designDb.shouldValidateDesignDatabase;
+      // ROOT CAUSE FIX: Use sync version to avoid Promise-always-truthy bug (SD-NAV-CMD-001A)
+      shouldValidateDesignDatabaseSync = designDb.shouldValidateDesignDatabaseSync;
     }
 
     if (!GitBranchVerifier) {

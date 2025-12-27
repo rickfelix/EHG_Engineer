@@ -206,6 +206,39 @@ export function isInfrastructureSDSync(sd) {
 }
 
 /**
+ * Check if SD requires DESIGN→DATABASE validation gates (sync version)
+ * Uses declared sd_type only - no AI call
+ *
+ * ROOT CAUSE FIX: SD-NAV-CMD-001A bugfix gate failure
+ * The async version was being called without await in PlanToExecExecutor.getRequiredGates,
+ * causing Promise to always be truthy. This sync version uses declared sd_type directly.
+ *
+ * Logic:
+ * - Non-code types (infrastructure, documentation, process, qa, api, backend, orchestrator, bugfix*) → false
+ * - Only feature and database types → true
+ *
+ * *Note: bugfix is CODE_PRODUCING but does NOT require DESIGN/DATABASE gates
+ *        (quick fixes don't need full design architecture review)
+ *
+ * @param {Object} sd - Strategic Directive object
+ * @returns {boolean} True if gates required, false otherwise
+ */
+export function requiresDesignDatabaseGatesSync(sd) {
+  if (!sd) return true; // Default to requiring gates if no SD (safe default)
+
+  const declaredType = (sd.sd_type || sd.category || '').toLowerCase();
+
+  // Non-code SDs never need design/database gates
+  if (SD_TYPE_CATEGORIES.NON_CODE.includes(declaredType)) {
+    return false;
+  }
+
+  // Only feature and database SDs need design/database gates
+  // bugfix, refactor, performance etc. are code-producing but don't need these gates
+  return SD_TYPE_CATEGORIES.DESIGN_DATABASE_GATES.includes(declaredType);
+}
+
+/**
  * Check if SD requires DESIGN→DATABASE validation gates
  *
  * @param {Object} sd - Strategic Directive object
@@ -288,6 +321,7 @@ export default {
   isNonCodeSD,
   isInfrastructureSDSync,
   requiresDesignDatabaseGates,
+  requiresDesignDatabaseGatesSync,
   getScoringWeights,
   getThresholdProfile,
   getSkippedSubAgents,

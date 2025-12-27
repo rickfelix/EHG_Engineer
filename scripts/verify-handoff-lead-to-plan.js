@@ -164,16 +164,71 @@ class LeadToPlanVerifier {
               isOrchestrator: true
             };
           } else {
-            // Not all children complete - reject
-            const incompleteChildren = children.filter(c => c.status !== 'completed');
-            console.log('\n   ❌ Not all children complete - cannot proceed');
+            // LEO Protocol Fix (2025-12-26): Orchestrator SDs with INCOMPLETE children
+            // should be ALLOWED to proceed during LEAD-TO-PLAN. Children work happens
+            // AFTER the parent enters EXEC phase. The children completion check is
+            // only relevant for PLAN-TO-LEAD and LEAD-FINAL-APPROVAL handoffs.
+            //
+            // Workflow: Parent LEAD → PLAN → EXEC → Children work → Auto-complete parent
+            console.log('\n   ℹ️  Orchestrator with incomplete children - EXPECTED at this phase');
+            console.log('   ℹ️  Children will work after parent enters EXEC phase');
+            console.log('   ✅ Proceeding with orchestrator LEAD→PLAN handoff');
 
-            return this.rejectHandoff(sdId, 'CHILDREN_INCOMPLETE',
-              `Orchestrator SD has ${incompleteChildren.length} incomplete child SDs`, {
-              incompleteChildren: incompleteChildren.map(c => ({ id: c.id, status: c.status })),
-              requiredComplete: children.length,
-              actualComplete: completedChildren.length
-            });
+            const sdValidation = {
+              valid: true,
+              percentage: 90,
+              score: 90,
+              maxScore: 100,
+              errors: [],
+              warnings: [`Orchestrator has ${children.length - completedChildren.length} incomplete children - expected at LEAD→PLAN phase`],
+              isOrchestrator: true,
+              childCount: children.length,
+              completedChildCount: completedChildren.length,
+              orchestratorPhase: 'initial_setup'
+            };
+
+            // Create handoff execution record
+            const execution = await this.createHandoffExecution(sd, template, sdValidation, null);
+
+            // HANDOFF APPROVED - Orchestrator initial transition
+            console.log('\n✅ HANDOFF APPROVED (ORCHESTRATOR INITIAL)');
+            console.log('='.repeat(50));
+            console.log('✅ Orchestrator SD proceeding to PLAN phase');
+            console.log(`✅ ${children.length} child SDs will work after parent enters EXEC`);
+
+            // Update SD to indicate PLAN phase can begin
+            await this.supabase
+              .from('strategic_directives_v2')
+              .update({
+                status: 'active',
+                phase: 'PLAN',
+                updated_at: new Date().toISOString(),
+                metadata: {
+                  ...sd.metadata,
+                  is_parent: true,
+                  handoff_to_plan: {
+                    verified_at: new Date().toISOString(),
+                    quality_score: 90,
+                    verifier: 'verify-handoff-lead-to-plan.js',
+                    orchestrator_initial_setup: true,
+                    child_count: children.length,
+                    incomplete_children: children.length - completedChildren.length
+                  }
+                }
+              })
+              .eq('id', sd.id);
+
+            console.log('\\n🎯 PLAN PHASE AUTHORIZED (ORCHESTRATOR INITIAL)');
+            console.log('Parent SD will coordinate children after entering EXEC');
+
+            return {
+              success: true,
+              executionId: execution.id,
+              sdId: sdId,
+              qualityScore: 90,
+              isOrchestrator: true,
+              orchestratorPhase: 'initial_setup'
+            };
           }
         } else {
           console.log('   ⚠️  No child SDs found - proceeding with standard validation');

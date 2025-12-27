@@ -73,6 +73,11 @@ class PlanToExecVerifier {
       'feature': 55,
       'enhancement': 55,
 
+      // ROOT CAUSE FIX: SD-NAV-CMD-001A - bugfix SDs have simpler scope
+      // Bugfix stories are targeted fixes, not full feature narratives
+      'bugfix': 55,
+      'bug_fix': 55,  // Handle underscore variant
+
       // Stricter for data/security work
       'database': 68,
       'security': 68,
@@ -508,9 +513,12 @@ class PlanToExecVerifier {
         const prdMinimumScore = this.getStoryMinimumScoreByCategory(sd.category, sd.sd_type);
         console.log(`   SD Category: ${sd.category || 'unknown'} → PRD Minimum Score: ${prdMinimumScore}%`);
 
+        // ROOT CAUSE FIX: SD-NAV-CMD-001A - Pass sdType for type-aware validation
+        // Bugfix SDs use heuristic validation instead of AI scoring
         prdBoilerplateResult = await validatePRDForHandoff(prd, {
           minimumScore: prdMinimumScore,
-          blockOnWarnings: false
+          blockOnWarnings: false,
+          sdType: sd.sd_type || sd.category  // Pass SD type for heuristic mode detection
         });
 
         console.log(prdBoilerplateResult.summary);

@@ -14,7 +14,7 @@
 import { calculateAdaptiveThreshold } from './adaptive-threshold-calculator.js';
 import { getPatternStats } from './pattern-tracking.js';
 // Import centralized SD type checking (replaces local shouldValidateDesignDatabase)
-import { requiresDesignDatabaseGates } from './sd-type-checker.js';
+import { requiresDesignDatabaseGates, requiresDesignDatabaseGatesSync } from './sd-type-checker.js';
 
 /**
  * Validate DESIGN→DATABASE workflow for PLAN→EXEC handoff
@@ -502,4 +502,24 @@ export async function shouldValidateDesignDatabase(sd) {
   // - Fallback logic for low confidence results
   // - Caching for repeated calls
   return requiresDesignDatabaseGates(sd);
+}
+
+/**
+ * Helper: Check if SD requires DESIGN→DATABASE validation (SYNC version)
+ *
+ * ROOT CAUSE FIX: SD-NAV-CMD-001A bugfix gate failure
+ * The async version was being called without await in PlanToExecExecutor.getRequiredGates(),
+ * causing Promise to always be truthy. This sync version uses declared sd_type directly.
+ *
+ * Use this version in synchronous contexts (like getRequiredGates).
+ *
+ * @param {Object} sd - Strategic Directive object
+ * @returns {boolean} True if validation required
+ * @see ./sd-type-checker.js - Single source of truth for SD type logic
+ */
+export function shouldValidateDesignDatabaseSync(sd) {
+  // Delegate to centralized SD type checker (sync version)
+  // Uses declared sd_type only - no AI classification
+  // Safe for use in synchronous contexts
+  return requiresDesignDatabaseGatesSync(sd);
 }
