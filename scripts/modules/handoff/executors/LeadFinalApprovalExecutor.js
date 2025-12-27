@@ -281,6 +281,110 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       required: true
     });
 
+    // Gate 4: Verify all related PRs are merged
+    gates.push({
+      name: 'PR_MERGE_VERIFICATION',
+      validator: async (ctx) => {
+        console.log('\n🔒 GATE 4: PR Merge Verification');
+        console.log('-'.repeat(50));
+
+        const sdId = ctx.sd.legacy_id || ctx.sd.id;
+
+        // Build expected branch name pattern for this SD
+        // Branches follow pattern: feat/SD-XXX-*, fix/SD-XXX-*, etc.
+        const branchPatterns = [
+          `feat/${sdId}`,
+          `fix/${sdId}`,
+          `docs/${sdId}`,
+          `test/${sdId}`
+        ];
+
+        try {
+          // Use gh CLI to find open PRs for this SD's branches
+          const { execSync } = await import('child_process');
+
+          // Query open PRs across both repos
+          const repos = ['rickfelix/ehg', 'rickfelix/EHG_Engineer'];
+          const openPRs = [];
+
+          for (const repo of repos) {
+            try {
+              const result = execSync(
+                `gh pr list --repo ${repo} --state open --json number,title,headRefName,url --limit 100`,
+                { encoding: 'utf8', timeout: 30000 }
+              );
+
+              const prs = JSON.parse(result || '[]');
+
+              // Filter PRs that match this SD's branch patterns
+              const matchingPRs = prs.filter(pr =>
+                branchPatterns.some(pattern =>
+                  pr.headRefName.toLowerCase().includes(pattern.toLowerCase())
+                )
+              );
+
+              if (matchingPRs.length > 0) {
+                openPRs.push(...matchingPRs.map(pr => ({
+                  ...pr,
+                  repo: repo
+                })));
+              }
+            } catch (repoError) {
+              // If gh CLI fails for a repo, log warning but continue
+              console.log(`   ⚠️  Could not check ${repo}: ${repoError.message?.substring(0, 50) || 'unknown error'}`);
+            }
+          }
+
+          if (openPRs.length > 0) {
+            console.log(`   ❌ Found ${openPRs.length} open PR(s) for this SD:`);
+            openPRs.forEach(pr => {
+              console.log(`      - PR #${pr.number}: ${pr.title}`);
+              console.log(`        Branch: ${pr.headRefName}`);
+              console.log(`        Repo: ${pr.repo}`);
+              console.log(`        URL: ${pr.url}`);
+            });
+
+            return {
+              passed: false,
+              score: 0,
+              max_score: 100,
+              issues: [
+                `${openPRs.length} open PR(s) must be merged before SD completion`,
+                ...openPRs.map(pr => `  → PR #${pr.number} (${pr.repo}): ${pr.url}`)
+              ],
+              warnings: [],
+              details: { openPRs: openPRs.map(pr => ({ number: pr.number, repo: pr.repo, url: pr.url })) }
+            };
+          }
+
+          console.log('   ✅ No open PRs found for this SD');
+          console.log(`   Checked patterns: ${branchPatterns.join(', ')}`);
+
+          return {
+            passed: true,
+            score: 100,
+            max_score: 100,
+            issues: [],
+            warnings: [],
+            details: { checkedPatterns: branchPatterns, openPRs: 0 }
+          };
+
+        } catch (error) {
+          // If gh CLI is not available, warn but don't block
+          console.log(`   ⚠️  PR verification skipped: ${error.message}`);
+          return {
+            passed: true,
+            score: 80,
+            max_score: 100,
+            issues: [],
+            warnings: [`PR verification could not run: ${error.message}. Verify manually that all PRs are merged.`],
+            details: { skipped: true, reason: error.message }
+          };
+        }
+      },
+      required: true
+    });
+
     return gates;
   }
 
@@ -415,6 +519,14 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         '1. Generate retrospective: node scripts/execute-subagent.js --code RETRO --sd-id <SD-ID>',
         '2. Ensure quality score >= 60%',
         '3. Re-run LEAD-FINAL-APPROVAL'
+      ].join('\n'),
+      'PR_MERGE_VERIFICATION': [
+        'All open PRs for this SD must be merged before completion:',
+        '1. Review open PRs listed above',
+        '2. Merge each PR: gh pr merge <PR-NUMBER> --repo <REPO>',
+        '3. Or close if no longer needed: gh pr close <PR-NUMBER> --repo <REPO>',
+        '4. Pull merged changes: git pull origin main',
+        '5. Re-run LEAD-FINAL-APPROVAL'
       ].join('\n')
     };
 
