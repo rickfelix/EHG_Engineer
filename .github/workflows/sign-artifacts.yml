@@ -31,7 +31,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v4
+        uses: sigstore/cosign-installer@v3.8.0
 
       - name: Install SLSA tools
         run: |
