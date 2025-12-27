@@ -106,7 +106,7 @@ jobs:
 
       - name: Create pre-commit config
         run: |
-          cat > .pre-commit-config.yaml <<-'EOF'
+          cat > .pre-commit-config.yaml <<'EOF'
           repos:
             - repo: local
               hooks:
@@ -250,7 +250,7 @@ jobs:
             echo "Attempt $attempt of $MAX_RETRIES..."
 
             # Test that anonymous users cannot write with connection timeout
-            if PGCONNECT_TIMEOUT=10 psql "$DATABASE_URL" <<-'EOF' 2>&1
+            if PGCONNECT_TIMEOUT=10 psql "$DATABASE_URL" <<'EOF' 2>&1
             -- Set role to anonymous
             SET ROLE anon;
 
@@ -267,7 +267,7 @@ jobs:
 
             -- Reset role
             RESET ROLE;
-            EOF
+EOF
             then
               echo "RLS permissions are properly restrictive"
               exit 0
