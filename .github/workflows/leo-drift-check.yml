@@ -34,7 +34,7 @@ jobs:
 
       - name: Compile drift checker
         run: |
-          npx tsc tools/gates/drift-check.ts --outDir dist/tools/gates --module es2020 --target es2020 --moduleResolution node --esModuleInterop
+          npx tsc tools/gates/drift-check.ts --outDir dist/tools/gates --module es2020 --target es2020 --moduleResolution node --esModuleInterop --skipLibCheck
 
       - name: Run drift detection
         env:
