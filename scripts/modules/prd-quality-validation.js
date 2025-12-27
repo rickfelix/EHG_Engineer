@@ -201,9 +201,10 @@ function validatePRDHeuristic(prd) {
  * Validate a single PRD for quality using AI-powered Russian Judge rubric
  * Set PRD_VALIDATION_MODE=heuristic to use fast non-AI validation
  * @param {Object} prd - PRD object from database
+ * @param {Object} sd - Strategic Directive object (optional, for type-aware weights)
  * @returns {Promise<Object>} { valid: boolean, issues: array, warnings: array, score: number }
  */
-export async function validatePRDQuality(prd) {
+export async function validatePRDQuality(prd, sd = null) {
   const prdId = prd?.id || 'Unknown';
 
   // Basic presence check (fast-fail before AI call)
@@ -229,9 +230,9 @@ export async function validatePRDQuality(prd) {
   }
 
   try {
-    // Use AI-powered Russian Judge rubric
-    const rubric = new PRDQualityRubric();
-    const result = await rubric.validatePRDQuality(prd);
+    // Use AI-powered Russian Judge rubric with SD type-aware weights
+    const rubric = new PRDQualityRubric(sd);
+    const result = await rubric.validatePRDQuality(prd, sd);
 
     // Convert to legacy format for backward compatibility
     return {
@@ -286,12 +287,14 @@ export async function validatePRDQuality(prd) {
  * @param {Object} options - Validation options
  * @param {number} options.minimumScore - Minimum score required (default: 70)
  * @param {boolean} options.blockOnWarnings - Whether to block on warnings (default: false)
+ * @param {Object} options.sd - Strategic Directive object (for type-aware weights)
  * @returns {Promise<Object>} Validation result for handoff (async now - calls AI)
  */
 export async function validatePRDForHandoff(prd, options = {}) {
   const {
     minimumScore = 70,
-    blockOnWarnings = false
+    blockOnWarnings = false,
+    sd = null
   } = options;
 
   const result = {
@@ -310,8 +313,8 @@ export async function validatePRDForHandoff(prd, options = {}) {
     return result;
   }
 
-  // Run quality validation
-  const qualityResult = await validatePRDQuality(prd);
+  // Run quality validation with SD type-aware weights
+  const qualityResult = await validatePRDQuality(prd, sd);
   result.qualityDetails = qualityResult;
   result.score = qualityResult.score;
 

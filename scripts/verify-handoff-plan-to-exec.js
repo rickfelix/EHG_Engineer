@@ -510,7 +510,8 @@ class PlanToExecVerifier {
 
         prdBoilerplateResult = await validatePRDForHandoff(prd, {
           minimumScore: prdMinimumScore,
-          blockOnWarnings: false
+          blockOnWarnings: false,
+          sd: sd  // Pass SD for type-aware weights (documentation SDs get different evaluation)
         });
 
         console.log(prdBoilerplateResult.summary);
