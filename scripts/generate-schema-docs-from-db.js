@@ -202,9 +202,9 @@ class SchemaDocumentationGenerator {
       this.log('✅ Schema documentation generated successfully!');
       this.log(`📁 Output: ${CONFIG.outputDir}`);
 
-    } catch {
-      console.error('❌ Error generating schema documentation:', _error);
-      throw _error;
+    } catch (error) {
+      console.error('❌ Error generating schema documentation:', error);
+      throw error;
     } finally {
       if (this.pgClient) {
         await this.pgClient.end();
