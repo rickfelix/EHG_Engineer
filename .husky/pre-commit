@@ -1,4 +1,33 @@
 # ============================================================================
+# STAGE 0: Direct Commit to Main Protection (BLOCKING)
+# ============================================================================
+# LEO Protocol requires all work to be done on feature branches.
+# Direct commits to main are blocked to enforce proper workflow.
+# ============================================================================
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+if [ "$BRANCH" = "main" ]; then
+  echo ""
+  echo "❌ BLOCKED: Direct commits to main are not allowed!"
+  echo ""
+  echo "   LEO Protocol requires all work on feature branches."
+  echo ""
+  echo "   To fix this:"
+  echo "   1. Create a Strategic Directive: npm run sd:create"
+  echo "   2. Run PLAN-TO-EXEC handoff: node scripts/handoff.js plan-to-exec"
+  echo "      (This creates your feature branch automatically)"
+  echo ""
+  echo "   Or manually create a branch:"
+  echo "   git checkout -b feat/SD-XXX-description"
+  echo "   git checkout -b quick-fix/QF-YYYYMMDD-NNN"
+  echo ""
+  echo "   Emergency bypass (logged): git commit --no-verify"
+  echo ""
+  exit 1
+fi
+
+# ============================================================================
 # Auto-fix Linting Issues
 # ============================================================================
 echo "🔍 Running ESLint auto-fix on staged files..."
@@ -199,18 +228,17 @@ if [ "$BEHIND" -gt 50 ]; then
 fi
 
 # ============================================================================
-# Branch Naming Convention Check
+# Branch Naming Convention Check (Warning only - main already blocked above)
 # ============================================================================
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
+# Note: Direct commits to main are blocked in STAGE 0 above.
+# This section only warns about non-standard branch naming conventions.
 
-if [ "$BRANCH" != "main" ]; then
-  # Valid patterns: feat/, fix/, docs/, test/, quick-fix/, reports/
-  if ! echo "$BRANCH" | grep -qE '^(feat|fix|docs|test|quick-fix|reports)/'; then
-    echo ""
-    echo "⚠️  WARNING: Branch name '$BRANCH' does not follow convention."
-    echo "   Expected prefixes: feat/, fix/, docs/, test/, quick-fix/, or reports/"
-    echo ""
-  fi
+# Valid patterns: feat/, fix/, docs/, test/, quick-fix/, reports/
+if ! echo "$BRANCH" | grep -qE '^(feat|fix|docs|test|quick-fix|reports)/'; then
+  echo ""
+  echo "⚠️  WARNING: Branch name '$BRANCH' does not follow convention."
+  echo "   Expected prefixes: feat/, fix/, docs/, test/, quick-fix/, or reports/"
+  echo ""
 fi
 
 echo "✅ Work accumulation check complete"
