@@ -1,27 +1,41 @@
 /**
  * LEO Protocol v4.1 Progress Calculator
- * Deterministic progress calculation that replaces metadata-based approach
- * Single source of truth for all progress calculations
+ * Deterministic progress calculation - Single source of truth
+ *
+ * Refactored as part of SD-REFACTOR-2025-001-P1-003
+ * Phase calculation logic extracted to phase-calculators.js
+ *
+ * @module ProgressCalculator
+ * @version 2.0.0
  */
+
+import {
+  PHASE_WEIGHTS,
+  PHASE_ORDER,
+  calculateLeadPlanningProgress,
+  getLeadPlanningDetails,
+  calculatePlanDesignProgress,
+  getPlanDesignDetails,
+  calculateExecImplementationProgress,
+  getExecImplementationDetails,
+  calculatePlanVerificationProgress,
+  getPlanVerificationDetails,
+  calculateLeadApprovalProgress,
+  getLeadApprovalDetails,
+  determineCurrentPhase,
+  getPhaseDisplayName,
+  calculateAllPhases,
+  getAllPhaseDetails
+} from './phase-calculators.js';
+
+// Re-export constants for backward compatibility
+export { PHASE_WEIGHTS, PHASE_ORDER };
 
 class ProgressCalculator {
   constructor() {
-    // LEO Protocol v4.1 official phase weights
-    this.PHASE_WEIGHTS = {
-      LEAD_PLANNING: 20,      // SD creation and approval
-      PLAN_DESIGN: 20,        // PRD creation and planning
-      EXEC_IMPLEMENTATION: 30, // Implementation work
-      PLAN_VERIFICATION: 15,   // Testing and verification
-      LEAD_APPROVAL: 15       // Final approval and deployment
-    };
-
-    this.PHASE_ORDER = [
-      'LEAD_PLANNING',
-      'PLAN_DESIGN', 
-      'EXEC_IMPLEMENTATION',
-      'PLAN_VERIFICATION',
-      'LEAD_APPROVAL'
-    ];
+    // Use imported constants
+    this.PHASE_WEIGHTS = PHASE_WEIGHTS;
+    this.PHASE_ORDER = PHASE_ORDER;
   }
 
   /**
@@ -29,7 +43,7 @@ class ProgressCalculator {
    * This is the SINGLE SOURCE OF TRUTH for progress calculation
    */
   calculateSDProgress(sd, prd) {
-    // SPECIAL CASE: For completed SDs, respect the database progress field
+    // SPECIAL CASE: Completed SDs - respect database progress field
     if (sd?.status?.toLowerCase() === 'completed' || sd?.current_phase === 'COMPLETE') {
       return {
         phases: {
@@ -48,8 +62,7 @@ class ProgressCalculator {
       };
     }
 
-    // SPECIAL CASE: For archived SDs with metadata completion_percentage = 100,
-    // respect the manual completion percentage (regardless of PRD status)
+    // SPECIAL CASE: Archived SDs with 100% manual completion
     if (sd?.status?.toLowerCase() === 'archived' && sd?.metadata?.completion_percentage === 100) {
       return {
         phases: {
@@ -68,325 +81,80 @@ class ProgressCalculator {
       };
     }
 
-    const progress = {
-      phases: {
-        LEAD_PLANNING: 0,
-        PLAN_DESIGN: 0,
-        EXEC_IMPLEMENTATION: 0,
-        PLAN_VERIFICATION: 0,
-        LEAD_APPROVAL: 0
-      },
-      total: 0,
-      currentPhase: 'LEAD_PLANNING',
-      details: {}
-    };
-
-    // PHASE 1: LEAD Planning (20%)
-    progress.phases.LEAD_PLANNING = this.calculateLeadPlanningProgress(sd);
-    progress.details.leadPlanning = this.getLeadPlanningDetails(sd);
-
-    // PHASE 2: PLAN Design (20%) - requires PRD
-    if (prd) {
-      progress.phases.PLAN_DESIGN = this.calculatePlanDesignProgress(prd);
-      progress.details.planDesign = this.getPlanDesignDetails(prd);
-
-      // PHASE 3: EXEC Implementation (30%)
-      progress.phases.EXEC_IMPLEMENTATION = this.calculateExecImplementationProgress(prd);
-      progress.details.execImplementation = this.getExecImplementationDetails(prd);
-
-      // PHASE 4: PLAN Verification (15%)
-      progress.phases.PLAN_VERIFICATION = this.calculatePlanVerificationProgress(prd);
-      progress.details.planVerification = this.getPlanVerificationDetails(prd);
-
-      // PHASE 5: LEAD Approval (15%)
-      progress.phases.LEAD_APPROVAL = this.calculateLeadApprovalProgress(prd);
-      progress.details.leadApproval = this.getLeadApprovalDetails(prd);
-    }
+    // Calculate all phases using extracted module
+    const phases = calculateAllPhases(sd, prd);
+    const details = getAllPhaseDetails(sd, prd);
 
     // Calculate total progress using official weights
-    progress.total = Math.round(
-      (progress.phases.LEAD_PLANNING * this.PHASE_WEIGHTS.LEAD_PLANNING / 100) +
-      (progress.phases.PLAN_DESIGN * this.PHASE_WEIGHTS.PLAN_DESIGN / 100) +
-      (progress.phases.EXEC_IMPLEMENTATION * this.PHASE_WEIGHTS.EXEC_IMPLEMENTATION / 100) +
-      (progress.phases.PLAN_VERIFICATION * this.PHASE_WEIGHTS.PLAN_VERIFICATION / 100) +
-      (progress.phases.LEAD_APPROVAL * this.PHASE_WEIGHTS.LEAD_APPROVAL / 100)
+    const total = Math.round(
+      (phases.LEAD_PLANNING * this.PHASE_WEIGHTS.LEAD_PLANNING / 100) +
+      (phases.PLAN_DESIGN * this.PHASE_WEIGHTS.PLAN_DESIGN / 100) +
+      (phases.EXEC_IMPLEMENTATION * this.PHASE_WEIGHTS.EXEC_IMPLEMENTATION / 100) +
+      (phases.PLAN_VERIFICATION * this.PHASE_WEIGHTS.PLAN_VERIFICATION / 100) +
+      (phases.LEAD_APPROVAL * this.PHASE_WEIGHTS.LEAD_APPROVAL / 100)
     );
 
     // Determine current phase
-    progress.currentPhase = this.determineCurrentPhase(progress.phases);
+    const currentPhase = determineCurrentPhase(phases);
 
-    return progress;
+    return {
+      phases,
+      total,
+      currentPhase,
+      details
+    };
   }
 
-  /**
-   * LEAD Planning Phase (20%) - SD Creation and Definition
-   */
+  // ===========================================================================
+  // DELEGATED METHODS: For backward compatibility
+  // ===========================================================================
+
   calculateLeadPlanningProgress(sd) {
-    if (!sd || !sd.id) return 0;
-
-    // Check if SD is a placeholder/draft
-    const isPlaceholder = 
-      sd.title === '[Enter Strategic Directive Title]' ||
-      !sd.title ||
-      sd.status === 'draft' ||
-      sd.title.trim().length === 0;
-
-    if (isPlaceholder) return 0;
-
-    // SD exists with meaningful content
-    return 100;
+    return calculateLeadPlanningProgress(sd);
   }
 
   getLeadPlanningDetails(sd) {
-    return {
-      hasTitle: sd?.title && sd.title !== '[Enter Strategic Directive Title]',
-      hasDescription: sd?.description && sd.description.trim().length > 0,
-      hasObjectives: sd?.strategic_objectives && sd.strategic_objectives.length > 0,
-      isActive: sd?.status !== 'draft'
-    };
+    return getLeadPlanningDetails(sd);
   }
 
-  /**
-   * PLAN Design Phase (20%) - PRD Creation and Planning
-   */
   calculatePlanDesignProgress(prd) {
-    if (!prd) return 0;
-
-    // Parse plan_checklist if it's a JSON string
-    let planChecklist = prd.plan_checklist || [];
-    if (typeof planChecklist === 'string') {
-      try {
-        planChecklist = JSON.parse(planChecklist);
-      } catch (e) {
-        console.error('Failed to parse plan_checklist:', e.message);
-        return 0;
-      }
-    }
-    if (!Array.isArray(planChecklist) || planChecklist.length === 0) return 100;
-
-    const completedItems = planChecklist.filter(item =>
-      (typeof item === 'object' && item.checked) ||
-      (typeof item === 'string' && false) // strings default to unchecked
-    ).length;
-
-    return Math.round((completedItems / planChecklist.length) * 100);
+    return calculatePlanDesignProgress(prd);
   }
 
   getPlanDesignDetails(prd) {
-    if (!prd) return { totalItems: 0, completedItems: 0, hasRequirements: false, hasTechnicalSpecs: false };
-
-    // Parse plan_checklist if it's a JSON string
-    let planChecklist = prd.plan_checklist || [];
-    if (typeof planChecklist === 'string') {
-      try {
-        planChecklist = JSON.parse(planChecklist);
-      } catch (e) {
-        planChecklist = [];
-      }
-    }
-    if (!Array.isArray(planChecklist)) planChecklist = [];
-
-    // Parse functional_requirements if it's a JSON string
-    let functionalReqs = prd.functional_requirements || [];
-    if (typeof functionalReqs === 'string') {
-      try {
-        functionalReqs = JSON.parse(functionalReqs);
-      } catch (e) {
-        functionalReqs = [];
-      }
-    }
-
-    // Parse technical_requirements if it's a JSON string
-    let technicalReqs = prd.technical_requirements || [];
-    if (typeof technicalReqs === 'string') {
-      try {
-        technicalReqs = JSON.parse(technicalReqs);
-      } catch (e) {
-        technicalReqs = [];
-      }
-    }
-
-    return {
-      totalItems: planChecklist.length,
-      completedItems: planChecklist.filter(item =>
-        typeof item === 'object' && item.checked
-      ).length,
-      hasRequirements: Array.isArray(functionalReqs) && functionalReqs.length > 0,
-      hasTechnicalSpecs: Array.isArray(technicalReqs) && technicalReqs.length > 0
-    };
+    return getPlanDesignDetails(prd);
   }
 
-  /**
-   * EXEC Implementation Phase (30%) - Implementation Work
-   */
   calculateExecImplementationProgress(prd) {
-    if (!prd) return 0;
-
-    const execChecklist = Array.isArray(prd.exec_checklist) ? prd.exec_checklist : [];
-    if (execChecklist.length === 0) return 100; // No checklist = considered complete
-
-    const completedItems = execChecklist.filter(item =>
-      (typeof item === 'object' && item.checked) ||
-      (typeof item === 'string' && false)
-    ).length;
-
-    return Math.round((completedItems / execChecklist.length) * 100);
+    return calculateExecImplementationProgress(prd);
   }
 
   getExecImplementationDetails(prd) {
-    const execChecklist = Array.isArray(prd.exec_checklist) ? prd.exec_checklist : [];
-    return {
-      totalItems: execChecklist.length,
-      completedItems: execChecklist.filter(item =>
-        typeof item === 'object' && item.checked
-      ).length,
-      phase: prd?.phase || 'unknown'
-    };
+    return getExecImplementationDetails(prd);
   }
 
-  /**
-   * PLAN Verification Phase (15%) - Testing and Quality Assurance
-   */
   calculatePlanVerificationProgress(prd) {
-    if (!prd) return 0;
-
-    // Check multiple sources for verification data
-    let verificationItems = [];
-
-    // Parse validation_checklist if it's a JSON string
-    let validationChecklist = prd.validation_checklist;
-    if (typeof validationChecklist === 'string') {
-      try {
-        validationChecklist = JSON.parse(validationChecklist);
-      } catch (e) {
-        validationChecklist = null;
-      }
-    }
-
-    // Parse metadata verification_checklist if it's a JSON string
-    let metadataVerificationChecklist = prd.metadata?.verification_checklist;
-    if (typeof metadataVerificationChecklist === 'string') {
-      try {
-        metadataVerificationChecklist = JSON.parse(metadataVerificationChecklist);
-      } catch (e) {
-        metadataVerificationChecklist = null;
-      }
-    }
-
-    // 1. Check direct validation_checklist
-    if (Array.isArray(validationChecklist) && validationChecklist.length > 0) {
-      verificationItems = validationChecklist;
-    }
-    // 2. Check metadata for verification_checklist (new approach)
-    else if (Array.isArray(metadataVerificationChecklist) && metadataVerificationChecklist.length > 0) {
-      verificationItems = metadataVerificationChecklist;
-    }
-    // 3. Check status-based completion
-    else if (prd.status === 'verification_complete' || prd.status === 'approved') {
-      return 100;
-    }
-
-    if (verificationItems.length === 0) return 0; // No verification data
-
-    const completedItems = verificationItems.filter(item =>
-      (typeof item === 'object' && item.checked) ||
-      (typeof item === 'string' && false)
-    ).length;
-
-    return Math.round((completedItems / verificationItems.length) * 100);
+    return calculatePlanVerificationProgress(prd);
   }
 
   getPlanVerificationDetails(prd) {
-    // Parse validation_checklist if it's a JSON string
-    let validationChecklist = prd?.validation_checklist;
-    if (typeof validationChecklist === 'string') {
-      try {
-        validationChecklist = JSON.parse(validationChecklist);
-      } catch (e) {
-        validationChecklist = [];
-      }
-    }
-
-    // Parse metadata verification_checklist if it's a JSON string
-    let metadataVerificationChecklist = prd?.metadata?.verification_checklist;
-    if (typeof metadataVerificationChecklist === 'string') {
-      try {
-        metadataVerificationChecklist = JSON.parse(metadataVerificationChecklist);
-      } catch (e) {
-        metadataVerificationChecklist = [];
-      }
-    }
-
-    let verificationItems = validationChecklist || metadataVerificationChecklist || [];
-    if (!Array.isArray(verificationItems)) verificationItems = [];
-
-    return {
-      totalItems: verificationItems.length,
-      completedItems: verificationItems.filter(item =>
-        typeof item === 'object' && item.checked
-      ).length,
-      status: prd?.status,
-      hasQualityAssurance: prd?.metadata?.quality_assurance === 'PASSED'
-    };
+    return getPlanVerificationDetails(prd);
   }
 
-  /**
-   * LEAD Approval Phase (15%) - Final Approval
-   */
   calculateLeadApprovalProgress(prd) {
-    if (!prd) return 0;
-
-    // Check explicit approval
-    if (prd.approved_by === 'LEAD' && prd.approval_date) {
-      return 100;
-    }
-
-    // Check status-based approval
-    if (prd.status === 'approved' || prd.status === 'complete' || prd.status === 'completed') {
-      return 100;
-    }
-
-    return 0;
+    return calculateLeadApprovalProgress(prd);
   }
 
   getLeadApprovalDetails(prd) {
-    return {
-      isApproved: prd?.approved_by === 'LEAD',
-      approvalDate: prd?.approval_date,
-      approver: prd?.approved_by,
-      status: prd?.status
-    };
+    return getLeadApprovalDetails(prd);
   }
 
-  /**
-   * Determine current active phase based on progress
-   */
   determineCurrentPhase(phases) {
-    // Find first incomplete phase
-    for (const phase of this.PHASE_ORDER) {
-      if (phases[phase] < 100) {
-        return phase;
-      }
-    }
-    
-    // All phases complete
-    return 'COMPLETE';
+    return determineCurrentPhase(phases);
   }
 
-  /**
-   * Get human-readable phase name
-   */
   getPhaseDisplayName(phase) {
-    const displayNames = {
-      LEAD_PLANNING: 'LEAD Planning',
-      PLAN_DESIGN: 'PLAN Design',
-      EXEC_IMPLEMENTATION: 'EXEC Implementation',
-      PLAN_VERIFICATION: 'PLAN Verification',
-      LEAD_APPROVAL: 'LEAD Approval',
-      COMPLETE: 'Complete'
-    };
-    
-    return displayNames[phase] || phase;
+    return getPhaseDisplayName(phase);
   }
 
   /**
@@ -394,14 +162,14 @@ class ProgressCalculator {
    */
   getProgressSummary(sd, prd) {
     const progress = this.calculateSDProgress(sd, prd);
-    
+
     return {
       total: progress.total,
       currentPhase: progress.currentPhase,
-      currentPhaseDisplay: this.getPhaseDisplayName(progress.currentPhase),
+      currentPhaseDisplay: getPhaseDisplayName(progress.currentPhase),
       phases: Object.entries(progress.phases).map(([phase, percentage]) => ({
         phase,
-        phaseDisplay: this.getPhaseDisplayName(phase),
+        phaseDisplay: getPhaseDisplayName(phase),
         percentage,
         weight: this.PHASE_WEIGHTS[phase],
         isComplete: percentage === 100,
@@ -433,7 +201,7 @@ class ProgressCalculator {
     allSDs.forEach(sd => {
       const prd = prdMap[sd.id];
       const progress = this.calculateSDProgress(sd, prd);
-      
+
       totalProgress += progress.total;
       breakdown.bySD.push({
         id: sd.id,
@@ -466,3 +234,6 @@ class ProgressCalculator {
 }
 
 export default ProgressCalculator;
+
+// Also export extracted module for direct access
+export * from './phase-calculators.js';
