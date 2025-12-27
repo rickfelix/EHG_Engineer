@@ -68,7 +68,7 @@ export class HandoffRecorder {
     const { data: sd, error } = await this.supabase
       .from('strategic_directives_v2')
       .select('id')
-      .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
+      .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
       .single();
 
     if (error || !sd) {

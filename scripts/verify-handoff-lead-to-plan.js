@@ -59,11 +59,11 @@ class LeadToPlanVerifier {
     console.log(`Strategic Directive: ${sdId}`);
     
     try {
-      // 1. Load Strategic Directive (support both UUID and legacy_id)
+      // 1. Load Strategic Directive (support UUID, legacy_id, and sd_key)
       const { data: sd, error: sdError } = await this.supabase
         .from('strategic_directives_v2')
         .select('*')
-        .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
+        .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
         .single();
 
       if (sdError || !sd) {
@@ -1016,11 +1016,11 @@ class LeadToPlanVerifier {
     }
 
     try {
-      // Query all referenced dependencies
+      // Query all referenced dependencies (support id, legacy_id, and sd_key)
       const { data: existingDeps, error } = await this.supabase
         .from('strategic_directives_v2')
-        .select('id, legacy_id, status, title')
-        .or(deps.map(d => `id.eq.${d},legacy_id.eq.${d}`).join(','));
+        .select('id, legacy_id, sd_key, status, title')
+        .or(deps.map(d => `id.eq.${d},legacy_id.eq.${d},sd_key.eq.${d}`).join(','));
 
       if (error) {
         result.warnings.push(

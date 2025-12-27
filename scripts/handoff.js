@@ -95,11 +95,11 @@ async function getSDWorkflow(sdId) {
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
 
-  // Support both UUID and legacy_id lookups
+  // Support UUID, legacy_id, and sd_key lookups
   const { data: sd, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, title, sd_type, category, current_phase, status')
-    .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
+    .select('id, legacy_id, sd_key, title, sd_type, intensity_level, category, current_phase, status')
+    .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
     .single();
 
   if (error || !sd) {
@@ -188,11 +188,11 @@ async function verifySDCompletion(sdId) {
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
 
-  // Get SD details
+  // Get SD details (supports UUID, legacy_id, and sd_key)
   const { data: sd, error: sdError } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, title, status, current_phase, sd_type, category')
-    .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
+    .select('id, legacy_id, sd_key, title, status, current_phase, sd_type, intensity_level, category')
+    .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
     .single();
 
   if (sdError || !sd) {
@@ -200,7 +200,7 @@ async function verifySDCompletion(sdId) {
   }
 
   // Get workflow requirements for this SD type
-  const workflowInfo = await getSDWorkflow(sd.legacy_id || sd.id);
+  const workflowInfo = await getSDWorkflow(sd.sd_key || sd.legacy_id || sd.id);
   const requiredHandoffs = workflowInfo.workflow?.required || [];
 
   // Get existing handoffs for this SD
