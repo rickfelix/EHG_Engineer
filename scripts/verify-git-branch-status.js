@@ -224,10 +224,10 @@ class GitBranchVerifier {
     console.log('-'.repeat(50));
 
     // Extract SD-ID from expected branch name
-    // Match SD-ID patterns like: SD-E2E-FOUNDATION-001-R2, SD-2025-001, SD-VISION-V2-005
-    // SD-ID segments are UPPERCASE alphanumeric, slug is lowercase
-    // Pattern: SD- followed by uppercase/numeric segments (stops at first lowercase char)
-    const sdMatch = this.expectedBranchName.match(/SD-[A-Z0-9]+(-[A-Z0-9]+)*/);
+    // Match SD-ID patterns like: SD-E2E-FOUNDATION-001-R2, SD-2025-001, SD-VISION-V2-005, SD-PARENT-4.0-A
+    // SD-ID segments are UPPERCASE alphanumeric (with optional dots for versions), slug is lowercase
+    // Pattern: SD- followed by uppercase/numeric/dot segments (stops at first lowercase char)
+    const sdMatch = this.expectedBranchName.match(/SD-[A-Z0-9.]+(-[A-Z0-9.]+)*/);
 
     if (!sdMatch) {
       this.results.warnings.push('Could not extract SD-ID from branch name');
