@@ -45,6 +45,27 @@ const HANDOFF_REQUIREMENTS = {
   orchestrator: []  // Parent SDs - progress derived from child SD completion, no direct handoffs
 };
 
+// LEO v4.3.3: Intensity levels for refactoring SDs
+const VALID_INTENSITY_LEVELS = ['cosmetic', 'structural', 'architectural'];
+
+const INTENSITY_HINTS = {
+  cosmetic: {
+    keywords: ['rename', 'format', 'comment', 'typo', 'spacing', 'indent', 'naming', 'style'],
+    maxLOC: 50,
+    weight: 1.0
+  },
+  structural: {
+    keywords: ['extract', 'consolidate', 'reorganize', 'move', 'split', 'merge', 'import', 'file'],
+    maxLOC: 500,
+    weight: 1.2
+  },
+  architectural: {
+    keywords: ['pattern', 'interface', 'module', 'redesign', 'architecture', 'abstraction', 'layer', 'boundary'],
+    maxLOC: null, // No limit
+    weight: 1.5
+  }
+};
+
 // JSON schema for GPT-5 Mini response (no function calling support)
 const EXPECTED_JSON_SCHEMA = `{
   "sd_type": "feature|infrastructure|database|security|documentation|bugfix|refactor|performance",
@@ -346,6 +367,50 @@ Analyze the SD carefully and classify it based on what is actually being BUILT o
       usedWorstCase,
       recommendation: this.generateRecommendation(declaredType, bestMatch.type, bestMatch.confidence, usedWorstCase),
       fallbackMode: true
+    };
+  }
+
+  /**
+   * LEO v4.3.3: Detect intensity level for refactoring SDs
+   * @param {Object} sd - Strategic directive
+   * @returns {Object} Intensity detection result
+   */
+  detectIntensity(sd) {
+    if (sd.sd_type !== 'refactor') {
+      return {
+        applicable: false,
+        reason: 'Intensity detection only applies to refactor SDs'
+      };
+    }
+
+    const text = `${sd.title || ''} ${sd.description || ''} ${JSON.stringify(sd.scope || {})}`.toLowerCase();
+    let bestMatch = { intensity: 'structural', confidence: 50, keywords: [] };
+
+    for (const [intensity, config] of Object.entries(INTENSITY_HINTS)) {
+      const matchedKeywords = config.keywords.filter(kw => text.includes(kw));
+      if (matchedKeywords.length > 0) {
+        const baseConfidence = Math.min(matchedKeywords.length / 2, 1) * 100;
+        const weightedConfidence = Math.min(baseConfidence * config.weight, 100);
+
+        if (weightedConfidence > bestMatch.confidence) {
+          bestMatch = {
+            intensity,
+            confidence: Math.round(weightedConfidence),
+            keywords: matchedKeywords
+          };
+        }
+      }
+    }
+
+    return {
+      applicable: true,
+      suggestedIntensity: bestMatch.intensity,
+      confidence: bestMatch.confidence,
+      keywords: bestMatch.keywords,
+      reasoning: `Matched keywords: ${bestMatch.keywords.join(', ') || 'none (defaulting to structural)'}`,
+      recommendation: sd.intensity_level
+        ? `Current: ${sd.intensity_level}, Suggested: ${bestMatch.intensity}`
+        : `Set intensity_level to '${bestMatch.intensity}' (REQUIRED for refactor SDs)`
     };
   }
 }
