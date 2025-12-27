@@ -106,24 +106,24 @@ jobs:
 
       - name: Create pre-commit config
         run: |
-          cat > .pre-commit-config.yaml <<-'EOF'
-          repos:
-            - repo: local
-              hooks:
-                - id: drift-check
-                  name: LEO Drift Check
-                  entry: node dist/tools/gates/drift-check.js
-                  language: system
-                  pass_filenames: false
-                  always_run: true
-
-                - id: boundary-check
-                  name: Module Boundary Check
-                  entry: npx eslint
-                  language: system
-                  types: [javascript, typescript]
-                  args: ['--max-warnings', '0']
-          EOF
+          printf '%s\n' \
+            "repos:" \
+            "  - repo: local" \
+            "    hooks:" \
+            "      - id: drift-check" \
+            "        name: LEO Drift Check" \
+            "        entry: node dist/tools/gates/drift-check.js" \
+            "        language: system" \
+            "        pass_filenames: false" \
+            "        always_run: true" \
+            "" \
+            "      - id: boundary-check" \
+            "        name: Module Boundary Check" \
+            "        entry: npx eslint" \
+            "        language: system" \
+            "        types: [javascript, typescript]" \
+            "        args: ['--max-warnings', '0']" \
+            > .pre-commit-config.yaml
 
       - name: Comment on PR
         if: github.event_name == 'pull_request'
@@ -250,24 +250,8 @@ jobs:
             echo "Attempt $attempt of $MAX_RETRIES..."
 
             # Test that anonymous users cannot write with connection timeout
-            if PGCONNECT_TIMEOUT=10 psql "$DATABASE_URL" <<-'EOF' 2>&1
-            -- Set role to anonymous
-            SET ROLE anon;
-
-            -- This should fail with insufficient privilege
-            DO $$
-            BEGIN
-              INSERT INTO leo_gate_reviews (prd_id, gate, score, evidence)
-              VALUES ('test-prd', '2A', 50, '{}');
-              RAISE EXCEPTION 'ERROR: Anonymous insert was allowed!';
-            EXCEPTION
-              WHEN insufficient_privilege THEN
-                RAISE NOTICE 'Anonymous insert correctly blocked';
-            END $$;
-
-            -- Reset role
-            RESET ROLE;
-            EOF
+            RLS_TEST_SQL="SET ROLE anon; DO \$\$ BEGIN INSERT INTO leo_gate_reviews (prd_id, gate, score, evidence) VALUES ('test-prd', '2A', 50, '{}'); RAISE EXCEPTION 'ERROR: Anonymous insert was allowed!'; EXCEPTION WHEN insufficient_privilege THEN RAISE NOTICE 'Anonymous insert correctly blocked'; END \$\$; RESET ROLE;"
+            if PGCONNECT_TIMEOUT=10 psql "$DATABASE_URL" -c "$RLS_TEST_SQL" 2>&1
             then
               echo "RLS permissions are properly restrictive"
               exit 0
