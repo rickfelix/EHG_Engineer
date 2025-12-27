@@ -101,6 +101,8 @@ jobs:
         if: steps.check_changes.outputs.changes == 'true'
         uses: peter-evans/create-pull-request@v6
         id: create_pr
+        env:
+          HUSKY: '0'  # Disable pre-commit hooks for automated commits
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: |
