@@ -224,10 +224,10 @@ class GitBranchVerifier {
     console.log('-'.repeat(50));
 
     // Extract SD-ID from expected branch name
-    // Match SD-YYYY-NNNN-XXX but stop before description slug
-    // The SD-ID ends before the lowercase description part
-    // Pattern: SD- followed by uppercase segments, stopping at first lowercase char
-    const sdMatch = this.expectedBranchName.match(/SD-[A-Z]+(-[A-Z]+)*(-[0-9]{3,4})?/);
+    // Match SD-ID patterns like: SD-E2E-FOUNDATION-001-R2, SD-2025-001, SD-VISION-V2-005
+    // SD-ID segments are UPPERCASE alphanumeric, slug is lowercase
+    // Pattern: SD- followed by uppercase/numeric segments (stops at first lowercase char)
+    const sdMatch = this.expectedBranchName.match(/SD-[A-Z0-9]+(-[A-Z0-9]+)*/);
 
     if (!sdMatch) {
       this.results.warnings.push('Could not extract SD-ID from branch name');

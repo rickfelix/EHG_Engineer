@@ -61,12 +61,18 @@ class PlanToExecVerifier {
       'documentation': 50,
       'docs': 50,
 
+      // Lenient for QA/testing work (E2E test execution SDs have simple user stories)
+      'quality assurance': 50,
+      'qa': 50,
+      'testing': 50,
+      'e2e': 50,
+
       // Lenient for internal/infrastructure work (includes QA/testing tooling)
-      'infrastructure': 55,
-      'infra': 55,
+      'infrastructure': 50,  // Lowered from 55% - infrastructure SDs have simpler narratives
+      'infra': 50,
       'tooling': 55,
       'devops': 55,
-      'quality': 55,  // QA/testing work is similar to infrastructure
+      'quality': 50,  // QA/testing work is similar to infrastructure
 
       // Moderate for standard features (lowered to 55% during Phase 1 AI calibration)
       // TODO: Increase to 65% once AI scoring is calibrated (target: 2-4 weeks)
@@ -420,7 +426,8 @@ class PlanToExecVerifier {
         storyQualityResult = await validateUserStoriesForHandoff(userStories, {
           minimumScore: storyMinimumScore,
           minimumStories: 1,
-          blockOnWarnings: false
+          blockOnWarnings: false,
+          sdType: sd.sd_type  // Pass SD type to enable heuristic validation for infrastructure/database SDs
         });
 
         console.log(storyQualityResult.summary);

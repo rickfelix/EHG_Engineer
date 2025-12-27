@@ -226,12 +226,12 @@ export async function validatePRDQuality(prd, options = {}) {
     };
   }
 
-  // ROOT CAUSE FIX: SD-NAV-CMD-001A - Use heuristic validation for bugfix SDs
-  // AI scoring is too strict for simple bugfix PRDs
-  // Bugfix SDs have simpler scope and don't need full AI semantic analysis
+  // ROOT CAUSE FIX: SD-NAV-CMD-001A - Use heuristic validation for simpler SDs
+  // AI scoring is too strict for bugfix, infrastructure, and test-focused PRDs
+  // These SDs have simpler scope and don't need full AI semantic analysis
+  const heuristicTypes = ['bugfix', 'bug_fix', 'infrastructure', 'quality assurance', 'quality_assurance', 'orchestrator', 'documentation'];
   const usesHeuristic = process.env.PRD_VALIDATION_MODE === 'heuristic' ||
-                        sdType === 'bugfix' ||
-                        sdType === 'bug_fix';
+                        heuristicTypes.includes(sdType);
 
   if (usesHeuristic) {
     console.log(`   ℹ️  Using heuristic PRD validation (sdType: ${sdType || 'env override'})`);

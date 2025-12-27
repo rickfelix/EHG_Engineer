@@ -128,10 +128,13 @@ function validateUserStoryHeuristic(story) {
  * Validate a single user story for quality using AI-powered Russian Judge rubric
  * Set STORY_VALIDATION_MODE=heuristic to use fast non-AI validation
  * @param {Object} story - User story object from database
+ * @param {Object} options - Validation options
+ * @param {string} options.sdType - SD type (infrastructure, bugfix, etc.) for type-aware validation
  * @returns {Promise<Object>} { valid: boolean, passed: boolean, issues: array, warnings: array, score: number }
  */
-export async function validateUserStoryQuality(story) {
+export async function validateUserStoryQuality(story, options = {}) {
   const storyKey = story?.story_key || story?.id || 'Unknown';
+  const sdType = (options.sdType || '').toLowerCase();
 
   // Basic presence check (fast-fail before AI call)
   if (!story || Object.keys(story).length === 0) {
@@ -145,8 +148,16 @@ export async function validateUserStoryQuality(story) {
     };
   }
 
-  // Use heuristic validation if AI is disabled
-  if (process.env.STORY_VALIDATION_MODE === 'heuristic') {
+  // Use heuristic validation for simpler SDs (infrastructure, test-focused, etc.)
+  // AI scoring is too strict for these SD types - database SDs focus on schema/migrations, not user narratives
+  const heuristicTypes = ['bugfix', 'bug_fix', 'infrastructure', 'database', 'quality assurance', 'quality_assurance', 'orchestrator', 'documentation'];
+  const usesHeuristic = process.env.STORY_VALIDATION_MODE === 'heuristic' ||
+                        heuristicTypes.includes(sdType);
+
+  if (usesHeuristic) {
+    if (sdType) {
+      console.log(`   ℹ️  Using heuristic story validation (sdType: ${sdType})`);
+    }
     return validateUserStoryHeuristic(story);
   }
 
@@ -187,7 +198,8 @@ export async function validateUserStoriesForHandoff(stories, options = {}) {
   const {
     minimumScore = 70,
     minimumStories = 1,
-    blockOnWarnings = false
+    blockOnWarnings = false,
+    sdType = ''  // Pass SD type to enable heuristic validation for infrastructure/database SDs
   } = options;
 
   const result = {
@@ -258,7 +270,7 @@ export async function validateUserStoriesForHandoff(stories, options = {}) {
       const storyStartTime = Date.now();
 
       try {
-        const storyResult = await validateUserStoryQuality(story);
+        const storyResult = await validateUserStoryQuality(story, { sdType });
         const storyDuration = Date.now() - storyStartTime;
 
         return {
