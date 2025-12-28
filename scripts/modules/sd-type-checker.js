@@ -26,7 +26,8 @@ export const SD_TYPE_CATEGORIES = {
   // SD-E2E-WEBSOCKET-AUTH-006 lesson: qa type added for test cleanup/review tasks
   // PAT-SD-API-CATEGORY-003: api/backend SDs produce code but need unit/integration tests, not E2E
   // SD-UNIFIED-PATH-1.0: orchestrator added - parent SDs coordinate, children produce code
-  NON_CODE: ['infrastructure', 'documentation', 'process', 'qa', 'api', 'backend', 'orchestrator'],
+  // SD-UNIFIED-PATH-2.2.1: database added - DB SDs work via migrations, not app code changes
+  NON_CODE: ['infrastructure', 'documentation', 'process', 'qa', 'api', 'backend', 'orchestrator', 'database'],
 
   // SDs that produce code and need full validation
   CODE_PRODUCING: ['feature', 'bugfix', 'refactor', 'performance'],
