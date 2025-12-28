@@ -52,15 +52,27 @@ export async function validateBMADForPlanToExec(sd_id, supabase) {
     // ================================================
     // 1. FETCH SD AND USER STORIES
     // ================================================
-    // SD ID Schema Fix: Handle both UUID and legacy_id
+    // SD ID Schema Fix: Handle UUID, legacy_id, and sd_key
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sd_id);
-    const queryField = isUUID ? 'id' : 'legacy_id';
 
-    const { data: sd, error: sdError } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, title, checkpoint_plan')
-      .eq(queryField, sd_id)
-      .single();
+    let sd, sdError;
+    if (isUUID) {
+      const result = await supabase
+        .from('strategic_directives_v2')
+        .select('id, title, checkpoint_plan')
+        .eq('id', sd_id)
+        .single();
+      sd = result.data;
+      sdError = result.error;
+    } else {
+      const result = await supabase
+        .from('strategic_directives_v2')
+        .select('id, title, checkpoint_plan')
+        .or(`legacy_id.eq.${sd_id},sd_key.eq.${sd_id}`)
+        .single();
+      sd = result.data;
+      sdError = result.error;
+    }
 
     if (sdError || !sd) {
       validation.passed = false;

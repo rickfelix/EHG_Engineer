@@ -17,6 +17,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -124,11 +125,11 @@ Examples:
     // 3. Generate brief content
     const briefContent = generateBriefContent(sd, briefData);
 
-    // 4. Store in database
-    await storeBrief(sdId, briefContent, briefData);
+    // 4. Store in database (use UUID from sd record)
+    await storeBrief(sd.id, sd.sd_key || sdId, briefContent, briefData);
 
     console.log('\n✅ Refactor Brief created successfully!');
-    console.log(`\n📄 Brief stored in product_requirements_v2 with document_type='refactor_brief'`);
+    console.log('\n📄 Brief stored in product_requirements_v2 with document_type=\'refactor_brief\'');
     console.log(`\n   View with: SELECT content FROM product_requirements_v2 WHERE directive_id = '${sdId}';`);
 
   } catch (error) {
@@ -138,13 +139,13 @@ Examples:
 }
 
 /**
- * Fetch SD details from database
+ * Fetch SD details from database (supports id, legacy_id, and sd_key)
  */
 async function fetchSDDetails(sdId) {
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, title, description, sd_type, intensity_level, status, key_changes, scope')
-    .eq('id', sdId)
+    .select('id, sd_key, title, description, sd_type, intensity_level, status, key_changes, scope')
+    .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
     .single();
 
   if (error) {
@@ -246,7 +247,7 @@ async function detectAffectedFiles(sdId) {
     );
     return stdout.split('\n').filter(Boolean);
 
-  } catch (error) {
+  } catch (_error) {
     console.log('   ⚠️  Could not auto-detect files');
     return [];
   }
@@ -399,21 +400,44 @@ git revert <commit-hash>
 
 /**
  * Store brief in database
+ * @param {string} sdUuid - The SD's UUID (for foreign key)
+ * @param {string} sdKey - The SD's key for display purposes
+ * @param {string} content - The brief markdown content
+ * @param {object} briefData - Brief metadata
  */
-async function storeBrief(sdId, content, briefData) {
+async function storeBrief(sdUuid, sdKey, content, briefData) {
   // Check if PRD already exists
   const { data: existing } = await supabase
     .from('product_requirements_v2')
     .select('id')
-    .eq('directive_id', sdId)
+    .eq('directive_id', sdUuid)
     .single();
 
   const prdData = {
-    directive_id: sdId,
-    title: `Refactor Brief: ${sdId}`,
+    directive_id: sdUuid,
+    sd_id: sdUuid,
+    title: `Refactor Brief: ${sdKey}`,
     content: content,
     document_type: 'refactor_brief',
     status: 'draft',
+    // Required: minimum 3 functional requirements per check constraint
+    functional_requirements: [
+      { id: 'FR-1', requirement: 'Extract target code into separate module', priority: 'high', acceptance_criteria: 'Module exists and is importable' },
+      { id: 'FR-2', requirement: 'Maintain existing API signatures', priority: 'critical', acceptance_criteria: 'No breaking changes to public interfaces' },
+      { id: 'FR-3', requirement: 'Preserve all existing functionality', priority: 'critical', acceptance_criteria: 'All existing tests pass without modification' }
+    ],
+    // Required: minimum 1 acceptance criteria per check constraint
+    acceptance_criteria: [
+      { id: 'AC-1', criteria: 'All existing tests pass without modification', priority: 'critical' },
+      { id: 'AC-2', criteria: 'No API signature changes (backward compatible)', priority: 'critical' },
+      { id: 'AC-3', criteria: 'Code coverage remains at or above baseline', priority: 'high' },
+      { id: 'AC-4', criteria: 'REGRESSION sub-agent returns PASS verdict', priority: 'critical' }
+    ],
+    // Required: minimum 1 test scenario per check constraint
+    test_scenarios: [
+      { id: 'TS-1', scenario: 'Run existing test suite', expected_result: 'All tests pass (100%)', test_type: 'regression' },
+      { id: 'TS-2', scenario: 'Verify API backward compatibility', expected_result: 'No API signature changes detected', test_type: 'integration' }
+    ],
     metadata: {
       intensity: briefData.intensity,
       code_smell: briefData.codeSmell,
@@ -430,11 +454,12 @@ async function storeBrief(sdId, content, briefData) {
     const { error } = await supabase
       .from('product_requirements_v2')
       .update(prdData)
-      .eq('directive_id', sdId);
+      .eq('directive_id', sdUuid);
 
     if (error) throw new Error(`Failed to update brief: ${error.message}`);
   } else {
     console.log('   📝 Creating new PRD entry...');
+    prdData.id = randomUUID();
     const { error } = await supabase
       .from('product_requirements_v2')
       .insert(prdData);

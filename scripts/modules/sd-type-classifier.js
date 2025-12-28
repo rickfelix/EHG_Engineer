@@ -9,13 +9,17 @@
  * - Confidence scoring to trigger worst-case handoff requirements
  * - Reasoning explanation for transparency
  * - Fallback to keyword detection if API fails
+ * - Intensity detection for refactoring SDs (delegated to IntensityDetector)
  *
  * @module sd-type-classifier
- * @version 1.1.0
+ * @version 1.2.0 - LEO v4.3.3 Refactoring Enhancement
  */
 
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
+
+// LEO v4.3.3: Import IntensityDetector for refactoring SDs
+import { detectIntensityForSD } from './intensity-detector.js';
 
 dotenv.config();
 
@@ -45,26 +49,7 @@ const HANDOFF_REQUIREMENTS = {
   orchestrator: []  // Parent SDs - progress derived from child SD completion, no direct handoffs
 };
 
-// LEO v4.3.3: Intensity levels for refactoring SDs
-const VALID_INTENSITY_LEVELS = ['cosmetic', 'structural', 'architectural'];
-
-const INTENSITY_HINTS = {
-  cosmetic: {
-    keywords: ['rename', 'format', 'comment', 'typo', 'spacing', 'indent', 'naming', 'style'],
-    maxLOC: 50,
-    weight: 1.0
-  },
-  structural: {
-    keywords: ['extract', 'consolidate', 'reorganize', 'move', 'split', 'merge', 'import', 'file'],
-    maxLOC: 500,
-    weight: 1.2
-  },
-  architectural: {
-    keywords: ['pattern', 'interface', 'module', 'redesign', 'architecture', 'abstraction', 'layer', 'boundary'],
-    maxLOC: null, // No limit
-    weight: 1.5
-  }
-};
+// LEO v4.3.3: VALID_INTENSITY_LEVELS and INTENSITY_HINTS now imported from intensity-detector.js
 
 // JSON schema for GPT-5 Mini response (no function calling support)
 const EXPECTED_JSON_SCHEMA = `{
@@ -372,46 +357,13 @@ Analyze the SD carefully and classify it based on what is actually being BUILT o
 
   /**
    * LEO v4.3.3: Detect intensity level for refactoring SDs
+   * Delegates to IntensityDetector module (extracted for Single Responsibility)
    * @param {Object} sd - Strategic directive
    * @returns {Object} Intensity detection result
    */
   detectIntensity(sd) {
-    if (sd.sd_type !== 'refactor') {
-      return {
-        applicable: false,
-        reason: 'Intensity detection only applies to refactor SDs'
-      };
-    }
-
-    const text = `${sd.title || ''} ${sd.description || ''} ${JSON.stringify(sd.scope || {})}`.toLowerCase();
-    let bestMatch = { intensity: 'structural', confidence: 50, keywords: [] };
-
-    for (const [intensity, config] of Object.entries(INTENSITY_HINTS)) {
-      const matchedKeywords = config.keywords.filter(kw => text.includes(kw));
-      if (matchedKeywords.length > 0) {
-        const baseConfidence = Math.min(matchedKeywords.length / 2, 1) * 100;
-        const weightedConfidence = Math.min(baseConfidence * config.weight, 100);
-
-        if (weightedConfidence > bestMatch.confidence) {
-          bestMatch = {
-            intensity,
-            confidence: Math.round(weightedConfidence),
-            keywords: matchedKeywords
-          };
-        }
-      }
-    }
-
-    return {
-      applicable: true,
-      suggestedIntensity: bestMatch.intensity,
-      confidence: bestMatch.confidence,
-      keywords: bestMatch.keywords,
-      reasoning: `Matched keywords: ${bestMatch.keywords.join(', ') || 'none (defaulting to structural)'}`,
-      recommendation: sd.intensity_level
-        ? `Current: ${sd.intensity_level}, Suggested: ${bestMatch.intensity}`
-        : `Set intensity_level to '${bestMatch.intensity}' (REQUIRED for refactor SDs)`
-    };
+    // Delegate to extracted IntensityDetector module
+    return detectIntensityForSD(sd);
   }
 }
 

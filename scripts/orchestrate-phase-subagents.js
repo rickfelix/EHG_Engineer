@@ -42,22 +42,22 @@
  *   - Returns clear PASS/FAIL/BLOCKED verdict
  */
 
-import { createClient } from '@supabase/supabase-js';
-import { createDatabaseClient } from '../lib/supabase-connection.js';
+import { createClient as _createClient } from '@supabase/supabase-js';
+import { createDatabaseClient as _createDatabaseClient } from '../lib/supabase-connection.js';
 import { createSupabaseServiceClient } from './lib/supabase-connection.js';
 import { executeSubAgent as realExecuteSubAgent } from '../lib/sub-agent-executor.js';
-import { selectSubAgents, selectSubAgentsHybrid } from '../lib/context-aware-sub-agent-selector.js';
+import { selectSubAgents as _selectSubAgents, selectSubAgentsHybrid } from '../lib/context-aware-sub-agent-selector.js';
 import { safeInsert, generateUUID } from './modules/safe-insert.js';
 import {
   shouldSkipCodeValidation,
   getValidationRequirements,
-  getPlanVerifySubAgents,
-  logSdTypeValidationMode
+  getPlanVerifySubAgents as _getPlanVerifySubAgents,
+  logSdTypeValidationMode as _logSdTypeValidationMode
 } from '../lib/utils/sd-type-validation.js';
 // LEO Protocol v4.3.4: LLM-based intelligent impact analysis
-import { analyzeSDImpact, enhanceSubAgentSelection, getImpactBasedSubAgents } from '../lib/intelligent-impact-analyzer.js';
+import { analyzeSDImpact as _analyzeSDImpact, enhanceSubAgentSelection as _enhanceSubAgentSelection, getImpactBasedSubAgents } from '../lib/intelligent-impact-analyzer.js';
 // LEO Protocol v4.3.4: Pattern-based learning from retrospectives
-import { getPatternBasedSubAgents, analyzeSDAgainstPatterns } from '../lib/learning/pattern-to-subagent-mapper.js';
+import { getPatternBasedSubAgents, analyzeSDAgainstPatterns as _analyzeSDAgainstPatterns } from '../lib/learning/pattern-to-subagent-mapper.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -88,7 +88,18 @@ const PLAN_VERIFY_BY_SD_TYPE = {
 
   // Reduced validation for non-code SDs (skip TESTING, GITHUB)
   documentation: ['DOCMON', 'STORIES'],
-  infrastructure: ['DOCMON', 'STORIES', 'GITHUB', 'SECURITY']  // Infrastructure keeps SECURITY for RLS validation
+  infrastructure: ['DOCMON', 'STORIES', 'GITHUB', 'SECURITY'],  // Infrastructure keeps SECURITY for RLS validation
+
+  // LEO Protocol v4.3.3: Refactor SD type with intensity-aware validation
+  // Default refactor uses standard validation; intensity overrides below
+  refactor: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE']
+};
+
+// LEO Protocol v4.3.3: Intensity-specific PLAN_VERIFY overrides for refactor SDs
+const REFACTOR_INTENSITY_SUBAGENTS = {
+  cosmetic: ['GITHUB', 'DOCMON', 'STORIES'],  // No TESTING/SECURITY/PERFORMANCE - cosmetic is low risk
+  structural: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE'],  // Standard
+  architectural: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN']  // Full + DESIGN
 };
 
 // MANDATORY sub-agents that ALWAYS run regardless of keyword matching
@@ -103,25 +114,49 @@ const MANDATORY_SUBAGENTS_BY_PHASE = {
     security: ['TESTING', 'SECURITY'],
     api: ['TESTING', 'SECURITY', 'PERFORMANCE', 'API'],
     documentation: ['DOCMON'],
-    infrastructure: ['GITHUB', 'SECURITY']
+    infrastructure: ['GITHUB', 'SECURITY'],
+    // LEO Protocol v4.3.3: Refactor mandatory agents (intensity-aware)
+    refactor: ['GITHUB', 'DOCMON']  // Base requirement; TESTING mandatory only for structural/architectural
   },
   LEAD_FINAL: ['RETRO']  // Always generate retrospective
 };
 
+// LEO Protocol v4.3.3: Intensity-specific MANDATORY sub-agents for refactor
+const REFACTOR_INTENSITY_MANDATORY = {
+  cosmetic: ['GITHUB', 'DOCMON'],  // Minimal - just git and docs
+  structural: ['GITHUB', 'DOCMON', 'SECURITY', 'PERFORMANCE'],  // Standard security/performance checks
+  architectural: ['TESTING', 'GITHUB', 'DOCMON', 'SECURITY', 'PERFORMANCE', 'DESIGN']  // Full validation
+};
+
 /**
  * Query SD details from database
- * SD-VENTURE-STAGE0-UI-001: Support both UUID and legacy_id lookups
+ * SD-VENTURE-STAGE0-UI-001: Support UUID, legacy_id, and sd_key lookups
  */
 async function getSDDetails(sdId) {
-  // Check if sdId is a UUID or legacy_id
+  // Check if sdId is a UUID
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
-  const queryField = isUUID ? 'id' : 'legacy_id';
 
-  const { data, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('*')
-    .eq(queryField, sdId)
-    .single();
+  let data, error;
+
+  if (isUUID) {
+    // Direct UUID lookup
+    const result = await supabase
+      .from('strategic_directives_v2')
+      .select('*')
+      .eq('id', sdId)
+      .single();
+    data = result.data;
+    error = result.error;
+  } else {
+    // Try legacy_id or sd_key lookup
+    const result = await supabase
+      .from('strategic_directives_v2')
+      .select('*')
+      .or(`legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+      .single();
+    data = result.data;
+    error = result.error;
+  }
 
   if (error) {
     throw new Error(`Failed to get SD details: ${error.message}`);
@@ -179,7 +214,12 @@ async function getPhaseSubAgentsForSd(phase, sd) {
     const sdType = sd.sd_type || 'feature';
     const skipCode = shouldSkipCodeValidation(sd);
 
-    if (skipCode) {
+    // LEO Protocol v4.3.3: Intensity-aware sub-agent selection for refactor SDs
+    if (sdType === 'refactor' && sd.intensity_level) {
+      phaseAgentCodes = REFACTOR_INTENSITY_SUBAGENTS[sd.intensity_level] || PLAN_VERIFY_BY_SD_TYPE.refactor;
+      console.log(`   📋 SD Type: ${sdType} (intensity: ${sd.intensity_level})`);
+      console.log(`   📋 Using intensity-aware PLAN_VERIFY sub-agents: ${phaseAgentCodes.join(', ')}`);
+    } else if (skipCode) {
       // Use reduced validation for documentation/non-code SDs
       phaseAgentCodes = PLAN_VERIFY_BY_SD_TYPE[sdType] || PLAN_VERIFY_BY_SD_TYPE.documentation;
       console.log(`   📋 SD Type: ${sdType} (skip code validation: YES)`);
@@ -729,9 +769,17 @@ async function orchestrate(phase, sdId, options = {}) {
     console.log('\n🔒 Step 3D: Applying mandatory sub-agents for SD type...');
     const sdType = sd.sd_type || 'feature';
     const mandatoryForPhase = MANDATORY_SUBAGENTS_BY_PHASE[phase];
-    const mandatoryAgents = typeof mandatoryForPhase === 'object' && !Array.isArray(mandatoryForPhase)
-      ? (mandatoryForPhase[sdType] || mandatoryForPhase.feature || [])
-      : (mandatoryForPhase || []);
+
+    // LEO Protocol v4.3.3: Intensity-aware mandatory agents for refactor SDs
+    let mandatoryAgents;
+    if (sdType === 'refactor' && sd.intensity_level && REFACTOR_INTENSITY_MANDATORY[sd.intensity_level]) {
+      mandatoryAgents = REFACTOR_INTENSITY_MANDATORY[sd.intensity_level];
+      console.log(`   📊 Refactor intensity: ${sd.intensity_level}`);
+    } else if (typeof mandatoryForPhase === 'object' && !Array.isArray(mandatoryForPhase)) {
+      mandatoryAgents = mandatoryForPhase[sdType] || mandatoryForPhase.feature || [];
+    } else {
+      mandatoryAgents = mandatoryForPhase || [];
+    }
 
     for (const mandatoryCode of mandatoryAgents) {
       const alreadyRequired = requiredSubAgents.some(sa =>
