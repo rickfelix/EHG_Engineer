@@ -16,6 +16,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { getOrCreateSession, updateHeartbeat } from '../lib/session-manager.mjs';
 import { claimSD, isSDClaimed } from '../lib/session-conflict-checker.mjs';
+import { getEstimatedDuration, formatEstimateDetailed } from './lib/duration-estimator.js';
 
 dotenv.config();
 
@@ -143,6 +144,32 @@ async function main() {
   console.log(`Progress: ${sd.progress_percentage || 0}%`);
   console.log(`Type: ${sd.sd_type || 'feature'}`);
   console.log(`is_working_on: ${colors.green}true${colors.reset}`);
+
+  // 5.5. Show duration estimate
+  try {
+    const { data: sdFull } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_type, category, priority')
+      .eq('legacy_id', effectiveId)
+      .single();
+
+    if (sdFull) {
+      const estimate = await getEstimatedDuration(supabase, sdFull);
+      console.log(`\n${colors.bold}Duration Estimate:${colors.reset}`);
+      const lines = formatEstimateDetailed(estimate);
+      lines.forEach(line => {
+        if (line.startsWith('  •')) {
+          console.log(`${colors.dim}${line}${colors.reset}`);
+        } else if (line === '') {
+          console.log();
+        } else {
+          console.log(`   ${line}`);
+        }
+      });
+    }
+  } catch {
+    // Silent fail - estimate is optional
+  }
 
   // 6. Show warnings if any
   if (claimResult.warnings?.length > 0) {
