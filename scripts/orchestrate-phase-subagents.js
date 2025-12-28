@@ -88,7 +88,18 @@ const PLAN_VERIFY_BY_SD_TYPE = {
 
   // Reduced validation for non-code SDs (skip TESTING, GITHUB)
   documentation: ['DOCMON', 'STORIES'],
-  infrastructure: ['DOCMON', 'STORIES', 'GITHUB', 'SECURITY']  // Infrastructure keeps SECURITY for RLS validation
+  infrastructure: ['DOCMON', 'STORIES', 'GITHUB', 'SECURITY'],  // Infrastructure keeps SECURITY for RLS validation
+
+  // LEO Protocol v4.3.3: Refactor SD type with intensity-aware validation
+  // Default refactor uses standard validation; intensity overrides below
+  refactor: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE']
+};
+
+// LEO Protocol v4.3.3: Intensity-specific PLAN_VERIFY overrides for refactor SDs
+const REFACTOR_INTENSITY_SUBAGENTS = {
+  cosmetic: ['GITHUB', 'DOCMON', 'STORIES'],  // No TESTING/SECURITY/PERFORMANCE - cosmetic is low risk
+  structural: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE'],  // Standard
+  architectural: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN']  // Full + DESIGN
 };
 
 // MANDATORY sub-agents that ALWAYS run regardless of keyword matching
@@ -103,9 +114,18 @@ const MANDATORY_SUBAGENTS_BY_PHASE = {
     security: ['TESTING', 'SECURITY'],
     api: ['TESTING', 'SECURITY', 'PERFORMANCE', 'API'],
     documentation: ['DOCMON'],
-    infrastructure: ['GITHUB', 'SECURITY']
+    infrastructure: ['GITHUB', 'SECURITY'],
+    // LEO Protocol v4.3.3: Refactor mandatory agents (intensity-aware)
+    refactor: ['GITHUB', 'DOCMON']  // Base requirement; TESTING mandatory only for structural/architectural
   },
   LEAD_FINAL: ['RETRO']  // Always generate retrospective
+};
+
+// LEO Protocol v4.3.3: Intensity-specific MANDATORY sub-agents for refactor
+const REFACTOR_INTENSITY_MANDATORY = {
+  cosmetic: ['GITHUB', 'DOCMON'],  // Minimal - just git and docs
+  structural: ['GITHUB', 'DOCMON', 'SECURITY', 'PERFORMANCE'],  // Standard security/performance checks
+  architectural: ['TESTING', 'GITHUB', 'DOCMON', 'SECURITY', 'PERFORMANCE', 'DESIGN']  // Full validation
 };
 
 /**
@@ -194,7 +214,12 @@ async function getPhaseSubAgentsForSd(phase, sd) {
     const sdType = sd.sd_type || 'feature';
     const skipCode = shouldSkipCodeValidation(sd);
 
-    if (skipCode) {
+    // LEO Protocol v4.3.3: Intensity-aware sub-agent selection for refactor SDs
+    if (sdType === 'refactor' && sd.intensity_level) {
+      phaseAgentCodes = REFACTOR_INTENSITY_SUBAGENTS[sd.intensity_level] || PLAN_VERIFY_BY_SD_TYPE.refactor;
+      console.log(`   📋 SD Type: ${sdType} (intensity: ${sd.intensity_level})`);
+      console.log(`   📋 Using intensity-aware PLAN_VERIFY sub-agents: ${phaseAgentCodes.join(', ')}`);
+    } else if (skipCode) {
       // Use reduced validation for documentation/non-code SDs
       phaseAgentCodes = PLAN_VERIFY_BY_SD_TYPE[sdType] || PLAN_VERIFY_BY_SD_TYPE.documentation;
       console.log(`   📋 SD Type: ${sdType} (skip code validation: YES)`);
@@ -744,9 +769,17 @@ async function orchestrate(phase, sdId, options = {}) {
     console.log('\n🔒 Step 3D: Applying mandatory sub-agents for SD type...');
     const sdType = sd.sd_type || 'feature';
     const mandatoryForPhase = MANDATORY_SUBAGENTS_BY_PHASE[phase];
-    const mandatoryAgents = typeof mandatoryForPhase === 'object' && !Array.isArray(mandatoryForPhase)
-      ? (mandatoryForPhase[sdType] || mandatoryForPhase.feature || [])
-      : (mandatoryForPhase || []);
+
+    // LEO Protocol v4.3.3: Intensity-aware mandatory agents for refactor SDs
+    let mandatoryAgents;
+    if (sdType === 'refactor' && sd.intensity_level && REFACTOR_INTENSITY_MANDATORY[sd.intensity_level]) {
+      mandatoryAgents = REFACTOR_INTENSITY_MANDATORY[sd.intensity_level];
+      console.log(`   📊 Refactor intensity: ${sd.intensity_level}`);
+    } else if (typeof mandatoryForPhase === 'object' && !Array.isArray(mandatoryForPhase)) {
+      mandatoryAgents = mandatoryForPhase[sdType] || mandatoryForPhase.feature || [];
+    } else {
+      mandatoryAgents = mandatoryForPhase || [];
+    }
 
     for (const mandatoryCode of mandatoryAgents) {
       const alreadyRequired = requiredSubAgents.some(sa =>
