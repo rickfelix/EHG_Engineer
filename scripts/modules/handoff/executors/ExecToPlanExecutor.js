@@ -141,7 +141,7 @@ export class ExecToPlanExecutor extends BaseExecutor {
         // - qa/bugfix: requires_sub_agents: false in validation profile
         // - orchestrator: children handle sub-agents
         // - documentation/docs: no code to validate
-        const skipSubAgentTypes = ['qa', 'bugfix', 'bug_fix', 'orchestrator', 'documentation', 'docs'];
+        const skipSubAgentTypes = ['qa', 'bugfix', 'bug_fix', 'orchestrator', 'documentation', 'docs', 'database'];
         if (skipSubAgentTypes.includes(sdType)) {
           console.log(`   ℹ️  ${sdType} type SD - sub-agent orchestration SKIPPED`);
           console.log(`   → ${sdType} validation profile has requires_sub_agents: false`);

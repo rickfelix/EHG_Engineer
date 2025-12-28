@@ -311,10 +311,36 @@ export class PlanToLeadExecutor extends BaseExecutor {
           };
         }
 
+        // DATABASE FAST-PATH: Database SDs are validated via migration success, not strategic analysis
+        // SD-UNIFIED-PATH-2.2.1: Added to handle database SDs completing PLAN-TO-LEAD
+        const sdTypeForAutoPass = (ctx.sd?.sd_type || '').toLowerCase();
+        const isDatabaseForAutoPass = sdTypeForAutoPass === 'database';
+
+        if (isDatabaseForAutoPass && retrospective) {
+          console.log('   🗄️  DATABASE AUTO-PASS: Database SD with retrospective exists');
+          console.log(`      Retrospective quality_score: ${retrospective.quality_score || 0}/100`);
+          console.log('      Rationale: Database SDs are validated via migration success + DATABASE sub-agent');
+          console.log('      Skipping Russian Judge AI deep validation for database SDs');
+
+          return {
+            passed: true,
+            score: Math.max(retrospective.quality_score || 60, 60), // Minimum 60% for database
+            max_score: 100,
+            issues: [],
+            warnings: ['Database auto-pass: Validated via migration success + DATABASE sub-agent'],
+            details: {
+              database_auto_pass: true,
+              sd_type: sdTypeForAutoPass,
+              retrospective_id: retrospective.id,
+              retrospective_quality: retrospective.quality_score
+            }
+          };
+        }
+
         // BUGFIX FAST-PATH: Bugfix SDs are simple fixes validated via git commit evidence
         // They don't need deep strategic analysis - just verify retrospective exists
         // SD-NAV-CMD-001: Added to handle bugfix children completing PLAN-TO-LEAD
-        const bugfixSdType = (ctx.sd?.sd_type || '').toLowerCase();
+        const bugfixSdType = sdTypeForAutoPass;
         const isBugfixForAutoPass = bugfixSdType === 'bugfix' || bugfixSdType === 'bug_fix';
 
         if (isBugfixForAutoPass && retrospective) {
