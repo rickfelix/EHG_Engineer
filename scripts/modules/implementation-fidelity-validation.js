@@ -208,14 +208,17 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
 
   // SD-NAV-CMD-001 lesson: Bugfix SDs skip sub-agent orchestration, so they need relaxed TESTING requirements
   // Bugfix SDs validate via git commit evidence instead of TESTING sub-agent results
+  // LEO Protocol v4.3.3: Cosmetic refactoring also skips TESTING - low risk, unit tests sufficient
   try {
     const { data: sd } = await supabase
       .from('strategic_directives_v2')
-      .select('id, title, sd_type, scope, category')
+      .select('id, title, sd_type, scope, category, intensity_level')
       .eq('id', sd_id)
       .single();
 
     const sdType = (sd?.sd_type || '').toLowerCase();
+    const intensityLevel = (sd?.intensity_level || '').toLowerCase();
+
     if (sdType === 'bugfix' || sdType === 'bug_fix') {
       console.log(`\n   ℹ️  BUGFIX SD DETECTED (sd_type=${sdType})`);
       console.log('      Bugfix SDs skip sub-agent orchestration, using git commit evidence instead');
@@ -224,6 +227,14 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
       // For bugfix SDs, we still validate git commits, but don't require TESTING sub-agent
       validation.details.bugfix_mode = true;
       validation.details.testing_requirement = 'relaxed';
+    } else if (sdType === 'refactor' && intensityLevel === 'cosmetic') {
+      console.log(`\n   ℹ️  COSMETIC REFACTOR SD DETECTED (intensity=${intensityLevel})`);
+      console.log('      Cosmetic refactoring (renames, module extraction) is low-risk');
+      console.log('      Unit tests sufficient - E2E/TESTING sub-agent not required\n');
+
+      // LEO Protocol v4.3.3: Cosmetic refactoring uses unit tests, not E2E
+      validation.details.cosmetic_refactor_mode = true;
+      validation.details.testing_requirement = 'unit_tests_only';
     }
   } catch (error) {
     // Continue with standard validation
@@ -340,6 +351,12 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
     console.log('   ℹ️  Bugfix SD - TESTING sub-agent verification SKIPPED');
     console.log('   ℹ️  Bugfix SDs use git commit evidence for validation');
     validation.warnings.push('[PREFLIGHT] TESTING verification skipped for bugfix SD');
+  } else if (validation.details.cosmetic_refactor_mode) {
+    // LEO Protocol v4.3.3: Cosmetic refactoring skips E2E testing
+    console.log('   ℹ️  Cosmetic Refactor SD - TESTING sub-agent verification SKIPPED');
+    console.log('   ℹ️  Cosmetic refactoring uses unit tests (run npx vitest for verification)');
+    console.log('   ℹ️  Git commit evidence validates implementation completeness');
+    validation.warnings.push('[PREFLIGHT] TESTING verification skipped for cosmetic refactor SD');
   } else {
     try {
       // Query TESTING sub-agent to verify server was operational
