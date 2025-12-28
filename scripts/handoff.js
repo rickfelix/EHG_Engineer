@@ -505,6 +505,27 @@ async function main() {
 
         const nextStep = nextStepMap[handoffType.toUpperCase()];
         if (nextStep) {
+          // LEO Protocol v4.3.3: Actually update SD status in database (PAT-HANDOFF-STATUS-001)
+          const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+          // Resolve sd_key to UUID for consistent database update
+          const { data: sdData } = await supabase
+            .from('strategic_directives_v2')
+            .select('id')
+            .or(`legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+            .single();
+
+          if (sdData?.id) {
+            const { error: updateError } = await supabase
+              .from('strategic_directives_v2')
+              .update({ status: nextStep.status, updated_at: new Date().toISOString() })
+              .eq('id', sdData.id);
+
+            if (updateError) {
+              console.warn(`   ⚠️  Failed to update SD status: ${updateError.message}`);
+            }
+          }
+
           console.log('');
           console.log('─'.repeat(50));
           console.log(`   📍 SD Status: ${nextStep.status.toUpperCase()}`);

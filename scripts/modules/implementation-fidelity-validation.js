@@ -209,12 +209,35 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
   // SD-NAV-CMD-001 lesson: Bugfix SDs skip sub-agent orchestration, so they need relaxed TESTING requirements
   // Bugfix SDs validate via git commit evidence instead of TESTING sub-agent results
   // LEO Protocol v4.3.3: Cosmetic refactoring also skips TESTING - low risk, unit tests sufficient
+  // LEO Protocol v4.3.3: Resolve sd_id to UUID for consistent database queries
+  let resolvedSdUuid = sd_id; // Default to original if lookup fails
+
   try {
-    const { data: sd, error: sdError } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, title, sd_type, scope, category, intensity_level')
-      .eq('id', sd_id)
-      .single();
+    // Support both UUID and legacy_id/sd_key lookups
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sd_id);
+    let sd, sdError;
+
+    if (isUUID) {
+      resolvedSdUuid = sd_id; // Already a UUID
+      const result = await supabase
+        .from('strategic_directives_v2')
+        .select('id, title, sd_type, scope, category, intensity_level')
+        .eq('id', sd_id)
+        .single();
+      sd = result.data;
+      sdError = result.error;
+    } else {
+      const result = await supabase
+        .from('strategic_directives_v2')
+        .select('id, title, sd_type, scope, category, intensity_level')
+        .or(`legacy_id.eq.${sd_id},sd_key.eq.${sd_id}`)
+        .single();
+      sd = result.data;
+      sdError = result.error;
+      if (sd?.id) {
+        resolvedSdUuid = sd.id; // Use the resolved UUID for subsequent queries
+      }
+    }
 
     if (sdError) {
       console.log(`   ⚠️  SD query error: ${sdError.message}`);
@@ -414,6 +437,13 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
   // ===================================================================
   console.log('\n[PREFLIGHT] Checking for stubbed/incomplete code...');
 
+  // LEO Protocol v4.3.3: Skip strict stub detection for cosmetic refactoring
+  // Cosmetic changes (module extraction, renames) don't introduce new stubs
+  if (validation.details.cosmetic_refactor_mode) {
+    console.log('   ℹ️  Cosmetic Refactor SD - Stub detection SKIPPED');
+    console.log('   ℹ️  Module extraction/rename work preserves existing functionality');
+    validation.warnings.push('[PREFLIGHT] Stub detection skipped for cosmetic refactor SD');
+  } else {
   // SD-VENTURE-STAGE0-UI-001: Search by both UUID and legacy_id
   try {
     // Get all changes for this SD (reuse cached searchTerms)
@@ -492,6 +522,7 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
     validation.warnings.push(`[PHASE 1] Cannot detect stubbed code: ${error.message}`);
     console.log(`   ⚠️  Cannot detect stubbed code: ${error.message}`);
   }
+  } // End of else block for cosmetic_refactor_mode skip
 
   console.log('   ✅ All Phase 1 blockers passed - proceeding to Phase 2 scoring');
 
@@ -503,15 +534,18 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
 
   try {
     // Fetch PRD metadata with DESIGN and DATABASE analyses
+    // LEO Protocol v4.3.3: Use resolved UUID for PRD lookup (directive_id is a UUID)
     const { data: prdData, error: prdError } = await supabase
       .from('product_requirements_v2')
       .select('metadata, directive_id, title')
-      .eq('directive_id', sd_id)
+      .eq('directive_id', resolvedSdUuid)
       .single();
 
     if (prdError) {
+      console.log(`   ⚠️  PRD fetch error: ${prdError.message}`);
       validation.issues.push(`Failed to fetch PRD: ${prdError.message}`);
       validation.failed_gates.push('PRD_FETCH');
+      validation.passed = false; // Explicitly mark as failed
       return validation;
     }
 

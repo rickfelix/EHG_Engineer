@@ -1,0 +1,34 @@
+{
+  "_comment": "Example SD-specific PRD config. Copy and rename to SD-XXX-001.json",
+  "_usage": "Override any PRD field by including it here. Fields not specified use template defaults.",
+  "executive_summary": "Custom executive summary for this specific SD...",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Custom requirement",
+      "priority": "HIGH",
+      "description": "Detailed description",
+      "acceptance_criteria": ["Criterion 1", "Criterion 2"]
+    }
+  ],
+  "acceptance_criteria": ["Custom acceptance criterion 1", "Custom acceptance criterion 2"],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Custom test scenario",
+      "test_type": "integration",
+      "description": "Test description",
+      "expected_result": "Expected outcome"
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Custom risk",
+      "impact": "HIGH",
+      "probability": "LOW",
+      "category": "Technical",
+      "mitigation": "Mitigation strategy",
+      "severity": "MEDIUM"
+    }
+  ]
+}
