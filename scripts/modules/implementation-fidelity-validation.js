@@ -210,14 +210,20 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
   // Bugfix SDs validate via git commit evidence instead of TESTING sub-agent results
   // LEO Protocol v4.3.3: Cosmetic refactoring also skips TESTING - low risk, unit tests sufficient
   try {
-    const { data: sd } = await supabase
+    const { data: sd, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .select('id, title, sd_type, scope, category, intensity_level')
       .eq('id', sd_id)
       .single();
 
+    if (sdError) {
+      console.log(`   ⚠️  SD query error: ${sdError.message}`);
+    }
+
     const sdType = (sd?.sd_type || '').toLowerCase();
     const intensityLevel = (sd?.intensity_level || '').toLowerCase();
+
+    console.log(`   🔍 SD Type check: sd_type=${sdType}, intensity_level=${intensityLevel}`);
 
     if (sdType === 'bugfix' || sdType === 'bug_fix') {
       console.log(`\n   ℹ️  BUGFIX SD DETECTED (sd_type=${sdType})`);
