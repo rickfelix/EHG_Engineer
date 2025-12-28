@@ -93,6 +93,39 @@ Notes: expected vs actual
 - Regression test each fix
 - Mark complete when done
 
+#### Phase 7: AUDIT RETROSPECTIVE
+
+Immediately after SD creation, generate audit retrospective to capture lessons.
+
+**Trigger:**
+\`\`\`bash
+npm run audit:retro -- --file docs/audits/YYYY-MM-DD-audit.md
+\`\`\`
+
+**System Aggregates:**
+- All findings with dispositions from \`audit_finding_sd_mapping\`
+- Triangulation consensus data from \`audit_triangulation_log\`
+- Chairman verbatim observations (2x weighting)
+- Sub-agent contributions
+
+**RETRO Generates:**
+- Process learnings (about the audit itself)
+- Divergence insights (where models disagreed)
+- Pattern candidates for \`issue_patterns\` table
+- Protocol improvements
+
+**Quality Criteria:**
+- 100% triage coverage (all items have disposition)
+- >= 3 Chairman verbatim citations
+- >= 1 model divergence insight
+- All lessons cite evidence (NAV-xx, SD-xx)
+- Time constraint: <= 15-20 minutes
+
+**Output:**
+- Retrospective record in \`retrospectives\` (retro_type='AUDIT')
+- Contributions in \`retrospective_contributions\`
+- Runtime audit marked 'retro_complete'
+
 ---
 
 ### Roles
@@ -176,6 +209,13 @@ See: \`/runtime-audit\` skill for full template
 - [ ] Remediation triangulated
 - [ ] SDs created with evidence
 
+**After SD Creation (Phase 7):**
+- [ ] Audit findings ingested (\`npm run audit:ingest\`)
+- [ ] All items triaged (100% coverage)
+- [ ] Audit retrospective generated (\`npm run audit:retro\`)
+- [ ] Quality score >= 70
+- [ ] Action items assigned
+
 ---
 
 ### Artifacts
@@ -187,6 +227,9 @@ See: \`/runtime-audit\` skill for full template
 | Synthesis Grid | Inline | Compare findings |
 | SD Script | scripts/create-sd-runtime-audit-*.mjs | Create SDs |
 | Strategic Directives | Database | Track fixes |
+| Audit Mappings | audit_finding_sd_mapping | Track all findings |
+| Audit Retrospective | retrospectives (type=AUDIT) | Capture learnings |
+| Triangulation Log | audit_triangulation_log | Model consensus |
 
 ---
 
