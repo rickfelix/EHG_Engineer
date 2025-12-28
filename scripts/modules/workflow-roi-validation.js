@@ -42,6 +42,23 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
   console.log('\n🚪 GATE 4: Workflow ROI & Pattern Effectiveness (LEAD Final)');
   console.log('='.repeat(60));
 
+  // LEO Protocol v4.3.3: Resolve sd_id to UUID for consistent database queries
+  // sd_id may be a sd_key like "SD-REFACTOR-TEST-001" instead of UUID
+  let sdUuid = sd_id;
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sd_id);
+
+  if (!isUUID) {
+    const { data: sdData } = await supabase
+      .from('strategic_directives_v2')
+      .select('id')
+      .or(`legacy_id.eq.${sd_id},sd_key.eq.${sd_id}`)
+      .single();
+
+    if (sdData?.id) {
+      sdUuid = sdData.id;
+    }
+  }
+
   const validation = {
     passed: true,
     score: 0,
@@ -55,10 +72,11 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
 
   try {
     // Fetch PRD metadata with DESIGN and DATABASE analyses
+    // LEO Protocol v4.3.3: Use sdUuid (resolved from sd_key) for PRD lookup
     const { data: prdData, error: prdError } = await supabase
       .from('product_requirements_v2')
       .select('metadata, directive_id, title, created_at')
-      .eq('directive_id', sd_id)
+      .eq('directive_id', sdUuid)
       .single();
 
     if (prdError) {
@@ -84,7 +102,7 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
       const { data: handoffs } = await supabase
         .from('sd_phase_handoffs')
         .select('handoff_type, metadata, created_at')
-        .eq('sd_id', sd_id)
+        .eq('sd_id', sdUuid)
         .order('created_at', { ascending: false });
 
       if (handoffs) {
@@ -127,7 +145,7 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
       const { data: leadHandoff } = await supabase
         .from('sd_phase_handoffs')
         .select('metadata, created_at')
-        .eq('sd_id', sd_id)
+        .eq('sd_id', sdUuid)
         .eq('handoff_type', 'LEAD-FINAL')
         .order('created_at', { ascending: false })
         .limit(1);
@@ -238,7 +256,7 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
     const { data: sdData } = await supabase
       .from('strategic_directives_v2')
       .select('*')
-      .eq('id', sd_id)
+      .eq('id', sdUuid)
       .single();
 
     // Fetch pattern statistics for maturity bonus
@@ -601,10 +619,11 @@ async function validateExecutiveApproval(sd_id, gateResults, validation, supabas
 
   // Check if retrospective exists
   // NOTE: Table is 'retrospectives' not 'sd_retrospectives'
+  // LEO Protocol v4.3.3: Use sdUuid (resolved from sd_key) for lookup
   const { data: retroData } = await supabase
     .from('retrospectives')
     .select('id, quality_score')
-    .eq('sd_id', sd_id)
+    .eq('sd_id', sdUuid)
     .single();
 
   if (retroData) {

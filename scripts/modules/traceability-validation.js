@@ -133,10 +133,11 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
 
   try {
     // Fetch PRD metadata with DESIGN and DATABASE analyses
+    // LEO Protocol v4.3.3: Use sdUuid (resolved from sd_key) for PRD lookup
     const { data: prdData, error: prdError } = await supabase
       .from('product_requirements_v2')
       .select('metadata, directive_id, title')
-      .eq('directive_id', sd_id)
+      .eq('directive_id', sdUuid)
       .single();
 
     if (prdError) {
