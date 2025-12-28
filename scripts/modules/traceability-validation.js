@@ -52,10 +52,11 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
   let sdCategory = null;
 
   // Fetch SD data for both UUID resolution and category (for SD-type aware validation)
+  // LEO Protocol v4.3.3: Include sd_key in lookup (sd_key like "SD-REFACTOR-TEST-001")
   const { data: sdData } = await supabase
     .from('strategic_directives_v2')
     .select('id, category, metadata')
-    .or(`legacy_id.eq.${sd_id},id.eq.${sd_id}`)
+    .or(`legacy_id.eq.${sd_id},id.eq.${sd_id},sd_key.eq.${sd_id}`)
     .single();
 
   if (sdData) {
