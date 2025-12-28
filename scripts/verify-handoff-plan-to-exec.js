@@ -309,11 +309,11 @@ class PlanToExecVerifier {
     console.log(`Strategic Directive: ${sdId}`);
     
     try {
-      // 1. Load Strategic Directive (support both UUID and legacy_id)
+      // 1. Load Strategic Directive (support UUID, legacy_id, and sd_key)
       const { data: sd, error: sdError } = await this.supabase
         .from('strategic_directives_v2')
         .select('*')
-        .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
+        .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
         .single();
 
       if (sdError || !sd) {
@@ -508,11 +508,39 @@ class PlanToExecVerifier {
       // 4a. NEW: PRD Boilerplate/Placeholder Detection (SD-CAPABILITY-LIFECYCLE-001)
       // Prevents placeholder text like "To be defined" from reaching EXEC
       // PAT-PARENT-DET: Skip for parent orchestrators - their PRDs have decomposition content
+      // LEO-v4.3.3: Refactor Briefs use lower threshold (50%) as they are intentionally lighter
       let prdBoilerplateResult = { valid: true, score: 100, warnings: [] };
+
+      // Check if this is a Refactor Brief (lighter PRD alternative for refactoring SDs)
+      const isRefactorBrief = prd.document_type === 'refactor_brief';
 
       if (isParentOrchestrator) {
         console.log('\n🔍 PRD boilerplate check: SKIPPED (parent orchestrator)');
         console.log('   ℹ️  Parent orchestrator PRDs use decomposition format');
+      } else if (isRefactorBrief) {
+        console.log('\n🔍 PRD boilerplate check: RELAXED (refactor_brief document)');
+        console.log('   ℹ️  Refactor Briefs are intentionally lighter than full PRDs');
+        console.log('   ℹ️  Using 50% minimum score instead of standard PRD requirements');
+
+        // Refactor Briefs use 50% minimum score - they focus on current/desired state, not full PRD
+        prdBoilerplateResult = await validatePRDForHandoff(prd, {
+          minimumScore: 50,
+          blockOnWarnings: false,
+          sdType: sd.sd_type || sd.category
+        });
+
+        console.log(prdBoilerplateResult.summary);
+
+        if (!prdBoilerplateResult.valid) {
+          const guidance = getPRDImprovementGuidance(prdBoilerplateResult);
+          console.log('\n   ❌ Refactor Brief content quality validation failed');
+          return this.rejectHandoff(sdId, 'PRD_BOILERPLATE', 'Refactor Brief contains placeholder or boilerplate content', {
+            qualityValidation: prdBoilerplateResult,
+            improvements: guidance
+          });
+        }
+
+        console.log(`   ✅ Refactor Brief content quality passed (score: ${prdBoilerplateResult.score}%)`);
       } else {
         console.log('\n🔍 Validating PRD content quality (boilerplate detection)...');
 

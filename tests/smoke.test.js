@@ -17,8 +17,10 @@ describe('Smoke Tests - Critical System Validation', () => {
     });
 
     test('should have Supabase anon key configured', () => {
-      expect(process.env.SUPABASE_ANON_KEY).toBeDefined();
-      expect(process.env.SUPABASE_ANON_KEY.length).toBeGreaterThan(50);
+      // Support both SUPABASE_ANON_KEY and NEXT_PUBLIC_SUPABASE_ANON_KEY
+      const anonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      expect(anonKey).toBeDefined();
+      expect(anonKey.length).toBeGreaterThan(50);
     });
 
     test('should have node environment set', () => {
@@ -51,9 +53,14 @@ describe('Smoke Tests - Critical System Validation', () => {
 
     beforeAll(async () => {
       const { createClient } = await import('@supabase/supabase-js');
+      // Use service role key for smoke tests (needs full schema access)
+      // Fall back to anon key for environment compatibility
+      const apiKey = process.env.SUPABASE_SERVICE_ROLE_KEY ||
+                     process.env.SUPABASE_ANON_KEY ||
+                     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
       supabase = createClient(
         process.env.SUPABASE_URL,
-        process.env.SUPABASE_ANON_KEY
+        apiKey
       );
     });
 
@@ -137,9 +144,14 @@ describe('Smoke Tests - Critical System Validation', () => {
 
     beforeAll(async () => {
       const { createClient } = await import('@supabase/supabase-js');
+      // Use service role key for smoke tests (needs full schema access)
+      // Fall back to anon key for environment compatibility
+      const apiKey = process.env.SUPABASE_SERVICE_ROLE_KEY ||
+                     process.env.SUPABASE_ANON_KEY ||
+                     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
       supabase = createClient(
         process.env.SUPABASE_URL,
-        process.env.SUPABASE_ANON_KEY
+        apiKey
       );
     });
 

@@ -42,22 +42,22 @@
  *   - Returns clear PASS/FAIL/BLOCKED verdict
  */
 
-import { createClient } from '@supabase/supabase-js';
-import { createDatabaseClient } from '../lib/supabase-connection.js';
+import { createClient as _createClient } from '@supabase/supabase-js';
+import { createDatabaseClient as _createDatabaseClient } from '../lib/supabase-connection.js';
 import { createSupabaseServiceClient } from './lib/supabase-connection.js';
 import { executeSubAgent as realExecuteSubAgent } from '../lib/sub-agent-executor.js';
-import { selectSubAgents, selectSubAgentsHybrid } from '../lib/context-aware-sub-agent-selector.js';
+import { selectSubAgents as _selectSubAgents, selectSubAgentsHybrid } from '../lib/context-aware-sub-agent-selector.js';
 import { safeInsert, generateUUID } from './modules/safe-insert.js';
 import {
   shouldSkipCodeValidation,
   getValidationRequirements,
-  getPlanVerifySubAgents,
-  logSdTypeValidationMode
+  getPlanVerifySubAgents as _getPlanVerifySubAgents,
+  logSdTypeValidationMode as _logSdTypeValidationMode
 } from '../lib/utils/sd-type-validation.js';
 // LEO Protocol v4.3.4: LLM-based intelligent impact analysis
-import { analyzeSDImpact, enhanceSubAgentSelection, getImpactBasedSubAgents } from '../lib/intelligent-impact-analyzer.js';
+import { analyzeSDImpact as _analyzeSDImpact, enhanceSubAgentSelection as _enhanceSubAgentSelection, getImpactBasedSubAgents } from '../lib/intelligent-impact-analyzer.js';
 // LEO Protocol v4.3.4: Pattern-based learning from retrospectives
-import { getPatternBasedSubAgents, analyzeSDAgainstPatterns } from '../lib/learning/pattern-to-subagent-mapper.js';
+import { getPatternBasedSubAgents, analyzeSDAgainstPatterns as _analyzeSDAgainstPatterns } from '../lib/learning/pattern-to-subagent-mapper.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -110,18 +110,33 @@ const MANDATORY_SUBAGENTS_BY_PHASE = {
 
 /**
  * Query SD details from database
- * SD-VENTURE-STAGE0-UI-001: Support both UUID and legacy_id lookups
+ * SD-VENTURE-STAGE0-UI-001: Support UUID, legacy_id, and sd_key lookups
  */
 async function getSDDetails(sdId) {
-  // Check if sdId is a UUID or legacy_id
+  // Check if sdId is a UUID
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
-  const queryField = isUUID ? 'id' : 'legacy_id';
 
-  const { data, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('*')
-    .eq(queryField, sdId)
-    .single();
+  let data, error;
+
+  if (isUUID) {
+    // Direct UUID lookup
+    const result = await supabase
+      .from('strategic_directives_v2')
+      .select('*')
+      .eq('id', sdId)
+      .single();
+    data = result.data;
+    error = result.error;
+  } else {
+    // Try legacy_id or sd_key lookup
+    const result = await supabase
+      .from('strategic_directives_v2')
+      .select('*')
+      .or(`legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+      .single();
+    data = result.data;
+    error = result.error;
+  }
 
   if (error) {
     throw new Error(`Failed to get SD details: ${error.message}`);
