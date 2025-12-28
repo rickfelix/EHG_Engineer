@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-28T00:33:31.458Z
-**Rows**: 5,056
+**Generated**: 2025-12-28T16:19:12.153Z
+**Rows**: 5,392
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (18 total)
+## Columns (19 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -36,6 +36,7 @@
 | validation_mode | `text` | YES | `'prospective'::text` | Validation mode: prospective (default, pre-execution validation) or retrospective (post-execution review) |
 | justification | `text` | YES | - | Required for CONDITIONAL_PASS verdicts: explanation of conditions and follow-up actions (min 50 chars) |
 | conditions | `jsonb` | YES | - | Required for CONDITIONAL_PASS verdicts: array of follow-up action strings (non-empty array) |
+| retro_contribution | `jsonb` | YES | `'{}'::jsonb` | - |
 
 ## Constraints
 

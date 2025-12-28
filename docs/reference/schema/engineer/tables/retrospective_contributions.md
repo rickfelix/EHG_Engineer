@@ -1,0 +1,68 @@
+# retrospective_contributions Table
+
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
+**Database**: dedlbzhpgkmetvhbkyzq
+**Repository**: /mnt/c/_EHG/EHG_Engineer/
+**Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
+**Generated**: 2025-12-28T16:19:12.153Z
+**Rows**: 0
+**RLS**: Enabled (2 policies)
+
+⚠️ **This is a REFERENCE document** - Query database directly for validation
+
+⚠️ **CRITICAL**: This schema is for **EHG_Engineer** database. Implementations go in /mnt/c/_EHG/EHG_Engineer/
+
+---
+
+## Columns (13 total)
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | `uuid` | **NO** | `gen_random_uuid()` | - |
+| retro_id | `uuid` | YES | - | - |
+| contributor_type | `character varying(30)` | **NO** | - | - |
+| contributor_name | `character varying(50)` | **NO** | - | - |
+| observations | `jsonb` | YES | - | - |
+| risks | `jsonb` | YES | - | - |
+| recommendations | `jsonb` | YES | - | - |
+| evidence_refs | `jsonb` | YES | - | - |
+| confidence | `integer(32)` | YES | - | - |
+| scope | `character varying(50)` | YES | - | - |
+| time_spent_minutes | `integer(32)` | YES | - | - |
+| raw_text | `text` | YES | - | - |
+| created_at | `timestamp with time zone` | YES | `now()` | - |
+
+## Constraints
+
+### Primary Key
+- `retrospective_contributions_pkey`: PRIMARY KEY (id)
+
+### Foreign Keys
+- `retrospective_contributions_retro_id_fkey`: retro_id → retrospectives(id)
+
+### Check Constraints
+- `retrospective_contributions_confidence_check`: CHECK (((confidence >= 0) AND (confidence <= 100)))
+- `retrospective_contributions_contributor_type_check`: CHECK (((contributor_type)::text = ANY ((ARRAY['triangulation_partner'::character varying, 'sub_agent'::character varying, 'chairman'::character varying, 'system'::character varying])::text[])))
+
+## Indexes
+
+- `retrospective_contributions_pkey`
+  ```sql
+  CREATE UNIQUE INDEX retrospective_contributions_pkey ON public.retrospective_contributions USING btree (id)
+  ```
+
+## RLS Policies
+
+### 1. retrospective_contributions_insert (INSERT)
+
+- **Roles**: {public}
+- **With Check**: `true`
+
+### 2. retrospective_contributions_select (SELECT)
+
+- **Roles**: {public}
+- **Using**: `true`
+
+---
+
+[← Back to Schema Overview](../database-schema-overview.md)

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-28T00:33:31.458Z
-**Tables**: 292
+**Generated**: 2025-12-28T16:19:12.153Z
+**Tables**: 297
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (292)
+## All Tables (297)
 
 ### LEO Protocol
 
@@ -52,6 +52,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ### Strategic Directives
 
+- [audit_finding_sd_links](tables/audit_finding_sd_links.md)
+- [audit_finding_sd_mapping](tables/audit_finding_sd_mapping.md)
 - [cross_sd_utilization](tables/cross_sd_utilization.md)
 - [sd_backlog_map](tables/sd_backlog_map.md)
 - [sd_baseline_issues](tables/sd_baseline_issues.md)
@@ -88,6 +90,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 ### Retrospectives
 
 - [retrospective_action_items](tables/retrospective_action_items.md)
+- [retrospective_contributions](tables/retrospective_contributions.md)
 - [retrospective_insights](tables/retrospective_insights.md)
 - [retrospective_learning_links](tables/retrospective_learning_links.md)
 - [retrospective_templates](tables/retrospective_templates.md)
@@ -147,6 +150,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [app_config](tables/app_config.md)
 - [archetype_benchmarks](tables/archetype_benchmarks.md)
 - [assumption_sets](tables/assumption_sets.md)
+- [audit_triangulation_log](tables/audit_triangulation_log.md)
 - [backlog_item_completion](tables/backlog_item_completion.md)
 - [blueprint_board_submissions](tables/blueprint_board_submissions.md)
 - [blueprint_selection_signals](tables/blueprint_selection_signals.md)
@@ -266,6 +270,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [retro_notifications](tables/retro_notifications.md)
 - [risk_assessments](tables/risk_assessments.md)
 - [root_cause_reports](tables/root_cause_reports.md)
+- [runtime_audits](tables/runtime_audits.md)
 - [schema_expectations](tables/schema_expectations.md)
 - [screen_layouts](tables/screen_layouts.md)
 - [sdip_ai_analysis](tables/sdip_ai_analysis.md)

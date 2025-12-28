@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-28T00:33:31.458Z
-**Rows**: 186
+**Generated**: 2025-12-28T16:19:12.153Z
+**Rows**: 188
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -111,7 +111,7 @@ Use the id column instead - it is the canonical identifier. |
 ### Check Constraints
 - `check_target_application`: CHECK (((target_application)::text = ANY ((ARRAY['EHG'::character varying, 'EHG_Engineer'::character varying])::text[])))
 - `chk_sd_v2_triage`: CHECK (((rolled_triage IS NULL) OR (rolled_triage = ANY (ARRAY['High'::text, 'Medium'::text, 'Low'::text, 'Future'::text]))))
-- `sd_type_check`: CHECK (((sd_type)::text = ANY ((ARRAY['feature'::character varying, 'bugfix'::character varying, 'performance'::character varying, 'database'::character varying, 'docs'::character varying, 'documentation'::character varying, 'infrastructure'::character varying, 'refactor'::character varying, 'security'::character varying, 'orchestrator'::character varying, 'qa'::character varying])::text[])))
+- `sd_type_check`: CHECK (((sd_type IS NULL) OR ((sd_type)::text = ANY ((ARRAY['bugfix'::character varying, 'database'::character varying, 'docs'::character varying, 'documentation'::character varying, 'feature'::character varying, 'infrastructure'::character varying, 'orchestrator'::character varying, 'qa'::character varying, 'refactor'::character varying, 'security'::character varying, 'implementation'::character varying, 'strategic_observation'::character varying, 'architectural_review'::character varying, 'discovery_spike'::character varying, 'ux_debt'::character varying, 'product_decision'::character varying])::text[]))))
 - `strategic_directives_v2_complexity_level_check`: CHECK (((complexity_level)::text = ANY ((ARRAY['simple'::character varying, 'moderate'::character varying, 'complex'::character varying, 'critical'::character varying])::text[])))
 - `strategic_directives_v2_confidence_score_check`: CHECK (((confidence_score >= 0) AND (confidence_score <= 100)))
 - `strategic_directives_v2_intensity_level_check`: CHECK (((intensity_level)::text = ANY ((ARRAY['cosmetic'::character varying, 'structural'::character varying, 'architectural'::character varying])::text[])))
