@@ -209,12 +209,16 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
   // SD-NAV-CMD-001 lesson: Bugfix SDs skip sub-agent orchestration, so they need relaxed TESTING requirements
   // Bugfix SDs validate via git commit evidence instead of TESTING sub-agent results
   // LEO Protocol v4.3.3: Cosmetic refactoring also skips TESTING - low risk, unit tests sufficient
+  // LEO Protocol v4.3.3: Resolve sd_id to UUID for consistent database queries
+  let resolvedSdUuid = sd_id; // Default to original if lookup fails
+
   try {
     // Support both UUID and legacy_id/sd_key lookups
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sd_id);
     let sd, sdError;
 
     if (isUUID) {
+      resolvedSdUuid = sd_id; // Already a UUID
       const result = await supabase
         .from('strategic_directives_v2')
         .select('id, title, sd_type, scope, category, intensity_level')
@@ -230,6 +234,9 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
         .single();
       sd = result.data;
       sdError = result.error;
+      if (sd?.id) {
+        resolvedSdUuid = sd.id; // Use the resolved UUID for subsequent queries
+      }
     }
 
     if (sdError) {
@@ -527,15 +534,18 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
 
   try {
     // Fetch PRD metadata with DESIGN and DATABASE analyses
+    // LEO Protocol v4.3.3: Use resolved UUID for PRD lookup (directive_id is a UUID)
     const { data: prdData, error: prdError } = await supabase
       .from('product_requirements_v2')
       .select('metadata, directive_id, title')
-      .eq('directive_id', sd_id)
+      .eq('directive_id', resolvedSdUuid)
       .single();
 
     if (prdError) {
+      console.log(`   ⚠️  PRD fetch error: ${prdError.message}`);
       validation.issues.push(`Failed to fetch PRD: ${prdError.message}`);
       validation.failed_gates.push('PRD_FETCH');
+      validation.passed = false; // Explicitly mark as failed
       return validation;
     }
 
