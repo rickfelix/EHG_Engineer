@@ -229,7 +229,9 @@ export async function validatePRDQuality(prd, options = {}) {
   // ROOT CAUSE FIX: SD-NAV-CMD-001A - Use heuristic validation for simpler SDs
   // AI scoring is too strict for bugfix, infrastructure, and test-focused PRDs
   // These SDs have simpler scope and don't need full AI semantic analysis
-  const heuristicTypes = ['bugfix', 'bug_fix', 'infrastructure', 'quality assurance', 'quality_assurance', 'orchestrator', 'documentation'];
+  // Added 'refactor' (2025-12-27): Refactoring SDs are internal code restructuring,
+  // similar to infrastructure - they don't need the full AI semantic analysis
+  const heuristicTypes = ['bugfix', 'bug_fix', 'infrastructure', 'quality assurance', 'quality_assurance', 'orchestrator', 'documentation', 'refactor'];
   const usesHeuristic = process.env.PRD_VALIDATION_MODE === 'heuristic' ||
                         heuristicTypes.includes(sdType);
 
