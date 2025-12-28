@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-28T00:33:31.458Z
-**Rows**: 196
+**Generated**: 2025-12-28T16:19:12.153Z
+**Rows**: 212
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (60 total)
+## Columns (64 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -79,6 +79,10 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 | unnecessary_work_identified | `jsonb` | YES | `'[]'::jsonb` | Array of items that could have been deleted but were not. Used to improve future Q8 decisions. |
 | protocol_improvements | `jsonb` | YES | `'[]'::jsonb` | Array of LEO Protocol improvement suggestions. Each object: { category: string, improvement: string, evidence: string, impact: string, affected_phase: LEAD|PLAN|EXEC|null } |
 | retrospective_type | `text` | YES | `'SD_COMPLETION'::text` | Type of retrospective: LEAD_TO_PLAN (approval phase), PLAN_TO_EXEC (validation phase), SD_COMPLETION (full SD retrospective) |
+| audit_id | `uuid` | YES | - | - |
+| triangulation_divergence_insights | `jsonb` | YES | - | - |
+| verbatim_citations | `jsonb` | YES | - | - |
+| coverage_analysis | `jsonb` | YES | - | - |
 
 ## Constraints
 
@@ -86,6 +90,7 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 - `retrospectives_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `retrospectives_audit_id_fkey`: audit_id → runtime_audits(id)
 - `retrospectives_sd_id_fkey`: sd_id → strategic_directives_v2(id)
 
 ### Check Constraints
@@ -99,7 +104,7 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 - `retrospectives_context_efficiency_rating_check`: CHECK (((context_efficiency_rating >= 0) AND (context_efficiency_rating <= 100)))
 - `retrospectives_generated_by_check`: CHECK ((generated_by = ANY (ARRAY['MANUAL'::text, 'SUB_AGENT'::text, 'TRIGGER'::text, 'SCHEDULED'::text])))
 - `retrospectives_quality_score_check`: CHECK (((quality_score IS NULL) OR ((quality_score >= 0) AND (quality_score <= 100))))
-- `retrospectives_retro_type_check`: CHECK ((retro_type = ANY (ARRAY['SPRINT'::text, 'SD_COMPLETION'::text, 'INCIDENT'::text, 'MILESTONE'::text, 'WEEKLY'::text, 'MONTHLY'::text, 'ARCHITECTURE_DECISION'::text, 'RELEASE'::text])))
+- `retrospectives_retro_type_check`: CHECK ((retro_type = ANY (ARRAY['SPRINT'::text, 'SD_COMPLETION'::text, 'INCIDENT'::text, 'MILESTONE'::text, 'WEEKLY'::text, 'MONTHLY'::text, 'ARCHITECTURE_DECISION'::text, 'RELEASE'::text, 'AUDIT'::text])))
 - `retrospectives_retrospective_type_check`: CHECK ((retrospective_type = ANY (ARRAY['LEAD_TO_PLAN'::text, 'PLAN_TO_EXEC'::text, 'SD_COMPLETION'::text])))
 - `retrospectives_risk_accuracy_score_check`: CHECK (((risk_accuracy_score >= 0) AND (risk_accuracy_score <= 100)))
 - `retrospectives_status_check`: CHECK ((status = ANY (ARRAY['DRAFT'::text, 'PUBLISHED'::text, 'ARCHIVED'::text])))

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-28T00:33:31.458Z
-**Tables**: 292
+**Generated**: 2025-12-28T16:19:12.153Z
+**Tables**: 297
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -30,7 +30,7 @@
 |-------|------|-----|----------|-------------|
 | [activity_logs](tables/activity_logs.md) | 243 | ✅ | 2 | - |
 | [advisory_checkpoints](tables/advisory_checkpoints.md) | 3 | ✅ | 4 | - |
-| [agent_artifacts](tables/agent_artifacts.md) | 1,650 | ✅ | 3 | Stores large tool outputs as artifacts with summary pointers for context efficiency |
+| [agent_artifacts](tables/agent_artifacts.md) | 1,813 | ✅ | 3 | Stores large tool outputs as artifacts with summary pointers for context efficiency |
 | [agent_avatars](tables/agent_avatars.md) | 66 | ✅ | 2 | - |
 | [agent_coordination_state](tables/agent_coordination_state.md) | 0 | ✅ | 2 | RLS enabled 2025-10-26 (migration 021) - Agent coordination state tracking |
 | [agent_departments](tables/agent_departments.md) | 12 | ✅ | 2 | - |
@@ -46,17 +46,23 @@ Example: SELECT * FROM agent_memory_stores WHERE agent_id = ? AND venture_id = ?
 | [agent_performance_metrics](tables/agent_performance_metrics.md) | 3 | ✅ | 2 | RLS enabled 2025-10-26 (migration 021) - Agent performance metrics (from context learning schema) |
 | [agent_registry](tables/agent_registry.md) | 7 | ✅ | 2 | - |
 | [agent_relationships](tables/agent_relationships.md) | 2 | ✅ | 1 | - |
-| [agent_task_contracts](tables/agent_task_contracts.md) | 1,659 | ✅ | 4 | Task contracts for sub-agent handoffs. Sub-agents read their contract from this table
+| [agent_task_contracts](tables/agent_task_contracts.md) | 1,822 | ✅ | 4 | Task contracts for sub-agent handoffs. Sub-agents read their contract from this table
 instead of inheriting parent agent context, reducing context overhead by 50-70%.
 Pattern: Extends sd_data_contracts for agent-to-agent communication.
 Reference: SD-FOUND-AGENTIC-CONTEXT-001 (Agentic Context Engineering v3.0) |
 | [agent_tools](tables/agent_tools.md) | 8 | ✅ | 2 | - |
 | [agentic_reviews](tables/agentic_reviews.md) | 12 | ✅ | 4 | - |
 | [agents](tables/agents.md) | 0 | ✅ | 2 | Governance agents for chairman/CEO system. Separate from crewai_agents (research automation). Referenced by ventures.ceo_agent_id and directive_delegations. |
-| [ai_quality_assessments](tables/ai_quality_assessments.md) | 4,326 | ✅ | 3 | AI-powered quality assessments using Russian Judge rubrics (gpt-4o-mini). Stores all quality evaluations for meta-analysis and continuous improvement. |
+| [ai_quality_assessments](tables/ai_quality_assessments.md) | 4,369 | ✅ | 3 | AI-powered quality assessments using Russian Judge rubrics (gpt-4o-mini). Stores all quality evaluations for meta-analysis and continuous improvement. |
 | [app_config](tables/app_config.md) | 1 | ✅ | 3 | - |
 | [archetype_benchmarks](tables/archetype_benchmarks.md) | 7 | ✅ | 2 | - |
 | [assumption_sets](tables/assumption_sets.md) | 0 | ✅ | 4 | Golden Nugget: Versioned assumption sets for Assumptions vs Reality calibration |
+| [audit_finding_sd_links](tables/audit_finding_sd_links.md) | 0 | ✅ | 2 | Join table supporting many-to-many relationships between audit findings and SDs.
+   Supports primary (1:1), supporting (N:1), and theme (N:1) link types. |
+| [audit_finding_sd_mapping](tables/audit_finding_sd_mapping.md) | 76 | ✅ | 2 | Maps runtime audit findings to Strategic Directives with full traceability.
+   Created from triangulated recommendations (Claude + OpenAI + Antigravity).
+   Key invariant: original_issue_id is immutable - verbatim Chairman feedback preserved. |
+| [audit_triangulation_log](tables/audit_triangulation_log.md) | 0 | ✅ | 2 | - |
 | [backlog_item_completion](tables/backlog_item_completion.md) | 1 | ✅ | 2 | RLS enabled: service_role full access, authenticated read-only |
 | [blueprint_board_submissions](tables/blueprint_board_submissions.md) | 0 | ✅ | 5 | Tracks blueprint submissions for board review (SD-BLUEPRINT-UI-001:US-002,US-003) |
 | [blueprint_selection_signals](tables/blueprint_selection_signals.md) | 0 | ✅ | 3 | - |
@@ -75,14 +81,14 @@ SECURITY FIX: Replaced USING(true) from 20251216000001_chairman_unified_decision
 | [circuit_breaker_blocks](tables/circuit_breaker_blocks.md) | 0 | ✅ | 2 | Audit log for Circuit Breaker blocks (Law 3).
 Records all handoffs rejected due to validation_score < 85%.
 Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
-| [claude_sessions](tables/claude_sessions.md) | 1,451 | ✅ | 2 | Tracks active Claude Code sessions for multi-instance coordination. Sessions auto-register and update heartbeat on sd:next/sd:claim. |
+| [claude_sessions](tables/claude_sessions.md) | 1,588 | ✅ | 2 | Tracks active Claude Code sessions for multi-instance coordination. Sessions auto-register and update heartbeat on sd:next/sd:claim. |
 | [companies](tables/companies.md) | 75 | ✅ | 6 | - |
 | [competitors](tables/competitors.md) | 0 | ✅ | 5 | - |
 | [compliance_alerts](tables/compliance_alerts.md) | 14 | ✅ | 2 | RLS enabled 2025-10-26 (migration 021) - Compliance alerts and violations |
-| [compliance_checks](tables/compliance_checks.md) | 3 | ✅ | 2 | Stores compliance check run history for the Always-On Compliance orchestrator |
+| [compliance_checks](tables/compliance_checks.md) | 4 | ✅ | 2 | Stores compliance check run history for the Always-On Compliance orchestrator |
 | [compliance_events](tables/compliance_events.md) | 8 | ✅ | 2 | CCE Event Store: Normalized compliance events for UI and external consumers |
 | [compliance_policies](tables/compliance_policies.md) | 6 | ✅ | 2 | CCE Policy Registry: Configurable compliance rules with JSONB configuration |
-| [compliance_violations](tables/compliance_violations.md) | 12 | ✅ | 3 | Stores individual compliance violations detected during checks |
+| [compliance_violations](tables/compliance_violations.md) | 87 | ✅ | 3 | Stores individual compliance violations detected during checks |
 | [component_registry_embeddings](tables/component_registry_embeddings.md) | 0 | ✅ | 2 | Component registry with semantic search embeddings for AI-powered recommendations during PRD creation |
 | [content_types](tables/content_types.md) | 3 | ✅ | 2 | - |
 | [context_embeddings](tables/context_embeddings.md) | 0 | ✅ | 2 | RLS enabled 2025-10-26 (migration 020) - Vector embeddings for semantic similarity matching |
@@ -132,10 +138,10 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [folder_structure_snapshot](tables/folder_structure_snapshot.md) | 0 | ✅ | 2 | - |
 | [gate_requirements_templates](tables/gate_requirements_templates.md) | 5 | ✅ | 2 | Templates for generating verification gates with standard requirements |
 | [github_operations](tables/github_operations.md) | 0 | ✅ | 4 | Tracks all GitHub operations initiated by the LEO Protocol GitHub Sub-Agent |
-| [governance_audit_log](tables/governance_audit_log.md) | 50,516 | ✅ | 3 | - |
+| [governance_audit_log](tables/governance_audit_log.md) | 51,092 | ✅ | 3 | - |
 | [governance_policies](tables/governance_policies.md) | 0 | ✅ | 2 | - |
 | [governance_proposals](tables/governance_proposals.md) | 2 | ✅ | 2 | - |
-| [handoff_audit_log](tables/handoff_audit_log.md) | 1,766 | ✅ | 2 | Audit trail for all handoff creation attempts, including blocked bypasses |
+| [handoff_audit_log](tables/handoff_audit_log.md) | 1,813 | ✅ | 2 | Audit trail for all handoff creation attempts, including blocked bypasses |
 | [handoff_validation_rules](tables/handoff_validation_rules.md) | 8 | ✅ | 2 | - |
 | [handoff_verification_gates](tables/handoff_verification_gates.md) | 0 | ✅ | 2 | Mandatory verification checkpoints that must pass before handoffs can proceed |
 | [hap_blocks_v2](tables/hap_blocks_v2.md) | 0 | ✅ | 2 | - |
@@ -154,7 +160,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [leo_complexity_thresholds](tables/leo_complexity_thresholds.md) | 4 | ✅ | 2 | Configuration for automatic complexity detection and reasoning depth triggers |
 | [leo_effort_policies](tables/leo_effort_policies.md) | 16 | ✅ | 3 | LEO Protocol effort policies by phase and complexity level |
 | [leo_gate_reviews](tables/leo_gate_reviews.md) | 437 | ✅ | 2 | - |
-| [leo_handoff_executions](tables/leo_handoff_executions.md) | 617 | ✅ | 3 | Tracks all LEO Protocol handoff executions with full audit trail. Used by unified-handoff-system.js for workflow orchestration. |
+| [leo_handoff_executions](tables/leo_handoff_executions.md) | 683 | ✅ | 3 | Tracks all LEO Protocol handoff executions with full audit trail. Used by unified-handoff-system.js for workflow orchestration. |
 | [leo_handoff_rejections](tables/leo_handoff_rejections.md) | 0 | ✅ | 2 | Tracks rejected handoffs with improvement guidance for LEO Protocol v4.2.0 |
 | [leo_handoff_templates](tables/leo_handoff_templates.md) | 5 | ✅ | 3 | - |
 | [leo_handoff_validations](tables/leo_handoff_validations.md) | 0 | ✅ | 2 | Stores validation results for handoff executions in LEO Protocol v4.2.0 |
@@ -186,7 +192,7 @@ Reference: docs/workflow/stages_v2.yaml |
 | [llm_models](tables/llm_models.md) | 8 | ✅ | 2 | - |
 | [llm_providers](tables/llm_providers.md) | 2 | ✅ | 2 | - |
 | [market_segments](tables/market_segments.md) | 6 | ✅ | 3 | - |
-| [model_usage_log](tables/model_usage_log.md) | 397 | ✅ | 2 | - |
+| [model_usage_log](tables/model_usage_log.md) | 398 | ✅ | 2 | - |
 | [nav_preferences](tables/nav_preferences.md) | 2 | ✅ | 2 | - |
 | [nav_routes](tables/nav_routes.md) | 45 | ✅ | 4 | - |
 | [operations_audit_log](tables/operations_audit_log.md) | 1 | ✅ | 2 | - |
@@ -211,7 +217,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence. |
 | [prd_research_audit_log](tables/prd_research_audit_log.md) | 4 | ✅ | 6 | Audit log for all knowledge retrieval operations (monitoring and optimization) |
 | [prd_ui_mappings](tables/prd_ui_mappings.md) | 8 | ✅ | 2 | - |
 | [prds_backup_20251016](tables/prds_backup_20251016.md) | 9 | ✅ | 2 | - |
-| [product_requirements_v2](tables/product_requirements_v2.md) | 175 | ✅ | 3 | Product Requirements Documents (PRDs) for Strategic Directives. Created by PLAN agent during PLAN_PRD phase. Contains comprehensive implementation specifications: requirements, architecture, testing, risks, and acceptance criteria. One PRD per SD (1:1 relationship via sd_uuid foreign key). |
+| [product_requirements_v2](tables/product_requirements_v2.md) | 186 | ✅ | 3 | Product Requirements Documents (PRDs) for Strategic Directives. Created by PLAN agent during PLAN_PRD phase. Contains comprehensive implementation specifications: requirements, architecture, testing, risks, and acceptance criteria. One PRD per SD (1:1 relationship via sd_uuid foreign key). |
 | [profiles](tables/profiles.md) | 2 | ✅ | 4 | - |
 | [prompt_templates](tables/prompt_templates.md) | 1 | ✅ | 2 | - |
 | [proposal_approvals](tables/proposal_approvals.md) | 0 | ✅ | 2 | - |
@@ -226,24 +232,26 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence. |
 | [recursion_events](tables/recursion_events.md) | 0 | ✅ | 4 | - |
 | [remediation_manifests](tables/remediation_manifests.md) | 1 | ✅ | 4 | Corrective and Preventive Action (CAPA) plans linked to root cause reports |
 | [research_sessions](tables/research_sessions.md) | 101 | ✅ | 2 | - |
-| [retro_notifications](tables/retro_notifications.md) | 448 | ✅ | 2 | - |
+| [retro_notifications](tables/retro_notifications.md) | 464 | ✅ | 2 | - |
 | [retrospective_action_items](tables/retrospective_action_items.md) | 0 | ✅ | 2 | - |
+| [retrospective_contributions](tables/retrospective_contributions.md) | 0 | ✅ | 2 | - |
 | [retrospective_insights](tables/retrospective_insights.md) | 0 | ✅ | 2 | - |
 | [retrospective_learning_links](tables/retrospective_learning_links.md) | 0 | ✅ | 2 | - |
 | [retrospective_templates](tables/retrospective_templates.md) | 2 | ✅ | 2 | - |
 | [retrospective_triggers](tables/retrospective_triggers.md) | 0 | ✅ | 2 | - |
-| [retrospectives](tables/retrospectives.md) | 196 | ✅ | 2 | - |
+| [retrospectives](tables/retrospectives.md) | 212 | ✅ | 2 | - |
 | [risk_assessments](tables/risk_assessments.md) | 1 | ✅ | 2 | BMAD Enhancement: Multi-domain risk assessment for Strategic Directives |
 | [root_cause_reports](tables/root_cause_reports.md) | 4 | ✅ | 4 | Root cause investigation records for failures, defects, and quality issues across LEO Protocol |
+| [runtime_audits](tables/runtime_audits.md) | 0 | ✅ | 3 | - |
 | [schema_expectations](tables/schema_expectations.md) | 5 | ✅ | 2 | - |
 | [screen_layouts](tables/screen_layouts.md) | 1 | ✅ | 2 | - |
 | [sd_backlog_map](tables/sd_backlog_map.md) | 6 | ✅ | 2 | - |
 | [sd_baseline_issues](tables/sd_baseline_issues.md) | 5 | ✅ | 4 | Tracks pre-existing codebase issues that should not block unrelated SD completion. Part of LEO Protocol governance. |
-| [sd_baseline_items](tables/sd_baseline_items.md) | 50 | ✅ | 1 | Individual SD assignments within a baseline, including track assignment, sequence, and effort estimates. |
+| [sd_baseline_items](tables/sd_baseline_items.md) | 0 | ✅ | 1 | Individual SD assignments within a baseline, including track assignment, sequence, and effort estimates. |
 | [sd_burn_rate_snapshots](tables/sd_burn_rate_snapshots.md) | 0 | ✅ | 1 | Periodic snapshots of velocity metrics for trending and forecasting. |
 | [sd_business_evaluations](tables/sd_business_evaluations.md) | 0 | ✅ | 2 | - |
 | [sd_capabilities](tables/sd_capabilities.md) | 0 | ✅ | 2 | Junction table tracking which capabilities were registered/updated/deprecated by which Strategic Directives. Provides full audit trail. |
-| [sd_claims](tables/sd_claims.md) | 558 | ✅ | 2 | Historical record of SD claims by sessions. Supports analytics and audit trail. |
+| [sd_claims](tables/sd_claims.md) | 605 | ✅ | 2 | Historical record of SD claims by sessions. Supports analytics and audit trail. |
 | [sd_conflict_matrix](tables/sd_conflict_matrix.md) | 0 | ✅ | 1 | Potential conflicts between SDs that should not run in parallel. |
 | [sd_contract_exceptions](tables/sd_contract_exceptions.md) | 0 | ✅ | 4 | Tracks all contract exceptions with full audit trail and automatic scrutiny assessment.
 Each exception records the violation, justification, scrutiny level, and approval status.
@@ -256,7 +264,7 @@ tables/columns explicitly allowed by their parent's contract. Violations are BLO
 Reference: Consistency + Autonomy Architecture Plan |
 | [sd_dependency_graph](tables/sd_dependency_graph.md) | 0 | ✅ | 2 | Tracks dependencies and relationships between strategic directives |
 | [sd_exec_file_operations](tables/sd_exec_file_operations.md) | 0 | ✅ | 4 | Tracks file operations during EXEC phase for automatic deliverable matching. Part of SD-DELIVERABLES-V2-001. |
-| [sd_execution_actuals](tables/sd_execution_actuals.md) | 50 | ✅ | 1 | Actual execution metrics for variance analysis against baseline plan. |
+| [sd_execution_actuals](tables/sd_execution_actuals.md) | 0 | ✅ | 1 | Actual execution metrics for variance analysis against baseline plan. |
 | [sd_execution_baselines](tables/sd_execution_baselines.md) | 1 | ✅ | 1 | Point-in-time snapshots of SD execution plans. Only one baseline can be active at a time. Rebaseline requires LEAD approval. |
 | [sd_execution_timeline](tables/sd_execution_timeline.md) | 3 | ✅ | 2 | - |
 | [sd_intensity_adjustments](tables/sd_intensity_adjustments.md) | 3 | ✅ | 2 | Adjustments to validation requirements based on intensity level.
@@ -264,9 +272,9 @@ Overrides take precedence over sd_type_validation_profiles defaults.
 Weight adjustments are ADDED to base weights (must sum to 0 to maintain 100% total). |
 | [sd_intensity_gate_exemptions](tables/sd_intensity_gate_exemptions.md) | 21 | ✅ | 2 | Intensity-specific gate exemptions. Overrides sd_type_gate_exemptions when intensity_level is set. |
 | [sd_overlap_analysis](tables/sd_overlap_analysis.md) | 641 | ✅ | 2 | Stores overlap analysis results between strategic directives |
-| [sd_phase_handoffs](tables/sd_phase_handoffs.md) | 1,378 | ✅ | 8 | DEPRECATED: Use leo_handoff_executions instead. This table is empty (0 records) and was created after leo_handoff_executions (166 records). Kept for backwards compatibility only. Single source of truth: leo_handoff_executions. |
+| [sd_phase_handoffs](tables/sd_phase_handoffs.md) | 1,425 | ✅ | 8 | DEPRECATED: Use leo_handoff_executions instead. This table is empty (0 records) and was created after leo_handoff_executions (166 records). Kept for backwards compatibility only. Single source of truth: leo_handoff_executions. |
 | [sd_phase_tracking](tables/sd_phase_tracking.md) | 9 | ✅ | 2 | Tracks LEO Protocol phase completion for strategic directives |
-| [sd_scope_deliverables](tables/sd_scope_deliverables.md) | 810 | ✅ | 2 | Tracks deliverables extracted from SD scope documents to ensure all promises are fulfilled |
+| [sd_scope_deliverables](tables/sd_scope_deliverables.md) | 879 | ✅ | 2 | Tracks deliverables extracted from SD scope documents to ensure all promises are fulfilled |
 | [sd_session_activity](tables/sd_session_activity.md) | 0 | ✅ | 1 | Granular tracking of SD work per session for continuity detection. |
 | [sd_state_transitions](tables/sd_state_transitions.md) | 9 | ✅ | 2 | - |
 | [sd_subagent_deliverable_mapping](tables/sd_subagent_deliverable_mapping.md) | 9 | ✅ | 2 | Maps sub-agent codes to deliverable types for automatic completion triggers |
@@ -286,16 +294,16 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [stage_data_contracts](tables/stage_data_contracts.md) | 2 | ✅ | 2 | - |
 | [stage_events](tables/stage_events.md) | 0 | ✅ | 3 | - |
 | [story_test_mappings](tables/story_test_mappings.md) | 0 | ✅ | 4 | Links user stories to test results with traceability |
-| [strategic_directives_v2](tables/strategic_directives_v2.md) | 186 | ✅ | 4 | RLS enabled: service_role full access, authenticated read-only |
+| [strategic_directives_v2](tables/strategic_directives_v2.md) | 188 | ✅ | 4 | RLS enabled: service_role full access, authenticated read-only |
 | [sub_agent_execution_batches](tables/sub_agent_execution_batches.md) | 2 | ✅ | 2 | - |
-| [sub_agent_execution_results](tables/sub_agent_execution_results.md) | 5,056 | ✅ | 4 | Sub-agent execution results with optimized autovacuum settings (5% threshold).
+| [sub_agent_execution_results](tables/sub_agent_execution_results.md) | 5,392 | ✅ | 4 | Sub-agent execution results with optimized autovacuum settings (5% threshold).
 Last performance fix: 2025-11-21 (VACUUM FULL to remove 340 dead rows causing RETRO timeout) |
 | [sub_agent_execution_results_archive](tables/sub_agent_execution_results_archive.md) | 2,036 | ✅ | 4 | - |
 | [sub_agent_executions](tables/sub_agent_executions.md) | 59 | ✅ | 2 | - |
 | [sub_agent_gate_requirements](tables/sub_agent_gate_requirements.md) | 13 | ✅ | 2 | - |
 | [subagent_activations](tables/subagent_activations.md) | 0 | ✅ | 2 | - |
 | [subagent_requirements](tables/subagent_requirements.md) | 0 | ✅ | 2 | - |
-| [subagent_validation_results](tables/subagent_validation_results.md) | 1,107 | ✅ | 3 | - |
+| [subagent_validation_results](tables/subagent_validation_results.md) | 1,270 | ✅ | 3 | - |
 | [submission_groups](tables/submission_groups.md) | 0 | ✅ | 2 | - |
 | [submission_screenshots](tables/submission_screenshots.md) | 0 | ✅ | 2 | - |
 | [submission_steps](tables/submission_steps.md) | 0 | ✅ | 2 | - |
@@ -327,7 +335,7 @@ Last performance fix: 2025-11-21 (VACUUM FULL to remove 340 dead rows causing RE
 | [user_context_patterns](tables/user_context_patterns.md) | 0 | ✅ | 2 | RLS enabled 2025-10-26 (migration 020) - Learned patterns of user behavior and context |
 | [user_navigation_analytics](tables/user_navigation_analytics.md) | 112 | ✅ | 2 | - |
 | [user_preferences](tables/user_preferences.md) | 2 | ✅ | 2 | - |
-| [user_stories](tables/user_stories.md) | 548 | ✅ | 3 | RLS enabled: service_role full access, authenticated read-only |
+| [user_stories](tables/user_stories.md) | 605 | ✅ | 3 | RLS enabled: service_role full access, authenticated read-only |
 | [validation_evidence](tables/validation_evidence.md) | 0 | ✅ | 2 | - |
 | [venture_archetypes](tables/venture_archetypes.md) | 8 | ✅ | 2 | Venture archetype templates for categorizing and styling ventures |
 | [venture_artifacts](tables/venture_artifacts.md) | 0 | ✅ | 5 | - |
@@ -383,8 +391,13 @@ Last performance fix: 2025-11-21 (VACUUM FULL to remove 340 dead rows causing RE
 - [leo_test_plans](tables/leo_test_plans.md)
 - [leo_workflow_phases](tables/leo_workflow_phases.md)
 
-### Strategic Directives (32 tables)
+### Strategic Directives (34 tables)
 
+- [audit_finding_sd_links](tables/audit_finding_sd_links.md) - Join table supporting many-to-many relationships between audit findings and SDs.
+   Supports primary (1:1), supporting (N:1), and theme (N:1) link types.
+- [audit_finding_sd_mapping](tables/audit_finding_sd_mapping.md) - Maps runtime audit findings to Strategic Directives with full traceability.
+   Created from triangulated recommendations (Claude + OpenAI + Antigravity).
+   Key invariant: original_issue_id is immutable - verbatim Chairman feedback preserved.
 - [cross_sd_utilization](tables/cross_sd_utilization.md) - Manages cross-SD utilization requests and approvals
 - [sd_backlog_map](tables/sd_backlog_map.md)
 - [sd_baseline_issues](tables/sd_baseline_issues.md) - Tracks pre-existing codebase issues that should not block unrelated SD completion. Part of LEO Protocol governance.
@@ -429,9 +442,10 @@ Reference: Consistency + Autonomy Architecture Plan
 - [strategic_directives_v2](tables/strategic_directives_v2.md) - RLS enabled: service_role full access, authenticated read-only
 - [working_sd_sessions](tables/working_sd_sessions.md)
 
-### Retrospectives (6 tables)
+### Retrospectives (7 tables)
 
 - [retrospective_action_items](tables/retrospective_action_items.md)
+- [retrospective_contributions](tables/retrospective_contributions.md)
 - [retrospective_insights](tables/retrospective_insights.md)
 - [retrospective_learning_links](tables/retrospective_learning_links.md)
 - [retrospective_templates](tables/retrospective_templates.md)
@@ -467,7 +481,7 @@ Part of SD-HARDENING-V2-002C: Idempotency & Persistence.
 - [agent_knowledge_base](tables/agent_knowledge_base.md) - RLS enabled 2025-10-26 (migration 021) - Agent knowledge base
 - [issue_patterns](tables/issue_patterns.md) - Learning history system: stores recurring issues, proven solutions, and success metrics for cross-session knowledge retention
 
-### Other (213 tables)
+### Other (215 tables)
 
 - [activity_logs](tables/activity_logs.md)
 - [advisory_checkpoints](tables/advisory_checkpoints.md)
@@ -497,6 +511,7 @@ Reference: SD-FOUND-AGENTIC-CONTEXT-001 (Agentic Context Engineering v3.0)
 - [app_config](tables/app_config.md)
 - [archetype_benchmarks](tables/archetype_benchmarks.md)
 - [assumption_sets](tables/assumption_sets.md) - Golden Nugget: Versioned assumption sets for Assumptions vs Reality calibration
+- [audit_triangulation_log](tables/audit_triangulation_log.md)
 - [backlog_item_completion](tables/backlog_item_completion.md) - RLS enabled: service_role full access, authenticated read-only
 - [blueprint_board_submissions](tables/blueprint_board_submissions.md) - Tracks blueprint submissions for board review (SD-BLUEPRINT-UI-001:US-002,US-003)
 - [blueprint_selection_signals](tables/blueprint_selection_signals.md)
@@ -628,6 +643,7 @@ Reference: docs/workflow/stages_v2.yaml
 - [retro_notifications](tables/retro_notifications.md)
 - [risk_assessments](tables/risk_assessments.md) - BMAD Enhancement: Multi-domain risk assessment for Strategic Directives
 - [root_cause_reports](tables/root_cause_reports.md) - Root cause investigation records for failures, defects, and quality issues across LEO Protocol
+- [runtime_audits](tables/runtime_audits.md)
 - [schema_expectations](tables/schema_expectations.md)
 - [screen_layouts](tables/screen_layouts.md)
 - [sdip_ai_analysis](tables/sdip_ai_analysis.md)
@@ -766,6 +782,12 @@ _Key relationships between tables:_
 
 **assumption_sets**:
 - `parent_version_id` → `assumption_sets.id`
+
+**audit_finding_sd_links**:
+- `mapping_id` → `audit_finding_sd_mapping.id`
+
+**audit_triangulation_log**:
+- `audit_id` → `runtime_audits.id`
 
 **blueprint_board_submissions**:
 - `blueprint_id` → `opportunity_blueprints.id`
@@ -1041,6 +1063,9 @@ _Key relationships between tables:_
 **retrospective_action_items**:
 - `retrospective_id` → `retrospectives.id`
 
+**retrospective_contributions**:
+- `retro_id` → `retrospectives.id`
+
 **retrospective_insights**:
 - `retrospective_id` → `retrospectives.id`
 
@@ -1051,6 +1076,7 @@ _Key relationships between tables:_
 - `template_id` → `retrospective_templates.id`
 
 **retrospectives**:
+- `audit_id` → `runtime_audits.id`
 - `sd_id` → `strategic_directives_v2.id`
 
 **risk_assessments**:
