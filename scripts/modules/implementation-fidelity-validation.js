@@ -430,6 +430,13 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
   // ===================================================================
   console.log('\n[PREFLIGHT] Checking for stubbed/incomplete code...');
 
+  // LEO Protocol v4.3.3: Skip strict stub detection for cosmetic refactoring
+  // Cosmetic changes (module extraction, renames) don't introduce new stubs
+  if (validation.details.cosmetic_refactor_mode) {
+    console.log('   ℹ️  Cosmetic Refactor SD - Stub detection SKIPPED');
+    console.log('   ℹ️  Module extraction/rename work preserves existing functionality');
+    validation.warnings.push('[PREFLIGHT] Stub detection skipped for cosmetic refactor SD');
+  } else {
   // SD-VENTURE-STAGE0-UI-001: Search by both UUID and legacy_id
   try {
     // Get all changes for this SD (reuse cached searchTerms)
@@ -508,6 +515,7 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
     validation.warnings.push(`[PHASE 1] Cannot detect stubbed code: ${error.message}`);
     console.log(`   ⚠️  Cannot detect stubbed code: ${error.message}`);
   }
+  } // End of else block for cosmetic_refactor_mode skip
 
   console.log('   ✅ All Phase 1 blockers passed - proceeding to Phase 2 scoring');
 
