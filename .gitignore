@@ -29,6 +29,9 @@ test-results/
 coverage/
 supabase/.temp/
 
+# Generated LEO Protocol reports (can be regenerated with leo:summary)
+docs/summaries/compliance/
+
 # Process ID files
 .pids/
 

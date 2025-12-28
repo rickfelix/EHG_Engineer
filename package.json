@@ -65,6 +65,7 @@
     "leo:refresh": "node scripts/leo-refresh.js",
     "leo:refresh:check": "node scripts/leo-refresh.js --check-only",
     "leo:refresh:force": "node scripts/leo-refresh.js --force",
+    "leo:summary": "node scripts/leo-summary.mjs",
     "leo:version": "node scripts/check-leo-version.js",
     "leo:version:fix": "node scripts/check-leo-version.js --fix",
     "leo:discover": "node scripts/discover-schema-constraints.js",

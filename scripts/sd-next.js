@@ -22,6 +22,7 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import { warnIfTempFilesExceedThreshold } from '../lib/root-temp-checker.mjs';
+import { getEstimatedDuration, formatEstimateShort } from './lib/duration-estimator.js';
 
 // Load environment from EHG_Engineer regardless of cwd
 const envPath = '/mnt/c/_EHG/EHG_Engineer/.env';
@@ -453,7 +454,24 @@ class SDNextSelector {
     if (workingOn) {
       console.log(`${colors.bgYellow}${colors.bold} CONTINUE ${colors.reset} ${workingOn.legacy_id}`);
       console.log(`  ${workingOn.title}`);
-      console.log(`  ${colors.dim}Progress: ${workingOn.progress_percentage || 0}% | Marked as "Working On"${colors.reset}\n`);
+      console.log(`  ${colors.dim}Progress: ${workingOn.progress_percentage || 0}% | Marked as "Working On"${colors.reset}`);
+
+      // Add duration estimate for working on SD
+      try {
+        const { data: sdFull } = await supabase
+          .from('strategic_directives_v2')
+          .select('id, sd_type, category, priority')
+          .eq('legacy_id', workingOn.legacy_id)
+          .single();
+        if (sdFull) {
+          const estimate = await getEstimatedDuration(supabase, sdFull);
+          console.log(`  ${colors.dim}Est: ${formatEstimateShort(estimate)}${colors.reset}\n`);
+        } else {
+          console.log();
+        }
+      } catch {
+        console.log();
+      }
     }
 
     // Find ready SDs from baseline
@@ -477,7 +495,24 @@ class SDNextSelector {
       const top = readySDs[0];
       console.log(`${colors.bgGreen}${colors.bold} START ${colors.reset} ${top.legacy_id}`);
       console.log(`  ${top.title}`);
-      console.log(`  ${colors.dim}Track: ${top.track || 'N/A'} | Rank: ${top.sequence_rank} | All dependencies satisfied${colors.reset}\n`);
+      console.log(`  ${colors.dim}Track: ${top.track || 'N/A'} | Rank: ${top.sequence_rank} | All dependencies satisfied${colors.reset}`);
+
+      // Add duration estimate
+      try {
+        const { data: sdFull } = await supabase
+          .from('strategic_directives_v2')
+          .select('id, sd_type, category, priority')
+          .eq('legacy_id', top.legacy_id)
+          .single();
+        if (sdFull) {
+          const estimate = await getEstimatedDuration(supabase, sdFull);
+          console.log(`  ${colors.dim}Est: ${formatEstimateShort(estimate)}${colors.reset}\n`);
+        } else {
+          console.log();
+        }
+      } catch {
+        console.log();
+      }
     }
 
     // Show parallel opportunities
