@@ -210,11 +210,27 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
   // Bugfix SDs validate via git commit evidence instead of TESTING sub-agent results
   // LEO Protocol v4.3.3: Cosmetic refactoring also skips TESTING - low risk, unit tests sufficient
   try {
-    const { data: sd, error: sdError } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, title, sd_type, scope, category, intensity_level')
-      .eq('id', sd_id)
-      .single();
+    // Support both UUID and legacy_id/sd_key lookups
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sd_id);
+    let sd, sdError;
+
+    if (isUUID) {
+      const result = await supabase
+        .from('strategic_directives_v2')
+        .select('id, title, sd_type, scope, category, intensity_level')
+        .eq('id', sd_id)
+        .single();
+      sd = result.data;
+      sdError = result.error;
+    } else {
+      const result = await supabase
+        .from('strategic_directives_v2')
+        .select('id, title, sd_type, scope, category, intensity_level')
+        .or(`legacy_id.eq.${sd_id},sd_key.eq.${sd_id}`)
+        .single();
+      sd = result.data;
+      sdError = result.error;
+    }
 
     if (sdError) {
       console.log(`   ⚠️  SD query error: ${sdError.message}`);
