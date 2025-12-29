@@ -404,7 +404,6 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     console.log('-'.repeat(50));
 
     // Transition SD to completed status
-    // Note: completed_at column doesn't exist in schema, using updated_at instead
     const { error: sdError } = await this.supabase
       .from('strategic_directives_v2')
       .update({
@@ -413,6 +412,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         progress_percentage: 100,
         is_working_on: false,  // Release the SD from "working on" tracking
         active_session_id: null,  // Clear session claim
+        completion_date: new Date().toISOString(),  // Record completion timestamp for duration tracking
         updated_at: new Date().toISOString()
       })
       .eq('id', sd.id);
@@ -519,7 +519,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
             }
           } else {
             // Cannot auto-complete - log details for manual review
-            console.log(`   ⚠️  Cannot auto-complete parent - manual intervention required`);
+            console.log('   ⚠️  Cannot auto-complete parent - manual intervention required');
             const failedChecks = report.results.filter(r => !r.passed);
             failedChecks.forEach(check => {
               console.log(`      ❌ ${check.check}: ${check.message}`);
@@ -529,7 +529,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         } catch (guardianError) {
           // Guardian not available - fall back to legacy behavior with better error handling
           console.log(`   ⚠️  Guardian unavailable: ${guardianError.message}`);
-          console.log(`   📝 Attempting legacy completion (may fail if artifacts missing)...`);
+          console.log('   📝 Attempting legacy completion (may fail if artifacts missing)...');
 
           const { error } = await this.supabase
             .from('strategic_directives_v2')

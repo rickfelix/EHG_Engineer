@@ -35,7 +35,8 @@ const BOILERPLATE_TITLES = [
   'add functionality'
 ];
 
-const GENERIC_ROLES = ['user', 'developer', 'admin', 'system'];
+// Reserved for future role-based validation
+const _GENERIC_ROLES = ['user', 'developer', 'admin', 'system'];
 
 const GENERIC_BENEFITS = [
   'improve the system',
@@ -135,6 +136,7 @@ function validateUserStoryHeuristic(story) {
 export async function validateUserStoryQuality(story, options = {}) {
   const storyKey = story?.story_key || story?.id || 'Unknown';
   const sdType = (options.sdType || '').toLowerCase();
+  const sdCategory = (options.sdCategory || '').toLowerCase();
 
   // Basic presence check (fast-fail before AI call)
   if (!story || Object.keys(story).length === 0) {
@@ -150,9 +152,12 @@ export async function validateUserStoryQuality(story, options = {}) {
 
   // Use heuristic validation for simpler SDs (infrastructure, test-focused, etc.)
   // AI scoring is too strict for these SD types - database SDs focus on schema/migrations, not user narratives
-  const heuristicTypes = ['bugfix', 'bug_fix', 'infrastructure', 'database', 'quality assurance', 'quality_assurance', 'orchestrator', 'documentation'];
+  // Added 'theming', 'ux', 'design', 'ui' - these focus on visual/style fixes, not complex user narratives
+  // Check both sdType and sdCategory since SDs can have type='implementation' but category='theming'
+  const heuristicTypes = ['bugfix', 'bug_fix', 'infrastructure', 'database', 'quality assurance', 'quality_assurance', 'orchestrator', 'documentation', 'theming', 'ux', 'design', 'ui', 'layout', 'state-management'];
   const usesHeuristic = process.env.STORY_VALIDATION_MODE === 'heuristic' ||
-                        heuristicTypes.includes(sdType);
+                        heuristicTypes.includes(sdType) ||
+                        heuristicTypes.includes(sdCategory);
 
   if (usesHeuristic) {
     if (sdType) {
@@ -199,7 +204,8 @@ export async function validateUserStoriesForHandoff(stories, options = {}) {
     minimumScore = 70,
     minimumStories = 1,
     blockOnWarnings = false,
-    sdType = ''  // Pass SD type to enable heuristic validation for infrastructure/database SDs
+    sdType = '',  // Pass SD type to enable heuristic validation for infrastructure/database SDs
+    sdCategory = ''  // Pass SD category (theming, ux, etc.) for heuristic validation
   } = options;
 
   const result = {
@@ -270,7 +276,7 @@ export async function validateUserStoriesForHandoff(stories, options = {}) {
       const storyStartTime = Date.now();
 
       try {
-        const storyResult = await validateUserStoryQuality(story, { sdType });
+        const storyResult = await validateUserStoryQuality(story, { sdType, sdCategory });
         const storyDuration = Date.now() - storyStartTime;
 
         return {

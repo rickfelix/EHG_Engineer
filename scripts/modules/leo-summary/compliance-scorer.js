@@ -37,15 +37,27 @@ const HANDOFF_SEQUENCE = [
   'PLAN-TO-LEAD'
 ];
 
-// Default expected durations by SD type (hours)
+// Expected durations by SD type (hours)
+// Calibrated from actual LEO Protocol execution data
+// Based on: 5 infrastructure SDs completed in 4.6 hours (~55 min each)
 const EXPECTED_DURATIONS = {
-  feature: 8,
-  bugfix: 4,
-  infrastructure: 12,
-  docs: 2,
-  refactor: 6,
-  orchestrator: 24,
-  default: 8
+  // Core SD types
+  feature: 1.5,         // Feature implementation
+  bugfix: 0.5,          // Bug investigation and fix
+  infrastructure: 1,    // Infrastructure/tooling work
+  refactor: 1,          // Code refactoring
+  implementation: 1.5,  // General implementation work
+
+  // Documentation and research
+  docs: 0.5,            // Simple documentation
+  documentation: 1,     // Complex documentation work
+  spike: 1,             // Research/discovery spike
+
+  // Complex work (calculated from children when applicable)
+  orchestrator: 4,      // Fallback if no children to sum
+
+  // Fallback
+  default: 1
 };
 
 /**
@@ -310,19 +322,54 @@ function checkSequence(handoffs) {
  * @returns {Object} Score and details
  */
 function calcDurationEfficiency(data) {
-  const { sd, timeline } = data;
+  const { sd, timeline: _timeline } = data;
 
   // Calculate actual duration
-  const startDate = sd.created_at ? new Date(sd.created_at) : null;
-  const endDate = sd.completion_date ? new Date(sd.completion_date) : null;
+  // Normalize timestamps to handle timezone inconsistencies
+  // created_at often lacks timezone suffix (parsed as local time)
+  // completion_date may have timezone suffix (parsed as UTC)
+  // Both are stored as UTC in the database, so treat them consistently
+  let startDate = null;
+  let endDate = null;
+
+  if (sd.created_at) {
+    const createdStr = sd.created_at.includes('+') || sd.created_at.endsWith('Z')
+      ? sd.created_at
+      : sd.created_at + 'Z';
+    startDate = new Date(createdStr);
+  }
+
+  if (sd.completion_date) {
+    const completedStr = sd.completion_date.includes('+') || sd.completion_date.endsWith('Z')
+      ? sd.completion_date
+      : sd.completion_date + 'Z';
+    endDate = new Date(completedStr);
+  }
 
   if (!startDate || !endDate) {
     return { score: 100, details: { note: 'No timing data available' } };
   }
 
   const actualHours = (endDate - startDate) / (1000 * 60 * 60);
-  const sdType = sd.sd_type || 'default';
-  const expectedHours = EXPECTED_DURATIONS[sdType] || EXPECTED_DURATIONS.default;
+
+  // Determine expected duration
+  // For orchestrators: sum of children's expected durations
+  // For regular SDs: use type-based expectations
+  const { isOrchestrator, children } = data;
+  let expectedHours;
+  let effectiveType;
+
+  if (isOrchestrator && children && children.length > 0) {
+    // Sum expected durations of all children
+    expectedHours = children.reduce((sum, child) => {
+      const childType = child.sd?.sd_type || 'default';
+      return sum + (EXPECTED_DURATIONS[childType] || EXPECTED_DURATIONS.default);
+    }, 0);
+    effectiveType = `orchestrator (${children.length} children)`;
+  } else {
+    effectiveType = sd.sd_type || 'default';
+    expectedHours = EXPECTED_DURATIONS[effectiveType] || EXPECTED_DURATIONS.default;
+  }
 
   // Score based on how close actual is to expected
   // Perfect: actual <= expected (100%)
@@ -340,7 +387,7 @@ function calcDurationEfficiency(data) {
     details: {
       actualHours: Math.round(actualHours * 10) / 10,
       expectedHours,
-      sdType,
+      sdType: effectiveType,
       ratio: Math.round((actualHours / expectedHours) * 100) / 100
     }
   };
