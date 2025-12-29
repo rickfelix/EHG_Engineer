@@ -117,12 +117,106 @@ async function getChildCount(supabase, sdId) {
 }
 
 /**
+ * Get elapsed time for an SD (from first handoff or created_at)
+ * @param {SupabaseClient} supabase
+ * @param {Object} sd - Strategic Directive
+ * @returns {Promise<Object>} { elapsedMinutes, startedAt, source }
+ */
+async function getElapsedTime(supabase, sd) {
+  // Try to get first handoff
+  const { data: handoffs } = await supabase
+    .from('sd_phase_handoffs')
+    .select('created_at')
+    .eq('sd_id', sd.id)
+    .order('created_at', { ascending: true })
+    .limit(1);
+
+  let startedAt = null;
+  let source = 'created_at';
+
+  if (handoffs && handoffs.length > 0) {
+    // Ensure UTC parsing by appending Z if not present
+    const timestamp = handoffs[0].created_at.endsWith('Z')
+      ? handoffs[0].created_at
+      : handoffs[0].created_at + 'Z';
+    startedAt = new Date(timestamp);
+    source = 'first_handoff';
+  } else if (sd.created_at) {
+    const timestamp = sd.created_at.endsWith('Z')
+      ? sd.created_at
+      : sd.created_at + 'Z';
+    startedAt = new Date(timestamp);
+    source = 'created_at';
+  }
+
+  if (!startedAt) {
+    return { elapsedMinutes: 0, startedAt: null, source: 'unknown' };
+  }
+
+  const now = new Date();
+  // Ensure elapsed is non-negative (in case of clock skew)
+  const elapsedMinutes = Math.max(0, Math.round((now - startedAt) / (1000 * 60)));
+
+  return { elapsedMinutes, startedAt, source };
+}
+
+/**
+ * Get parent SD estimate if this is a child SD
+ * @param {SupabaseClient} supabase
+ * @param {Object} sd - Strategic Directive
+ * @returns {Promise<Object|null>} Parent estimate info or null
+ */
+async function getParentEstimate(supabase, sd) {
+  if (!sd.parent_sd_id) {
+    return null;
+  }
+
+  const { data: parent } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, title, sd_type, priority, category, created_at, parent_sd_id')
+    .eq('id', sd.parent_sd_id)
+    .single();
+
+  if (!parent) {
+    return null;
+  }
+
+  // Get parent's estimate (recursive call, but without parent info to avoid infinite loop)
+  const parentEstimate = await getEstimatedDuration(supabase, parent, { includeParent: false });
+  const parentElapsed = await getElapsedTime(supabase, parent);
+
+  // Get sibling count and completed count
+  const { data: siblings } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, status')
+    .eq('parent_sd_id', parent.id);
+
+  const siblingCount = siblings?.length || 0;
+  const completedCount = siblings?.filter(s => s.status === 'completed').length || 0;
+
+  return {
+    parentId: parent.id,
+    parentTitle: parent.title,
+    parentEstimateMinutes: parentEstimate.estimateMinutes,
+    parentEstimateFormatted: parentEstimate.estimateFormatted,
+    parentElapsedMinutes: parentElapsed.elapsedMinutes,
+    parentElapsedFormatted: formatMinutes(parentElapsed.elapsedMinutes),
+    parentRemainingMinutes: Math.max(0, parentEstimate.estimateMinutes - parentElapsed.elapsedMinutes),
+    parentRemainingFormatted: formatMinutes(Math.max(0, parentEstimate.estimateMinutes - parentElapsed.elapsedMinutes)),
+    siblingCount,
+    completedCount,
+    progressPercent: siblingCount > 0 ? Math.round((completedCount / siblingCount) * 100) : 0
+  };
+}
+
+/**
  * Get intelligent duration estimate for an SD
  * @param {SupabaseClient} supabase
  * @param {Object} sd - Strategic Directive { id, sd_type, category, priority }
+ * @param {Object} options - { includeParent: true } to include parent estimate
  * @returns {Promise<Object>} Estimate with confidence and factors
  */
-export async function getEstimatedDuration(supabase, sd) {
+export async function getEstimatedDuration(supabase, sd, options = { includeParent: true }) {
   const sdType = sd.sd_type || 'default';
   const priority = sd.priority || 'medium';
   const category = sd.category;
@@ -194,16 +288,34 @@ export async function getEstimatedDuration(supabase, sd) {
     .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))
     .slice(0, 3);
 
+  // Get elapsed and remaining time
+  const elapsed = await getElapsedTime(supabase, sd);
+  const elapsedMinutes = elapsed.elapsedMinutes;
+  const remainingMinutes = Math.max(0, estimate - elapsedMinutes);
+
+  // Get parent estimate if applicable
+  let parentInfo = null;
+  if (options.includeParent && sd.parent_sd_id) {
+    parentInfo = await getParentEstimate(supabase, sd);
+  }
+
   return {
     estimateMinutes: estimate,
     estimateFormatted: formatMinutes(estimate),
+    elapsedMinutes,
+    elapsedFormatted: formatMinutes(elapsedMinutes),
+    remainingMinutes,
+    remainingFormatted: formatMinutes(remainingMinutes),
+    elapsedSource: elapsed.source,
+    startedAt: elapsed.startedAt,
     confidence,
     sampleSize,
     factors,
     recentSimilar: recentSimilar.map(s => ({
       id: s.sdId,
       duration: formatMinutes(s.durationMinutes)
-    }))
+    })),
+    parent: parentInfo
   };
 }
 
@@ -259,8 +371,27 @@ export function formatEstimateShort(estimate) {
  */
 export function formatEstimateDetailed(estimate) {
   const lines = [];
-  lines.push(`Estimate:   ~${estimate.estimateFormatted}`);
+
+  // Time breakdown: Total / Elapsed / Remaining
+  lines.push(`Total:     ~${estimate.estimateFormatted}`);
+  if (estimate.elapsedMinutes > 0) {
+    lines.push(`Elapsed:    ${estimate.elapsedFormatted} (since ${estimate.elapsedSource === 'first_handoff' ? 'first handoff' : 'creation'})`);
+    lines.push(`Remaining: ~${estimate.remainingFormatted}`);
+  }
   lines.push(`Confidence: ${estimate.confidence.charAt(0).toUpperCase() + estimate.confidence.slice(1)} (${estimate.sampleSize} ${estimate.sampleSize === 1 ? 'SD' : 'SDs'})`);
+
+  // Parent SD info (if child)
+  if (estimate.parent) {
+    const p = estimate.parent;
+    lines.push('');
+    lines.push(`Parent SD: ${p.parentTitle}`);
+    lines.push(`  Total:     ~${p.parentEstimateFormatted}`);
+    if (p.parentElapsedMinutes > 0) {
+      lines.push(`  Elapsed:    ${p.parentElapsedFormatted}`);
+      lines.push(`  Remaining: ~${p.parentRemainingFormatted}`);
+    }
+    lines.push(`  Progress:   ${p.completedCount}/${p.siblingCount} children (${p.progressPercent}%)`);
+  }
 
   if (estimate.factors.length > 0) {
     lines.push('');

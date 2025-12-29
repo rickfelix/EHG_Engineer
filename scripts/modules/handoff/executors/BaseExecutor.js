@@ -165,44 +165,73 @@ export class BaseExecutor {
 
       if (!session) {
         console.log('   [Claim] No session available - skipping auto-claim');
-        return;
-      }
-
-      // Determine which ID to use for claiming (legacy_id or id)
-      const claimId = sd.legacy_id || sdId;
-
-      // Check if already claimed by this session
-      const claimStatus = await conflictChecker.isSDClaimed(claimId, session.session_id);
-
-      if (claimStatus.claimed && claimStatus.claimedBy === session.session_id) {
-        // Already claimed by us - just update heartbeat
-        await sessionManager.updateHeartbeat(session.session_id);
-        console.log('   [Claim] SD already claimed by this session');
-        return;
-      }
-
-      if (claimStatus.claimed) {
-        // Claimed by another session - warn but don't block
-        console.log(`   [Claim] ⚠️ SD claimed by another session (${claimStatus.claimedBy})`);
-        console.log('   [Claim] Proceeding with handoff - claim conflict will not block');
-        return;
-      }
-
-      // Attempt to claim the SD
-      const result = await conflictChecker.claimSD(claimId, session.session_id);
-
-      if (result.success) {
-        console.log(`   [Claim] ✅ SD ${claimId} claimed for session - is_working_on=true`);
-        if (result.warnings?.length > 0) {
-          result.warnings.forEach(w => console.log(`   [Claim] ⚠️ ${w.message}`));
-        }
       } else {
-        console.log(`   [Claim] ⚠️ Could not claim SD: ${result.error || 'Unknown error'}`);
-        console.log('   [Claim] Proceeding with handoff - claim failure will not block');
+        // Determine which ID to use for claiming (legacy_id or id)
+        const claimId = sd.legacy_id || sdId;
+
+        // Check if already claimed by this session
+        const claimStatus = await conflictChecker.isSDClaimed(claimId, session.session_id);
+
+        if (claimStatus.claimed && claimStatus.claimedBy === session.session_id) {
+          // Already claimed by us - just update heartbeat
+          await sessionManager.updateHeartbeat(session.session_id);
+          console.log('   [Claim] SD already claimed by this session');
+        } else if (claimStatus.claimed) {
+          // Claimed by another session - warn but don't block
+          console.log(`   [Claim] ⚠️ SD claimed by another session (${claimStatus.claimedBy})`);
+          console.log('   [Claim] Proceeding with handoff - claim conflict will not block');
+        } else {
+          // Attempt to claim the SD
+          const result = await conflictChecker.claimSD(claimId, session.session_id);
+
+          if (result.success) {
+            console.log(`   [Claim] ✅ SD ${claimId} claimed for session - is_working_on=true`);
+            if (result.warnings?.length > 0) {
+              result.warnings.forEach(w => console.log(`   [Claim] ⚠️ ${w.message}`));
+            }
+          } else {
+            console.log(`   [Claim] ⚠️ Could not claim SD: ${result.error || 'Unknown error'}`);
+            console.log('   [Claim] Proceeding with handoff - claim failure will not block');
+          }
+        }
       }
+
+      // Show duration estimate (non-blocking) - ALWAYS runs regardless of claim status
+      await this._showDurationEstimate(sd);
     } catch (error) {
       // Non-fatal - allow handoff to proceed
       console.log(`   [Claim] ⚠️ Auto-claim error (non-blocking): ${error.message}`);
+    }
+  }
+
+  /**
+   * Show duration estimate for the SD
+   * Non-blocking: Errors are logged but handoff continues
+   * @param {object} sd - SD record
+   */
+  async _showDurationEstimate(sd) {
+    try {
+      const { getEstimatedDuration, formatEstimateDetailed } =
+        await import('../../../lib/duration-estimator.js');
+
+      const estimate = await getEstimatedDuration(this.supabase, sd);
+
+      if (estimate) {
+        console.log('\n   📊 Duration Estimate:');
+        const lines = formatEstimateDetailed(estimate);
+        lines.forEach(line => {
+          if (line.startsWith('  •')) {
+            console.log(`      ${line}`);
+          } else if (line === '') {
+            // Skip empty lines
+          } else {
+            console.log(`      ${line}`);
+          }
+        });
+      }
+    } catch (error) {
+      // Non-fatal - estimate is optional
+      console.log(`   [Estimate] ⚠️ Could not calculate duration estimate: ${error.message}`);
     }
   }
 
