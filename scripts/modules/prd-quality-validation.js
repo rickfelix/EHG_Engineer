@@ -13,7 +13,6 @@
  */
 
 import { PRDQualityRubric } from './rubrics/prd-quality-rubric.js';
-import { getPRDQualityThresholdSync, THRESHOLD_PROFILES } from './sd-type-checker.js';
 
 // ============================================
 // BOILERPLATE PATTERNS TO DETECT
@@ -59,15 +58,15 @@ const BOILERPLATE_REQUIREMENTS = [
   'add capability'
 ];
 
-// Generic executive summary patterns (warning) - reserved for future validation
-const _GENERIC_SUMMARY_PATTERNS = [
+// Generic executive summary patterns (warning)
+const GENERIC_SUMMARY_PATTERNS = [
   'this prd defines the technical requirements',
   'product requirements document for',
   'requirements for strategic directive'
 ];
 
-// Generic test scenarios (blocking) - reserved for future validation
-const _BOILERPLATE_TEST_SCENARIOS = [
+// Generic test scenarios (blocking)
+const BOILERPLATE_TEST_SCENARIOS = [
   'to be defined during planning',
   'verify it works',
   'test the feature',
@@ -235,10 +234,7 @@ export async function validatePRDQuality(prd, options = {}) {
   // similar to infrastructure - they don't need the full AI semantic analysis
   // Added 'theming', 'ux', 'design', 'ui' (2025-12-28): UI/UX SDs focus on visual/style changes
   // Check both sdType and sdCategory since SDs can have type='implementation' but category='theming'
-  // ROOT CAUSE FIX (2026-01-01): Added 'database', 'database_schema' - same rationale as
-  // user-story-quality-validation.js line 157: database SDs focus on schema/migrations,
-  // not user narratives. This was an incomplete refactoring that caused false PRD failures.
-  const heuristicTypes = ['bugfix', 'bug_fix', 'infrastructure', 'implementation', 'database', 'database_schema', 'quality assurance', 'quality_assurance', 'orchestrator', 'documentation', 'refactor', 'theming', 'ux', 'design', 'ui', 'layout', 'state-management'];
+  const heuristicTypes = ['bugfix', 'bug_fix', 'infrastructure', 'quality assurance', 'quality_assurance', 'orchestrator', 'documentation', 'refactor', 'theming', 'ux', 'design', 'ui'];
   const usesHeuristic = process.env.PRD_VALIDATION_MODE === 'heuristic' ||
                         heuristicTypes.includes(sdType) ||
                         heuristicTypes.includes(sdCategory);
@@ -302,36 +298,20 @@ export async function validatePRDQuality(prd, options = {}) {
 
 /**
  * Validate PRD for handoff readiness
- * SD-LEO-PROTOCOL-V435-001 US-002: Uses type-specific PRD quality thresholds
- *
  * @param {Object} prd - PRD object from database
  * @param {Object} options - Validation options
- * @param {number} options.minimumScore - Minimum score required (default: type-specific threshold from THRESHOLD_PROFILES)
+ * @param {number} options.minimumScore - Minimum score required (default: 70)
  * @param {boolean} options.blockOnWarnings - Whether to block on warnings (default: false)
  * @param {string} options.sdType - SD type for type-aware validation (bugfix uses heuristic)
- * @param {Object} options.sd - SD object for type-specific threshold lookup
  * @returns {Promise<Object>} Validation result for handoff (async now - calls AI)
  */
 export async function validatePRDForHandoff(prd, options = {}) {
   const {
+    minimumScore = 70,
     blockOnWarnings = false,
     sdType = '',
-    sdCategory = '',  // Pass SD category (theming, ux, etc.) for heuristic validation
-    sd = null  // SD object for type-specific threshold
+    sdCategory = ''  // Pass SD category (theming, ux, etc.) for heuristic validation
   } = options;
-
-  // SD-LEO-PROTOCOL-V435-001 US-002: Get type-specific threshold
-  // Priority: explicit minimumScore > SD-based threshold > sdType-based threshold > default
-  let minimumScore = options.minimumScore;
-  if (minimumScore === undefined) {
-    if (sd) {
-      minimumScore = getPRDQualityThresholdSync(sd);
-    } else if (sdType) {
-      minimumScore = THRESHOLD_PROFILES[sdType.toLowerCase()]?.prdQuality || THRESHOLD_PROFILES.default.prdQuality;
-    } else {
-      minimumScore = THRESHOLD_PROFILES.default.prdQuality;
-    }
-  }
 
   const result = {
     valid: true,
