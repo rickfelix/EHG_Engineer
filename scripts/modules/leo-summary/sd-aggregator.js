@@ -212,8 +212,29 @@ function getDefaultValidationProfile(sdType) {
  * @returns {Object} Timing metrics
  */
 export function calculateTiming(sd, timeline) {
-  const startDate = sd.created_at ? new Date(sd.created_at) : null;
-  const endDate = sd.completion_date ? new Date(sd.completion_date) : null;
+  // Normalize timestamps to handle timezone inconsistencies
+  // created_at often lacks timezone suffix (parsed as local time)
+  // completion_date may have timezone suffix (parsed as UTC)
+  // Both are stored as UTC in the database, so treat them consistently
+
+  let startDate = null;
+  let endDate = null;
+
+  if (sd.created_at) {
+    // If no timezone suffix, append 'Z' to parse as UTC
+    const createdStr = sd.created_at.includes('+') || sd.created_at.endsWith('Z')
+      ? sd.created_at
+      : sd.created_at + 'Z';
+    startDate = new Date(createdStr);
+  }
+
+  if (sd.completion_date) {
+    // If no timezone suffix, append 'Z' to parse as UTC
+    const completedStr = sd.completion_date.includes('+') || sd.completion_date.endsWith('Z')
+      ? sd.completion_date
+      : sd.completion_date + 'Z';
+    endDate = new Date(completedStr);
+  }
 
   let totalMinutes = 0;
   if (startDate && endDate) {
