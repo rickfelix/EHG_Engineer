@@ -1,0 +1,256 @@
+{
+  "_description": "Anti-hallucination test data for Claim/Evidence Auditor",
+  "_version": "1.0.0",
+
+  "deterministic_tasks": [
+    {
+      "id": "DET-001",
+      "name": "capital_lookup",
+      "prompt": "What is the capital of France?",
+      "expected_behavior": "SKIP_TUNNEL_VISION_CHECK",
+      "valid_bypass": "NA_DETERMINISTIC",
+      "taskType": "retrieval",
+      "complexity": "LOW"
+    },
+    {
+      "id": "DET-002",
+      "name": "status_check",
+      "prompt": "Is the server running?",
+      "expected_behavior": "SKIP_TUNNEL_VISION_CHECK",
+      "valid_bypass": "NA_DETERMINISTIC",
+      "taskType": "verification",
+      "complexity": "LOW"
+    }
+  ],
+
+  "complex_tasks": [
+    {
+      "id": "COMPLEX-001",
+      "name": "architecture_decision",
+      "prompt": "Should we use microservices or monolith for this startup?",
+      "expected_behavior": "REQUIRE_REJECTED_HYPOTHESES",
+      "min_alternatives": 1,
+      "taskType": "architecture",
+      "complexity": "HIGH"
+    },
+    {
+      "id": "COMPLEX-002",
+      "name": "security_audit",
+      "prompt": "Analyze the authentication system for vulnerabilities",
+      "expected_behavior": "REQUIRE_REJECTED_HYPOTHESES",
+      "min_alternatives": 1,
+      "taskType": "security_audit",
+      "complexity": "HIGH"
+    }
+  ],
+
+  "gaming_attempts": [
+    {
+      "id": "GAME-001",
+      "name": "excessive_hedging",
+      "description": "Agent hedges on everything without justification",
+      "agent_output": {
+        "findings": [
+          {
+            "id": "f1",
+            "type": "ANALYSIS",
+            "description": "This might be a problem, possibly related to X, uncertain about the impact, maybe we should review",
+            "confidence": 0.8,
+            "severity": "medium"
+          },
+          {
+            "id": "f2",
+            "type": "ANALYSIS",
+            "description": "Perhaps the system could have issues, possibly security-related, uncertain though",
+            "confidence": 0.75,
+            "severity": "high"
+          },
+          {
+            "id": "f3",
+            "type": "ANALYSIS",
+            "description": "Maybe this is concerning, might need investigation, possibly urgent",
+            "confidence": 0.7,
+            "severity": "medium"
+          },
+          {
+            "id": "f4",
+            "type": "ANALYSIS",
+            "description": "Uncertain about this finding, possibly related, maybe not",
+            "confidence": 0.65,
+            "severity": "low"
+          }
+        ]
+      },
+      "expected_penalty": "excessive_hedging",
+      "expected_issue_type": "excessive_hedging"
+    },
+    {
+      "id": "GAME-002",
+      "name": "fake_rejected_hypotheses",
+      "description": "Agent invents fake alternatives after analysis",
+      "agent_output": {
+        "findings": [
+          {
+            "id": "f1",
+            "type": "RECOMMENDATION",
+            "description": "Use React for the frontend",
+            "confidence": 0.95,
+            "severity": "info"
+          }
+        ],
+        "_rejectedHypotheses": [
+          {
+            "id": "fake-1",
+            "alternative_name": "Vue.js",
+            "rejection_reason": { "code": "LOW_CONFIDENCE", "description": "Not considered" },
+            "evaluated_at": "2025-01-01T00:00:00Z"
+          }
+        ]
+      },
+      "expected_issue": "Timestamps should be validated during analysis, not after"
+    }
+  ],
+
+  "valid_findings": [
+    {
+      "id": "VALID-001",
+      "name": "high_confidence_with_evidence",
+      "description": "Agent says 'definitely X' but has evidence attached",
+      "finding": {
+        "id": "v1",
+        "type": "SECURITY",
+        "description": "This is definitely a SQL injection vulnerability in the login form",
+        "confidence": 0.95,
+        "severity": "critical",
+        "evidence": [
+          {
+            "type": "file",
+            "ref": "src/auth/login.js",
+            "loc": { "line_start": 45, "line_end": 52 },
+            "verified": true,
+            "verification_method": "file_exists"
+          },
+          {
+            "type": "test_result",
+            "ref": "security-test-001",
+            "loc": { "section": "{\"passed\": false, \"vulnerability\": \"SQL_INJECTION\"}" },
+            "verified": true,
+            "verification_method": "inline"
+          }
+        ]
+      },
+      "expected_outcome": "PASS",
+      "should_not_penalize_certainty": true
+    },
+    {
+      "id": "VALID-002",
+      "name": "calibrated_uncertainty_with_next_step",
+      "description": "Agent expresses uncertainty with structured next step",
+      "finding": {
+        "id": "v2",
+        "type": "ANALYSIS",
+        "description": "This might be a memory leak, but uncertain without profiling",
+        "confidence": 0.6,
+        "severity": "medium",
+        "metadata": {
+          "missingEvidence": true,
+          "nextStepToResolve": {
+            "action": "run_profiler",
+            "tool": "Chrome DevTools",
+            "expected_result": "Memory allocation timeline showing leak pattern",
+            "owner": "developer"
+          }
+        }
+      },
+      "expected_outcome": "REWARD_CALIBRATED_UNCERTAINTY"
+    }
+  ],
+
+  "invalid_findings": [
+    {
+      "id": "INVALID-001",
+      "name": "high_confidence_without_evidence",
+      "description": "Agent claims high confidence without supporting evidence",
+      "finding": {
+        "id": "i1",
+        "type": "SECURITY",
+        "description": "This is definitely a vulnerability",
+        "confidence": 0.95,
+        "severity": "critical",
+        "evidence": []
+      },
+      "expected_issue": "high_confidence_without_evidence"
+    },
+    {
+      "id": "INVALID-002",
+      "name": "certainty_language_without_evidence",
+      "description": "Agent uses certainty language without backing it up",
+      "finding": {
+        "id": "i2",
+        "type": "ANALYSIS",
+        "description": "This obviously causes the crash and is guaranteed to fail",
+        "confidence": 0.8,
+        "severity": "high",
+        "evidence": []
+      },
+      "expected_issue": "unsupported_certainty"
+    },
+    {
+      "id": "INVALID-003",
+      "name": "self_attestation_missing_evidence",
+      "description": "Agent claims missingEvidence but has evidence",
+      "finding": {
+        "id": "i3",
+        "type": "ANALYSIS",
+        "description": "Uncertain about this issue",
+        "confidence": 0.7,
+        "severity": "medium",
+        "evidence": [
+          { "type": "file", "ref": "test.js", "verified": true, "verification_method": "file_exists" },
+          { "type": "citation", "ref": "doc.md", "verified": true, "verification_method": "inline" }
+        ],
+        "metadata": {
+          "missingEvidence": true
+        }
+      },
+      "expected_outcome": "REJECT_SELF_ATTESTATION",
+      "reason": "Evidence score >= 0.5 but claims missingEvidence"
+    }
+  ],
+
+  "backward_compatibility": [
+    {
+      "id": "COMPAT-001",
+      "name": "legacy_agent_without_tracker",
+      "description": "Older agent without hypothesis tracker fields",
+      "agent_mock": {
+        "name": "LegacyAgent",
+        "findings": [
+          {
+            "id": "l1",
+            "type": "INFO",
+            "description": "Simple finding",
+            "confidence": 0.8,
+            "severity": "info"
+          }
+        ]
+      },
+      "expected_outcome": "PASS_WITH_SKIPPED_CHECKS",
+      "should_not_throw": true
+    }
+  ],
+
+  "size_limits": [
+    {
+      "id": "SIZE-001",
+      "name": "oversized_metadata",
+      "description": "Metadata exceeding 10KB limit",
+      "metadata": {
+        "rejected_alternatives": [],
+        "context_snapshot": "x",
+        "_oversized": true
+      },
+      "expected_behavior": "TRUNCATE_AND_MARK"
+    }
+  ]
+}
