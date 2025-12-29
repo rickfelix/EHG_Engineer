@@ -54,15 +54,27 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
   // Fetch SD data for both UUID resolution and category (for SD-type aware validation)
   const { data: sdData } = await supabase
     .from('strategic_directives_v2')
-    .select('id, category, metadata')
+    .select('id, category, metadata, target_application')
     .or(`legacy_id.eq.${sd_id},id.eq.${sd_id}`)
     .single();
 
+  // Determine git repository path based on target_application
+  // FIX: Use target application path instead of process.cwd() for git commands
+  let gitRepoPath = process.cwd(); // Default fallback
   if (sdData) {
     sdUuid = sdData.id;
     // Get category from direct field or metadata
     sdCategory = sdData.category?.toLowerCase() || sdData.metadata?.category?.toLowerCase() || null;
     console.log(`   SD Category: ${sdCategory || 'unknown'}`);
+
+    // Determine git repo path from target_application
+    const targetApp = sdData.target_application || sdData.metadata?.target_application;
+    if (targetApp === 'EHG') {
+      gitRepoPath = '/mnt/c/_EHG/EHG';
+    } else if (targetApp === 'EHG_Engineer') {
+      gitRepoPath = '/mnt/c/_EHG/EHG_Engineer';
+    }
+    console.log(`   Git Repo: ${gitRepoPath}`);
   }
 
   const validation = {
@@ -532,10 +544,11 @@ async function validateTraceabilityMapping(sd_id, sdUuid, designAnalysis, databa
   console.log('\n   [C1] PRD → Implementation Mapping...');
 
   // Check if git commits reference the SD
+  // FIX: Use gitRepoPath (from target_application) instead of process.cwd()
   try {
     const { stdout: gitLog } = await execAsync(
       `git log --all --grep="${sd_id}" --oneline`,
-      { cwd: process.cwd(), timeout: 10000 }
+      { cwd: gitRepoPath, timeout: 10000 }
     );
 
     const commitCount = gitLog.trim().split('\n').filter(Boolean).length;
@@ -549,9 +562,10 @@ async function validateTraceabilityMapping(sd_id, sdUuid, designAnalysis, databa
       validation.warnings.push('[C1] No commits found referencing SD ID');
       console.log('   ⚠️  No commits reference SD ID (3/7)');
     }
-  } catch {
+  } catch (err) {
     sectionScore += 3; // Partial credit on error
     console.log('   ⚠️  Cannot verify git commits (3/7)');
+    console.log(`   DEBUG: Git error: ${err.message} | cwd: ${gitRepoPath}`);
   }
 
   // C2: Design analysis → Code mapping (7 points)
