@@ -728,22 +728,22 @@ production contamination.`,
 
   description: `Build the repository and schema scaffolding systems with embedded Agentic Layer
 support. Create venture scaffold templates (Next.js SaaS starter, API service) that include a
-canonical .claude/ directory structure for agent memory-as-code. Implement automated repo creation
+canonical .claude/ directory structure matching EHG_Engineer patterns. Implement automated repo creation
 in ehg-simulations org, set up git init and initial commit automation, build schema template
 library with pre-validated patterns, and create migration generator that converts JSON schema
 definitions to SQL migrations. CRITICAL: Every generated repo must include the .claude/ directory
-containing memory/, rules/, and tools/ subdirectories - this is the "agent manual" that enables
-autonomous operation.`,
+containing agents/, commands/, context/, hooks/, and logs/ subdirectories - this is the "agent manual"
+that enables autonomous operation.`,
 
   scope: `Repo template system with .claude/ directory scaffold, gh repo create automation, git init
 automation, schema template library, JSON-to-SQL migration generator, agentic layer directory
-structure (.claude/memory/, .claude/rules/, .claude/tools/).`,
+structure (.claude/agents/, .claude/commands/, .claude/context/, .claude/hooks/, .claude/logs/).`,
 
   rationale: `With foundation in place, the scaffolder enables rapid generation of venture
 infrastructure. Templates ensure consistency while automation enables speed. The Agentic Layer
 (.claude/ directory) is the critical innovation - it ensures that future Builder Crews can "read
 the manual" directly from the repo, enabling true autonomous operation without relying solely
-on ephemeral database memory.`,
+on ephemeral database memory. Structure matches EHG_Engineer for consistency.`,
 
   category: "infrastructure",
   priority: "critical",
@@ -757,8 +757,8 @@ on ephemeral database memory.`,
     "Automate GitHub repo creation in simulation org",
     "Build schema template library with validated patterns",
     "Implement migration generator from JSON schema",
-    "Establish canonical Agentic Layer structure: .claude/memory/, .claude/rules/, .claude/tools/",
-    "Include placeholder files: .claude/memory/active_context.md, .claude/rules/tech_spec.md, .claude/rules/system_prompts.md"
+    "Establish canonical Agentic Layer structure matching EHG_Engineer: .claude/agents/, .claude/commands/, .claude/context/, .claude/hooks/, .claude/logs/",
+    "Include placeholder files: .claude/session-state.md, .claude/settings.json, .claude/context/VENTURE-SPEC.md"
   ],
 
   success_criteria: [
@@ -767,10 +767,11 @@ on ephemeral database memory.`,
     "Initial commit automation pushes template with venture config",
     "Schema templates cover common SaaS patterns (users, subscriptions, etc.)",
     "Migration generator produces valid SQL from JSON schema",
-    "Every generated repo includes .claude/ directory with memory/, rules/, tools/ subdirectories",
-    ".claude/memory/active_context.md exists with placeholder structure",
-    ".claude/rules/tech_spec.md exists with template for technical specifications",
-    ".claude/tools/ directory includes agent tool manifests (JSON schemas)"
+    "Every generated repo includes .claude/ directory with agents/, commands/, context/, hooks/, logs/ subdirectories",
+    ".claude/session-state.md exists with venture state placeholder",
+    ".claude/context/VENTURE-SPEC.md exists with template for technical specifications",
+    ".claude/agents/ directory includes venture-agents.md for Builder/Reviewer/QA prompts",
+    ".claude/settings.json exists with venture configuration"
   ],
 
   metadata: {
@@ -785,15 +786,17 @@ on ephemeral database memory.`,
       creation_mode: "CREATE_FROM_NEW",
       agentic_layer: {
         directory: ".claude/",
-        subdirectories: ["memory/", "rules/", "tools/"],
+        subdirectories: ["agents/", "commands/", "context/", "hooks/", "logs/"],
         required_files: [
-          ".claude/memory/active_context.md",
-          ".claude/memory/decision_log.md",
-          ".claude/rules/tech_spec.md",
-          ".claude/rules/system_prompts.md",
-          ".claude/rules/constraints.md",
-          ".claude/tools/manifest.json"
-        ]
+          ".claude/session-state.md",
+          ".claude/settings.json",
+          ".claude/context/VENTURE-SPEC.md",
+          ".claude/context/TECH-STACK.md",
+          ".claude/context/CONSTRAINTS.md",
+          ".claude/agents/venture-agents.md",
+          ".claude/logs/decisions.md"
+        ],
+        note: "Structure matches EHG_Engineer .claude/ directory for consistency"
       }
     },
     timeline: { start: "2026-01-06", end: "2026-01-12", duration_days: 7 },
@@ -805,7 +808,7 @@ on ephemeral database memory.`,
   risks: [
     {
       risk: "Agentic Layer structure may vary by venture type",
-      mitigation: "Define minimal canonical structure, allow venture-specific extensions"
+      mitigation: "Define minimal canonical structure matching EHG_Engineer, allow venture-specific extensions"
     }
   ]
 }
@@ -947,17 +950,17 @@ extraction that infers data model from requirements, implement schema generator 
 with relationships, build RLS policy generator for automatic security rules, implement PRD-to-repo
 extraction for tech requirements, and create repo customizer that applies PRD context to scaffold
 templates. CRITICAL NEW REQUIREMENT: Implement "Context Crystallization" - the Dreamcatcher must
-write the generated PRD, Tech Spec, and initial System Prompts into the .claude/ directory
-(.claude/memory/active_context.md, .claude/rules/tech_spec.md, .claude/rules/system_prompts.md). The simulation
-is not just code; it is a "frozen agent state" that future Builder Crews can resume.`,
+write the generated PRD, Tech Spec, and initial System Prompts into the .claude/ directory using
+EHG_Engineer structure (.claude/session-state.md, .claude/context/TECH-STACK.md, .claude/agents/venture-agents.md).
+The simulation is not just code; it is a "frozen agent state" that future Builder Crews can resume.`,
 
   scope: `PRD-to-schema intelligence, schema generator, RLS generator, PRD-to-repo intelligence,
-repo customizer, Context Crystallization (.claude/ population with generated artifacts).`,
+repo customizer, Context Crystallization (.claude/ population using EHG_Engineer structure: context/, agents/, logs/).`,
 
   rationale: `With PRD generated, the system can now infer what database schema and application
 structure the venture needs. All generated artifacts are tagged as simulations (epistemic_status:
 simulation). The Context Crystallization step is essential for autonomous operation - by writing
-PRD insights, tech specs, and system prompts directly into .claude/memory/ and .claude/rules/, we create
+PRD insights, tech specs, and system prompts directly into .claude/context/ and .claude/agents/, we create
 a "frozen agent state" that preserves the Dreamcatcher's understanding for future Builder Crews.
 This is "memory-as-code" - the agent's brain and body (code) stay in sync.`,
 
@@ -974,10 +977,10 @@ This is "memory-as-code" - the agent's brain and body (code) stay in sync.`,
     "Auto-generate RLS security policies",
     "Extract technology requirements from PRD",
     "Customize repo scaffold with venture specifics",
-    "Implement Context Crystallization: write PRD summary to .claude/memory/active_context.md",
-    "Crystallize Tech Spec: extract and write technical decisions to .claude/rules/tech_spec.md",
-    "Generate System Prompts: create agent-specific prompts in .claude/rules/system_prompts.md",
-    "Record decision log: capture generation decisions in .claude/memory/decision_log.md"
+    "Implement Context Crystallization: write venture overview to .claude/session-state.md",
+    "Crystallize Tech Spec: extract and write technical decisions to .claude/context/TECH-STACK.md",
+    "Generate System Prompts: create agent-specific prompts in .claude/agents/venture-agents.md",
+    "Record decision log: capture generation decisions in .claude/logs/decisions.md"
   ],
 
   success_criteria: [
@@ -986,10 +989,10 @@ This is "memory-as-code" - the agent's brain and body (code) stay in sync.`,
     "RLS policies enforce basic access control",
     "Tech requirements identify stack components",
     "Repo customizer updates package.json, README, config",
-    ".claude/memory/active_context.md contains: venture name, problem statement, solution hypothesis, current stage, key decisions",
-    ".claude/rules/tech_spec.md contains: stack components, architecture decisions, data model summary, API patterns",
-    ".claude/rules/system_prompts.md contains: role-specific prompts for Builder, Reviewer, and QA agents",
-    ".claude/memory/decision_log.md contains: chronological log of generation decisions with rationale",
+    ".claude/session-state.md contains: venture name, problem statement, solution hypothesis, current stage, key decisions",
+    ".claude/context/TECH-STACK.md contains: stack components, architecture decisions, data model summary, API patterns",
+    ".claude/agents/venture-agents.md contains: role-specific prompts for Builder, Reviewer, and QA agents",
+    ".claude/logs/decisions.md contains: chronological log of generation decisions with rationale",
     "Context Crystallization completes before simulation is marked 'generated'"
   ],
 
@@ -1005,11 +1008,13 @@ This is "memory-as-code" - the agent's brain and body (code) stay in sync.`,
       creation_mode: "CREATE_FROM_NEW",
       context_crystallization: {
         purpose: "Create frozen agent state that Builder Crews can resume",
+        structure_note: "Uses EHG_Engineer .claude/ structure for consistency",
         outputs: {
-          "active_context.md": "Venture overview, current state, immediate next steps",
-          "tech_spec.md": "Technical decisions, architecture, constraints",
-          "system_prompts.md": "Role-specific prompts for Builder/Reviewer/QA agents",
-          "decision_log.md": "Chronological record of why decisions were made"
+          "session-state.md": "Venture overview, current state, immediate next steps",
+          "context/TECH-STACK.md": "Technical decisions, architecture, constraints",
+          "context/VENTURE-SPEC.md": "Problem statement, solution hypothesis, requirements",
+          "agents/venture-agents.md": "Role-specific prompts for Builder/Reviewer/QA agents",
+          "logs/decisions.md": "Chronological record of why decisions were made"
         },
         principle: "The simulation is not just code; it is a frozen agent state"
       }
@@ -1026,7 +1031,7 @@ This is "memory-as-code" - the agent's brain and body (code) stay in sync.`,
       mitigation: "Use structured templates, validate outputs, allow human override"
     },
     {
-      risk: "active_context.md may become stale",
+      risk: "session-state.md may become stale",
       mitigation: "Include last_updated timestamp, design for update-in-place"
     }
   ]
@@ -1166,11 +1171,11 @@ namespace), Stage 17 repo elevation (fork simulation repo to production org), an
 trail with Chairman signature requirement. CRITICAL: When elevating from Simulation (Aries) to
 Production (Saturn), the .claude/ directory MUST be preserved and git committed. The operational
 agents in production inherit the context crystallized during simulation - this is the "brain
-transplant" that ensures continuity. The .claude/memory/active_context.md must be updated to reflect
+transplant" that ensures continuity. The .claude/session-state.md must be updated to reflect
 elevation status. CONSTRAINT: Complete by Feb 10 - no new logic after.`,
 
-  scope: `Stage 16 schema elevation, Stage 17 repo elevation with .claude/ preservation, elevation
-audit trail with Chairman signature, Agentic Layer continuity verification.`,
+  scope: `Stage 16 schema elevation, Stage 17 repo elevation with .claude/ preservation (agents/, commands/,
+context/, hooks/, logs/), elevation audit trail with Chairman signature, Agentic Layer continuity verification.`,
 
   rationale: `Elevation is the ceremonial transformation from possible to real. The Chairman's
 signature requirement ensures human accountability for production changes. The Agentic Layer
@@ -1191,9 +1196,9 @@ the frozen agent state from Dreamcatcher becomes the operational memory for prod
     "Log all elevations with Chairman signature",
     "Archive simulation after successful elevation",
     "Preserve .claude/ directory during elevation (git commit to production)",
-    "Update .claude/memory/active_context.md with elevation metadata",
+    "Update .claude/session-state.md with elevation metadata",
     "Verify Agentic Layer integrity post-elevation",
-    "Add elevation record to .claude/memory/decision_log.md"
+    "Add elevation record to .claude/logs/decisions.md"
   ],
 
   success_criteria: [
@@ -1203,9 +1208,9 @@ the frozen agent state from Dreamcatcher becomes the operational memory for prod
     "Simulation marked 'elevated' after promotion",
     "Elevation fails if Chairman signature missing",
     ".claude/ directory present in production repo after elevation",
-    ".claude/memory/active_context.md updated with: elevated_at, elevated_by, production_repo_url, production_schema",
-    ".claude/memory/decision_log.md contains elevation event with Chairman signature",
-    "All files in .claude/rules/ preserved without modification",
+    ".claude/session-state.md updated with: elevated_at, elevated_by, production_repo_url, production_schema",
+    ".claude/logs/decisions.md contains elevation event with Chairman signature",
+    "All files in .claude/context/ and .claude/agents/ preserved without modification",
     "Agentic Layer integrity check passes: all required files present post-elevation"
   ],
 
@@ -1222,8 +1227,9 @@ the frozen agent state from Dreamcatcher becomes the operational memory for prod
       critical_constraint: "COMPLETE BY FEB 10 - NO NEW LOGIC AFTER",
       agentic_layer_elevation: {
         principle: "Brain transplant - simulation context becomes production memory",
-        preserved_paths: [".claude/memory/", ".claude/rules/", ".claude/tools/"],
-        updated_on_elevation: [".claude/memory/active_context.md", ".claude/memory/decision_log.md"],
+        structure_note: "Uses EHG_Engineer .claude/ structure for consistency",
+        preserved_paths: [".claude/agents/", ".claude/commands/", ".claude/context/", ".claude/hooks/", ".claude/logs/"],
+        updated_on_elevation: [".claude/session-state.md", ".claude/logs/decisions.md"],
         integrity_check: "Verify all required .claude/ files present after fork",
         failure_mode: "Elevation BLOCKED if .claude/ directory missing or corrupt"
       }
