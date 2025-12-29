@@ -1,0 +1,119 @@
+{
+  "$schema": "./phase-model-config.schema.json",
+  "_meta": {
+    "version": "1.0.0",
+    "description": "Phase-based model allocation for LEO Protocol sub-agents",
+    "extractedFrom": "lib/sub-agent-executor.js",
+    "extractedDate": "2025-12-29",
+    "philosophy": "Trust the simple model until proven wrong. Only upgrade based on evidence.",
+    "calibration": "Weekly review of actual performance to adjust assignments"
+  },
+  "phaseModelOverrides": {
+    "LEAD": {
+      "_tier1_haiku": "Deterministic/operational tasks",
+      "GITHUB": { "model": "haiku", "reason": "CI/CD verification, status checks" },
+      "DOCMON": { "model": "haiku", "reason": "Pattern-based file structure validation" },
+      "RETRO": { "model": "haiku", "reason": "Pattern extraction from execution history" },
+      "QUICKFIX": { "model": "haiku", "reason": "Trivial edits (<50 LOC)" },
+
+      "_tier2_sonnet": "Mid-level reasoning",
+      "VALIDATION": { "model": "haiku", "reason": "LEAD phase: ideation only, low-risk planning" },
+      "DESIGN": { "model": "sonnet", "reason": "Architecture brainstorming requires reasoning" },
+      "TESTING": { "model": "sonnet", "reason": "Test strategy planning needs thoughtfulness" },
+      "DATABASE": { "model": "sonnet", "reason": "Schema planning needs careful reasoning" },
+      "STORIES": { "model": "sonnet", "reason": "User story generation needs context" },
+      "API": { "model": "sonnet", "reason": "API design patterns" },
+      "RISK": { "model": "sonnet", "reason": "Risk assessment" },
+      "DEPENDENCY": { "model": "sonnet", "reason": "Dependency analysis" },
+      "PERFORMANCE": { "model": "sonnet", "reason": "Performance planning" },
+      "UAT": { "model": "sonnet", "reason": "UAT planning" },
+
+      "_tier3_opus": "Security-critical (NEVER COMPROMISE)",
+      "SECURITY": { "model": "opus", "reason": "Threat modeling - NEVER COMPROMISE" }
+    },
+    "PLAN": {
+      "_tier1_haiku": "Deterministic/operational tasks",
+      "GITHUB": { "model": "haiku", "reason": "Branch setup, basic coordination" },
+      "DOCMON": { "model": "haiku", "reason": "Template-based PRD compliance checks" },
+
+      "_tier2_sonnet": "Mid-level reasoning",
+      "DESIGN": { "model": "sonnet", "reason": "Component architecture design" },
+      "TESTING": { "model": "sonnet", "reason": "E2E test plan generation (needs edge case thinking)" },
+      "DATABASE": { "model": "sonnet", "reason": "Schema design (constraints matter)" },
+      "API": { "model": "sonnet", "reason": "API contract design" },
+      "RISK": { "model": "sonnet", "reason": "Security risk assessment" },
+      "DEPENDENCY": { "model": "sonnet", "reason": "CVE assessment" },
+      "PERFORMANCE": { "model": "sonnet", "reason": "Optimization planning" },
+      "RETRO": { "model": "sonnet", "reason": "Retrospective needs context understanding" },
+      "UAT": { "model": "sonnet", "reason": "UAT design" },
+
+      "_tier3_opus": "Critical gates (NEVER COMPROMISE)",
+      "SECURITY": { "model": "opus", "reason": "Security design review - NEVER COMPROMISE" },
+      "VALIDATION": { "model": "opus", "reason": "PLAN phase: critical duplicate detection - NEVER COMPROMISE" },
+      "STORIES": { "model": "opus", "reason": "User story elaboration - upgraded 2025-12-08 (3.4% pass rate with Sonnet)" }
+    },
+    "EXEC": {
+      "_tier1_haiku": "Deterministic/operational tasks",
+      "GITHUB": { "model": "haiku", "reason": "PR operations, basic coordination" },
+      "QUICKFIX": { "model": "haiku", "reason": "Small edits and patches" },
+
+      "_tier2_sonnet": "Mid-level reasoning",
+      "DESIGN": { "model": "sonnet", "reason": "Implementation-phase architecture decisions" },
+      "DATABASE": { "model": "sonnet", "reason": "Migration execution (careful reasoning)" },
+      "STORIES": { "model": "sonnet", "reason": "Story-driven implementation details" },
+      "API": { "model": "sonnet", "reason": "API implementation validation" },
+      "DEPENDENCY": { "model": "sonnet", "reason": "Dependency update validation" },
+      "PERFORMANCE": { "model": "sonnet", "reason": "Performance optimization execution" },
+      "RETRO": { "model": "sonnet", "reason": "Retrospective generation (context needed)" },
+      "DOCMON": { "model": "sonnet", "reason": "Documentation compliance - upgraded 2025-12-08 (13% pass rate with Haiku)" },
+      "UAT": { "model": "sonnet", "reason": "UAT execution (structured testing)" },
+
+      "_tier3_opus": "Critical gates (NEVER COMPROMISE)",
+      "SECURITY": { "model": "opus", "reason": "Security code review - NEVER COMPROMISE" },
+      "VALIDATION": { "model": "opus", "reason": "EXEC phase: final QA gate - NEVER COMPROMISE" },
+      "TESTING": { "model": "opus", "reason": "E2E test execution - upgraded 2025-12-08 (11% pass rate with Sonnet)" }
+    }
+  },
+  "defaultModelAssignments": {
+    "_description": "Fallback when phase is unknown or for ad-hoc runs. HAIKU-FIRST STRATEGY (2025-12-06)",
+    "_tier1_haiku": "Deterministic/operational",
+    "GITHUB": { "model": "haiku", "reason": "CI/CD operations, status checks" },
+    "DOCMON": { "model": "haiku", "reason": "Pattern-based compliance checks" },
+    "RETRO": { "model": "haiku", "reason": "Pattern extraction" },
+    "QUICKFIX": { "model": "haiku", "reason": "Small edits" },
+
+    "_tier2_sonnet": "Mid-level reasoning (default when phase unknown)",
+    "DATABASE": { "model": "sonnet", "reason": "Schema work needs careful reasoning" },
+    "STORIES": { "model": "sonnet", "reason": "Context understanding required" },
+    "DESIGN": { "model": "sonnet", "reason": "Design judgment needed" },
+    "RISK": { "model": "sonnet", "reason": "Risk assessment" },
+    "PERFORMANCE": { "model": "sonnet", "reason": "Optimization analysis" },
+    "TESTING": { "model": "sonnet", "reason": "Edge case detection" },
+    "API": { "model": "sonnet", "reason": "API design" },
+    "DEPENDENCY": { "model": "sonnet", "reason": "Dependency analysis" },
+    "UAT": { "model": "sonnet", "reason": "Structured testing" },
+    "VALIDATION": { "model": "sonnet", "reason": "Default to Sonnet (can escalate to Opus in critical phases)" },
+
+    "_tier3_opus": "Security-critical",
+    "SECURITY": { "model": "opus", "reason": "Always Opus for security - NEVER COMPROMISE" }
+  },
+  "subAgentCategoryMapping": {
+    "_description": "Sub-agent to pattern category mapping. LEO Protocol v4.3.2+ Enhancement: Enables proactive pattern injection",
+    "VALIDATION": ["code_structure", "protocol", "testing"],
+    "TESTING": ["testing", "deployment", "build"],
+    "DATABASE": ["database", "security"],
+    "SECURITY": ["security", "database"],
+    "DESIGN": ["ui", "code_structure"],
+    "PERFORMANCE": ["performance", "database"],
+    "GITHUB": ["deployment", "build", "ci_cd"],
+    "DOCMON": ["documentation", "protocol"],
+    "RETRO": ["protocol", "process"],
+    "UAT": ["testing", "ui"],
+    "DEPENDENCY": ["deployment", "build"],
+    "API": ["api", "security"],
+    "STORIES": ["protocol", "requirements"],
+    "RISK": ["security", "protocol"],
+    "QUICKFIX": ["code_structure", "testing", "build"],
+    "REGRESSION": ["refactoring", "testing", "code_structure"]
+  }
+}
