@@ -129,7 +129,13 @@ class PlanToExecVerifier {
 
     // Check required fields
     this.prdRequirements.requiredFields.forEach(field => {
-      const value = prd[field];
+      // Check direct field first, then metadata fallback for fields that may not exist as columns
+      let value = prd[field];
+      // Fallback to metadata if column value is missing OR is an empty array
+      const isEmptyOrMissing = value === null || value === undefined || (Array.isArray(value) && value.length === 0);
+      if (isEmptyOrMissing && prd.metadata && prd.metadata[field]) {
+        value = prd.metadata[field];
+      }
       const isPresent = value !== null && value !== undefined;
 
       if (!isPresent) {
@@ -427,7 +433,8 @@ class PlanToExecVerifier {
           minimumScore: storyMinimumScore,
           minimumStories: 1,
           blockOnWarnings: false,
-          sdType: sd.sd_type  // Pass SD type to enable heuristic validation for infrastructure/database SDs
+          sdType: sd.sd_type,  // Pass SD type to enable heuristic validation for infrastructure/database SDs
+          sdCategory: sd.category  // Pass SD category to enable heuristic validation for theming/ux/design SDs
         });
 
         console.log(storyQualityResult.summary);
@@ -550,10 +557,12 @@ class PlanToExecVerifier {
 
         // ROOT CAUSE FIX: SD-NAV-CMD-001A - Pass sdType for type-aware validation
         // Bugfix SDs use heuristic validation instead of AI scoring
+        // Also pass sdCategory for theming/ux/design SDs (2025-12-28)
         prdBoilerplateResult = await validatePRDForHandoff(prd, {
           minimumScore: prdMinimumScore,
           blockOnWarnings: false,
-          sdType: sd.sd_type || sd.category  // Pass SD type for heuristic mode detection
+          sdType: sd.sd_type || sd.category,  // Pass SD type for heuristic mode detection
+          sdCategory: sd.category  // Pass SD category for theming/ux/design SDs
         });
 
         console.log(prdBoilerplateResult.summary);
