@@ -1,4 +1,6 @@
-# LEO Protocol v4.0 - Quick Reference Guide
+# LEO Protocol v4.3.3 - Quick Reference Guide
+
+> **Note**: This guide updated for LEO Protocol v4.3.3. See CLAUDE.md for full protocol details.
 
 ## 🚀 Quick Start Commands
 
@@ -41,7 +43,7 @@ node scripts/handoff-controller.js archive EXEC completed-feature
 
 ### LEAD → PLAN
 ```
-□ SD created in /docs/strategic-directives/
+□ SD created in database (strategic_directives_v2 table)
 □ Business objectives clear
 □ Success metrics measurable
 □ Constraints documented
@@ -229,4 +231,4 @@ New Task?
 ---
 
 *Keep this guide handy during LEO Protocol execution*
-*v4.0 - Updated 2025-08-31*
+*v4.3.3 - Updated 2025-12-29*

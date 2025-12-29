@@ -84,7 +84,7 @@ async function runHealthCheck() {
       if (result.details) {
         console.log(chalk.gray(`   ${result.details}`));
       }
-    } catch (error) {
+    } catch (_error) {
       console.log(chalk.red(`❌ ${check.name}: ERROR - ${error.message}`));
       results.push({ name: check.name, status: 'error', error: error.message });
     }
@@ -178,7 +178,7 @@ async function checkSDReadiness(sdId) {
       console.log(chalk.red('❌ Not ready - fix PRD format first'));
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.error(chalk.red('Error checking SD readiness:'), error.message);
   }
 }
@@ -188,15 +188,15 @@ async function checkSDReadiness(sdId) {
  */
 async function checkDatabaseConnection() {
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .select('count')
       .limit(1);
 
     if (error) throw error;
     return { status: 'pass', details: 'Database connection successful' };
-  } catch (error) {
-    return { status: 'fail', details: `Database connection failed: ${error.message}` };
+  } catch (catchError) {
+    return { status: 'fail', details: `Database connection failed: ${catchError.message}` };
   }
 }
 
@@ -219,7 +219,7 @@ async function checkTablesExist() {
       } else {
         results.push(`✅ ${table} - OK`);
       }
-    } catch (error) {
+    } catch (_error) {
       results.push(`❌ ${table} - Error: ${error.message}`);
     }
   }
@@ -240,14 +240,14 @@ async function checkFormatCompliance() {
   if (error) throw error;
 
   let validCount = 0;
-  let invalidCount = 0;
+  let _invalidCount = 0;
 
   for (const prd of prds) {
     const validation = validatePRDContent(prd.content, prd.id);
     if (validation.success) {
       validCount++;
     } else {
-      invalidCount++;
+      _invalidCount++;
     }
   }
 
@@ -358,7 +358,7 @@ async function checkContentQuality() {
           qualityIssues++;
         }
       }
-    } catch (e) {
+    } catch (_e) {
       qualityIssues++;
     }
   }
@@ -498,7 +498,7 @@ async function checkTableStatus() {
         const status = table === 'prds' ? '(DEPRECATED)' : '';
         console.log(chalk.green(`✅ ${table}: ${count} records ${status}`));
       }
-    } catch (error) {
+    } catch (_error) {
       console.log(chalk.red(`❌ ${table}: ${error.message}`));
     }
   }

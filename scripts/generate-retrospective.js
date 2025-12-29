@@ -32,7 +32,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import fs from 'fs';
+// import fs from 'fs'; // Currently unused - available for file operations if needed
 
 dotenv.config();
 
@@ -46,7 +46,8 @@ const supabase = createClient(
  * @param {Array} arr - JavaScript array
  * @returns {string} JSONB string
  */
-function toJsonb(arr) {
+// toJsonb - Currently unused but kept for potential JSONB formatting needs
+function _toJsonb(arr) {
   return JSON.stringify(arr);
 }
 
@@ -92,8 +93,8 @@ async function generateRetrospective(sdId) {
     .eq('strategic_directive_id', sdId)
     .single();
 
-  // Get handoffs
-  const { data: handoffs } = await supabase
+  // Get handoffs (data fetched for context availability)
+  const { data: _handoffs } = await supabase
     .from('v_handoff_chain')
     .select('*')
     .eq('sd_id', sdId);
@@ -253,7 +254,7 @@ async function generateRetrospective(sdId) {
   }
 
   // Update to PUBLISHED if quality score is >= 70
-  const { data: updated, error: updateError } = await supabase
+  const { data: _updated, error: updateError } = await supabase
     .from('retrospectives')
     .update({ status: 'PUBLISHED' })
     .eq('id', retroId)

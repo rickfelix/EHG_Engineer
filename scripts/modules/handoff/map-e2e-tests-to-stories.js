@@ -33,7 +33,7 @@ async function findTestFiles(dir) {
     }
 
     return files;
-  } catch (error) {
+  } catch (_error) {
     // Directory doesn't exist or not accessible
     return [];
   }

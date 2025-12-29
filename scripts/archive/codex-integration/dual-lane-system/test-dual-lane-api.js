@@ -7,7 +7,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
+import _crypto from 'crypto';
 import DualLaneControllerAPI from './dual-lane-controller-api.js';
 import SecurityContextManager from './security-context-manager.js';
 

@@ -255,7 +255,7 @@ async function updateSaaSBackstories() {
       };
 
       // Update the sub-agent
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('leo_sub_agents')
         .update({
           description: backstoryData.summary,
@@ -273,7 +273,7 @@ async function updateSaaSBackstories() {
         console.log(`   Key Focus: ${backstoryData.summary.substring(0, 60)}...`);
         console.log(`   Achievements: ${backstoryData.achievements.length} SaaS success stories\n`);
       }
-    } catch (error) {
+    } catch (_error) {
       console.error(`❌ Failed to update ${subAgentId}:`, error);
     }
   }

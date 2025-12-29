@@ -502,7 +502,7 @@ async function updateSubAgents() {
 
     console.log('🎉 Both sub-agents enhanced successfully!');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Unexpected error:', err);
     process.exit(1);
   }

@@ -44,7 +44,7 @@ async function verifyFix() {
       console.log(`   ✅ User: ${result.rows[0].current_user}`);
       
       await client.end();
-    } catch (error) {
+    } catch (_error) {
       console.log('   ❌ Connection: FAILED');
       console.log(`   ❌ Error: ${error.message}`);
       allPassed = false;

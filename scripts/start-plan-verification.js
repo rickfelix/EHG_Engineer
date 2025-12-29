@@ -1,11 +1,11 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// import path from 'path'; // Unused
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -41,7 +41,7 @@ async function startPlanVerification() {
     ];
 
     // Update PRD with verification phase
-    const { data: prdUpdate, error: prdError } = await supabase
+    const { data: _prdUpdate, error: prdError } = await supabase
       .from('product_requirements_v2')
       .update({
         status: 'verification',
@@ -76,7 +76,7 @@ async function startPlanVerification() {
     }
 
     // Update SD for verification phase
-    const { data: sdUpdate, error: sdError } = await supabase
+    const { data: _sdUpdate, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .update({
         metadata: {
@@ -155,7 +155,7 @@ async function startPlanVerification() {
     console.log('📈 Next Phase: PLAN Verification (15% of total progress)');
     console.log('🚀 Ready to begin comprehensive testing phase!');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('Failed to start PLAN verification:', err.message);
   }
 }

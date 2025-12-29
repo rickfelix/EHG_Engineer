@@ -104,4 +104,5 @@ Large-scale completions:
 
 ---
 
-*Part of LEO Protocol v4.2.0 - Implementation Tracking*
+*Part of LEO Protocol v4.3.3 - Implementation Tracking*
+*Updated: 2025-12-29*

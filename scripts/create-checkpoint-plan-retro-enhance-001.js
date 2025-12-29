@@ -143,7 +143,7 @@ async function createCheckpointPlan() {
   console.log('📋 Creating Checkpoint Plan for SD-RETRO-ENHANCE-001...\n');
 
   // Update SD with checkpoint plan in JSONB field
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('strategic_directives_v2')
     .update({ checkpoint_plan: checkpointPlan })
     .eq('id', 'SD-RETRO-ENHANCE-001')

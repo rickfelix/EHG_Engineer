@@ -40,7 +40,7 @@ class SessionManagerSubAgent {
     console.log('🔐 Session Manager Sub-Agent Activating...');
     console.log('==========================================');
 
-    const { action = 'validate', sdId = null, force = false } = context;
+    const { action = 'validate', sdId = null, force: _force = false } = context;
 
     try {
       switch (action) {
@@ -62,7 +62,7 @@ class SessionManagerSubAgent {
         default:
           throw new Error(`Unknown action: ${action}`);
       }
-    } catch (error) {
+    } catch (_error) {
       console.error('❌ Session Manager error:', error.message);
       return {
         success: false,
@@ -198,7 +198,7 @@ class SessionManagerSubAgent {
       // Get SD ID
       validation.sdId = await fs.readFile(this.sessionIdFile, 'utf8');
 
-    } catch (error) {
+    } catch (_error) {
       validation.issues.push(`Error reading session: ${error.message}`);
     }
 
@@ -270,7 +270,7 @@ class SessionManagerSubAgent {
         action: 'session_cleaned',
         message: 'Session files removed'
       };
-    } catch (error) {
+    } catch (_error) {
       return {
         success: false,
         error: error.message,
@@ -315,7 +315,7 @@ class SessionManagerSubAgent {
         return activeSDs[0].id;
       }
 
-    } catch (error) {
+    } catch (_error) {
       console.warn('  Could not detect SD:', error.message);
     }
 

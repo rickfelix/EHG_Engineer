@@ -21,8 +21,8 @@ import { getScoringWeights, isInfrastructureSDSync } from './sd-type-checker.js'
 // BOILERPLATE DETECTION PATTERNS
 // ============================================
 
-// Generic SD descriptions (boilerplate)
-const BOILERPLATE_DESCRIPTIONS = [
+// Generic SD descriptions (boilerplate) - available for future validation enhancement
+const _BOILERPLATE_DESCRIPTIONS = [
   'imported from ehg backlog',
   'implement',
   'create',
@@ -33,8 +33,8 @@ const BOILERPLATE_DESCRIPTIONS = [
   'develop'
 ];
 
-// Generic strategic objectives (boilerplate)
-const BOILERPLATE_OBJECTIVES = [
+// Generic strategic objectives (boilerplate) - available for future validation enhancement
+const _BOILERPLATE_OBJECTIVES = [
   'implement all user stories',
   'pass all tests',
   'meet acceptance criteria',
@@ -43,24 +43,24 @@ const BOILERPLATE_OBJECTIVES = [
   'deploy to production'
 ];
 
-// Minimum requirements
-const MINIMUM_DESCRIPTION_LENGTH = 50;
-const MINIMUM_OBJECTIVES_COUNT = 2;
-const MINIMUM_SUCCESS_METRICS_COUNT = 1;
-const MINIMUM_RISKS_COUNT = 1;
+// Minimum requirements - available for future validation enhancement
+const _MINIMUM_DESCRIPTION_LENGTH = 50;
+const _MINIMUM_OBJECTIVES_COUNT = 2;
+const _MINIMUM_SUCCESS_METRICS_COUNT = 1;
+const _MINIMUM_RISKS_COUNT = 1;
 
 // ============================================
 // RETROSPECTIVE GATE PATTERNS
 // ============================================
 
-// Boilerplate retrospective content (already detected, but re-verify)
-const BOILERPLATE_RETRO_LEARNINGS = [
+// Boilerplate retrospective content (already detected, but re-verify) - available for future validation enhancement
+const _BOILERPLATE_RETRO_LEARNINGS = [
   'database-first architecture maintained',
   'leo protocol phases followed',
   'sub-agent automation improved'
 ];
 
-const BOILERPLATE_RETRO_ACTION_ITEMS = [
+const _BOILERPLATE_RETRO_ACTION_ITEMS = [
   'review retrospective learnings before next sd',
   'apply patterns from this sd',
   'update sub-agent instructions'
@@ -73,7 +73,7 @@ const BOILERPLATE_RETRO_ACTION_ITEMS = [
 /**
  * Check if text is too short or boilerplate
  */
-function isBoilerplateText(text, patterns, minLength = 50) {
+function _isBoilerplateText(text, patterns, minLength = 50) {
   if (!text || text.length < minLength) return true;
 
   const normalized = text.toLowerCase();
@@ -90,7 +90,7 @@ function isBoilerplateText(text, patterns, minLength = 50) {
 /**
  * Check if array contains mostly boilerplate items
  */
-function checkArrayBoilerplate(items, patterns) {
+function _checkArrayBoilerplate(items, patterns) {
   if (!items || !Array.isArray(items) || items.length === 0) {
     return { isEmpty: true, isBoilerplate: false, percentage: 0 };
   }

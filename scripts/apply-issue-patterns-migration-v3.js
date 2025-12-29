@@ -46,7 +46,7 @@ async function applyMigration() {
     // PostgreSQL can handle multiple statements in one query
     console.log('⚙️  Executing migration (this may take 10-30 seconds)...\n');
 
-    const result = await client.query(sql);
+    const _result = await client.query(sql);
 
     console.log('✅ Migration executed successfully!\n');
 

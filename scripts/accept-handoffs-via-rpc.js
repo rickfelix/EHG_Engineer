@@ -35,7 +35,7 @@ async function acceptHandoffsViaRPC() {
 
   // Accept each handoff via RPC function
   for (const handoff of handoffs) {
-    const { data, error } = await supabase.rpc('accept_phase_handoff', {
+    const { data: _data, error } = await supabase.rpc('accept_phase_handoff', {
       handoff_id_param: handoff.id
     });
 

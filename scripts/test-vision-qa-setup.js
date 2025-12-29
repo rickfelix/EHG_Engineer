@@ -65,7 +65,7 @@ async function testSetup() {
       console.log('✅ OpenAI: Connection successful');
       console.log(`   Available models: ${openaiClient.getAvailableModels().join(', ')}`);
       console.log(`   Test cost estimate (10 iterations): $${costEstimate.estimatedTotal.toFixed(2)}`);
-    } catch (error) {
+    } catch (_error) {
       console.log('❌ OpenAI: Connection failed');
       console.log(`   Error: ${error.message}`);
       openaiStatus = '❌';
@@ -86,7 +86,7 @@ async function testSetup() {
       console.log('✅ Anthropic: Connection successful');
       console.log(`   Available models: ${anthropicClient.getAvailableModels().join(', ')}`);
       console.log(`   Test cost estimate (10 iterations): $${costEstimate.estimatedTotal.toFixed(2)}`);
-    } catch (error) {
+    } catch (_error) {
       console.log('❌ Anthropic: Connection failed');
       console.log(`   Error: ${error.message}`);
       anthropicStatus = '❌';
@@ -108,7 +108,7 @@ async function testSetup() {
     console.log(`   Provider: ${agent.config.provider || 'openai'}`);
     console.log(`   Max iterations: ${agent.config.maxIterations}`);
     console.log(`   Cost limit: $${agent.config.costLimit}`);
-  } catch (error) {
+  } catch (_error) {
     console.log('❌ Vision QA Agent: Initialization failed');
     console.log(`   Error: ${error.message}`);
   }

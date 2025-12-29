@@ -43,7 +43,7 @@ class LEOCICDIntegrationTester {
     for (const test of tests) {
       try {
         await test.call(this);
-      } catch (error) {
+      } catch (_error) {
         this.addTestResult(test.name, false, error.message);
         console.error(chalk.red(`❌ ${test.name} failed: ${error.message}`));
       }
@@ -163,7 +163,7 @@ class LEOCICDIntegrationTester {
         if (result && typeof result.valid === 'boolean') {
           passedPhases++;
         }
-      } catch (error) {
+      } catch (_error) {
         console.warn(chalk.yellow(`Phase ${phase} validation warning: ${error.message}`));
       }
     }
@@ -329,15 +329,15 @@ class LEOCICDIntegrationTester {
           query = query.eq('sd_id', filter.sd_id);
         }
 
-        const { data, error } = await query.limit(5);
+        const { data: _data, error } = await query.limit(5);
 
         if (error) {
           console.warn(chalk.yellow(`Query warning for ${table}: ${error.message}`));
         } else {
           successfulQueries++;
         }
-      } catch (error) {
-        console.warn(chalk.yellow(`Query failed for ${table}: ${error.message}`));
+      } catch (err) {
+        console.warn(chalk.yellow(`Query failed for ${table}: ${err.message}`));
       }
     }
 
@@ -364,7 +364,7 @@ class LEOCICDIntegrationTester {
       try {
         const { error } = await cleanupQuery;
         if (!error) cleanedUp++;
-      } catch (error) {
+      } catch (_error) {
         console.warn(chalk.yellow(`Cleanup warning: ${error.message}`));
       }
     }

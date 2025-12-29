@@ -38,7 +38,7 @@ async function testConnection() {
       console.log('Tables with "backlog":', tables);
     }
 
-  } catch (err) {
+  } catch (_err) {
     console.error('Connection error:', err);
   }
 }

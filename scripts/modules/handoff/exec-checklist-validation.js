@@ -93,7 +93,7 @@ export async function validateExecChecklist(sdId, prd, supabase, options = {}) {
   }
 
   // Check 3: Items have required fields
-  let validItems = 0;
+  let _validItems = 0;
   let itemsWithText = 0;
   let itemsWithStoryLinks = 0;
 

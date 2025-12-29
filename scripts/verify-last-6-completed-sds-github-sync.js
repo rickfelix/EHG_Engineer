@@ -49,7 +49,7 @@ function gitCommand(repo, command) {
       stdio: ['pipe', 'pipe', 'pipe']
     });
     return { success: true, output: result.trim() };
-  } catch (error) {
+  } catch (_error) {
     return { success: false, error: error.message, output: error.stdout?.trim() || '' };
   }
 }
@@ -126,7 +126,7 @@ function checkFileExists(repo, filePath) {
   try {
     const fullPath = path.join(repo, filePath);
     return fs.existsSync(fullPath);
-  } catch (error) {
+  } catch (_error) {
     return false;
   }
 }
@@ -134,7 +134,7 @@ function checkFileExists(repo, filePath) {
 /**
  * Get common file patterns to check based on SD type
  */
-function getExpectedFiles(sdId, sdTitle) {
+function getExpectedFiles(sdId, _sdTitle) {
   const files = [];
 
   // Check for PRD files
@@ -157,7 +157,7 @@ function getExpectedFiles(sdId, sdTitle) {
 /**
  * Get detailed commit info for verification
  */
-function getCommitDetails(repo, commitHash) {
+function _getCommitDetails(repo, commitHash) {
   const result = gitCommand(repo, `show ${commitHash} --stat --oneline`);
   return result.success ? result.output : null;
 }
@@ -286,7 +286,7 @@ async function verifySDsGitHubSync() {
   console.log();
 
   console.log('SD Verification Summary:');
-  results.forEach((result, idx) => {
+  results.forEach((result, _idx) => {
     const engineerCommits = result.repos.EHG_Engineer?.commits?.length || 0;
     const ehgCommits = result.repos.EHG?.commits?.length || 0;
     const totalCommits = engineerCommits + ehgCommits;

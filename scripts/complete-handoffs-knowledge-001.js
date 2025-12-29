@@ -74,7 +74,7 @@ const leadHandoff = {
   created_by: 'UNIFIED-HANDOFF-SYSTEM-RETROACTIVE'
 };
 
-const { data, error } = await supabase
+const { data: _data, error } = await supabase
   .from('sd_phase_handoffs')
   .insert(leadHandoff)
   .select();

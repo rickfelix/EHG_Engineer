@@ -362,7 +362,7 @@ async function createHandoff() {
     console.log('📋 Creating EXEC→PLAN Handoff for SD-041C\n');
 
     // Try handoff_tracking table first
-    const { data: checkTable, error: tableError } = await supabase
+    const { data: _checkTable, error: tableError } = await supabase
       .from('handoff_tracking')
       .select('id')
       .limit(1);
@@ -372,7 +372,7 @@ async function createHandoff() {
     if (useHandoffTracking) {
       console.log('Using handoff_tracking table...');
 
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('handoff_tracking')
         .insert({
           sd_id: 'SD-041C',

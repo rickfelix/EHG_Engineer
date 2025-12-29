@@ -127,7 +127,7 @@ async function runAllTests() {
     console.log(`\n${allPassed ? '✅ All tests passed!' : '❌ Some tests failed'}\n`);
 
     process.exit(allPassed ? 0 : 1);
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Test suite failed:', error.message);
     console.error(error.stack);
     process.exit(1);

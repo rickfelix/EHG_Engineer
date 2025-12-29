@@ -28,7 +28,7 @@ async function main() {
     status: 'draft',
     chairman_input: 'Test input',
   };
-  const saved = await loader.saveSDIPSubmission(testSubmission, flags);
+  const _saved = await loader.saveSDIPSubmission(testSubmission, flags);
   console.log(`Result: ${flags.dryRun ? 'dry-run mode' : 'submission saved'}`);
 
   console.log('\n✅ Test complete');

@@ -52,7 +52,7 @@ async function updatePriorities() {
     try {
       console.log(`📋 Updating ${sdId}...`);
 
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('strategic_directives_v2')
         .update({
           priority: 'high',
@@ -73,7 +73,7 @@ async function updatePriorities() {
         console.log(`   ⚠️  ${sdId} not found in database`);
         errorCount++;
       }
-    } catch (error) {
+    } catch (_error) {
       console.error(`   ❌ Unexpected error with ${sdId}:`, error.message);
       errorCount++;
     }

@@ -94,7 +94,7 @@ async function testConnection() {
       
       return config;
       
-    } catch (error) {
+    } catch (_error) {
       console.log(`❌ FAILED: ${error.message}\n`);
       await pool.end();
     }

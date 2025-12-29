@@ -358,7 +358,7 @@ Line 407: Expected </TabsContent>, found </div>
   };
 
   // Insert handoff into database
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('handoffs')
     .insert(handoffData)
     .select();

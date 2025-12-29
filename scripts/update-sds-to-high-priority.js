@@ -32,7 +32,7 @@ async function updateSDPriorities() {
   for (const sdId of sdsToUpdate) {
     try {
       // Update the priority to high
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('strategic_directives_v2')
         .update({
           priority: 'high',
@@ -50,7 +50,7 @@ async function updateSDPriorities() {
         console.log(`   Previous: medium → New: ${data.priority}`);
         successCount++;
       }
-    } catch (err) {
+    } catch (_err) {
       console.error(`❌ Error updating ${sdId}:`, err.message);
       failCount++;
     }

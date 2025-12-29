@@ -58,7 +58,7 @@ async function fetchSDWithBacklog(sdId) {
   // Fetch backlog items for consolidated SDs
   let backlogItems = [];
   if (isConsolidated) {
-    const { data: items, error: itemsError } = await supabase
+    const { data: items, error: _itemsError } = await supabase
       .from('consolidated_backlog_v3')
       .select('*')
       .eq('sd_id', sdId)
@@ -188,7 +188,7 @@ async function generateConsolidatedPRD(sdId, force = false) {
     }
 
     // Fetch SD and backlog data
-    const { sd, backlogItems, isConsolidated } = await fetchSDWithBacklog(sdId);
+    const { sd, backlogItems, isConsolidated: _isConsolidated } = await fetchSDWithBacklog(sdId);
 
     // Generate user stories
     const userStories = generateUserStories(sdId, backlogItems);
@@ -262,7 +262,7 @@ async function generateConsolidatedPRD(sdId, force = false) {
 
     return result;
 
-  } catch (error) {
+  } catch (_error) {
     console.error(chalk.red('❌ Error generating consolidated PRD:'), error.message);
     throw error;
   }
@@ -309,7 +309,7 @@ async function main() {
     } else {
       await generateConsolidatedPRD(sdId, options.force);
     }
-  } catch (error) {
+  } catch (_error) {
     console.error(chalk.red('Script failed:'), error.message);
     process.exit(1);
   }

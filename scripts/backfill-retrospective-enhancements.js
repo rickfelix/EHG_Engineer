@@ -78,7 +78,7 @@ function saveProgress(progress) {
  * Infer target_application from retrospective
  * All existing retrospectives are from EHG_Engineer management system
  */
-function inferTargetApplication(retro) {
+function inferTargetApplication(_retro) {
   // Default: All current retrospectives are from EHG_Engineer
   return 'EHG_engineer';
 }
@@ -290,7 +290,7 @@ async function backfillRetrospective(retro, dryRun, retries = 0) {
     }
 
     // Update database
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('retrospectives')
       .update(updates)
       .eq('id', retro.id)
@@ -455,7 +455,7 @@ async function main() {
       try {
         fs.unlinkSync(PROGRESS_FILE);
         console.log('🧹 Progress file cleaned up');
-      } catch (error) {
+      } catch (_error) {
         // Ignore cleanup errors
       }
     } else {

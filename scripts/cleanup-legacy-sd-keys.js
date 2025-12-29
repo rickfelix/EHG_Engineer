@@ -64,7 +64,7 @@ async function cleanupLegacySDKeys() {
 
   // Step 3: Find duplicate sd_keys
   console.log('\n📋 Step 3: Checking for duplicate sd_keys...');
-  const { data: duplicates, error: dupError } = await supabase
+  const { data: _duplicates, error: _dupError } = await supabase
     .rpc('find_duplicate_sd_keys'); // Custom function if available
 
   // Alternative query if RPC doesn't exist
@@ -80,7 +80,7 @@ async function cleanupLegacySDKeys() {
       keyCounts[sd.sd_key].push(sd);
     });
 
-    const duplicateKeys = Object.entries(keyCounts).filter(([key, records]) => records.length > 1);
+    const duplicateKeys = Object.entries(keyCounts).filter(([_key, records]) => records.length > 1);
 
     if (duplicateKeys.length > 0) {
       console.log(`\n⚠️  Found ${duplicateKeys.length} duplicate SD keys:`);

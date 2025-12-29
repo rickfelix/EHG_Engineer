@@ -180,5 +180,5 @@ The pre-commit hook is a **local development tool**. For CI/CD:
 
 ---
 
-*Last updated: 2025-10-25*
-*Part of LEO Protocol v4.2.0 quality standards*
+*Last updated: 2025-12-29*
+*Part of LEO Protocol v4.3.3 quality standards*

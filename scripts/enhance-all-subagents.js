@@ -482,7 +482,7 @@ async function enhanceSubAgents() {
       // No updated_at column in leo_sub_agents table
 
       // Execute UPDATE
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('leo_sub_agents')
         .update(updates)
         .eq('code', code)

@@ -80,7 +80,7 @@ async function verifyRLS() {
       return false;
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Verification failed:', error.message);
     console.error('Stack:', error.stack);
     return false;

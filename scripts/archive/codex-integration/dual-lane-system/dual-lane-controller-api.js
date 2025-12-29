@@ -6,7 +6,7 @@
  * Replaces simulation with actual AI processing
  */
 
-import { spawn } from 'child_process';
+import { spawn as _spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';

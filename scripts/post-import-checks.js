@@ -17,7 +17,7 @@ async function postImportChecks() {
   console.log('='.repeat(60) + '\n');
   
   // Check A: SD count & summed totals
-  const { data: countData, error: countError } = await supabase
+  const { error: countError } = await supabase
     .from('strategic_directives_backlog')
     .select('sd_id, total_items');
     
@@ -35,7 +35,7 @@ async function postImportChecks() {
   console.log('');
   
   // Check B: Any H+M+L+F != total_items
-  const { data: mismatchData, error: mismatchError } = await supabase
+  const { error: mismatchError } = await supabase
     .from('strategic_directives_backlog')
     .select('sd_id, sequence_rank, h_count, m_count, l_count, future_count, total_items')
     .order('sequence_rank')
@@ -65,7 +65,7 @@ async function postImportChecks() {
   console.log('');
   
   // Check C: Duplicate backlog_id across multiple SDs
-  const { data: mapData, error: mapError } = await supabase
+  const { error: mapError } = await supabase
     .from('sd_backlog_map')
     .select('backlog_id, sd_id');
   
@@ -84,9 +84,9 @@ async function postImportChecks() {
     });
     
     const duplicates = Object.entries(backlogUsage)
-      .filter(([bid, sds]) => sds.size > 1)
-      .map(([bid, sds]) => ({ 
-        backlog_id: bid, 
+      .filter(([_bid, sds]) => sds.size > 1)
+      .map(([bid, sds]) => ({
+        backlog_id: bid,
         sd_count: sds.size,
         sd_list: Array.from(sds).slice(0, 3).join(', ')
       }))

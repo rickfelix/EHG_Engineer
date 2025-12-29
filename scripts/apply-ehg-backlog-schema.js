@@ -17,7 +17,7 @@ async function main() {
   
   try {
     // Read SQL file
-    const sql = await fs.readFile('database/schema/010_ehg_backlog_schema.sql', 'utf-8');
+    const _sql = await fs.readFile('database/schema/010_ehg_backlog_schema.sql', 'utf-8');
     
     // Note: Supabase JS client doesn't support raw SQL execution
     // For production, use Supabase dashboard or psql
@@ -27,7 +27,7 @@ async function main() {
     console.log('\n✅ Schema file created at: database/schema/010_ehg_backlog_schema.sql');
     
     // Check if tables exist
-    const { data: tables, error } = await supabase
+    const { data: _tables, error } = await supabase
       .from('strategic_directives_backlog')
       .select('sd_id')
       .limit(1);

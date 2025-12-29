@@ -6,8 +6,9 @@
 
 import dotenv from 'dotenv';
 dotenv.config();
-import fs from 'fs';
-import path from 'path';
+// fs and path imports reserved for potential future file operations
+// import fs from 'fs';
+// import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

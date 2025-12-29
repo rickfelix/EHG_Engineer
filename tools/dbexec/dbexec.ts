@@ -1,10 +1,7 @@
 #!/usr/bin/env node
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { Client } from 'pg';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 type Args = {
   files: string[];
@@ -99,8 +96,8 @@ async function run() {
         const rowCount = result.rowCount || 0;
         totalRows += rowCount;
         console.log(`✓ Applied ${file} (${rowCount} rows affected)`);
-      } catch (queryError: any) {
-        console.error(`✗ Error in ${file}: ${queryError.message}`);
+      } catch (queryError: unknown) {
+        console.error(`✗ Error in ${file}: ${queryError instanceof Error ? queryError.message : String(queryError)}`);
         if (stopOnError) {
           throw queryError;
         }
@@ -111,8 +108,8 @@ async function run() {
     await client.query('COMMIT;');
     console.log('Transaction committed successfully');
 
-  } catch (error: any) {
-    console.error(`Fatal error: ${error.message || error}`);
+  } catch (error: unknown) {
+    console.error(`Fatal error: ${error instanceof Error ? error.message : String(error)}`);
 
     try {
       await client.query('ROLLBACK;');

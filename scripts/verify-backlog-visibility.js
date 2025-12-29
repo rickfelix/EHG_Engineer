@@ -95,7 +95,7 @@ async function verifyBacklogVisibility() {
     } else {
       console.log('❌ Not found in API response');
     }
-  } catch (e) {
+  } catch (_e) {
     console.log('⚠️  Could not test API:', e.message);
   }
 

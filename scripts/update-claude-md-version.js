@@ -47,7 +47,7 @@ class CLAUDEMDUpdater {
       console.log(`   File location: docs/03_protocols_and_standards/${latest.filename}`);
       
       return latest;
-    } catch (error) {
+    } catch (_error) {
       console.error('❌ Failed to update CLAUDE.md:', error.message);
       throw error;
     }
@@ -122,7 +122,7 @@ class CLAUDEMDUpdater {
         console.log('❌ CLAUDE.md validation failed - outdated version references detected');
         return false;
       }
-    } catch (error) {
+    } catch (_error) {
       console.error('❌ Validation failed:', error.message);
       return false;
     }
@@ -137,7 +137,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const updater = new CLAUDEMDUpdater();
   
   updater.updateCLAUDEMD()
-    .then(latest => {
+    .then(_latest => {
       console.log('\n🎯 CLAUDE.md now dynamically references the latest LEO Protocol version');
       console.log('   Run this script whenever protocol versions change');
       return updater.validateUpdate();

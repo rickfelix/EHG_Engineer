@@ -64,7 +64,7 @@ function findMigrationFiles(sdId) {
 /**
  * Basic SQL syntax validation
  */
-function validateSQLSyntax(content, filename) {
+function validateSQLSyntax(content, _filename) {
   const issues = [];
 
   // Check for unclosed quotes

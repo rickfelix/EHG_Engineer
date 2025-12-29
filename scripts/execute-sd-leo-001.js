@@ -7,8 +7,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+// import { fileURLToPath } from 'url';  // Unused - using __dirname directly
+import { join } from 'path';
 
 
 
@@ -51,7 +51,7 @@ async function executeLEADPhase() {
 }
 
 // PLAN Phase
-async function executePLANPhase(leadHandoff) {
+async function executePLANPhase(_leadHandoff) {
   console.log('\n📋 PLAN PHASE: Technical Design');
   console.log('-'.repeat(40));
 
@@ -89,7 +89,7 @@ async function executePLANPhase(leadHandoff) {
 }
 
 // EXEC Phase
-async function executeEXECPhase(planHandoff) {
+async function executeEXECPhase(_planHandoff) {
   console.log('\n📋 EXEC PHASE: Implementation');
   console.log('-'.repeat(40));
 
@@ -113,7 +113,7 @@ async function executeEXECPhase(planHandoff) {
 }
 
 // Verification Phase
-async function executeVerification(implementation) {
+async function executeVerification(_implementation) {
   console.log('\n📋 VERIFICATION PHASE: Testing');
   console.log('-'.repeat(40));
 
@@ -127,7 +127,7 @@ async function executeVerification(implementation) {
   try {
     await execAsync('npm run leo help');
     console.log('✅ leo command: Working');
-  } catch (error) {
+  } catch (_error) {
     console.log('❌ leo command: Failed');
   }
 
@@ -166,7 +166,7 @@ async function executeLEADApproval(verification) {
         .eq('id', 'SD-LEO-001');
 
       console.log('✅ Database updated: SD-LEO-001 marked as in_progress');
-    } catch (error) {
+    } catch (_error) {
       console.log('⚠️ Database update skipped');
     }
   }
@@ -176,7 +176,7 @@ async function executeLEADApproval(verification) {
 async function main() {
   try {
     const leadHandoff = await executeLEADPhase();
-    const { prd, handoff: planHandoff } = await executePLANPhase(leadHandoff);
+    const { prd: _prd, handoff: planHandoff } = await executePLANPhase(leadHandoff);
     const implementation = await executeEXECPhase(planHandoff);
     const verification = await executeVerification(implementation);
     await executeLEADApproval(verification);

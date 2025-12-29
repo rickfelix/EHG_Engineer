@@ -37,7 +37,7 @@ async function findAgentTable() {
       if (!error && count > 0) {
         found.push({ table, count, sample: data });
       }
-    } catch (err) {
+    } catch (_err) {
       // Skip tables that don't exist
     }
   }

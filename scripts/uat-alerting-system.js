@@ -79,7 +79,7 @@ class UATAlertingSystem {
     return JSON.stringify(data, null, 2);
   }
 
-  async sendEmailAlert(alert) {
+  async sendEmailAlert(_alert) {
     // Email implementation (would use SendGrid, SES, etc.)
     console.log(`📧 Email alert sent to ${this.channels.email}`);
   }
@@ -120,7 +120,7 @@ class UATAlertingSystem {
       if (response.ok) {
         console.log('💬 Slack alert sent');
       }
-    } catch (error) {
+    } catch (_error) {
       console.error('Error sending Slack alert:', error);
     }
   }
@@ -138,7 +138,7 @@ class UATAlertingSystem {
       if (response.ok) {
         console.log('🔗 Webhook alert sent');
       }
-    } catch (error) {
+    } catch (_error) {
       console.error('Error sending webhook alert:', error);
     }
   }
@@ -161,7 +161,7 @@ class UATAlertingSystem {
 
   async monitorTestRuns() {
     // Set up real-time monitoring
-    const subscription = supabase
+    const _subscription = supabase
       .channel('uat-monitoring')
       .on('postgres_changes', {
         event: 'INSERT',

@@ -23,7 +23,7 @@
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import fs from 'fs';
-import path from 'path';
+// import path from 'path'; // Currently unused - available for future path utilities
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -323,7 +323,7 @@ async function main() {
     try {
       fs.unlinkSync(PROGRESS_FILE);
       console.log('🧹 Progress file cleaned up');
-    } catch (error) {
+    } catch (_error) {
       // Ignore cleanup errors
     }
   } else {

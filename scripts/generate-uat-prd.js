@@ -17,8 +17,8 @@ const supabase = createClient(
 
 // Comprehensive user stories covering all test layers
 const generateUserStories = () => {
-  const stories = [];
-  let storyId = 1;
+  const _stories = [];
+  let _storyId = 1;
 
   // Authentication & Authorization Testing (8 stories)
   const authStories = [
@@ -944,7 +944,7 @@ async function generatePRD() {
     if (existing) {
       console.log('⚠️  PRD already exists. Updating...');
 
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('product_requirements_v2')
         .update({
           content: prdContent,
@@ -958,7 +958,7 @@ async function generatePRD() {
       console.log('✅ PRD updated successfully!');
     } else {
       // Create new PRD with all required fields
-      const { data, error } = await supabase
+      const { data: _data2, error } = await supabase
         .from('product_requirements_v2')
         .insert({
           id: crypto.randomUUID(),

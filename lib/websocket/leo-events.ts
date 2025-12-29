@@ -19,7 +19,7 @@ let io: SocketIOServer | null = null;
 interface QueuedEvent {
   namespace: string;
   event: string;
-  payload: any;
+  payload: Record<string, unknown>;
   timestamp: number;
 }
 
@@ -111,8 +111,9 @@ export function emitDriftDetected(event: Omit<WSDriftDetectedEventType, 'v' | 't
 /**
  * Generic emit function (for flexibility)
  */
-export function emit(event: string, payload: any): void {
-  const [namespace, eventName] = event.split('/');
+export function emit(event: string, payload: Record<string, unknown>): void {
+  // namespace and eventName are extracted but not used directly - they're passed through queueEvent
+  void event.split('/');
   
   // Add version and timestamp if not present
   if (!payload.v) payload.v = 1;
@@ -130,7 +131,7 @@ export function emit(event: string, payload: any): void {
 /**
  * Queue an event for debounced emission
  */
-function queueEvent(event: string, payload: any, key: string): void {
+function queueEvent(event: string, payload: Record<string, unknown>, key: string): void {
   // Store in queue with deduplication key
   eventQueue.set(key, {
     namespace: event.split('/')[0],

@@ -27,7 +27,7 @@ class VisionAlignmentFeasibilityRubric {
     try {
       const rubricPath = path.join(__dirname, '../docs/vision/rubric.yaml');
       this.visionRubric = yaml.load(readFileSync(rubricPath, 'utf-8'));
-    } catch (error) {
+    } catch (_error) {
       console.warn('⚠️  Warning: Could not load vision rubric YAML, using defaults');
       this.visionRubric = null;
     }
@@ -374,7 +374,7 @@ class VisionAlignmentFeasibilityRubric {
   /**
    * Generate reasoning for the evaluation
    */
-  generateReasoning(scores, feasibilityScore, feasibilityStatus) {
+  generateReasoning(scores, _feasibilityScore, _feasibilityStatus) {
     const reasons = [];
 
     // Negative indicators
@@ -578,7 +578,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log('📋 Evaluation Criteria (Russian Judge Pattern):');
 
     const rubric = new VisionAlignmentFeasibilityRubric();
-    Object.entries(rubric.criteria).forEach(([key, criterion]) => {
+    Object.entries(rubric.criteria).forEach(([_key, criterion]) => {
       console.log(`\n• ${criterion.name} (weight: ${(criterion.weight * 100).toFixed(0)}%)`);
       console.log(`  ${criterion.description}`);
       console.log('  Scale:');

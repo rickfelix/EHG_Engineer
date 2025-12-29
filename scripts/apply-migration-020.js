@@ -44,7 +44,7 @@ async function applyMigration() {
     console.log('   Tables: context_embeddings, feedback_events, interaction_history, learning_configurations, user_context_patterns');
 
     // Execute the migration SQL
-    const { data, error } = await supabase.rpc('exec_sql', {
+    const { data: _data, error } = await supabase.rpc('exec_sql', {
       sql: migrationSQL
     });
 
@@ -90,7 +90,7 @@ async function applyMigration() {
     ];
 
     for (const table of tables) {
-      const { data: rlsData, error: rlsError } = await supabase
+      const { data: _rlsData, error: rlsError } = await supabase
         .from(table)
         .select('id')
         .limit(1);

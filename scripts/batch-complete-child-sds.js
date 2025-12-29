@@ -98,7 +98,7 @@ async function main() {
     ];
 
     for (const h of handoffTypes) {
-      const { error: handoffError } = await supabase
+      const { error: _handoffError } = await supabase
         .from('sd_phase_handoffs')
         .insert({
           sd_id: sd.id,

@@ -43,8 +43,8 @@ class CLAUDEMDGeneratorV3 {
       // Fetch protocol and metadata
       const protocol = await this.getActiveProtocol();
       const agents = await this.getAgents();
-      const subAgents = await this.getSubAgents();
-      const handoffTemplates = await this.getHandoffTemplates();
+      const _subAgents = await this.getSubAgents();
+      const _handoffTemplates = await this.getHandoffTemplates();
 
       // Get sections by tier
       const sections = await this.getSectionsByTier(protocol.id);

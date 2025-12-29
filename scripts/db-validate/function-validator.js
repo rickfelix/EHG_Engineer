@@ -103,7 +103,7 @@ export const FUNCTION_GROUPS = {
 /**
  * Known phase weights for progress calculation
  */
-const EXPECTED_PHASE_WEIGHTS = {
+const _EXPECTED_PHASE_WEIGHTS = {
   LEAD_approval: 20,
   PLAN_prd: 20,
   EXEC_implementation: 30,
@@ -271,7 +271,7 @@ export class FunctionValidator {
     const weights = {};
 
     // Look for weight assignments like progress := progress + 20
-    const progressPatterns = [
+    const _progressPatterns = [
       /progress\s*:=\s*progress\s*\+\s*(\d+)/gi,
       /'weight',\s*(\d+)/gi,
       /weight.*?(\d+)/gi
@@ -307,7 +307,7 @@ export class FunctionValidator {
 
     // Check for PRD table reference inconsistency
     const prdReferences = {};
-    for (const [funcName, tables] of Object.entries(tableRefs)) {
+    for (const [funcName, _tables] of Object.entries(tableRefs)) {
       const func = functions.find(f => f.name === funcName);
       if (!func) continue;
 
@@ -552,7 +552,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         // Validate all groups
         const { valid, results } = await validator.validateAllGroups();
 
-        for (const [groupName, result] of Object.entries(results)) {
+        for (const [_groupName, result] of Object.entries(results)) {
           validator.logResult(result);
           console.log('');
         }

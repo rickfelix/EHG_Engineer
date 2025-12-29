@@ -534,7 +534,7 @@ async function main() {
     const riskMatrix = generateRiskMatrixArtifact();
 
     // Phase 3: Validate
-    const { qualityCheck } = await validateArtifacts(riskMatrix);
+    const { qualityCheck: _qualityCheck } = await validateArtifacts(riskMatrix);
 
     // Phase 4: Log Prediction
     const { predictionId, correlationId, prediction } = await logPrediction();
@@ -557,7 +557,7 @@ async function main() {
 
     process.exit(0);
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ SOVEREIGN CYCLE FAILED:', error.message);
     console.error(error.stack);
     process.exit(1);

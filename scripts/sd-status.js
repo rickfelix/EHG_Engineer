@@ -192,7 +192,7 @@ class SDStatusReporter {
 
     for (const item of this.items) {
       const sd = this.sdDetails[item.sd_id];
-      const actual = this.actuals[item.sd_id];
+      const _actual = this.actuals[item.sd_id];
 
       if (sd?.status !== 'completed' && !item.is_ready) {
         // Find what's blocking

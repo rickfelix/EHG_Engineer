@@ -41,7 +41,7 @@ interface MigrationResult {
 async function parsePRDFile(filePath: string): Promise<{
   metadata: PRDMetadata;
   content: string;
-  sections: Record<string, any>;
+  sections: Record<string, string>;
 }> {
   const fileContent = await fs.readFile(filePath, 'utf-8');
   const fileName = path.basename(filePath, '.md');
@@ -66,7 +66,7 @@ async function parsePRDFile(filePath: string): Promise<{
   }
 
   // Extract sections based on markdown headers
-  const sections: Record<string, any> = {};
+  const sections: Record<string, string> = {};
   const sectionRegex = /^##\s+(.+)$/gm;
   let match;
   const sectionStarts: Array<{ title: string; start: number }> = [];

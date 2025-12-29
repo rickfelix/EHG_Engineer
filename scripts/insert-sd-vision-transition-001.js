@@ -147,7 +147,7 @@ async function insertSD() {
 
 // Run the insertion
 insertSD()
-  .then((uuid) => {
+  .then((_uuid) => {
     console.log('\n✨ Operation complete!');
     process.exit(0);
   })

@@ -19,7 +19,7 @@ async function createTestPRD() {
   console.log('🔧 Creating test PRD for story generation...\n');
 
   // First check if SD-2025-09-EMB exists
-  const { data: sd, error: sdError } = await supabase
+  const { data: sd, error: _sdError } = await supabase
     .from('strategic_directives_v2')
     .select('id, legacy_id, title')
     .eq('legacy_id', 'SD-2025-09-EMB')

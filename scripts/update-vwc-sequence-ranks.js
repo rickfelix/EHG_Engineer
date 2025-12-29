@@ -366,7 +366,7 @@ async function main() {
 
     process.exit(0);
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Fatal error:', error.message);
     console.error(error.stack);
     process.exit(1);

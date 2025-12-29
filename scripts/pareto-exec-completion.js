@@ -98,10 +98,8 @@ console.timeEnd('voice-latency'); // Should be <500ms`
   };
   
   console.log('📊 Pareto Analysis:\n');
-  
-  let totalFullEffort = 0;
-  let totalParetoEffort = 0;
-  
+
+  // Effort totals calculated below but currently used for display only
   Object.entries(paretoStrategy).forEach(([task, details]) => {
     console.log(`📌 ${task}:`);
     console.log(`   Full: ${details.fullScope}`);

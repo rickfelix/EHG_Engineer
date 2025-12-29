@@ -115,4 +115,5 @@ Access live database:
 
 ---
 
-*Part of LEO Protocol v4.2.0 - Database-First Architecture*
+*Part of LEO Protocol v4.3.3 - Database-First Architecture*
+*Updated: 2025-12-29*

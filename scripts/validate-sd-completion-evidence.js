@@ -146,7 +146,7 @@ class SDCompletionValidator {
               commit: commit.trim()
             })));
           }
-        } catch (error) {
+        } catch (_error) {
           // Repository might not exist
         }
       }
@@ -286,7 +286,7 @@ class SDCompletionValidator {
         message: `${modifiedFiles} files modified in implementation`,
         details: { modifiedFiles }
       };
-    } catch (error) {
+    } catch (_error) {
       return {
         passed: false,
         score: 0,
@@ -296,7 +296,7 @@ class SDCompletionValidator {
     }
   }
 
-  async functionalityTest(sd) {
+  async functionalityTest(_sd) {
     // This would ideally run automated tests or check deployment
     // For now, we'll check if the implementation looks substantial
     try {
@@ -320,7 +320,7 @@ class SDCompletionValidator {
         message: 'No substantial code changes detected',
         warning: 'Manual functionality verification required'
       };
-    } catch (error) {
+    } catch (_error) {
       return {
         passed: false,
         score: 0,

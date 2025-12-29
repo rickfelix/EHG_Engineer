@@ -107,7 +107,7 @@ function determineSeverity(text, impact) {
 /**
  * Extract patterns from "What Needs Improvement" items
  */
-async function extractPatternsFromImprovements(retro, sdId, sdKey) {
+async function extractPatternsFromImprovements(retro, sdId, _sdKey) {
   if (!retro.what_needs_improvement || retro.what_needs_improvement.length === 0) {
     console.log('  ℹ️  No improvement items to extract');
     return [];
@@ -191,7 +191,7 @@ async function extractPatternsFromImprovements(retro, sdId, sdKey) {
 /**
  * Extract successful patterns from "What Went Well"
  */
-async function extractSuccessPatternsFromAchievements(retro, sdId) {
+async function extractSuccessPatternsFromAchievements(retro, _sdId) {
   if (!retro.success_patterns || retro.success_patterns.length === 0) {
     console.log('  ℹ️  No success patterns to extract');
     return [];

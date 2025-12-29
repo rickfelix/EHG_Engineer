@@ -253,7 +253,7 @@ class FileTreeGenerator {
    * Build final markdown output
    */
   buildMarkdownOutput(engineerTree, ehgTree) {
-    const timestamp = new Date().toISOString();
+    const _timestamp = new Date().toISOString();
     const dateStr = new Date().toLocaleString();
 
     let content = '# Application File Trees\n\n';

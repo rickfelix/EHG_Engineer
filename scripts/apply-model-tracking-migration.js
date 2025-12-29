@@ -16,7 +16,7 @@ async function applyMigration() {
   const supabase = await createSupabaseServiceClient('engineer');
 
   // Check if table already exists
-  const { data: existing, error: checkError } = await supabase
+  const { data: _existing, error: checkError } = await supabase
     .from('model_usage_log')
     .select('id')
     .limit(1);

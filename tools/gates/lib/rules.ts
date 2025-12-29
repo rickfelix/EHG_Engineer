@@ -43,7 +43,7 @@ export async function getRulesForGate(gate: string): Promise<ValidationRule[]> {
 /**
  * Get PRD details for context
  */
-export async function getPRDDetails(prdId: string): Promise<any> {
+export async function getPRDDetails(prdId: string): Promise<{ id: string; title: string; sd_id: string | null; status: string } | null> {
   const db = await getDb();
   
   const { data, error } = await db
@@ -67,7 +67,7 @@ export async function storeGateReview(
   prdId: string,
   gate: string,
   score: number,
-  evidence: Record<string, any>,
+  evidence: Record<string, unknown>,
 ): Promise<void> {
   const db = await getDb();
   

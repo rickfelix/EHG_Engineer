@@ -153,7 +153,7 @@ async function executeLEADFinalApproval() {
       }
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.log('⚠️  Database operation skipped, approval decision stands');
   }
 

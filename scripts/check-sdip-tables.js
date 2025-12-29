@@ -38,7 +38,7 @@ async function checkSDIPTables() {
             try {
                 console.log(`📋 Checking table: ${tableName}`);
                 
-                const { data, error } = await supabase
+                const { data: _data, error } = await supabase
                     .from(tableName)
                     .select('*')
                     .eq('directive_id', sdipId)
@@ -119,7 +119,7 @@ async function checkSDIPTables() {
             try {
                 console.log(`📋 Checking ${tableName}...`);
                 
-                const { data, error } = await supabase
+                const { data: _data2, error } = await supabase
                     .from(tableName)
                     .select('*')
                     .limit(1);

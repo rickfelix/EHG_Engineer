@@ -172,13 +172,13 @@ async function createHandoffTables() {
         const tables = ['leo_handoff_executions', 'leo_handoff_validations', 'leo_handoff_rejections'];
         for (const table of tables) {
             try {
-                const { data, error } = await supabase.from(table).select('*').limit(1);
+                const { data: _data, error } = await supabase.from(table).select('*').limit(1);
                 if (error) {
                     console.log(`   ❌ ${table}: ${error.message}`);
                 } else {
                     console.log(`   ✅ ${table}: Table accessible`);
                 }
-            } catch (e) {
+            } catch (_e) {
                 console.log(`   ❌ ${table}: Not accessible`);
             }
         }

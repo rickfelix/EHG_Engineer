@@ -64,7 +64,7 @@ async function insertGTMRoutes() {
 
     // 2. Insert GTM Intelligence route
     console.log('2. Inserting /gtm-intelligence route...');
-    const { data: intelData, error: intelError } = await supabase
+    const { error: intelError } = await supabase
       .from('nav_routes')
       .upsert(GTM_ROUTES[0], {
         onConflict: 'path',
@@ -80,7 +80,7 @@ async function insertGTMRoutes() {
 
     // 3. Insert GTM Timing route
     console.log('\n3. Inserting /gtm-timing route...');
-    const { data: timingData, error: timingError } = await supabase
+    const { error: timingError } = await supabase
       .from('nav_routes')
       .upsert(GTM_ROUTES[1], {
         onConflict: 'path',

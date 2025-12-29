@@ -25,7 +25,7 @@ async function applyPolicy() {
     if (statement.includes('DROP POLICY') || statement.includes('CREATE POLICY')) {
       console.log('Executing:', statement.substring(0, 60) + '...');
 
-      const { data, error } = await supabase.rpc('exec_sql', {
+      const { data: _data, error } = await supabase.rpc('exec_sql', {
         sql_query: statement + ';'
       });
 

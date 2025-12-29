@@ -108,7 +108,7 @@ async function getSubAgentId(code) {
  * Check if trigger already exists
  */
 async function triggerExists(subAgentId, phrase, context) {
-  const { data, error } = await supabase
+  const { data, error: _error } = await supabase
     .from('leo_sub_agent_triggers')
     .select('id')
     .eq('sub_agent_id', subAgentId)
@@ -334,7 +334,7 @@ async function verifySubAgents() {
  * Check if pattern_subagent_mapping table exists
  */
 async function checkMappingTable() {
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('pattern_subagent_mapping')
     .select('id')
     .limit(1);

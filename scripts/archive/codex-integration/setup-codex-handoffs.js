@@ -26,7 +26,7 @@ class CodexHandoffSetup {
   async checkExistingTables() {
     try {
       // Try to query the codex_handoffs table
-      const { data, error } = await this.supabase
+      const { data: _data, error } = await this.supabase
         .from('codex_handoffs')
         .select('id')
         .limit(1);
@@ -42,7 +42,7 @@ class CodexHandoffSetup {
 
       // Some other error occurred
       throw error;
-    } catch (error) {
+    } catch (_error) {
       return false;
     }
   }
@@ -61,7 +61,7 @@ class CodexHandoffSetup {
         console.log(chalk.yellow('⚠️  Tables already exist. Checking for updates...'));
 
         // Check if columns exist on product_requirements_v2
-        const { data, error } = await this.supabase
+        const { data: _data, error } = await this.supabase
           .from('product_requirements_v2')
           .select('codex_status')
           .limit(1);
@@ -124,7 +124,7 @@ class CodexHandoffSetup {
 
     // Check codex_handoffs table
     try {
-      const { data, error } = await this.supabase
+      const { data: _data, error } = await this.supabase
         .from('codex_handoffs')
         .select('id')
         .limit(1);
@@ -140,7 +140,7 @@ class CodexHandoffSetup {
 
     // Check product_requirements_v2 columns
     try {
-      const { data, error } = await this.supabase
+      const { data: _data2, error } = await this.supabase
         .from('product_requirements_v2')
         .select('id, codex_status, codex_handoff_id')
         .limit(1);
@@ -156,7 +156,7 @@ class CodexHandoffSetup {
 
     // Check view
     try {
-      const { data, error } = await this.supabase
+      const { data: _data3, error } = await this.supabase
         .from('active_codex_handoffs')
         .select('handoff_id')
         .limit(1);
@@ -230,7 +230,7 @@ class CodexHandoffSetup {
     };
 
     try {
-      const { data, error } = await this.supabase
+      const { data: _data, error } = await this.supabase
         .from('product_requirements_v2')
         .insert(samplePRD)
         .select()

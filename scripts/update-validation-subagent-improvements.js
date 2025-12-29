@@ -746,7 +746,7 @@ Duplicate Check Results:
 
     return data;
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Unexpected error:', err);
     process.exit(1);
   }

@@ -88,7 +88,7 @@ class CommitValidator {
     // Extract components if possible
     const matches = firstLine.match(this.commitPattern);
     if (matches) {
-      const [, type, sdId, subject] = matches;
+      const [, type, _sdId, subject] = matches;
 
       // Validate type
       if (!this.validTypes.includes(type)) {

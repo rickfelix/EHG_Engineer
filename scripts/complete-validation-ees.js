@@ -17,7 +17,7 @@ async function completeValidationEES() {
 
   console.log('📋 Completing validation EES...\n');
 
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('execution_sequences_v2')
     .update({
       status: 'completed',

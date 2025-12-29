@@ -9,7 +9,7 @@ const run = async () => {
     console.log('Testing EXEC checklist for PRD-SD-001...');
     const result = await validateEXECChecklist('PRD-SD-001');
     console.log('Result:', result);
-  } catch (error) {
+  } catch (_error) {
     console.error('Error:', error);
   }
 };

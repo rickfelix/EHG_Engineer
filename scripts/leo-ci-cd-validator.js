@@ -44,7 +44,7 @@ class LEOCICDValidator {
       }
 
       // Try to get CI/CD status - if columns don't exist, skip validation
-      const { data: sdData, error: sdError } = await supabase
+      const { error: sdError } = await supabase
         .from('strategic_directives_v2')
         .select('ci_cd_status, last_pipeline_run, pipeline_health_score')
         .eq('id', sdId)
@@ -106,7 +106,7 @@ class LEOCICDValidator {
   /**
    * Apply phase-specific CI/CD validation rules
    */
-  async applyPhaseValidationRules(sdId, phase, status, options = {}) {
+  async applyPhaseValidationRules(sdId, phase, status, _options = {}) {
     const errors = [];
     const warnings = [];
     let score = 100;
@@ -265,7 +265,7 @@ class LEOCICDValidator {
   /**
    * Trigger automated failure resolution
    */
-  async triggerFailureResolution(sdId, validationResult) {
+  async triggerFailureResolution(sdId, _validationResult) {
     try {
       console.log(chalk.cyan(`\n🤖 Triggering automated CI/CD failure resolution for ${sdId}...`));
 

@@ -21,7 +21,7 @@ const supabase = createClient(
  * @param {string} prdId - PRD ID for error reporting
  * @returns {Object} Validation result with success/errors
  */
-export function validatePRDContent(content, prdId = 'unknown') {
+export function validatePRDContent(content, _prdId = 'unknown') {
   const result = {
     success: false,
     errors: [],
@@ -39,7 +39,7 @@ export function validatePRDContent(content, prdId = 'unknown') {
   let parsedContent;
   try {
     parsedContent = JSON.parse(content);
-  } catch (e) {
+  } catch (_e) {
     result.errors.push(`Invalid JSON format: ${e.message}`);
     return result;
   }
@@ -207,7 +207,7 @@ async function fixInvalidPRDs() {
     return;
   }
 
-  for (const { prd, validation } of scanResult.invalidPRDs) {
+  for (const { prd, validation: _validation } of scanResult.invalidPRDs) {
     console.log(chalk.yellow(`🔄 Fixing ${prd.id}...`));
 
     let newContent;

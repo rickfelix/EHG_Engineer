@@ -34,7 +34,7 @@ async function getSDDetails() {
   console.log('\nScope:', sd.scope || 'No scope');
 
   // Check for PRD
-  const { data: prd, error: prdError } = await supabase
+  const { data: prd, error: _prdError } = await supabase
     .from('product_requirements_v2')
     .select('id, title, status')
     .eq('strategic_directive_id', 'SD-BOARD-VISUAL-BUILDER-001')
@@ -50,7 +50,7 @@ async function getSDDetails() {
   }
 
   // Check for backlog linkage
-  const { data: backlog, error: backlogError } = await supabase
+  const { data: backlog, error: _backlogError } = await supabase
     .from('sd_backlog_map')
     .select('backlog_id, backlog_title, item_description, priority, completion_status, extras')
     .eq('sd_id', 'SD-BOARD-VISUAL-BUILDER-001')
@@ -71,7 +71,7 @@ async function getSDDetails() {
   }
 
   // Check for handoffs
-  const { data: handoffs, error: handoffsError } = await supabase
+  const { data: handoffs, error: _handoffsError } = await supabase
     .from('sd_phase_handoffs')
     .select('from_phase, to_phase, status, created_at')
     .eq('sd_id', 'SD-BOARD-VISUAL-BUILDER-001')

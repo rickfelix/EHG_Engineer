@@ -245,7 +245,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
 
   testCompressionOnSD(sdId, phase)
-    .then(results => {
+    .then(_results => {
       console.log('✅ Compression test complete!\n');
       process.exit(0);
     })

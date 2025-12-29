@@ -1,6 +1,21 @@
 # Product Requirements Documents (PRDs)
 
-This directory contains Product Requirements Documents for strategic directives and features.
+> **DATABASE-FIRST (LEO Protocol v4.3.3)**: PRDs are stored in the `product_requirements_v2` table.
+> This directory contains legacy documentation only. Query the database for current PRD data.
+
+## Database Source of Truth
+
+```sql
+-- Get PRD for a specific SD
+SELECT * FROM product_requirements_v2 WHERE sd_id = 'SD-XXX-001';
+
+-- List all PRDs
+SELECT id, title, status, sd_id FROM product_requirements_v2;
+```
+
+---
+
+*The content below describes legacy file-based PRDs. All new PRDs must be created in the database.*
 
 ## Purpose
 
@@ -171,4 +186,5 @@ Before marking PRD as approved:
 
 ---
 
-*Part of LEO Protocol v4.2.0 - PLAN Phase Documentation*
+*Part of LEO Protocol v4.3.3 - PLAN Phase Documentation*
+*Updated: 2025-12-29 - Added database-first notice*

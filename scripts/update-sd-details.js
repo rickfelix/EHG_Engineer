@@ -17,7 +17,7 @@ async function updateSDDetails() {
   const sdId = 'SD-DASHBOARD-AUDIT-2025-08-31-A';
   
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .update({
         title: 'Critical Issues Audit for LEO Protocol Dashboard',
@@ -77,7 +77,7 @@ async function updateSDDetails() {
     console.log(`✅ ${sdId} updated successfully!`);
     console.log('Updated record:', JSON.stringify(data, null, 2));
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error updating SD:', error.message);
     process.exit(1);
   }

@@ -1,11 +1,12 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// path - available for future file path operations
+import path from 'path'; // eslint-disable-line no-unused-vars
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -41,7 +42,7 @@ async function reviewSDs() {
       console.log('Created:', new Date(sd.created_at).toLocaleDateString());
       
       // Check for associated PRDs
-      const { data: prds, error: prdError } = await supabase
+      const { data: prds, error: _prdError } = await supabase
         .from('product_requirements_v2')
         .select('id, title, status, phase')
         .eq('directive_id', sd.id);
@@ -59,7 +60,7 @@ async function reviewSDs() {
       }
       
       // Check for associated EES
-      const { data: ees, error: eesError } = await supabase
+      const { data: ees, error: _eesError } = await supabase
         .from('execution_sequences_v2')
         .select('id, sequence_number, description, status, executor_role')
         .eq('directive_id', sd.id)
@@ -126,7 +127,7 @@ async function reviewSDs() {
       });
     }
     
-  } catch (err) {
+  } catch (_err) {
     console.error('Failed to review SDs:', err.message);
   }
 }

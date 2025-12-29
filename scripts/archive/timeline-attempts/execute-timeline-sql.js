@@ -39,7 +39,7 @@ async function executeSql() {
     // let's create the table using JavaScript
 
     // First, check if table exists
-    const { data: existingTable, error: checkError } = await supabase
+    const { data: _existingTable, error: checkError } = await supabase
       .from('sd_execution_timeline')
       .select('id')
       .limit(1);
@@ -97,7 +97,7 @@ async function executeSql() {
       tracking_added: new Date().toISOString()
     };
 
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .update({
         metadata: {

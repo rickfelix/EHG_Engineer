@@ -63,7 +63,7 @@ async function markComplete() {
   };
 
   try {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('strategic_directives_v2')
       .update(updateData)
       .eq('id', 'SD-UAT-2025-006')

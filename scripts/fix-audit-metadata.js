@@ -56,7 +56,7 @@ async function fixAuditMetadata() {
     console.log('Updated Phase Progress:', correctPhaseProgress);
 
     // Update the SD in database
-    const { data: updatedSD, error: updateError } = await supabase
+    const { data: _updatedSD, error: updateError } = await supabase
       .from('strategic_directives_v2')
       .update({
         metadata: updatedMetadata,

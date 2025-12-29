@@ -108,7 +108,7 @@ class RLSVerifier {
       await this.client.connect();
       this.log('[OK] Connected to database');
       return true;
-    } catch (error) {
+    } catch (_error) {
       if (attempt < CONFIG.maxRetries) {
         const delay = CONFIG.retryDelays[attempt - 1] || CONFIG.retryDelays[CONFIG.retryDelays.length - 1];
         this.warn(`[WARN] Connection attempt ${attempt} failed, retrying in ${delay / 1000}s...`);
@@ -401,7 +401,7 @@ async function main() {
     // Exit with appropriate code
     process.exit(results.passed ? 0 : 1);
 
-  } catch (error) {
+  } catch (_error) {
     // Always output errors to stderr, even in JSON mode
     console.error('\n[FAIL] VERIFICATION FAILED');
     console.error('Error:', error.message);

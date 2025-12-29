@@ -19,7 +19,7 @@ async function updateSequenceRank() {
   
   try {
     // Update sequence_rank to 1 (top of the list)
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .update({ sequence_rank: 1 })
       .eq('id', 'SD-MULTIMEDIA-001')
@@ -35,7 +35,7 @@ async function updateSequenceRank() {
     console.log(`   New sequence_rank: ${data.sequence_rank}`);
     console.log('\n📊 SD will now appear at the top when sorting ascending.');
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error:', error.message);
     process.exit(1);
   }

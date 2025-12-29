@@ -13,7 +13,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import crypto from 'crypto';
+// crypto import kept for potential future UUID generation
+// import crypto from 'crypto';
 
 dotenv.config();
 

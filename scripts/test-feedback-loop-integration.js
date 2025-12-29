@@ -17,7 +17,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { execSync } from 'child_process';
+// import { execSync } from 'child_process'; // Unused - available for shell commands
 import dotenv from 'dotenv';
 import chalk from 'chalk';
 
@@ -79,7 +79,7 @@ class FeedbackLoopIntegrationTests {
       this.passed++;
       this.results.push({ name: testName, status: 'passed' });
       console.log(chalk.green('✓'));
-    } catch (error) {
+    } catch (_error) {
       this.failed++;
       this.results.push({ name: testName, status: 'failed', error: error.message });
       console.log(chalk.red('✗'));
@@ -410,7 +410,7 @@ async function main() {
     const success = await tester.runAll();
     await tester.cleanup();
     process.exit(success ? 0 : 1);
-  } catch (error) {
+  } catch (_error) {
     console.error(chalk.red('\n❌ Test suite failed:'), error);
     await tester.cleanup();
     process.exit(1);

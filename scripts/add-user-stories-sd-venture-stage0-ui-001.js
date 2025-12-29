@@ -1099,7 +1099,7 @@ async function insertUserStories() {
   for (const story of userStories) {
     console.log(`Inserting story: ${story.story_key} - ${story.title}`);
 
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('user_stories')
       .insert(story)
       .select()

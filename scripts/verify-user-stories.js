@@ -92,7 +92,7 @@ async function verifyUserStories() {
       totalPoints,
       storiesBySd
     };
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error verifying user stories:', error.message);
     if (error.details) console.error('Details:', error.details);
     if (error.hint) console.error('Hint:', error.hint);

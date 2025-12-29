@@ -212,7 +212,7 @@ async function runMaintenance() {
 
 // Run
 runMaintenance()
-  .then((result) => {
+  .then((_result) => {
     process.exit(0);
   })
   .catch((error) => {

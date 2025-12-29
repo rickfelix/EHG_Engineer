@@ -9,7 +9,7 @@
  */
 
 import { createSupabaseServiceClient } from './lib/supabase-connection.js';
-import fs from 'fs';
+// fs import kept for potential future file operations
 import path from 'path';
 import { fileURLToPath } from 'url';
 

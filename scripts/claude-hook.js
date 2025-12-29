@@ -38,7 +38,7 @@ async function isMiddlewareRunning() {
       timeout: 1000 
     });
     return response.ok;
-  } catch (error) {
+  } catch (_error) {
     return false;
   }
 }
@@ -142,7 +142,7 @@ async function handleResponseReceived(response) {
       const cacheData = await fs.readFile(CACHE_FILE, 'utf-8');
       const cache = JSON.parse(cacheData);
       requestId = cache.requestId;
-    } catch (error) {
+    } catch (_error) {
       // No cache, can't enhance
       console.log(response);
       return;

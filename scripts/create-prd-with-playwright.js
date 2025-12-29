@@ -624,12 +624,12 @@ const prdData = {
     console.log('📄 PRD ID:', prdResult.id);
     
     // Insert Playwright specifications
-    const { data: specResult, error: specError } = await supabase
+    const { data: _specResult, error: specError } = await supabase
       .from('prd_playwright_specifications')
       .insert(playwrightSpecs)
       .select()
       .single();
-    
+
     if (specError) {
       console.error('⚠️ Warning: Could not create Playwright specs:', specError);
     } else {
@@ -719,7 +719,7 @@ function generateSharedSelectors() {
   };
 }
 
-function generateTestFixtures(prd) {
+function generateTestFixtures(_prd) {
   return {
     users: {
       chairman: {
@@ -748,7 +748,7 @@ function generateTestFixtures(prd) {
   };
 }
 
-function extractAPIEndpoints(prd) {
+function extractAPIEndpoints(_prd) {
   return [
     { method: 'GET', path: '/api/sdip/submissions', expectedStatus: 200 },
     { method: 'POST', path: '/api/sdip/submissions', expectedStatus: 201 },

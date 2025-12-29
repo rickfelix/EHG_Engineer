@@ -209,7 +209,7 @@ async function updateSequence() {
   let errorCount = 0;
 
   for (const mapping of sequenceMapping) {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .update({
         sequence_rank: mapping.sequence_rank,

@@ -158,7 +158,7 @@ export function rateLimiter(config: RateLimitConfig) {
     let responseEnded = false;
 
     // Override res.end to check status
-    res.end = function(...args: any[]): any {
+    res.end = function(this: NextApiResponse, ...args: Parameters<typeof originalEnd>): ReturnType<typeof originalEnd> {
       if (!responseEnded) {
         responseEnded = true;
 

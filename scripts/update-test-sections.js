@@ -5,7 +5,7 @@
  * Maps old section categories to new sidebar navigation structure
  */
 
-import { createClient } from '@supabase/supabase-js';
+// import { createClient } from '@supabase/supabase-js'; // Unused
 import chalk from 'chalk';
 import pg from 'pg';
 
@@ -158,7 +158,7 @@ async function updateSections() {
       }
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.error(chalk.red('❌ Error:'), error.message);
   } finally {
     await client.end();

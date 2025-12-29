@@ -57,7 +57,7 @@ async function main() {
           await client.query(stmt);
           console.log('   ✅ Success\n');
           successCount++;
-        } catch (error) {
+        } catch (_error) {
           console.log('   ⚠️  Comment failed (non-critical)\n');
           skipCount++;
         }

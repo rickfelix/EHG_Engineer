@@ -42,7 +42,7 @@ class URLVerifier {
       console.log(`\n📍 Target URL: ${targetUrl}`);
       console.log(`🔌 Port: ${this.results.port}`);
       console.log(`🎯 Component hint: ${componentHint || 'None provided'}`);
-    } catch (error) {
+    } catch (_error) {
       console.error('❌ Invalid URL format');
       return this.generateReport(false);
     }
@@ -85,7 +85,7 @@ class URLVerifier {
         console.log('❌ Page not accessible (HTTP status: ' + response.status() + ')');
       }
       
-    } catch (error) {
+    } catch (_error) {
       console.error('❌ Error accessing URL:', error.message);
       this.results.accessible = false;
     } finally {

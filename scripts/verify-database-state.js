@@ -94,7 +94,7 @@ async function verifyDatabaseState() {
           console.log(`❌ Files found in ${path}: ${files.join(', ')}`);
           filesFound = true;
         }
-      } catch (e) {
+      } catch (_e) {
         // Directory doesn't exist, that's fine
       }
     }
@@ -129,7 +129,7 @@ async function verifyDatabaseState() {
     
     process.exit(allPassed ? 0 : 1);
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Verification error:', error.message);
     process.exit(1);
   }

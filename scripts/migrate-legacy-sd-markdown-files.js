@@ -299,7 +299,7 @@ function cleanupEmptyDirs() {
           }
           console.log(`🧹 Removed empty directory: ${dir}`);
         }
-      } catch (e) {
+      } catch (_e) {
         // Directory not empty or other issue, skip
       }
     }

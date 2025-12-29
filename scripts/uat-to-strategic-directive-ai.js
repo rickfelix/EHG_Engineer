@@ -35,7 +35,7 @@ class UATToSDConverter {
   /**
    * Main conversion pipeline
    */
-  async convertTestFailureToSD(testResult, options = {}) {
+  async convertTestFailureToSD(testResult, _options = {}) {
     console.log(chalk.cyan.bold('\n🤖 UAT to Strategic Directive AI Conversion\n'));
     console.log(chalk.gray('═'.repeat(60)));
 
@@ -76,7 +76,7 @@ class UATToSDConverter {
 
       return { ...submission, sd_key: strategicDirective.sd_key };
 
-    } catch (error) {
+    } catch (_error) {
       console.error(chalk.red('❌ Conversion failed:'), error.message);
       throw error;
     }
@@ -562,8 +562,8 @@ Return JSON with:
    * Create linking table in database
    */
   async createLinkingTable() {
-    const sql = `
-      CREATE TABLE IF NOT EXISTS uat_finding_actions (
+    const _sql = `
+      CREATE TABLE IF NOT EXISTS uat_finding_actions (`
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         uat_result_id UUID,
         uat_case_id TEXT,
@@ -606,7 +606,7 @@ async function main() {
   };
 
   try {
-    const submission = await converter.convertTestFailureToSD(testResult);
+    const _submission = await converter.convertTestFailureToSD(testResult);
 
     console.log(chalk.cyan('\n═'.repeat(60)));
     console.log(chalk.green('🎉 Conversion complete!'));
@@ -617,7 +617,7 @@ async function main() {
     console.log(chalk.cyan('═'.repeat(60) + '\n'));
 
     process.exit(0);
-  } catch (error) {
+  } catch (_error) {
     console.error(chalk.red('Fatal error:'), error);
     process.exit(1);
   }

@@ -16,17 +16,17 @@ async function verify() {
     // 1. Check tables exist by querying them directly
     console.log('1. Tables created:');
 
-    const { data: dcCount, error: dcErr } = await supabase
+    const { data: _dcCount, error: dcErr } = await supabase
         .from('sd_data_contracts')
         .select('id', { count: 'exact', head: true });
     console.log('   sd_data_contracts:', dcErr ? '❌ ' + dcErr.message : '✅');
 
-    const { data: ucCount, error: ucErr } = await supabase
+    const { data: _ucCount, error: ucErr } = await supabase
         .from('sd_ux_contracts')
         .select('id', { count: 'exact', head: true });
     console.log('   sd_ux_contracts:', ucErr ? '❌ ' + ucErr.message : '✅');
 
-    const { data: vCount, error: vErr } = await supabase
+    const { data: _vCount, error: vErr } = await supabase
         .from('sd_contract_violations')
         .select('id', { count: 'exact', head: true });
     console.log('   sd_contract_violations:', vErr ? '❌ ' + vErr.message : '✅');

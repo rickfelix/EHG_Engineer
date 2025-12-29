@@ -110,7 +110,7 @@ const execChecklist = [
 ];
 
 // Update PRD (store deliverables in metadata.exec_deliverables since column doesn't exist)
-const { data: updated, error } = await supabase
+const { data: _updated, error } = await supabase
   .from('product_requirements_v2')
   .update({
     status: 'implemented',

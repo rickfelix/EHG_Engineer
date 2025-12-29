@@ -214,7 +214,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
   };
 
   // Update PRD
-  const { data: updated, error: updateError } = await supabase
+  const { data: _updated, error: updateError } = await supabase
     .from('product_requirements_v2')
     .update({
       metadata: updatedMetadata,

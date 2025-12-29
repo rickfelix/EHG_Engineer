@@ -25,7 +25,7 @@ async function checkDirectiveStatus() {
 
     for (const table of tables) {
         try {
-            const { data, error, count } = await supabase
+            const { data: _data, error, count } = await supabase
                 .from(table)
                 .select('*', { count: 'exact', head: true });
 

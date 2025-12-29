@@ -24,7 +24,7 @@ async function executeAgentManagementExpansion() {
 
     // Step 2: Add 8 new user stories
     console.log('📝 STEP 2: Adding 8 new agent management user stories...');
-    const newStories = await addAgentManagementStories();
+    const _newStories = await addAgentManagementStories();
     console.log('');
 
     // Step 3: Verify final counts

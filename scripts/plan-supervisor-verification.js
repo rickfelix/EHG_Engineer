@@ -121,7 +121,7 @@ class PLANSupervisorCLI {
       }
     });
 
-    this.tool.on('verification:complete', (results) => {
+    this.tool.on('verification:complete', (_results) => {
       if (!options.json) {
         console.log('\n✅ Verification complete!');
       }
@@ -283,7 +283,7 @@ class PLANSupervisorCLI {
       // Exit with appropriate code
       process.exit(results.verdict === 'pass' ? 0 : 1);
 
-    } catch (error) {
+    } catch (_error) {
       console.error(`\n❌ Fatal error: ${error.message}`);
       
       if (options.json) {

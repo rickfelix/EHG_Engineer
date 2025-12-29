@@ -111,7 +111,7 @@ async function addEESToDatabase() {
   console.log('📋 Adding Epic Execution Sequences to database...\n');
 
   for (const ees of eesItems) {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('execution_sequences_v2')
       .insert(ees)
       .select();

@@ -136,7 +136,7 @@ export async function extractAndPopulateDeliverables(sdId, prd, supabase, option
       const scopeLines = prd.scope.split('\n');
       const checkpointPattern = /(?:Checkpoint|Deliverable|Component|Feature|Phase)\s*(\d+)?[:\-]\s*(.+)/i;
 
-      scopeLines.forEach((line, index) => {
+      scopeLines.forEach((line, _index) => {
         const match = line.match(checkpointPattern);
         if (match) {
           deliverables.push({

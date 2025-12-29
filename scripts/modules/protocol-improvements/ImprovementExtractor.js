@@ -372,7 +372,7 @@ export class ImprovementExtractor {
     return 60;
   }
 
-  _extractFromGenericFields(whatNeedsImprovement, actionItems) {
+  _extractFromGenericFields(whatNeedsImprovement, _actionItems) {
     const improvements = [];
 
     // Parse what_needs_improvement JSONB

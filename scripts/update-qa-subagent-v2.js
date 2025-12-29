@@ -69,7 +69,7 @@ async function updateQASubAgent() {
 
   try {
     // Update QA Engineering Director sub-agent
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('leo_sub_agents')
       .update({
         capabilities: JSON.stringify(capabilities),
@@ -105,7 +105,7 @@ async function updateQASubAgent() {
 
     console.log('\n✅ Database update complete!');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error:', error.message);
   }
 }
@@ -261,7 +261,7 @@ Based on learnings from **SD-RECONNECT-009** retrospective (ID: 39cc380d-2d4d-46
   };
 
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('leo_protocol_sections')
       .insert(section)
       .select();
@@ -276,7 +276,7 @@ Based on learnings from **SD-RECONNECT-009** retrospective (ID: 39cc380d-2d4d-46
     console.log(`   Title: ${data[0].title}`);
     console.log(`   Order Index: ${data[0].order_index}\n`);
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error:', error.message);
   }
 }

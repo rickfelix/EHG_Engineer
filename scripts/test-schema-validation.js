@@ -9,9 +9,10 @@
  * @see docs/retrospectives/SD-KNOWLEDGE-001-completion-issues-and-prevention.md
  */
 
-import { compareTypes, formatValidationError, generateUUID, clearSchemaCache } from './modules/schema-validator.js';
+ 
+import { compareTypes, formatValidationError, generateUUID, clearSchemaCache as _clearSchemaCache } from './modules/schema-validator.js';
 import { safeInsert, safeBulkInsert } from './modules/safe-insert.js';
-import { createClient } from '@supabase/supabase-js';
+// import { createClient } from '@supabase/supabase-js'; // Unused - using safe-insert instead
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -33,7 +34,7 @@ function test(name, fn) {
     fn();
     testsPassed++;
     console.log(`✅ PASS: ${name}`);
-  } catch (err) {
+  } catch (_err) {
     testsFailed++;
     console.log(`❌ FAIL: ${name}`);
     console.log(`   Error: ${err.message}`);

@@ -123,7 +123,7 @@ async function updateTestingSubAgent() {
   };
 
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('leo_sub_agents')
       .update({
         metadata: updatedMetadata
@@ -149,7 +149,7 @@ async function updateTestingSubAgent() {
     console.log('- Context reduction: 30-40%');
     console.log('- Timeout block reduction: 90%');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Unexpected error:', err);
     process.exit(1);
   }

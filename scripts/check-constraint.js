@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient as _createClient } from '@supabase/supabase-js';
 import { createDatabaseClient } from '../lib/supabase-connection.js';
 import dotenv from 'dotenv';
 

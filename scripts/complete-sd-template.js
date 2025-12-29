@@ -38,7 +38,7 @@ async function completeStrategicDirective(sdId) {
     
     // STEP 1: Update Strategic Directive
     console.log('📋 Step 1: Updating Strategic Directive...');
-    const { data: sdUpdate, error: sdError } = await supabase
+    const { data: _sdUpdate, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .update({
         status: 'completed', // Use 'completed' status instead of 'archived'

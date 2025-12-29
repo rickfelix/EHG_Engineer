@@ -1,11 +1,11 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// import path from 'path'; // Unused
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -70,7 +70,7 @@ async function updateDashboardUISD() {
     const scope = 'In Scope: Dashboard layout optimization, Progress tracker improvements, Strategic Directive dropdown enhancements, Mobile responsiveness, Dark mode refinements, Real-time update indicators, Accessibility improvements. Out of Scope: Backend API changes, Database schema modifications, Authentication system changes, Third-party integrations.';
 
     // Update the SD in database
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .update({
         status: 'active',
@@ -139,7 +139,7 @@ async function updateDashboardUISD() {
     console.log('  3. Approve resource allocation');
     console.log('  4. Complete LEAD approval for PLAN handoff');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('Failed to update SD:', err.message);
   }
 }

@@ -47,7 +47,7 @@ async function addBacklogReviewRequirement() {
     ]
   };
 
-  const { data: leadData, error: leadError } = await supabase
+  const { data: _leadData, error: leadError } = await supabase
     .from('leo_agents')
     .update(leadUpdate)
     .eq('agent_code', 'LEAD')
@@ -114,7 +114,7 @@ async function addBacklogReviewRequirement() {
     ]
   };
 
-  const { data: planData, error: planError } = await supabase
+  const { data: _planData, error: planError } = await supabase
     .from('leo_agents')
     .update(planUpdate)
     .eq('agent_code', 'PLAN')
@@ -248,7 +248,7 @@ grep -r "/[route-name]" src/App.tsx src/routes/
     }
   };
 
-  const { data: sectionData, error: sectionError } = await supabase
+  const { data: _sectionData, error: sectionError } = await supabase
     .from('leo_protocol_sections')
     .insert(checklistSection)
     .select()

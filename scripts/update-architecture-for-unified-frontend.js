@@ -100,7 +100,7 @@ const UPDATED_SD_EXECUTION_PROTOCOL = `### Application Context for Implementatio
 **Key Rule**: Both user AND admin UI changes go to EHG. Only backend API changes go to EHG_Engineer.`;
 
 // Updated EXEC Implementation Requirements - just the app check portion
-const UPDATED_EXEC_APP_CHECK = `1. **APPLICATION CHECK** ⚠️ CRITICAL
+const _UPDATED_EXEC_APP_CHECK = `1. **APPLICATION CHECK** ⚠️ CRITICAL
    - For **user features**: \`/mnt/c/_EHG/EHG/\`
    - For **admin features**: \`/mnt/c/_EHG/EHG/src/components/admin/\` or \`/src/pages/admin/\`
    - For **backend API changes**: \`/mnt/c/_EHG/EHG_Engineer/\`
@@ -174,7 +174,7 @@ async function main() {
     console.log('   2. Review generated CLAUDE_CORE.md for changes');
     console.log('   3. Commit the updated CLAUDE*.md files\n');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Update failed:', error);
     process.exit(1);
   }

@@ -109,7 +109,7 @@ async function updateGithubSubAgent() {
   };
 
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('leo_sub_agents')
       .update({
         metadata: updatedMetadata
@@ -135,7 +135,7 @@ async function updateGithubSubAgent() {
     console.log('- ROI: 120:1 ratio');
     console.log('- Time saved: 10-20 hours per incident');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Unexpected error:', err);
     process.exit(1);
   }

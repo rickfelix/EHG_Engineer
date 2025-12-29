@@ -127,8 +127,8 @@ async function validateRetrospectiveQuality(sdId) {
   console.log('📊 SECTION VALIDATION');
   console.log('═'.repeat(60));
 
-  let allSectionsMeetMin = true;
-  let allSectionsExcellent = true;
+  let _allSectionsMeetMin = true;
+  let _allSectionsExcellent = true;
 
   validations.forEach(v => {
     console.log(`\n${v.section}:`);
@@ -136,8 +136,8 @@ async function validateRetrospectiveQuality(sdId) {
     console.log(`   Status: ${v.status}`);
     console.log(`   ${v.recommendation}`);
 
-    if (!v.meetsMin) allSectionsMeetMin = false;
-    if (!v.isExcellent) allSectionsExcellent = false;
+    if (!v.meetsMin) _allSectionsMeetMin = false;
+    if (!v.isExcellent) _allSectionsExcellent = false;
   });
 
   // Validate scores

@@ -45,7 +45,7 @@ async function markSD046WorkingOn() {
     console.log('\n🚀 Ready to begin LEAD phase for SD-046');
     console.log('📌 Next: Requirements gathering and strategic analysis');
 
-  } catch (error) {
+  } catch (_error) {
     console.log('⚠️  Proceeding with LEAD phase (database update skipped)');
   }
 }

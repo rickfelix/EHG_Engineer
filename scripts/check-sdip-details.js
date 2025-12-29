@@ -67,7 +67,7 @@ async function checkSDIP() {
     }
 
     // Check directive submissions
-    const { data: submissions, error: subError } = await supabase
+    const { data: submissions, error: _subError } = await supabase
       .from('directive_submissions')
       .select('*')
       .ilike('intent_summary', '%SDIP%')

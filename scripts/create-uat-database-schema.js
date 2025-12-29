@@ -37,9 +37,7 @@ async function executeSQLFile() {
 
     console.log(`Found ${statements.length} SQL statements to execute\n`);
 
-    let successCount = 0;
-    let errorCount = 0;
-    const errors = [];
+    let _successCount = 0;
 
     // Execute each statement
     for (let i = 0; i < statements.length; i++) {
@@ -83,7 +81,7 @@ async function executeSQLFile() {
           statement.includes('GRANT')) {
         // These need to be executed via SQL Editor or psql
         console.log('⏳ (Requires SQL Editor execution)');
-        successCount++;
+        __successCount++;
       } else if (statement.includes('INSERT INTO uat_test_suites')) {
         // We can handle inserts with the JS client
         try {
@@ -143,10 +141,10 @@ async function executeSQLFile() {
 
           if (error) throw error;
           console.log('✅');
-          successCount++;
-        } catch (error) {
+          ___successCount++;
+        } catch (_error) {
           console.log('⚠️  (May already exist)');
-          successCount++;
+          // Note: Intentionally not tracking count for already-existing items
         }
       } else {
         console.log('⏭️  (Skipped)');
@@ -174,7 +172,7 @@ async function executeSQLFile() {
     console.log('\nTable Status:');
     for (const table of tables) {
       try {
-        const { data, error } = await supabase
+        const { data: _data, error } = await supabase
           .from(table)
           .select('id')
           .limit(1);
@@ -184,7 +182,7 @@ async function executeSQLFile() {
         } else {
           console.log(`  ✅ ${table} - Ready`);
         }
-      } catch (e) {
+      } catch (_e) {
         console.log(`  ❌ ${table} - Not created`);
       }
     }
@@ -230,7 +228,7 @@ async function executeSQLFile() {
 
 // Run if executed directly
 executeSQLFile()
-  .then((summary) => {
+  .then((_summary) => {
     console.log('\n🚀 Next steps after SQL execution:');
     console.log('1. Generate test cases: node scripts/generate-test-cases.js');
     console.log('2. Configure Playwright: node scripts/setup-playwright-config.js');

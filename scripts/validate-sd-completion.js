@@ -1,22 +1,22 @@
 #!/usr/bin/env node
 
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// import { fileURLToPath } from 'url'; // Unused
+// import { dirname } from 'path'; // Unused
 
 
 
 
 /**
  * Validate Strategic Directive Completion Readiness
- * 
+ *
  * Checks that all database fields required for dashboard 100% calculation are set
  * Run before completing any Strategic Directive to prevent progress display issues
- * 
+ *
  * Usage: node validate-sd-completion.js SD-2025-001
  */
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// import path from 'path'; // Unused
 import dotenv from 'dotenv';
 dotenv.config();
 

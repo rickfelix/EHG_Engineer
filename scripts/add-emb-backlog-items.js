@@ -97,7 +97,7 @@ async function addBacklogItems() {
     console.log(`✅ Successfully added ${data.length} backlog items!`);
 
     // Verify and show summary
-    const { data: allItems, error: fetchError } = await supabase
+    const { data: allItems, error: _fetchError } = await supabase
       .from('sd_backlog_map')
       .select('backlog_id, backlog_title, priority, phase')
       .eq('sd_id', 'SD-2025-09-EMB')

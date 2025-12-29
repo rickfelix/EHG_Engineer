@@ -35,11 +35,11 @@ async function verifyMemoryPartitioning() {
   let passed = true;
 
   // Check if venture_id column exists in agent_memory_stores
-  const { data: columns, error: colError } = await supabase
+  const { data: _columns, error: _colError } = await supabase
     .rpc('to_regclass', { text: 'public.agent_memory_stores' });
 
   // Query schema to check column
-  const { data: schemaCheck, error: schemaError } = await supabase
+  const { data: _schemaCheck, error: schemaError } = await supabase
     .from('agent_memory_stores')
     .select('venture_id')
     .limit(0);
@@ -93,7 +93,7 @@ async function verifyTruthNormalization() {
   // Check ventures have vertical_category assigned
   let categorizedCount = 0;
   for (const venture of SWARM_VENTURES) {
-    const { data, error } = await supabase
+    const { data, error: _error } = await supabase
       .from('ventures')
       .select('vertical_category')
       .eq('id', venture.id)
@@ -131,7 +131,7 @@ async function verifyIdentityLocking() {
   console.log('   ✅ claim_task_contract uses FOR UPDATE SKIP LOCKED (existing)');
 
   // Check if new idempotency function exists
-  const { data: funcCheck, error: funcError } = await supabase
+  const { data: _funcCheck, error: funcError } = await supabase
     .rpc('fn_complete_task_contract_idempotent', {
       p_contract_id: '00000000-0000-0000-0000-000000000000',
       p_idempotency_key: '00000000-0000-0000-0000-000000000001'
@@ -150,7 +150,7 @@ async function verifyIdentityLocking() {
   }
 
   // Check atomic budget function
-  const { data: budgetCheck, error: budgetError } = await supabase
+  const { data: _budgetCheck, error: budgetError } = await supabase
     .rpc('fn_deduct_budget_atomic', {
       p_venture_id: '00000000-0000-0000-0000-000000000000',
       p_tokens_to_deduct: 0

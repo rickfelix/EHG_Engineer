@@ -494,7 +494,7 @@ Design issues are easier to fix before implementation than during refactoring.
   };
 
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('leo_sub_agents')
       .update({
         description: updatedDescription,
@@ -524,7 +524,7 @@ Design issues are easier to fix before implementation than during refactoring.
     console.log('- 11 issue patterns catalogued');
     console.log('- SD-A11Y: 108 violations fixed, 99.7% test pass');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Unexpected error:', err);
     process.exit(1);
   }

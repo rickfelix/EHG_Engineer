@@ -139,7 +139,7 @@ async function diagnose() {
         console.log('No quality-related migrations in schema_migrations table');
         console.log('(This is normal if using a different migration tracking system)');
       }
-    } catch (error) {
+    } catch (_error) {
       console.log('Migration tracking table not found or not accessible');
     }
 

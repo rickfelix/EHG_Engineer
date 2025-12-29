@@ -90,9 +90,9 @@ class FixValidationOrchestrator {
       const jsonFile = path.join(this.fixRequestsDir, 'fix-requests.json');
       const content = await fs.readFile(jsonFile, 'utf8');
       return JSON.parse(content);
-    } catch (error) {
+    } catch (_error) {
       console.warn('⚠️  Could not load fix-requests.json, scanning directory...');
-      
+
       // Fallback: scan directory for individual fix request files
       const files = await fs.readdir(this.fixRequestsDir);
       const requests = [];
@@ -204,7 +204,7 @@ class FixValidationOrchestrator {
             if (match) {
               refinedRecommendation = JSON.parse(match[1]);
             }
-          } catch (e) {
+          } catch (_e) {
             // Ignore parsing errors
           }
           
@@ -252,7 +252,7 @@ class FixValidationOrchestrator {
   /**
    * Generate validation report
    */
-  async generateValidationReport(results, requests) {
+  async generateValidationReport(results, _requests) {
     const report = [];
     const timestamp = new Date().toISOString();
     

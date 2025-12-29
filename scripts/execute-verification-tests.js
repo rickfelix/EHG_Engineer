@@ -1,11 +1,11 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// import { fileURLToPath } from 'url';  // Unused
+// import { dirname } from 'path';  // Unused
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// import path from 'path';  // Unused
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -160,7 +160,7 @@ async function executeVerificationTests() {
       checked: test.passed
     }));
     
-    const { data: prdUpdate, error: prdError } = await supabase
+    const { data: _prdUpdate, error: prdError } = await supabase
       .from('product_requirements_v2')
       .update({
         status: 'verification_complete',

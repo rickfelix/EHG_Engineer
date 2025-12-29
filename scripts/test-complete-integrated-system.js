@@ -22,10 +22,12 @@ import SecuritySubAgent from '../lib/agents/security-sub-agent.js';  // Replaces
 import TestingSubAgent from '../lib/agents/testing-sub-agent.js';   // Replaces TestingSubAgentV2
 import APISubAgent from '../lib/agents/api-sub-agent.js';
 import DependencySubAgent from '../lib/agents/dependency-sub-agent.js';
-import { SharedIntelligenceHub, getInstance as getHubInstance } from '../lib/agents/shared-intelligence-hub.js';
+ 
+import { SharedIntelligenceHub as _SharedIntelligenceHub, getInstance as getHubInstance } from '../lib/agents/shared-intelligence-hub.js';
 import PriorityEngine from '../lib/agents/priority-engine.js';
 import AutoFixEngine from '../lib/agents/auto-fix-engine.js';
-import { TypeMapper, getInstance as getTypeMapperInstance } from '../lib/agents/type-mapping.js';
+ 
+import { TypeMapper as _TypeMapper, getInstance as getTypeMapperInstance } from '../lib/agents/type-mapping.js';
 
 console.log('🧪 LEO Protocol Complete Integrated System Test');
 console.log('Testing all 4 new sub-agents with full improvements\n');
@@ -76,7 +78,7 @@ async function testCompleteSystem() {
       // Share findings with hub
       securityFindings.forEach(finding => hub.shareFinding('security', finding));
 
-    } catch (error) {
+    } catch (_error) {
       results.errors.push(`Security Agent: ${error.message}`);
       console.log(`  ❌ Error: ${error.message}`);
     }
@@ -98,7 +100,7 @@ async function testCompleteSystem() {
       // Share findings with hub (SD-FOUNDATION-V3-003: Fixed argument order - agentName first)
       testFindings.forEach(finding => hub.shareFinding('testing', finding));
 
-    } catch (error) {
+    } catch (_error) {
       results.errors.push(`Testing Agent: ${error.message}`);
       console.log(`  ❌ Error: ${error.message}`);
     }
@@ -120,7 +122,7 @@ async function testCompleteSystem() {
       // Share findings with hub (SD-FOUNDATION-V3-003: Fixed argument order - agentName first)
       apiFindings.forEach(finding => hub.shareFinding('api', finding));
 
-    } catch (error) {
+    } catch (_error) {
       results.errors.push(`API Agent: ${error.message}`);
       console.log(`  ❌ Error: ${error.message}`);
     }
@@ -142,7 +144,7 @@ async function testCompleteSystem() {
       // Share findings with hub (SD-FOUNDATION-V3-003: Fixed argument order - agentName first)
       depFindings.forEach(finding => hub.shareFinding('dependencies', finding));
 
-    } catch (error) {
+    } catch (_error) {
       results.errors.push(`Dependency Agent: ${error.message}`);
       console.log(`  ❌ Error: ${error.message}`);
     }
@@ -190,9 +192,9 @@ async function testCompleteSystem() {
     for (const finding of allFindings.slice(0, 10)) { // Test first 10 findings
       try {
         // Test type mapping
-        const mappedType = typeMapper.mapType(finding);
+        const _mappedType = typeMapper.mapType(finding);
         const isFixable = typeMapper.isFixable(finding);
-        const confidence = typeMapper.getFixConfidence(finding);
+        const _confidence = typeMapper.getFixConfidence(finding);
         
         typeMapTests++;
         
@@ -203,7 +205,7 @@ async function testCompleteSystem() {
             successfulFixes++;
           }
         }
-      } catch (error) {
+      } catch (_error) {
         // Continue testing other findings
       }
     }
@@ -244,7 +246,7 @@ async function testCompleteSystem() {
     
     console.log(`  Standardization score: ${results.integration.standardization.standardizationScore}%`);
 
-  } catch (error) {
+  } catch (_error) {
     results.errors.push(`System Error: ${error.message}`);
     console.error(`❌ System Error: ${error.message}`);
   }

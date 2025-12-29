@@ -38,8 +38,8 @@ async function applyUIValidationSchema() {
       .map(s => s.trim())
       .filter(s => s.length > 0 && !s.startsWith('--'));
     
-    let successCount = 0;
-    let errorCount = 0;
+    let _successCount = 0;
+    let _errorCount = 0;
     
     // Execute each statement
     for (const statement of statements) {
@@ -58,13 +58,13 @@ async function applyUIValidationSchema() {
             // If RPC doesn't exist, skip (we'll handle tables differently)
             console.log('⚠️  Skipping direct SQL execution (RPC not available)');
           } else {
-            successCount++;
+            _successCount++;
             console.log(`✅ Executed: ${statement.substring(0, 50)}...`);
           }
         }
-      } catch (error) {
-        errorCount++;
-        console.error('❌ Failed to execute statement:', error.message);
+      } catch (_error) {
+        _errorCount++;
+        console.error('❌ Failed to execute statement');
       }
     }
     
@@ -81,7 +81,7 @@ async function applyUIValidationSchema() {
     
     for (const tableName of tablesToCreate) {
       try {
-        const { data, error } = await supabase
+        const { data: _data, error } = await supabase
           .from(tableName)
           .select('id')
           .limit(1);
@@ -91,7 +91,7 @@ async function applyUIValidationSchema() {
         } else if (!error) {
           console.log(`✅ Table ${tableName} exists`);
         }
-      } catch (error) {
+      } catch (_error) {
         console.log(`⚠️  Cannot verify table ${tableName}`);
       }
     }

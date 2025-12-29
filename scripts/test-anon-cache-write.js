@@ -218,7 +218,7 @@ async function testAnonWrites() {
     console.log(chalk.gray('   1. Run automated-knowledge-retrieval.js'));
     console.log(chalk.gray('   2. Verify cache writes succeed without RLS errors\n'));
 
-  } catch (error) {
+  } catch (_error) {
     console.error(chalk.red('\n❌ Test failed:'), error.message);
     console.error(chalk.gray('\nThis indicates RLS policies are not configured correctly.'));
     console.error(chalk.gray('Re-run: node scripts/apply-anon-rls-cache-policies.js\n'));

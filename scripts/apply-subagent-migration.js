@@ -19,7 +19,7 @@ async function executeSQL(description, sql) {
   console.log(`\n📝 ${description}...`);
 
   try {
-    const { data, error } = await supabase.rpc('exec_sql', { sql_query: sql });
+    const { data: _data, error } = await supabase.rpc('exec_sql', { sql_query: sql });
 
     if (error) {
       // If exec_sql doesn't exist, show manual instructions

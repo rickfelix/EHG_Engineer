@@ -64,7 +64,7 @@ async function updateRetrospective() {
     ]
   };
 
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('retrospectives')
     .update(updates)
     .eq('sd_id', 'SD-2025-1020-E2E-SELECTORS')

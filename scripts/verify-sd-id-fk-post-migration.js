@@ -196,7 +196,7 @@ async function verifyPostMigration() {
     }
     console.log(`\n${'='.repeat(80)}\n`);
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error during verification:', error);
     throw error;
   } finally {

@@ -24,7 +24,7 @@ export function parseVitestOutput(output) {
 
   try {
     // Look for test summary line: " Test Files  13 passed (13)"
-    const testFilesMatch = output.match(/Test Files\s+(\d+)\s+passed/);
+    const _testFilesMatch = output.match(/Test Files\s+(\d+)\s+passed/);
 
     // Look for individual test count: " Tests  162 passed | 1 skipped (163)"
     // Format: "Tests  <passed> passed [| <failed> failed] [| <skipped> skipped] (<total>)"

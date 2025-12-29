@@ -321,7 +321,7 @@ async function insertBacklogItems() {
     for (const item of backlogItems) {
         try {
             // Upsert using composite key (sd_id, backlog_id)
-            const { data, error } = await supabase
+            const { error } = await supabase
                 .from('sd_backlog_map')
                 .upsert(item, {
                     onConflict: 'sd_id,backlog_id',

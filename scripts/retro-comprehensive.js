@@ -333,12 +333,12 @@ async function generateComprehensiveRetrospective() {
       if (!error) {
         console.log(chalk.green(`💾 Retrospective stored in database: ${data.id}`));
       }
-    } catch (dbError) {
+    } catch (_dbError) {
       console.log(chalk.gray('📝 Retrospective saved to file (database storage optional)'));
     }
 
-  } catch (error) {
-    console.log(chalk.yellow('⚠️  Could not save retrospective file:', error.message));
+  } catch (fileError) {
+    console.log(chalk.yellow('⚠️  Could not save retrospective file:', fileError.message));
   }
 
   console.log(chalk.green.bold('\n🎉 RETRO Sub-Agent Analysis Complete!'));

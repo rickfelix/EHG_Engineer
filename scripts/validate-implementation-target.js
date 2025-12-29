@@ -7,7 +7,7 @@
 import chalk from 'chalk';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import fs from 'fs';
+// import fs from 'fs'; // Unused - available for file operations
 import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -40,7 +40,7 @@ class ImplementationValidator {
         isEhgEngineer: remote.includes('EHG_Engineer'),
         isEhgApp: remote.includes('/ehg.git') && !remote.includes('EHG_Engineer')
       };
-    } catch (error) {
+    } catch (_error) {
       return { remote: null, isEhgEngineer: false, isEhgApp: false };
     }
   }

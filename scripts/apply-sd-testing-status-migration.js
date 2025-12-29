@@ -47,7 +47,7 @@ async function applyMigration() {
 
       try {
         // Use rpc to execute raw SQL
-        const { data, error } = await supabase.rpc('exec_sql', { sql: stmt });
+        const { data: _data, error } = await supabase.rpc('exec_sql', { sql: stmt });
 
         if (error) {
           // Check if error is benign (already exists)
@@ -76,7 +76,7 @@ async function applyMigration() {
 
     // Verify table exists
     console.log('🔍 Verifying table creation...');
-    const { data: tables, error: tableError } = await supabase
+    const { data: _tables, error: tableError } = await supabase
       .from('sd_testing_status')
       .select('*')
       .limit(1);

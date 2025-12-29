@@ -29,7 +29,7 @@ async function verifyTable() {
 
   // Test 1: Table accessibility
   console.log('Test 1: Table Accessibility');
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('llm_recommendations')
     .select('*')
     .limit(0);

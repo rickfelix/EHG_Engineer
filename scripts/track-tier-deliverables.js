@@ -59,7 +59,7 @@ async function trackDeliverables() {
   console.log('Tracking deliverables for SD-VIF-TIER-001...\n');
 
   for (const deliverable of deliverables) {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('sd_scope_deliverables')
       .insert(deliverable)
       .select();

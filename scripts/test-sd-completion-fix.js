@@ -77,7 +77,7 @@ class SDCompletionTester {
     try {
       await this.executor.markSDComplete(testSDId);
       console.log(chalk.green('✓ markSDComplete executed successfully'));
-    } catch (error) {
+    } catch (_error) {
       console.error(chalk.red('✗ markSDComplete failed:'), error);
     }
 

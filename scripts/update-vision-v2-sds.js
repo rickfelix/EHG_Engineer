@@ -407,7 +407,7 @@ async function main() {
           updateCount++;
         }
 
-      } catch (error) {
+      } catch (_error) {
         console.log(`   ❌ Error updating ${sdId}: ${error.message}`);
         errorCount++;
       }
@@ -428,7 +428,7 @@ async function main() {
       console.log('\n✅ All updates applied successfully!');
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Fatal error:', error.message);
     process.exit(1);
   } finally {

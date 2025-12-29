@@ -73,7 +73,7 @@ async function verifyInstallation() {
 
     // 3. Check related SDs
     console.log('\n3️⃣ Checking other Strategic Directives...');
-    const { data: allSDs, error: allSDsError } = await supabase
+    const { data: allSDs, error: _allSDsError } = await supabase
       .from('strategic_directives_v2')
       .select('id, title, status, priority')
       .order('execution_order', { ascending: true })
@@ -112,7 +112,7 @@ async function verifyInstallation() {
     console.log('\n✅ Verification complete!');
     return true;
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Verification failed:', error);
     return false;
   }

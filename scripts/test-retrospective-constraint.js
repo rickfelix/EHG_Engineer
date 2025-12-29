@@ -31,7 +31,7 @@ async function test(name, fn) {
     await fn();
     testsPassed++;
     console.log(`✅ PASS: ${name}`);
-  } catch (err) {
+  } catch (_err) {
     testsFailed++;
     console.log(`❌ FAIL: ${name}`);
     console.log(`   Error: ${err.message}`);
@@ -40,7 +40,7 @@ async function test(name, fn) {
 
 // Test 1: Try to insert quality_score = 0 (should fail)
 await test('Reject quality_score = 0', async () => {
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('retrospectives')
     .insert({
       sd_id: 'TEST-CONSTRAINT-001',
@@ -68,7 +68,7 @@ await test('Reject quality_score = 0', async () => {
 
 // Test 2: Try to insert quality_score = NULL (should fail)
 await test('Reject quality_score = NULL', async () => {
-  const { data, error } = await supabase
+  const { data: _data2, error } = await supabase
     .from('retrospectives')
     .insert({
       sd_id: 'TEST-CONSTRAINT-002',
@@ -96,7 +96,7 @@ await test('Reject quality_score = NULL', async () => {
 
 // Test 3: Try to insert quality_score = 69 (should fail)
 await test('Reject quality_score = 69 (below threshold)', async () => {
-  const { data, error } = await supabase
+  const { data: _data3, error } = await supabase
     .from('retrospectives')
     .insert({
       sd_id: 'TEST-CONSTRAINT-003',
@@ -194,7 +194,7 @@ await test('Accept quality_score = 100 (maximum)', async () => {
 
 // Test 6: Try to insert quality_score = 101 (should fail)
 await test('Reject quality_score = 101 (above maximum)', async () => {
-  const { data, error } = await supabase
+  const { data: _data6, error } = await supabase
     .from('retrospectives')
     .insert({
       sd_id: 'TEST-CONSTRAINT-006',

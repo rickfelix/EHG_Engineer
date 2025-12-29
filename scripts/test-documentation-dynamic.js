@@ -65,7 +65,7 @@ try {
         });
     });
     
-} catch (error) {
+} catch (_error) {
   console.error('❌ Could not load dynamic agent:', error.message);
   console.log('\n🔧 Using original Documentation Sub-Agent instead...');
   

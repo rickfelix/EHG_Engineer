@@ -66,7 +66,7 @@ async function testBasicContractFlow() {
     console.log('\n✅ Test 1 PASSED: Basic contract flow works\n');
     return true;
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Test 1 FAILED:', error.message);
     return false;
   }
@@ -155,7 +155,7 @@ ${'Lorem ipsum dolor sit amet. '.repeat(100)}
     console.log('\n✅ Test 2 PASSED: Artifact integration works\n');
     return true;
 
-  } catch (error) {
+  } catch (_error) {
     // Handle type constraint issue gracefully
     if (error.message.includes('type_check') || error.message.includes('violates check constraint')) {
       console.log('   ⚠️  Test skipped due to type constraint (known schema issue)');
@@ -199,7 +199,7 @@ async function testSubAgentExecutorIntegration() {
     console.log('\n✅ Test 3 PASSED: Sub-agent executor integration verified\n');
     return true;
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Test 3 FAILED:', error.message);
     console.error('   Stack:', error.stack?.split('\n').slice(0, 3).join('\n'));
     return false;
@@ -233,7 +233,7 @@ async function testFullSubAgentWithContract() {
     console.log('\n✅ Test 4 PASSED: Full sub-agent execution with contract works\n');
     return true;
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Test 4 FAILED:', error.message);
     // This might fail if DOCMON sub-agent doesn't exist - that's expected
     if (error.message.includes('not found')) {

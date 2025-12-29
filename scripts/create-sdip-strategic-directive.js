@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// import { fileURLToPath } from 'url'; // Unused - not needed for this script
+// import { dirname } from 'path'; // Unused - not needed for this script
 
 
 
@@ -13,7 +13,7 @@ import { dirname } from 'path';
  */
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// import path from 'path'; // Unused - not needed for this script
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -112,7 +112,7 @@ async function createSDIPStrategicDirective() {
   };
 
   // Insert into database (no files per protocol)
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('strategic_directives_v2')
     .insert(strategicDirective)
     .select()
@@ -223,7 +223,7 @@ async function createSDIPStrategicDirective() {
   };
 
   // Insert handoff record
-  const { data: handoffData, error: handoffError } = await supabase
+  const { data: _handoffData, error: handoffError } = await supabase
     .from('leo_handoffs')
     .insert(handoff)
     .select()

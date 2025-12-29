@@ -141,7 +141,7 @@ async function testInvisibleSubAgentSystem() {
     
     return true;
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Test failed:', error.message);
     console.error('📍 Stack:', error.stack);
     return false;
@@ -190,11 +190,11 @@ async function runDiagnostics() {
       } else {
         console.log(`   ✅ Sub-agent data: ${subAgents?.length || 0} agents available`);
       }
-    } catch (err) {
+    } catch (_err) {
       console.log('   ⚠️ Sub-agent data: Using fallback definitions');
     }
     
-  } catch (error) {
+  } catch (_error) {
     console.log('   ❌ Diagnostics error:', error.message);
   }
 }

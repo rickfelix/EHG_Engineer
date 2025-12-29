@@ -80,8 +80,8 @@ class CredentialBoundaryTester {
     console.log('\n🌿 Test 3: Branch Restriction Verification');
 
     // Check git config for branch patterns
-    const codexPattern = /staging\/codex-\*/;
-    const claudePattern = /feature\/\*/;
+    const _codexPattern = /staging\/codex-\*/;
+    const _claudePattern = /feature\/\*/;
 
     this.results.passed.push('✅ Branch patterns defined');
     this.results.passed.push('✅ Codex restricted to staging/codex-*');
@@ -101,7 +101,7 @@ class CredentialBoundaryTester {
   testCommitMarkers() {
     console.log('\n🏷️ Test 5: Commit Marker Validation');
 
-    const markers = {
+    const _markers = {
       codex: '[CODEX-READY:<hash>]',
       claude: '[CLAUDE-APPLIED:<hash>]'
     };

@@ -49,7 +49,7 @@ class EnhancedDevOpsPlatformArchitect {
     console.log(chalk.gray('─'.repeat(70)));
 
     try {
-      const { sd_id, failure_category, pipeline_status_id, trigger_type = 'manual' } = context;
+      const { sd_id, failure_category: _failure_category, pipeline_status_id: _pipeline_status_id, trigger_type: _trigger_type = 'manual' } = context;
 
       if (!sd_id) {
         throw new Error('Strategic Directive ID required for DevOps analysis');
@@ -249,7 +249,7 @@ class EnhancedDevOpsPlatformArchitect {
   /**
    * Resolution strategy for test failures
    */
-  async resolveTestFailures(failure, sdId) {
+  async resolveTestFailures(failure, _sdId) {
     console.log(chalk.yellow('   🧪 Analyzing test failures...'));
 
     // Common test failure resolutions
@@ -285,7 +285,7 @@ class EnhancedDevOpsPlatformArchitect {
   /**
    * Resolution strategy for lint errors
    */
-  async resolveLintErrors(failure, sdId) {
+  async resolveLintErrors(_failure, _sdId) {
     console.log(chalk.yellow('   📝 Analyzing lint errors...'));
 
     const recommendations = [
@@ -309,7 +309,7 @@ class EnhancedDevOpsPlatformArchitect {
   /**
    * Resolution strategy for build failures
    */
-  async resolveBuildFailures(failure, sdId) {
+  async resolveBuildFailures(failure, _sdId) {
     console.log(chalk.yellow('   🔨 Analyzing build failures...'));
 
     const recommendations = [
@@ -342,7 +342,7 @@ class EnhancedDevOpsPlatformArchitect {
   /**
    * Resolution strategy for deployment failures
    */
-  async resolveDeploymentFailures(failure, sdId) {
+  async resolveDeploymentFailures(_failure, _sdId) {
     console.log(chalk.yellow('   🚀 Analyzing deployment failures...'));
 
     const recommendations = [
@@ -365,7 +365,7 @@ class EnhancedDevOpsPlatformArchitect {
   /**
    * Resolution strategy for timeout issues
    */
-  async resolveTimeouts(failure, sdId) {
+  async resolveTimeouts(_failure, _sdId) {
     console.log(chalk.yellow('   ⏰ Analyzing timeout issues...'));
 
     const recommendations = [
@@ -387,7 +387,7 @@ class EnhancedDevOpsPlatformArchitect {
   /**
    * Resolution strategy for dependency issues
    */
-  async resolveDependencyIssues(failure, sdId) {
+  async resolveDependencyIssues(_failure, _sdId) {
     console.log(chalk.yellow('   📦 Analyzing dependency issues...'));
 
     const recommendations = [
@@ -410,7 +410,7 @@ class EnhancedDevOpsPlatformArchitect {
   /**
    * Resolution strategy for security scan failures
    */
-  async resolveSecurityIssues(failure, sdId) {
+  async resolveSecurityIssues(_failure, _sdId) {
     console.log(chalk.yellow('   🔒 Analyzing security scan failures...'));
 
     const recommendations = [
@@ -433,7 +433,7 @@ class EnhancedDevOpsPlatformArchitect {
   /**
    * Generic resolution strategy
    */
-  async resolveGenericFailures(failure, sdId) {
+  async resolveGenericFailures(_failure, _sdId) {
     console.log(chalk.yellow('   ❓ Analyzing generic failure...'));
 
     const recommendations = [

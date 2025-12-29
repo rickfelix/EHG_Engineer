@@ -22,7 +22,7 @@ async function updateAgentEngineeringScope() {
   const newScope = 'Comprehensive AI Agent Management platform providing centralized control and visibility for entire AI agent fleet. Central dashboard with modern layout featuring filtering, search, and sorting capabilities. Agent list view displays name, role, status, and organization for all agents. Detailed agent pages with tabbed interface showing Tools (assigned tools with permissions), Activity (current tasks and history), Performance (real-time charts and metrics), and Versions (history with rollback). Agent creation wizard provides guided form for defining role/goal, selecting tools with access levels, and configuring settings. Tools Management system maintains registry of all available tools with documentation, permissions, and usage tracking. Role-based tool assignment with permission levels and cost limits per agent. Real-time activity dashboards visualize uptime, cost tracking, success rates, and resource utilization. Version management enables agent version tracking, comparison, and one-click rollback. Organization integration displays department assignments, hierarchical relationships, and team coordination. Also includes: configuration management (LLM settings, prompts, backstories, agent parameters), performance monitoring and alerting, agent lifecycle management (enable/disable, hot reload), prompt engineering tooling (library, version control, A/B testing), system presets and preferences, search optimization, agent health dashboards. Agents in this department: Agent Configuration Specialist, Prompt Engineering Specialist, Agent Performance Monitor, Agent Reliability Engineer, Agent Lifecycle Manager';
 
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .update({
         scope: newScope,
@@ -41,7 +41,7 @@ async function updateAgentEngineeringScope() {
     console.log('='.repeat(80));
 
     return data;
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error updating SD:', error.message);
     if (error.details) console.error('Details:', error.details);
     if (error.hint) console.error('Hint:', error.hint);

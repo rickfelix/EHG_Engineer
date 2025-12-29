@@ -49,7 +49,7 @@ async function getSDDetails() {
 
     // Check for related PRDs
     console.log('\n=== CHECKING FOR RELATED PRDS ===\n');
-    const { data: prds, error: prdError } = await supabase
+    const { data: prds, error: _prdError } = await supabase
       .from('product_requirements_v2')
       .select('*')
       .eq('directive_id', sdId);
@@ -65,7 +65,7 @@ async function getSDDetails() {
 
     // Check for handoffs
     console.log('\n=== CHECKING FOR HANDOFFS ===\n');
-    const { data: handoffs, error: handoffError } = await supabase
+    const { data: handoffs, error: _handoffError } = await supabase
       .from('sd_phase_handoffs')
       .select('*')
       .eq('sd_id', sdId)

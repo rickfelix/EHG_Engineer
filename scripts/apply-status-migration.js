@@ -29,7 +29,7 @@ async function applyStatusMigration() {
 
     // Execute migration using RPC if available
     try {
-      const { data, error } = await supabase.rpc('execute_sql', {
+      const { data: _data, error } = await supabase.rpc('execute_sql', {
         sql: migrationSQL
       });
 
@@ -39,7 +39,7 @@ async function applyStatusMigration() {
       }
       
       console.log('✅ Migration executed successfully via RPC');
-    } catch (rpcError) {
+    } catch (_rpcError) {
       console.log('⚠️  RPC not available, trying alternative approach');
       
       // Alternative: Execute individual statements

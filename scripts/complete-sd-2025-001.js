@@ -25,7 +25,7 @@ async function completeSD2025001() {
   
   try {
     // Update SD status to completed
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .update({
         status: 'completed',
@@ -44,8 +44,8 @@ async function completeSD2025001() {
       console.error('❌ Error updating SD:', error.message);
       
       // Try simpler update
-      const { data: simpleData, error: simpleError } = await supabase
-        .from('strategic_directives_v2')  
+      const { data: _simpleData, error: simpleError } = await supabase
+        .from('strategic_directives_v2')
         .update({
           status: 'completed',
           progress_percentage: 100

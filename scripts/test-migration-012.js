@@ -170,7 +170,7 @@ async function testMigration() {
 
     process.exit(0);
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ MIGRATION TEST FAILED:', error.message);
     console.error(error.stack);
     process.exit(1);

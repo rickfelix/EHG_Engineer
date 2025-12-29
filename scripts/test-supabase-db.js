@@ -24,7 +24,7 @@ Supabase URL: https://dedlbzhpgkmetvhbkyzq.supabase.co
     try {
       const { stdout: whoami } = await execAsync('supabase whoami', { timeout: 5000 });
       console.log(`   ✅ Logged in as: ${whoami.trim()}`);
-    } catch (error) {
+    } catch (_error) {
       console.log('   ❌ Not logged in. Please run: supabase login');
       return;
     }
@@ -51,7 +51,7 @@ Supabase URL: https://dedlbzhpgkmetvhbkyzq.supabase.co
         console.log('   ⚠️  EHG project not found in your Supabase account');
         console.log(`   Available projects: ${projectList.length}`);
       }
-    } catch (error) {
+    } catch (_error) {
       console.log(`   ⚠️  Could not list projects: ${error.message}`);
     }
 
@@ -77,7 +77,7 @@ Supabase URL: https://dedlbzhpgkmetvhbkyzq.supabase.co
     console.log('2. Pull database schema: supabase db pull');
     console.log('3. Start local development: supabase start');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error:', error.message);
   }
 }

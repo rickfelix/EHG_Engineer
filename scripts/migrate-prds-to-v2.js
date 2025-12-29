@@ -34,7 +34,6 @@
 
 import { createDatabaseClient } from './lib/supabase-connection.js';
 import { readFileSync, writeFileSync } from 'fs';
-import { execSync } from 'child_process';
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const SKIP_CODE_UPDATE = process.argv.includes('--skip-code-update');
@@ -187,7 +186,7 @@ async function main() {
             }
             updatedCount++;
           }
-        } catch (err) {
+        } catch (_err) {
           console.log(`   ⚠️  Skipped (file not found): ${filePath}`);
         }
       }

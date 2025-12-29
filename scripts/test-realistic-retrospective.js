@@ -85,13 +85,13 @@ async function testRealistic() {
       await client.query('DELETE FROM retrospectives WHERE id = $1', [result.rows[0].id]);
       console.log('\n✅ Test data cleaned up');
 
-    } catch (err) {
+    } catch (_err) {
       console.log(`❌ INSERT FAILED: ${err.message}`);
       console.log(`   Detail: ${err.detail || 'N/A'}`);
       console.log(`   Hint: ${err.hint || 'N/A'}`);
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Test failed:', error.message);
     throw error;
   } finally {

@@ -61,11 +61,11 @@ async function createUIValidationTables() {
     
     for (const tableName of tablesToCheck) {
       try {
-        const { data, error } = await supabase
+        const { data: _data, error } = await supabase
           .from(tableName)
           .select('*')
           .limit(1);
-        
+
         if (error) {
           if (error.message.includes('does not exist')) {
             console.log(`❌ Table '${tableName}' does not exist`);

@@ -196,7 +196,7 @@ async function createRetrospectiveEnhancementSD() {
       .single();
 
     if (existing) {
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('strategic_directives_v2')
         .update(strategicDirective)
         .eq('id', 'SD-RETRO-ENHANCE-001')
@@ -206,7 +206,7 @@ async function createRetrospectiveEnhancementSD() {
       if (error) throw error;
       console.log('✅ Strategic Directive updated successfully!');
     } else {
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('strategic_directives_v2')
         .insert(strategicDirective)
         .select()

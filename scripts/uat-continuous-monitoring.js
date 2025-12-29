@@ -86,7 +86,7 @@ class UATContinuousMonitoring {
       // Keep the process alive
       this.keepAlive();
 
-    } catch (error) {
+    } catch (_error) {
       console.error(chalk.red(`❌ Failed to start monitoring system: ${error.message}`));
       this.monitoring.isRunning = false;
       throw error;
@@ -127,7 +127,7 @@ class UATContinuousMonitoring {
 
       console.log(chalk.green(`✅ ${runId}: Scheduled test execution completed`));
 
-    } catch (error) {
+    } catch (_error) {
       console.error(chalk.red(`❌ ${runId}: Scheduled test execution failed: ${error.message}`));
       this.monitoring.consecutiveFailures++;
       await this.handleSystemFailure(error, runId);
@@ -245,7 +245,7 @@ class UATContinuousMonitoring {
         analysisProcess.on('error', reject);
       });
 
-    } catch (error) {
+    } catch (_error) {
       console.warn(`⚠️ ${runId}: Analysis failed, using basic metrics: ${error.message}`);
       return this.generateBasicAnalysis(testResult);
     }
@@ -537,7 +537,7 @@ class UATContinuousMonitoring {
         message: authExists && configExists ? 'Test environment ready' : 'Missing auth or config files',
         details: { authExists, configExists }
       };
-    } catch (error) {
+    } catch (_error) {
       return {
         status: 'error',
         message: error.message
@@ -550,7 +550,7 @@ class UATContinuousMonitoring {
    */
   async checkDatabaseHealth() {
     try {
-      const { data, error } = await this.supabase
+      const { data: _data, error } = await this.supabase
         .from('uat_reports')
         .select('id')
         .limit(1);
@@ -559,10 +559,10 @@ class UATContinuousMonitoring {
         status: error ? 'unhealthy' : 'healthy',
         message: error ? error.message : 'Database connection successful'
       };
-    } catch (error) {
+    } catch (err) {
       return {
         status: 'error',
-        message: error.message
+        message: err.message
       };
     }
   }
@@ -583,7 +583,7 @@ class UATContinuousMonitoring {
    */
   async storeMonitoringResults(runId, testResult, analysis, qualityCheck) {
     try {
-      const record = {
+      const _record = {
         run_id: runId,
         timestamp: new Date(),
         system_id: this.systemId,
@@ -597,7 +597,7 @@ class UATContinuousMonitoring {
       // Store in a monitoring table (would need to be created)
       console.log(`💾 Stored monitoring results for ${runId}`);
 
-    } catch (error) {
+    } catch (_error) {
       console.warn(`⚠️ Failed to store monitoring results: ${error.message}`);
     }
   }
@@ -609,7 +609,7 @@ class UATContinuousMonitoring {
     try {
       // Store in notifications table
       console.log(`💾 Stored notification: ${notification.type}`);
-    } catch (error) {
+    } catch (_error) {
       console.warn(`⚠️ Failed to store notification: ${error.message}`);
     }
   }
@@ -731,7 +731,7 @@ Examples:
     const monitor = new UATContinuousMonitoring(options);
     await monitor.startMonitoring();
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Failed to start UAT continuous monitoring:', error.message);
     process.exit(1);
   }

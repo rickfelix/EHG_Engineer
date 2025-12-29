@@ -13,7 +13,7 @@ import inquirer from 'inquirer';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
-import path from 'path';
+import _path from 'path';
 
 const execAsync = promisify(exec);
 dotenv.config();
@@ -81,7 +81,7 @@ class EXECChecklistEnforcer {
   /**
    * Main enforcement entry point
    */
-  async enforceChecklist(prdId, options = {}) {
+  async enforceChecklist(prdId, _options = {}) {
     console.log(chalk.blue.bold('\n🚨 EXEC PRE-IMPLEMENTATION CHECKLIST'));
     console.log(chalk.blue('━'.repeat(50)));
 
@@ -173,7 +173,7 @@ class EXECChecklistEnforcer {
   /**
    * Verify correct application directory
    */
-  async verifyApplication(prd) {
+  async verifyApplication(_prd) {
     const { stdout: pwd } = await execAsync('pwd');
     const currentDir = pwd.trim();
 
@@ -214,7 +214,7 @@ class EXECChecklistEnforcer {
   /**
    * Verify Git repository
    */
-  async verifyGitRepository(prd) {
+  async verifyGitRepository(_prd) {
     try {
       const { stdout } = await execAsync('git remote -v');
 

@@ -680,7 +680,7 @@ class PlanToExecVerifier {
         }
       };
       
-    } catch (error) {
+    } catch (_error) {
       console.error('❌ Handoff verification failed:', error.message);
       return this.rejectHandoff(sdId, 'SYSTEM_ERROR', error.message);
     }
@@ -720,7 +720,7 @@ class PlanToExecVerifier {
     try {
       await this.supabase.from('sd_phase_handoffs').insert(execution);
       console.log(`📝 Handoff execution recorded: ${executionId}`);
-    } catch (error) {
+    } catch (_error) {
       console.warn('⚠️  Could not store handoff execution:', error.message);
     }
     
@@ -820,7 +820,7 @@ class PlanToExecVerifier {
         analysis: workflowAnalysis
       };
 
-    } catch (error) {
+    } catch (_error) {
       console.error(`   ❌ Workflow review validation error: ${error.message}`);
       return {
         valid: true, // Don't block on system errors
@@ -860,7 +860,7 @@ class PlanToExecVerifier {
     try {
       await this.supabase.from('leo_handoff_rejections').insert(rejection);
       console.log(`📝 Rejection recorded: ${rejection.id}`);
-    } catch (error) {
+    } catch (_error) {
       console.warn('⚠️  Could not store rejection:', error.message);
     }
     

@@ -59,7 +59,7 @@ async function verifyUuidIdRemoval() {
   console.log('\n2. Checking backup table existence...');
 
   // Query using raw SQL via a stored function or direct RPC
-  const { data: backupCheck, error: backupError } = await supabase
+  const { data: _backupCheck, error: backupError } = await supabase
     .from('_backup_strategic_directives_uuid_id')
     .select('id, uuid_id')
     .limit(1);

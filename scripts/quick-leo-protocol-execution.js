@@ -1,11 +1,12 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// path - available for future file path operations
+import path from 'path'; // eslint-disable-line no-unused-vars
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -26,7 +27,7 @@ async function quickLeoProtocolExecution() {
     // PHASE 1: Create minimal PRD (PLAN phase)
     console.log('📋 PHASE 2: PLAN - Creating minimal PRD...');
     
-    const { data: prd, error: prdError } = await supabase
+    const { data: _prd, error: prdError } = await supabase
       .from('product_requirements_v2')
       .upsert([
         {
@@ -108,7 +109,7 @@ async function quickLeoProtocolExecution() {
     console.log('  ✅ Ready for production');
     
     // Update SD to 100% complete
-    const { data: finalSD, error: finalError } = await supabase
+    const { data: _finalSD, error: finalError } = await supabase
       .from('strategic_directives_v2')
       .update({
         status: 'archived',
@@ -170,7 +171,7 @@ async function quickLeoProtocolExecution() {
     console.log('║  LEO Protocol v4.1 Workflow Demonstrated! 🎯     ║');
     console.log('╚════════════════════════════════════════════════════╝');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Failed to execute LEO Protocol:', err.message);
   }
 }

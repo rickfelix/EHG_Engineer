@@ -8,7 +8,8 @@
  */
 
 import { execSync } from 'child_process';
-import path from 'path';
+// path - available for future path operations
+import path from 'path'; // eslint-disable-line no-unused-vars
 
 /**
  * Validate build for target application
@@ -133,7 +134,7 @@ function generateBuildFixRecommendations(errors) {
 /**
  * Extract module name from import path
  */
-function extractModuleName(errorMessage) {
+function _extractModuleName(errorMessage) {
   const match = errorMessage.match(/['"]([^'"]+)['"]/);
   if (match) {
     const parts = match[1].split('/');

@@ -112,7 +112,7 @@ async function reviseScope() {
     const now = new Date().toISOString();
 
     // Update SD scope
-    const { data: sd, error: updateError } = await supabase
+    const { data: _sd, error: updateError } = await supabase
       .from('strategic_directives_v2')
       .update({
         scope: REVISED_SCOPE,
@@ -173,7 +173,7 @@ async function reviseScope() {
     console.log('');
     console.log('🎯 Next: Create SD-BACKEND-001C for PDF Export\n');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ ERROR:', error.message);
     process.exit(1);
   }

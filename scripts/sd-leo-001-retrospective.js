@@ -121,7 +121,7 @@ const retrospective = {
 async function storeRetrospective() {
   try {
     // Store in retrospectives table if it exists
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('retrospectives')
       .insert({
         sd_id: retrospective.sd_id,
@@ -143,7 +143,7 @@ async function storeRetrospective() {
     } else {
       console.log('⚠️ Could not store in database:', error.message);
     }
-  } catch (err) {
+  } catch (_err) {
     console.log('⚠️ Retrospectives table may not exist');
   }
 }

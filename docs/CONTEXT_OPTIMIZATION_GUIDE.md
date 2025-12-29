@@ -370,6 +370,6 @@ wc -l CLAUDE*.md
 
 ---
 
-*Part of LEO Protocol v4.2.0 performance optimization*
+*Part of LEO Protocol v4.3.3 performance optimization*
 *Database-first architecture maintained*
 *All context sourced from leo_protocol_sections table*

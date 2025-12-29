@@ -296,7 +296,7 @@ async function main() {
       cancelled: updateResult.rows.length > 0 ? updateResult.rows[0] : null
     };
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Error during SD split operation:', error.message);
     console.error('\nStack trace:', error.stack);
 
@@ -317,7 +317,7 @@ async function main() {
 
 // Execute
 main()
-  .then(result => {
+  .then(_result => {
     process.exit(0);
   })
   .catch(err => {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import fs from 'fs';
-import path from 'path';
+// path import kept for potential future file operations
 
 // Load configurations
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));

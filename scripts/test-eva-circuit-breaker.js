@@ -172,7 +172,7 @@ async function testCircuitBreaker() {
     console.log('=' .repeat(50));
     console.log('EVA Circuit Breaker is fully functional and ready for production.\n');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Test Failed:', error.message);
     console.error('Full error:', error);
 

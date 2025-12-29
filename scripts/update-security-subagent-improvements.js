@@ -110,7 +110,7 @@ async function updateSecuritySubAgent() {
   };
 
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('leo_sub_agents')
       .update({
         capabilities: updatedCapabilities,
@@ -138,7 +138,7 @@ async function updateSecuritySubAgent() {
     console.log('- Bug prevention rate: 95%');
     console.log('- Vulnerability reduction: 10x (Supabase Auth vs custom)');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Unexpected error:', err);
     process.exit(1);
   }

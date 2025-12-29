@@ -21,7 +21,7 @@ function prepareMigration() {
   const sqlContent = fs.readFileSync(sqlPath, 'utf8');
   
   // Create a cleaned version (remove comments for easier copying)
-  const cleanSQL = sqlContent
+  const _cleanSQL = sqlContent
     .split('\n')
     .filter(line => !line.trim().startsWith('--') || line.includes('--'))
     .join('\n');

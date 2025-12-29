@@ -134,7 +134,7 @@ class IntelligentChecklistSystem {
             deliverables.push(path.join(checkPath, file));
           }
         }
-      } catch (e) {
+      } catch (_e) {
         // Directory might not exist
       }
     }

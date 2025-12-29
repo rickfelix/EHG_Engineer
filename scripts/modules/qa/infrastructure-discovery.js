@@ -67,7 +67,7 @@ async function findAuthHelpers(appPath) {
         fullPath: join(fixturesPath, file)
       });
     }
-  } catch (error) {
+  } catch (_error) {
     // fixtures directory doesn't exist
   }
 
@@ -91,7 +91,7 @@ async function findTestHelpers(appPath) {
         fullPath: join(helpersPath, file)
       });
     }
-  } catch (error) {
+  } catch (_error) {
     // helpers directory doesn't exist
   }
 
@@ -117,7 +117,7 @@ async function findFixtures(appPath) {
         });
       }
     }
-  } catch (error) {
+  } catch (_error) {
     // fixtures directory doesn't exist
   }
 
@@ -145,7 +145,7 @@ async function findConfigs(appPath) {
         name: configName,
         path: configPath
       });
-    } catch (error) {
+    } catch (_error) {
       // config doesn't exist
     }
   }
@@ -171,7 +171,7 @@ async function analyzeE2EPatterns(appPath) {
         fullPath: join(e2ePath, file)
       });
     }
-  } catch (error) {
+  } catch (_error) {
     // e2e directory doesn't exist
   }
 

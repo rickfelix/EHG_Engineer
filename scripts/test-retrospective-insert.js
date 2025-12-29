@@ -75,7 +75,7 @@ async function testInsert() {
     await client.query('DELETE FROM retrospectives WHERE sd_id = \'TEST-JSONB-001\'');
     console.log('\n✅ Test record cleaned up');
 
-  } catch (error) {
+  } catch (_error) {
     console.log('❌ TEST FAILED');
     console.log('   Error:', error.message);
     console.log('\n   Full error:');

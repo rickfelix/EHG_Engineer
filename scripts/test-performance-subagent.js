@@ -42,7 +42,7 @@ async function testPerformance() {
     fs.writeFileSync(reportPath, JSON.stringify(results, null, 2));
     console.log(`\n💾 Full report saved to: ${reportPath}`);
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error during performance analysis:', error.message);
     console.error(error.stack);
   }

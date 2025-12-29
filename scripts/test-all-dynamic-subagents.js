@@ -96,7 +96,7 @@ async function testAgent(name, modulePath) {
     fs.writeFileSync(reportPath, JSON.stringify(results, null, 2));
     console.log(`   💾 Report saved: ${reportName}`);
     
-  } catch (error) {
+  } catch (_error) {
     console.error(`❌ Failed to test ${name} Sub-Agent:`, error.message);
     allResults[name] = {
       success: false,

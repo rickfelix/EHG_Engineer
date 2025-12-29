@@ -165,7 +165,7 @@ async function discoverSchema() {
       } else {
         console.log(`- ❌ ${table} not found`);
       }
-    } catch (e) {
+    } catch (_e) {
       console.log(`- ❌ ${table} not found`);
     }
   }

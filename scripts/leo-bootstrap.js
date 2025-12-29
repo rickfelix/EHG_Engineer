@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// Unused ES module path helpers (kept for potential future use)
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 
 
@@ -158,22 +159,22 @@ class LEOBootstrap {
       }
       
       return 'All tables exist';
-    } catch (error) {
+    } catch (_error) {
       return false;
     }
   }
-  
+
   async loadActiveProtocol() {
     if (!this.hasDatabase) {
       return 'Using file-based protocol';
     }
     
-    const { data, error } = await this.supabase
+    const { data, error: _error } = await this.supabase
       .from('leo_protocols')
       .select('version, status')
       .eq('status', 'active')
       .single();
-    
+
     if (data) {
       this.activeProtocol = data;
       return `Active: v${data.version}`;

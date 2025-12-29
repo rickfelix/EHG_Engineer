@@ -64,7 +64,7 @@ async function fixPRDFormat() {
 
   console.log('\n🔄 Updating to array format...');
 
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('product_requirements_v2')
     .update(updates)
     .eq('id', 'PRD-KNOWLEDGE-001')

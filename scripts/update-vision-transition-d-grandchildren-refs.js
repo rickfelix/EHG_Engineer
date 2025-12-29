@@ -164,7 +164,7 @@ async function updateReferenceDocuments() {
 
     return true;
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Error updating reference documents:', error.message);
     console.error(error);
     return false;

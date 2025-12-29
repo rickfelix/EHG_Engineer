@@ -62,7 +62,7 @@ class RLSSmokeTests {
       console.log(`     Execution time: ${executionTime}ms`);
       return passed;
 
-    } catch (error) {
+    } catch (_error) {
       this.recordTest('SMOKE-1', false, {
         error: error.message,
         expected: 'Exit 0, JSON output, <30s',
@@ -108,7 +108,7 @@ class RLSSmokeTests {
       console.log(`     Permission: ${rows[0]?.can_read_policies ? 'Granted' : 'Denied'}`);
       return passed;
 
-    } catch (error) {
+    } catch (_error) {
       this.recordTest('SMOKE-2', false, {
         error: error.message,
         expected: 'Returns true',
@@ -159,7 +159,7 @@ class RLSSmokeTests {
       console.log(`     Valid structure: ${passed}`);
       return passed;
 
-    } catch (error) {
+    } catch (_error) {
       this.recordTest('SMOKE-3', false, {
         error: error.message,
         expected: 'No syntax errors',
@@ -207,7 +207,7 @@ class RLSSmokeTests {
       console.log(`     Tables missing RLS: ${results.tables_missing_rls}`);
       return passed;
 
-    } catch (error) {
+    } catch (_error) {
       this.recordTest('SMOKE-4', false, {
         error: error.message,
         expected: 'Script reports RLS status',
@@ -255,7 +255,7 @@ class RLSSmokeTests {
       console.log(`     Functional: ${passed}`);
       return passed;
 
-    } catch (error) {
+    } catch (_error) {
       this.recordTest('SMOKE-5', false, {
         error: error.message,
         expected: 'PLAN integration script functional',

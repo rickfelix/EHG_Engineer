@@ -14,7 +14,7 @@ async function createHandoff() {
   console.log('📋 Creating LEAD→PLAN Handoff for SD-041B\n');
 
   // Check for handoff_tracking table first
-  const { data: checkTable, error: tableError } = await supabase
+  const { data: _checkTable, error: tableError } = await supabase
     .from('handoff_tracking')
     .select('id')
     .limit(1);

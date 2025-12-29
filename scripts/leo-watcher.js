@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// Unused ES module path helpers (kept for potential future use)
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 
 
@@ -106,7 +107,7 @@ class LEOWatcher {
     }
     
     try {
-      const { data, error } = await this.supabase
+      const { data, error: _error } = await this.supabase
         .from('leo_protocols')
         .select('version')
         .eq('status', 'active')
@@ -115,13 +116,13 @@ class LEOWatcher {
       if (data) {
         return data.version;
       }
-    } catch (error) {
+    } catch (_error) {
       // Ignore errors, return cached version
     }
-    
+
     return this.lastVersion || 'unknown';
   }
-  
+
   setupRealtimeSubscription() {
     // Subscribe to changes in leo_protocols table
     this.subscription = this.supabase
@@ -130,7 +131,7 @@ class LEOWatcher {
         event: '*',
         schema: 'public',
         table: 'leo_protocols'
-      }, payload => {
+      }, _payload => {
         console.log('\n🔔 Real-time update detected!');
         this.check();
       })
@@ -138,7 +139,7 @@ class LEOWatcher {
         event: '*',
         schema: 'public',
         table: 'leo_sub_agents'
-      }, payload => {
+      }, _payload => {
         console.log('\n🔔 Sub-agent update detected!');
         this.check();
       })

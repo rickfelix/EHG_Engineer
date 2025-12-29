@@ -26,7 +26,7 @@ async function applyMigration() {
       'database/migrations/create-issue-patterns-table.sql'
     );
 
-    const sql = await fs.readFile(migrationPath, 'utf-8');
+    const _sql = await fs.readFile(migrationPath, 'utf-8');
     console.log('✅ Read migration file');
 
     console.log('\n⚠️  MANUAL MIGRATION REQUIRED\n');
@@ -46,7 +46,7 @@ async function applyMigration() {
     console.log('🔄 Attempting simplified migration...\n');
 
     // Check if table exists
-    const { data: existingTable, error: checkError } = await supabase
+    const { data: _existingTable, error: checkError } = await supabase
       .from('issue_patterns')
       .select('id')
       .limit(1);

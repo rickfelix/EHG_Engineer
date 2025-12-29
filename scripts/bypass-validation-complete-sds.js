@@ -49,7 +49,7 @@ async function bypassValidationAndComplete() {
     for (const id of sdIds) {
       console.log(`\nProcessing ${id}...`);
 
-      const { data: updated, error: updateError } = await supabase
+      const { data: _updated, error: updateError } = await supabase
         .from('strategic_directives_v2')
         .update({
           status: 'completed',
@@ -80,7 +80,7 @@ async function bypassValidationAndComplete() {
     console.log('\n=== VERIFICATION ===\n');
 
     for (const id of sdIds) {
-      const { data, error } = await supabase
+      const { data, error: _error } = await supabase
         .from('strategic_directives_v2')
         .select('id, title, status, progress')
         .eq('id', id)

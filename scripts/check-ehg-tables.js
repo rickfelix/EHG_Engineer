@@ -15,7 +15,7 @@ async function checkTables() {
   console.log('Checking EHG Backlog tables...\n');
   
   // Check strategic_directives_backlog
-  const { data: sdData, error: sdError } = await supabase
+  const { data: _sdData, error: sdError } = await supabase
     .from('strategic_directives_backlog')
     .select('sd_id')
     .limit(1);
@@ -35,7 +35,7 @@ async function checkTables() {
   }
   
   // Check sd_backlog_map
-  const { data: mapData, error: mapError } = await supabase
+  const { data: _mapData, error: mapError } = await supabase
     .from('sd_backlog_map')
     .select('backlog_id')
     .limit(1);
@@ -48,7 +48,7 @@ async function checkTables() {
   }
   
   // Check import_audit
-  const { data: auditData, error: auditError } = await supabase
+  const { data: _auditData, error: auditError } = await supabase
     .from('import_audit')
     .select('id')
     .limit(1);
@@ -61,7 +61,7 @@ async function checkTables() {
   }
   
   // Check product_requirements_v3
-  const { data: prdData, error: prdError } = await supabase
+  const { data: _prdData, error: prdError } = await supabase
     .from('product_requirements_v3')
     .select('prd_id')
     .limit(1);

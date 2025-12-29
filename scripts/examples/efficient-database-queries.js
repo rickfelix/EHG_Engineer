@@ -78,7 +78,7 @@ async function example2_limitResults() {
   console.log('❌ BAD: Fetch all rows');
   console.log('─'.repeat(40));
 
-  const { data: allSDs, count: totalCount } = await supabase
+  const { data: allSDs, count: _totalCount } = await supabase
     .from('strategic_directives_v2')
     .select('*', { count: 'exact' });
 

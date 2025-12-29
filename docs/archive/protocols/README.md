@@ -12,13 +12,13 @@ This directory contains archived LEO Protocol versions that are no longer active
 
 ## Why These Protocols Are Archived
 
-These protocol versions have been superseded by **LEO Protocol v4.2.x**. They are preserved for:
+These protocol versions have been superseded by **LEO Protocol v4.3.3**. They are preserved for:
 - Historical reference
 - Understanding protocol evolution
 - Migration path documentation
 - Troubleshooting legacy implementations
 
-**Current Active Protocol**: LEO Protocol v4.2.x (see `/docs/03_protocols_and_standards/`)
+**Current Active Protocol**: LEO Protocol v4.3.3 (see `/CLAUDE.md` for auto-generated context router)
 
 ---
 
@@ -136,7 +136,8 @@ Navigate to `/docs/archive/protocols/` directory
 | v4.1 | Q4 2024 | Q4 2025 | 2025-10-24 | Archived |
 | v4.1.1 | Q1 2025 | Q4 2025 | 2025-10-24 | Archived |
 | v4.1.2 | Q1 2025 | Q4 2025 | 2025-10-24 | Archived |
-| **v4.2.x** | **Q2 2025** | **Active** | **-** | **Current** |
+| v4.2.x | Q2 2025 | Q4 2025 | 2025-12-29 | Archived |
+| **v4.3.3** | **Q4 2025** | **Active** | **-** | **Current** |
 
 ---
 
@@ -183,4 +184,5 @@ docs/archive/
 
 **Last Archive Update**: 2025-10-24
 **Files Archived**: 7 protocol versions (v3.1.5 through v4.1.2)
-**Reason**: Documentation audit cleanup - superseded by v4.2.x
+**Reason**: Documentation audit cleanup - superseded by v4.3.3
+**Current Protocol**: v4.3.3 (auto-generated from database)

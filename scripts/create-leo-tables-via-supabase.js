@@ -32,11 +32,11 @@ async function testAndCreateTables() {
   
   for (const table of tables) {
     try {
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from(table)
         .select('*')
         .limit(1);
-      
+
       if (error) {
         console.log(`❌ Table '${table}' does not exist: ${error.message}`);
         console.log('   You need to create this table in Supabase Dashboard');

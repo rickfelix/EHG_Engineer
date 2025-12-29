@@ -211,7 +211,7 @@ async function createTestPlan() {
   };
 
   // Check if test plan already exists
-  const { data: existing, error: checkError } = await supabase
+  const { data: existing, error: _checkError } = await supabase
     .from('leo_test_plans')
     .select('id')
     .eq('prd_id', 'PRD-KNOWLEDGE-001')

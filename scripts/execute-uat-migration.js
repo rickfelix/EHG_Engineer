@@ -75,7 +75,7 @@ async function executeUATMigration() {
           result = await supabase.rpc('execute_sql', {
             sql: statement + ';'
           });
-        } catch (rpcError) {
+        } catch (_rpcError) {
           // RPC doesn't exist or we don't have permission
           throw new Error('Cannot execute DDL statements with anon key - admin access required');
         }
@@ -124,7 +124,7 @@ async function executeUATMigration() {
 
       // Verify tables exist
       console.log('\nVerifying tables...');
-      const { data: tables, error: verifyError } = await supabase
+      const { data: _tables, error: verifyError } = await supabase
         .from('uat_cases')
         .select('count')
         .limit(0);

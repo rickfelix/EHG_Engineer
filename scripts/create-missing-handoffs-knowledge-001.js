@@ -100,7 +100,7 @@ for (const handoff of handoffs) {
   console.log(`  From: ${handoff.from_agent} → To: ${handoff.to_agent}`);
   console.log(`  Deliverables: ${handoff.deliverables.length} items`);
 
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('sd_phase_handoffs')
     .insert(execution)
     .select();

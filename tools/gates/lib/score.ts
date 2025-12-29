@@ -7,14 +7,14 @@ export type Check = () => Promise<boolean>;
 export interface ValidationRule {
   rule_name: string;
   weight: number;
-  criteria?: Record<string, any>;
+  criteria?: Record<string, unknown>;
   required?: boolean;
 }
 
 export interface GateResult {
   score: number;
   results: Record<string, boolean>;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 }
 
 /**
@@ -26,7 +26,7 @@ export async function scoreGate(
   checks: Record<string, Check>,
 ): Promise<GateResult> {
   const results: Record<string, boolean> = {};
-  const details: Record<string, any> = {};
+  const _details: Record<string, unknown> = {};
   let totalScore = 0;
 
   // Execute all checks in parallel for performance
@@ -59,7 +59,7 @@ export async function scoreGate(
   // Round to 2 decimal places
   const score = Math.round(totalScore * 100) / 100;
 
-  return { score, results, details };
+  return { score, results, details: _details };
 }
 
 /**

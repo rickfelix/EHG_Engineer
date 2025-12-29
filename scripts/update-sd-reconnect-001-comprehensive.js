@@ -431,7 +431,7 @@ async function updateSDRECONNECT001() {
   };
 
   // Update the strategic directive
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('strategic_directives_v2')
     .update(updatedSD)
     .eq('id', 'SD-RECONNECT-001')

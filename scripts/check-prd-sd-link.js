@@ -36,7 +36,7 @@ async function checkPRDSDLink() {
   console.log('Current Phase:', sd.current_phase);
 
   // Check PRD by sd_uuid
-  const { data: prdByUuid, error: prdUuidErr } = await supabase
+  const { data: prdByUuid, error: _prdUuidErr } = await supabase
     .from('product_requirements_v2')
     .select('id, sd_uuid, sd_id, title, status, phase')
     .eq('sd_uuid', sd.uuid_id);
@@ -55,7 +55,7 @@ async function checkPRDSDLink() {
   }
 
   // Check PRD by sd_id
-  const { data: prdBySdId, error: prdSdIdErr } = await supabase
+  const { data: prdBySdId, error: _prdSdIdErr } = await supabase
     .from('product_requirements_v2')
     .select('id, sd_uuid, sd_id, title, status, phase')
     .eq('sd_id', sdId);

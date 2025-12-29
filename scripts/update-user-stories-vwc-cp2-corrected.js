@@ -126,7 +126,7 @@ async function updateUserStories() {
     console.log('   - Aligned with SD-VWC-INTUITIVE-FLOW-001 goal');
     console.log('   - Ready for EXEC phase implementation\n');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Error:', error.message);
     console.error(error);
     throw error;

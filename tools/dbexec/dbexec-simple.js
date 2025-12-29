@@ -6,7 +6,7 @@
  */
 
 const fs = require('fs');
-const path = require('path');
+const _path = require('path'); // Kept for potential future path operations
 const { Client } = require('pg');
 
 async function main() {

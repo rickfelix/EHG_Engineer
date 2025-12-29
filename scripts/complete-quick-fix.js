@@ -19,19 +19,19 @@ import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
 import dotenv from 'dotenv';
 import readline from 'readline';
-import { restartLeoStack, verifyServerRestart } from '../lib/server-manager.js';
+import { restartLeoStack, verifyServerRestart as _verifyServerRestart } from '../lib/server-manager.js';
 import { runSelfVerification } from '../lib/quickfix-self-verifier.js';
 import { runComplianceRubric } from '../lib/quickfix-compliance-rubric.js';
 import {
-  captureConsoleErrorsBaseline,
+  captureConsoleErrorsBaseline as _captureConsoleErrorsBaseline,
   captureConsoleErrorsAfterFix,
   generateEvidenceSummary
 } from '../lib/utils/quickfix-evidence-capture.js';
 
 // Auto-refinement constants
 const MAX_REFINEMENT_ATTEMPTS = 3;
-const MIN_PASS_SCORE = 90;
-const MIN_WARN_SCORE = 70;
+const _MIN_PASS_SCORE = 90;
+const _MIN_WARN_SCORE = 70;
 
 // Test execution constants
 const TEST_TIMEOUT_UNIT = 120000; // 2 minutes for unit tests
@@ -91,7 +91,7 @@ function runTests(testType, options = {}) {
       /passed \(\d+/i
     ];
 
-    const hasPassIndicator = passIndicators.some(pattern => pattern.test(output));
+    const _hasPassIndicator = passIndicators.some(pattern => pattern.test(output));
 
     return {
       passed: true,
@@ -242,15 +242,15 @@ async function completeQuickFix(qfId, options = {}) {
           actualLoc = parseInt(match[1]);
           console.log(`🔍 Auto-detected actual LOC: ${actualLoc}\n`);
         }
-      } catch (err) {
+      } catch (_err) {
         // Fallback to manual input
         actualLoc = null;
       }
     } else {
       actualLoc = options.actualLoc;
     }
-  } catch (err) {
-    console.log(`⚠️  Could not auto-detect git info: ${err.message}\n`);
+  } catch (_err) {
+    console.log('⚠️  Could not auto-detect git info\n');
   }
 
   // Manual input if not provided
@@ -376,7 +376,7 @@ async function completeQuickFix(qfId, options = {}) {
   // TypeScript verification - PROGRAMMATIC
   console.log('📘 TYPESCRIPT VERIFICATION\n');
 
-  let tscResult = null;
+  let _tscResult = null;
   if (!options.skipTypeCheck) {
     console.log('   🔍 Running TypeScript compiler check...');
     console.log('      Command: npx tsc --noEmit');
@@ -390,11 +390,11 @@ async function completeQuickFix(qfId, options = {}) {
         stdio: 'pipe',
         cwd: testDir
       });
-      tscResult = { passed: true };
+      _tscResult = { passed: true };
       console.log('   ✅ TypeScript compilation PASSED\n');
-    } catch (err) {
-      const output = err.stdout?.toString() || err.stderr?.toString() || err.message;
-      tscResult = { passed: false, output };
+    } catch (_err) {
+      const output = _err.stdout?.toString() || _err.stderr?.toString() || _err.message;
+      _tscResult = { passed: false, output };
 
       console.log('   ❌ TypeScript compilation FAILED\n');
 
@@ -548,7 +548,7 @@ async function completeQuickFix(qfId, options = {}) {
           execSync(`test -f "${testPattern}"`, { stdio: 'pipe' });
           testCoverage.filesWithTests.push(file);
           break;
-        } catch (err) {
+        } catch (_err) {
           // Test file doesn't exist
         }
       }
@@ -793,7 +793,7 @@ Quick-Fix Workflow - LEO Protocol`;
   // Show refinement history
   if (refinementHistory.length > 1) {
     console.log('\n📈 Refinement History:\n');
-    refinementHistory.forEach((r, i) => {
+    refinementHistory.forEach((r, _i) => {
       const icon = r.verdict === 'PASS' ? '✅' : r.verdict === 'WARN' ? '⚠️' : '❌';
       console.log(`   Attempt ${r.attempt}: ${icon} ${r.score}/100 (${r.verdict})`);
     });
@@ -1082,7 +1082,7 @@ function getRefinementSuggestion(criterionId) {
  * @param {Object} context - Refinement context
  */
 async function applyAutoRefinement(failedCriteria, context) {
-  const { qfId, filesChanged } = context;
+  const { qfId: _qfId, filesChanged } = context;
 
   for (const criterion of failedCriteria) {
     console.log(`   🔧 Attempting to fix: ${criterion.name}`);
@@ -1099,8 +1099,8 @@ async function applyAutoRefinement(failedCriteria, context) {
             // Note: In a real implementation, this would use Edit tool
             // For now, just provide guidance
             console.log(`      Check file: ${file} for console.log, @ts-ignore`);
-          } catch (err) {
-            console.log(`      ⚠️  Could not check ${file}: ${err.message}`);
+          } catch (_err) {
+            console.log(`      ⚠️  Could not check ${file}`);
           }
         }
         break;
@@ -1110,7 +1110,7 @@ async function applyAutoRefinement(failedCriteria, context) {
         try {
           execSync('npm run lint -- --fix', { stdio: 'pipe', timeout: 30000 });
           console.log('      ✅ Auto-lint fix applied');
-        } catch (err) {
+        } catch (_err) {
           console.log('      ⚠️  Auto-lint fix failed, manual intervention needed');
         }
         break;

@@ -961,13 +961,13 @@ const calculateCountdown = (launchDate) => {
 // For brevity, I'll include just the story keys for Stage 24 & 25 here and note that the full
 // implementation exists in the original comprehensive version above.
 
-const stage24Stories = [
+const _stage24Stories = [
   // US-D6-24-001: Post-Launch Analytics Dashboard (8 points, CRITICAL)
   // US-D6-24-002: User Feedback Collection (5 points, HIGH)
   // US-D6-24-003: Reality Data Collection (5 points, CRITICAL)
 ];
 
-const stage25Stories = [
+const _stage25Stories = [
   // US-D6-25-001: Optimization Roadmap Generation (5 points, CRITICAL)
   // US-D6-25-002: Assumptions vs Reality Report (8 points, CRITICAL)
   // US-D6-25-003: Growth Engine Integration (8 points, HIGH)
@@ -1002,7 +1002,7 @@ async function insertUserStories() {
 
   for (const story of allStories) {
     try {
-      const result = await client.query(
+      const _result = await client.query(
         `INSERT INTO user_stories (
           story_key, prd_id, sd_id, title, user_role, user_want, user_benefit,
           story_points, priority, status, acceptance_criteria, definition_of_done,

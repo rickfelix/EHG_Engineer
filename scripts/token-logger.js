@@ -114,7 +114,7 @@ function logTokenUsage({ sd_id, phase, tokens, notes = '' }) {
     console.log(`   Weekly total: ${log.tokens_used.toLocaleString()} / ${log.budget_limit.toLocaleString()} (${percentUsed}%) [${budgetZone}]`);
 
     return { logged: true, zone: budgetZone, percentUsed };
-  } catch (error) {
+  } catch (_error) {
     console.error(`❌ Error logging tokens: ${error.message}`);
     process.exit(1);
   }
@@ -164,7 +164,7 @@ function displayWeeklyLog() {
 
     console.log(`\nTotal Entries: ${log.entries.length}`);
     console.log('═'.repeat(70) + '\n');
-  } catch (error) {
+  } catch (_error) {
     console.error(`❌ Error reading log: ${error.message}`);
     process.exit(1);
   }
@@ -183,7 +183,7 @@ if (args.includes('--log')) {
   const tokensIndex = args.indexOf('--tokens');
   const notesIndex = args.indexOf('--notes');
 
-  const result = logTokenUsage({
+  const _result = logTokenUsage({
     sd_id: args[sdIndex + 1],
     phase: args[phaseIndex + 1],
     tokens: args[tokensIndex + 1],

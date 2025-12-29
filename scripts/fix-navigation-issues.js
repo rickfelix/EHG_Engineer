@@ -4,8 +4,8 @@
  * Script to identify and document all navigation issues in the LEO Protocol Dashboard
  */
 
-import fs from 'fs';
-import path from 'path';
+// import fs from 'fs';  // Unused
+// import path from 'path';  // Unused
 
 console.log('🔍 Analyzing LEO Protocol Dashboard Navigation Issues\n');
 console.log('=' .repeat(50));

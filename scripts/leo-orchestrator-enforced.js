@@ -12,7 +12,8 @@ import HandoffValidator from './handoff-validator.js';
 import UniversalPhaseExecutor from '../templates/execute-phase.js';
 import UniversalPRDGenerator from '../templates/generate-prd.js';
 import UniversalHandoffCreator from '../templates/create-handoff.js';
-import { createClient } from '@supabase/supabase-js';
+// createClient is imported dynamically in markSDComplete
+// import { createClient } from '@supabase/supabase-js';
 import chalk from 'chalk';
 import fs from 'fs/promises';
 import dotenv from 'dotenv';
@@ -153,7 +154,7 @@ class EnforcedOrchestrator extends LEOProtocolOrchestrator {
       await fs.unlink('.leo-session-active');
       await fs.unlink('.leo-session-id');
       console.log('🧹 Session tracking files cleaned up');
-    } catch (error) {
+    } catch (_error) {
       // Files might not exist, that's ok
     }
   }
@@ -172,7 +173,7 @@ class EnforcedOrchestrator extends LEOProtocolOrchestrator {
       );
 
       // Update SD to completed status with is_working_on: false
-      const { data: sdUpdate, error: sdError } = await supabase
+      const { error: sdError } = await supabase
         .from('strategic_directives_v2')
         .update({
           status: 'completed',

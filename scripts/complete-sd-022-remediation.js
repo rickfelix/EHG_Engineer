@@ -22,7 +22,7 @@ async function completeSd() {
 
   try {
     // Update SD status to completed
-    const { data: sd, error: sdError } = await supabase
+    const { data: _sd, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .update({
         status: 'completed',
@@ -45,7 +45,7 @@ async function completeSd() {
     console.log('   Completion Date:', new Date().toISOString());
 
     // Accept PLAN→LEAD handoff
-    const { data: handoff, error: handoffError } = await supabase
+    const { data: _handoff, error: handoffError } = await supabase
       .from('sd_phase_handoffs')
       .update({
         status: 'accepted',
@@ -64,7 +64,7 @@ async function completeSd() {
     }
 
     // Also accept EXEC→PLAN handoff
-    const { data: execHandoff, error: execHandoffError } = await supabase
+    const { data: _execHandoff, error: execHandoffError } = await supabase
       .from('sd_phase_handoffs')
       .update({
         status: 'accepted',

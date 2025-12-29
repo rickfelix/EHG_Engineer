@@ -5,6 +5,16 @@ import playwright from 'eslint-plugin-playwright';
 import playwrightSelectors from './tools/eslint-rules/playwright-selectors/index.js';
 
 export default [
+  // Ignore bundled/generated files
+  {
+    ignores: [
+      '**/*.bundle.cjs',
+      '**/*.bundle.js',
+      '**/dist/**',
+      '**/build/**',
+      'node_modules/**'
+    ]
+  },
   {
     files: ['**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx'],
     languageOptions: {
@@ -119,7 +129,7 @@ export default [
         }
       ],
       'no-console': 'off',  // Allow console in CLI tools and scripts
-      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
       'semi': ['error', 'always'],
       'quotes': ['error', 'single', { avoidEscape: true }]
     }

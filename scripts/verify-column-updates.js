@@ -9,7 +9,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const sectionIds = [269, 311, 312];
 
 for (const id of sectionIds) {
-  const { data, error } = await supabase
+  const { data, error: _error } = await supabase
     .from('leo_protocol_sections')
     .select('id, title, content')
     .eq('id', id)

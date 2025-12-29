@@ -348,5 +348,5 @@ const { data, error } = await supabase
 ---
 
 **Generated from codebase analysis**
-**Last updated**: 2025-10-16
-**LEO Protocol**: v4.2.0
+**Last updated**: 2025-12-29
+**LEO Protocol**: v4.3.3

@@ -193,19 +193,15 @@ class HandoffValidator {
     
     // Get appropriate checklist
     let checklist = [];
-    let checklistField = '';
-    
+
     switch (agent.toUpperCase()) {
       case 'LEAD':
-        checklistField = 'lead_checklist';
         checklist = prd.lead_checklist || [];
         break;
       case 'PLAN':
-        checklistField = 'plan_checklist';
         checklist = prd.plan_checklist || [];
         break;
       case 'EXEC':
-        checklistField = 'exec_checklist';
         checklist = prd.exec_checklist || [];
         break;
       default:
@@ -363,7 +359,7 @@ class HandoffValidator {
   /**
    * Check for tool execution evidence
    */
-  async checkToolExecution(sdId) {
+  async checkToolExecution(_sdId) {
     const evidence = {};
     
     // Check for generated report files
@@ -397,12 +393,12 @@ class HandoffValidator {
               if (data.score !== undefined) {
                 evidence[report.agent].score = data.score;
               }
-            } catch (e) {
+            } catch (_e) {
               // Couldn't parse score
             }
           }
         }
-      } catch (e) {
+      } catch (_e) {
         // File doesn't exist or can't be accessed
       }
     }
@@ -502,7 +498,7 @@ class HandoffValidator {
       if (!error) {
         console.log('\n📝 Validation logged to database');
       }
-    } catch (e) {
+    } catch (_e) {
       // Silently fail if logging fails
     }
   }

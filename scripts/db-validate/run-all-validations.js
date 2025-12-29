@@ -19,7 +19,7 @@
 
 import { SchemaValidator } from './schema-validator.js';
 import { MigrationTester, getLatestMigrations } from './migration-tester.js';
-import { FunctionValidator, FUNCTION_GROUPS } from './function-validator.js';
+import { FunctionValidator, FUNCTION_GROUPS as _FUNCTION_GROUPS } from './function-validator.js';
 import { RLSValidator, CRITICAL_TABLES } from './rls-validator.js';
 
 const args = process.argv.slice(2);

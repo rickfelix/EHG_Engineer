@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient as _createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import pg from 'pg';
 
@@ -74,7 +74,7 @@ async function trySupabaseServiceRole() {
 
     try {
       // Try to use RPC if available
-      const { data, error } = await supabaseAdmin.rpc('execute_sql', {
+      const { data: _data, error } = await supabaseAdmin.rpc('execute_sql', {
         sql: 'ALTER TABLE strategic_directives_v2 DROP COLUMN IF EXISTS execution_order CASCADE;'
       });
 

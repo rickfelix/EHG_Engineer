@@ -209,7 +209,7 @@ async function generateUserStories() {
       return item;
     });
 
-    const { data: updated, error: updateError } = await supabase
+    const { data: _updated, error: updateError } = await supabase
       .from('product_requirements_v2')
       .update({
         backlog_items: userStories,

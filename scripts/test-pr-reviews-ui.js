@@ -132,7 +132,7 @@ async function testPRReviewsUI() {
       }
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Test failed:', error.message);
   } finally {
     await browser.close();

@@ -219,7 +219,7 @@ module.exports = Calculator;`;
 
     try {
       // Setup
-      const initialContent = await this.setup();
+      const _initialContent = await this.setup();
 
       // Step 1: Demonstrate read-only Codex
       const codexResult = await this.demonstrateReadOnlyCodex();

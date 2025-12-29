@@ -26,7 +26,7 @@ async function applyMigration() {
     console.log('\n📝 Executing migration...\n');
 
     // Execute migration
-    const result = await client.query(sql);
+    const _result = await client.query(sql);
 
     console.log('\n✅ Migration applied successfully!\n');
 

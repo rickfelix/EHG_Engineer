@@ -20,7 +20,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-async function executeSQLFile(filePath) {
+async function _executeSQLFile(filePath) {
   try {
     const sql = await fs.readFile(filePath, 'utf8');
 
@@ -69,7 +69,7 @@ async function applyMigration() {
   try {
     // First, let's insert the Strategic Directive directly
     console.log('📝 Inserting Strategic Directive SD-2025-09-EMB...');
-    const { data: sdData, error: sdError } = await supabase
+    const { data: _sdData, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .upsert({
         id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
@@ -150,7 +150,7 @@ The EHG application currently uses synchronous database-driven communication bet
 ## Implementation Details
 See full PRD in database for complete specifications including queues, security, observability, and rollout phases.`;
 
-    const { data: prdData, error: prdError } = await supabase
+    const { data: _prdData, error: prdError } = await supabase
       .from('product_requirements_v2')
       .upsert({
         id: 'PRD-SD-2025-09-EMB',
@@ -240,7 +240,7 @@ async function verifyMigration() {
 
     // 3. Check if backlog tables exist
     console.log('\n3️⃣ Checking backlog structure...');
-    const { data: tables, error: tablesError } = await supabase
+    const { data: tables, error: _tablesError } = await supabase
       .from('information_schema.tables')
       .select('table_name')
       .in('table_name', ['backlog_epics_v2', 'backlog_stories_v2', 'backlog_tasks_v2'])
@@ -250,7 +250,7 @@ async function verifyMigration() {
       console.log(`✅ Found ${tables.length} backlog tables`);
 
       // Try to check for epics
-      const { data: epics, error: epicsError } = await supabase
+      const { data: epics, error: _epicsError } = await supabase
         .from('backlog_epics_v2')
         .select('*')
         .eq('sd_id', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890');

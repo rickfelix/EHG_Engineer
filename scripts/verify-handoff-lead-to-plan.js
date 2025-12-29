@@ -323,7 +323,7 @@ class LeadToPlanVerifier {
           } else {
             console.log('\\n   ✅ Quality assessment passed');
           }
-        } catch (error) {
+        } catch (_error) {
           console.log(`\\n   ⚠️  Russian Judge unavailable: ${error.message}`);
           console.log('   Proceeding with traditional validation only');
         }
@@ -438,7 +438,7 @@ class LeadToPlanVerifier {
         qualityScore: sdValidation.percentage
       };
       
-    } catch (error) {
+    } catch (_error) {
       console.error('❌ Handoff verification failed:', error.message);
       return this.rejectHandoff(sdId, 'SYSTEM_ERROR', error.message);
     }
@@ -509,7 +509,7 @@ class LeadToPlanVerifier {
         metrics = Array.isArray(metricsSource)
           ? metricsSource
           : (typeof metricsSource === 'string' ? JSON.parse(metricsSource) : []);
-      } catch (e) {
+      } catch (_e) {
         // If parsing fails, treat as single item
         metrics = [metricsSource];
       }
@@ -598,7 +598,7 @@ class LeadToPlanVerifier {
       const smartKeywords = ['owner:', 'target:', 'baseline:', 'deadline:', 'due:'];
       let smartObjectiveCount = 0;
 
-      sd.strategic_objectives.forEach((obj, index) => {
+      sd.strategic_objectives.forEach((obj, _index) => {
         const objText = (typeof obj === 'string' ? obj : obj.description || '').toLowerCase();
         const hasSmart = smartKeywords.some(kw => objText.includes(kw));
 
@@ -892,7 +892,7 @@ class LeadToPlanVerifier {
     try {
       criteria = Array.isArray(sd.success_criteria) ? sd.success_criteria :
         (typeof sd.success_criteria === 'string' ? JSON.parse(sd.success_criteria || '[]') : []);
-    } catch (e) {
+    } catch (_e) {
       // If parsing fails, skip this check
       return result;
     }
@@ -1056,7 +1056,7 @@ class LeadToPlanVerifier {
         );
       }
 
-    } catch (e) {
+    } catch (_e) {
       result.warnings.push(
         `PRD-Readiness: Dependency validation error: ${e.message}`
       );
@@ -1180,7 +1180,7 @@ class LeadToPlanVerifier {
             check.issues.push('Timeline constraint may be unrealistic for comprehensive implementation');
           }
         }
-      } catch (e) {
+      } catch (_e) {
         // Ignore JSON parsing errors for feasibility check
       }
     }
@@ -1202,7 +1202,7 @@ class LeadToPlanVerifier {
             check.issues.push('High-risk items lack mitigation strategies');
           }
         }
-      } catch (e) {
+      } catch (_e) {
         // Ignore JSON parsing errors
       }
     }
@@ -1218,7 +1218,7 @@ class LeadToPlanVerifier {
   /**
    * Check development environment readiness
    */
-  async checkEnvironmentReadiness(sd) {
+  async checkEnvironmentReadiness(_sd) {
     const check = {
       ready: true,
       issues: []
@@ -1258,7 +1258,7 @@ class LeadToPlanVerifier {
         }
       }
       
-    } catch (error) {
+    } catch (_error) {
       check.ready = false;
       check.issues.push(`Environment check failed: ${error.message}`);
     }
@@ -1302,7 +1302,7 @@ class LeadToPlanVerifier {
     try {
       await this.supabase.from('sd_phase_handoffs').insert(execution);
       console.log(`📝 Handoff execution recorded: ${executionId}`);
-    } catch (error) {
+    } catch (_error) {
       console.warn('⚠️  Could not store handoff execution:', error.message);
     }
     
@@ -1339,7 +1339,7 @@ class LeadToPlanVerifier {
     try {
       await this.supabase.from('leo_handoff_rejections').insert(rejection);
       console.log(`📝 Rejection recorded: ${rejection.id}`);
-    } catch (error) {
+    } catch (_error) {
       console.warn('⚠️  Could not store rejection:', error.message);
     }
     

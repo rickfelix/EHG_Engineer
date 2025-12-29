@@ -61,7 +61,7 @@ async function main() {
   console.log('\n🔄 Executing via RPC to bypass trigger...\n');
 
   // Use RPC to execute raw SQL with service role permissions
-  const { data, error } = await supabase.rpc('exec_sql', {
+  const { data: _data, error } = await supabase.rpc('exec_sql', {
     sql: `
       BEGIN;
 

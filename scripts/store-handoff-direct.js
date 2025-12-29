@@ -332,7 +332,7 @@ async function storeHandoff(type, sdId, handoffContent) {
     console.log('\n📝 Preparing handoff data...');
 
     // Escape single quotes for SQL
-    const escapeSql = (str) => str ? str.replace(/'/g, "''") : '';
+    const _escapeSql = (str) => str ? str.replace(/'/g, "''") : '';
 
     const insertSQL = `
 INSERT INTO sd_phase_handoffs (
@@ -407,7 +407,7 @@ INSERT INTO sd_phase_handoffs (
 
     return handoffId;
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Failed to store handoff:', error.message);
     throw error;
   } finally {
@@ -466,7 +466,7 @@ Note: Uses direct PostgreSQL connection to bypass RLS policy restrictions.
     }
 
     // Store via direct database connection
-    const handoffId = await storeHandoff(type, sdId, handoffContent);
+    const _handoffId = await storeHandoff(type, sdId, handoffContent);
 
     console.log('\n📋 Next Steps:');
     console.log('   1. PLAN agent should review handoff');
@@ -476,7 +476,7 @@ Note: Uses direct PostgreSQL connection to bypass RLS policy restrictions.
 
     process.exit(0);
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Error:', error.message);
     console.error('\nStack trace:', error.stack);
     process.exit(1);

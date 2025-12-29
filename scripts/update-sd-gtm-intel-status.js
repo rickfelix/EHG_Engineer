@@ -17,7 +17,7 @@ async function updateSDStatus() {
   console.log('\n📊 Updating SD Status: SD-GTM-INTEL-DISCOVERY-001');
   console.log('='.repeat(70));
 
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('strategic_directives_v2')
     .update({
       status: 'active',

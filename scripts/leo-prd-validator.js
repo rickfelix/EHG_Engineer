@@ -307,7 +307,7 @@ class PRDValidator {
   /**
    * Validate linkages to other documents
    */
-  validateLinkages(content, results, filePath) {
+  validateLinkages(content, results, _filePath) {
     // Check SD linkage
     if (results.metadata.relatedSD) {
       // Try to find the actual SD file

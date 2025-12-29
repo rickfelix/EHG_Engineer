@@ -19,7 +19,7 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:8082';
 /**
  * Application flow mapping
  */
-const EHG_FLOW = {
+const _EHG_FLOW = {
   entry: {
     url: '/',
     description: 'Landing page - First point of contact',
@@ -270,7 +270,7 @@ async function analyzeApplication() {
 /**
  * Generate comprehensive test plan based on analysis
  */
-async function generateTestPlan(analysis) {
+async function generateTestPlan(_analysis) {
   console.log(chalk.bold.cyan(`
 ╔══════════════════════════════════════════════════════════════╗
 ║           Comprehensive UAT Test Plan for EHG                 ║
@@ -348,7 +348,7 @@ async function generateTestPlan(analysis) {
   );
 
   console.log(chalk.green('\n📋 Test Plan Summary:'));
-  testPlan.phases.forEach((phase, index) => {
+  testPlan.phases.forEach((phase, _index) => {
     console.log(chalk.blue(`\n${phase.name}`));
     phase.tests.forEach(test => {
       console.log(`   ✓ ${test}`);
@@ -365,7 +365,7 @@ async function generateTestPlan(analysis) {
 async function main() {
   try {
     const analysis = await analyzeApplication();
-    const testPlan = await generateTestPlan(analysis);
+    const _testPlan = await generateTestPlan(analysis);
 
     console.log(chalk.bold.green('\n✨ Ready to implement comprehensive UAT testing!'));
     console.log(chalk.cyan('\nNext Steps:'));

@@ -199,7 +199,7 @@ async function addImplementationContext() {
   let errorCount = 0;
 
   for (const [storyKey, implementationContext] of Object.entries(storyContexts)) {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('user_stories')
       .update({ implementation_context: implementationContext.trim() })
       .eq('story_key', storyKey)

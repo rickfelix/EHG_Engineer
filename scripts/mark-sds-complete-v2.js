@@ -1,11 +1,8 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-
-
-
+// Unused ES module path helpers (kept for potential future use)
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -23,7 +20,7 @@ async function markSDsComplete() {
     
     // 1. Update SD-DASHBOARD-AUDIT-2025-08-31-A
     console.log('Updating SD-DASHBOARD-AUDIT-2025-08-31-A...');
-    const { data: sd1, error: sd1Error } = await supabase
+    const { error: sd1Error } = await supabase
       .from('strategic_directives_v2')
       .update({ 
         status: 'complete',  // Try "complete" instead of "completed"
@@ -37,7 +34,7 @@ async function markSDsComplete() {
       
       // Try "approved" as fallback
       console.log('  Trying with status = "approved"...');
-      const { data: sd1b, error: sd1bError } = await supabase
+      const { error: sd1bError } = await supabase
         .from('strategic_directives_v2')
         .update({ 
           status: 'approved',
@@ -57,7 +54,7 @@ async function markSDsComplete() {
     
     // 2. Update SD-2025-01-15-A
     console.log('\nUpdating SD-2025-01-15-A...');
-    const { data: sd2, error: sd2Error } = await supabase
+    const { error: sd2Error } = await supabase
       .from('strategic_directives_v2')
       .update({ 
         status: 'complete',  // Try "complete" instead of "completed"
@@ -71,7 +68,7 @@ async function markSDsComplete() {
       
       // Try "approved" as fallback
       console.log('  Trying with status = "approved"...');
-      const { data: sd2b, error: sd2bError } = await supabase
+      const { error: sd2bError } = await supabase
         .from('strategic_directives_v2')
         .update({ 
           status: 'approved',
@@ -91,7 +88,7 @@ async function markSDsComplete() {
     
     // Verify the updates
     console.log('\n=== VERIFICATION ===');
-    const { data: verifyData, error: verifyError } = await supabase
+    const { data: verifyData } = await supabase
       .from('strategic_directives_v2')
       .select('id, title, status')
       .order('created_at', { ascending: false });

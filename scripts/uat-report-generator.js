@@ -29,7 +29,7 @@ class UATReportGenerator {
     try {
       const rawResults = fs.readFileSync(resultsPath, 'utf8');
       return JSON.parse(rawResults);
-    } catch (error) {
+    } catch (_error) {
       console.error(`Failed to parse results from ${resultsPath}:`, error.message);
       return null;
     }
@@ -408,7 +408,7 @@ class UATReportGenerator {
       }
 
       return true;
-    } catch (error) {
+    } catch (_error) {
       console.error('❌ Database storage error:', error.message);
       return false;
     }
@@ -440,7 +440,7 @@ class UATReportGenerator {
       } else {
         console.log(`📋 Stored ${recommendations.length} recommendations`);
       }
-    } catch (error) {
+    } catch (_error) {
       console.warn('⚠️ Error storing recommendations:', error.message);
     }
   }
@@ -511,7 +511,7 @@ async function main() {
     const exitCode = report.quality_gates.overallGateStatus === 'PASS' ? 0 : 1;
     process.exit(exitCode);
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Report generation failed:', error.message);
     process.exit(1);
   }

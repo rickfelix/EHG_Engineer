@@ -48,7 +48,7 @@ async function applyMigration() {
         if (result.rows && result.rows.length > 0) {
           console.log(`    Result: ${JSON.stringify(result.rows)}`);
         }
-        console.log(`    ✅ Success`);
+        console.log('    ✅ Success');
       } catch (error) {
         console.error(`    ❌ Error: ${error.message}`);
         throw error;

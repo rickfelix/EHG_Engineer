@@ -15,7 +15,7 @@ async function updateProgress() {
 
   const sd_id = 'SD-AGENT-ADMIN-002';
 
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('strategic_directives_v2')
     .update({
       progress: 25, // LEAD (5%) + PLAN (20%) = 25%

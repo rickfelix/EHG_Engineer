@@ -179,7 +179,7 @@ async function reviewRetrospectives(sdId, options = {}) {
 
     return results;
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Retrospective review failed:', error.message);
     throw error;
   }
@@ -338,7 +338,7 @@ function identifyFailurePatterns(retrospectives) {
     .slice(0, 5);
 }
 
-function generateRiskMitigations(currentSD, failurePatterns, retrospectives) {
+function generateRiskMitigations(currentSD, failurePatterns, _retrospectives) {
   const mitigations = [];
 
   failurePatterns.forEach(pattern => {
@@ -393,7 +393,7 @@ function calculateEffortAdjustments(retrospectives) {
   };
 }
 
-function generateRecommendations(results, currentSD) {
+function generateRecommendations(results, _currentSD) {
   const recommendations = [];
 
   // Recommendation based on success patterns
@@ -460,10 +460,10 @@ async function main() {
   }
 
   try {
-    const results = await reviewRetrospectives(sdId, { similarCount });
+    const _results = await reviewRetrospectives(sdId, { similarCount });
     process.exit(0);
-  } catch (error) {
-    console.error('Fatal error:', error);
+  } catch (catchError) {
+    console.error('Fatal error:', catchError);
     process.exit(1);
   }
 }

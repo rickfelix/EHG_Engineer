@@ -76,7 +76,7 @@ class DashboardUITester {
             success: true
           };
           console.log(`  ✅ ${endpoint}: ${response.status}`);
-        } catch (error) {
+        } catch (_error) {
           this.results.server[endpoint] = {
             status: error.response?.status || 'ERROR',
             success: false
@@ -84,7 +84,7 @@ class DashboardUITester {
           console.log(`  ❌ ${endpoint}: ${error.message}`);
         }
       }
-    } catch (error) {
+    } catch (_error) {
       this.results.errors.push(`Server health check failed: ${error.message}`);
       console.log(`  ❌ Server health check failed: ${error.message}`);
     }
@@ -117,7 +117,7 @@ class DashboardUITester {
         };
         
         console.log(`  ✅ ${endpoint.name}: ${response.status} - ${Array.isArray(data) ? data.length + ' records' : 'object'}`);
-      } catch (error) {
+      } catch (_error) {
         this.results.api[endpoint.path] = {
           name: endpoint.name,
           status: error.response?.status || 'ERROR',
@@ -154,7 +154,7 @@ class DashboardUITester {
           const message = JSON.parse(data);
           console.log(`  ✅ Received message: ${message.type || 'state update'}`);
           this.results.websocket.canReceiveMessages = true;
-        } catch (e) {
+        } catch (_e) {
           console.log('  ⚠️  Received non-JSON message');
         }
       });
@@ -246,7 +246,7 @@ class DashboardUITester {
         valid: progress.overall >= 0 && progress.overall <= 100
       };
       
-    } catch (error) {
+    } catch (_error) {
       console.log(`  ❌ Data integrity test failed: ${error.message}`);
       this.results.errors.push(`Data integrity: ${error.message}`);
     }
@@ -294,7 +294,7 @@ class DashboardUITester {
         hasHandoffs: !!state.handoffs
       };
       
-    } catch (error) {
+    } catch (_error) {
       console.log(`  ❌ UI component test failed: ${error.message}`);
       this.results.errors.push(`UI components: ${error.message}`);
     }
@@ -351,7 +351,7 @@ class DashboardUITester {
           .delete()
           .eq('id', testSD.id);
       }
-    } catch (error) {
+    } catch (_error) {
       console.log(`  ❌ Real-time sync test failed: ${error.message}`);
       this.results.errors.push(`Real-time sync: ${error.message}`);
     }
@@ -374,7 +374,7 @@ class DashboardUITester {
         await axios.post(BASE_URL + '/api/checklist/update', checklistUpdate);
         console.log('  ✅ Checklist update endpoint working');
         this.results.ui.checklistUpdate = true;
-      } catch (error) {
+      } catch (_error) {
         console.log('  ⚠️  Checklist update endpoint: ' + error.message);
         this.results.ui.checklistUpdate = false;
       }
@@ -396,12 +396,12 @@ class DashboardUITester {
           hasEES: !!sd.executionSequences,
           hasProgress: typeof sd.progress === 'number'
         };
-      } catch (error) {
+      } catch (_error) {
         console.log('  ❌ SD detail endpoint failed: ' + error.message);
         this.results.ui.sdDetail = { success: false, error: error.message };
       }
       
-    } catch (error) {
+    } catch (_error) {
       console.log(`  ❌ Interactive features test failed: ${error.message}`);
       this.results.errors.push(`Interactive features: ${error.message}`);
     }

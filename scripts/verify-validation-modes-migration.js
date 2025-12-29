@@ -206,7 +206,7 @@ async function verifyMigration() {
       `);
       console.error('  ✗ FAIL: Should have rejected CONDITIONAL_PASS in prospective mode');
       process.exit(1);
-    } catch (err) {
+    } catch (_err) {
       if (err.message.includes('check_conditional_pass_retrospective')) {
         console.log('  ✓ Correctly rejected (check_conditional_pass_retrospective constraint)');
       } else {
@@ -229,7 +229,7 @@ async function verifyMigration() {
       `);
       console.error('  ✗ FAIL: Should have rejected CONDITIONAL_PASS without justification');
       process.exit(1);
-    } catch (err) {
+    } catch (_err) {
       if (err.message.includes('check_justification_required')) {
         console.log('  ✓ Correctly rejected (check_justification_required constraint)');
       } else {
@@ -253,7 +253,7 @@ async function verifyMigration() {
       `);
       console.error('  ✗ FAIL: Should have rejected justification shorter than 50 chars');
       process.exit(1);
-    } catch (err) {
+    } catch (_err) {
       if (err.message.includes('check_justification_required')) {
         console.log('  ✓ Correctly rejected (justification length < 50 chars)');
       } else {
@@ -277,7 +277,7 @@ async function verifyMigration() {
     console.log('\nMigration is PRODUCTION READY');
     console.log('='.repeat(70) + '\n');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('Migration verification failed:', error.message);
     process.exit(1);
   } finally {

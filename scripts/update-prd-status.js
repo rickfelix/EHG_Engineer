@@ -11,7 +11,7 @@ const supabase = createClient(
 const PRD_ID = 'PRD-SD-VISION-V2-006';
 
 // Check current status
-const { data: prd, error: fetchError } = await supabase
+const { data: prd, error: _fetchError } = await supabase
   .from('product_requirements_v2')
   .select('id, status')
   .eq('id', PRD_ID)

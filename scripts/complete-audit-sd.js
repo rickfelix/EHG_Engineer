@@ -19,7 +19,7 @@ async function completeAuditSD() {
   
   try {
     // Update SD to completed with conditions
-    const { data: sdData, error: sdError } = await supabase
+    const { data: _sdData, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .update({
         status: 'active', // Active but with conditions
@@ -52,7 +52,7 @@ async function completeAuditSD() {
     }
     
     // Update PRD to fully complete
-    const { data: prdData, error: prdError } = await supabase
+    const { data: _prdData, error: prdError } = await supabase
       .from('product_requirements_v2')
       .update({
         status: 'completed',

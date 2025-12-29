@@ -18,7 +18,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const execAsync = promisify(exec);
-const supabase = createClient(
+// supabase client - currently unused as handoffs are created via CLI
+const _supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
 );
@@ -326,7 +327,7 @@ Example:
     }
 
     // Create via CLI
-    const result = await createHandoffViaCLI(type, sdId, handoffContent);
+    const _result = await createHandoffViaCLI(type, sdId, handoffContent);
 
     console.log('\n✅ Handoff created successfully!');
     console.log('\n📋 Next Steps:');

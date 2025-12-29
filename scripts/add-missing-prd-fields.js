@@ -60,7 +60,7 @@ Phase 5: Deployment (30 min)
 - Measure PRD completeness improvement`
   };
 
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('product_requirements_v2')
     .update(updates)
     .eq('id', 'PRD-KNOWLEDGE-001')

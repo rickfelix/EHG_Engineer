@@ -49,7 +49,7 @@ class SmartRefactorCLI {
       } else {
         this.showHelp();
       }
-    } catch (error) {
+    } catch (_error) {
       console.error(chalk.red(`\n❌ Error: ${error.message}`));
       process.exit(1);
     }
@@ -130,7 +130,7 @@ Integration:
   async runAnalyze(dirPath) {
     console.log(chalk.blue.bold('\n📊 Dependency Analysis\n'));
 
-    const analysis = await this.analyzer.analyzeDirectory(dirPath);
+    const _analysis = await this.analyzer.analyzeDirectory(dirPath);
 
     // Print statistics
     const stats = this.analyzer.getStats();
@@ -211,19 +211,19 @@ Integration:
     console.log('This example demonstrates refactoring with validation:\n');
 
     // Create a simple example refactor function
-    const exampleRefactor = (content, fileData) => {
+    const _exampleRefactor = (_content, fileData) => {
       console.log(`   Processing: ${fileData.path}`);
 
       // Example: Add a comment at the top
-      if (!content.startsWith('//')) {
-        return `// Refactored by Smart Refactor Tool\n${content}`;
+      if (!_content.startsWith('//')) {
+        return `// Refactored by Smart Refactor Tool\n${_content}`;
       }
 
-      return content;
+      return _content;
     };
 
     // Create a minimal package
-    const contextPackage = {
+    const _contextPackage = {
       metadata: {
         targetFiles: ['example.js'],
         totalFiles: 1,

@@ -31,7 +31,7 @@ if (!supabaseUrl || !supabaseKey) {
   process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const _supabase = createClient(supabaseUrl, supabaseKey);
 
 async function fixTrigger() {
   console.log('🔧 Fixing auto_transition_status() trigger function...\n');

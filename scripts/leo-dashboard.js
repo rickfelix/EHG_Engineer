@@ -134,7 +134,7 @@ class DashboardCLI {
       
       // Try to get metrics from the server
       this.getServerMetrics(port);
-    } catch (error) {
+    } catch (_error) {
       console.log('⚠️ Dashboard status unknown');
     }
   }
@@ -217,7 +217,7 @@ class DashboardCLI {
         cwd: process.cwd()
       });
       console.log('✅ Server dependencies installed');
-    } catch (error) {
+    } catch (_error) {
       console.error('❌ Failed to install server dependencies');
       process.exit(1);
     }
@@ -359,7 +359,7 @@ class DashboardCLI {
     if (fs.existsSync(CONFIG_FILE)) {
       try {
         return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-      } catch (error) {
+      } catch (_error) {
         console.warn('⚠️ Invalid configuration file, using defaults');
       }
     }

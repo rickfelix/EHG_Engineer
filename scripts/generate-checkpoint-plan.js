@@ -168,7 +168,7 @@ async function generateCheckpointPlan(sdId, options = {}) {
     console.log(`Stories per Checkpoint: ~${Math.ceil(storyCount / checkpointCount)}`);
     console.log('');
 
-    checkpointPlan.checkpoints.forEach((cp, idx) => {
+    checkpointPlan.checkpoints.forEach((cp, _idx) => {
       console.log(`Checkpoint ${cp.id}: ${cp.name}`);
       console.log(`  Milestone: ${cp.milestone}`);
       console.log(`  User Stories: ${cp.user_stories.join(', ')}`);
@@ -217,7 +217,7 @@ function determineCheckpointCount(storyCount) {
   return Math.ceil(storyCount / 4); // Max 4 stories per checkpoint
 }
 
-function generateMilestoneDescription(checkpointId, totalCheckpoints, stories) {
+function generateMilestoneDescription(checkpointId, totalCheckpoints, _stories) {
   const milestones = {
     1: 'Foundation & Core Components',
     2: 'Feature Implementation',
@@ -256,7 +256,7 @@ async function main() {
   const sdId = process.argv[2];
   const checkpointsArg = process.argv.indexOf('--checkpoints');
   const checkpoints = checkpointsArg !== -1 ? parseInt(process.argv[checkpointsArg + 1]) : null;
-  const auto = process.argv.includes('--auto');
+  const _auto = process.argv.includes('--auto');
 
   if (!sdId) {
     console.error('Usage: node scripts/generate-checkpoint-plan.js <SD-ID> [--checkpoints N] [--auto]');
@@ -273,7 +273,7 @@ async function main() {
   }
 
   try {
-    const result = await generateCheckpointPlan(sdId, { checkpoints });
+    const _result = await generateCheckpointPlan(sdId, { checkpoints });
     process.exit(0);
   } catch (error) {
     console.error('Fatal error:', error);

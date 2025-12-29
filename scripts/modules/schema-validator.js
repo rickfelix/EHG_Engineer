@@ -40,7 +40,7 @@ export async function getTableSchema(supabase, tableName) {
 
   if (error) {
     // Fallback: try direct query if RPC doesn't exist
-    const query = `
+    const _query = `
       SELECT column_name, data_type, is_nullable, column_default
       FROM information_schema.columns
       WHERE table_name = $1

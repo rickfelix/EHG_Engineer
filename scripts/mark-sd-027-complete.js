@@ -71,7 +71,7 @@ async function markSDComplete() {
           console.log(`✅ Updated SD-027 in ${table} table`);
           break;
         }
-      } catch (e) {
+      } catch (_e) {
         // Silent catch - table might not exist
       }
     }
@@ -103,7 +103,7 @@ async function markSDComplete() {
 }
 
 // Execute
-markSDComplete().then(result => {
+markSDComplete().then(_result => {
   console.log('\n✅ SD-027 MARKED AS COMPLETED!');
   console.log('Status in system: COMPLETED');
   console.log('Ready for deployment and monitoring');

@@ -461,10 +461,9 @@ class LEOHookFeedback {
   async resolveStaleSession() {
     console.log('🔄 Refreshing orchestrator session...');
 
-    // Read existing session ID
-    let sdId = 'SD-TEMP-001';
+    // Read existing session ID (currently unused but kept for future use)
     try {
-      sdId = await fs.readFile('.leo-session-id', 'utf8');
+      await fs.readFile('.leo-session-id', 'utf8');
     } catch {
       // No session ID file
     }

@@ -123,7 +123,7 @@ async function createUserStories() {
   console.log(`📊 Inserting ${userStories.length} user stories...\n`);
 
   for (const story of userStories) {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('user_stories')
       .upsert(story, { onConflict: 'story_key' })
       .select('story_key, title');

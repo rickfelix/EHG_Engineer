@@ -95,7 +95,7 @@ async function executeLEADPhase() {
 }
 
 // PLAN Phase - Technical Design with Sub-Agent Integration
-async function executePLANPhase(leadHandoff) {
+async function executePLANPhase(_leadHandoff) {
   console.log('\n📋 PLAN PHASE: Technical Design with Sub-Agent Integration');
   console.log('-'.repeat(40));
 
@@ -184,7 +184,7 @@ async function executePLANPhase(leadHandoff) {
 }
 
 // EXEC Phase - Implementation with Sub-Agent Coordination
-async function executeEXECPhase(planData) {
+async function executeEXECPhase(_planData) {
   console.log('\n📋 EXEC PHASE: Implementation with Sub-Agent Coordination');
   console.log('-'.repeat(40));
 
@@ -324,7 +324,7 @@ if (import.meta.url === \`file://\${process.argv[1]}\`) {
   console.log('✅ Enhanced orchestrator created:', orchestratorPath);
 
   // Create git pre-commit hook
-  const gitHook = `#!/bin/sh
+  const _gitHook = `#!/bin/sh
 # SD-LEO-003: Enforce LEO Protocol Orchestrator Usage
 
 # Check for orchestrator session
@@ -345,7 +345,7 @@ echo "✅ LEO Protocol Orchestrator session validated"
 exit 0
 `;
 
-  const hookPath = join(__dirname, '..', '.git', 'hooks', 'pre-commit');
+  const _hookPath = join(__dirname, '..', '.git', 'hooks', 'pre-commit');
   // Note: Would write hook here in real implementation
   console.log('✅ Git pre-commit hook configured');
 
@@ -366,7 +366,7 @@ exit 0
 }
 
 // VERIFICATION Phase - Testing with Sub-Agent Validation
-async function executeVERIFICATIONPhase(implementation) {
+async function executeVERIFICATIONPhase(_implementation) {
   console.log('\n📋 VERIFICATION PHASE: Testing & Validation');
   console.log('-'.repeat(40));
 

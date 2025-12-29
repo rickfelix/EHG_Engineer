@@ -277,7 +277,7 @@ CRITICAL NUANCES:
     console.log(`📝 Inserting ${sequences.length} Epic Execution Sequences...\n`);
 
     for (const seq of sequences) {
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('execution_sequences_v2')
         .insert({
           id: seq.id,

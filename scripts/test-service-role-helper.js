@@ -34,7 +34,7 @@ async function testServiceRoleHelper() {
     const url = getSupabaseUrl('engineer');
     console.log('✅ getSupabaseUrl() works');
     console.log(`   URL: ${url}`);
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ getSupabaseUrl() failed:', error.message);
     return;
   }
@@ -43,7 +43,7 @@ async function testServiceRoleHelper() {
     const anonKey = getAnonKey('engineer');
     console.log('✅ getAnonKey() works');
     console.log(`   Key: ${anonKey.substring(0, 20)}...`);
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ getAnonKey() failed:', error.message);
     console.log('   (This is expected if SUPABASE_ANON_KEY not in .env)');
   }
@@ -52,7 +52,7 @@ async function testServiceRoleHelper() {
     const serviceKey = getServiceRoleKey('engineer');
     console.log('✅ getServiceRoleKey() works');
     console.log(`   Key: ${serviceKey.substring(0, 20)}...`);
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ getServiceRoleKey() failed:', error.message);
     console.log('   ⚠️  SUPABASE_SERVICE_ROLE_KEY not found in .env');
     console.log('   Add it to continue testing handoff read access');
@@ -71,7 +71,7 @@ async function testServiceRoleHelper() {
       verbose: true
     });
     console.log('✅ createSupabaseServiceClient() created client successfully');
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ createSupabaseServiceClient() failed:', error.message);
     return;
   }
@@ -99,7 +99,7 @@ async function testServiceRoleHelper() {
         });
       }
     }
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Service role query failed:', error.message);
   }
 
@@ -129,7 +129,7 @@ async function testServiceRoleHelper() {
         console.log('   ⚠️  Unexpected: Anon key can read handoffs (RLS not blocking)');
       }
     }
-  } catch (error) {
+  } catch (_error) {
     console.log(`⚠️  Anon client creation failed: ${error.message}`);
     console.log('   (This is expected if SUPABASE_ANON_KEY not in .env)');
   }
@@ -157,7 +157,7 @@ async function testServiceRoleHelper() {
         });
       }
     }
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Query failed:', error.message);
   }
 

@@ -186,7 +186,7 @@ async function runMigration() {
     // Step 6: Verification
     console.log('\nStep 6: Verification...');
 
-    const { data: verifyData, count: totalCount } = await supabase
+    const { data: _verifyData, count: totalCount } = await supabase
       .from('product_requirements_v2')
       .select('*', { count: 'exact', head: true });
 
@@ -260,7 +260,7 @@ async function runMigration() {
     console.log('2. Update code to use sd_id instead of sd_uuid');
     console.log('');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('Migration error:', error.message);
     console.error(error.stack);
   }

@@ -46,7 +46,7 @@ class LEOStatusLine {
       } else {
         this.statusCache = this.getDefaultStatus();
       }
-    } catch (error) {
+    } catch (_error) {
       this.statusCache = this.getDefaultStatus();
     }
   }
@@ -57,7 +57,7 @@ class LEOStatusLine {
   saveStatus() {
     try {
       fs.writeFileSync(this.configPath, JSON.stringify(this.statusCache, null, 2));
-    } catch (error) {
+    } catch (_error) {
       // Silent fail - status line should not break workflow
     }
   }
@@ -135,10 +135,10 @@ class LEOStatusLine {
         };
       }
       
-    } catch (error) {
+    } catch (_error) {
       // Context detection is best-effort
     }
-    
+
     return context;
   }
 
@@ -356,7 +356,7 @@ class LEOStatusLine {
         console.log(`📊 Status: ${text}`);
       }
       
-    } catch (error) {
+    } catch (_error) {
       // Silent fail
     }
   }
@@ -483,7 +483,7 @@ class LEOStatusLine {
       
       // Last fallback to directory name
       return path.basename(process.cwd());
-    } catch (error) {
+    } catch (_error) {
       return 'unknown';
     }
   }
@@ -495,7 +495,7 @@ class LEOStatusLine {
     try {
       const branch = execSync('git branch --show-current', { encoding: 'utf8' }).trim();
       return branch || 'detached';
-    } catch (error) {
+    } catch (_error) {
       return 'no-git';
     }
   }

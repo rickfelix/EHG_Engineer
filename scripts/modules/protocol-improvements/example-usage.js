@@ -12,7 +12,7 @@ import {
   getEffectivenessReport,
   getImprovementStatus,
   getTopPriorityImprovements,
-  runFullImprovementCycle
+  runFullImprovementCycle as _runFullImprovementCycle
 } from './index.js';
 
 async function main() {
@@ -69,7 +69,7 @@ async function main() {
 
     // Example 6: Get effectiveness report
     console.log('6. Getting effectiveness report...');
-    const report = await getEffectivenessReport();
+    const _report = await getEffectivenessReport();
     console.log('   (Report displayed above)\n');
 
     // Example 7: Run full cycle (extract → apply → track)

@@ -123,7 +123,7 @@ async function updateEXECChecklist() {
     console.log('  5. src/client/src/components/voice/RealtimeClient.ts');
     console.log('  6. src/client/src/components/voice/types.ts');
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error:', error.message);
     process.exit(1);
   }

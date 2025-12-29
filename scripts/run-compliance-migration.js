@@ -23,7 +23,7 @@ async function runMigration() {
   console.log('   Checking if migration already applied...');
 
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('quick_fixes')
       .select('compliance_score, compliance_verdict, compliance_details')
       .limit(1);
@@ -32,7 +32,7 @@ async function runMigration() {
       console.log('   ✅ Columns already exist - migration previously applied\n');
       return;
     }
-  } catch (err) {
+  } catch (_err) {
     // Columns don't exist, continue with migration
   }
 

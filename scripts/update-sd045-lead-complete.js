@@ -12,7 +12,7 @@ async function updateSD045LeadPhase() {
   console.log('📝 Completing LEAD phase for SD-045...\n');
 
   // Update SD-045 with LEAD phase completion and handoff data
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('strategic_directives_v2')
     .update({
       progress: 20,

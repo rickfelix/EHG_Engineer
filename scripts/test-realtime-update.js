@@ -22,14 +22,14 @@ async function testRealtimeUpdate() {
     const testDescription = `OpenAI Realtime Voice consolidation - Updated at ${new Date().toLocaleTimeString()}`;
     
     console.log('📝 Updating SD-2025-001 description...');
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
-      .update({ 
+      .update({
         description: testDescription,
         updated_at: new Date().toISOString()
       })
       .eq('id', 'SD-2025-001');
-    
+
     if (error) {
       throw error;
     }
@@ -39,7 +39,7 @@ async function testRealtimeUpdate() {
     console.log('\n💡 The dashboard should automatically update without refresh');
     console.log('   Check: http://localhost:3000/dashboard');
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error:', error.message);
     process.exit(1);
   }

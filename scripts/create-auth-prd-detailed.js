@@ -252,7 +252,7 @@ async function createAuthPRD() {
       .eq('directive_id', 'SD-AUTH-SETUP-2025-001');
 
     // Create new PRD
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('product_requirements_v2')
       .insert(prd)
       .select()

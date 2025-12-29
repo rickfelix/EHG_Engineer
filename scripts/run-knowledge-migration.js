@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabase = createClient(
+const _supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
@@ -14,7 +14,7 @@ const supabase = createClient(
 async function runMigration() {
   console.log('🚀 Running Knowledge Retrieval System Migration\n');
 
-  const sqlFile = fs.readFileSync('supabase/ehg_engineer/migrations/20251015200000_knowledge_retrieval_system.sql', 'utf8');
+  const _sqlFile = fs.readFileSync('supabase/ehg_engineer/migrations/20251015200000_knowledge_retrieval_system.sql', 'utf8');
 
   console.log('📄 Reading migration file: 196 lines, 6.5KB\n');
   

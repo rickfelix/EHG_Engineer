@@ -1,11 +1,11 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// import path from 'path'; // Unused
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -108,7 +108,7 @@ async function testProgressCalculation() {
       console.log('when available, which handles complex phase transitions correctly.');
     }
     
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Error testing progress:', err.message);
   }
 }

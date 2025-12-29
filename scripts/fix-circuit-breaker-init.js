@@ -29,7 +29,7 @@ async function fix() {
   if (!existing || existing.length === 0) {
     console.log('\n➕ Inserting context7 entry...');
     
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('system_health')
       .insert({
         service_name: 'context7',
@@ -54,7 +54,7 @@ async function fix() {
     console.log('\n⚠️  Multiple rows found! Deleting duplicates...');
     
     // Keep first row, delete others
-    const keepRow = existing[0];
+    const _keepRow = existing[0];
     const deleteRows = existing.slice(1);
 
     for (const row of deleteRows) {

@@ -36,7 +36,7 @@ const supabase = createClient(
 );
 
 const SD_ID = 'SD-VISION-V2-010';
-const PRD_ID = 'PRD-SD-VISION-V2-010';
+const _PRD_ID = 'PRD-SD-VISION-V2-010';
 
 // User stories following INVEST criteria with Given-When-Then acceptance criteria
 const userStories = [
@@ -377,7 +377,7 @@ async function addUserStories() {
           sd_id: sdUuid  // Replace string SD_ID with actual UUID
         };
 
-        const { data, error } = await supabase
+        const { data: _data, error } = await supabase
           .from('user_stories')
           .insert(storyWithUuid)
           .select()

@@ -37,7 +37,7 @@ async function updateSD011WorkingOn() {
     console.log(`   Current Working On: ${current.working_on || '(not set)'}\n`);
 
     // Update the working_on field
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .update({
         working_on: '✅ COMPLETED - All 3 components implemented: GTM Strategy Engine, Campaign Orchestration, Market Readiness Assessment. 100% validation across all LEO phases.',
@@ -71,7 +71,7 @@ async function updateSD011WorkingOn() {
       console.log(`📝 Working On: ${data.working_on}`);
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Unexpected error:', error);
   }
 }

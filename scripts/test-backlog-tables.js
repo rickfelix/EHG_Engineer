@@ -30,7 +30,7 @@ async function testTables() {
                 console.log('   Columns:', Object.keys(data[0]));
             }
         }
-    } catch (e) {
+    } catch (_e) {
         console.log('   ❌ Exception:', e.message);
     }
     
@@ -51,7 +51,7 @@ async function testTables() {
                 console.log('   Columns:', Object.keys(data[0]));
             }
         }
-    } catch (e) {
+    } catch (_e) {
         console.log('   ❌ Exception:', e.message);
     }
     
@@ -88,7 +88,7 @@ async function testTables() {
                 console.log('   ✅ Test data cleaned up');
             }
         }
-    } catch (e) {
+    } catch (_e) {
         console.log('   ❌ Exception:', e.message);
     }
     
@@ -146,7 +146,7 @@ async function testTables() {
                     console.log('   ✅ Test data cleaned up');
                 }
             }
-        } catch (e) {
+        } catch (_e) {
             console.log('   ❌ Exception:', e.message);
         }
     }

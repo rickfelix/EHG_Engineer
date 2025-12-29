@@ -76,7 +76,7 @@ async function insertProtocol() {
 
     // Step 2: Check if v4.3.1 already exists
     console.log('\n📦 Step 2: Checking for existing v4.3.1...');
-    const { data: existingV431, error: checkError } = await supabase
+    const { data: existingV431 } = await supabase
       .from('leo_protocols')
       .select('id, status')
       .eq('id', PROTOCOL_ID)
@@ -113,7 +113,7 @@ async function insertProtocol() {
 
     // Step 4: Copy sections from previous version
     console.log('\n📦 Step 4: Copying sections from previous version...');
-    const { data: oldSections, error: sectionsError } = await supabase
+    const { data: oldSections } = await supabase
       .from('leo_protocol_sections')
       .select('*')
       .eq('protocol_id', 'leo-v4-2-0-story-gates')

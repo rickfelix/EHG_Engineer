@@ -23,7 +23,7 @@ async function updatePriority() {
   ];
 
   for (const sdId of sdIds) {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .update({ priority: 'high' })
       .eq('id', sdId)

@@ -254,7 +254,7 @@ Please analyze the codebase and generate the complete artifact bundle.
       } else {
         console.log(chalk.yellow('ℹ️  Manual copy required (clipboard not supported on this platform)'));
       }
-    } catch (error) {
+    } catch (_error) {
       console.log(chalk.yellow('ℹ️  Could not copy to clipboard. Please copy manually.'));
     }
   }

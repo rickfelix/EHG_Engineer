@@ -165,7 +165,7 @@ async function checkAgentAssignments(stage) {
 async function checkDossierExists(stage) {
   // Check if stage dossier exists in the documentation structure
   // For now, we check if there's stage metadata in the database
-  const { data, error } = await supabase
+  const { data: _data, error: _error } = await supabase
     .from('stage_reviews')
     .select('id, stage_number, review_status')
     .eq('stage_number', stage)
@@ -215,7 +215,7 @@ async function checkSessionRouting(stage) {
 
 async function checkExceptionStatus(stage) {
   // Check for documented exceptions
-  const { data, error } = await supabase
+  const { data, error: _error } = await supabase
     .from('strategic_directives_v2')
     .select('id, title, metadata')
     .filter('metadata->crewai_compliance_status', 'eq', 'exception')
@@ -307,7 +307,7 @@ async function checkRowCount(stage, config) {
     query = query.eq(column, stage);
   }
 
-  const { data, error, count } = await query;
+  const { data, error, count: _count } = await query;
 
   if (error) {
     return {
@@ -334,7 +334,7 @@ async function checkRowCount(stage, config) {
  * Check if a table exists
  */
 async function checkTableExists(tableName) {
-  const { data, error } = await supabase.from(tableName).select('id').limit(1);
+  const { data: _data, error } = await supabase.from(tableName).select('id').limit(1);
 
   if (error && error.message.includes('does not exist')) {
     return {
@@ -706,7 +706,7 @@ async function runComplianceCheck() {
 
   // Output JSON for GitHub Actions
   if (process.env.GITHUB_OUTPUT) {
-    const outputLine = `compliance_result=${JSON.stringify(output)}`;
+    const _outputLine = `compliance_result=${JSON.stringify(output)}`;
     console.log(`\n::set-output name=compliance_result::${JSON.stringify(output)}`);
   }
 

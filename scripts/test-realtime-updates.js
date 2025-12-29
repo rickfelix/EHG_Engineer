@@ -1,11 +1,11 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// import path from 'path'; // Unused
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -77,7 +77,7 @@ async function testRealTimeUpdates() {
     console.log('  ✅ LEO Protocol v4.1 compliance maintained');
     console.log('  ✅ Single source of truth established');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Real-time test failed:', err.message);
   }
 }

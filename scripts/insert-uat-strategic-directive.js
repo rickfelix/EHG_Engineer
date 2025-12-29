@@ -73,7 +73,7 @@ async function insertUATStrategicDirective() {
     };
 
     // Check if SD already exists
-    const { data: existing, error: checkError } = await supabase
+    const { data: existing } = await supabase
       .from('strategic_directives_v2')
       .select('id')
       .eq('id', strategicDirective.id)

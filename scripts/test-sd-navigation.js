@@ -143,7 +143,7 @@ async function testSDNavigation() {
       return { success: true, message: 'Cannot test switching with only one SD' };
     }
     
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Test failed:', error.message);
     return { success: false, message: error.message };
   } finally {

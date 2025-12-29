@@ -7,7 +7,8 @@
  */
 
 import ContextMonitor from '../lib/context/context-monitor.js';
-import { createSmartHandoff, processSubAgentReports } from '../lib/context/handoff-with-overflow-prevention.js';
+ 
+import { createSmartHandoff, processSubAgentReports as _processSubAgentReports } from '../lib/context/handoff-with-overflow-prevention.js';
 import chalk from 'chalk';
 
 class OverflowPreventionTest {
@@ -42,7 +43,7 @@ class OverflowPreventionTest {
       // Print results
       this.printResults();
 
-    } catch (error) {
+    } catch (_error) {
       console.error(chalk.red('\n❌ Test suite failed:'), error.message);
       process.exit(1);
     }
@@ -157,7 +158,7 @@ class OverflowPreventionTest {
       if (handoff.contextStatus === 'HEALTHY') {
         this.pass(`Context status correctly reported as ${handoff.contextStatus}`);
       }
-    } catch (error) {
+    } catch (_error) {
       this.fail(`Smart handoff failed: ${error.message}`);
     }
   }
@@ -191,7 +192,7 @@ class OverflowPreventionTest {
       if (handoff.strategy) {
         this.pass(`Strategy applied: ${handoff.strategy}`);
       }
-    } catch (error) {
+    } catch (_error) {
       this.fail(`Critical handoff test failed: ${error.message}`);
     }
   }

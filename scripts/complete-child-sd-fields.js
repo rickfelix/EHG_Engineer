@@ -158,7 +158,7 @@ async function completeChildSDFields() {
   for (const update of childSDUpdates) {
     const { id, ...fields } = update;
 
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .update(fields)
       .eq('id', id)

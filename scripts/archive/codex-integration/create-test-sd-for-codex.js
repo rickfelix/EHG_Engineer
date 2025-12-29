@@ -129,10 +129,10 @@ async function createTestSD() {
 
 // Execute
 createTestSD()
-  .then(sd => {
+  .then(_sd => {
     console.log(chalk.gray('\n[LEAD Agent work complete]'));
     process.exit(0);
   })
-  .catch(error => {
+  .catch(_error => {
     process.exit(1);
   });

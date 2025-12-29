@@ -1,11 +1,11 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// import path from 'path'; // Unused
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -96,7 +96,7 @@ async function startLeadApproval() {
     console.log('    • Sign off on strategic directive completion\n');
 
     // Update PRD with approval phase initiated
-    const { data: prdUpdate, error: prdError2 } = await supabase
+    const { data: _prdUpdate, error: prdError2 } = await supabase
       .from('product_requirements_v2')
       .update({
         status: 'awaiting_approval',
@@ -121,7 +121,7 @@ async function startLeadApproval() {
     }
 
     // Update SD for approval phase
-    const { data: sdUpdate, error: sdError2 } = await supabase
+    const { data: _sdUpdate, error: sdError2 } = await supabase
       .from('strategic_directives_v2')
       .update({
         metadata: {
@@ -186,7 +186,7 @@ async function startLeadApproval() {
     console.log('🚀 READY FOR LEAD APPROVAL ASSESSMENT');
     console.log('Next: Conduct comprehensive final review and approval');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Failed to start LEAD approval:', err.message);
   }
 }

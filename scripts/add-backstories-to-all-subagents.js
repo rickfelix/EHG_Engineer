@@ -280,7 +280,7 @@ async function enrichSubAgents() {
       };
 
       // Update the sub-agent with enriched metadata
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('leo_sub_agents')
         .update({
           description: backstoryData.summary,

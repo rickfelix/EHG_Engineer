@@ -29,7 +29,7 @@ async function parseTestResults() {
 
     // Check for JSON results
     const jsonResultsPath = path.join(resultsPath, 'results.json');
-    const junitResultsPath = path.join(resultsPath, 'junit.xml');
+    const _junitResultsPath = path.join(resultsPath, 'junit.xml');
     const logPath = path.join(resultsPath, 'uat-full-run.log');
 
     let testStats = {
@@ -66,7 +66,7 @@ async function parseTestResults() {
           };
         });
       }
-    } catch (err) {
+    } catch (_err) {
       // Fallback to log parsing if JSON not available
       try {
         const logData = await fs.readFile(logPath, 'utf-8');
@@ -90,7 +90,7 @@ async function parseTestResults() {
             testStats.failed++;
           }
         });
-      } catch (logErr) {
+      } catch (_logErr) {
         console.log('⚠️ Test results not yet available');
       }
     }
@@ -101,7 +101,7 @@ async function parseTestResults() {
     }
 
     return testStats;
-  } catch (error) {
+  } catch (_error) {
     console.error('Error parsing test results:', error.message);
     return null;
   }
@@ -127,7 +127,7 @@ async function updateDatabaseStatus(stats) {
     if (updateError) {
       console.error('Error updating database:', updateError);
     }
-  } catch (error) {
+  } catch (_error) {
     console.error('Database update failed:', error.message);
   }
 }

@@ -172,7 +172,7 @@ async function updateChairmanDirectiveMetadata() {
 
     return results;
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Error updating metadata:', error.message);
     console.error(error.stack);
     throw error;

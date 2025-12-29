@@ -285,7 +285,7 @@ async function verifyMigration() {
       const gateTestPassed2 = gateTestResult2.rows[0].result === false;
       console.log(`   - Gate test (0.5): ${gateTestPassed2 ? '✅ FALSE' : '❌ TRUE (should be FALSE)'}`);
       gateTestPassed = gateTestPassed && gateTestPassed2;
-    } catch (err) {
+    } catch (_err) {
       console.log(`   ❌ Gate test error: ${err.message}`);
       results.errors.push(`Quality gate function test failed: ${err.message}`);
     }
@@ -488,7 +488,7 @@ async function verifyMigration() {
       console.log('');
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Verification failed:', error.message);
     results.errors.push(`Fatal error: ${error.message}`);
     results.overall_status = 'FAIL';

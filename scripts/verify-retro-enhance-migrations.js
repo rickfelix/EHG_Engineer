@@ -322,7 +322,7 @@ async function runVerification() {
           check: check.name,
           ...result
         });
-      } catch (error) {
+      } catch (_error) {
         console.log(`❌ Error: ${error.message}`);
         failed++;
         results.push({
@@ -360,7 +360,7 @@ async function runVerification() {
       return false;
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Verification failed:', error.message);
     return false;
   } finally {

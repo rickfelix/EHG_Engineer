@@ -12,7 +12,8 @@ import BaseExecutor from './BaseExecutor.js';
 import { execSync } from 'child_process';
 import path from 'path';
 import readline from 'readline';
-import { validateSDHandoffState, quickPreflightCheck } from '../../../lib/handoff-preflight.js';
+// validateSDHandoffState - available for future validation needs
+import { validateSDHandoffState as _validateSDHandoffState, quickPreflightCheck } from '../../../lib/handoff-preflight.js';
 
 // External verifier (will be lazy loaded)
 let LeadToPlanVerifier;

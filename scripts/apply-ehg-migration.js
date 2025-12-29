@@ -80,7 +80,7 @@ async function applyMigration() {
         console.log(`\n[${i + 1}/${statements.length}] Executing...`);
         console.log(statement.substring(0, 80) + '...');
 
-        const { data, error } = await adminSupabase.rpc('exec_sql', { sql: statement });
+        const { data: _data, error } = await adminSupabase.rpc('exec_sql', { sql: statement });
 
         if (error) {
           console.error('❌ Error:', error);
@@ -95,7 +95,7 @@ async function applyMigration() {
 
     // Verify tables exist
     console.log('\n🔍 Verifying tables...');
-    const { data: tables, error: tablesError } = await supabase
+    const { data: _tables, error: tablesError } = await supabase
       .from('automation_feedback')
       .select('id')
       .limit(1);

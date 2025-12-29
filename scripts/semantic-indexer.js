@@ -100,7 +100,8 @@ async function scanDirectory(dirPath, fileList = []) {
 /**
  * Generate embedding for text using OpenAI
  */
-async function generateEmbedding(text) {
+ 
+async function _generateEmbedding(text) {
   const response = await openai.embeddings.create({
     model: EMBEDDING_MODEL,
     input: text,
@@ -229,7 +230,7 @@ async function indexEntities(entities, options) {
         }
       }
 
-    } catch (error) {
+    } catch (_error) {
       console.error(`  ❌ Batch processing error: ${error.message}`);
       errors += batch.length;
     }
@@ -288,7 +289,7 @@ async function main() {
       if (verbose) {
         console.log(`  ${dir}: ${files.length} files`);
       }
-    } catch (error) {
+    } catch (_error) {
       // Directory doesn't exist, skip
       if (verbose) {
         console.log(`  ${dir}: not found (skipping)`);
@@ -311,7 +312,7 @@ async function main() {
         const relPath = path.relative(applicationRoot, filePath);
         console.log(`  ${relPath}: ${entities.length} entities`);
       }
-    } catch (error) {
+    } catch (_error) {
       console.error(`  ⚠️  Error processing ${filePath}: ${error.message}`);
     }
   }

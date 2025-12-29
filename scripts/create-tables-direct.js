@@ -39,7 +39,7 @@ async function createTables() {
         console.log('⚠️  Table does not exist. Attempting alternate method...');
         
         // Try using RPC to execute SQL
-        const { data, error } = await supabase.rpc('exec_sql', {
+        const { data: _data, error } = await supabase.rpc('exec_sql', {
           sql: `
             CREATE TABLE IF NOT EXISTS strategic_directives_v2 (
               id VARCHAR(50) PRIMARY KEY,

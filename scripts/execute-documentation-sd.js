@@ -68,7 +68,7 @@ async function executeDocumentationSD() {
 
     // Step 2: Add 7 DOCMON-driven user stories
     console.log('📝 STEP 2: Adding 7 DOCMON-driven documentation stories...');
-    const newStories = await addDocumentationStories();
+    const _newStories = await addDocumentationStories();
     console.log('');
 
     // Step 3: Verify final counts

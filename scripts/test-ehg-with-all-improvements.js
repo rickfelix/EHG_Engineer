@@ -110,7 +110,7 @@ async function testOnEHGCodebase() {
           securityAgent.addFinding(finding);
         }
       });
-    } catch (error) {
+    } catch (_error) {
       // Skip files that can't be read
     }
   }
@@ -170,7 +170,7 @@ async function testOnEHGCodebase() {
           }
         }
       });
-    } catch (error) {
+    } catch (_error) {
       // Skip
     }
   }

@@ -250,7 +250,7 @@ async function updateTestPlanningRequirements() {
     console.log('  3. Update PRD creation templates');
     console.log('  4. Train team on new test planning requirements');
     
-  } catch (error) {
+  } catch (_error) {
     console.log('❌ Unexpected error:', error.message);
   }
 }

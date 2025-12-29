@@ -141,7 +141,7 @@ async function verifySDIdIntegrity() {
         } else {
           console.log(`✅ ${tableName}: No orphaned records`);
         }
-      } catch (err) {
+      } catch (_err) {
         console.log(`⚠️  ${tableName}: Error checking orphans - ${err.message}`);
       }
     }
@@ -205,7 +205,7 @@ async function verifySDIdIntegrity() {
 
     console.log('\n' + '='.repeat(80));
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error during integrity check:', error);
     throw error;
   } finally {

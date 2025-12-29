@@ -140,7 +140,7 @@ async function migrateHandoffFiles() {
           // Wrap text content in JSON object
           deliverables = JSON.stringify({ content: delivText });
         }
-      } catch (e) {
+      } catch (_e) {
         deliverables = '{}';
       }
 
@@ -152,7 +152,7 @@ async function migrateHandoffFiles() {
           // Wrap text content in JSON array
           actionItems = JSON.stringify([{ content: actionsText }]);
         }
-      } catch (e) {
+      } catch (_e) {
         actionItems = '[]';
       }
 

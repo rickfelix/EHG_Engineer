@@ -222,7 +222,7 @@ async function main() {
     console.log('   2. Review generated CLAUDE_EXEC.md and CLAUDE_CORE.md');
     console.log('   3. Commit the updated files\\n');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Update failed:', error);
     process.exit(1);
   }

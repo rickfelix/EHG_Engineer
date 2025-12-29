@@ -156,7 +156,7 @@ async function checkSupabaseConnectivity() {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Test query (READ-ONLY)
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .select('id')
       .limit(1);
@@ -255,7 +255,7 @@ function printSummary() {
   console.log('═'.repeat(60));
 
   const totalChecks = results.passed.length + results.warnings.length + results.failed.length;
-  const passRate = Math.round((results.passed.length / totalChecks) * 100);
+  const _passRate = Math.round((results.passed.length / totalChecks) * 100);
 
   if (results.failed.length === 0) {
     console.log('  🎉 GOVERNANCE PREFLIGHT: PASS');

@@ -865,7 +865,7 @@ async function generateAllTests() {
  * Generate test runner script
  */
 async function generateTestRunner() {
-  const runnerContent = `{
+  const _runnerContent = `{
   "scripts": {
     "test:uat": "playwright test tests/uat --config=playwright-uat.config.js",
     "test:uat:ui": "playwright test tests/uat --config=playwright-uat.config.js --ui",

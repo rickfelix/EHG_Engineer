@@ -11,7 +11,10 @@ This directory contains all LEO protocol versions, development standards, and wo
 
 ## Directory Contents
 
-### Current Protocol (v4.2.x)
+### Current Protocol (v4.3.3)
+
+> **Note**: LEO Protocol v4.3.3 is the current active version (auto-generated from database).
+> See `/CLAUDE.md` for the current protocol context router.
 
 | File | Description |
 |------|-------------|
@@ -63,11 +66,12 @@ Legacy protocol versions (v3.x, v4.0, v4.1.x) have been archived as of 2025-10-2
 ## Quick Reference
 
 ### Current Active Protocol
-**LEO Protocol v4.2.x** is the current active version. Key features:
-- Hybrid sub-agent architecture
+**LEO Protocol v4.3.3** is the current active version (auto-generated from database). Key features:
+- Hybrid sub-agent architecture (v4.2 foundation)
 - Playwright E2E testing integration
-- Database-first patterns
+- Database-first patterns (strictly enforced)
 - Git commit conventions
+- UI Parity Governance
 
 ### Archived Protocols
 Legacy protocols (v3.x, v4.0, v4.1.x) have been archived to `/docs/archive/protocols/` as of 2025-10-24. See archive README for historical reference and migration guidance.
@@ -94,3 +98,6 @@ Legacy protocols (v3.x, v4.0, v4.1.x) have been archived to `/docs/archive/proto
 ---
 
 **Note**: Documentation audit cleanup completed 2025-10-24. Legacy protocol versions (v3.x - v4.1.x) archived to `/docs/archive/protocols/`.
+
+*Part of LEO Protocol v4.3.3 - Protocols and Standards*
+*Updated: 2025-12-29*

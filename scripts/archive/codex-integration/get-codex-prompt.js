@@ -5,7 +5,7 @@
  * Retrieves and displays the last generated prompt for easy copying
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient as _createClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import chalk from 'chalk';
@@ -139,7 +139,7 @@ try {
     console.log(chalk.green('\n✅ Prompt copied to clipboard!'));
     console.log(chalk.gray('   Just paste with Ctrl+V in OpenAI Codex'));
   }
-} catch (error) {
+} catch (_error) {
   console.log(chalk.yellow('\n⚠️  Could not copy to clipboard automatically'));
 }
 

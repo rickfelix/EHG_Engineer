@@ -155,7 +155,7 @@ class CodexOutputValidator {
         encoding: 'utf8'
       });
       this.validationResults.push('✅ Patch applies cleanly');
-    } catch (error) {
+    } catch (_error) {
       this.warnings.push('Patch does not apply cleanly to current codebase');
     }
 

@@ -129,7 +129,7 @@ async function updateParentMetadata() {
 
     return updatedMetadata;
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Error updating parent SD metadata:', error.message);
     console.error(error);
     process.exit(1);
@@ -143,7 +143,7 @@ async function updateParentMetadata() {
 
 // Execute
 updateParentMetadata()
-  .then(metadata => {
+  .then(_metadata => {
     console.log('✅ Script completed successfully\n');
     process.exit(0);
   })

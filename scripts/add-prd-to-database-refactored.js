@@ -33,7 +33,7 @@ import {
 import {
   isLLMAvailable,
   generatePRDContentWithLLM,
-  buildPRDGenerationContext
+  buildPRDGenerationContext as _buildPRDGenerationContext
 } from './modules/prd-llm-service.mjs';
 
 // Business logic
@@ -52,11 +52,11 @@ import {
 
 // External dependencies
 import { autoTriggerStories } from './modules/auto-trigger-stories.mjs';
-import { getComponentRecommendations, formatForPRD, generateInstallScript } from '../lib/shadcn-semantic-explainable-selector.js';
+import { getComponentRecommendations, formatForPRD as _formatForPRD, generateInstallScript } from '../lib/shadcn-semantic-explainable-selector.js';
 import {
   autoDetectSdType,
-  shouldSkipCodeValidation,
-  getValidationRequirements
+  shouldSkipCodeValidation as _shouldSkipCodeValidation,
+  getValidationRequirements as _getValidationRequirements
 } from '../lib/utils/sd-type-validation.js';
 import {
   extractPersonasFromSD,
@@ -421,7 +421,7 @@ async function addPRDToDatabase(sdId, prdTitle) {
     console.log('═══════════════════════════════════════════════════');
 
     try {
-      const { recommendations, summary } = await getComponentRecommendations({
+      const { recommendations, summary: _summary } = await getComponentRecommendations({
         sdScope: sdData.scope || sdData.title || sdId,
         sdDescription: sdData.description || '',
         sdObjectives: sdData.strategic_objectives || '',
@@ -473,7 +473,7 @@ async function addPRDToDatabase(sdId, prdTitle) {
     console.log('═'.repeat(70));
     console.log(`   PRD ID: ${prdId}`);
     console.log(`   SD ID: ${sdId}`);
-    console.log(`   Status: planning`);
+    console.log('   Status: planning');
     console.log('\n📝 Next steps:');
     console.log('   1. Review generated PRD content');
     console.log('   2. Complete remaining checklist items');

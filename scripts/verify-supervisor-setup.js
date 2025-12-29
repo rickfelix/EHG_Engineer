@@ -25,11 +25,11 @@ async function verifySupervisor() {
   // Check 1: plan_verification_results table
   console.log('\n1. Checking plan_verification_results table...');
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('plan_verification_results')
       .select('id')
       .limit(1);
-    
+
     if (!error || error.code === 'PGRST116') { // PGRST116 = no rows returned (table exists)
       console.log('   ✅ Table exists and is accessible');
       readyCount++;
@@ -39,26 +39,26 @@ async function verifySupervisor() {
     } else {
       console.log('   ⚠️  Table exists but has issues:', error.message);
     }
-  } catch (err) {
-    console.log('   ❌ Error checking table:', err.message);
+  } catch (_err) {
+    console.log('   ❌ Error checking table');
   }
   
   // Check 2: plan_subagent_queries table
   console.log('\n2. Checking plan_subagent_queries table...');
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('plan_subagent_queries')
       .select('id')
       .limit(1);
-    
+
     if (!error || error.code === 'PGRST116') {
       console.log('   ✅ Table exists and is accessible');
       readyCount++;
     } else {
       console.log('   ❌ Table does not exist');
     }
-  } catch (err) {
-    console.log('   ❌ Error checking table:', err.message);
+  } catch (_err) {
+    console.log('   ❌ Error checking table');
   }
   
   // Check 3: plan_conflict_rules table
@@ -75,19 +75,19 @@ async function verifySupervisor() {
     } else {
       console.log('   ❌ Table does not exist');
     }
-  } catch (err) {
+  } catch (_err) {
     console.log('   ❌ Error checking table:', err.message);
   }
   
   // Check 4: PLAN agent exists
   console.log('\n4. Checking PLAN agent configuration...');
   try {
-    const { data, error } = await supabase
+    const { data, error: _error } = await supabase
       .from('leo_agents')
       .select('agent_code, name, verification_percentage')
       .eq('agent_code', 'PLAN')
       .single();
-    
+
     if (data) {
       console.log(`   ✅ PLAN agent exists: ${data.name}`);
       console.log(`      Current verification: ${data.verification_percentage}%`);
@@ -95,8 +95,8 @@ async function verifySupervisor() {
     } else {
       console.log('   ⚠️  PLAN agent not found');
     }
-  } catch (err) {
-    console.log('   ❌ Error checking agent:', err.message);
+  } catch (_err) {
+    console.log('   ❌ Error checking agent');
   }
   
   // Check 5: /leo-verify command file

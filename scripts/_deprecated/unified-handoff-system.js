@@ -55,12 +55,12 @@ import { validateGate2ExecToPlan } from './modules/implementation-fidelity-valid
 import { validateGate3PlanToLead } from './modules/traceability-validation.js';
 import { validateGate4LeadFinal } from './modules/workflow-roi-validation.js';
 import {
-  shouldSkipCodeValidation,
+  shouldSkipCodeValidation as _shouldSkipCodeValidation,
   getValidationRequirements,
-  logSdTypeValidationMode
+  logSdTypeValidationMode as _logSdTypeValidationMode
 } from '../lib/utils/sd-type-validation.js';
 import { autoValidateUserStories } from './auto-validate-user-stories-on-exec-complete.js';
-import { autoCompleteDeliverables, checkDeliverablesNeedCompletion } from './modules/handoff/auto-complete-deliverables.js';
+import { autoCompleteDeliverables as _autoCompleteDeliverables, checkDeliverablesNeedCompletion as _checkDeliverablesNeedCompletion } from './modules/handoff/auto-complete-deliverables.js';
 import { validateSDCompletionReadiness, getSDImprovementGuidance } from './modules/sd-quality-validation.js';
 import path from 'path';
 import fs from 'fs';

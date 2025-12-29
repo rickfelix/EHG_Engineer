@@ -149,7 +149,7 @@ class UATComprehensiveAnalysis {
 
       return pipeline;
 
-    } catch (error) {
+    } catch (_error) {
       console.error(chalk.red(`❌ Analysis pipeline failed: ${error.message}`));
       pipeline.status = 'failed';
       pipeline.error = error.message;
@@ -195,7 +195,7 @@ class UATComprehensiveAnalysis {
               resolve(pipeline);
             }
           }
-        } catch (error) {
+        } catch (_error) {
           clearInterval(monitor);
           reject(error);
         }
@@ -333,7 +333,7 @@ class UATComprehensiveAnalysis {
   /**
    * Calculate platform coverage
    */
-  calculatePlatformCoverage(results) {
+  calculatePlatformCoverage(_results) {
     // Based on the 17 test categories we have
     const totalModules = 17;
     const testedModules = totalModules; // All modules have tests
@@ -538,7 +538,7 @@ Examples:
       process.exit(1);
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Analysis pipeline error:', error.message);
     process.exit(1);
   }

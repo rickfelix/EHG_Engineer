@@ -114,14 +114,14 @@ Acceptance Criteria:
     };
     
     // Upsert backlog item
-    const { data: backlogData, error: backlogError } = await supabase
+    const { data: _backlogData, error: backlogError } = await supabase
         .from('sd_backlog_map')
         .upsert(backlogPayload, {
             onConflict: 'sd_id,backlog_id',
             ignoreDuplicates: false
         })
         .select();
-    
+
     if (backlogError) {
         console.log('❌ Backlog operation failed:', backlogError.message);
     } else {

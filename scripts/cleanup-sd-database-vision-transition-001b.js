@@ -115,10 +115,10 @@ async function main() {
   } else {
     console.log(`Found ${testRecords.length} SD-TEST-* records`);
     const testIds = testRecords.map(r => r.id);
-    const testUuids = testRecords.map(r => r.uuid_id);
+    const _testUuids = testRecords.map(r => r.uuid_id);
 
     // 2b. Delete from sd_phase_handoffs (FK on sd_id)
-    const { data: handoffRefs, error: handoffFetchErr } = await supabase
+    const { data: handoffRefs, error: _handoffFetchErr } = await supabase
       .from('sd_phase_handoffs')
       .select('id, sd_id')
       .in('sd_id', testIds);
@@ -146,7 +146,7 @@ async function main() {
     }
 
     // 2c. Delete from product_requirements_v2 (FK on directive_id or sd_uuid)
-    const { data: prdRefs, error: prdFetchErr } = await supabase
+    const { data: prdRefs, error: _prdFetchErr } = await supabase
       .from('product_requirements_v2')
       .select('id, directive_id')
       .in('directive_id', testIds);

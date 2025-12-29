@@ -6,7 +6,7 @@
  * Makes Codex ACTIVE rather than just architectural
  */
 
-import { spawn } from 'child_process';
+import { spawn as _spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -202,7 +202,7 @@ REQUIRED ACTIONS:
 Apply this Codex-generated patch now.`;
 
     // Execute Claude CLI with full permissions
-    const result = await this.executeClaudeWithConstraints(
+    const _result = await this.executeClaudeWithConstraints(
       claudePrompt,
       config.permissions,
       config.env
@@ -230,7 +230,7 @@ Apply this Codex-generated patch now.`;
    * Execute Claude CLI with specific constraints
    */
   async executeClaudeWithConstraints(prompt, permissions, env) {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve, _reject) => {
       // Build Claude command with constraints
       const args = [
         '--print', // Non-interactive mode
@@ -247,7 +247,7 @@ Apply this Codex-generated patch now.`;
       args.push(prompt);
 
       // Set up environment
-      const processEnv = {
+      const _processEnv = {
         ...process.env,
         ...env
       };
@@ -270,7 +270,7 @@ Apply this Codex-generated patch now.`;
   /**
    * Simulate Codex response for testing
    */
-  simulateCodexResponse(prompt) {
+  simulateCodexResponse(_prompt) {
     return {
       message: 'Codex: Generating read-only artifacts',
       patch: `--- a/src/example.js
@@ -291,7 +291,7 @@ Apply this Codex-generated patch now.`;
   /**
    * Simulate Claude response for testing
    */
-  simulateClaudeResponse(prompt) {
+  simulateClaudeResponse(_prompt) {
     return {
       message: 'Claude: Applied Codex artifacts',
       applied: true,

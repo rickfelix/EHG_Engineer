@@ -17,7 +17,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 async function updateSDStatus() {
   console.log('Updating SD-VWC-A11Y-001 status after LEAD approval...\n');
 
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('strategic_directives_v2')
     .update({
       status: 'active',

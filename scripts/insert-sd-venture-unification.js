@@ -375,7 +375,7 @@ async function insertSD() {
 
   try {
     // Check if already exists
-    const { data: existing, error: checkError } = await supabase
+    const { data: existing } = await supabase
       .from('strategic_directives_v2')
       .select('id, title, status, created_at')
       .eq('id', 'SD-VENTURE-UNIFICATION-001')
@@ -404,7 +404,7 @@ async function insertSD() {
     }
 
     // Insert new record
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('strategic_directives_v2')
       .insert(sdData)
       .select();

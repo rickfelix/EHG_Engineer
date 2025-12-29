@@ -24,7 +24,7 @@ async function completeSD2025001LeadApproval() {
   
   try {
     // Update leo_progress_v2 to mark LEAD approval as 100% complete
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('leo_progress_v2')
       .upsert({
         entity_type: 'SD',

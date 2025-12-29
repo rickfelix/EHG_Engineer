@@ -23,6 +23,7 @@
  */
 
 import { exit } from 'node:process';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { getDb } from './lib/db';
 import { scoreGate, formatGateResults, Check } from './lib/score';
 import { getRulesForGate, getPRDDetails, storeGateReview } from './lib/rules';
@@ -50,15 +51,16 @@ const GATE_2E_RULES = [
 // Anthropic Client
 // ============================================================================
 
-let anthropicClient: Anthropic | null = null;
+let _anthropicClient: Anthropic | null = null;
 
-function getAnthropicClient(): Anthropic {
-  if (!anthropicClient) {
-    anthropicClient = new Anthropic({
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _getAnthropicClient(): Anthropic {
+  if (!_anthropicClient) {
+    _anthropicClient = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY
     });
   }
-  return anthropicClient;
+  return _anthropicClient;
 }
 
 // ============================================================================
@@ -68,7 +70,7 @@ function getAnthropicClient(): Anthropic {
 /**
  * Analyze files changed in this SD for hardening concerns
  */
-async function analyzeChangedFiles(prdId: string, db: any): Promise<{
+async function analyzeChangedFiles(prdId: string, db: SupabaseClient): Promise<{
   files: string[];
   hasDatabaseChanges: boolean;
   hasApiChanges: boolean;
@@ -105,7 +107,7 @@ async function analyzeChangedFiles(prdId: string, db: any): Promise<{
 /**
  * LLM-based RLS policy analysis
  */
-async function analyzeRLSPolicies(sdId: string, db: any): Promise<{
+async function analyzeRLSPolicies(sdId: string, db: SupabaseClient): Promise<{
   passed: boolean;
   findings: string[];
   coverage: number;
@@ -162,7 +164,7 @@ async function analyzeRLSPolicies(sdId: string, db: any): Promise<{
 /**
  * LLM-based query pattern analysis
  */
-async function analyzeQueryPatterns(sdId: string, db: any): Promise<{
+async function analyzeQueryPatterns(sdId: string, db: SupabaseClient): Promise<{
   passed: boolean;
   findings: string[];
   n1QueryRisks: number;
@@ -219,7 +221,7 @@ async function analyzeQueryPatterns(sdId: string, db: any): Promise<{
 /**
  * TypeScript type safety analysis
  */
-async function analyzeTypeSafety(sdId: string, db: any): Promise<{
+async function analyzeTypeSafety(sdId: string, db: SupabaseClient): Promise<{
   passed: boolean;
   findings: string[];
   strictnessScore: number;
@@ -272,7 +274,7 @@ async function analyzeTypeSafety(sdId: string, db: any): Promise<{
 /**
  * Data integrity analysis
  */
-async function analyzeDataIntegrity(sdId: string, db: any): Promise<{
+async function analyzeDataIntegrity(sdId: string, db: SupabaseClient): Promise<{
   passed: boolean;
   findings: string[];
   splitBrainRisks: number;

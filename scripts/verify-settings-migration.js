@@ -42,7 +42,7 @@ async function verifyMigration() {
 
   // Test 1: Check if profiles table exists
   console.log('1️⃣  Checking profiles table...');
-  const { data: profilesData, error: profilesError } = await supabase
+  const { data: _profilesData, error: profilesError } = await supabase
     .from('profiles')
     .select('*')
     .limit(0);
@@ -62,7 +62,7 @@ async function verifyMigration() {
 
   // Test 2: Check if user_preferences table exists
   console.log('\n2️⃣  Checking user_preferences table...');
-  const { data: prefsData, error: prefsError } = await supabase
+  const { data: _prefsData, error: prefsError } = await supabase
     .from('user_preferences')
     .select('*')
     .limit(0);

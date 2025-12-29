@@ -108,7 +108,7 @@ class GitBranchVerifier {
     try {
       const { stdout, stderr } = await execAsync(command, { cwd: this.appPath });
       return { stdout: stdout.trim(), stderr: stderr.trim(), success: true };
-    } catch (error) {
+    } catch (_error) {
       return {
         stdout: error.stdout?.trim() || '',
         stderr: error.stderr?.trim() || error.message,
@@ -469,11 +469,11 @@ class GitBranchVerifier {
     }
 
     // Run all checks
-    const check1 = await this.checkBranchExists();
-    const check2 = await this.checkCurrentBranch();
-    const check3 = await this.checkBranchNaming();
-    const check4 = await this.checkBranchMatchesSD();
-    const check5 = await this.checkRemoteTracking();
+    const _check1 = await this.checkBranchExists();
+    const _check2 = await this.checkCurrentBranch();
+    const _check3 = await this.checkBranchNaming();
+    const _check4 = await this.checkBranchMatchesSD();
+    const _check5 = await this.checkRemoteTracking();
 
     // Execute actions based on check results
     if (this.results.actions.includes('create_branch') && !this.results.branchExists) {
