@@ -65,6 +65,9 @@ class CLAUDEMDGeneratorV3 {
       // LEO Protocol Enhancement: Gate health metrics for self-improvement
       const gateHealth = await this.getGateHealth();
 
+      // LEO Protocol v4.4 Enhancement: Proactive SD proposals
+      const pendingProposals = await this.getPendingProposals();
+
       const data = {
         protocol,
         agents,
@@ -75,7 +78,8 @@ class CLAUDEMDGeneratorV3 {
         processScripts,
         hotPatterns,
         recentRetrospectives,
-        gateHealth
+        gateHealth,
+        pendingProposals
       };
 
       // Generate each file
@@ -94,6 +98,7 @@ class CLAUDEMDGeneratorV3 {
       console.log(`📚 Protocol sections: ${protocol.sections.length}`);
       console.log(`🔥 Hot patterns: ${hotPatterns.length}`);
       console.log(`📝 Recent retrospectives: ${recentRetrospectives.length}`);
+      console.log(`📋 Pending proposals: ${pendingProposals.length}`);
       console.log('\n🎯 Router architecture implemented!');
       console.log('   → Initial context load: ~18k chars (9% of 200k budget)');
       console.log('   → Down from: 173k chars (87% of budget)');
@@ -304,6 +309,32 @@ class CLAUDEMDGeneratorV3 {
     }
   }
 
+  /**
+   * Fetch pending SD proposals for proactive surfacing
+   * Part of LEO Protocol v4.4 Proactive SD Proposal System
+   */
+  async getPendingProposals(limit = 5) {
+    try {
+      const { data, error } = await supabase
+        .from('sd_proposals')
+        .select('*')
+        .eq('status', 'pending')
+        .order('urgency_level', { ascending: true }) // critical first (alphabetically)
+        .order('confidence_score', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        console.warn('⚠️  Could not load proposals (table may not exist yet)');
+        return [];
+      }
+
+      return data || [];
+    } catch (err) {
+      console.warn('⚠️  Could not load proposals:', err.message);
+      return [];
+    }
+  }
+
   getSectionsByMapping(sections, fileKey) {
     const mappedTypes = this.fileMapping[fileKey]?.sections || [];
     return sections.filter(s => mappedTypes.includes(s.section_type));
@@ -368,7 +399,7 @@ ${smartRouter ? smartRouter.content : '## Context Router\n\n**Load Strategy**: R
   }
 
   generateCore(data) {
-    const { protocol, agents, subAgents, hotPatterns, recentRetrospectives, gateHealth } = data;
+    const { protocol, agents, subAgents, hotPatterns, recentRetrospectives, gateHealth, pendingProposals } = data;
     const sections = protocol.sections;
     const { today, time } = this.getMetadata(protocol);
 
@@ -386,6 +417,9 @@ ${smartRouter ? smartRouter.content : '## Context Router\n\n**Load Strategy**: R
     // Gate health section for self-improvement
     const gateHealthSection = this.generateGateHealthSection(gateHealth);
 
+    // LEO Protocol v4.4 Enhancement: Proactive SD proposals
+    const proposalsSection = this.generateProposalsSection(pendingProposals);
+
     return `# CLAUDE_CORE.md - LEO Protocol Core Context
 
 **Generated**: ${today} ${time}
@@ -395,6 +429,8 @@ ${smartRouter ? smartRouter.content : '## Context Router\n\n**Load Strategy**: R
 ---
 
 ${coreContent}
+
+${proposalsSection}
 
 ${hotPatternsSection}
 
@@ -418,7 +454,7 @@ ${subAgentSection}
 
 *Generated from database: ${today}*
 *Protocol Version: ${protocol.version}*
-*Includes: Hot Patterns (${hotPatterns?.length || 0}) + Recent Lessons (${recentRetrospectives?.length || 0})*
+*Includes: Proposals (${pendingProposals?.length || 0}) + Hot Patterns (${hotPatterns?.length || 0}) + Lessons (${recentRetrospectives?.length || 0})*
 *Load this file first in all sessions*
 `;
   }
@@ -789,6 +825,59 @@ When gates consistently fail:
 4. Create remediation SD if pass rate < 70% for 2+ weeks
 
 *Gate health auto-updated from \`v_gate_health_metrics\`. Run \`npm run gate:health\` for details.*
+`;
+
+    return section;
+  }
+
+  /**
+   * Generate Proactive SD Proposals section for CLAUDE_CORE.md
+   * Part of LEO Protocol v4.4 - shows pending proposals that need attention
+   */
+  generateProposalsSection(proposals) {
+    if (!proposals || proposals.length === 0) {
+      return '';
+    }
+
+    let section = `## 📋 Proactive SD Proposals (LEO v4.4)
+
+**ACTION REQUIRED**: These are AI-generated proposals awaiting chairman approval.
+
+`;
+
+    proposals.forEach((p, idx) => {
+      const urgencyIcon = p.urgency_level === 'critical' ? '🔴' :
+                          p.urgency_level === 'medium' ? '🟡' : '🟢';
+      const triggerLabel = {
+        'dependency_update': 'Dependency',
+        'retrospective_pattern': 'Pattern',
+        'code_health': 'Code Health'
+      }[p.trigger_type] || p.trigger_type;
+      const confidence = (p.confidence_score * 100).toFixed(0);
+
+      section += `### ${idx + 1}. ${urgencyIcon} ${p.title}
+**Trigger**: ${triggerLabel} | **Confidence**: ${confidence}% | **ID**: \`${p.id.substring(0, 8)}\`
+
+${p.description.substring(0, 200)}${p.description.length > 200 ? '...' : ''}
+
+`;
+    });
+
+    section += `### Quick Actions
+
+\`\`\`bash
+# Approve proposal (creates draft SD):
+npm run proposal:approve <proposal-id>
+
+# Dismiss proposal:
+npm run proposal:dismiss <proposal-id> <reason>
+# Reasons: not_relevant, wrong_timing, duplicate, too_small, too_large, already_fixed, other
+
+# View all pending:
+npm run proposal:list
+\`\`\`
+
+*Proposals auto-generated by observer agents. Run \`npm run proposal:list\` for full details.*
 `;
 
     return section;

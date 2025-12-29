@@ -73,6 +73,7 @@ class SDNextSelector {
     this.currentSession = null;
     this.activeSessions = [];
     this.claimedSDs = new Map(); // sd_id -> session_id
+    this.pendingProposals = []; // LEO v4.4: Proactive proposals
   }
 
   async run() {
@@ -89,6 +90,7 @@ class SDNextSelector {
     await this.loadRecentActivity();
     await this.loadConflicts();
     await this.loadActiveSessions();
+    await this.loadPendingProposals();
 
     // Display active sessions
     await this.displayActiveSessions();
@@ -103,6 +105,9 @@ class SDNextSelector {
 
     // Display recommendations
     await this.displayRecommendations();
+
+    // Display proactive proposals (LEO v4.4)
+    await this.displayProposals();
 
     // Display parallel opportunities
     await this.displayParallelOpportunities();
@@ -266,6 +271,58 @@ class SDNextSelector {
       .eq('conflict_severity', 'blocking');
 
     this.conflicts = conflicts || [];
+  }
+
+  /**
+   * Load pending SD proposals (LEO Protocol v4.4)
+   */
+  async loadPendingProposals() {
+    try {
+      const { data: proposals, error } = await supabase
+        .from('sd_proposals')
+        .select('*')
+        .eq('status', 'pending')
+        .order('urgency_level', { ascending: true }) // critical first
+        .order('confidence_score', { ascending: false })
+        .limit(5);
+
+      if (error) {
+        // Table may not exist yet - non-fatal
+        return;
+      }
+
+      this.pendingProposals = proposals || [];
+    } catch {
+      // Non-fatal - proposals are optional
+    }
+  }
+
+  /**
+   * Display pending proposals (LEO Protocol v4.4)
+   */
+  async displayProposals() {
+    if (this.pendingProposals.length === 0) return;
+
+    console.log(`\n${colors.bold}───────────────────────────────────────────────────────────────────${colors.reset}`);
+    console.log(`${colors.bold}${colors.magenta}SUGGESTED (Proactive Proposals):${colors.reset}\n`);
+
+    for (const p of this.pendingProposals) {
+      const urgencyIcon = p.urgency_level === 'critical' ? `${colors.red}🔴` :
+                          p.urgency_level === 'medium' ? `${colors.yellow}🟡` : `${colors.green}🟢`;
+      const triggerLabel = {
+        'dependency_update': 'DEP',
+        'retrospective_pattern': 'RETRO',
+        'code_health': 'HEALTH'
+      }[p.trigger_type] || p.trigger_type.substring(0, 5).toUpperCase();
+      const confidence = (p.confidence_score * 100).toFixed(0);
+      const shortId = p.id.substring(0, 8);
+
+      console.log(`  ${urgencyIcon} [${triggerLabel}]${colors.reset} ${p.title.substring(0, 50)}...`);
+      console.log(`${colors.dim}    Confidence: ${confidence}% | ID: ${shortId} | approve: npm run proposal:approve ${shortId}${colors.reset}`);
+    }
+
+    console.log(`\n${colors.dim}  Dismiss: npm run proposal:dismiss <id> <reason>${colors.reset}`);
+    console.log(`${colors.dim}  Reasons: not_relevant, wrong_timing, duplicate, too_small, too_large, already_fixed${colors.reset}`);
   }
 
   async showFallbackQueue() {
