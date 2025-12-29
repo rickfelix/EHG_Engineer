@@ -114,7 +114,7 @@ async function updateUatSubAgent() {
   };
 
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('leo_sub_agents')
       .update({
         capabilities: updatedCapabilities,
@@ -137,7 +137,7 @@ async function updateUatSubAgent() {
     console.log('- Failure Patterns: 12 anti-patterns');
     console.log('- Key Improvements: 5 major enhancements');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Unexpected error:', err);
     process.exit(1);
   }

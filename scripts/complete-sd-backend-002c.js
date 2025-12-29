@@ -38,7 +38,7 @@ async function completeSDBACKEND002C() {
     console.log(`📊 Current Progress: ${sd.progress}%\n`);
 
     // Update to 100% complete
-    const { data: updated, error: updateError } = await supabase
+    const { data: _updated, error: updateError } = await supabase
       .from('strategic_directives_v2')
       .update({
         progress: 100,

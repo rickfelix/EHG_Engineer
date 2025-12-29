@@ -61,7 +61,7 @@ async function loadEVAAgent() {
   console.log('╚════════════════════════════════════════════════════════════╝\n');
 
   // Check for existing EVA agent or create temporary context
-  const { data: evaAgent } = await supabase
+  const { data: _evaAgent } = await supabase
     .from('agent_registry')
     .select('*')
     .eq('agent_type', 'venture_ceo')
@@ -69,7 +69,7 @@ async function loadEVAAgent() {
     .limit(1)
     .single();
 
-  const agentContext = evaAgent || {
+  const agentContext = _evaAgent || {
     id: 'eva-health-scanner-' + uuidv4().substring(0, 8),
     agent_type: EVA_CONFIG.agentType,
     display_name: EVA_CONFIG.displayName,
@@ -201,7 +201,7 @@ async function scanVentureHealth(venture) {
     .eq('venture_id', venture.id)
     .order('lifecycle_stage');
 
-  const { data: systemEvents } = await supabase
+  const { data: _systemEvents } = await supabase
     .from('system_events')
     .select('event_type, payload, created_at')
     .eq('venture_id', venture.id)
@@ -432,7 +432,7 @@ async function generateHealthBrief(scanResults) {
 async function main() {
   try {
     // Load EVA agent
-    const eva = await loadEVAAgent();
+    const _eva = await loadEVAAgent();
 
     // Load seeded ventures
     console.log('📂 Loading seeded ventures...\n');

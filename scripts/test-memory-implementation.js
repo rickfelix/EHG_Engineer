@@ -62,7 +62,7 @@ class MemoryImplementationTest {
       // Print Results
       this.printResults();
 
-    } catch (error) {
+    } catch (_error) {
       console.error(chalk.red('\n❌ Test suite failed with error:'), error.message);
       process.exit(1);
     }
@@ -79,7 +79,7 @@ class MemoryImplementationTest {
       } else {
         this.fail('Initial state should be empty', state);
       }
-    } catch (error) {
+    } catch (_error) {
       this.fail('Failed to read initial state', error.message);
     }
   }
@@ -106,7 +106,7 @@ class MemoryImplementationTest {
       } else {
         this.fail('Session state not persisted', state);
       }
-    } catch (error) {
+    } catch (_error) {
       this.fail('Failed to start session', error.message);
     }
   }
@@ -137,7 +137,7 @@ class MemoryImplementationTest {
       } else {
         this.fail('Section content not found in state');
       }
-    } catch (error) {
+    } catch (_error) {
       this.fail('Failed to update section', error.message);
     }
   }
@@ -162,7 +162,7 @@ class MemoryImplementationTest {
       } else {
         this.fail(`${phase} completion not found in state`);
       }
-    } catch (error) {
+    } catch (_error) {
       this.fail(`Failed to complete ${phase} phase`, error.message);
     }
   }
@@ -180,7 +180,7 @@ class MemoryImplementationTest {
 
       await this.memory.updateSection('Current PRD', content);
       this.pass('PLAN PRD information added to memory');
-    } catch (error) {
+    } catch (_error) {
       this.fail('Failed to update PLAN information', error.message);
     }
   }
@@ -196,7 +196,7 @@ class MemoryImplementationTest {
 
       await this.memory.updateSection('Context Cache', content);
       this.pass('EXEC context cache updated in memory');
-    } catch (error) {
+    } catch (_error) {
       this.fail('Failed to update EXEC context', error.message);
     }
   }
@@ -214,7 +214,7 @@ class MemoryImplementationTest {
 
       await this.memory.updateSection('EXEC Progress', content);
       this.pass('EXEC progress tracking added');
-    } catch (error) {
+    } catch (_error) {
       this.fail('Failed to update EXEC progress', error.message);
     }
   }
@@ -256,7 +256,7 @@ class MemoryImplementationTest {
       } else {
         this.fail('EXEC context not found');
       }
-    } catch (error) {
+    } catch (_error) {
       this.fail('Failed to read final state', error.message);
     }
   }
@@ -272,7 +272,7 @@ class MemoryImplementationTest {
       } else {
         this.warn(`File trees may need refresh: ${freshness}`);
       }
-    } catch (error) {
+    } catch (_error) {
       this.fail('Failed to check file tree freshness', error.message);
     }
   }
@@ -291,7 +291,7 @@ class MemoryImplementationTest {
       } else {
         this.fail('Session not properly reset', state);
       }
-    } catch (error) {
+    } catch (_error) {
       this.fail('Failed to reset session', error.message);
     }
   }

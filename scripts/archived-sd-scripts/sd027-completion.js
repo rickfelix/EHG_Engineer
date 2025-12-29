@@ -18,7 +18,7 @@ dotenv.config({ path: join(__dirname, '..', '.env') });
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const _supabase = createClient(supabaseUrl, supabaseKey);
 
 async function markSDCompleted() {
   const completion = {
@@ -94,7 +94,7 @@ async function markSDCompleted() {
 }
 
 // Execute
-markSDCompleted().then(completion => {
+markSDCompleted().then(_completion => {
   console.log('\\n✅ SD-027 MARKED AS COMPLETED!');
   console.log('🎉 LEO Protocol cycle successfully completed');
   console.log('📊 Ready for deployment and monitoring phase');

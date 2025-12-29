@@ -21,7 +21,7 @@ const supabase = createClient(
 );
 
 async function checkTableExists(tableName) {
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from(tableName)
     .select('*')
     .limit(1);
@@ -31,13 +31,13 @@ async function checkTableExists(tableName) {
 
 async function checkColumnExists(tableName, columnName) {
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from(tableName)
       .select(columnName)
       .limit(1);
 
     return !error;
-  } catch (err) {
+  } catch (_err) {
     return false;
   }
 }

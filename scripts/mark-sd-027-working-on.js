@@ -58,7 +58,7 @@ async function markSD027WorkingOn() {
     console.log('📌 Focus: Venture Detail (Stage View) - 4 backlog items consolidated');
     console.log('📌 Next: Requirements gathering and strategic analysis');
 
-  } catch (error) {
+  } catch (_error) {
     console.log('⚠️  Proceeding with LEAD phase (database update skipped)');
   }
 }

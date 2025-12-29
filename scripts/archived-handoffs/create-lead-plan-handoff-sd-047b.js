@@ -7,7 +7,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import { randomUUID } from 'crypto';
+import { randomUUID as _randomUUID } from 'crypto';
 
 dotenv.config();
 

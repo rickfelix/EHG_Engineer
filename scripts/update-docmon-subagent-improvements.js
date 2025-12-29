@@ -298,7 +298,7 @@ node scripts/orchestrate-phase-subagents.js EXEC_IMPL <SD-ID>
   };
 
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('leo_sub_agents')
       .update({
         description: updatedDescription,
@@ -327,7 +327,7 @@ node scripts/orchestrate-phase-subagents.js EXEC_IMPL <SD-ID>
     console.log('- SD-A11Y: 100% database compliance, 0 markdown violations');
     console.log('- SD-LEO-004: Auto-trigger enforcement');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Unexpected error:', err);
     process.exit(1);
   }

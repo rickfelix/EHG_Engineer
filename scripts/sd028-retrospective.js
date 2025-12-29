@@ -114,7 +114,7 @@ async function createRetrospective() {
 
   // Store in database
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('retrospectives')
       .insert({
         sd_id: retrospective.sd_id,
@@ -129,7 +129,7 @@ async function createRetrospective() {
     } else {
       console.log('✅ Retrospective stored in database');
     }
-  } catch (error) {
+  } catch (_error) {
     console.error('⚠️ Database error:', error);
   }
 
@@ -177,7 +177,7 @@ async function createRetrospective() {
     } else {
       console.log('\n✅ SD-028 progress updated to 33% (Phase 1 complete)');
     }
-  } catch (error) {
+  } catch (_error) {
     console.error('\n⚠️ Progress update error:', error);
   }
 
@@ -185,7 +185,7 @@ async function createRetrospective() {
 }
 
 // Execute retrospective
-createRetrospective().then(result => {
+createRetrospective().then(_result => {
   console.log('\n' + '='.repeat(50));
   console.log('📝 RETROSPECTIVE COMPLETE');
   console.log('SD-028 Phase 1: Core Conversation Engine');

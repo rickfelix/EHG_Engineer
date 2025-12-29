@@ -665,7 +665,7 @@ async function updateDatabaseSubAgent() {
     console.log('   ✅ Metadata comprehensive');
     console.log('   ✅ Description enhanced\n');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Error:', err);
     process.exit(1);
   }

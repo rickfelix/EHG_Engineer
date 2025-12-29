@@ -11,7 +11,7 @@ async function createTable() {
   const supabase = await createSupabaseServiceClient('engineer');
 
   // First, check if table already exists by trying to query it
-  const { data: existing, error: checkError } = await supabase
+  const { data: _existing, error: checkError } = await supabase
     .from('model_usage_log')
     .select('id')
     .limit(1);

@@ -83,7 +83,7 @@ async function addToExistingBacklog() {
       present_in_latest_import: true
     };
 
-    const { data: sdData, error: sdError } = await supabase
+    const { data: _sdData, error: sdError } = await supabase
       .from('strategic_directives_backlog')
       .upsert(sdBacklogData, {
         onConflict: 'sd_id'

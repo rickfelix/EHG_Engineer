@@ -33,8 +33,10 @@ import { verifyComponentIntegration, findNewComponents } from './modules/qa/inte
 import { selectTestTier } from './modules/qa/test-tier-selector.js';
 import { discoverAndRecommend } from './modules/qa/infrastructure-discovery.js';
 import { checkCrossSDDependencies } from './modules/qa/dependency-checker.js';
-import { executePendingMigrations, validateMigrationFile } from './modules/qa/migration-executor.js';
-import { parseVitestOutput, parsePlaywrightOutput, aggregateTestResults } from './modules/qa/test-output-parser.js';
+// validateMigrationFile - available for future migration validation
+import { executePendingMigrations, validateMigrationFile as _validateMigrationFile } from './modules/qa/migration-executor.js';
+// aggregateTestResults - available for future multi-suite aggregation
+import { parseVitestOutput, parsePlaywrightOutput, aggregateTestResults as _aggregateTestResults } from './modules/qa/test-output-parser.js';
 import { storeAndCompressResults } from './modules/qa/sub-agent-result-handler.js';
 import { generateTestPlan, storeTestPlan } from './modules/qa/test-plan-generator.js';
 
@@ -57,7 +59,7 @@ async function checkDevServerHealth(port = 5173, maxWaitSeconds = 10) {
         // Server is responding (even 404 means server is alive)
         return true;
       }
-    } catch (e) {
+    } catch (_e) {
       // Server not ready yet, wait and retry
     }
     await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
@@ -324,7 +326,7 @@ export async function executeQADirector(sd_id, options = {}) {
       console.log(`   Unit Tests: ${testPlan.unit_test_strategy.test_cases.length} cases`);
       console.log(`   E2E Tests: ${testPlan.e2e_test_strategy.test_cases.length} cases`);
       console.log(`   User Story Coverage: ${testPlan.e2e_test_strategy.user_story_mapping.length} stories\n`);
-    } catch (error) {
+    } catch (_error) {
       console.error(`   ⚠️  Test plan generation failed: ${error.message}`);
       console.log('   Continuing with legacy test tier selection...\n');
     }
@@ -416,7 +418,7 @@ export async function executeQADirector(sd_id, options = {}) {
         } else {
           console.log(`      ❌ Unit tests FAILED (${unitTestResults.failed} failures)`);
         }
-      } catch (error) {
+      } catch (_error) {
         console.log(`      ❌ Unit tests FAILED (execution error): ${error.message}`);
         unitTestResults = {
           success: false,
@@ -468,7 +470,7 @@ export async function executeQADirector(sd_id, options = {}) {
           } else {
             console.log(`      ❌ E2E tests FAILED (${e2eTestResults.failed} failures)`);
           }
-        } catch (error) {
+        } catch (_error) {
           console.log('      ❌ E2E tests FAILED (execution error)');
           console.log(`      Error: ${error.message}`);
 

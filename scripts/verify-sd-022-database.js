@@ -106,7 +106,7 @@ async function verifyRecords() {
       console.log('   ⚠️ FOUND:', sd022Files.length, 'file(s)');
       sd022Files.forEach(f => console.log('      -', f));
     }
-  } catch (err) {
+  } catch (_err) {
     console.log('   ❌ ERROR reading migrations directory:', err.message);
   }
 

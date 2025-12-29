@@ -1,11 +1,11 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// import { fileURLToPath } from 'url'; // Unused - not needed for this script
+// import { dirname } from 'path'; // Unused - not needed for this script
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// import path from 'path'; // Unused - not needed for this script
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -75,8 +75,8 @@ async function createProgressTable() {
 
     console.log('✅ Progress table creation initiated');
 
-    // Create indexes for performance
-    const indexSQL = `
+    // Create indexes for performance - SQL to be executed in Supabase dashboard
+    const _indexSQL = `
       CREATE INDEX IF NOT EXISTS idx_leo_progress_entity ON leo_progress_v2(entity_type, entity_id);
       CREATE INDEX IF NOT EXISTS idx_leo_progress_total ON leo_progress_v2(
         COALESCE(total_progress_override, 
@@ -92,7 +92,7 @@ async function createProgressTable() {
     console.log('✅ Creating indexes...');
 
     // Insert current SD progress data
-    const { data: insertResult, error: insertError } = await supabase
+    const { data: _insertResult, error: insertError } = await supabase
       .from('leo_progress_v2')
       .upsert([
         {

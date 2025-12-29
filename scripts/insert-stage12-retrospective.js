@@ -19,10 +19,11 @@ async function insertRetrospective() {
   try {
     // Read the retrospective file
     const retroPath = join(__dirname, '../docs/retrospectives/SD-STAGE-12-001-RETROSPECTIVE.md');
-    const content = await readFile(retroPath, 'utf8');
+    // Read the retrospective file (content used for reference)
+    await readFile(retroPath, 'utf8');
 
-    // Extract lessons learned from the content
-    const lessonsLearned = [
+    // Lessons learned extracted from retrospective content (kept for reference/future use)
+    const _lessonsLearned = [
       {
         category: 'technical',
         lesson: 'Manual Migration is the Established Pattern',

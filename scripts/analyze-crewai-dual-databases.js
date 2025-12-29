@@ -7,7 +7,7 @@
  * 2. EHG Application (liapbndqlqxdcgpwntbv) - Operational
  */
 
-import { createDatabaseClient, createSupabaseServiceClient } from './lib/supabase-connection.js';
+import { createDatabaseClient, createSupabaseServiceClient as _createSupabaseServiceClient } from './lib/supabase-connection.js';
 
 // ANSI color codes
 const colors = {
@@ -30,7 +30,7 @@ function section(title) {
   console.log('='.repeat(80) + '\n');
 }
 
-async function getCrewAITables(client, dbName) {
+async function getCrewAITables(client, _dbName) {
   const result = await client.query(`
     SELECT table_name,
            (SELECT COUNT(*) FROM information_schema.columns
@@ -114,7 +114,7 @@ async function getSampleData(client, tableName, limit = 5) {
   }
 }
 
-async function analyzeLEOAgents(client) {
+async function _analyzeLEOAgents(client) {
   try {
     const agents = await client.query('SELECT * FROM leo_agents ORDER BY agent_id;');
     return agents.rows;
@@ -123,7 +123,7 @@ async function analyzeLEOAgents(client) {
   }
 }
 
-async function analyzeLEOSubAgents(client) {
+async function _analyzeLEOSubAgents(client) {
   try {
     const subAgents = await client.query('SELECT * FROM leo_sub_agents ORDER BY sub_agent_id;');
     return subAgents.rows;
@@ -132,7 +132,7 @@ async function analyzeLEOSubAgents(client) {
   }
 }
 
-async function analyzeCrewAIAgents(client) {
+async function _analyzeCrewAIAgents(client) {
   try {
     const agents = await client.query(`
       SELECT
@@ -152,7 +152,7 @@ async function analyzeCrewAIAgents(client) {
   }
 }
 
-async function analyzeCrewAICrews(client) {
+async function _analyzeCrewAICrews(client) {
   try {
     const crews = await client.query(`
       SELECT
@@ -171,7 +171,7 @@ async function analyzeCrewAICrews(client) {
   }
 }
 
-async function analyzeCrewMembers(client) {
+async function _analyzeCrewMembers(client) {
   try {
     const members = await client.query(`
       SELECT
@@ -256,10 +256,10 @@ async function generateMarkdownReport(engineerAnalysis, appAnalysis) {
   // Executive Summary
   report += '## Executive Summary\n\n';
 
-  const engineerCrewTables = engineerAnalysis.tables.filter(t => t.name.includes('crew')).length;
-  const engineerAgentTables = engineerAnalysis.tables.filter(t => t.name.includes('agent') || t.name.includes('leo')).length;
-  const appCrewTables = appAnalysis.tables.filter(t => t.name.includes('crew')).length;
-  const appAgentTables = appAnalysis.tables.filter(t => t.name.includes('agent')).length;
+  const _engineerCrewTables = engineerAnalysis.tables.filter(t => t.name.includes('crew')).length;
+  const _engineerAgentTables = engineerAnalysis.tables.filter(t => t.name.includes('agent') || t.name.includes('leo')).length;
+  const _appCrewTables = appAnalysis.tables.filter(t => t.name.includes('crew')).length;
+  const _appAgentTables = appAnalysis.tables.filter(t => t.name.includes('agent')).length;
 
   // Count total records
   const appAgentCount = appAnalysis.tables.find(t => t.name === 'crewai_agents')?.rowCount || 0;

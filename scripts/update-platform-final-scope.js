@@ -20,7 +20,7 @@ async function updatePlatformFinalScope() {
   console.log('='.repeat(80));
 
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .update({
         scope: 'EVA Assistant as central coordinator, 5 additional specialized agents, external data integrations (Reddit, HN, ProductHunt, Crunchbase), shared knowledge base with pgvector, CrewAI Flows orchestration, orchestration infrastructure (sessions, agent communications, actions), Complete SaaS organizational hierarchy with 11 AI agent departments: (1) Product Management, (2) Marketing, (3) Advertising, (4) Branding, (5) Sales, (6) Customer Success, (7) Finance, (8) Legal & Compliance, (9) Engineering, (10) Agent Engineering, (11) Investor Relations. CEO/COO executive agents, CrewAI hierarchical process with reports_to relationships, agent backstory system, task delegation framework, tool assignment per role, departmental coordination workflows',
@@ -85,7 +85,7 @@ async function updatePlatformFinalScope() {
     console.log('='.repeat(80));
 
     return data;
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error updating SD:', error.message);
     if (error.details) console.error('Details:', error.details);
     if (error.hint) console.error('Hint:', error.hint);

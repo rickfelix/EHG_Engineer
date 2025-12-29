@@ -1,5 +1,22 @@
 # Handoff Documentation
 
+> **DATABASE-FIRST (LEO Protocol v4.3.3)**: Handoffs are stored in the `sd_phase_handoffs` table.
+> This directory contains templates and legacy documentation only. Query the database for current handoff data.
+
+## Database Source of Truth
+
+```sql
+-- Get handoffs for a specific SD
+SELECT * FROM sd_phase_handoffs WHERE sd_id = 'SD-XXX-001' ORDER BY created_at DESC;
+
+-- List recent handoffs
+SELECT sd_id, from_phase, to_phase, created_at FROM sd_phase_handoffs ORDER BY created_at DESC LIMIT 20;
+```
+
+---
+
+*The content below describes the handoff system. All handoffs must be created in the database.*
+
 This directory contains handoff documentation for inter-agent and inter-phase communication.
 
 ## Purpose
@@ -66,7 +83,7 @@ const { data, error } = await supabase
     },
     handoff_metadata: {
       timestamp: new Date().toISOString(),
-      leo_version: '4.2.0'
+      leo_version: '4.3.3'
     }
   });
 ```
@@ -121,4 +138,5 @@ Before completing handoff:
 
 ---
 
-*Part of LEO Protocol v4.2.0 - Unified Handoff System*
+*Part of LEO Protocol v4.3.3 - Unified Handoff System*
+*Updated: 2025-12-29 - Added database-first notice*

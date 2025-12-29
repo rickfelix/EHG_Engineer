@@ -15,7 +15,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { execSync } from 'child_process';
+// import { execSync } from 'child_process'; // Unused - available for future shell commands
 import dotenv from 'dotenv';
 
 dotenv.config();

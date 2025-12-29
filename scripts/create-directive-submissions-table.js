@@ -59,11 +59,11 @@ async function createDirectiveSubmissionsTable() {
   try {
     // Check if table already exists
     console.log('🔍 Checking if directive_submissions table exists...');
-    const { data: existingTable, error: checkError } = await supabase
+    const { data: _existingTable, error: checkError } = await supabase
       .from('directive_submissions')
       .select('id')
       .limit(1);
-    
+
     if (!checkError) {
       console.log('✅ Table directive_submissions already exists');
       console.log('   Skipping table creation (idempotent operation)');
@@ -138,11 +138,11 @@ async function verifyTableCreation(supabase) {
   
   try {
     // Test basic table access
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('directive_submissions')
       .select('id, submission_id, status, created_at')
       .limit(1);
-    
+
     if (error) {
       if (error.message.includes('does not exist') || error.message.includes('relation')) {
         console.log('⚠️  Table still does not exist - please ensure the SQL was executed successfully');
@@ -171,7 +171,7 @@ async function testTableOperations(supabase) {
   try {
     // Test insert
     const testSubmissionId = `test-${Date.now()}`;
-    const { data: insertData, error: insertError } = await supabase
+    const { data: _insertData, error: insertError } = await supabase
       .from('directive_submissions')
       .insert({
         submission_id: testSubmissionId,
@@ -200,12 +200,12 @@ async function testTableOperations(supabase) {
     console.log('   ✓ Update operation successful');
     
     // Test select
-    const { data: selectData, error: selectError } = await supabase
+    const { data: _selectData, error: selectError } = await supabase
       .from('directive_submissions')
       .select('*')
       .eq('submission_id', testSubmissionId)
       .single();
-    
+
     if (selectError) {
       throw new Error(`Select test failed: ${selectError.message}`);
     }
@@ -236,7 +236,7 @@ async function validateTableStructure(supabase) {
   
   try {
     // First, let's see what the actual table structure looks like
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('directive_submissions')
       .select('*')
       .limit(1);

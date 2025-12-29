@@ -90,7 +90,7 @@ async function addExplorationSummary() {
   };
 
   // Update SD with exploration summary in metadata
-  const { data: updated, error: updateError } = await supabase
+  const { data: _updated, error: updateError } = await supabase
     .from('strategic_directives_v2')
     .update({
       metadata: updatedMetadata,

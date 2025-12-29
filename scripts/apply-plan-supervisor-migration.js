@@ -92,7 +92,7 @@ async function applyMigration() {
     console.log('\n🔍 Verifying migration results...\n');
     
     // Check if PLAN agent has supervisor_mode column
-    const { data: planAgent, error: planError } = await supabase
+    const { data: planAgent, error: _planError } = await supabase
       .from('leo_agents')
       .select('agent_code')
       .eq('agent_code', 'PLAN')

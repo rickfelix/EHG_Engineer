@@ -22,7 +22,7 @@ const migrationSQL = fs.readFileSync(
 // Execute migration
 console.log('Executing migration...\n');
 
-const { data, error } = await supabase.rpc('exec_sql', {
+const { data: _data, error } = await supabase.rpc('exec_sql', {
   sql: migrationSQL
 });
 

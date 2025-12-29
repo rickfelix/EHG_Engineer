@@ -398,7 +398,7 @@ node scripts/orchestrate-phase-subagents.js LEAD_FINAL <SD-ID>
   };
 
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('leo_sub_agents')
       .update({
         description: updatedDescription,
@@ -428,7 +428,7 @@ node scripts/orchestrate-phase-subagents.js LEAD_FINAL <SD-ID>
     console.log('- Pattern recognition: 8-10 SDs for actionable patterns');
     console.log('- Organizational learning: 50+ SDs scale');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Unexpected error:', err);
     process.exit(1);
   }

@@ -53,7 +53,7 @@ async function executeMigration(client, migration) {
   console.log(`Size: ${(sqlContent.length / 1024).toFixed(1)} KB`);
 
   try {
-    console.log(`\nExecuting...`);
+    console.log('\nExecuting...');
     const startTime = Date.now();
 
     await client.query(sqlContent);
@@ -110,7 +110,7 @@ async function verifyEnforcement(client) {
       console.log(`✅ SD-2025-12-26-MANIFESTO-HARDENING exists (status: ${result.rows[0].status}, progress: ${result.rows[0].progress}%)`);
       tests.push({ name: 'Tracking SD', passed: true });
     } else {
-      console.log(`❌ SD-2025-12-26-MANIFESTO-HARDENING not found`);
+      console.log('❌ SD-2025-12-26-MANIFESTO-HARDENING not found');
       tests.push({ name: 'Tracking SD', passed: false });
     }
   } catch (err) {
@@ -138,20 +138,20 @@ async function verifyEnforcement(client) {
   }
 
   // Test 5: Test EXEC constraint (should fail)
-  console.log(`\n--- Testing Law 1 Enforcement ---`);
+  console.log('\n--- Testing Law 1 Enforcement ---');
   try {
     await client.query(`
       INSERT INTO strategic_directives_v2 (id, title, description, scope, created_by)
       VALUES ('TEST-EXEC-VIOLATION-001', 'Test EXEC Violation', 'Should fail', 'Test', 'EXEC')
     `);
     // If we get here, the constraint didn't work
-    console.log(`❌ EXEC constraint NOT enforced - INSERT succeeded (should have failed)`);
+    console.log('❌ EXEC constraint NOT enforced - INSERT succeeded (should have failed)');
     // Clean up
-    await client.query(`DELETE FROM strategic_directives_v2 WHERE id = 'TEST-EXEC-VIOLATION-001'`);
+    await client.query('DELETE FROM strategic_directives_v2 WHERE id = \'TEST-EXEC-VIOLATION-001\'');
     tests.push({ name: 'Law 1 EXEC block', passed: false, error: 'INSERT succeeded' });
   } catch (err) {
     if (err.message.includes('DOCTRINE_OF_CONSTRAINT_VIOLATION')) {
-      console.log(`✅ Law 1 ENFORCED: EXEC INSERT correctly rejected`);
+      console.log('✅ Law 1 ENFORCED: EXEC INSERT correctly rejected');
       console.log(`   Error: ${err.message.split('\n')[0]}`);
       tests.push({ name: 'Law 1 EXEC block', passed: true });
     } else {
@@ -161,7 +161,7 @@ async function verifyEnforcement(client) {
   }
 
   // Test 6: Test Circuit Breaker (should fail with low score)
-  console.log(`\n--- Testing Law 3 Enforcement ---`);
+  console.log('\n--- Testing Law 3 Enforcement ---');
   try {
     await client.query(`
       INSERT INTO sd_phase_handoffs (
@@ -173,13 +173,13 @@ async function verifyEnforcement(client) {
       )
     `);
     // If we get here, the circuit breaker didn't work
-    console.log(`❌ Circuit Breaker NOT enforced - low score handoff succeeded (should have failed)`);
+    console.log('❌ Circuit Breaker NOT enforced - low score handoff succeeded (should have failed)');
     // Clean up
-    await client.query(`DELETE FROM sd_phase_handoffs WHERE sd_id = 'SD-TEST-CIRCUIT-BREAKER'`);
+    await client.query('DELETE FROM sd_phase_handoffs WHERE sd_id = \'SD-TEST-CIRCUIT-BREAKER\'');
     tests.push({ name: 'Law 3 Circuit Breaker', passed: false, error: 'INSERT succeeded' });
   } catch (err) {
     if (err.message.includes('CIRCUIT BREAKER TRIPPED') || err.message.includes('85%')) {
-      console.log(`✅ Law 3 ENFORCED: Low-score handoff correctly rejected`);
+      console.log('✅ Law 3 ENFORCED: Low-score handoff correctly rejected');
       console.log(`   Error: ${err.message.split('\n')[0]}`);
       tests.push({ name: 'Law 3 Circuit Breaker', passed: true });
     } else {

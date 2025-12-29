@@ -17,7 +17,7 @@ async function updateSD() {
   console.log('📝 Updating SD-KNOWLEDGE-001 with missing fields...');
 
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .update({
         status: 'active',
@@ -77,7 +77,7 @@ async function updateSD() {
     console.log(`   Risks: ${data[0].risks.length}`);
     console.log('\n📋 Now ready for LEAD→PLAN handoff');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Update failed:', error.message);
     process.exit(1);
   }

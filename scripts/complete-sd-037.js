@@ -39,7 +39,7 @@ async function completeSD037() {
     console.log(`🎯 Updating SD: ${findData.title} (ID: ${findData.id})`);
 
     // Update SD-037 status to completed
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .update({
         status: 'completed',

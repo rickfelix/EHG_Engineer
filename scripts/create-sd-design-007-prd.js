@@ -8,7 +8,7 @@ const supabase = createClient(
 async function createPRD() {
   const prdId = 'PRD-SD-DESIGN-007';
 
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('prd_registry')
     .insert({
       id: prdId,

@@ -123,7 +123,7 @@ async function testRealtimeSync() {
     console.log('📊 Check the dashboard server logs for real-time events');
     console.log('🌐 Visit http://localhost:3000 to see updated data');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Test failed:', error);
   }
 }

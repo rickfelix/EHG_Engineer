@@ -10,7 +10,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 import SessionManagerSubAgent from './session-manager-subagent.js';
-import { GitHubDeploymentSubAgent } from './github-deployment-subagent.js';
+// GitHubDeploymentSubAgent import reserved for future use
+// import { GitHubDeploymentSubAgent } from './github-deployment-subagent.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -139,7 +140,7 @@ class HookSubAgentActivator {
   /**
    * Handle inline resolutions for sub-agents without dedicated classes
    */
-  async handleInlineResolution(failureType, action, context) {
+  async handleInlineResolution(_failureType, action, _context) {
     switch (action) {
       case 'migrate_prd':
         return await this.migratePRDFiles();
@@ -383,7 +384,7 @@ class HookSubAgentActivator {
                 reason: `lib version is ${Math.floor(daysDiff)} days older`
               });
             }
-          } catch (statError) {
+          } catch (_statError) {
             console.warn(`  Could not analyze: ${file}`);
           }
         }
@@ -407,7 +408,7 @@ class HookSubAgentActivator {
           try {
             await fs.rename(oldPath, deprecatedPath);
             console.log(`    Deprecated: ${fix.file} (${fix.reason})`);
-          } catch (renameError) {
+          } catch (_renameError) {
             console.warn(`    Could not deprecate: ${fix.file}`);
           }
         }

@@ -67,7 +67,7 @@ async function applyMigrations() {
 
   // Check 1: intensity_level column
   console.log('1. Checking intensity_level column...');
-  const { data: sdData, error: sdError } = await supabase
+  const { data: _sdData, error: sdError } = await supabase
     .from('strategic_directives_v2')
     .select('id, intensity_level')
     .limit(1);
@@ -135,7 +135,7 @@ async function applyMigrations() {
 
   // Check 6: document_type column on product_requirements_v2
   console.log('6. Checking document_type column on product_requirements_v2...');
-  const { data: prdData, error: prdError } = await supabase
+  const { data: _prdData, error: prdError } = await supabase
     .from('product_requirements_v2')
     .select('id, document_type')
     .limit(1);

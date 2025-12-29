@@ -132,7 +132,7 @@ async function testSecurity() {
             });
           }
         }
-      } catch (e) {
+      } catch (_e) {
         console.log('   (npm audit failed - skipping)');
       }
     }
@@ -166,7 +166,7 @@ async function testSecurity() {
     fs.writeFileSync(reportPath, JSON.stringify(results, null, 2));
     console.log(`\n💾 Full report saved to: ${reportPath}`);
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error during security analysis:', error.message);
     console.error(error.stack);
   }

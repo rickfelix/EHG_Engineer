@@ -20,7 +20,7 @@ async function updateSDScope() {
   console.log('='.repeat(80));
 
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .update({
         scope: 'EVA Assistant as central coordinator, 5 additional specialized agents, external data integrations (Reddit, HN, ProductHunt, Crunchbase), shared knowledge base with pgvector, CrewAI Flows orchestration, orchestration infrastructure (sessions, agent communications, actions), Complete SaaS organizational hierarchy with 10 AI agent departments (Product, Marketing, Advertising, Branding, Sales, Customer Success, Finance, Legal, Engineering, AI Agent Management), CEO/COO executive agents, CrewAI hierarchical process with reports_to relationships, agent backstory system, task delegation framework, tool assignment per role, departmental coordination workflows',
@@ -75,7 +75,7 @@ async function updateSDScope() {
     console.log('='.repeat(80));
 
     return data;
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error updating SD:', error.message);
     if (error.details) console.error('Details:', error.details);
     if (error.hint) console.error('Hint:', error.hint);

@@ -19,7 +19,7 @@ async function updateProgress() {
     );
 
     console.log(`✅ SD Progress updated: ${rows[0].progress_percentage}% (Checkpoint 3 complete)`);
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error:', error.message);
     throw error;
   } finally {

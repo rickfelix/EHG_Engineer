@@ -92,7 +92,7 @@ async function enhanceSD() {
     ];
 
     // Update SD with success_metrics and risks
-    const { data: updated, error: updateError } = await supabase
+    const { data: _updated, error: updateError } = await supabase
       .from('strategic_directives_v2')
       .update({
         success_metrics: success_metrics,

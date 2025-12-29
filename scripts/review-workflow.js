@@ -27,7 +27,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { execute as executeDesignSubAgent } from '../lib/sub-agents/design.js';
 import { applyFixes } from '../lib/workflow-review/story-updater.js';
-import { getCacheStats, refreshCache } from '../lib/workflow-review/pattern-cache.js';
+// refreshCache - available for future cache operations
+import { getCacheStats, refreshCache as _refreshCache } from '../lib/workflow-review/pattern-cache.js';
 import readline from 'readline';
 import dotenv from 'dotenv';
 
@@ -366,7 +367,7 @@ async function runInteractiveReview(sdId) {
   }
 
   // Load data
-  const { sd, prd, userStories } = await loadWorkflowData(sdId);
+  const { sd: _sd, prd: _prd, userStories: _userStories } = await loadWorkflowData(sdId);
 
   let iteration = 1;
   let continueIterating = true;
@@ -515,7 +516,7 @@ async function main() {
     const { sdId } = parseArgs();
     await runInteractiveReview(sdId);
     process.exit(0);
-  } catch (error) {
+  } catch (_error) {
     console.error(`\n${colors.red}${colors.bright}❌ Error:${colors.reset} ${error.message}`);
     console.error(error.stack);
     process.exit(1);

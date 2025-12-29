@@ -76,7 +76,7 @@ async function testSDQualityRubric() {
     });
 
     return { passed: true, result };
-  } catch (error) {
+  } catch (_error) {
     console.log(`❌ SD Rubric Test Failed: ${error.message}`);
     return { passed: false, error: error.message };
   }
@@ -130,7 +130,7 @@ async function testPRDQualityRubric() {
     });
 
     return { passed: true, result };
-  } catch (error) {
+  } catch (_error) {
     console.log(`❌ PRD Rubric Test Failed: ${error.message}`);
     return { passed: false, error: error.message };
   }
@@ -183,7 +183,7 @@ async function testUserStoryQualityRubric() {
     });
 
     return { passed: true, result };
-  } catch (error) {
+  } catch (_error) {
     console.log(`❌ User Story Rubric Test Failed: ${error.message}`);
     return { passed: false, error: error.message };
   }
@@ -237,7 +237,7 @@ async function testRetrospectiveQualityRubric() {
     });
 
     return { passed: true, result };
-  } catch (error) {
+  } catch (_error) {
     console.log(`❌ Retrospective Rubric Test Failed: ${error.message}`);
     return { passed: false, error: error.message };
   }

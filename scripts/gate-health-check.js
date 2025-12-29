@@ -23,7 +23,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as _uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 import fs from 'fs';
 

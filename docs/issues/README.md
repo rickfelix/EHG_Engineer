@@ -120,4 +120,5 @@ EOF
 
 ---
 
-*Part of LEO Protocol v4.2.0 - Issue Management*
+*Part of LEO Protocol v4.3.3 - Issue Management*
+*Updated: 2025-12-29*

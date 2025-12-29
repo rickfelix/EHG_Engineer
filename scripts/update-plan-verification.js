@@ -30,7 +30,7 @@ async function updatePLANVerification() {
       checked: index < 3 // First 3 items verified by PLAN
     }));
     
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('product_requirements_v2')
       .update({
         validation_checklist: updatedChecklist,
@@ -80,7 +80,7 @@ async function updatePLANVerification() {
     console.log('- 13 hours remediation required');
     console.log('\n👑 Handed to LEAD for final approval');
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error:', error.message);
   }
 }

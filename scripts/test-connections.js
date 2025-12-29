@@ -47,7 +47,7 @@ class ConnectionTester {
       
       console.log(`\n✅ Connection tests complete!\n`);
       
-    } catch (error) {
+    } catch (_error) {
       console.error('❌ Test failed:', error.message);
       process.exit(1);
     }
@@ -111,7 +111,7 @@ class ConnectionTester {
       } else {
         console.log(`   ❌ Repository not accessible (may be private or not exist)`);
       }
-    } catch (error) {
+    } catch (_error) {
       console.log(`   ❌ Could not verify repository: ${error.message}`);
     }
   }
@@ -149,7 +149,7 @@ class ConnectionTester {
         } else {
           console.log(`   ⚠️  Supabase URL not responding (may require authentication)`);
         }
-      } catch (error) {
+      } catch (_error) {
         console.log(`   ⚠️  Could not verify Supabase: ${error.message}`);
       }
     } else {

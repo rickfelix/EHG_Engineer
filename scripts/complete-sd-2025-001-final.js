@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// fileURLToPath and dirname kept for potential future module path resolution
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 
 
@@ -12,7 +13,8 @@ import { dirname } from 'path';
  */
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// path import kept for potential future file operations
+// import path from 'path';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -35,7 +37,7 @@ async function completeSD2025001() {
     const completionTimestamp = new Date().toISOString();
     
     // Final SD update - mark as 100% complete using correct pattern
-    const { data: sdUpdate, error: sdError } = await supabase
+    const { data: _sdUpdate, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .update({
         status: 'archived', // SD complete moves to archived per LEO Protocol

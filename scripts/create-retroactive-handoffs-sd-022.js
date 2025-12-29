@@ -326,7 +326,7 @@ async function createHandoffs() {
 
   for (const handoff of handoffs) {
     try {
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('sd_phase_handoffs')
         .insert(handoff)
         .select();

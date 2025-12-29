@@ -15,7 +15,7 @@ async function checkParentAndChildD() {
   console.log('='.repeat(60));
 
   // Check Parent SD status
-  const { data: parent, error: parentError } = await supabase
+  const { data: parent, error: _parentError } = await supabase
     .from('strategic_directives_v2')
     .select('id, title, status, current_phase, progress')
     .eq('id', 'SD-VISION-TRANSITION-001')

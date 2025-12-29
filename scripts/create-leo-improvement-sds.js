@@ -342,7 +342,7 @@ async function createStrategicDirectives() {
       }
 
       // Insert the SD
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('strategic_directives_v2')
         .insert({
           ...sd,

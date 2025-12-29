@@ -89,7 +89,7 @@ async function main() {
     ]
   };
 
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('retrospectives')
     .update(retroUpdate)
     .eq('sd_id', 'SD-VISION-TRANSITION-001E')

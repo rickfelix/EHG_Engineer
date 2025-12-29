@@ -351,7 +351,7 @@ class CodexArtifactProcessor {
 
     fs.mkdirSync(processedSubDir, { recursive: true });
 
-    for (const [type, filepath] of Object.entries(artifacts)) {
+    for (const [_type, filepath] of Object.entries(artifacts)) {
       const filename = path.basename(filepath);
       const destPath = path.join(processedSubDir, filename);
       fs.renameSync(filepath, destPath);
@@ -424,7 +424,7 @@ class CodexArtifactProcessor {
           console.log(`    Manifest: ${chalk.gray(filename)}`);
           console.log(`    Created: ${chalk.gray(date)}`);
           console.log(`    Task: ${chalk.gray(content.task || 'N/A')}\n`);
-        } catch (error) {
+        } catch (_error) {
           console.log(`  ${chalk.red('Invalid manifest:')} ${filename}`);
         }
       }
@@ -454,10 +454,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     processor.listArtifacts().catch(console.error);
   } else {
     processor.processArtifacts(prdId, options)
-      .then(summary => {
+      .then(_summary => {
         process.exit(0);
       })
-      .catch(error => {
+      .catch(_error => {
         process.exit(1);
       });
   }

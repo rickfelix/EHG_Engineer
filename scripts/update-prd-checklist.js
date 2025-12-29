@@ -166,7 +166,7 @@ async function updatePRDChecklist() {
     console.log('\n📝 Handoff Record Created:');
     console.log(JSON.stringify(handoff, null, 2));
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error:', error.message);
     process.exit(1);
   }

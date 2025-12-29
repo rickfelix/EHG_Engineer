@@ -26,7 +26,7 @@ async function applyMigration() {
   try {
     // Read the migration SQL
     const sqlPath = path.join(__dirname, '..', 'database', 'migrations', '014_leo_gap_remediation.sql');
-    const sql = await fs.readFile(sqlPath, 'utf-8');
+    const _sql = await fs.readFile(sqlPath, 'utf-8');
 
     console.log('📝 Migration includes:');
     console.log('  1. Add structured fields to PRDs table');

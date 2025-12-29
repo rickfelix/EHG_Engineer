@@ -78,7 +78,7 @@ async function testAPIEndpoint() {
     logTestCase('API Endpoint', 'PASS', `Submission created: ${data.submission.id}`);
     return data.submission;
 
-  } catch (error) {
+  } catch (_error) {
     logTestCase('API Endpoint', 'FAIL', `Request failed: ${error.message}`);
     return null;
   }
@@ -121,7 +121,7 @@ async function testDatabaseRecord(submissionId) {
     logTestCase('Database Record', 'PASS', `Record found with ${Object.keys(data).length} columns`);
     return data;
 
-  } catch (error) {
+  } catch (_error) {
     logTestCase('Database Record', 'FAIL', `Database error: ${error.message}`);
     return null;
   }

@@ -106,7 +106,7 @@ async function generatePRDScript() {
         sdTitle = 'TEMPLATE PRD Title - Please Update';
       }
     }
-  } catch (err) {
+  } catch (_err) {
     console.log('   ⚠️  Could not connect to database (using template defaults)');
   }
 

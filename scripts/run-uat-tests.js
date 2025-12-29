@@ -92,7 +92,7 @@ async function waitForServer(url, maxAttempts = 30) {
         console.log(`   ✓ Server ready at ${url}`);
         return true;
       }
-    } catch (e) {
+    } catch (_e) {
       // Server not ready yet
     }
     await setTimeout(1000);
@@ -346,7 +346,7 @@ async function main() {
     cleanup();
     process.exit(exitCode);
 
-  } catch (error) {
+  } catch (_error) {
     console.error(chalk.red('\n❌ Fatal error:'), error);
     cleanup();
     process.exit(1);

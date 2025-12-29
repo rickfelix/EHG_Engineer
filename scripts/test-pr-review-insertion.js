@@ -60,7 +60,7 @@ async function testPRReviewInsertion() {
     const metrics = await dbLoader.calculatePRMetrics();
     console.log('📈 Current metrics:', metrics);
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error inserting PR review:', error);
   }
 

@@ -8,7 +8,7 @@
 import fsModule from 'fs';
 const fs = fsModule.promises;
 import path from 'path';
-import { execSync } from 'child_process';
+// import { execSync } from 'child_process'; // Unused - available for shell commands
 
 // Import all sub-agents (updated paths)
 import SecuritySubAgent from '../lib/agents/security-sub-agent';
@@ -98,7 +98,7 @@ class SubAgentIntegrationTester {
           })));
         }
         
-      } catch (error) {
+      } catch (_error) {
         console.error(`❌ ${name} Failed: ${error.message}`);
         this.results.agents[name] = {
           status: 'failed',
@@ -323,7 +323,7 @@ async function main() {
   try {
     await tester.runAllTests();
     process.exit(0);
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Integration test failed:', error);
     process.exit(1);
   }

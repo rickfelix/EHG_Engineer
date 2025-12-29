@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createClient } from '@supabase/supabase-js';
-import { randomUUID } from 'crypto';
+// import { randomUUID } from 'crypto'; // Unused - IDs are provided externally
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -87,7 +87,7 @@ AC-006: Approved blueprints show Create Venture option`,
     }
   };
 
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('strategic_directives_v2')
     .insert([sdData])
     .select();

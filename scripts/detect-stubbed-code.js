@@ -19,7 +19,7 @@
 
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
-import { resolve } from 'path';
+import { resolve as _resolve } from 'path';
 
 // ============================================================================
 // CONFIGURATION
@@ -136,7 +136,7 @@ function getAllProductionFiles() {
       ).trim().split('\n').filter(Boolean);
 
       files.push(...dirFiles);
-    } catch (error) {
+    } catch (_error) {
       // Directory doesn't exist, skip
     }
   });

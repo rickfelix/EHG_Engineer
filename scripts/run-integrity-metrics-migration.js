@@ -33,7 +33,7 @@ async function runMigration() {
     console.log('📝 Migration SQL loaded');
 
     // First, check if the table already exists
-    const { data: testData, error: testError } = await supabase
+    const { data: _testData, error: testError } = await supabase
       .from('integrity_metrics')
       .select('id')
       .limit(1);
@@ -42,7 +42,7 @@ async function runMigration() {
       console.log('⚠️  Table does not exist. Attempting to create...');
 
       // Try using RPC to execute SQL (if the function exists)
-      const { data, error } = await supabase.rpc('execute_sql', {
+      const { data: _data, error } = await supabase.rpc('execute_sql', {
         sql: migrationSQL
       });
 
@@ -75,7 +75,7 @@ async function runMigration() {
       console.log(`✅ Table verified: integrity_metrics exists (${count || 0} rows)`);
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Migration failed:', error.message);
     console.log('\n📋 Please run the migration manually in Supabase Dashboard:');
     console.log('   https://supabase.com/dashboard/project/dedlbzhpgkmetvhbkyzq/sql');

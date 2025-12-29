@@ -382,7 +382,7 @@ class DynamicChecklistGenerator {
   /**
    * Generate Approval checklist (LEAD agent)
    */
-  generateApprovalChecklist(analysis) {
+  generateApprovalChecklist(_analysis) {
     return [
       {
         text: 'Business objectives achieved',
@@ -406,7 +406,7 @@ class DynamicChecklistGenerator {
   /**
    * Estimate complexity based on patterns
    */
-  estimateComplexity(patterns, sd) {
+  estimateComplexity(patterns, _sd) {
     const complexityScore = patterns.length;
     
     // High complexity indicators

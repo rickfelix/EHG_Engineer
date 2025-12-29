@@ -119,7 +119,7 @@ async function updateSDLeadApproval() {
     console.log('\n✅ SD-VISION-TRANSITION-001A LEAD Approval complete!');
     console.log('   ➡️  Ready for PLAN phase');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Error updating SD:', error.message);
     console.error('Stack:', error.stack);
     process.exit(1);

@@ -263,10 +263,10 @@ const sdId = process.argv[2] || 'SD-TEST-CODEX-1758340937843';
 
 // Execute
 createPRDFromSD(sdId)
-  .then(prd => {
+  .then(_prd => {
     console.log(chalk.gray('\n[PLAN Agent work complete]'));
     process.exit(0);
   })
-  .catch(error => {
+  .catch(_error => {
     process.exit(1);
   });

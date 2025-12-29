@@ -228,7 +228,7 @@ async function addVentureWorkflow() {
           fileContent = fs.readFileSync(filePath, 'utf8');
           console.log(`    ✓ Read content from ${prd.file_path}`);
         }
-      } catch (err) {
+      } catch (_err) {
         console.log('    ⚠️  Could not read file, using summary');
       }
       

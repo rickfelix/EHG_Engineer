@@ -101,7 +101,7 @@ async function updateDependencySubAgent() {
   };
 
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('leo_sub_agents')
       .update({
         metadata: updatedMetadata
@@ -126,7 +126,7 @@ async function updateDependencySubAgent() {
     console.log('- PAT-008: Dependency vulnerability management');
     console.log('- CI/CD integration: Automated failure diagnosis');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Unexpected error:', err);
     process.exit(1);
   }

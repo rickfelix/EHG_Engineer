@@ -178,7 +178,7 @@ async function testCoordinationWithImprovedAgents() {
           console.log(`   ✓ Has standardized methods`);
         }
         
-      } catch (error) {
+      } catch (_error) {
         console.log(`⚠️  ${agent.name}: ${error.message}`);
       }
     }
@@ -214,7 +214,7 @@ async function testCoordinationWithImprovedAgents() {
     
     console.log('\n🎯 System Ready for Production Use!');
     
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Test failed:', error.message);
     console.error(error.stack);
     process.exit(1);

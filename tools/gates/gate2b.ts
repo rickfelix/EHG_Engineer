@@ -12,7 +12,7 @@ import { exit } from 'node:process';
 import { getDb } from './lib/db';
 import { scoreGate, formatGateResults, Check } from './lib/score';
 import { getRulesForGate, getPRDDetails, storeGateReview } from './lib/rules';
-import { meetsA11yLevel, safeJsonParse } from './lib/evidence';
+import { meetsA11yLevel } from './lib/evidence';
 
 (async () => {
   const prdId = process.env.PRD_ID;

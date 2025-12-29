@@ -96,7 +96,7 @@ async function testSystemBasics() {
     
     return true;
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Test failed:', error.message);
     console.error('📍 At:', error.stack?.split('\n')[1]);
     return false;
@@ -123,7 +123,7 @@ async function simpleDiagnostics() {
     const agentFiles = files.filter(f => f.endsWith('.js'));
     console.log('   🤖 Agent modules:', agentFiles.length);
     
-  } catch (err) {
+  } catch (_err) {
     console.log('   ❌ Agent files: Missing');
   }
   

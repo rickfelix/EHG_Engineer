@@ -34,7 +34,7 @@ This directory contains archived documentation that is no longer active but pres
 **Archived**: 7 protocol versions
 **From**: `/docs/03_protocols_and_standards/`
 **To**: `/docs/archive/protocols/`
-**Reason**: Superseded by LEO Protocol v4.2.x
+**Reason**: Superseded by LEO Protocol v4.3.3
 
 **Files Archived**:
 - leo_protocol_v3.1.5.md (83KB)

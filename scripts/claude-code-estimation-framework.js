@@ -76,11 +76,11 @@ class ClaudeCodeEstimator {
   estimateTask(task) {
     const {
       description,
-      type,
+      type: _type,
       complexity = 'moderate',
       humanEstimateHours = null,
       requirements = [],
-      technologies = []
+      technologies: _technologies
     } = task;
 
     // Analyze task components
@@ -114,7 +114,7 @@ class ClaudeCodeEstimator {
   /**
    * Analyze task description to identify components
    */
-  analyzeTaskComponents(description, requirements) {
+  analyzeTaskComponents(description, _requirements) {
     const components = [];
     
     // UI/UX patterns
@@ -287,7 +287,7 @@ class ClaudeCodeEstimator {
       return { message: 'No historical data available yet' };
     }
 
-    const accuracyData = this.historicalData.map(item => {
+    const _accuracyData = this.historicalData.map(item => {
       // This would need to be enhanced to track original estimates
       return {
         taskId: item.taskId,
@@ -324,7 +324,7 @@ class ClaudeCodeEstimator {
       const dataPath = path.join(__dirname, '../data/estimation-history.json');
       const data = await fs.readFile(dataPath, 'utf8');
       this.historicalData = JSON.parse(data);
-    } catch (error) {
+    } catch (_error) {
       // File doesn't exist or can't be read - start fresh
       this.historicalData = [];
     }
@@ -384,7 +384,7 @@ export default ClaudeCodeEstimator;
 // Run demonstration if executed directly
 if (import.meta.url === `file://${process.argv[1]}`) {
   demonstrateEstimation()
-    .then(result => {
+    .then(_result => {
       console.log('\n✅ Estimation framework demonstration complete');
       console.log('\n📝 Integration Instructions:');
       console.log('1. Add to CLAUDE.md for automatic estimation');

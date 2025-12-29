@@ -50,13 +50,13 @@ async function executeSqlMigration() {
       console.log(stmt.substring(0, 100) + (stmt.length > 100 ? '...' : ''));
 
       try {
-        const { data, error } = await supabase.rpc('exec_sql', { sql: stmt });
+        const { data: _data, error } = await supabase.rpc('exec_sql', { sql: stmt });
 
         if (error) {
           console.error('❌ Error:', error.message);
           // Try direct query if RPC fails
           console.log('Trying direct query...');
-          const { data: data2, error: error2 } = await supabase.from('_sql').select('*').eq('query', stmt);
+          const { data: _data2, error: error2 } = await supabase.from('_sql').select('*').eq('query', stmt);
           if (error2) {
             console.error('❌ Also failed:', error2.message);
           }
@@ -80,7 +80,7 @@ async function executeSqlMigration() {
     ];
 
     for (const id of sdIds) {
-      const { data, error } = await supabase
+      const { data, error: _error } = await supabase
         .from('strategic_directives_v2')
         .select('id, title, status, progress')
         .eq('id', id)

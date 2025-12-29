@@ -86,7 +86,7 @@ async function analyzeDatabaseSchema() {
 
     console.log(`   Sub-Agent Executions: ${!subAgentError ? '✅ Present' : '⚠️  Schema mismatch detected'}`);
 
-  } catch (error) {
+  } catch (_error) {
     console.log('   Database analysis limited due to permissions');
   }
 }

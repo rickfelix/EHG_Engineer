@@ -10,7 +10,6 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
-import fs from 'fs/promises';
 
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -183,7 +182,7 @@ class LEOProtocolCLI {
     try {
       const result = await execAsync(`bash "${this.scriptsDir}/leo-status.sh" show`);
       console.log(result.stdout);
-    } catch (error) {
+    } catch (_error) {
       console.log('⚠️  Could not retrieve current status');
     }
   }

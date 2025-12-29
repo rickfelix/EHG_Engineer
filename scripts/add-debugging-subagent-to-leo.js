@@ -140,7 +140,7 @@ Like a forensic detective examining a crime scene, this agent methodically trace
     console.log(`✅ Added ${triggersData.length} activation triggers\n`);
 
     // 3. Create context documentation
-    const contextDoc = `# CLAUDE-DEBUGGING.md - Debugging Sub-Agent Context
+    const _contextDoc = `# CLAUDE-DEBUGGING.md - Debugging Sub-Agent Context
 
 ## 🔍 World-Class Debugging Expertise
 

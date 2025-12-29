@@ -23,7 +23,7 @@ async function validateSchema() {
 
   // 1. Check handoff_tracking table
   console.log('📋 Checking Handoff Tables:');
-  const { data: handoffData, error: handoffError } = await supabase
+  const { data: _handoffData, error: handoffError } = await supabase
     .from('handoff_tracking')
     .select('*')
     .limit(0);
@@ -53,7 +53,7 @@ async function validateSchema() {
     console.log('  ✅ handoff_tracking table: EXISTS');
 
     // Validate required columns
-    const requiredCols = [
+    const _requiredCols = [
       'sd_id',
       'from_agent',
       'to_agent',

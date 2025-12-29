@@ -117,7 +117,7 @@ const MODIFIED_WORKFLOW_SD_TYPES = {
  * @param {object} options - Additional options
  * @returns {Promise<object>} Validation result
  */
-async function validateSDHandoffState(sdId, targetPhase, options = {}) {
+async function validateSDHandoffState(sdId, targetPhase, _options = {}) {
   const result = {
     ready: false,
     sdId,

@@ -19,7 +19,7 @@ const supabase = createClient(
 interface SubAgentResult {
   agent: Agent;
   status: 'pass' | 'fail' | 'error' | 'timeout';
-  evidence: Record<string, any>;
+  evidence: Record<string, unknown>;
   message?: string;
   completedAt: string;
 }
@@ -28,7 +28,7 @@ interface GateResult {
   gate: Gate;
   score: number;
   passed: boolean;
-  evidence: Record<string, any>;
+  evidence: Record<string, unknown>;
 }
 
 interface SupervisorVerdict {
@@ -44,14 +44,16 @@ interface SupervisorVerdict {
 /**
  * Priority-based conflict resolution
  * Security > Database > Testing > Performance > Design
+ * Kept for future use in conflict resolution logic
  */
-const AGENT_PRIORITY: Record<Agent, number> = {
+const _AGENT_PRIORITY: Record<Agent, number> = {
   SECURITY: 5,
   DATABASE: 4,
   TESTING: 3,
   PERFORMANCE: 2,
   DESIGN: 1
 };
+void _AGENT_PRIORITY; // Will be used for conflict resolution
 
 /**
  * Query all sub-agent results for a PRD
@@ -427,7 +429,9 @@ function displayVerdict(verdict: SupervisorVerdict): void {
 }
 
 // CLI interface
-if (require.main === module) {
+import { fileURLToPath } from 'url';
+const __filename_supervisor = fileURLToPath(import.meta.url);
+if (process.argv[1] === __filename_supervisor) {
   const prdId = process.argv[2] || process.env.PRD_ID;
 
   if (!prdId) {

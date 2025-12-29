@@ -81,7 +81,7 @@ async function executeLEADPhase() {
 
   // Store handoff in database
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('sd_phase_handoffs')
       .insert({
         id: `HANDOFF-${Date.now()}`,
@@ -95,10 +95,11 @@ async function executeLEADPhase() {
         created_by: 'LEAD_AGENT',
         completed_at: new Date().toISOString()
       });
-    
+
+    if (error) throw error;
     console.log('✅ LEAD→PLAN Handoff stored in database');
-  } catch (error) {
-    console.log('⚠️  Could not store handoff:', error.message);
+  } catch (_error) {
+    console.log('⚠️  Could not store handoff');
   }
 
   console.log('✅ No over-engineering detected (using native database features)');
@@ -108,7 +109,7 @@ async function executeLEADPhase() {
 }
 
 // PLAN Phase - Technical Design
-async function executePLANPhase(leadHandoff) {
+async function executePLANPhase(_leadHandoff) {
   console.log('\n📋 PLAN PHASE: Technical Design');
   console.log('-'.repeat(40));
 
@@ -177,13 +178,14 @@ async function executePLANPhase(leadHandoff) {
 
   // Store PRD in database
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('product_requirements_v2')
       .insert(prd);
-    
+
+    if (error) throw error;
     console.log('✅ PRD created in database:', prd.id);
-  } catch (error) {
-    console.log('⚠️  Could not store PRD:', error.message);
+  } catch (_error) {
+    console.log('⚠️  Could not store PRD');
   }
 
   console.log('✅ Acceptance criteria defined (7 items)');
@@ -237,7 +239,7 @@ async function executePLANPhase(leadHandoff) {
 }
 
 // EXEC Phase - Implementation
-async function executeEXECPhase(planHandoff) {
+async function executeEXECPhase(_planHandoff) {
   console.log('\n📋 EXEC PHASE: Implementation');
   console.log('-'.repeat(40));
 
@@ -421,7 +423,7 @@ COMMENT ON FUNCTION auto_transition_status() IS 'SD-LEO-002: Automatic status tr
 }
 
 // VERIFICATION Phase - Testing
-async function executeVERIFICATIONPhase(implementation) {
+async function executeVERIFICATIONPhase(_implementation) {
   console.log('\n📋 VERIFICATION PHASE: Testing & Validation');
   console.log('-'.repeat(40));
 
@@ -516,7 +518,7 @@ async function main() {
   try {
     // Execute all phases following LEO Protocol
     const leadHandoff = await executeLEADPhase();
-    const { prd, handoff: planHandoff } = await executePLANPhase(leadHandoff);
+    const { prd: _prd, handoff: planHandoff } = await executePLANPhase(leadHandoff);
     const implementation = await executeEXECPhase(planHandoff);
     const verification = await executeVERIFICATIONPhase(implementation);
     await executeLEADApproval(verification);

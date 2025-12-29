@@ -14,7 +14,7 @@
  * Note: This is a simple pattern-based parser. For production use,
  * consider using @babel/parser or typescript compiler API for AST parsing.
  */
-function parseTypeScriptJavaScript(code, language, filePath) {
+function parseTypeScriptJavaScript(code, _language, _filePath) {
   const entities = [];
   const lines = code.split('\n');
 
@@ -23,7 +23,7 @@ function parseTypeScriptJavaScript(code, language, filePath) {
   let match;
 
   while ((match = functionPattern.exec(code)) !== null) {
-    const [fullMatch, name, params] = match;
+    const [_fullMatch, name, params] = match;
     const lineNumber = code.substring(0, match.index).split('\n').length;
 
     entities.push({
@@ -41,7 +41,7 @@ function parseTypeScriptJavaScript(code, language, filePath) {
   const arrowFunctionPattern = /^(?:export\s+)?(?:const|let)\s+(\w+)\s*=\s*(?:async\s+)?\((.*?)\)\s*=>/gm;
 
   while ((match = arrowFunctionPattern.exec(code)) !== null) {
-    const [fullMatch, name, params] = match;
+    const [_fullMatch, name, params] = match;
     const lineNumber = code.substring(0, match.index).split('\n').length;
 
     entities.push({
@@ -59,7 +59,7 @@ function parseTypeScriptJavaScript(code, language, filePath) {
   const classPattern = /^(?:export\s+)?(?:abstract\s+)?class\s+(\w+)(?:\s+extends\s+\w+)?/gm;
 
   while ((match = classPattern.exec(code)) !== null) {
-    const [fullMatch, name] = match;
+    const [_fullMatch, name] = match;
     const lineNumber = code.substring(0, match.index).split('\n').length;
 
     entities.push({
@@ -76,7 +76,7 @@ function parseTypeScriptJavaScript(code, language, filePath) {
   const componentPattern = /^(?:export\s+)?(?:const|function)\s+([A-Z]\w+)\s*(?:=\s*)?(?:\((.*?)\))?\s*(?:=>|:)/gm;
 
   while ((match = componentPattern.exec(code)) !== null) {
-    const [fullMatch, name, props] = match;
+    const [_fullMatch, name, props] = match;
     const lineNumber = code.substring(0, match.index).split('\n').length;
 
     // Check if it's a React component (returns JSX or uses hooks)
@@ -98,7 +98,7 @@ function parseTypeScriptJavaScript(code, language, filePath) {
   const interfacePattern = /^(?:export\s+)?interface\s+(\w+)/gm;
 
   while ((match = interfacePattern.exec(code)) !== null) {
-    const [fullMatch, name] = match;
+    const [_fullMatch, name] = match;
     const lineNumber = code.substring(0, match.index).split('\n').length;
 
     entities.push({
@@ -115,7 +115,7 @@ function parseTypeScriptJavaScript(code, language, filePath) {
   const typePattern = /^(?:export\s+)?type\s+(\w+)/gm;
 
   while ((match = typePattern.exec(code)) !== null) {
-    const [fullMatch, name] = match;
+    const [_fullMatch, name] = match;
     const lineNumber = code.substring(0, match.index).split('\n').length;
 
     entities.push({
@@ -134,7 +134,7 @@ function parseTypeScriptJavaScript(code, language, filePath) {
 /**
  * Parse SQL code entities
  */
-function parseSQL(code, language, filePath) {
+function parseSQL(code, _language, _filePath) {
   const entities = [];
   const lines = code.split('\n');
 
@@ -143,7 +143,7 @@ function parseSQL(code, language, filePath) {
   let match;
 
   while ((match = functionPattern.exec(code)) !== null) {
-    const [fullMatch, name] = match;
+    const [_fullMatch, name] = match;
     const lineNumber = code.substring(0, match.index).split('\n').length;
 
     entities.push({
@@ -160,7 +160,7 @@ function parseSQL(code, language, filePath) {
   const tablePattern = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)/gi;
 
   while ((match = tablePattern.exec(code)) !== null) {
-    const [fullMatch, name] = match;
+    const [_fullMatch, name] = match;
     const lineNumber = code.substring(0, match.index).split('\n').length;
 
     entities.push({
@@ -177,7 +177,7 @@ function parseSQL(code, language, filePath) {
   const viewPattern = /CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(\w+)/gi;
 
   while ((match = viewPattern.exec(code)) !== null) {
-    const [fullMatch, name] = match;
+    const [_fullMatch, name] = match;
     const lineNumber = code.substring(0, match.index).split('\n').length;
 
     entities.push({
@@ -268,7 +268,7 @@ function findEndOfBlock(lines, startLine) {
 /**
  * Find the end of a SQL block
  */
-function findEndOfSQLBlock(lines, startLine, blockType) {
+function findEndOfSQLBlock(lines, startLine, _blockType) {
   // Look for semicolon
   for (let i = startLine; i < lines.length; i++) {
     if (lines[i].trim().endsWith(';')) {

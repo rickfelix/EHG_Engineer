@@ -349,7 +349,7 @@ await dbManager.runMigration('down', 1); // Rollback one
   console.log(`✅ Setup guide created: ${outputPath}`);
 }
 
-async function documentAPI(config, agent) {
+async function documentAPI(_config, _agent) {
   console.log('📊 Documenting API endpoints...\n');
   // This would analyze and document API endpoints
   // Implementation depends on your API structure

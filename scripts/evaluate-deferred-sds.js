@@ -8,7 +8,7 @@ const supabaseKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Enhanced 6-dimension evaluation rubric
-const evaluationRubric = {
+const _evaluationRubric = {
   'Business_Value': {
     name: 'Business Value & Impact',
     description: 'Direct impact on business objectives and revenue potential',

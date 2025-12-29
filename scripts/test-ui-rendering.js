@@ -149,7 +149,7 @@ async function testUIRendering() {
     
     const componentScore = (header ? 1 : 0) + (nav ? 1 : 0) + (main ? 1 : 0);
     const dataScore = (hasLEOProtocol ? 1 : 0) + (hasSD ? 1 : 0) + (hasPRD ? 1 : 0) + (hasProgress ? 1 : 0);
-    const interactiveScore = Math.min(5, buttons.length > 0 ? 1 : 0 + links.length > 0 ? 1 : 0 + inputs.length > 0 ? 1 : 0 + checkboxes.length > 0 ? 1 : 0);
+    const _interactiveScore = Math.min(5, buttons.length > 0 ? 1 : 0 + links.length > 0 ? 1 : 0 + inputs.length > 0 ? 1 : 0 + checkboxes.length > 0 ? 1 : 0);
     
     console.log('\n🏆 Scores:');
     console.log(`  Component Rendering: ${componentScore}/3`);
@@ -161,7 +161,7 @@ async function testUIRendering() {
     const overallScore = componentScore >= 2 && dataScore >= 3 && errorElements.length === 0;
     console.log(`\n${overallScore ? '✅' : '❌'} Overall UI Status: ${overallScore ? 'HEALTHY' : 'NEEDS ATTENTION'}`);
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Test failed:', error.message);
   } finally {
     await browser.close();

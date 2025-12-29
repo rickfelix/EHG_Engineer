@@ -96,7 +96,7 @@ async function updateAllPRDs() {
   let errorCount = 0;
 
   for (const [sdId, data] of Object.entries(explorationData)) {
-    const prdId = `PRD-${sdId}`;
+    const _prdId = `PRD-${sdId}`;
 
     const { data: result, error } = await supabase
       .from('product_requirements_v2')

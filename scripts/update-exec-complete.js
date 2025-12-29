@@ -29,7 +29,7 @@ async function updateEXECComplete() {
       checked: true
     }));
     
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('product_requirements_v2')
       .update({
         exec_checklist: updatedChecklist,
@@ -76,7 +76,7 @@ async function updateEXECComplete() {
     console.log('- Remediation Time: 13 hours estimated');
     console.log('\n🔄 Handed back to PLAN for verification');
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error:', error.message);
   }
 }

@@ -10,7 +10,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { randomUUID } from 'crypto';
+// import { randomUUID } from 'crypto'; // Unused - IDs are provided externally
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -454,7 +454,7 @@ async function main() {
         continue;
       }
 
-      const created = await createSD(sd);
+      const _created = await createSD(sd);
       console.log(`CREATE: ${sd.id} - ${sd.title}`);
       console.log(`  Lines saved: ~${sd.estimated_lines_saved}`);
       results.created.push(sd.id);

@@ -85,4 +85,5 @@ Analysis documents capture:
 
 ---
 
-*Part of LEO Protocol v4.2.0 - Knowledge Management*
+*Part of LEO Protocol v4.3.3 - Knowledge Management*
+*Updated: 2025-12-29*

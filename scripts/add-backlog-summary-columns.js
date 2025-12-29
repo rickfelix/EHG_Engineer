@@ -26,7 +26,7 @@ async function addBacklogSummaryColumns() {
 
   try {
     // Check if columns already exist by attempting to query them
-    const { data: checkData, error: checkError } = await supabase
+    const { data: _checkData, error: checkError } = await supabase
       .from('strategic_directives_v2')
       .select('id, backlog_summary, backlog_summary_generated_at')
       .limit(1);

@@ -43,7 +43,7 @@ for (let i = 0; i < statements.length; i++) {
   console.log(`${i + 1}. Executing: ${statementType}...`);
 
   try {
-    const { data, error } = await supabase.rpc('exec_sql', {
+    const { data: _data, error } = await supabase.rpc('exec_sql', {
       sql: statement + ';'
     });
 

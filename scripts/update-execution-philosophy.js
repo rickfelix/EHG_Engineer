@@ -113,7 +113,7 @@ async function updateExecutionPhilosophy() {
     console.log('   2. Review changes in CLAUDE.md');
     console.log('   3. Commit to git if satisfied');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error updating execution philosophy:', error);
     process.exit(1);
   }

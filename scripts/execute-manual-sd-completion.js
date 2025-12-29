@@ -11,7 +11,7 @@ console.log('');
 
 async function executeManualCompletion() {
   // Parse connection string and build config manually
-  const poolerUrl = process.env.SUPABASE_POOLER_URL;
+  const _poolerUrl = process.env.SUPABASE_POOLER_URL;
   const dbPassword = process.env.SUPABASE_DB_PASSWORD || 'Fl!M32DaM00n!1';
 
   const client = new Client({

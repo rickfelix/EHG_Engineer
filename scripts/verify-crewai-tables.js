@@ -16,7 +16,7 @@ async function verifyCrewAITables() {
 
   // Check crewai_flows table
   try {
-    const { data: flows, error: flowsError } = await supabase
+    const { data: _flows, error: flowsError } = await supabase
       .from('crewai_flows')
       .select('id')
       .limit(1);
@@ -27,14 +27,14 @@ async function verifyCrewAITables() {
     } else {
       console.log('✅ crewai_flows table: EXISTS and ACCESSIBLE');
     }
-  } catch (error) {
+  } catch (err) {
     console.log('❌ crewai_flows table: ERROR');
-    console.log('   Error:', error.message);
+    console.log('   Error:', err.message);
   }
 
   // Check crewai_flow_executions table
   try {
-    const { data: executions, error: executionsError } = await supabase
+    const { data: _executions, error: executionsError } = await supabase
       .from('crewai_flow_executions')
       .select('id')
       .limit(1);
@@ -45,9 +45,9 @@ async function verifyCrewAITables() {
     } else {
       console.log('✅ crewai_flow_executions table: EXISTS and ACCESSIBLE');
     }
-  } catch (error) {
+  } catch (err) {
     console.log('❌ crewai_flow_executions table: ERROR');
-    console.log('   Error:', error.message);
+    console.log('   Error:', err.message);
   }
 
   // Check crewai_flow_templates table
@@ -69,9 +69,9 @@ async function verifyCrewAITables() {
         console.log('   No templates found (table is empty)');
       }
     }
-  } catch (error) {
+  } catch (err) {
     console.log('❌ crewai_flow_templates table: ERROR');
-    console.log('   Error:', error.message);
+    console.log('   Error:', err.message);
   }
 
   console.log('\n=== Verification Complete ===');

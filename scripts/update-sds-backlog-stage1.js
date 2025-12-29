@@ -214,7 +214,7 @@ async function updateSDs() {
         
         return true;
         
-    } catch (error) {
+    } catch (_error) {
         console.error('❌ SD update failed:', error);
         return false;
     }
@@ -501,7 +501,7 @@ async function createBacklogItems() {
         
         return true;
         
-    } catch (error) {
+    } catch (_error) {
         console.error('❌ Backlog creation failed:', error);
         return false;
     }
@@ -556,7 +556,7 @@ async function createMappings() {
         
         return true;
         
-    } catch (error) {
+    } catch (_error) {
         console.error('❌ Mapping creation failed:', error);
         return false;
     }
@@ -616,7 +616,7 @@ interface Stage1Metadata {
         fs.writeFileSync(filename, contractContent);
         console.log(`✅ Created data contract PRD at ${filename}`);
         return true;
-    } catch (error) {
+    } catch (_error) {
         console.error('❌ Failed to create data contract PRD:', error);
         return false;
     }

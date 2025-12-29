@@ -88,7 +88,7 @@ class HandoffValidator {
   /**
    * Perform comprehensive validation of handoff content
    */
-  performValidation(content, filePath) {
+  performValidation(content, _filePath) {
     const validation = {
       valid: true,
       errors: [],

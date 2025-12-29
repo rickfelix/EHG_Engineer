@@ -82,7 +82,7 @@ function parseCheckConstraint(definition) {
 
   for (const pattern of patterns) {
     let match;
-    const regex = new RegExp(pattern);
+    const _regex = new RegExp(pattern);
     const str = definition;
 
     // Extract all quoted strings

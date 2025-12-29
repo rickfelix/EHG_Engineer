@@ -44,7 +44,8 @@ import { getRulesForGate, getPRDDetails, storeGateReview } from './lib/rules.js'
   console.log(`SD: ${prdDetails.sd_id || 'None'}`);
   console.log('');
 
-  const db = await getDb();
+  const _db = await getDb(); // Used to verify connection
+  void _db;
   const rules = await getRulesForGate('0');
 
   // Define checks for each rule
@@ -54,7 +55,7 @@ import { getRulesForGate, getPRDDetails, storeGateReview } from './lib/rules.js'
 
       try {
         // Run ESLint with hardcoded command (security: no interpolation)
-        const output = execSync('npx eslint .', {
+        execSync('npx eslint .', {
           encoding: 'utf8',
           stdio: 'pipe',
           timeout: 30000 // 30s timeout
@@ -63,10 +64,11 @@ import { getRulesForGate, getPRDDetails, storeGateReview } from './lib/rules.js'
         // ESLint exits with 0 if no errors
         console.log('  ✅ ESLint validation passed (zero errors)');
         return true;
-      } catch (error: any) {
+      } catch (error: unknown) {
         // ESLint exits with 1 if errors found
-        const output = error.stdout || '';
-        const errorMatch = output.match(/(\d+)\s+error/);
+        const execError = error as { stdout?: string };
+        const errorOutput = execError.stdout || '';
+        const errorMatch = errorOutput.match(/(\d+)\s+error/);
         const errorCount = errorMatch ? parseInt(errorMatch[1]) : 0;
 
         console.log(`  ❌ ESLint validation failed: ${errorCount} error(s)`);
@@ -79,7 +81,7 @@ import { getRulesForGate, getPRDDetails, storeGateReview } from './lib/rules.js'
 
       try {
         // Run tsc with hardcoded command (security: no interpolation)
-        const output = execSync('npx tsc --noEmit', {
+        execSync('npx tsc --noEmit', {
           encoding: 'utf8',
           stdio: 'pipe',
           timeout: 30000 // 30s timeout
@@ -87,10 +89,11 @@ import { getRulesForGate, getPRDDetails, storeGateReview } from './lib/rules.js'
 
         console.log('  ✅ TypeScript compilation succeeded (zero type errors)');
         return true;
-      } catch (error: any) {
+      } catch (error: unknown) {
         // tsc exits with non-zero if errors found
-        const output = error.stdout || '';
-        const errorMatch = output.match(/Found (\d+) error/);
+        const execError = error as { stdout?: string };
+        const tscOutput = execError.stdout || '';
+        const errorMatch = tscOutput.match(/Found (\d+) error/);
         const errorCount = errorMatch ? parseInt(errorMatch[1]) : 0;
 
         console.log(`  ❌ TypeScript compilation failed: ${errorCount} type error(s)`);
@@ -103,7 +106,7 @@ import { getRulesForGate, getPRDDetails, storeGateReview } from './lib/rules.js'
 
       try {
         // Run import checker with hardcoded command (security: no interpolation)
-        const output = execSync('node tools/gates/lib/check-imports.js', {
+        execSync('node tools/gates/lib/check-imports.js', {
           encoding: 'utf8',
           stdio: 'pipe',
           timeout: 10000 // 10s timeout
@@ -111,11 +114,12 @@ import { getRulesForGate, getPRDDetails, storeGateReview } from './lib/rules.js'
 
         console.log('  ✅ All imports resolved successfully');
         return true;
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Import checker exits with 1 if unresolved imports found
-        const output = error.stdout || '';
+        const execError = error as { stdout?: string };
+        const importOutput = execError.stdout || '';
         console.log('  ⚠️  Import resolution check failed (non-blocking)');
-        console.log(`  ${output.split('\n').slice(0, 3).join('\n  ')}`);
+        console.log(`  ${importOutput.split('\n').slice(0, 3).join('\n  ')}`);
         return false;
       }
     },

@@ -83,7 +83,7 @@ async function verifyLinkage() {
     console.log('3. Test across all browser configurations');
     console.log('4. Monitor authentication success rate');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error verifying linkage:', error.message);
   }
 }

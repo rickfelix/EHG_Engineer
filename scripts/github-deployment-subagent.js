@@ -421,7 +421,7 @@ class GitHubDeploymentSubAgent {
     for (const check of checks) {
       console.log(`  🔍 ${check.name}...`);
       try {
-        const { stdout, stderr } = await execAsync(check.command);
+        const { stdout, stderr: _stderr } = await execAsync(check.command);
         if (check.name === 'Git repository clean' && stdout.trim()) {
           throw new Error(`Repository not clean: ${stdout.trim().split('\n').length} uncommitted files`);
         }
@@ -658,7 +658,7 @@ class GitHubDeploymentSubAgent {
     
     // Log failure to database
     try {
-      const { error: logError } = await supabase
+      const { error: _logError } = await supabase
         .from('strategic_directives_v2')
         .update({
           metadata: {

@@ -1,11 +1,11 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { fileURLToPath as _fileURLToPath } from 'url';
+import { dirname as _dirname } from 'path';
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+import _path from 'path';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -28,7 +28,7 @@ async function completeStrategicDirective() {
     const completionTimestamp = new Date().toISOString();
     
     // Final SD update - mark as 100% complete
-    const { data: sdUpdate, error: sdError } = await supabase
+    const { data: _sdUpdate, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .update({
         status: 'archived', // SD complete moves to archived per LEO Protocol
@@ -156,7 +156,7 @@ async function completeStrategicDirective() {
         console.log('⏳ Dashboard update pending (may take a moment for real-time sync)');
         console.log(`   Current progress shown: ${updatedSD?.progress || 'unknown'}%`);
       }
-    } catch (fetchError) {
+    } catch (_fetchError) {
       console.log('⚠️  Dashboard check skipped (server may be updating)');
     }
     

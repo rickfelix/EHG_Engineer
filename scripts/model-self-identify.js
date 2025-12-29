@@ -40,7 +40,7 @@ function getConfiguredModel(subagentType) {
       }
     }
     return null;
-  } catch (err) {
+  } catch (_err) {
     return null;
   }
 }
@@ -54,7 +54,7 @@ function getCurrentSessionId() {
     if (fs.existsSync(sessionFile)) {
       return fs.readFileSync(sessionFile, 'utf8').trim();
     }
-  } catch (err) {
+  } catch (_err) {
     // Ignore
   }
   return null;

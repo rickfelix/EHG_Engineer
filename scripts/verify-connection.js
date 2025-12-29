@@ -20,11 +20,11 @@ async function testConnection() {
     const supabase = createClient(supabaseUrl, supabaseKey);
     
     // Test basic connection - simpler query
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .select('id')
       .limit(1);
-    
+
     if (error && error.code !== 'PGRST116') {
       // PGRST116 means table doesn't exist yet, which is expected in Phase 1
       console.log('❌ Connection failed:', error.message);
@@ -35,7 +35,7 @@ async function testConnection() {
     console.log('📊 Database is accessible and ready for schema setup');
     console.log('\n🔄 Next: Proceed to Phase 2 for database schema creation');
     
-  } catch (error) {
+  } catch (_error) {
     console.log('❌ Connection error:', error.message);
     process.exit(1);
   }

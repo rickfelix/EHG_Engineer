@@ -38,7 +38,7 @@ async function main() {
   
   // Test if view exists
   console.log('\n🔍 Testing if view already exists...');
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('v_prd_sd_payload')
     .select('sd_id')
     .limit(1);

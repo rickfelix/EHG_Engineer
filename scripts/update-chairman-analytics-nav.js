@@ -104,7 +104,7 @@ async function updateNavigationMaturity() {
     console.log('   3. Test keyboard navigation (Tab + Enter)');
     console.log('   4. Update SD-CHAIRMAN-ANALYTICS-PROMOTE-001 progress to 65%');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ ERROR:', error.message);
     console.error('Stack:', error.stack);
     process.exit(1);

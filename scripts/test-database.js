@@ -22,7 +22,7 @@ async function testDatabase() {
     
     // Test 1: Test strategic_directives_v2 table
     console.log('📋 Test 1: Testing strategic_directives_v2 table...');
-    const { data: sdData, error: sdError } = await supabase
+    const { data: _sdData, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .select('id')
       .limit(1);
@@ -42,7 +42,7 @@ async function testDatabase() {
     
     // Test 2: Test execution_sequences_v2 table
     console.log('\n📋 Test 2: Testing execution_sequences_v2 table...');
-    const { data: esData, error: esError } = await supabase
+    const { data: _esData, error: esError } = await supabase
       .from('execution_sequences_v2')
       .select('id')
       .limit(1);
@@ -62,7 +62,7 @@ async function testDatabase() {
     
     // Test 3: Test hap_blocks_v2 table
     console.log('\n📋 Test 3: Testing hap_blocks_v2 table...');
-    const { data: hapData, error: hapError } = await supabase
+    const { data: _hapData, error: hapError } = await supabase
       .from('hap_blocks_v2')
       .select('hap_id')
       .limit(1);
@@ -95,7 +95,7 @@ async function testDatabase() {
       console.log('5. Run this test again to verify');
     }
     
-  } catch (error) {
+  } catch (_error) {
     console.log('❌ Database test failed:', error.message);
     process.exit(1);
   }

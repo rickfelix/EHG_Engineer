@@ -37,7 +37,7 @@ async function updatePriorities() {
       }
 
       // Update priority to high
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('strategic_directives_v2')
         .update({
           priority: 'high',
@@ -53,7 +53,7 @@ async function updatePriorities() {
         console.log(`✅ ${sdId}: ${existingSD.title}`);
         console.log(`   Priority: ${existingSD.priority} → high`);
       }
-    } catch (err) {
+    } catch (_err) {
       console.log(`❌ ${sdId}: Unexpected error - ${err.message}`);
     }
   }

@@ -417,7 +417,7 @@ async function main() {
 
 // Execute
 main()
-  .then(results => {
+  .then(_results => {
     console.log('\n🎉 All records created/updated successfully!');
     process.exit(0);
   })

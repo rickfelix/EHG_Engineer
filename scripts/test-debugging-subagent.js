@@ -38,9 +38,9 @@
  * @license MIT
  */
 
-import fs from 'fs';
-import path from 'path';
-import { execSync } from 'child_process';
+// import fs from 'fs'; // Unused - available for file operations
+// import path from 'path'; // Unused - available for path operations
+// import { execSync } from 'child_process'; // Unused - available for shell commands
 
 class DebuggingSubAgent {
   constructor() {
@@ -160,7 +160,7 @@ class DebuggingSubAgent {
    * Identify the type of error from context
    */
   identifyErrorType(context) {
-    const { error, message, code } = context;
+    const { error: _error, message, code } = context;
     
     // Check against known error patterns
     for (const [key, pattern] of this.knowledgeBase.commonErrors) {
@@ -577,7 +577,7 @@ async function testDebuggingAgent() {
 export { DebuggingSubAgent };
 
 // Run test if executed directly
-import { fileURLToPath } from 'url';
+// import { fileURLToPath } from 'url';
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   testDebuggingAgent().then(analysis => {
     console.log('✅ Debugging Sub-Agent test completed');

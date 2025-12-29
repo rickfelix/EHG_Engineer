@@ -7,7 +7,7 @@
 
 import 'dotenv/config';
 import fs from 'fs/promises';
-import path from 'path';
+// path import kept for potential future use in file path operations
 
 async function activateSystem() {
   console.log('🚀 Activating Invisible Sub-Agent System...\n');
@@ -63,7 +63,7 @@ async function activateSystem() {
     const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
     
     try {
-      const { data, error } = await supabase.from('leo_protocols').select('count').limit(1);
+      const { data: _data, error } = await supabase.from('leo_protocols').select('count').limit(1);
       if (error) {
         console.log('   ❌ Database connection failed:', error.message);
       } else {
@@ -85,14 +85,14 @@ async function activateSystem() {
       
       // Create instances
       const contextMonitor = new ContextMonitor(process.env.OPENAI_API_KEY, process.cwd());
-      const autoSelector = new AutoSelector(process.env.OPENAI_API_KEY, process.cwd());
-      const promptEnhancer = new PromptEnhancer(process.env.OPENAI_API_KEY, process.cwd());
+      const _autoSelector = new AutoSelector(process.env.OPENAI_API_KEY, process.cwd());
+      const _promptEnhancer = new PromptEnhancer(process.env.OPENAI_API_KEY, process.cwd());
       
       console.log('   ✅ All components instantiated successfully');
       
       // Quick functionality test
       const testContext = { project_type: 'test' };
-      const testResult = await contextMonitor.analyzeWithRules('test prompt', testContext);
+      const _testResult = await contextMonitor.analyzeWithRules('test prompt', testContext);
       
       console.log('   ✅ Basic functionality verified');
       systemStatus.components = '✅';
@@ -106,10 +106,10 @@ async function activateSystem() {
     console.log('\n5️⃣ Running integration test...');
     
     try {
-      const { testInvisibleSubAgentSystem } = await import('./test-system-simple.js');
+      const { testInvisibleSubAgentSystem: _testInvisibleSubAgentSystem } = await import('./test-system-simple.js');
       console.log('   ✅ Integration test completed');
       systemStatus.integration = '✅';
-    } catch (err) {
+    } catch (_err) {
       console.log('   ⚠️ Integration test had issues but system is functional');
       systemStatus.integration = '⚠️';
     }

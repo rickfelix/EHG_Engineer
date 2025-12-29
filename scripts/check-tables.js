@@ -11,7 +11,7 @@ const supabase = createClient(
 async function checkTables() {
   try {
     // Query for backlog related tables
-    const { data, error } = await supabase
+    const { data: _data, error: _error } = await supabase
       .rpc('get_table_list', {})
       .catch(() => null);
 
@@ -25,7 +25,7 @@ async function checkTables() {
       ORDER BY table_name;
     `;
 
-    const { data: tables, error: queryError } = await supabase
+    const { data: tables, error: _queryError } = await supabase
       .rpc('query', { sql: query })
       .catch(() => ({ data: null, error: 'RPC not available' }));
 

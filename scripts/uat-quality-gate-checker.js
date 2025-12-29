@@ -84,7 +84,7 @@ class QualityGateChecker {
           this.log('info', `✅ Loaded quality gate configuration from ${configPath}`);
         }
       }
-    } catch (error) {
+    } catch (_error) {
       this.log('warn', `⚠️ Could not load configuration from ${configPath}: ${error.message}`);
     }
   }
@@ -99,7 +99,7 @@ class QualityGateChecker {
     try {
       const reportData = fs.readFileSync(reportPath, 'utf8');
       report = JSON.parse(reportData);
-    } catch (error) {
+    } catch (_error) {
       this.logError(`❌ Failed to load report: ${error.message}`);
       return this.createResult(false, [], `Failed to load report: ${error.message}`);
     }
@@ -132,7 +132,7 @@ class QualityGateChecker {
       }
 
       return this.evaluateReport(latestReport.full_report);
-    } catch (error) {
+    } catch (_error) {
       this.logError(`❌ Database connection error: ${error.message}`);
       return this.createResult(false, [], `Database connection error: ${error.message}`);
     }
@@ -348,7 +348,7 @@ class QualityGateChecker {
       } else {
         this.log('info', `💾 Stored ${gateRecords.length} quality gate results`);
       }
-    } catch (error) {
+    } catch (_error) {
       this.log('warn', `⚠️ Error storing quality gate results: ${error.message}`);
     }
   }
@@ -474,7 +474,7 @@ async function main() {
       process.exit(exitCode);
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Quality gate checker error:', error.message);
     if (options.exitOnFailure) {
       process.exit(1);

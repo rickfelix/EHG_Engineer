@@ -160,7 +160,7 @@ async function main() {
       }
     };
 
-    const { data: prd, error: prdError } = await supabase
+    const { data: _prd, error: prdError } = await supabase
       .from('product_requirements_v2')
       .insert(prdData)
       .select()
@@ -267,7 +267,7 @@ async function main() {
     ];
 
     for (const handoff of handoffs) {
-      const { data: created, error: handoffError } = await supabase
+      const { data: _created, error: handoffError } = await supabase
         .from('sd_phase_handoffs')
         .insert(handoff)
         .select()
@@ -317,7 +317,7 @@ async function main() {
     console.log('');
     console.log('✨ SD-STAGE-08-001 is now LEO Protocol compliant!');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Remediation failed:', error.message);
     console.error(error);
     process.exit(1);

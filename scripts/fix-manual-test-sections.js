@@ -39,7 +39,7 @@ async function fixSections() {
   let errorCount = 0;
 
   for (const [testId, section] of Object.entries(sectionMappings)) {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('uat_cases')
       .update({ section })
       .eq('id', testId)

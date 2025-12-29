@@ -267,7 +267,7 @@ async function main() {
   }
 }
 
-main().catch(err => {
+main().catch(_err => {
   console.error('\n❌ Script ended with errors');
   console.error('   See details above for next steps\n');
   process.exit(1);

@@ -211,7 +211,7 @@ async function applyMigration(client, migration, dryRun = false) {
   try {
     // Check if file exists
     await fs.access(migrationPath);
-  } catch (error) {
+  } catch (_error) {
     throw new Error(`Migration file not found: ${migrationPath}`);
   }
 

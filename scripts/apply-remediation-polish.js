@@ -30,7 +30,7 @@ async function testPolishMigration() {
   try {
     // Read the polish migration SQL
     const sqlPath = path.join(__dirname, '..', 'database', 'migrations', '015_leo_gap_remediation_polish.sql');
-    const sql = await fs.readFile(sqlPath, 'utf-8');
+    const _sql = await fs.readFile(sqlPath, 'utf-8');
 
     console.log('📝 Polish improvements include:');
     console.log('  1. Gate 3 as single source of EXEC authorization');

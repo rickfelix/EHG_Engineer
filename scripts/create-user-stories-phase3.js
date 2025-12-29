@@ -197,7 +197,7 @@ async function main() {
     let errorCount = 0;
 
     for (const story of stories) {
-      const { data, error} = await supabase
+      const { data: _data, error} = await supabase
         .from('user_stories')
         .insert({
           sd_id: sd.id,

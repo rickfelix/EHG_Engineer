@@ -40,7 +40,7 @@ async function applyMigration() {
     const sql = readFileSync('supabase/migrations/010_add_anon_select_system_health.sql', 'utf8');
 
     // Split into statements
-    const statements = sql
+    const _statements = sql
       .split(';')
       .map(s => s.trim())
       .filter(s => s.length > 0 && !s.startsWith('--'));

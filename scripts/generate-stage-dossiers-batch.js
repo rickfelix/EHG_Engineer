@@ -124,7 +124,7 @@ Step-by-step Standard Operating Procedures for executing Stage ${stage.id} (${st
 **Automation Level**: ${stage.automationLevel}/5
 **Expected Duration**: ${stage.automationLevel === 5 ? '1-2 hours (automated)' : '4-12 hours (manual/assisted)'}
 
-${stage.substages.map((sub, idx) => `
+${stage.substages.map((sub, _idx) => `
 ### Substage ${sub.id}: ${sub.title}
 
 **Done When**:
@@ -196,7 +196,7 @@ function generateFile07_Recursion(stage) {
 **Critique Recursion Section**: DOES NOT EXIST
 **Evidence**: EHG_Engineer@${COMMIT_HASH}:docs/workflow/critique/stage-${stage.id}.md:${stage.critiqueLines}
 
-${stage.triggers.map((trigger, idx) => `
+${stage.triggers.map((trigger, _idx) => `
 ### Trigger ${trigger}
 
 **Condition**: [Define trigger condition]

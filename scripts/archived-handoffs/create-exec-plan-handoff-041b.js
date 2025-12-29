@@ -180,7 +180,7 @@ async function createHandoff() {
   };
 
   // Try to store in handoff_tracking table first
-  const { data: checkTable, error: tableError } = await supabase
+  const { data: _checkTable, error: tableError } = await supabase
     .from('handoff_tracking')
     .select('id')
     .limit(1);

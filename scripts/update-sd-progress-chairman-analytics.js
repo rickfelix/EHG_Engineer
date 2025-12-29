@@ -28,7 +28,7 @@ async function updateSDProgress() {
     console.log(`📈 New Progress: ${newProgress}%`);
     console.log(`🔄 New Phase: ${newPhase}`);
 
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .update({
         progress_percentage: newProgress,
@@ -65,7 +65,7 @@ async function updateSDProgress() {
     console.log('   ✅ Navigation link now visible to all users');
     console.log('   ⏭️  Next: PLAN verification (E2E test + QA review)');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ UNEXPECTED ERROR:', error);
     process.exit(1);
   }

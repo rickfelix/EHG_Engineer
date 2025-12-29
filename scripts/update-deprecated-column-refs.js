@@ -35,7 +35,7 @@ const replacements = [
 ];
 
 async function fetchSection(id) {
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('leo_protocol_sections')
     .select('id, section_type, title, content')
     .eq('id', id)

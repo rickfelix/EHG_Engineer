@@ -10,7 +10,7 @@ import * as path from 'path';
  * Lint OpenAPI specification
  * Returns true if valid, false if invalid or linter not available
  */
-export async function lintOpenAPI(spec: any): Promise<boolean> {
+export async function lintOpenAPI(spec: Record<string, unknown>): Promise<boolean> {
   try {
     // Check if swagger-cli is available
     execSync('npx @apidevtools/swagger-cli --version', { stdio: 'ignore' });
@@ -41,7 +41,7 @@ export async function lintOpenAPI(spec: any): Promise<boolean> {
 /**
  * Check if all required test matrices are present
  */
-export function hasAllTestMatrices(matrices: any, required: string[]): boolean {
+export function hasAllTestMatrices(matrices: Record<string, unknown> | null | undefined, required: string[]): boolean {
   if (!matrices || typeof matrices !== 'object') return false;
   
   for (const matrix of required) {
@@ -57,7 +57,7 @@ export function hasAllTestMatrices(matrices: any, required: string[]): boolean {
 /**
  * Check if security scan results are clean
  */
-export function isSecurityScanClean(results: any): boolean {
+export function isSecurityScanClean(results: { owasp?: string; csp?: string } | null | undefined): boolean {
   if (!results) return false;
   
   // Check OWASP status
@@ -129,11 +129,11 @@ export function meetsA11yLevel(actual: string | undefined, required: string): bo
 /**
  * Parse JSON safely
  */
-export function safeJsonParse(data: any): any {
-  if (typeof data === 'object') return data;
-  
+export function safeJsonParse(data: unknown): Record<string, unknown> | null {
+  if (typeof data === 'object' && data !== null) return data as Record<string, unknown>;
+
   try {
-    return JSON.parse(data);
+    return JSON.parse(data as string);
   } catch {
     return null;
   }

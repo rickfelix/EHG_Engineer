@@ -312,7 +312,7 @@ async function executeInsert() {
                 .single();
             
             // Upsert with conflict handling
-            const { data, error } = await supabase
+            const { error } = await supabase
                 .from('sd_backlog_map')
                 .upsert(item, {
                     onConflict: 'sd_id,backlog_id',

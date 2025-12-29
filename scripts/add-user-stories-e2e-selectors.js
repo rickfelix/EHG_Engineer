@@ -56,7 +56,7 @@ const userStories = [
 async function addUserStories() {
   console.log('📋 Adding 3 User Stories to PRD-SD-2025-1020-E2E-SELECTORS metadata...\n');
 
-  const { data: updated, error } = await supabase
+  const { data: _updated, error } = await supabase
     .from('product_requirements_v2')
     .update({
       metadata: {

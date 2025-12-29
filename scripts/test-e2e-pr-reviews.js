@@ -40,7 +40,7 @@ async function testInfrastructure() {
     const response = await fetch('http://localhost:3000/api/health');
     TEST_RESULTS.infrastructure.serverRunning = response.ok;
     console.log('✅ Server running on port 3000');
-  } catch (error) {
+  } catch (_error) {
     TEST_RESULTS.infrastructure.serverRunning = false;
     console.log(`❌ Server not accessible: ${error.message}`);
   }
@@ -79,7 +79,7 @@ async function testDatabase() {
 
   // Test tables exist
   try {
-    const { data: reviews } = await dbLoader.supabase
+    const { data: _reviews } = await dbLoader.supabase
       .from('agentic_reviews')
       .select('count');
     TEST_RESULTS.database.agenticReviewsTable = true;
@@ -90,7 +90,7 @@ async function testDatabase() {
   }
 
   try {
-    const { data: metrics } = await dbLoader.supabase
+    const { data: _metrics } = await dbLoader.supabase
       .from('pr_metrics')
       .select('count');
     TEST_RESULTS.database.prMetricsTable = true;
@@ -120,7 +120,7 @@ async function testDatabase() {
       .from('agentic_reviews')
       .delete()
       .eq('pr_number', 999);
-  } catch (error) {
+  } catch (_error) {
     TEST_RESULTS.database.insertCapability = false;
     console.log('❌ Database insert failed:', error.message);
   }
@@ -130,7 +130,7 @@ async function testDatabase() {
     const metrics = await dbLoader.calculatePRMetrics();
     TEST_RESULTS.database.metricsCalculation = !!metrics;
     console.log('✅ Metrics calculation working');
-  } catch (error) {
+  } catch (_error) {
     TEST_RESULTS.database.metricsCalculation = false;
     console.log('❌ Metrics calculation failed:', error.message);
   }
@@ -148,7 +148,7 @@ async function testAPI() {
     const data = await response.json();
     TEST_RESULTS.api.prReviewsEndpoint = response.ok && Array.isArray(data);
     console.log(`✅ /api/pr-reviews returns ${data.length} reviews`);
-  } catch (error) {
+  } catch (_error) {
     TEST_RESULTS.api.prReviewsEndpoint = false;
     console.log('❌ /api/pr-reviews failed:', error.message);
   }
@@ -159,7 +159,7 @@ async function testAPI() {
     const data = await response.json();
     TEST_RESULTS.api.metricsEndpoint = response.ok && data.hasOwnProperty('passRate');
     console.log(`✅ /api/pr-reviews/metrics returns metrics (Pass rate: ${data.passRate}%)`);
-  } catch (error) {
+  } catch (_error) {
     TEST_RESULTS.api.metricsEndpoint = false;
     console.log('❌ /api/pr-reviews/metrics failed:', error.message);
   }
@@ -174,7 +174,7 @@ async function testAPI() {
     // Webhook should return 200 OK or 400 Bad Request (both mean it exists)
     TEST_RESULTS.api.webhookEndpoint = response.status === 200 || response.status === 400;
     console.log(TEST_RESULTS.api.webhookEndpoint ? '✅ GitHub webhook endpoint exists' : '❌ Webhook endpoint missing');
-  } catch (error) {
+  } catch (_error) {
     TEST_RESULTS.api.webhookEndpoint = false;
     console.log('❌ Webhook endpoint failed:', error.message);
   }
@@ -229,7 +229,7 @@ async function testUI() {
     TEST_RESULTS.ui.dataDisplays = await passRateElement.isVisible();
     console.log(TEST_RESULTS.ui.dataDisplays ? '✅ Data displays correctly' : '❌ Data not displaying');
 
-  } catch (error) {
+  } catch (_error) {
     console.log('❌ UI test error:', error.message);
     TEST_RESULTS.ui.error = error.message;
   } finally {
@@ -354,7 +354,7 @@ async function testIntegration() {
     TEST_RESULTS.integration.completeFlow = true;
     console.log('✅ Complete integration flow working');
 
-  } catch (error) {
+  } catch (_error) {
     TEST_RESULTS.integration.error = error.message;
     console.log('❌ Integration test failed:', error.message);
   }

@@ -83,7 +83,7 @@ async function updateSDContent() {
 
   console.log('📋 Updating SD-2025-01-15-A with full content...\n');
 
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('strategic_directives_v2')
     .update(sdData)
     .eq('id', 'SD-2025-01-15-A')

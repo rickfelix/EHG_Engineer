@@ -76,7 +76,7 @@ async function testCheckboxPersistence() {
       console.log('\n❌ No checkbox states are being saved');
     }
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Test failed:', error.message);
     process.exit(1);
   }

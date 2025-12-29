@@ -133,7 +133,7 @@ function processFile(filePath) {
 
   while ((match = buttonPattern.exec(content)) !== null) {
     const fullMatch = match[0];
-    const props = match[1];
+    const _matchedProps = match[1];
 
     // Get surrounding context (100 chars before and after)
     const startIdx = Math.max(0, match.index - 100);

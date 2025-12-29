@@ -182,7 +182,7 @@ export async function checkSDCanComplete(sdId) {
  * @param {Object} options - Validation options
  * @returns {Promise<Object>} Full validation result
  */
-export async function validateSDContractCompliance(sdId, prd = null, options = {}) {
+export async function validateSDContractCompliance(sdId, prd = null, _options = {}) {
   console.log(`\n📜 Contract Compliance Validation for ${sdId}`);
   console.log('-'.repeat(50));
 

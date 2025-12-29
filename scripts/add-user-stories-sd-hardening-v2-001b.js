@@ -1279,7 +1279,7 @@ async function addUserStories() {
           sd_id: sdUuid  // Replace string SD_ID with actual UUID
         };
 
-        const { data, error } = await supabase
+        const { data: _data, error } = await supabase
           .from('user_stories')
           .insert(storyWithUuid)
           .select()

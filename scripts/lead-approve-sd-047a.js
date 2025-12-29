@@ -18,7 +18,7 @@ const supabase = createClient(
 async function approveSD() {
   console.log('📋 LEAD Approval: SD-047A Venture Timeline Tab\n');
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('strategic_directives_v2')
     .update({
       status: 'active',

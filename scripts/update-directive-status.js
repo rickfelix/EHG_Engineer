@@ -89,7 +89,7 @@ Date: ${new Date().toISOString().split('T')[0]}
       console.log(`📄 Verification evidence saved to: ${verificationPath}`);
     }
     
-  } catch (error) {
+  } catch (_error) {
     console.error('Error updating directive status:', error);
     process.exit(1);
   }

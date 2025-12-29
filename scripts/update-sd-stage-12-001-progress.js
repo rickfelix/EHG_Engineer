@@ -77,7 +77,7 @@ async function updateProgress() {
       console.log(`   SD: ${sdProgress.id} - ${sdProgress.title}`);
     }
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Unexpected error:', err);
     process.exit(1);
   }

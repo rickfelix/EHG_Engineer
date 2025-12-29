@@ -108,7 +108,7 @@ async function updateSection() {
   console.log('📝 Updating Quick Fix Rubric with SD Type Awareness...\n');
 
   // Update the section
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('leo_protocol_sections')
     .update({
       content: UPDATED_CONTENT,

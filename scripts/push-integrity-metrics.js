@@ -121,7 +121,7 @@ class IntegrityMetricsPusher {
       }
       
       return recommendations;
-    } catch (error) {
+    } catch (_error) {
       console.error('Error parsing recommendations:', error.message);
       return [];
     }
@@ -199,7 +199,7 @@ class IntegrityMetricsPusher {
     if (this.options.recommendations && typeof this.options.recommendations === 'string') {
       try {
         topRecommendations = JSON.parse(this.options.recommendations);
-      } catch (e) {
+      } catch (_e) {
         console.error('⚠️  Could not parse recommendations JSON');
       }
     }

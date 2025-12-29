@@ -43,10 +43,10 @@ async function analyzePrompt(prompt) {
       const { execSync } = await import('child_process');
       const branch = execSync('git branch --show-current', { encoding: 'utf8' }).trim();
       context.git_branch = branch;
-    } catch (e) {}
-    
+    } catch (_e) {}
+
     // Analyze with context monitor
-    const contextAnalysis = await contextMonitor.analyzeContext(prompt, context);
+    const _contextAnalysis = await contextMonitor.analyzeContext(prompt, context);
     
     // Get sub-agent selection
     const selection = await autoSelector.processUserInput(prompt, context);

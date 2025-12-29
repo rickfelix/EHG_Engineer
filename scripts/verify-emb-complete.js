@@ -24,7 +24,7 @@ async function verifyComplete() {
   try {
     // 1. Check Strategic Directive
     console.log('\n1️⃣ Strategic Directive (strategic_directives_v2):');
-    const { data: sd, error: sdError } = await supabase
+    const { data: sd, error: _sdError } = await supabase
       .from('strategic_directives_v2')
       .select('*')
       .eq('id', 'SD-2025-09-EMB')
@@ -44,7 +44,7 @@ async function verifyComplete() {
 
     // 2. Check PRD
     console.log('\n2️⃣ Product Requirements Document (product_requirements_v2):');
-    const { data: prd, error: prdError } = await supabase
+    const { data: prd, error: _prdError } = await supabase
       .from('product_requirements_v2')
       .select('*')
       .eq('directive_id', 'SD-2025-09-EMB')
@@ -63,7 +63,7 @@ async function verifyComplete() {
 
     // 3. Check Backlog Items
     console.log('\n3️⃣ Backlog Items (sd_backlog_map):');
-    const { data: backlog, error: backlogError, count } = await supabase
+    const { data: backlog, error: _backlogError, count: _count } = await supabase
       .from('sd_backlog_map')
       .select('*', { count: 'exact' })
       .eq('sd_id', 'SD-2025-09-EMB')
@@ -164,8 +164,8 @@ async function verifyComplete() {
     console.log('🎯 Target System: EHG Application (40-stage venture workflow)');
     console.log('📝 Governance: All artifacts stored in EHG_Engineer database');
 
-  } catch (error) {
-    console.error('❌ Verification error:', error);
+  } catch (err) {
+    console.error('❌ Verification error:', err);
   }
 }
 

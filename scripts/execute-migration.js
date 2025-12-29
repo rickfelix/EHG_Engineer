@@ -199,7 +199,7 @@ async function executeMigration(dryRun = true) {
         console.log(chalk.gray('      📋 Would migrate to template'));
       }
 
-    } catch (error) {
+    } catch (_error) {
       skippedCount++;
       console.log(chalk.gray(`   ⏭️  Skipping ${scriptName} (not found)`));
     }
@@ -233,7 +233,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const isExecute = process.argv.includes('--execute');
 
   executeMigration(!isExecute)
-    .then(result => {
+    .then(_result => {
       console.log(chalk.green.bold('\n🎉 Migration process complete!'));
     })
     .catch(error => {

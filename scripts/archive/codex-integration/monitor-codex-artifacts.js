@@ -27,7 +27,7 @@ try {
   const files = fs.readdirSync(ARTIFACT_DIR);
   files.forEach(f => knownFiles.add(f));
   console.log(chalk.gray(`Found ${knownFiles.size} existing artifacts`));
-} catch (error) {
+} catch (_error) {
   console.log(chalk.yellow('Creating artifact directory...'));
   fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
 }
@@ -65,7 +65,7 @@ function checkForNewArtifacts() {
           try {
             execSync(`node scripts/validate-codex-output.js ${manifest}`, { stdio: 'inherit' });
             console.log(chalk.green('✅ Validation passed!'));
-          } catch (error) {
+          } catch (_error) {
             console.log(chalk.red('❌ Validation failed. Check the artifacts.'));
           }
 

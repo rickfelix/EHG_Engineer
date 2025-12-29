@@ -4,8 +4,10 @@
  * Comprehensive performance analysis and testing
  */
 
-import { createClient } from '@supabase/supabase-js';
-import WebSocket from 'ws';
+// createClient - available for future database integration
+import { createClient as _createClient } from '@supabase/supabase-js';
+// WebSocket - available for future real-time benchmarking
+import WebSocket from 'ws'; // eslint-disable-line no-unused-vars
 import EventEmitter from 'events';
 
 class PerformanceBenchmark extends EventEmitter {
@@ -53,7 +55,7 @@ class PerformanceBenchmark extends EventEmitter {
         const end = process.hrtime.bigint();
         const latencyMs = Number(end - start) / 1000000;
         measurements.push(latencyMs);
-      } catch (error) {
+      } catch (_error) {
         this.results.errors.push({
           test: name,
           iteration: i,
@@ -111,7 +113,7 @@ class PerformanceBenchmark extends EventEmitter {
 
   async testFunctionExecution() {
     // Simulate portfolio query function
-    const queryTypes = ['holdings', 'performance', 'allocation'];
+    const _queryTypes = ['holdings', 'performance', 'allocation'];
     const complexityDelay = Math.random() * 200 + 50; // 50-250ms
     
     await this.delay(complexityDelay);
@@ -173,7 +175,7 @@ class PerformanceBenchmark extends EventEmitter {
     };
   }
 
-  async simulateUserSession(userId) {
+  async simulateUserSession(_userId) {
     // Simulate full voice session
     await this.testTokenGeneration();
     await this.testWebRTCConnection();
@@ -199,7 +201,7 @@ class PerformanceBenchmark extends EventEmitter {
   async benchmarkResources() {
     console.log('📊 Running Resource Utilization Analysis...\n');
     
-    const baseline = this.measureResources();
+    const _baseline = this.measureResources();
     
     // Test under different loads
     const loadTests = [
@@ -539,14 +541,14 @@ class PerformanceBenchmark extends EventEmitter {
       
       return assessment;
       
-    } catch (error) {
+    } catch (_error) {
       console.error('❌ Benchmark failed:', error);
       throw error;
     }
   }
 
   async saveResults() {
-    const report = {
+    const _report = {
       timestamp: new Date().toISOString(),
       suite: 'SD-2025-001 Performance Benchmark',
       results: {

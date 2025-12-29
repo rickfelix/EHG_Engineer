@@ -36,7 +36,7 @@ async function runMigration() {
 
     // Execute migration
     console.log('⏳ Executing migration...');
-    const { data, error } = await supabase.rpc('exec_sql', {
+    const { data: _data, error } = await supabase.rpc('exec_sql', {
       sql: migrationSQL
     });
 
@@ -81,7 +81,7 @@ async function runMigration() {
     console.log('   - Functions: 1 (cleanup_expired_tech_stack_references)');
     console.log('\n🎯 Database ready for knowledge retrieval pipeline');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Unexpected error:', error.message);
     console.error('Full error:', error);
     process.exit(1);

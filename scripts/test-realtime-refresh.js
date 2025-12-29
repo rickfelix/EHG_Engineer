@@ -1,11 +1,11 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// import path from 'path'; // Unused
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -81,7 +81,7 @@ async function testRealTimeRefresh() {
     console.log('  ✅ Checklist item updates');
     console.log('  ✅ Real-time collaboration between users');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Real-time test failed:', err.message);
   }
 }

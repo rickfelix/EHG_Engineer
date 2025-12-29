@@ -47,7 +47,7 @@ async function acceptHandoffVwcA11y001() {
   }
 
   // Accept the handoff via RPC function
-  const { data, error } = await supabase.rpc('accept_phase_handoff', {
+  const { data: _data, error } = await supabase.rpc('accept_phase_handoff', {
     handoff_id_param: handoff.id
   });
 

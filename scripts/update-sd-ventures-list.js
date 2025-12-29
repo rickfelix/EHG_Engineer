@@ -81,7 +81,7 @@ async function updateSD() {
   console.log('📋 Updating SD-2025-09-11: Ventures List Consolidated\n');
   console.log('🎯 LEAD Simplicity-First Restructuring Applied\n');
 
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('strategic_directives_v2')
     .update(updatedSD)
     .eq('sd_key', 'SD-2025-09-11-ventures-list-consolidated')

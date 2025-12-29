@@ -19,7 +19,7 @@ async function seedDirect() {
   console.log('🌱 Testing direct insert...\n');
 
   // First check if table is accessible
-  const { data: existing, error: checkError } = await supabase
+  const { data: _existing, error: checkError } = await supabase
     .from('uat_cases')
     .select('id')
     .limit(1);

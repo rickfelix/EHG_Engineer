@@ -29,7 +29,7 @@ async function createTables() {
 
     try {
       // Create table using RPC function if it exists
-      const { data, error } = await supabaseAdmin.rpc('execute_sql', {
+      const { data: _data, error } = await supabaseAdmin.rpc('execute_sql', {
         sql: `
           CREATE TABLE IF NOT EXISTS sd_execution_timeline (
             id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -52,7 +52,7 @@ async function createTables() {
         console.log('✅ Table created via RPC!');
         return;
       }
-    } catch (e) {
+    } catch (_e) {
       console.log('RPC method not available');
     }
   }
@@ -110,7 +110,7 @@ async function createTables() {
     console.log('   This will serve as our timeline storage until table is created\n');
 
     // Initialize timeline structure for SD-INFRA-EXCELLENCE-001
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .update({
         metadata: {

@@ -408,7 +408,7 @@ async function enhanceSubAgents() {
       capabilities: enhancement.capabilities
     };
 
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('leo_sub_agents')
       .update(updates)
       .eq('code', code)

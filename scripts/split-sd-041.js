@@ -116,7 +116,7 @@ async function splitSD041() {
     }
   };
 
-  const { data: sd041AData, error: sd041AError } = await supabase
+  const { data: _sd041AData, error: sd041AError } = await supabase
     .from('strategic_directives_v2')
     .insert(sd041A)
     .select()
@@ -195,7 +195,7 @@ async function splitSD041() {
     }
   };
 
-  const { data: sd041BData, error: sd041BError } = await supabase
+  const { data: _sd041BData, error: sd041BError } = await supabase
     .from('strategic_directives_v2')
     .insert(sd041B)
     .select()
@@ -275,7 +275,7 @@ async function splitSD041() {
     }
   };
 
-  const { data: sd041CData, error: sd041CError } = await supabase
+  const { data: _sd041CData, error: sd041CError } = await supabase
     .from('strategic_directives_v2')
     .insert(sd041C)
     .select()

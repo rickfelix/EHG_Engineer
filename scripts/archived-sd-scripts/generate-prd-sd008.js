@@ -216,7 +216,7 @@ async function generatePRDForSD008() {
 
 // Execute
 generatePRDForSD008()
-  .then(prd => {
+  .then(_prd => {
     console.log('\n📋 Next Steps:');
     console.log('1. Review PRD for completeness');
     console.log('2. Create PLAN→EXEC handoff');

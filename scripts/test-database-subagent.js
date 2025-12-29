@@ -40,7 +40,7 @@ async function testDatabase() {
     fs.writeFileSync(reportPath, JSON.stringify(results, null, 2));
     console.log(`\n💾 Full report saved to: ${reportPath}`);
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error during database analysis:', error.message);
     console.error(error.stack);
   }

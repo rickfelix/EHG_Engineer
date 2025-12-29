@@ -1,11 +1,11 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// import path from 'path'; // Unused
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -21,7 +21,7 @@ async function updateExecProgress() {
     const prdId = 'PRD-SD-DASHBOARD-UI-2025-08-31-A';
     
     // Update PRD with EXEC progress
-    const { data: prdUpdate, error: prdError } = await supabase
+    const { data: _prdUpdate, error: prdError } = await supabase
       .from('product_requirements_v2')
       .update({
         exec_checklist: [
@@ -65,12 +65,12 @@ async function updateExecProgress() {
     }
 
     // Update SD to reflect EXEC progress
-    const { data: sdUpdate, error: sdError } = await supabase
+    const { data: _sdUpdate, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .update({
         metadata: {
           lead_status: 'complete',
-          plan_status: 'complete', 
+          plan_status: 'complete',
           exec_status: 'in_progress',
           phase_progress: {
             LEAD: 100,
@@ -118,7 +118,7 @@ async function updateExecProgress() {
     console.log('  3. Add sidebar collapse persistence');
     console.log('  4. Continue with remaining checklist items');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('Failed to update EXEC progress:', err.message);
   }
 }

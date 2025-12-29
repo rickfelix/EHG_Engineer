@@ -65,7 +65,7 @@ async function main() {
 
   // Verify connection
   console.log('\n🔍 Verifying database connection...');
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('leo_sub_agents')
     .select('code')
     .limit(1);

@@ -8,7 +8,7 @@
 import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
+import _crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import DualLaneController from './dual-lane-controller.js';
 
@@ -313,7 +313,7 @@ class CodexRealExecutionTester {
       proc.stdout.on('data', (data) => output += data);
       proc.stderr.on('data', (data) => output += data);
 
-      proc.on('close', (code) => {
+      proc.on('close', (_code) => {
         resolve(output);
       });
 

@@ -85,7 +85,7 @@ async function markSD046Completed() {
     console.log('\n🎯 Business Impact: HIGH - Enhanced pricing intelligence delivered');
     console.log('🚀 Status: Production-ready and fully operational');
 
-  } catch (error) {
+  } catch (_error) {
     console.log('⚠️  Proceeding with completion status (database update skipped)');
     console.log('SD-046 is functionally 100% complete regardless of database status');
   }

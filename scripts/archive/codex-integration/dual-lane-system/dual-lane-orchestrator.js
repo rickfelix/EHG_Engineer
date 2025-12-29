@@ -10,7 +10,7 @@ import DualLaneController from './dual-lane-controller.js';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import fs from 'fs';
-import path from 'path';
+import _path from 'path';
 
 dotenv.config();
 
@@ -135,7 +135,7 @@ class DualLaneOrchestrator {
       }
 
       return data;
-    } catch (err) {
+    } catch (_err) {
       return null;
     }
   }
@@ -163,7 +163,7 @@ class DualLaneOrchestrator {
       } else {
         console.log('✅ Handoff recorded in database');
       }
-    } catch (err) {
+    } catch (_err) {
       console.warn('Database unavailable, handoff logged locally');
     }
 
@@ -191,7 +191,7 @@ class DualLaneOrchestrator {
       } else {
         console.log('✅ Progress updated in database');
       }
-    } catch (err) {
+    } catch (_err) {
       console.warn('Database unavailable, progress logged locally');
     }
   }

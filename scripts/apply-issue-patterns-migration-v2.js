@@ -202,7 +202,7 @@ async function applyMigration() {
     try {
       await client.end();
       console.log('👋 Connection closed\n');
-    } catch (e) {
+    } catch (_e) {
       // Ignore close errors
     }
   }

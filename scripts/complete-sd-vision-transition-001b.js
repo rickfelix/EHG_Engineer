@@ -35,7 +35,7 @@ async function main() {
     await supabase.rpc('exec_sql', {
       sql: 'ALTER TABLE strategic_directives_v2 DISABLE TRIGGER enforce_sd_completion_protocol;'
     });
-  } catch (e) {
+  } catch (_e) {
     console.log('   (RPC not available, may need manual trigger disable)');
   }
 
@@ -79,7 +79,7 @@ async function main() {
     await supabase.rpc('exec_sql', {
       sql: 'ALTER TABLE strategic_directives_v2 ENABLE TRIGGER enforce_sd_completion_protocol;'
     });
-  } catch (e) {
+  } catch (_e) {
     // Ignore
   }
 

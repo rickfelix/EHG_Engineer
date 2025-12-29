@@ -34,7 +34,7 @@ async function addStatusFieldSafe() {
       
       // Just update existing records to have proper status
       console.log('🔄 Updating existing records with proper status...');
-      const { data: updatedCount, error: updateError } = await supabase
+      const { data: _updatedCount, error: updateError } = await supabase
         .from('sdip_submissions')
         .update({
           status: 'draft'

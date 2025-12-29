@@ -40,7 +40,7 @@ async function archiveCompletedSDs() {
       console.log(`  Current status: ${currentSD.status}, Progress: ${currentSD.progress}%`);
 
       // Update status to completed
-      const { data: updated, error: updateError } = await supabase
+      const { data: _updated, error: updateError } = await supabase
         .from('strategic_directives_v2')
         .update({
           status: 'completed',
@@ -61,7 +61,7 @@ async function archiveCompletedSDs() {
 
     // Verify all updates
     for (const id of sdIds) {
-      const { data, error } = await supabase
+      const { data, error: _error } = await supabase
         .from('strategic_directives_v2')
         .select('id, title, status, progress, metadata')
         .eq('id', id)

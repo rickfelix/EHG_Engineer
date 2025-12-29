@@ -86,7 +86,7 @@ async function testStep7Workflow() {
     console.log('\n' + '=' .repeat(50));
     console.log('🎉 Step 7 Workflow Test Complete!');
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Test failed:', error.message);
     process.exit(1);
   }

@@ -50,11 +50,11 @@ async function setupPRDDatabase() {
   
   // Try to check if table exists
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('product_requirements_v2')
       .select('id')
       .limit(1);
-    
+
     if (error) {
       if (error.message.includes('table') || error.message.includes('relation')) {
         console.log('\n⚠️  Table does not exist yet - please create it using the SQL above');
@@ -64,7 +64,7 @@ async function setupPRDDatabase() {
     } else {
       console.log('\n✅ Table product_requirements_v2 exists!');
     }
-  } catch (err) {
+  } catch (_err) {
     console.error('\n❌ Error:', err.message);
   }
 }

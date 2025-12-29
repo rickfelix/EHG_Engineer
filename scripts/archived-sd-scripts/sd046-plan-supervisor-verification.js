@@ -18,7 +18,7 @@ dotenv.config({ path: join(__dirname, '..', '.env') });
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const _supabase = createClient(supabaseUrl, supabaseKey);
 
 async function conductPLANSupervisorVerification() {
   console.log('🔍 PLAN SUPERVISOR VERIFICATION');
@@ -187,7 +187,7 @@ async function conductPLANSupervisorVerification() {
 
   // Calculate Overall Metrics
   const totalSubAgents = Object.keys(subAgentVerifications).length;
-  const passingAgents = Object.values(subAgentVerifications).filter(a => a.status === 'PASS').length;
+  const _passingAgents = Object.values(subAgentVerifications).filter(a => a.status === 'PASS').length;
   const conditionalAgents = Object.values(subAgentVerifications).filter(a => a.status === 'CONDITIONAL_PASS').length;
   const failingAgents = Object.values(subAgentVerifications).filter(a => a.status === 'FAIL').length;
 

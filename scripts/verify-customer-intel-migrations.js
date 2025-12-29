@@ -199,7 +199,7 @@ async function verifyMigrations() {
 
     console.log('\n═══════════════════════════════════════════════════════════════');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ ERROR:', error.message);
     console.error('Stack:', error.stack);
     process.exit(1);

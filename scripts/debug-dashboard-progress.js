@@ -1,11 +1,13 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// fileURLToPath and dirname kept for potential future module path resolution
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// path import kept for potential future file operations
+// import path from 'path';
 import dotenv from 'dotenv';
 dotenv.config();
 import ProgressCalculator from '../lib/dashboard/progress-calculator';

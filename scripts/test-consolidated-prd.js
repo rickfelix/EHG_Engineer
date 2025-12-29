@@ -94,7 +94,7 @@ async function testPRDGeneration() {
 
     console.log(chalk.green('\n✅ Test completed successfully!'));
 
-  } catch (error) {
+  } catch (_error) {
     console.error(chalk.red('\n❌ Test failed:'), error.message);
     console.error(error);
   }

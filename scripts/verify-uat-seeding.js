@@ -99,7 +99,7 @@ async function verifyUATData() {
       console.log('Run: node scripts/execute-database-sql.js database/migrations/seed-uat-test-cases.sql');
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error:', error.message);
   } finally {
     await client.end();

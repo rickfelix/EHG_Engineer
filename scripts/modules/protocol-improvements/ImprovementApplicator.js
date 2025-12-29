@@ -472,12 +472,12 @@ export class ImprovementApplicator {
     };
   }
 
-  async _applyWorkflowPhase(improvement) {
+  async _applyWorkflowPhase(_improvement) {
     // Update workflow phase configuration
     throw new Error('Workflow phase improvements require manual application (too risky for auto-apply)');
   }
 
-  async _applyHandoffTemplate(improvement) {
+  async _applyHandoffTemplate(_improvement) {
     // Update handoff template
     throw new Error('Handoff template improvements require manual application (structural changes)');
   }

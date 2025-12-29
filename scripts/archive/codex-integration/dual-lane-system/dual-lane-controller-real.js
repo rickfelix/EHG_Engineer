@@ -219,7 +219,7 @@ Remember: You are Codex. Generate the changes, don't apply them.`;
             try {
               const result = JSON.parse(output);
               resolve(result);
-            } catch (e) {
+            } catch (_e) {
               // If not JSON, parse the output
               resolve(this.parseClaudeOutput(output));
             }

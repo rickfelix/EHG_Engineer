@@ -212,7 +212,7 @@ class UATIntelligentAgent {
     try {
       const reportData = fs.readFileSync(reportPath, 'utf8');
       report = JSON.parse(reportData);
-    } catch (error) {
+    } catch (_error) {
       throw new Error(`Failed to load report: ${error.message}`);
     }
 
@@ -401,7 +401,7 @@ class UATIntelligentAgent {
       });
 
       return trends;
-    } catch (error) {
+    } catch (_error) {
       console.warn(`⚠️ Could not analyze historical patterns: ${error.message}`);
       return { error: error.message };
     }
@@ -470,7 +470,7 @@ class UATIntelligentAgent {
         critical_issues_trend: this.calculateTrend(criticalIssues.reverse()), // Reverse for chronological order
         stability_score: this.calculateStabilityScore(passRates)
       };
-    } catch (error) {
+    } catch (_error) {
       return { error: error.message };
     }
   }
@@ -660,7 +660,7 @@ class UATIntelligentAgent {
       fs.writeFileSync(resultsPath, JSON.stringify(results, null, 2));
       console.log(`📄 Analysis saved to: ${resultsPath}`);
 
-    } catch (error) {
+    } catch (_error) {
       console.warn(`⚠️ Could not store analysis results: ${error.message}`);
     }
   }
@@ -729,7 +729,7 @@ async function main() {
     console.log('\n🎯 Intelligent analysis completed successfully!');
     console.log(`📋 ${results.recommendations.length} actionable recommendations generated`);
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Intelligent agent error:', error.message);
     process.exit(1);
   }

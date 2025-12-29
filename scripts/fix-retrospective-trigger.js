@@ -45,7 +45,7 @@ async function main() {
 
     // Split by statement (simple approach - split on semicolons outside of function definitions)
     // For this migration, we'll execute it as one block since it's wrapped in BEGIN/COMMIT
-    const { data, error } = await supabase.rpc('exec_sql', { sql_query: sql });
+    const { data: _data, error } = await supabase.rpc('exec_sql', { sql_query: sql });
 
     if (error) {
       // If exec_sql RPC doesn't exist, try direct execution via REST API

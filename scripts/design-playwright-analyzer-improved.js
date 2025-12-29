@@ -190,7 +190,7 @@ class ImprovedPlaywrightDesignAnalyzer {
         });
         
         results.darkModeActive = darkModeStyles;
-      } catch (error) {
+      } catch (_error) {
         console.log('⚠️  Could not test dark mode toggle');
       }
 

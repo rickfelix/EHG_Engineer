@@ -58,19 +58,19 @@ function displayBudgetStatus() {
     // Determine traffic light
     let light = '🟢 GREEN';
     let recommendation = 'Use models per assignment freely';
-    let lightEmoji = '🟢';
+    let _lightEmoji = '🟢';
 
     if (percentUsed >= 95) {
       light = '🔴 RED';
-      lightEmoji = '🔴';
+      _lightEmoji = '🔴';
       recommendation = 'Budget nearly exhausted. Pause work or prepare for overage.';
     } else if (percentUsed >= 85) {
       light = '🟠 ORANGE';
-      lightEmoji = '🟠';
+      _lightEmoji = '🟠';
       recommendation = 'Consider deferring non-critical SDs to next week.';
     } else if (percentUsed >= 70) {
       light = '🟡 YELLOW';
-      lightEmoji = '🟡';
+      _lightEmoji = '🟡';
       recommendation = 'Monitor burn rate. Upgrade models cautiously.';
     }
 
@@ -129,7 +129,7 @@ function displayBudgetStatus() {
 
     console.log('║                                                                ║');
     console.log('╚════════════════════════════════════════════════════════════════╝\n');
-  } catch (error) {
+  } catch (_error) {
     console.error(`❌ Error reading budget status: ${error.message}`);
     process.exit(1);
   }

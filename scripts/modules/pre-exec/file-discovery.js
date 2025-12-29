@@ -202,7 +202,7 @@ export class FileDiscoveryEngine {
             absolute: true
           });
           matches.forEach(m => files.add(m));
-        } catch (error) {
+        } catch (_error) {
           // Test files may not exist yet
         }
       }
@@ -234,7 +234,7 @@ export class FileDiscoveryEngine {
           absolute: true
         });
         matches.forEach(m => files.add(m));
-      } catch (error) {
+      } catch (_error) {
         // Config file may not exist
       }
     }

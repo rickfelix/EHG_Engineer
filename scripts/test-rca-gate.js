@@ -148,7 +148,7 @@ async function testRCAGate() {
     console.log('  ✅ Gate passing (with verified CAPA)');
     console.log('  ✅ Cleanup');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Test failed:', error.message);
     throw error;
   } finally {

@@ -299,7 +299,7 @@ class SubAgentActivationSystem {
    * Populate handoff template with specific data
    */
   populateHandoffTemplate(template, data) {
-    const { prdId, timestamp, activation, prdPath } = data;
+    const { prdId, timestamp, activation, prdPath: _prdPath } = data;
     
     // Standard replacements
     template = template.replace(/\[ISO Date\]/g, timestamp);

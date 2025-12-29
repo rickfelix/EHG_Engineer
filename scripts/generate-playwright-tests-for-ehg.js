@@ -60,7 +60,7 @@ const EHG_CONFIG = {
 };
 
 // Generate test for authentication module
-function generateAuthenticationTests(stories) {
+function generateAuthenticationTests(_stories) {
   const authTests = `import { test, expect } from '@playwright/test';
 import { EHG_CONFIG } from './config';
 

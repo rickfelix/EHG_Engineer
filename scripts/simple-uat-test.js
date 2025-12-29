@@ -61,7 +61,7 @@ async function runLoginTest() {
   console.log(chalk.cyan('═'.repeat(60)));
 
   // Wait for user to perform test
-  const ready = await ask(chalk.cyan('\nPress Enter when ready to perform the test...'));
+  const _ready = await ask(chalk.cyan('\nPress Enter when ready to perform the test...'));
 
   console.log(chalk.gray('\n⏱️  Please perform the test steps now...\n'));
 

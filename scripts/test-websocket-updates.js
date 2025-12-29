@@ -65,7 +65,7 @@ async function testWebSocketUpdates() {
           }
         }, 5000);
 
-      } catch (error) {
+      } catch (_error) {
         console.error('❌ Error inserting test review:', error);
         ws.close();
         reject(error);
@@ -95,7 +95,7 @@ async function testWebSocketUpdates() {
             resolve(true);
           }
         }
-      } catch (error) {
+      } catch (_error) {
         console.error('Error parsing message:', error);
       }
     });
@@ -131,7 +131,7 @@ async function main() {
       console.log('   - Check database connection');
       process.exit(1);
     }
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Test failed:', error);
     process.exit(1);
   }

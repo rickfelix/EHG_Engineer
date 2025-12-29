@@ -215,7 +215,7 @@ All schemas include proper indexes, RLS policies, and constraints aligned with c
   };
 
   // Update the strategic directive
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('strategic_directives_v2')
     .update(updatedSD)
     .eq('id', 'SD-DATA-001')

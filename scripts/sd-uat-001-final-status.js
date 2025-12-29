@@ -82,12 +82,12 @@ async function generateFinalReport() {
   let tablesReady = 0;
   for (const table of tables) {
     try {
-      const { count } = await supabase
+      const { count: _count } = await supabase
         .from(table)
         .select('*', { count: 'exact', head: true });
       console.log(`✅ ${table.padEnd(25)} Ready`);
       tablesReady++;
-    } catch (e) {
+    } catch (_e) {
       console.log(`❌ ${table.padEnd(25)} Not found`);
     }
   }
@@ -207,7 +207,7 @@ async function generateFinalReport() {
 
 // Execute
 generateFinalReport()
-  .then(result => {
+  .then(_result => {
     console.log('\n✨ Report generation complete');
     process.exit(0);
   })

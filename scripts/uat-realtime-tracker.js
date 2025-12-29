@@ -38,7 +38,7 @@ async function getTestProgress() {
       percentComplete: ((currentProgress / 1455) * 100).toFixed(1),
       passRate: currentProgress > 0 ? ((passed / currentProgress) * 100).toFixed(1) : 0
     };
-  } catch (error) {
+  } catch (_error) {
     return {
       total: 1455,
       current: 0,

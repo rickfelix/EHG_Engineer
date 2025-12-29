@@ -157,7 +157,7 @@ async function runTest() {
     console.log('✅ Test Complete!');
     console.log('='.repeat(60));
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Test failed:', error.message);
     console.error(error.stack);
     process.exit(1);

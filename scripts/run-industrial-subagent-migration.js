@@ -108,7 +108,7 @@ async function runMigration() {
   console.log('=== Industrial Sub-Agent Registration Migration ===\n');
 
   // Check if leo_sub_agents table exists
-  const { data: tableCheck, error: tableError } = await supabase
+  const { data: _tableCheck, error: tableError } = await supabase
     .from('leo_sub_agents')
     .select('id')
     .limit(1);
@@ -127,7 +127,7 @@ async function runMigration() {
   for (const agent of SUB_AGENTS) {
     process.stdout.write(`  ${agent.code}... `);
 
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('leo_sub_agents')
       .upsert(agent, { onConflict: 'id' })
       .select();

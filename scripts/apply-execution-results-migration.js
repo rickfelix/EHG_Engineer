@@ -20,10 +20,10 @@ async function applyMigration() {
 
   try {
     // Read migration file
-    const sql = await readFile('database/schema/sub_agent_execution_results.sql', 'utf8');
+    const _sql = await readFile('database/schema/sub_agent_execution_results.sql', 'utf8');
 
     // Check if table already exists
-    const { data: existingTable, error: checkError } = await supabase
+    const { data: _existingTable, error: checkError } = await supabase
       .from('sub_agent_execution_results')
       .select('id')
       .limit(1);

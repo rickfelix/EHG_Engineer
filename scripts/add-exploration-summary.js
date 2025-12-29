@@ -12,7 +12,7 @@ const supabase = createClient(
 );
 
 async function addExplorationSummary() {
-  const SD_UUID = '0cbf032c-ddff-4ea3-9892-2871eeaff1a7';
+  const _SD_UUID = '0cbf032c-ddff-4ea3-9892-2871eeaff1a7';
   const PRD_ID = 'PRD-SD-VISION-V2-011';
 
   // Get current PRD

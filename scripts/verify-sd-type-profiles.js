@@ -35,7 +35,7 @@ async function verifyMigration() {
 
     await client.end();
     console.log('\n✅ All verification queries completed successfully');
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Verification failed:', error.message);
     console.error(error.stack);
     process.exit(1);

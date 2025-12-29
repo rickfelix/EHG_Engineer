@@ -21,7 +21,7 @@ async function checkStoryGates() {
 
   try {
     // Check if views exist
-    const { data: stories, error: storiesError } = await supabase
+    const { data: _stories, error: storiesError } = await supabase
       .from('v_story_verification_status')
       .select('*')
       .limit(1);

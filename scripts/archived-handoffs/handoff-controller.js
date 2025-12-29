@@ -337,7 +337,7 @@ class HandoffController {
     
     // Update state
     const state = this.loadState();
-    const [from, , to] = handoffType.split('-');
+    const [_from, , to] = handoffType.split('-');
     state.currentAgent = to;
     state.lastHandoff = {
       type: handoffType,

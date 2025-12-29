@@ -1,11 +1,11 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { fileURLToPath as _fileURLToPath } from 'url';
+import { dirname as _dirname } from 'path';
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+import _path from 'path';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -25,7 +25,7 @@ async function conductLeadApprovalAssessment() {
     console.log('Assessment Scope: Complete LEO Protocol v4.1 delivery evaluation\n');
     
     // Get current data for assessment
-    const { data: sd } = await supabase
+    const { data: _sd } = await supabase
       .from('strategic_directives_v2')
       .select('*')
       .eq('id', sdId)

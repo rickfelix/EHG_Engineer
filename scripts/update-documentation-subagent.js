@@ -179,7 +179,7 @@ async function updateDocumentationSubAgent() {
   
   try {
     // Update the sub-agent with enhanced profile
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('leo_sub_agents')
       .update({
         name: documentationSubAgentProfile.name,
@@ -223,7 +223,7 @@ async function updateDocumentationSubAgent() {
     
     return data;
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error updating Documentation Sub-Agent:', error.message);
     throw error;
   }

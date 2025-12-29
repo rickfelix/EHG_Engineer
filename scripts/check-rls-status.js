@@ -15,7 +15,7 @@ async function checkRLS() {
 
   // Test 1: system_health INSERT
   console.log('1️⃣  Testing system_health INSERT...');
-  const { data: healthTest, error: healthError } = await supabase
+  const { data: _healthTest, error: healthError } = await supabase
     .from('system_health')
     .insert({
       service_name: 'test_service_temp',
@@ -34,7 +34,7 @@ async function checkRLS() {
 
   // Test 2: prd_research_audit_log INSERT
   console.log('\n2️⃣  Testing prd_research_audit_log INSERT...');
-  const { data: auditTest, error: auditError } = await supabase
+  const { data: _auditTest, error: auditError } = await supabase
     .from('prd_research_audit_log')
     .insert({
       sd_id: 'SD-TEST-TEMP',
@@ -55,7 +55,7 @@ async function checkRLS() {
 
   // Test 3: tech_stack_references INSERT
   console.log('\n3️⃣  Testing tech_stack_references INSERT...');
-  const { data: cacheTest, error: cacheError } = await supabase
+  const { data: _cacheTest, error: cacheError } = await supabase
     .from('tech_stack_references')
     .insert({
       sd_id: 'SD-TEST-TEMP',

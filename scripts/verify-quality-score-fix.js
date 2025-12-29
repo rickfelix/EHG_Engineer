@@ -31,7 +31,7 @@ async function verifyFix() {
       // Clean up
       await client.query('DELETE FROM retrospectives WHERE sd_id = \'TEST-VERIFY-001\'');
       console.log('✅ Test 1 PASSED: quality_score = 70 accepted\n');
-    } catch (err) {
+    } catch (_err) {
       console.log(`❌ Test 1 FAILED: quality_score = 70 rejected - ${err.message}\n`);
     }
 
@@ -53,7 +53,7 @@ async function verifyFix() {
       // Clean up
       await client.query('DELETE FROM retrospectives WHERE sd_id = \'TEST-VERIFY-002\'');
       console.log('✅ Test 2 PASSED: quality_score = 100 accepted\n');
-    } catch (err) {
+    } catch (_err) {
       console.log(`❌ Test 2 FAILED: quality_score = 100 rejected - ${err.message}\n`);
     }
 
@@ -73,7 +73,7 @@ async function verifyFix() {
       `);
 
       console.log('❌ Test 3 FAILED: quality_score = 69 was accepted (should be rejected)\n');
-    } catch (err) {
+    } catch (_err) {
       console.log('✅ Test 3 PASSED: quality_score = 69 correctly rejected\n');
     }
 
@@ -93,7 +93,7 @@ async function verifyFix() {
       `);
 
       console.log('❌ Test 4 FAILED: quality_score = 101 was accepted (should be rejected)\n');
-    } catch (err) {
+    } catch (_err) {
       console.log('✅ Test 4 PASSED: quality_score = 101 correctly rejected\n');
     }
 
@@ -114,7 +114,7 @@ async function verifyFix() {
       console.log('   ⚠️  Constraint not found!\n');
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Verification failed:', error.message);
     throw error;
   } finally {

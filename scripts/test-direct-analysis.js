@@ -89,7 +89,7 @@ Consider:
       console.log('📝 Message response:', response.choices[0].message.content);
     }
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error:', error.message);
     if (error.response) {
       console.error('Response:', error.response.data);
@@ -123,7 +123,7 @@ Reply with a JSON array of agent codes and confidence scores.`
     
     console.log('📝 Response:', response.choices[0].message.content);
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error:', error.message);
   }
 }

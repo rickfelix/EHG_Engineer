@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createClient } from '@supabase/supabase-js';
-import { readFileSync } from 'fs';
+import { readFileSync as _readFileSync } from 'fs';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -16,7 +16,7 @@ async function enhancePRD() {
 
   const prd_id = 'PRD-SD-AGENT-ADMIN-002';
 
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('product_requirements_v2')
     .update({
       system_architecture: `

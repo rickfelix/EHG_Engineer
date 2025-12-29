@@ -17,7 +17,7 @@ function makeRequest(options) {
       res.on('end', () => {
         try {
           resolve(JSON.parse(data));
-        } catch (e) {
+        } catch (_e) {
           resolve(data);
         }
       });
@@ -112,7 +112,7 @@ async function testSDNavigation() {
       }
     };
     
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Test failed:', error.message);
     return { success: false, message: error.message };
   }

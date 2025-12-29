@@ -22,8 +22,8 @@ import readline from 'readline';
 
 dotenv.config();
 
-// Repository paths for target application detection
-const REPO_PATHS = {
+// Repository paths for target application detection - currently unused but kept for reference
+const _REPO_PATHS = {
   EHG: '/mnt/c/_EHG/EHG',
   EHG_Engineer: '/mnt/c/_EHG/EHG_Engineer'
 };
@@ -228,7 +228,7 @@ async function createQuickFix(options = {}) {
       // Check if git repo
       try {
         execSync('git rev-parse --git-dir', { stdio: 'pipe' });
-      } catch (err) {
+      } catch (_err) {
         console.log('   ⚠️  Not a git repository - skipping branch creation\n');
         return printNextSteps(qfId, false);
       }

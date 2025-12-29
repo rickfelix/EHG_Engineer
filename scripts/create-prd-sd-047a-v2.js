@@ -432,7 +432,7 @@ Topological sort (Kahn's algorithm) on dependency graph, client-side calculation
   };
 
   // Insert PRD into database
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('product_requirements_v2')
     .insert(prdData)
     .select();

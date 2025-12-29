@@ -157,7 +157,7 @@ class LEOProtocolMigrator {
       const protocolId = `leo-v${version.replace(/\./g, '-')}`;
       
       // Insert main protocol
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('leo_protocols')
         .upsert({
           id: protocolId,

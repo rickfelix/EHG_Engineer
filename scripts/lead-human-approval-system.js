@@ -158,7 +158,7 @@ class LEADApprovalSystem {
   /**
    * Get consequences of recommended actions
    */
-  getActionConsequences(recommendation, sd) {
+  getActionConsequences(recommendation, _sd) {
     if (recommendation.includes('CANCEL')) {
       return 'SD will be permanently cancelled. Cannot be easily restored.';
     }

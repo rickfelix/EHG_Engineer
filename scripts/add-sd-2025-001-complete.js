@@ -30,7 +30,7 @@ async function addOpenAIRealtimeSDToDatabase() {
   try {
     // 1. Insert Strategic Directive
     console.log('📋 Inserting Strategic Directive...');
-    const { data: sdData, error: sdError } = await supabase
+    const { data: _sdData, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .upsert({
         id: 'SD-2025-001',
@@ -123,7 +123,7 @@ async function addOpenAIRealtimeSDToDatabase() {
     
     // 2. Insert Product Requirements Document
     console.log('\n📋 Inserting Product Requirements Document...');
-    const { data: prdData, error: prdError } = await supabase
+    const { data: _prdData, error: prdError } = await supabase
       .from('product_requirements_v2')
       .upsert({
         id: 'PRD-2025-001',

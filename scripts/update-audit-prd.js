@@ -233,13 +233,13 @@ Phase 4: Reporting (2 hours)
   };
   
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('product_requirements_v2')
       .update(updatedPRD)
       .eq('id', prdId)
       .select()
       .single();
-    
+
     if (error) {
       console.error('❌ Error updating PRD:', error.message);
       return;
@@ -258,7 +258,7 @@ Phase 4: Reporting (2 hours)
     
     console.log('\n✅ PLAN Phase Complete - Ready for handoff to EXEC');
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error:', error.message);
   }
 }

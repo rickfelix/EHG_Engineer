@@ -709,7 +709,7 @@ async function insertStrategicDirectives() {
     try {
       console.log(`📋 Inserting ${sd.id}: ${sd.title}...`);
 
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('strategic_directives_v2')
         .upsert({
           id: sd.id,

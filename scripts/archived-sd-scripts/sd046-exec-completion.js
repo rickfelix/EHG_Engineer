@@ -18,7 +18,7 @@ dotenv.config({ path: join(__dirname, '..', '.env') });
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const _supabase = createClient(supabaseUrl, supabaseKey);
 
 async function createEXECCompletion() {
   const completion = {
@@ -163,7 +163,7 @@ async function createEXECCompletion() {
   });
 
   console.log('\n📊 Phase Completion Status:');
-  Object.entries(completion.phase_completion).forEach(([phase, details]) => {
+  Object.entries(completion.phase_completion).forEach(([_phase, details]) => {
     console.log(`  ${details.name}: ${details.status}`);
     details.deliverables.forEach(deliverable => console.log(`    • ${deliverable}`));
   });

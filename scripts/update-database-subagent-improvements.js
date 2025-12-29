@@ -372,7 +372,7 @@ node scripts/orchestrate-phase-subagents.js <PHASE> <SD-ID>
   };
 
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('leo_sub_agents')
       .update({
         description: updatedDescription,
@@ -401,7 +401,7 @@ node scripts/orchestrate-phase-subagents.js <PHASE> <SD-ID>
     console.log('- 11 issue patterns catalogued');
     console.log('- PAT-001: 100% success rate, 15 min avg resolution');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Unexpected error:', err);
     process.exit(1);
   }

@@ -14,7 +14,7 @@ async function completeSD() {
   console.log('🎯 Completing SD-041B - LEO Protocol Final Approval\n');
 
   // Update SD status to completed
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('strategic_directives_v2')
     .update({
       status: 'completed',

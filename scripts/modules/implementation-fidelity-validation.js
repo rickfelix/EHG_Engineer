@@ -265,7 +265,7 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
       validation.details.cosmetic_refactor_mode = true;
       validation.details.testing_requirement = 'unit_tests_only';
     }
-  } catch (error) {
+  } catch (_error) {
     // Continue with standard validation
   }
 
@@ -727,7 +727,7 @@ async function validateDesignFidelity(sd_id, designAnalysis, validation, supabas
         return;
       }
     }
-  } catch (e) {
+  } catch (_e) {
     // Continue with normal validation if SD type check fails
   }
 
@@ -1057,7 +1057,7 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
       sectionScore += 3; // Partial credit (might not need RLS)
       console.log('   ⚠️  No RLS policies detected (3/5)');
     }
-  } catch (error) {
+  } catch (_error) {
     sectionScore += 3; // Partial credit on error
     console.log('   ⚠️  Cannot verify RLS policies (3/5)');
   }
@@ -1080,7 +1080,7 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
       // Always give credit for having a migration
       sectionScore += 5;
       console.log(`   ✅ Migration file has ${lineCount} lines`);
-    } catch (error) {
+    } catch (_error) {
       sectionScore += 3; // Partial credit
       console.log('   ⚠️  Cannot read migration file (3/5)');
     }
@@ -1156,7 +1156,7 @@ async function validateDataFlowAlignment(sd_id, designAnalysis, databaseAnalysis
         return;
       }
     }
-  } catch (e) {
+  } catch (_e) {
     // Continue with normal validation if SD type check fails
   }
 

@@ -318,7 +318,7 @@ class DesignAudit {
 
     // UI Checklist Status
     this.log('\n✅ UI Checklist:', 'green');
-    Object.entries(audit.ui_checklist).forEach(([key, value]) => {
+    Object.entries(audit.ui_checklist).forEach(([_key, value]) => {
       const icon = value.present ? '✓' : '✗';
       const color = value.present ? 'green' : 'red';
       this.log(`  ${icon} ${value.description}`, color);
@@ -326,7 +326,7 @@ class DesignAudit {
 
     // UX Checklist Status
     this.log('\n✅ UX Checklist:', 'green');
-    Object.entries(audit.ux_checklist).forEach(([key, value]) => {
+    Object.entries(audit.ux_checklist).forEach(([_key, value]) => {
       const icon = value.present ? '✓' : '✗';
       const color = value.present ? 'green' : 'red';
       this.log(`  ${icon} ${value.description}`, color);

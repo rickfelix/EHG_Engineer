@@ -237,7 +237,7 @@ async function updateSDBACKEND002() {
       '   - src/app/api/analytics/predictions/route.ts:',
       '     export async function GET(request: Request) {',
       '       const supabase = createClient();',
-      "       const { data, error } = await supabase.from('analytics_predictions').select('*').order('created_at', { ascending: false }).limit(10);",
+      "       const { data: _data, error } = await supabase.from('analytics_predictions').select('*').order('created_at', { ascending: false }).limit(10);",
       '       if (error) return NextResponse.json({ error: error.message }, { status: 500 });',
       '       return NextResponse.json(data);',
       '     }',

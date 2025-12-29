@@ -618,7 +618,7 @@ function validateINVESTCriteria(userStory) {
 
     return data;
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Unexpected error:', err);
     process.exit(1);
   }

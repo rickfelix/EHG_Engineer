@@ -248,7 +248,7 @@ async function testAllGates(sdId) {
     console.log(allPassed ? '✅ ALL GATES PASSED' : '❌ SOME GATES FAILED');
     console.log('='.repeat(70) + '\n');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Error during validation:', error.message);
     console.error(error.stack);
   }
@@ -312,7 +312,7 @@ Example:
     console.log('✅ Test completed successfully\n');
     process.exit(0);
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Test failed:', error.message);
     console.error(error.stack);
     process.exit(1);

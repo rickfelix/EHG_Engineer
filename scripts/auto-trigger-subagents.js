@@ -154,7 +154,7 @@ function generateSubAgentChecklist(event, sdKey) {
  */
 async function recordSubAgentActivation(sdId, subAgent, event, result) {
   try {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('sub_agent_executions')
       .insert({
         sd_id: sdId,

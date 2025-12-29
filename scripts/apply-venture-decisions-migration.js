@@ -7,8 +7,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import fs from 'fs';
-import path from 'path';
+// fs and path imports kept for potential future file operations
 
 dotenv.config();
 
@@ -21,7 +20,7 @@ async function applyMigration() {
   console.log('Applying venture_decisions migration...\n');
 
   // Step 1: Check if table already exists
-  const { data: tableCheck, error: checkError } = await supabase
+  const { data: _tableCheck, error: checkError } = await supabase
     .from('venture_decisions')
     .select('id')
     .limit(1);
@@ -82,7 +81,7 @@ async function applyMigration() {
   console.log('Enabling RLS...');
 
   // Step 5: Verify
-  const { data: verify, error: verifyError } = await supabase
+  const { data: _verify, error: verifyError } = await supabase
     .from('venture_decisions')
     .select('id')
     .limit(1);

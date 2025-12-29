@@ -362,7 +362,7 @@ async function createPlanToLeadHandoff() {
 
 // Execute
 createPlanToLeadHandoff()
-  .then(result => {
+  .then(_result => {
     console.log('✅ Script completed successfully');
     process.exit(0);
   })

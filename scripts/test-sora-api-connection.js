@@ -80,7 +80,7 @@ function makeRequest(url, options, body = null) {
               data: data ? JSON.parse(data) : null,
               headers: res.headers
             });
-          } catch (err) {
+          } catch (_err) {
             resolve({
               status: res.statusCode,
               data: data,
@@ -161,7 +161,7 @@ async function submitVideoJob() {
       response: response.data
     };
 
-  } catch (error) {
+  } catch (_error) {
     console.log(`${colors.red}❌ Job submission failed${colors.reset}`);
     console.log(`   Error: ${error.message}`);
     console.log('');
@@ -231,7 +231,7 @@ async function waitForCompletion(jobId) {
       // Still processing, wait before next poll
       await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
 
-    } catch (error) {
+    } catch (_error) {
       console.log(`${colors.red}❌ Error checking job status${colors.reset}`);
       console.log(`   Error: ${error.message}`);
       console.log('');
@@ -297,7 +297,7 @@ async function downloadVideo(videoUrl) {
       sizeBytes: stats.size
     };
 
-  } catch (error) {
+  } catch (_error) {
     console.log(`${colors.red}❌ Download failed${colors.reset}`);
     console.log(`   Error: ${error.message}`);
     console.log('');

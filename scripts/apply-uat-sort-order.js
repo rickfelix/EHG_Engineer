@@ -59,7 +59,7 @@ async function applySortOrder() {
     } else {
       console.log('✅ Migration executed successfully');
     }
-  } catch (err) {
+  } catch (_err) {
     console.log('⚠️  RPC not available. Will proceed to update sort_order values.');
   }
 
@@ -69,7 +69,7 @@ async function applySortOrder() {
   let errorCount = 0;
 
   for (const [testId, sortOrder] of Object.entries(testSortOrder)) {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('uat_cases')
       .update({ sort_order: sortOrder })
       .eq('id', testId)

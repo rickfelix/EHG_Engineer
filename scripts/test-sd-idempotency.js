@@ -78,7 +78,7 @@ async function testSDIdempotency() {
       console.log(`   Call 3: ${result3.sd_id}`);
     }
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Test failed:', error.message);
     process.exit(1);
   }

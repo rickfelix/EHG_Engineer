@@ -41,7 +41,7 @@ async function verifyOrchestration() {
     
     return true;
     
-  } catch (error) {
+  } catch (_error) {
     console.log('   ❌ Connection: FAILED');
     console.log(`   ❌ Error: ${error.message}`);
     console.log('\n' + '═'.repeat(60));

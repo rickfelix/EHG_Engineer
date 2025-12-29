@@ -175,7 +175,7 @@ async function main() {
   console.log('📝 Adding BMAD section to LEO Protocol...\n');
 
   // Check if section already exists
-  const { data: existing, error: checkError } = await supabase
+  const { data: existing, error: _checkError } = await supabase
     .from('leo_protocol_sections')
     .select('id, section_type')
     .eq('protocol_id', 'leo-v4-2-0-story-gates')

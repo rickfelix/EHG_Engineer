@@ -80,7 +80,7 @@ async function executePRDSQL() {
     console.log(createTableSQL);
     
     // Try to verify if table exists by querying it
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('product_requirements_v2')
       .select('id')
       .limit(1);

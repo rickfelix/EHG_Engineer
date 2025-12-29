@@ -61,7 +61,7 @@ async function completeGTMIntelDiscovery() {
 
     // Step 3: Create retrospective
     console.log('\n📊 Step 3: Creating retrospective...');
-    const { data: retro, error: retroError } = await supabase
+    const { data: _retro, error: retroError } = await supabase
       .from('retrospectives')
       .insert({
         sd_id: sdId,

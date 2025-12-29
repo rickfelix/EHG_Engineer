@@ -4,7 +4,8 @@
  * Insert Manual Test Cases Directly via SQL
  */
 
-import { createClient } from '@supabase/supabase-js';
+// createClient import reserved for potential future use
+// import { createClient } from '@supabase/supabase-js';
 import chalk from 'chalk';
 import pg from 'pg';
 

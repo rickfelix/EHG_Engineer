@@ -19,7 +19,7 @@ import { autoTriggerStories } from './modules/auto-trigger-stories.mjs';
 import { getComponentRecommendations, formatForPRD, generateInstallScript } from '../lib/shadcn-semantic-explainable-selector.js';
 import {
   autoDetectSdType,
-  shouldSkipCodeValidation,
+  shouldSkipCodeValidation as _shouldSkipCodeValidation,
   getValidationRequirements
 } from '../lib/utils/sd-type-validation.js';
 import {
@@ -1004,7 +1004,7 @@ This PRD defines the technical requirements and implementation approach for ${sd
     let designAnalysis = null;
     let databaseAnalysis = null;  // Capture for LLM PRD generation
     let securityAnalysis = null;  // Capture for LLM PRD generation
-    let apiAnalysis = null;       // Capture for LLM PRD generation
+    let _apiAnalysis = null;       // Capture for LLM PRD generation
     let riskAnalysis = null;      // Capture for LLM PRD generation
 
     try {

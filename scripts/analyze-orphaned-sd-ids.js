@@ -91,7 +91,7 @@ async function analyzeOrphanedRecords() {
         if (dateResult.rows.length > 0 && dateResult.rows[0].earliest) {
           console.log(`\n  Date Range: ${dateResult.rows[0].earliest} to ${dateResult.rows[0].latest}`);
         }
-      } catch (err) {
+      } catch (_err) {
         // Some tables might not have created_at column
         console.log('  (No date range available - missing created_at column)');
       }

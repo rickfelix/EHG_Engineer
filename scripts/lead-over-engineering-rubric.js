@@ -215,7 +215,7 @@ class OverEngineeringRubric {
   /**
    * Generate detailed reasoning for the evaluation
    */
-  generateReasoning(scores, totalScore, isOverEngineered) {
+  generateReasoning(scores, _totalScore, _isOverEngineered) {
     const reasons = [];
 
     // Negative indicators
@@ -290,7 +290,7 @@ class OverEngineeringRubric {
   /**
    * Get clarification reason for borderline scores
    */
-  getClarificationReason(scores, totalScore) {
+  getClarificationReason(scores, _totalScore) {
     const reasons = [];
 
     if (scores.complexity <= 3) {
@@ -365,7 +365,6 @@ class OverEngineeringRubric {
    */
   suggestRephrases(sd, scores) {
     const suggestions = [];
-    const text = [sd.title, sd.description].filter(Boolean).join(' ');
 
     // Suggest simplification if complexity is low-scored
     if (scores.complexity <= 3) {
@@ -564,7 +563,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       console.log('📋 Evaluation Criteria:');
 
       const rubric = new OverEngineeringRubric();
-      Object.entries(rubric.criteria).forEach(([key, criterion]) => {
+      Object.entries(rubric.criteria).forEach(([_key, criterion]) => {
         console.log(`• ${criterion.name}`);
         console.log(`  ${criterion.description}`);
       });

@@ -1,11 +1,11 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// import path from 'path'; // Unused
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -39,16 +39,16 @@ async function updateSDCompletionMetadata() {
       final_status: 'All critical issues resolved, dashboard fully functional'
     };
     
-    const { data: sd1, error: sd1Error } = await supabase
+    const { data: _sd1, error: sd1Error } = await supabase
       .from('strategic_directives_v2')
-      .update({ 
+      .update({
         metadata: updatedMetadata1,
         progress: 100,  // Set progress to 100%
         updated_at: new Date().toISOString()
       })
       .eq('id', 'SD-DASHBOARD-AUDIT-2025-08-31-A')
       .select();
-    
+
     if (sd1Error) {
       console.error('  Error updating metadata:', sd1Error.message);
     } else {
@@ -76,16 +76,16 @@ async function updateSDCompletionMetadata() {
       final_status: 'Platform foundation successfully established'
     };
     
-    const { data: sd2, error: sd2Error } = await supabase
+    const { data: _sd2, error: sd2Error } = await supabase
       .from('strategic_directives_v2')
-      .update({ 
+      .update({
         metadata: updatedMetadata2,
         progress: 100,  // Set progress to 100%
         updated_at: new Date().toISOString()
       })
       .eq('id', 'SD-2025-01-15-A')
       .select();
-    
+
     if (sd2Error) {
       console.error('  Error updating metadata:', sd2Error.message);
     } else {
@@ -96,11 +96,11 @@ async function updateSDCompletionMetadata() {
     
     // 3. Verify the updates
     console.log('\n=== VERIFICATION ===');
-    const { data: verifyData, error: verifyError } = await supabase
+    const { data: verifyData, error: _verifyError } = await supabase
       .from('strategic_directives_v2')
       .select('id, title, status, progress, metadata')
       .order('created_at', { ascending: false });
-    
+
     if (verifyData) {
       console.log('\nCurrent SD completion status:');
       verifyData.forEach(sd => {
@@ -124,7 +124,7 @@ async function updateSDCompletionMetadata() {
     console.log('  - progress: 100');
     console.log('  - metadata.completion_status: "complete"');
     
-  } catch (err) {
+  } catch (_err) {
     console.error('Failed to update SD metadata:', err.message);
   }
 }

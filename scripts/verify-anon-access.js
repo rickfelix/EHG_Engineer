@@ -29,7 +29,7 @@ async function verify() {
       console.log('  -', record.service_name, '| state:', record.state || 'undefined', '| failures:', record.failure_count);
     });
 
-  } catch (err) {
+  } catch (_err) {
     console.error('❌ Error:', err);
     process.exit(1);
   }

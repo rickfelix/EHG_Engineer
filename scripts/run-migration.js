@@ -11,7 +11,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
-import { join, resolve } from 'path';
+// join - available for future path operations
+import { join as _join, resolve } from 'path';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -27,7 +28,7 @@ async function runMigration(migrationPath) {
   let sql;
   try {
     sql = readFileSync(absolutePath, 'utf8');
-  } catch (error) {
+  } catch (_error) {
     console.error(`❌ Failed to read migration file: ${error.message}`);
     process.exit(1);
   }
@@ -54,7 +55,7 @@ async function runMigration(migrationPath) {
   console.log('='.repeat(70));
   console.log('');
 
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  const _supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
     console.log('⚙️  Executing migration SQL via Supabase RPC...\n');
@@ -82,7 +83,7 @@ async function runMigration(migrationPath) {
 
     process.exit(1);
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Migration failed:', error.message);
     if (error.stack) {
       console.error('\nStack trace:');

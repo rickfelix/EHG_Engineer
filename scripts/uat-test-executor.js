@@ -89,7 +89,7 @@ async function listTests(runId) {
   console.log(chalk.cyan.bold('\n📋 Available UAT Tests\n'));
 
   // Get test cases with their status
-  const { data: cases } = await supabase
+  const { data: _cases } = await supabase
     .from('uat_cases')
     .select(`
       *,
@@ -234,7 +234,7 @@ async function main() {
       await agent.executeTest(runId);
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.error(chalk.red('Error:'), error.message);
     process.exit(1);
   }

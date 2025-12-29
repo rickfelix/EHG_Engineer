@@ -1,11 +1,11 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// import path from 'path'; // Unused
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -71,7 +71,7 @@ async function updateDraftSDTitles() {
     
     console.log('✅ Draft SD titles updated successfully');
     
-  } catch (err) {
+  } catch (_err) {
     console.error('Error:', err.message);
   }
 }

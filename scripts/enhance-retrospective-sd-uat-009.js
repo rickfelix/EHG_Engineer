@@ -13,7 +13,7 @@ const supabase = createClient(
 async function enhanceRetrospective() {
   const retrospectiveId = '80626539-21c4-4b14-b3c2-36af0e7c7203';
 
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('retrospectives')
     .update({
       what_went_well: [

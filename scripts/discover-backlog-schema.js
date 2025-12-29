@@ -26,7 +26,7 @@ async function discoverSchema() {
                 `
             });
             viewCheck = data;
-        } catch (e) {
+        } catch (_e) {
             // RPC might not exist, try direct query
         }
         
@@ -47,7 +47,7 @@ async function discoverSchema() {
                 `
             });
             tables = data;
-        } catch (e) {
+        } catch (_e) {
             // RPC might not exist
         }
         

@@ -167,7 +167,7 @@ export function createProtocolImprovementSystem() {
     },
 
     // Get effectiveness report
-    async getEffectivenessReport(filters = {}) {
+    async getEffectivenessReport(_filters = {}) {
       const { createClient } = await import('@supabase/supabase-js');
       const supabase = createClient(
         process.env.SUPABASE_URL || 'https://dedlbzhpgkmetvhbkyzq.supabase.co',

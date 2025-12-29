@@ -98,7 +98,7 @@ async function createTimelineTracking() {
       .single();
 
     if (!existing) {
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('sd_execution_timeline')
         .insert(timeline)
         .select();

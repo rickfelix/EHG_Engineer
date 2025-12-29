@@ -14,7 +14,6 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { globby } from 'globby';
-import * as path from 'path';
 import * as fs from 'fs';
 import { execSync } from 'child_process';
 import { exit } from 'process';
@@ -30,8 +29,8 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Severity mapping for different violation types
-const SEVERITY_MAP = {
+// Severity mapping for different violation types (kept for potential future use)
+const _SEVERITY_MAP = {
   'prds/*.md': 'critical',              // Blocks CI
   'prds/**/*.md': 'critical',           // Blocks CI
   'handoffs/**/*.md': 'critical',       // Blocks CI
@@ -41,6 +40,7 @@ const SEVERITY_MAP = {
   'reports/subagents/**': 'warning',    // Log only
   'subagent-results/**/*': 'warning',   // Log only
 } as const;
+void _SEVERITY_MAP; // Kept for potential future use
 
 // Drift detection patterns
 const FORBIDDEN_PATTERNS = {
@@ -111,7 +111,7 @@ interface ComplianceAlert {
   severity: 'info' | 'warning' | 'error' | 'critical';
   source: string;
   message: string;
-  payload: any;
+  payload: Record<string, unknown>;
 }
 
 /**
@@ -138,8 +138,8 @@ function getGitContext() {
 /**
  * Check if file is allowlisted
  */
-function isAllowlisted(file: string): boolean {
-  const minimatch = require('minimatch');
+async function isAllowlisted(file: string): Promise<boolean> {
+  const { minimatch } = await import('minimatch');
   return ALLOWLIST_PATTERNS.some(pattern => minimatch(file, pattern));
 }
 
@@ -158,7 +158,8 @@ async function checkForbiddenPatterns(): Promise<DriftResult[]> {
     });
 
     // Filter out allowlisted files
-    const violatingFiles = files.filter(f => !isAllowlisted(f));
+    const allowlistResults = await Promise.all(files.map(async f => ({ file: f, allowed: await isAllowlisted(f) })));
+    const violatingFiles = allowlistResults.filter(r => !r.allowed).map(r => r.file);
 
     if (violatingFiles.length > 0) {
       results.push({

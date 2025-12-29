@@ -41,8 +41,8 @@ export async function getDb(): Promise<SupabaseClient> {
 /**
  * Execute a query and handle errors consistently
  */
-export async function query<T = any>(
-  queryFn: () => Promise<{ data: T | null; error: any; count?: number }>,
+export async function query<T = unknown>(
+  queryFn: () => Promise<{ data: T | null; error: { message: string } | null; count?: number }>,
 ): Promise<T> {
   const { data, error } = await queryFn();
   if (error) {

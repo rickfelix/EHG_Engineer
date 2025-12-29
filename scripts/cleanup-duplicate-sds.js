@@ -32,7 +32,7 @@ async function cleanupDuplicateSDs() {
     
     // Find duplicates
     const duplicateGroups = Array.from(sdsBySubmission.entries())
-      .filter(([submissionId, sds]) => sds.length > 1);
+      .filter(([_submissionId, sds]) => sds.length > 1);
     
     if (duplicateGroups.length === 0) {
       console.log('✅ No duplicate Strategic Directives found!');

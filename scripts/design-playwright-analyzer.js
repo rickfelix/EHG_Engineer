@@ -7,7 +7,8 @@
 
 import { chromium } from 'playwright';
 import fs from 'fs/promises';
-import path from 'path';
+// path import kept for potential future file operations
+// import path from 'path';
 
 class PlaywrightDesignAnalyzer {
   constructor() {
@@ -491,11 +492,11 @@ class PlaywrightDesignAnalyzer {
               });
             }
           });
-        } catch (e) {
+        } catch (_e) {
           // Cross-origin stylesheets
         }
       });
-      
+
       // Check for reduced motion support
       const supportsReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       
@@ -581,7 +582,7 @@ class PlaywrightDesignAnalyzer {
       try {
         await firstButton.hover({ timeout: 5000 });
         await page.waitForTimeout(100);
-      } catch (hoverError) {
+      } catch (_hoverError) {
         console.log('   Note: Button hover test skipped (element not visible)');
       }
       

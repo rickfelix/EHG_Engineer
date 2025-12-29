@@ -21,7 +21,7 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const execAsync = promisify(exec);
 
-const supabase = createClient(
+const _supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
@@ -69,7 +69,7 @@ class GitHubSubAgentTester {
       });
 
       console.log('✅ Test passed\n');
-    } catch (error) {
+    } catch (_error) {
       console.error('❌ Test failed:', error.message);
       this.testResults.push({
         test: 'Uncommitted Changes Detection',
@@ -108,7 +108,7 @@ class GitHubSubAgentTester {
       });
 
       console.log('✅ Test passed\n');
-    } catch (error) {
+    } catch (_error) {
       console.error('❌ Test failed:', error.message);
       this.testResults.push({
         test: 'Branch Synchronization',
@@ -147,7 +147,7 @@ class GitHubSubAgentTester {
       });
 
       console.log('✅ Test passed\n');
-    } catch (error) {
+    } catch (_error) {
       console.error('❌ Test failed:', error.message);
       this.testResults.push({
         test: 'Repository State Report',
@@ -197,7 +197,7 @@ class GitHubSubAgentTester {
       }
 
       console.log('✅ Test passed\n');
-    } catch (error) {
+    } catch (_error) {
       console.error('❌ Test failed:', error.message);
       this.testResults.push({
         test: 'Pre-Deployment Checks',

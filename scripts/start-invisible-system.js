@@ -25,7 +25,7 @@ async function checkService() {
   try {
     const response = await fetch(`${MIDDLEWARE_URL}/health`);
     return response.ok;
-  } catch (error) {
+  } catch (_error) {
     return false;
   }
 }
@@ -107,7 +107,7 @@ async function verifyHooks() {
       console.log('   Run: npm run activate-subagents');
       return false;
     }
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Failed to check Claude Code configuration:', error.message);
     return false;
   }
@@ -148,7 +148,7 @@ async function testIntegration() {
     
     return true;
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Test failed:', error.message);
     return false;
   }

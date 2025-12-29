@@ -1,7 +1,7 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// import { fileURLToPath } from 'url'; // Unused - not needed for this script
+// import { dirname } from 'path'; // Unused - not needed for this script
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// import path from 'path'; // Unused - not needed for this script
 import dotenv from 'dotenv';
 import { createPRDLink } from '../lib/sd-helpers.js';
 
@@ -84,7 +84,7 @@ async function createPRD() {
     };
 
     // Create PRD in database
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('product_requirements_v2')
       .insert({
         id: prdId,

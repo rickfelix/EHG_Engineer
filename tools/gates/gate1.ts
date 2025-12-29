@@ -26,12 +26,12 @@ import { scoreGate, formatGateResults, Check } from './lib/score.js';
 import { getRulesForGate, getPRDDetails, storeGateReview } from './lib/rules.js';
 
 // Cache Jest results to avoid running twice
-let jestResultsCache: { success: boolean; output: string; json?: any } | null = null;
+let jestResultsCache: { success: boolean; output: string; json?: Record<string, unknown> } | null = null;
 
 /**
  * Run Jest and cache results
  */
-function runJest(): { success: boolean; output: string; json?: any } {
+function runJest(): { success: boolean; output: string; json?: Record<string, unknown> } {
   if (jestResultsCache) return jestResultsCache;
 
   try {
@@ -52,10 +52,11 @@ function runJest(): { success: boolean; output: string; json?: any } {
 
     jestResultsCache = { success: true, output, json };
     return jestResultsCache;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Jest failed - try to extract output and parse JSON
-    const output = error.stdout || error.stderr || '';
-    let json;
+    const execError = error as { stdout?: string; stderr?: string };
+    const output = execError.stdout || execError.stderr || '';
+    let json: Record<string, unknown> | undefined;
     try {
       json = JSON.parse(output);
     } catch {
@@ -95,7 +96,8 @@ function runJest(): { success: boolean; output: string; json?: any } {
   console.log(`SD: ${prdDetails.sd_id || 'None'}`);
   console.log('');
 
-  const db = await getDb();
+  const _db = await getDb(); // Used to verify connection
+  void _db;
   const rules = await getRulesForGate('1');
 
   // Define checks for each rule
@@ -125,7 +127,7 @@ function runJest(): { success: boolean; output: string; json?: any } {
         return false;
       }
 
-      const { numFailedTests, numPassedTests, numTotalTests } = result.json;
+      const { numFailedTests, numTotalTests } = result.json as { numFailedTests: number; numTotalTests: number };
 
       if (numFailedTests === 0) {
         console.log(`  [PASS] All ${numTotalTests} tests passed`);
@@ -159,7 +161,7 @@ function runJest(): { success: boolean; output: string; json?: any } {
           console.log(`  [FAIL] Line coverage ${lineCoverage.toFixed(1)}% < ${threshold}%`);
           return false;
         }
-      } catch (error) {
+      } catch {
         console.log('  [FAIL] Could not read coverage data');
         return false;
       }

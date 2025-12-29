@@ -776,7 +776,7 @@ async function main() {
   console.log('💾 Inserting User Stories...\n');
 
   for (const story of USER_STORIES) {
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('user_stories')
       .insert({
         sd_id: SD_ID,

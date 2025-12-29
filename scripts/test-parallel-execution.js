@@ -48,7 +48,7 @@ class ParallelExecutionTest {
       // Print results
       this.printResults();
 
-    } catch (error) {
+    } catch (_error) {
       console.error(chalk.red('\n❌ Test suite failed:'), error.message);
       process.exit(1);
     }

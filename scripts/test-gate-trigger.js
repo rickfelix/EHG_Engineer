@@ -25,7 +25,7 @@ async function testGateTrigger() {
   // Try to create an execution without gates passed
   console.log('\n📝 Attempting to start EXEC for PRD-SD-001 without gates passed...\n');
   
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('sub_agent_executions')
     .insert({
       sub_agent_id: execAgent.id,

@@ -33,7 +33,7 @@ async function updateSDProgress() {
 
   try {
     // Update SD progress (using 'id' column, not 'sd_id')
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('strategic_directives_v2')
       .update({
         progress_percentage: 40,
@@ -74,7 +74,7 @@ async function updateSDProgress() {
     console.log('  3. Write E2E tests (accessibility validation)');
     console.log('  4. Create EXEC->PLAN verification handoff');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('\n❌ Fatal error:', err.message);
     console.error('\nStack:', err.stack);
     process.exit(1);

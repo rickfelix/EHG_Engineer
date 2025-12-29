@@ -26,7 +26,7 @@ async function deployFix() {
   console.log(`Size: ${(sql.length / 1024).toFixed(1)} KB\n`);
 
   console.log('Executing migration...');
-  const { data, error } = await supabase.rpc('exec_raw_sql', { sql });
+  const { data: _data, error } = await supabase.rpc('exec_raw_sql', { sql });
 
   if (error) {
     console.error('❌ Migration failed:', error);

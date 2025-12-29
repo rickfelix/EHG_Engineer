@@ -14,7 +14,7 @@ async function approveSD() {
     const sdId = 'SD-VIF-TIER-001';
 
     // Update SD status to active and set phase to PLAN
-    const { data: updated, error: updateError } = await supabase
+    const { data: _updated, error: updateError } = await supabase
       .from('strategic_directives_v2')
       .update({
         status: 'active',

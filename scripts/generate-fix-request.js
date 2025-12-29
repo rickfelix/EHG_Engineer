@@ -71,7 +71,7 @@ class FixRequestGenerator {
     try {
       const content = await fs.readFile(actualPath, 'utf8');
       return JSON.parse(content);
-    } catch (error) {
+    } catch (_error) {
       // Try to find most recent report
       const reportsDir = path.dirname(actualPath);
       const files = await fs.readdir(reportsDir);

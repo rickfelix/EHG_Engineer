@@ -47,7 +47,7 @@ if (stageError) {
 
 // FR-1: Verify lifecycle_phases has 6 phases
 console.log('\nFR-1: Verifying lifecycle_phases has 6 phases...');
-const { data: phases, error: phaseError, count: phaseCount } = await supabase
+const { data: _phases, error: phaseError, count: phaseCount } = await supabase
   .from('lifecycle_phases')
   .select('*', { count: 'exact' });
 
@@ -105,7 +105,7 @@ try {
     console.log(`   ✅ get_stage_info(1) returned: ${stageInfo.stage_name || 'data'}`);
     results.findings.get_stage_info = 'PASS';
   }
-} catch (err) {
+} catch (_err) {
   console.log('   ❌ ERROR:', err.message);
   results.critical_issues.push('get_stage_info test failed: ' + err.message);
   results.verdict = 'FAIL';
@@ -129,7 +129,7 @@ try {
     console.log(`   ✅ get_sd_required_stages('feature') returned ${requiredStages.length} stages`);
     results.findings.get_sd_required_stages = 'PASS';
   }
-} catch (err) {
+} catch (_err) {
   console.log('   ❌ ERROR:', err.message);
   results.critical_issues.push('get_sd_required_stages test failed: ' + err.message);
   results.verdict = 'FAIL';
@@ -153,7 +153,7 @@ try {
     console.log(`   ✅ get_stages_by_phase(1) returned ${phaseStages.length} stages`);
     results.findings.get_stages_by_phase = 'PASS';
   }
-} catch (err) {
+} catch (_err) {
   console.log('   ❌ ERROR:', err.message);
   results.critical_issues.push('get_stages_by_phase test failed: ' + err.message);
   results.verdict = 'FAIL';

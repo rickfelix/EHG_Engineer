@@ -135,7 +135,7 @@ async function testMCPWorkflow() {
 
   // Step 2: Generate MCP commands
   console.log('🔧 Step 2: Generating MCP test commands...\n');
-  const mcpCommands = generateMCPTestCommands(userStory);
+  const _mcpCommands = generateMCPTestCommands(userStory);
 
   // Step 3: Display MCP workflow
   console.log('═══════════════════════════════════════════════════════════');

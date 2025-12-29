@@ -115,7 +115,7 @@ Patterns exceeding these thresholds auto-create CRITICAL SDs:
 async function updateSection() {
   console.log('Updating pattern_search_guide section...');
 
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('leo_protocol_sections')
     .update({
       content: enhancedContent,

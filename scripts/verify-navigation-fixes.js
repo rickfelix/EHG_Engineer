@@ -185,7 +185,7 @@ async function runTests() {
         console.log('❌ FAILED');
         failedTests++;
       }
-    } catch (error) {
+    } catch (_error) {
       console.log(`❌ ERROR: ${error.message}`);
       failedTests++;
     }

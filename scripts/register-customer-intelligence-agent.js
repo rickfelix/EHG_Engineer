@@ -16,7 +16,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // Use EHG database (not EHG_Engineer)
-const supabase = createClient(
+const _supabase = createClient(
   process.env.EHG_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.EHG_SUPABASE_ANON_KEY
 );

@@ -192,7 +192,8 @@ async function createPRD(sdId, sdUuid) {
 /**
  * Create a handoff with gate validation results
  */
-async function createHandoff(sdId, type, gateResults) {
+ 
+async function _createHandoff(sdId, type, gateResults) {
   const [fromPhase, , toPhase] = type.split('-');
 
   // Extract score from gate validation results
@@ -237,7 +238,8 @@ async function createHandoff(sdId, type, gateResults) {
 /**
  * Generate realistic gate validation results
  */
-function generateGateResults(gateNum, score, adaptiveThreshold) {
+ 
+function _generateGateResults(gateNum, score, adaptiveThreshold) {
   const passed = score >= adaptiveThreshold;
 
   return {
@@ -340,7 +342,7 @@ async function seedData() {
 
     // Create PRD
     // SD ID Schema Cleanup (2025-12-12): Use sd.id directly
-    const prd = await createPRD(sd.id, sd.id);
+    const _prd = await createPRD(sd.id, sd.id);
 
     console.log(`   ✅ Created test data for ${sdConfig.id} (ready for validation testing)`);
   }
@@ -386,7 +388,7 @@ async function main() {
     console.log('✅ Seeding complete!\n');
     process.exit(0);
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Seeding failed:', error.message);
     console.error(error.stack);
     process.exit(1);

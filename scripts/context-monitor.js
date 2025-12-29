@@ -96,7 +96,7 @@ class ContextMonitor {
         const content = fs.readFileSync(filepath, 'utf8');
         tokens += this.estimateTokens(content);
       }
-    } catch (error) {
+    } catch (_error) {
       // File doesn't exist or can't be read
     }
     

@@ -15,8 +15,7 @@ import {
   getRunStats,
   closeUATRun,
   getOpenDefects,
-  exportRunResults,
-  getTestCasesBySection
+  exportRunResults
 } from '../api/uat/handlers';
 
 // Types
@@ -197,7 +196,7 @@ class UATLead {
     }
 
     const lines = payload.split('\n');
-    const result: any = { evidence: {} };
+    const result: Record<string, unknown> & { evidence: Record<string, string> } = { evidence: {} };
 
     for (const line of lines) {
       if (line.includes('=')) {
@@ -219,11 +218,11 @@ class UATLead {
     }
 
     return {
-      run_id: result.run_id,
-      case_id: result.case_id,
-      status: result.status as any,
+      run_id: result.run_id as string,
+      case_id: result.case_id as string,
+      status: result.status as 'PASS' | 'FAIL' | 'BLOCKED' | 'NA',
       evidence: Object.keys(result.evidence).length > 0 ? result.evidence : undefined,
-      notes: result.notes
+      notes: result.notes as string | undefined
     };
   }
 
@@ -237,7 +236,7 @@ class UATLead {
     const result = await createUATDefect({
       run_id: payload.run_id,
       case_id: payload.case_id,
-      severity: severity as any,
+      severity: severity as 'critical' | 'major' | 'minor',
       summary: `${payload.case_id} failed: ${payload.notes || payload.evidence?.toast || 'See details'}`
     });
 
@@ -422,7 +421,8 @@ class UATLead {
     );
 
     const filename = `uat-results-${this.activeRun}.${format}`;
-    require('fs').writeFileSync(filename, results);
+    const fs = await import('fs');
+    fs.writeFileSync(filename, results);
     console.log(chalk.green(`✓ Exported to ${filename}\n`));
   }
 
@@ -459,7 +459,9 @@ class UATLead {
 }
 
 // Run if executed directly
-if (require.main === module) {
+import { fileURLToPath } from 'url';
+const __filename_uat = fileURLToPath(import.meta.url);
+if (process.argv[1] === __filename_uat) {
   const lead = new UATLead();
   lead.start().catch(console.error);
 }

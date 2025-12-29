@@ -1,11 +1,13 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// fileURLToPath and dirname kept for potential future module path resolution
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
+// path import kept for potential future file operations
+// import path from 'path';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -21,7 +23,7 @@ async function completePLANPhase() {
     // Update PRD to mark PLAN complete
     const prdId = 'PRD-SD-DASHBOARD-UI-2025-08-31-A';
     
-    const { data: prdUpdate, error: prdError } = await supabase
+    const { data: _prdUpdate, error: prdError } = await supabase
       .from('product_requirements_v2')
       .update({
         status: 'approved',
@@ -59,7 +61,7 @@ async function completePLANPhase() {
     }
 
     // Update SD to reflect PLAN completion
-    const { data: sdUpdate, error: sdError } = await supabase
+    const { data: _sdUpdate, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .update({
         metadata: {

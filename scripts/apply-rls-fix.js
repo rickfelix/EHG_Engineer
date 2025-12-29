@@ -2,7 +2,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import fs from 'fs';
+// fs import kept for potential future file operations
 
 dotenv.config();
 

@@ -8,7 +8,8 @@
  */
 
 import { execSync } from 'child_process';
-import path from 'path';
+// path - available for future path operations
+import path from 'path'; // eslint-disable-line no-unused-vars
 
 /**
  * Verify component integration
@@ -52,7 +53,7 @@ export async function verifyComponentIntegration(componentPaths, targetApp = 'eh
       encoding: 'utf8',
       stdio: 'pipe'
     });
-  } catch (error) {
+  } catch (_error) {
     // grep failed - continue with empty matches
   }
 
@@ -139,7 +140,7 @@ export async function findNewComponents(targetApp = 'ehg') {
 
     const files = output.split('\n').filter(f => f.trim());
     return files;
-  } catch (error) {
+  } catch (_error) {
     // Fallback: simpler find without sorting (macOS/WSL compatibility)
     try {
       const fallbackCommand = `find ${appPath} -type f \\( -name "*.tsx" -o -name "*.jsx" \\) -mtime -1 2>/dev/null | head -50`;

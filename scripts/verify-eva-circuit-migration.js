@@ -154,7 +154,7 @@ async function verifyMigration() {
     console.log(`   • RLS Policies: ${rlsResult.rows.length} ✅`);
     console.log(`   • Triggers: ${trigResult.rows.length} ✅`);
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error:', error.message);
     console.error('Full error:', error);
     process.exit(1);

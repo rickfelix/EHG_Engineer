@@ -61,7 +61,7 @@ async function getSDDetails() {
     console.log('\n');
 
     // Check for existing user stories
-    const { data: stories, error: storiesError } = await supabase
+    const { data: stories, error: _storiesError } = await supabase
       .from('user_stories')
       .select('*')
       .eq('sd_id', sd2.id);
@@ -107,7 +107,7 @@ async function getSDDetails() {
   console.log('\n');
 
   // Check for existing user stories
-  const { data: stories, error: storiesError } = await supabase
+  const { data: stories, error: _storiesError2 } = await supabase
     .from('user_stories')
     .select('*')
     .eq('sd_id', sd.id);

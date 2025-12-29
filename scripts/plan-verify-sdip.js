@@ -290,7 +290,7 @@ async function verifySDIPImplementation() {
   }
   
   // Create EXEC handback to PLAN
-  const handback = {
+  const _handback = {
     type: 'EXEC_TO_PLAN_HANDBACK',
     timestamp: new Date().toISOString(),
     from: 'EXEC',

@@ -128,7 +128,7 @@ class SDDatabaseSync {
     }
     
     try {
-      const { data, error } = await this.supabase
+      const { data: _data, error } = await this.supabase
         .from('strategic_directives_v2')
         .insert({
           id: sdId,

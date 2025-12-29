@@ -95,7 +95,7 @@ async function checkEHGBacklog() {
       if (!error) {
         console.log(`   ✅ Found: ${table} (rows: ${count})`);
       }
-    } catch (e) {
+    } catch (_e) {
       // Table doesn't exist
     }
   }

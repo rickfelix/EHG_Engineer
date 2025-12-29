@@ -11,7 +11,8 @@
 import * as parser from '@babel/parser';
 import traverse from '@babel/traverse';
 import fs from 'fs/promises';
-import path from 'path';
+// path - available for future path operations
+import path from 'path'; // eslint-disable-line no-unused-vars
 
 /**
  * DependencyAnalyzer class - Analyzes code dependencies
@@ -111,7 +112,7 @@ export class DependencyAnalyzer {
         },
 
         // ES6 default export: export default foo
-        ExportDefaultDeclaration: (nodePath) => {
+        ExportDefaultDeclaration: (_nodePath) => {
           exports.add('default');
         },
 

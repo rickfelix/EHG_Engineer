@@ -30,7 +30,7 @@ export class GuidanceGenerator {
    * @param {Object} dependencies - Dependency analysis
    * @returns {Array} Utilities with recommendations
    */
-  identifyReusableUtilities(utilities, dependencies) {
+  identifyReusableUtilities(utilities, _dependencies) {
     return utilities.map(util => ({
       path: util.path,
       name: util.name,

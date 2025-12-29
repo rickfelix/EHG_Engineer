@@ -108,7 +108,7 @@ async function updateExecChecklist() {
     
     console.log('\n⚠️  Cannot handoff to PLAN until 100% complete!');
     
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Error:', error.message);
     process.exit(1);
   }

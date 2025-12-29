@@ -50,7 +50,7 @@ import { createDatabaseClient } from './lib/supabase-connection.js';
       ['Category', sd.category !== null]
     ];
 
-    checks.forEach(([name, isPresent]) => {
+    checks.forEach(([_name, isPresent]) => {
       fields++;
       if (isPresent) present++;
     });
@@ -90,7 +90,7 @@ import { createDatabaseClient } from './lib/supabase-connection.js';
       });
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Query failed:', error.message);
     process.exit(1);
   } finally {

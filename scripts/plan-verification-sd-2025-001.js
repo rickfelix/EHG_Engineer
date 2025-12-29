@@ -144,7 +144,7 @@ class PLANVerification {
     console.log('📋 STEP 2: Verifying Acceptance Criteria\n');
     
     // Get PRD from database
-    const { data: prd } = await this.supabase
+    const { data: _prd } = await this.supabase
       .from('product_requirements_v2')
       .select('*')
       .eq('id', 'PRD-PRD-2025-001')

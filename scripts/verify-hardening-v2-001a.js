@@ -15,7 +15,7 @@
 import { createDatabaseClient } from './lib/supabase-connection.js';
 
 const CHAIRMAN_EMAIL = 'rickfelix2000@gmail.com';
-const TEST_NON_CHAIRMAN_EMAIL = 'test@example.com';
+const _TEST_NON_CHAIRMAN_EMAIL = 'test@example.com';
 
 const GOVERNANCE_TABLES = [
   'strategic_directives_v2',
@@ -65,7 +65,7 @@ async function main() {
         results.failed++;
         console.log(`   ❌ FAIL: Expected ${CHAIRMAN_EMAIL}, got ${chairmanEmail || 'NOT SET'}`);
       }
-    } catch (error) {
+    } catch (_error) {
       results.failed++;
       results.tests.push({
         name: 'US-001: Chairman email configured',
@@ -106,7 +106,7 @@ async function main() {
         results.failed++;
         console.log(`   ❌ FAIL: Function missing or incorrect (exists: ${fnExists})`);
       }
-    } catch (error) {
+    } catch (_error) {
       results.failed++;
       results.tests.push({
         name: 'US-001: fn_is_chairman() function exists',
@@ -159,7 +159,7 @@ async function main() {
           results.failed++;
           console.log(`   ❌ FAIL: ${tableName} missing expected policies`);
         }
-      } catch (error) {
+      } catch (_error) {
         results.failed++;
         results.tests.push({
           name: `US-002/US-003: ${tableName} RLS policies`,
@@ -203,7 +203,7 @@ async function main() {
         results.failed++;
         console.log('   ❌ FAIL: service_role operations restricted');
       }
-    } catch (error) {
+    } catch (_error) {
       results.failed++;
       results.tests.push({
         name: 'US-004: service_role can perform all operations',
@@ -239,7 +239,7 @@ async function main() {
     // Exit with appropriate code
     process.exit(results.failed > 0 ? 1 : 0);
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ FATAL ERROR:', error.message);
     console.error(error.stack);
     process.exit(1);

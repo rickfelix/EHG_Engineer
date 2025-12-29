@@ -7,7 +7,6 @@
 
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs/promises';
-import path from 'path';
 import chalk from 'chalk';
 import dotenv from 'dotenv';
 
@@ -44,7 +43,7 @@ class LEOCleanup {
       try {
         await fs.unlink(file);
         console.log(chalk.green(`   ✓ Removed ${file}`));
-      } catch (error) {
+      } catch (_error) {
         // File doesn't exist, that's ok
       }
     }
@@ -54,7 +53,7 @@ class LEOCleanup {
     console.log(chalk.yellow('\n📋 Checking for completed SDs that should not be active...'));
 
     // Get all completed SDs
-    const { data: completedSDs, error } = await supabase
+    const { data: completedSDs, error: _error } = await supabase
       .from('strategic_directives_v2')
       .select('id, title, status, current_phase')
       .eq('status', 'completed');
@@ -130,7 +129,7 @@ class LEOCleanup {
         try {
           await fs.unlink(file);
           console.log(chalk.green(`   ✓ Removed ${file}`));
-        } catch (error) {
+        } catch (_error) {
           // File doesn't exist, that's ok
         }
       }

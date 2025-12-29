@@ -83,7 +83,7 @@ async function createHandoff() {
   };
 
   // Store handoff
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('leo_handoffs')
     .insert(handoff);
 

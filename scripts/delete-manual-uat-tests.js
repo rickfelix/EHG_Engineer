@@ -39,7 +39,7 @@ async function deleteManualTests() {
 
   // Delete using RPC or direct SQL
   // Try using raw SQL through rpc if available
-  const { data: sqlResult, error: sqlError } = await supabase.rpc('exec_sql', {
+  const { data: _sqlResult, error: sqlError } = await supabase.rpc('exec_sql', {
     sql: "DELETE FROM uat_cases WHERE test_type = 'manual'"
   });
 

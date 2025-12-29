@@ -302,7 +302,7 @@ CREATE INDEX idx_venture_milestones_status ON venture_milestones(status);
   };
 
   // Try handoff_tracking table first
-  const { data: checkTable, error: tableError } = await supabase
+  const { data: _checkTable, error: tableError } = await supabase
     .from('handoff_tracking')
     .select('id')
     .limit(1);
@@ -312,7 +312,7 @@ CREATE INDEX idx_venture_milestones_status ON venture_milestones(status);
   if (useHandoffTracking) {
     console.log('Using handoff_tracking table...');
 
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('handoff_tracking')
       .insert({
         sd_id: 'SD-047A',

@@ -43,7 +43,7 @@ async function markLeoValidationComplete() {
       approved_by: 'LEAD'
     };
 
-    const { data: updated, error: updateError } = await supabase
+    const { data: _updated, error: updateError } = await supabase
       .from('strategic_directives_v2')
       .update({
         progress: 100,
@@ -63,7 +63,7 @@ async function markLeoValidationComplete() {
     console.log('  Completion status: complete');
     console.log('  Completion date:', updatedMetadata.completion_date);
 
-  } catch (err) {
+  } catch (_err) {
     console.error('Failed to update SD:', err.message);
   }
 }

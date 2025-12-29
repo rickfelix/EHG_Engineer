@@ -346,7 +346,7 @@ class LEOMaintenanceManager {
         console.log(chalk.cyan(`\nActive Sessions: ${activeSessions.length || 0}`));
       }
 
-    } catch (error) {
+    } catch (_error) {
       console.log(chalk.yellow('\n⚠️  Could not fetch database statistics'));
     }
 

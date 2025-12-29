@@ -53,7 +53,7 @@ async function validateTestPlans() {
     } else {
       console.log('   ✅ No test plan markdown files found');
     }
-  } catch (error) {
+  } catch (_error) {
     console.log('   ✅ No test plan markdown files found');
   }
 

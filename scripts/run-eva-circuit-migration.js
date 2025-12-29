@@ -33,7 +33,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   }
 });
 
-async function executeSql(sql) {
+async function _executeSql(sql) {
   const { data, error } = await supabase.rpc('exec_sql', { sql_query: sql });
   if (error) throw error;
   return data;
@@ -54,7 +54,7 @@ async function runMigration() {
   try {
     migrationSql = readFileSync(migrationPath, 'utf8');
     console.log(`✅ Migration file loaded (${migrationSql.length} bytes)\n`);
-  } catch (error) {
+  } catch (_error) {
     console.error(`❌ Failed to read migration file: ${error.message}`);
     process.exit(1);
   }
@@ -96,7 +96,7 @@ async function runMigration() {
     } else {
       console.log('✅ Migration executed successfully');
     }
-  } catch (error) {
+  } catch (_error) {
     console.error(`❌ Migration failed: ${error.message}`);
     console.error('Full error:', error);
 
@@ -155,7 +155,7 @@ async function verifyTables() {
       } else {
         console.log(`  ✅ ${table}: Exists (${count || 0} rows)`);
       }
-    } catch (error) {
+    } catch (_error) {
       console.error(`  ❌ ${table}: Verification failed - ${error.message}`);
     }
   }
@@ -183,7 +183,7 @@ async function verifyTables() {
       } else {
         console.log(`  ✅ ${func}: Exists`);
       }
-    } catch (error) {
+    } catch (_error) {
       console.log(`  ⚠️  ${func}: Verification skipped`);
     }
   }

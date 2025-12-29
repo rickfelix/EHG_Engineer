@@ -66,7 +66,7 @@ async function testContentCreation() {
 
     // TEST 2: Create initial version
     console.log('📝 TEST 2: Creating initial version...');
-    const { data: version1, error: version1Error } = await supabase
+    const { data: _version1, error: version1Error } = await supabase
       .from('content_versions')
       .insert({
         catalogue_id: catalogueItem.id,
@@ -101,7 +101,7 @@ async function testContentCreation() {
 
     if (updateError) throw updateError;
 
-    const { data: version2, error: version2Error } = await supabase
+    const { data: _version2, error: version2Error } = await supabase
       .from('content_versions')
       .insert({
         catalogue_id: catalogueItem.id,
@@ -145,7 +145,7 @@ async function testContentCreation() {
 
     // TEST 5: Link conversation to content
     console.log('📝 TEST 5: Linking conversation to content...');
-    const { data: link, error: linkError } = await supabase
+    const { data: _link, error: linkError } = await supabase
       .from('conversation_content_links')
       .insert({
         conversation_id: conversation.id,
@@ -170,7 +170,7 @@ async function testContentCreation() {
 
     if (layoutError) throw layoutError;
 
-    const { data: assignment, error: assignmentError } = await supabase
+    const { data: _assignment, error: assignmentError } = await supabase
       .from('content_layout_assignments')
       .insert({
         catalogue_id: catalogueItem.id,
@@ -189,7 +189,7 @@ async function testContentCreation() {
 
     // TEST 7: Create metadata entry
     console.log('📝 TEST 7: Creating metadata entry...');
-    const { data: metadata, error: metadataError } = await supabase
+    const { data: _metadata, error: metadataError } = await supabase
       .from('content_item_metadata')
       .insert({
         catalogue_id: catalogueItem.id,
@@ -244,7 +244,7 @@ async function testContentCreation() {
     console.log('\n🧹 Cleanup: To remove test data, run:');
     console.log(`   DELETE FROM content_catalogue WHERE id = '${catalogueItem.id}';`);
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ TEST FAILED:', error.message);
     if (error.details) console.error('Details:', error.details);
     if (error.hint) console.error('Hint:', error.hint);

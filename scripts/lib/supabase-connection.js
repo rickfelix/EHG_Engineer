@@ -85,7 +85,7 @@ export function buildConnectionString(projectKey, password) {
  * @returns {Promise<pg.Client>} Connected client
  */
 export async function createDatabaseClient(projectKey = 'ehg', options = {}) {
-  const config = DB_CONFIGS[projectKey];
+  const _config = DB_CONFIGS[projectKey];
 
   // Get password from environment or options
   const password = options.password ||

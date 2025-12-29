@@ -287,7 +287,7 @@ async function verifyMigration() {
       return 1;
     }
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Verification error:', error.message);
     console.error(error.stack);
     return 1;

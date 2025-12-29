@@ -1,11 +1,11 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// Unused ES module path helpers (kept for potential future use)
+// import { fileURLToPath } from 'url';
+// import { dirname } from 'path';
 
 
 
 
 import { createClient } from '@supabase/supabase-js';
-import path from 'path';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -120,7 +120,7 @@ async function initializeSD003Dashboard() {
     ];
     
     // Update SD with comprehensive LEAD planning
-    const { data: updatedSD, error: updateError } = await supabase
+    const { error: updateError } = await supabase
       .from('strategic_directives_v2')
       .update({
         status: 'active',
@@ -165,12 +165,12 @@ async function initializeSD003Dashboard() {
     console.log('✅ SD-003-DASHBOARD INITIALIZED SUCCESSFULLY\n');
     
     console.log('🎯 STRATEGIC OBJECTIVES:');
-    strategicObjectives.forEach((obj, index) => {
-      console.log(`  ${index + 1}. ${obj}`);
+    strategicObjectives.forEach((obj, idx) => {
+      console.log(`  ${idx + 1}. ${obj}`);
     });
     
     console.log('\n📈 SUCCESS CRITERIA:');
-    successCriteria.forEach((criteria, index) => {
+    successCriteria.forEach((criteria) => {
       console.log(`  ✓ ${criteria}`);
     });
     
@@ -193,7 +193,7 @@ async function initializeSD003Dashboard() {
     console.log('  LEAD Approval: 0% (Pending)\n');
     
     console.log('📋 LEAD CHECKLIST STATUS:');
-    leadChecklist.forEach((item, index) => {
+    leadChecklist.forEach((item) => {
       console.log(`  ${item.checked ? '✅' : '⏳'} ${item.text}`);
     });
     

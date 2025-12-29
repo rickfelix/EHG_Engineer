@@ -146,7 +146,7 @@ async function testMultiAgentSelection() {
         console.log(`   Note: Would miss ${scenario.expectedAgents.length - legacyResult.auto_triggered} potentially needed agents`);
       }
       
-    } catch (error) {
+    } catch (_error) {
       console.log(`   ❌ Error: ${error.message}`);
     }
   }

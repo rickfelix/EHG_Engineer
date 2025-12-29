@@ -83,7 +83,7 @@ async function testSubAgent(agentInfo) {
       score: result.score || 'N/A'
     };
     
-  } catch (error) {
+  } catch (_error) {
     return {
       name: agentInfo.name,
       status: 'error',

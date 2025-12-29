@@ -8,7 +8,7 @@
 import fsModule from 'fs';
 const fs = fsModule.promises;
 import path from 'path';
-import { execSync } from 'child_process';
+// import { execSync } from 'child_process'; // Unused - available for shell commands
 
 // Import improved sub-agents
 import SecuritySubAgentV3 from '../lib/agents/security-sub-agent-v3';
@@ -16,7 +16,7 @@ import PerformanceSubAgentV2 from '../lib/agents/performance-sub-agent-v2';
 import IntelligentDesignSubAgent from '../lib/agents/design-sub-agent-intelligent';
 
 // Import base agents for comparison
-import BaseSubAgent from '../lib/agents/base-sub-agent';
+// import BaseSubAgent from '../lib/agents/base-sub-agent'; // Unused - available for comparison
 import IntelligentBaseSubAgent from '../lib/agents/intelligent-base-sub-agent';
 
 // Import coordination tool
@@ -482,7 +482,7 @@ async function main() {
   try {
     await tester.runComprehensiveTest();
     process.exit(0);
-  } catch (error) {
+  } catch (_error) {
     console.error('❌ Test failed:', error);
     console.error(error.stack);
     process.exit(1);

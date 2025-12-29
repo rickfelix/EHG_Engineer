@@ -21,7 +21,8 @@ import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { execSync } from 'child_process';
 import fs from 'fs';
-import path from 'path';
+// path - available for future file path operations
+import path from 'path'; // eslint-disable-line no-unused-vars
 
 // Configuration
 const LLM_CONFIG = {
@@ -96,7 +97,7 @@ async function main() {
 
   // Step 2: Find PRD
   console.log('📄 Step 2: Finding PRD...');
-  let { data: prd, error: prdError } = await supabase
+  let { data: prd, error: _prdError } = await supabase
     .from('product_requirements_v2')
     .select('*')
     .eq('sd_id', sd.id)
@@ -147,7 +148,7 @@ async function main() {
     );
     fs.unlinkSync(promptFile);
     console.log('   ✅ Design analysis complete\n');
-  } catch (err) {
+  } catch (_err) {
     console.warn('   ⚠️  Design analysis failed:', err.message);
   }
 
@@ -167,7 +168,7 @@ async function main() {
     );
     fs.unlinkSync(promptFile);
     console.log('   ✅ Database analysis complete\n');
-  } catch (err) {
+  } catch (_err) {
     console.warn('   ⚠️  Database analysis failed:', err.message);
   }
 
@@ -187,7 +188,7 @@ async function main() {
     );
     fs.unlinkSync(promptFile);
     console.log('   ✅ Risk analysis complete\n');
-  } catch (err) {
+  } catch (_err) {
     console.warn('   ⚠️  Risk analysis failed:', err.message);
   }
 
@@ -213,7 +214,7 @@ async function main() {
       );
       fs.unlinkSync(promptFile);
       console.log('   ✅ Security analysis complete\n');
-    } catch (err) {
+    } catch (_err) {
       console.warn('   ⚠️  Security analysis failed:', err.message);
     }
   }
@@ -335,7 +336,7 @@ async function main() {
     console.log('1. Run handoff validation: node scripts/verify-handoff-plan-to-exec.js ' + sdId);
     console.log('2. Review PRD content in database');
 
-  } catch (err) {
+  } catch (_err) {
     console.error('   ❌ LLM generation failed:', err.message);
     process.exit(1);
   }

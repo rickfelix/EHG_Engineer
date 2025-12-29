@@ -50,10 +50,10 @@ export class OrchestratorCompletionGuardian {
    * Returns detailed report of what's missing and what can be auto-created
    */
   async validate() {
-    console.log(`\n🛡️  ORCHESTRATOR COMPLETION GUARDIAN`);
-    console.log(`════════════════════════════════════════════════════════════`);
+    console.log('\n🛡️  ORCHESTRATOR COMPLETION GUARDIAN');
+    console.log('════════════════════════════════════════════════════════════');
     console.log(`   SD: ${this.sdId}`);
-    console.log(`   Validating completion requirements...\n`);
+    console.log('   Validating completion requirements...\n');
 
     // Load parent SD data
     const { data: parent, error: parentError } = await supabase
@@ -278,8 +278,8 @@ export class OrchestratorCompletionGuardian {
     const failed = this.validationResults.filter(r => !r.passed);
     const canAutoFix = failed.filter(r => r.canAutoFix);
 
-    console.log(`📊 VALIDATION RESULTS`);
-    console.log(`────────────────────────────────────────────────────────────`);
+    console.log('📊 VALIDATION RESULTS');
+    console.log('────────────────────────────────────────────────────────────');
 
     this.validationResults.forEach(r => {
       const icon = r.passed ? '✅' : '❌';
@@ -287,8 +287,8 @@ export class OrchestratorCompletionGuardian {
       console.log(`   ${icon} ${r.check}: ${r.message}${fix}`);
     });
 
-    console.log(`\n📈 SUMMARY`);
-    console.log(`────────────────────────────────────────────────────────────`);
+    console.log('\n📈 SUMMARY');
+    console.log('────────────────────────────────────────────────────────────');
     console.log(`   Passed: ${passed.length}/${this.validationResults.length}`);
     console.log(`   Failed: ${failed.length}/${this.validationResults.length}`);
     console.log(`   Can Auto-Fix: ${canAutoFix.length}/${failed.length}`);
@@ -313,8 +313,8 @@ export class OrchestratorCompletionGuardian {
    * Auto-create all missing artifacts using intelligence from children
    */
   async autoCreateArtifacts() {
-    console.log(`\n🔧 AUTO-CREATING MISSING ARTIFACTS`);
-    console.log(`════════════════════════════════════════════════════════════`);
+    console.log('\n🔧 AUTO-CREATING MISSING ARTIFACTS');
+    console.log('════════════════════════════════════════════════════════════');
 
     const created = [];
 
@@ -402,7 +402,7 @@ export class OrchestratorCompletionGuardian {
    */
   async createPRD() {
     // Load child PRDs for aggregation
-    const { data: childPrds } = await supabase
+    const { data: _childPrds } = await supabase
       .from('product_requirements_v2')
       .select('title, executive_summary')
       .in('sd_id', this.childData.map(c => c.id));
@@ -521,7 +521,7 @@ export class OrchestratorCompletionGuardian {
     if (error) {
       console.log(`   ❌ Failed to enhance retrospective: ${error.message}`);
     } else {
-      console.log(`   ✅ Enhanced retrospective quality score`);
+      console.log('   ✅ Enhanced retrospective quality score');
     }
   }
 
@@ -549,8 +549,8 @@ export class OrchestratorCompletionGuardian {
    * Complete the orchestrator SD after all artifacts are in place
    */
   async complete() {
-    console.log(`\n🎯 COMPLETING ORCHESTRATOR SD`);
-    console.log(`════════════════════════════════════════════════════════════`);
+    console.log('\n🎯 COMPLETING ORCHESTRATOR SD');
+    console.log('════════════════════════════════════════════════════════════');
 
     // Use direct update (Supabase client should work now that artifacts exist)
     const { data, error } = await supabase
@@ -567,12 +567,12 @@ export class OrchestratorCompletionGuardian {
 
     if (error) {
       console.log(`\n❌ COMPLETION FAILED: ${error.message}`);
-      console.log(`\n💡 This may be a LEO Protocol trigger blocking the update.`);
+      console.log('\n💡 This may be a LEO Protocol trigger blocking the update.');
       console.log(`   Run: node scripts/complete-orchestrator-direct.js ${this.sdId}`);
       return { success: false, error: error.message };
     }
 
-    console.log(`\n🎉 ORCHESTRATOR COMPLETED SUCCESSFULLY`);
+    console.log('\n🎉 ORCHESTRATOR COMPLETED SUCCESSFULLY');
     console.log(`   ID: ${data.id}`);
     console.log(`   Status: ${data.status}`);
     console.log(`   Progress: ${data.progress}%`);
@@ -620,7 +620,7 @@ export async function guardOrchestratorCompletion(sdId, options = {}) {
   const report = await guardian.validate();
 
   if (report.canComplete) {
-    console.log(`\n✅ All requirements met - ready for completion`);
+    console.log('\n✅ All requirements met - ready for completion');
     if (options.autoComplete) {
       return await guardian.complete();
     }

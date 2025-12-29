@@ -12,7 +12,7 @@ async function testCreateTable() {
   console.log('Testing table creation capabilities...\n');
 
   // Try to create a simple test table
-  const { data, error } = await supabase
+  const { data: _data, error } = await supabase
     .from('test_table_delete_me')
     .insert([
       { test_field: 'test_value' }

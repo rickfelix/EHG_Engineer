@@ -46,7 +46,7 @@ async function applySchema() {
     // Try to check if tables already exist
     console.log('\n🔍 Checking existing tables...');
 
-    const { data: activations, error: activationsError } = await supabase
+    const { data: _activations, error: activationsError } = await supabase
       .from('sub_agent_activations')
       .select('id')
       .limit(1);
@@ -57,7 +57,7 @@ async function applySchema() {
       console.log('❌ sub_agent_activations table does not exist - needs creation');
     }
 
-    const { data: sessions, error: sessionsError } = await supabase
+    const { data: _sessions, error: sessionsError } = await supabase
       .from('leo_session_tracking')
       .select('id')
       .limit(1);

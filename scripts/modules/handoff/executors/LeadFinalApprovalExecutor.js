@@ -577,7 +577,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
           severity: 'warning',
           created_by: 'LEAD-FINAL-APPROVAL-EXECUTOR'
         });
-    } catch (e) {
+    } catch (_e) {
       // Silent fail for logging - don't break the flow
     }
   }

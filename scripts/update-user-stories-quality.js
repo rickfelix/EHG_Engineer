@@ -212,7 +212,7 @@ async function updateUserStories() {
   for (const update of updates) {
     console.log(`Updating ${update.story_key}...`);
 
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('user_stories')
       .update({
         user_role: update.user_role,

@@ -344,7 +344,7 @@ class VisionQADecisionHelper {
   /**
    * Generate LEO Protocol communication snippet
    */
-  generateCommunication(decision, agentRole = 'PLAN') {
+  generateCommunication(decision, _agentRole = 'PLAN') {
     const header = `**Vision QA Status:** ${decision.recommendation}`;
     
     if (decision.required) {
@@ -389,7 +389,7 @@ This tool helps LEO Protocol agents determine when Vision QA is required.
     
     const roleChoice = await question('\nSelect (1-3): ');
     const roles = ['LEAD', 'PLAN', 'EXEC'];
-    const agentRole = roles[parseInt(roleChoice) - 1] || 'PLAN';
+    const _agentRole = roles[parseInt(roleChoice) - 1] || 'PLAN';
 
     // Get input type
     console.log('\nWhat are you analyzing?');
@@ -397,7 +397,7 @@ This tool helps LEO Protocol agents determine when Vision QA is required.
     console.log('2. Task/EES');
     console.log('3. Free text description');
     
-    const typeChoice = await question('\nSelect (1-3): ');
+    const _typeChoice = await question('\nSelect (1-3): ');
 
     // Get description
     const description = await question('\nEnter description or paste content:\n');

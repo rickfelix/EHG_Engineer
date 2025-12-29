@@ -95,7 +95,7 @@ async function verifyGTMRoutes() {
 
     console.log('\n========================================\n');
 
-  } catch (error) {
+  } catch (_error) {
     console.error('\n❌ Verification failed with error:');
     console.error(error.message);
     console.error('\nStack trace:');
