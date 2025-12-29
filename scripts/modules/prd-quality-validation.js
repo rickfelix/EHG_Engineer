@@ -208,6 +208,7 @@ function validatePRDHeuristic(prd) {
 export async function validatePRDQuality(prd, options = {}) {
   const prdId = prd?.id || 'Unknown';
   const sdType = (options.sdType || prd?.category || '').toLowerCase();
+  const sdCategory = (options.sdCategory || prd?.category || '').toLowerCase();
 
   // Basic presence check (fast-fail before AI call)
   if (!prd || Object.keys(prd).length === 0) {
@@ -231,9 +232,12 @@ export async function validatePRDQuality(prd, options = {}) {
   // These SDs have simpler scope and don't need full AI semantic analysis
   // Added 'refactor' (2025-12-27): Refactoring SDs are internal code restructuring,
   // similar to infrastructure - they don't need the full AI semantic analysis
-  const heuristicTypes = ['bugfix', 'bug_fix', 'infrastructure', 'quality assurance', 'quality_assurance', 'orchestrator', 'documentation', 'refactor'];
+  // Added 'theming', 'ux', 'design', 'ui' (2025-12-28): UI/UX SDs focus on visual/style changes
+  // Check both sdType and sdCategory since SDs can have type='implementation' but category='theming'
+  const heuristicTypes = ['bugfix', 'bug_fix', 'infrastructure', 'quality assurance', 'quality_assurance', 'orchestrator', 'documentation', 'refactor', 'theming', 'ux', 'design', 'ui'];
   const usesHeuristic = process.env.PRD_VALIDATION_MODE === 'heuristic' ||
-                        heuristicTypes.includes(sdType);
+                        heuristicTypes.includes(sdType) ||
+                        heuristicTypes.includes(sdCategory);
 
   if (usesHeuristic) {
     console.log(`   ℹ️  Using heuristic PRD validation (sdType: ${sdType || 'env override'})`);
@@ -305,7 +309,8 @@ export async function validatePRDForHandoff(prd, options = {}) {
   const {
     minimumScore = 70,
     blockOnWarnings = false,
-    sdType = ''
+    sdType = '',
+    sdCategory = ''  // Pass SD category (theming, ux, etc.) for heuristic validation
   } = options;
 
   const result = {
@@ -324,8 +329,8 @@ export async function validatePRDForHandoff(prd, options = {}) {
     return result;
   }
 
-  // Run quality validation (with SD type for type-aware validation)
-  const qualityResult = await validatePRDQuality(prd, { sdType });
+  // Run quality validation (with SD type and category for type-aware validation)
+  const qualityResult = await validatePRDQuality(prd, { sdType, sdCategory });
   result.qualityDetails = qualityResult;
   result.score = qualityResult.score;
 
