@@ -35,7 +35,8 @@ const BOILERPLATE_TITLES = [
   'add functionality'
 ];
 
-const GENERIC_ROLES = ['user', 'developer', 'admin', 'system'];
+// Reserved for future role-based validation
+const _GENERIC_ROLES = ['user', 'developer', 'admin', 'system'];
 
 const GENERIC_BENEFITS = [
   'improve the system',

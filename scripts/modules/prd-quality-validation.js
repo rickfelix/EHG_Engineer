@@ -58,15 +58,15 @@ const BOILERPLATE_REQUIREMENTS = [
   'add capability'
 ];
 
-// Generic executive summary patterns (warning)
-const GENERIC_SUMMARY_PATTERNS = [
+// Generic executive summary patterns (warning) - reserved for future validation
+const _GENERIC_SUMMARY_PATTERNS = [
   'this prd defines the technical requirements',
   'product requirements document for',
   'requirements for strategic directive'
 ];
 
-// Generic test scenarios (blocking)
-const BOILERPLATE_TEST_SCENARIOS = [
+// Generic test scenarios (blocking) - reserved for future validation
+const _BOILERPLATE_TEST_SCENARIOS = [
   'to be defined during planning',
   'verify it works',
   'test the feature',
