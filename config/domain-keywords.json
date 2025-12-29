@@ -1,0 +1,250 @@
+{
+  "$schema": "./domain-keywords.schema.json",
+  "_meta": {
+    "version": "1.0.0",
+    "description": "Domain keyword configuration for context-aware sub-agent selector",
+    "extractedFrom": "lib/context-aware-sub-agent-selector.js",
+    "extractedDate": "2025-12-29"
+  },
+  "domains": {
+    "DATABASE": {
+      "code": "DATABASE",
+      "name": "Principal Database Architect",
+      "primary": [
+        "database", "postgres", "postgresql", "supabase", "migration",
+        "schema", "SQL", "query", "index", "foreign key", "primary key",
+        "constraint", "trigger", "stored procedure", "transaction"
+      ],
+      "secondary": [
+        "table", "column", "row", "RLS", "policy", "data model",
+        "relationship", "junction", "insert", "update", "delete", "select"
+      ],
+      "exclusions": [
+        "HTML table", "data table", "table component", "UI table",
+        "display table", "grid table", "table view", "table layout",
+        "table styling", "CSS table"
+      ],
+      "minMatches": 2,
+      "weight": { "title": 3, "description": 2, "content": 1 }
+    },
+    "SECURITY": {
+      "code": "SECURITY",
+      "name": "Chief Security Architect",
+      "primary": [
+        "authentication", "authorization", "auth", "security", "login",
+        "logout", "session", "token", "JWT", "OAuth", "SSO", "password",
+        "credential", "permission", "role", "access control", "RBAC",
+        "encryption", "hash", "salt", "vulnerability", "OWASP", "XSS",
+        "CSRF", "SQL injection"
+      ],
+      "secondary": [
+        "RLS", "policy", "user", "admin", "privileges", "audit"
+      ],
+      "exclusions": [
+        "security deposit", "job security", "security guard"
+      ],
+      "minMatches": 2,
+      "weight": { "title": 3, "description": 2, "content": 1 }
+    },
+    "DESIGN": {
+      "code": "DESIGN",
+      "name": "Senior Design Sub-Agent",
+      "primary": [
+        "UI", "UX", "design", "user experience", "user interface",
+        "wireframe", "mockup", "prototype", "responsive", "mobile",
+        "layout", "styling", "theme", "branding", "accessibility",
+        "a11y", "ARIA", "screen reader", "keyboard navigation",
+        "color contrast", "responsive design", "grid layout", "flexbox"
+      ],
+      "secondary": [
+        "component", "interface", "button", "form", "modal", "dropdown",
+        "menu", "navigation", "header", "footer", "sidebar", "card",
+        "tooltip", "icon"
+      ],
+      "exclusions": [
+        "TypeScript interface", "interface definition", "type interface",
+        "API interface", "interface IProps", "interface Props",
+        "React component logic", "component state", "component lifecycle",
+        "component props", "component testing"
+      ],
+      "minMatches": 2,
+      "weight": { "title": 3, "description": 2, "content": 1 }
+    },
+    "PERFORMANCE": {
+      "code": "PERFORMANCE",
+      "name": "Performance Engineering Lead",
+      "primary": [
+        "performance", "optimization", "optimize", "speed", "latency",
+        "throughput", "scalability", "scale", "scaling", "caching",
+        "bottleneck", "profiling", "benchmark", "load time", "response time",
+        "memory usage", "CPU usage", "indexing", "lazy loading",
+        "code splitting", "bundle size", "compression", "minification",
+        "high traffic", "traffic", "increased load"
+      ],
+      "secondary": [
+        "load", "cache", "fast", "slow", "timeout", "efficient", "efficiency"
+      ],
+      "exclusions": [
+        "load data", "data loading", "user load", "workload distribution"
+      ],
+      "minMatches": 2,
+      "weight": { "title": 3, "description": 2, "content": 1 }
+    },
+    "TESTING": {
+      "code": "TESTING",
+      "name": "QA Engineering Director",
+      "primary": [
+        "testing", "test", "QA", "quality assurance", "E2E", "end-to-end",
+        "unit test", "integration test", "Playwright", "Vitest", "Jest",
+        "coverage", "test suite", "test case", "assertion", "mock",
+        "stub", "fixture", "test automation"
+      ],
+      "secondary": [
+        "verify", "validate", "check", "assertion", "expect"
+      ],
+      "exclusions": [
+        "test environment", "load test"
+      ],
+      "minMatches": 1,
+      "weight": { "title": 3, "description": 2, "content": 1 }
+    },
+    "VALIDATION": {
+      "code": "VALIDATION",
+      "name": "Principal Systems Analyst",
+      "primary": [
+        "duplicate", "duplicates", "existing implementation",
+        "existing implementations", "already implemented", "codebase check",
+        "codebase audit", "codebase validation", "codebase", "conflict",
+        "validation", "validate", "duplicate work", "reuse",
+        "leverage existing", "check existing", "find existing",
+        "search existing", "verify existing", "search codebase"
+      ],
+      "secondary": [
+        "existing", "already", "similar", "same as", "like",
+        "infrastructure", "pattern", "implementation", "implementations",
+        "search", "find"
+      ],
+      "exclusions": [],
+      "minMatches": 1,
+      "weight": { "title": 4, "description": 3, "content": 2 }
+    },
+    "DOCMON": {
+      "code": "DOCMON",
+      "name": "Information Architecture Lead",
+      "primary": [
+        "documentation", "docs", "README", "guide", "guides",
+        "documentation generation", "workflow docs", "technical writing",
+        "API docs", "API documentation", "user manual", "reference docs",
+        "tutorial", "instructions", "setup guide", "developer docs"
+      ],
+      "secondary": [
+        "document", "explain", "describe", "how to", "walkthrough", "example"
+      ],
+      "exclusions": [
+        "document upload", "PDF document", "document management"
+      ],
+      "minMatches": 1,
+      "weight": { "title": 4, "description": 3, "content": 2 }
+    },
+    "GITHUB": {
+      "code": "GITHUB",
+      "name": "DevOps Platform Architect",
+      "primary": [
+        "GitHub Actions", "CI/CD", "pipeline", "workflow", "deployment",
+        "build", "actions", "pull request", "PR", "release",
+        "continuous integration", "continuous deployment"
+      ],
+      "secondary": [
+        "github", "git", "deploy", "publish", "version"
+      ],
+      "exclusions": [
+        "git commit", "git branch", "version control"
+      ],
+      "minMatches": 1,
+      "weight": { "title": 3, "description": 2, "content": 1 }
+    },
+    "UAT": {
+      "code": "UAT",
+      "name": "UAT Test Executor",
+      "primary": [
+        "UAT", "user acceptance testing", "acceptance testing",
+        "user journey", "acceptance criteria", "user story",
+        "stakeholder testing"
+      ],
+      "secondary": [
+        "acceptance", "user test", "manual test"
+      ],
+      "exclusions": [],
+      "minMatches": 1,
+      "weight": { "title": 3, "description": 2, "content": 1 }
+    },
+    "API": {
+      "code": "API",
+      "name": "API Architecture Sub-Agent",
+      "primary": [
+        "API", "REST", "RESTful", "GraphQL", "endpoint", "route",
+        "controller", "middleware", "API design", "API architecture",
+        "OpenAPI", "Swagger", "API versioning", "API documentation"
+      ],
+      "secondary": [
+        "request", "response", "payload", "status code", "HTTP method",
+        "query parameter", "path parameter", "pagination", "rate limiting"
+      ],
+      "exclusions": [
+        "API key", "third-party API"
+      ],
+      "minMatches": 2,
+      "weight": { "title": 3, "description": 2, "content": 1 }
+    },
+    "DEPENDENCY": {
+      "code": "DEPENDENCY",
+      "name": "Dependency Management Sub-Agent",
+      "primary": [
+        "dependency", "dependencies", "npm", "yarn", "pnpm",
+        "package.json", "vulnerability", "CVE", "security advisory",
+        "outdated", "deprecated", "npm audit", "Snyk", "Dependabot"
+      ],
+      "secondary": [
+        "package", "install", "update", "upgrade", "version",
+        "semver", "node_modules", "patch", "CVSS", "exploit"
+      ],
+      "exclusions": [
+        "package delivery", "software package", "update user"
+      ],
+      "minMatches": 2,
+      "weight": { "title": 3, "description": 2, "content": 1 }
+    }
+  },
+  "coordinationGroups": {
+    "auth_feature": {
+      "keywords": ["authentication", "authorization", "login", "auth"],
+      "agents": ["SECURITY", "DATABASE"],
+      "reason": "Authentication features require security architecture AND database schema"
+    },
+    "rls_policy": {
+      "keywords": ["RLS", "row level security", "policy"],
+      "agents": ["DATABASE", "SECURITY"],
+      "reason": "RLS policies are database features with security implications"
+    },
+    "api_endpoint": {
+      "keywords": ["API", "endpoint", "REST", "GraphQL"],
+      "agents": ["API", "SECURITY", "DATABASE", "PERFORMANCE"],
+      "reason": "APIs require architecture review, security validation, database queries, and performance optimization"
+    },
+    "dependency_update": {
+      "keywords": ["dependency update", "npm upgrade", "package update", "vulnerability patch"],
+      "agents": ["DEPENDENCY", "SECURITY", "TESTING"],
+      "reason": "Dependency updates require vulnerability scanning, security review, and regression testing"
+    },
+    "data_export": {
+      "keywords": ["export", "CSV", "Excel", "PDF", "download"],
+      "agents": ["DATABASE", "PERFORMANCE"],
+      "reason": "Data export requires database optimization and performance tuning"
+    },
+    "user_management": {
+      "keywords": ["user management", "user admin", "role management"],
+      "agents": ["SECURITY", "DATABASE", "DESIGN"],
+      "reason": "User management requires security, database, and UI design"
+    }
+  }
+}
