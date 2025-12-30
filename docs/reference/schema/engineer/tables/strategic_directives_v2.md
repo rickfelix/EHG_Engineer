@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-30T16:06:20.997Z
-**Rows**: 282
+**Generated**: 2025-12-30T20:05:08.123Z
+**Rows**: 284
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -397,6 +397,11 @@ Use the id column instead - it is the canonical identifier. |
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION enforce_metadata_object()`
 
+### trg_enforce_orphan_protection
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_orphan_protection()`
+
 ### trg_enforce_parent_orchestrator_type
 
 - **Timing**: AFTER INSERT
@@ -406,6 +411,21 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION enforce_parent_orchestrator_type()`
+
+### trg_enforce_sd_type_change_explanation
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_sd_type_change_explanation()`
+
+### trg_enforce_sd_type_change_risk
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_sd_type_change_risk()`
+
+### trg_enforce_type_change_timing
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_type_change_timing()`
 
 ### trg_inherit_contracts_on_insert
 

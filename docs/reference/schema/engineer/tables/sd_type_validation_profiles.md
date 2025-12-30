@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-30T16:06:20.997Z
+**Generated**: 2025-12-30T20:05:08.123Z
 **Rows**: 11
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (19 total)
+## Columns (20 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -37,6 +37,7 @@
 | e2e_acceptance_criteria_template | `jsonb` | YES | - | Template JSON for E2E acceptance criteria that should be included in user stories |
 | story_e2e_guidance | `text` | YES | - | Guidance text shown when creating user stories for this SD type |
 | required_handoff_types | `ARRAY` | YES | `ARRAY['LEAD-TO-PLAN'::text, 'PLAN-TO-EXEC'::text, 'EXEC-TO-PLAN'::text]` | - |
+| requires_user_stories | `boolean` | YES | `true` | If true, user stories must exist AND be validated for the verify phase to pass. Prevents Silent Success anti-pattern. |
 
 ## Constraints
 
