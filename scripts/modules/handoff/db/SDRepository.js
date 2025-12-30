@@ -4,7 +4,12 @@
  *
  * Consolidates all SD query patterns into a single, testable module.
  * Eliminates 10+ duplicate query patterns from unified-handoff-system.js
+ *
+ * SD-LEO-ID-NORMALIZE-001: Uses SD ID normalizer to prevent silent update failures
+ * caused by ID format mismatches (UUID vs sd_key vs legacy_id).
  */
+
+import { normalizeSDId, normalizeSDIdWithDetails } from '../../sd-id-normalizer.js';
 
 export class SDRepository {
   constructor(supabase) {
@@ -138,28 +143,70 @@ export class SDRepository {
 
   /**
    * Update SD status and phase
-   * @param {string} sdId - Strategic Directive ID
+   *
+   * SD-LEO-ID-NORMALIZE-001: This method now normalizes the SD ID before update
+   * to prevent silent failures when the input format doesn't match the DB id column.
+   *
+   * @param {string} sdId - Strategic Directive ID (any format: uuid, legacy_id, sd_key)
    * @param {string} status - New status
    * @param {string} phase - New phase (optional)
    * @param {object} metadata - Additional fields to update
+   * @throws {Error} If SD not found or update fails
    */
   async updateStatus(sdId, status, phase = null, metadata = {}) {
-    const updateData = { status, ...metadata };
+    // SD-LEO-ID-NORMALIZE-001: Normalize ID to prevent silent update failures
+    const normalization = await normalizeSDIdWithDetails(this.supabase, sdId);
+
+    if (!normalization.success) {
+      throw new Error(
+        `Cannot update SD status: ${normalization.error}. ` +
+        `Input ID was: "${sdId}" (format: ${normalization.inputFormat})`
+      );
+    }
+
+    const canonicalId = normalization.canonicalId;
+
+    // Log if normalization changed the ID (helps debug silent failures)
+    if (normalization.wasNormalized) {
+      console.log(`[SDRepository.updateStatus] ID normalized: "${sdId}" -> "${canonicalId}"`);
+    }
+
+    const updateData = {
+      status,
+      ...metadata,
+      updated_at: new Date().toISOString()
+    };
+
     if (phase) {
       updateData.current_phase = phase;
     }
 
-    const { error } = await this.supabase
+    const { data, error } = await this.supabase
       .from('strategic_directives_v2')
       .update(updateData)
-      .eq('id', sdId);
+      .eq('id', canonicalId)
+      .select('id')
+      .single();
 
     if (error) {
       throw new Error(`Failed to update SD status: ${error.message}`);
     }
 
-    // Invalidate cache
+    // SD-LEO-ID-NORMALIZE-001: Verify update actually happened
+    if (!data) {
+      throw new Error(
+        'SD status update returned no data - possible silent failure. ' +
+        `Canonical ID: "${canonicalId}", Original input: "${sdId}"`
+      );
+    }
+
+    console.log(`[SDRepository.updateStatus] Updated SD ${canonicalId}: status=${status}${phase ? `, phase=${phase}` : ''}`);
+
+    // Invalidate cache for both original and canonical IDs
     this._invalidateCacheForSd(sdId);
+    if (sdId !== canonicalId) {
+      this._invalidateCacheForSd(canonicalId);
+    }
   }
 
   /**
