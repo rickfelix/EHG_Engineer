@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-30T20:05:08.123Z
+**Generated**: 2025-12-30T21:56:22.248Z
 **Rows**: 284
 **RLS**: Enabled (4 policies)
 
@@ -122,7 +122,7 @@ Use the id column instead - it is the canonical identifier. |
 - `strategic_directives_v2_progress_percentage_check`: CHECK (((progress_percentage >= 0) AND (progress_percentage <= 100)))
 - `strategic_directives_v2_relationship_type_check`: CHECK ((relationship_type = ANY (ARRAY['standalone'::text, 'parent'::text, 'child'::text])))
 - `strategic_directives_v2_scope_reduction_check`: CHECK (((scope_reduction_percentage >= 0) AND (scope_reduction_percentage <= 100)))
-- `strategic_directives_v2_status_check`: CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'in_progress'::character varying, 'active'::character varying, 'pending_approval'::character varying, 'completed'::character varying, 'deferred'::character varying, 'cancelled'::character varying])::text[])))
+- `strategic_directives_v2_status_check`: CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'active'::character varying, 'in_progress'::character varying, 'planning'::character varying, 'review'::character varying, 'pending_approval'::character varying, 'completed'::character varying, 'deferred'::character varying, 'cancelled'::character varying])::text[])))
 
 ## Indexes
 
