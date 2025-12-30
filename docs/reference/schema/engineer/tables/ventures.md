@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-29T05:03:19.064Z
-**Rows**: 5
+**Generated**: 2025-12-30T16:06:20.997Z
+**Rows**: 7
 **RLS**: Enabled (5 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -214,6 +214,11 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
   WHERE (user_company_access.user_id = auth.uid())))`
 
 ## Triggers
+
+### auto_populate_company_id_trigger
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION auto_populate_venture_company_id()`
 
 ### enforce_tier0_stage_cap
 

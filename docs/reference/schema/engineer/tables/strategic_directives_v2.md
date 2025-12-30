@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2025-12-29T05:03:19.064Z
-**Rows**: 218
+**Generated**: 2025-12-30T16:06:20.997Z
+**Rows**: 282
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -106,7 +106,9 @@ Use the id column instead - it is the canonical identifier. |
 - `strategic_directives_v2_parent_sd_id_fkey`: parent_sd_id → strategic_directives_v2(id)
 
 ### Unique Constraints
+- `strategic_directives_v2_legacy_id_unique`: UNIQUE (legacy_id)
 - `strategic_directives_v2_sd_key_key`: UNIQUE (sd_key)
+- `strategic_directives_v2_sd_key_unique`: UNIQUE (sd_key)
 
 ### Check Constraints
 - `check_target_application`: CHECK (((target_application)::text = ANY ((ARRAY['EHG'::character varying, 'EHG_Engineer'::character varying])::text[])))
@@ -212,6 +214,10 @@ Use the id column instead - it is the canonical identifier. |
   ```sql
   CREATE INDEX idx_strategic_directives_v2_embedding ON public.strategic_directives_v2 USING ivfflat (scope_embedding vector_cosine_ops) WITH (lists='50')
   ```
+- `idx_strategic_directives_v2_legacy_id`
+  ```sql
+  CREATE INDEX idx_strategic_directives_v2_legacy_id ON public.strategic_directives_v2 USING btree (legacy_id) WHERE (legacy_id IS NOT NULL)
+  ```
 - `idx_strategic_directives_v2_priority`
   ```sql
   CREATE INDEX idx_strategic_directives_v2_priority ON public.strategic_directives_v2 USING btree (priority)
@@ -228,6 +234,10 @@ Use the id column instead - it is the canonical identifier. |
   ```sql
   CREATE INDEX idx_strategic_directives_v2_status ON public.strategic_directives_v2 USING btree (status)
   ```
+- `strategic_directives_v2_legacy_id_unique`
+  ```sql
+  CREATE UNIQUE INDEX strategic_directives_v2_legacy_id_unique ON public.strategic_directives_v2 USING btree (legacy_id)
+  ```
 - `strategic_directives_v2_pkey`
   ```sql
   CREATE UNIQUE INDEX strategic_directives_v2_pkey ON public.strategic_directives_v2 USING btree (id)
@@ -235,6 +245,10 @@ Use the id column instead - it is the canonical identifier. |
 - `strategic_directives_v2_sd_key_key`
   ```sql
   CREATE UNIQUE INDEX strategic_directives_v2_sd_key_key ON public.strategic_directives_v2 USING btree (sd_key)
+  ```
+- `strategic_directives_v2_sd_key_unique`
+  ```sql
+  CREATE UNIQUE INDEX strategic_directives_v2_sd_key_unique ON public.strategic_directives_v2 USING btree (sd_key)
   ```
 
 ## RLS Policies
