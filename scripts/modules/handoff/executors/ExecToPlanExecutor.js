@@ -3,9 +3,12 @@
  * Part of LEO Protocol Unified Handoff System refactor
  *
  * Validates that EXEC phase implementation is complete and ready for PLAN verification.
+ *
+ * SD-LEO-ID-NORMALIZE-001: Uses SD ID normalizer for all update operations.
  */
 
 import BaseExecutor from './BaseExecutor.js';
+import { normalizeSDId } from '../../sd-id-normalizer.js';
 
 // External validators (will be lazy loaded)
 let validateBMADForExecToPlan;
@@ -449,21 +452,36 @@ export class ExecToPlanExecutor extends BaseExecutor {
     await this._transitionPrdToVerification(prdForTransition);
 
     // 6c. Update SD status (may fail due to progress trigger - that's expected)
+    // SD-LEO-ID-NORMALIZE-001: Normalize ID before update
     console.log('\n   Updating SD status...');
     try {
-      const { error: updateError } = await this.supabase
-        .from('strategic_directives_v2')
-        .update({
-          current_phase: 'EXEC_COMPLETE',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', sdId);
-
-      if (updateError) {
-        console.warn(`   ⚠️  SD phase update note: ${updateError.message}`);
-        console.log('   ℹ️  SD completion requires PLAN-TO-LEAD handoff');
+      const sdCanonicalId = await normalizeSDId(this.supabase, sdId);
+      if (!sdCanonicalId) {
+        console.warn(`   ⚠️  Could not normalize SD ID: ${sdId}`);
       } else {
-        console.log('   ✅ SD phase updated to EXEC_COMPLETE');
+        if (sdId !== sdCanonicalId) {
+          console.log(`   ℹ️  ID normalized: "${sdId}" -> "${sdCanonicalId}"`);
+        }
+
+        const { data: updateResult, error: updateError } = await this.supabase
+          .from('strategic_directives_v2')
+          .update({
+            current_phase: 'EXEC_COMPLETE',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', sdCanonicalId)
+          .select('id')
+          .single();
+
+        if (updateError) {
+          console.warn(`   ⚠️  SD phase update note: ${updateError.message}`);
+          console.log('   ℹ️  SD completion requires PLAN-TO-LEAD handoff');
+        } else if (!updateResult) {
+          // SD-LEO-ID-NORMALIZE-001: Detect silent failures
+          console.warn('   ⚠️  SD update returned no data - possible silent failure');
+        } else {
+          console.log('   ✅ SD phase updated to EXEC_COMPLETE');
+        }
       }
     } catch (error) {
       console.warn(`   ⚠️  SD update error: ${error.message}`);

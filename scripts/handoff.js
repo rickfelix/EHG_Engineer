@@ -16,6 +16,7 @@
 import { createHandoffSystem } from './modules/handoff/index.js';
 import { createClient } from '@supabase/supabase-js';
 import { shouldSkipCodeValidation, getValidationRequirements } from '../lib/utils/sd-type-validation.js';
+import { normalizeSDId } from './modules/sd-id-normalizer.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -506,24 +507,34 @@ async function main() {
         const nextStep = nextStepMap[handoffType.toUpperCase()];
         if (nextStep) {
           // LEO Protocol v4.3.3: Actually update SD status in database (PAT-HANDOFF-STATUS-001)
+          // SD-LEO-ID-NORMALIZE-001: Use normalizer to prevent silent update failures
           const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-          // Resolve sd_key to UUID for consistent database update
-          const { data: sdData } = await supabase
-            .from('strategic_directives_v2')
-            .select('id')
-            .or(`legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
-            .single();
+          // Normalize SD ID to canonical form before update
+          const canonicalId = await normalizeSDId(supabase, sdId);
 
-          if (sdData?.id) {
-            const { error: updateError } = await supabase
+          if (canonicalId) {
+            const { data: updateData, error: updateError } = await supabase
               .from('strategic_directives_v2')
               .update({ status: nextStep.status, updated_at: new Date().toISOString() })
-              .eq('id', sdData.id);
+              .eq('id', canonicalId)
+              .select('id')
+              .single();
 
             if (updateError) {
               console.warn(`   ⚠️  Failed to update SD status: ${updateError.message}`);
+            } else if (!updateData) {
+              // SD-LEO-ID-NORMALIZE-001: Detect silent failures
+              console.warn('   ⚠️  SD status update returned no data - possible silent failure');
+              console.warn(`      Input ID: "${sdId}", Canonical ID: "${canonicalId}"`);
+            } else {
+              // Log successful normalization if ID was transformed
+              if (sdId !== canonicalId) {
+                console.log(`   ℹ️  ID normalized: "${sdId}" -> "${canonicalId}"`);
+              }
             }
+          } else {
+            console.warn(`   ⚠️  Could not normalize SD ID: ${sdId}`);
           }
 
           console.log('');

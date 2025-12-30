@@ -3,6 +3,8 @@
  * Part of LEO Protocol Unified Handoff System refactor
  *
  * Validates that PLAN verification is complete and ready for LEAD final approval.
+ *
+ * SD-LEO-ID-NORMALIZE-001: Uses SD ID normalizer for all update operations.
  */
 
 import BaseExecutor from './BaseExecutor.js';
@@ -11,6 +13,7 @@ import {
   isInfrastructureSDSync,
   getThresholdProfile
 } from '../../sd-type-checker.js';
+import { normalizeSDId } from '../../sd-id-normalizer.js';
 
 // External validators (will be lazy loaded)
 let orchestrate;
@@ -852,8 +855,21 @@ export class PlanToLeadExecutor extends BaseExecutor {
       console.log('\n📊 STATE TRANSITIONS: Orchestrator Final Status Updates');
       console.log('-'.repeat(50));
 
+      // SD-LEO-ID-NORMALIZE-001: Normalize ID before update to prevent silent failures
+      const canonicalId = await normalizeSDId(this.supabase, sdId);
+      if (!canonicalId) {
+        console.log(`   ⚠️  Could not normalize SD ID: ${sdId}`);
+        return ResultBuilder.rejected(
+          'ID_NORMALIZATION_FAILED',
+          `Could not normalize SD ID: ${sdId}. Ensure SD exists in database.`
+        );
+      }
+      if (sdId !== canonicalId) {
+        console.log(`   ℹ️  ID normalized: "${sdId}" -> "${canonicalId}"`);
+      }
+
       // Update SD status to completed (orchestrators go straight to completed)
-      const { error: sdError } = await this.supabase
+      const { data: updateResult, error: sdError } = await this.supabase
         .from('strategic_directives_v2')
         .update({
           status: 'completed',
@@ -861,10 +877,15 @@ export class PlanToLeadExecutor extends BaseExecutor {
           progress_percentage: 100,
           updated_at: new Date().toISOString()
         })
-        .eq('id', sdId);
+        .eq('id', canonicalId)
+        .select('id')
+        .single();
 
       if (sdError) {
         console.log(`   ⚠️  SD update error: ${sdError.message}`);
+      } else if (!updateResult) {
+        // SD-LEO-ID-NORMALIZE-001: Detect silent failures
+        console.log('   ⚠️  SD update returned no data - possible silent failure');
       } else {
         console.log('   ✅ Orchestrator SD status transitioned: → completed');
         console.log('   ✅ Progress set to 100% (all children complete)');
@@ -973,19 +994,34 @@ export class PlanToLeadExecutor extends BaseExecutor {
     }
 
     // 3. Update SD status for LEAD approval (may trigger progress calculation)
-    const { error: sdError } = await this.supabase
-      .from('strategic_directives_v2')
-      .update({
-        status: 'pending_approval',
-        current_phase: 'LEAD',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', sdId);
-
-    if (sdError) {
-      console.log(`   ⚠️  SD update note: ${sdError.message}`);
+    // SD-LEO-ID-NORMALIZE-001: Normalize ID before update
+    const sdCanonicalId = await normalizeSDId(this.supabase, sdId);
+    if (!sdCanonicalId) {
+      console.log(`   ⚠️  Could not normalize SD ID for status update: ${sdId}`);
     } else {
-      console.log('   ✅ SD status transitioned: → pending_approval');
+      if (sdId !== sdCanonicalId) {
+        console.log(`   ℹ️  ID normalized: "${sdId}" -> "${sdCanonicalId}"`);
+      }
+
+      const { data: sdUpdateResult, error: sdError } = await this.supabase
+        .from('strategic_directives_v2')
+        .update({
+          status: 'pending_approval',
+          current_phase: 'LEAD',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', sdCanonicalId)
+        .select('id')
+        .single();
+
+      if (sdError) {
+        console.log(`   ⚠️  SD update note: ${sdError.message}`);
+      } else if (!sdUpdateResult) {
+        // SD-LEO-ID-NORMALIZE-001: Detect silent failures
+        console.log('   ⚠️  SD update returned no data - possible silent failure');
+      } else {
+        console.log('   ✅ SD status transitioned: → pending_approval');
+      }
     }
 
     // 4. Check if this SD has a parent that should be auto-completed

@@ -323,8 +323,8 @@ class LeadToPlanVerifier {
           } else {
             console.log('\\n   ✅ Quality assessment passed');
           }
-        } catch (_error) {
-          console.log(`\\n   ⚠️  Russian Judge unavailable: ${error.message}`);
+        } catch (rjError) {
+          console.log(`\\n   ⚠️  Russian Judge unavailable: ${rjError.message}`);
           console.log('   Proceeding with traditional validation only');
         }
       }
@@ -438,7 +438,7 @@ class LeadToPlanVerifier {
         qualityScore: sdValidation.percentage
       };
       
-    } catch (_error) {
+    } catch (error) {
       console.error('❌ Handoff verification failed:', error.message);
       return this.rejectHandoff(sdId, 'SYSTEM_ERROR', error.message);
     }
@@ -727,8 +727,14 @@ class LeadToPlanVerifier {
     }
 
     // Check success_criteria count
-    const criteria = Array.isArray(sd.success_criteria) ? sd.success_criteria :
-      (typeof sd.success_criteria === 'string' ? JSON.parse(sd.success_criteria || '[]') : []);
+    let criteria = [];
+    try {
+      criteria = Array.isArray(sd.success_criteria) ? sd.success_criteria :
+        (typeof sd.success_criteria === 'string' ? JSON.parse(sd.success_criteria || '[]') : []);
+    } catch (_parseErr) {
+      // success_criteria is a plain text string, treat as 1 item
+      criteria = sd.success_criteria ? [sd.success_criteria] : [];
+    }
     if (criteria.length >= checks.success_criteria.minItems) {
       result.score += checks.success_criteria.weight;
     } else {
@@ -1056,9 +1062,9 @@ class LeadToPlanVerifier {
         );
       }
 
-    } catch (_e) {
+    } catch (depError) {
       result.warnings.push(
-        `PRD-Readiness: Dependency validation error: ${e.message}`
+        `PRD-Readiness: Dependency validation error: ${depError.message}`
       );
     }
 
@@ -1258,9 +1264,9 @@ class LeadToPlanVerifier {
         }
       }
       
-    } catch (_error) {
+    } catch (envError) {
       check.ready = false;
-      check.issues.push(`Environment check failed: ${error.message}`);
+      check.issues.push(`Environment check failed: ${envError.message}`);
     }
     
     return check;
@@ -1302,8 +1308,8 @@ class LeadToPlanVerifier {
     try {
       await this.supabase.from('sd_phase_handoffs').insert(execution);
       console.log(`📝 Handoff execution recorded: ${executionId}`);
-    } catch (_error) {
-      console.warn('⚠️  Could not store handoff execution:', error.message);
+    } catch (storeError) {
+      console.warn('⚠️  Could not store handoff execution:', storeError.message);
     }
     
     return execution;
@@ -1339,8 +1345,8 @@ class LeadToPlanVerifier {
     try {
       await this.supabase.from('leo_handoff_rejections').insert(rejection);
       console.log(`📝 Rejection recorded: ${rejection.id}`);
-    } catch (_error) {
-      console.warn('⚠️  Could not store rejection:', error.message);
+    } catch (rejError) {
+      console.warn('⚠️  Could not store rejection:', rejError.message);
     }
     
     // Display improvement guidance
