@@ -36,37 +36,6 @@ const COMPLETION_REQUIREMENTS = {
 };
 
 /**
- * Get the execution order position of a child SD
- * Uses parent's dependency_chain or child index
- */
-async function getChildPosition(childSd, parentSd) {
-  // Check if parent has explicit dependency_chain
-  const dependencyChain = parentSd.dependency_chain || parentSd.metadata?.dependency_chain;
-
-  if (Array.isArray(dependencyChain) && dependencyChain.length > 0) {
-    const position = dependencyChain.findIndex(
-      id => id === childSd.id || id === childSd.legacy_id || id === childSd.sd_key
-    );
-    return position >= 0 ? position : null;
-  }
-
-  // Fallback: use sd_key pattern (e.g., SD-PARENT-001-P0, SD-PARENT-001-P1)
-  // Case-insensitive match for -p0, -P0, etc.
-  const match = childSd.sd_key?.match(/-[pP](\d+)$/);
-  if (match) {
-    return parseInt(match[1], 10);
-  }
-
-  // Another pattern: SD-XXX-001, SD-XXX-002
-  const legacyMatch = childSd.legacy_id?.match(/-[pP]?(\d+)$/);
-  if (legacyMatch) {
-    return parseInt(legacyMatch[1], 10);
-  }
-
-  return null;
-}
-
-/**
  * Get all siblings in execution order
  */
 async function getSiblingsInOrder(parentSd) {
