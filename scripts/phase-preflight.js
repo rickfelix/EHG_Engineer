@@ -16,6 +16,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { IssueKnowledgeBase } from '../lib/learning/issue-knowledge-base.js';
+import { enforceChildProgressionGate } from './modules/child-progression-gate.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -636,6 +637,25 @@ async function main() {
       displayParentWorkflowGuidance(sd, hierarchy.children, phase);
     } else if (hierarchy.type === 'child') {
       displayChildWorkflowGuidance(sd, hierarchy.parent, phase);
+    }
+
+    // CHILD PROGRESSION GATE: Enforce sequential completion for child SDs
+    // HARD BLOCK: Cannot start LEAD phase on P(N) until P(N-1) is verified complete
+    // This prevents the "Pending Approval Trap" where handoffs are skipped
+    if (hierarchy.type === 'child' && phase === 'LEAD') {
+      const progressionResult = await enforceChildProgressionGate(sdId);
+
+      if (!progressionResult.canProceed) {
+        console.log('\n❌ CHILD PROGRESSION GATE BLOCKED');
+        console.log('   Cannot start LEAD phase until predecessor is fully complete.');
+        console.log(`   Blocked by: ${progressionResult.blockedBy?.sd_key || progressionResult.blockedBy?.legacy_id || 'unknown'}`);
+        console.log('\n   Required action:');
+        console.log(`   ${progressionResult.requiredAction}`);
+        console.log('\n   Then re-run: node scripts/phase-preflight.js --phase LEAD --sd-id ' + sdId);
+        process.exit(1); // HARD BLOCK
+      }
+
+      console.log('\n✅ Child Progression Gate: PASSED (predecessor verified complete)');
     }
 
     // SD-LEO-GEMINI-001 (US-001): Discovery Gate for PLAN phase
