@@ -1,0 +1,41 @@
+# Genesis Virtual Bunker - Simulation Branch Guard
+#
+# Prevents simulation branches (sim/*) from being merged to main.
+# This is a safety measure to ensure simulation code never enters production.
+#
+# Part of SD-GENESIS-V31-MASON-BRANCH
+
+name: Simulation Branch Guard
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-source-branch:
+    name: Block Simulation Branches
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check if source is simulation branch
+        if: startsWith(github.head_ref, 'sim/')
+        run: |
+          echo "::error::Simulation branches cannot be merged to main."
+          echo ""
+          echo "Source branch: ${{ github.head_ref }}"
+          echo ""
+          echo "Simulation branches (sim/*) are ephemeral and should be:"
+          echo "  1. Regenerated at Stage 16/17 for production"
+          echo "  2. Incinerated when no longer needed"
+          echo ""
+          echo "If you need to promote simulation code to production,"
+          echo "use the regeneration gates instead."
+          echo ""
+          echo "See: docs/vision/GENESIS_VIRTUAL_BUNKER_ADDENDUM.md"
+          exit 1
+
+      - name: Allow non-simulation branches
+        if: "!startsWith(github.head_ref, 'sim/')"
+        run: |
+          echo "Source branch '${{ github.head_ref }}' is not a simulation branch."
+          echo "Proceeding with merge checks..."
