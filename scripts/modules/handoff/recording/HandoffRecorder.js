@@ -461,8 +461,70 @@ export class HandoffRecorder {
       return handoffId;
 
     } catch (error) {
+      // SD-LEO-PROTOCOL-V435-001 US-004: Silent error logging with recovery paths
       console.error('⚠️  Could not create handoff artifact:', error.message);
+
+      // Log error silently to database for debugging
+      await this._logErrorSilently('createArtifact', {
+        handoffType,
+        sdId,
+        executionId,
+        error: error.message,
+        stack: error.stack?.substring(0, 500)
+      });
+
+      // Return null but don't throw - the handoff execution was still recorded
       return null;
+    }
+  }
+
+  /**
+   * SD-LEO-PROTOCOL-V435-001 US-004: Silent Error Logging
+   *
+   * Logs errors to database without blocking the main flow.
+   * Provides recovery path suggestions for common error types.
+   *
+   * @param {string} operation - The operation that failed
+   * @param {object} context - Error context details
+   */
+  async _logErrorSilently(operation, context) {
+    try {
+      // Determine recovery path based on error type
+      let recoveryPath = 'Check database connectivity and retry';
+      const errorMsg = (context.error || '').toLowerCase();
+
+      if (errorMsg.includes('foreign key') || errorMsg.includes('fk constraint')) {
+        recoveryPath = 'Verify SD exists in strategic_directives_v2. Check sd_id format.';
+      } else if (errorMsg.includes('unique constraint') || errorMsg.includes('duplicate')) {
+        recoveryPath = 'Handoff may already exist. Check sd_phase_handoffs for existing record.';
+      } else if (errorMsg.includes('null value') || errorMsg.includes('not-null')) {
+        recoveryPath = 'Required field is missing. Check handoff content builder output.';
+      } else if (errorMsg.includes('check constraint')) {
+        recoveryPath = 'Invalid enum value. Check status, handoff_type, or phase values.';
+      } else if (errorMsg.includes('timeout') || errorMsg.includes('connection')) {
+        recoveryPath = 'Database connection issue. Wait and retry or check Supabase status.';
+      }
+
+      console.log(`   📋 Recovery Path: ${recoveryPath}`);
+
+      // Insert into error log table (non-blocking)
+      const errorRecord = {
+        operation,
+        context: JSON.stringify(context),
+        recovery_path: recoveryPath,
+        created_at: new Date().toISOString()
+      };
+
+      // Try to insert but don't wait or throw on failure
+      this.supabase
+        .from('leo_error_log')
+        .insert(errorRecord)
+        .then(() => {}) // Silently succeed
+        .catch(() => {}); // Silently fail - error logging should never block
+
+    } catch (_logError) {
+      // If error logging itself fails, just continue silently
+      // Never let error logging cause additional failures
     }
   }
 }

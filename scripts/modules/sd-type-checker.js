@@ -74,30 +74,31 @@ export const SCORING_WEIGHTS = {
 };
 
 // Threshold profiles by SD type
+// SD-LEO-PROTOCOL-V435-001 US-002: Added prdQuality thresholds per type
 export const THRESHOLD_PROFILES = {
   // Infrastructure SDs have lower quality thresholds (simpler by design)
-  infrastructure: { retrospectiveQuality: 55, sdCompletion: 55 },
-  documentation: { retrospectiveQuality: 50, sdCompletion: 50 },
-  process: { retrospectiveQuality: 55, sdCompletion: 55 },
-  qa: { retrospectiveQuality: 55, sdCompletion: 55 },  // SD-E2E-WEBSOCKET-AUTH-006
+  infrastructure: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50 },
+  documentation: { retrospectiveQuality: 50, sdCompletion: 50, prdQuality: 50 },
+  process: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50 },
+  qa: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50 },  // SD-E2E-WEBSOCKET-AUTH-006
 
   // PAT-SD-API-CATEGORY-003: API/backend SDs have slightly lower thresholds (no E2E required)
-  api: { retrospectiveQuality: 55, sdCompletion: 55 },
-  backend: { retrospectiveQuality: 55, sdCompletion: 55 },
+  api: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 65 },
+  backend: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 65 },
 
   // Feature SDs have standard thresholds
-  feature: { retrospectiveQuality: 65, sdCompletion: 65 },
-  bugfix: { retrospectiveQuality: 60, sdCompletion: 60 },
-  refactor: { retrospectiveQuality: 60, sdCompletion: 60 },
-  database: { retrospectiveQuality: 65, sdCompletion: 65 },
-  security: { retrospectiveQuality: 70, sdCompletion: 70 },
-  performance: { retrospectiveQuality: 60, sdCompletion: 60 },
+  feature: { retrospectiveQuality: 65, sdCompletion: 65, prdQuality: 85 },
+  bugfix: { retrospectiveQuality: 60, sdCompletion: 60, prdQuality: 70 },
+  refactor: { retrospectiveQuality: 60, sdCompletion: 60, prdQuality: 75 },
+  database: { retrospectiveQuality: 65, sdCompletion: 65, prdQuality: 70 },
+  security: { retrospectiveQuality: 70, sdCompletion: 70, prdQuality: 90 },
+  performance: { retrospectiveQuality: 60, sdCompletion: 60, prdQuality: 85 },
 
   // Orchestrator: Parent SDs - thresholds based on child completion
-  orchestrator: { retrospectiveQuality: 55, sdCompletion: 100 },  // Must have all children complete
+  orchestrator: { retrospectiveQuality: 55, sdCompletion: 100, prdQuality: 50 },  // Must have all children complete
 
   // Default
-  default: { retrospectiveQuality: 65, sdCompletion: 65 }
+  default: { retrospectiveQuality: 65, sdCompletion: 65, prdQuality: 70 }
 };
 
 /**
@@ -283,6 +284,20 @@ export async function getThresholdProfile(sd, options = {}) {
 }
 
 /**
+ * Get PRD quality threshold for SD type (sync version)
+ * SD-LEO-PROTOCOL-V435-001 US-002: Type-specific PRD quality thresholds
+ *
+ * @param {Object} sd - Strategic Directive object
+ * @returns {number} PRD quality threshold (50-90)
+ */
+export function getPRDQualityThresholdSync(sd) {
+  if (!sd) return THRESHOLD_PROFILES.default.prdQuality;
+  const declaredType = (sd.sd_type || sd.category || '').toLowerCase();
+  const profile = THRESHOLD_PROFILES[declaredType] || THRESHOLD_PROFILES.default;
+  return profile.prdQuality || THRESHOLD_PROFILES.default.prdQuality;
+}
+
+/**
  * Get sub-agents to skip for this SD type (PLAN_VERIFY phase)
  *
  * @param {Object} sd - Strategic Directive object
@@ -325,6 +340,7 @@ export default {
   requiresDesignDatabaseGatesSync,
   getScoringWeights,
   getThresholdProfile,
+  getPRDQualityThresholdSync,
   getSkippedSubAgents,
   clearCache,
   getCacheStats,
