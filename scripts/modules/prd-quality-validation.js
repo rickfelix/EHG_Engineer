@@ -13,6 +13,7 @@
  */
 
 import { PRDQualityRubric } from './rubrics/prd-quality-rubric.js';
+import { getPRDQualityThresholdSync, THRESHOLD_PROFILES } from './sd-type-checker.js';
 
 // ============================================
 // BOILERPLATE PATTERNS TO DETECT
@@ -298,20 +299,36 @@ export async function validatePRDQuality(prd, options = {}) {
 
 /**
  * Validate PRD for handoff readiness
+ * SD-LEO-PROTOCOL-V435-001 US-002: Uses type-specific PRD quality thresholds
+ *
  * @param {Object} prd - PRD object from database
  * @param {Object} options - Validation options
- * @param {number} options.minimumScore - Minimum score required (default: 70)
+ * @param {number} options.minimumScore - Minimum score required (default: type-specific threshold from THRESHOLD_PROFILES)
  * @param {boolean} options.blockOnWarnings - Whether to block on warnings (default: false)
  * @param {string} options.sdType - SD type for type-aware validation (bugfix uses heuristic)
+ * @param {Object} options.sd - SD object for type-specific threshold lookup
  * @returns {Promise<Object>} Validation result for handoff (async now - calls AI)
  */
 export async function validatePRDForHandoff(prd, options = {}) {
   const {
-    minimumScore = 70,
     blockOnWarnings = false,
     sdType = '',
-    sdCategory = ''  // Pass SD category (theming, ux, etc.) for heuristic validation
+    sdCategory = '',  // Pass SD category (theming, ux, etc.) for heuristic validation
+    sd = null  // SD object for type-specific threshold
   } = options;
+
+  // SD-LEO-PROTOCOL-V435-001 US-002: Get type-specific threshold
+  // Priority: explicit minimumScore > SD-based threshold > sdType-based threshold > default
+  let minimumScore = options.minimumScore;
+  if (minimumScore === undefined) {
+    if (sd) {
+      minimumScore = getPRDQualityThresholdSync(sd);
+    } else if (sdType) {
+      minimumScore = THRESHOLD_PROFILES[sdType.toLowerCase()]?.prdQuality || THRESHOLD_PROFILES.default.prdQuality;
+    } else {
+      minimumScore = THRESHOLD_PROFILES.default.prdQuality;
+    }
+  }
 
   const result = {
     valid: true,

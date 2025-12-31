@@ -22,6 +22,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // SD Type-aware workflow definitions
+// SD-LEO-PROTOCOL-V435-001: Added all 9 SD types with type-specific requirements
 const WORKFLOW_BY_SD_TYPE = {
   feature: {
     name: 'Full LEO Workflow',
@@ -84,6 +85,31 @@ const WORKFLOW_BY_SD_TYPE = {
         skippedValidation: []
       }
     }
+  },
+  // SD-LEO-PROTOCOL-V435-001: New type definitions
+  bugfix: {
+    name: 'Bugfix LEO Workflow',
+    description: 'Streamlined workflow for bug fixes with regression testing',
+    required: ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL'],
+    optional: [],
+    skippedValidation: [],
+    note: 'Bugfix SDs require regression testing to verify fix and prevent regressions'
+  },
+  performance: {
+    name: 'Performance LEO Workflow',
+    description: 'Full validation with PERFORMANCE sub-agent and benchmarks',
+    required: ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL'],
+    optional: [],
+    skippedValidation: [],
+    note: 'Performance SDs require PERFORMANCE sub-agent with baseline/comparison metrics'
+  },
+  orchestrator: {
+    name: 'Orchestrator LEO Workflow',
+    description: 'Parent SD workflow - completion driven by child SDs',
+    required: ['LEAD-TO-PLAN', 'PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL'],
+    optional: ['PLAN-TO-EXEC', 'EXEC-TO-PLAN'],
+    skippedValidation: ['E2E tests', 'Implementation Fidelity', 'Deliverables Gate'],
+    note: 'Orchestrator SDs complete when all children complete. No direct implementation.'
   }
 };
 
@@ -111,7 +137,25 @@ async function getSDWorkflow(sdId) {
   const skipValidation = shouldSkipCodeValidation(sd);
   const validationReqs = getValidationRequirements(sd);
   const effectiveType = sd.sd_type || (skipValidation ? 'infrastructure' : 'feature');
-  const workflow = WORKFLOW_BY_SD_TYPE[effectiveType] || WORKFLOW_BY_SD_TYPE.feature;
+  let workflow = WORKFLOW_BY_SD_TYPE[effectiveType] || WORKFLOW_BY_SD_TYPE.feature;
+
+  // SD-LEO-PROTOCOL-V435-001 US-005: Activate refactor intensity overrides
+  // If refactor type with intensity_level, apply the appropriate overrides
+  if (effectiveType === 'refactor' && sd.intensity_level && workflow.intensityOverrides) {
+    const intensityLevel = sd.intensity_level.toLowerCase();
+    const overrides = workflow.intensityOverrides[intensityLevel];
+
+    if (overrides) {
+      // Apply intensity-specific overrides
+      workflow = {
+        ...workflow,
+        required: overrides.required || workflow.required,
+        skippedValidation: overrides.skippedValidation || workflow.skippedValidation,
+        _intensityApplied: intensityLevel
+      };
+      console.log(`   ℹ️  Refactor intensity: ${intensityLevel} - workflow adjusted`);
+    }
+  }
 
   return {
     sd,

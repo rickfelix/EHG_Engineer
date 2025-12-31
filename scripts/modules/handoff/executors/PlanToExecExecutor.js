@@ -381,6 +381,18 @@ export class PlanToExecExecutor extends BaseExecutor {
       required: false // Warning-only, doesn't block handoff
     });
 
+    // SD-LEO-PROTOCOL-V435-001 US-003: Deliverables Planning Gate
+    // Validates that deliverables are defined before EXEC phase (if required by SD type)
+    gates.push({
+      name: 'GATE_DELIVERABLES_PLANNING',
+      validator: async (_ctx) => {
+        console.log('\n📦 GATE: Deliverables Planning Check');
+        console.log('-'.repeat(50));
+        return this._validateDeliverablesPlanning(sd);
+      },
+      required: false // Non-blocking for now (auto-populates in executeSpecific)
+    });
+
     // Gate 6: Branch Enforcement
     gates.push({
       name: 'GATE6_BRANCH_ENFORCEMENT',
@@ -756,6 +768,114 @@ export class PlanToExecExecutor extends BaseExecutor {
         max_score: 100,
         issues: [],
         warnings: [`Exploration audit error: ${error.message}`],
+        details: { error: error.message }
+      };
+    }
+  }
+
+  /**
+   * SD-LEO-PROTOCOL-V435-001 US-003: Validate Deliverables Planning
+   *
+   * Checks if deliverables are defined before EXEC phase for SD types that require them.
+   * Non-code SD types (infrastructure, documentation, orchestrator) can skip this gate.
+   *
+   * @param {Object} sd - Strategic Directive object
+   * @returns {Object} Gate validation result
+   */
+  async _validateDeliverablesPlanning(sd) {
+    try {
+      const sdType = (sd.sd_type || sd.category || 'feature').toLowerCase();
+
+      // Check if this SD type requires deliverables from sd_type_validation_profiles
+      const { data: profile } = await this.supabase
+        .from('sd_type_validation_profiles')
+        .select('requires_deliverables, requires_deliverables_gate')
+        .eq('sd_type', sdType)
+        .single();
+
+      // Determine if deliverables are required
+      // Priority: requires_deliverables_gate > requires_deliverables > default (true)
+      const requiresDeliverables = profile?.requires_deliverables_gate ??
+                                   profile?.requires_deliverables ??
+                                   !['infrastructure', 'documentation', 'docs', 'orchestrator', 'process'].includes(sdType);
+
+      console.log(`   SD Type: ${sdType}`);
+      console.log(`   Requires Deliverables: ${requiresDeliverables ? 'Yes' : 'No'}`);
+
+      if (!requiresDeliverables) {
+        console.log(`   ✅ Deliverables gate skipped for ${sdType} type`);
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [],
+          details: { skipped: true, reason: `${sdType} type does not require deliverables` }
+        };
+      }
+
+      // Check for existing deliverables
+      const { data: deliverables } = await this.supabase
+        .from('sd_scope_deliverables')
+        .select('id, name, completion_status')
+        .eq('sd_id', sd.id);
+
+      const deliverableCount = deliverables?.length || 0;
+
+      console.log(`   Deliverables Defined: ${deliverableCount}`);
+
+      if (deliverableCount === 0) {
+        console.log('   ⚠️  No deliverables defined yet');
+        console.log('      Deliverables will be auto-populated from PRD');
+        return {
+          passed: true, // Non-blocking - auto-populate will handle
+          score: 70,
+          max_score: 100,
+          issues: [],
+          warnings: ['No deliverables defined. Will attempt auto-population from PRD.'],
+          details: {
+            deliverableCount: 0,
+            message: 'Deliverables will be extracted from PRD exec_checklist'
+          }
+        };
+      }
+
+      // Count completed vs pending
+      const completed = deliverables.filter(d => d.completion_status === 'completed').length;
+      const pending = deliverableCount - completed;
+
+      console.log(`   📊 Status: ${completed} completed, ${pending} pending`);
+      console.log('\n   📦 Deliverables:');
+      deliverables.slice(0, 5).forEach((d, i) => {
+        const status = d.completion_status === 'completed' ? '✓' : '○';
+        console.log(`      ${i + 1}. ${status} ${d.name || 'Unnamed'}`);
+      });
+      if (deliverableCount > 5) {
+        console.log(`      ... and ${deliverableCount - 5} more`);
+      }
+
+      return {
+        passed: true,
+        score: 100,
+        max_score: 100,
+        issues: [],
+        warnings: pending > 0 ? [`${pending} deliverables pending completion`] : [],
+        details: {
+          deliverableCount,
+          completed,
+          pending,
+          deliverables: deliverables.map(d => ({ name: d.name, status: d.completion_status }))
+        }
+      };
+
+    } catch (error) {
+      console.log(`   ⚠️  Deliverables gate error: ${error.message}`);
+      return {
+        passed: true,
+        score: 50,
+        max_score: 100,
+        issues: [],
+        warnings: [`Deliverables gate error: ${error.message}`],
         details: { error: error.message }
       };
     }
