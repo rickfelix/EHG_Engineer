@@ -695,10 +695,13 @@ export class PlanToLeadExecutor extends BaseExecutor {
         }
 
         // Count user stories for this SD
+        // Note: user_stories.sd_id uses the uppercase ID format (e.g., SD-XXX-001)
+        // not the lowercase sd_key format
+        const sdIdForStories = sdUuid || sdLegacyId.toUpperCase().replace(/^(?!SD-)/, 'SD-');
         const { data: userStories, error: storyError } = await this.supabase
           .from('user_stories')
           .select('id, title, status, validation_status')
-          .eq('sd_id', sdLegacyId);
+          .eq('sd_id', sdIdForStories);
 
         if (storyError) {
           console.log(`   ⚠️  User story query error: ${storyError.message}`);
