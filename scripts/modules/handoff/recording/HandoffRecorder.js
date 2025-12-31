@@ -18,6 +18,7 @@
 import { randomUUID } from 'crypto';
 import ContentBuilder from '../content/ContentBuilder.js';
 import ValidationOrchestrator from '../validation/ValidationOrchestrator.js';
+import { withRetry, isRetryable, RETRY_PRESETS } from '../../resilience/retry-executor.js';
 
 /**
  * Handoff types that are COMPLETION actions, not phase transitions.
@@ -481,51 +482,186 @@ export class HandoffRecorder {
   /**
    * SD-LEO-PROTOCOL-V435-001 US-004: Silent Error Logging
    *
-   * Logs errors to database without blocking the main flow.
-   * Provides recovery path suggestions for common error types.
+   * Attempt recovery from an error with retry logic and proper logging.
+   * SD-GENESIS-V32-PULSE: Refactored from _logErrorSilently to provide
+   * actual recovery attempts and structured error logging.
    *
    * @param {string} operation - The operation that failed
    * @param {object} context - Error context details
+   * @param {Function} retryOperation - Optional function to retry
+   * @returns {Promise<{recovered: boolean, result?: any, errorId?: string}>}
    */
-  async _logErrorSilently(operation, context) {
+  async _attemptRecovery(operation, context, retryOperation = null) {
     try {
-      // Determine recovery path based on error type
-      let recoveryPath = 'Check database connectivity and retry';
+      // Determine error type and recovery guidance
       const errorMsg = (context.error || '').toLowerCase();
+      const errorAnalysis = this._analyzeError(errorMsg);
 
-      if (errorMsg.includes('foreign key') || errorMsg.includes('fk constraint')) {
-        recoveryPath = 'Verify SD exists in strategic_directives_v2. Check sd_id format.';
-      } else if (errorMsg.includes('unique constraint') || errorMsg.includes('duplicate')) {
-        recoveryPath = 'Handoff may already exist. Check sd_phase_handoffs for existing record.';
-      } else if (errorMsg.includes('null value') || errorMsg.includes('not-null')) {
-        recoveryPath = 'Required field is missing. Check handoff content builder output.';
-      } else if (errorMsg.includes('check constraint')) {
-        recoveryPath = 'Invalid enum value. Check status, handoff_type, or phase values.';
-      } else if (errorMsg.includes('timeout') || errorMsg.includes('connection')) {
-        recoveryPath = 'Database connection issue. Wait and retry or check Supabase status.';
+      console.log(`   📋 Recovery Guidance: ${errorAnalysis.guidance}`);
+      console.log(`   🔍 Error Type: ${errorAnalysis.errorType}`);
+
+      // Check if error is retryable
+      const mockError = { message: context.error, status: context.status || 500 };
+      const retryCheck = isRetryable(mockError);
+
+      // If we have a retry operation and error is retryable, attempt recovery
+      if (retryOperation && retryCheck.retryable) {
+        console.log('   ⚡ Attempting recovery with retry...');
+        try {
+          const result = await withRetry(retryOperation, {
+            ...RETRY_PRESETS.database,
+            operationName: operation,
+            component: 'HandoffRecorder',
+            sdId: context.sdId,
+            onRetry: (err, attempt, delay) => {
+              console.log(`   ⚡ Retry attempt ${attempt}: waiting ${delay}ms...`);
+            }
+          });
+          console.log('   ✅ Recovery successful after retry');
+          return { recovered: true, result };
+        } catch (retryError) {
+          console.log(`   ❌ Recovery failed after retries: ${retryError.message}`);
+          // Fall through to log the error
+          context.retryError = retryError.message;
+        }
       }
 
-      console.log(`   📋 Recovery Path: ${recoveryPath}`);
+      // Log error to leo_error_log table (non-blocking)
+      const errorId = await this._logToErrorTable(operation, context, errorAnalysis);
 
-      // Insert into error log table (non-blocking)
-      const errorRecord = {
-        operation,
-        context: JSON.stringify(context),
-        recovery_path: recoveryPath,
-        created_at: new Date().toISOString()
+      return {
+        recovered: false,
+        errorId,
+        guidance: errorAnalysis.guidance,
+        errorType: errorAnalysis.errorType
       };
 
-      // Try to insert but don't wait or throw on failure
-      this.supabase
+    } catch (recoveryError) {
+      // If recovery itself fails, log silently and return
+      console.warn(`   ⚠️  Recovery attempt error: ${recoveryError.message}`);
+      return { recovered: false };
+    }
+  }
+
+  /**
+   * Analyze error message to determine type and recovery guidance.
+   *
+   * @param {string} errorMsg - Lowercase error message
+   * @returns {{errorType: string, guidance: string, isRetryable: boolean}}
+   */
+  _analyzeError(errorMsg) {
+    if (errorMsg.includes('foreign key') || errorMsg.includes('fk constraint')) {
+      return {
+        errorType: 'VALIDATION_ERROR',
+        guidance: 'Verify SD exists in strategic_directives_v2. Check sd_id format.',
+        isRetryable: false
+      };
+    }
+    if (errorMsg.includes('unique constraint') || errorMsg.includes('duplicate')) {
+      return {
+        errorType: 'VALIDATION_ERROR',
+        guidance: 'Handoff may already exist. Check sd_phase_handoffs for existing record.',
+        isRetryable: false
+      };
+    }
+    if (errorMsg.includes('null value') || errorMsg.includes('not-null')) {
+      return {
+        errorType: 'VALIDATION_ERROR',
+        guidance: 'Required field is missing. Check handoff content builder output.',
+        isRetryable: false
+      };
+    }
+    if (errorMsg.includes('check constraint')) {
+      return {
+        errorType: 'VALIDATION_ERROR',
+        guidance: 'Invalid enum value. Check status, handoff_type, or phase values.',
+        isRetryable: false
+      };
+    }
+    if (errorMsg.includes('timeout') || errorMsg.includes('connection')) {
+      return {
+        errorType: 'TIMEOUT',
+        guidance: 'Database connection issue. Wait and retry or check Supabase status.',
+        isRetryable: true
+      };
+    }
+    if (errorMsg.includes('rate limit') || errorMsg.includes('too many')) {
+      return {
+        errorType: 'RATE_LIMIT',
+        guidance: 'Rate limit hit. Wait before retrying.',
+        isRetryable: true
+      };
+    }
+    if (errorMsg.includes('auth') || errorMsg.includes('unauthorized')) {
+      return {
+        errorType: 'AUTH_ERROR',
+        guidance: 'Authentication failed. Check API keys and permissions.',
+        isRetryable: false
+      };
+    }
+    return {
+      errorType: 'DATABASE_ERROR',
+      guidance: 'Check database connectivity and retry.',
+      isRetryable: true
+    };
+  }
+
+  /**
+   * Log error to leo_error_log table.
+   *
+   * @param {string} operation - The operation that failed
+   * @param {object} context - Error context
+   * @param {object} errorAnalysis - Analysis from _analyzeError
+   * @returns {Promise<string|null>} Error log ID if successful
+   */
+  async _logToErrorTable(operation, context, errorAnalysis) {
+    try {
+      const errorRecord = {
+        error_type: errorAnalysis.errorType,
+        error_message: context.error || 'Unknown error',
+        error_code: context.errorCode || null,
+        error_stack: context.stack || null,
+        operation: operation,
+        component: 'HandoffRecorder',
+        sd_id: context.sdId || null,
+        attempt_count: context.attemptCount || 1,
+        is_recoverable: errorAnalysis.isRetryable,
+        recovery_guidance: errorAnalysis.guidance,
+        session_id: context.sessionId || null,
+        context: {
+          handoffType: context.handoffType,
+          executionId: context.executionId,
+          timestamp: new Date().toISOString(),
+          retryError: context.retryError
+        },
+        severity: errorAnalysis.isRetryable ? 'warning' : 'error'
+      };
+
+      const { data, error } = await this.supabase
         .from('leo_error_log')
         .insert(errorRecord)
-        .then(() => {}) // Silently succeed
-        .catch(() => {}); // Silently fail - error logging should never block
+        .select('id')
+        .single();
 
-    } catch (_logError) {
-      // If error logging itself fails, just continue silently
-      // Never let error logging cause additional failures
+      if (error) {
+        console.warn(`   ⚠️  Could not log error to database: ${error.message}`);
+        return null;
+      }
+
+      return data?.id;
+    } catch (logError) {
+      // Error logging should never block operations
+      console.warn(`   ⚠️  Error logging exception: ${logError.message}`);
+      return null;
     }
+  }
+
+  /**
+   * @deprecated Use _attemptRecovery instead. Kept for backward compatibility.
+   * Logs errors to database without blocking the main flow.
+   */
+  async _logErrorSilently(operation, context) {
+    return this._attemptRecovery(operation, context);
   }
 }
 
