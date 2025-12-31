@@ -23,10 +23,12 @@
  * 4. Risk Analysis (10%) - Standard
  *
  * FEATURE SDs (customer-facing) - DEFAULT:
- * 1. Requirements (40%) - Balanced
- * 2. Architecture (30%) - Balanced
- * 3. Test Scenarios (20%) - Balanced
+ * 1. Requirements (30%) - Balanced
+ * 2. Architecture (25%) - Balanced
+ * 3. Test Scenarios (15%) - Balanced
  * 4. Risk Analysis (10%) - Standard
+ * 5. Acceptance Testability (10%) - US-001: Specification testability
+ * 6. Quantitative Claims (10%) - US-006: Claim validation
  *
  * DATABASE SDs (schema migrations):
  * 1. Requirements (30%) - Less emphasis
@@ -56,39 +58,54 @@ export class PRDQualityRubric extends AIQualityEvaluator {
    */
   static getWeights(sd = null) {
     const defaultWeights = {
-      requirements: 0.40,
-      architecture: 0.30,
-      test_scenarios: 0.20,
-      risk_analysis: 0.10
+      requirements: 0.25,
+      architecture: 0.20,
+      test_scenarios: 0.15,
+      risk_analysis: 0.10,
+      acceptance_testability: 0.10,  // US-001: Specification testability
+      quantitative_claims: 0.10,     // US-006: Claim validation
+      failure_modes: 0.10            // US-004: Failure mode documentation
     };
 
     if (!sd?.sd_type) return defaultWeights;
 
-    // Type-specific weight adjustments
+    // Type-specific weight adjustments (all must sum to 1.0)
     const typeWeights = {
       documentation: {
-        requirements: 0.60,      // Focus on completeness
-        architecture: 0.05,      // Minimal relevance for docs-only
-        test_scenarios: 0.25,    // Validation still important
-        risk_analysis: 0.10      // Standard
+        requirements: 0.45,               // Focus on completeness
+        architecture: 0.05,               // Minimal relevance for docs-only
+        test_scenarios: 0.15,             // Validation still important
+        risk_analysis: 0.10,              // Standard
+        acceptance_testability: 0.10,     // US-001
+        quantitative_claims: 0.05,        // US-006: Less relevant for docs
+        failure_modes: 0.10               // US-004
       },
       infrastructure: {
-        requirements: 0.35,      // Less emphasis on detailed specs
-        architecture: 0.45,      // MORE weight on technical design
-        test_scenarios: 0.10,    // Less emphasis on user scenarios
-        risk_analysis: 0.10      // Standard
+        requirements: 0.20,               // Less emphasis on detailed specs
+        architecture: 0.30,               // MORE weight on technical design
+        test_scenarios: 0.10,             // Less emphasis on user scenarios
+        risk_analysis: 0.10,              // Standard
+        acceptance_testability: 0.10,     // US-001
+        quantitative_claims: 0.10,        // US-006
+        failure_modes: 0.10               // US-004
       },
       database: {
-        requirements: 0.30,      // Less emphasis
-        architecture: 0.35,      // Focus on schema design
-        test_scenarios: 0.15,    // Migration testing
-        risk_analysis: 0.20      // HIGHER weight (data loss risks)
+        requirements: 0.15,               // Less emphasis
+        architecture: 0.25,               // Focus on schema design
+        test_scenarios: 0.10,             // Migration testing
+        risk_analysis: 0.15,              // HIGHER weight (data loss risks)
+        acceptance_testability: 0.10,     // US-001
+        quantitative_claims: 0.10,        // US-006
+        failure_modes: 0.15               // US-004: HIGHER for databases (data loss)
       },
       security: {
-        requirements: 0.30,      // Less emphasis
-        architecture: 0.30,      // Security architecture
-        test_scenarios: 0.15,    // Security testing
-        risk_analysis: 0.25      // HIGHEST weight (threat modeling)
+        requirements: 0.15,               // Less emphasis
+        architecture: 0.20,               // Security architecture
+        test_scenarios: 0.10,             // Security testing
+        risk_analysis: 0.20,              // HIGHEST weight (threat modeling)
+        acceptance_testability: 0.10,     // US-001
+        quantitative_claims: 0.10,        // US-006
+        failure_modes: 0.15               // US-004: HIGHER for security
       }
     };
 
@@ -145,6 +162,76 @@ Score 9-10 only if test scenarios demonstrate deep understanding of potential fa
 - 9-10: Comprehensive risk analysis: specific risks + mitigation + rollback plan + monitoring strategy
 
 Look for proactive risk thinking specific to this implementation, not generic risk boilerplate.`
+        },
+        // US-001: Specification Testability Validator
+        // LEO Protocol v4.3.4 Enhancement - Addresses Genesis PRD Review feedback
+        {
+          name: 'acceptance_criteria_testability',
+          weight: weights.acceptance_testability,
+          prompt: `Evaluate acceptance criteria testability (US-001 Enhancement):
+- 0-3: Acceptance criteria are vague, unmeasurable, or contain placeholder text ("works correctly", "should be good", "TBD")
+- 4-6: Some criteria are testable but many lack clear pass/fail conditions or measurable outcomes
+- 7-8: Most acceptance criteria are specific, independently testable with clear pass/fail conditions
+- 9-10: ALL acceptance criteria are concrete, testable, with clear pass/fail conditions AND automated test feasibility
+
+CRITICAL CHECKS:
+1. Does each criterion have a MEASURABLE outcome? (e.g., "response time <200ms" vs "fast response")
+2. Are there SPECIFIC conditions? (e.g., "when user clicks X, Y happens" vs "user can do things")
+3. Can an engineer write an automated test from this criterion? (No interpretation needed)
+4. Are there NO vague words like: "appropriate", "suitable", "proper", "correct", "good", "works"
+
+Penalize heavily for:
+- Placeholder text ("To be defined", "TBD", "Will be determined")
+- Boilerplate criteria ("All tests pass", "No regressions", "Meets requirements")
+- Subjective language ("User-friendly", "Intuitive", "Clean code")`
+        },
+        // US-006: Quantitative Claim Validation
+        // LEO Protocol v4.3.4 Enhancement - Addresses Genesis PRD Review feedback
+        {
+          name: 'quantitative_claims_validation',
+          weight: weights.quantitative_claims,
+          prompt: `Evaluate quantitative claims and metrics (US-006 Enhancement):
+- 0-3: No quantitative metrics defined OR all claims lack justification/baselines
+- 4-6: Some quantified claims exist but missing baselines, targets, or evidence
+- 7-8: Claims have baselines AND targets, with reasonable assumptions documented
+- 9-10: ALL quantitative claims have: baseline + target + evidence/justification + measurement method
+
+CRITICAL CHECKS:
+1. PERFORMANCE claims (e.g., "50% faster"): Does it state baseline? Current state? How measured?
+2. COVERAGE claims (e.g., "90% test coverage"): Is current coverage stated? Is 90% justified?
+3. CAPACITY claims (e.g., "handles 1000 users"): Is current capacity stated? Is target evidence-based?
+4. IMPROVEMENT claims (e.g., "reduces errors by 30%"): What's the current error rate? Evidence?
+
+Penalize heavily for:
+- Claims without baselines ("Improve performance by 50%" - 50% from what?)
+- Round-number targets without justification ("90%", "100%", "10x" - why these numbers?)
+- Missing measurement methodology (HOW will this be measured/verified?)
+- Aspirational claims stated as facts ("This will reduce costs" - evidence?)`
+        },
+        // US-004: Failure Mode Documentation
+        // LEO Protocol v4.3.4 Enhancement - Addresses Genesis PRD Review feedback
+        {
+          name: 'failure_mode_documentation',
+          weight: weights.failure_modes,
+          prompt: `Evaluate failure mode documentation (US-004 Enhancement):
+- 0-3: No failure modes documented OR only generic failures ("system might fail")
+- 4-6: Some failure modes listed but missing recovery strategies or rollback plans
+- 7-8: Specific failure modes with recovery strategies AND rollback procedures
+- 9-10: Comprehensive failure analysis: failure modes + detection + recovery + rollback + post-mortem triggers
+
+CRITICAL CHECKS:
+1. FAILURE IDENTIFICATION: Are specific failure scenarios documented? (Not just "might fail")
+2. DETECTION METHOD: How will failures be detected? Monitoring? Alerts? Health checks?
+3. RECOVERY STRATEGY: What happens when failure occurs? Retry? Fallback? Graceful degradation?
+4. ROLLBACK PLAN: Can the change be reverted? How quickly? What's the data impact?
+5. POST-MORTEM TRIGGERS: What conditions trigger a post-mortem review?
+
+Penalize heavily for:
+- Generic failure statements ("Handle errors appropriately")
+- Missing rollback procedures for database changes
+- No detection/alerting strategy
+- Optimistic assumptions ("This won't fail")
+- Missing data recovery considerations`
         }
       ]
     };
@@ -208,6 +295,9 @@ ${this.formatDependencies(prd.dependencies)}
 
 ## Risks & Mitigations
 ${this.formatRisks(prd.risks)}
+
+## Failure Modes
+${this.formatFailureModes(prd.failure_modes)}
 
 ## Additional Context
 Status: ${prd.status || 'Not set'}
@@ -505,6 +595,53 @@ SD UUID: ${prd.sd_uuid || 'Not linked'}`;
     }
 
     return JSON.stringify(risks);
+  }
+
+  /**
+   * Format failure modes for evaluation (US-004)
+   * Supports structured format: { mode, detection, recovery, rollback, trigger }
+   */
+  formatFailureModes(failureModes) {
+    if (!failureModes || failureModes.length === 0) {
+      return 'No failure modes documented';
+    }
+
+    if (Array.isArray(failureModes)) {
+      return failureModes.map((mode, idx) => {
+        if (typeof mode === 'string') {
+          return `${idx + 1}. ${mode}`;
+        } else if (mode.mode || mode.failure) {
+          const details = [];
+          const modeName = mode.mode || mode.failure;
+
+          // Detection method
+          if (mode.detection) {
+            details.push(`Detection: ${mode.detection}`);
+          }
+          // Recovery strategy
+          if (mode.recovery) {
+            details.push(`Recovery: ${mode.recovery}`);
+          }
+          // Rollback plan
+          if (mode.rollback) {
+            details.push(`Rollback: ${mode.rollback}`);
+          }
+          // Post-mortem trigger
+          if (mode.trigger || mode.postmortem_trigger) {
+            details.push(`Post-mortem Trigger: ${mode.trigger || mode.postmortem_trigger}`);
+          }
+
+          const detailsStr = details.length > 0
+            ? '\n   ' + details.join('\n   ')
+            : '';
+
+          return `${idx + 1}. ${modeName}${detailsStr}`;
+        }
+        return `${idx + 1}. ${JSON.stringify(mode)}`;
+      }).join('\n\n');
+    }
+
+    return JSON.stringify(failureModes);
   }
 
   /**
