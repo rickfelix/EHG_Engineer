@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-01T22:19:40.872Z
+**Generated**: 2026-01-01T22:24:00.069Z
 **Rows**: 1,705
 **RLS**: Enabled (8 policies)
 
@@ -54,15 +54,20 @@
 - `sd_phase_handoffs_sd_id_from_phase_to_phase_created_at_key`: UNIQUE (sd_id, from_phase, to_phase, created_at)
 
 ### Check Constraints
+- `chk_handoff_validation_threshold`: CHECK (((validation_score IS NULL) OR ((status)::text = 'blocked'::text) OR ((validation_score >= 0) AND (validation_score <= 100))))
 - `sd_phase_handoffs_from_phase_check`: CHECK (((from_phase)::text = ANY ((ARRAY['LEAD'::character varying, 'PLAN'::character varying, 'EXEC'::character varying])::text[])))
 - `sd_phase_handoffs_handoff_type_check`: CHECK (((handoff_type)::text = ANY ((ARRAY['LEAD-TO-PLAN'::character varying, 'PLAN-TO-EXEC'::character varying, 'EXEC-TO-PLAN'::character varying, 'PLAN-TO-LEAD'::character varying])::text[])))
-- `sd_phase_handoffs_status_check`: CHECK (((status)::text = ANY ((ARRAY['pending_acceptance'::character varying, 'accepted'::character varying, 'rejected'::character varying])::text[])))
+- `sd_phase_handoffs_status_check`: CHECK (((status)::text = ANY ((ARRAY['pending_acceptance'::character varying, 'accepted'::character varying, 'rejected'::character varying, 'blocked'::character varying])::text[])))
 - `sd_phase_handoffs_to_phase_check`: CHECK (((to_phase)::text = ANY ((ARRAY['LEAD'::character varying, 'PLAN'::character varying, 'EXEC'::character varying])::text[])))
 - `sd_phase_handoffs_validation_score_check`: CHECK (((validation_score >= 0) AND (validation_score <= 100)))
 - `validation_details_max_size`: CHECK (((validation_details IS NULL) OR (length((validation_details)::text) <= 102400)))
 
 ## Indexes
 
+- `idx_sd_phase_handoffs_blocked`
+  ```sql
+  CREATE INDEX idx_sd_phase_handoffs_blocked ON public.sd_phase_handoffs USING btree (sd_id, handoff_type) WHERE ((status)::text = 'blocked'::text)
+  ```
 - `idx_sd_phase_handoffs_created`
   ```sql
   CREATE INDEX idx_sd_phase_handoffs_created ON public.sd_phase_handoffs USING btree (created_at DESC)

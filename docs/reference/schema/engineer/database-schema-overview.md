@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-01T22:19:40.872Z
-**Tables**: 303
+**Generated**: 2026-01-01T22:24:00.069Z
+**Tables**: 304
 **Source**: Supabase PostgreSQL introspection
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -138,7 +138,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [folder_structure_snapshot](tables/folder_structure_snapshot.md) | 0 | ✅ | 2 | - |
 | [gate_requirements_templates](tables/gate_requirements_templates.md) | 5 | ✅ | 2 | Templates for generating verification gates with standard requirements |
 | [github_operations](tables/github_operations.md) | 0 | ✅ | 4 | Tracks all GitHub operations initiated by the LEO Protocol GitHub Sub-Agent |
-| [governance_audit_log](tables/governance_audit_log.md) | 54,746 | ✅ | 3 | - |
+| [governance_audit_log](tables/governance_audit_log.md) | 54,747 | ✅ | 3 | - |
 | [governance_policies](tables/governance_policies.md) | 0 | ✅ | 2 | - |
 | [governance_proposals](tables/governance_proposals.md) | 2 | ✅ | 2 | - |
 | [handoff_audit_log](tables/handoff_audit_log.md) | 2,072 | ✅ | 2 | Audit trail for all handoff creation attempts, including blocked bypasses |
@@ -269,6 +269,8 @@ Reference: Consistency + Autonomy Architecture Plan |
 | [sd_execution_actuals](tables/sd_execution_actuals.md) | 0 | ✅ | 1 | Actual execution metrics for variance analysis against baseline plan. |
 | [sd_execution_baselines](tables/sd_execution_baselines.md) | 1 | ✅ | 1 | Point-in-time snapshots of SD execution plans. Only one baseline can be active at a time. Rebaseline requires LEAD approval. |
 | [sd_execution_timeline](tables/sd_execution_timeline.md) | 3 | ✅ | 2 | - |
+| [sd_governance_bypass_audit](tables/sd_governance_bypass_audit.md) | 0 | ✅ | 2 | Audit trail for governance trigger bypasses.
+All bypass requests are logged for security review. |
 | [sd_intensity_adjustments](tables/sd_intensity_adjustments.md) | 3 | ✅ | 2 | Adjustments to validation requirements based on intensity level.
 Overrides take precedence over sd_type_validation_profiles defaults.
 Weight adjustments are ADDED to base weights (must sum to 0 to maintain 100% total). |
@@ -398,7 +400,7 @@ Last performance fix: 2025-11-21 (VACUUM FULL to remove 340 dead rows causing RE
 - [leo_test_plans](tables/leo_test_plans.md)
 - [leo_workflow_phases](tables/leo_workflow_phases.md)
 
-### Strategic Directives (36 tables)
+### Strategic Directives (37 tables)
 
 - [audit_finding_sd_links](tables/audit_finding_sd_links.md) - Join table supporting many-to-many relationships between audit findings and SDs.
    Supports primary (1:1), supporting (N:1), and theme (N:1) link types.
@@ -428,6 +430,8 @@ Reference: Consistency + Autonomy Architecture Plan
 - [sd_execution_actuals](tables/sd_execution_actuals.md) - Actual execution metrics for variance analysis against baseline plan.
 - [sd_execution_baselines](tables/sd_execution_baselines.md) - Point-in-time snapshots of SD execution plans. Only one baseline can be active at a time. Rebaseline requires LEAD approval.
 - [sd_execution_timeline](tables/sd_execution_timeline.md)
+- [sd_governance_bypass_audit](tables/sd_governance_bypass_audit.md) - Audit trail for governance trigger bypasses.
+All bypass requests are logged for security review.
 - [sd_intensity_adjustments](tables/sd_intensity_adjustments.md) - Adjustments to validation requirements based on intensity level.
 Overrides take precedence over sd_type_validation_profiles defaults.
 Weight adjustments are ADDED to base weights (must sum to 0 to maintain 100% total).
