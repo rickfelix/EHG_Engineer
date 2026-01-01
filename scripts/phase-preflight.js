@@ -55,6 +55,39 @@ const PHASE_STRATEGIES = {
 };
 
 /**
+ * Extract displayable text from retrospective array items.
+ * Handles both legacy string format and new object format.
+ *
+ * @param {string|object} item - Either a string or object with 'learning' property
+ * @returns {string} Displayable text
+ */
+function extractDisplayText(item) {
+  if (typeof item === 'string') {
+    return item;
+  }
+  if (item && typeof item === 'object') {
+    // Try common property names for the main text
+    return item.learning || item.description || item.text || item.message || JSON.stringify(item);
+  }
+  return String(item);
+}
+
+/**
+ * Safely truncate text for display
+ *
+ * @param {string|object} item - Item to display (string or object)
+ * @param {number} maxLength - Maximum length before truncation
+ * @returns {string} Truncated display text
+ */
+function truncateForDisplay(item, maxLength = 70) {
+  const text = extractDisplayText(item);
+  if (text.length > maxLength) {
+    return text.substring(0, maxLength) + '...';
+  }
+  return text;
+}
+
+/**
  * SD-LEO-GEMINI-001: Discovery Gate (US-001)
  *
  * Validates that ≥5 files have been read before PRD creation begins.
@@ -541,9 +574,9 @@ function displayResults(sd, phase, strategy, patterns, retrospectives) {
       console.log(`   SD: ${retro.sd_id} | Category: ${retro.learning_category || 'N/A'}`);
       console.log(`   Date: ${new Date(retro.conducted_date).toLocaleDateString()}`);
 
-      // Show key learnings (first 2)
+      // Show key learnings (first item) - uses standardized object format {learning: "..."}
       if (retro.key_learnings && retro.key_learnings.length > 0) {
-        console.log(`   Key Learning: ${retro.key_learnings[0].substring(0, 70)}${retro.key_learnings[0].length > 70 ? '...' : ''}`);
+        console.log(`   Key Learning: ${truncateForDisplay(retro.key_learnings[0], 70)}`);
       }
 
       // Show success or failure pattern (context-dependent)
