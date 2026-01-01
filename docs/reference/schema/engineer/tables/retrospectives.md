@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-01T22:24:00.069Z
+**Generated**: 2026-01-01T22:50:58.156Z
 **Rows**: 296
 **RLS**: Enabled (2 policies)
 
@@ -34,7 +34,7 @@
 | what_went_well | `jsonb` | YES | `'[]'::jsonb` | - |
 | what_needs_improvement | `jsonb` | YES | `'[]'::jsonb` | - |
 | action_items | `jsonb` | YES | `'[]'::jsonb` | - |
-| key_learnings | `jsonb` | YES | `'[]'::jsonb` | - |
+| key_learnings | `jsonb` | YES | `'[]'::jsonb` | JSONB array of learning objects. Schema: [{"learning": "text", "evidence": "optional", "category": "optional"}] |
 | velocity_achieved | `integer(32)` | YES | - | - |
 | quality_score | `integer(32)` | **NO** | - | Quality score (70-100). Must be >= 70 for completed SDs. Never 0.
 Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
@@ -51,8 +51,8 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 | objectives_met | `boolean` | YES | - | - |
 | on_schedule | `boolean` | YES | - | - |
 | within_scope | `boolean` | YES | - | - |
-| success_patterns | `ARRAY` | YES | `'{}'::text[]` | - |
-| failure_patterns | `ARRAY` | YES | `'{}'::text[]` | - |
+| success_patterns | `ARRAY` | YES | `'{}'::text[]` | JSONB array of pattern objects. Schema: [{"pattern": "text", "context": "optional"}] |
+| failure_patterns | `ARRAY` | YES | `'{}'::text[]` | JSONB array of pattern objects. Schema: [{"pattern": "text", "context": "optional"}] |
 | improvement_areas | `ARRAY` | YES | `'{}'::text[]` | - |
 | generated_by | `text` | YES | - | - |
 | trigger_event | `text` | YES | - | - |
