@@ -1,0 +1,70 @@
+# sd_governance_bypass_audit Table
+
+**Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
+**Database**: dedlbzhpgkmetvhbkyzq
+**Repository**: /mnt/c/_EHG/EHG_Engineer/
+**Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
+**Generated**: 2026-01-01T22:24:00.069Z
+**Rows**: 0
+**RLS**: Enabled (2 policies)
+
+⚠️ **This is a REFERENCE document** - Query database directly for validation
+
+⚠️ **CRITICAL**: This schema is for **EHG_Engineer** database. Implementations go in /mnt/c/_EHG/EHG_Engineer/
+
+---
+
+## Columns (9 total)
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | `uuid` | **NO** | `gen_random_uuid()` | - |
+| sd_id | `uuid` | **NO** | - | - |
+| trigger_name | `character varying(100)` | **NO** | - | - |
+| actor_role | `character varying(50)` | **NO** | - | - |
+| bypass_reason | `text` | YES | - | - |
+| automation_context | `jsonb` | YES | - | - |
+| bypassed_at | `timestamp with time zone` | YES | `now()` | - |
+| old_values | `jsonb` | YES | - | - |
+| new_values | `jsonb` | YES | - | - |
+
+## Constraints
+
+### Primary Key
+- `sd_governance_bypass_audit_pkey`: PRIMARY KEY (id)
+
+## Indexes
+
+- `idx_governance_bypass_actor`
+  ```sql
+  CREATE INDEX idx_governance_bypass_actor ON public.sd_governance_bypass_audit USING btree (actor_role)
+  ```
+- `idx_governance_bypass_sd`
+  ```sql
+  CREATE INDEX idx_governance_bypass_sd ON public.sd_governance_bypass_audit USING btree (sd_id)
+  ```
+- `idx_governance_bypass_trigger`
+  ```sql
+  CREATE INDEX idx_governance_bypass_trigger ON public.sd_governance_bypass_audit USING btree (trigger_name)
+  ```
+- `sd_governance_bypass_audit_pkey`
+  ```sql
+  CREATE UNIQUE INDEX sd_governance_bypass_audit_pkey ON public.sd_governance_bypass_audit USING btree (id)
+  ```
+
+## RLS Policies
+
+### 1. bypass_audit_read (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 2. bypass_audit_service_role (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
+
+---
+
+[← Back to Schema Overview](../database-schema-overview.md)
