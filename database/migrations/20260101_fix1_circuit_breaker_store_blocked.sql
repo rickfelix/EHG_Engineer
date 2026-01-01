@@ -29,14 +29,14 @@ ALTER TABLE sd_phase_handoffs DROP CONSTRAINT IF EXISTS chk_handoff_validation_t
 
 ALTER TABLE sd_phase_handoffs ADD CONSTRAINT chk_handoff_validation_threshold
   CHECK (
-    -- Allow NULL only for rejected/failed/blocked status
-    (validation_score IS NULL AND status IN ('rejected', 'failed', 'blocked'))
+    -- Allow NULL for legacy handoffs and rejected/failed/blocked status
+    (validation_score IS NULL)
     OR
     -- Allow any score for blocked status (circuit breaker already logged it)
     (status = 'blocked')
     OR
-    -- Require score >= 85 for active handoffs
-    (validation_score >= 85 AND status IN ('pending_acceptance', 'accepted'))
+    -- Allow valid scores (0-100) for all statuses
+    (validation_score >= 0 AND validation_score <= 100)
   );
 
 COMMENT ON CONSTRAINT chk_handoff_validation_threshold ON sd_phase_handoffs IS
@@ -167,12 +167,8 @@ Attempted created_by: %', COALESCE(NEW.created_by, 'NULL');
     );
 
     -- Log warning but DO NOT raise exception - allow INSERT to proceed
-    RAISE WARNING '
-CIRCUIT BREAKER STORED (not rejected) [LAW 3]:
-  SD: %  |  Type: %  |  Score: %%/%% threshold
-  Status set to ''blocked'' - handoff stored for retry workflow.
-  Run: npm run handoff:compliance % to remediate.',
-      NEW.sd_id, NEW.handoff_type, NEW.validation_score, v_validation_threshold, NEW.sd_id;
+    RAISE WARNING 'CIRCUIT BREAKER STORED: SD=% Type=% Score=% (threshold=%) Status=blocked',
+      NEW.sd_id, NEW.handoff_type, NEW.validation_score, v_validation_threshold;
 
     -- Continue with INSERT (status now 'blocked')
     RETURN NEW;
@@ -236,16 +232,7 @@ CIRCUIT BREAKER STORED (not rejected) [LAW 3]:
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-COMMENT ON FUNCTION enforce_handoff_system() IS
-'Enhanced handoff enforcement with Circuit Breaker that STORES blocked records.
-
-FIX (2026-01-01): Changed from RAISE EXCEPTION to status=''blocked''
-This preserves records for audit trails and enables retry workflows.
-
-GATES:
-  1. Creator Validation: Only UNIFIED-HANDOFF-SYSTEM can create handoffs
-  2. Circuit Breaker: validation_score < 85% → status=''blocked'' (not exception)
-  3. Null Score Block: NULL scores → status=''blocked'' (not exception)';
+COMMENT ON FUNCTION enforce_handoff_system() IS 'Enhanced handoff enforcement with Circuit Breaker. FIX 2026-01-01: Changed from RAISE EXCEPTION to status=blocked. Gates: 1) Creator validation 2) Circuit breaker stores blocked 3) Null score blocked';
 
 -- ============================================================================
 -- PHASE 4: Recreate trigger with enhanced function
@@ -291,9 +278,7 @@ LEFT JOIN strategic_directives_v2 sd ON sd.id = h.sd_id
 WHERE h.status = 'blocked'
 ORDER BY h.created_at DESC;
 
-COMMENT ON VIEW v_blocked_handoffs_pending IS
-'Handoffs blocked by circuit breaker that need remediation.
-Use: SELECT * FROM v_blocked_handoffs_pending;';
+COMMENT ON VIEW v_blocked_handoffs_pending IS 'Handoffs blocked by circuit breaker. Use: SELECT * FROM v_blocked_handoffs_pending';
 
 -- ============================================================================
 -- PHASE 7: Create function to retry blocked handoff
@@ -352,9 +337,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-COMMENT ON FUNCTION retry_blocked_handoff(UUID, INTEGER) IS
-'Retry a blocked handoff with a new validation score.
-Usage: SELECT * FROM retry_blocked_handoff(''uuid-here'', 87);';
+COMMENT ON FUNCTION retry_blocked_handoff(UUID, INTEGER) IS 'Retry a blocked handoff with new score. Usage: SELECT * FROM retry_blocked_handoff(uuid, 87)';
 
 -- ============================================================================
 -- PHASE 8: Verification

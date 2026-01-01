@@ -297,7 +297,7 @@ BEGIN
 
     -- Block type changes after PLAN phase has handoffs
     IF has_handoffs AND sd_phase NOT IN ('LEAD', 'DRAFT') THEN
-      RAISE EXCEPTION E'SD_TYPE_CHANGE_TIMING_BLOCKED: Cannot change type from "%" to "%" after handoffs created.\n\nCurrent Phase: %\nProgress: %%\n\nType changes should happen in LEAD phase before work begins.\nUse automation bypass if this is intentional.',
+      RAISE EXCEPTION E'SD_TYPE_CHANGE_TIMING_BLOCKED: Cannot change type from "%" to "%" after handoffs created.\n\nCurrent Phase: %\nProgress: %\n\nType changes should happen in LEAD phase before work begins.\nUse automation bypass if this is intentional.',
         OLD.sd_type, NEW.sd_type, sd_phase, sd_progress;
     END IF;
   END IF;
