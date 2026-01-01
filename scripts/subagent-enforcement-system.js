@@ -556,13 +556,15 @@ class SubAgentEnforcementSystem {
    * Get sub-agent execution results from database
    * This is the SOURCE OF TRUTH for sub-agent execution verification
    * SD-LEO-4-3-2-AUTOMATION: Enforce persistence
+   *
+   * FIX 2 (2026-01-01): Results are ordered by created_at DESC so index [0] is always latest
    */
   async getSubAgentExecutionResults(sdId) {
     const { data, error } = await this.supabase
       .from('sub_agent_execution_results')
       .select('sub_agent_code, verdict, execution_time, created_at')
       .eq('sd_id', sdId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false }); // CRITICAL: DESC order ensures [0] is latest
 
     if (error) {
       console.warn(`⚠️  Could not fetch sub-agent results: ${error.message}`);
@@ -573,30 +575,58 @@ class SubAgentEnforcementSystem {
   }
 
   /**
+   * Get the LATEST result for a specific sub-agent code
+   * FIX 2 (2026-01-01): Explicit helper to get latest result instead of implicit .find()
+   *
+   * @param {string} sdId - SD identifier
+   * @param {string} agentCode - Sub-agent code (e.g., 'TESTING', 'GITHUB')
+   * @returns {Object|null} Latest result or null if none
+   */
+  async getLatestSubAgentResult(sdId, agentCode) {
+    const { data, error } = await this.supabase
+      .from('sub_agent_execution_results')
+      .select('*')
+      .eq('sd_id', sdId)
+      .eq('sub_agent_code', agentCode.toUpperCase())
+      .order('created_at', { ascending: false })
+      .limit(1)  // EXPLICIT: Only get the single latest record
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+      console.warn(`⚠️  Could not fetch latest ${agentCode} result: ${error.message}`);
+      return null;
+    }
+
+    return data || null;
+  }
+
+  /**
    * Verify sub-agent results exist in database (SOURCE OF TRUTH)
    * Returns which required sub-agents have persisted results
    * SD-LEO-4-3-2-AUTOMATION: Database-first enforcement
+   *
+   * FIX 2 (2026-01-01): Use explicit getLatestSubAgentResult() instead of implicit .find()
    */
   async verifySubAgentResultsExist(sdId, requiredSubAgents) {
     console.log('\n🔍 Verifying sub-agent results in database...');
 
-    const results = await this.getSubAgentExecutionResults(sdId);
-    const persistedCodes = new Set(results.map(r => r.sub_agent_code?.toUpperCase()));
-
     const verification = {
       verified: [],
       missing: [],
-      results: results
+      results: []
     };
 
     for (const agentName of requiredSubAgents) {
       // Map agent name to code (e.g., "Testing" -> "TESTING")
       const agentCode = agentName.toUpperCase();
 
-      if (persistedCodes.has(agentCode)) {
+      // FIX 2: Use explicit latest query instead of .find() on full result set
+      const latestResult = await this.getLatestSubAgentResult(sdId, agentCode);
+
+      if (latestResult) {
         verification.verified.push(agentName);
-        const latestResult = results.find(r => r.sub_agent_code?.toUpperCase() === agentCode);
-        console.log(`   ✅ ${agentName}: ${latestResult?.verdict || 'PASS'} (${new Date(latestResult?.created_at).toLocaleDateString()})`);
+        verification.results.push(latestResult);
+        console.log(`   ✅ ${agentName}: ${latestResult.verdict || 'PASS'} (${new Date(latestResult.created_at).toLocaleDateString()})`);
       } else {
         verification.missing.push(agentName);
         console.log(`   ❌ ${agentName}: No persisted results found`);

@@ -348,6 +348,102 @@ USING (
 
 ---
 
+## Governance Trigger Automation Bypass (NEW)
+
+**Added**: 2026-01-01 (Fix 5 - Process Improvement)
+**Impact**: Allows LEO orchestration to bypass governance triggers with full audit trail
+
+### The Problem
+
+Governance triggers (orphan protection, type change validation) block automation workflows even when the operations are valid. For example:
+- LEO orchestrator creating child SDs
+- System migrations changing SD types
+- Admin operations during maintenance
+
+### The Solution: `automation_context`
+
+Add bypass metadata to `governance_metadata` field:
+
+```json
+{
+  "automation_context": {
+    "bypass_governance": true,
+    "actor_role": "LEO_ORCHESTRATOR",
+    "bypass_reason": "Creating child SDs as part of orchestrator setup",
+    "requested_at": "2026-01-01T00:00:00Z"
+  }
+}
+```
+
+### Valid Actor Roles
+
+| Role | Use Case |
+|------|----------|
+| `LEO_ORCHESTRATOR` | LEO Protocol automation (child SD creation, phase transitions) |
+| `SYSTEM_MIGRATION` | Database migrations, schema updates |
+| `ADMIN` | Manual admin override (fully audited) |
+
+### Affected Governance Triggers
+
+| Trigger | Normal Behavior | With Bypass |
+|---------|-----------------|-------------|
+| `orphan_protection` | Blocks type changes that orphan work | Logs + allows |
+| `type_change_risk` | Blocks HIGH risk changes without approval | Logs + allows |
+| `type_change_timing` | Blocks changes after handoffs created | Logs + allows |
+| `type_change_explanation` | Requires explanation for type changes | Logs + allows |
+
+### Audit Trail
+
+All bypasses are logged to `sd_governance_bypass_audit`:
+
+```sql
+SELECT * FROM v_recent_governance_bypasses;
+```
+
+Fields captured:
+- `sd_id` - Which SD was modified
+- `trigger_name` - Which trigger was bypassed
+- `actor_role` - Who/what requested the bypass
+- `bypass_reason` - Justification
+- `old_values` / `new_values` - What changed
+
+### Usage Example (JavaScript)
+
+```javascript
+// LEO Orchestrator creating child SD
+await supabase
+  .from('strategic_directives_v2')
+  .insert({
+    id: 'SD-CHILD-001',
+    parent_sd_id: 'SD-PARENT-001',
+    sd_type: 'implementation',
+    governance_metadata: {
+      automation_context: {
+        bypass_governance: true,
+        actor_role: 'LEO_ORCHESTRATOR',
+        bypass_reason: 'Creating child SD for orchestrator workflow',
+        requested_at: new Date().toISOString()
+      }
+    }
+  });
+```
+
+### Security Considerations
+
+1. **Audit Everything**: All bypasses logged for review
+2. **Valid Roles Only**: Only 3 recognized roles
+3. **Reason Required**: Must explain why bypass needed
+4. **Review Regularly**: Query `v_recent_governance_bypasses` periodically
+
+### Related
+
+- Migration: `database/migrations/20260101_fix5_governance_automation_bypass.sql`
+- Function: `is_valid_automation_bypass(governance_metadata, trigger_name)`
+- Audit table: `sd_governance_bypass_audit`
+- View: `v_recent_governance_bypasses`
+
+---
+
 ## Schema Validation Enhancements (NEW)
 
 **Added**: 2025-10-26 (PAT-001, SD-VWC-PRESETS-001)
