@@ -113,3 +113,6 @@ src/client/dist/
 
 # Generated query outputs (regenerable from scripts)
 /output/
+
+# Archived bootstrap scripts (local reference only)
+/docs/archive/
