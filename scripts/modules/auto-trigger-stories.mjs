@@ -845,7 +845,51 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
   } catch (error) {
     const duration = Math.round((Date.now() - startTime) / 1000);
 
-    console.error('❌ Error in auto-trigger:', error.message);
+    // FIX 7 (2026-01-01): Enhanced error logging for debugging silent failures
+    console.error('');
+    console.error('╔══════════════════════════════════════════════════════════════════════╗');
+    console.error('║   STORIES AUTO-TRIGGER ERROR                                         ║');
+    console.error('╚══════════════════════════════════════════════════════════════════════╝');
+    console.error('');
+    console.error(`❌ Error: ${error.message}`);
+    console.error(`   SD ID: ${sdId}`);
+    console.error(`   PRD ID: ${prdId}`);
+    console.error(`   Duration: ${duration}s`);
+    console.error('');
+
+    // Log stack trace for debugging
+    if (error.stack) {
+      console.error('📋 Stack trace:');
+      console.error(error.stack.split('\n').slice(0, 5).join('\n'));
+    }
+
+    // Common error diagnosis
+    console.error('');
+    console.error('🔍 Possible causes:');
+    if (error.message.includes('UUID') || error.message.includes('uuid')) {
+      console.error('   → SD ID format mismatch (UUID vs legacy key)');
+      console.error(`   → Received: ${sdId}`);
+      console.error('   → Check if using strategic_directives_v2.id (key) not .uuid_id');
+    }
+    if (error.message.includes('not found') || error.message.includes('PGRST116')) {
+      console.error('   → SD or PRD not found in database');
+      console.error('   → Verify SD exists: SELECT * FROM strategic_directives_v2 WHERE id = $1');
+      console.error('   → Verify PRD exists: SELECT * FROM product_requirements_v2 WHERE id = $1');
+    }
+    if (error.message.includes('constraint') || error.message.includes('violates')) {
+      console.error('   → Database constraint violation');
+      console.error('   → Check story_key format: SD-ID:US-NNN');
+      console.error('   → Check for duplicate stories');
+    }
+    if (error.message.includes('OPENAI') || error.message.includes('API')) {
+      console.error('   → OpenAI API issue');
+      console.error('   → Check OPENAI_API_KEY is set');
+      console.error('   → Template fallback should still work');
+    }
+    console.error('');
+    console.error('💡 To debug manually:');
+    console.error(`   node scripts/trigger-stories-generation.mjs ${sdId}`);
+    console.error('');
 
     if (logExecution) {
       await logSubAgentError(supabase, sdId, prdId, executionId, error, duration);
@@ -854,6 +898,12 @@ export async function autoTriggerStories(supabase, sdId, prdId, options = {}) {
     return {
       executed: false,
       error: error.message,
+      error_details: {
+        sd_id: sdId,
+        prd_id: prdId,
+        duration_seconds: duration,
+        stack_preview: error.stack?.split('\n').slice(0, 3).join('\n')
+      },
       execution_id: executionId
     };
   }

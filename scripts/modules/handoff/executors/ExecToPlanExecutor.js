@@ -61,17 +61,16 @@ export class ExecToPlanExecutor extends BaseExecutor {
         console.log('\n🔐 PREREQUISITE CHECK: PLAN-TO-EXEC Handoff Required');
         console.log('-'.repeat(50));
 
-        // Query for an accepted PLAN-TO-EXEC handoff
+        // Query for PLAN-TO-EXEC handoff (any status - to detect blocked handoffs)
         // Use UUID (ctx.sd.id) not legacy_id (ctx.sdId) - handoffs are stored by UUID
         const sdUuid = ctx.sd?.id || ctx.sdId;
-        const { data: planToExecHandoff, error } = await this.supabase
+        const { data: allHandoffs, error } = await this.supabase
           .from('sd_phase_handoffs')
-          .select('id, status, created_at, validation_score')
+          .select('id, status, created_at, validation_score, rejection_reason')
           .eq('sd_id', sdUuid)
           .eq('handoff_type', 'PLAN-TO-EXEC')
-          .eq('status', 'accepted')
           .order('created_at', { ascending: false })
-          .limit(1);
+          .limit(5);
 
         if (error) {
           console.log(`   ⚠️  Error checking prerequisite: ${error.message}`);
@@ -84,6 +83,30 @@ export class ExecToPlanExecutor extends BaseExecutor {
           };
         }
 
+        // FIX 1: Check for blocked handoffs and provide guidance
+        const blockedHandoff = allHandoffs?.find(h => h.status === 'blocked');
+        if (blockedHandoff) {
+          console.log('   ⚠️  BLOCKED PLAN-TO-EXEC handoff found (circuit breaker tripped)');
+          console.log(`      ID: ${blockedHandoff.id.slice(0, 8)}...`);
+          console.log(`      Score: ${blockedHandoff.validation_score}% (required: 85%)`);
+          console.log(`      Reason: ${blockedHandoff.rejection_reason || 'Below threshold'}`);
+          console.log('\n   REMEDIATION:');
+          console.log('   1. Address validation failures to raise score to 85%+');
+          console.log(`   2. Use: SELECT * FROM retry_blocked_handoff('${blockedHandoff.id}', <new_score>);`);
+          console.log('   3. Or create new handoff after fixing issues');
+
+          return {
+            passed: false,
+            score: 0,
+            max_score: 100,
+            issues: [`BLOCKED: PLAN-TO-EXEC handoff blocked with score ${blockedHandoff.validation_score}%`],
+            warnings: [],
+            remediation: 'Fix validation issues and retry blocked handoff or create new one'
+          };
+        }
+
+        // Check for accepted handoff
+        const planToExecHandoff = allHandoffs?.filter(h => h.status === 'accepted');
         if (!planToExecHandoff || planToExecHandoff.length === 0) {
           console.log('   ❌ No accepted PLAN-TO-EXEC handoff found');
           console.log('   ⚠️  LEO Protocol requires PLAN-TO-EXEC before EXEC-TO-PLAN');
@@ -136,22 +159,29 @@ export class ExecToPlanExecutor extends BaseExecutor {
         console.log('-'.repeat(50));
 
         // SD-TYPE-AWARE SUB-AGENT EXEMPTIONS (2025-12-27)
-        // Based on retrospective analysis: 21% of action items were inappropriate for SD type
+        // FIX 6: Query database instead of hardcoded list (2026-01-01)
         // Exemptions defined in sd_type_validation_profiles.requires_sub_agents
         const sdType = (ctx.sd?.sd_type || '').toLowerCase();
 
-        // SD types exempt from sub-agent orchestration
-        // - qa/bugfix: requires_sub_agents: false in validation profile
-        // - orchestrator: children handle sub-agents
-        // - documentation/docs: no code to validate
-        const skipSubAgentTypes = ['qa', 'bugfix', 'bug_fix', 'orchestrator', 'documentation', 'docs', 'database'];
-        if (skipSubAgentTypes.includes(sdType)) {
+        // Query database for SD type validation profile
+        const { data: validationProfile } = await this.supabase
+          .from('sd_type_validation_profiles')
+          .select('requires_sub_agents, validation_requirements')
+          .eq('sd_type', sdType)
+          .single();
+
+        // Check if sub-agents are NOT required for this SD type
+        const skipSubAgents = validationProfile?.requires_sub_agents === false;
+
+        if (skipSubAgents) {
           console.log(`   ℹ️  ${sdType} type SD - sub-agent orchestration SKIPPED`);
-          console.log(`   → ${sdType} validation profile has requires_sub_agents: false`);
+          console.log(`   → Database: sd_type_validation_profiles.requires_sub_agents = false`);
           if (sdType === 'orchestrator') {
             console.log('   → Orchestrator SDs: children handle sub-agent validation');
           } else if (['documentation', 'docs'].includes(sdType)) {
             console.log('   → Documentation SDs: no code paths to validate');
+          } else if (sdType === 'infrastructure') {
+            console.log('   → Infrastructure SDs: infrastructure-specific validation only');
           }
           ctx._orchestrationResult = { can_proceed: true, passed: 0, total_agents: 0, skipped: true };
           return {
@@ -159,8 +189,8 @@ export class ExecToPlanExecutor extends BaseExecutor {
             score: 100,
             max_score: 100,
             issues: [],
-            warnings: [`Sub-agent orchestration skipped for ${sdType} type SD`],
-            details: { skipped: true, reason: `${sdType} type - requires_sub_agents: false` }
+            warnings: [`Sub-agent orchestration skipped for ${sdType} type SD (db: requires_sub_agents=false)`],
+            details: { skipped: true, reason: `${sdType} type - requires_sub_agents: false`, source: 'database' }
           };
         }
 

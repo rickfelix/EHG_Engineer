@@ -1709,8 +1709,19 @@ ${sdData.metadata ? `## SD METADATA\n${formatMetadata(sdData.metadata)}` : ''}
         console.log(`   Recommendation: ${storiesResult.recommendation}`);
       }
     } catch (triggerError) {
-      console.warn('⚠️  Auto-trigger warning:', triggerError.message);
-      console.log('   User stories will need to be created manually');
+      // FIX 7 (2026-01-01): Enhanced error logging for debugging
+      console.error('');
+      console.error('⚠️  STORIES Auto-trigger failed:', triggerError.message);
+      console.error('');
+      console.error('   SD ID passed: ' + sdId);
+      console.error('   PRD ID passed: ' + prdId);
+      if (triggerError.stack) {
+        console.error('   Stack: ' + triggerError.stack.split('\n')[1]);
+      }
+      console.error('');
+      console.error('   To generate stories manually, run:');
+      console.error(`   node scripts/trigger-stories-generation.mjs ${sdId}`);
+      console.error('');
     }
 
     console.log('\n📝 Next steps:');

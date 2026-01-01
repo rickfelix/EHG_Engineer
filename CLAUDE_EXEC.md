@@ -254,6 +254,77 @@ These anti-patterns are specific to the EXEC phase. Violating them leads to fail
 **Correct Approach**: Every backend field must have corresponding UI component
 </negative_constraints>
 
+## 🔒 Circuit Breaker Pattern: Blocked Handoffs
+
+**Added**: 2026-01-01 (Fix 1 - Process Improvement)
+**Status**: ACTIVE
+
+### What is the Circuit Breaker?
+
+The circuit breaker is a database trigger that **blocks invalid phase transitions** when validation fails. Instead of raising an exception and losing the handoff data, it now **stores blocked handoffs** for remediation.
+
+### How It Works
+
+```
+Handoff Attempt → Validation Check → Score < 85%?
+                                          ↓
+                                    status = 'blocked'
+                                    rejection_reason = details
+                                    stored in sd_phase_handoffs
+```
+
+### Detecting Blocked Handoffs
+
+When you see this in EXEC→PLAN output:
+
+```
+⚠️  BLOCKED PLAN-TO-EXEC handoff found (circuit breaker tripped)
+   Handoff ID: abc-123
+   Blocked at: 2026-01-01T12:00:00Z
+   Reason: CIRCUIT_BREAKER: validation_score 72% < 85% threshold
+```
+
+### Remediation Steps
+
+1. **Check validation score**: Query the handoff record
+   ```sql
+   SELECT id, validation_score, rejection_reason
+   FROM sd_phase_handoffs
+   WHERE sd_id = 'SD-XXX' AND status = 'blocked';
+   ```
+
+2. **Address failing validations**: Fix the issues identified in `rejection_reason`
+
+3. **Retry the handoff**:
+   ```sql
+   SELECT retry_blocked_handoff('handoff-uuid-here');
+   ```
+
+4. **Or use the script**:
+   ```bash
+   node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001
+   ```
+
+### Valid Status Values
+
+| Status | Meaning |
+|--------|---------|
+| `pending_acceptance` | Awaiting review |
+| `accepted` | Handoff approved |
+| `rejected` | Manually rejected |
+| `blocked` | Circuit breaker tripped (auto) |
+
+### Key Insight
+
+**Old Behavior**: Validation failure raised exception → handoff lost → context lost
+**New Behavior**: Validation failure stores handoff → remediation possible → context preserved
+
+### Related
+
+- Migration: `database/migrations/20260101_fix1_circuit_breaker_store_blocked.sql`
+- Function: `retry_blocked_handoff(handoff_id)`
+- View: `v_blocked_handoffs_pending_retry`
+
 ## 📚 Skill Integration (EXEC Phase)
 
 ## Skill Integration During EXEC
