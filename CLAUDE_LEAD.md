@@ -1,10 +1,50 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2025-12-27 5:55:08 PM
+**Generated**: 2026-01-01 8:59:19 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
 ---
+
+## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
+
+**Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions. Do NOT use database-agent to create handoffs directly.
+
+### ⛔ NEVER DO THIS:
+- Using `database-agent` to directly insert into `sd_phase_handoffs`
+- Creating handoff records without running validation scripts
+- Skipping preflight knowledge retrieval
+
+### ✅ ALWAYS DO THIS:
+
+#### LEAD → PLAN Transition
+```bash
+node scripts/phase-preflight.js --phase PLAN --sd-id SD-XXX-001
+node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001
+```
+
+#### PLAN → EXEC Transition
+```bash
+node scripts/phase-preflight.js --phase EXEC --sd-id SD-XXX-001
+node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001
+```
+
+#### EXEC → PLAN Transition (Verification)
+```bash
+node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
+```
+
+#### PLAN → LEAD Transition (Final Approval)
+```bash
+node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
+```
+
+### Compliance Check
+```bash
+npm run handoff:compliance SD-XXX-001
+```
+
+**Database trigger now BLOCKS direct inserts. You MUST use the scripts above.**
 
 ## Baseline Issues Management
 
@@ -51,46 +91,6 @@ security, testing, performance, database, documentation, accessibility, code_qua
 ### Functions
 - `check_baseline_gate(p_sd_id)`: Returns PASS/BLOCKED verdict for LEAD gate
 - `generate_baseline_issue_key(p_category)`: Generates unique issue key
-
-## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
-
-**Anti-Bypass Protocol**: These commands MUST be run for ALL phase transitions. Do NOT use database-agent to create handoffs directly.
-
-### ⛔ NEVER DO THIS:
-- Using `database-agent` to directly insert into `sd_phase_handoffs`
-- Creating handoff records without running validation scripts
-- Skipping preflight knowledge retrieval
-
-### ✅ ALWAYS DO THIS:
-
-#### LEAD → PLAN Transition
-```bash
-node scripts/phase-preflight.js --phase PLAN --sd-id SD-XXX-001
-node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001
-```
-
-#### PLAN → EXEC Transition
-```bash
-node scripts/phase-preflight.js --phase EXEC --sd-id SD-XXX-001
-node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001
-```
-
-#### EXEC → PLAN Transition (Verification)
-```bash
-node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
-```
-
-#### PLAN → LEAD Transition (Final Approval)
-```bash
-node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
-```
-
-### Compliance Check
-```bash
-npm run handoff:compliance SD-XXX-001
-```
-
-**Database trigger now BLOCKS direct inserts. You MUST use the scripts above.**
 
 ## 🔍 Explore Before Validation (LEAD Phase)
 
@@ -856,6 +856,6 @@ npm run sd:status    # Overall progress by track
 
 ---
 
-*Generated from database: 2025-12-27*
+*Generated from database: 2026-01-01*
 *Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

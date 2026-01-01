@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-27 5:55:08 PM
+**Generated**: 2026-01-01 8:59:19 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -185,37 +185,6 @@ npm run handoff:compliance SD-ID  # Check specific SD
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
-## Mandatory Agent Invocation Rules
-
-**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
-
-### Task Type -> Required Agent
-
-| Task Keywords | MUST Invoke | Purpose |
-|---------------|-------------|---------|
-| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
-| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
-| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
-| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
-| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
-| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
-| database, migration, schema | **database-agent** | Schema validation |
-| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
-
-### Why This Exists
-
-**Incident**: Human-like testing perspective interpreted as manual content inspection.
-**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
-**Root Cause**: Ad-hoc review instead of specialized agent invocation.
-**Prevention**: Explicit rules mandate agent use for specialized tasks.
-
-### How to Apply
-
-1. Detect task type from user request keywords
-2. Invoke required agent(s) BEFORE making changes
-3. Agent findings inform implementation
-4. Re-run agent AFTER changes to verify fixes
-
 ## 🤖 Built-in Agent Integration
 
 ## Built-in Agent Integration
@@ -257,6 +226,37 @@ Task(subagent_type="Explore", prompt="Identify affected areas")
 ```
 
 This is faster than sequential exploration and provides comprehensive coverage.
+
+## Mandatory Agent Invocation Rules
+
+**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
+
+### Task Type -> Required Agent
+
+| Task Keywords | MUST Invoke | Purpose |
+|---------------|-------------|---------|
+| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
+| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
+| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
+| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
+| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
+| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
+| database, migration, schema | **database-agent** | Schema validation |
+| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
+
+### Why This Exists
+
+**Incident**: Human-like testing perspective interpreted as manual content inspection.
+**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
+**Root Cause**: Ad-hoc review instead of specialized agent invocation.
+**Prevention**: Explicit rules mandate agent use for specialized tasks.
+
+### How to Apply
+
+1. Detect task type from user request keywords
+2. Invoke required agent(s) BEFORE making changes
+3. Agent findings inform implementation
+4. Re-run agent AFTER changes to verify fixes
 
 ## Work Tracking Policy
 
@@ -825,6 +825,30 @@ Patterns exceeding these thresholds auto-create CRITICAL SDs:
 
 **Weekly Maintenance:** `npm run pattern:maintenance` (also runs via GitHub Action)
 
+## Genesis Codebase Locations
+
+**CRITICAL**: Genesis spans TWO codebases:
+
+| Codebase | Path | Contents |
+|----------|------|----------|
+| **EHG_Engineer** | `/lib/genesis/` | Infrastructure (quality gates, TTL, patterns) |
+| **EHG App** | `/lib/genesis/` | Orchestrators (ScaffoldEngine, repo-creator) |
+| **EHG App** | `/scripts/genesis/` | Pipeline (genesis-pipeline.js, soul-extractor.js) |
+
+### Quick Reference
+| Task | Location |
+|------|----------|
+| Create simulation | `node /ehg/scripts/genesis/genesis-pipeline.js create "seed"` |
+| Ratify simulation | `POST /api/genesis/ratify` |
+| Query patterns | `EHG_Engineer/lib/genesis/pattern-library.js` |
+| Run quality gates | `EHG_Engineer/lib/genesis/quality-gates.js` |
+| Soul extraction (Stage 16) | `ehg/scripts/genesis/soul-extractor.js` |
+| Production gen (Stage 17) | `ehg/scripts/genesis/production-generator.js` |
+
+### Full Documentation
+- Implementation guide: `docs/architecture/GENESIS_IMPLEMENTATION_GUIDE.md`
+- Quick reference: `docs/reference/genesis-codebase-guide.md`
+
 ## Parent-Child SD Hierarchy
 
 ### Overview
@@ -1361,6 +1385,8 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 
 **Result**: Objective quality gates that enforce LEO Protocol's philosophy without relying on human judgment.
 
+
+
 ## 🔥 Hot Issue Patterns (Auto-Updated)
 
 **CRITICAL**: These are active patterns detected from retrospectives. Review before starting work.
@@ -1407,9 +1433,9 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 |------|-----------|----------|----------|--------|
 | Gate 0 | 0% | 36 | 36 | 🔴 Critical |
 | Gate 1 | 0% | 1 | 1 | 🔴 Critical |
-| Gate 3 | 0% | 54 | 54 | 🔴 Critical |
-| Gate 2B | 0% | 54 | 54 | 🔴 Critical |
-| Gate 2D | 0% | 54 | 54 | 🔴 Critical |
+| Gate 3 | 0% | 42 | 42 | 🔴 Critical |
+| Gate 2B | 0% | 42 | 42 | 🔴 Critical |
+| Gate 2D | 0% | 42 | 42 | 🔴 Critical |
 
 ### Remediation Actions
 
@@ -1437,16 +1463,16 @@ When gates consistently fail:
 - [ ] Add reset_sd_phase RPC function for administrative phase corrections
 - [ ] Maintain E2E test path auto-generation for all SD types
 
-### 2. Legacy Protocol Cleanup (The Exorcism) - Retrospective ⭐
-**Category**: DEPLOYMENT_ISSUE | **Date**: 12/16/2025 | **Score**: 100
+### 2. Mock Infrastructure: Config, Registry, and Utilities - Retrospective ⭐
+**Category**: PROCESS_IMPROVEMENT | **Date**: 12/28/2025 | **Score**: 100
 
 **Key Improvements**:
-- Should have documented rollback procedure before starting
-- E2E tests could verify UI still renders Stage1-25 correctly
+- Root Cause: jsdom test environment does not properly mock localStorage between test cases, causing 2...
+- Root Cause: Handoff validation system requires multiple sub-agent validations that may not be applic...
 
 **Action Items**:
-- [ ] Create rollback procedure for stage component deletions
-- [ ] Add E2E test verifying Stage1-25 UI renders correctly
+- [ ] Document mock system usage in docs/mock-data-system.md (in SD-MOCK-POLISH)
+- [ ] Complete missing handoff documentation
 
 ### 3. Vision V2: Chairman's Dashboard UI - Retrospective ⭐
 **Category**: TESTING_STRATEGY | **Date**: 12/14/2025 | **Score**: 100
@@ -1470,16 +1496,16 @@ When gates consistently fail:
 - [ ] RETRO Deduplication | Owner: LEO Team | Due: 2025-01-15 | Acceptance: No duplica...
 - [ ] Infrastructure Test Validation | Owner: LEO Team | Due: 2025-01-31 | Acceptance:...
 
-### 5. UI Canon Alignment - Retrospective ⭐
-**Category**: TESTING_STRATEGY | **Date**: 12/19/2025 | **Score**: 100
+### 5. Legacy Protocol Cleanup (The Exorcism) - Retrospective ⭐
+**Category**: DEPLOYMENT_ISSUE | **Date**: 12/16/2025 | **Score**: 100
 
 **Key Improvements**:
-- E2E test timeout configuration for mock mode
-- Deprecation enforcement for legacy stage constants
+- Should have documented rollback procedure before starting
+- E2E tests could verify UI still renders Stage1-25 correctly
 
 **Action Items**:
-- [ ] Add eslint rule to deprecate IDEATION_STAGES import and suggest VENTURE_STAGES
-- [ ] Configure separate Playwright timeouts for mock-mode tests (30s) vs real-mode te...
+- [ ] Create rollback procedure for stage component deletions
+- [ ] Add E2E test verifying Stage1-25 UI renders correctly
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1549,7 +1575,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ---
 
-*Generated from database: 2025-12-27*
+*Generated from database: 2026-01-01*
 *Protocol Version: 4.3.3*
-*Includes: Hot Patterns (5) + Recent Lessons (5)*
+*Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*
