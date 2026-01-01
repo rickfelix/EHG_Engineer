@@ -13,7 +13,7 @@ See documentation for table structure: `database/schema/007_leo_protocol_schema_
 
 ## Session Prologue (Short)
 
-1. **Follow LEAD→PLAN→EXEC** - Target gate pass rate varies by SD type (60-90%, typically 85%)
+1. **Follow LEAD→PLAN→EXEC** - Target ≥85% gate pass rate
 2. **Use sub-agents** - Architect, QA, Reviewer - summarize outputs
 3. **Database-first** - No markdown files as source of truth
 4. **USE PROCESS SCRIPTS** - ⚠️ NEVER bypass add-prd-to-database.js, handoff.js ⚠️
@@ -64,7 +64,7 @@ This command provides:
 - `bash scripts/leo-stack.sh stop` - Stop all servers
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-05 7:37:54 PM
+**Last Generated**: 2026-01-01 8:59:19 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -102,43 +102,8 @@ This command provides:
 - + Phase file: 43k avg (22%) ✅
 - + Reference doc: 58k (29%) ✅
 
-## Sub-Agent Trigger Keywords (Quick Reference)
-
-**CRITICAL**: When user query contains these keywords, PROACTIVELY invoke the corresponding sub-agent via Task tool.
-
-| Sub-Agent | Trigger Keywords |
-|-----------|------------------|
-| `ANALYTICS` | analytics, metrics, dashboard, aarrr, funnel, conversion rate, user behavior, tracking, kpi, retention rate (+1 more) |
-| `API` | api, rest, restful, graphql, endpoint, route, controller, middleware, request, response (+7 more) |
-| `CRM` | crm, customer relationship, contact management, lead tracking, customer success, salesforce, hubspot, customer data |
-| `DATABASE` | query, select from, insert into, supabase, fetch from database, database query |
-| `DEPENDENCY` | dependency, dependencies, npm, yarn, pnpm, package, package.json, vulnerability, cve, security advisory (+12 more) |
-| `DESIGN` | component, visual, design system, styling, css, tailwind, interface, ui, button, form (+32 more) |
-| `DOCMON` | lead_sd_creation, lead_handoff_creation, lead_approval, plan_prd_generation, plan_verification, exec_implementation, exec_completion, handoff_created, handoff_accepted, phase_transition (+4 more) |
-| `FINANCIAL` | financial, p&l, profit and loss, cash flow, burn rate, runway, revenue projection, margin, gross margin, ebitda (+2 more) |
-| `GITHUB` | exec_implementation_complete, create pull request, gh pr create, lead_approval_complete, create release, plan_verification_pass, github deploy, github status, deployment ci pattern |
-| `LAUNCH` | launch, go-live, production launch, deployment, release, rollout, cutover, launch checklist, beta release, ga release |
-| `MARKETING` | marketing, go-to-market, gtm, campaign, positioning, messaging, channel strategy, content marketing, seo, brand awareness (+1 more) |
-| `MONITORING` | uptime, incident, observability, logging, tracing, datadog, prometheus, monitoring, alerting, health check (+1 more) |
-| `PERFORMANCE` | optimization |
-| `PRICING` | pricing, price point, pricing strategy, unit economics, subscription, freemium, tiered pricing, cac, ltv, revenue model |
-| `RCA` | sub_agent_blocked, ci_pipeline_failure, quality_gate_critical, test_regression, handoff_rejection, sub_agent_fail, quality_degradation, pattern_recurrence, performance_regression, diagnose defect (+2 more) |
-| `REGRESSION` | refactor, refactoring, backward compatibility, backwards compatible, breaking change, regression, restructure, no behavior change, no functional change, api signature (+17 more) |
-| `RETRO` | lead_rejection, plan_verification_complete, plan_complexity_high, exec_sprint_complete, exec_quality_issue, handoff_rejected, handoff_delay, phase_complete, sd_status_completed, sd_status_blocked (+10 more) |
-| `RISK` | high risk, complex, architecture, sophisticated, advanced, overhaul, redesign, authorization, rls, permission (+35 more) |
-| `SALES` | sales, sales playbook, sales process, pipeline, deal flow, quota, sales cycle, objection handling, sales enablement, closing |
-| `SECURITY` | authentication, security, security auth pattern |
-| `STORIES` | user story, user stories, acceptance criteria, implementation, context, guidance, plan_prd |
-| `TESTING` | coverage, protected route, build error, dev server, test infrastructure, testing evidence, redirect to login, playwright build, unit tests, vitest (+3 more) |
-| `UAT` | uat test, execute test, run uat, test execution, manual test, uat testing, start testing, test-auth, test-dash, test-vent |
-| `VALIDATION` | existing implementation, duplicate, conflict, already implemented, codebase check |
-| `VALUATION` | valuation, exit, exit strategy, acquisition, ipo, series a, fundraising, multiple, dcf, comparable (+1 more) |
-
-*Full trigger list in CLAUDE_CORE.md. Use Task tool with `subagent_type="<agent-code>"`*
-
-
 ---
 
-*Router generated from database: 2026-01-05*
+*Router generated from database: 2026-01-01*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*
