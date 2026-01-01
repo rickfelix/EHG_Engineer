@@ -110,3 +110,9 @@ src/client/dist/
 # Token logging (local budget tracking, not version controlled)
 .token-log.json
 .claude/logs/
+
+# Generated query outputs (regenerable from scripts)
+/output/
+
+# Archived bootstrap scripts (local reference only)
+/docs/archive/
