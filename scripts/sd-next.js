@@ -331,10 +331,9 @@ class SDNextSelector {
       .from('strategic_directives_v2')
       .select('legacy_id, title, priority, status, sequence_rank, progress_percentage, dependencies, metadata, is_working_on')
       .eq('is_active', true)
-      .in('status', ['draft', 'active', 'in_progress'])
-      .in('priority', ['critical', 'high'])
-      .not('sequence_rank', 'is', null)
-      .order('sequence_rank')
+      .in('status', ['draft', 'lead_review', 'plan_active', 'exec_active', 'active', 'in_progress'])
+      .in('priority', ['critical', 'high', 'medium'])
+      .order('sequence_rank', { nullsFirst: false })
       .limit(15);
 
     if (error || !sds || sds.length === 0) {
@@ -368,11 +367,13 @@ class SDNextSelector {
     if (tracks.STANDALONE.length > 0) {
       this.displayTrackSection('STANDALONE', 'Standalone (No Dependencies)', tracks.STANDALONE);
     }
+    if (tracks.UNASSIGNED.length > 0) {
+      this.displayTrackSection('UNASSIGNED', 'Unassigned (Needs Track)', tracks.UNASSIGNED);
+    }
 
-    // Find ready SDs
+    // Find ready SDs (include unassigned)
     const _readySDs = sds.filter(sd => {
-      const track = sd.metadata?.execution_track;
-      return track && this.checkDependenciesResolvedSync(sd.dependencies);
+      return this.checkDependenciesResolvedSync(sd.dependencies);
     });
 
     console.log(`\n${colors.bold}${colors.green}RECOMMENDED STARTING POINTS:${colors.reset}`);
@@ -383,12 +384,12 @@ class SDNextSelector {
       console.log(`${colors.dim}   (Marked as "Working On" in UI)${colors.reset}`);
     }
 
-    // Show top ready SD per track
+    // Show top ready SD per track (including unassigned)
     for (const [trackKey, trackSDs] of Object.entries(tracks)) {
-      if (trackKey === 'UNASSIGNED') continue;
       const ready = trackSDs.find(s => s.deps_resolved && !s.is_working_on);
       if (ready) {
-        console.log(`${colors.green}  Track ${trackKey}:${colors.reset} ${ready.legacy_id} - ${ready.title.substring(0, 50)}...`);
+        const trackLabel = trackKey === 'UNASSIGNED' ? 'Unassigned' : `Track ${trackKey}`;
+        console.log(`${colors.green}  ${trackLabel}:${colors.reset} ${ready.legacy_id} - ${ready.title.substring(0, 50)}...`);
       }
     }
 
@@ -706,14 +707,26 @@ class SDNextSelector {
       deps = dependencies;
     }
 
-    return deps.map(dep => {
-      if (typeof dep === 'string') {
-        // Parse "SD-XXX (description)" format
-        const match = dep.match(/^(SD-[A-Z0-9-]+)/);
-        return { sd_id: match ? match[1] : dep, resolved: false };
-      }
-      return { sd_id: dep.sd_id || dep, resolved: false };
-    });
+    // Only return entries that are actual SD references (SD-XXX format)
+    // Ignore text descriptions of prerequisites
+    return deps
+      .map(dep => {
+        if (typeof dep === 'string') {
+          // Parse "SD-XXX (description)" format
+          const match = dep.match(/^(SD-[A-Z0-9-]+)/);
+          if (match) {
+            return { sd_id: match[1], resolved: false };
+          }
+          // Not an SD reference - skip it
+          return null;
+        }
+        // Object format with sd_id field
+        if (dep.sd_id && dep.sd_id.match(/^SD-[A-Z0-9-]+/)) {
+          return { sd_id: dep.sd_id, resolved: false };
+        }
+        return null;
+      })
+      .filter(Boolean); // Remove nulls
   }
 }
 
