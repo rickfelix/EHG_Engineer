@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-01T13:00:37.176Z
-**Rows**: 293
+**Generated**: 2026-01-01T22:19:40.872Z
+**Rows**: 303
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -352,6 +352,11 @@ Use the id column instead - it is the canonical identifier. |
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION trigger_retro_notification()`
 
+### trg_auto_complete_parent_orchestrator
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION try_auto_complete_parent_orchestrator()`
+
 ### trg_auto_set_is_parent
 
 - **Timing**: AFTER INSERT
@@ -386,6 +391,11 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION enforce_doctrine_of_constraint()`
+
+### trg_enforce_child_creation_timing
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION enforce_child_creation_timing()`
 
 ### trg_enforce_metadata_object
 
