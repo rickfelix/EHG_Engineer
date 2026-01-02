@@ -46,6 +46,39 @@ Each gate uses 2-phase validation:
 
 ---
 
+## SD Type-Aware Thresholds (v1.1.0)
+
+**NEW**: Gate pass thresholds now vary by SD type in addition to risk-based adaptive thresholds.
+
+### SD Type Base Thresholds
+
+| SD Type | Base Threshold | Rationale |
+|---------|----------------|-----------|
+| **feature** | 85% | Full validation (UI, E2E, integration) |
+| **database** | 75% | Schema-focused, may skip UI-dependent E2E |
+| **infrastructure** | 80% | Tooling/protocols, reduced code validation |
+| **security** | 90% | Higher bar for security-critical work |
+| **documentation** | 60% | No code changes, minimal validation |
+| **orchestrator** | 70% | Coordination layer, user stories in children |
+| **refactor** | 80% | Behavior preservation focus |
+| **bugfix** | 80% | Targeted fix validation |
+| **performance** | 85% | Measurable impact verification |
+
+### Orchestrator SD Handling
+
+Parent orchestrator SDs (those with child SDs) have special validation logic:
+- **USER_STORY_EXISTENCE_GATE**: Bypassed (user stories are in child SDs)
+- Gate validates child SD progress and completion instead of parent user stories
+- Detection query: `SELECT COUNT(*) FROM strategic_directives_v2 WHERE parent_sd_id = :sd_id`
+
+### Priority: SD Type vs Risk-Based
+
+1. **SD Type threshold** is checked first (from `getThreshold(sd.sd_type)`)
+2. **Risk-based modifiers** can still apply on top
+3. **Special case minimums** (security, production) take precedence
+
+---
+
 ## Adaptive Thresholds
 
 ### How It Works

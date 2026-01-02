@@ -13,7 +13,7 @@
 
 import { exit } from 'node:process';
 import { getDb } from './lib/db.js';
-import { scoreGate, formatGateResults, Check } from './lib/score.js';
+import { scoreGate, formatGateResults, gatePass, getThreshold, Check } from './lib/score.js';
 import { getRulesForGate, getPRDDetails, storeGateReview } from './lib/rules.js';
 import { checkTestEvidence } from './lib/check-test-evidence.js';
 import { checkDiffMinimality } from './lib/check-diff.js';
@@ -53,6 +53,7 @@ import { checkMigrationCorrectness } from './lib/check-migration.js';
 
   console.log(`Title: ${prdDetails.title}`);
   console.log(`SD: ${prdDetails.sd_id || 'None'}`);
+  console.log(`SD Type: ${prdDetails.sd_type} (threshold: ${getThreshold(prdDetails.sd_type)}%)`);
   console.log('');
 
   // Extract SD ID from PRD ID if available
@@ -166,9 +167,10 @@ import { checkMigrationCorrectness } from './lib/check-migration.js';
   // Store review in database
   await storeGateReview(prdId, 'Q', score, results);
 
-  // Exit with appropriate code
-  if (score < 85) {
-    console.log(`\n❌ Gate Q failed: ${score}% < 85%`);
+  // Exit with appropriate code (using SD type-aware threshold)
+  const threshold = getThreshold(prdDetails.sd_type);
+  if (!gatePass(score, prdDetails.sd_type)) {
+    console.log(`\n❌ Gate Q failed: ${score}% < ${threshold}%`);
     console.log('');
     console.log('To improve score:');
     if (!results['hasTestEvidence']) {
@@ -185,7 +187,7 @@ import { checkMigrationCorrectness } from './lib/check-migration.js';
     }
     exit(1);
   } else {
-    console.log(`\n✅ Gate Q passed: ${score}%`);
+    console.log(`\n✅ Gate Q passed: ${score}% >= ${threshold}%`);
     exit(0);
   }
 })().catch((error) => {

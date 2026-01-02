@@ -2,7 +2,7 @@
 
 ## Overview
 
-The LEO Protocol Gate System enforces quality standards through deterministic validation gates. Each gate must score ≥85% to pass, ensuring PRDs meet all requirements before implementation.
+The LEO Protocol Gate System enforces quality standards through deterministic validation gates. Each gate must score at or above the SD type threshold to pass (60-90%, typically 85% for features), ensuring PRDs meet all requirements before implementation. See "SD Type Awareness" section in Gate 3 for the complete threshold table.
 
 ## Gate Structure
 
@@ -56,6 +56,88 @@ The LEO Protocol Gate System enforces quality standards through deterministic va
 | `supervisorChecklistPass` | 100% | Complete Verification | Gates 2A-2D pass + all sub-agents pass |
 
 **Total Weight**: 1.000 (100%)
+
+#### Gate 3 Detailed Breakdown
+
+Gate 3 performs comprehensive traceability validation across multiple validation areas:
+
+##### Prerequisite Gates Check
+
+Gate 3 first verifies that all prerequisite gates (2A, 2B, 2C, 2D) have passed with ≥85% score:
+
+```sql
+-- Gate 3 checks latest scores for each prerequisite
+SELECT gate, score FROM leo_gate_reviews
+WHERE prd_id = 'PRD-XXX' AND gate IN ('2A', '2B', '2C', '2D')
+ORDER BY created_at DESC;
+```
+
+##### Sub-Agent Verification
+
+Gate 3 validates all required sub-agent executions have completed successfully:
+
+| Sub-Agent | Triggered When | Required Status |
+|-----------|----------------|-----------------|
+| SECURITY | Auth/permission changes | PASS or CONDITIONAL_PASS |
+| DATABASE | Schema/migration changes | PASS or CONDITIONAL_PASS |
+| TESTING | All SDs | PASS or CONDITIONAL_PASS |
+| DESIGN | UI component changes | PASS or CONDITIONAL_PASS |
+| PERFORMANCE | High priority SDs | PASS or CONDITIONAL_PASS |
+
+##### SD Type Awareness
+
+Gate 3 applies different validation paths based on SD type:
+
+| SD Type | Threshold | Special Handling |
+|---------|-----------|------------------|
+| `feature` | 85% | Full validation (default) |
+| `database` | 75% | Skips design traceability, focuses on schema validation |
+| `infrastructure` | 80% | Simplified validation (no code tests) |
+| `security` | 90% | Stricter security sub-agent requirements |
+| `documentation`/`docs` | 60% | No code/test validation required |
+| `orchestrator` | 70% | Validates via children completion status |
+| `refactor` | 80% | Validates via REGRESSION sub-agent results |
+| `bugfix` | 80% | Standard validation |
+| `performance` | 85% | Requires PERFORMANCE sub-agent pass |
+
+##### Supervisor Verification Artifact
+
+Gate 3 optionally checks for a supervisor verification artifact:
+
+```json
+{
+  "dor_pass": true,
+  "verified_at": "2026-01-02T10:00:00Z",
+  "supervisor_notes": "All criteria met"
+}
+```
+
+If `dor_pass` is `false`, Gate 3 will fail regardless of other checks.
+
+##### Common Gate 3 Failure Patterns
+
+1. **"Not all prerequisite gates have passed"**
+   - **Cause**: One or more of Gates 2A-2D has score <85%
+   - **Fix**: Re-run and fix failing gates before Gate 3
+
+2. **"Security sub-agent not executed"**
+   - **Cause**: SECURITY sub-agent was not triggered or skipped
+   - **Fix**: Run `npm run subagent:execute SECURITY <SD-ID>`
+
+3. **"Gate X: Not executed"**
+   - **Cause**: A required prerequisite gate was never run
+   - **Fix**: Run all gates in sequence: 2A → 2B → 2C → 2D → 3
+
+4. **"Definition of Ready (DoR) not met"**
+   - **Cause**: Supervisor artifact has `dor_pass: false`
+   - **Fix**: Update supervisor verification artifact in `leo_artifacts`
+
+##### Orchestrator SD Handling
+
+For parent orchestrator SDs (those with child SDs), Gate 3 validates differently:
+- Checks that child SDs exist and are progressing
+- User stories are expected in child SDs, not the parent
+- Bypasses USER_STORY_EXISTENCE_GATE for parent orchestrators
 
 ## Running Gates Locally
 

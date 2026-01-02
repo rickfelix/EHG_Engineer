@@ -22,7 +22,7 @@ const __dirname = path.dirname(__filename);
 config({ path: path.resolve(__dirname, '../../.env') });
 import { existsSync, readFileSync } from 'node:fs';
 import { getDb } from './lib/db.js';
-import { scoreGate, formatGateResults, Check } from './lib/score.js';
+import { scoreGate, formatGateResults, gatePass, getThreshold, Check } from './lib/score.js';
 import { getRulesForGate, getPRDDetails, storeGateReview } from './lib/rules.js';
 
 // Cache Jest results to avoid running twice
@@ -94,6 +94,7 @@ function runJest(): { success: boolean; output: string; json?: Record<string, un
 
   console.log(`Title: ${prdDetails.title}`);
   console.log(`SD: ${prdDetails.sd_id || 'None'}`);
+  console.log(`SD Type: ${prdDetails.sd_type} (threshold: ${getThreshold(prdDetails.sd_type)}%)`);
   console.log('');
 
   const _db = await getDb(); // Used to verify connection
@@ -171,18 +172,19 @@ function runJest(): { success: boolean; output: string; json?: Record<string, un
   // Score the gate
   const { score, results } = await scoreGate(rules, checks);
 
-  // Format and display results
-  console.log(formatGateResults('1', { score, results }));
+  // Format and display results (with SD type for threshold)
+  console.log(formatGateResults('1', { score, results }, prdDetails.sd_type));
 
   // Store review in database
   await storeGateReview(prdId, '1', score, results);
 
-  // Exit with appropriate code
-  if (score < 85) {
-    console.log(`\nGate 1 failed: ${score}% < 85%`);
+  // Exit with appropriate code (using SD type-aware threshold)
+  const threshold = getThreshold(prdDetails.sd_type);
+  if (!gatePass(score, prdDetails.sd_type)) {
+    console.log(`\nGate 1 failed: ${score}% < ${threshold}%`);
     exit(1);
   } else {
-    console.log(`\nGate 1 passed: ${score}%`);
+    console.log(`\nGate 1 passed: ${score}% >= ${threshold}%`);
     exit(0);
   }
 })().catch((error) => {

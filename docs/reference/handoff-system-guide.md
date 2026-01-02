@@ -473,7 +473,7 @@ const result = await executor.execute();
 ### DON'T
 
 - Don't bypass prerequisite validation
-- Don't allow scores below 85% to pass
+- Don't allow scores below the SD type threshold to pass (60-90%, typically 85%)
 - Don't skip claim checking
 - Don't create handoffs without gates
 - Don't ignore blocking gate failures

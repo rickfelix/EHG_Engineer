@@ -661,6 +661,31 @@ export class PlanToLeadExecutor extends BaseExecutor {
         const sdLegacyId = ctx.sdId;
         const sdType = (ctx.sd?.sd_type || 'feature').toLowerCase();
 
+        // ORCHESTRATOR BYPASS: Parent orchestrator SDs have user stories in children
+        const { data: childSDs, error: childError } = await this.supabase
+          .from('strategic_directives_v2')
+          .select('id')
+          .eq('parent_sd_id', sdUuid);
+
+        const isParentOrchestrator = childSDs && childSDs.length > 0 && !childError;
+        if (isParentOrchestrator) {
+          console.log(`   ℹ️  Parent orchestrator SD detected (${childSDs.length} children)`);
+          console.log('   ✅ User stories managed by child SDs - bypassing check');
+          return {
+            passed: true,
+            score: 100,
+            max_score: 100,
+            issues: [],
+            warnings: ['Parent orchestrator - user stories belong to child SDs'],
+            details: {
+              sd_type: sdType,
+              is_parent_orchestrator: true,
+              child_count: childSDs.length,
+              stories_required: false
+            }
+          };
+        }
+
         // Get SD type validation profile
         const { data: profile, error: profileError } = await this.supabase
           .from('sd_type_validation_profiles')

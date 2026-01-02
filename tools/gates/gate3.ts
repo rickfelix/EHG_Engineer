@@ -9,7 +9,7 @@
 
 import { exit } from 'node:process';
 import { getDb } from './lib/db';
-import { scoreGate, formatGateResults, Check } from './lib/score';
+import { scoreGate, formatGateResults, gatePass, getThreshold, Check } from './lib/score';
 import { getRulesForGate, getPRDDetails, storeGateReview } from './lib/rules';
 import { safeJsonParse } from './lib/evidence';
 
@@ -32,6 +32,7 @@ import { safeJsonParse } from './lib/evidence';
 
   console.log(`Title: ${prdDetails.title}`);
   console.log(`SD: ${prdDetails.sd_id || 'None'}`);
+  console.log(`SD Type: ${prdDetails.sd_type} (threshold: ${getThreshold(prdDetails.sd_type)}%)`);
   console.log('');
 
   const db = await getDb();
@@ -156,13 +157,14 @@ import { safeJsonParse } from './lib/evidence';
   // Store review in database
   await storeGateReview(prdId, '3', score, results);
 
-  // Exit with appropriate code
-  if (score < 85) {
-    console.log(`\n❌ Gate 3 (Final Verification) failed: ${score}% < 85%`);
+  // Exit with appropriate code (using SD type-aware threshold)
+  const threshold = getThreshold(prdDetails.sd_type);
+  if (!gatePass(score, prdDetails.sd_type)) {
+    console.log(`\n❌ Gate 3 (Final Verification) failed: ${score}% < ${threshold}%`);
     console.log('PRD is NOT ready for implementation');
     exit(1);
   } else {
-    console.log(`\n✅ Gate 3 (Final Verification) passed: ${score}%`);
+    console.log(`\n✅ Gate 3 (Final Verification) passed: ${score}% >= ${threshold}%`);
     console.log('🎆 PRD is READY for implementation!');
     exit(0);
   }

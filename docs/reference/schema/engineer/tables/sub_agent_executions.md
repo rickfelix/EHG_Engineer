@@ -20,7 +20,7 @@
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
 | prd_id | `text` | **NO** | - | - |
-| sub_agent_id | `uuid` | **NO** | - | - |
+| sub_agent_id | `character varying(50)` | **NO** | - | FK to leo_sub_agents.id (migrated from UUID in migration 028) |
 | status | `text` | **NO** | - | - |
 | results | `jsonb` | YES | `'{}'::jsonb` | - |
 | started_at | `timestamp with time zone` | YES | `now()` | - |
