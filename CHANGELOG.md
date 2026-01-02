@@ -2,6 +2,13 @@
 
 ## 2026-01-02
 
+### Venture Scoring Engine
+- **SD-VS-SCORING-RUBRIC-001**: Documented venture opportunity scoring rubric
+  - Scoring dimensions use existing chairman_settings columns
+  - Weighted scoring: Feedback Speed (25%), Pattern Match (20%), Market Demand (20%)
+  - Additional weights: Unit Economics (15%), Distribution Fit (10%), Strategic Unlock (10%)
+  - Scores calculated from: pattern_threshold, feedback_speed, risk_tolerance parameters
+
 ### Scaffold Patterns
 - **SD-VS-PATTERN-UNLOCK-001**: Added 4 priority patterns to scaffold_patterns table
   - `StripeService` (service) - Billing, subscriptions, metering, webhooks integration
