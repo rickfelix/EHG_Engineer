@@ -2,6 +2,15 @@
 
 ## 2026-01-02
 
+### Research Arm Pipeline
+- **SD-VS-RESEARCH-ARM-001**: Documented research pipeline integration
+  - Research pipeline trigger hooks via API endpoints
+  - Weekly research digest automation (scheduled Monday runs)
+  - CrewAI research results feed into scoring engine
+  - Queue status tracking for research jobs
+  - Error handling and retry logic for failed research jobs
+  - Integration points: chairman_settings, venture_opportunity_scores tables
+
 ### Venture Scoring Engine
 - **SD-VS-SCORING-RUBRIC-001**: Documented venture opportunity scoring rubric
   - Scoring dimensions use existing chairman_settings columns
