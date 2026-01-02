@@ -80,10 +80,37 @@ node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001
 node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
 ```
 
-#### PLAN → LEAD Transition (Final Approval)
+#### PLAN → LEAD Transition (Verification Complete)
 ```bash
 node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
 ```
+
+#### LEAD → Final Approval (SD Completion)
+```bash
+node scripts/handoff.js execute LEAD-FINAL-APPROVAL SD-XXX-001
+```
+
+### LEAD_FINAL Phase Documentation
+
+**Purpose**: Final approval gate before SD completion. Validates all work is done.
+
+**Prerequisites** (must all be met):
+- All handoffs complete: LEAD-TO-PLAN → PLAN-TO-EXEC → EXEC-TO-PLAN → PLAN-TO-LEAD
+- All tests passing (unit + E2E)
+- UI parity verified (≥80% coverage)
+- No blocking issues remaining
+
+**Actions performed**:
+1. Verify all acceptance criteria met
+2. Generate retrospective for continuous improvement
+3. Mark SD as 'completed'
+4. Archive handoff history
+5. Trigger parent orchestrator completion check (if child SD)
+
+**When to use**:
+- After PLAN-TO-LEAD handoff succeeds
+- When all implementation and verification is complete
+- Ready to mark the SD as fully completed
 
 ### Compliance Check
 ```bash

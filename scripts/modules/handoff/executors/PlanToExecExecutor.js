@@ -352,6 +352,7 @@ export class PlanToExecExecutor extends BaseExecutor {
     // Gate 1: DESIGN→DATABASE Workflow (conditional)
     // ROOT CAUSE FIX: Use sync version - async version was causing Promise-always-truthy bug (SD-NAV-CMD-001A)
     // bugfix type SDs do NOT require DESIGN/DATABASE sub-agents (quick fixes don't need full architecture review)
+    // Gap #2 Fix (2026-01-01): Auto-invoke missing sub-agents instead of just failing
     if (shouldValidateDesignDatabaseSync(sd)) {
       gates.push({
         name: 'GATE1_DESIGN_DATABASE',
@@ -360,7 +361,43 @@ export class PlanToExecExecutor extends BaseExecutor {
           console.log('-'.repeat(50));
           // Use UUID (ctx.sd.id) not legacy_id (ctx.sdId) for database queries
           const sdUuidForQuery = ctx.sd?.id || ctx.sdId;
-          return validateGate1PlanToExec(sdUuidForQuery, this.supabase);
+
+          // First check: Validate existing sub-agents
+          const initialResult = await validateGate1PlanToExec(sdUuidForQuery, this.supabase);
+
+          // Gap #2 Fix: If validation fails, auto-invoke missing sub-agents
+          if (!initialResult.passed && !ctx._autoInvokeAttempted) {
+            console.log('\n   🔄 Auto-invoking missing PLAN phase sub-agents...');
+            ctx._autoInvokeAttempted = true;
+
+            try {
+              const { orchestrate } = await import('../../../orchestrate-phase-subagents.js');
+              const orchestrationResult = await orchestrate('PLAN_PRD', sdUuidForQuery, {
+                autoRemediate: true,
+                skipIfExists: true
+              });
+
+              if (orchestrationResult.status === 'PASS' || orchestrationResult.status === 'COMPLETE') {
+                console.log('   ✅ Sub-agents invoked successfully');
+                if (orchestrationResult.executed?.length > 0) {
+                  console.log(`      Executed: ${orchestrationResult.executed.join(', ')}`);
+                }
+
+                // Re-check after invocation
+                console.log('\n   🔁 Re-validating after sub-agent invocation...');
+                const reCheckResult = await validateGate1PlanToExec(sdUuidForQuery, this.supabase);
+                return reCheckResult;
+              } else {
+                console.log(`   ⚠️  Sub-agent orchestration status: ${orchestrationResult.status}`);
+                console.log('      Proceeding with original validation result');
+              }
+            } catch (orchestrationError) {
+              console.error('   ⚠️  Auto-invocation failed:', orchestrationError.message);
+              console.log('      Proceeding with original validation result');
+            }
+          }
+
+          return initialResult;
         },
         required: true
       });

@@ -1687,50 +1687,66 @@ ${sdData.metadata ? `## SD METADATA\n${formatMetadata(sdData.metadata)}` : ''}
       console.log('   - No components seeded in registry');
     }
 
-    // Auto-trigger Product Requirements Expert sub-agent
+    // Auto-invoke ALL PLAN phase sub-agents (Gap #1 Fix - 2026-01-01)
     console.log('\n═══════════════════════════════════════════════════');
-    console.log('🤖 AUTO-TRIGGER: Product Requirements Expert');
+    console.log('🤖 AUTO-INVOKE: PLAN Phase Sub-Agents (orchestrate)');
     console.log('═══════════════════════════════════════════════════');
 
     try {
-      const storiesResult = await autoTriggerStories(supabase, sdId, prdId, {
-        skipIfExists: true,
-        notifyOnSkip: true,
-        logExecution: true,
-        personaContext: stakeholderPersonas
+      // Use orchestrator instead of individual sub-agent calls
+      const { orchestrate } = await import('./orchestrate-phase-subagents.js');
+      const orchestrationResult = await orchestrate('PLAN_PRD', sdId, {
+        autoRemediate: true,
+        skipIfExists: true
       });
 
-      if (storiesResult.skipped) {
-        console.log('✅ User stories already exist, auto-trigger skipped');
-      } else if (storiesResult.executed) {
-        console.log('✅ User stories generated successfully');
-      } else if (storiesResult.recommendation) {
-        console.log('⚠️  User stories need to be generated manually');
-        console.log(`   Recommendation: ${storiesResult.recommendation}`);
+      if (orchestrationResult.status === 'PASS' || orchestrationResult.status === 'COMPLETE') {
+        console.log('✅ Sub-agents completed successfully');
+        if (orchestrationResult.executed?.length > 0) {
+          console.log(`   Executed: ${orchestrationResult.executed.join(', ')}`);
+        }
+        if (orchestrationResult.skipped?.length > 0) {
+          console.log(`   Skipped (already exist): ${orchestrationResult.skipped.join(', ')}`);
+        }
+      } else if (orchestrationResult.status === 'PARTIAL') {
+        console.log('⚠️  Some sub-agents completed with issues');
+        console.log(`   Summary: ${JSON.stringify(orchestrationResult.summary || {})}`);
+      } else {
+        console.log(`⚠️  Sub-agent orchestration status: ${orchestrationResult.status}`);
+        console.log('   Some sub-agents may need manual invocation');
       }
-    } catch (triggerError) {
-      // FIX 7 (2026-01-01): Enhanced error logging for debugging
+    } catch (orchestrationError) {
       console.error('');
-      console.error('⚠️  STORIES Auto-trigger failed:', triggerError.message);
+      console.error('⚠️  Sub-agent orchestration failed:', orchestrationError.message);
       console.error('');
-      console.error('   SD ID passed: ' + sdId);
-      console.error('   PRD ID passed: ' + prdId);
-      if (triggerError.stack) {
-        console.error('   Stack: ' + triggerError.stack.split('\n')[1]);
+      console.error('   SD ID: ' + sdId);
+      console.error('   PRD ID: ' + prdId);
+      console.error('');
+      console.error('   To invoke sub-agents manually, run:');
+      console.error(`   node scripts/orchestrate-phase-subagents.js PLAN_PRD ${sdId}`);
+      console.error('');
+      // Fallback: try just stories for backward compatibility
+      try {
+        console.log('   Attempting fallback: STORIES sub-agent only...');
+        const storiesResult = await autoTriggerStories(supabase, sdId, prdId, {
+          skipIfExists: true,
+          notifyOnSkip: true,
+          logExecution: true,
+          personaContext: stakeholderPersonas
+        });
+        if (storiesResult.executed) {
+          console.log('   ✅ Fallback: User stories generated');
+        }
+      } catch (fallbackError) {
+        console.error('   ❌ Fallback also failed:', fallbackError.message);
       }
-      console.error('');
-      console.error('   To generate stories manually, run:');
-      console.error(`   node scripts/trigger-stories-generation.mjs ${sdId}`);
-      console.error('');
     }
 
     console.log('\n📝 Next steps:');
-    console.log('1. Review component recommendations in PRD metadata.ui_components field');
-    console.log('2. Install recommended components using the generated installation script');
-    console.log('3. Update PRD with actual requirements');
-    console.log('4. Mark checklist items as complete');
-    console.log('5. Update phase as work progresses');
-    console.log('6. If user stories not auto-generated, run: node scripts/create-user-stories-[sd-id].mjs');
+    console.log('1. Review sub-agent results (auto-invoked above)');
+    console.log('2. Verify PRD metadata and component recommendations');
+    console.log('3. Mark checklist items as complete');
+    console.log('4. Run PLAN-TO-EXEC handoff when ready');
     
   } catch (error) {
     console.error('❌ Error adding PRD to database:', error.message);

@@ -275,7 +275,13 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
     console.log('\n[5/9] Checking if schema documentation was consulted (MINOR)...');
 
     if (prdData?.metadata?.database_analysis?.raw_analysis) {
-      const dbAnalysis = prdData.metadata.database_analysis.raw_analysis;
+      const rawDbAnalysis = prdData.metadata.database_analysis.raw_analysis;
+
+      // ROOT CAUSE FIX: Ensure dbAnalysis is a string before calling .includes()
+      // raw_analysis can be: string, object, or compressed artifact reference
+      const dbAnalysis = typeof rawDbAnalysis === 'string'
+        ? rawDbAnalysis
+        : JSON.stringify(rawDbAnalysis);
 
       // Check if analysis mentions schema docs
       const mentionsSchemaDocs = dbAnalysis.includes('docs/reference/schema/') ||

@@ -110,7 +110,12 @@ const MANDATORY_SUBAGENTS_BY_PHASE = {
   PLAN_VERIFY: {
     // SD-type specific mandatory agents
     feature: ['TESTING', 'SECURITY', 'PERFORMANCE'],
-    database: ['TESTING', 'DATABASE', 'SECURITY', 'PERFORMANCE'],
+    // ROOT CAUSE FIX (2026-01-01): Removed TESTING from database mandatory list
+    // Database SDs focus on schema/migrations, not user-facing code. TESTING exemption
+    // is configured in sd_type_validation_profiles table. Step 3D was overriding this
+    // exemption by hardcoding TESTING as mandatory here. Now database SDs correctly
+    // use DATABASE agent for schema validation instead of TESTING agent.
+    database: ['DATABASE', 'SECURITY', 'PERFORMANCE'],
     security: ['TESTING', 'SECURITY'],
     api: ['TESTING', 'SECURITY', 'PERFORMANCE', 'API'],
     documentation: ['DOCMON'],

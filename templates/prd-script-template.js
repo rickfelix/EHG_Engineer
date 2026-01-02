@@ -328,13 +328,28 @@ async function createPRD() {
 
     // Metadata (for custom fields that don't fit schema)
     metadata: {
-      // Store custom fields here that aren't in the official schema
-      // Examples:
+      // REQUIRED: exploration_summary - Documents files explored during PLAN phase
+      // Minimum 3 files required for GATE_EXPLORATION_AUDIT to pass (PLAN→EXEC handoff)
+      // Format: Array of objects with file_path, purpose, key_findings
+      exploration_summary: [
+        // TODO: Add at least 3-5 files explored during planning
+        // Example:
+        // {
+        //   file_path: 'lib/hooks/useExample.ts',
+        //   purpose: 'Understand existing hook pattern',
+        //   key_findings: 'Uses React Query for caching, follows established patterns'
+        // },
+        // {
+        //   file_path: 'database/schema/example_table.sql',
+        //   purpose: 'Review existing table structure',
+        //   key_findings: 'Has RLS policies, UUID primary key, created_at timestamps'
+        // }
+      ],
+      // Other optional metadata:
       // ui_components: [...],
       // success_metrics: [...],
       // database_changes: {...},
       // estimated_hours: 40,
-      // etc.
     },
 
     // Audit Trail
@@ -403,7 +418,32 @@ async function createPRD() {
   }
 
   // -------------------------------------------------------------------------
-  // STEP 6: Success!
+  // STEP 6: Auto-invoke PLAN phase sub-agents (Gap #1 Fix)
+  // -------------------------------------------------------------------------
+
+  console.log('\n6️⃣  Auto-invoking PLAN phase sub-agents...');
+
+  try {
+    // Dynamic import to avoid circular dependencies
+    const { orchestrate } = await import('./orchestrate-phase-subagents.js');
+    const orchestrationResult = await orchestrate('PLAN_PRD', SD_ID, { autoRemediate: true });
+
+    if (orchestrationResult.status === 'PASS' || orchestrationResult.status === 'COMPLETE') {
+      console.log(`   ✅ Sub-agents completed: ${orchestrationResult.executed?.join(', ') || 'All required'}`);
+    } else if (orchestrationResult.status === 'PARTIAL') {
+      console.log(`   ⚠️  Some sub-agents had issues: ${JSON.stringify(orchestrationResult.summary)}`);
+    } else {
+      console.log(`   ⚠️  Sub-agent orchestration status: ${orchestrationResult.status}`);
+      console.log('   You may need to run sub-agents manually for full compliance');
+    }
+  } catch (orchestrationError) {
+    console.warn('   ⚠️  Sub-agent auto-invocation failed:', orchestrationError.message);
+    console.log('   Sub-agents can be run manually later with:');
+    console.log(`      node scripts/orchestrate-phase-subagents.js PLAN_PRD ${SD_ID}`);
+  }
+
+  // -------------------------------------------------------------------------
+  // STEP 7: Success Summary
   // -------------------------------------------------------------------------
 
   console.log('\n✅ PRD created successfully!');
@@ -417,11 +457,9 @@ async function createPRD() {
 
   console.log('\n📝 Next Steps:');
   console.log('   1. Update TODO items in PRD (executive_summary, requirements, etc.)');
-  console.log('   2. Run STORIES sub-agent: node scripts/create-user-stories-[sd-id].mjs');
-  console.log('   3. Run DATABASE sub-agent: node scripts/database-architect-schema-review.js');
-  console.log('   4. Run SECURITY sub-agent: node scripts/security-architect-assessment.js');
-  console.log('   5. Mark plan_checklist items as complete');
-  console.log('   6. Create PLAN→EXEC handoff when ready');
+  console.log('   2. Verify sub-agent results in database (auto-invoked above)');
+  console.log('   3. Mark plan_checklist items as complete');
+  console.log('   4. Create PLAN→EXEC handoff when ready');
   console.log('');
 }
 
