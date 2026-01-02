@@ -11,6 +11,7 @@
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 3.4 | 2026-01-02 | **See 00_VISION_V3.4_ADDENDUM.md** - Operational Infrastructure: Portfolio Glide Path Strategy, Venture Selection Framework, Capability Management, Legal Structure (Series LLC), EVA Technical Spec, Pattern Library Foundation. Sourced from SD-BLIND-SPOTS-001 and SD-VENTURE-SELECTION-001. |
 | 3.3 | 2026-01-01 | Round 3 Triangulation: Added Two Personas (Chairman & Solo Entrepreneur), Progressive AI Maturity Model (Solo Entrepreneur phases out), Chairman's Interface (UI/UX Vision), Progressive Approval Model, EVA Safety Layers, Automated Kill/Sunset Criteria, Seed Agent MVP Specification, Incident Severity Matrix, Pattern Versioning, Chairman Settings for manual control. Desktop-first with future mobile roadmap. |
 | 3.2 | 2026-01-01 | Solo Chairman refinement: Added Chairman's Operating Model, Exit/Flip Strategy (Phase 8), Seed Agent pattern, Bootstrap Strategy. Revised Stage 35 to "as-needed" autonomy. Updated success metrics to 30+ ventures / $200K MRR target. |
 | 3.1 | 2026-01-01 | Triangulation amendments: Removed AURORA (EVA does it all), added Budget Firewall, added Sunset Protocol, added instrumentation requirements. |
@@ -837,6 +838,8 @@ This document supersedes:
 - `00_VISION_V2_CHAIRMAN_OS.md` (archived)
 - Vision V3.0, V3.1, V3.2 (superseded by V3.3)
 
+**Extended by:** `00_VISION_V3.4_ADDENDUM.md` (operational infrastructure details)
+
 This document is the authoritative source for:
 - System purpose and philosophy
 - **Two Personas: Chairman (permanent) & Solo Entrepreneur (phased out)**
@@ -845,7 +848,7 @@ This document is the authoritative source for:
 - Chairman's Operating Model
 - Chairman's Interface (UI/UX Vision)
 - Progressive Approval Model
-- EVA Safety Layers
+- EVA Safety Layers (philosophy)
 - Incident Response
 - Kill/Sunset Criteria
 - Seed Agent Specification
@@ -855,12 +858,22 @@ This document is the authoritative source for:
 - Agent hierarchy
 - Exit strategy
 
+**See V3.4 Addendum for:**
+- Portfolio Glide Path Strategy (Vending Machine → Micro-SaaS → Platform)
+- Venture Selection Framework & Scoring Engine
+- Research Arm Pipeline & CrewAI Integration
+- Capability Management & Build/Buy/Partner/Avoid Framework
+- Delaware Series LLC Legal Structure
+- EVA Technical Specification (database schema, 17+ tables)
+- Pattern Library Foundation & Maturity Assessment
+
 ---
 
 *Triangulated by the Council: Claude (Architect), OpenAI (Strategist), Antigravity (Accelerator)*
 *Refined by Chairman Q&A: January 1, 2026*
+*V3.4 Addendum: January 2, 2026 (sourced from SD-BLIND-SPOTS-001, SD-VENTURE-SELECTION-001)*
 *Ratified: January 1, 2026*
-*Version: 3.3*
+*Version: 3.3 + 3.4 Addendum*
 
 ---
 
