@@ -114,18 +114,40 @@ async function createPRD() {
     `.trim(),
 
     // Requirements (JSONB arrays)
+    // CRITICAL: Minimum 3 functional requirements required by database constraint
+    // PRD validation will FAIL if fewer than 3 requirements are provided
     functional_requirements: [
       {
         id: 'FR-1',
-        requirement: 'TODO: First functional requirement',
-        description: 'TODO: Detailed description',
+        requirement: 'TODO: Primary functional requirement',
+        description: 'TODO: Detailed description of the main feature/capability',
         priority: 'CRITICAL', // CRITICAL, HIGH, MEDIUM, LOW
         acceptance_criteria: [
           'TODO: Specific, measurable criterion 1',
           'TODO: Specific, measurable criterion 2'
         ]
+      },
+      {
+        id: 'FR-2',
+        requirement: 'TODO: Secondary functional requirement',
+        description: 'TODO: Supporting feature or capability',
+        priority: 'HIGH',
+        acceptance_criteria: [
+          'TODO: Specific, measurable criterion',
+          'TODO: Testable success condition'
+        ]
+      },
+      {
+        id: 'FR-3',
+        requirement: 'TODO: Third functional requirement',
+        description: 'TODO: Additional feature, integration, or constraint',
+        priority: 'MEDIUM',
+        acceptance_criteria: [
+          'TODO: Specific, measurable criterion',
+          'TODO: Verification method'
+        ]
       }
-      // Add more functional requirements as needed
+      // Add more functional requirements as needed (3+ required)
     ],
 
     non_functional_requirements: [

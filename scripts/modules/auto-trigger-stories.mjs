@@ -104,7 +104,14 @@ function getOpenAIClient() {
     console.warn('   ⚠️  OPENAI_API_KEY not set - falling back to template generation');
     return null;
   }
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  // ROOT CAUSE FIX (2026-01-02): Add 45s timeout to prevent indefinite hangs
+  // Previous behavior: no timeout → requests could hang for 600+ seconds
+  // With timeout: fail-fast and allow retry logic to handle it
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    timeout: 45000,  // 45 second timeout per request
+    maxRetries: 0    // Disable SDK's internal retries, use our retry-executor instead
+  });
 }
 
 /**
