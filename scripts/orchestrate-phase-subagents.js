@@ -590,6 +590,74 @@ async function verifyExecutionRecorded(recordId) {
 }
 
 /**
+ * Update PRD metadata with sub-agent execution results
+ *
+ * This ensures sub-agent results are propagated to PRD.metadata for:
+ * - Gate validation traceability
+ * - Dashboard visibility
+ * - Retrospective analysis
+ *
+ * @param {string} sdId - The SD ID (UUID)
+ * @param {string} phase - The phase (e.g., 'PLAN_VERIFY')
+ * @param {Array} results - Array of sub-agent execution results
+ * @returns {Promise<Object|null>} - Updated metadata or null on failure
+ */
+async function updatePRDMetadataFromSubAgents(sdId, phase, results) {
+  try {
+    // Get PRD associated with this SD
+    const { data: prd, error: prdError } = await supabase
+      .from('product_requirements_v2')
+      .select('id, metadata')
+      .eq('directive_id', sdId)
+      .single();
+
+    if (prdError || !prd) {
+      // Not an error - SD may not have a PRD yet (early phases)
+      console.log(`   ℹ️  No PRD found for SD ${sdId} (normal for early phases)`);
+      return null;
+    }
+
+    // Build sub-agent summary
+    const subAgentSummary = results.map(r => ({
+      code: r.sub_agent_code,
+      verdict: r.verdict,
+      confidence: r.confidence,
+      executed_at: new Date().toISOString()
+    }));
+
+    const allPassed = results.every(r =>
+      ['PASS', 'CONDITIONAL_PASS'].includes(r.verdict)
+    );
+
+    // Update PRD metadata with sub-agent results
+    const updatedMetadata = {
+      ...(prd.metadata || {}),
+      [`${phase.toLowerCase()}_sub_agents`]: {
+        executed_at: new Date().toISOString(),
+        all_passed: allPassed,
+        agents: subAgentSummary
+      }
+    };
+
+    const { error: updateError } = await supabase
+      .from('product_requirements_v2')
+      .update({ metadata: updatedMetadata })
+      .eq('id', prd.id);
+
+    if (updateError) {
+      console.warn(`   ⚠️  Failed to update PRD metadata: ${updateError.message}`);
+      return null;
+    }
+
+    console.log(`   ✅ PRD metadata updated with ${results.length} sub-agent results`);
+    return updatedMetadata;
+  } catch (err) {
+    console.warn(`   ⚠️  PRD metadata update exception: ${err.message}`);
+    return null;
+  }
+}
+
+/**
  * Aggregate sub-agent results into final verdict
  */
 function aggregateResults(results) {
@@ -872,6 +940,14 @@ async function orchestrate(phase, sdId, options = {}) {
     console.log(`  • Failed: ${aggregated.failed}`);
     console.log(`  • Blocked: ${aggregated.blocked}`);
     console.log('═'.repeat(60));
+
+    // Step 6: Update PRD metadata with sub-agent results
+    console.log('\n📝 Step 6: Updating PRD metadata...');
+    if (executionResults.length > 0) {
+      await updatePRDMetadataFromSubAgents(sd.id, phase, executionResults);
+    } else {
+      console.log('   ℹ️  No sub-agent results to propagate to PRD');
+    }
 
     return aggregated;
 

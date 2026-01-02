@@ -29,16 +29,16 @@
   "loading_patterns": [
     {
       "pattern": "Loading states (isLoading, Skeleton)",
-      "count": 1883,
+      "count": 1909,
       "confidence": "high"
     }
   ],
   "navigation": [
     {
       "pattern": "Programmatic navigation",
-      "count": 214,
+      "count": 221,
       "confidence": "high"
     }
   ],
-  "last_scan": "2025-12-31T03:53:16.528Z"
+  "last_scan": "2026-01-02T04:34:45.094Z"
 }

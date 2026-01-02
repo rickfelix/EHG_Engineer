@@ -25,19 +25,9 @@
 import { exit } from 'node:process';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { getDb } from './lib/db';
-import { scoreGate, formatGateResults, Check } from './lib/score';
+import { scoreGate, formatGateResults, gatePass, getThreshold, Check } from './lib/score';
 import { getRulesForGate, getPRDDetails, storeGateReview } from './lib/rules';
 import Anthropic from '@anthropic-ai/sdk';
-
-// ============================================================================
-// Configuration
-// ============================================================================
-
-const CONFIG = {
-  model: 'claude-3-5-haiku-20241022',  // Use Haiku for cost efficiency
-  maxTokens: 3000,
-  passThreshold: 85
-};
 
 // Gate 2E rules with weights
 const GATE_2E_RULES = [
@@ -345,6 +335,7 @@ async function analyzeDataIntegrity(sdId: string, db: SupabaseClient): Promise<{
 
   console.log(`Title: ${prdDetails.title}`);
   console.log(`SD: ${prdDetails.sd_id || 'None'}`);
+  console.log(`SD Type: ${prdDetails.sd_type} (threshold: ${getThreshold(prdDetails.sd_type)}%)`);
   console.log('');
 
   const db = await getDb();
@@ -454,9 +445,10 @@ async function analyzeDataIntegrity(sdId: string, db: SupabaseClient): Promise<{
     console.warn('Failed to store gate review:', err);
   }
 
-  // Exit with appropriate code
-  if (score < CONFIG.passThreshold) {
-    console.log(`\nGate 2E failed: ${score}% < ${CONFIG.passThreshold}%`);
+  // Exit with appropriate code (using SD type-aware threshold)
+  const threshold = getThreshold(prdDetails.sd_type);
+  if (!gatePass(score, prdDetails.sd_type)) {
+    console.log(`\n❌ Gate 2E failed: ${score}% < ${threshold}%`);
     console.log('\nRecommendations:');
     console.log('1. Run SECURITY sub-agent to validate RLS policies');
     console.log('2. Run PERFORMANCE sub-agent to check for N+1 queries');
@@ -464,7 +456,7 @@ async function analyzeDataIntegrity(sdId: string, db: SupabaseClient): Promise<{
     console.log('4. Verify data integrity for related tables');
     exit(1);
   } else {
-    console.log(`\nGate 2E passed: ${score}%`);
+    console.log(`\n✅ Gate 2E passed: ${score}% >= ${threshold}%`);
     exit(0);
   }
 })().catch((error) => {

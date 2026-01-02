@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2025-12-27 5:55:08 PM
+**Generated**: 2026-01-02 8:31:59 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
@@ -254,77 +254,6 @@ These anti-patterns are specific to the EXEC phase. Violating them leads to fail
 **Correct Approach**: Every backend field must have corresponding UI component
 </negative_constraints>
 
-## 🔒 Circuit Breaker Pattern: Blocked Handoffs
-
-**Added**: 2026-01-01 (Fix 1 - Process Improvement)
-**Status**: ACTIVE
-
-### What is the Circuit Breaker?
-
-The circuit breaker is a database trigger that **blocks invalid phase transitions** when validation fails. Instead of raising an exception and losing the handoff data, it now **stores blocked handoffs** for remediation.
-
-### How It Works
-
-```
-Handoff Attempt → Validation Check → Score < 85%?
-                                          ↓
-                                    status = 'blocked'
-                                    rejection_reason = details
-                                    stored in sd_phase_handoffs
-```
-
-### Detecting Blocked Handoffs
-
-When you see this in EXEC→PLAN output:
-
-```
-⚠️  BLOCKED PLAN-TO-EXEC handoff found (circuit breaker tripped)
-   Handoff ID: abc-123
-   Blocked at: 2026-01-01T12:00:00Z
-   Reason: CIRCUIT_BREAKER: validation_score 72% < 85% threshold
-```
-
-### Remediation Steps
-
-1. **Check validation score**: Query the handoff record
-   ```sql
-   SELECT id, validation_score, rejection_reason
-   FROM sd_phase_handoffs
-   WHERE sd_id = 'SD-XXX' AND status = 'blocked';
-   ```
-
-2. **Address failing validations**: Fix the issues identified in `rejection_reason`
-
-3. **Retry the handoff**:
-   ```sql
-   SELECT retry_blocked_handoff('handoff-uuid-here');
-   ```
-
-4. **Or use the script**:
-   ```bash
-   node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001
-   ```
-
-### Valid Status Values
-
-| Status | Meaning |
-|--------|---------|
-| `pending_acceptance` | Awaiting review |
-| `accepted` | Handoff approved |
-| `rejected` | Manually rejected |
-| `blocked` | Circuit breaker tripped (auto) |
-
-### Key Insight
-
-**Old Behavior**: Validation failure raised exception → handoff lost → context lost
-**New Behavior**: Validation failure stores handoff → remediation possible → context preserved
-
-### Related
-
-- Migration: `database/migrations/20260101_fix1_circuit_breaker_store_blocked.sql`
-- Function: `retry_blocked_handoff(handoff_id)`
-- View: `v_blocked_handoffs_pending_retry`
-
 ## 📚 Skill Integration (EXEC Phase)
 
 ## Skill Integration During EXEC
@@ -557,24 +486,6 @@ EXEC→PLAN handoffs now have **intelligent verification**:
 | **300-600** | ✅ **OPTIMAL** | Sweet spot |
 | **>800** | **MUST split** | Too complex |
 
-## TODO Comment Standard
-
-## TODO Comment Standard (When Deferring Work)
-
-**Evidence from Retrospectives**: Proven pattern in SD-UAT-003 saved 4-6 hours.
-
-### Standard TODO Format
-
-```typescript
-// TODO (SD-ID): Action required
-// Requires: Dependencies, prerequisites
-// Estimated effort: X-Y hours
-// Current state: Mock/temporary/placeholder
-```
-
-**Success Pattern** (SD-UAT-003):
-> "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
-
 ## Human-Like E2E Testing Fixtures
 
 ### Human-Like E2E Testing Enhancements (LEO v4.4)
@@ -658,6 +569,24 @@ All human-like test results are automatically included in the LEO evidence pack:
 - `test_results.attachments.accessibility` - axe-core violations
 - `test_results.attachments.chaos` - resilience test results
 - `test_results.attachments.llm_ux` - LLM evaluation scores
+
+## TODO Comment Standard
+
+## TODO Comment Standard (When Deferring Work)
+
+**Evidence from Retrospectives**: Proven pattern in SD-UAT-003 saved 4-6 hours.
+
+### Standard TODO Format
+
+```typescript
+// TODO (SD-ID): Action required
+// Requires: Dependencies, prerequisites
+// Estimated effort: X-Y hours
+// Current state: Mock/temporary/placeholder
+```
+
+**Success Pattern** (SD-UAT-003):
+> "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
 
 ## EXEC Dual Test Requirement
 
@@ -775,86 +704,6 @@ UI Parity Status:
 - Gate 2.5 Status: PASS/FAIL
 ```
 
-## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge
-
-## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge (MANDATORY)
-
-**Every completed Strategic Directive and Quick-Fix MUST end with:**
-
-1. **Commit** - All changes committed with proper message format
-2. **Push** - Branch pushed to remote
-3. **Merge to Main** - Feature branch merged into main
-
-### For Quick-Fixes
-
-The `complete-quick-fix.js` script handles this automatically:
-
-```bash
-node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN --pr-url https://...
-```
-
-The script will:
-1. Verify tests pass and UAT completed
-2. Commit and push changes
-3. **Prompt to merge PR to main** (or local merge if no PR)
-4. Delete the feature branch
-
-### For Strategic Directives
-
-After LEAD approval, execute the following:
-
-```bash
-# 1. Ensure all changes committed
-git add .
-git commit -m "feat(SD-YYYY-XXX): [description]
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-
-# 2. Push to remote
-git push origin feature/SD-YYYY-XXX
-
-# 3. Create PR if not exists
-gh pr create --title "feat(SD-YYYY-XXX): [title]" --body "..."
-
-# 4. Merge PR (preferred method)
-gh pr merge --merge --delete-branch
-
-# OR local merge fallback
-git checkout main
-git pull origin main
-git merge --no-ff feature/SD-YYYY-XXX
-git push origin main
-git branch -d feature/SD-YYYY-XXX
-git push origin --delete feature/SD-YYYY-XXX
-```
-
-### Merge Checklist
-
-Before merging, verify:
-- [ ] All tests passing (unit + E2E)
-- [ ] CI/CD pipeline green
-- [ ] Code review completed (if required)
-- [ ] No merge conflicts
-- [ ] SD status = 'archived' OR Quick-Fix status = 'completed'
-
-### Anti-Patterns
-
-❌ **NEVER** leave feature branches unmerged after completion
-❌ **NEVER** skip the push step
-❌ **NEVER** merge without verifying tests pass
-❌ **NEVER** force push to main
-
-### Verification
-
-After merge, confirm:
-```bash
-git checkout main
-git pull origin main
-git log --oneline -5  # Should show your merge commit
-```
-
 ## 🌿 Branch Hygiene Gate (MANDATORY)
 
 ## Branch Hygiene Gate (MANDATORY)
@@ -944,6 +793,86 @@ When starting implementation:
 3. If multiple SDs detected → split branches
 4. If >100 files changed → assess scope creep
 5. Document branch health in handoff notes
+
+## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge
+
+## 🔀 SD/Quick-Fix Completion: Commit, Push, Merge (MANDATORY)
+
+**Every completed Strategic Directive and Quick-Fix MUST end with:**
+
+1. **Commit** - All changes committed with proper message format
+2. **Push** - Branch pushed to remote
+3. **Merge to Main** - Feature branch merged into main
+
+### For Quick-Fixes
+
+The `complete-quick-fix.js` script handles this automatically:
+
+```bash
+node scripts/complete-quick-fix.js QF-YYYYMMDD-NNN --pr-url https://...
+```
+
+The script will:
+1. Verify tests pass and UAT completed
+2. Commit and push changes
+3. **Prompt to merge PR to main** (or local merge if no PR)
+4. Delete the feature branch
+
+### For Strategic Directives
+
+After LEAD approval, execute the following:
+
+```bash
+# 1. Ensure all changes committed
+git add .
+git commit -m "feat(SD-YYYY-XXX): [description]
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# 2. Push to remote
+git push origin feature/SD-YYYY-XXX
+
+# 3. Create PR if not exists
+gh pr create --title "feat(SD-YYYY-XXX): [title]" --body "..."
+
+# 4. Merge PR (preferred method)
+gh pr merge --merge --delete-branch
+
+# OR local merge fallback
+git checkout main
+git pull origin main
+git merge --no-ff feature/SD-YYYY-XXX
+git push origin main
+git branch -d feature/SD-YYYY-XXX
+git push origin --delete feature/SD-YYYY-XXX
+```
+
+### Merge Checklist
+
+Before merging, verify:
+- [ ] All tests passing (unit + E2E)
+- [ ] CI/CD pipeline green
+- [ ] Code review completed (if required)
+- [ ] No merge conflicts
+- [ ] SD status = 'archived' OR Quick-Fix status = 'completed'
+
+### Anti-Patterns
+
+❌ **NEVER** leave feature branches unmerged after completion
+❌ **NEVER** skip the push step
+❌ **NEVER** merge without verifying tests pass
+❌ **NEVER** force push to main
+
+### Verification
+
+After merge, confirm:
+```bash
+git checkout main
+git pull origin main
+git log --oneline -5  # Should show your merge commit
+```
 
 ## Auto-Merge Workflow for SD Completion
 
@@ -1193,6 +1122,39 @@ Notes: expected vs actual
 - Regression test each fix
 - Mark complete when done
 
+#### Phase 7: AUDIT RETROSPECTIVE
+
+Immediately after SD creation, generate audit retrospective to capture lessons.
+
+**Trigger:**
+```bash
+npm run audit:retro -- --file docs/audits/YYYY-MM-DD-audit.md
+```
+
+**System Aggregates:**
+- All findings with dispositions from `audit_finding_sd_mapping`
+- Triangulation consensus data from `audit_triangulation_log`
+- Chairman verbatim observations (2x weighting)
+- Sub-agent contributions
+
+**RETRO Generates:**
+- Process learnings (about the audit itself)
+- Divergence insights (where models disagreed)
+- Pattern candidates for `issue_patterns` table
+- Protocol improvements
+
+**Quality Criteria:**
+- 100% triage coverage (all items have disposition)
+- >= 3 Chairman verbatim citations
+- >= 1 model divergence insight
+- All lessons cite evidence (NAV-xx, SD-xx)
+- Time constraint: <= 15-20 minutes
+
+**Output:**
+- Retrospective record in `retrospectives` (retro_type='AUDIT')
+- Contributions in `retrospective_contributions`
+- Runtime audit marked 'retro_complete'
+
 ---
 
 ### Roles
@@ -1276,6 +1238,13 @@ See: `/runtime-audit` skill for full template
 - [ ] Remediation triangulated
 - [ ] SDs created with evidence
 
+**After SD Creation (Phase 7):**
+- [ ] Audit findings ingested (`npm run audit:ingest`)
+- [ ] All items triaged (100% coverage)
+- [ ] Audit retrospective generated (`npm run audit:retro`)
+- [ ] Quality score >= 70
+- [ ] Action items assigned
+
 ---
 
 ### Artifacts
@@ -1287,6 +1256,9 @@ See: `/runtime-audit` skill for full template
 | Synthesis Grid | Inline | Compare findings |
 | SD Script | scripts/create-sd-runtime-audit-*.mjs | Create SDs |
 | Strategic Directives | Database | Track fixes |
+| Audit Mappings | audit_finding_sd_mapping | Track all findings |
+| Audit Retrospective | retrospectives (type=AUDIT) | Capture learnings |
+| Triangulation Log | audit_triangulation_log | Model consensus |
 
 ---
 
@@ -1538,6 +1510,6 @@ Verifies LEAD to PLAN handoff requirements are met before allowing transition.
 
 ---
 
-*Generated from database: 2025-12-27*
+*Generated from database: 2026-01-02*
 *Protocol Version: 4.3.3*
 *Load when: User mentions EXEC, implementation, coding, or testing*

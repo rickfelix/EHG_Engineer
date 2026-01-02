@@ -41,23 +41,57 @@ export async function getRulesForGate(gate: string): Promise<ValidationRule[]> {
 }
 
 /**
- * Get PRD details for context
+ * PRD details including SD type for threshold calculation
  */
-export async function getPRDDetails(prdId: string): Promise<{ id: string; title: string; sd_id: string | null; status: string } | null> {
+export interface PRDDetails {
+  id: string;
+  title: string;
+  sd_id: string | null;
+  status: string;
+  sd_type: string;
+  directive_id: string | null;
+}
+
+/**
+ * Get PRD details for context, including SD type
+ */
+export async function getPRDDetails(prdId: string): Promise<PRDDetails | null> {
   const db = await getDb();
-  
-  const { data, error } = await db
+
+  // First get PRD with directive_id
+  const { data: prd, error: prdError } = await db
     .from('product_requirements_v2')
-    .select('id, title, sd_id, status')
+    .select('id, title, sd_id, status, directive_id')
     .eq('id', prdId)
     .single();
-  
-  if (error || !data) {
+
+  if (prdError || !prd) {
     console.error(`❌ PRD not found: ${prdId}`);
     return null;
   }
-  
-  return data;
+
+  // Get SD type from linked strategic directive
+  let sdType = 'feature'; // default
+  if (prd.directive_id) {
+    const { data: sd } = await db
+      .from('strategic_directives_v2')
+      .select('sd_type')
+      .eq('id', prd.directive_id)
+      .single();
+
+    if (sd?.sd_type) {
+      sdType = sd.sd_type;
+    }
+  }
+
+  return {
+    id: prd.id,
+    title: prd.title,
+    sd_id: prd.sd_id,
+    status: prd.status,
+    directive_id: prd.directive_id,
+    sd_type: sdType
+  };
 }
 
 /**

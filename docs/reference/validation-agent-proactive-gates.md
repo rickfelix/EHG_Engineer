@@ -65,6 +65,7 @@ node scripts/systems-analyst-codebase-audit.js <SD-ID>
 - [ ] **Route Validation**: URLs/paths available and not conflicting
 - [ ] **Component Validation**: Check for existing similar components (reuse > rebuild)
 - [ ] **User Story Validation**: User stories created in PRD and mapped to E2E tests (100% coverage required)
+  - **Exception**: Parent orchestrator SDs (those with child SDs) skip this check—user stories belong to children
 - [ ] **Test Infrastructure Validation**: Existing test patterns identified
 
 **Invocation**:

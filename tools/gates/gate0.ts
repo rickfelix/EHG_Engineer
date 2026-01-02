@@ -13,7 +13,7 @@
 import { exit } from 'node:process';
 import { execSync } from 'node:child_process';
 import { getDb } from './lib/db.js';
-import { scoreGate, formatGateResults, Check } from './lib/score.js';
+import { scoreGate, formatGateResults, gatePass, getThreshold, Check } from './lib/score.js';
 import { getRulesForGate, getPRDDetails, storeGateReview } from './lib/rules.js';
 
 (async () => {
@@ -42,6 +42,7 @@ import { getRulesForGate, getPRDDetails, storeGateReview } from './lib/rules.js'
 
   console.log(`Title: ${prdDetails.title}`);
   console.log(`SD: ${prdDetails.sd_id || 'None'}`);
+  console.log(`SD Type: ${prdDetails.sd_type} (threshold: ${getThreshold(prdDetails.sd_type)}%)`);
   console.log('');
 
   const _db = await getDb(); // Used to verify connection
@@ -128,18 +129,19 @@ import { getRulesForGate, getPRDDetails, storeGateReview } from './lib/rules.js'
   // Score the gate
   const { score, results } = await scoreGate(rules, checks);
 
-  // Format and display results
-  console.log(formatGateResults('0', { score, results }));
+  // Format and display results (with SD type for threshold)
+  console.log(formatGateResults('0', { score, results }, prdDetails.sd_type));
 
   // Store review in database
   await storeGateReview(prdId, '0', score, results);
 
-  // Exit with appropriate code
-  if (score < 85) {
-    console.log(`\n❌ Gate 0 failed: ${score}% < 85%`);
+  // Exit with appropriate code (using SD type-aware threshold)
+  const threshold = getThreshold(prdDetails.sd_type);
+  if (!gatePass(score, prdDetails.sd_type)) {
+    console.log(`\n❌ Gate 0 failed: ${score}% < ${threshold}%`);
     exit(1);
   } else {
-    console.log(`\n✅ Gate 0 passed: ${score}%`);
+    console.log(`\n✅ Gate 0 passed: ${score}% >= ${threshold}%`);
     exit(0);
   }
 })().catch((error) => {

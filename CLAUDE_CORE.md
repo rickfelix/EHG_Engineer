@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2025-12-27 5:55:08 PM
+**Generated**: 2026-01-02 8:31:59 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -185,37 +185,6 @@ npm run handoff:compliance SD-ID  # Check specific SD
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
-## Mandatory Agent Invocation Rules
-
-**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
-
-### Task Type -> Required Agent
-
-| Task Keywords | MUST Invoke | Purpose |
-|---------------|-------------|---------|
-| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
-| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
-| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
-| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
-| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
-| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
-| database, migration, schema | **database-agent** | Schema validation |
-| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
-
-### Why This Exists
-
-**Incident**: Human-like testing perspective interpreted as manual content inspection.
-**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
-**Root Cause**: Ad-hoc review instead of specialized agent invocation.
-**Prevention**: Explicit rules mandate agent use for specialized tasks.
-
-### How to Apply
-
-1. Detect task type from user request keywords
-2. Invoke required agent(s) BEFORE making changes
-3. Agent findings inform implementation
-4. Re-run agent AFTER changes to verify fixes
-
 ## 🤖 Built-in Agent Integration
 
 ## Built-in Agent Integration
@@ -290,6 +259,37 @@ The pre-push hook automatically:
 2. Verifies completion status in database
 3. Blocks if not ready for merge
 
+## Mandatory Agent Invocation Rules
+
+**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
+
+### Task Type -> Required Agent
+
+| Task Keywords | MUST Invoke | Purpose |
+|---------------|-------------|---------|
+| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
+| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
+| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
+| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
+| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
+| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
+| database, migration, schema | **database-agent** | Schema validation |
+| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
+
+### Why This Exists
+
+**Incident**: Human-like testing perspective interpreted as manual content inspection.
+**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
+**Root Cause**: Ad-hoc review instead of specialized agent invocation.
+**Prevention**: Explicit rules mandate agent use for specialized tasks.
+
+### How to Apply
+
+1. Detect task type from user request keywords
+2. Invoke required agent(s) BEFORE making changes
+3. Agent findings inform implementation
+4. Re-run agent AFTER changes to verify fixes
+
 ## Sub-Agent Model Routing
 
 **CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
@@ -316,39 +316,6 @@ Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
 
 *Added: SD-EVA-DECISION-001 to prevent haiku model usage*
 
-
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Execution Philosophy
 
@@ -407,6 +374,39 @@ These principles override default behavior and must be internalized before start
 
 **REMEMBER**: The goal is NOT to complete SDs quickly. The goal is to complete SDs CORRECTLY. A properly implemented SD that takes 8 hours is infinitely better than a rushed implementation that takes 4 hours but requires 6 hours of fixes.
 
+
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## 🎯 Skill Integration (Claude Code Skills)
 
@@ -843,10 +843,18 @@ The LEO Protocol supports hierarchical SDs for multi-phase work. Parent SDs coor
 
 1. **Every child gets full LEAD→PLAN→EXEC** - complete workflow, no shortcuts
 2. **Parent PLAN creates children** - PLAN agent proposes decomposition during parent PRD
-3. **Each child needs LEAD approval** - validates strategic value, scope, risks per child
-4. **Children execute sequentially** - Child B waits for Child A to complete
-5. **Parent progress = weighted child progress** - auto-calculated
-6. **Parent completes last** - after all children finish
+3. **Parent SDs bypass user story gates** - user stories exist in child SDs, not parent (USER_STORY_EXISTENCE_GATE bypassed for orchestrators)
+4. **Each child needs LEAD approval** - validates strategic value, scope, risks per child
+5. **Children execute sequentially** - Child B waits for Child A to complete
+6. **Parent progress = weighted child progress** - auto-calculated
+7. **Parent completes last** - after all children finish
+
+### Orchestrator Gate Handling
+
+Parent orchestrator SDs have special validation logic:
+- **USER_STORY_EXISTENCE_GATE**: Bypassed (user stories are in child SDs)
+- **Gate thresholds**: Use `orchestrator` threshold (70%) instead of feature (85%)
+- **Validation focus**: Child SD progress and completion status
 
 ### Workflow Diagram
 
@@ -903,18 +911,36 @@ SELECT calculate_parent_sd_progress('SD-PARENT-001');
 
 -- Get next child to execute
 SELECT get_next_child_sd('SD-PARENT-001');
-```
 
+-- Detect orchestrator (for gate bypass)
+SELECT COUNT(*) > 0 as is_orchestrator 
+FROM strategic_directives_v2 
+WHERE parent_sd_id = 'SD-XXX';
+```
 
 ## SD Type-Aware Workflow Paths
 
-**IMPORTANT**: Different SD types have different required handoffs. Always check the workflow before executing handoffs.
+**IMPORTANT**: Different SD types have different required handoffs AND different gate pass thresholds.
 
 ### Workflow Command
 ```bash
 # Check recommended workflow for any SD
 node scripts/handoff.js workflow SD-XXX-001
 ```
+
+### Gate Pass Thresholds by SD Type
+
+| SD Type | Gate Threshold | Rationale |
+|---------|----------------|-----------|
+| **feature** | 85% | Full validation (UI, E2E, integration) |
+| **database** | 75% | Schema-focused, may skip UI-dependent E2E |
+| **infrastructure** | 80% | Tooling/protocols, reduced code validation |
+| **security** | 90% | Higher bar for security-critical work |
+| **documentation** | 60% | No code changes, minimal validation |
+| **orchestrator** | 70% | Coordination layer, user stories in children |
+| **refactor** | 80% | Behavior preservation focus |
+| **bugfix** | 80% | Targeted fix validation |
+| **performance** | 85% | Measurable impact verification |
 
 ### Workflow by SD Type
 
@@ -925,19 +951,22 @@ node scripts/handoff.js workflow SD-XXX-001
 | **documentation** | LEAD→PLAN→EXEC→LEAD (final) | EXEC-TO-PLAN | All code validation |
 | **database** | Full workflow | None | Some E2E (UI-dependent) |
 | **security** | Full workflow | None | None |
+| **orchestrator** | LEAD→PLAN→(children)→LEAD (final) | N/A | USER_STORY_EXISTENCE_GATE |
 
 ### Key Rules
 
-1. **Feature SDs**: Full 5-handoff workflow with all validation gates
-2. **Infrastructure SDs**: Can skip EXEC-TO-PLAN (no code to validate)
-3. **Documentation SDs**: Can skip EXEC-TO-PLAN (no implementation to verify)
+1. **Feature SDs**: Full 5-handoff workflow with all validation gates at 85%
+2. **Infrastructure SDs**: Can skip EXEC-TO-PLAN (no code to validate), threshold 80%
+3. **Documentation SDs**: Can skip EXEC-TO-PLAN, threshold only 60%
 4. **Database/Security SDs**: Full workflow but may skip UI-dependent E2E tests
+5. **Orchestrator SDs**: User stories expected in children, not parent (70% threshold)
 
 ### Pre-Handoff Check
 Before executing any handoff:
 1. Run `node scripts/handoff.js workflow SD-ID` to see the recommended path
 2. The execute command will warn you if a handoff is optional
 3. Infrastructure/docs SDs can proceed directly from EXEC to PLAN-TO-LEAD
+4. Gate thresholds are automatically applied based on SD type
 
 ## Database-First Enforcement - Expanded
 
@@ -1361,6 +1390,8 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 
 **Result**: Objective quality gates that enforce LEO Protocol's philosophy without relying on human judgment.
 
+
+
 ## 🔥 Hot Issue Patterns (Auto-Updated)
 
 **CRITICAL**: These are active patterns detected from retrospectives. Review before starting work.
@@ -1407,9 +1438,9 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 |------|-----------|----------|----------|--------|
 | Gate 0 | 0% | 36 | 36 | 🔴 Critical |
 | Gate 1 | 0% | 1 | 1 | 🔴 Critical |
-| Gate 3 | 0% | 54 | 54 | 🔴 Critical |
-| Gate 2B | 0% | 54 | 54 | 🔴 Critical |
-| Gate 2D | 0% | 54 | 54 | 🔴 Critical |
+| Gate 3 | 0% | 42 | 42 | 🔴 Critical |
+| Gate 2B | 0% | 42 | 42 | 🔴 Critical |
+| Gate 2D | 0% | 42 | 42 | 🔴 Critical |
 
 ### Remediation Actions
 
@@ -1426,7 +1457,29 @@ When gates consistently fail:
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. Vision V2: EVA Orchestration Layer - Retrospective ⭐
+### 1. UI Canon Alignment - Retrospective ⭐
+**Category**: TESTING_STRATEGY | **Date**: 12/19/2025 | **Score**: 100
+
+**Key Improvements**:
+- E2E test timeout configuration for mock mode
+- Deprecation enforcement for legacy stage constants
+
+**Action Items**:
+- [ ] Add eslint rule to deprecate IDEATION_STAGES import and suggest VENTURE_STAGES
+- [ ] Configure separate Playwright timeouts for mock-mode tests (30s) vs real-mode te...
+
+### 2. Settings Tab Clarity + Feature Catalog Copy (NAV-48 + NAV-49) - Retrospective ⭐
+**Category**: APPLICATION_ISSUE | **Date**: 12/26/2025 | **Score**: 100
+
+**Key Improvements**:
+- PLAN-TO-EXEC handoff timed out on OpenAI API calls
+- Had to manually advance phase due to API timeouts
+
+**Action Items**:
+- [ ] Add timeout fallback for AI quality assessment in handoffs
+- [ ] Complete missing handoff documentation
+
+### 3. Vision V2: EVA Orchestration Layer - Retrospective ⭐
 **Category**: DATABASE_SCHEMA | **Date**: 12/14/2025 | **Score**: 100
 
 **Key Improvements**:
@@ -1437,7 +1490,7 @@ When gates consistently fail:
 - [ ] Add reset_sd_phase RPC function for administrative phase corrections
 - [ ] Maintain E2E test path auto-generation for all SD types
 
-### 2. Legacy Protocol Cleanup (The Exorcism) - Retrospective ⭐
+### 4. Legacy Protocol Cleanup (The Exorcism) - Retrospective ⭐
 **Category**: DEPLOYMENT_ISSUE | **Date**: 12/16/2025 | **Score**: 100
 
 **Key Improvements**:
@@ -1448,38 +1501,16 @@ When gates consistently fail:
 - [ ] Create rollback procedure for stage component deletions
 - [ ] Add E2E test verifying Stage1-25 UI renders correctly
 
-### 3. Vision V2: Chairman's Dashboard UI - Retrospective ⭐
-**Category**: TESTING_STRATEGY | **Date**: 12/14/2025 | **Score**: 100
+### 5. Sovereign Industrial Expansion - Stages 7-25 Materialization (Orchestrator) ⭐
+**Category**: PROCESS_IMPROVEMENT | **Date**: 12/27/2025 | **Score**: 100
 
 **Key Improvements**:
-- No unified test evidence found - consider running comprehensive E2E tests
-- No unified test evidence found - consider running comprehensive E2E tests
+- LEO Protocol artifacts should be created BEFORE implementation, not retroactively
+- Handoff chain documentation should accompany development from the start
 
 **Action Items**:
-- [ ] Complete PLAN-TO-LEAD handoff
-- [ ] Merge PR to main branch
-
-### 4. LEO Protocol Enhancement: Discovery Gate & Quality Improvements - Retrospective ⭐
-**Category**: TESTING_STRATEGY | **Date**: 12/12/2025 | **Score**: 100
-
-**Key Improvements**:
-- RETRO sub-agent accumulates duplicates - needs deduplication logic
-- Infrastructure SDs lack unified test evidence - need alternative validation
-
-**Action Items**:
-- [ ] RETRO Deduplication | Owner: LEO Team | Due: 2025-01-15 | Acceptance: No duplica...
-- [ ] Infrastructure Test Validation | Owner: LEO Team | Due: 2025-01-31 | Acceptance:...
-
-### 5. UI Canon Alignment - Retrospective ⭐
-**Category**: TESTING_STRATEGY | **Date**: 12/19/2025 | **Score**: 100
-
-**Key Improvements**:
-- E2E test timeout configuration for mock mode
-- Deprecation enforcement for legacy stage constants
-
-**Action Items**:
-- [ ] Add eslint rule to deprecate IDEATION_STAGES import and suggest VENTURE_STAGES
-- [ ] Configure separate Playwright timeouts for mock-mode tests (30s) vs real-mode te...
+- [ ] Create orchestrator SD template with built-in child tracking
+- [ ] Enforce LEO Protocol compliance for all SDs from LEAD phase
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1549,7 +1580,7 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ---
 
-*Generated from database: 2025-12-27*
+*Generated from database: 2026-01-02*
 *Protocol Version: 4.3.3*
-*Includes: Hot Patterns (5) + Recent Lessons (5)*
+*Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

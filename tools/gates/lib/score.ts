@@ -63,23 +63,55 @@ export async function scoreGate(
 }
 
 /**
- * Check if gate passes (≥85%)
+ * SD type-specific gate pass thresholds
+ * Different SD types have different validation requirements
  */
-export function gatePass(score: number): boolean {
-  return score >= 85;
+const SD_TYPE_THRESHOLDS: Record<string, number> = {
+  feature: 85,
+  database: 75,
+  infrastructure: 80,
+  security: 90,
+  documentation: 60,
+  docs: 60,
+  bugfix: 80,
+  refactor: 80,
+  orchestrator: 70,
+  performance: 85
+};
+
+/**
+ * Get the threshold for a given SD type
+ */
+export function getThreshold(sdType?: string): number {
+  if (!sdType) return 85;
+  return SD_TYPE_THRESHOLDS[sdType.toLowerCase()] ?? 85;
+}
+
+/**
+ * Check if gate passes based on SD type threshold
+ * @param score - The gate score (0-100)
+ * @param sdType - Optional SD type for type-specific thresholds
+ */
+export function gatePass(score: number, sdType?: string): boolean {
+  const threshold = getThreshold(sdType);
+  return score >= threshold;
 }
 
 /**
  * Format gate results for console output
+ * @param gate - Gate name
+ * @param result - Gate result
+ * @param sdType - Optional SD type for threshold display
  */
-export function formatGateResults(gate: string, result: GateResult): string {
+export function formatGateResults(gate: string, result: GateResult, sdType?: string): string {
   const lines: string[] = [];
-  const passIcon = result.score >= 85 ? '✅' : '❌';
+  const threshold = getThreshold(sdType);
+  const passIcon = result.score >= threshold ? '✅' : '❌';
   
   lines.push(`\n${'='.repeat(50)}`);
   lines.push(`Gate ${gate} Results`);
   lines.push('='.repeat(50));
-  lines.push(`Score: ${result.score}% ${passIcon}`);
+  lines.push(`Score: ${result.score}% (threshold: ${threshold}%) ${passIcon}`);
   lines.push('\nRule Results:');
   
   for (const [rule, passed] of Object.entries(result.results)) {
