@@ -1,4 +1,4 @@
-# EHG VISION v3: THE ASSET FACTORY
+# EHG VISION v3.2: THE ASSET FACTORY
 
 **Status:** RATIFIED
 **Date:** January 1, 2026
@@ -11,7 +11,9 @@
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 3.0 | 2026-01-01 | Paradigm shift from "Code Factory" to "Asset Factory". Integrated Maintenance, Marketing, and Distribution layers. Triangulated by Claude (Architect), OpenAI (Strategist), Antigravity (Accelerator). |
+| 3.2 | 2026-01-01 | Solo Chairman refinement: Added Chairman's Operating Model, Exit/Flip Strategy (Phase 8), Seed Agent pattern, Bootstrap Strategy. Revised Stage 35 to "as-needed" autonomy. Updated success metrics to 30+ ventures / $200K MRR target. Removed AURORA in favor of EVA consolidation. |
+| 3.1 | 2026-01-01 | Triangulation amendments: Removed AURORA (EVA does it all), added Budget Firewall, added Sunset Protocol, added instrumentation requirements. |
+| 3.0 | 2026-01-01 | Paradigm shift from "Code Factory" to "Asset Factory". Integrated Maintenance, Marketing, and Distribution layers. |
 
 ---
 
@@ -19,12 +21,66 @@
 
 **V2 built a system that creates code.**
 **V3 builds a system that creates wealth.**
+**V3.2 builds a system that creates wealth FOR A SOLO CHAIRMAN.**
+
+The critical constraint: **Rick is the only human.** No developers. No marketing team. No support staff. The system must be fully autonomous with Chairman oversight, not Chairman labor.
 
 The shift:
 - V2 asked: "Can we generate ventures?"
-- V3 asks: "Can we generate **revenue while the Chairman sleeps**?"
+- V3 asked: "Can we generate revenue while the Chairman sleeps?"
+- V3.2 asks: "Can we generate **sellable assets** while the Chairman allocates?"
 
-A venture without customers is a hobby. A venture without maintenance dies. V3 closes these gaps.
+---
+
+## The Chairman's Operating Model
+
+This section codifies the Chairman's preferences as determined through direct Q&A on January 1, 2026.
+
+### The Solo Chairman Constraint
+
+| Dimension | Chairman's Answer | System Implication |
+|-----------|-------------------|-------------------|
+| **Autonomy Level** | As needed | No fixed limits. Involvement scales with venture complexity. |
+| **Approval Model** | Before publish, batched daily | Nothing goes live without Chairman review. Daily digest, not real-time. |
+| **Bootstrap Method** | Claude Code builds | LEO Protocol is the builder. No contractors. |
+| **Incident Response** | Auto-pause, fix in morning | Accept short downtime. State preservation over 24/7 uptime. |
+| **Marketing Automation** | Full funnel | AI handles content, ads, email, retargeting. Chairman sets budgets. |
+| **Venture Variety** | Same stack, varied models | Next.js + Supabase always. Business models can differ. |
+| **Customer Support** | AI + escalate to Chairman | Chairman is the human fallback for edge cases. |
+| **Budget Structure** | Per-venture hard caps | Ventures are financially isolated. No cross-subsidization. |
+| **Agent Architecture** | Seed Agent pattern | Build the meta-agent that builds other agents. |
+| **Target Timeline** | Q2 2026 | First autonomous revenue by end of June. |
+| **Portfolio Scale** | 30+ ventures, $200K MRR | High volume factory. Many small bets. |
+| **Brand Control** | AI autonomous | Chairman intervenes only if something feels wrong. |
+| **Code Maintenance** | Auto-fix + canary | AI fixes, canary deploys, rollback on failure. |
+| **Legal Docs** | AI drafts, Chairman reviews | No lawyer. Template-based with Chairman approval. |
+| **Safety Layer** | Trust EVA | No separate watchdog. EVA self-monitors. |
+| **Exit Strategy** | Active flip model | Build to sell. Target 2-3x annual revenue. |
+
+### The Daily Approval Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     CHAIRMAN'S DAILY DIGEST                         │
+│                         (Morning Review)                            │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+    ┌─────────────────────────────┼─────────────────────────────┐
+    │                             │                             │
+    ▼                             ▼                             ▼
+┌────────────┐            ┌────────────┐            ┌────────────┐
+│  CONTENT   │            │    ADS     │            │   FIXES    │
+│  Pending   │            │  Pending   │            │  Deployed  │
+│ (10 items) │            │ (3 items)  │            │ (5 items)  │
+└────────────┘            └────────────┘            └────────────┘
+    │                             │                             │
+    ▼                             ▼                             ▼
+[ Approve ]              [ Approve ]              [ Review Logs ]
+[ Reject  ]              [ Adjust Budget ]        [ Rollback?   ]
+[ Edit    ]              [ Reject ]
+```
+
+**Rule:** Nothing publishes until Chairman sees morning digest and approves.
 
 ---
 
@@ -38,117 +94,316 @@ Seed Idea → Code → Deployment → ???
                         (Chairman's Problem)
 ```
 
-### V3: The Asset Factory
+### V3.2: The Asset Flip Factory
 
 ```
-Seed Idea → Validated Product → Paying Customers → Maintained System → Growing Revenue
-                                                                            ↓
-                                                                  (Chairman's Freedom)
+Seed Idea → Validated Product → Paying Customers → Maintained System → SALE
+                                                                         ↓
+                                                              (Chairman's Payday)
 ```
+
+**Key Insight:** Ventures are not meant to be held forever. They are assets to flip.
 
 ---
 
 ## 1. The Core Philosophy (Revised)
 
-We are not building a **Command Center**. We are building a **Wealth Engine**.
+We are not building a **Command Center**. We are not building a **Holding Company**.
+We are building a **Venture Flip Factory**.
 
-The system is designed to generate **passive income at scale** - ventures that:
-1. Attract their own customers (Marketing)
-2. Convert visitors to revenue (Distribution)
-3. Fix their own bugs (Maintenance)
-4. Improve themselves over time (Learning)
+The system is designed to:
+1. **Create** ventures rapidly (Genesis)
+2. **Validate** ventures with real revenue (Phase 1-6)
+3. **Automate** ventures to run without Chairman labor (Phase 7)
+4. **Sell** ventures at 2-3x annual revenue (Phase 8)
+5. **Repeat** with learnings fed back into the factory
 
 ### The Chairman's True Role
 
 The Chairman is not a developer. Not a marketer. Not a support agent.
 
-**The Chairman is a Capital Allocator.**
+**The Chairman is a Portfolio Manager who builds assets to sell.**
 
-| Old Role (V2) | New Role (V3) |
-|---------------|---------------|
+| Old Role (V2) | New Role (V3.2) |
+|---------------|-----------------|
 | Approve code changes | Approve strategic bets |
-| Review stage artifacts | Review revenue metrics |
-| Decide on pivots | Decide on portfolio allocation |
-| Manage EVA | Receive dividends |
+| Review stage artifacts | Review daily digest |
+| Decide on pivots | Decide on acquisitions and exits |
+| Manage EVA | Collect proceeds from flips |
 
 ---
 
 ## 2. The Full-Stack Venture Lifecycle
 
 V2 covered Stages 1-25 (Ideation → Deployment).
-V3 extends to **Stages 1-35** (Ideation → Passive Income).
+V3 extended to Stages 26-35 (Growth → Autonomy).
+**V3.2 extends to Stages 36-40 (Exit → Reinvestment).**
 
-### The Seven Phases
+### The Nine Phases
 
-| Phase | Name | Stages | Purpose | V2 Status |
-|-------|------|--------|---------|-----------|
+| Phase | Name | Stages | Purpose | Status |
+|-------|------|--------|---------|--------|
+| 0 | THE FORGE | — | Build the factory itself | Active |
 | 1 | THE TRUTH | 1-5 | Validation & Market Reality | Built |
 | 2 | THE ENGINE | 6-9 | Business Model Foundation | Built |
 | 3 | THE IDENTITY | 10-12 | Brand & Go-to-Market | Built |
 | 4 | THE BLUEPRINT | 13-16 | Technical Architecture | Built |
 | 5 | THE BUILD | 17-20 | Implementation | Built |
 | 6 | THE LAUNCH | 21-25 | Deployment & Optimization | Built |
-| **7** | **THE MACHINE** | **26-35** | **Growth, Maintenance, Autonomy** | **NEW** |
+| 7 | THE MACHINE | 26-35 | Growth, Maintenance, Autonomy | In Progress |
+| **8** | **THE EXIT** | **36-40** | **Sale, Transfer, Reinvestment** | **NEW** |
 
-### Phase 7: THE MACHINE (New Stages)
+### Phase 0: THE FORGE (Bootstrap)
+
+Before we can run ventures, we must build the factory.
+
+**Current State (January 2026):**
+
+| Component | Status | Gap |
+|-----------|--------|-----|
+| Genesis Pipeline | 80% | PRD generation stubbed |
+| Pattern Library | 90% | 49 patterns, needs Seed Agent |
+| LEO Protocol | 95% | Operational |
+| Marketing Automation | 0% | Not started |
+| Support Automation | 0% | Not started |
+| Seed Agent | 0% | The meta-agent that builds agents |
+
+**Bootstrap Strategy:**
+1. Claude Code builds first 2-3 ventures via LEO Protocol
+2. Ventures are "Wizard of Oz" shells with AI-generated flavor
+3. Revenue validates the model
+4. Seed Agent is built to scale venture creation
+5. Factory becomes self-sustaining
+
+**Exit Criteria for Phase 0:**
+- [ ] Seed Agent can spawn new agents from prompts
+- [ ] First venture generates $1 autonomous revenue
+- [ ] Marketing automation handles one funnel end-to-end
+
+### Phase 7: THE MACHINE (Stages 26-35)
 
 | Stage | Title | Purpose | Owner |
 |-------|-------|---------|-------|
 | 26 | Content Engine Setup | SEO, blog, social presence | VP_GROWTH |
 | 27 | Paid Acquisition Pipeline | Ads, funnels, landing pages | VP_GROWTH |
 | 28 | Customer Success Automation | Onboarding, retention, NPS | VP_GROWTH |
-| 29 | Support & Incident Automation | Ticketing, triage, resolution | VP_TECH |
-| 30 | Bug Detection & Auto-Fix | Monitoring, alerts, remediation | VP_TECH |
+| 29 | Support & Incident Automation | Ticketing, triage, resolution | VP_OPS |
+| 30 | Bug Detection & Auto-Fix | Monitoring, alerts, remediation | VP_OPS |
 | 31 | Feature Request Pipeline | User feedback → PRD → Implementation | VP_PRODUCT |
 | 32 | Pattern Library Feedback | Venture learnings → Pattern updates | VP_TECH |
 | 33 | Revenue Optimization | Pricing tests, upsell, churn prevention | VP_GROWTH |
 | 34 | Portfolio Synergy | Cross-venture opportunities | CEO |
-| 35 | Autonomy Certification | Venture runs without intervention | CHAIRMAN |
+| 35 | Autonomy Certification | Venture runs with minimal intervention | CHAIRMAN |
 
-### Stage 35: Autonomy Certification (The Goal)
+### Phase 8: THE EXIT (Stages 36-40) — NEW
 
-A venture reaches Stage 35 when it can demonstrate:
+| Stage | Title | Purpose | Owner |
+|-------|-------|---------|-------|
+| 36 | Sale Readiness Audit | Documentation, metrics, legal cleanup | VP_OPS |
+| 37 | Valuation & Listing | Price determination, marketplace listing | CHAIRMAN |
+| 38 | Due Diligence Package | Buyer questions, data room, demos | VP_OPS |
+| 39 | Transfer & Handoff | Asset transfer, training, transition | VP_TECH |
+| 40 | Reinvestment Allocation | Proceeds → Pattern Library → New Ventures | CHAIRMAN |
+
+---
+
+## 3. Stage 35: Autonomy Certification (Revised)
+
+A venture reaches Stage 35 when Chairman involvement drops to **as-needed oversight**.
+
+### Quantified Autonomy
 
 | Criteria | Threshold |
 |----------|-----------|
 | Revenue | Positive MRR for 3 consecutive months |
-| Support | <5% tickets require human escalation |
-| Bugs | <2 critical issues per month, auto-resolved |
-| Growth | Customer acquisition on autopilot (content/ads) |
-| Maintenance | Updates deployed without Chairman involvement |
+| Support | <10% tickets require Chairman escalation |
+| Bugs | Auto-fixed via canary deploy with rollback |
+| Growth | Customer acquisition funnel running |
+| Maintenance | Updates deploy without Chairman labor |
+| Chairman Time | **As needed** (no fixed limit) |
 
-**When a venture passes Stage 35, it becomes a "Passive Asset."**
+### What "Autonomous" Means in V3.2
+
+**Old Definition (V3.1):** "No human intervention required"
+**New Definition (V3.2):** "Chairman involvement only when Chairman chooses"
+
+The Chairman may choose to spend 10 hours/month on a high-growth venture or 0 hours on a stable one. The point is **choice, not constraint**.
+
+### Auto-Pause Incident Model
+
+When something breaks:
+1. System detects failure
+2. System auto-pauses affected components
+3. System preserves state (no data loss)
+4. System sends morning digest notification
+5. Chairman fixes when convenient
+
+**Accepted tradeoff:** Short downtime is acceptable. State preservation is not negotiable.
 
 ---
 
-## 3. The Three New Layers
+## 4. Stage 40: Exit & Reinvestment (NEW)
+
+When a venture is ready to sell:
+
+### Sale Readiness Checklist
+
+| Category | Requirement |
+|----------|-------------|
+| **Revenue** | 6+ months of consistent MRR |
+| **Documentation** | All code documented, no tribal knowledge |
+| **Autonomy** | Stage 35 certified (runs without founder) |
+| **Legal** | Clean IP, ToS, Privacy Policy |
+| **Metrics** | CAC, LTV, churn, MRR all instrumented |
+| **Tech Debt** | No critical debt, dependencies updated |
+
+### Valuation Model
+
+**Target Multiple:** 2-3x Annual Revenue (ARR)
+
+| Venture Profile | Multiple |
+|-----------------|----------|
+| Growing MRR, high retention | 3x ARR |
+| Stable MRR, moderate retention | 2.5x ARR |
+| Flat/declining, high churn | 2x ARR or less |
+
+### Listing Channels
+
+- Acquire.com (primary)
+- MicroAcquire
+- Flippa (for smaller ventures)
+- Direct outreach to strategic buyers
+
+### Reinvestment Loop
+
+```
+Sale Proceeds
+      │
+      ▼
+┌─────────────────────┐
+│  ALLOCATION SPLIT   │
+│                     │
+│  40% → Pattern Lib  │  (Improve the factory)
+│  40% → New Ventures │  (Fuel new bets)
+│  20% → Chairman     │  (Take profits)
+└─────────────────────┘
+```
+
+---
+
+## 5. The Seed Agent Pattern
+
+### The Bootstrap Paradox
+
+To build ventures automatically, we need agents.
+To build agents, we need... agents?
+
+### The Solution: One Agent to Rule Them All
+
+The **Seed Agent** is a meta-agent whose only job is to spawn other agents.
+
+```
+Chairman: "I need a Twitter marketing agent"
+     │
+     ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         SEED AGENT                                  │
+│   Input: Natural language description of needed agent               │
+│   Output: Working agent code + deployment                           │
+└─────────────────────────────────────────────────────────────────────┘
+     │
+     ▼
+Generated: twitter-marketing-agent.py
+     │
+     ▼
+Deployed to Agent Platform
+     │
+     ▼
+Agent begins operating autonomously
+```
+
+### Seed Agent Capabilities
+
+| Capability | Description |
+|------------|-------------|
+| Agent Generation | Creates new agents from prompts |
+| Template Library | Pre-built patterns for common agent types |
+| Deployment | Pushes new agents to the Agent Platform |
+| Testing | Validates agent behavior before deployment |
+| Documentation | Auto-generates agent specs |
+
+### Priority Order
+
+1. **First:** Build the Seed Agent
+2. **Then:** Use Seed Agent to build marketing agents
+3. **Then:** Use Seed Agent to build support agents
+4. **Then:** Use Seed Agent to build maintenance agents
+
+---
+
+## 6. The Venture Stack Constraint
+
+### Same Stack, Varied Models
+
+All EHG ventures use the same technical foundation:
+
+| Layer | Standard |
+|-------|----------|
+| Frontend | Next.js 14+ |
+| Backend | Next.js API Routes + Supabase |
+| Database | Supabase (PostgreSQL) |
+| Auth | Supabase Auth |
+| Hosting | Vercel |
+| Payments | Stripe |
+| Email | Resend or SendGrid |
+| Analytics | PostHog or Plausible |
+
+### Why Same Stack?
+
+1. **Pattern Reuse** — Every pattern works across all ventures
+2. **Maintenance Efficiency** — One upgrade path, not 30
+3. **Seed Agent Simplicity** — Generate code for one stack, not many
+4. **Chairman Familiarity** — Review code you understand
+
+### Varied Business Models
+
+While tech is standardized, business models can vary:
+
+| Model Type | Example |
+|------------|---------|
+| SaaS Subscription | Monthly/annual recurring |
+| Usage-Based | Pay per API call |
+| Marketplace | Transaction fees |
+| Freemium | Free tier + paid upgrade |
+| One-Time Purchase | Lifetime access |
+
+---
+
+## 7. The Three Automation Layers
 
 ### Layer A: Marketing Automation (Stages 26-28)
 
 **Problem Solved:** "Who finds the customers?"
 
-| Component | Purpose | Implementation |
-|-----------|---------|----------------|
-| Content Engine | SEO + thought leadership | AI-generated blog posts, social content |
-| Landing Page Factory | Convert visitors | Template-driven LP generation |
-| Paid Acquisition | Scalable traffic | Automated ad campaigns (Google, Meta) |
-| Email Sequences | Nurture leads | Drip campaigns triggered by behavior |
+| Component | Purpose | Automation Level |
+|-----------|---------|------------------|
+| Content Engine | SEO + thought leadership | Full (AI generates) |
+| Landing Pages | Convert visitors | Full (template-driven) |
+| Paid Acquisition | Scalable traffic | Full (AI manages within budget) |
+| Email Sequences | Nurture leads | Full (behavior-triggered) |
 
-**CrewAI Integration:**
-- `CONTENT_MARKETING` Crew - generates blog posts, social content
-- `PAID_ACQUISITION` Crew - manages ad campaigns, optimizes spend
-- `CONVERSION_OPTIMIZATION` Crew - A/B tests landing pages, improves funnels
+**Chairman Role:** Set budgets, approve daily digest of pending content/ads.
 
 ### Layer B: Maintenance Automation (Stages 29-32)
 
 **Problem Solved:** "Who fixes the bugs?"
 
-| Component | Purpose | Implementation |
-|-----------|---------|----------------|
-| Error Monitoring | Detect issues | Sentry integration, custom alerts |
-| Auto-Triage | Classify severity | AI-powered issue classification |
-| Auto-Fix Pipeline | Resolve issues | Pattern-based bug fixes |
-| Regression Prevention | Learn from fixes | Pattern Library updates |
+| Component | Purpose | Automation Level |
+|-----------|---------|------------------|
+| Error Monitoring | Detect issues | Full (Sentry integration) |
+| Auto-Triage | Classify severity | Full (AI classification) |
+| Auto-Fix Pipeline | Resolve issues | Full (canary + rollback) |
+| Pattern Feedback | Learn from fixes | Full (updates library) |
 
 **The Maintenance Loop:**
 ```
@@ -169,35 +424,40 @@ pattern)   for crew)
     │       │
     └───┬───┘
         ↓
-Deploy Fix
+Canary Deploy
+        ↓
+Tests Pass? → Promote to Production
         ↓
 Update Pattern Library
-        ↓
-Propagate to Similar Ventures
 ```
 
-### Layer C: Distribution Automation (Stages 26-28, 33)
+**Chairman Role:** Review morning logs, rollback if needed.
 
-**Problem Solved:** "How do we scale revenue?"
+### Layer C: Support Automation (Stages 28-29)
 
-| Component | Purpose | Implementation |
-|-----------|---------|----------------|
-| Multi-Channel Presence | Reach customers | Automated social, email, content |
-| Pricing Optimization | Maximize revenue | A/B test pricing, dynamic pricing |
-| Upsell/Cross-sell | Increase LTV | Automated upgrade prompts |
-| Churn Prevention | Reduce attrition | Early warning + intervention |
+**Problem Solved:** "Who helps the customers?"
+
+| Component | Purpose | Automation Level |
+|-----------|---------|------------------|
+| FAQ/Docs | Self-serve answers | Full (AI-generated) |
+| Chat Bot | First-line support | Full (RAG-based) |
+| Ticket Triage | Classify requests | Full (AI routing) |
+| Escalation | Complex issues | Chairman inbox |
+
+**Chairman Role:** Handle <10% of tickets that require human judgment.
 
 ---
 
-## 4. The PRD Evolution
+## 8. The PRD Evolution
 
 V2 PRDs focused on **what to build**.
 V3 PRDs include **how to grow**.
+V3.2 PRDs include **how to exit**.
 
-### V3 PRD Structure
+### V3.2 PRD Structure
 
 ```typescript
-interface PRD_V3 {
+interface PRD_V3_2 {
   // V2 Fields (Unchanged)
   executive_summary: string;
   problem_statement: string;
@@ -206,11 +466,13 @@ interface PRD_V3 {
   technical_requirements: Requirement[];
   success_metrics: Metric[];
 
-  // V3 Fields (NEW)
+  // V3 Fields (Growth)
   go_to_market: {
     primary_channel: 'content' | 'paid' | 'viral' | 'partnerships';
     content_strategy: ContentPlan;
     ad_budget_monthly: number;
+    max_monthly_budget: number;      // Hard ceiling
+    daily_stop_loss: number;         // Auto-pause threshold
     target_cac: number;
     target_ltv: number;
   };
@@ -230,25 +492,179 @@ interface PRD_V3 {
   };
 
   autonomy_target: {
-    target_stage_35_date: string;  // ISO8601
-    human_intervention_budget: number;  // hours/month
+    target_stage_35_date: string;
     revenue_target_for_autonomy: number;
+  };
+
+  // V3.2 Fields (Exit) — NEW
+  exit_profile: {
+    target_exit_date: string;        // When to list for sale
+    target_multiple: number;         // 2-3x ARR
+    ideal_buyer_profile: string;     // Who would buy this?
+    strategic_value: string[];       // Why it's worth buying
+    transferability_score: 'high' | 'medium' | 'low';
   };
 }
 ```
 
-### Genesis Pipeline Integration
+---
 
-When Genesis creates a venture, the PRD now includes:
-1. **Marketing DNA** - How will this venture acquire customers?
-2. **Maintenance DNA** - How will this venture fix itself?
-3. **Growth DNA** - How will this venture increase revenue?
+## 9. Budget Structure
 
-This is baked in from Day 1, not bolted on after launch.
+### Per-Venture Hard Caps
+
+Each venture operates within strict financial isolation:
+
+```typescript
+interface VentureBudget {
+  venture_id: string;
+
+  // Monthly Caps
+  max_monthly_ad_spend: number;
+  max_monthly_api_costs: number;
+  max_monthly_infrastructure: number;
+
+  // Daily Limits
+  daily_ad_stop_loss: number;
+  daily_api_stop_loss: number;
+
+  // Lifetime Limits
+  total_investment_cap: number;      // Kill venture if exceeded without profit
+
+  // Alerts
+  alert_at_percentage: number;       // Alert Chairman at 80% of cap
+}
+```
+
+### No Cross-Subsidization
+
+If Venture A is profitable and Venture B is burning cash:
+- Venture B cannot borrow from Venture A's budget
+- Each venture lives or dies on its own
+- Chairman can manually reallocate, but system cannot
 
 ---
 
-## 5. The Shadow Work (Formalized)
+## 10. Success Metrics (V3.2)
+
+### Portfolio Targets
+
+| Metric | Target | Timeline |
+|--------|--------|----------|
+| Total Ventures | 30+ | By end of 2027 |
+| Portfolio MRR | $200K+ | By end of 2027 |
+| Ventures at Stage 35+ | 10+ | By end of 2026 |
+| First Autonomous Revenue | $1 | Q2 2026 |
+| First Venture Flip | 1 | Q4 2026 |
+| Flip Proceeds | $50K+ | Q4 2026 |
+
+### Per-Venture Targets
+
+| Metric | Target |
+|--------|--------|
+| Time to Stage 25 (Launch) | <30 days |
+| Time to Stage 35 (Autonomy) | <90 days from launch |
+| Time to Exit-Ready (Stage 36) | <12 months from launch |
+| Chairman Time (Autonomous) | As needed |
+| Support Escalation Rate | <10% |
+| Auto-Fix Success Rate | >90% |
+
+### Factory Targets
+
+| Metric | Target |
+|--------|--------|
+| Ventures Created per Month | 3+ |
+| Pattern Library Size | 100+ patterns |
+| Seed Agent Capability | Generate any standard agent type |
+| Marketing Funnel Automation | 100% |
+
+---
+
+## 11. Triangulation Amendments (All Rounds)
+
+### Round 1 Amendments (V3.1)
+
+#### Amendment 1: The Budget Firewall (Antigravity)
+Hard limits on marketing spend. Daily stop-loss triggers auto-pause.
+
+#### Amendment 2: The Sunset Protocol (Antigravity)
+Kill criteria for failing ventures. The Graveyard for archived learnings. (Specific criteria TBD via research.)
+
+#### Amendment 3: Instrumentation Baseline (OpenAI)
+Required dashboards before Stage 35 certification.
+
+#### Amendment 4: Deterministic Demo Mode (OpenAI)
+Predictable, repeatable demos for the Feb 14 Exhibition.
+
+#### Amendment 5: Chairman Veto on Brand Voice (Antigravity)
+Chairman can intervene on brand decisions, but AI generates autonomously by default.
+
+### Round 2 Amendments (V3.2)
+
+#### Amendment 6: Bootstrap Strategy
+Phase 0 (THE FORGE) acknowledges current state. Claude Code builds first ventures.
+
+#### Amendment 7: Exception-Only Autonomy (Refined)
+Stage 35 = "as needed" involvement, not "zero involvement."
+
+#### Amendment 8: REJECTED — No Separate Watchdog
+Chairman trusts EVA. No redundant safety layer.
+
+#### Amendment 9: Daily Batch Approval
+Chairman reviews morning digest. Nothing publishes without approval.
+
+#### Amendment 10: Same Stack, Varied Models
+Next.js + Supabase always. Business models can differ.
+
+#### Amendment 11: Exit Strategy (Phase 8)
+Build to sell. Target 2-3x ARR. Reinvestment loop defined.
+
+#### Amendment 12: Seed Agent Priority
+Build the meta-agent before building specialized agents.
+
+---
+
+## 12. The Chain of Command
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        RICK (The Chairman)                          │
+│             CAPITAL ALLOCATION • DAILY APPROVAL • EXIT DECISIONS    │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      EVA (Chief of Staff)                           │
+│              Build • Maintain • Market • Grow • Prepare for Sale    │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+                ┌─────────┬───────┴───────┬─────────┐
+                ▼         ▼               ▼         ▼
+           ┌────────┐ ┌────────┐     ┌────────┐ ┌────────┐
+           │VP_TECH │ │VP_PROD │     │VP_GROWTH│ │VP_OPS  │
+           │        │ │        │     │         │ │        │
+           └────────┘ └────────┘     └────────┘ └────────┘
+                                          │
+                                          ▼
+                                   ┌────────────┐
+                                   │ SEED AGENT │
+                                   │ (Creates   │
+                                   │  Agents)   │
+                                   └────────────┘
+```
+
+### Why One Brain, Not Two
+
+The original V3 draft proposed a separate "AURORA" agent for revenue operations. This was rejected during triangulation for:
+
+1. **Simpler Architecture** - One orchestrator, no coordination overhead
+2. **Faster Implementation** - Extend EVA, don't build new agent
+3. **Unified Interface** - Chairman talks to EVA only
+4. **Scale Later** - Split when portfolio exceeds 10 ventures, not before
+
+---
+
+## 13. The Shadow Work (Formalized)
 
 The following gaps identified during the Jan 1, 2026 audit are now **formal requirements** for Exhibition readiness.
 
@@ -269,17 +685,9 @@ The following gaps identified during the Jan 1, 2026 audit are now **formal requ
 | No Prod CI/CD | Deployment is manual | Create production workflow |
 | Security Headers | No CSP, HSTS, X-Frame-Options | Add middleware |
 
-### UX Shadows
-
-| Shadow | Description | Resolution |
-|--------|-------------|------------|
-| Dead Bulk Actions | Pause/Archive buttons do nothing | Implement handlers |
-| Empty State Confusion | Loading vs no-data indistinguishable | Add proper empty states |
-| Error Boundaries | Data-fetch errors not caught | Wrap pages in error boundaries |
-
 ---
 
-## 6. The Feb 14, 2026 Exhibition Standard
+## 14. The Feb 14, 2026 Exhibition Standard
 
 **Definition of "Done" for the Fleet Exhibition:**
 
@@ -293,6 +701,7 @@ The following gaps identified during the Jan 1, 2026 audit are now **formal requ
 | Stage progression works | Can advance venture through stages 1-5 minimum |
 | No white screens | All primary flows render without errors |
 | No hardcoded secrets | Security audit passes |
+| Demo produces consistent output | Deterministic demo mode |
 
 ### Tier 2: Should Have (Quality)
 
@@ -309,161 +718,48 @@ The following gaps identified during the Jan 1, 2026 audit are now **formal requ
 |-------------|--------------|
 | Marketing DNA in PRD | PRD includes go_to_market section |
 | Maintenance DNA in PRD | PRD includes maintenance_profile |
-| Pattern feedback loop | Venture learnings update pattern library |
+| Exit DNA in PRD | PRD includes exit_profile section |
 
 ---
 
-## 7. The Triangulated Assessment
-
-### Angle 1: Claude (The Architect)
-
-**The Archaeologist Model:**
-
-> "The City is built. The streets exist. What remains is not construction but excavation - revealing what was always there."
-
-The 29 Genesis SDs are COMPLETED. The infrastructure exists. The gap is **integration** - connecting islands into a continent.
-
-**Architect's Verdict:** 40-70 hours of glue work, not greenfield development.
-
-### Angle 2: OpenAI (The Strategist)
-
-**The Business Layer:**
-
-> "A venture without customers is a science project. Marketing, Distribution, and Maintenance must be baked into the DNA from Day 1."
-
-The V2 vision optimized for **code creation**. But code doesn't pay bills. The PRD must include:
-- Customer acquisition strategy
-- Revenue optimization path
-- Self-maintenance capability
-
-**Strategist's Verdict:** Extend the PRD schema. Add Phase 7 (Stages 26-35). Score ventures on viability, not just feasibility.
-
-### Angle 3: Antigravity (The Accelerator)
-
-**The Time Collapse:**
-
-> "Feb 14 is not a deadline. It's a Fleet Exhibition. The question is not 'will we finish?' but 'how many ships do we parade?'"
-
-At current velocity (80 commits in 5 days), the remaining work is achievable in 2-3 weeks. The Exhibition should showcase:
-- 5+ simulations created via Genesis
-- At least 1 venture at Stage 10+
-- Marketing DNA visible in PRD
-- Pattern Library driving code generation
-
-**Accelerator's Verdict:** Target 5 simulations for the Fleet Review. Feb 14 is conservative if we focus.
-
----
-
-## 8. The New Chain of Command
-
-V2 Chain: Rick → EVA → Venture CEO → VPs → Crews
-
-V3 Chain adds **Autonomous Operations:**
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        RICK (The Chairman)                          │
-│                    CAPITAL ALLOCATION • TASTE • VETO                │
-└─────────────────────────────────────────────────────────────────────┘
-                                  │
-                    ┌─────────────┴─────────────┐
-                    ▼                           ▼
-┌─────────────────────────────┐   ┌─────────────────────────────┐
-│  EVA (Chief Operating       │   │  AURORA (Chief Revenue      │
-│       Officer)              │   │         Officer) [NEW]      │
-│  Build • Maintain • Fix     │   │  Market • Sell • Grow       │
-└─────────────────────────────┘   └─────────────────────────────┘
-          │                                   │
-    ┌─────┴─────┐                       ┌─────┴─────┐
-    ▼           ▼                       ▼           ▼
-┌────────┐ ┌────────┐               ┌────────┐ ┌────────┐
-│VP_TECH │ │VP_PROD │               │VP_MKTG │ │VP_SALES│
-│        │ │        │               │ [NEW]  │ │ [NEW]  │
-└────────┘ └────────┘               └────────┘ └────────┘
-```
-
-### AURORA: Chief Revenue Officer (New Agent)
-
-| Function | Description |
-|----------|-------------|
-| **MARKETER** | Generates content, manages ads, optimizes SEO |
-| **DISTRIBUTOR** | Manages channels, partnerships, viral loops |
-| **OPTIMIZER** | A/B tests pricing, improves conversion, reduces churn |
-
-AURORA is EVA's counterpart for the revenue side of ventures.
-
----
-
-## 9. Success Metrics (Revised)
-
-V2 metrics focused on **throughput**.
-V3 metrics focus on **freedom**.
-
-| Metric | V2 Target | V3 Target |
-|--------|-----------|-----------|
-| Ventures reaching Stage 25 | 3x current | Unchanged |
-| **Ventures reaching Stage 35** | N/A | **3 per quarter** |
-| **MRR from autonomous ventures** | N/A | **$10K by Q2 2026** |
-| **Chairman hours per venture per week** | >5 | **<1** |
-| **Auto-resolved support tickets** | N/A | **>80%** |
-| **Auto-fixed bugs** | N/A | **>50%** |
-
----
-
-## 10. Migration Path: V2 → V3
-
-### Immediate (Pre-Exhibition)
-
-1. **Update PRD Schema** - Add go_to_market, maintenance_profile, growth_levers
-2. **Wire Genesis Integration** - Stage 16/17 scripts to UI
-3. **Implement LLM PRD Generation** - Replace stub in genesis-pipeline.js
-4. **Close Security Shadows** - Secrets, headers, monitoring
-
-### Post-Exhibition (Q1 2026)
-
-1. **Build Phase 7 Infrastructure** - Stages 26-35
-2. **Implement AURORA** - Revenue automation agent
-3. **Build Maintenance Loop** - Auto-triage, auto-fix pipeline
-4. **Build Marketing Engine** - Content, ads, landing pages
-
-### Q2 2026
-
-1. **First Stage 35 Certification** - One venture reaches full autonomy
-2. **Portfolio Synergy** - Cross-venture pattern sharing
-3. **Passive Income Milestone** - $10K MRR from autonomous ventures
-
----
-
-## 11. The Oath (Revised)
+## 15. The Oath (V3.2)
 
 **V2 Oath:** "Rick commands, EVA coordinates, Crews execute."
 
-**V3 Oath:**
+**V3 Oath:** "Ventures create themselves. Ventures market themselves. Ventures maintain themselves."
 
-> "Ventures create themselves. Ventures market themselves. Ventures maintain themselves.
-> The Chairman approves the bets. The system delivers the returns."
+**V3.2 Oath:**
+
+> "We build assets to flip.
+> The factory never stops.
+> One venture sells, another is born.
+> The Chairman allocates.
+> The system delivers."
 
 ---
 
-## 12. Document Governance
+## 16. Document Governance
 
 This document supersedes:
-- `00_VISION_V2_CHAIRMAN_OS.md` (archived, not deleted)
-- Genesis Oath V3.1 language around "code factory" (updated to "asset factory")
+- `00_VISION_V2_CHAIRMAN_OS.md` (archived)
+- Vision V3.0 and V3.1 (superseded by V3.2)
 
 This document is the authoritative source for:
 - System purpose and philosophy
-- Venture lifecycle definition (Stages 1-35)
+- Venture lifecycle definition (Phases 0-8, Stages 1-40)
+- Chairman's Operating Model
 - PRD schema requirements
 - Success metrics
 - Agent hierarchy
+- Exit strategy
 
 ---
 
 *Triangulated by the Council: Claude (Architect), OpenAI (Strategist), Antigravity (Accelerator)*
+*Refined by Chairman Q&A: January 1, 2026*
 *Ratified: January 1, 2026*
-*Effective: Immediately*
+*Version: 3.2*
 
 ---
 
-**The City is built. Now we open for business.**
+**The City is built. Now we flip the keys.**
