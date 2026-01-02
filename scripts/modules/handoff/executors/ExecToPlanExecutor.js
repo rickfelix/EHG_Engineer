@@ -83,30 +83,60 @@ export class ExecToPlanExecutor extends BaseExecutor {
           };
         }
 
-        // FIX 1: Check for blocked handoffs and provide guidance
-        const blockedHandoff = allHandoffs?.find(h => h.status === 'blocked');
-        if (blockedHandoff) {
-          console.log('   ⚠️  BLOCKED PLAN-TO-EXEC handoff found (circuit breaker tripped)');
-          console.log(`      ID: ${blockedHandoff.id.slice(0, 8)}...`);
-          console.log(`      Score: ${blockedHandoff.validation_score}% (required: 85%)`);
-          console.log(`      Reason: ${blockedHandoff.rejection_reason || 'Below threshold'}`);
+        // ROOT CAUSE FIX (2026-01-01): Check for ACCEPTED handoff FIRST before checking blocked
+        // An accepted handoff takes precedence over older blocked handoffs
+        // This fixes SD-VS-CHAIRMAN-SETTINGS-001 where accepted handoff (86%) was being
+        // ignored because an older blocked handoff (0%) existed
+        const acceptedHandoffs = allHandoffs?.filter(h => h.status === 'accepted') || [];
+        const blockedHandoffs = allHandoffs?.filter(h => h.status === 'blocked') || [];
+
+        // If we have at least one accepted handoff, the prerequisite is satisfied
+        if (acceptedHandoffs.length > 0) {
+          const latestAccepted = acceptedHandoffs[0]; // Already sorted by created_at desc
+          console.log('   ✅ Prerequisite satisfied: PLAN-TO-EXEC handoff found');
+          console.log(`      Handoff ID: ${latestAccepted.id.slice(0, 8)}...`);
+          console.log(`      Status: ${latestAccepted.status}`);
+          console.log(`      Score: ${latestAccepted.validation_score}`);
+          console.log(`      Date: ${new Date(latestAccepted.created_at).toLocaleString()}`);
+
+          // Warn if there are also blocked handoffs (but don't fail)
+          if (blockedHandoffs.length > 0) {
+            console.log(`   ⚠️  Note: ${blockedHandoffs.length} earlier blocked handoff(s) exist (ignored - accepted handoff takes precedence)`);
+          }
+
+          return {
+            passed: true,
+            score: 100,
+            max_score: 100,
+            issues: [],
+            warnings: blockedHandoffs.length > 0 ? [`${blockedHandoffs.length} blocked handoff(s) exist from earlier attempts`] : []
+          };
+        }
+
+        // No accepted handoff - check if there are blocked handoffs to provide guidance
+        if (blockedHandoffs.length > 0) {
+          const latestBlocked = blockedHandoffs[0];
+          console.log('   ⚠️  BLOCKED PLAN-TO-EXEC handoff found (no accepted handoff exists)');
+          console.log(`      ID: ${latestBlocked.id.slice(0, 8)}...`);
+          console.log(`      Score: ${latestBlocked.validation_score}% (required: 85%)`);
+          console.log(`      Reason: ${latestBlocked.rejection_reason || 'Below threshold'}`);
           console.log('\n   REMEDIATION:');
           console.log('   1. Address validation failures to raise score to 85%+');
-          console.log(`   2. Use: SELECT * FROM retry_blocked_handoff('${blockedHandoff.id}', <new_score>);`);
+          console.log(`   2. Use: SELECT * FROM retry_blocked_handoff('${latestBlocked.id}', <new_score>);`);
           console.log('   3. Or create new handoff after fixing issues');
 
           return {
             passed: false,
             score: 0,
             max_score: 100,
-            issues: [`BLOCKED: PLAN-TO-EXEC handoff blocked with score ${blockedHandoff.validation_score}%`],
+            issues: [`BLOCKED: PLAN-TO-EXEC handoff blocked with score ${latestBlocked.validation_score}%`],
             warnings: [],
             remediation: 'Fix validation issues and retry blocked handoff or create new one'
           };
         }
 
-        // Check for accepted handoff
-        const planToExecHandoff = allHandoffs?.filter(h => h.status === 'accepted');
+        // No handoffs at all
+        const planToExecHandoff = acceptedHandoffs;
         if (!planToExecHandoff || planToExecHandoff.length === 0) {
           console.log('   ❌ No accepted PLAN-TO-EXEC handoff found');
           console.log('   ⚠️  LEO Protocol requires PLAN-TO-EXEC before EXEC-TO-PLAN');
@@ -175,7 +205,7 @@ export class ExecToPlanExecutor extends BaseExecutor {
 
         if (skipSubAgents) {
           console.log(`   ℹ️  ${sdType} type SD - sub-agent orchestration SKIPPED`);
-          console.log(`   → Database: sd_type_validation_profiles.requires_sub_agents = false`);
+          console.log('   → Database: sd_type_validation_profiles.requires_sub_agents = false');
           if (sdType === 'orchestrator') {
             console.log('   → Orchestrator SDs: children handle sub-agent validation');
           } else if (['documentation', 'docs'].includes(sdType)) {

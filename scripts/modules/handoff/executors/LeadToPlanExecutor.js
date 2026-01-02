@@ -493,6 +493,9 @@ export class LeadToPlanExecutor extends BaseExecutor {
       return result;
     }
 
+    // Gap #7 Fix (2026-01-01): Update SD current_phase to PLAN_PRD
+    await this._transitionSdToPlan(sdId, sd);
+
     // Auto-generate PRD script on successful LEAD→PLAN handoff
     await this._autoGeneratePRDScript(sdId, sd);
 
@@ -505,6 +508,43 @@ export class LeadToPlanExecutor extends BaseExecutor {
       ...result,
       qualityScore: result.qualityScore || 100
     };
+  }
+
+  /**
+   * STATE TRANSITION: Update SD current_phase on successful LEAD-TO-PLAN handoff
+   *
+   * Gap #7 Fix (2026-01-01): LeadToPlanExecutor was missing state transition.
+   * SD remained in LEAD phase even after handoff was approved.
+   * This caused phase tracking to be out of sync.
+   */
+  async _transitionSdToPlan(sdId, sd) {
+    console.log('\n📊 STATE TRANSITION: SD Phase Update');
+    console.log('-'.repeat(50));
+
+    try {
+      // Determine the correct SD ID field (UUID vs legacy_id)
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
+      const queryField = isUUID ? 'id' : 'legacy_id';
+
+      const { error } = await this.supabase
+        .from('strategic_directives_v2')
+        .update({
+          current_phase: 'PLAN_PRD',
+          status: 'in_progress',
+          updated_at: new Date().toISOString()
+        })
+        .eq(queryField, sdId);
+
+      if (error) {
+        console.log(`   ⚠️  Could not update SD phase: ${error.message}`);
+      } else {
+        const oldPhase = sd?.current_phase || 'LEAD';
+        console.log(`   ✅ SD phase transitioned: ${oldPhase} → PLAN_PRD`);
+        console.log('   ✅ SD status transitioned: → in_progress');
+      }
+    } catch (error) {
+      console.log(`   ⚠️  SD transition error: ${error.message}`);
+    }
   }
 
   /**
@@ -807,21 +847,49 @@ export class LeadToPlanExecutor extends BaseExecutor {
 
         console.log('\n' + output);
         console.log('✅ PRD script auto-generated successfully!');
+
+        // Gap #3 Fix (2026-01-01): Auto-execute the generated PRD script
+        const prdScriptPath = path.join(process.cwd(), 'scripts', `create-prd-${sdId.toLowerCase()}.js`);
+
         console.log('');
-        console.log('📝 NEXT STEPS:');
-        console.log(`   1. Edit: scripts/create-prd-${sdId.toLowerCase()}.js`);
-        console.log('      - Update TODO sections');
-        console.log('      - Add requirements, architecture, test scenarios');
+        console.log('📄 AUTO-EXECUTING PRD SCRIPT...');
+        console.log(`   Running: node ${prdScriptPath}`);
         console.log('');
-        console.log(`   2. Run: node scripts/create-prd-${sdId.toLowerCase()}.js`);
-        console.log('      - Creates PRD in database');
-        console.log('      - Validates schema automatically');
-        console.log('      - Triggers STORIES sub-agent');
+
+        try {
+          const prdOutput = execSync(
+            `node "${prdScriptPath}"`,
+            { encoding: 'utf-8', cwd: process.cwd(), timeout: 120000 }
+          );
+          console.log(prdOutput);
+          console.log('✅ PRD created and sub-agents invoked successfully!');
+        } catch (prdExecError) {
+          console.log(`   ⚠️  PRD script execution failed: ${prdExecError.message}`);
+          console.log('');
+          console.log('📝 MANUAL STEPS (if needed):');
+          console.log(`   1. Edit: scripts/create-prd-${sdId.toLowerCase()}.js`);
+          console.log('      - Update TODO sections');
+          console.log('      - Add requirements, architecture, test scenarios');
+          console.log('');
+          console.log(`   2. Run: node scripts/create-prd-${sdId.toLowerCase()}.js`);
+          console.log('      - Creates PRD in database');
+          console.log('      - Validates schema automatically');
+          console.log('      - Triggers sub-agents');
+        }
         console.log('');
 
       } catch (execError) {
         if (execError.message.includes('already exists')) {
           console.log('   ℹ️  PRD script already exists - skipping generation');
+          // Gap #3 Fix: Even if script exists, try to execute it
+          const prdScriptPath = path.join(process.cwd(), 'scripts', `create-prd-${sdId.toLowerCase()}.js`);
+          console.log('   📄 Attempting to execute existing PRD script...');
+          try {
+            execSync(`node "${prdScriptPath}"`, { encoding: 'utf-8', cwd: process.cwd(), timeout: 120000 });
+            console.log('   ✅ Existing PRD script executed successfully');
+          } catch (existingError) {
+            console.log(`   ⚠️  Existing script execution failed: ${existingError.message}`);
+          }
         } else {
           console.log(`   ⚠️  Generation failed: ${execError.message}`);
           console.log('   You can manually run: npm run prd:new ' + sdId);
