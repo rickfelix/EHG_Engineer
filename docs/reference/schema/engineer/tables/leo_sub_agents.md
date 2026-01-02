@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-02T13:50:10.062Z
+**Generated**: 2026-01-02T19:42:40.935Z
 **Rows**: 26
 **RLS**: Enabled (3 policies)
 
@@ -18,7 +18,7 @@
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
-| id | `uuid` | **NO** | `gen_random_uuid()` | - |
+| id | `character varying(50)` | **NO** | `gen_random_uuid()` | - |
 | code | `text` | **NO** | - | Sub-agent unique code identifier. QUICKFIX added 2025-11-17 for lightweight UAT issue resolution. |
 | name | `text` | **NO** | - | - |
 | description | `text` | YES | - | - |

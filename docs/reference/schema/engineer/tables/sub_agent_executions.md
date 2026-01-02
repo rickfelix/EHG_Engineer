@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-02T13:50:10.062Z
-**Rows**: 68
+**Generated**: 2026-01-02T19:42:40.935Z
+**Rows**: 64
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -20,7 +20,7 @@
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
 | prd_id | `text` | **NO** | - | - |
-| sub_agent_id | `uuid` | **NO** | - | - |
+| sub_agent_id | `character varying(50)` | **NO** | - | - |
 | status | `text` | **NO** | - | - |
 | results | `jsonb` | YES | `'{}'::jsonb` | - |
 | started_at | `timestamp with time zone` | YES | `now()` | - |
@@ -66,6 +66,10 @@
 - `sub_agent_executions_pkey`
   ```sql
   CREATE UNIQUE INDEX sub_agent_executions_pkey ON public.sub_agent_executions USING btree (id)
+  ```
+- `ux_subagent_prd`
+  ```sql
+  CREATE UNIQUE INDEX ux_subagent_prd ON public.sub_agent_executions USING btree (prd_id, sub_agent_id)
   ```
 
 ## RLS Policies
