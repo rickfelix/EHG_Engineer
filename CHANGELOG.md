@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-01-02
+
+### Scaffold Patterns
+- **SD-VS-PATTERN-UNLOCK-001**: Added 4 priority patterns to scaffold_patterns table
+  - `StripeService` (service) - Billing, subscriptions, metering, webhooks integration
+  - `RBACMiddleware` (service) - Role-based access control, permissions, RLS integration
+  - `useCRUD` (hook) - Generic CRUD hook for Supabase table bindings with React Query
+  - `BackgroundJob` (service) - Job queue with status tracking, retry logic, failure handling
+- Pattern count increased from 45 to 49
+
 ## 2025-09-22
 
 ### Refactoring
