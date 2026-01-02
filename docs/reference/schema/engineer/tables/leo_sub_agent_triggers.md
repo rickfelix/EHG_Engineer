@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-02T13:50:10.062Z
+**Generated**: 2026-01-02T19:42:40.935Z
 **Rows**: 365
 **RLS**: Enabled (3 policies)
 
@@ -19,7 +19,7 @@
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| sub_agent_id | `uuid` | **NO** | - | - |
+| sub_agent_id | `character varying(50)` | **NO** | - | - |
 | trigger_phrase | `text` | **NO** | - | - |
 | trigger_type | `text` | YES | - | - |
 | priority | `integer(32)` | YES | `0` | - |
