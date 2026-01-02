@@ -2,6 +2,14 @@
 
 ## 2026-01-02
 
+### Portfolio Glide Path Dashboard
+- **SD-VS-GLIDE-PATH-001**: Documented portfolio glide path dashboard
+  - Glide Path phase indicator (Vending Machine → Micro-SaaS → Platform → Portfolio)
+  - Phase transition recommendations based on chairman_settings thresholds
+  - Risk/reward visualization for current venture portfolio
+  - Trend tracking for scoring dimensions over time
+  - Integration points: venture_opportunity_scores, chairman_settings tables
+
 ### Research Arm Pipeline
 - **SD-VS-RESEARCH-ARM-001**: Documented research pipeline integration
   - Research pipeline trigger hooks via API endpoints
