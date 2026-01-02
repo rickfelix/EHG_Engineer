@@ -1,12 +1,12 @@
-# leo_gate_reviews Table
+# eva_weekly_review_templates Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-01-02T13:50:10.062Z
-**Rows**: 437
-**RLS**: Enabled (2 policies)
+**Rows**: 2
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,42 +14,37 @@
 
 ---
 
-## Columns (7 total)
+## Columns (8 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| prd_id | `text` | **NO** | - | - |
-| gate | `text` | **NO** | - | - |
-| score | `numeric(5,2)` | **NO** | - | - |
-| evidence | `jsonb` | **NO** | `'{}'::jsonb` | - |
+| template_name | `character varying(255)` | **NO** | - | - |
+| template_type | `character varying(50)` | **NO** | - | - |
+| template_content | `text` | **NO** | - | - |
+| variables | `jsonb` | **NO** | `'[]'::jsonb` | - |
+| enabled | `boolean` | **NO** | `true` | - |
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
-| created_by | `text` | YES | `'system'::text` | - |
+| updated_at | `timestamp with time zone` | **NO** | `now()` | - |
 
 ## Constraints
 
 ### Primary Key
-- `leo_gate_reviews_pkey`: PRIMARY KEY (id)
+- `eva_weekly_review_templates_pkey`: PRIMARY KEY (id)
 
 ### Check Constraints
-- `leo_gate_reviews_gate_check`: CHECK ((gate = ANY (ARRAY['0'::text, '1'::text, 'Q'::text, '2A'::text, '2B'::text, '2C'::text, '2D'::text, '3'::text])))
-- `leo_gate_reviews_score_check`: CHECK (((score >= (0)::numeric) AND (score <= (100)::numeric)))
+- `eva_weekly_review_templates_template_type_check`: CHECK (((template_type)::text = ANY ((ARRAY['venture_summary'::character varying, 'portfolio_summary'::character varying, 'decision_digest'::character varying, 'alert_digest'::character varying])::text[])))
 
 ## Indexes
 
-- `leo_gate_reviews_pkey`
+- `eva_weekly_review_templates_pkey`
   ```sql
-  CREATE UNIQUE INDEX leo_gate_reviews_pkey ON public.leo_gate_reviews USING btree (id)
+  CREATE UNIQUE INDEX eva_weekly_review_templates_pkey ON public.eva_weekly_review_templates USING btree (id)
   ```
 
 ## RLS Policies
 
-### 1. authenticated_read_leo_gate_reviews (SELECT)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 2. service_role_all_leo_gate_reviews (ALL)
+### 1. Service role full access to review templates (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-02T03:47:14.868Z
-**Rows**: 283
+**Generated**: 2026-01-02T13:50:10.062Z
+**Rows**: 285
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -61,7 +61,7 @@
 | updated_at | `timestamp without time zone` | YES | `CURRENT_TIMESTAMP` | Timestamp of last modification. Auto-updated via trigger on any column change. |
 | created_by | `character varying(100)` | YES | `'PLAN'::character varying` | User ID or agent code that created this PRD. Typically "PLAN" agent or human user ID. |
 | updated_by | `character varying(100)` | YES | - | User ID or agent code that last modified this PRD. Updated with each change. |
-| metadata | `jsonb` | YES | `'{}'::jsonb` | JSONB object: Flexible metadata storage. Custom fields, integrations, sub-agent results. Auto-populated by orchestrate-phase-subagents.js with: `{ "<phase>_sub_agents": { executed_at, all_passed, agents: [{ code, verdict, confidence, executed_at }] } }` |
+| metadata | `jsonb` | YES | `'{}'::jsonb` | JSONB object: Flexible metadata storage. Custom fields, integrations, temporary data. Format: { key: value } |
 | content | `text` | YES | - | Full markdown content of PRD. Can be used for markdown-based PRD generation or legacy compatibility. |
 | evidence_appendix | `text` | YES | - | Supporting evidence and artifacts. Screenshots, logs, research findings. Appended to PRD for reference. |
 | backlog_items | `jsonb` | YES | `'[]'::jsonb` | JSONB array: Linked backlog items from sd_backlog_map. Cached for quick access. Format: [{ id, title, status }] |

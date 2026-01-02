@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-02T03:47:14.868Z
-**Rows**: 63
+**Generated**: 2026-01-02T13:50:10.062Z
+**Rows**: 68
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -20,7 +20,7 @@
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
 | prd_id | `text` | **NO** | - | - |
-| sub_agent_id | `character varying(50)` | **NO** | - | FK to leo_sub_agents.id (migrated from UUID in migration 028) |
+| sub_agent_id | `uuid` | **NO** | - | - |
 | status | `text` | **NO** | - | - |
 | results | `jsonb` | YES | `'{}'::jsonb` | - |
 | started_at | `timestamp with time zone` | YES | `now()` | - |
