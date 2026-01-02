@@ -530,10 +530,12 @@ class PlanToExecVerifier {
         console.log('   ℹ️  Using 50% minimum score instead of standard PRD requirements');
 
         // Refactor Briefs use 50% minimum score - they focus on current/desired state, not full PRD
+        // ROOT CAUSE FIX (2026-01-02): Pass sdCategory for heuristic detection (database, etc.)
         prdBoilerplateResult = await validatePRDForHandoff(prd, {
           minimumScore: 50,
           blockOnWarnings: false,
-          sdType: sd.sd_type || sd.category
+          sdType: sd.sd_type || sd.category,
+          sdCategory: sd.category  // Enables heuristic mode for database SDs
         });
 
         console.log(prdBoilerplateResult.summary);
