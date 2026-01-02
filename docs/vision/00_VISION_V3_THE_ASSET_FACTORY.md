@@ -1,4 +1,4 @@
-# EHG VISION v3.2: THE ASSET FACTORY
+# EHG VISION v3.3: THE ASSET FACTORY
 
 **Status:** RATIFIED
 **Date:** January 1, 2026
@@ -11,7 +11,8 @@
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 3.2 | 2026-01-01 | Solo Chairman refinement: Added Chairman's Operating Model, Exit/Flip Strategy (Phase 8), Seed Agent pattern, Bootstrap Strategy. Revised Stage 35 to "as-needed" autonomy. Updated success metrics to 30+ ventures / $200K MRR target. Removed AURORA in favor of EVA consolidation. |
+| 3.3 | 2026-01-01 | Round 3 Triangulation: Added Two Personas (Chairman & Solo Entrepreneur), Progressive AI Maturity Model (Solo Entrepreneur phases out), Chairman's Interface (UI/UX Vision), Progressive Approval Model, EVA Safety Layers, Automated Kill/Sunset Criteria, Seed Agent MVP Specification, Incident Severity Matrix, Pattern Versioning, Chairman Settings for manual control. Desktop-first with future mobile roadmap. |
+| 3.2 | 2026-01-01 | Solo Chairman refinement: Added Chairman's Operating Model, Exit/Flip Strategy (Phase 8), Seed Agent pattern, Bootstrap Strategy. Revised Stage 35 to "as-needed" autonomy. Updated success metrics to 30+ ventures / $200K MRR target. |
 | 3.1 | 2026-01-01 | Triangulation amendments: Removed AURORA (EVA does it all), added Budget Firewall, added Sunset Protocol, added instrumentation requirements. |
 | 3.0 | 2026-01-01 | Paradigm shift from "Code Factory" to "Asset Factory". Integrated Maintenance, Marketing, and Distribution layers. |
 
@@ -21,14 +22,94 @@
 
 **V2 built a system that creates code.**
 **V3 builds a system that creates wealth.**
-**V3.2 builds a system that creates wealth FOR A SOLO CHAIRMAN.**
+**V3.3 builds a system that creates wealth FOR A SOLO CHAIRMAN with a clear interface.**
 
 The critical constraint: **Rick is the only human.** No developers. No marketing team. No support staff. The system must be fully autonomous with Chairman oversight, not Chairman labor.
 
 The shift:
 - V2 asked: "Can we generate ventures?"
 - V3 asked: "Can we generate revenue while the Chairman sleeps?"
-- V3.2 asks: "Can we generate **sellable assets** while the Chairman allocates?"
+- V3.3 asks: "Can we generate **sellable assets** with a **clear control panel**?"
+
+---
+
+## The Two Personas: Chairman & Solo Entrepreneur
+
+In the early stages, Rick wears **two hats**. As AI matures, one hat disappears.
+
+### Persona Definitions
+
+| Persona | Role | Responsibilities | Long-Term Fate |
+|---------|------|------------------|----------------|
+| **Chairman** | Capital allocator, strategic oversight | Exit decisions, capital deployment, portfolio strategy, exception approvals | **PERMANENT** - Always human |
+| **Solo Entrepreneur** | Hands-on operator | Venture creation, content review, incident response, day-to-day decisions | **PHASED OUT** - AI takes over |
+
+### The Progressive AI Maturity Model
+
+The Solo Entrepreneur role progressively transfers to AI:
+
+```
+PHASE 0: BOOTSTRAP (Current)
+┌─────────────────────────────────────────────────────────────────────────┐
+│  RICK = Chairman + Solo Entrepreneur                                    │
+│  AI assists with: Code generation, basic automation                     │
+│  Rick handles: Everything else                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+PHASE 1: DELEGATION (1-5 Ventures)
+┌─────────────────────────────────────────────────────────────────────────┐
+│  RICK = Chairman + Partial Entrepreneur                                 │
+│  AI handles: Content generation, dependency updates, basic support      │
+│  Rick handles: Approvals, incident response, strategy, exits            │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+PHASE 2: AUTOMATION (6-15 Ventures)
+┌─────────────────────────────────────────────────────────────────────────┐
+│  RICK = Chairman + Exception Handler                                    │
+│  AI handles: All content, marketing, support, maintenance, deployments  │
+│  Rick handles: High-risk approvals, P0/P1 incidents, exit prep          │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+PHASE 3: AUTONOMY (16+ Ventures)
+┌─────────────────────────────────────────────────────────────────────────┐
+│  RICK = Chairman ONLY                                                   │
+│  AI handles: All Solo Entrepreneur responsibilities                     │
+│  Rick handles: Capital allocation, exit decisions, strategic pivots     │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Solo Entrepreneur Responsibilities Transfer Schedule
+
+| Responsibility | Phase 0 | Phase 1 | Phase 2 | Phase 3 |
+|----------------|---------|---------|---------|---------|
+| Venture ideation | Rick | Rick + AI suggestions | AI proposes, Rick approves | AI autonomous |
+| PRD creation | Rick | AI drafts, Rick edits | AI creates, Rick approves | AI autonomous |
+| Content creation | Rick | AI drafts, Rick approves | AI autonomous with spot-checks | AI autonomous |
+| Marketing campaigns | Rick | Rick configures, AI executes | AI proposes, Rick approves budget | AI autonomous within limits |
+| Customer support | Rick | AI handles Tier 1, Rick handles rest | AI handles all, escalates edge cases | AI autonomous |
+| Incident response | Rick | Rick responds, AI assists | AI fixes P2/P3, Rick handles P0/P1 | AI handles all, Rick notified for P0 |
+| Dependency updates | Rick | AI proposes, Rick approves | AI autonomous with canary | AI autonomous |
+| Exit preparation | Rick | Rick with AI data gathering | AI prepares package, Rick reviews | AI autonomous, Rick approves sale |
+
+### Triggers for Phase Progression
+
+| From → To | Trigger Conditions |
+|-----------|-------------------|
+| Phase 0 → Phase 1 | First venture reaches Stage 25 (launched) |
+| Phase 1 → Phase 2 | 5+ ventures AND auto-fix success rate >90% AND false positive rate <5% |
+| Phase 2 → Phase 3 | 15+ ventures AND all ventures at Stage 30+ AND zero P0 incidents for 90 days |
+
+### The Disappearing Entrepreneur
+
+By Phase 3:
+- The Solo Entrepreneur persona **no longer exists**
+- Rick's time commitment drops from 40+ hrs/week to <5 hrs/week
+- Rick becomes a pure **capital allocator** and **strategic decision-maker**
+- AI handles all operational work within Chairman-defined policies
+- The system has become a true **autonomous asset factory**
 
 ---
 
@@ -36,12 +117,12 @@ The shift:
 
 This section codifies the Chairman's preferences as determined through direct Q&A on January 1, 2026.
 
-### The Solo Chairman Constraint
+### The Solo Chairman Constraint (Phase 0-2)
 
 | Dimension | Chairman's Answer | System Implication |
 |-----------|-------------------|-------------------|
 | **Autonomy Level** | As needed | No fixed limits. Involvement scales with venture complexity. |
-| **Approval Model** | Before publish, batched daily | Nothing goes live without Chairman review. Daily digest, not real-time. |
+| **Approval Model** | Progressive (Active → Exception-only) | Starts hands-on, evolves to exception-only as trust builds. |
 | **Bootstrap Method** | Claude Code builds | LEO Protocol is the builder. No contractors. |
 | **Incident Response** | Auto-pause, fix in morning | Accept short downtime. State preservation over 24/7 uptime. |
 | **Marketing Automation** | Full funnel | AI handles content, ads, email, retargeting. Chairman sets budgets. |
@@ -54,90 +135,599 @@ This section codifies the Chairman's preferences as determined through direct Q&
 | **Brand Control** | AI autonomous | Chairman intervenes only if something feels wrong. |
 | **Code Maintenance** | Auto-fix + canary | AI fixes, canary deploys, rollback on failure. |
 | **Legal Docs** | AI drafts, Chairman reviews | No lawyer. Template-based with Chairman approval. |
-| **Safety Layer** | Trust EVA | No separate watchdog. EVA self-monitors. |
+| **Safety Layer** | Trust EVA (with internal layers) | EVA has multi-layer safety controls. No external watchdog. |
 | **Exit Strategy** | Active flip model | Build to sell. Target 2-3x annual revenue. |
-
-### The Daily Approval Flow
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     CHAIRMAN'S DAILY DIGEST                         │
-│                         (Morning Review)                            │
-└─────────────────────────────────────────────────────────────────────┘
-                                  │
-    ┌─────────────────────────────┼─────────────────────────────┐
-    │                             │                             │
-    ▼                             ▼                             ▼
-┌────────────┐            ┌────────────┐            ┌────────────┐
-│  CONTENT   │            │    ADS     │            │   FIXES    │
-│  Pending   │            │  Pending   │            │  Deployed  │
-│ (10 items) │            │ (3 items)  │            │ (5 items)  │
-└────────────┘            └────────────┘            └────────────┘
-    │                             │                             │
-    ▼                             ▼                             ▼
-[ Approve ]              [ Approve ]              [ Review Logs ]
-[ Reject  ]              [ Adjust Budget ]        [ Rollback?   ]
-[ Edit    ]              [ Reject ]
-```
-
-**Rule:** Nothing publishes until Chairman sees morning digest and approves.
+| **Platform Strategy** | Desktop-first, mobile later | Progressive approach as app matures. |
 
 ---
 
-## The Paradigm Shift
+## The Progressive Approval Model
 
-### V2: The Software Factory
+The approval model evolves as the portfolio matures. AI monitors portfolio size and success rates to recommend progression. Chairman can manually override at any time.
 
+### Approval Stages
+
+| Stage | Trigger | Model | Description |
+|-------|---------|-------|-------------|
+| **ACTIVE** | 1-5 ventures | Active Batch | Chairman reviews and approves every item daily. Nothing publishes without explicit approval. |
+| **HYBRID** | 6-15 ventures | Tiered | Low-risk items use negative consent (auto-publish in 24h unless vetoed). High-risk items require active approval. |
+| **EXCEPTION** | 16+ ventures | Exception-Only | Only anomalies and high-stakes decisions reach Chairman. Everything else auto-executes within policy. |
+
+### Risk-Based Routing (Hybrid & Exception Stages)
+
+| Risk Level | Items | Model |
+|------------|-------|-------|
+| **Low** | Blog posts, social content, routine dependency updates | Negative Consent (24h auto-publish) |
+| **Medium** | Ad campaigns within budget, feature deployments | Batch Approval (daily digest) |
+| **High** | Budget increases, pricing changes, new integrations | Active Approval (must click) |
+| **Critical** | Kill decisions, security incidents, legal sign-off | Synchronous Approval (immediate) |
+
+### Chairman Settings
+
+The Chairman can manually control the approval model via settings:
+
+```typescript
+interface ChairmanSettings {
+  // Approval Model
+  approval_mode: 'ACTIVE' | 'HYBRID' | 'EXCEPTION';
+  auto_progression_enabled: boolean;  // Let AI recommend progression
+
+  // Risk Thresholds
+  low_risk_auto_approve: boolean;
+  medium_risk_digest_hours: number;   // Hours before auto-approve (default: 24)
+  high_risk_require_approval: boolean;
+
+  // Notification Preferences
+  p0_notify_sms: boolean;
+  p1_notify_push: boolean;
+  digest_time: string;  // "08:00" - when to send morning digest
+
+  // Mobile (Future)
+  mobile_enabled: boolean;  // false until mobile is ready
+}
 ```
-Seed Idea → Code → Deployment → ???
-                              ↑
-                        (Chairman's Problem)
-```
 
-### V3.2: The Asset Flip Factory
+### AI-Guided Progression
 
-```
-Seed Idea → Validated Product → Paying Customers → Maintained System → SALE
-                                                                         ↓
-                                                              (Chairman's Payday)
-```
+EVA monitors the following metrics to recommend progression:
 
-**Key Insight:** Ventures are not meant to be held forever. They are assets to flip.
+| Metric | Threshold for Progression |
+|--------|---------------------------|
+| Ventures in portfolio | 5+ for HYBRID, 15+ for EXCEPTION |
+| Auto-fix success rate | >90% over 30 days |
+| False positive rate | <5% (items Chairman overrode) |
+| Chairman override frequency | Declining trend over 14 days |
+
+When thresholds are met, EVA presents: "Ready to progress to [HYBRID/EXCEPTION] mode. [Accept] [Remind Later] [Stay Current]"
 
 ---
 
-## 1. The Core Philosophy (Revised)
+## The Chairman's Interface (UI/UX Vision)
 
-We are not building a **Command Center**. We are not building a **Holding Company**.
-We are building a **Venture Flip Factory**.
+### Design Philosophy
 
-The system is designed to:
-1. **Create** ventures rapidly (Genesis)
-2. **Validate** ventures with real revenue (Phase 1-6)
-3. **Automate** ventures to run without Chairman labor (Phase 7)
-4. **Sell** ventures at 2-3x annual revenue (Phase 8)
-5. **Repeat** with learnings fed back into the factory
+1. **Desktop-First** — The primary experience is a large screen "War Room"
+2. **Progressive Disclosure** — Summary first, details on demand
+3. **Exception-Focused** — Show problems, not successes
+4. **One-Click Actions** — Minimize friction for common decisions
+5. **Mobile Later** — Future roadmap item when app matures
 
-### The Chairman's True Role
+### The Morning Digest (Primary View)
 
-The Chairman is not a developer. Not a marketer. Not a support agent.
+The Chairman opens the app each morning to a single dashboard:
 
-**The Chairman is a Portfolio Manager who builds assets to sell.**
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  GOOD MORNING, CHAIRMAN                              January 2, 2026   │
+│                                                                         │
+│  Portfolio: $47,230 MRR (+3.2% WoW)      Ventures: 12 Active           │
+│  Pending Approvals: 7                     Incidents: 1 (P2 - handled)  │
+│  Approval Mode: ACTIVE                    [Change Settings]            │
+└─────────────────────────────────────────────────────────────────────────┘
 
-| Old Role (V2) | New Role (V3.2) |
-|---------------|-----------------|
-| Approve code changes | Approve strategic bets |
-| Review stage artifacts | Review daily digest |
-| Decide on pivots | Decide on acquisitions and exits |
-| Manage EVA | Collect proceeds from flips |
+┌─────────────────────────────────────────────────────────────────────────┐
+│  APPROVAL QUEUE                                       [Approve All →]  │
+├─────────────────────────────────────────────────────────────────────────┤
+│  📝 Content (4 items)                                                   │
+│     └─ 4 blog posts ready for VentureA, VentureB      [Review] [✓ All] │
+│                                                                         │
+│  💰 Ads (2 items)                                                       │
+│     ├─ $150/day campaign for VentureX               [Approve] [Edit]   │
+│     └─ $75/day campaign for VentureY                [Approve] [Edit]   │
+│                                                                         │
+│  🔧 Technical (1 item)                                                  │
+│     └─ Dependency update: React 18.3 → 19.0         [Approve] [Defer]  │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  ATTENTION NEEDED                                                       │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ⚠️ VentureC: Churn spike (+2.3% this week)          [Investigate →]   │
+│  ℹ️ VentureD: Ready for Stage 35 certification       [Review →]        │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  PORTFOLIO HEALTH                                      [See All →]     │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐                       │
+│  │ 🟢  │ │ 🟢  │ │ 🟡  │ │ 🟢  │ │ 🟢  │ │ 🟣  │  ...                  │
+│  │ V-A │ │ V-B │ │ V-C │ │ V-D │ │ V-E │ │ V-F │                       │
+│  │$12K │ │ $8K │ │ $3K │ │ $5K │ │ $4K │ │EXIT │                       │
+│  │ +5% │ │ +2% │ │ -3% │ │ +1% │ │ +8% │ │READY│                       │
+│  └─────┘ └─────┘ └─────┘ └─────┘ └─────┘ └─────┘                       │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Information Architecture
+
+```
+HOME (Morning Digest)
+│
+├── PORTFOLIO
+│   ├── Grid View (all ventures, health tiles)
+│   ├── List View (sortable table)
+│   └── [Venture Detail]
+│       ├── Overview (metrics, stage, health)
+│       ├── Financials (MRR, costs, margins)
+│       ├── Marketing (campaigns, content queue)
+│       ├── Support (tickets, escalations)
+│       ├── Technical (deploys, incidents)
+│       └── Exit Prep (readiness score)
+│
+├── APPROVALS
+│   ├── Pending (grouped by type)
+│   ├── History (past 30 days)
+│   └── Policies (approval rules)
+│
+├── GENESIS
+│   ├── Create New Venture
+│   ├── Active Simulations
+│   └── Pattern Library
+│
+├── INCIDENTS
+│   ├── Active (by severity)
+│   ├── Resolved (last 7 days)
+│   └── Post-Mortems
+│
+├── EXITS
+│   ├── Sale Pipeline
+│   ├── Due Diligence Packages
+│   └── Completed Sales
+│
+└── SETTINGS
+    ├── Chairman Preferences
+    ├── Approval Model
+    ├── Budget Defaults
+    ├── Notification Rules
+    └── EVA Configuration
+```
+
+### Key Screens
+
+#### 1. Portfolio Grid ("The Wall")
+
+| Element | Description |
+|---------|-------------|
+| **Tile** | Venture name, current stage, MRR, week-over-week trend |
+| **Colors** | 🟢 Green = healthy, 🟡 Yellow = warning, 🔴 Red = needs attention, 🟣 Purple = exit-ready |
+| **Click** | Opens Venture Detail view |
+| **Filters** | By phase, health, MRR range |
+| **Sort** | By MRR, health, recent activity |
+
+#### 2. Venture Detail View
+
+- **Hero Section:** Name, stage badge, MRR, health score, days since last incident
+- **Tab Navigation:** Overview | Financials | Marketing | Support | Technical | Exit
+- **Sidebar:** Quick actions (Pause, Archive, Escalate, Mark Exit-Ready)
+- **Activity Feed:** Recent events with timestamps
+
+#### 3. Genesis Creation Flow
+
+```
+Step 1: Seed Input
+┌─────────────────────────────────────────────────────────────────┐
+│  What's your venture idea?                                      │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │ "An AI tool that helps freelancers write better proposals"  ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                              [Generate PRD →]   │
+└─────────────────────────────────────────────────────────────────┘
+
+Step 2: PRD Review
+┌─────────────────────────────────────────────────────────────────┐
+│  Generated PRD                                [Edit] [Regenerate]│
+│  ───────────────────────────────────────────────────────────────│
+│  Title: ProposalPro AI                                          │
+│  Problem: Freelancers spend 3+ hours per proposal...            │
+│  Target Users: Freelance developers, designers, writers         │
+│  Pricing Model: SaaS Subscription ($29/mo)                      │
+│  ...                                                            │
+│                                          [Approve & Create →]   │
+└─────────────────────────────────────────────────────────────────┘
+
+Step 3: Venture Created
+┌─────────────────────────────────────────────────────────────────┐
+│  ✅ Venture Created: ProposalPro AI                             │
+│                                                                  │
+│  Status: GENESIS (Stage 1)                                      │
+│  Preview: https://proposalpro-abc123.vercel.app                 │
+│                                                                  │
+│  [View in Portfolio]  [Create Another]  [Open Venture]          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 4. Exit Preparation View
+
+- **Readiness Score:** 0-100% with breakdown by category
+- **Checklist:** Documentation ✅, Metrics ✅, Legal ⏳, Tech Debt ✅
+- **Valuation Calculator:** Inputs for MRR, growth, churn → estimated sale price
+- **One-Click Actions:** Generate Due Diligence Package, Preview Listing
+- **Buyer Interest:** (Future) Track inbound inquiries
+
+### Mobile Strategy (Future Roadmap)
+
+**Current:** Desktop-only. Mobile is not a priority for initial release.
+
+**Future (When App Matures):**
+- Mobile-optimized Approval Queue with swipe gestures
+- Push notifications for P0/P1 incidents
+- Quick portfolio health view
+- Basic approval/reject actions
+
+**Triggers for Mobile Development:**
+- Portfolio exceeds 10 ventures
+- Chairman requests mobile access
+- Exception-only mode is stable
 
 ---
 
-## 2. The Full-Stack Venture Lifecycle
+## EVA Safety Layers
+
+EVA is trusted, but trust is earned through multiple internal safety controls.
+
+### Layer Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           EVA CORE                                       │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
+│  │   Policy    │  │   Budget    │  │  Rollback   │  │   Audit     │    │
+│  │   Engine    │  │   Guards    │  │   Engine    │  │   Logger    │    │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Safety Layer 1: Policy Engine
+
+All actions are validated against configurable policies before execution.
+
+| Policy Type | Example | Enforcement |
+|-------------|---------|-------------|
+| Spend Limits | Max $500/day per venture | Hard block |
+| Content Rules | No competitor mentions | Reject + flag |
+| Deployment Gates | Must pass tests | Block deploy |
+| Kill Protection | Cannot kill venture with >$1K MRR without Chairman | Require approval |
+
+### Safety Layer 2: Budget Guards
+
+Hard-coded financial limits that cannot be overridden by AI.
+
+```typescript
+interface BudgetGuards {
+  // Per-Venture Limits
+  max_daily_ad_spend: number;       // Default: $100
+  max_daily_api_spend: number;      // Default: $50
+  max_monthly_total: number;        // Default: $3,000
+
+  // Portfolio Limits
+  max_portfolio_daily_spend: number; // Default: $1,000
+  emergency_stop_threshold: number;  // If exceeded, halt all spending
+
+  // Alerts
+  alert_at_percentage: 80;           // Alert Chairman at 80% of limit
+}
+```
+
+### Safety Layer 3: Rollback Engine
+
+Every action that modifies state can be rolled back.
+
+| Action Type | Rollback Capability | Auto-Rollback Trigger |
+|-------------|--------------------|-----------------------|
+| Code Deploy | Full rollback to previous version | Tests fail, error rate spikes |
+| Ad Campaign | Pause + restore previous config | Spend exceeds budget, CTR crashes |
+| Content Publish | Unpublish + archive | Manual Chairman request |
+| Database Migration | Backward migration script | Migration fails |
+
+### Safety Layer 4: Immutable Audit Log
+
+Every action is logged to an append-only audit trail.
+
+```typescript
+interface AuditEntry {
+  id: string;
+  timestamp: string;
+  actor: 'EVA' | 'CHAIRMAN' | 'SYSTEM';
+  action: string;
+  venture_id: string | null;
+  details: object;
+  reversible: boolean;
+  rolled_back: boolean;
+  rolled_back_at: string | null;
+  rolled_back_by: string | null;
+}
+```
+
+**Retention:** Audit logs are retained for 7 years (legal/tax compliance).
+
+---
+
+## Incident Severity Matrix
+
+Not all incidents are equal. Response varies by severity.
+
+| Severity | Examples | Auto-Response | Chairman Notification | SLA |
+|----------|----------|---------------|----------------------|-----|
+| **P0** | Security breach, data loss, payment system down | Immediate halt, preserve state | SMS + push + email immediately | <15 min response |
+| **P1** | Auth failures, critical feature broken, revenue impact | Auto-pause affected component | Push notification | Morning digest |
+| **P2** | Feature bug, performance degradation, non-critical error | Auto-fix attempt with canary | Morning digest only | 24h resolution |
+| **P3** | Cosmetic issues, minor UX problems, low-impact bugs | Log for future fix | Weekly summary | Best effort |
+
+### Escalation Rules
+
+```
+P0 Detected
+    │
+    ├─→ Immediate: Halt affected systems
+    ├─→ Immediate: Preserve state (no data loss)
+    ├─→ Immediate: SMS + Push to Chairman
+    └─→ If no response in 15 min: Auto-rollback to last known good state
+
+P1 Detected
+    │
+    ├─→ Immediate: Auto-pause affected component
+    ├─→ Immediate: Push notification to Chairman
+    └─→ Include in morning digest with recommended action
+
+P2 Detected
+    │
+    ├─→ Attempt auto-fix via pattern matching
+    ├─→ If fix succeeds: Log and include in morning digest
+    └─→ If fix fails: Escalate to P1
+
+P3 Detected
+    │
+    └─→ Log for weekly summary, no immediate action
+```
+
+---
+
+## Automated Kill/Sunset Criteria
+
+Ventures that fail to perform are automatically handled. The Chairman can override any automated action.
+
+### Automatic Archive Triggers
+
+| Trigger | Threshold | Action | Override |
+|---------|-----------|--------|----------|
+| **Revenue Failure** | MRR < $50 for 90 consecutive days | Auto-archive to Graveyard | Chairman can restore |
+| **Budget Exhaustion** | Lifetime cap exceeded, no profit | Freeze + notify Chairman | Chairman decides: kill or inject funds |
+| **Churn Crisis** | >20% monthly churn for 60 days | Mark as DISTRESSED, surface to Chairman | Chairman decides |
+| **Stalled Progress** | No stage advancement for 90 days | Flag for review | Chairman decides |
+| **Repeated Failures** | 3 P0 incidents in 30 days | Auto-pause all operations | Chairman must manually restart |
+
+### The Graveyard
+
+Archived ventures are not deleted. They become learning artifacts:
+- Code is preserved in read-only state
+- Patterns that failed are documented
+- Post-mortem is auto-generated
+- Learnings feed back into Pattern Library
+
+### Resurrection
+
+A venture can be resurrected from the Graveyard if:
+- Chairman explicitly requests it
+- New market conditions justify retry
+- Pattern Library has improved to address original failure
+
+---
+
+## The Seed Agent MVP Specification
+
+The Seed Agent is NOT magic AI. It is a structured system for creating new agents.
+
+### What the Seed Agent IS
+
+| Capability | Description |
+|------------|-------------|
+| **Template Library** | Pre-built agent templates for common types |
+| **Configuration Layer** | LLM fills in venture-specific details |
+| **Deployment Pipeline** | Automated testing and deployment |
+| **Rollback Mechanism** | If agent fails, automatic rollback |
+
+### What the Seed Agent is NOT
+
+- Not freeform "create any agent from any prompt"
+- Not self-improving without human review
+- Not able to modify core EVA systems
+
+### MVP Agent Templates (4 Types)
+
+| Template | Purpose | Inputs | Outputs |
+|----------|---------|--------|---------|
+| **Marketing Agent** | Content creation, social posting, SEO | Brand guidelines, topics, schedule | Blog posts, social content, SEO optimizations |
+| **Support Agent** | FAQ responses, ticket triage | Product docs, common issues | Ticket responses, escalation decisions |
+| **Maintenance Agent** | Dependency updates, security patches | Codebase access, update policies | PRs for updates, security reports |
+| **Analytics Agent** | Metrics collection, anomaly detection | Data sources, thresholds | Daily reports, anomaly alerts |
+
+### Agent Creation Flow
+
+```
+Chairman: "I need a marketing agent for VentureX"
+    │
+    ▼
+Seed Agent: Select template (Marketing Agent)
+    │
+    ▼
+Seed Agent: Gather venture-specific config
+    ├─ Brand voice from VentureX PRD
+    ├─ Content topics from venture description
+    └─ Posting schedule (default: 3x/week)
+    │
+    ▼
+Seed Agent: Generate agent code from template
+    │
+    ▼
+Seed Agent: Run test suite (simulated execution)
+    │
+    ▼
+Seed Agent: Deploy to Agent Platform (staging first)
+    │
+    ▼
+Seed Agent: Monitor for 24h
+    │
+    ├─ If stable: Promote to production
+    └─ If issues: Rollback and notify Chairman
+```
+
+### Future Expansion
+
+After MVP is stable (Q3 2026):
+- Add more templates (Sales, Ops, Legal)
+- Allow template customization
+- Enable template sharing across ventures
+- Consider limited freeform generation with heavy guardrails
+
+---
+
+## Pattern Versioning & Rollout
+
+Patterns are versioned and rolled out safely across the fleet.
+
+### Semantic Versioning
+
+Patterns follow semver: `MAJOR.MINOR.PATCH`
+
+| Version Change | Meaning | Rollout |
+|----------------|---------|---------|
+| PATCH (1.0.0 → 1.0.1) | Bug fix, no behavior change | Auto-rollout to all ventures |
+| MINOR (1.0.0 → 1.1.0) | New feature, backward compatible | Canary then fleet |
+| MAJOR (1.0.0 → 2.0.0) | Breaking change | Chairman approval required |
+
+### Canary Rollout Process
+
+```
+New Pattern Version
+    │
+    ▼
+Deploy to 1 venture (canary)
+    │
+    ▼
+Monitor for 7 days
+    │
+    ├─ If stable: Roll out to 20% of fleet
+    └─ If issues: Rollback canary, fix pattern
+    │
+    ▼
+Monitor 20% for 7 days
+    │
+    ├─ If stable: Roll out to 100% of fleet
+    └─ If issues: Rollback to previous version
+```
+
+### Pattern Deprecation
+
+| State | Meaning | Action |
+|-------|---------|--------|
+| **ACTIVE** | Current recommended pattern | Use freely |
+| **SOFT_DEPRECATED** | Better alternative exists | Warning in logs, no block |
+| **DEPRECATED** | Will be removed | Block new usage, migrate existing |
+| **ARCHIVED** | Removed from active use | Read-only, for reference only |
+
+---
+
+## Triangulation Amendments (All Rounds)
+
+### Round 1 Amendments (V3.1)
+
+#### Amendment 1: The Budget Firewall (Antigravity)
+Hard limits on marketing spend. Daily stop-loss triggers auto-pause.
+
+#### Amendment 2: The Sunset Protocol (Antigravity)
+Kill criteria for failing ventures. The Graveyard for archived learnings.
+
+#### Amendment 3: Instrumentation Baseline (OpenAI)
+Required dashboards before Stage 35 certification.
+
+#### Amendment 4: Deterministic Demo Mode (OpenAI)
+Predictable, repeatable demos for the Feb 14 Exhibition.
+
+#### Amendment 5: Chairman Veto on Brand Voice (Antigravity)
+Chairman can intervene on brand decisions, but AI generates autonomously by default.
+
+### Round 2 Amendments (V3.2)
+
+#### Amendment 6: Bootstrap Strategy
+Phase 0 (THE FORGE) acknowledges current state. Claude Code builds first ventures.
+
+#### Amendment 7: Exception-Only Autonomy (Refined)
+Stage 35 = "as needed" involvement, not "zero involvement."
+
+#### Amendment 8: REJECTED — No Separate Watchdog
+Chairman trusts EVA with internal safety layers. No external watchdog.
+
+#### Amendment 9: Daily Batch Approval
+Chairman reviews morning digest. Progressive model evolves over time.
+
+#### Amendment 10: Same Stack, Varied Models
+Next.js + Supabase always. Business models can differ.
+
+#### Amendment 11: Exit Strategy (Phase 8)
+Build to sell. Target 2-3x ARR. Reinvestment loop defined.
+
+#### Amendment 12: Seed Agent Priority
+Build the meta-agent before building specialized agents.
+
+### Round 3 Amendments (V3.3)
+
+#### Amendment 13: Progressive Approval Model
+Active → Hybrid → Exception-only as portfolio matures. AI-guided with manual override.
+
+#### Amendment 14: Chairman's Interface (UI/UX Vision)
+Desktop-first Morning Digest, Portfolio Grid, Approval Queue, Genesis Flow, Exit Prep.
+
+#### Amendment 15: EVA Safety Layers
+Policy Engine, Budget Guards, Rollback Engine, Immutable Audit Log.
+
+#### Amendment 16: Incident Severity Matrix
+P0/P1/P2/P3 classification with differentiated responses.
+
+#### Amendment 17: Automated Kill/Sunset Criteria
+Revenue failure, budget exhaustion, churn crisis → auto-archive with Chairman override.
+
+#### Amendment 18: Seed Agent MVP Specification
+4 template types (Marketing, Support, Maintenance, Analytics). Not freeform generation.
+
+#### Amendment 19: Pattern Versioning & Rollout
+Semantic versioning, canary rollout, deprecation lifecycle.
+
+#### Amendment 20: Chairman Settings
+Manual control over approval mode, thresholds, notifications.
+
+#### Amendment 21: Desktop-First, Mobile Later
+Progressive platform strategy. Mobile is future roadmap.
+
+#### Amendment 22: Two Personas & Progressive AI Maturity
+Chairman (permanent human) vs Solo Entrepreneur (phased out by AI). The Solo Entrepreneur role progressively transfers to AI across 4 phases until Rick becomes pure Chairman.
+
+---
+
+## The Full-Stack Venture Lifecycle
 
 V2 covered Stages 1-25 (Ideation → Deployment).
 V3 extended to Stages 26-35 (Growth → Autonomy).
-**V3.2 extends to Stages 36-40 (Exit → Reinvestment).**
+**V3.3 extends to Stages 36-40 (Exit → Reinvestment) with full UI/UX support.**
 
 ### The Nine Phases
 
@@ -151,401 +741,45 @@ V3 extended to Stages 26-35 (Growth → Autonomy).
 | 5 | THE BUILD | 17-20 | Implementation | Built |
 | 6 | THE LAUNCH | 21-25 | Deployment & Optimization | Built |
 | 7 | THE MACHINE | 26-35 | Growth, Maintenance, Autonomy | In Progress |
-| **8** | **THE EXIT** | **36-40** | **Sale, Transfer, Reinvestment** | **NEW** |
-
-### Phase 0: THE FORGE (Bootstrap)
-
-Before we can run ventures, we must build the factory.
-
-**Current State (January 2026):**
-
-| Component | Status | Gap |
-|-----------|--------|-----|
-| Genesis Pipeline | 80% | PRD generation stubbed |
-| Pattern Library | 90% | 49 patterns, needs Seed Agent |
-| LEO Protocol | 95% | Operational |
-| Marketing Automation | 0% | Not started |
-| Support Automation | 0% | Not started |
-| Seed Agent | 0% | The meta-agent that builds agents |
-
-**Bootstrap Strategy:**
-1. Claude Code builds first 2-3 ventures via LEO Protocol
-2. Ventures are "Wizard of Oz" shells with AI-generated flavor
-3. Revenue validates the model
-4. Seed Agent is built to scale venture creation
-5. Factory becomes self-sustaining
-
-**Exit Criteria for Phase 0:**
-- [ ] Seed Agent can spawn new agents from prompts
-- [ ] First venture generates $1 autonomous revenue
-- [ ] Marketing automation handles one funnel end-to-end
-
-### Phase 7: THE MACHINE (Stages 26-35)
-
-| Stage | Title | Purpose | Owner |
-|-------|-------|---------|-------|
-| 26 | Content Engine Setup | SEO, blog, social presence | VP_GROWTH |
-| 27 | Paid Acquisition Pipeline | Ads, funnels, landing pages | VP_GROWTH |
-| 28 | Customer Success Automation | Onboarding, retention, NPS | VP_GROWTH |
-| 29 | Support & Incident Automation | Ticketing, triage, resolution | VP_OPS |
-| 30 | Bug Detection & Auto-Fix | Monitoring, alerts, remediation | VP_OPS |
-| 31 | Feature Request Pipeline | User feedback → PRD → Implementation | VP_PRODUCT |
-| 32 | Pattern Library Feedback | Venture learnings → Pattern updates | VP_TECH |
-| 33 | Revenue Optimization | Pricing tests, upsell, churn prevention | VP_GROWTH |
-| 34 | Portfolio Synergy | Cross-venture opportunities | CEO |
-| 35 | Autonomy Certification | Venture runs with minimal intervention | CHAIRMAN |
-
-### Phase 8: THE EXIT (Stages 36-40) — NEW
-
-| Stage | Title | Purpose | Owner |
-|-------|-------|---------|-------|
-| 36 | Sale Readiness Audit | Documentation, metrics, legal cleanup | VP_OPS |
-| 37 | Valuation & Listing | Price determination, marketplace listing | CHAIRMAN |
-| 38 | Due Diligence Package | Buyer questions, data room, demos | VP_OPS |
-| 39 | Transfer & Handoff | Asset transfer, training, transition | VP_TECH |
-| 40 | Reinvestment Allocation | Proceeds → Pattern Library → New Ventures | CHAIRMAN |
+| 8 | THE EXIT | 36-40 | Sale, Transfer, Reinvestment | NEW |
 
 ---
 
-## 3. Stage 35: Autonomy Certification (Revised)
-
-A venture reaches Stage 35 when Chairman involvement drops to **as-needed oversight**.
-
-### Quantified Autonomy
-
-| Criteria | Threshold |
-|----------|-----------|
-| Revenue | Positive MRR for 3 consecutive months |
-| Support | <10% tickets require Chairman escalation |
-| Bugs | Auto-fixed via canary deploy with rollback |
-| Growth | Customer acquisition funnel running |
-| Maintenance | Updates deploy without Chairman labor |
-| Chairman Time | **As needed** (no fixed limit) |
-
-### What "Autonomous" Means in V3.2
-
-**Old Definition (V3.1):** "No human intervention required"
-**New Definition (V3.2):** "Chairman involvement only when Chairman chooses"
-
-The Chairman may choose to spend 10 hours/month on a high-growth venture or 0 hours on a stable one. The point is **choice, not constraint**.
-
-### Auto-Pause Incident Model
-
-When something breaks:
-1. System detects failure
-2. System auto-pauses affected components
-3. System preserves state (no data loss)
-4. System sends morning digest notification
-5. Chairman fixes when convenient
-
-**Accepted tradeoff:** Short downtime is acceptable. State preservation is not negotiable.
-
----
-
-## 4. Stage 40: Exit & Reinvestment (NEW)
-
-When a venture is ready to sell:
-
-### Sale Readiness Checklist
-
-| Category | Requirement |
-|----------|-------------|
-| **Revenue** | 6+ months of consistent MRR |
-| **Documentation** | All code documented, no tribal knowledge |
-| **Autonomy** | Stage 35 certified (runs without founder) |
-| **Legal** | Clean IP, ToS, Privacy Policy |
-| **Metrics** | CAC, LTV, churn, MRR all instrumented |
-| **Tech Debt** | No critical debt, dependencies updated |
-
-### Valuation Model
-
-**Target Multiple:** 2-3x Annual Revenue (ARR)
-
-| Venture Profile | Multiple |
-|-----------------|----------|
-| Growing MRR, high retention | 3x ARR |
-| Stable MRR, moderate retention | 2.5x ARR |
-| Flat/declining, high churn | 2x ARR or less |
-
-### Listing Channels
-
-- Acquire.com (primary)
-- MicroAcquire
-- Flippa (for smaller ventures)
-- Direct outreach to strategic buyers
-
-### Reinvestment Loop
+## The Chain of Command
 
 ```
-Sale Proceeds
-      │
-      ▼
-┌─────────────────────┐
-│  ALLOCATION SPLIT   │
-│                     │
-│  40% → Pattern Lib  │  (Improve the factory)
-│  40% → New Ventures │  (Fuel new bets)
-│  20% → Chairman     │  (Take profits)
-└─────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          RICK (The Chairman)                            │
+│       CAPITAL ALLOCATION • APPROVAL (Progressive) • EXIT DECISIONS      │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        EVA (Chief of Staff)                             │
+│    ┌──────────────────────────────────────────────────────────────┐    │
+│    │                    SAFETY LAYERS                              │    │
+│    │  Policy Engine │ Budget Guards │ Rollback │ Audit Logger     │    │
+│    └──────────────────────────────────────────────────────────────┘    │
+│            Build • Maintain • Market • Grow • Prepare for Sale          │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                  ┌─────────┬───────┴───────┬─────────┐
+                  ▼         ▼               ▼         ▼
+             ┌────────┐ ┌────────┐     ┌────────┐ ┌────────┐
+             │VP_TECH │ │VP_PROD │     │VP_GROWTH│ │VP_OPS  │
+             └────────┘ └────────┘     └────────┘ └────────┘
+                                            │
+                                            ▼
+                                     ┌────────────┐
+                                     │ SEED AGENT │
+                                     │ (4 MVP     │
+                                     │ Templates) │
+                                     └────────────┘
 ```
 
 ---
 
-## 5. The Seed Agent Pattern
-
-### The Bootstrap Paradox
-
-To build ventures automatically, we need agents.
-To build agents, we need... agents?
-
-### The Solution: One Agent to Rule Them All
-
-The **Seed Agent** is a meta-agent whose only job is to spawn other agents.
-
-```
-Chairman: "I need a Twitter marketing agent"
-     │
-     ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                         SEED AGENT                                  │
-│   Input: Natural language description of needed agent               │
-│   Output: Working agent code + deployment                           │
-└─────────────────────────────────────────────────────────────────────┘
-     │
-     ▼
-Generated: twitter-marketing-agent.py
-     │
-     ▼
-Deployed to Agent Platform
-     │
-     ▼
-Agent begins operating autonomously
-```
-
-### Seed Agent Capabilities
-
-| Capability | Description |
-|------------|-------------|
-| Agent Generation | Creates new agents from prompts |
-| Template Library | Pre-built patterns for common agent types |
-| Deployment | Pushes new agents to the Agent Platform |
-| Testing | Validates agent behavior before deployment |
-| Documentation | Auto-generates agent specs |
-
-### Priority Order
-
-1. **First:** Build the Seed Agent
-2. **Then:** Use Seed Agent to build marketing agents
-3. **Then:** Use Seed Agent to build support agents
-4. **Then:** Use Seed Agent to build maintenance agents
-
----
-
-## 6. The Venture Stack Constraint
-
-### Same Stack, Varied Models
-
-All EHG ventures use the same technical foundation:
-
-| Layer | Standard |
-|-------|----------|
-| Frontend | Next.js 14+ |
-| Backend | Next.js API Routes + Supabase |
-| Database | Supabase (PostgreSQL) |
-| Auth | Supabase Auth |
-| Hosting | Vercel |
-| Payments | Stripe |
-| Email | Resend or SendGrid |
-| Analytics | PostHog or Plausible |
-
-### Why Same Stack?
-
-1. **Pattern Reuse** — Every pattern works across all ventures
-2. **Maintenance Efficiency** — One upgrade path, not 30
-3. **Seed Agent Simplicity** — Generate code for one stack, not many
-4. **Chairman Familiarity** — Review code you understand
-
-### Varied Business Models
-
-While tech is standardized, business models can vary:
-
-| Model Type | Example |
-|------------|---------|
-| SaaS Subscription | Monthly/annual recurring |
-| Usage-Based | Pay per API call |
-| Marketplace | Transaction fees |
-| Freemium | Free tier + paid upgrade |
-| One-Time Purchase | Lifetime access |
-
----
-
-## 7. The Three Automation Layers
-
-### Layer A: Marketing Automation (Stages 26-28)
-
-**Problem Solved:** "Who finds the customers?"
-
-| Component | Purpose | Automation Level |
-|-----------|---------|------------------|
-| Content Engine | SEO + thought leadership | Full (AI generates) |
-| Landing Pages | Convert visitors | Full (template-driven) |
-| Paid Acquisition | Scalable traffic | Full (AI manages within budget) |
-| Email Sequences | Nurture leads | Full (behavior-triggered) |
-
-**Chairman Role:** Set budgets, approve daily digest of pending content/ads.
-
-### Layer B: Maintenance Automation (Stages 29-32)
-
-**Problem Solved:** "Who fixes the bugs?"
-
-| Component | Purpose | Automation Level |
-|-----------|---------|------------------|
-| Error Monitoring | Detect issues | Full (Sentry integration) |
-| Auto-Triage | Classify severity | Full (AI classification) |
-| Auto-Fix Pipeline | Resolve issues | Full (canary + rollback) |
-| Pattern Feedback | Learn from fixes | Full (updates library) |
-
-**The Maintenance Loop:**
-```
-Error Detected (Sentry)
-        ↓
-Auto-Triage (AI classifies severity/type)
-        ↓
-Pattern Match (Is this a known issue type?)
-        │
-    ┌───┴───┐
-    │       │
- [YES]    [NO]
-    │       │
-    ▼       ▼
-Auto-Fix   Create SD
-(Apply     (New work
-pattern)   for crew)
-    │       │
-    └───┬───┘
-        ↓
-Canary Deploy
-        ↓
-Tests Pass? → Promote to Production
-        ↓
-Update Pattern Library
-```
-
-**Chairman Role:** Review morning logs, rollback if needed.
-
-### Layer C: Support Automation (Stages 28-29)
-
-**Problem Solved:** "Who helps the customers?"
-
-| Component | Purpose | Automation Level |
-|-----------|---------|------------------|
-| FAQ/Docs | Self-serve answers | Full (AI-generated) |
-| Chat Bot | First-line support | Full (RAG-based) |
-| Ticket Triage | Classify requests | Full (AI routing) |
-| Escalation | Complex issues | Chairman inbox |
-
-**Chairman Role:** Handle <10% of tickets that require human judgment.
-
----
-
-## 8. The PRD Evolution
-
-V2 PRDs focused on **what to build**.
-V3 PRDs include **how to grow**.
-V3.2 PRDs include **how to exit**.
-
-### V3.2 PRD Structure
-
-```typescript
-interface PRD_V3_2 {
-  // V2 Fields (Unchanged)
-  executive_summary: string;
-  problem_statement: string;
-  target_users: UserPersona[];
-  functional_requirements: Requirement[];
-  technical_requirements: Requirement[];
-  success_metrics: Metric[];
-
-  // V3 Fields (Growth)
-  go_to_market: {
-    primary_channel: 'content' | 'paid' | 'viral' | 'partnerships';
-    content_strategy: ContentPlan;
-    ad_budget_monthly: number;
-    max_monthly_budget: number;      // Hard ceiling
-    daily_stop_loss: number;         // Auto-pause threshold
-    target_cac: number;
-    target_ltv: number;
-  };
-
-  maintenance_profile: {
-    expected_bug_rate: 'low' | 'medium' | 'high';
-    auto_fix_eligible: boolean;
-    monitoring_requirements: string[];
-    sla_targets: SLAConfig;
-  };
-
-  growth_levers: {
-    pricing_flexibility: boolean;
-    upsell_paths: string[];
-    viral_mechanics: string[];
-    retention_hooks: string[];
-  };
-
-  autonomy_target: {
-    target_stage_35_date: string;
-    revenue_target_for_autonomy: number;
-  };
-
-  // V3.2 Fields (Exit) — NEW
-  exit_profile: {
-    target_exit_date: string;        // When to list for sale
-    target_multiple: number;         // 2-3x ARR
-    ideal_buyer_profile: string;     // Who would buy this?
-    strategic_value: string[];       // Why it's worth buying
-    transferability_score: 'high' | 'medium' | 'low';
-  };
-}
-```
-
----
-
-## 9. Budget Structure
-
-### Per-Venture Hard Caps
-
-Each venture operates within strict financial isolation:
-
-```typescript
-interface VentureBudget {
-  venture_id: string;
-
-  // Monthly Caps
-  max_monthly_ad_spend: number;
-  max_monthly_api_costs: number;
-  max_monthly_infrastructure: number;
-
-  // Daily Limits
-  daily_ad_stop_loss: number;
-  daily_api_stop_loss: number;
-
-  // Lifetime Limits
-  total_investment_cap: number;      // Kill venture if exceeded without profit
-
-  // Alerts
-  alert_at_percentage: number;       // Alert Chairman at 80% of cap
-}
-```
-
-### No Cross-Subsidization
-
-If Venture A is profitable and Venture B is burning cash:
-- Venture B cannot borrow from Venture A's budget
-- Each venture lives or dies on its own
-- Chairman can manually reallocate, but system cannot
-
----
-
-## 10. Success Metrics (V3.2)
+## Success Metrics (V3.3)
 
 ### Portfolio Targets
 
@@ -569,185 +803,53 @@ If Venture A is profitable and Venture B is burning cash:
 | Support Escalation Rate | <10% |
 | Auto-Fix Success Rate | >90% |
 
-### Factory Targets
+### UI/UX Targets
 
 | Metric | Target |
 |--------|--------|
-| Ventures Created per Month | 3+ |
-| Pattern Library Size | 100+ patterns |
-| Seed Agent Capability | Generate any standard agent type |
-| Marketing Funnel Automation | 100% |
+| Morning Digest completion time | <30 minutes |
+| Approval queue processing | <15 minutes |
+| Time to create new venture (Genesis) | <5 minutes |
+| Chairman satisfaction (NPS) | >50 |
 
 ---
 
-## 11. Triangulation Amendments (All Rounds)
-
-### Round 1 Amendments (V3.1)
-
-#### Amendment 1: The Budget Firewall (Antigravity)
-Hard limits on marketing spend. Daily stop-loss triggers auto-pause.
-
-#### Amendment 2: The Sunset Protocol (Antigravity)
-Kill criteria for failing ventures. The Graveyard for archived learnings. (Specific criteria TBD via research.)
-
-#### Amendment 3: Instrumentation Baseline (OpenAI)
-Required dashboards before Stage 35 certification.
-
-#### Amendment 4: Deterministic Demo Mode (OpenAI)
-Predictable, repeatable demos for the Feb 14 Exhibition.
-
-#### Amendment 5: Chairman Veto on Brand Voice (Antigravity)
-Chairman can intervene on brand decisions, but AI generates autonomously by default.
-
-### Round 2 Amendments (V3.2)
-
-#### Amendment 6: Bootstrap Strategy
-Phase 0 (THE FORGE) acknowledges current state. Claude Code builds first ventures.
-
-#### Amendment 7: Exception-Only Autonomy (Refined)
-Stage 35 = "as needed" involvement, not "zero involvement."
-
-#### Amendment 8: REJECTED — No Separate Watchdog
-Chairman trusts EVA. No redundant safety layer.
-
-#### Amendment 9: Daily Batch Approval
-Chairman reviews morning digest. Nothing publishes without approval.
-
-#### Amendment 10: Same Stack, Varied Models
-Next.js + Supabase always. Business models can differ.
-
-#### Amendment 11: Exit Strategy (Phase 8)
-Build to sell. Target 2-3x ARR. Reinvestment loop defined.
-
-#### Amendment 12: Seed Agent Priority
-Build the meta-agent before building specialized agents.
-
----
-
-## 12. The Chain of Command
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        RICK (The Chairman)                          │
-│             CAPITAL ALLOCATION • DAILY APPROVAL • EXIT DECISIONS    │
-└─────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                      EVA (Chief of Staff)                           │
-│              Build • Maintain • Market • Grow • Prepare for Sale    │
-└─────────────────────────────────────────────────────────────────────┘
-                                  │
-                ┌─────────┬───────┴───────┬─────────┐
-                ▼         ▼               ▼         ▼
-           ┌────────┐ ┌────────┐     ┌────────┐ ┌────────┐
-           │VP_TECH │ │VP_PROD │     │VP_GROWTH│ │VP_OPS  │
-           │        │ │        │     │         │ │        │
-           └────────┘ └────────┘     └────────┘ └────────┘
-                                          │
-                                          ▼
-                                   ┌────────────┐
-                                   │ SEED AGENT │
-                                   │ (Creates   │
-                                   │  Agents)   │
-                                   └────────────┘
-```
-
-### Why One Brain, Not Two
-
-The original V3 draft proposed a separate "AURORA" agent for revenue operations. This was rejected during triangulation for:
-
-1. **Simpler Architecture** - One orchestrator, no coordination overhead
-2. **Faster Implementation** - Extend EVA, don't build new agent
-3. **Unified Interface** - Chairman talks to EVA only
-4. **Scale Later** - Split when portfolio exceeds 10 ventures, not before
-
----
-
-## 13. The Shadow Work (Formalized)
-
-The following gaps identified during the Jan 1, 2026 audit are now **formal requirements** for Exhibition readiness.
-
-### Integration Shadows
-
-| Shadow | Description | Resolution |
-|--------|-------------|------------|
-| Stage 16/17 Orphan | soul-extractor.js and production-generator.js not wired to UI | Create API endpoints, wire to Stage16/17 components |
-| PRD Stub | generatePRD() returns template, not LLM output | Wire OpenAI to genesis-pipeline.js |
-| Genesis UI | No visual interface for simulation creation | Build Chairman-accessible Genesis creation form |
-
-### Infrastructure Shadows
-
-| Shadow | Description | Resolution |
-|--------|-------------|------------|
-| Hardcoded Secrets | JWT_SECRET in .env.production | Implement secret rotation |
-| Empty Sentry | SENTRY_DSN is blank | Configure error monitoring |
-| No Prod CI/CD | Deployment is manual | Create production workflow |
-| Security Headers | No CSP, HSTS, X-Frame-Options | Add middleware |
-
----
-
-## 14. The Feb 14, 2026 Exhibition Standard
-
-**Definition of "Done" for the Fleet Exhibition:**
-
-### Tier 1: Must Have (Blocking)
-
-| Requirement | Verification |
-|-------------|--------------|
-| Genesis creates ventures via UI | Chairman can click "Create Venture" and see simulation |
-| PRD is LLM-generated, not template | Unique PRD for "Uber for Dog Walking" vs "AI Legal Assistant" |
-| Ventures visible in portfolio | Chairman sees all simulations in dashboard |
-| Stage progression works | Can advance venture through stages 1-5 minimum |
-| No white screens | All primary flows render without errors |
-| No hardcoded secrets | Security audit passes |
-| Demo produces consistent output | Deterministic demo mode |
-
-### Tier 2: Should Have (Quality)
-
-| Requirement | Verification |
-|-------------|--------------|
-| Error monitoring live | Sentry captures errors |
-| Bulk actions work | Can pause/archive multiple ventures |
-| Empty states are clear | User knows "loading" vs "no data" |
-| Stage 16/17 integration | Soul extraction triggers from UI |
-
-### Tier 3: Nice to Have (Polish)
-
-| Requirement | Verification |
-|-------------|--------------|
-| Marketing DNA in PRD | PRD includes go_to_market section |
-| Maintenance DNA in PRD | PRD includes maintenance_profile |
-| Exit DNA in PRD | PRD includes exit_profile section |
-
----
-
-## 15. The Oath (V3.2)
+## The Oath (V3.3)
 
 **V2 Oath:** "Rick commands, EVA coordinates, Crews execute."
 
 **V3 Oath:** "Ventures create themselves. Ventures market themselves. Ventures maintain themselves."
 
-**V3.2 Oath:**
+**V3.3 Oath:**
 
 > "We build assets to flip.
 > The factory never stops.
-> One venture sells, another is born.
-> The Chairman allocates.
-> The system delivers."
+> The control panel is clear.
+> The Chairman decides what matters.
+> The system handles the rest.
+> **The entrepreneur disappears. Only the Chairman remains.**"
 
 ---
 
-## 16. Document Governance
+## Document Governance
 
 This document supersedes:
 - `00_VISION_V2_CHAIRMAN_OS.md` (archived)
-- Vision V3.0 and V3.1 (superseded by V3.2)
+- Vision V3.0, V3.1, V3.2 (superseded by V3.3)
 
 This document is the authoritative source for:
 - System purpose and philosophy
+- **Two Personas: Chairman (permanent) & Solo Entrepreneur (phased out)**
+- **Progressive AI Maturity Model**
 - Venture lifecycle definition (Phases 0-8, Stages 1-40)
 - Chairman's Operating Model
+- Chairman's Interface (UI/UX Vision)
+- Progressive Approval Model
+- EVA Safety Layers
+- Incident Response
+- Kill/Sunset Criteria
+- Seed Agent Specification
+- Pattern Versioning
 - PRD schema requirements
 - Success metrics
 - Agent hierarchy
@@ -758,8 +860,8 @@ This document is the authoritative source for:
 *Triangulated by the Council: Claude (Architect), OpenAI (Strategist), Antigravity (Accelerator)*
 *Refined by Chairman Q&A: January 1, 2026*
 *Ratified: January 1, 2026*
-*Version: 3.2*
+*Version: 3.3*
 
 ---
 
-**The City is built. Now we flip the keys.**
+**The City is built. The control panel is ready. The entrepreneur fades. The Chairman reigns.**
