@@ -1,49 +1,41 @@
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
+#!/usr/bin/env node
+import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
+
+dotenv.config();
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-(async () => {
-  console.log('Using database:', process.env.SUPABASE_URL);
-
-  // First verify SD exists
-  const { data: sd, error: sdErr } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, title, status')
-    .eq('sd_key', 'SD-RECURSION-AI-001')
-    .maybeSingle();
-
-  if (sdErr) {
-    console.error('❌ SD query error:', sdErr.message);
-    process.exit(1);
-  }
-
-  if (!sd) {
-    console.error('❌ SD not found: SD-RECURSION-AI-001');
-    process.exit(1);
-  }
-
-  console.log('✅ SD found:', { id: sd.id, status: sd.status });
-
-  // Get sample handoff to see schema
-  const { data: sample, error } = await supabase
+async function checkSchema() {
+  // Get handoff table structure
+  const { data, error } = await supabase
     .from('sd_phase_handoffs')
     .select('*')
     .limit(1);
 
   if (error) {
-    console.error('❌ Handoff query error:', error.message);
-  } else if (sample && sample.length > 0) {
-    console.log('\n✅ sd_phase_handoffs columns:');
-    Object.keys(sample[0]).sort().forEach(col => {
-      const value = sample[0][col];
-      const type = value === null ? 'null' : typeof value;
-      console.log('  - ' + col + ': ' + type);
-    });
+    console.error('Error:', error.message);
+  } else if (data && data.length > 0) {
+    console.log('Handoff Columns:', Object.keys(data[0]));
+    console.log('\nSample handoff:');
+    console.log(JSON.stringify(data[0], null, 2));
   } else {
-    console.log('⚠️ No handoff records exist yet');
+    console.log('No handoffs found, trying to get table info...');
+    // Try a different approach - check tables
+    const { data: tables, error: tableError } = await supabase
+      .from('information_schema.columns')
+      .select('column_name, data_type')
+      .eq('table_name', 'sd_phase_handoffs');
+    
+    if (tableError) {
+      console.log('Table info error:', tableError);
+    } else {
+      console.log('Columns:', tables);
+    }
   }
-})();
+}
+
+checkSchema();
