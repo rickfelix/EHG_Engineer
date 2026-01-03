@@ -1,189 +1,184 @@
-# User Story System v1.1 - Database Documentation
+# EHG_Engineer Database
 
-## Overview
-Database-first user story management integrated with LEO Protocol.
+**Database ID**: `dedlbzhpgkmetvhbkyzq` (Supabase)
+**Tables**: 312+
+**Schema Documentation**: Auto-generated from database introspection
 
-## Feature Flags (ALL DEFAULT OFF)
+## Quick Links
+
+| Resource | Description |
+|----------|-------------|
+| [Schema Overview](../docs/reference/schema/engineer/database-schema-overview.md) | Quick reference for all tables |
+| [All Tables (312+)](../docs/reference/schema/engineer/README.md) | Complete table documentation |
+| [Migration Guide](migrations/README.md) | How to write and run migrations |
+| [Migration Inventory](docs/migration-inventory.md) | All 192+ migration files |
+| [Database Agent Patterns](../docs/reference/database-agent-patterns.md) | Best practices for database work |
+
+## Core Domains
+
+| Domain | Key Tables | Description |
+|--------|------------|-------------|
+| **Strategic Directives** | `strategic_directives_v2`, `sd_phase_handoffs`, `sd_backlog_map` | SD lifecycle and phase management |
+| **Product Requirements** | `product_requirements_v2`, `prd_quality_scores` | PRD tracking and quality gates |
+| **LEO Protocol** | `leo_protocols`, `leo_sub_agents`, `leo_protocol_sections` | Protocol configuration |
+| **Agent System** | `agent_artifacts`, `agent_task_contracts`, `agent_runs` | AI agent coordination |
+| **Quality & Retrospectives** | `retrospectives`, `ai_quality_assessments`, `lessons_learned` | Quality gates and learning |
+| **Compliance** | `compliance_policies`, `circuit_breaker_blocks` | Governance enforcement |
+| **Skills & Patterns** | `skills_inventory`, `skill_assignments`, `failure_patterns` | Skill management |
+| **Ventures** | `ventures`, `venture_stages`, `venture_artifacts` | Venture portfolio |
+
+## Database Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Supabase (PostgreSQL)                    │
+├─────────────────────────────────────────────────────────────┤
+│  Database: dedlbzhpgkmetvhbkyzq (CONSOLIDATED)              │
+│                                                             │
+│  ┌─────────────────┐  ┌─────────────────┐                   │
+│  │ EHG_Engineer    │  │ EHG App         │                   │
+│  │ (LEO Protocol)  │  │ (Portfolio UI)  │                   │
+│  └────────┬────────┘  └────────┬────────┘                   │
+│           │                    │                            │
+│           └────────┬───────────┘                            │
+│                    ▼                                        │
+│           ┌────────────────┐                                │
+│           │ Shared Schema  │                                │
+│           │ 312+ Tables    │                                │
+│           └────────────────┘                                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Regenerating Schema Documentation
+
+Schema documentation is auto-generated from live database introspection:
+
 ```bash
-FEATURE_AUTO_STORIES=false  # Auto-generate stories from PRDs
-FEATURE_STORY_AGENT=false   # Enable STORY sub-agent
-FEATURE_STORY_UI=false      # Show dashboard UI
-FEATURE_STORY_GATES=false   # Enforce release gates
+# Regenerate all schema docs
+npm run schema:docs:engineer
+
+# Output location: docs/reference/schema/engineer/
 ```
 
-## Migration
+**When to regenerate:**
+- After applying new migrations
+- After schema changes
+- When documentation appears outdated
 
-### Apply Migration
+## Adding New Tables
+
+### 1. Create Migration File
+
 ```bash
-psql $DATABASE_URL -f database/migrations/2025-01-17-user-stories.sql
+# File: database/migrations/YYYYMMDD_description.sql
+-- or
+# File: supabase/migrations/YYYYMMDDHHMMSS_description.sql
 ```
 
-### Verify Migration
-```bash
-psql $DATABASE_URL -f database/migrations/verify-2025-01-17-user-stories.sql
-psql $DATABASE_URL -f scripts/verify_user_stories.sql
-```
+### 2. Include Required Elements
 
-### Rollback (if needed)
-```bash
-psql $DATABASE_URL -f database/migrations/rollback-2025-01-17-user-stories.sql
-```
-
-## API Endpoints
-
-### Generate Stories from PRD
-```bash
-curl -X POST http://localhost:3000/api/stories/generate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "sd_key": "SD-2025-001",
-    "prd_id": "550e8400-e29b-41d4-a716-446655440000",
-    "mode": "dry_run"
-  }'
-```
-
-Response:
-```json
-{
-  "status": "success",
-  "mode": "dry_run",
-  "sd_key": "SD-2025-001",
-  "story_count": 3,
-  "stories": [
-    {
-      "action": "would_insert",
-      "story_key": "SD-2025-001:US-a3b4c5d6",
-      "sequence_no": 1,
-      "title": "User can submit directive"
-    }
-  ]
-}
-```
-
-### List Stories
-```bash
-curl "http://localhost:3000/api/stories?sd_key=SD-2025-001&status=passing&limit=10"
-```
-
-### Verify Stories (CI Integration)
-```bash
-curl -X POST http://localhost:3000/api/stories/verify \
-  -H "Content-Type: application/json" \
-  -d '{
-    "story_keys": ["SD-2025-001:US-a3b4c5d6"],
-    "test_run_id": "tr-2025-001",
-    "build_id": "ci-4567",
-    "status": "passing",
-    "coverage_pct": 95.0
-  }'
-```
-
-## Database Schema
-
-### Extended Tables
-- `sd_backlog_map` - Extended with story-specific columns:
-  - `item_type` - epic/story/task classification
-  - `verification_status` - not_run/failing/passing
-  - `acceptance_criteria` - JSONB array of criteria
-  - `sequence_no` - Story ordering within SD
-
-### Views
-- `v_story_verification_status` - Current story status with test results
-- `v_sd_release_gate` - Release readiness based on story verification
-
-### Functions
-- `fn_generate_stories_from_prd(sd_key, prd_id, mode)` - Generate stories from PRD acceptance criteria
-
-### Security
-- Function restricted to `service_role` only
-- Views accessible by `authenticated` users
-- Audit log tracks all operations
-
-## Performance Optimizations
-- Covering index `idx_story_list` for fast story queries
-- No ORDER BY in views for optimizer flexibility
-- Targeted indexes on verification status and parent relationships
-
-## CI/CD Integration
-
-### Webhook Format
-POST `/api/stories/verify` with:
-```json
-{
-  "story_keys": ["SD-XXX:US-XXX"],
-  "test_run_id": "tr-XXX",
-  "build_id": "ci-XXX",
-  "status": "passing|failing|not_run",
-  "coverage_pct": 95.0,
-  "artifacts": ["s3://bucket/test.log"]
-}
-```
-
-## Staging Activation Checklist
-
-### Phase 1: Foundation (Day 1)
-- [ ] Apply migration
-- [ ] Run verification scripts
-- [ ] Test dry_run generation
-
-### Phase 2: Shadow Mode (Day 2)
-- [ ] Enable FEATURE_AUTO_STORIES=true
-- [ ] Generate stories for pilot SD
-- [ ] Verify no duplicates
-
-### Phase 3: UI Verification (Day 3)
-- [ ] Enable FEATURE_STORY_UI=true
-- [ ] Test story lists and filters
-- [ ] Verify gate calculations
-
-### Phase 4: Full Integration (Day 4)
-- [ ] Enable FEATURE_STORY_AGENT=true
-- [ ] Test CI webhook integration
-- [ ] Verify end-to-end flow
-
-## Monitoring
-
-### Key Metrics
-- Story generation success rate
-- Verification update latency
-- Query performance (target P95 < 200ms)
-- Gate calculation accuracy
-
-### Health Checks
 ```sql
--- Check story counts
-SELECT sd_key, COUNT(*) as story_count
-FROM v_story_verification_status
-GROUP BY sd_key;
+-- 1. Create table
+CREATE TABLE IF NOT EXISTS my_table (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- Check gate status
-SELECT * FROM v_sd_release_gate
-WHERE NOT ready AND passing_pct > 90;
+-- 2. Enable RLS
+ALTER TABLE my_table ENABLE ROW LEVEL SECURITY;
 
--- Check recent verifications
-SELECT story_key, status, last_run_at
-FROM v_story_verification_status
-WHERE last_run_at > NOW() - INTERVAL '1 hour'
-ORDER BY last_run_at DESC;
+-- 3. Add RLS policies
+CREATE POLICY "Authenticated users can view"
+ON my_table FOR SELECT TO authenticated USING (true);
+
+-- 4. Add indexes
+CREATE INDEX idx_my_table_created ON my_table(created_at);
+
+-- 5. Add trigger for updated_at
+CREATE TRIGGER set_updated_at
+  BEFORE UPDATE ON my_table
+  FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
 ```
 
-## Troubleshooting
+### 3. Apply and Verify
 
-### Common Issues
+```bash
+# Apply migration
+supabase db push
 
-1. **Function permission denied**
-   - Ensure using service_role key
-   - Check GRANT statement executed
+# Regenerate docs
+npm run schema:docs:engineer
+```
 
-2. **Duplicate story keys**
-   - Unique constraint prevents duplicates
-   - Use upsert mode to update existing
+## Common Tasks
 
-3. **Cross-SD update rejected**
-   - API validates single SD per request
-   - Split updates by SD
+| Task | Command |
+|------|---------|
+| View all tables | `npm run schema:docs:engineer` then browse `docs/reference/schema/engineer/` |
+| Check migration status | `supabase migration list` |
+| Apply pending migrations | `supabase db push` |
+| Validate schema | `npm run db:validate` |
+| Check RLS coverage | See [database-agent-patterns.md](../docs/reference/database-agent-patterns.md) |
 
-4. **Performance degradation**
-   - Check covering index usage with EXPLAIN
-   - Verify pagination in use
-   - Review audit log growth
+## RLS Policy Patterns
+
+All tables must have Row Level Security enabled. Common patterns:
+
+```sql
+-- Pattern 1: Authenticated read, service_role write
+CREATE POLICY "authenticated_read" ON table FOR SELECT TO authenticated USING (true);
+CREATE POLICY "service_write" ON table FOR ALL TO service_role USING (true);
+
+-- Pattern 2: User-owned resources
+CREATE POLICY "user_owned" ON table FOR ALL TO authenticated
+  USING (auth.uid() = created_by) WITH CHECK (auth.uid() = created_by);
+
+-- Pattern 3: Organization-scoped
+CREATE POLICY "org_scoped" ON table FOR ALL TO authenticated
+  USING (organization_id IN (SELECT org_id FROM user_organizations WHERE user_id = auth.uid()));
+```
+
+## Feature-Specific Documentation
+
+| Feature | Documentation |
+|---------|---------------|
+| User Stories System | [docs/USER_STORIES_V1.1.md](docs/USER_STORIES_V1.1.md) |
+| Migration Consolidation | [docs/MIGRATION_CONSOLIDATION_README.md](docs/MIGRATION_CONSOLIDATION_README.md) |
+| Migration Inventory | [docs/migration-inventory.md](docs/migration-inventory.md) |
+
+## Supabase Connection
+
+```bash
+# Link to project
+supabase link --project-ref dedlbzhpgkmetvhbkyzq
+
+# Check connection
+supabase db ping
+
+# Run SQL query
+supabase db exec --sql "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'"
+```
+
+## Environment Variables
+
+```bash
+# Required for database access
+SUPABASE_URL=https://dedlbzhpgkmetvhbkyzq.supabase.co
+SUPABASE_ANON_KEY=<your-anon-key>
+SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>  # For migrations
+
+# Connection string (for direct access)
+DATABASE_URL=postgresql://postgres:<password>@db.dedlbzhpgkmetvhbkyzq.supabase.co:5432/postgres
+```
+
+## Related Documentation
+
+- [Database Agent Patterns](../docs/reference/database-agent-patterns.md) - Best practices, anti-patterns, and lessons learned
+- [Migration Checklist](../docs/guides/database-migration-checklist.md) - Pre-migration validation steps
+- [RLS Policy Guide](../docs/reference/rls-policy-catalog.md) - Security policy reference
+
+---
+
+**Last Updated**: 2026-01-03
+**Auto-Generated Schema Docs**: Run `npm run schema:docs:engineer` to regenerate

@@ -202,4 +202,4 @@ If you're unsure which directory to work in:
 ---
 
 **Last Updated**: 2025-10-17
-**Part of**: LEO Protocol v3.1.5 Multi-Application Architecture
+**Part of**: LEO Protocol v4.3.3 Multi-Application Architecture
