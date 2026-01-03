@@ -18,7 +18,7 @@
 
 ## Overview
 
-EHG_Engineer is a comprehensive development environment implementing LEO Protocol v3.1.5, designed to build and manage multiple applications through an AI-assisted workflow system.
+EHG_Engineer is a comprehensive development environment implementing LEO Protocol v4.3.3, designed to build and manage multiple applications through an AI-assisted workflow system.
 
 ## Quick Start
 
@@ -93,9 +93,9 @@ EHG_Engineer/
 
 ## Important Files
 
-- `IMPORTANT_DATABASE_DISTINCTION.md` - Critical info about database separation
-- `PROJECT_REGISTRATION_GUIDE.md` - How to add new projects
-- `SIMPLE_PROJECT_SETUP.md` - Simplified setup instructions
+- [IMPORTANT_DATABASE_DISTINCTION.md](docs/operations/IMPORTANT_DATABASE_DISTINCTION.md) - Critical info about database separation
+- [PROJECT_REGISTRATION_GUIDE.md](docs/guides/PROJECT_REGISTRATION_GUIDE.md) - How to add new projects
+- [SIMPLE_PROJECT_SETUP.md](docs/guides/SIMPLE_PROJECT_SETUP.md) - Simplified setup instructions
 - `.env.project-template` - Template for new projects
 
 ## Support
