@@ -249,7 +249,7 @@ class EnhancedDevOpsPlatformArchitect {
   /**
    * Resolution strategy for test failures
    */
-  async resolveTestFailures(failure, _sdId) {
+  async resolveTestFailures(failure, sdId) {
     console.log(chalk.yellow('   🧪 Analyzing test failures...'));
 
     // Common test failure resolutions
@@ -265,13 +265,56 @@ class EnhancedDevOpsPlatformArchitect {
 
     if (canRetry) {
       console.log(chalk.cyan('   🔄 Scheduling pipeline retry...'));
-      // TODO: Implement GitHub API call to retry workflow
-      return {
-        success: true,
-        action: 'retry_scheduled',
-        message: 'Pipeline retry scheduled for test failures',
-        recommendations
-      };
+
+      // Get run ID from failure object
+      const runId = failure.run_id || failure.job_details?.run_id;
+      if (!runId) {
+        console.log(chalk.yellow('   ⚠️ No run ID available for retry'));
+        return {
+          success: false,
+          requiresManual: true,
+          message: 'Cannot retry - no run ID available',
+          recommendations
+        };
+      }
+
+      try {
+        // Use gh CLI to retry the workflow
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execAsync = promisify(exec);
+
+        console.log(chalk.cyan(`   🔄 Retrying workflow run ${runId}...`));
+        const { stdout, stderr } = await execAsync(
+          `gh run rerun ${runId} --failed`,
+          { timeout: 30000 }
+        );
+
+        if (stderr && stderr.toLowerCase().includes('error')) {
+          throw new Error(stderr);
+        }
+
+        console.log(chalk.green(`   ✅ Workflow retry triggered: ${stdout.trim() || 'Success'}`));
+
+        // Log the retry to database
+        await this.logPipelineRetry(runId, sdId, 'test_failure');
+
+        return {
+          success: true,
+          action: 'retry_triggered',
+          message: `Pipeline retry triggered for run ${runId}`,
+          recommendations,
+          run_id: runId
+        };
+      } catch (error) {
+        console.log(chalk.red(`   ❌ Retry failed: ${error.message}`));
+        return {
+          success: false,
+          requiresManual: true,
+          message: `Pipeline retry failed: ${error.message}`,
+          recommendations
+        };
+      }
     }
 
     return {
@@ -280,6 +323,25 @@ class EnhancedDevOpsPlatformArchitect {
       message: 'Test failures require manual investigation',
       recommendations
     };
+  }
+
+  /**
+   * Log pipeline retry attempt to database
+   */
+  async logPipelineRetry(runId, sdId, failureType) {
+    try {
+      await supabase
+        .from('ci_cd_pipeline_retries')
+        .insert({
+          run_id: runId,
+          sd_id: sdId,
+          failure_type: failureType,
+          retry_triggered_at: new Date().toISOString(),
+          triggered_by: 'DevOpsPlatformArchitect'
+        });
+    } catch (error) {
+      console.warn(chalk.yellow(`   ⚠️ Failed to log retry: ${error.message}`));
+    }
   }
 
   /**

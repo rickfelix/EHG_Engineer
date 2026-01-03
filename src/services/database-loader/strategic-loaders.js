@@ -90,10 +90,8 @@ class StrategicLoaders {
         // Backlog summary will be fetched on-demand via API
         const backlogItemCount = backlogInfo.total_items || sd.total_items || 0;
 
-        // Calculate overall progress - use first PRD for progress calculation
-        // TODO: Enhance to handle multiple PRDs per SD properly
-        const primaryPRD = sdPRDs.length > 0 ? sdPRDs[0] : null;
-        const progressData = this.progressCalculator.calculateSDProgress(sd, primaryPRD);
+        // Calculate overall progress - aggregate across all PRDs if multiple exist
+        const progressData = this.aggregateMultiPRDProgress(sd, sdPRDs);
         const overallProgress = progressData.total;
 
         // Add progress breakdown - use the phases data
@@ -176,6 +174,90 @@ class StrategicLoaders {
       console.error('❌ Failed to load SDs:', error.message);
       return [];
     }
+  }
+
+  /**
+   * Aggregate progress across multiple PRDs for a single SD
+   * Takes the max of each phase across all PRDs for comprehensive progress view
+   *
+   * @param {Object} sd - Strategic Directive data
+   * @param {Array} prds - Array of PRD objects for this SD
+   * @returns {Object} Aggregated progress data
+   */
+  aggregateMultiPRDProgress(sd, prds) {
+    // No PRDs - calculate with null PRD
+    if (!prds || prds.length === 0) {
+      return this.progressCalculator.calculateSDProgress(sd, null);
+    }
+
+    // Single PRD - standard calculation
+    if (prds.length === 1) {
+      return this.progressCalculator.calculateSDProgress(sd, prds[0]);
+    }
+
+    // Multiple PRDs - aggregate by taking max of each phase
+    const phaseMaxes = {
+      LEAD_PLANNING: 0,
+      PLAN_DESIGN: 0,
+      EXEC_IMPLEMENTATION: 0,
+      PLAN_VERIFICATION: 0,
+      LEAD_APPROVAL: 0
+    };
+
+    const allDetails = [];
+    let latestPhase = 'LEAD_PLANNING';
+    const phaseOrder = ['LEAD_PLANNING', 'PLAN_DESIGN', 'EXEC_IMPLEMENTATION', 'PLAN_VERIFICATION', 'LEAD_APPROVAL', 'COMPLETE'];
+
+    for (const prd of prds) {
+      const progress = this.progressCalculator.calculateSDProgress(sd, prd);
+
+      // Take max of each phase
+      for (const phase of Object.keys(phaseMaxes)) {
+        if (progress.phases[phase] > phaseMaxes[phase]) {
+          phaseMaxes[phase] = progress.phases[phase];
+        }
+      }
+
+      // Track latest phase across all PRDs
+      if (phaseOrder.indexOf(progress.currentPhase) > phaseOrder.indexOf(latestPhase)) {
+        latestPhase = progress.currentPhase;
+      }
+
+      allDetails.push({
+        prd_id: prd.id,
+        prd_title: prd.title,
+        progress: progress.total,
+        currentPhase: progress.currentPhase
+      });
+    }
+
+    // Calculate total using official weights
+    const PHASE_WEIGHTS = {
+      LEAD_PLANNING: 15,
+      PLAN_DESIGN: 25,
+      EXEC_IMPLEMENTATION: 35,
+      PLAN_VERIFICATION: 15,
+      LEAD_APPROVAL: 10
+    };
+
+    const total = Math.round(
+      (phaseMaxes.LEAD_PLANNING * PHASE_WEIGHTS.LEAD_PLANNING / 100) +
+      (phaseMaxes.PLAN_DESIGN * PHASE_WEIGHTS.PLAN_DESIGN / 100) +
+      (phaseMaxes.EXEC_IMPLEMENTATION * PHASE_WEIGHTS.EXEC_IMPLEMENTATION / 100) +
+      (phaseMaxes.PLAN_VERIFICATION * PHASE_WEIGHTS.PLAN_VERIFICATION / 100) +
+      (phaseMaxes.LEAD_APPROVAL * PHASE_WEIGHTS.LEAD_APPROVAL / 100)
+    );
+
+    return {
+      phases: phaseMaxes,
+      total,
+      currentPhase: latestPhase,
+      details: {
+        multiPRD: true,
+        prdCount: prds.length,
+        prdProgress: allDetails
+      }
+    };
   }
 
   /**
