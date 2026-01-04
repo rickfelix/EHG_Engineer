@@ -2,6 +2,9 @@
 
 > **⚠️ LARGE FILE NOTICE**: This file is 66KB (approximately 2,300+ lines). Use the table of contents below for navigation. Consider splitting into smaller focused documents if editing frequently.
 
+> **TRUTH_STATUS: VISION_ONLY**
+> This document describes planned functionality for Stage 13 Exit-Oriented Design. No implementation exists. All TypeScript interfaces and specifications are architectural designs, not working code.
+
 **Status:** Enhanced for Lovable.dev • **Owner:** EVA Core • **Scope:** Exit Strategy Planning & Readiness Engine  
 **Stack:** React + Vite + Tailwind • TypeScript/Zod • Supabase • Financial Modeling Libraries
 **Enhancement Level:** Technical Architecture Specification (Not Implementation)

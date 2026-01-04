@@ -1,11 +1,11 @@
 /**
  * SD Type Classifier - AI-Powered Strategic Directive Classification
  *
- * Uses GPT-5 Mini with JSON response mode to accurately classify SD types
+ * Uses GPT 5.2 with JSON response mode to accurately classify SD types
  * based on semantic understanding of scope, title, and description.
  *
  * Key Features:
- * - JSON response mode for structured output (gpt-5-mini doesn't support function calling)
+ * - JSON response mode for structured output
  * - Confidence scoring to trigger worst-case handoff requirements
  * - Reasoning explanation for transparency
  * - Fallback to keyword detection if API fails
@@ -26,6 +26,7 @@ dotenv.config();
 // Valid SD types (must match database CHECK constraint)
 const VALID_SD_TYPES = [
   'feature',
+  'implementation',  // Backend-only work for existing frontend
   'infrastructure',
   'database',
   'security',
@@ -39,6 +40,7 @@ const VALID_SD_TYPES = [
 // Handoff requirements by SD type (from database sd_type_validation_profiles)
 const HANDOFF_REQUIREMENTS = {
   feature: ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD'],
+  implementation: ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD'],  // Backend-only work
   infrastructure: ['LEAD-TO-PLAN', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD'],
   database: ['LEAD-TO-PLAN', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD'],
   documentation: ['LEAD-TO-PLAN', 'PLAN-TO-LEAD'],
@@ -51,9 +53,9 @@ const HANDOFF_REQUIREMENTS = {
 
 // LEO v4.3.3: VALID_INTENSITY_LEVELS and INTENSITY_HINTS now imported from intensity-detector.js
 
-// JSON schema for GPT-5 Mini response (no function calling support)
+// JSON schema for GPT 5.2 response
 const EXPECTED_JSON_SCHEMA = `{
-  "sd_type": "feature|infrastructure|database|security|documentation|bugfix|refactor|performance",
+  "sd_type": "feature|implementation|infrastructure|database|security|documentation|bugfix|refactor|performance",
   "confidence": 0-100,
   "reasoning": "Brief explanation of why this type was chosen",
   "alternative_type": "second-best type or 'none'",
@@ -62,7 +64,7 @@ const EXPECTED_JSON_SCHEMA = `{
 
 export class SDTypeClassifier {
   constructor() {
-    this.model = 'gpt-5-mini'; // Using gpt-5-mini with JSON response mode
+    this.model = 'gpt-5.2'; // Using gpt-5.2 consistent with other validation scripts
 
     if (!process.env.OPENAI_API_KEY) {
       console.warn('OPENAI_API_KEY not found - AI classification will fall back to keyword detection');
@@ -98,51 +100,66 @@ export class SDTypeClassifier {
   }
 
   /**
-   * Call OpenAI with JSON response mode (gpt-5-mini doesn't support function calling)
+   * Call OpenAI GPT 5.2 with JSON response mode
    */
   async callOpenAI(sd) {
     const systemPrompt = `You are an expert at classifying Strategic Directives (SDs) in a software development lifecycle.
 
 **SD Type Definitions:**
 
-1. **feature** - Building user-facing UI components, forms, pages, dashboards, or user experiences
+1. **feature** - Building NEW user-facing functionality including UI AND backend APIs that serve users
    - Key indicators: React components, UI/UX work, forms, buttons, dialogs, frontend code
+   - ALSO: Product API endpoints that users/frontend consume (REST, GraphQL)
    - Example: "Build Stage 21-25 UI components for venture workflow"
+   - Example: "Build content generation API with LLM integration"
 
-2. **infrastructure** - Building CI/CD pipelines, tooling, scripts, automation, developer workflows
+2. **implementation** - Building backend services/APIs for an EXISTING frontend (backend-only work)
+   - Key indicators: API endpoints, service layer, adapters, integrations where UI already exists
+   - Distinction from feature: Frontend/UI is ALREADY COMPLETE, this SD adds backend only
+   - Example: "Implement Content Forge API endpoints (frontend already built)"
+   - Example: "Add LLM adapter to support existing AI features"
+
+3. **infrastructure** - Building CI/CD pipelines, tooling, scripts, automation, developer workflows
    - Key indicators: GitHub Actions, deployment scripts, build tools, monitoring, DevOps
+   - NOT product APIs - those are feature or implementation
    - Example: "Set up automated deployment pipeline with staging environment"
-   - NOTE: Building a "deployment dashboard UI" is FEATURE work, not infrastructure
+   - Example: "Build LEO Protocol validation scripts"
 
-3. **database** - Schema design, migrations, tables, indexes, RLS policies, stored procedures
+4. **database** - Schema design, migrations, tables, indexes, RLS policies, stored procedures
    - Key indicators: CREATE TABLE, ALTER TABLE, migrations, Supabase, PostgreSQL
    - Example: "Add venture_artifacts table with epistemic tracking columns"
 
-4. **security** - Authentication, authorization, RLS policies, vulnerability fixes, secrets management
+5. **security** - Authentication, authorization, RLS policies, vulnerability fixes, secrets management
    - Key indicators: Auth flows, JWT, session management, RBAC, OWASP compliance
    - Example: "Implement row-level security for multi-tenant data isolation"
 
-5. **documentation** - README files, guides, API docs, tutorials, comments
+6. **documentation** - README files, guides, API docs, tutorials, comments
    - Key indicators: Markdown files, JSDoc, documentation updates, onboarding guides
    - Example: "Create developer onboarding guide for LEO Protocol"
 
-6. **bugfix** - Fixing broken functionality, errors, crashes, regressions
+7. **bugfix** - Fixing broken functionality, errors, crashes, regressions
    - Key indicators: "fix", "broken", "error", "crash", existing functionality not working
    - Example: "Fix authentication token refresh failing on session timeout"
 
-7. **refactor** - Restructuring code without changing functionality, tech debt reduction
+8. **refactor** - Restructuring code without changing functionality, tech debt reduction
    - Key indicators: "refactor", "cleanup", "restructure", "extract", no new features
    - Example: "Extract authentication logic into reusable service module"
 
-8. **performance** - Optimization, speed improvements, caching, bundle size reduction
+9. **performance** - Optimization, speed improvements, caching, bundle size reduction
    - Key indicators: "optimize", "performance", "cache", "latency", "bundle size"
    - Example: "Implement query caching to reduce API latency by 50%"
 
-**Critical Rule:** Focus on what the SD BUILDS, not what it REFERENCES.
-- "Build a deployment dashboard UI" = **feature** (building UI components)
+**Critical Rules:**
+1. Focus on what the SD BUILDS, not what it REFERENCES
+2. If frontend UI already exists and SD builds backend only → **implementation**
+3. If building both frontend AND backend → **feature**
+4. If building internal tooling/scripts (not product APIs) → **infrastructure**
+
+Examples:
+- "Build a deployment dashboard UI" = **feature** (building UI)
 - "Build deployment pipeline scripts" = **infrastructure** (building CI/CD)
-- "Build QA test runner UI component" = **feature** (building UI)
-- "Build automated QA testing pipeline" = **infrastructure** (building automation)
+- "Implement API endpoints for existing Content Forge UI" = **implementation** (backend for existing frontend)
+- "Build Content Forge feature end-to-end" = **feature** (full stack)
 
 Return ONLY valid JSON in this exact format:
 ${EXPECTED_JSON_SCHEMA}
@@ -188,7 +205,7 @@ Analyze the SD carefully and classify it based on what is actually being BUILT o
 
       return result;
     } catch (parseError) {
-      console.error('Failed to parse GPT-5 Mini response:', content.substring(0, 200));
+      console.error('Failed to parse GPT 5.2 response:', content.substring(0, 200));
       throw new Error(`JSON parse failed: ${parseError.message}`);
     }
   }
@@ -298,6 +315,10 @@ Analyze the SD carefully and classify it based on what is actually being BUILT o
       },
       performance: {
         keywords: ['performance', 'optimize', 'cache', 'latency', 'bundle size'],
+        weight: 1.0
+      },
+      implementation: {
+        keywords: ['api endpoint', 'backend', 'service layer', 'adapter', 'implement api', 'rest api', 'graphql', 'existing frontend', 'frontend already'],
         weight: 1.0
       },
       feature: {
