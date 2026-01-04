@@ -1054,31 +1054,7 @@ The QA Engineering Director sub-agent now has access to:
 ## Triangulated Runtime Audit Protocol
 
 ### Purpose
-A structured workflow for manually testing the EHG application with AI-assisted diagnosis and remediation planning. Uses Claude Code as the testing guide and triangulates findings across 3 AI models for high-confidence root cause analysis and fix proposals.
-
-### What is Triangulation?
-
-**Triangulation** is the EHG methodology of obtaining independent perspectives on the same issue from three distinct AI models:
-
-| Model | Provider | Role in Triangulation |
-|-------|----------|----------------------|
-| **Claude Code** | Anthropic (Opus 4.5) | Primary guide, codebase-aware analysis, synthesis lead |
-| **ChatGPT** | OpenAI (GPT-4/o1) | Independent analysis, alternative perspective |
-| **AntiGravity** | Google (Gemini) | Independent analysis, third perspective |
-
-**Why Triangulate?**
-- **Reduce hallucination risk**: If all 3 AIs agree, confidence is high
-- **Identify blind spots**: Each model has different training and biases
-- **Better decision quality**: Divergence signals areas needing deeper investigation
-- **Audit trail**: Documented consensus/divergence for Chairman decisions
-
-**Consensus Scoring**:
-| Consensus Type | Definition | Action |
-|----------------|------------|--------|
-| HIGH | All 3 agree | Execute with confidence |
-| MEDIUM | 2 of 3 agree | Chairman decides, note dissent |
-| LOW | Only 1 agrees | Requires investigation |
-| DIVERGENT | All 3 disagree | Stop and research further |
+A structured workflow for manually testing the EHG application with AI-assisted diagnosis and remediation planning. Uses Claude Code as the testing guide and triangulates findings across 3 AI models (Claude, ChatGPT, Antigravity) for high-confidence root cause analysis and fix proposals.
 
 ### When to Use
 - Periodic product health checks
