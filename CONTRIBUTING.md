@@ -205,6 +205,47 @@ npx eslint --fix .
 psql $DATABASE_URL -c "UPDATE leo_validation_rules SET weight = 0.333 WHERE gate = '2A' AND rule_name = 'has_adrs';"
 ```
 
+## Truth Labels Convention
+
+Documentation and specification files must include truth status labels to clearly communicate implementation status. This prevents stakeholder confusion about what is built vs. what is planned.
+
+### Truth Status Labels
+
+Add one of these labels at the top of relevant documentation files:
+
+| Label | Meaning | When to Use |
+|-------|---------|-------------|
+| `TRUTH_STATUS: VISION_ONLY` | Specification only, no code exists | Feature designs, architecture specs, future plans |
+| `TRUTH_STATUS: SCAFFOLD_ONLY` | Database schema or tests exist, no functional implementation | Tables without API endpoints, E2E tests without UI |
+| `TRUTH_STATUS: IMPLEMENTED` | Feature is complete and functional | Working features with tests passing |
+
+### Label Format
+
+Add the label at the top of the file after the title:
+
+```markdown
+# Feature Name PRD
+
+> **TRUTH_STATUS: VISION_ONLY**
+> This document describes planned functionality. No implementation exists.
+
+## Executive Summary
+...
+```
+
+### When Labels Are Required
+
+- **Exit Pipeline specs** (`docs/vision/specs/`): VISION_ONLY (Stages 11-25)
+- **GDPR documentation**: Label based on current implementation status
+- **PRD documents**: Label if implementation is incomplete
+- **Architecture docs**: VISION_ONLY if describing future state
+
+### Database-First Principle
+
+Remember: Truth labels document the *code* status, not the *documentation* status. The presence of a PRD in the database does not mean the feature is implemented.
+
+---
+
 ## Running Tests
 
 ### Unit Tests
