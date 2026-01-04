@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-04T14:13:42.838Z
+**Generated**: 2026-01-04T15:10:53.065Z
 **Rows**: 11
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (20 total)
+## Columns (27 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -38,6 +38,13 @@
 | story_e2e_guidance | `text` | YES | - | Guidance text shown when creating user stories for this SD type |
 | required_handoff_types | `ARRAY` | YES | `ARRAY['LEAD-TO-PLAN'::text, 'PLAN-TO-EXEC'::text, 'EXEC-TO-PLAN'::text]` | - |
 | requires_user_stories | `boolean` | YES | `true` | If true, user stories must exist AND be validated for the verify phase to pass. Prevents Silent Success anti-pattern. |
+| requires_human_verifiable_outcome | `boolean` | YES | `false` | If true, SD completion requires evidence that a human (or LLM acting as human) verified the outcome works. For feature SDs with UI, this triggers UAT Agent + LLM UX Oracle validation. |
+| human_verification_type | `text` | YES | `'none'::text` | Type of human verification required: ui_smoke_test (Playwright + LLM UX), api_test (endpoint verification), cli_verification (script output check), documentation_review (manual doc check), none (no human verification) |
+| smoke_test_template | `jsonb` | YES | `'[]'::jsonb` | Template for smoke test steps. Array of {step_number, instruction_template, expected_outcome_template}. Merged with SD-specific context at runtime. |
+| requires_llm_ux_validation | `boolean` | YES | `false` | If true, LLM UX Oracle (GPT-5.2) must evaluate affected pages with minimum score threshold. |
+| llm_ux_min_score | `integer(32)` | YES | `50` | Minimum LLM UX Oracle score (0-100) required for SD completion. Default 50 (standard stringency). |
+| llm_ux_required_lenses | `ARRAY` | YES | `ARRAY['first-time-user'::text]` | Which LLM UX Oracle lenses must pass: first-time-user, accessibility, mobile-user, error-recovery, cognitive-load |
+| requires_uat_execution | `boolean` | YES | `false` | If true, UAT Agent must execute smoke test steps via Playwright MCP and capture evidence. |
 
 ## Constraints
 
@@ -51,6 +58,7 @@
 - `sd_type_validation_profiles_min_handoffs_check`: CHECK (((min_handoffs >= 0) AND (min_handoffs <= 5)))
 - `sd_type_validation_profiles_plan_weight_check`: CHECK (((plan_weight >= 0) AND (plan_weight <= 100)))
 - `sd_type_validation_profiles_verify_weight_check`: CHECK (((verify_weight >= 0) AND (verify_weight <= 100)))
+- `valid_human_verification_type`: CHECK ((human_verification_type = ANY (ARRAY['ui_smoke_test'::text, 'api_test'::text, 'cli_verification'::text, 'documentation_review'::text, 'none'::text])))
 - `weights_sum_to_100`: CHECK ((((((lead_weight + plan_weight) + exec_weight) + verify_weight) + final_weight) = 100))
 
 ## Indexes
