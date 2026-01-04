@@ -33,6 +33,7 @@ import RealtimeDashboard from './src/services/realtime-dashboard.js';
 // Import Story API
 import * as storiesAPI from './src/api/stories.js';
 import * as namingEngineAPI from './src/api/naming-engine/index.js';
+import * as financialEngineAPI from './src/api/financial-engine/index.js';
 import StoryAgentBootstrap from './src/agents/story-bootstrap.js';
 
 // Import Directive Enhancement Service
@@ -2416,6 +2417,40 @@ app.post('/api/v2/naming-engine/generate', asyncHandler(namingEngineAPI.generate
  * GET /api/v2/naming-engine/suggestions/:brand_genome_id
  */
 app.get('/api/v2/naming-engine/suggestions/:brand_genome_id', asyncHandler(namingEngineAPI.getSuggestions));
+
+// =============================================================================
+// SD-FINANCIAL-ENGINE-001: Financial Engine API Routes
+// =============================================================================
+
+/**
+ * Create financial projection
+ * POST /api/v2/financial-engine/project
+ */
+app.post('/api/v2/financial-engine/project', asyncHandler(financialEngineAPI.createProjection));
+
+/**
+ * Get financial projection by model ID
+ * GET /api/v2/financial-engine/:id
+ */
+app.get('/api/v2/financial-engine/:id', asyncHandler(financialEngineAPI.getProjection));
+
+/**
+ * Create scenario for a model
+ * POST /api/v2/financial-engine/:id/scenario
+ */
+app.post('/api/v2/financial-engine/:id/scenario', asyncHandler(financialEngineAPI.createScenario));
+
+/**
+ * Export financial model to Excel
+ * GET /api/v2/financial-engine/:id/export
+ */
+app.get('/api/v2/financial-engine/:id/export', asyncHandler(financialEngineAPI.exportToExcel));
+
+/**
+ * List financial models for a venture
+ * GET /api/v2/financial-engine/list/:venture_id
+ */
+app.get('/api/v2/financial-engine/list/:venture_id', asyncHandler(financialEngineAPI.listModels));
 
 // =============================================================================
 // SOVEREIGN PIPE v3.7.0: EVA ERROR HANDLER
