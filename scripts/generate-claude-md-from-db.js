@@ -355,7 +355,7 @@ class CLAUDEMDGeneratorV3 {
   }
 
   generateRouter(data) {
-    const { protocol } = data;
+    const { protocol, subAgents } = data;
     const sections = protocol.sections;
     const { today, time } = this.getMetadata(protocol);
 
@@ -365,6 +365,9 @@ class CLAUDEMDGeneratorV3 {
     const sessionPrologue = sections.find(s => s.section_type === 'session_prologue');
     const sessionInit = sections.find(s => s.section_type === 'session_init');
     const commonCommands = sections.find(s => s.section_type === 'common_commands');
+
+    // Generate trigger quick reference for router
+    const triggerReference = this.generateTriggerQuickReference(subAgents);
 
     return `# CLAUDE.md - LEO Protocol Context Router
 
@@ -389,6 +392,8 @@ ${commonCommands ? commonCommands.content : ''}
 **Title**: ${protocol.title}
 
 ${smartRouter ? smartRouter.content : '## Context Router\n\n**Load Strategy**: Read CLAUDE_CORE.md first, then phase-specific files as needed.'}
+
+${triggerReference}
 
 ---
 
@@ -913,20 +918,97 @@ npm run proposal:list
     let section = `## Available Sub-Agents
 
 **Usage**: Invoke sub-agents using the Task tool with matching subagent_type.
+**IMPORTANT**: When user query contains trigger keywords, PROACTIVELY invoke the corresponding sub-agent.
 
-| Sub-Agent | Trigger Keywords | Priority | Description |
-|-----------|------------------|----------|-------------|
 `;
 
-    subAgents.forEach(sa => {
-      // Extract trigger_phrase from triggers array (from leo_sub_agent_triggers table)
-      const triggers = sa.triggers?.map(t => t.trigger_phrase).filter(Boolean).join(', ') || 'N/A';
-      const desc = sa.description?.substring(0, 60) + (sa.description?.length > 60 ? '...' : '') || 'N/A';
-      section += `| ${sa.name} | ${triggers.substring(0, 40)} | ${sa.priority || 'N/A'} | ${desc} |\n`;
+    // Group sub-agents by whether they have triggers or not
+    const withTriggers = subAgents.filter(sa => sa.triggers && sa.triggers.length > 0);
+    const withoutTriggers = subAgents.filter(sa => !sa.triggers || sa.triggers.length === 0);
+
+    if (withoutTriggers.length > 0) {
+      section += '### Sub-Agents Without Keyword Triggers\n\n';
+      withoutTriggers.forEach(sa => {
+        section += `- **${sa.name}** (\`${sa.code || 'N/A'}\`): ${sa.description?.substring(0, 80) || 'N/A'}\n`;
+      });
+      section += '\n';
+    }
+
+    section += '### Keyword-Triggered Sub-Agents\n\n';
+
+    withTriggers.forEach(sa => {
+      // Extract all trigger_phrases from triggers array
+      const triggers = sa.triggers?.map(t => t.trigger_phrase).filter(Boolean) || [];
+      const desc = sa.description?.substring(0, 100) || 'N/A';
+
+      section += `#### ${sa.name} (\`${sa.code || 'N/A'}\`)\n`;
+      section += `${desc}\n\n`;
+
+      if (triggers.length > 0) {
+        section += `**Trigger Keywords**: \`${triggers.join('\`, \`')}\`\n\n`;
+      }
     });
 
     section += `
 **Note**: Sub-agent results MUST be persisted to \`sub_agent_execution_results\` table.
+`;
+
+    return section;
+  }
+
+  /**
+   * Generate a compact trigger keyword reference for the router file
+   * Maps keywords to sub-agent codes for quick lookup
+   */
+  generateTriggerQuickReference(subAgents) {
+    if (!subAgents || subAgents.length === 0) {
+      return '';
+    }
+
+    // Build keyword -> sub-agent mapping
+    const keywordMap = {};
+    subAgents.forEach(sa => {
+      if (!sa.triggers || sa.triggers.length === 0) return;
+      sa.triggers.forEach(t => {
+        if (t.trigger_phrase) {
+          const keyword = t.trigger_phrase.toLowerCase();
+          if (!keywordMap[keyword]) {
+            keywordMap[keyword] = { agent: sa.code, priority: t.priority || sa.priority || 50 };
+          }
+        }
+      });
+    });
+
+    // Group by sub-agent for compact display
+    const agentKeywords = {};
+    Object.entries(keywordMap).forEach(([keyword, info]) => {
+      if (!agentKeywords[info.agent]) {
+        agentKeywords[info.agent] = [];
+      }
+      agentKeywords[info.agent].push(keyword);
+    });
+
+    let section = `## Sub-Agent Trigger Keywords (Quick Reference)
+
+**CRITICAL**: When user query contains these keywords, PROACTIVELY invoke the corresponding sub-agent via Task tool.
+
+| Sub-Agent | Trigger Keywords |
+|-----------|------------------|
+`;
+
+    // Sort by agent code for consistency
+    Object.keys(agentKeywords).sort().forEach(agent => {
+      const keywords = agentKeywords[agent].slice(0, 10); // Limit to top 10 keywords per agent
+      const moreCount = agentKeywords[agent].length - 10;
+      let keywordStr = keywords.join(', ');
+      if (moreCount > 0) {
+        keywordStr += ` (+${moreCount} more)`;
+      }
+      section += `| \`${agent}\` | ${keywordStr} |\n`;
+    });
+
+    section += `
+*Full trigger list in CLAUDE_CORE.md. Use Task tool with \`subagent_type="${'<agent-code>'}"\`*
 `;
 
     return section;

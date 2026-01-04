@@ -5,6 +5,7 @@
 
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
+const { executeSubAgent } = require('../../lib/sub-agent-executor.js');
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -105,27 +106,32 @@ async function triggerFailureResolution(pipelineStatusId, sdId, failureCategory)
       return false;
     }
 
-    // TODO: Trigger DevOps Platform Architect sub-agent
-    // This would integrate with the LEO sub-agent system
+    // Trigger DevOps Platform Architect sub-agent (GITHUB)
     console.log(`🤖 Triggering DevOps Platform Architect for ${failureCategory} failure in ${sdId}`);
 
-    // For now, log the sub-agent execution
-    const { error: executionError } = await supabase
-      .from('sub_agent_executions')
-      .insert({
-        sub_agent_id: 'devops-platform-architect',
-        triggered_by: 'ci_cd_failure',
-        context: {
-          sd_id: sdId,
-          failure_category: failureCategory,
-          pipeline_status_id: pipelineStatusId,
-          auto_triggered: true
-        },
-        status: 'queued'
+    try {
+      const result = await executeSubAgent('GITHUB', sdId, {
+        failure_category: failureCategory,
+        pipeline_status_id: pipelineStatusId,
+        resolution_id: resolution.id,
+        trigger_type: 'ci_cd_failure',
+        auto_triggered: true
       });
 
-    if (executionError) {
-      console.error('Failed to log sub-agent execution:', executionError);
+      // Update resolution record with sub-agent result
+      await supabase
+        .from('ci_cd_failure_resolutions')
+        .update({
+          resolution_result: result,
+          resolved: result.verdict === 'PASS',
+          resolved_at: result.verdict === 'PASS' ? new Date().toISOString() : null
+        })
+        .eq('id', resolution.id);
+
+      console.log(`✅ DevOps Platform Architect: ${result.verdict} (${result.confidence}%)`);
+    } catch (subAgentError) {
+      console.error('Sub-agent execution failed:', subAgentError.message);
+      // Non-fatal - continue with resolution record
     }
 
     return true;

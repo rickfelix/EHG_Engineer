@@ -1,90 +1,57 @@
-import { createClient } from '@supabase/supabase-js';
+#!/usr/bin/env node
 import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
+
 dotenv.config();
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-async function checkPriorityValues() {
-  try {
-    const { data, error } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, title, priority, status')
-      .order('created_at', { ascending: false });
+async function checkCompletion() {
+  // Check progress breakdown
+  const { data: breakdown, error: breakdownError } = await supabase.rpc('get_progress_breakdown', {
+    sd_id_param: 'SD-FOUNDATION-SECURITY-001'
+  });
 
-    if (error) throw error;
+  if (breakdownError) {
+    console.error('Error getting progress breakdown:', breakdownError.message);
+  } else {
+    console.log('Progress Breakdown:');
+    console.log(JSON.stringify(breakdown, null, 2));
+  }
 
-    // Analyze based on text priority field
-    const critical = data.filter(sd => sd.priority === 'critical');
-    const high = data.filter(sd => sd.priority === 'high');
-    const medium = data.filter(sd => sd.priority === 'medium');
-    const low = data.filter(sd => sd.priority === 'low');
+  // Check handoffs
+  console.log('\n\nHandoffs:');
+  const { data: handoffs, error: handoffError } = await supabase
+    .from('sd_phase_handoffs')
+    .select('id, source_sd_id, target_sd_id, handoff_type, status')
+    .or('source_sd_id.eq.SD-FOUNDATION-SECURITY-001,target_sd_id.eq.SD-FOUNDATION-SECURITY-001');
 
-    console.log('=== PRIORITY DISTRIBUTION (Text Values) ===');
-    console.log('Critical:', critical.length);
-    console.log('High:', high.length);
-    console.log('Medium:', medium.length);
-    console.log('Low:', low.length);
-
-    console.log('');
-    console.log('=== CRITICAL AND HIGH PRIORITY SDs ===');
-    console.log('Critical SDs:', critical.length);
-    critical.forEach(sd => {
-      console.log(`  - ${sd.id || 'N/A'}: ${sd.title} [Status: ${sd.status}]`);
+  if (handoffError) {
+    console.error('Error getting handoffs:', handoffError.message);
+  } else {
+    handoffs.forEach(h => {
+      console.log(`  - ${h.handoff_type} (${h.source_sd_id} → ${h.target_sd_id}): ${h.status}`);
     });
+  }
 
-    console.log('');
-    console.log('High Priority SDs:', high.length);
-    high.forEach(sd => {
-      console.log(`  - ${sd.id || 'N/A'}: ${sd.title} [Status: ${sd.status}]`);
+  // Check retrospectives
+  console.log('\n\nRetrospectives:');
+  const { data: retro, error: retroError } = await supabase
+    .from('sd_retrospectives')
+    .select('id, sd_id, status')
+    .eq('sd_id', 'SD-FOUNDATION-SECURITY-001');
+
+  if (retroError) {
+    console.error('Error getting retrospectives:', retroError.message);
+  } else {
+    console.log(`Found ${retro.length} retrospectives`);
+    retro.forEach(r => {
+      console.log(`  - ${r.id}: ${r.status}`);
     });
-
-    // Check completion status for critical and high
-    const criticalCompleted = critical.filter(sd => sd.status === 'completed');
-    const highCompleted = high.filter(sd => sd.status === 'completed');
-
-    console.log('');
-    console.log('=== COMPLETION SUMMARY ===');
-    console.log(`Critical SDs Completed: ${criticalCompleted.length}/${critical.length}`);
-    console.log(`High SDs Completed: ${highCompleted.length}/${high.length}`);
-
-    const criticalIncomplete = critical.filter(sd => sd.status !== 'completed');
-    const highIncomplete = high.filter(sd => sd.status !== 'completed');
-
-    if (criticalIncomplete.length === 0 && highIncomplete.length === 0) {
-      console.log('');
-      console.log('✅ CONFIRMED: ALL CRITICAL AND HIGH PRIORITY STRATEGIC DIRECTIVES ARE COMPLETED!');
-    } else {
-      console.log('');
-      console.log('⚠️ INCOMPLETE CRITICAL/HIGH SDs:');
-      if (criticalIncomplete.length > 0) {
-        console.log('Critical Incomplete:', criticalIncomplete.length);
-        criticalIncomplete.forEach(sd => {
-          console.log(`  - ${sd.id}: ${sd.title} [Status: ${sd.status}]`);
-        });
-      }
-      if (highIncomplete.length > 0) {
-        console.log('High Incomplete:', highIncomplete.length);
-        highIncomplete.forEach(sd => {
-          console.log(`  - ${sd.id}: ${sd.title} [Status: ${sd.status}]`);
-        });
-      }
-    }
-
-    // Also show all completed SDs regardless of priority
-    console.log('');
-    console.log('=== ALL COMPLETED STRATEGIC DIRECTIVES ===');
-    const allCompleted = data.filter(sd => sd.status === 'completed');
-    console.log(`Total Completed: ${allCompleted.length}/${data.length}`);
-    allCompleted.forEach(sd => {
-      console.log(`  - ${sd.identifier || 'N/A'} [Priority: ${sd.priority}]: ${sd.title}`);
-    });
-
-  } catch (error) {
-    console.error('Error:', error.message);
   }
 }
 
-checkPriorityValues();
+checkCompletion();
