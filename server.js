@@ -32,6 +32,7 @@ import RealtimeDashboard from './src/services/realtime-dashboard.js';
 
 // Import Story API
 import * as storiesAPI from './src/api/stories.js';
+import * as namingEngineAPI from './src/api/naming-engine/index.js';
 import StoryAgentBootstrap from './src/agents/story-bootstrap.js';
 
 // Import Directive Enhancement Service
@@ -2399,6 +2400,22 @@ app.get('/api/v2/ventures/:venture_id/backlog', requireVentureScope, asyncHandle
     backlog_items: backlogItems || []
   });
 }));
+
+// =============================================================================
+// SD-NAMING-ENGINE-001: Naming Engine API Routes
+// =============================================================================
+
+/**
+ * Generate venture name suggestions
+ * POST /api/v2/naming-engine/generate
+ */
+app.post('/api/v2/naming-engine/generate', asyncHandler(namingEngineAPI.generateNames));
+
+/**
+ * Get saved name suggestions for a brand genome
+ * GET /api/v2/naming-engine/suggestions/:brand_genome_id
+ */
+app.get('/api/v2/naming-engine/suggestions/:brand_genome_id', asyncHandler(namingEngineAPI.getSuggestions));
 
 // =============================================================================
 // SOVEREIGN PIPE v3.7.0: EVA ERROR HANDLER
