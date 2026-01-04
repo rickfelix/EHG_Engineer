@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-02T19:42:40.935Z
-**Tables**: 312
+**Generated**: 2026-01-04T00:33:56.410Z
+**Tables**: 316
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (312)
+## All Tables (316)
 
 ### LEO Protocol
 
@@ -161,6 +161,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [board_meeting_attendance](tables/board_meeting_attendance.md)
 - [board_meetings](tables/board_meetings.md)
 - [board_members](tables/board_members.md)
+- [brand_genome_submissions](tables/brand_genome_submissions.md)
 - [brand_variants](tables/brand_variants.md)
 - [capital_transactions](tables/capital_transactions.md)
 - [chairman_approval_requests](tables/chairman_approval_requests.md)
@@ -225,6 +226,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [financial_models](tables/financial_models.md)
 - [financial_projections](tables/financial_projections.md)
 - [financial_scenarios](tables/financial_scenarios.md)
+- [fit_gate_scores](tables/fit_gate_scores.md)
 - [folder_structure_snapshot](tables/folder_structure_snapshot.md)
 - [gate_requirements_templates](tables/gate_requirements_templates.md)
 - [github_operations](tables/github_operations.md)
@@ -233,6 +235,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [governance_proposals](tables/governance_proposals.md)
 - [hap_blocks_v2](tables/hap_blocks_v2.md)
 - [import_audit](tables/import_audit.md)
+- [intake_submissions](tables/intake_submissions.md)
 - [integrity_metrics](tables/integrity_metrics.md)
 - [intelligence_analysis](tables/intelligence_analysis.md)
 - [intelligence_patterns](tables/intelligence_patterns.md)
@@ -333,6 +336,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [user_company_access](tables/user_company_access.md)
 - [user_context_patterns](tables/user_context_patterns.md)
 - [user_navigation_analytics](tables/user_navigation_analytics.md)
+- [user_organizations](tables/user_organizations.md)
 - [user_preferences](tables/user_preferences.md)
 - [user_stories](tables/user_stories.md)
 - [validation_evidence](tables/validation_evidence.md)
