@@ -469,7 +469,7 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
         /return undefined;?\s*\/\/\s*TODO/gi,
         /TODO:\s*implement/gi,
         /stub(bed)?Function/gi,
-        /placeholder/gi,
+        /(?<!=["'])\bplaceholder\b(?:\s+(?:function|implementation|code|data|value)|$)/gi,  // Match "placeholder function", not HTML placeholder=""
         /temporary implementation/gi,
         /console\.log\(['"]TODO/gi,
         /\/\/\s*STUB:/gi,
