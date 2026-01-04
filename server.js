@@ -34,6 +34,7 @@ import RealtimeDashboard from './src/services/realtime-dashboard.js';
 import * as storiesAPI from './src/api/stories.js';
 import * as namingEngineAPI from './src/api/naming-engine/index.js';
 import * as financialEngineAPI from './src/api/financial-engine/index.js';
+import * as contentForgeAPI from './src/api/content-forge/index.js';
 import StoryAgentBootstrap from './src/agents/story-bootstrap.js';
 
 // Import Directive Enhancement Service
@@ -2451,6 +2452,34 @@ app.get('/api/v2/financial-engine/:id/export', asyncHandler(financialEngineAPI.e
  * GET /api/v2/financial-engine/list/:venture_id
  */
 app.get('/api/v2/financial-engine/list/:venture_id', asyncHandler(financialEngineAPI.listModels));
+
+// =============================================================================
+// SD-CONTENT-FORGE-IMPL-001: Content Forge API Routes
+// =============================================================================
+
+/**
+ * Generate marketing content using LLM
+ * POST /api/v2/content-forge/generate
+ */
+app.post('/api/v2/content-forge/generate', asyncHandler(contentForgeAPI.generateContent));
+
+/**
+ * List generated content with filters
+ * GET /api/v2/content-forge/list
+ */
+app.get('/api/v2/content-forge/list', asyncHandler(contentForgeAPI.listContent));
+
+/**
+ * Check content compliance
+ * POST /api/v2/content-forge/compliance-check
+ */
+app.post('/api/v2/content-forge/compliance-check', asyncHandler(contentForgeAPI.checkContentCompliance));
+
+/**
+ * Get brand genome by ID
+ * GET /api/v2/brand-genome/:id
+ */
+app.get('/api/v2/brand-genome/:id', asyncHandler(contentForgeAPI.getBrandGenome));
 
 // =============================================================================
 // SOVEREIGN PIPE v3.7.0: EVA ERROR HANDLER
