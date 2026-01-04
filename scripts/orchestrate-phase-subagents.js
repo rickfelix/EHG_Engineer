@@ -81,10 +81,12 @@ const PHASE_SUBAGENT_MAP = {
 // allowed RLS gaps and N+1 queries to slip through. Making them mandatory prevents this.
 const PLAN_VERIFY_BY_SD_TYPE = {
   // Full validation for code-impacting SDs - SECURITY + PERFORMANCE are MANDATORY
-  feature: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'API', 'DEPENDENCY'],
+  // LEO Protocol v4.4.1: Added UAT for user-facing SDs (feature, api) to ensure human verification
+  // ROOT CAUSE: UAT sub-agent had 0% invocation rate because it was keyword-only, not phase-mandatory
+  feature: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'API', 'DEPENDENCY', 'UAT'],
   database: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE'],  // Added PERFORMANCE for N+1 detection
   security: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE'],  // Added PERFORMANCE
-  api: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'API'],  // New type for API work
+  api: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'API', 'UAT'],  // Added UAT for API verification
 
   // Reduced validation for non-code SDs (skip TESTING, GITHUB)
   documentation: ['DOCMON', 'STORIES'],
@@ -109,7 +111,9 @@ const MANDATORY_SUBAGENTS_BY_PHASE = {
   PLAN_PRD: ['DATABASE', 'STORIES'],  // Always validate schema and user stories
   PLAN_VERIFY: {
     // SD-type specific mandatory agents
-    feature: ['TESTING', 'SECURITY', 'PERFORMANCE'],
+    // LEO Protocol v4.4.1: Added UAT to feature/api mandatory lists
+    // ROOT CAUSE: UAT had 0% invocation - now mandatory for user-facing SDs
+    feature: ['TESTING', 'SECURITY', 'PERFORMANCE', 'UAT'],
     // ROOT CAUSE FIX (2026-01-01): Removed TESTING from database mandatory list
     // Database SDs focus on schema/migrations, not user-facing code. TESTING exemption
     // is configured in sd_type_validation_profiles table. Step 3D was overriding this
@@ -117,7 +121,7 @@ const MANDATORY_SUBAGENTS_BY_PHASE = {
     // use DATABASE agent for schema validation instead of TESTING agent.
     database: ['DATABASE', 'SECURITY', 'PERFORMANCE'],
     security: ['TESTING', 'SECURITY'],
-    api: ['TESTING', 'SECURITY', 'PERFORMANCE', 'API'],
+    api: ['TESTING', 'SECURITY', 'PERFORMANCE', 'API', 'UAT'],
     documentation: ['DOCMON'],
     infrastructure: ['GITHUB', 'SECURITY'],
     // LEO Protocol v4.3.3: Refactor mandatory agents (intensity-aware)

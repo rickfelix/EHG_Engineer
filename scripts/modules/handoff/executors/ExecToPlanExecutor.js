@@ -354,10 +354,12 @@ export class ExecToPlanExecutor extends BaseExecutor {
           remediation: actionRequired
         };
       },
-      // Required for feature SDs only - determined dynamically
-      required: false,
-      // Soft gate: logs warning but doesn't block (Phase 1 - Advisory Mode)
-      advisory: true
+      // LEO v4.4.1: Human verification now REQUIRED for feature/api SDs
+      // ROOT CAUSE FIX: smoke_test_steps had 50% adherence because gate was advisory-only
+      // Now blocking for user-facing SDs to ensure human verification actually happens
+      required: true,
+      // Dynamic skip for non-feature SDs (determined by validator)
+      advisory: false
     });
 
     return gates;
