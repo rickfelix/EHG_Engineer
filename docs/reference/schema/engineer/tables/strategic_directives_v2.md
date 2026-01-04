@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-04T14:13:42.838Z
+**Generated**: 2026-01-04T15:10:53.065Z
 **Rows**: 363
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (74 total)
+## Columns (77 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -96,6 +96,9 @@ Use the id column instead - it is the canonical identifier. |
   - cosmetic: Variable renames, formatting, comment updates (<50 LOC)
   - structural: Extract methods, file reorganization, import changes (50-500 LOC)
   - architectural: Design pattern changes, module restructuring (>500 LOC) |
+| smoke_test_steps | `jsonb` | YES | `'[]'::jsonb` | SD-specific smoke test steps. Array of {step_number, instruction, expected_outcome, evidence_url}. Populated from template + SD context. Required for feature SDs. |
+| human_verification_status | `text` | YES | `'not_required'::text` | Status of human-verifiable outcome validation: not_required, pending, in_progress, passed, failed |
+| llm_ux_score | `integer(32)` | YES | - | LLM UX Oracle average score for this SD (0-100). NULL if not evaluated. |
 
 ## Constraints
 
@@ -123,6 +126,7 @@ Use the id column instead - it is the canonical identifier. |
 - `strategic_directives_v2_relationship_type_check`: CHECK ((relationship_type = ANY (ARRAY['standalone'::text, 'parent'::text, 'child'::text])))
 - `strategic_directives_v2_scope_reduction_check`: CHECK (((scope_reduction_percentage >= 0) AND (scope_reduction_percentage <= 100)))
 - `strategic_directives_v2_status_check`: CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'active'::character varying, 'in_progress'::character varying, 'planning'::character varying, 'review'::character varying, 'pending_approval'::character varying, 'completed'::character varying, 'deferred'::character varying, 'cancelled'::character varying])::text[])))
+- `valid_human_verification_status`: CHECK ((human_verification_status = ANY (ARRAY['not_required'::text, 'pending'::text, 'in_progress'::text, 'passed'::text, 'failed'::text])))
 
 ## Indexes
 
