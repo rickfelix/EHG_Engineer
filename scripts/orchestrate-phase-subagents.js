@@ -84,6 +84,9 @@ const PLAN_VERIFY_BY_SD_TYPE = {
   // LEO Protocol v4.4.1: Added UAT for user-facing SDs (feature, api) to ensure human verification
   // ROOT CAUSE: UAT sub-agent had 0% invocation rate because it was keyword-only, not phase-mandatory
   feature: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'API', 'DEPENDENCY', 'UAT'],
+  // LEO Protocol v4.4.1: Enhancement - improvements to existing features (UAT optional, not mandatory)
+  // Use this type for minor improvements that don't warrant full UAT validation
+  enhancement: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'API', 'DEPENDENCY'],
   database: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE'],  // Added PERFORMANCE for N+1 detection
   security: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE'],  // Added PERFORMANCE
   api: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'API', 'UAT'],  // Added UAT for API verification
@@ -114,6 +117,8 @@ const MANDATORY_SUBAGENTS_BY_PHASE = {
     // LEO Protocol v4.4.1: Added UAT to feature/api mandatory lists
     // ROOT CAUSE: UAT had 0% invocation - now mandatory for user-facing SDs
     feature: ['TESTING', 'SECURITY', 'PERFORMANCE', 'UAT'],
+    // LEO Protocol v4.4.1: Enhancement - same as feature but UAT NOT mandatory (optional via keyword)
+    enhancement: ['TESTING', 'SECURITY', 'PERFORMANCE'],
     // ROOT CAUSE FIX (2026-01-01): Removed TESTING from database mandatory list
     // Database SDs focus on schema/migrations, not user-facing code. TESTING exemption
     // is configured in sd_type_validation_profiles table. Step 3D was overriding this
