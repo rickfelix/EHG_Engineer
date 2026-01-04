@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-04T15:10:53.065Z
-**Rows**: 1
+**Generated**: 2026-01-04T20:01:25.156Z
+**Rows**: 3
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (11 total)
+## Columns (15 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -29,6 +29,10 @@
 | superseded_by | `uuid` | YES | - | - |
 | notes | `text` | YES | - | - |
 | metadata | `jsonb` | YES | `'{}'::jsonb` | - |
+| generation_rationale | `text` | YES | - | - |
+| generated_by | `text` | YES | - | - |
+| algorithm_version | `text` | YES | - | - |
+| generation_metadata | `jsonb` | YES | - | - |
 
 ## Constraints
 

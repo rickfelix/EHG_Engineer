@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-04T15:10:53.065Z
-**Tables**: 316
+**Generated**: 2026-01-04T20:01:25.156Z
+**Tables**: 324
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (316)
+## All Tables (324)
 
 ### LEO Protocol
 
@@ -59,9 +59,11 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sd_backlog_map](tables/sd_backlog_map.md)
 - [sd_baseline_issues](tables/sd_baseline_issues.md)
 - [sd_baseline_items](tables/sd_baseline_items.md)
+- [sd_baseline_rationale](tables/sd_baseline_rationale.md)
 - [sd_burn_rate_snapshots](tables/sd_burn_rate_snapshots.md)
 - [sd_business_evaluations](tables/sd_business_evaluations.md)
 - [sd_capabilities](tables/sd_capabilities.md)
+- [sd_checkpoint_history](tables/sd_checkpoint_history.md)
 - [sd_claims](tables/sd_claims.md)
 - [sd_conflict_matrix](tables/sd_conflict_matrix.md)
 - [sd_contract_exceptions](tables/sd_contract_exceptions.md)
@@ -75,6 +77,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sd_governance_bypass_audit](tables/sd_governance_bypass_audit.md)
 - [sd_intensity_adjustments](tables/sd_intensity_adjustments.md)
 - [sd_intensity_gate_exemptions](tables/sd_intensity_gate_exemptions.md)
+- [sd_key_result_alignment](tables/sd_key_result_alignment.md)
 - [sd_overlap_analysis](tables/sd_overlap_analysis.md)
 - [sd_phase_handoffs](tables/sd_phase_handoffs.md)
 - [sd_phase_tracking](tables/sd_phase_tracking.md)
@@ -184,6 +187,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [context_embeddings](tables/context_embeddings.md)
 - [context_usage_daily](tables/context_usage_daily.md)
 - [context_usage_log](tables/context_usage_log.md)
+- [continuous_execution_log](tables/continuous_execution_log.md)
 - [crew_members](tables/crew_members.md)
 - [crew_semantic_diffs](tables/crew_semantic_diffs.md)
 - [crewai_agents](tables/crewai_agents.md)
@@ -240,6 +244,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [intelligence_analysis](tables/intelligence_analysis.md)
 - [intelligence_patterns](tables/intelligence_patterns.md)
 - [interaction_history](tables/interaction_history.md)
+- [key_results](tables/key_results.md)
+- [kr_progress_snapshots](tables/kr_progress_snapshots.md)
 - [lead_evaluations](tables/lead_evaluations.md)
 - [learning_configurations](tables/learning_configurations.md)
 - [lifecycle_stage_config](tables/lifecycle_stage_config.md)
@@ -249,6 +255,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [model_usage_log](tables/model_usage_log.md)
 - [nav_preferences](tables/nav_preferences.md)
 - [nav_routes](tables/nav_routes.md)
+- [objectives](tables/objectives.md)
 - [operations_audit_log](tables/operations_audit_log.md)
 - [opportunities](tables/opportunities.md)
 - [opportunity_blueprints](tables/opportunity_blueprints.md)
@@ -300,6 +307,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [stage_data_contracts](tables/stage_data_contracts.md)
 - [stage_events](tables/stage_events.md)
 - [story_test_mappings](tables/story_test_mappings.md)
+- [strategic_vision](tables/strategic_vision.md)
 - [sub_agent_execution_batches](tables/sub_agent_execution_batches.md)
 - [sub_agent_execution_results](tables/sub_agent_execution_results.md)
 - [sub_agent_execution_results_archive](tables/sub_agent_execution_results_archive.md)
