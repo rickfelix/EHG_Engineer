@@ -76,7 +76,14 @@ export class UserStoryQualityRubric extends AIQualityEvaluator {
 - Strict on testability: all acceptance criteria must be independently testable
 - Apply full INVEST principles (Independent, Negotiable, Valuable, Estimable, Small, Testable)
 - No boilerplate like "works correctly", "good performance", "user-friendly"
-- Given-When-Then should cover happy path + edge cases`,
+- Given-When-Then should cover happy path + edge cases
+
+**LEO v4.4.0 - HUMAN-VERIFIABLE OUTCOME REQUIREMENT:**
+- Feature SDs MUST include at least one acceptance criterion that a non-technical person could verify
+- This should be a "smoke test" style criterion: Navigate to X, click Y, see Z
+- Example GOOD: "When user clicks Save, a success toast appears within 2 seconds"
+- Example BAD: "Data is persisted to database correctly" (requires technical verification)
+- Penalize stories that only have technical criteria without user-observable outcomes`,
 
       database: `**MODERATE MODE for Database SDs:**
 - Focus on data integrity and migration safety in acceptance criteria
@@ -110,7 +117,15 @@ export class UserStoryQualityRubric extends AIQualityEvaluator {
 - 7-8: Most criteria are specific, testable, and verifiable
 - 9-10: All acceptance criteria are specific, testable, verifiable, with clear pass/fail conditions
 
-Penalize heavily for generic boilerplate like "system works", "good performance", "user-friendly". Reserve 9-10 for truly testable criteria.`
+Penalize heavily for generic boilerplate like "system works", "good performance", "user-friendly". Reserve 9-10 for truly testable criteria.
+
+**LEO v4.4.0 - Human-Verifiable Outcome Check (for FEATURE SDs only):**
+For feature SDs, also check that at least one criterion describes a user-observable outcome that a non-technical person could verify:
+- GOOD: "User sees success message after clicking Submit"
+- GOOD: "Form validation shows inline error when email format is invalid"
+- BAD: "Data is correctly saved to database" (only a developer can verify)
+- BAD: "API returns 200 status" (only a developer can verify)
+If ALL criteria are technical-only with no user-observable outcomes, score maximum 6/10.`
         },
         {
           name: 'story_independence_implementability',
