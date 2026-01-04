@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-04T15:10:53.065Z
+**Generated**: 2026-01-04T20:01:25.156Z
 **Rows**: 0
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -62,17 +62,22 @@
 
 ## RLS Policies
 
-### 1. runtime_audits_insert (INSERT)
+### 1. Allow delete for authenticated (DELETE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 2. runtime_audits_insert (INSERT)
 
 - **Roles**: {public}
 - **With Check**: `true`
 
-### 2. runtime_audits_select (SELECT)
+### 3. runtime_audits_select (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`
 
-### 3. runtime_audits_update (UPDATE)
+### 4. runtime_audits_update (UPDATE)
 
 - **Roles**: {public}
 - **Using**: `true`

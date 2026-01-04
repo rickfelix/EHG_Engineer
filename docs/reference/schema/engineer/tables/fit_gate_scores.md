@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-04T15:10:53.065Z
+**Generated**: 2026-01-04T20:01:25.156Z
 **Rows**: 0
-**RLS**: Enabled (3 policies)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -93,14 +93,19 @@
 
 ## RLS Policies
 
-### 1. insert_fit_gate_scores_policy (INSERT)
+### 1. Allow delete for authenticated (DELETE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 2. insert_fit_gate_scores_policy (INSERT)
 
 - **Roles**: {authenticated}
 - **With Check**: `((auth.uid() = evaluated_by) AND (EXISTS ( SELECT 1
    FROM user_organizations
   WHERE ((user_organizations.user_id = auth.uid()) AND (user_organizations.role = ANY (ARRAY['evaluator'::text, 'admin'::text, 'owner'::text]))))))`
 
-### 2. select_fit_gate_scores_policy (SELECT)
+### 3. select_fit_gate_scores_policy (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `(intake_submission_id IN ( SELECT intake_submissions.id
@@ -109,7 +114,7 @@
            FROM user_organizations
           WHERE (user_organizations.user_id = auth.uid()))))))`
 
-### 3. update_fit_gate_scores_policy (UPDATE)
+### 4. update_fit_gate_scores_policy (UPDATE)
 
 - **Roles**: {authenticated}
 - **Using**: `(auth.uid() = evaluated_by)`

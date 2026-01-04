@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-04T15:10:53.065Z
+**Generated**: 2026-01-04T20:01:25.156Z
 **Rows**: 8
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -42,12 +42,23 @@
 
 ## RLS Policies
 
-### 1. select_venture_archetypes_policy (SELECT)
+### 1. Allow insert for authenticated (INSERT)
+
+- **Roles**: {authenticated}
+- **With Check**: `true`
+
+### 2. Allow update for authenticated (UPDATE)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+- **With Check**: `true`
+
+### 3. select_venture_archetypes_policy (SELECT)
 
 - **Roles**: {public}
 - **Using**: `true`
 
-### 2. venture_archetypes_delete (DELETE)
+### 4. venture_archetypes_delete (DELETE)
 
 - **Roles**: {service_role}
 - **Using**: `true`

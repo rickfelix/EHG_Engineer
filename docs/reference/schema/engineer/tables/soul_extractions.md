@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-04T15:10:53.065Z
+**Generated**: 2026-01-04T20:01:25.156Z
 **Rows**: 0
-**RLS**: Disabled
+**RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -51,6 +51,19 @@
   ```sql
   CREATE UNIQUE INDEX soul_extractions_pkey ON public.soul_extractions USING btree (id)
   ```
+
+## RLS Policies
+
+### 1. Allow all for authenticated (ALL)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+- **With Check**: `true`
+
+### 2. Allow select for anon (SELECT)
+
+- **Roles**: {anon}
+- **Using**: `true`
 
 ---
 
