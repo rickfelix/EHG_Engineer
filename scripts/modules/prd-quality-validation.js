@@ -238,7 +238,7 @@ export async function validatePRDQuality(prd, options = {}) {
   // ROOT CAUSE FIX (2026-01-01): Added 'database', 'database_schema' - same rationale as
   // user-story-quality-validation.js line 157: database SDs focus on schema/migrations,
   // not user narratives. This was an incomplete refactoring that caused false PRD failures.
-  const heuristicTypes = ['bugfix', 'bug_fix', 'infrastructure', 'database', 'database_schema', 'quality assurance', 'quality_assurance', 'orchestrator', 'documentation', 'refactor', 'theming', 'ux', 'design', 'ui', 'layout', 'state-management'];
+  const heuristicTypes = ['bugfix', 'bug_fix', 'infrastructure', 'implementation', 'database', 'database_schema', 'quality assurance', 'quality_assurance', 'orchestrator', 'documentation', 'refactor', 'theming', 'ux', 'design', 'ui', 'layout', 'state-management'];
   const usesHeuristic = process.env.PRD_VALIDATION_MODE === 'heuristic' ||
                         heuristicTypes.includes(sdType) ||
                         heuristicTypes.includes(sdCategory);

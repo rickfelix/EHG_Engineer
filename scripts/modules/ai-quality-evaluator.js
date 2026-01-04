@@ -1,7 +1,7 @@
 /**
  * AI Quality Evaluator - Foundation Class
  *
- * Provides AI-powered quality assessment using gpt-5-mini with Russian Judge
+ * Provides AI-powered quality assessment using GPT 5.2 with Russian Judge
  * multi-criterion weighted rubrics (0-10 scale per criterion).
  *
  * All rubrics (SD, PRD, User Story, Retrospective) extend this class.
@@ -62,7 +62,7 @@ export class AIQualityEvaluator {
    */
   constructor(rubricConfig) {
     this.rubricConfig = rubricConfig;
-    this.model = 'gpt-5-mini';
+    this.model = 'gpt-5.2';
     this.temperature = 0.3; // Balance consistency + nuance
 
     // Initialize OpenAI
