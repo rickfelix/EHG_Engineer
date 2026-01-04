@@ -64,7 +64,7 @@ This command provides:
 - `bash scripts/leo-stack.sh stop` - Stop all servers
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-04 9:03:44 AM
+**Last Generated**: 2026-01-04 11:42:40 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -111,6 +111,7 @@ This command provides:
 | `ANALYTICS` | analytics, metrics, dashboard, aarrr, funnel, conversion rate, user behavior, tracking, kpi, retention rate (+1 more) |
 | `API` | api, rest, restful, graphql, endpoint, route, controller, middleware, request, response (+7 more) |
 | `CRM` | crm, customer relationship, contact management, lead tracking, customer success, salesforce, hubspot, customer data |
+| `DATABASE` | query, select from, insert into, supabase, fetch from database, database query |
 | `DEPENDENCY` | dependency, dependencies, npm, yarn, pnpm, package, package.json, vulnerability, cve, security advisory (+12 more) |
 | `DESIGN` | component, visual, design system, styling, css, tailwind, interface, ui, button, form (+32 more) |
 | `DOCMON` | lead_sd_creation, lead_handoff_creation, lead_approval, plan_prd_generation, plan_verification, exec_implementation, exec_completion, handoff_created, handoff_accepted, phase_transition (+4 more) |
