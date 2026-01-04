@@ -97,14 +97,16 @@ const PLAN_VERIFY_BY_SD_TYPE = {
 
   // LEO Protocol v4.3.3: Refactor SD type with intensity-aware validation
   // Default refactor uses standard validation; intensity overrides below
-  refactor: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE']
+  // LEO Protocol v4.4.1: Added REGRESSION for backward compatibility validation
+  refactor: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'REGRESSION']
 };
 
 // LEO Protocol v4.3.3: Intensity-specific PLAN_VERIFY overrides for refactor SDs
+// LEO Protocol v4.4.1: Added REGRESSION for structural/architectural (backward compatibility)
 const REFACTOR_INTENSITY_SUBAGENTS = {
-  cosmetic: ['GITHUB', 'DOCMON', 'STORIES'],  // No TESTING/SECURITY/PERFORMANCE - cosmetic is low risk
-  structural: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE'],  // Standard
-  architectural: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN']  // Full + DESIGN
+  cosmetic: ['GITHUB', 'DOCMON', 'STORIES'],  // No TESTING/SECURITY/PERFORMANCE/REGRESSION - cosmetic is low risk
+  structural: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'REGRESSION'],
+  architectural: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'REGRESSION']
 };
 
 // MANDATORY sub-agents that ALWAYS run regardless of keyword matching
@@ -130,16 +132,18 @@ const MANDATORY_SUBAGENTS_BY_PHASE = {
     documentation: ['DOCMON'],
     infrastructure: ['GITHUB', 'SECURITY'],
     // LEO Protocol v4.3.3: Refactor mandatory agents (intensity-aware)
-    refactor: ['GITHUB', 'DOCMON']  // Base requirement; TESTING mandatory only for structural/architectural
+    // LEO Protocol v4.4.1: Added REGRESSION - backward compatibility is core to refactoring
+    refactor: ['GITHUB', 'DOCMON', 'REGRESSION']  // Base requirement; TESTING mandatory only for structural/architectural
   },
   LEAD_FINAL: ['RETRO']  // Always generate retrospective
 };
 
 // LEO Protocol v4.3.3: Intensity-specific MANDATORY sub-agents for refactor
+// LEO Protocol v4.4.1: Added REGRESSION for structural/architectural (backward compatibility)
 const REFACTOR_INTENSITY_MANDATORY = {
-  cosmetic: ['GITHUB', 'DOCMON'],  // Minimal - just git and docs
-  structural: ['GITHUB', 'DOCMON', 'SECURITY', 'PERFORMANCE'],  // Standard security/performance checks
-  architectural: ['TESTING', 'GITHUB', 'DOCMON', 'SECURITY', 'PERFORMANCE', 'DESIGN']  // Full validation
+  cosmetic: ['GITHUB', 'DOCMON'],  // Minimal - just git and docs (no REGRESSION for cosmetic)
+  structural: ['GITHUB', 'DOCMON', 'SECURITY', 'PERFORMANCE', 'REGRESSION'],  // + backward compatibility
+  architectural: ['TESTING', 'GITHUB', 'DOCMON', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'REGRESSION']  // Full validation
 };
 
 /**
