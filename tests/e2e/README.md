@@ -208,16 +208,44 @@ test.beforeEach(async () => {
 ```
 tests/
 ├── e2e/
-│   ├── venture-creation-workflow.spec.js  (B1.4 - NEW)
-│   ├── context7-failure-scenarios.spec.ts (existing)
-│   ├── knowledge-retrieval-flow.spec.ts   (existing)
-│   ├── semantic-search.spec.js            (existing)
-│   ├── story-example.spec.js              (existing)
+│   ├── accessibility/                     (SD-E2E-UAT-COVERAGE-001)
+│   │   └── placeholder-replacement.spec.ts
+│   ├── auth/                              (Authentication tests)
+│   ├── concurrency/                       (SD-E2E-UAT-COVERAGE-001C)
+│   │   └── concurrent-operations.spec.ts
+│   ├── edge-cases/                        (SD-E2E-UAT-COVERAGE-001D)
+│   │   └── boundary-conditions.spec.ts
+│   ├── error-handling/                    (SD-E2E-UAT-COVERAGE-001B)
+│   │   └── api-failure-states.spec.ts
+│   ├── forms/                             (SD-E2E-UAT-COVERAGE-001B)
+│   │   └── validation-error-states.spec.ts
+│   ├── mobile/                            (SD-E2E-UAT-COVERAGE-001B)
+│   │   └── placeholder-mobile.spec.ts
+│   ├── security/                          (SD-E2E-UAT-COVERAGE-001C)
+│   │   ├── csrf-validation.spec.ts
+│   │   └── rbac-permissions.spec.ts
+│   ├── venture-creation-workflow.spec.js  (B1.4)
+│   ├── context7-failure-scenarios.spec.ts
+│   ├── knowledge-retrieval-flow.spec.ts
 │   └── README.md                          (this file)
 ├── helpers/                               (B1.1 utilities)
 ├── factories/                             (B1.2 data factories)
 └── unit/                                  (B1.3 unit tests)
 ```
+
+### SD-E2E-UAT-COVERAGE-001 Test Categories
+
+The E2E test suite was expanded as part of the SD-E2E-UAT-COVERAGE-001 initiative:
+
+| Category | Description | Test File |
+|----------|-------------|-----------|
+| Accessibility | WCAG 2.1 AA compliance, label associations | `accessibility/placeholder-replacement.spec.ts` |
+| Mobile | Viewport testing, touch interactions | `mobile/placeholder-mobile.spec.ts` |
+| Error Handling | API failures, timeout, retry mechanisms | `error-handling/api-failure-states.spec.ts` |
+| Forms | Validation states, inline errors, aria | `forms/validation-error-states.spec.ts` |
+| Security | CSRF tokens, RBAC permissions | `security/csrf-validation.spec.ts`, `rbac-permissions.spec.ts` |
+| Concurrency | Race conditions, double-click prevention | `concurrency/concurrent-operations.spec.ts` |
+| Edge Cases | Empty states, large datasets, special chars | `edge-cases/boundary-conditions.spec.ts` |
 
 ## Best Practices
 
