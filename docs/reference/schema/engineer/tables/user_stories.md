@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-05T02:24:09.223Z
-**Rows**: 1,169
+**Generated**: 2026-01-05T11:19:21.578Z
+**Rows**: 1,175
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -159,6 +159,11 @@
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION auto_validate_story_on_test_pass()`
+
+### trg_warn_user_story_e2e
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION warn_user_story_e2e_status()`
 
 ### trigger_sync_story_to_deliverables
 
