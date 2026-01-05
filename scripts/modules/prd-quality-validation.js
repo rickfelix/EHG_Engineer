@@ -234,7 +234,13 @@ export async function validatePRDQuality(prd, options = {}) {
   // similar to infrastructure - they don't need the full AI semantic analysis
   // Added 'theming', 'ux', 'design', 'ui' (2025-12-28): UI/UX SDs focus on visual/style changes
   // Check both sdType and sdCategory since SDs can have type='implementation' but category='theming'
-  const heuristicTypes = ['bugfix', 'bug_fix', 'infrastructure', 'quality assurance', 'quality_assurance', 'orchestrator', 'documentation', 'refactor', 'theming', 'ux', 'design', 'ui', 'layout', 'state-management'];
+  // ROOT CAUSE FIX (2026-01-01): Added 'database', 'database_schema' - same rationale as
+  // user-story-quality-validation.js line 157: database SDs focus on schema/migrations,
+  // not user narratives. This was an incomplete refactoring that caused false PRD failures.
+  // ROOT CAUSE FIX (2026-01-04): Added 'feature' - Explorer agents analysis found AI validation
+  // variance (54% vs 56% for same PRD) blocks features. Hybrid approach: use deterministic
+  // heuristic for features with 65% threshold (see sd-type-checker.js). AI reserved for tiebreakers.
+  const heuristicTypes = ['bugfix', 'bug_fix', 'infrastructure', 'implementation', 'database', 'database_schema', 'quality assurance', 'quality_assurance', 'orchestrator', 'documentation', 'refactor', 'theming', 'ux', 'design', 'ui', 'layout', 'state-management', 'feature'];
   const usesHeuristic = process.env.PRD_VALIDATION_MODE === 'heuristic' ||
                         heuristicTypes.includes(sdType) ||
                         heuristicTypes.includes(sdCategory);

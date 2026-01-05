@@ -302,7 +302,10 @@ Analyze the SD carefully and classify it based on what is actually being BUILT o
         weight: 1.0
       },
       documentation: {
-        keywords: ['documentation', 'docs', 'readme', 'guide', 'tutorial'],
+        // Enhanced keywords to catch research/evaluation SDs (LEO v4.3.3 improvement)
+        keywords: ['documentation', 'docs', 'readme', 'guide', 'tutorial',
+                   'research', 'evaluation', 'analysis', 'triangulation',
+                   'assessment', 'audit', 'verdict', 'go/no-go', 'investigation'],
         weight: 0.9
       },
       bugfix: {
