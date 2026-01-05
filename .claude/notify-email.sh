@@ -2,18 +2,14 @@
 # Claude Code Email Notification via Resend
 # Sends an email when Claude needs user input
 
-# Source the .env file if it exists (for credentials like RESEND_API_KEY)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="$SCRIPT_DIR/../.env"
-if [ -f "$ENV_FILE" ]; then
-    set -a  # Export all variables
-    source "$ENV_FILE"
-    set +a
+# Load environment variables from .env if available
+if [ -f "/mnt/c/_EHG/EHG_Engineer/.env" ]; then
+    export $(grep -v '^#' /mnt/c/_EHG/EHG_Engineer/.env | xargs)
 fi
 
-# Resend credentials (from .env.claude or environment)
+# Resend credentials (set these in your environment or .env file)
 RESEND_API_KEY="${RESEND_API_KEY:-}"
-TO_EMAIL="${CLAUDE_NOTIFY_EMAIL:-rickfelix2000@gmail.com}"
+TO_EMAIL="${CLAUDE_NOTIFY_EMAIL:-}"
 
 if [ -z "$RESEND_API_KEY" ] || [ -z "$TO_EMAIL" ]; then
     echo "Email notification not configured. Set RESEND_API_KEY and CLAUDE_NOTIFY_EMAIL."
