@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-04T22:58:02.355Z
+**Generated**: 2026-01-05T02:07:57.612Z
 **Rows**: 327
 **RLS**: Enabled (3 policies)
 
@@ -94,7 +94,7 @@
 - `product_requirements_v2_document_type_check`: CHECK (((document_type)::text = ANY ((ARRAY['prd'::character varying, 'refactor_brief'::character varying, 'architecture_decision_record'::character varying])::text[])))
 - `product_requirements_v2_reasoning_depth_check`: CHECK (((reasoning_depth)::text = ANY ((ARRAY['quick'::character varying, 'standard'::character varying, 'deep'::character varying, 'ultra'::character varying])::text[])))
 - `product_requirements_v2_research_confidence_score_check`: CHECK (((research_confidence_score >= (0)::numeric) AND (research_confidence_score <= (1)::numeric)))
-- `product_requirements_v2_status_check`: CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'planning'::character varying, 'approved'::character varying, 'in_progress'::character varying, 'pending_approval'::character varying, 'verification'::character varying, 'implemented'::character varying, 'testing'::character varying, 'completed'::character varying, 'archived'::character varying])::text[])))
+- `product_requirements_v2_status_check`: CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'planning'::character varying, 'in_progress'::character varying, 'testing'::character varying, 'verification'::character varying, 'approved'::character varying, 'completed'::character varying, 'archived'::character varying, 'rejected'::character varying, 'on_hold'::character varying, 'cancelled'::character varying])::text[])))
 - `test_scenarios_required`: CHECK (((test_scenarios IS NOT NULL) AND ((test_scenarios -> 0) IS NOT NULL)))
 
 ## Indexes
