@@ -70,3 +70,19 @@ jobs:
             echo "✅ Coverage ${COVERAGE}% meets threshold ${THRESHOLD}%"
           fi
         continue-on-error: true  # Informational only during test infrastructure fixes
+
+      - name: Capture test results to database
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -f test-results.json ] || [ -f coverage/test-results.json ]; then
+            echo "📊 Capturing test results to database..."
+            node scripts/test-result-capture.js --ci --branch "${{ github.head_ref || github.ref_name }}" || {
+              echo "⚠️ Test result capture failed (non-blocking)"
+            }
+          else
+            echo "ℹ️ No test results JSON found - skipping capture"
+          fi
+        continue-on-error: true
