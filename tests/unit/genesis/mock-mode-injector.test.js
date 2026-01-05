@@ -10,7 +10,7 @@ import {
   MOCK_MODE_ASSERTION,
   MOCK_MODE_ASSERTION_COMPACT,
   MOCK_MODE_IMPORT,
-} from '../mock-mode-injector.js';
+} from '../../../lib/genesis/mock-mode-injector.js';
 
 describe('Mock Mode Injector', () => {
   describe('hasMockModeAssertion', () => {

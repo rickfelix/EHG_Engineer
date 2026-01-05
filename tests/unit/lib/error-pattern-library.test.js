@@ -16,7 +16,7 @@ import {
   getPatternsByCategory,
   getPatternsBySubAgent,
   getLibraryStats
-} from './error-pattern-library.js';
+} from '../../../lib/error-pattern-library.js';
 
 // ============================================================================
 // TEST UTILITIES

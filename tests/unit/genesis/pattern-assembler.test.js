@@ -12,7 +12,7 @@ import {
   validateSlotValues,
   SLOT_PREFIX,
   SLOT_SUFFIX,
-} from '../pattern-assembler.js';
+} from '../../../lib/genesis/pattern-assembler.js';
 
 describe('Pattern Assembler', () => {
   describe('substituteSlots', () => {
