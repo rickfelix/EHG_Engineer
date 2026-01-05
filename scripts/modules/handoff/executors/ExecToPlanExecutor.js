@@ -617,6 +617,36 @@ export class ExecToPlanExecutor extends BaseExecutor {
       console.warn(`   ⚠️  SD update error: ${error.message}`);
     }
 
+    // =========================================================================
+    // AUTOMATED SHIPPING: PR Creation Decision (LEO Protocol v4.3.5)
+    // =========================================================================
+    let shippingResult = null;
+    try {
+      console.log('\n🚢 [AUTO-SHIP] PR Creation Decision');
+      console.log('-'.repeat(50));
+
+      const { runAutomatedShipping } = await import('../../shipping/index.js');
+      const repoPath = this.determineTargetRepository(sd);
+
+      shippingResult = await runAutomatedShipping(
+        sdId,
+        repoPath,
+        'EXEC-TO-PLAN',
+        'PR_CREATION'
+      );
+
+      if (shippingResult.executionResult?.success) {
+        console.log(`\n   ✅ PR Created: ${shippingResult.executionResult.prUrl}`);
+      } else if (shippingResult.shouldEscalate) {
+        console.log('\n   ⚠️  PR creation escalated to human - run /ship manually');
+      } else if (shippingResult.executionResult?.deferred) {
+        console.log('\n   ⏸️  PR creation deferred - fix issues first');
+      }
+    } catch (shippingError) {
+      console.warn(`   ⚠️  Auto-shipping error (non-blocking): ${shippingError.message}`);
+      // Non-blocking - handoff still succeeds even if shipping fails
+    }
+
     return {
       success: true,
       subAgents: {
@@ -627,6 +657,14 @@ export class ExecToPlanExecutor extends BaseExecutor {
       test_evidence: testEvidenceResult, // LEO v4.3.4: Unified test evidence
       deliverables: deliverablesStatus,
       commit_verification: commitVerification,
+      // LEO v4.3.5: Automated shipping result
+      automated_shipping: shippingResult ? {
+        decision: shippingResult.decision,
+        confidence: shippingResult.confidence,
+        pr_url: shippingResult.executionResult?.prUrl,
+        pr_number: shippingResult.executionResult?.prNumber,
+        escalated: shippingResult.shouldEscalate
+      } : null,
       // Use normalized score (weighted average 0-100%) instead of summed totalScore
       qualityScore: gateResults.normalizedScore ?? Math.round((gateResults.totalScore / gateResults.totalMaxScore) * 100)
     };

@@ -445,11 +445,62 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     console.log(`   Title: ${sd.title}`);
     console.log(`   Handoff ID: ${handoffId}`);
 
+    // =========================================================================
+    // AUTOMATED SHIPPING: PR Merge & Branch Cleanup (LEO Protocol v4.3.5)
+    // =========================================================================
+    let shippingResults = { merge: null, cleanup: null };
+    try {
+      console.log('\n🚢 [AUTO-SHIP] Merge & Cleanup Decisions');
+      console.log('-'.repeat(50));
+
+      const { runFinalApprovalShipping } = await import('../../shipping/index.js');
+      const repoPath = this.determineTargetRepository(sd);
+
+      shippingResults = await runFinalApprovalShipping(
+        sd.legacy_id || sdId,
+        repoPath
+      );
+
+      // Report merge result
+      if (shippingResults.merge?.executionResult?.success) {
+        console.log('\n   ✅ PR Merged successfully');
+      } else if (shippingResults.merge?.shouldEscalate) {
+        console.log('\n   ⚠️  PR merge escalated to human - run /ship manually');
+      } else if (shippingResults.merge?.executionResult?.deferred) {
+        console.log('\n   ⏸️  PR merge deferred - fix issues first');
+      }
+
+      // Report cleanup result
+      if (shippingResults.cleanup?.executionResult?.success) {
+        console.log(`   ✅ Branch ${shippingResults.cleanup.executionResult.branchDeleted} deleted`);
+      } else if (shippingResults.cleanup?.shouldEscalate) {
+        console.log('   ⚠️  Branch cleanup escalated to human');
+      }
+    } catch (shippingError) {
+      console.warn(`   ⚠️  Auto-shipping error (non-blocking): ${shippingError.message}`);
+      // Non-blocking - handoff still succeeds even if shipping fails
+    }
+
     return {
       success: true,
       sdId: sdId,
       handoffId: handoffId,
       message: 'SD completed successfully',
+      // LEO v4.3.5: Automated shipping results
+      automated_shipping: {
+        merge: shippingResults.merge ? {
+          decision: shippingResults.merge.decision,
+          confidence: shippingResults.merge.confidence,
+          merged: shippingResults.merge.executionResult?.merged,
+          escalated: shippingResults.merge.shouldEscalate
+        } : null,
+        cleanup: shippingResults.cleanup ? {
+          decision: shippingResults.cleanup.decision,
+          confidence: shippingResults.cleanup.confidence,
+          branch_deleted: shippingResults.cleanup.executionResult?.branchDeleted,
+          escalated: shippingResults.cleanup.shouldEscalate
+        } : null
+      },
       // Use normalized score (weighted average 0-100%) instead of summed totalScore
       qualityScore: gateResults.normalizedScore ?? Math.round((gateResults.totalScore / gateResults.totalMaxScore) * 100)
     };
