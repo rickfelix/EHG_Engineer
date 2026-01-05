@@ -66,13 +66,37 @@ dotenv.config();
 const supabase = await createSupabaseServiceClient('engineer', { verbose: false });
 
 // Phase to sub-agent mapping (loaded from database, this is fallback)
-// NOTE: PLAN_VERIFY is now DYNAMIC based on sd_type - see getPhaseSubAgentsForSd()
+// NOTE: PLAN_PRD and PLAN_VERIFY are now DYNAMIC based on sd_type - see getPhaseSubAgentsForSd()
 const PHASE_SUBAGENT_MAP = {
   LEAD_PRE_APPROVAL: ['VALIDATION', 'DATABASE', 'SECURITY', 'DESIGN', 'RISK'],
-  PLAN_PRD: ['DATABASE', 'STORIES', 'RISK'],
+  PLAN_PRD: ['DATABASE', 'STORIES', 'RISK', 'TESTING'],  // LEO v4.4.1: Added TESTING for test plan creation
   EXEC_IMPL: [], // EXEC does the work, no sub-agents
   PLAN_VERIFY: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'API', 'DEPENDENCY'],
   LEAD_FINAL: ['RETRO']
+};
+
+// LEO Protocol v4.4.1: SD type-aware PLAN_PRD mapping
+// ROOT CAUSE FIX: TESTING was only running during PLAN_VERIFY (after implementation)
+// This caused SDs to be implemented without test plans, then blocked when TESTING
+// found no tests during verification. Now TESTING runs during PLAN_PRD for
+// feature/api SDs to generate test requirements BEFORE implementation.
+const PLAN_PRD_BY_SD_TYPE = {
+  // Feature/API SDs need test requirements created during planning
+  feature: ['DATABASE', 'STORIES', 'RISK', 'TESTING', 'API'],
+  api: ['DATABASE', 'STORIES', 'RISK', 'TESTING', 'API'],
+
+  // Database SDs focus on schema validation
+  database: ['DATABASE', 'STORIES', 'RISK'],
+
+  // Security SDs need security review during planning
+  security: ['DATABASE', 'STORIES', 'RISK', 'SECURITY'],
+
+  // Documentation/infrastructure don't need testing during planning
+  documentation: ['STORIES', 'DOCMON'],
+  infrastructure: ['DATABASE', 'STORIES', 'RISK'],
+
+  // Refactor uses standard planning
+  refactor: ['DATABASE', 'STORIES', 'RISK']
 };
 
 // SD type-aware PLAN_VERIFY mapping (SD-TECH-DEBT-DOCS-001 resilience improvement)
@@ -104,9 +128,22 @@ const REFACTOR_INTENSITY_SUBAGENTS = {
 
 // MANDATORY sub-agents that ALWAYS run regardless of keyword matching
 // LEO Protocol v4.3.4: Ensures critical validations can't be skipped
+// LEO Protocol v4.4.1: PLAN_PRD now SD-type aware to require TESTING for feature/api SDs
 const MANDATORY_SUBAGENTS_BY_PHASE = {
   LEAD_PRE_APPROVAL: ['VALIDATION', 'RISK'],  // Always check for duplicates and risks
-  PLAN_PRD: ['DATABASE', 'STORIES'],  // Always validate schema and user stories
+  PLAN_PRD: {
+    // LEO v4.4.1: SD-type specific mandatory agents for PLAN_PRD
+    // ROOT CAUSE FIX: Feature/API SDs must have TESTING during planning to create test requirements
+    feature: ['DATABASE', 'STORIES', 'TESTING'],
+    api: ['DATABASE', 'STORIES', 'TESTING', 'API'],
+    database: ['DATABASE', 'STORIES'],
+    security: ['DATABASE', 'STORIES', 'SECURITY'],
+    documentation: ['STORIES'],
+    infrastructure: ['DATABASE', 'STORIES'],
+    refactor: ['DATABASE', 'STORIES'],
+    // Default fallback for unknown types
+    default: ['DATABASE', 'STORIES']
+  },
   PLAN_VERIFY: {
     // SD-type specific mandatory agents
     feature: ['TESTING', 'SECURITY', 'PERFORMANCE'],
@@ -213,10 +250,11 @@ async function getPhaseSubAgentsForSd(phase, sd) {
     throw new Error(`Failed to query sub-agents: ${error.message}`);
   }
 
-  // For PLAN_VERIFY, use sd_type-aware mapping
+  // For PLAN_VERIFY and PLAN_PRD, use sd_type-aware mapping
   let phaseAgentCodes;
+  const sdType = sd.sd_type || 'feature';
+
   if (phase === 'PLAN_VERIFY') {
-    const sdType = sd.sd_type || 'feature';
     const skipCode = shouldSkipCodeValidation(sd);
 
     // LEO Protocol v4.3.3: Intensity-aware sub-agent selection for refactor SDs
@@ -235,6 +273,12 @@ async function getPhaseSubAgentsForSd(phase, sd) {
       console.log(`   📋 SD Type: ${sdType} (skip code validation: NO)`);
       console.log(`   📋 Using full PLAN_VERIFY sub-agents: ${phaseAgentCodes.join(', ')}`);
     }
+  } else if (phase === 'PLAN_PRD') {
+    // LEO Protocol v4.4.1: SD type-aware PLAN_PRD sub-agent selection
+    // ROOT CAUSE FIX: Feature/API SDs need TESTING during planning to create test requirements
+    phaseAgentCodes = PLAN_PRD_BY_SD_TYPE[sdType] || PHASE_SUBAGENT_MAP[phase];
+    console.log(`   📋 SD Type: ${sdType}`);
+    console.log(`   📋 Using PLAN_PRD sub-agents: ${phaseAgentCodes.join(', ')}`);
   } else {
     // For other phases, use standard mapping
     phaseAgentCodes = PHASE_SUBAGENT_MAP[phase] || [];
