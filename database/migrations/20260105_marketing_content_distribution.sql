@@ -34,9 +34,9 @@ ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS marketing_content_queue (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   venture_id UUID NOT NULL REFERENCES ventures(id) ON DELETE CASCADE,
-  content_id UUID REFERENCES generated_content(id) ON DELETE SET NULL,
+  content_id UUID,  -- Optional reference to content source (no FK - table may not exist)
 
-  -- Content details (copy from generated_content for quick access)
+  -- Content details (stored directly for independence from source)
   title VARCHAR(255) NOT NULL,
   content_body TEXT NOT NULL,
   content_type VARCHAR(50),
@@ -159,9 +159,8 @@ CREATE POLICY "mcq_venture_access" ON marketing_content_queue
   USING (
     venture_id IN (
       SELECT v.id FROM ventures v
-      JOIN companies c ON v.company_id = c.id
-      WHERE c.id IN (
-        SELECT company_id FROM company_users WHERE user_id = auth.uid()
+      WHERE v.company_id IN (
+        SELECT company_id FROM user_company_access WHERE user_id = auth.uid()
       )
     )
   );
@@ -176,9 +175,8 @@ CREATE POLICY "dh_venture_access" ON distribution_history
   USING (
     venture_id IN (
       SELECT v.id FROM ventures v
-      JOIN companies c ON v.company_id = c.id
-      WHERE c.id IN (
-        SELECT company_id FROM company_users WHERE user_id = auth.uid()
+      WHERE v.company_id IN (
+        SELECT company_id FROM user_company_access WHERE user_id = auth.uid()
       )
     )
   );
