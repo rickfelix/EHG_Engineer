@@ -259,6 +259,120 @@ export class ExecToPlanExecutor extends BaseExecutor {
       required: true
     });
 
+    // LEO v4.4.2: MANDATORY_TESTING_VALIDATION gate
+    // SD-LEO-TESTING-GOVERNANCE-001A: Enforce TESTING sub-agent execution
+    // Evidence: 14.6% of SDs completed without TESTING validation
+    gates.push({
+      name: 'MANDATORY_TESTING_VALIDATION',
+      validator: async (ctx) => {
+        console.log('\n🧪 MANDATORY TESTING VALIDATION (LEO v4.4.2)');
+        console.log('-'.repeat(50));
+
+        // 1. Check SD type exemptions
+        const sdType = (ctx.sd?.sd_type || 'feature').toLowerCase();
+        const EXEMPT_TYPES = ['documentation', 'docs', 'infrastructure', 'orchestrator'];
+
+        if (EXEMPT_TYPES.includes(sdType)) {
+          console.log(`   ℹ️  ${sdType} type SD - TESTING validation SKIPPED`);
+          console.log('   → No code paths to validate');
+          return {
+            passed: true,
+            score: 100,
+            max_score: 100,
+            issues: [],
+            warnings: [`TESTING skipped for ${sdType} type SD`],
+            details: { skipped: true, reason: sdType }
+          };
+        }
+
+        // 2. Query for TESTING sub-agent execution
+        const sdUuid = ctx.sd?.id || ctx.sdId;
+        const { data: testingResults, error } = await this.supabase
+          .from('sub_agent_execution_results')
+          .select('id, verdict, confidence, created_at')
+          .eq('sd_id', sdUuid)
+          .eq('sub_agent_code', 'TESTING')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (error) {
+          console.log(`   ⚠️  Error checking TESTING execution: ${error.message}`);
+          return {
+            passed: false,
+            score: 0,
+            max_score: 100,
+            issues: [`Failed to verify TESTING execution: ${error.message}`],
+            warnings: []
+          };
+        }
+
+        // 3. Validate execution exists
+        if (!testingResults?.length) {
+          console.log('   ❌ BLOCKING: TESTING sub-agent must be executed');
+          console.log('\n   REMEDIATION:');
+          console.log('   1. Run: node scripts/orchestrate-phase-subagents.js PLAN_VERIFY ' + (ctx.sdId || sdUuid));
+          console.log('   2. Ensure all E2E tests pass');
+          console.log('   3. Re-run EXEC-TO-PLAN handoff');
+          return {
+            passed: false,
+            score: 0,
+            max_score: 100,
+            issues: ['BLOCKING: TESTING sub-agent must be executed before EXEC-TO-PLAN handoff'],
+            warnings: []
+          };
+        }
+
+        // 4. Validate verdict is acceptable
+        const result = testingResults[0];
+        console.log(`   📊 TESTING result found: ${result.verdict} (${result.confidence}% confidence)`);
+
+        if (!['PASS', 'CONDITIONAL_PASS'].includes(result.verdict)) {
+          console.log(`   ❌ TESTING verdict ${result.verdict} - must pass`);
+          return {
+            passed: false,
+            score: 0,
+            max_score: 100,
+            issues: [`TESTING verdict ${result.verdict} - must be PASS or CONDITIONAL_PASS`],
+            warnings: []
+          };
+        }
+
+        // 5. Validate freshness (default 24h)
+        const maxAgeHours = parseInt(process.env.LEO_TESTING_MAX_AGE_HOURS || '24');
+        const ageHours = (Date.now() - new Date(result.created_at)) / 3600000;
+
+        if (ageHours > maxAgeHours) {
+          console.log(`   ⚠️  TESTING results stale (${ageHours.toFixed(1)}h old, max ${maxAgeHours}h)`);
+          return {
+            passed: false,
+            score: 50,
+            max_score: 100,
+            issues: [`TESTING results stale (${ageHours.toFixed(1)}h old, max ${maxAgeHours}h)`],
+            warnings: []
+          };
+        }
+
+        console.log('   ✅ TESTING validation passed');
+        console.log(`      Verdict: ${result.verdict}`);
+        console.log(`      Age: ${ageHours.toFixed(1)}h (max ${maxAgeHours}h)`);
+
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [],
+          details: {
+            verdict: result.verdict,
+            confidence: result.confidence,
+            age_hours: ageHours.toFixed(1),
+            max_age_hours: maxAgeHours
+          }
+        };
+      },
+      required: true
+    });
+
     // BMAD Validation
     gates.push({
       name: 'BMAD_EXEC_TO_PLAN',
@@ -879,7 +993,17 @@ export class ExecToPlanExecutor extends BaseExecutor {
         '- Ambiguity: All FIXME/TODO/HACK comments resolved (MANDATORY)',
         'After fixing issues, re-run this handoff'
       ].join('\n'),
-      'RCA_GATE': 'All P0/P1 RCRs must have verified CAPAs before handoff. Run: node scripts/root-cause-agent.js capa verify --capa-id <UUID>'
+      'RCA_GATE': 'All P0/P1 RCRs must have verified CAPAs before handoff. Run: node scripts/root-cause-agent.js capa verify --capa-id <UUID>',
+      'MANDATORY_TESTING_VALIDATION': [
+        'TESTING sub-agent is MANDATORY for code-producing SDs.',
+        '',
+        'STEPS TO RESOLVE:',
+        '1. Run: node scripts/orchestrate-phase-subagents.js PLAN_VERIFY <SD-ID>',
+        '2. Ensure all E2E tests pass',
+        '3. Re-run EXEC-TO-PLAN handoff',
+        '',
+        'EXEMPT SD TYPES: documentation, infrastructure, orchestrator'
+      ].join('\n')
     };
 
     return remediations[gateName] || null;
