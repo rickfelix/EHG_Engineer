@@ -8,12 +8,25 @@ Commit your changes and create a pull request.
 
 Before proceeding with the current branch, check for stale unmerged branches that may need attention.
 
-**Run these commands to gather branch information:**
+**Run this quick check first:**
 
 ```bash
 # Get all local branches that haven't been merged into main
 git branch --no-merged main
+```
 
+**If unmerged branches exist, use AskUserQuestion to prompt:**
+
+```
+Question: "Found X unmerged branch(es). Would you like me to do a deeper analysis?"
+Options:
+- "Yes, analyze branches" - Full analysis with categorization and cleanup options
+- "No, skip to shipping" - Proceed directly to Step 1
+```
+
+**If user chooses "Yes, analyze branches", run the detailed analysis:**
+
+```bash
 # For each unmerged branch, get the last commit date
 git for-each-ref --sort=-committerdate --format='%(refname:short) %(committerdate:relative) %(committerdate:iso8601)' refs/heads/ | grep -v "^main "
 ```
@@ -91,6 +104,22 @@ For STALE EMPTY branches:
 
 ### Step 5: Return the PR URL to the user
 
+### Step 6: Ask About Merging (MANDATORY)
+
+**After presenting the PR URL, use AskUserQuestion to prompt:**
+
+```
+Question: "PR created successfully! Do you want to merge it now?"
+Options:
+- "Yes, merge now" - Run `gh pr merge <PR#> --merge --delete-branch` and confirm completion
+- "No, I'll review first" - End the ship command, user will merge manually later
+```
+
+**If user chooses "Yes, merge now":**
+1. Run `gh pr merge <PR#> --merge --delete-branch`
+2. Run `git checkout main && git pull` to sync local
+3. Confirm: "✅ PR #X merged and branch deleted. You're on main with latest changes."
+
 ---
 
 ## Example Flow
@@ -98,12 +127,16 @@ For STALE EMPTY branches:
 ### Example 1: With Unmerged Branches Detected
 
 ```bash
-# Step 0: Check for unmerged branches
+# Step 0: Quick check for unmerged branches
 git branch --no-merged main
 # Output:
 #   feature/old-experiment
 #   fix/parallel-work
 
+# ASK USER: "Found 2 unmerged branch(es). Would you like me to do a deeper analysis?"
+# User chooses: "Yes, analyze branches"
+
+# Run detailed analysis
 git for-each-ref --sort=-committerdate --format='%(refname:short) %(committerdate:relative) %(committerdate:iso8601)' refs/heads/
 # Output:
 #   fix/parallel-work 30 minutes ago 2026-01-05T14:30:00-05:00
@@ -114,7 +147,7 @@ git for-each-ref --sort=-committerdate --format='%(refname:short) %(committerdat
 git log main..feature/old-experiment --oneline
 # Output: 3 commits
 
-# Present to user via AskUserQuestion:
+# Present categorized summary to user via AskUserQuestion:
 # ⚠️ POSSIBLY ACTIVE: fix/parallel-work (30 min ago) - likely parallel instance
 # 📦 STALE WITH WORK: feature/old-experiment (5 days ago) - 3 commits ahead
 #
@@ -155,6 +188,17 @@ gh pr create --title "feat: add notification system" --body "## Summary
 - [ ] Verify hooks trigger on Stop event
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+
+# Step 5: Return PR URL
+# Output: https://github.com/user/repo/pull/123
+
+# Step 6: ASK USER: "PR created successfully! Do you want to merge it now?"
+# User chooses: "Yes, merge now"
+
+# Merge and sync
+gh pr merge 123 --merge --delete-branch
+git checkout main && git pull
+# Output: ✅ PR #123 merged and branch deleted. You're on main with latest changes.
 ```
 
 ## Branch Cleanup Commands Reference
