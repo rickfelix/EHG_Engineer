@@ -37,7 +37,8 @@
       "parent_child_overview",
       "negative_constraints_global",
       "sd_type_workflow_paths",
-      "work_tracking_policy"
+      "work_tracking_policy",
+      "genesis_codebase"
     ]
   },
   "CLAUDE_LEAD.md": {
