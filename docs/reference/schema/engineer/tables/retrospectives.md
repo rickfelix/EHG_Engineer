@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-05T20:12:20.676Z
-**Rows**: 364
+**Generated**: 2026-01-05T22:49:52.110Z
+**Rows**: 369
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (64 total)
+## Columns (75 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -83,6 +83,17 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 | triangulation_divergence_insights | `jsonb` | YES | - | - |
 | verbatim_citations | `jsonb` | YES | - | - |
 | coverage_analysis | `jsonb` | YES | - | - |
+| test_run_id | `uuid` | YES | - | FK to test_runs for quantitative metrics. Populated by RETRO sub-agent. |
+| test_pass_rate | `numeric(5,2)` | YES | - | Pass rate from linked test_run (0-100) |
+| test_total_count | `integer(32)` | YES | `0` | - |
+| test_passed_count | `integer(32)` | YES | `0` | - |
+| test_failed_count | `integer(32)` | YES | `0` | - |
+| test_skipped_count | `integer(32)` | YES | `0` | - |
+| test_evidence_freshness | `text` | YES | - | - |
+| story_coverage_percent | `numeric(5,2)` | YES | - | Percentage of user stories with passing tests |
+| stories_with_tests | `integer(32)` | YES | `0` | - |
+| stories_total | `integer(32)` | YES | `0` | - |
+| test_verdict | `character varying(20)` | YES | - | Test verdict from test_runs (PASS, FAIL, PARTIAL, ERROR) |
 
 ## Constraints
 
@@ -92,6 +103,7 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 ### Foreign Keys
 - `retrospectives_audit_id_fkey`: audit_id → runtime_audits(id)
 - `retrospectives_sd_id_fkey`: sd_id → strategic_directives_v2(id)
+- `retrospectives_test_run_id_fkey`: test_run_id → test_runs(id)
 
 ### Check Constraints
 - `action_items_max_25`: CHECK (((action_items IS NULL) OR (jsonb_typeof(action_items) <> 'array'::text) OR (jsonb_array_length(action_items) <= 25)))
@@ -109,6 +121,8 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 - `retrospectives_risk_accuracy_score_check`: CHECK (((risk_accuracy_score >= 0) AND (risk_accuracy_score <= 100)))
 - `retrospectives_status_check`: CHECK ((status = ANY (ARRAY['DRAFT'::text, 'PUBLISHED'::text, 'ARCHIVED'::text])))
 - `retrospectives_team_satisfaction_check`: CHECK (((team_satisfaction >= 1) AND (team_satisfaction <= 10)))
+- `retrospectives_test_evidence_freshness_check`: CHECK ((test_evidence_freshness = ANY (ARRAY['FRESH'::text, 'AGING'::text, 'STALE'::text, NULL::text])))
+- `retrospectives_test_verdict_check`: CHECK (((test_verdict)::text = ANY ((ARRAY['PASS'::character varying, 'FAIL'::character varying, 'PARTIAL'::character varying, 'ERROR'::character varying, NULL::character varying])::text[])))
 - `what_needs_improvement_max_20`: CHECK (((what_needs_improvement IS NULL) OR (jsonb_typeof(what_needs_improvement) <> 'array'::text) OR (jsonb_array_length(what_needs_improvement) <= 20)))
 - `what_went_well_max_25`: CHECK (((what_went_well IS NULL) OR (jsonb_typeof(what_went_well) <> 'array'::text) OR (jsonb_array_length(what_went_well) <= 25)))
 
@@ -185,6 +199,14 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 - `idx_retrospectives_target_application`
   ```sql
   CREATE INDEX idx_retrospectives_target_application ON public.retrospectives USING btree (target_application)
+  ```
+- `idx_retrospectives_test_metrics`
+  ```sql
+  CREATE INDEX idx_retrospectives_test_metrics ON public.retrospectives USING btree (sd_id, test_pass_rate, test_verdict) WHERE (test_run_id IS NOT NULL)
+  ```
+- `idx_retrospectives_test_run_id`
+  ```sql
+  CREATE INDEX idx_retrospectives_test_run_id ON public.retrospectives USING btree (test_run_id) WHERE (test_run_id IS NOT NULL)
   ```
 - `retrospectives_pkey`
   ```sql
