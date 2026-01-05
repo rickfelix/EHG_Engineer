@@ -17,6 +17,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { IssueKnowledgeBase } from '../lib/learning/issue-knowledge-base.js';
 import { enforceChildProgressionGate } from './modules/child-progression-gate.js';
+import { loadSchemaContext, formatSchemaContext, schemaDocsExist } from '../lib/schema-context-loader.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -717,6 +718,30 @@ async function main() {
 
     // Search retrospectives
     const retrospectives = await searchRetrospectives(sd.category || sd.title, strategy);
+
+    // LEO v4.4.2: Load schema context for PLAN/EXEC phases (SD-LEO-TESTING-GOVERNANCE-001C)
+    // Evidence: 42-95 hours/year lost to schema mismatches
+    let schemaContext = null;
+    if ((phase === 'PLAN' || phase === 'EXEC') && schemaDocsExist()) {
+      try {
+        schemaContext = await loadSchemaContext(sd, {
+          includeOverview: phase === 'PLAN',
+          maxTables: phase === 'PLAN' ? 8 : 5
+        });
+
+        if (schemaContext.schemasLoaded.length > 0) {
+          console.log(formatSchemaContext(schemaContext));
+          strategy.schemaContext = schemaContext;
+        } else if (schemaContext.tablesFound.length > 0) {
+          console.log(`\n📊 Tables detected (${schemaContext.tablesFound.join(', ')}) but no schema docs found`);
+          console.log('   💡 Run: node scripts/generate-schema-docs-from-db.js');
+        } else {
+          console.log('\n   ℹ️  No relevant schema docs found for this SD');
+        }
+      } catch (schemaErr) {
+        console.log(`\n   ⚠️  Schema loading error: ${schemaErr.message}`);
+      }
+    }
 
     // Display results
     displayResults(sd, phase, strategy, patterns, retrospectives);
