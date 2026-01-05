@@ -105,10 +105,15 @@ const PLAN_PRD_BY_SD_TYPE = {
 // allowed RLS gaps and N+1 queries to slip through. Making them mandatory prevents this.
 const PLAN_VERIFY_BY_SD_TYPE = {
   // Full validation for code-impacting SDs - SECURITY + PERFORMANCE are MANDATORY
-  feature: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'API', 'DEPENDENCY'],
+  // LEO Protocol v4.4.1: Added UAT for user-facing SDs (feature, api) to ensure human verification
+  // ROOT CAUSE: UAT sub-agent had 0% invocation rate because it was keyword-only, not phase-mandatory
+  feature: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'API', 'DEPENDENCY', 'UAT'],
+  // LEO Protocol v4.4.1: Enhancement - improvements to existing features (UAT optional, not mandatory)
+  // Use this type for minor improvements that don't warrant full UAT validation
+  enhancement: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'API', 'DEPENDENCY'],
   database: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE'],  // Added PERFORMANCE for N+1 detection
   security: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE'],  // Added PERFORMANCE
-  api: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'API'],  // New type for API work
+  api: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'API', 'UAT'],  // Added UAT for API verification
 
   // Reduced validation for non-code SDs (skip TESTING, GITHUB)
   documentation: ['DOCMON', 'STORIES'],
@@ -116,14 +121,16 @@ const PLAN_VERIFY_BY_SD_TYPE = {
 
   // LEO Protocol v4.3.3: Refactor SD type with intensity-aware validation
   // Default refactor uses standard validation; intensity overrides below
-  refactor: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE']
+  // LEO Protocol v4.4.1: Added REGRESSION for backward compatibility validation
+  refactor: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'REGRESSION']
 };
 
 // LEO Protocol v4.3.3: Intensity-specific PLAN_VERIFY overrides for refactor SDs
+// LEO Protocol v4.4.1: Added REGRESSION for structural/architectural (backward compatibility)
 const REFACTOR_INTENSITY_SUBAGENTS = {
-  cosmetic: ['GITHUB', 'DOCMON', 'STORIES'],  // No TESTING/SECURITY/PERFORMANCE - cosmetic is low risk
-  structural: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE'],  // Standard
-  architectural: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN']  // Full + DESIGN
+  cosmetic: ['GITHUB', 'DOCMON', 'STORIES'],  // No TESTING/SECURITY/PERFORMANCE/REGRESSION - cosmetic is low risk
+  structural: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'REGRESSION'],
+  architectural: ['TESTING', 'GITHUB', 'DOCMON', 'STORIES', 'DATABASE', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'REGRESSION']
 };
 
 // MANDATORY sub-agents that ALWAYS run regardless of keyword matching
@@ -146,7 +153,11 @@ const MANDATORY_SUBAGENTS_BY_PHASE = {
   },
   PLAN_VERIFY: {
     // SD-type specific mandatory agents
-    feature: ['TESTING', 'SECURITY', 'PERFORMANCE'],
+    // LEO Protocol v4.4.1: Added UAT to feature/api mandatory lists
+    // ROOT CAUSE: UAT had 0% invocation - now mandatory for user-facing SDs
+    feature: ['TESTING', 'SECURITY', 'PERFORMANCE', 'UAT'],
+    // LEO Protocol v4.4.1: Enhancement - same as feature but UAT NOT mandatory (optional via keyword)
+    enhancement: ['TESTING', 'SECURITY', 'PERFORMANCE'],
     // ROOT CAUSE FIX (2026-01-01): Removed TESTING from database mandatory list
     // Database SDs focus on schema/migrations, not user-facing code. TESTING exemption
     // is configured in sd_type_validation_profiles table. Step 3D was overriding this
@@ -154,20 +165,22 @@ const MANDATORY_SUBAGENTS_BY_PHASE = {
     // use DATABASE agent for schema validation instead of TESTING agent.
     database: ['DATABASE', 'SECURITY', 'PERFORMANCE'],
     security: ['TESTING', 'SECURITY'],
-    api: ['TESTING', 'SECURITY', 'PERFORMANCE', 'API'],
+    api: ['TESTING', 'SECURITY', 'PERFORMANCE', 'API', 'UAT'],
     documentation: ['DOCMON'],
     infrastructure: ['GITHUB', 'SECURITY'],
     // LEO Protocol v4.3.3: Refactor mandatory agents (intensity-aware)
-    refactor: ['GITHUB', 'DOCMON']  // Base requirement; TESTING mandatory only for structural/architectural
+    // LEO Protocol v4.4.1: Added REGRESSION - backward compatibility is core to refactoring
+    refactor: ['GITHUB', 'DOCMON', 'REGRESSION']  // Base requirement; TESTING mandatory only for structural/architectural
   },
   LEAD_FINAL: ['RETRO']  // Always generate retrospective
 };
 
 // LEO Protocol v4.3.3: Intensity-specific MANDATORY sub-agents for refactor
+// LEO Protocol v4.4.1: Added REGRESSION for structural/architectural (backward compatibility)
 const REFACTOR_INTENSITY_MANDATORY = {
-  cosmetic: ['GITHUB', 'DOCMON'],  // Minimal - just git and docs
-  structural: ['GITHUB', 'DOCMON', 'SECURITY', 'PERFORMANCE'],  // Standard security/performance checks
-  architectural: ['TESTING', 'GITHUB', 'DOCMON', 'SECURITY', 'PERFORMANCE', 'DESIGN']  // Full validation
+  cosmetic: ['GITHUB', 'DOCMON'],  // Minimal - just git and docs (no REGRESSION for cosmetic)
+  structural: ['GITHUB', 'DOCMON', 'SECURITY', 'PERFORMANCE', 'REGRESSION'],  // + backward compatibility
+  architectural: ['TESTING', 'GITHUB', 'DOCMON', 'SECURITY', 'PERFORMANCE', 'DESIGN', 'REGRESSION']  // Full validation
 };
 
 /**
