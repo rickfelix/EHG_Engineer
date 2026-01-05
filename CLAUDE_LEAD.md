@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-01-01 8:59:19 AM
+**Generated**: 2026-01-05 12:16:25 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
@@ -360,6 +360,68 @@ This question is MANDATORY for all SDs that produce user-facing data. It should 
 5. Does it follow existing patterns?
 6. Is it required for the stated goal?
 **7. Can users see and interpret the outputs?** ← NEW
+
+## 🎯 Strategic Validation Question 9: Human-Verifiable Outcome
+
+## Strategic Validation Question 9: Human-Verifiable Outcome
+
+**Added in LEO v4.4.0** - Part of LEAD Pre-Approval Gate
+
+### The Question
+> "Describe the 30-second demo that proves this SD delivered value."
+
+If you cannot answer this question concretely, the SD is too vague to approve.
+
+### Evaluation Criteria
+
+| Rating | Criteria |
+|--------|----------|
+| ✅ YES | SD has concrete `smoke_test_steps` with user-observable outcomes |
+| ⚠️ PARTIAL | Some verification steps exist but are too technical or vague |
+| ❌ NO | No smoke test steps defined, or all criteria are technical-only |
+
+### Required Format: smoke_test_steps
+
+Feature SDs MUST include `smoke_test_steps` JSONB array:
+
+```json
+[
+  {"step_number": 1, "instruction": "Navigate to /dashboard", "expected_outcome": "Dashboard loads with venture list visible"},
+  {"step_number": 2, "instruction": "Click Create Venture button", "expected_outcome": "New venture form appears"},
+  {"step_number": 3, "instruction": "Fill form and click Save", "expected_outcome": "Success toast + venture appears in list"}
+]
+```
+
+### LEAD Agent Actions
+
+**If YES**: Proceed with approval
+**If PARTIAL**:
+- Require concrete user-observable outcomes
+- Reject technical-only criteria ("API returns 200", "data in database")
+
+**If NO**:
+- **BLOCK approval** until `smoke_test_steps` is populated
+- Prompt: "What will a user SEE that proves this works?"
+
+### SD Type Exemptions
+
+| SD Type | Requires Q9? | Reason |
+|---------|--------------|--------|
+| feature | ✅ YES | User-facing, must be verifiable |
+| bugfix | ✅ YES | Fix must be observable |
+| security | ⚠️ API test | Verify auth/authz works |
+| database | ⚠️ API test | Verify data flows correctly |
+| infrastructure | ❌ NO | Internal tooling |
+| documentation | ❌ NO | No runtime behavior |
+| refactor | ❌ NO | Behavior unchanged by definition |
+
+### Integration with Validation Gates
+
+This question is ENFORCED by:
+1. **LeadToPlanExecutor** - `SMOKE_TEST_SPECIFICATION` gate blocks without steps
+2. **ExecToPlanExecutor** - `HUMAN_VERIFICATION_GATE` validates execution
+3. **AIQualityEvaluator** - Caps scores at 70% if no human-verifiable outcomes
+4. **UserStoryQualityRubric** - Caps at 6/10 for technical-only acceptance criteria
 
 ## 📚 Automated PRD Enrichment (MANDATORY)
 
@@ -856,6 +918,6 @@ npm run sd:status    # Overall progress by track
 
 ---
 
-*Generated from database: 2026-01-01*
+*Generated from database: 2026-01-05*
 *Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

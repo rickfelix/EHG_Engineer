@@ -66,6 +66,7 @@
     "description": "PLAN phase operations (~30-35k chars)",
     "sections": [
       "mandatory_phase_transitions_plan",
+      "workflow",
       "PHASE_2_PLANNING",
       "plan_multi_perspective",
       "prd_research_lookup",
@@ -99,6 +100,7 @@
     "description": "EXEC phase operations (~20-25k chars)",
     "sections": [
       "mandatory_phase_transitions_exec",
+      "workflow",
       "exec_implementation_requirements",
       "exec_retrospective_anti_patterns",
       "exec_skill_integration",
