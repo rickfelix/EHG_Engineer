@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-05T11:19:21.578Z
-**Tables**: 327
+**Generated**: 2026-01-05T11:33:40.176Z
+**Tables**: 330
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (327)
+## All Tables (330)
 
 ### LEO Protocol
 
@@ -199,6 +199,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [cultural_design_styles](tables/cultural_design_styles.md)
 - [defect_taxonomy](tables/defect_taxonomy.md)
 - [directive_submissions](tables/directive_submissions.md)
+- [distribution_channels](tables/distribution_channels.md)
+- [distribution_history](tables/distribution_history.md)
 - [doctrine_constraint_violations](tables/doctrine_constraint_violations.md)
 - [documentation_health_checks](tables/documentation_health_checks.md)
 - [documentation_inventory](tables/documentation_inventory.md)
@@ -252,6 +254,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [llm_models](tables/llm_models.md)
 - [llm_providers](tables/llm_providers.md)
 - [market_segments](tables/market_segments.md)
+- [marketing_content_queue](tables/marketing_content_queue.md)
 - [model_usage_log](tables/model_usage_log.md)
 - [naming_favorites](tables/naming_favorites.md)
 - [naming_suggestions](tables/naming_suggestions.md)

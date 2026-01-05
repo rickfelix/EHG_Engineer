@@ -1,11 +1,11 @@
-# content_types Table
+# distribution_channels Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-01-05T11:33:40.176Z
-**Rows**: 3
+**Rows**: 4
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,20 +14,16 @@
 
 ---
 
-## Columns (13 total)
+## Columns (9 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
 | name | `character varying(100)` | **NO** | - | - |
-| display_name | `character varying(255)` | YES | - | - |
-| description | `text` | YES | - | - |
-| creation_method | `jsonb` | YES | `'{}'::jsonb` | - |
-| display_rules | `jsonb` | YES | `'{}'::jsonb` | - |
-| validation_schema | `jsonb` | YES | `'{}'::jsonb` | - |
-| transformation_logic | `jsonb` | YES | `'{}'::jsonb` | - |
-| icon | `character varying(100)` | YES | - | - |
-| color | `character varying(20)` | YES | - | - |
+| channel_type | `character varying(50)` | **NO** | - | - |
+| platform | `character varying(50)` | YES | - | - |
+| config | `jsonb` | YES | `'{}'::jsonb` | - |
+| utm_defaults | `jsonb` | YES | `'{}'::jsonb` | - |
 | is_active | `boolean` | YES | `true` | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
@@ -35,26 +31,29 @@
 ## Constraints
 
 ### Primary Key
-- `content_types_pkey`: PRIMARY KEY (id)
+- `distribution_channels_pkey`: PRIMARY KEY (id)
+
+### Check Constraints
+- `distribution_channels_channel_type_check`: CHECK (((channel_type)::text = ANY ((ARRAY['social'::character varying, 'email'::character varying, 'web'::character varying, 'other'::character varying])::text[])))
+- `distribution_channels_platform_check`: CHECK (((platform)::text = ANY ((ARRAY['linkedin'::character varying, 'twitter'::character varying, 'facebook'::character varying, 'instagram'::character varying, 'email'::character varying, 'website'::character varying, 'other'::character varying])::text[])))
 
 ## Indexes
 
-- `content_types_pkey`
+- `distribution_channels_pkey`
   ```sql
-  CREATE UNIQUE INDEX content_types_pkey ON public.content_types USING btree (id)
+  CREATE UNIQUE INDEX distribution_channels_pkey ON public.distribution_channels USING btree (id)
   ```
 
 ## RLS Policies
 
-### 1. Allow service_role to manage content_types (ALL)
+### 1. distribution_channels_admin (ALL)
 
 - **Roles**: {service_role}
 - **Using**: `true`
-- **With Check**: `true`
 
-### 2. Anon read content_types (SELECT)
+### 2. distribution_channels_read (SELECT)
 
-- **Roles**: {anon}
+- **Roles**: {authenticated}
 - **Using**: `true`
 
 ---
