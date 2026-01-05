@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-05T11:33:40.176Z
-**Tables**: 330
+**Generated**: 2026-01-05T20:12:20.676Z
+**Tables**: 340
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (330)
+## All Tables (340)
 
 ### LEO Protocol
 
@@ -337,12 +337,22 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [tool_access_grants](tables/tool_access_grants.md)
 - [tool_registry](tables/tool_registry.md)
 - [tool_usage_ledger](tables/tool_usage_ledger.md)
+- [uat_audit_trail](tables/uat_audit_trail.md)
 - [uat_cases](tables/uat_cases.md)
+- [uat_coverage_metrics](tables/uat_coverage_metrics.md)
 - [uat_credential_history](tables/uat_credential_history.md)
 - [uat_credentials](tables/uat_credentials.md)
 - [uat_defects](tables/uat_defects.md)
+- [uat_issues](tables/uat_issues.md)
+- [uat_performance_metrics](tables/uat_performance_metrics.md)
 - [uat_results](tables/uat_results.md)
 - [uat_runs](tables/uat_runs.md)
+- [uat_screenshots](tables/uat_screenshots.md)
+- [uat_test_cases](tables/uat_test_cases.md)
+- [uat_test_results](tables/uat_test_results.md)
+- [uat_test_runs](tables/uat_test_runs.md)
+- [uat_test_schedules](tables/uat_test_schedules.md)
+- [uat_test_suites](tables/uat_test_suites.md)
 - [uat_test_users](tables/uat_test_users.md)
 - [ui_validation_checkpoints](tables/ui_validation_checkpoints.md)
 - [ui_validation_results](tables/ui_validation_results.md)
