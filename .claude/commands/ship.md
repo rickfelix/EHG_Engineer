@@ -4,35 +4,136 @@ Commit your changes and create a pull request.
 
 ## Instructions
 
-1. **Check current state**:
+### Step 0: Check for Unmerged Branches (MANDATORY)
+
+Before proceeding with the current branch, check for stale unmerged branches that may need attention.
+
+**Run these commands to gather branch information:**
+
+```bash
+# Get all local branches that haven't been merged into main
+git branch --no-merged main
+
+# For each unmerged branch, get the last commit date
+git for-each-ref --sort=-committerdate --format='%(refname:short) %(committerdate:relative) %(committerdate:iso8601)' refs/heads/ | grep -v "^main "
+```
+
+**Analyze the results:**
+
+1. **Identify "Possibly Active" branches** (modified within last 2 hours):
+   - These may be in use by a parallel Claude Code instance
+   - Do NOT suggest deleting or merging these without explicit confirmation
+   - Mark them with a ⚠️ warning
+
+2. **Identify "Stale" branches** (not modified in > 2 hours):
+   - These are candidates for cleanup
+   - Check if they have unmerged commits using: `git log main..<branch> --oneline`
+
+3. **Categorize each unmerged branch**:
+   - `ACTIVE`: Last commit < 2 hours ago (possibly parallel instance)
+   - `STALE_WITH_COMMITS`: Last commit > 2 hours, has unmerged work
+   - `STALE_EMPTY`: Last commit > 2 hours, no unique commits (safe to delete)
+
+**If unmerged branches exist, use AskUserQuestion to prompt:**
+
+Present the user with a summary like:
+```
+Found X unmerged branches:
+
+⚠️ POSSIBLY ACTIVE (may be parallel Claude Code instance):
+  - feature/xyz (modified 45 minutes ago) - 3 commits ahead
+
+📦 STALE WITH WORK (has unmerged commits):
+  - feature/abc (modified 3 days ago) - 5 commits ahead
+
+🗑️ STALE EMPTY (safe to delete):
+  - feature/old (modified 1 week ago) - 0 commits ahead
+```
+
+**Ask the user how to proceed with each category:**
+
+For ACTIVE branches:
+- Option 1: "Skip these branches (leave for parallel instance)"
+- Option 2: "Include specific branch in this ship (I know it's safe)"
+
+For STALE WITH WORK branches:
+- Option 1: "Create separate PRs for each"
+- Option 2: "Merge into current branch and ship together"
+- Option 3: "Delete without merging (abandon work)"
+- Option 4: "Skip for now"
+
+For STALE EMPTY branches:
+- Option 1: "Delete all empty stale branches"
+- Option 2: "Keep them"
+
+**Handle the user's choices before proceeding to Step 1.**
+
+---
+
+### Step 1: Check current state
    - Run `git status` to see uncommitted changes
    - Run `git log origin/main..HEAD` to see unpushed commits
 
-2. **If there are uncommitted changes**:
+### Step 2: If there are uncommitted changes:
    - Stage all changes: `git add .`
    - Create a commit with a descriptive message summarizing the changes
    - Follow the commit message format with the 🤖 Generated footer
 
-3. **Push to remote**:
+### Step 3: Push to remote
    - If on main branch, create a new feature branch first
    - Push the branch to origin with `-u` flag
 
-4. **Create Pull Request**:
+### Step 4: Create Pull Request
    - Use `gh pr create` with:
      - A clear, concise title
      - A body with `## Summary` (bullet points of changes) and `## Test plan`
      - The 🤖 Generated footer
 
-5. **Return the PR URL** to the user
+### Step 5: Return the PR URL to the user
+
+---
 
 ## Example Flow
 
+### Example 1: With Unmerged Branches Detected
+
 ```bash
-# Check state
+# Step 0: Check for unmerged branches
+git branch --no-merged main
+# Output:
+#   feature/old-experiment
+#   fix/parallel-work
+
+git for-each-ref --sort=-committerdate --format='%(refname:short) %(committerdate:relative) %(committerdate:iso8601)' refs/heads/
+# Output:
+#   fix/parallel-work 30 minutes ago 2026-01-05T14:30:00-05:00
+#   feature/old-experiment 5 days ago 2025-12-31T10:00:00-05:00
+#   main 2 hours ago 2026-01-05T12:00:00-05:00
+
+# Check commits ahead for stale branches
+git log main..feature/old-experiment --oneline
+# Output: 3 commits
+
+# Present to user via AskUserQuestion:
+# ⚠️ POSSIBLY ACTIVE: fix/parallel-work (30 min ago) - likely parallel instance
+# 📦 STALE WITH WORK: feature/old-experiment (5 days ago) - 3 commits ahead
+#
+# User chooses: Skip active branch, create separate PR for old-experiment
+```
+
+### Example 2: Standard Flow (No Issues)
+
+```bash
+# Step 0: Check unmerged branches
+git branch --no-merged main
+# Output: (empty - no unmerged branches)
+# Proceed directly to Step 1
+
+# Step 1: Check state
 git status
 git log origin/main..HEAD --oneline
 
-# Commit if needed
+# Step 2: Commit if needed
 git add .
 git commit -m "feat: add notification system
 
@@ -40,10 +141,10 @@ git commit -m "feat: add notification system
 
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
-# Push
+# Step 3: Push
 git push -u origin HEAD
 
-# Create PR
+# Step 4: Create PR
 gh pr create --title "feat: add notification system" --body "## Summary
 - Added email notifications via Resend
 - Added SMS notifications via Twilio
@@ -54,4 +155,23 @@ gh pr create --title "feat: add notification system" --body "## Summary
 - [ ] Verify hooks trigger on Stop event
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+```
+
+## Branch Cleanup Commands Reference
+
+```bash
+# Delete a local branch
+git branch -d <branch-name>
+
+# Force delete a local branch (if unmerged)
+git branch -D <branch-name>
+
+# Delete a remote branch
+git push origin --delete <branch-name>
+
+# Create PR for a specific branch
+git checkout <branch-name> && gh pr create
+
+# Merge another branch into current
+git merge <branch-name>
 ```
