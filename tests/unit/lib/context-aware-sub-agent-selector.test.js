@@ -11,7 +11,7 @@ import {
   selectSubAgents,
   DOMAIN_KEYWORDS as _DOMAIN_KEYWORDS,
   COORDINATION_GROUPS as _COORDINATION_GROUPS
-} from './context-aware-sub-agent-selector.js';
+} from '../../../lib/context-aware-sub-agent-selector.js';
 
 // Test utilities
 let totalTests = 0;

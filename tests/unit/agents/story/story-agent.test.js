@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals';
-import StorySubAgent from '../index.js';
+import StorySubAgent from '../../../../agents/story/index.js';
 import axios from 'axios';
 
 jest.mock('axios');

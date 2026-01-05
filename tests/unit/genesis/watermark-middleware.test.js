@@ -10,7 +10,7 @@ import {
   WATERMARK_SCRIPT,
   generateWatermarkCode,
   verifyWatermarkPresence,
-} from '../watermark-middleware.js';
+} from '../../../lib/genesis/watermark-middleware.js';
 
 describe('Watermark Middleware', () => {
   describe('WATERMARK_CSS', () => {

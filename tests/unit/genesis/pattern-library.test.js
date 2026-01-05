@@ -13,7 +13,7 @@ import {
   getPatternByName,
   searchPatterns,
   getPatternStats,
-} from '../pattern-library.js';
+} from '../../../lib/genesis/pattern-library.js';
 
 describe('PatternTypes', () => {
   it('should have all 9 pattern types', () => {

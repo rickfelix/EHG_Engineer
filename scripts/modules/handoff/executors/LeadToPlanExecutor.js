@@ -14,6 +14,8 @@ import path from 'path';
 import readline from 'readline';
 // validateSDHandoffState - available for future validation needs
 import { validateSDHandoffState as _validateSDHandoffState, quickPreflightCheck } from '../../../lib/handoff-preflight.js';
+// SD Branch Creation (proactive branch setup at LEAD-TO-PLAN)
+import { createSDBranch, branchExists, generateBranchName } from '../../create-sd-branch.js';
 
 // External verifier (will be lazy loaded)
 let LeadToPlanVerifier;
@@ -92,7 +94,147 @@ export class LeadToPlanExecutor extends BaseExecutor {
       remediation: 'Add smoke_test_steps array with 3-5 user-observable verification steps. Example: [{step_number: 1, instruction: "Navigate to /dashboard", expected_outcome: "Dashboard loads with venture list visible"}]'
     });
 
+    // LEO v4.4.1: Proactive Branch Creation Gate
+    // Creates branch EARLY (at LEAD approval) instead of reactively at PLAN-TO-EXEC
+    // This ensures branch exists before any implementation work begins
+    gates.push({
+      name: 'SD_BRANCH_PREPARATION',
+      validator: async (ctx) => {
+        console.log('\n🌿 GATE: SD Branch Preparation (Proactive Creation)');
+        console.log('-'.repeat(50));
+        return this._ensureSDBranchExists(ctx.sd);
+      },
+      required: false, // Soft gate - creates branch but doesn't block handoff
+      weight: 0.9,
+      remediation: 'Branch creation failed. Run manually: npm run sd:branch ' + (_sd?.id || '<SD-ID>')
+    });
+
     return gates;
+  }
+
+  /**
+   * LEO v4.4.1: Proactive Branch Creation
+   * Ensures SD branch exists BEFORE implementation starts (at LEAD approval)
+   *
+   * This addresses the gap where:
+   * - Branch creation was only validated at PLAN-TO-EXEC (too late)
+   * - Developers might start work before running handoff
+   * - No explicit trigger point for branch creation existed
+   *
+   * @param {Object} sd - Strategic Directive
+   * @returns {Object} Validation result with branch details
+   */
+  async _ensureSDBranchExists(sd) {
+    const issues = [];
+    const warnings = [];
+    let branchName = null;
+    let created = false;
+
+    try {
+      const sdId = sd.id || sd.sd_key;
+      const title = sd.title || '';
+      const targetApp = sd.target_application || 'EHG';
+
+      // Determine repo path
+      const repoPaths = {
+        EHG: '/mnt/c/_EHG/EHG',
+        EHG_Engineer: '/mnt/c/_EHG/EHG_Engineer'
+      };
+      const repoPath = repoPaths[targetApp];
+
+      if (!repoPath) {
+        warnings.push(`Unknown target_application: ${targetApp} - skipping branch creation`);
+        console.log(`   ⚠️  Unknown target_application: ${targetApp}`);
+        return { pass: true, score: 80, issues: [], warnings };
+      }
+
+      // Generate expected branch name
+      branchName = generateBranchName(sdId, title);
+      console.log(`   Target Application: ${targetApp}`);
+      console.log(`   Repository: ${repoPath}`);
+      console.log(`   Expected Branch: ${branchName}`);
+
+      // Check if branch already exists
+      const existsResult = await branchExists(branchName, repoPath);
+
+      if (existsResult.exists) {
+        console.log(`   ✅ Branch already exists (${existsResult.location})`);
+
+        // Update database with branch name if not already set
+        if (!sd.branch_name) {
+          try {
+            await this.supabase
+              .from('strategic_directives_v2')
+              .update({ branch_name: branchName })
+              .eq('id', sd.id);
+            console.log('   ✅ Branch name recorded in database');
+          } catch {
+            // Non-critical - continue
+          }
+        }
+
+        return {
+          pass: true,
+          score: 100,
+          issues: [],
+          warnings: [],
+          details: { branchName, exists: true, created: false }
+        };
+      }
+
+      // Branch doesn't exist - create it proactively
+      console.log('   ℹ️  Branch does not exist - creating proactively...');
+
+      try {
+        const result = await createSDBranch({
+          sdId,
+          title,
+          app: targetApp,
+          autoStash: true, // Automatically handle uncommitted changes
+          noSwitch: false  // Switch to the new branch
+        });
+
+        if (result.success) {
+          created = true;
+          branchName = result.branchName;
+          console.log(`   ✅ Branch created: ${branchName}`);
+
+          return {
+            pass: true,
+            score: 100,
+            issues: [],
+            warnings: [],
+            details: { branchName, exists: true, created: true }
+          };
+        } else {
+          warnings.push('Branch creation returned unsuccessful - may need manual creation');
+          console.log('   ⚠️  Branch creation did not complete successfully');
+        }
+      } catch (createError) {
+        warnings.push(`Branch creation failed: ${createError.message}`);
+        console.log(`   ⚠️  Could not create branch: ${createError.message}`);
+        console.log('   📋 Manual command: npm run sd:branch ' + sdId);
+      }
+
+    } catch (error) {
+      warnings.push(`Branch preparation error: ${error.message}`);
+      console.log(`   ⚠️  Error: ${error.message}`);
+    }
+
+    // Even if branch creation failed, don't block handoff (soft gate)
+    const passed = issues.length === 0;
+    const score = passed ? (warnings.length > 0 ? 70 : 100) : 0;
+
+    console.log(`   Result: ${passed ? '✅ PASS' : '❌ FAIL'} ${warnings.length > 0 ? '(with warnings)' : ''}`);
+
+    return {
+      pass: passed,
+      score,
+      max_score: 100,
+      issues,
+      warnings,
+      details: { branchName, created }
+    };
   }
 
   /**

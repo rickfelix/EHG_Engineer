@@ -8,7 +8,7 @@ import {
   assertMockMode,
   isMockModeEnabled,
   requireMockMode,
-} from '../mock-mode.js';
+} from '../../../lib/genesis/mock-mode.js';
 
 describe('Mock Mode Module', () => {
   const originalEnv = process.env.EHG_MOCK_MODE;
