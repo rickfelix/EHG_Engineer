@@ -97,3 +97,53 @@ jobs:
           name: playwright-report-full
           path: all-reports/
           retention-days: 30
+
+  capture-results:
+    name: Capture Test Results to Database
+    needs: e2e-tests
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download test artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: playwright-report-shard-*
+          merge-multiple: true
+          path: test-results/
+
+      - name: Capture results to database
+        if: always()
+        run: |
+          if [ -f test-results/results.json ]; then
+            node scripts/test-result-capture.js \
+              --json test-results/results.json \
+              --branch "${{ github.head_ref || github.ref_name }}" \
+              --ci
+          else
+            echo "No test results file found, checking for test-results.json"
+            if [ -f test-results.json ]; then
+              node scripts/test-result-capture.js \
+                --json test-results.json \
+                --branch "${{ github.head_ref || github.ref_name }}" \
+                --ci
+            else
+              echo "No test results available to capture"
+            fi
+          fi
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        continue-on-error: true
