@@ -55,6 +55,8 @@
     "leo:new": "node scripts/create-strategic-directive.js",
     "leo:help": "node scripts/leo.js help",
     "leo:status": "node scripts/leo.js status",
+    "leo:prompt": "node scripts/leo-continuous-prompt.js",
+    "leo:prompt:short": "node scripts/leo-continuous-prompt.js --short",
     "leo:orchestrate": "node scripts/leo-orchestrator-enforced.js",
     "leo:commit": "node scripts/leo-hook-feedback.js commit",
     "leo:maintenance": "node scripts/leo-maintenance.js",
