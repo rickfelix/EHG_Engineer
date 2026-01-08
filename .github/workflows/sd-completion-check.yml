@@ -139,13 +139,14 @@ jobs:
             const sdId = process.env.SD_ID;
             console.log(`Archiving SD: ${sdId}`);
 
+            // Use v2 table with flexible lookup (id, legacy_id, or sd_key)
             const { data, error } = await supabase
-              .from('strategic_directives')
+              .from('strategic_directives_v2')
               .update({
                 status: 'archived',
                 archived_at: new Date().toISOString()
               })
-              .eq('id', sdId)
+              .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
               .select();
 
             if (error) {
