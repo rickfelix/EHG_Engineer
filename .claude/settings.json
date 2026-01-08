@@ -4,6 +4,17 @@
     "command": "/mnt/c/_EHG/EHG_Engineer/.claude/statusline-context-tracker.sh"
   },
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/mnt/c/_EHG/EHG_Engineer/.claude/record-user-input.sh",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
