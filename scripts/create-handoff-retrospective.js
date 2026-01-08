@@ -91,11 +91,11 @@ async function main() {
     process.exit(1);
   }
 
-  // Check if SD exists
+  // Check if SD exists (use v2 table with flexible lookup)
   const { data: sd, error: sdError } = await supabase
-    .from('strategic_directives')
+    .from('strategic_directives_v2')
     .select('*')
-    .eq('sd_id', sdId)
+    .or(`legacy_id.eq.${sdId},sd_key.eq.${sdId},id.eq.${sdId}`)
     .single();
 
   if (sdError || !sd) {
