@@ -136,6 +136,10 @@ async function validateDiscoveryGate(sdId) {
   } else if (prd?.metadata?.files_explored && Array.isArray(prd.metadata.files_explored)) {
     filesExplored = prd.metadata.files_explored;
     source = 'prd.metadata.files_explored';
+  } else if (sd?.metadata?.exploration_summary?.files_explored && Array.isArray(sd.metadata.exploration_summary.files_explored)) {
+    // ROOT CAUSE FIX: Check sd.metadata.exploration_summary.files_explored (common storage location)
+    filesExplored = sd.metadata.exploration_summary.files_explored;
+    source = 'sd.metadata.exploration_summary.files_explored';
   } else if (sd?.metadata?.exploration_files && Array.isArray(sd.metadata.exploration_files)) {
     filesExplored = sd.metadata.exploration_files;
     source = 'sd.metadata.exploration_files';

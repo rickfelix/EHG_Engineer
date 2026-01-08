@@ -711,6 +711,10 @@ export class PlanToExecExecutor extends BaseExecutor {
       } else if (prd.metadata?.files_explored && Array.isArray(prd.metadata.files_explored)) {
         filesExplored = prd.metadata.files_explored;
         source = 'metadata.files_explored';
+      } else if (sd?.metadata?.exploration_summary?.files_explored && Array.isArray(sd.metadata.exploration_summary.files_explored)) {
+        // ROOT CAUSE FIX: Also check SD metadata (common storage location from update-sd-exploration.js)
+        filesExplored = sd.metadata.exploration_summary.files_explored;
+        source = 'sd.metadata.exploration_summary.files_explored';
       }
 
       const fileCount = filesExplored.length;

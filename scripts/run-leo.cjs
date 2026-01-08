@@ -28,10 +28,20 @@ function clearScreen() {
 }
 
 function printHeader() {
-  console.log('\n' + '═'.repeat(60));
+  console.log('\n' + '═'.repeat(70));
   console.log('  🦁 LEO PROTOCOL - Command Center');
   console.log('  LEAD → PLAN → EXEC');
-  console.log('═'.repeat(60) + '\n');
+  console.log('═'.repeat(70));
+  console.log('');
+  console.log('  📖 BEFORE PROCEEDING: Read CLAUDE.md and CLAUDE_LEAD.md');
+  console.log('     These files contain the LEO Protocol instructions including:');
+  console.log('     - Automatic execution mode (no approval prompts)');
+  console.log('     - Phase transition commands');
+  console.log('     - Sub-agent trigger keywords');
+  console.log('');
+  console.log('  ⚡ CONTINUOUS MODE: When user says "start SD-XXX", execute');
+  console.log('     the handoff immediately. The command IS the approval.');
+  console.log('═'.repeat(70) + '\n');
 }
 
 function printMenu(title, options) {
