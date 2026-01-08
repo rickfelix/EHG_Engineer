@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-08T22:48:54.513Z
-**Rows**: 402
+**Generated**: 2026-01-08T23:33:05.453Z
+**Rows**: 407
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -370,6 +370,16 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION auto_set_is_parent()`
+
+### trg_auto_set_legacy_id
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION auto_set_legacy_id_from_sd_key()`
+
+### trg_auto_set_legacy_id
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION auto_set_legacy_id_from_sd_key()`
 
 ### trg_capability_lifecycle
 
