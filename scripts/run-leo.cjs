@@ -144,6 +144,13 @@ async function mainMenu() {
   });
 
   options.push({
+    id: 'create',
+    label: 'Create New SD',
+    description: 'Create a new Strategic Directive from template',
+    action: createSDMenu
+  });
+
+  options.push({
     id: 'dashboard',
     label: 'Dashboard',
     description: 'Progress, velocity, and test baseline metrics',
@@ -371,6 +378,237 @@ async function startSD(sdId) {
 
   const selected = await selectOption(`Start: ${sdId}`, options);
   await selected.action();
+}
+
+// ============================================================
+// CREATE SD MENU
+// ============================================================
+
+async function createSDMenu() {
+  const options = [
+    {
+      id: 'intelligent',
+      label: 'Intelligent Creation (AI-Powered)',
+      description: 'Describe your idea, AI generates complete SD with architecture',
+      recommended: true,
+      action: createSDIntelligent
+    },
+    {
+      id: 'manual',
+      label: 'Manual Creation',
+      description: 'Enter each field manually',
+      action: createSDInteractive
+    },
+    {
+      id: 'template',
+      label: 'From Template File',
+      description: 'Use existing template scripts',
+      action: async () => {
+        console.log('\n📁 Template scripts are in: scripts/create-*-sd*.js');
+        console.log('\nExamples:');
+        console.log('  • scripts/create-vif-strategic-directives.js');
+        console.log('  • scripts/create-sdip-strategic-directive.js');
+        console.log('\nCopy and modify a template, then run with:');
+        console.log('  node scripts/your-new-sd.js\n');
+        return promptAfterAction();
+      }
+    },
+    {
+      id: 'back',
+      label: '← Back to Main Menu',
+      action: mainMenu
+    }
+  ];
+
+  const selected = await selectOption('Create New Strategic Directive', options);
+  await selected.action();
+}
+
+async function createSDIntelligent() {
+  clearScreen();
+  printHeader();
+  console.log('🧠 INTELLIGENT SD CREATION\n');
+  console.log('Describe what you want to build. The AI will:');
+  console.log('  • Determine the best SD architecture (standalone/parent-child/grandchild)');
+  console.log('  • Auto-generate title, category, priority, and all fields');
+  console.log('  • Include testing and documentation requirements');
+  console.log('  • Create all necessary SDs automatically\n');
+  console.log('-'.repeat(60));
+  console.log('Tips:');
+  console.log('  • Be as detailed as possible');
+  console.log('  • Mention specific features, components, or systems');
+  console.log('  • Include any constraints or requirements');
+  console.log('  • Type "file:<path>" to load from a file');
+  console.log('-'.repeat(60) + '\n');
+
+  const input = await question('Describe your SD (or "back" to cancel):\n> ');
+
+  if (!input.trim() || input.toLowerCase() === 'back') {
+    return createSDMenu();
+  }
+
+  let description = input;
+
+  // Check if it's a file reference
+  if (input.startsWith('file:')) {
+    const filePath = input.replace('file:', '').trim();
+    try {
+      description = fs.readFileSync(path.join(ENGINEER_DIR, filePath), 'utf8');
+      console.log(`\n📄 Loaded ${description.length} characters from ${filePath}`);
+    } catch (error) {
+      console.log(`\n❌ Could not read file: ${filePath}`);
+      return promptAfterAction();
+    }
+  }
+
+  console.log('\n🔄 Analyzing with AI...\n');
+
+  // Run the intelligent SD creation script
+  try {
+    const result = execSync(
+      `node scripts/create-sd-intelligent.js --description "${description.replace(/"/g, '\\"').replace(/\n/g, ' ')}"`,
+      {
+        stdio: 'inherit',
+        cwd: ENGINEER_DIR
+      }
+    );
+  } catch (error) {
+    // Script handles its own output, error is expected on user cancel
+  }
+
+  return promptAfterAction();
+}
+
+async function createSDInteractive() {
+  clearScreen();
+  printHeader();
+  console.log('📋 CREATE NEW STRATEGIC DIRECTIVE\n');
+  console.log('This will create a new SD in the database.\n');
+  console.log('-'.repeat(60) + '\n');
+
+  // Get SD details
+  const title = await question('Title: ');
+  if (!title.trim()) {
+    console.log('❌ Title is required.');
+    return promptAfterAction();
+  }
+
+  // Generate ID from title
+  const suggestedId = 'SD-' + title.trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, '')
+    .split(/\s+/)
+    .slice(0, 3)
+    .join('-') + '-001';
+
+  const idAnswer = await question(`SD ID [${suggestedId}]: `);
+  const sdId = idAnswer.trim() || suggestedId;
+
+  console.log('\nCategories: feature, infrastructure, database, security, documentation, refactor');
+  const category = await question('Category [feature]: ') || 'feature';
+
+  console.log('\nPriorities: critical, high, medium, low');
+  const priority = await question('Priority [medium]: ') || 'medium';
+
+  console.log('\nSD Types: feature, infrastructure, database, security, documentation, refactor');
+  const sdType = await question(`SD Type [${category}]: `) || category;
+
+  const description = await question('\nDescription (brief): ');
+  const rationale = await question('Rationale (why): ');
+
+  // Confirm
+  console.log('\n' + '═'.repeat(60));
+  console.log('REVIEW:');
+  console.log('═'.repeat(60));
+  console.log(`ID:          ${sdId}`);
+  console.log(`Title:       ${title}`);
+  console.log(`Category:    ${category}`);
+  console.log(`Priority:    ${priority}`);
+  console.log(`SD Type:     ${sdType}`);
+  console.log(`Description: ${description.substring(0, 50)}...`);
+  console.log('═'.repeat(60));
+
+  const confirm = await question('\nCreate this SD? [Y/n]: ');
+  if (confirm.toLowerCase() === 'n') {
+    console.log('Cancelled.');
+    return promptAfterAction();
+  }
+
+  // Create the SD
+  const sdKey = sdId.replace('SD-', '');
+
+  const createScript = `
+    const { createClient } = require('@supabase/supabase-js');
+    require('dotenv').config();
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+    async function create() {
+      const sd = {
+        id: '${sdId}',
+        sd_key: '${sdKey}',
+        title: ${JSON.stringify(title)},
+        version: '1.0',
+        status: 'draft',
+        category: '${category}',
+        priority: '${priority}',
+        sd_type: '${sdType}',
+        current_phase: 'LEAD',
+        description: ${JSON.stringify(description || 'To be defined')},
+        rationale: ${JSON.stringify(rationale || 'To be defined')},
+        scope: 'To be defined during PLAN phase',
+        strategic_objectives: [
+          'Primary objective - to be defined',
+          'TESTING: Test requirements to be defined',
+          'DOCUMENTATION: Documentation requirements to be defined'
+        ],
+        success_criteria: [
+          'Primary success criterion - to be defined',
+          'TESTING: Test criteria to be defined',
+          'DOCUMENTATION: Documentation criteria to be defined'
+        ],
+        key_changes: [],
+        key_principles: [],
+        metadata: {
+          source: 'LEO Command Center',
+          created_via: 'npm run leo',
+          testing_requirements: {},
+          documentation_requirements: {}
+        },
+        created_by: 'LEAD',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { data, error } = await supabase
+        .from('strategic_directives_v2')
+        .insert(sd)
+        .select()
+        .single();
+
+      if (error) {
+        console.log('❌ Error:', error.message);
+        process.exit(1);
+      }
+      console.log('✅ SD created:', data.id);
+      console.log('\\nNext steps:');
+      console.log('1. Run: npm run sd:next to see in queue');
+      console.log('2. Run: node scripts/handoff.js execute LEAD-TO-PLAN', data.id);
+    }
+    create();
+  `;
+
+  try {
+    execSync(`node -e "${createScript.replace(/"/g, '\\"').replace(/\n/g, ' ')}"`, {
+      stdio: 'inherit',
+      cwd: ENGINEER_DIR
+    });
+  } catch (error) {
+    console.log('❌ Failed to create SD');
+  }
+
+  return promptAfterAction();
 }
 
 // ============================================================
