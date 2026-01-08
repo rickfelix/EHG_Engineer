@@ -383,12 +383,25 @@ class PlanToExecVerifier {
 
       // 3a. MANDATORY: Check User Stories Exist
       // PAT-PARENT-DET: Skip for parent orchestrators - children have user stories
+      // SD-TYPE-PROFILE: Check sd_type_validation_profiles for requires_user_stories
       let userStories = [];
       let completedStories = 0;
+
+      // Query validation profile for this SD type
+      const { data: validationProfile } = await this.supabase
+        .from('sd_type_validation_profiles')
+        .select('requires_user_stories, requires_e2e_tests, requires_prd')
+        .eq('sd_type', sd.sd_type)
+        .single();
+
+      const requiresUserStories = validationProfile?.requires_user_stories !== false;
 
       if (isParentOrchestrator) {
         console.log('\n📝 User stories check: SKIPPED (parent orchestrator)');
         console.log('   ℹ️  User stories belong to child SDs, not parent orchestrator');
+      } else if (!requiresUserStories) {
+        console.log(`\n📝 User stories check: SKIPPED (sd_type='${sd.sd_type}')`);
+        console.log('   ℹ️  Validation profile: requires_user_stories=false');
       } else {
         console.log('\n📝 Checking for user stories...');
         // Use sd.id (UUID) not sdId (legacy_id) for user stories query
@@ -418,10 +431,13 @@ class PlanToExecVerifier {
       // 3a-2. NEW: User Story Quality Validation (SD-CAPABILITY-LIFECYCLE-001)
       // Prevents boilerplate and low-quality stories from reaching EXEC
       // PAT-PARENT-DET: Skip for parent orchestrators
+      // SD-TYPE-PROFILE: Skip for SD types that don't require user stories
       let storyQualityResult = { valid: true, averageScore: 100, warnings: [] };
 
       if (isParentOrchestrator) {
         console.log('\n🔍 User story quality check: SKIPPED (parent orchestrator)');
+      } else if (!requiresUserStories) {
+        console.log(`\n🔍 User story quality check: SKIPPED (sd_type='${sd.sd_type}')`);
       } else {
         console.log('\n🔍 Validating user story quality...');
 

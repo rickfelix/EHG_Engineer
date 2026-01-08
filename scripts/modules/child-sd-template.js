@@ -38,12 +38,79 @@ export const CHILD_SD_TEMPLATE = {
   rationale: '',
   category: 'feature',
   priority: 'high',
+  sd_type: 'implementation', // Default, should be inferred via inferSDType()
 
   // Child-specific fields
   parent_sd_id: null,
   phase_number: null,
   dependency_requirements: []
 };
+
+/**
+ * SD Type Inference Keywords
+ * Used to automatically determine sd_type from title/scope
+ */
+const SD_TYPE_KEYWORDS = {
+  documentation: [
+    'research', 'analysis', 'mapping', 'documentation', 'docs', 'audit',
+    'investigation', 'discovery', 'assessment', 'review', 'study'
+  ],
+  infrastructure: [
+    'migration', 'infrastructure', 'setup', 'configuration', 'deployment',
+    'pipeline', 'ci/cd', 'devops', 'platform', 'tooling'
+  ],
+  feature: [
+    'ui', 'ux', 'user interface', 'dashboard', 'form', 'page', 'component',
+    'button', 'modal', 'wizard', 'experience', 'intake', 'flow'
+  ],
+  testing: [
+    'e2e', 'end-to-end', 'test', 'testing', 'qa', 'quality', 'validation',
+    'verification', 'regression', 'playwright'
+  ],
+  refactor: [
+    'refactor', 'restructure', 'cleanup', 'optimize', 'consolidate',
+    'modernize', 'simplify'
+  ],
+  bugfix: [
+    'fix', 'bug', 'issue', 'hotfix', 'patch', 'repair', 'resolve'
+  ]
+};
+
+/**
+ * Infer SD type from title and scope keywords
+ * Prevents incorrect type assignments that cause workflow issues
+ *
+ * @param {string} title - SD title
+ * @param {string} scope - SD scope
+ * @param {string} description - SD description (optional)
+ * @returns {Object} { sdType: string, confidence: number, matchedKeywords: string[] }
+ */
+export function inferSDType(title, scope = '', description = '') {
+  const textToAnalyze = `${title} ${scope} ${description}`.toLowerCase();
+  const scores = {};
+  const matches = {};
+
+  for (const [sdType, keywords] of Object.entries(SD_TYPE_KEYWORDS)) {
+    const matched = keywords.filter(kw => textToAnalyze.includes(kw.toLowerCase()));
+    scores[sdType] = matched.length;
+    matches[sdType] = matched;
+  }
+
+  // Find highest scoring type
+  const sortedTypes = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  const [topType, topScore] = sortedTypes[0];
+  const [secondType, secondScore] = sortedTypes[1] || ['none', 0];
+
+  // Calculate confidence (difference between top two scores)
+  const confidence = topScore > 0 ? Math.min(95, 60 + (topScore - secondScore) * 15) : 50;
+
+  return {
+    sdType: topScore > 0 ? topType : 'implementation', // Default if no keywords match
+    confidence,
+    matchedKeywords: matches[topType] || [],
+    allScores: scores
+  };
+}
 
 /**
  * Inherit strategic fields from parent SD
@@ -175,6 +242,7 @@ export function inheritStrategicFields(parentSD, childContext = {}) {
  * @param {string} config.phaseObjective - Main objective for this phase
  * @param {string} config.category - Category override (optional)
  * @param {string} config.priority - Priority override (optional)
+ * @param {string} config.sdType - SD type override (optional, auto-inferred if not provided)
  * @param {Object} config.customMetrics - Additional success_metrics (optional)
  * @param {Object} config.customRisks - Additional risks (optional)
  * @returns {Object} Complete child SD data ready for database insert
@@ -188,9 +256,14 @@ export function generateChildSD(parentSD, config) {
     phaseObjective,
     category = parentSD.category || 'feature',
     priority = parentSD.priority || 'high',
+    sdType = null, // Will be inferred if not provided
     customMetrics = [],
     customRisks = []
   } = config;
+
+  // Infer SD type from title/scope if not explicitly provided
+  const inferredType = inferSDType(phaseTitle, phaseScope, phaseDescription);
+  const finalSDType = sdType || inferredType.sdType;
 
   // Generate SD key pattern: PARENT-ID-P{N}
   const parentKey = parentSD.sd_key || parentSD.legacy_id || parentSD.id;
@@ -222,6 +295,7 @@ export function generateChildSD(parentSD, config) {
     rationale: `Part of ${parentSD.title} - ${phaseObjective || phaseTitle}`,
     category,
     priority,
+    sd_type: finalSDType, // Auto-inferred from title/scope keywords
 
     // Strategic fields (inherited + merged)
     success_metrics: mergedMetrics,
@@ -240,7 +314,14 @@ export function generateChildSD(parentSD, config) {
       phase_number: phaseNumber,
       parent_sd_key: parentKey,
       inherited_from: parentSD.id,
-      generation_date: new Date().toISOString()
+      generation_date: new Date().toISOString(),
+      // SD type inference audit trail
+      sd_type_inference: {
+        inferred_type: inferredType.sdType,
+        confidence: inferredType.confidence,
+        matched_keywords: inferredType.matchedKeywords,
+        explicit_override: sdType !== null
+      }
     },
 
     // Timestamps
@@ -390,5 +471,7 @@ export default {
   createMinimalPhaseConfig,
   validateChildBeforeCreation,
   getExamplePhaseConfigs,
-  CHILD_SD_TEMPLATE
+  inferSDType, // NEW: Auto-infer sd_type from title/scope
+  CHILD_SD_TEMPLATE,
+  SD_TYPE_KEYWORDS // NEW: Expose keywords for testing/extension
 };

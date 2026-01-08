@@ -8,6 +8,7 @@
 
 import fetch from 'node-fetch';
 import fs from 'fs/promises';
+import { readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -18,6 +19,55 @@ const __dirname = path.dirname(__filename);
 const MIDDLEWARE_URL = 'http://localhost:3457';
 const CACHE_FILE = path.join(__dirname, '../.claude-hook-cache.json');
 const LOG_FILE = path.join(__dirname, '../.claude-hook.log');
+const CONFIG_FILE = path.join(__dirname, '../config/sub-agent-selection.json');
+
+/**
+ * Check for proactive reminder keywords in prompt
+ * Prevents bypassing sub-agents (NC-EXEC-004: 15% quality loss)
+ * @param {string} prompt - The user prompt to analyze
+ * @returns {object|null} - Reminder details if keywords detected, null otherwise
+ */
+function checkProactiveReminders(prompt) {
+  try {
+    // Load config synchronously for hook performance (ESM compatible)
+    const configData = JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'));
+    const reminders = configData.proactiveReminders;
+
+    if (!reminders) return null;
+
+    const promptLower = prompt.toLowerCase();
+    const results = [];
+
+    for (const [domain, config] of Object.entries(reminders)) {
+      if (!config.enabled) continue;
+
+      // Check exclusions first - if prompt contains exclusions, skip this domain
+      const hasExclusion = config.exclusions?.some(excl =>
+        promptLower.includes(excl.toLowerCase())
+      );
+      if (hasExclusion) continue;
+
+      // Count keyword matches
+      const matches = config.keywords.filter(kw =>
+        promptLower.includes(kw.toLowerCase())
+      );
+
+      if (matches.length >= config.triggerMinMatches) {
+        results.push({
+          domain,
+          keywords: matches,
+          reminder: config.reminderText,
+          suggestions: config.suggestCommands
+        });
+      }
+    }
+
+    return results.length > 0 ? results : null;
+  } catch (error) {
+    // Fail silently - don't block prompts if config loading fails
+    return null;
+  }
+}
 
 // Utility to log messages
 async function log(message, data = null) {
@@ -78,7 +128,26 @@ async function ensureMiddlewareRunning() {
 // Handle prompt submission
 async function handlePromptSubmit(prompt, context = {}) {
   await log('Prompt submitted', { prompt: prompt.substring(0, 100) });
-  
+
+  // Check for proactive reminders (prevents NC-EXEC-004 violations)
+  const reminders = checkProactiveReminders(prompt);
+  if (reminders) {
+    console.error('\n' + '='.repeat(70));
+    for (const reminder of reminders) {
+      console.error(`\n${reminder.reminder}`);
+      console.error(`Keywords detected: ${reminder.keywords.join(', ')}`);
+      console.error('\nSuggested alternatives:');
+      for (const suggestion of reminder.suggestions) {
+        console.error(`  → ${suggestion}`);
+      }
+      await log('Proactive reminder triggered', {
+        domain: reminder.domain,
+        keywords: reminder.keywords
+      });
+    }
+    console.error('\n' + '='.repeat(70) + '\n');
+  }
+
   // Ensure middleware is running
   if (!await ensureMiddlewareRunning()) {
     console.error('⚠️ Sub-agent system unavailable');

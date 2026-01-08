@@ -4,29 +4,14 @@
     "command": "/mnt/c/_EHG/EHG_Engineer/.claude/statusline-context-tracker.sh"
   },
   "hooks": {
-    "UserPromptSubmit": [
+    "PreToolUse": [
       {
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "/mnt/c/_EHG/EHG_Engineer/.claude/record-user-input.sh",
-            "timeout": 2
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/mnt/c/_EHG/EHG_Engineer/.claude/notify-user.sh complete",
+            "command": "node /mnt/c/_EHG/EHG_Engineer/scripts/claude-hook.js prompt-submit",
             "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "/mnt/c/_EHG/EHG_Engineer/.claude/notify-email.sh complete",
-            "timeout": 10
           }
         ]
       }
