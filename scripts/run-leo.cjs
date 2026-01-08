@@ -190,59 +190,22 @@ async function mainMenu() {
 // ============================================================
 
 async function continueSD(sd) {
-  const options = [
-    {
-      id: 'prompt',
-      label: 'Get Continuous Execution Prompt',
-      description: 'Copy-paste prompt for continuous LEO mode',
-      recommended: true,
-      action: () => {
-        runCommand(`npm run leo:prompt ${sd.id}`);
-        return promptAfterAction();
-      }
-    },
-    {
-      id: 'handoff',
-      label: 'Execute Next Handoff',
-      description: `Current phase: ${sd.current_phase}`,
-      action: () => executeHandoffMenu(sd)
-    },
-    {
-      id: 'status',
-      label: 'View SD Details',
-      description: 'See full status, user stories, and handoffs',
-      action: () => {
-        runCommand(`node -e "
-          const { createClient } = require('@supabase/supabase-js');
-          require('dotenv').config();
-          const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-          async function get() {
-            const { data: sd } = await supabase.from('strategic_directives_v2').select('*').eq('id', '${sd.id}').single();
-            const { data: stories } = await supabase.from('user_stories').select('story_key, status, title').eq('sd_id', '${sd.id}');
-            console.log('\\n' + '═'.repeat(60));
-            console.log('SD:', sd.id);
-            console.log('Title:', sd.title);
-            console.log('Status:', sd.status, '| Phase:', sd.current_phase);
-            console.log('Progress:', sd.progress_percentage + '%');
-            console.log('-'.repeat(60));
-            console.log('User Stories:', stories?.length || 0);
-            stories?.forEach(s => console.log('  ', s.status === 'completed' ? '✓' : '○', s.story_key, '-', s.title?.substring(0,40)));
-            console.log('═'.repeat(60));
-          }
-          get();
-        "`);
-        return promptAfterAction();
-      }
-    },
-    {
-      id: 'back',
-      label: '← Back to Main Menu',
-      action: mainMenu
-    }
-  ];
+  // Default: Output continuous mode prompt directly (no sub-menu)
+  clearScreen();
+  printHeader();
+  console.log(`\n🔄 RESUMING SD: ${sd.id}\n`);
+  console.log(`   Title: ${sd.title}`);
+  console.log(`   Phase: ${sd.current_phase} | Status: ${sd.status}\n`);
+  console.log('📋 Continuous Mode Prompt (copy everything below the dashed line):\n');
 
-  const selected = await selectOption(`Continue: ${sd.id}`, options);
-  await selected.action();
+  runCommand(`npm run leo:prompt ${sd.id}`);
+
+  console.log('\n' + '═'.repeat(60));
+  console.log('💡 TIP: Copy the prompt above and paste it to enable continuous mode.');
+  console.log('    Then say: "Continue SD ' + sd.id + '" to resume execution.');
+  console.log('═'.repeat(60));
+
+  return promptAfterAction();
 }
 
 // ============================================================
@@ -359,35 +322,20 @@ async function jumpToSD() {
 }
 
 async function startSD(sdId) {
-  const options = [
-    {
-      id: 'prompt',
-      label: 'Get Continuous Execution Prompt',
-      description: 'Copy-paste prompt for Claude Code',
-      recommended: true,
-      action: () => {
-        runCommand(`npm run leo:prompt ${sdId}`);
-        return promptAfterAction();
-      }
-    },
-    {
-      id: 'start',
-      label: 'Begin with LEAD-TO-PLAN',
-      description: 'Start the LEO workflow from scratch',
-      action: () => {
-        runCommand(`node scripts/handoff.js execute LEAD-TO-PLAN ${sdId}`);
-        return promptAfterAction();
-      }
-    },
-    {
-      id: 'back',
-      label: '← Back',
-      action: whatsNextMenu
-    }
-  ];
+  // Default: Output continuous mode prompt directly (no sub-menu)
+  clearScreen();
+  printHeader();
+  console.log(`\n🚀 STARTING SD: ${sdId}\n`);
+  console.log('📋 Continuous Mode Prompt (copy everything below the dashed line):\n');
 
-  const selected = await selectOption(`Start: ${sdId}`, options);
-  await selected.action();
+  runCommand(`npm run leo:prompt ${sdId}`);
+
+  console.log('\n' + '═'.repeat(60));
+  console.log('💡 TIP: Copy the prompt above and paste it to enable continuous mode.');
+  console.log('    Then say: "Start SD ' + sdId + '" to begin execution.');
+  console.log('═'.repeat(60));
+
+  return promptAfterAction();
 }
 
 // ============================================================
