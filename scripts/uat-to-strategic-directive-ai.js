@@ -13,6 +13,9 @@ import { createClient } from '@supabase/supabase-js';
 import chalk from 'chalk';
 import dotenv from 'dotenv';
 
+// SD-LLM-CONFIG-CENTRAL-001: Centralized model configuration
+import { getOpenAIModel } from '../lib/config/model-config.js';
+
 dotenv.config();
 
 // Initialize OpenAI
@@ -29,7 +32,7 @@ const supabase = createClient(
 class UATToSDConverter {
   constructor() {
     this.conversionId = `UAT-SD-${Date.now()}`;
-    this.model = 'gpt-4-turbo-preview';
+    this.model = getOpenAIModel('generation'); // SD-LLM-CONFIG-CENTRAL-001: Centralized config (was outdated gpt-4-turbo-preview)
   }
 
   /**

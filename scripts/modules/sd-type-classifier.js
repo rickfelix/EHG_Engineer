@@ -21,6 +21,9 @@ import dotenv from 'dotenv';
 // LEO v4.3.3: Import IntensityDetector for refactoring SDs
 import { detectIntensityForSD } from './intensity-detector.js';
 
+// SD-LLM-CONFIG-CENTRAL-001: Centralized model configuration
+import { getOpenAIModel } from '../../lib/config/model-config.js';
+
 dotenv.config();
 
 // Valid SD types (must match database CHECK constraint)
@@ -64,7 +67,7 @@ const EXPECTED_JSON_SCHEMA = `{
 
 export class SDTypeClassifier {
   constructor() {
-    this.model = 'gpt-5.2'; // Using gpt-5.2 consistent with other validation scripts
+    this.model = getOpenAIModel('classification'); // SD-LLM-CONFIG-CENTRAL-001: Centralized config
 
     if (!process.env.OPENAI_API_KEY) {
       console.warn('OPENAI_API_KEY not found - AI classification will fall back to keyword detection');
