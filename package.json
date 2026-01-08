@@ -27,7 +27,7 @@
     "sync-app": "node scripts/sync-manager.js",
     "create-app-sd": "node scripts/create-app-sd.js",
     "deploy-sd": "node scripts/deploy-sd-to-app.js",
-    "leo": "node scripts/leo.js",
+    "leo": "node scripts/run-leo.cjs",
     "leo-status": "node scripts/leo-status-line.js show",
     "build:loader": "tsc -p tsconfig.json",
     "test:loader:dry": "node dist/services/database-loader/index.js --dry-run",
@@ -202,8 +202,6 @@
     "leo:continuous": "node scripts/leo-continuous.js",
     "leo:continuous:start": "node scripts/leo-continuous.js --start",
     "leo:continuous:status": "node scripts/leo-continuous.js --status",
-    "leo:prompt": "node scripts/leo-continuous-prompt.js",
-    "leo:prompt:short": "node scripts/leo-continuous-prompt.js --short",
     "leo:checkpoint": "node scripts/lib/leo-checkpoint.js",
     "leo:checkpoint:validate": "node scripts/lib/leo-checkpoint.js validate",
     "leo:checkpoint:history": "node scripts/lib/leo-checkpoint.js history",
@@ -241,7 +239,10 @@
     "leo:cleanup:root:force": "node scripts/cleanup-root-temp-files.js --force",
     "untrack:manifest": "node scripts/generate-untrack-manifest.js",
     "untrack:execute": "node scripts/execute-untrack-manifest.js",
-    "untrack:execute:force": "node scripts/execute-untrack-manifest.js --force"
+    "untrack:execute:force": "node scripts/execute-untrack-manifest.js --force",
+    "hooks:setup": "node scripts/setup-global-hooks.cjs",
+    "hooks:recover": "node scripts/hooks/recover-session-state.cjs",
+    "hooks:baseline": "node scripts/hooks/compare-test-baseline.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",
