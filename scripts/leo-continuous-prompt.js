@@ -25,6 +25,8 @@ const SHORT_PROMPT = `
 Continuous mode: After each SD completes, auto-proceed to next via \`npm run sd:next\`.
 No confirmation needed. Follow LEO Protocol (LEAD→PLAN→EXEC).
 
+QUALITY OVER SPEED: Fix root causes, never work around issues.
+
 ON FAILURE - Progressive Escalation (max 20 min total):
 1. First failure → Run /escalate Level 2 (5-Whys diagnosis via explorer agent)
 2. If quick fix found (<10 min) → Attempt fix, retry
@@ -53,6 +55,15 @@ You are now in **continuous execution mode**. Follow these rules:
 1. Run \`npm run sd:next\` to identify the next READY SD
 2. Immediately proceed without asking for confirmation
 3. Follow LEO Protocol: LEAD → PLAN → EXEC for each SD
+
+### Quality Over Speed - Root Cause Focus:
+**CRITICAL: Fix root causes, never work around issues.**
+
+- When encountering a problem, identify and fix the ROOT CAUSE
+- Do NOT create workarounds that leave the underlying issue unfixed
+- If a script doesn't read data correctly, fix the script (not the data storage)
+- If validation fails, fix the validation logic (not bypass it)
+- Quality is more important than speed - take time to do it right
 
 ### On Failure - Progressive Escalation (/escalate pattern):
 **NEVER ask user what to do. Follow this escalation automatically:**

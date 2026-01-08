@@ -599,24 +599,38 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // QF-20251220-426: Check 5: success_metrics must be populated
     // Root cause: Empty success_metrics caused RETROSPECTIVE_QUALITY_GATE failures
     // at PLAN-TO-LEAD. Catching this at LEAD-TO-PLAN prevents downstream issues.
-    const successMetrics = sd.success_metrics;
+    // ROOT CAUSE FIX: Also check success_criteria as fallback (SD creation scripts use this field)
+    let successMetrics = sd.success_metrics;
+    let metricsSource = 'success_metrics';
+
+    // Fallback to success_criteria if success_metrics is empty (common in SD creation scripts)
+    if ((!successMetrics || (Array.isArray(successMetrics) && successMetrics.length === 0))
+        && sd.success_criteria && Array.isArray(sd.success_criteria) && sd.success_criteria.length > 0) {
+      successMetrics = sd.success_criteria;
+      metricsSource = 'success_criteria (fallback)';
+      console.log('   ℹ️  Using success_criteria as fallback for success_metrics');
+    }
+
     if (!successMetrics || (Array.isArray(successMetrics) && successMetrics.length === 0)) {
-      issues.push('success_metrics is empty - must define at least one measurable success metric');
-      console.log('   ❌ success_metrics is empty or missing');
+      issues.push('success_metrics AND success_criteria are both empty - must define at least one measurable success metric');
+      console.log('   ❌ success_metrics and success_criteria are both empty or missing');
     } else if (Array.isArray(successMetrics)) {
-      // Validate structure: each metric should have metric, target, baseline
+      // Validate structure: accept both object format (metric/target) AND string format (success_criteria)
+      // Object format: { metric: "...", target: "..." }
+      // String format: "Schema allows all status values..." (from success_criteria)
       const validMetrics = successMetrics.filter(m =>
-        m && typeof m === 'object' && m.metric && m.target
+        (m && typeof m === 'object' && m.metric && m.target) || // Object format
+        (m && typeof m === 'string' && m.trim().length > 0)     // String format (success_criteria)
       );
       if (validMetrics.length === 0) {
-        issues.push('success_metrics has invalid structure - each metric needs metric and target fields');
-        console.log('   ❌ success_metrics has no valid entries');
+        issues.push('success_metrics/success_criteria has no valid entries');
+        console.log('   ❌ No valid metric entries found');
       } else if (validMetrics.length < successMetrics.length) {
-        warnings.push(`${successMetrics.length - validMetrics.length} success_metrics entries have invalid structure`);
-        console.log(`   ⚠️  ${validMetrics.length}/${successMetrics.length} success_metrics are valid`);
+        warnings.push(`${successMetrics.length - validMetrics.length} metric entries are invalid`);
+        console.log(`   ⚠️  ${validMetrics.length}/${successMetrics.length} metrics are valid`);
         score -= 10;
       } else {
-        console.log(`   ✅ success_metrics validated (${validMetrics.length} metrics)`);
+        console.log(`   ✅ ${metricsSource} validated (${validMetrics.length} entries)`);
       }
     } else {
       warnings.push('success_metrics is not an array - may cause downstream issues');
