@@ -30,6 +30,10 @@ import {
   isVisionBriefApproved,
   buildPersonaContextString
 } from './lib/persona-extractor.js';
+
+// SD-LLM-CONFIG-CENTRAL-001: Centralized model configuration
+import { getOpenAIModel } from '../lib/config/model-config.js';
+
 dotenv.config();
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -48,7 +52,7 @@ dotenv.config();
 // ═══════════════════════════════════════════════════════════════════════════
 
 const LLM_PRD_CONFIG = {
-  model: 'gpt-5.2',  // Same capable model used for story generation
+  model: getOpenAIModel('generation'),  // SD-LLM-CONFIG-CENTRAL-001: Centralized config
   temperature: 0.6,   // Slightly lower for more structured PRD content
   maxTokens: 32000,   // Extended for comprehensive PRD generation (user requested)
   enabled: process.env.LLM_PRD_GENERATION !== 'false'  // Enabled by default

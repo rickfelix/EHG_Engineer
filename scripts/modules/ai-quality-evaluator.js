@@ -49,6 +49,9 @@ import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
 
+// SD-LLM-CONFIG-CENTRAL-001: Centralized model configuration
+import { getOpenAIModel } from '../../lib/config/model-config.js';
+
 dotenv.config();
 
 export class AIQualityEvaluator {
@@ -62,7 +65,7 @@ export class AIQualityEvaluator {
    */
   constructor(rubricConfig) {
     this.rubricConfig = rubricConfig;
-    this.model = 'gpt-5.2';
+    this.model = getOpenAIModel('validation'); // SD-LLM-CONFIG-CENTRAL-001: Centralized config
     this.temperature = 0.3; // Balance consistency + nuance
 
     // Initialize OpenAI
