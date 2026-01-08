@@ -76,6 +76,8 @@ class SDNextSelector {
     this.pendingProposals = []; // LEO v4.4: Proactive proposals
     this.okrScorecard = []; // OKR hierarchy scorecard
     this.vision = null; // Strategic vision
+    this.sdHierarchy = new Map(); // parent_sd_id -> children[]
+    this.allSDs = new Map(); // sd_id -> sd details
   }
 
   async run() {
@@ -89,6 +91,9 @@ class SDNextSelector {
 
     // Load OKR scorecard first (strategic context)
     await this.loadOKRScorecard();
+
+    // Load SD hierarchy for tree display
+    await this.loadSDHierarchy();
 
     // Load data
     await this.loadActiveBaseline();
@@ -306,6 +311,59 @@ class SDNextSelector {
   }
 
   /**
+   * Load SD hierarchy for parent-child tree display
+   */
+  async loadSDHierarchy() {
+    try {
+      const { data: sds } = await supabase
+        .from('strategic_directives_v2')
+        .select('id, legacy_id, title, parent_sd_id, status, current_phase, progress_percentage, dependencies, is_working_on, metadata, priority')
+        .eq('is_active', true)
+        .order('created_at');
+
+      if (!sds) return;
+
+      // Build lookup map and hierarchy
+      for (const sd of sds) {
+        const sdId = sd.legacy_id || sd.id;
+        this.allSDs.set(sdId, sd);
+        this.allSDs.set(sd.id, sd); // Also map by UUID
+
+        if (sd.parent_sd_id) {
+          if (!this.sdHierarchy.has(sd.parent_sd_id)) {
+            this.sdHierarchy.set(sd.parent_sd_id, []);
+          }
+          this.sdHierarchy.get(sd.parent_sd_id).push(sd);
+        }
+      }
+    } catch (e) {
+      // Non-fatal - continue without hierarchy
+    }
+  }
+
+  /**
+   * Get children of an SD (by legacy_id or UUID)
+   */
+  getChildren(sdId) {
+    // Try both legacy_id and UUID lookups
+    const children = this.sdHierarchy.get(sdId) || [];
+    const sd = this.allSDs.get(sdId);
+    if (sd && sd.id !== sdId) {
+      const byUuid = this.sdHierarchy.get(sd.id) || [];
+      return [...children, ...byUuid];
+    }
+    return children;
+  }
+
+  /**
+   * Get parent SD details
+   */
+  getParent(sd) {
+    if (!sd.parent_sd_id) return null;
+    return this.allSDs.get(sd.parent_sd_id);
+  }
+
+  /**
    * Load OKR scorecard for strategic visibility
    */
   async loadOKRScorecard() {
@@ -442,7 +500,7 @@ class SDNextSelector {
     // No baseline - fall back to sequence_rank on SDs directly
     const { data: sds, error } = await supabase
       .from('strategic_directives_v2')
-      .select('legacy_id, title, priority, status, sequence_rank, progress_percentage, dependencies, metadata, is_working_on')
+      .select('id, legacy_id, title, priority, status, sequence_rank, progress_percentage, dependencies, metadata, is_working_on, parent_sd_id')
       .eq('is_active', true)
       .in('status', ['draft', 'lead_review', 'plan_active', 'exec_active', 'active', 'in_progress'])
       .in('priority', ['critical', 'high', 'medium'])
@@ -531,55 +589,141 @@ class SDNextSelector {
 
     console.log(`\n${trackColors[trackKey]}${colors.bold}TRACK ${trackKey}: ${trackName}${colors.reset}`);
 
-    items.forEach(item => {
+    // Group items by parent for hierarchical display
+    const rootItems = [];
+    const childItems = new Map(); // parent_sd_id -> children
+
+    for (const item of items) {
       const sdId = item.legacy_id || item.sd_id;
-      const rankStr = `[${item.sequence_rank}]`.padEnd(5);
-
-      // Check if claimed by another session
-      const claimedBySession = this.claimedSDs.get(sdId);
-      const isClaimedByOther = claimedBySession &&
-        this.currentSession &&
-        claimedBySession !== this.currentSession.session_id;
-      const isClaimedByMe = claimedBySession &&
-        this.currentSession &&
-        claimedBySession === this.currentSession.session_id;
-
-      // Status icon logic
-      let statusIcon;
-      if (isClaimedByOther) {
-        statusIcon = `${colors.yellow}CLAIMED${colors.reset}`;
-      } else if (isClaimedByMe) {
-        statusIcon = `${colors.green}YOURS${colors.reset}`;
-      } else if (item.deps_resolved) {
-        statusIcon = `${colors.green}READY${colors.reset}`;
-      } else if (item.progress_percentage > 0) {
-        statusIcon = `${colors.yellow}${item.progress_percentage}%${colors.reset}`;
+      if (item.parent_sd_id) {
+        if (!childItems.has(item.parent_sd_id)) {
+          childItems.set(item.parent_sd_id, []);
+        }
+        childItems.get(item.parent_sd_id).push(item);
       } else {
-        statusIcon = `${colors.red}BLOCKED${colors.reset}`;
+        rootItems.push(item);
       }
+    }
 
-      const workingIcon = item.is_working_on ? `${colors.bgYellow} ACTIVE ${colors.reset} ` : '';
-      const claimedIcon = isClaimedByOther ? `${colors.bgBlue} CLAIMED ${colors.reset} ` : '';
-
-      console.log(`  ${claimedIcon}${workingIcon}${rankStr} ${sdId} - ${item.title.substring(0, 45)}... ${statusIcon}`);
-
-      // Show who claimed it
-      if (isClaimedByOther) {
-        const claimingSession = this.activeSessions.find(s => s.session_id === claimedBySession);
-        const shortId = claimedBySession.substring(0, 12) + '...';
-        const ageMin = claimingSession ? Math.round(claimingSession.claim_duration_minutes || 0) : '?';
-        console.log(`${colors.dim}        └─ Claimed by session ${shortId} (${ageMin}m)${colors.reset}`);
-      }
-
-      // Show blockers if not resolved and not claimed
-      if (!item.deps_resolved && item.dependencies && !isClaimedByOther) {
-        const deps = this.parseDependencies(item.dependencies);
-        const unresolvedDeps = deps.filter(d => !d.resolved);
-        if (unresolvedDeps.length > 0) {
-          console.log(`${colors.dim}        └─ Blocked by: ${unresolvedDeps.map(d => d.sd_id).join(', ')}${colors.reset}`);
+    // Also add items whose parent is not in this track as roots
+    for (const item of items) {
+      if (item.parent_sd_id) {
+        const parentInTrack = items.find(i =>
+          (i.legacy_id || i.sd_id) === item.parent_sd_id || i.id === item.parent_sd_id
+        );
+        if (!parentInTrack && !rootItems.includes(item)) {
+          rootItems.push(item);
         }
       }
-    });
+    }
+
+    // Display hierarchically
+    for (const item of rootItems) {
+      this.displaySDItem(item, '', childItems, items);
+    }
+  }
+
+  /**
+   * Display a single SD item with its children (recursive)
+   */
+  displaySDItem(item, indent, childItems, allItems) {
+    const sdId = item.legacy_id || item.sd_id;
+    const rankStr = item.sequence_rank ? `[${item.sequence_rank}]`.padEnd(5) : '     ';
+
+    // Check if claimed by another session
+    const claimedBySession = this.claimedSDs.get(sdId);
+    const isClaimedByOther = claimedBySession &&
+      this.currentSession &&
+      claimedBySession !== this.currentSession.session_id;
+    const isClaimedByMe = claimedBySession &&
+      this.currentSession &&
+      claimedBySession === this.currentSession.session_id;
+
+    // Status icon logic
+    let statusIcon;
+    if (isClaimedByOther) {
+      statusIcon = `${colors.yellow}CLAIMED${colors.reset}`;
+    } else if (isClaimedByMe) {
+      statusIcon = `${colors.green}YOURS${colors.reset}`;
+    } else if (item.deps_resolved) {
+      statusIcon = `${colors.green}READY${colors.reset}`;
+    } else if (item.progress_percentage > 0) {
+      statusIcon = `${colors.yellow}${item.progress_percentage}%${colors.reset}`;
+    } else {
+      statusIcon = `${colors.red}BLOCKED${colors.reset}`;
+    }
+
+    const workingIcon = item.is_working_on ? `${colors.bgYellow} ACTIVE ${colors.reset} ` : '';
+    const claimedIcon = isClaimedByOther ? `${colors.bgBlue} CLAIMED ${colors.reset} ` : '';
+    const title = (item.title || '').substring(0, 40 - indent.length);
+
+    console.log(`${indent}${claimedIcon}${workingIcon}${rankStr} ${sdId} - ${title}... ${statusIcon}`);
+
+    // Show who claimed it
+    if (isClaimedByOther) {
+      const claimingSession = this.activeSessions.find(s => s.session_id === claimedBySession);
+      const shortId = claimedBySession.substring(0, 12) + '...';
+      const ageMin = claimingSession ? Math.round(claimingSession.claim_duration_minutes || 0) : '?';
+      console.log(`${colors.dim}${indent}        └─ Claimed by session ${shortId} (${ageMin}m)${colors.reset}`);
+    }
+
+    // Show blockers if not resolved and not claimed
+    if (!item.deps_resolved && item.dependencies && !isClaimedByOther) {
+      const deps = this.parseDependencies(item.dependencies);
+      const unresolvedDeps = deps.filter(d => !d.resolved);
+      if (unresolvedDeps.length > 0) {
+        console.log(`${colors.dim}${indent}        └─ Blocked by: ${unresolvedDeps.map(d => d.sd_id).join(', ')}${colors.reset}`);
+      }
+    }
+
+    // Display children recursively
+    const children = childItems.get(sdId) || childItems.get(item.id) || [];
+    const childrenInTrack = children.filter(c => allItems.includes(c));
+
+    for (let i = 0; i < childrenInTrack.length; i++) {
+      const child = childrenInTrack[i];
+      const isLast = i === childrenInTrack.length - 1;
+      const childIndent = indent + (isLast ? '  └─ ' : '  ├─ ');
+      const nextIndent = indent + (isLast ? '     ' : '  │  ');
+
+      // For children, use simpler display
+      this.displaySDItemSimple(child, childIndent, nextIndent, childItems, allItems);
+    }
+  }
+
+  /**
+   * Display child SD item (simpler format for nested items)
+   */
+  displaySDItemSimple(item, prefix, nextIndent, childItems, allItems) {
+    const sdId = item.legacy_id || item.sd_id;
+
+    // Status icon
+    let statusIcon;
+    if (item.deps_resolved) {
+      statusIcon = `${colors.green}READY${colors.reset}`;
+    } else if (item.progress_percentage > 0) {
+      statusIcon = `${colors.yellow}${item.progress_percentage}%${colors.reset}`;
+    } else {
+      statusIcon = `${colors.red}BLOCKED${colors.reset}`;
+    }
+
+    const workingIcon = item.is_working_on ? `${colors.bgYellow}◆${colors.reset}` : '';
+    const title = (item.title || '').substring(0, 30);
+
+    console.log(`${prefix}${workingIcon}${sdId} - ${title}... ${statusIcon}`);
+
+    // Recursively show grandchildren
+    const children = childItems.get(sdId) || childItems.get(item.id) || [];
+    const childrenInTrack = children.filter(c => allItems.includes(c));
+
+    for (let i = 0; i < childrenInTrack.length; i++) {
+      const child = childrenInTrack[i];
+      const isLast = i === childrenInTrack.length - 1;
+      const childPrefix = nextIndent + (isLast ? '└─ ' : '├─ ');
+      const childNextIndent = nextIndent + (isLast ? '   ' : '│  ');
+
+      this.displaySDItemSimple(child, childPrefix, childNextIndent, childItems, allItems);
+    }
   }
 
   async displayTracks() {
@@ -589,10 +733,10 @@ class SDNextSelector {
     for (const item of this.baselineItems) {
       const trackKey = item.track || 'STANDALONE';
       if (tracks[trackKey]) {
-        // Enrich with SD details
+        // Enrich with SD details (including parent_sd_id for hierarchy)
         const { data: sd } = await supabase
           .from('strategic_directives_v2')
-          .select('legacy_id, title, status, progress_percentage, is_working_on, dependencies, is_active')
+          .select('id, legacy_id, title, status, progress_percentage, is_working_on, dependencies, is_active, parent_sd_id')
           .eq('legacy_id', item.sd_id)
           .single();
 
@@ -608,7 +752,7 @@ class SDNextSelector {
       }
     }
 
-    // Display each track
+    // Display each track with hierarchy
     this.displayTrackSection('A', 'Infrastructure/Safety', tracks.A);
     this.displayTrackSection('B', 'Feature/Stages', tracks.B);
     this.displayTrackSection('C', 'Quality', tracks.C);
