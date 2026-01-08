@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-08T21:27:48.130Z
+**Generated**: 2026-01-08T22:48:54.513Z
 **Rows**: 402
 **RLS**: Enabled (4 policies)
 
@@ -116,7 +116,6 @@ Use the id column instead - it is the canonical identifier. |
 ### Check Constraints
 - `check_target_application`: CHECK (((target_application)::text = ANY ((ARRAY['EHG'::character varying, 'EHG_Engineer'::character varying])::text[])))
 - `chk_sd_v2_triage`: CHECK (((rolled_triage IS NULL) OR (rolled_triage = ANY (ARRAY['High'::text, 'Medium'::text, 'Low'::text, 'Future'::text]))))
-- `sd_type_check`: CHECK (((sd_type IS NULL) OR ((sd_type)::text = ANY ((ARRAY['bugfix'::character varying, 'database'::character varying, 'docs'::character varying, 'documentation'::character varying, 'feature'::character varying, 'infrastructure'::character varying, 'orchestrator'::character varying, 'qa'::character varying, 'refactor'::character varying, 'security'::character varying, 'implementation'::character varying, 'strategic_observation'::character varying, 'architectural_review'::character varying, 'discovery_spike'::character varying, 'ux_debt'::character varying, 'product_decision'::character varying])::text[]))))
 - `strategic_directives_v2_complexity_level_check`: CHECK (((complexity_level)::text = ANY ((ARRAY['simple'::character varying, 'moderate'::character varying, 'complex'::character varying, 'critical'::character varying])::text[])))
 - `strategic_directives_v2_confidence_score_check`: CHECK (((confidence_score >= 0) AND (confidence_score <= 100)))
 - `strategic_directives_v2_intensity_level_check`: CHECK (((intensity_level)::text = ANY ((ARRAY['cosmetic'::character varying, 'structural'::character varying, 'architectural'::character varying])::text[])))
@@ -125,6 +124,7 @@ Use the id column instead - it is the canonical identifier. |
 - `strategic_directives_v2_progress_percentage_check`: CHECK (((progress_percentage >= 0) AND (progress_percentage <= 100)))
 - `strategic_directives_v2_relationship_type_check`: CHECK ((relationship_type = ANY (ARRAY['standalone'::text, 'parent'::text, 'child'::text])))
 - `strategic_directives_v2_scope_reduction_check`: CHECK (((scope_reduction_percentage >= 0) AND (scope_reduction_percentage <= 100)))
+- `strategic_directives_v2_sd_type_check`: CHECK (((sd_type IS NULL) OR ((sd_type)::text = ANY ((ARRAY['bugfix'::character varying, 'database'::character varying, 'discovery_spike'::character varying, 'docs'::character varying, 'documentation'::character varying, 'feature'::character varying, 'frontend'::character varying, 'implementation'::character varying, 'infrastructure'::character varying, 'orchestrator'::character varying, 'qa'::character varying, 'refactor'::character varying, 'security'::character varying, 'ux_debt'::character varying])::text[]))))
 - `strategic_directives_v2_status_check`: CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'active'::character varying, 'in_progress'::character varying, 'planning'::character varying, 'review'::character varying, 'pending_approval'::character varying, 'completed'::character varying, 'deferred'::character varying, 'cancelled'::character varying])::text[])))
 - `valid_human_verification_status`: CHECK ((human_verification_status = ANY (ARRAY['not_required'::text, 'pending'::text, 'in_progress'::text, 'passed'::text, 'failed'::text])))
 

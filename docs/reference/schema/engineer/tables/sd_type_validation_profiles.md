@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-08T21:27:48.130Z
-**Rows**: 11
+**Generated**: 2026-01-08T22:48:54.513Z
+**Rows**: 12
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (27 total)
+## Columns (28 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -45,6 +45,7 @@
 | llm_ux_min_score | `integer(32)` | YES | `50` | Minimum LLM UX Oracle score (0-100) required for SD completion. Default 50 (standard stringency). |
 | llm_ux_required_lenses | `ARRAY` | YES | `ARRAY['first-time-user'::text]` | Which LLM UX Oracle lenses must pass: first-time-user, accessibility, mobile-user, error-recovery, cognitive-load |
 | requires_uat_execution | `boolean` | YES | `false` | If true, UAT Agent must execute smoke test steps via Playwright MCP and capture evidence. |
+| gate2_exempt_sections | `ARRAY` | YES | `'{}'::text[]` | Array of Gate 2 section codes that are exempt for this SD type. Exempt sections award full points without validation. Valid codes: B1_migrations, B2_rls, B3_complexity, C1_queries, D2_migration_tests |
 
 ## Constraints
 
