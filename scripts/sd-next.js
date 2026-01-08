@@ -113,6 +113,16 @@ class SDNextSelector {
       return;
     }
 
+    // Check if baseline has actionable (non-completed) items
+    const actionableCount = await this.countActionableBaselineItems();
+
+    if (actionableCount === 0) {
+      // Baseline exists but is exhausted - show helpful message and fallback
+      await this.showExhaustedBaselineMessage();
+      await this.showFallbackQueue({ skipBaselineWarning: true });
+      return;
+    }
+
     // Display tracks
     await this.displayTracks();
 
@@ -225,6 +235,54 @@ class SDNextSelector {
     if (actuals) {
       actuals.forEach(a => this.actuals[a.sd_id] = a);
     }
+  }
+
+  /**
+   * Count how many baseline items have non-completed SDs
+   */
+  async countActionableBaselineItems() {
+    if (!this.baseline || !this.baselineItems.length) return 0;
+
+    let actionableCount = 0;
+    for (const item of this.baselineItems) {
+      const { data: sd } = await supabase
+        .from('strategic_directives_v2')
+        .select('status, is_active')
+        .eq('legacy_id', item.sd_id)
+        .single();
+
+      if (sd && sd.is_active && sd.status !== 'completed' && sd.status !== 'cancelled') {
+        actionableCount++;
+      }
+    }
+    return actionableCount;
+  }
+
+  /**
+   * Show message when baseline exists but all items are completed
+   */
+  async showExhaustedBaselineMessage() {
+    const completedCount = this.baselineItems.length;
+
+    console.log(`${colors.bold}───────────────────────────────────────────────────────────────────${colors.reset}`);
+    console.log(`${colors.green}${colors.bold}✓ BASELINE COMPLETE${colors.reset}\n`);
+    console.log(`  All ${completedCount} SDs in the current baseline are completed!`);
+    console.log(`  ${colors.dim}Baseline ID: ${this.baseline.id.substring(0, 8)}...${colors.reset}\n`);
+
+    console.log(`${colors.cyan}OPTIONS:${colors.reset}`);
+    console.log(`  1. ${colors.bold}Continue with available SDs${colors.reset} (shown below)`);
+    console.log(`  2. ${colors.bold}Create new baseline:${colors.reset} npm run sd:baseline`);
+    console.log(`  3. ${colors.bold}Deactivate old baseline:${colors.reset} npm run sd:baseline:deactivate\n`);
+
+    // Show completed baseline items summary
+    console.log(`${colors.dim}Completed baseline items:${colors.reset}`);
+    for (const item of this.baselineItems.slice(0, 5)) {
+      console.log(`${colors.dim}  ✓ ${item.sd_id}${colors.reset}`);
+    }
+    if (this.baselineItems.length > 5) {
+      console.log(`${colors.dim}  ... and ${this.baselineItems.length - 5} more${colors.reset}`);
+    }
+    console.log();
   }
 
   async loadRecentActivity() {
@@ -496,7 +554,9 @@ class SDNextSelector {
     console.log(`${colors.dim}  Reasons: not_relevant, wrong_timing, duplicate, too_small, too_large, already_fixed${colors.reset}`);
   }
 
-  async showFallbackQueue() {
+  async showFallbackQueue(options = {}) {
+    const { skipBaselineWarning = false } = options;
+
     // No baseline - fall back to sequence_rank on SDs directly
     const { data: sds, error } = await supabase
       .from('strategic_directives_v2')
@@ -566,14 +626,16 @@ class SDNextSelector {
 
     console.log(`\n${colors.dim}To begin: "I'm working on <SD-ID>"${colors.reset}`);
 
-    // Baseline creation prompt
-    console.log(`\n${colors.bold}───────────────────────────────────────────────────────────────────${colors.reset}`);
-    console.log(`${colors.yellow}${colors.bold}⚠️  NO ACTIVE BASELINE${colors.reset}`);
-    console.log(`${colors.dim}A baseline captures your execution plan with sequence and track assignments.${colors.reset}`);
-    console.log(`${colors.dim}Without one, SDs are ordered by sequence_rank only.${colors.reset}\n`);
-    console.log(`${colors.cyan}To create a baseline:${colors.reset}`);
-    console.log(`  ${colors.bold}npm run sd:baseline${colors.reset}        ${colors.dim}Create execution baseline${colors.reset}`);
-    console.log(`  ${colors.bold}npm run sd:baseline view${colors.reset}   ${colors.dim}View current baseline${colors.reset}`);
+    // Baseline creation prompt (skip if we already showed exhausted baseline message)
+    if (!skipBaselineWarning) {
+      console.log(`\n${colors.bold}───────────────────────────────────────────────────────────────────${colors.reset}`);
+      console.log(`${colors.yellow}${colors.bold}⚠️  NO ACTIVE BASELINE${colors.reset}`);
+      console.log(`${colors.dim}A baseline captures your execution plan with sequence and track assignments.${colors.reset}`);
+      console.log(`${colors.dim}Without one, SDs are ordered by sequence_rank only.${colors.reset}\n`);
+      console.log(`${colors.cyan}To create a baseline:${colors.reset}`);
+      console.log(`  ${colors.bold}npm run sd:baseline${colors.reset}        ${colors.dim}Create execution baseline${colors.reset}`);
+      console.log(`  ${colors.bold}npm run sd:baseline view${colors.reset}   ${colors.dim}View current baseline${colors.reset}`);
+    }
   }
 
   displayTrackSection(trackKey, trackName, items) {
