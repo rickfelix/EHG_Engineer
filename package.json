@@ -244,7 +244,10 @@
     "hooks:setup": "node scripts/setup-global-hooks.cjs",
     "hooks:recover": "node scripts/hooks/recover-session-state.cjs",
     "hooks:baseline": "node scripts/hooks/compare-test-baseline.cjs",
-    "sd:baseline:deactivate": "node scripts/sd-baseline-deactivate.js"
+    "sd:baseline:deactivate": "node scripts/sd-baseline-deactivate.js",
+    "capability:analyze": "node scripts/capability-analyzer.js analyze",
+    "capability:scan": "node scripts/capability-analyzer.js scan",
+    "capability:report": "node scripts/capability-analyzer.js report"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",
