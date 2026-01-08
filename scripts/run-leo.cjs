@@ -124,50 +124,37 @@ async function mainMenu() {
 
   const options = [];
 
-  if (activeSD) {
+  // Only show Resume if SD is active AND not completed
+  if (activeSD && activeSD.status !== 'completed' && activeSD.current_phase !== 'COMPLETED') {
     options.push({
-      id: 'continue',
-      label: `Continue: ${activeSD.id}`,
-      description: `Phase: ${activeSD.current_phase} | ${activeSD.title.substring(0, 40)}...`,
+      id: 'resume',
+      label: `Resume: ${activeSD.id}`,
+      description: `In progress | ${activeSD.title.substring(0, 40)}...`,
       recommended: true,
       action: () => continueSD(activeSD)
     });
   }
 
   options.push({
-    id: 'queue',
-    label: 'View SD Queue',
-    description: 'See all READY Strategic Directives and pick one',
-    recommended: !activeSD,
-    action: viewQueue
+    id: 'next',
+    label: "What's Next?",
+    description: 'Pick from queue or enter a specific SD ID',
+    recommended: !activeSD || activeSD.status === 'completed',
+    action: whatsNextMenu
   });
 
   options.push({
-    id: 'start',
-    label: 'Start Specific SD',
-    description: 'Enter an SD ID to begin work',
-    action: startSpecificSD
+    id: 'dashboard',
+    label: 'Dashboard',
+    description: 'Progress, velocity, and test baseline metrics',
+    action: dashboardMenu
   });
 
   options.push({
-    id: 'status',
-    label: 'Check Status',
-    description: 'View baseline progress and recent activity',
-    action: checkStatus
-  });
-
-  options.push({
-    id: 'setup',
-    label: 'Setup & Configuration',
-    description: 'Configure hooks, settings, and tools',
-    action: setupMenu
-  });
-
-  options.push({
-    id: 'recovery',
-    label: 'Session Recovery',
-    description: 'Recover from crash or view session state',
-    action: recoveryMenu
+    id: 'settings',
+    label: 'Settings',
+    description: 'Hooks, servers, and session recovery',
+    action: settingsMenu
   });
 
   options.push({
@@ -284,66 +271,31 @@ async function executeHandoffMenu(sd) {
 }
 
 // ============================================================
-// VIEW QUEUE
+// WHAT'S NEXT? (Merged Queue + Enter SD ID)
 // ============================================================
 
-async function viewQueue() {
-  runCommand('npm run sd:next');
-  await promptAfterAction();
-}
-
-// ============================================================
-// START SPECIFIC SD
-// ============================================================
-
-async function startSpecificSD() {
-  clearScreen();
-  printHeader();
-
-  const recentSDs = await getRecentSDs();
-
-  if (recentSDs.length > 0) {
-    console.log('📋 Recent SDs:\n');
-    recentSDs.forEach((sd, i) => {
-      console.log(`  ${i + 1}. ${sd.id}`);
-      console.log(`     ${sd.title?.substring(0, 50)}...`);
-      console.log(`     Phase: ${sd.current_phase} | Status: ${sd.status}\n`);
-    });
-    console.log('-'.repeat(60));
-    console.log('Enter a number to select, or type an SD ID directly.\n');
-  }
-
-  const answer = await question('SD ID or number: ');
-
-  let sdId = answer.trim();
-  const num = parseInt(answer);
-  if (num >= 1 && num <= recentSDs.length) {
-    sdId = recentSDs[num - 1].id;
-  }
-
-  if (!sdId || sdId.toLowerCase() === 'back') {
-    return mainMenu();
-  }
-
+async function whatsNextMenu() {
   const options = [
     {
-      id: 'prompt',
-      label: 'Get Continuous Execution Prompt',
-      description: 'Copy-paste prompt for continuous LEO mode',
+      id: 'queue',
+      label: 'Show SD Queue',
+      description: 'View ranked queue with recommendations',
       recommended: true,
-      action: () => {
-        runCommand(`npm run leo:prompt ${sdId}`);
-        return promptAfterAction();
+      action: async () => {
+        runCommand('npm run sd:next');
+        console.log('\n' + '-'.repeat(60));
+        const answer = await question('Enter SD ID to start (or press Enter to go back): ');
+        if (answer.trim()) {
+          return startSD(answer.trim());
+        }
+        return mainMenu();
       }
     },
     {
-      id: 'start',
-      label: 'Start with LEAD-TO-PLAN Handoff',
-      description: 'Begin the LEO workflow',
-      action: () => {
-        runCommand(`node scripts/handoff.js execute LEAD-TO-PLAN ${sdId}`);
-        return promptAfterAction();
-      }
+      id: 'jump',
+      label: 'Jump to SD',
+      description: 'Enter a specific SD ID directly',
+      action: jumpToSD
     },
     {
       id: 'back',
@@ -352,20 +304,85 @@ async function startSpecificSD() {
     }
   ];
 
+  const selected = await selectOption("What's Next?", options);
+  await selected.action();
+}
+
+async function jumpToSD() {
+  clearScreen();
+  printHeader();
+
+  const recentSDs = await getRecentSDs();
+
+  if (recentSDs.length > 0) {
+    console.log('📋 Recent SDs:\n');
+    recentSDs.forEach((sd, i) => {
+      const statusIcon = sd.status === 'completed' ? '✓' : '○';
+      console.log(`  ${statusIcon} ${i + 1}. ${sd.id}`);
+      console.log(`       ${sd.title?.substring(0, 45)}...`);
+      console.log(`       Phase: ${sd.current_phase} | Status: ${sd.status}\n`);
+    });
+    console.log('-'.repeat(60));
+    console.log('Enter a number to select, or type an SD ID directly.\n');
+  }
+
+  const answer = await question('SD ID or number (or "back"): ');
+
+  let sdId = answer.trim();
+  const num = parseInt(answer);
+  if (num >= 1 && num <= recentSDs.length) {
+    sdId = recentSDs[num - 1].id;
+  }
+
+  if (!sdId || sdId.toLowerCase() === 'back') {
+    return whatsNextMenu();
+  }
+
+  return startSD(sdId);
+}
+
+async function startSD(sdId) {
+  const options = [
+    {
+      id: 'prompt',
+      label: 'Get Continuous Execution Prompt',
+      description: 'Copy-paste prompt for Claude Code',
+      recommended: true,
+      action: () => {
+        runCommand(`npm run leo:prompt ${sdId}`);
+        return promptAfterAction();
+      }
+    },
+    {
+      id: 'start',
+      label: 'Begin with LEAD-TO-PLAN',
+      description: 'Start the LEO workflow from scratch',
+      action: () => {
+        runCommand(`node scripts/handoff.js execute LEAD-TO-PLAN ${sdId}`);
+        return promptAfterAction();
+      }
+    },
+    {
+      id: 'back',
+      label: '← Back',
+      action: whatsNextMenu
+    }
+  ];
+
   const selected = await selectOption(`Start: ${sdId}`, options);
   await selected.action();
 }
 
 // ============================================================
-// CHECK STATUS
+// DASHBOARD (Progress, Velocity, Metrics)
 // ============================================================
 
-async function checkStatus() {
+async function dashboardMenu() {
   const options = [
     {
-      id: 'baseline',
-      label: 'Baseline Progress',
-      description: 'Overall SD completion vs baseline',
+      id: 'progress',
+      label: 'SD Progress',
+      description: 'Overall completion vs baseline',
       recommended: true,
       action: () => {
         runCommand('npm run sd:status');
@@ -373,18 +390,18 @@ async function checkStatus() {
       }
     },
     {
-      id: 'burnrate',
-      label: 'Velocity & Burnrate',
-      description: 'SD completion velocity and forecasting',
+      id: 'velocity',
+      label: 'Velocity & Forecast',
+      description: 'Completion rate and projections',
       action: () => {
         runCommand('npm run sd:burnrate');
         return promptAfterAction();
       }
     },
     {
-      id: 'test-baseline',
-      label: 'Test Baseline Comparison',
-      description: 'Compare current test state to session baseline',
+      id: 'tests',
+      label: 'Test Baseline',
+      description: 'Compare current tests to session baseline',
       action: () => {
         runCommand('npm run hooks:baseline');
         return promptAfterAction();
@@ -397,20 +414,20 @@ async function checkStatus() {
     }
   ];
 
-  const selected = await selectOption('Status & Metrics', options);
+  const selected = await selectOption('Dashboard', options);
   await selected.action();
 }
 
 // ============================================================
-// SETUP MENU
+// SETTINGS (Hooks, Servers, Recovery)
 // ============================================================
 
-async function setupMenu() {
+async function settingsMenu() {
   const options = [
     {
       id: 'hooks',
-      label: 'Configure Global Hooks',
-      description: 'Set up automatic session init, baseline capture, etc.',
+      label: 'Configure Hooks',
+      description: 'Set up automatic session init, baseline capture',
       recommended: true,
       action: () => {
         runCommand('npm run hooks:setup');
@@ -418,10 +435,16 @@ async function setupMenu() {
       }
     },
     {
-      id: 'stack',
-      label: 'LEO Stack Management',
-      description: 'Start/stop/restart LEO servers',
-      action: stackMenu
+      id: 'servers',
+      label: 'LEO Servers',
+      description: 'Start, stop, or restart the LEO stack',
+      action: serversMenu
+    },
+    {
+      id: 'recovery',
+      label: 'Session Recovery',
+      description: 'Recover from crash or clear session state',
+      action: recoveryMenu
     },
     {
       id: 'back',
@@ -430,15 +453,16 @@ async function setupMenu() {
     }
   ];
 
-  const selected = await selectOption('Setup & Configuration', options);
+  const selected = await selectOption('Settings', options);
   await selected.action();
 }
 
-async function stackMenu() {
+async function serversMenu() {
   const options = [
     {
       id: 'status',
-      label: 'Check Stack Status',
+      label: 'Check Status',
+      description: 'See which servers are running',
       action: () => {
         runCommand('bash scripts/leo-stack.sh status');
         return promptAfterAction();
@@ -446,7 +470,8 @@ async function stackMenu() {
     },
     {
       id: 'restart',
-      label: 'Restart All Servers',
+      label: 'Restart All',
+      description: 'Stop and start all LEO servers',
       action: () => {
         runCommand('bash scripts/leo-stack.sh restart');
         return promptAfterAction();
@@ -454,7 +479,8 @@ async function stackMenu() {
     },
     {
       id: 'stop',
-      label: 'Stop All Servers',
+      label: 'Stop All',
+      description: 'Shut down all LEO servers',
       action: () => {
         runCommand('bash scripts/leo-stack.sh stop');
         return promptAfterAction();
@@ -463,23 +489,19 @@ async function stackMenu() {
     {
       id: 'back',
       label: '← Back',
-      action: setupMenu
+      action: settingsMenu
     }
   ];
 
-  const selected = await selectOption('LEO Stack Management', options);
+  const selected = await selectOption('LEO Servers', options);
   await selected.action();
 }
-
-// ============================================================
-// RECOVERY MENU
-// ============================================================
 
 async function recoveryMenu() {
   const options = [
     {
       id: 'recover',
-      label: 'Recover Session State',
+      label: 'Recover Session',
       description: 'Restore from last checkpoint after crash',
       recommended: true,
       action: () => {
@@ -489,8 +511,8 @@ async function recoveryMenu() {
     },
     {
       id: 'view',
-      label: 'View Current Session State',
-      description: 'See what\'s stored in session state',
+      label: 'View Session State',
+      description: 'See current session details',
       action: () => {
         const statePath = path.join(process.env.HOME || '/tmp', '.claude-session-state.json');
         if (fs.existsSync(statePath)) {
@@ -514,8 +536,8 @@ async function recoveryMenu() {
     },
     {
       id: 'clear',
-      label: 'Clear Session State',
-      description: 'Start fresh (deletes checkpoints)',
+      label: 'Clear Session',
+      description: 'Delete all checkpoints and start fresh',
       action: async () => {
         const confirm = await question('\nAre you sure? This deletes all checkpoints. [y/N]: ');
         if (confirm.toLowerCase() === 'y') {
@@ -532,8 +554,8 @@ async function recoveryMenu() {
     },
     {
       id: 'back',
-      label: '← Back to Main Menu',
-      action: mainMenu
+      label: '← Back',
+      action: settingsMenu
     }
   ];
 
