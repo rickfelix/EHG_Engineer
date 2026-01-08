@@ -242,7 +242,8 @@
     "untrack:execute:force": "node scripts/execute-untrack-manifest.js --force",
     "hooks:setup": "node scripts/setup-global-hooks.cjs",
     "hooks:recover": "node scripts/hooks/recover-session-state.cjs",
-    "hooks:baseline": "node scripts/hooks/compare-test-baseline.cjs"
+    "hooks:baseline": "node scripts/hooks/compare-test-baseline.cjs",
+    "sd:baseline:deactivate": "node scripts/sd-baseline-deactivate.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",
