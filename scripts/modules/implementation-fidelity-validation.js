@@ -248,6 +248,30 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
 
     console.log(`   🔍 SD Type check: sd_type=${sdType}, intensity_level=${intensityLevel}`);
 
+    // Fetch Gate 2 exempt sections for this SD type
+    try {
+      const { data: typeProfile } = await supabase
+        .from('sd_type_validation_profiles')
+        .select('gate2_exempt_sections')
+        .eq('sd_type', sdType)
+        .single();
+
+      if (typeProfile?.gate2_exempt_sections?.length > 0) {
+        validation.details.gate2_exempt_sections = typeProfile.gate2_exempt_sections;
+        console.log(`   📋 Gate 2 exempt sections for ${sdType}: ${typeProfile.gate2_exempt_sections.join(', ')}`);
+      }
+    } catch (_e) {
+      // No exemptions configured - continue with standard validation
+    }
+
+    // Frontend SD type - pure UI work without database requirements
+    if (sdType === 'frontend') {
+      console.log(`\n   ℹ️  FRONTEND SD DETECTED (sd_type=${sdType})`);
+      console.log('      Pure UI/component work - database sections exempt');
+      console.log('      Focus on component implementation and E2E tests\n');
+      validation.details.frontend_mode = true;
+    }
+
     if (sdType === 'bugfix' || sdType === 'bug_fix') {
       console.log(`\n   ℹ️  BUGFIX SD DETECTED (sd_type=${sdType})`);
       console.log('      Bugfix SDs skip sub-agent orchestration, using git commit evidence instead');
@@ -853,6 +877,24 @@ async function validateDesignFidelity(sd_id, designAnalysis, validation, supabas
  * Phase-aware weighting: Migration execution is CRITICAL (20 pts)
  */
 async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, supabase) {
+  // Check for exempt sections
+  const exemptSections = validation.details.gate2_exempt_sections || [];
+  const isB1Exempt = exemptSections.includes('B1_migrations');
+  const isB2Exempt = exemptSections.includes('B2_rls');
+  const isB3Exempt = exemptSections.includes('B3_complexity');
+
+  // If all B sections are exempt, award full points
+  if (isB1Exempt && isB2Exempt && isB3Exempt) {
+    validation.score += 35;
+    validation.gate_scores.database_fidelity = 35;
+    validation.details.database_fidelity = {
+      exempt: true,
+      reason: 'All Section B checks exempt for this SD type'
+    };
+    console.log('   ✅ Section B fully exempt for this SD type (35/35)');
+    return;
+  }
+
   if (!databaseAnalysis) {
     validation.warnings.push('[B] No DATABASE analysis found - skipping database fidelity check');
     validation.score += 18; // Partial credit if not applicable (50% of 35)
@@ -863,12 +905,18 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
 
   let sectionScore = 0;
   const sectionDetails = {};
+  sectionDetails.exemptions = { B1: isB1Exempt, B2: isB2Exempt, B3: isB3Exempt };
 
   // B1: Check for migration files AND execution (25 points)
   // 5 points: Migration files created
   // 20 points: Migrations actually executed (CRITICAL - phase-aware weight)
   console.log('\n   [B1] Schema Change Migrations (Creation + Execution)...');
 
+  if (isB1Exempt) {
+    sectionScore += 25;
+    sectionDetails.B1_exempt = true;
+    console.log('   ✅ B1 exempt for this SD type - full credit (25/25)');
+  } else {
   try {
     // SD-CAPITAL-FLOW-001: Detect the correct implementation repo for migration search
     const implementationRepo = await detectImplementationRepo(sd_id, supabase);
@@ -1030,42 +1078,53 @@ async function validateDatabaseFidelity(sd_id, databaseAnalysis, validation, sup
     sectionScore += 0; // No points on error - cannot verify critical check
     console.log('   ❌ Cannot verify migrations - error (0/25)');
   }
+  } // End B1 else block
 
   // B2: Check for RLS policies (5 points)
   console.log('\n   [B2] RLS Policies...');
 
-  // SD-VENTURE-STAGE0-UI-001: Search by both UUID and legacy_id
-  try {
-    const searchTerms = await getSDSearchTerms(sd_id, supabase);
-    const implementationRepo = await detectImplementationRepo(sd_id, supabase);
-    const gitDiff = await gitLogForSD(
-      `git -C "${implementationRepo}" log --all --grep="\${TERM}" --pretty=format:"" --patch`,
-      searchTerms,
-      { timeout: 15000 }
-    );
+  if (isB2Exempt) {
+    sectionScore += 5;
+    sectionDetails.B2_exempt = true;
+    console.log('   ✅ B2 exempt for this SD type - full credit (5/5)');
+  } else {
+    // SD-VENTURE-STAGE0-UI-001: Search by both UUID and legacy_id
+    try {
+      const searchTerms = await getSDSearchTerms(sd_id, supabase);
+      const implementationRepo = await detectImplementationRepo(sd_id, supabase);
+      const gitDiff = await gitLogForSD(
+        `git -C "${implementationRepo}" log --all --grep="\${TERM}" --pretty=format:"" --patch`,
+        searchTerms,
+        { timeout: 15000 }
+      );
 
-    const hasRLS = gitDiff.includes('CREATE POLICY') ||
-                   gitDiff.includes('ALTER POLICY') ||
-                   gitDiff.toLowerCase().includes('rls');
+      const hasRLS = gitDiff.includes('CREATE POLICY') ||
+                     gitDiff.includes('ALTER POLICY') ||
+                     gitDiff.toLowerCase().includes('rls');
 
-    if (hasRLS) {
-      sectionScore += 5;
-      sectionDetails.rls_policies_found = true;
-      console.log('   ✅ RLS policies found in migrations');
-    } else {
-      validation.warnings.push('[B2] No RLS policies detected');
-      sectionScore += 3; // Partial credit (might not need RLS)
-      console.log('   ⚠️  No RLS policies detected (3/5)');
+      if (hasRLS) {
+        sectionScore += 5;
+        sectionDetails.rls_policies_found = true;
+        console.log('   ✅ RLS policies found in migrations');
+      } else {
+        validation.warnings.push('[B2] No RLS policies detected');
+        sectionScore += 3; // Partial credit (might not need RLS)
+        console.log('   ⚠️  No RLS policies detected (3/5)');
+      }
+    } catch (_error) {
+      sectionScore += 3; // Partial credit on error
+      console.log('   ⚠️  Cannot verify RLS policies (3/5)');
     }
-  } catch (_error) {
-    sectionScore += 3; // Partial credit on error
-    console.log('   ⚠️  Cannot verify RLS policies (3/5)');
   }
 
   // B3: Migration complexity check (5 points)
   console.log('\n   [B3] Migration Complexity Alignment...');
 
-  if (sectionDetails.migration_files && sectionDetails.migration_files.length > 0) {
+  if (isB3Exempt) {
+    sectionScore += 5;
+    sectionDetails.B3_exempt = true;
+    console.log('   ✅ B3 exempt for this SD type - full credit (5/5)');
+  } else if (sectionDetails.migration_files && sectionDetails.migration_files.length > 0) {
     try {
       // Read first migration file to estimate complexity
       // SD-CAPITAL-FLOW-001: Use stored implementation repo, not process.cwd()
@@ -1160,8 +1219,14 @@ async function validateDataFlowAlignment(sd_id, designAnalysis, databaseAnalysis
     // Continue with normal validation if SD type check fails
   }
 
+  // Check for exempt sections
+  const exemptSections = validation.details.gate2_exempt_sections || [];
+  const isC1Exempt = exemptSections.includes('C1_queries');
+  const isC2Exempt = exemptSections.includes('C2_form_integration');
+
   let sectionScore = 0;
   const sectionDetails = {};
+  sectionDetails.exemptions = { C1: isC1Exempt, C2: isC2Exempt };
 
   console.log('\n   [C] Data Flow Alignment...');
 
@@ -1171,62 +1236,88 @@ async function validateDataFlowAlignment(sd_id, designAnalysis, databaseAnalysis
   // C1: Check for database query code (10 points)
   console.log('\n   [C1] Database Query Integration...');
 
-  // SD-VENTURE-STAGE0-UI-001: Search by both UUID and legacy_id, and get patch data once for all C checks
-  let gitDiff = '';
+  if (isC1Exempt) {
+    sectionScore += 10;
+    sectionDetails.C1_exempt = true;
+    console.log('   ✅ C1 exempt for this SD type - full credit (10/10)');
+  } else {
+    // SD-VENTURE-STAGE0-UI-001: Search by both UUID and legacy_id, and get patch data once for all C checks
+    let gitDiff = '';
+    try {
+      const searchTerms = await getSDSearchTerms(sd_id, supabase);
+      const implementationRepo = await detectImplementationRepo(sd_id, supabase);
+      gitDiff = await gitLogForSD(
+        `git -C "${implementationRepo}" log --all --grep="\${TERM}" --pretty=format:"" --patch`,
+        searchTerms,
+        { timeout: 15000 }
+      );
+    } catch (_e) {
+      gitDiff = '';
+    }
+
+    const hasQueries = gitDiff.includes('.select(') ||
+                       gitDiff.includes('.insert(') ||
+                       gitDiff.includes('.update(') ||
+                       gitDiff.includes('.from(');
+
+    if (hasQueries) {
+      sectionScore += 10;
+      sectionDetails.database_queries_found = true;
+      console.log('   ✅ Database queries found in code changes');
+    } else {
+      validation.warnings.push('[C1] No database queries detected in code');
+      sectionScore += 5; // Partial credit
+      console.log('   ⚠️  No database queries detected (5/10)');
+    }
+  }
+
+  // Get gitDiff for C2 and C3 checks
+  let gitDiffForC2C3 = '';
   try {
     const searchTerms = await getSDSearchTerms(sd_id, supabase);
     const implementationRepo = await detectImplementationRepo(sd_id, supabase);
-    gitDiff = await gitLogForSD(
+    gitDiffForC2C3 = await gitLogForSD(
       `git -C "${implementationRepo}" log --all --grep="\${TERM}" --pretty=format:"" --patch`,
       searchTerms,
       { timeout: 15000 }
     );
   } catch (_e) {
-    gitDiff = '';
-  }
-
-  const hasQueries = gitDiff.includes('.select(') ||
-                     gitDiff.includes('.insert(') ||
-                     gitDiff.includes('.update(') ||
-                     gitDiff.includes('.from(');
-
-  if (hasQueries) {
-    sectionScore += 10;
-    sectionDetails.database_queries_found = true;
-    console.log('   ✅ Database queries found in code changes');
-  } else {
-    validation.warnings.push('[C1] No database queries detected in code');
-    sectionScore += 5; // Partial credit
-    console.log('   ⚠️  No database queries detected (5/10)');
+    gitDiffForC2C3 = '';
   }
 
   // C2: Check for form/UI integration (10 points)
   console.log('\n   [C2] Form/UI Integration...');
 
-  const hasFormIntegration = gitDiff.includes('useState') ||
-                              gitDiff.includes('useForm') ||
-                              gitDiff.includes('onSubmit') ||
-                              gitDiff.includes('<form') ||
-                              gitDiff.includes('Input') ||
-                              gitDiff.includes('Button');
-
-  if (hasFormIntegration) {
+  if (isC2Exempt) {
     sectionScore += 10;
-    sectionDetails.form_integration_found = true;
-    console.log('   ✅ Form/UI integration found');
+    sectionDetails.C2_exempt = true;
+    console.log('   ✅ C2 exempt for this SD type - full credit (10/10)');
   } else {
-    validation.warnings.push('[C2] No form/UI integration detected');
-    sectionScore += 5; // Partial credit
-    console.log('   ⚠️  No form/UI integration detected (5/10)');
+    const hasFormIntegration = gitDiffForC2C3.includes('useState') ||
+                                gitDiffForC2C3.includes('useForm') ||
+                                gitDiffForC2C3.includes('onSubmit') ||
+                                gitDiffForC2C3.includes('<form') ||
+                                gitDiffForC2C3.includes('Input') ||
+                                gitDiffForC2C3.includes('Button');
+
+    if (hasFormIntegration) {
+      sectionScore += 10;
+      sectionDetails.form_integration_found = true;
+      console.log('   ✅ Form/UI integration found');
+    } else {
+      validation.warnings.push('[C2] No form/UI integration detected');
+      sectionScore += 5; // Partial credit
+      console.log('   ⚠️  No form/UI integration detected (5/10)');
+    }
   }
 
   // C3: Check for data validation (5 points)
   console.log('\n   [C3] Data Validation...');
 
-  const hasValidation = gitDiff.includes('zod') ||
-                        gitDiff.includes('validate') ||
-                        gitDiff.includes('schema') ||
-                        gitDiff.includes('.required()');
+  const hasValidation = gitDiffForC2C3.includes('zod') ||
+                        gitDiffForC2C3.includes('validate') ||
+                        gitDiffForC2C3.includes('schema') ||
+                        gitDiffForC2C3.includes('.required()');
 
   if (hasValidation) {
     sectionScore += 5;
@@ -1363,30 +1454,40 @@ async function validateEnhancedTesting(sd_id, designAnalysis, databaseAnalysis, 
   // D2: Check for database migration tests (2 points - MINOR)
   console.log('\n   [D2] Database Migration Tests...');
 
-  // SD-VENTURE-STAGE0-UI-001: Search by both UUID and legacy_id
-  try {
-    const searchTerms = await getSDSearchTerms(sd_id, supabase);
-    const implementationRepo = await detectImplementationRepo(sd_id, supabase);
-    const gitLog = await gitLogForSD(
-      `git -C "${implementationRepo}" log --all --grep="\${TERM}" --name-only --pretty=format:""`,
-      searchTerms,
-      { timeout: 10000 }
-    );
+  // Check for exemption
+  const exemptSections = validation.details.gate2_exempt_sections || [];
+  const isD2Exempt = exemptSections.includes('D2_migration_tests');
 
-    const hasMigrationTests = gitLog.includes('migration') && gitLog.includes('test');
+  if (isD2Exempt) {
+    sectionScore += 2;
+    sectionDetails.D2_exempt = true;
+    console.log('   ✅ D2 exempt for this SD type - full credit (2/2)');
+  } else {
+    // SD-VENTURE-STAGE0-UI-001: Search by both UUID and legacy_id
+    try {
+      const searchTerms = await getSDSearchTerms(sd_id, supabase);
+      const implementationRepo = await detectImplementationRepo(sd_id, supabase);
+      const gitLog = await gitLogForSD(
+        `git -C "${implementationRepo}" log --all --grep="\${TERM}" --name-only --pretty=format:""`,
+        searchTerms,
+        { timeout: 10000 }
+      );
 
-    if (hasMigrationTests) {
-      sectionScore += 2;
-      sectionDetails.migration_tests_found = true;
-      console.log('   ✅ Migration tests found (2/2)');
-    } else {
-      validation.warnings.push('[D2] No migration tests detected');
-      sectionScore += 1; // Partial credit
-      console.log('   ⚠️  No migration tests detected (1/2)');
+      const hasMigrationTests = gitLog.includes('migration') && gitLog.includes('test');
+
+      if (hasMigrationTests) {
+        sectionScore += 2;
+        sectionDetails.migration_tests_found = true;
+        console.log('   ✅ Migration tests found (2/2)');
+      } else {
+        validation.warnings.push('[D2] No migration tests detected');
+        sectionScore += 1; // Partial credit
+        console.log('   ⚠️  No migration tests detected (1/2)');
+      }
+    } catch (_error) {
+      sectionScore += 1; // Partial credit on error
+      console.log('   ⚠️  Cannot verify migration tests (1/2)');
     }
-  } catch (_error) {
-    sectionScore += 1; // Partial credit on error
-    console.log('   ⚠️  Cannot verify migration tests (1/2)');
   }
 
   // D3: Check for test coverage metadata (3 points - MINOR)
