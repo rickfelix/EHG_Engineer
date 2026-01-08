@@ -17,6 +17,7 @@ This directory contains **infrastructure components**. The **pipeline orchestrat
 | EHG App (ehg/scripts/genesis) | Pipeline scripts, stage-specific logic |
 
 See: `/docs/architecture/GENESIS_IMPLEMENTATION_GUIDE.md` for full details.
+See: `/docs/genesis/TROUBLESHOOTING.md` for common issues and fixes.
 
 ---
 
@@ -33,6 +34,28 @@ See: `/docs/architecture/GENESIS_IMPLEMENTATION_GUIDE.md` for full details.
 | `mock-mode-injector.js` | Inject mock mode into code | `injectMockMode()` |
 | `watermark-middleware.js` | Visual simulation watermark | `watermarkMiddleware()` |
 | `ttl-cleanup.js` | TTL expiration and cleanup | `runCleanup()`, `getExpiredDeployments()` |
+| `prd-generator.js` | PRD generation from seed text (**STUB**) | `generatePRD()`, `getPRDGenerationStatus()` |
+
+---
+
+## Tiered Simulation System
+
+Genesis supports two simulation tiers (SD-GENESIS-FIX-001):
+
+| Tier | Name | Features | Default TTL |
+|------|------|----------|-------------|
+| **A** (default) | Lite Simulation | PRD generation, AI mockups, validation report | 7 days |
+| **B** | Full Simulation | + Code scaffolding, GitHub repo, Vercel deployment | 30 days |
+
+Use tier A for quick validation, tier B for comprehensive simulations.
+
+```javascript
+// Tier A (default) - quick validation
+const lite = await createSimulationBranch('My idea');
+
+// Tier B - full simulation with deployment
+const full = await createSimulationBranch('Complex venture', { tier: 'B' });
+```
 
 ---
 

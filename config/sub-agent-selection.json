@@ -264,5 +264,60 @@
       "agents": ["SECURITY", "DATABASE", "DESIGN"],
       "reason": "User management requires security, database, and UI design"
     }
+  },
+
+  "proactiveReminders": {
+    "DATABASE": {
+      "enabled": true,
+      "triggerMinMatches": 1,
+      "reminderText": "🔔 DATABASE KEYWORDS DETECTED: Use database-agent or npm run sd:* scripts instead of raw Node.js database queries. See NC-EXEC-004 for rationale (15% quality loss when bypassing sub-agents).",
+      "keywords": [
+        "database", "migration", "schema", "SQL", "query", "postgres", "supabase",
+        "strategic_directives", "table", "RLS", "column", "insert", "update", "delete"
+      ],
+      "exclusions": [
+        "npm run sd:", "database-agent", "SDRepository", "supabase-factory",
+        "Task(subagent_type", "HTML table", "UI table", "table component"
+      ],
+      "suggestCommands": [
+        "npm run sd:next (for SD queue info)",
+        "Task(subagent_type='database-agent', prompt='...')",
+        "SDRepository from scripts/modules/handoff/db/SDRepository.js",
+        "lib/supabase-factory.js for client creation"
+      ]
+    },
+    "VALIDATION": {
+      "enabled": true,
+      "triggerMinMatches": 1,
+      "reminderText": "🔔 VALIDATION KEYWORDS DETECTED: Use validation-agent for duplicate detection and codebase audits.",
+      "keywords": [
+        "duplicate", "existing", "already implemented", "codebase check", "find existing"
+      ],
+      "exclusions": [
+        "validation-agent", "Task(subagent_type"
+      ],
+      "suggestCommands": [
+        "Task(subagent_type='validation-agent', prompt='...')",
+        "node scripts/systems-analyst-codebase-audit.js <SD-ID>"
+      ]
+    },
+    "CHILD_SD": {
+      "enabled": true,
+      "triggerMinMatches": 1,
+      "reminderText": "🔔 CHILD SD WORKFLOW REMINDER: Children are created during PLAN phase, not before LEAD.\n   LEO Protocol: Parent LEAD → Parent PLAN (create children here) → Child LEAD → Child PLAN → Child EXEC\n   See CLAUDE_PLAN.md 'Child SD Pattern: When to Decompose' for correct workflow.",
+      "keywords": [
+        "create child", "child SD", "child strategic directive", "decompose", "decomposition",
+        "create children", "split into children", "break into child", "parent-child SD"
+      ],
+      "exclusions": [
+        "PLAN phase", "during PLAN", "in PLAN", "parent is in PLAN",
+        "after LEAD", "validateDecompositionGate", "decomposition-gate"
+      ],
+      "suggestCommands": [
+        "1. Complete parent LEAD phase first: node scripts/handoff.js execute LEAD-TO-PLAN <PARENT-SD>",
+        "2. Create children DURING parent PLAN phase (see CLAUDE_PLAN.md)",
+        "3. Use: node scripts/modules/decomposition-gate.js <SD-ID> to check requirements"
+      ]
+    }
   }
 }

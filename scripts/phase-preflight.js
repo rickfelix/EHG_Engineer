@@ -17,7 +17,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { IssueKnowledgeBase } from '../lib/learning/issue-knowledge-base.js';
 import { enforceChildProgressionGate } from './modules/child-progression-gate.js';
-import { loadSchemaContext, formatSchemaContext, schemaDocsExist } from '../lib/schema-context-loader.js';
+import { validateDecompositionGate, checkParentReadyForChildren } from './modules/decomposition-gate.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -54,39 +54,6 @@ const PHASE_STRATEGIES = {
     context: 'You are evaluating an SD. These patterns show strategic issues and over-engineering risks.'
   }
 };
-
-/**
- * Extract displayable text from retrospective array items.
- * Handles both legacy string format and new object format.
- *
- * @param {string|object} item - Either a string or object with 'learning' property
- * @returns {string} Displayable text
- */
-function extractDisplayText(item) {
-  if (typeof item === 'string') {
-    return item;
-  }
-  if (item && typeof item === 'object') {
-    // Try common property names for the main text
-    return item.learning || item.description || item.text || item.message || JSON.stringify(item);
-  }
-  return String(item);
-}
-
-/**
- * Safely truncate text for display
- *
- * @param {string|object} item - Item to display (string or object)
- * @param {number} maxLength - Maximum length before truncation
- * @returns {string} Truncated display text
- */
-function truncateForDisplay(item, maxLength = 70) {
-  const text = extractDisplayText(item);
-  if (text.length > maxLength) {
-    return text.substring(0, maxLength) + '...';
-  }
-  return text;
-}
 
 /**
  * SD-LEO-GEMINI-001: Discovery Gate (US-001)
@@ -136,10 +103,6 @@ async function validateDiscoveryGate(sdId) {
   } else if (prd?.metadata?.files_explored && Array.isArray(prd.metadata.files_explored)) {
     filesExplored = prd.metadata.files_explored;
     source = 'prd.metadata.files_explored';
-  } else if (sd?.metadata?.exploration_summary?.files_explored && Array.isArray(sd.metadata.exploration_summary.files_explored)) {
-    // ROOT CAUSE FIX: Check sd.metadata.exploration_summary.files_explored (common storage location)
-    filesExplored = sd.metadata.exploration_summary.files_explored;
-    source = 'sd.metadata.exploration_summary.files_explored';
   } else if (sd?.metadata?.exploration_files && Array.isArray(sd.metadata.exploration_files)) {
     filesExplored = sd.metadata.exploration_files;
     source = 'sd.metadata.exploration_files';
@@ -266,61 +229,118 @@ async function getSDMetadata(sdId) {
 }
 
 /**
- * PAT-PARENT-DET: Parent/Child SD Detection
- * Detects and displays parent/child hierarchy early in the workflow.
- * For parent SDs: shows children status
- * For child SDs: verifies parent is in correct phase
+ * PAT-PARENT-DET: Parent/Child SD Detection (INTELLIGENT)
+ * Detects parent/child relationships from MULTIPLE signals, not just flags.
+ *
+ * Signals checked:
+ * 1. metadata.is_parent (explicit flag)
+ * 2. metadata.child_sds (array of defined children)
+ * 3. metadata.child_count (count of intended children)
+ * 4. metadata.phases (phase-based decomposition)
+ * 5. metadata.dependency_graph (child dependency mapping)
+ * 6. parent_sd_id (for child detection)
  */
 async function detectParentChildHierarchy(sd) {
-  console.log('\n🔗 PARENT/CHILD SD DETECTION');
+  console.log('\n🔗 PARENT/CHILD SD DETECTION (Intelligent)');
   console.log('='.repeat(60));
 
-  const isParent = sd.metadata?.is_parent === true;
+  // Check multiple signals for parent status - not just a boolean flag
+  const parentSignals = {
+    explicitFlag: sd.metadata?.is_parent === true,
+    hasChildDefinitions: Array.isArray(sd.metadata?.child_sds) && sd.metadata.child_sds.length > 0,
+    hasChildCount: (sd.metadata?.child_count || 0) > 0,
+    hasPhases: Array.isArray(sd.metadata?.phases) && sd.metadata.phases.length > 1,
+    hasDependencyGraph: sd.metadata?.dependency_graph && Object.keys(sd.metadata.dependency_graph).length > 0,
+    hasExecutionOrder: Array.isArray(sd.metadata?.execution_order) && sd.metadata.execution_order.length > 0
+  };
+
+  // Count how many parent signals are present
+  const activeSignals = Object.entries(parentSignals).filter(([_, v]) => v);
+  const isLikelyParent = activeSignals.length >= 1; // Any signal indicates parent intent
+
   const hasParent = !!sd.parent_sd_id;
 
-  if (!isParent && !hasParent) {
-    console.log('   📋 SD Type: STANDALONE (no parent/child relationship)');
+  // Display detection reasoning
+  if (isLikelyParent && !hasParent) {
+    console.log('   🎯 SD Type: PARENT ORCHESTRATOR (detected from metadata)');
+    console.log(`   📋 SD: ${sd.legacy_id || sd.sd_key || sd.id}`);
+    console.log(`   📄 Title: ${sd.title}`);
+    console.log('\n   📊 DETECTION SIGNALS:');
+
+    if (parentSignals.hasChildDefinitions) {
+      const childCount = sd.metadata.child_sds.length;
+      console.log(`      ✅ child_sds: ${childCount} children defined in metadata`);
+      sd.metadata.child_sds.forEach((child, i) => {
+        const childId = typeof child === 'string' ? child : (child.sd_id || child.id || child.title);
+        console.log(`         ${i + 1}. ${childId}`);
+      });
+    }
+    if (parentSignals.hasChildCount) {
+      console.log(`      ✅ child_count: ${sd.metadata.child_count} children intended`);
+    }
+    if (parentSignals.hasPhases) {
+      console.log(`      ✅ phases: ${sd.metadata.phases.join(', ')}`);
+    }
+    if (parentSignals.hasDependencyGraph) {
+      const depCount = Object.keys(sd.metadata.dependency_graph).length;
+      console.log(`      ✅ dependency_graph: ${depCount} child dependencies mapped`);
+    }
+    if (parentSignals.hasExecutionOrder) {
+      console.log('      ✅ execution_order: Sequenced execution defined');
+    }
+    if (parentSignals.explicitFlag) {
+      console.log('      ✅ is_parent: Explicitly flagged as parent');
+    }
+
+    // Check if children exist in database yet
+    const { data: existingChildren } = await supabase
+      .from('strategic_directives_v2')
+      .select('legacy_id, sd_key, title, status, current_phase, progress_percentage')
+      .eq('parent_sd_id', sd.id)
+      .order('legacy_id', { ascending: true });
+
+    const childrenInDb = existingChildren?.length || 0;
+    const childrenDefined = sd.metadata?.child_sds?.length || sd.metadata?.child_count || 0;
+
+    console.log('\n   👶 CHILDREN STATUS:');
+    console.log(`      Defined in metadata: ${childrenDefined}`);
+    console.log(`      Created in database: ${childrenInDb}`);
+
+    if (childrenInDb === 0 && childrenDefined > 0) {
+      console.log('\n   ⚠️  CHILDREN NOT YET CREATED');
+      console.log('      Children are defined but not in database yet.');
+      console.log('      They will be created during PLAN phase.');
+      console.log('      LEAD should validate strategic intent of child decomposition.');
+    } else if (childrenInDb > 0) {
+      console.log('\n   📋 EXISTING CHILDREN:');
+      let completedCount = 0;
+      existingChildren.forEach(c => {
+        const icon = c.status === 'completed' ? '✅' :
+                     c.status === 'in_progress' ? '🔄' : '📋';
+        if (c.status === 'completed') completedCount++;
+        console.log(`      ${icon} ${c.legacy_id || c.sd_key} [${c.status}] ${c.progress_percentage || 0}%`);
+      });
+      console.log(`\n   📊 Progress: ${completedCount}/${childrenInDb} children completed`);
+    }
+
+    console.log('\n' + '='.repeat(60));
+    return {
+      type: 'parent',
+      sd,
+      children: existingChildren || [],
+      definedChildren: sd.metadata?.child_sds || [],
+      signals: parentSignals
+    };
+  }
+
+  if (!isLikelyParent && !hasParent) {
+    console.log('   📋 SD Type: STANDALONE (no parent/child relationship detected)');
+    console.log('   No parent signals found in metadata.');
     console.log('='.repeat(60));
     return { type: 'standalone', sd };
   }
 
-  if (isParent) {
-    console.log('   🎯 SD Type: PARENT ORCHESTRATOR');
-    console.log(`   📋 SD: ${sd.legacy_id || sd.id}`);
-    console.log(`   📄 Title: ${sd.title}`);
-    console.log(`   📊 Status: ${sd.status} | Phase: ${sd.current_phase}`);
-
-    // Get children
-    const { data: children } = await supabase
-      .from('strategic_directives_v2')
-      .select('legacy_id, title, status, current_phase, progress_percentage')
-      .eq('parent_sd_id', sd.id)
-      .order('legacy_id', { ascending: true });
-
-    if (children && children.length > 0) {
-      console.log(`\n   👶 CHILD SDs (${children.length}):`);
-      let completedCount = 0;
-      children.forEach(c => {
-        const icon = c.status === 'completed' ? '✅' :
-                     c.status === 'in_progress' ? '🔄' : '📋';
-        if (c.status === 'completed') completedCount++;
-        console.log(`      ${icon} ${c.legacy_id} [${c.status}] ${c.progress_percentage}%`);
-      });
-      console.log(`\n   📊 Progress: ${completedCount}/${children.length} children completed`);
-
-      // Check if parent should be in EXEC phase for children to work
-      if (completedCount > 0 && sd.status === 'draft') {
-        console.log('\n   ⚠️  WORKFLOW WARNING:');
-        console.log('      Child SDs have progressed but parent is still in DRAFT.');
-        console.log('      Parent should go through LEAD-TO-PLAN → PLAN-TO-EXEC');
-        console.log('      to enter ORCHESTRATOR/WAITING state before children execute.');
-      }
-    }
-
-    console.log('\n' + '='.repeat(60));
-    return { type: 'parent', sd, children };
-  }
-
+  // Child SD detection (has a parent)
   if (hasParent) {
     console.log('   🔗 SD Type: CHILD SD');
     console.log(`   📋 SD: ${sd.legacy_id || sd.id}`);
@@ -579,9 +599,9 @@ function displayResults(sd, phase, strategy, patterns, retrospectives) {
       console.log(`   SD: ${retro.sd_id} | Category: ${retro.learning_category || 'N/A'}`);
       console.log(`   Date: ${new Date(retro.conducted_date).toLocaleDateString()}`);
 
-      // Show key learnings (first item) - uses standardized object format {learning: "..."}
+      // Show key learnings (first 2)
       if (retro.key_learnings && retro.key_learnings.length > 0) {
-        console.log(`   Key Learning: ${truncateForDisplay(retro.key_learnings[0], 70)}`);
+        console.log(`   Key Learning: ${retro.key_learnings[0].substring(0, 70)}${retro.key_learnings[0].length > 70 ? '...' : ''}`);
       }
 
       // Show success or failure pattern (context-dependent)
@@ -715,6 +735,19 @@ async function main() {
       }
 
       console.log(`\n✅ Discovery Gate: ${discoveryResult.rating} (${discoveryResult.fileCount} files)`);
+
+      // DECOMPOSITION GATE: Check if SD should have children (Layer 2)
+      // This runs for parent SDs or SDs that meet decomposition criteria
+      const decompositionResult = await validateDecompositionGate(sdId, 'PLAN-ENTRY');
+      if (decompositionResult.decompositionAssessment?.shouldDecompose) {
+        console.log('\n📊 DECOMPOSITION ASSESSMENT:');
+        console.log(`   Should decompose: ${decompositionResult.decompositionAssessment.shouldDecompose}`);
+        console.log(`   Current children: ${decompositionResult.childCount}`);
+        if (!decompositionResult.hasChildren) {
+          console.log('\n   💡 REMINDER: Create child SDs during this PLAN phase');
+          console.log('      See CLAUDE_PLAN.md "Child SD Pattern: When to Decompose"');
+        }
+      }
     }
 
     // Search issue patterns
@@ -722,30 +755,6 @@ async function main() {
 
     // Search retrospectives
     const retrospectives = await searchRetrospectives(sd.category || sd.title, strategy);
-
-    // LEO v4.4.2: Load schema context for PLAN/EXEC phases (SD-LEO-TESTING-GOVERNANCE-001C)
-    // Evidence: 42-95 hours/year lost to schema mismatches
-    let schemaContext = null;
-    if ((phase === 'PLAN' || phase === 'EXEC') && schemaDocsExist()) {
-      try {
-        schemaContext = await loadSchemaContext(sd, {
-          includeOverview: phase === 'PLAN',
-          maxTables: phase === 'PLAN' ? 8 : 5
-        });
-
-        if (schemaContext.schemasLoaded.length > 0) {
-          console.log(formatSchemaContext(schemaContext));
-          strategy.schemaContext = schemaContext;
-        } else if (schemaContext.tablesFound.length > 0) {
-          console.log(`\n📊 Tables detected (${schemaContext.tablesFound.join(', ')}) but no schema docs found`);
-          console.log('   💡 Run: node scripts/generate-schema-docs-from-db.js');
-        } else {
-          console.log('\n   ℹ️  No relevant schema docs found for this SD');
-        }
-      } catch (schemaErr) {
-        console.log(`\n   ⚠️  Schema loading error: ${schemaErr.message}`);
-      }
-    }
 
     // Display results
     displayResults(sd, phase, strategy, patterns, retrospectives);
