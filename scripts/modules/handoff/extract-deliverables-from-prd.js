@@ -245,6 +245,15 @@ function inferDeliverableType(text) {
 
   const lowerText = text.toLowerCase();
 
+  // Documentation-related (check early - documentation deliverables are important)
+  if (lowerText.includes('documentation') || lowerText.includes('user guide') ||
+      lowerText.includes('release notes') || lowerText.includes('technical doc') ||
+      lowerText.includes('api doc') || lowerText.includes('readme') ||
+      lowerText.includes('ops guide') || lowerText.includes('runbook') ||
+      lowerText.includes('schema reference') || lowerText.includes('changelog')) {
+    return 'documentation';
+  }
+
   // Database-related
   if (lowerText.includes('database') || lowerText.includes('table') ||
       lowerText.includes('schema') || lowerText.includes('migration')) {
@@ -272,6 +281,12 @@ function inferDeliverableType(text) {
   // Migration-related
   if (lowerText.includes('migration') || lowerText.includes('migrate')) {
     return 'migration';
+  }
+
+  // Configuration-related
+  if (lowerText.includes('config') || lowerText.includes('setting') ||
+      lowerText.includes('environment') || lowerText.includes('env var')) {
+    return 'configuration';
   }
 
   // UI-related (default)

@@ -35,6 +35,20 @@ export const SD_TYPE_DOCUMENTATION_TEMPLATES = {
       min_test_scenarios: 5,
       requires_architecture: true,
       requires_risks: true
+    },
+    // NEW: Final documentation deliverables (post-EXEC, after testing)
+    final_documentation: {
+      required: [
+        { type: 'user_guide', description: 'End-user documentation explaining the feature' },
+        { type: 'release_notes', description: 'Summary of changes for release communication' },
+        { type: 'technical_doc', description: 'Architecture and implementation details' }
+      ],
+      optional: [
+        { type: 'api_reference', description: 'API documentation if new endpoints added' },
+        { type: 'faq', description: 'Frequently asked questions for support' }
+      ],
+      auto_generate: true,  // DOCMON auto-generates
+      requires_review: true  // Must be reviewed before SD completion
     }
   },
 
@@ -54,6 +68,18 @@ export const SD_TYPE_DOCUMENTATION_TEMPLATES = {
       min_test_scenarios: 0, // No E2E for infrastructure
       requires_architecture: false,
       requires_risks: false
+    },
+    final_documentation: {
+      required: [
+        { type: 'ops_guide', description: 'Operations guide for setup and maintenance' },
+        { type: 'configuration_reference', description: 'Configuration options and defaults' }
+      ],
+      optional: [
+        { type: 'runbook', description: 'Operational runbook for common tasks' },
+        { type: 'troubleshooting', description: 'Troubleshooting guide for common issues' }
+      ],
+      auto_generate: true,
+      requires_review: false  // Less critical for internal tooling
     }
   },
 
@@ -73,6 +99,18 @@ export const SD_TYPE_DOCUMENTATION_TEMPLATES = {
       min_test_scenarios: 2,
       requires_architecture: true,
       requires_risks: true
+    },
+    final_documentation: {
+      required: [
+        { type: 'schema_reference', description: 'Updated schema documentation with table descriptions' },
+        { type: 'migration_log', description: 'Migration execution log and verification' }
+      ],
+      optional: [
+        { type: 'data_dictionary', description: 'Full data dictionary update' },
+        { type: 'query_examples', description: 'Common query patterns for new schema' }
+      ],
+      auto_generate: true,
+      requires_review: true  // Schema changes are critical
     }
   },
 
@@ -92,6 +130,19 @@ export const SD_TYPE_DOCUMENTATION_TEMPLATES = {
       min_test_scenarios: 5,
       requires_architecture: true,
       requires_risks: true
+    },
+    final_documentation: {
+      required: [
+        { type: 'security_assessment', description: 'Security assessment and controls verification' },
+        { type: 'auth_flow_doc', description: 'Authentication/authorization flow documentation' },
+        { type: 'compliance_report', description: 'Compliance verification report' }
+      ],
+      optional: [
+        { type: 'penetration_test_results', description: 'Penetration testing results if performed' },
+        { type: 'security_runbook', description: 'Security incident response procedures' }
+      ],
+      auto_generate: false,  // Security docs often need manual review
+      requires_review: true  // Must be reviewed by security-aware personnel
     }
   },
 
@@ -111,6 +162,47 @@ export const SD_TYPE_DOCUMENTATION_TEMPLATES = {
       min_test_scenarios: 2,
       requires_architecture: false,
       requires_risks: false
+    },
+    final_documentation: {
+      required: [
+        { type: 'root_cause_analysis', description: 'Detailed root cause analysis and fix explanation' },
+        { type: 'fix_verification', description: 'Verification that bug is resolved with evidence' }
+      ],
+      optional: [
+        { type: 'prevention_guide', description: 'How to prevent similar bugs in future' }
+      ],
+      auto_generate: true,
+      requires_review: false  // Bug fixes are typically straightforward
+    }
+  },
+
+  enhancement: {
+    required_sections: ['Enhancement Spec', 'User Impact', 'Test Updates'],
+    prd_emphasis: 'Enhancement scope with impact on existing features',
+    retrospective_focus: 'Feature improvement metrics, user adoption impact',
+    documentation_checklist: [
+      'Enhancement scope defined',
+      'Backward compatibility verified',
+      'Existing tests updated',
+      'User impact documented'
+    ],
+    prd_template: {
+      min_functional_requirements: 3,
+      min_acceptance_criteria: 3,
+      min_test_scenarios: 3,
+      requires_architecture: false,
+      requires_risks: false
+    },
+    final_documentation: {
+      required: [
+        { type: 'feature_update', description: 'Updated feature documentation reflecting changes' },
+        { type: 'changelog_entry', description: 'Changelog entry for the enhancement' }
+      ],
+      optional: [
+        { type: 'migration_notes', description: 'Notes for users migrating from old behavior' }
+      ],
+      auto_generate: true,
+      requires_review: false  // Enhancements are incremental
     }
   },
 
@@ -135,6 +227,18 @@ export const SD_TYPE_DOCUMENTATION_TEMPLATES = {
       cosmetic: { min_functional_requirements: 1, min_test_scenarios: 0 },
       structural: { min_functional_requirements: 2, min_test_scenarios: 2 },
       architectural: { min_functional_requirements: 4, min_test_scenarios: 4 }
+    },
+    final_documentation: {
+      required: [
+        { type: 'refactor_summary', description: 'Summary of refactoring changes and rationale' },
+        { type: 'regression_verification', description: 'Verification that no behavior changed' }
+      ],
+      optional: [
+        { type: 'architecture_update', description: 'Updated architecture docs if structural changes' },
+        { type: 'code_patterns', description: 'New code patterns introduced' }
+      ],
+      auto_generate: true,
+      requires_review: false  // Internal code changes
     }
   },
 
@@ -154,6 +258,18 @@ export const SD_TYPE_DOCUMENTATION_TEMPLATES = {
       min_test_scenarios: 3,
       requires_architecture: false,
       requires_risks: true
+    },
+    final_documentation: {
+      required: [
+        { type: 'benchmark_report', description: 'Before/after benchmark comparison with metrics' },
+        { type: 'optimization_summary', description: 'Summary of optimizations implemented' }
+      ],
+      optional: [
+        { type: 'performance_guide', description: 'Performance best practices from this work' },
+        { type: 'monitoring_setup', description: 'Monitoring dashboards or alerts configured' }
+      ],
+      auto_generate: true,
+      requires_review: true  // Performance claims should be verified
     }
   },
 
@@ -173,6 +289,16 @@ export const SD_TYPE_DOCUMENTATION_TEMPLATES = {
       min_test_scenarios: 0,
       requires_architecture: false,
       requires_risks: false
+    },
+    final_documentation: {
+      required: [
+        { type: 'documentation_itself', description: 'The documentation deliverable itself (the SD output IS documentation)' }
+      ],
+      optional: [
+        { type: 'style_guide_updates', description: 'Updates to documentation style guide if patterns established' }
+      ],
+      auto_generate: false,  // The SD produces docs manually
+      requires_review: true  // Documentation should be reviewed for accuracy
     }
   },
 
@@ -192,6 +318,17 @@ export const SD_TYPE_DOCUMENTATION_TEMPLATES = {
       min_test_scenarios: 0,
       requires_architecture: false,
       requires_risks: false
+    },
+    final_documentation: {
+      required: [
+        { type: 'completion_summary', description: 'Summary of all child SD completions' }
+      ],
+      optional: [
+        { type: 'architecture_overview', description: 'High-level architecture documentation' },
+        { type: 'lessons_learned', description: 'Lessons learned from orchestrating multiple SDs' }
+      ],
+      auto_generate: true,  // Aggregates child SD documentation
+      requires_review: false  // Children handle detailed review
     }
   }
 };
@@ -285,9 +422,301 @@ export function validateDocumentation(sd, prd) {
   };
 }
 
+/**
+ * Get final documentation requirements for an SD type (post-EXEC deliverables)
+ *
+ * @param {string} sdType - SD type
+ * @returns {Object} Final documentation requirements
+ */
+export function getFinalDocumentationRequirements(sdType) {
+  const template = getDocumentationTemplate(sdType);
+  return template.final_documentation || {
+    required: [],
+    optional: [],
+    auto_generate: true,
+    requires_review: false
+  };
+}
+
+/**
+ * Get list of required final documentation types for an SD
+ *
+ * @param {string} sdType - SD type
+ * @returns {string[]} List of required documentation types
+ */
+export function getRequiredFinalDocTypes(sdType) {
+  const finalDocs = getFinalDocumentationRequirements(sdType);
+  return finalDocs.required.map(doc => doc.type);
+}
+
+/**
+ * Validate final documentation completeness for an SD
+ *
+ * @param {Object} sd - Strategic Directive
+ * @param {Object[]} generatedDocs - List of generated documents
+ * @returns {Object} Validation result { passed: boolean, missing: [], present: [] }
+ */
+export function validateFinalDocumentation(sd, generatedDocs = []) {
+  const finalDocs = getFinalDocumentationRequirements(sd.sd_type);
+  const generatedTypes = new Set(generatedDocs.map(d => d.type || d.doc_type));
+
+  const missing = [];
+  const present = [];
+
+  for (const req of finalDocs.required) {
+    if (generatedTypes.has(req.type)) {
+      present.push(req);
+    } else {
+      missing.push(req);
+    }
+  }
+
+  return {
+    passed: missing.length === 0,
+    missing,
+    present,
+    requires_review: finalDocs.requires_review,
+    auto_generate: finalDocs.auto_generate,
+    optional: finalDocs.optional
+  };
+}
+
+/**
+ * Generate documentation deliverable records for an SD based on its type
+ * These are inserted into sd_scope_deliverables at SD creation time
+ *
+ * @param {string} sdId - Strategic Directive ID
+ * @param {string} sdType - SD type (feature, infrastructure, etc.)
+ * @param {Object} options - Options { includeOptional: boolean }
+ * @returns {Object[]} Array of deliverable records ready for database insert
+ */
+export function generateDocumentationDeliverables(sdId, sdType, options = {}) {
+  const { includeOptional = false } = options;
+  const finalDocs = getFinalDocumentationRequirements(sdType);
+  const deliverables = [];
+
+  // Add required documentation deliverables
+  for (const doc of finalDocs.required) {
+    deliverables.push({
+      sd_id: sdId,
+      deliverable_type: 'documentation',
+      deliverable_name: `${doc.type}: ${doc.description}`,
+      description: `Required final documentation: ${doc.description}`,
+      extracted_from: 'sd_type_template',
+      priority: 'required',
+      completion_status: 'pending',
+      metadata: {
+        doc_type: doc.type,
+        auto_generate: finalDocs.auto_generate,
+        requires_review: finalDocs.requires_review,
+        source: 'sd-type-documentation-templates'
+      }
+    });
+  }
+
+  // Optionally add optional documentation deliverables
+  if (includeOptional && finalDocs.optional) {
+    for (const doc of finalDocs.optional) {
+      deliverables.push({
+        sd_id: sdId,
+        deliverable_type: 'documentation',
+        deliverable_name: `${doc.type}: ${doc.description}`,
+        description: `Optional final documentation: ${doc.description}`,
+        extracted_from: 'sd_type_template',
+        priority: 'optional',
+        completion_status: 'pending',
+        metadata: {
+          doc_type: doc.type,
+          auto_generate: finalDocs.auto_generate,
+          requires_review: finalDocs.requires_review,
+          source: 'sd-type-documentation-templates'
+        }
+      });
+    }
+  }
+
+  return deliverables;
+}
+
+/**
+ * Get a summary of documentation requirements for display
+ *
+ * @param {string} sdType - SD type
+ * @returns {Object} Summary with counts and flags
+ */
+export function getDocumentationSummary(sdType) {
+  const finalDocs = getFinalDocumentationRequirements(sdType);
+  const prdReqs = getPRDRequirements(sdType);
+
+  return {
+    sdType,
+    prdPhase: {
+      minFunctionalRequirements: prdReqs.min_functional_requirements,
+      minAcceptanceCriteria: prdReqs.min_acceptance_criteria,
+      minTestScenarios: prdReqs.min_test_scenarios,
+      requiresArchitecture: prdReqs.requires_architecture,
+      requiresRisks: prdReqs.requires_risks
+    },
+    finalPhase: {
+      requiredDocs: finalDocs.required.map(d => d.type),
+      optionalDocs: finalDocs.optional.map(d => d.type),
+      autoGenerate: finalDocs.auto_generate,
+      requiresReview: finalDocs.requires_review
+    }
+  };
+}
+
+/**
+ * Mark documentation deliverables as complete in sd_scope_deliverables
+ * Called by DOCMON when documentation is generated
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {string} sdId - Strategic Directive ID
+ * @param {string[]} completedDocTypes - List of doc types that were generated (e.g., ['user_guide', 'release_notes'])
+ * @param {Object} options - Options { evidence, verifiedBy }
+ * @returns {Promise<Object>} Result with { updated, failed, skipped }
+ */
+export async function markDocumentationDeliverablesComplete(supabase, sdId, completedDocTypes, options = {}) {
+  const {
+    evidence = 'Generated by DOCMON sub-agent',
+    verifiedBy = 'DOCMON'
+  } = options;
+
+  const results = {
+    updated: [],
+    failed: [],
+    skipped: [],
+    notFound: []
+  };
+
+  try {
+    // Find documentation deliverables for this SD that match the completed types
+    const { data: deliverables, error: fetchError } = await supabase
+      .from('sd_scope_deliverables')
+      .select('id, deliverable_name, deliverable_type, completion_status, metadata')
+      .eq('sd_id', sdId)
+      .eq('deliverable_type', 'documentation');
+
+    if (fetchError) {
+      console.error(`Error fetching deliverables: ${fetchError.message}`);
+      return { ...results, error: fetchError.message };
+    }
+
+    if (!deliverables || deliverables.length === 0) {
+      console.log(`No documentation deliverables found for ${sdId}`);
+      return results;
+    }
+
+    for (const deliverable of deliverables) {
+      // Extract doc_type from metadata
+      const docType = deliverable.metadata?.doc_type;
+
+      if (!docType) {
+        results.skipped.push({
+          id: deliverable.id,
+          name: deliverable.deliverable_name,
+          reason: 'No doc_type in metadata'
+        });
+        continue;
+      }
+
+      // Check if this doc type was completed
+      if (!completedDocTypes.includes(docType)) {
+        results.skipped.push({
+          id: deliverable.id,
+          name: deliverable.deliverable_name,
+          reason: `doc_type '${docType}' not in completed list`
+        });
+        continue;
+      }
+
+      // Skip if already completed
+      if (deliverable.completion_status === 'completed') {
+        results.skipped.push({
+          id: deliverable.id,
+          name: deliverable.deliverable_name,
+          reason: 'Already completed'
+        });
+        continue;
+      }
+
+      // Update the deliverable as completed
+      const { error: updateError } = await supabase
+        .from('sd_scope_deliverables')
+        .update({
+          completion_status: 'completed',
+          completion_evidence: evidence,
+          verified_by: verifiedBy,
+          verified_at: new Date().toISOString(),
+          completion_notes: `Auto-completed by DOCMON after generating ${docType} documentation`,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', deliverable.id);
+
+      if (updateError) {
+        results.failed.push({
+          id: deliverable.id,
+          name: deliverable.deliverable_name,
+          error: updateError.message
+        });
+      } else {
+        results.updated.push({
+          id: deliverable.id,
+          name: deliverable.deliverable_name,
+          docType
+        });
+      }
+    }
+
+    // Check if any requested types weren't found
+    for (const docType of completedDocTypes) {
+      const found = deliverables.some(d => d.metadata?.doc_type === docType);
+      if (!found) {
+        results.notFound.push(docType);
+      }
+    }
+
+    return results;
+
+  } catch (error) {
+    console.error(`Error marking documentation complete: ${error.message}`);
+    return { ...results, error: error.message };
+  }
+}
+
+/**
+ * Get pending documentation deliverables for an SD
+ *
+ * @param {Object} supabase - Supabase client
+ * @param {string} sdId - Strategic Directive ID
+ * @returns {Promise<Object[]>} List of pending documentation deliverables
+ */
+export async function getPendingDocumentationDeliverables(supabase, sdId) {
+  const { data, error } = await supabase
+    .from('sd_scope_deliverables')
+    .select('id, deliverable_name, priority, metadata')
+    .eq('sd_id', sdId)
+    .eq('deliverable_type', 'documentation')
+    .neq('completion_status', 'completed');
+
+  if (error) {
+    console.error(`Error fetching pending docs: ${error.message}`);
+    return [];
+  }
+
+  return data || [];
+}
+
 export default {
   SD_TYPE_DOCUMENTATION_TEMPLATES,
   getDocumentationTemplate,
   getPRDRequirements,
-  validateDocumentation
+  validateDocumentation,
+  getFinalDocumentationRequirements,
+  getRequiredFinalDocTypes,
+  validateFinalDocumentation,
+  generateDocumentationDeliverables,
+  getDocumentationSummary,
+  markDocumentationDeliverablesComplete,
+  getPendingDocumentationDeliverables
 };

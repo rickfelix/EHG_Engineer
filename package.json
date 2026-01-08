@@ -17,6 +17,7 @@
     "test-database": "node scripts/test-database.js",
     "new-sd": "node scripts/new-strategic-directive.js",
     "add-sd": "node scripts/add-sd-to-database.js",
+    "sd:create": "node scripts/create-sd-intelligent.js",
     "register-app": "node scripts/register-app.js",
     "switch-context": "node scripts/switch-context.js",
     "show-context": "node scripts/switch-context.js show",
