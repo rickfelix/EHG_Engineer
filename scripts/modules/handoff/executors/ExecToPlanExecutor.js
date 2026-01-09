@@ -212,7 +212,7 @@ export class ExecToPlanExecutor extends BaseExecutor {
 
         // 2. Check for fresh existing evidence (<60 min)
         try {
-          const { checkTestEvidenceFreshness, getLatestTestEvidence } = await import('../../lib/test-evidence-ingest.js');
+          const { checkTestEvidenceFreshness, getLatestTestEvidence } = await import('../../../lib/test-evidence-ingest.js');
 
           const maxAgeMinutes = parseInt(process.env.LEO_TEST_EVIDENCE_MAX_AGE_MINUTES || '60');
           const freshnessCheck = await checkTestEvidenceFreshness(sdId, maxAgeMinutes);
@@ -277,7 +277,7 @@ export class ExecToPlanExecutor extends BaseExecutor {
 
         // 4. Call ingestTestEvidence() to capture and link to user stories
         try {
-          const { ingestTestEvidence } = await import('../../lib/test-evidence-ingest.js');
+          const { ingestTestEvidence } = await import('../../../lib/test-evidence-ingest.js');
 
           console.log('   📥 Ingesting test evidence...');
 
