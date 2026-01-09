@@ -31,6 +31,9 @@ const execAsync = promisify(exec);
 // Base directory for repo discovery
 const EHG_BASE_DIR = '/mnt/c/_EHG';
 
+// Repositories to permanently ignore (archive/inactive repos with messy state)
+const IGNORED_REPOS = ['ehg-replit-archive', 'solara2'];
+
 // Static repo paths (fallback if discovery fails)
 const STATIC_REPO_PATHS = {
   EHG: '/mnt/c/_EHG/EHG',
@@ -48,6 +51,11 @@ function discoverRepos() {
     const entries = readdirSync(EHG_BASE_DIR);
 
     for (const entry of entries) {
+      // Skip ignored repos
+      if (IGNORED_REPOS.includes(entry)) {
+        continue;
+      }
+
       const fullPath = join(EHG_BASE_DIR, entry);
       const gitPath = join(fullPath, '.git');
 
