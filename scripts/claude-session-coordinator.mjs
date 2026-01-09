@@ -67,6 +67,51 @@ async function claimSD(sdId) {
     return;
   }
 
+  // Phase validation (Control Gap Fix) - Check SD phase before allowing claim
+  console.log(`Checking SD phase and status...\n`);
+  const { data: sdData, error: sdError } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key, legacy_id, title, current_phase, status')
+    .or(`legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+    .single();
+
+  if (sdError || !sdData) {
+    console.log(`${colors.red}${colors.bold}✗ SD NOT FOUND${colors.reset}\n`);
+    console.log(`  Could not find SD with ID: ${sdId}`);
+    console.log(`  Check the SD-ID and try again.\n`);
+    return;
+  }
+
+  // Check for non-actionable phases
+  const phase = sdData.current_phase || '';
+  const status = sdData.status || '';
+
+  if (phase === 'EXEC_COMPLETE' || status === 'review') {
+    console.log(`${colors.magenta}${colors.bold}⚠️  SD NEEDS VERIFICATION${colors.reset}\n`);
+    console.log(`  SD: ${sdData.legacy_id || sdData.sd_key}`);
+    console.log(`  Title: ${sdData.title}`);
+    console.log(`  Phase: ${phase} | Status: ${status}\n`);
+    console.log(`  This SD is in EXEC_COMPLETE/review phase and needs verification, not new work.`);
+    console.log(`  ${colors.cyan}Run: npm run sd:verify ${sdId}${colors.reset} to complete verification.\n`);
+    return;
+  }
+
+  if (phase === 'PLAN' || phase === 'PLAN_PRD') {
+    console.log(`${colors.cyan}${colors.bold}ℹ️  SD IN PLANNING PHASE${colors.reset}\n`);
+    console.log(`  SD: ${sdData.legacy_id || sdData.sd_key}`);
+    console.log(`  Phase: ${phase}\n`);
+    console.log(`  This SD is currently in PLAN phase. Proceeding with claim...`);
+    console.log(`  ${colors.dim}Note: You'll be continuing PLAN work, not starting LEAD approval.${colors.reset}\n`);
+  }
+
+  if (phase === 'EXEC' || phase === 'EXEC_ACTIVE') {
+    console.log(`${colors.blue}${colors.bold}ℹ️  SD IN EXECUTION PHASE${colors.reset}\n`);
+    console.log(`  SD: ${sdData.legacy_id || sdData.sd_key}`);
+    console.log(`  Phase: ${phase}\n`);
+    console.log(`  This SD is currently in EXEC phase. Proceeding with claim...`);
+    console.log(`  ${colors.dim}Note: You'll be continuing implementation work.${colors.reset}\n`);
+  }
+
   // Validate claim
   console.log(`Checking claim eligibility...\n`);
   const validation = await conflictChecker.canClaimSd(sdId, session.session_id);

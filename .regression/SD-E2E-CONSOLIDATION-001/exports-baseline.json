@@ -1,0 +1,1132 @@
+{
+  "/api/decisions.ts": [
+    {
+      "line": "55",
+      "export": "export async function logDecision(req: Request, res: Response) {"
+    },
+    {
+      "line": "127",
+      "export": "export async function listDecisions(req: Request, res: Response) {"
+    },
+    {
+      "line": "185",
+      "export": "export async function getDecisionStats(req: Request, res: Response) {"
+    },
+    {
+      "line": "253",
+      "export": "export async function getCrossVentureComparison(req: Request, res: Response) {"
+    },
+    {
+      "line": "351",
+      "export": "export async function getVentureRationaleBreakdown(req: Request, res: Response) {"
+    },
+    {
+      "line": "411",
+      "export": "export async function updateDecisionOutcome(req: Request, res: Response) {"
+    }
+  ],
+  "/api/deltas.ts": [
+    {
+      "line": "20",
+      "export": "export async function listDeltas(req: Request, res: Response) {"
+    },
+    {
+      "line": "93",
+      "export": "export async function acceptDelta(req: Request, res: Response) {"
+    },
+    {
+      "line": "182",
+      "export": "export async function rejectDelta(req: Request, res: Response) {"
+    },
+    {
+      "line": "217",
+      "export": "export async function previewDeltas(req: Request, res: Response) {"
+    }
+  ],
+  "/app/api/health/route.ts": [
+    {
+      "line": "12",
+      "export": "export interface HealthResponse {"
+    },
+    {
+      "line": "22",
+      "export": "export async function GET(): Promise<NextResponse<HealthResponse>> {"
+    }
+  ],
+  "/app/api/metrics/route.ts": [
+    {
+      "line": "15",
+      "export": "export async function GET(): Promise<NextResponse> {"
+    }
+  ],
+  "/app/api/ready/route.ts": [
+    {
+      "line": "13",
+      "export": "export interface ReadinessResponse {"
+    },
+    {
+      "line": "22",
+      "export": "export async function GET(): Promise<NextResponse<ReadinessResponse>> {"
+    }
+  ],
+  "/app/api/transcribe/route.ts": [
+    {
+      "line": "7",
+      "export": "export async function POST(request: NextRequest) {"
+    },
+    {
+      "line": "64",
+      "export": "export async function OPTIONS() {"
+    }
+  ],
+  "/App.tsx": [
+    {
+      "line": "178",
+      "export": "export default App;"
+    }
+  ],
+  "/components/accessibility/AccessibilityProvider.tsx": [
+    {
+      "line": "122",
+      "export": "export function useAccessibility() {"
+    },
+    {
+      "line": "134",
+      "export": "export function AccessibilityProvider({ children }: AccessibilityProviderProps) {"
+    }
+  ],
+  "/components/accessibility/AccessibilitySettings.tsx": [
+    {
+      "line": "11",
+      "export": "export const AccessibilitySettings: React.FC = () => {"
+    }
+  ],
+  "/components/accessibility/AccessibleNavigationAnnouncer.tsx": [
+    {
+      "line": "18",
+      "export": "export const AccessibleNavigationAnnouncer: React.FC = () => {"
+    }
+  ],
+  "/components/accessibility/SkipNavigation.tsx": [
+    {
+      "line": "4",
+      "export": "export const SkipNavigation: React.FC = () => {"
+    }
+  ],
+  "/components/accessibility/VoiceInput.tsx": [
+    {
+      "line": "52",
+      "export": "export function VoiceInput({"
+    }
+  ],
+  "/components/agents/ABTestingTab/ABTestingTab.tsx": [
+    {
+      "line": "72",
+      "export": "export const ABTestingTab: React.FC = () => {"
+    }
+  ],
+  "/components/agents/ABTestingTab/ExperimentConfig.tsx": [
+    {
+      "line": "64",
+      "export": "export const ExperimentConfig: React.FC<ExperimentConfigProps> = ({"
+    }
+  ],
+  "/components/agents/ABTestingTab/ExperimentList.tsx": [
+    {
+      "line": "104",
+      "export": "export const ExperimentList: React.FC<ExperimentListProps> = ({"
+    }
+  ],
+  "/components/agents/ABTestingTab/index.ts": [
+    {
+      "line": "1",
+      "export": "export { ABTestingTab } from './ABTestingTab';"
+    },
+    {
+      "line": "2",
+      "export": "export { ExperimentList } from './ExperimentList';"
+    },
+    {
+      "line": "3",
+      "export": "export { ExperimentConfig } from './ExperimentConfig';"
+    },
+    {
+      "line": "4",
+      "export": "export { ResultsPanel } from './ResultsPanel';"
+    }
+  ],
+  "/components/agents/ABTestingTab/ResultsPanel.tsx": [
+    {
+      "line": "41",
+      "export": "export const ResultsPanel: React.FC<ResultsPanelProps> = ({ formData }) => {"
+    }
+  ],
+  "/components/agents/AgentPerformanceTab.tsx": [
+    {
+      "line": "56",
+      "export": "export const AgentPerformanceTab: React.FC<AgentPerformanceTabProps> = ({"
+    }
+  ],
+  "/components/agents/AgentPresetEditor.tsx": [
+    {
+      "line": "68",
+      "export": "export const AgentPresetEditor: React.FC<AgentPresetEditorProps> = ({"
+    }
+  ],
+  "/components/agents/AgentPresetsList.tsx": [
+    {
+      "line": "72",
+      "export": "export const AgentPresetsList: React.FC<AgentPresetsListProps> = ({"
+    }
+  ],
+  "/components/agents/AgentPresetsTab.tsx": [
+    {
+      "line": "30",
+      "export": "export const AgentPresetsTab: React.FC<AgentPresetsTabProps> = ({"
+    }
+  ],
+  "/components/agents/AgentPresetsTypes.ts": [
+    {
+      "line": "8",
+      "export": "export interface AgentPresetConfig {"
+    },
+    {
+      "line": "19",
+      "export": "export interface AgentPreset {"
+    },
+    {
+      "line": "31",
+      "export": "export interface AgentPresetFormData {"
+    },
+    {
+      "line": "39",
+      "export": "export const presetConfigSchema = z.object({"
+    },
+    {
+      "line": "51",
+      "export": "export const PRESET_CATEGORIES = ["
+    },
+    {
+      "line": "59",
+      "export": "export const DEFAULT_CONFIG_JSON: AgentPresetConfig = {"
+    },
+    {
+      "line": "69",
+      "export": "export const DEFAULT_FORM_DATA: AgentPresetFormData = {"
+    },
+    {
+      "line": "76",
+      "export": "export type SortOption = \"recent\" | \"usage\";"
+    }
+  ],
+  "/components/agents/AgentSettingsTab.tsx": [
+    {
+      "line": "60",
+      "export": "export const AgentSettingsTab: React.FC<AgentSettingsTabProps> = ({ agents, onUpdateAgent }) => {"
+    }
+  ],
+  "/components/agents/AgentWizard/AgentWizard.tsx": [
+    {
+      "line": "39",
+      "export": "export function AgentWizard() {"
+    }
+  ],
+  "/components/agents/AgentWizard/index.ts": [
+    {
+      "line": "1",
+      "export": "export { AgentWizard } from './AgentWizard';"
+    },
+    {
+      "line": "2",
+      "export": "export { Step1BasicInfo } from './Step1BasicInfo';"
+    },
+    {
+      "line": "3",
+      "export": "export { Step2LLMConfig } from './Step2LLMConfig';"
+    },
+    {
+      "line": "4",
+      "export": "export { Step3AdvancedFeatures } from './Step3AdvancedFeatures';"
+    },
+    {
+      "line": "5",
+      "export": "export { Step4ToolsKnowledge } from './Step4ToolsKnowledge';"
+    },
+    {
+      "line": "6",
+      "export": "export { Step5Observability } from './Step5Observability';"
+    },
+    {
+      "line": "7",
+      "export": "export { Step6ReviewGenerate } from './Step6ReviewGenerate';"
+    },
+    {
+      "line": "8",
+      "export": "export * from './types';"
+    }
+  ],
+  "/components/agents/AgentWizard/Step1BasicInfo.tsx": [
+    {
+      "line": "46",
+      "export": "export function Step1BasicInfo({ onValidationChange }: Step1BasicInfoProps) {"
+    }
+  ],
+  "/components/agents/AgentWizard/Step2LLMConfig.tsx": [
+    {
+      "line": "49",
+      "export": "export function Step2LLMConfig({ onValidationChange }: Step2LLMConfigProps) {"
+    }
+  ],
+  "/components/agents/AgentWizard/Step3AdvancedFeatures.tsx": [
+    {
+      "line": "54",
+      "export": "export function Step3AdvancedFeatures({ onValidationChange }: Step3AdvancedFeaturesProps) {"
+    }
+  ],
+  "/components/agents/AgentWizard/Step4ToolsKnowledge.tsx": [
+    {
+      "line": "91",
+      "export": "export function Step4ToolsKnowledge({ onValidationChange }: Step4ToolsKnowledgeProps) {"
+    }
+  ],
+  "/components/agents/AgentWizard/Step5Observability.tsx": [
+    {
+      "line": "98",
+      "export": "export function Step5Observability({ onValidationChange }: Step5ObservabilityProps) {"
+    }
+  ],
+  "/components/agents/AgentWizard/Step6ReviewGenerate.tsx": [
+    {
+      "line": "60",
+      "export": "export function Step6ReviewGenerate({"
+    }
+  ],
+  "/components/agents/AgentWizard/types.ts": [
+    {
+      "line": "13",
+      "export": "export interface AgentFormData {"
+    },
+    {
+      "line": "72",
+      "export": "export interface EmbedderConfig {"
+    },
+    {
+      "line": "82",
+      "export": "export interface WizardStep {"
+    },
+    {
+      "line": "94",
+      "export": "export interface StepValidation {"
+    },
+    {
+      "line": "103",
+      "export": "export interface AgentResponse {"
+    },
+    {
+      "line": "126",
+      "export": "export interface CodeGenerationRequest {"
+    },
+    {
+      "line": "136",
+      "export": "export interface CodeGenerationResponse {"
+    },
+    {
+      "line": "150",
+      "export": "export interface Department {"
+    },
+    {
+      "line": "160",
+      "export": "export interface ToolRegistryItem {"
+    },
+    {
+      "line": "174",
+      "export": "export interface KnowledgeSource {"
+    },
+    {
+      "line": "187",
+      "export": "export interface WizardContext {"
+    },
+    {
+      "line": "199",
+      "export": "export const AGENT_FORM_DEFAULTS: Partial<AgentFormData> = {"
+    },
+    {
+      "line": "247",
+      "export": "export const LLM_MODELS = ["
+    },
+    {
+      "line": "309",
+      "export": "export const VALIDATION_RULES = {"
+    }
+  ],
+  "/components/agents/ComplianceTab/AgentComplianceDetail.tsx": [
+    {
+      "line": "43",
+      "export": "export function AgentComplianceDetail({"
+    },
+    {
+      "line": "119",
+      "export": "export default AgentComplianceDetail;"
+    }
+  ],
+  "/components/agents/ComplianceTab/AgentRegistrationTable.tsx": [
+    {
+      "line": "40",
+      "export": "export function AgentRegistrationTable({"
+    },
+    {
+      "line": "192",
+      "export": "export default AgentRegistrationTable;"
+    }
+  ],
+  "/components/agents/ComplianceTab/ComplianceStatusBadge.tsx": [
+    {
+      "line": "50",
+      "export": "export interface ComplianceStatusBadgeProps {"
+    },
+    {
+      "line": "57",
+      "export": "export function ComplianceStatusBadge({"
+    },
+    {
+      "line": "84",
+      "export": "export default ComplianceStatusBadge;"
+    }
+  ],
+  "/components/agents/ComplianceTab/ComplianceSummaryCards.tsx": [
+    {
+      "line": "40",
+      "export": "export function ComplianceSummaryCards({ summary, isLoading }: ComplianceSummaryCardsProps) {"
+    },
+    {
+      "line": "180",
+      "export": "export default ComplianceSummaryCards;"
+    }
+  ],
+  "/components/agents/ComplianceTab/ComplianceTab.tsx": [
+    {
+      "line": "23",
+      "export": "export function ComplianceTab() {"
+    },
+    {
+      "line": "222",
+      "export": "export default ComplianceTab;"
+    }
+  ],
+  "/components/agents/ComplianceTab/index.ts": [
+    {
+      "line": "6",
+      "export": "export { ComplianceTab } from './ComplianceTab';"
+    },
+    {
+      "line": "7",
+      "export": "export { ComplianceSummaryCards } from './ComplianceSummaryCards';"
+    },
+    {
+      "line": "8",
+      "export": "export { AgentRegistrationTable } from './AgentRegistrationTable';"
+    },
+    {
+      "line": "9",
+      "export": "export { AgentComplianceDetail } from './AgentComplianceDetail';"
+    },
+    {
+      "line": "10",
+      "export": "export { ComplianceStatusBadge } from './ComplianceStatusBadge';"
+    },
+    {
+      "line": "11",
+      "export": "export {"
+    },
+    {
+      "line": "17",
+      "export": "export * from './types';"
+    }
+  ],
+  "/components/agents/ComplianceTab/types.ts": [
+    {
+      "line": "8",
+      "export": "export type ComplianceSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';"
+    },
+    {
+      "line": "9",
+      "export": "export type ComplianceStatus = 'pass' | 'fail' | 'warning' | 'pending';"
+    },
+    {
+      "line": "11",
+      "export": "export interface ComplianceSummary {"
+    },
+    {
+      "line": "41",
+      "export": "export interface ComplianceViolation {"
+    },
+    {
+      "line": "55",
+      "export": "export interface CompliancePolicy {"
+    },
+    {
+      "line": "65",
+      "export": "export interface ComplianceEvent {"
+    },
+    {
+      "line": "79",
+      "export": "export interface AgentComplianceStatus {"
+    }
+  ],
+  "/components/agents/ComplianceTab/useComplianceData.ts": [
+    {
+      "line": "63",
+      "export": "export function useComplianceSummary() {"
+    },
+    {
+      "line": "72",
+      "export": "export function useComplianceViolations(params?: {"
+    },
+    {
+      "line": "85",
+      "export": "export function useCompliancePolicies() {"
+    },
+    {
+      "line": "93",
+      "export": "export function useComplianceEvents(params?: { limit?: number; is_read?: boolean }) {"
+    }
+  ],
+  "/components/agents/PromptEditor.tsx": [
+    {
+      "line": "61",
+      "export": "export const PromptEditor: React.FC<PromptEditorProps> = ({"
+    }
+  ],
+  "/components/agents/PromptLibraryTab.tsx": [
+    {
+      "line": "56",
+      "export": "export const PromptLibraryTab: React.FC<PromptLibraryTabProps> = ({ onCreateABTest }) => {"
+    }
+  ],
+  "/components/agents/PromptList.tsx": [
+    {
+      "line": "13",
+      "export": "export interface PromptTemplate {"
+    },
+    {
+      "line": "31",
+      "export": "export const CATEGORIES: Array<\"system\" | \"user\" | \"assistant\" | \"function\" | \"custom\"> = ["
+    },
+    {
+      "line": "49",
+      "export": "export const PromptList: React.FC<PromptListProps> = ({"
+    }
+  ],
+  "/components/agents/SearchPreferencesTab.tsx": [
+    {
+      "line": "69",
+      "export": "export const SearchPreferencesTab: React.FC = () => {"
+    }
+  ],
+  "/components/ai/AIHealthMonitor.tsx": [
+    {
+      "line": "9",
+      "export": "export interface ServiceHealth {"
+    },
+    {
+      "line": "17",
+      "export": "export const AIHealthMonitor = () => {"
+    }
+  ],
+  "/components/ai-ceo/BoardReporting.tsx": [
+    {
+      "line": "57",
+      "export": "export const BoardReporting: React.FC = () => {"
+    },
+    {
+      "line": "520",
+      "export": "export default BoardReporting;"
+    }
+  ],
+  "/components/ai-ceo/ExecutiveDecisionSupport.tsx": [
+    {
+      "line": "65",
+      "export": "export const ExecutiveDecisionSupport: React.FC = () => {"
+    },
+    {
+      "line": "577",
+      "export": "export default ExecutiveDecisionSupport;"
+    }
+  ],
+  "/components/ai-ceo/index.ts": [
+    {
+      "line": "1",
+      "export": "export { ExecutiveDecisionSupport } from \"./ExecutiveDecisionSupport\";"
+    },
+    {
+      "line": "2",
+      "export": "export { BoardReporting } from \"./BoardReporting\";"
+    },
+    {
+      "line": "3",
+      "export": "export { StrategicInitiativeTracking } from \"./StrategicInitiativeTracking\";"
+    }
+  ],
+  "/components/ai-ceo/StrategicInitiativeTracking.tsx": [
+    {
+      "line": "68",
+      "export": "export const StrategicInitiativeTracking: React.FC = () => {"
+    },
+    {
+      "line": "618",
+      "export": "export default StrategicInitiativeTracking;"
+    }
+  ],
+  "/components/analytics/AdvancedAnalyticsEngine.tsx": [
+    {
+      "line": "52",
+      "export": "export function AdvancedAnalyticsEngine() {"
+    },
+    {
+      "line": "474",
+      "export": "export default AdvancedAnalyticsEngine;"
+    }
+  ],
+  "/components/analytics/AIInsightsAlert.tsx": [
+    {
+      "line": "12",
+      "export": "export const AIInsightsAlert = ({ insights }: AIInsightsAlertProps) => {"
+    }
+  ],
+  "/components/analytics/AIInsightsView.tsx": [
+    {
+      "line": "24",
+      "export": "export const AIInsightsView = ({ insights }: AIInsightsViewProps) => {"
+    }
+  ],
+  "/components/analytics/AnalyticsDashboard.tsx": [
+    {
+      "line": "76",
+      "export": "export const AnalyticsDashboard: React.FC = () => {"
+    },
+    {
+      "line": "549",
+      "export": "export default AnalyticsDashboard;"
+    }
+  ],
+  "/components/analytics/ConfidenceScoreChart.tsx": [
+    {
+      "line": "5",
+      "export": "export const ConfidenceScoreChart = () => {"
+    }
+  ],
+  "/components/analytics/CustomReportsView.tsx": [
+    {
+      "line": "27",
+      "export": "export const CustomReportsView = () => {"
+    }
+  ],
+  "/components/analytics/DecisionHistoryTable.tsx": [
+    {
+      "line": "18",
+      "export": "export const DecisionHistoryTable = () => {"
+    }
+  ],
+  "/components/analytics/EngagementMetricsCards.tsx": [
+    {
+      "line": "78",
+      "export": "export const EngagementMetricsCards = ({"
+    }
+  ],
+  "/components/analytics/EnhancedCharts.tsx": [
+    {
+      "line": "110",
+      "export": "export const EnhancedCharts = ({ data, title, className }: EnhancedChartsProps) => {"
+    }
+  ],
+  "/components/analytics/EnhancedKeyMetricsOverview.tsx": [
+    {
+      "line": "23",
+      "export": "export const EnhancedKeyMetricsOverview = ({"
+    }
+  ],
+  "/components/analytics/ExecutiveDashboard.tsx": [
+    {
+      "line": "38",
+      "export": "export const ExecutiveDashboard = ({ selectedCompany, timeframe }: ExecutiveDashboardProps) => {"
+    }
+  ],
+  "/components/analytics/FeatureFlagControls.tsx": [
+    {
+      "line": "12",
+      "export": "export const FeatureFlagControls = ({ flags, onFlagsChange }: FeatureFlagControlsProps) => {"
+    }
+  ],
+  "/components/analytics/index.ts": [
+    {
+      "line": "1",
+      "export": "export { AnalyticsDashboard } from \"./AnalyticsDashboard\";"
+    },
+    {
+      "line": "2",
+      "export": "export { KPIBuilder } from \"./KPIBuilder\";"
+    },
+    {
+      "line": "3",
+      "export": "export { analyticsEngine } from \"../../services/analytics/AnalyticsEngine\";"
+    },
+    {
+      "line": "6",
+      "export": "export { ExportConfigurationForm } from \"./ExportConfigurationForm\";"
+    },
+    {
+      "line": "7",
+      "export": "export { ExportHistoryTable } from \"./ExportHistoryTable\";"
+    },
+    {
+      "line": "9",
+      "export": "export type {"
+    }
+  ],
+  "/components/analytics/KeyMetricsOverview.tsx": [
+    {
+      "line": "11",
+      "export": "export const KeyMetricsOverview = ({ analytics }: KeyMetricsOverviewProps) => {"
+    }
+  ],
+  "/components/analytics/KPIBuilder.tsx": [
+    {
+      "line": "33",
+      "export": "export const KPIBuilder: React.FC = () => {"
+    },
+    {
+      "line": "307",
+      "export": "export default KPIBuilder;"
+    }
+  ],
+  "/components/analytics/PortfolioAnalyticsView.tsx": [
+    {
+      "line": "25",
+      "export": "export const PortfolioAnalyticsView = ({ analytics }: PortfolioAnalyticsViewProps) => {"
+    }
+  ],
+  "/components/analytics/ThresholdCalibrationReview.tsx": [
+    {
+      "line": "21",
+      "export": "export const ThresholdCalibrationReview = () => {"
+    }
+  ],
+  "/components/analytics/UserJourneyAggregatedView.tsx": [
+    {
+      "line": "142",
+      "export": "export const UserJourneyAggregatedView = ({"
+    }
+  ],
+  "/components/analytics/UserJourneyDrillDown.tsx": [
+    {
+      "line": "183",
+      "export": "export const UserJourneyDrillDown = ({"
+    }
+  ],
+  "/components/analytics/VentureAnalyticsView.tsx": [
+    {
+      "line": "20",
+      "export": "export const VentureAnalyticsView = ({ ventures }: VentureAnalyticsViewProps) => {"
+    }
+  ],
+  "/components/auth/AISecurityMonitor.tsx": [
+    {
+      "line": "8",
+      "export": "export interface SecurityAlert {"
+    },
+    {
+      "line": "23",
+      "export": "export const AISecurityMonitor = () => {"
+    }
+  ],
+  "/components/auth/AuthenticationDashboard.tsx": [
+    {
+      "line": "44",
+      "export": "export const AuthenticationDashboard = () => {"
+    }
+  ],
+  "/components/auth/EnhancedAuthenticationSystem.tsx": [
+    {
+      "line": "67",
+      "export": "export function EnhancedAuthenticationSystem() {"
+    },
+    {
+      "line": "644",
+      "export": "export default EnhancedAuthenticationSystem;"
+    }
+  ],
+  "/components/auth/ProtectedRoute.tsx": [
+    {
+      "line": "9",
+      "export": "export const ProtectedRoute = ({ children, user }: ProtectedRouteProps) => {"
+    }
+  ],
+  "/components/auth/RoleBasedAccess.tsx": [
+    {
+      "line": "345",
+      "export": "export const RoleBasedAccess = ({"
+    }
+  ],
+  "/components/automation/AutomationInsightsPanel.tsx": [
+    {
+      "line": "14",
+      "export": "export const AutomationInsightsPanel = ({ ventureId, onActionTaken }: AutomationInsightsPanelProps) => {"
+    }
+  ],
+  "/components/automation/AutomationRuleBuilder.tsx": [
+    {
+      "line": "12",
+      "export": "export const AutomationRuleBuilder = ({ rule, onClose }: AutomationRuleBuilderProps) => {"
+    }
+  ],
+  "/components/automation/AutomationRulesList.tsx": [
+    {
+      "line": "28",
+      "export": "export const AutomationRulesList = ({ rules = [], onRuleClick }: AutomationRulesListProps) => {"
+    }
+  ],
+  "/components/board/BoardMeetingDashboard.tsx": [
+    {
+      "line": "68",
+      "export": "export const BoardMeetingDashboard: React.FC = () => {"
+    },
+    {
+      "line": "588",
+      "export": "export default BoardMeetingDashboard;"
+    }
+  ],
+  "/components/board/BoardMemberManagement.tsx": [
+    {
+      "line": "47",
+      "export": "export const BoardMemberManagement: React.FC = () => {"
+    },
+    {
+      "line": "474",
+      "export": "export default BoardMemberManagement;"
+    }
+  ],
+  "/components/board/index.ts": [
+    {
+      "line": "1",
+      "export": "export { BoardMeetingDashboard } from './BoardMeetingDashboard';"
+    },
+    {
+      "line": "2",
+      "export": "export { BoardMemberManagement } from './BoardMemberManagement';"
+    },
+    {
+      "line": "3",
+      "export": "export { RAIDLogBoardView } from './RAIDLogBoardView';"
+    }
+  ],
+  "/components/board/RAIDLogBoardView.tsx": [
+    {
+      "line": "49",
+      "export": "export const RAIDLogBoardView: React.FC = () => {"
+    },
+    {
+      "line": "295",
+      "export": "export default RAIDLogBoardView;"
+    }
+  ],
+  "/components/business-agents/AgentControlPanel.tsx": [
+    {
+      "line": "44",
+      "export": "export function AgentControlPanel({"
+    }
+  ],
+  "/components/chairman/AIInsightsEngine.tsx": [
+    {
+      "line": "20",
+      "export": "export const AIInsightsEngine = () => {"
+    }
+  ],
+  "/components/chairman/AlertConfiguration.tsx": [
+    {
+      "line": "29",
+      "export": "export const AlertConfiguration = ({ config, onChange }: AlertConfigurationProps) => {"
+    }
+  ],
+  "/components/chairman/ChairmanFeedbackPanel.tsx": [
+    {
+      "line": "17",
+      "export": "export const ChairmanFeedbackPanel: React.FC<ChairmanFeedbackPanelProps> = ({"
+    }
+  ],
+  "/components/chairman/ChairmanOverrideInterface.tsx": [
+    {
+      "line": "52",
+      "export": "export interface ChairmanOverride {"
+    },
+    {
+      "line": "67",
+      "export": "export interface ChairmanOverrideInterfaceProps {"
+    },
+    {
+      "line": "81",
+      "export": "export const ChairmanOverrideInterface: React.FC<ChairmanOverrideInterfaceProps> = ({"
+    }
+  ],
+  "/components/chairman/ChairmanOverridePanel.tsx": [
+    {
+      "line": "26",
+      "export": "export const ChairmanOverridePanel: React.FC<ChairmanOverridePanelProps> = ({"
+    }
+  ],
+  "/components/chairman/CircuitBreakerMonitor.tsx": [
+    {
+      "line": "115",
+      "export": "export const CircuitBreakerMonitor = ({ className }: CircuitBreakerMonitorProps) => {"
+    },
+    {
+      "line": "436",
+      "export": "export default CircuitBreakerMonitor;"
+    }
+  ],
+  "/components/chairman/CompanySelector.tsx": [
+    {
+      "line": "18",
+      "export": "export const CompanySelector = ({ selectedCompany, onCompanyChange }: CompanySelectorProps) => {"
+    }
+  ],
+  "/components/chairman/ExecutiveAlerts.tsx": [
+    {
+      "line": "14",
+      "export": "export const ExecutiveAlerts = ({ companyId }: ExecutiveAlertsProps) => {"
+    }
+  ],
+  "/components/chairman/ExitGateStatusPanel.tsx": [
+    {
+      "line": "79",
+      "export": "export function ExitGateStatusPanel({ ventureId }: ExitGateStatusPanelProps) {"
+    },
+    {
+      "line": "413",
+      "export": "export default ExitGateStatusPanel;"
+    }
+  ],
+  "/components/chairman/feedback/AgentInstructions.tsx": [
+    {
+      "line": "17",
+      "export": "export const AgentInstructions: React.FC<AgentInstructionsProps> = ({"
+    }
+  ],
+  "/components/chairman/feedback/FeedbackForm.tsx": [
+    {
+      "line": "27",
+      "export": "export const FeedbackForm: React.FC<FeedbackFormProps> = ({"
+    }
+  ],
+  "/components/chairman/feedback/FeedbackHistory.tsx": [
+    {
+      "line": "12",
+      "export": "export const FeedbackHistory: React.FC<FeedbackHistoryProps> = ({ existingFeedback }) => {"
+    }
+  ],
+  "/components/chairman/feedback/ProcessingStatus.tsx": [
+    {
+      "line": "9",
+      "export": "export const ProcessingStatus: React.FC<ProcessingStatusProps> = ({ transcribing, saving }) => {"
+    }
+  ],
+  "/components/chairman/feedback/VoiceRecorder.tsx": [
+    {
+      "line": "13",
+      "export": "export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({"
+    }
+  ],
+  "/components/chairman/FinancialAnalytics.tsx": [
+    {
+      "line": "134",
+      "export": "export const FinancialAnalytics = ({ className }: FinancialAnalyticsProps) => {"
+    }
+  ],
+  "/components/chairman/KPISelector.tsx": [
+    {
+      "line": "45",
+      "export": "export const KPISelector = ({ config, onChange }: KPISelectorProps) => {"
+    }
+  ],
+  "/components/chairman/OperationalIntelligence.tsx": [
+    {
+      "line": "202",
+      "export": "export const OperationalIntelligence = ({ className }: OperationalIntelligenceProps) => {"
+    }
+  ],
+  "/components/chairman/PerformanceDriveCycle.tsx": [
+    {
+      "line": "13",
+      "export": "export const PerformanceDriveCycle = ({ companyId }: PerformanceDriveCycleProps) => {"
+    }
+  ],
+  "/components/chairman/PortfolioRisksCard.tsx": [
+    {
+      "line": "65",
+      "export": "export const PortfolioRisksCard = ({ className, limit = 10 }: PortfolioRisksCardProps) => {"
+    },
+    {
+      "line": "276",
+      "export": "export default PortfolioRisksCard;"
+    }
+  ],
+  "/components/chairman/RecursionOverrideInterface.tsx": [
+    {
+      "line": "36",
+      "export": "export type OverrideDecision = 'approve' | 'reject' | 'modify';"
+    },
+    {
+      "line": "41",
+      "export": "export interface RecursionOverride {"
+    },
+    {
+      "line": "83",
+      "export": "export const RecursionOverrideInterface: React.FC<RecursionOverrideInterfaceProps> = ({"
+    }
+  ],
+  "/components/chairman/Stage13ApprovalQueuePanel.tsx": [
+    {
+      "line": "111",
+      "export": "export function Stage13ApprovalQueuePanel({ companyId }: Stage13ApprovalQueuePanelProps) {"
+    },
+    {
+      "line": "541",
+      "export": "export default Stage13ApprovalQueuePanel;"
+    }
+  ],
+  "/components/chairman/StrategicKPIMonitor.tsx": [
+    {
+      "line": "175",
+      "export": "export const StrategicKPIMonitor = ({ className }: StrategicKPIMonitorProps) => {"
+    }
+  ],
+  "/components/chairman/SynergyOpportunities.tsx": [
+    {
+      "line": "21",
+      "export": "export const SynergyOpportunities = ({ companyId }: SynergyOpportunitiesProps) => {"
+    }
+  ],
+  "/components/chairman/tabs/AnalyticsTab.tsx": [
+    {
+      "line": "99",
+      "export": "export const AnalyticsTab: React.FC = () => {"
+    }
+  ],
+  "/components/chairman/tabs/CalibrationTab.tsx": [
+    {
+      "line": "82",
+      "export": "export const CalibrationTab: React.FC = () => {"
+    }
+  ],
+  "/components/chairman/tabs/SettingsTab.tsx": [
+    {
+      "line": "96",
+      "export": "export const SettingsTab: React.FC = () => {"
+    }
+  ],
+  "/components/chairman/VenturePortfolioOverview.tsx": [
+    {
+      "line": "97",
+      "export": "export const VenturePortfolioOverview = ({ className }: VenturePortfolioOverviewProps) => {"
+    }
+  ],
+  "/components/chairman-v2/CompanySelector.tsx": [
+    {
+      "line": "18",
+      "export": "export const CompanySelector = ({ selectedCompany, onCompanyChange }: CompanySelectorProps) => {"
+    }
+  ],
+  "/components/collaboration/CollaborationHub.tsx": [
+    {
+      "line": "25",
+      "export": "export const CollaborationHub: React.FC<CollaborationHubProps> = ({ userId }) => {"
+    }
+  ],
+  "/components/collaboration/CreateThreadDialog.tsx": [
+    {
+      "line": "30",
+      "export": "export const CreateThreadDialog: React.FC<CreateThreadDialogProps> = ({"
+    }
+  ],
+  "/components/collaboration/ThreadDetails.tsx": [
+    {
+      "line": "25",
+      "export": "export const ThreadDetails: React.FC<ThreadDetailsProps> = ({"
+    }
+  ],
+  "/components/competitive-intelligence/CompetitiveIntelligenceModule.tsx": [
+    {
+      "line": "50",
+      "export": "export const CompetitiveIntelligenceModule: React.FC<CompetitiveIntelligenceModuleProps> = ({"
+    },
+    {
+      "line": "470",
+      "export": "export default CompetitiveIntelligenceModule;"
+    }
+  ],
+  "/components/competitive-intelligence/CompetitiveLandscapeMapping.tsx": [
+    {
+      "line": "71",
+      "export": "export const CompetitiveLandscapeMapping: React.FC = () => {"
+    },
+    {
+      "line": "598",
+      "export": "export default CompetitiveLandscapeMapping;"
+    }
+  ],
+  "/components/competitive-intelligence/CompetitorAnalysisAutomation.tsx": [
+    {
+      "line": "73",
+      "export": "export const CompetitorAnalysisAutomation: React.FC = () => {"
+    },
+    {
+      "line": "482",
+      "export": "export default CompetitorAnalysisAutomation;"
+    }
+  ],
+  "/components/competitive-intelligence/index.ts": [
+    {
+      "line": "1",
+      "export": "export { CompetitiveIntelligenceModule } from \"./CompetitiveIntelligenceModule\";"
+    },
+    {
+      "line": "2",
+      "export": "export { CompetitorAnalysisAutomation } from \"./CompetitorAnalysisAutomation\";"
+    },
+    {
+      "line": "3",
+      "export": "export { UserCentricBenchmarking } from \"./UserCentricBenchmarking\";"
+    },
+    {
+      "line": "4",
+      "export": "export { CompetitiveLandscapeMapping } from \"./CompetitiveLandscapeMapping\";"
+    },
+    {
+      "line": "5",
+      "export": "export { aiCompetitiveResearch } from \"../../services/competitive-intelligence/AICompetitiveResearchService\";"
+    },
+    {
+      "line": "7",
+      "export": "export type {"
+    }
+  ],
+  "/components/competitive-intelligence/UserCentricBenchmarking.tsx": [
+    {
+      "line": "88",
+      "export": "export const UserCentricBenchmarking: React.FC = () => {"
+    },
+    {
+      "line": "722",
+      "export": "export default UserCentricBenchmarking;"
+    }
+  ],
+  "/components/completion/PlatformCompletionSummary.tsx": [
+    {
+      "line": "18",
+      "export": "export function PlatformCompletionSummary() {"
+    },
+    {
+      "line": "228",
+      "export": "export default PlatformCompletionSummary;"
+    }
+  ]
+}

@@ -61,7 +61,89 @@ const colors = {
   bgGreen: '\x1b[42m',
   bgYellow: '\x1b[43m',
   bgBlue: '\x1b[44m',
+  bgMagenta: '\x1b[45m',
+  bgCyan: '\x1b[46m',
 };
+
+/**
+ * Get phase-aware status icon for an SD
+ * Control Gap Fix: SD status must reflect actual phase, not just dependency resolution
+ *
+ * @param {Object} item - SD item with current_phase, status, deps_resolved, progress_percentage
+ * @returns {string} Colored status string for display
+ */
+function getPhaseAwareStatus(item) {
+  const phase = item.current_phase || '';
+  const status = item.status || '';
+  const depsResolved = item.deps_resolved;
+  const progress = item.progress_percentage || 0;
+
+  // Phase-based status takes priority over dependency resolution
+  // This prevents showing "READY" for SDs that need verification/review
+
+  // EXEC_COMPLETE with review status = needs verification
+  if (phase === 'EXEC_COMPLETE' && status === 'review') {
+    return `${colors.magenta}VERIFY${colors.reset}`;
+  }
+
+  // Any COMPLETE phase that isn't fully completed = needs close-out
+  if (phase.includes('COMPLETE') && status !== 'completed') {
+    return `${colors.magenta}CLOSE-OUT${colors.reset}`;
+  }
+
+  // PLAN phases = in planning, not ready for LEAD work
+  if (phase === 'PLAN_PRD' || phase === 'PLAN') {
+    return `${colors.cyan}PLANNING${colors.reset}`;
+  }
+
+  // Draft status = needs LEAD review first
+  if (status === 'draft') {
+    return `${colors.yellow}DRAFT${colors.reset}`;
+  }
+
+  // In active EXEC phase
+  if (phase === 'EXEC' || phase === 'EXEC_ACTIVE') {
+    if (progress > 0 && progress < 100) {
+      return `${colors.blue}EXEC ${progress}%${colors.reset}`;
+    }
+    return `${colors.blue}IN_EXEC${colors.reset}`;
+  }
+
+  // Standard dependency-based logic for LEAD phase or new SDs
+  if (depsResolved) {
+    return `${colors.green}READY${colors.reset}`;
+  } else if (progress > 0) {
+    return `${colors.yellow}${progress}%${colors.reset}`;
+  } else {
+    return `${colors.red}BLOCKED${colors.reset}`;
+  }
+}
+
+/**
+ * Check if an SD is actionable for LEAD work (starting new work)
+ * Returns false for SDs in verification, planning, or other non-LEAD phases
+ */
+function isActionableForLead(item) {
+  const phase = item.current_phase || '';
+  const status = item.status || '';
+
+  // Not actionable if needs verification
+  if (phase === 'EXEC_COMPLETE' || phase.includes('COMPLETE')) {
+    return false;
+  }
+
+  // Not actionable if in active planning or execution
+  if (phase === 'PLAN_PRD' || phase === 'PLAN' || phase === 'EXEC' || phase === 'EXEC_ACTIVE') {
+    return false;
+  }
+
+  // Not actionable if in review status
+  if (status === 'review') {
+    return false;
+  }
+
+  return true;
+}
 
 class SDNextSelector {
   constructor() {
@@ -701,18 +783,15 @@ class SDNextSelector {
       this.currentSession &&
       claimedBySession === this.currentSession.session_id;
 
-    // Status icon logic
+    // Status icon logic - now phase-aware (Control Gap Fix)
     let statusIcon;
     if (isClaimedByOther) {
       statusIcon = `${colors.yellow}CLAIMED${colors.reset}`;
     } else if (isClaimedByMe) {
       statusIcon = `${colors.green}YOURS${colors.reset}`;
-    } else if (item.deps_resolved) {
-      statusIcon = `${colors.green}READY${colors.reset}`;
-    } else if (item.progress_percentage > 0) {
-      statusIcon = `${colors.yellow}${item.progress_percentage}%${colors.reset}`;
     } else {
-      statusIcon = `${colors.red}BLOCKED${colors.reset}`;
+      // Use phase-aware status to prevent showing READY for SDs needing verification
+      statusIcon = getPhaseAwareStatus(item);
     }
 
     const workingIcon = item.is_working_on ? `${colors.bgYellow} ACTIVE ${colors.reset} ` : '';
@@ -759,15 +838,8 @@ class SDNextSelector {
   displaySDItemSimple(item, prefix, nextIndent, childItems, allItems) {
     const sdId = item.legacy_id || item.sd_id;
 
-    // Status icon
-    let statusIcon;
-    if (item.deps_resolved) {
-      statusIcon = `${colors.green}READY${colors.reset}`;
-    } else if (item.progress_percentage > 0) {
-      statusIcon = `${colors.yellow}${item.progress_percentage}%${colors.reset}`;
-    } else {
-      statusIcon = `${colors.red}BLOCKED${colors.reset}`;
-    }
+    // Status icon - now phase-aware (Control Gap Fix)
+    const statusIcon = getPhaseAwareStatus(item);
 
     const workingIcon = item.is_working_on ? `${colors.bgYellow}◆${colors.reset}` : '';
     const title = (item.title || '').substring(0, 30);
@@ -798,7 +870,7 @@ class SDNextSelector {
         // Enrich with SD details (including parent_sd_id for hierarchy)
         const { data: sd } = await supabase
           .from('strategic_directives_v2')
-          .select('id, legacy_id, title, status, progress_percentage, is_working_on, dependencies, is_active, parent_sd_id')
+          .select('id, legacy_id, title, status, current_phase, progress_percentage, is_working_on, dependencies, is_active, parent_sd_id')
           .eq('legacy_id', item.sd_id)
           .single();
 
@@ -860,20 +932,36 @@ class SDNextSelector {
     }
 
     // Find ready SDs from baseline
+    // Find SDs that are truly READY for LEAD work (Control Gap Fix)
     const readySDs = [];
+    const needsVerificationSDs = []; // SDs in EXEC_COMPLETE or review status
     for (const item of this.baselineItems) {
       const { data: sd } = await supabase
         .from('strategic_directives_v2')
-        .select('legacy_id, title, status, progress_percentage, dependencies, is_active')
+        .select('legacy_id, title, status, current_phase, progress_percentage, dependencies, is_active')
         .eq('legacy_id', item.sd_id)
         .single();
 
       if (sd && sd.is_active && sd.status !== 'completed' && sd.status !== 'cancelled') {
         const depsResolved = await this.checkDependenciesResolved(sd.dependencies);
-        if (depsResolved) {
-          readySDs.push({ ...item, ...sd });
+        const enrichedSD = { ...item, ...sd, deps_resolved: depsResolved };
+
+        // Separate SDs needing verification from truly ready SDs
+        if (sd.current_phase === 'EXEC_COMPLETE' || sd.status === 'review') {
+          needsVerificationSDs.push(enrichedSD);
+        } else if (depsResolved && isActionableForLead(enrichedSD)) {
+          readySDs.push(enrichedSD);
         }
       }
+    }
+
+    // Show SDs needing verification/close-out FIRST (Control Gap Fix)
+    if (needsVerificationSDs.length > 0) {
+      console.log(`${colors.bgMagenta}${colors.bold} NEEDS VERIFICATION ${colors.reset}`);
+      needsVerificationSDs.forEach(sd => {
+        console.log(`  ${sd.legacy_id} - ${sd.title.substring(0, 45)}...`);
+        console.log(`  ${colors.dim}Phase: ${sd.current_phase} | Status: ${sd.status} | Run: npm run sd:verify ${sd.legacy_id}${colors.reset}\n`);
+      });
     }
 
     if (readySDs.length > 0 && !workingOn) {

@@ -65,10 +65,11 @@ export async function validateBMADForPlanToExec(sd_id, supabase) {
       sd = result.data;
       sdError = result.error;
     } else {
+      // SD-LEO-ID-NORMALIZE-001: Support id, legacy_id, and sd_key lookup
       const result = await supabase
         .from('strategic_directives_v2')
         .select('id, title, checkpoint_plan')
-        .or(`legacy_id.eq.${sd_id},sd_key.eq.${sd_id}`)
+        .or(`id.eq.${sd_id},legacy_id.eq.${sd_id},sd_key.eq.${sd_id}`)
         .single();
       sd = result.data;
       sdError = result.error;
