@@ -170,7 +170,7 @@ class IntelligentBranchCleanup {
     if (unsafeBranches.length > 0 && this.options.verbose) {
       console.log(`\n   ⚠️  KEPT (${unsafeBranches.length} branches with work or active):`);
       for (const { branch, analysis } of unsafeBranches.slice(0, 10)) {
-        console.log(`      - ${branch}: ${analysis.reason}`);
+        console.log(`      - ${branch.name}: ${analysis.reason}`);
       }
       if (unsafeBranches.length > 10) {
         console.log(`      ... and ${unsafeBranches.length - 10} more`);
@@ -184,7 +184,7 @@ class IntelligentBranchCleanup {
       if (this.options.verbose || safeBranches.length <= 20) {
         for (const { branch, analysis } of safeBranches.slice(0, 20)) {
           const sdInfo = analysis.sdStatus ? ` [SD: ${analysis.sdStatus}]` : '';
-          console.log(`      - ${branch}${sdInfo}`);
+          console.log(`      - ${branch.name}${sdInfo}`);
         }
         if (safeBranches.length > 20) {
           console.log(`      ... and ${safeBranches.length - 20} more`);

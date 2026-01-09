@@ -48,11 +48,11 @@ export class SDRepository {
       sd = result.data;
       error = result.error;
     } else {
-      // Try legacy_id or sd_key
+      // Try id, legacy_id, or sd_key (SD-LEO-ID-NORMALIZE-001: support all ID formats)
       const result = await this.supabase
         .from('strategic_directives_v2')
         .select(columns)
-        .or(`legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+        .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
         .single();
       sd = result.data;
       error = result.error;
@@ -96,11 +96,11 @@ export class SDRepository {
       sd = result.data;
       error = result.error;
     } else {
-      // Query by legacy_id or sd_key (e.g., SD-VENTURE-STAGE0-UI-001 or SD-REFACTOR-TEST-001)
+      // Query by id, legacy_id, or sd_key (SD-LEO-ID-NORMALIZE-001: support all ID formats)
       const result = await this.supabase
         .from('strategic_directives_v2')
         .select('id, legacy_id, sd_key, title, status, category, sd_type, intensity_level')
-        .or(`legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+        .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
         .single();
       sd = result.data;
       error = result.error;
