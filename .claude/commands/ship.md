@@ -8,11 +8,20 @@ Commit your changes and create a pull request.
 
 Before shipping, run the v2 cleanup script to handle orphaned branches intelligently.
 
-**Run the two-stage cleanup:**
+**Multi-Repo Support (v2.1.0):**
+
+The script now auto-discovers all git repositories in `/mnt/c/_EHG/`:
 
 ```bash
-# From EHG_Engineer directory - always preview first
+# List all discovered repos
+node scripts/branch-cleanup-v2.js --discover
+
+# Process ALL repos at once (recommended)
+node scripts/branch-cleanup-v2.js --all
+
+# Process specific repo
 node scripts/branch-cleanup-v2.js --repo EHG
+node scripts/branch-cleanup-v2.js --repo EHG_Engineer
 ```
 
 **The script performs two-stage analysis:**
@@ -31,23 +40,35 @@ node scripts/branch-cleanup-v2.js --repo EHG
 **Execution commands:**
 
 ```bash
-# Delete Stage 1 only (safest)
+# Preview all repos
+node scripts/branch-cleanup-v2.js --all
+
+# Delete Stage 1 in all repos
+node scripts/branch-cleanup-v2.js --all --execute
+
+# Delete Stage 1 + LIKELY_SAFE in all repos
+node scripts/branch-cleanup-v2.js --all --execute --stage2
+
+# Include remote deletion in all repos
+node scripts/branch-cleanup-v2.js --all --execute --stage2 --remote
+
+# Single repo commands (legacy)
 node scripts/branch-cleanup-v2.js --repo EHG --execute
-
-# Delete Stage 1 + LIKELY_SAFE from Stage 2
 node scripts/branch-cleanup-v2.js --repo EHG --execute --stage2
-
-# Include remote deletion
-node scripts/branch-cleanup-v2.js --repo EHG --execute --stage2 --remote
 ```
 
 **UNCERTAIN branches are preserved** - these may have unique work worth reviewing.
 
-**If many branches found, show the user the summary:**
+**If many branches found, show the user the aggregated summary:**
 ```
-Stage 1 (safe): X branches → auto-delete
-Stage 2 (LIKELY_SAFE): Y branches → recommend delete
-Stage 2 (UNCERTAIN): Z branches → preserved
+┌─────────────────────────┬──────────┬──────────┬──────────┬──────────┐
+│ Repository              │ Total    │ Stage 1  │ Stage 2  │ Kept     │
+├─────────────────────────┼──────────┼──────────┼──────────┼──────────┤
+│ EHG                     │ 45       │ 30       │ 10       │ 5        │
+│ EHG_Engineer            │ 12       │ 8        │ 3        │ 1        │
+├─────────────────────────┼──────────┼──────────┼──────────┼──────────┤
+│ TOTAL                   │ 57       │ 38       │ 13       │ 6        │
+└─────────────────────────┴──────────┴──────────┴──────────┴──────────┘
 ```
 
 **Then proceed to Step 1.**
@@ -181,7 +202,14 @@ git checkout main && git pull
 ## Branch Cleanup Scripts Reference
 
 ```bash
-# Two-stage intelligent cleanup (recommended)
+# Multi-repo commands (recommended for full cleanup)
+node scripts/branch-cleanup-v2.js --discover                    # List repos
+node scripts/branch-cleanup-v2.js --all                         # Preview all
+node scripts/branch-cleanup-v2.js --all --execute               # Delete Stage 1
+node scripts/branch-cleanup-v2.js --all --execute --stage2      # + LIKELY_SAFE
+node scripts/branch-cleanup-v2.js --all --execute --stage2 --remote  # + remote
+
+# Single repo commands
 node scripts/branch-cleanup-v2.js --repo EHG                    # Preview
 node scripts/branch-cleanup-v2.js --repo EHG --execute          # Stage 1 only
 node scripts/branch-cleanup-v2.js --repo EHG --execute --stage2 # + LIKELY_SAFE

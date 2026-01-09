@@ -10,25 +10,67 @@
  *   node scripts/branch-cleanup-v2.js --execute           # Delete Stage 1 only
  *   node scripts/branch-cleanup-v2.js --execute --remote  # Also delete remote
  *   node scripts/branch-cleanup-v2.js --repo EHG          # Target specific repo
+ *   node scripts/branch-cleanup-v2.js --all               # All discovered repos
+ *   node scripts/branch-cleanup-v2.js --discover          # List discovered repos
  *
  * @module branch-cleanup-v2
- * @version 2.0.0
+ * @version 2.1.0 - Multi-repo support
  */
 
 import { createClient } from '@supabase/supabase-js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { writeFileSync } from 'fs';
+import { writeFileSync, readdirSync, statSync, existsSync } from 'fs';
+import { join } from 'path';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const execAsync = promisify(exec);
 
-const REPO_PATHS = {
+// Base directory for repo discovery
+const EHG_BASE_DIR = '/mnt/c/_EHG';
+
+// Static repo paths (fallback if discovery fails)
+const STATIC_REPO_PATHS = {
   EHG: '/mnt/c/_EHG/EHG',
   EHG_Engineer: '/mnt/c/_EHG/EHG_Engineer'
 };
+
+/**
+ * Discover all git repositories in the EHG base directory
+ * @returns {Object} Map of repo name to path
+ */
+function discoverRepos() {
+  const repos = {};
+
+  try {
+    const entries = readdirSync(EHG_BASE_DIR);
+
+    for (const entry of entries) {
+      const fullPath = join(EHG_BASE_DIR, entry);
+      const gitPath = join(fullPath, '.git');
+
+      try {
+        const stat = statSync(fullPath);
+        if (stat.isDirectory() && existsSync(gitPath)) {
+          // Found a git repo
+          repos[entry] = fullPath;
+        }
+      } catch {
+        // Skip entries we can't stat
+      }
+    }
+  } catch (error) {
+    console.log(`⚠️ Could not discover repos: ${error.message}`);
+    return STATIC_REPO_PATHS;
+  }
+
+  return Object.keys(repos).length > 0 ? repos : STATIC_REPO_PATHS;
+}
+
+// Dynamically discover repos
+const REPO_PATHS = discoverRepos();
 
 const PROTECTED_BRANCHES = ['main', 'master', 'develop', 'staging', 'production'];
 const MIN_STALE_HOURS = 2;
@@ -502,6 +544,8 @@ const options = {
   remote: args.includes('--remote') || args.includes('-r'),
   verbose: args.includes('--verbose') || args.includes('-v'),
   stage2: args.includes('--stage2'),
+  all: args.includes('--all') || args.includes('-a'),
+  discover: args.includes('--discover'),
   repo: 'EHG'
 };
 
@@ -521,7 +565,9 @@ Options:
   --execute, -e    Delete branches (default is preview)
   --stage2         Also delete LIKELY_SAFE Stage 2 branches
   --remote, -r     Also delete remote branches
-  --repo <name>    Target repo (EHG or EHG_Engineer)
+  --repo <name>    Target specific repo by name
+  --all, -a        Process ALL discovered repos
+  --discover       List discovered repos and exit
   --verbose, -v    Show detailed output
   --help, -h       Show this help
 
@@ -534,16 +580,114 @@ Stage 2 (Analyzed + Tabled):
   • UNCERTAIN: May have unique work → preserved
 
 Examples:
-  node scripts/branch-cleanup-v2.js                          # Preview all
+  node scripts/branch-cleanup-v2.js                          # Preview EHG (default)
+  node scripts/branch-cleanup-v2.js --repo EHG_Engineer      # Preview specific repo
+  node scripts/branch-cleanup-v2.js --all                    # Preview ALL repos
+  node scripts/branch-cleanup-v2.js --discover               # List discovered repos
   node scripts/branch-cleanup-v2.js --execute                # Delete Stage 1 only
   node scripts/branch-cleanup-v2.js --execute --stage2       # Delete Stage 1 + LIKELY_SAFE
-  node scripts/branch-cleanup-v2.js --execute --stage2 --remote  # All + remote
+  node scripts/branch-cleanup-v2.js --all --execute --remote # All repos, all deletions
 `);
   process.exit(0);
 }
 
-const cleanup = new BranchCleanupV2(options);
-cleanup.run().catch(error => {
-  console.error('❌ Failed:', error.message);
-  process.exit(1);
-});
+// Handle --discover flag
+if (options.discover) {
+  console.log('\n🔍 DISCOVERED REPOSITORIES');
+  console.log('═'.repeat(50));
+  const repos = Object.entries(REPO_PATHS);
+  console.log(`Found ${repos.length} git repositories in ${EHG_BASE_DIR}:\n`);
+  for (const [name, path] of repos) {
+    console.log(`  • ${name.padEnd(20)} → ${path}`);
+  }
+  console.log('\nUse --repo <name> to target a specific repo');
+  console.log('Use --all to process all repos at once');
+  process.exit(0);
+}
+
+// Multi-repo orchestration
+async function runMultiRepo() {
+  const repos = Object.entries(REPO_PATHS);
+  const aggregatedStats = {
+    repoCount: repos.length,
+    total: 0,
+    stage1Safe: 0,
+    stage2Review: 0,
+    kept: 0,
+    deleted: 0,
+    perRepo: {}
+  };
+
+  console.log('\n🌐 MULTI-REPO BRANCH CLEANUP');
+  console.log('═'.repeat(60));
+  console.log(`Processing ${repos.length} repositories...\n`);
+
+  for (const [repoName, repoPath] of repos) {
+    console.log(`\n${'─'.repeat(60)}`);
+    console.log(`📂 REPOSITORY: ${repoName}`);
+    console.log(`   Path: ${repoPath}`);
+    console.log('─'.repeat(60));
+
+    const repoOptions = { ...options, repo: repoName };
+    const cleanup = new BranchCleanupV2(repoOptions);
+
+    try {
+      const stats = await cleanup.run();
+      aggregatedStats.perRepo[repoName] = stats;
+      aggregatedStats.total += stats.total;
+      aggregatedStats.stage1Safe += stats.stage1Safe;
+      aggregatedStats.stage2Review += stats.stage2Review;
+      aggregatedStats.kept += stats.kept;
+      aggregatedStats.deleted += stats.deleted;
+    } catch (error) {
+      console.log(`   ❌ Error processing ${repoName}: ${error.message}`);
+      aggregatedStats.perRepo[repoName] = { error: error.message };
+    }
+  }
+
+  // Print aggregated summary
+  console.log('\n' + '═'.repeat(60));
+  console.log('🌐 MULTI-REPO AGGREGATED SUMMARY');
+  console.log('═'.repeat(60));
+
+  console.log('\n┌' + '─'.repeat(25) + '┬' + '─'.repeat(10) + '┬' + '─'.repeat(10) + '┬' + '─'.repeat(10) + '┬' + '─'.repeat(10) + '┐');
+  console.log('│ ' + 'Repository'.padEnd(23) + ' │ ' + 'Total'.padEnd(8) + ' │ ' + 'Stage 1'.padEnd(8) + ' │ ' + 'Stage 2'.padEnd(8) + ' │ ' + 'Kept'.padEnd(8) + ' │');
+  console.log('├' + '─'.repeat(25) + '┼' + '─'.repeat(10) + '┼' + '─'.repeat(10) + '┼' + '─'.repeat(10) + '┼' + '─'.repeat(10) + '┤');
+
+  for (const [name, stats] of Object.entries(aggregatedStats.perRepo)) {
+    if (stats.error) {
+      console.log('│ ' + name.padEnd(23) + ' │ ' + 'ERROR'.padEnd(8) + ' │ ' + '-'.padEnd(8) + ' │ ' + '-'.padEnd(8) + ' │ ' + '-'.padEnd(8) + ' │');
+    } else {
+      console.log('│ ' + name.padEnd(23) + ' │ ' + String(stats.total).padEnd(8) + ' │ ' + String(stats.stage1Safe).padEnd(8) + ' │ ' + String(stats.stage2Review).padEnd(8) + ' │ ' + String(stats.kept).padEnd(8) + ' │');
+    }
+  }
+
+  console.log('├' + '─'.repeat(25) + '┼' + '─'.repeat(10) + '┼' + '─'.repeat(10) + '┼' + '─'.repeat(10) + '┼' + '─'.repeat(10) + '┤');
+  console.log('│ ' + 'TOTAL'.padEnd(23) + ' │ ' + String(aggregatedStats.total).padEnd(8) + ' │ ' + String(aggregatedStats.stage1Safe).padEnd(8) + ' │ ' + String(aggregatedStats.stage2Review).padEnd(8) + ' │ ' + String(aggregatedStats.kept).padEnd(8) + ' │');
+  console.log('└' + '─'.repeat(25) + '┴' + '─'.repeat(10) + '┴' + '─'.repeat(10) + '┴' + '─'.repeat(10) + '┴' + '─'.repeat(10) + '┘');
+
+  if (aggregatedStats.deleted > 0) {
+    console.log(`\n✅ Deleted ${aggregatedStats.deleted} branches across ${repos.length} repos`);
+  }
+
+  if (!options.execute && aggregatedStats.stage1Safe > 0) {
+    console.log('\n💡 To delete Stage 1 branches across all repos:');
+    console.log('   node scripts/branch-cleanup-v2.js --all --execute');
+  }
+
+  return aggregatedStats;
+}
+
+// Single repo or multi-repo execution
+if (options.all) {
+  runMultiRepo().catch(error => {
+    console.error('❌ Failed:', error.message);
+    process.exit(1);
+  });
+} else {
+  const cleanup = new BranchCleanupV2(options);
+  cleanup.run().catch(error => {
+    console.error('❌ Failed:', error.message);
+    process.exit(1);
+  });
+}
