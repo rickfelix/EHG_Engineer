@@ -4,82 +4,53 @@ Commit your changes and create a pull request.
 
 ## Instructions
 
-### Step 0: Check for Unmerged Branches (MANDATORY)
+### Step 0: Two-Stage Intelligent Branch Cleanup (AUTOMATED)
 
-Before proceeding with the current branch, check for stale unmerged branches that may need attention.
+Before shipping, run the v2 cleanup script to handle orphaned branches intelligently.
 
-**Run this quick check first:**
-
-```bash
-# Get all local branches that haven't been merged into main
-git branch --no-merged main
-```
-
-**If unmerged branches exist, use AskUserQuestion to prompt:**
-
-```
-Question: "Found X unmerged branch(es). Would you like me to do a deeper analysis?"
-Options:
-- "Yes, analyze branches" - Full analysis with categorization and cleanup options
-- "No, skip to shipping" - Proceed directly to Step 1
-```
-
-**If user chooses "Yes, analyze branches", run the detailed analysis:**
+**Run the two-stage cleanup:**
 
 ```bash
-# For each unmerged branch, get the last commit date
-git for-each-ref --sort=-committerdate --format='%(refname:short) %(committerdate:relative) %(committerdate:iso8601)' refs/heads/ | grep -v "^main "
+# From EHG_Engineer directory - always preview first
+node scripts/branch-cleanup-v2.js --repo EHG
 ```
 
-**Analyze the results:**
+**The script performs two-stage analysis:**
 
-1. **Identify "Possibly Active" branches** (modified within last 2 hours):
-   - These may be in use by a parallel Claude Code instance
-   - Do NOT suggest deleting or merging these without explicit confirmation
-   - Mark them with a ⚠️ warning
+**Stage 1 (Auto-safe):**
+- Branches with 0 commits (empty placeholders)
+- SD mismatch + 100% superseded on main
+- These are auto-deleted with `--execute`
 
-2. **Identify "Stale" branches** (not modified in > 2 hours):
-   - These are candidates for cleanup
-   - Check if they have unmerged commits using: `git log main..<branch> --oneline`
+**Stage 2 (Analyzed + Tabled):**
+- Branches with commits that need judgment
+- Script analyzes: commits, superseded %, age, SD status
+- Outputs a table with LIKELY_SAFE or UNCERTAIN recommendations
+- LIKELY_SAFE deleted with `--execute --stage2`
 
-3. **Categorize each unmerged branch**:
-   - `ACTIVE`: Last commit < 2 hours ago (possibly parallel instance)
-   - `STALE_WITH_COMMITS`: Last commit > 2 hours, has unmerged work
-   - `STALE_EMPTY`: Last commit > 2 hours, no unique commits (safe to delete)
+**Execution commands:**
 
-**If unmerged branches exist, use AskUserQuestion to prompt:**
+```bash
+# Delete Stage 1 only (safest)
+node scripts/branch-cleanup-v2.js --repo EHG --execute
 
-Present the user with a summary like:
-```
-Found X unmerged branches:
+# Delete Stage 1 + LIKELY_SAFE from Stage 2
+node scripts/branch-cleanup-v2.js --repo EHG --execute --stage2
 
-⚠️ POSSIBLY ACTIVE (may be parallel Claude Code instance):
-  - feature/xyz (modified 45 minutes ago) - 3 commits ahead
-
-📦 STALE WITH WORK (has unmerged commits):
-  - feature/abc (modified 3 days ago) - 5 commits ahead
-
-🗑️ STALE EMPTY (safe to delete):
-  - feature/old (modified 1 week ago) - 0 commits ahead
+# Include remote deletion
+node scripts/branch-cleanup-v2.js --repo EHG --execute --stage2 --remote
 ```
 
-**Ask the user how to proceed with each category:**
+**UNCERTAIN branches are preserved** - these may have unique work worth reviewing.
 
-For ACTIVE branches:
-- Option 1: "Skip these branches (leave for parallel instance)"
-- Option 2: "Include specific branch in this ship (I know it's safe)"
+**If many branches found, show the user the summary:**
+```
+Stage 1 (safe): X branches → auto-delete
+Stage 2 (LIKELY_SAFE): Y branches → recommend delete
+Stage 2 (UNCERTAIN): Z branches → preserved
+```
 
-For STALE WITH WORK branches:
-- Option 1: "Create separate PRs for each"
-- Option 2: "Merge into current branch and ship together"
-- Option 3: "Delete without merging (abandon work)"
-- Option 4: "Skip for now"
-
-For STALE EMPTY branches:
-- Option 1: "Delete all empty stale branches"
-- Option 2: "Keep them"
-
-**Handle the user's choices before proceeding to Step 1.**
+**Then proceed to Step 1.**
 
 ---
 
@@ -124,49 +95,58 @@ Options:
 
 ## Example Flow
 
-### Example 1: With Unmerged Branches Detected
+### Example 1: With Branches Detected
 
 ```bash
-# Step 0: Quick check for unmerged branches
-git branch --no-merged main
+# Step 0: Run two-stage cleanup
+node scripts/branch-cleanup-v2.js --repo EHG
+
 # Output:
-#   feature/old-experiment
-#   fix/parallel-work
-
-# ASK USER: "Found 2 unmerged branch(es). Would you like me to do a deeper analysis?"
-# User chooses: "Yes, analyze branches"
-
-# Run detailed analysis
-git for-each-ref --sort=-committerdate --format='%(refname:short) %(committerdate:relative) %(committerdate:iso8601)' refs/heads/
-# Output:
-#   fix/parallel-work 30 minutes ago 2026-01-05T14:30:00-05:00
-#   feature/old-experiment 5 days ago 2025-12-31T10:00:00-05:00
-#   main 2 hours ago 2026-01-05T12:00:00-05:00
-
-# Check commits ahead for stale branches
-git log main..feature/old-experiment --oneline
-# Output: 3 commits
-
-# Present categorized summary to user via AskUserQuestion:
-# ⚠️ POSSIBLY ACTIVE: fix/parallel-work (30 min ago) - likely parallel instance
-# 📦 STALE WITH WORK: feature/old-experiment (5 days ago) - 3 commits ahead
+# ════════════════════════════════════════════════════════════
+# 📊 ANALYSIS RESULTS
+# ════════════════════════════════════════════════════════════
 #
-# User chooses: Skip active branch, create separate PR for old-experiment
+# ✅ STAGE 1: Safe to Delete (45 branches)
+#    • docs/SD-DOCS-001-api-documentation... - Empty placeholder (0 commits)
+#    • feat/SD-UAT-002-testing... - SD mismatch + 100% superseded
+#    ... and 43 more
+#
+# ⚠️  STAGE 2: Needs Review (12 branches)
+#    • feat/SD-ARTIFACT-001... - 26 commits (20% superseded)
+#    ... and 11 more
+#
+# 📋 STAGE 2 ANALYSIS TABLE
+# ┌──────────────────────────────────────────────────┬────────┬────────────┬───────────────┬────────────┐
+# │ Branch                                           │ Commits│ Superseded │ Age (days)    │ Recommend  │
+# ├──────────────────────────────────────────────────┼────────┼────────────┼───────────────┼────────────┤
+# │ docs/SD-DOCS-ARCH-002-architecture-documentation │ 2      │ 100%       │ 17            │ LIKELY_SAFE│
+# │ feat/SD-ARTIFACT-INTEGRATION-001-artifact-panel  │ 26     │ 20%        │ 26            │ UNCERTAIN  │
+# └──────────────────────────────────────────────────┴────────┴────────────┴───────────────┴────────────┘
+#
+# 📊 Stage 2 Summary:
+#    LIKELY_SAFE: 8 branches (recommend deletion)
+#    UNCERTAIN:   4 branches (may have unique work)
+
+# User chooses to execute cleanup
+node scripts/branch-cleanup-v2.js --repo EHG --execute --stage2
+# Output: ✅ Deleted 53 branches (45 Stage 1 + 8 LIKELY_SAFE)
+# ⚠️ 4 UNCERTAIN branches preserved
+
+# Proceed to Step 1
 ```
 
-### Example 2: Standard Flow (No Issues)
+### Example 2: Standard Flow (Clean Repo)
 
 ```bash
-# Step 0: Check unmerged branches
-git branch --no-merged main
-# Output: (empty - no unmerged branches)
-# Proceed directly to Step 1
+# Step 0: Run cleanup - no branches found
+node scripts/branch-cleanup-v2.js --repo EHG
+# Output: ✅ No unmerged branches
 
 # Step 1: Check state
 git status
 git log origin/main..HEAD --oneline
 
-# Step 2: Commit if needed
+# Step 2: Commit
 git add .
 git commit -m "feat: add notification system
 
@@ -181,11 +161,9 @@ git push -u origin HEAD
 gh pr create --title "feat: add notification system" --body "## Summary
 - Added email notifications via Resend
 - Added SMS notifications via Twilio
-- Updated Claude Code hooks
 
 ## Test plan
 - [ ] Verify email notifications arrive
-- [ ] Verify hooks trigger on Stop event
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)"
 
@@ -195,27 +173,23 @@ gh pr create --title "feat: add notification system" --body "## Summary
 # Step 6: ASK USER: "PR created successfully! Do you want to merge it now?"
 # User chooses: "Yes, merge now"
 
-# Merge and sync
 gh pr merge 123 --merge --delete-branch
 git checkout main && git pull
-# Output: ✅ PR #123 merged and branch deleted. You're on main with latest changes.
+# Output: ✅ PR #123 merged and branch deleted.
 ```
 
-## Branch Cleanup Commands Reference
+## Branch Cleanup Scripts Reference
 
 ```bash
-# Delete a local branch
-git branch -d <branch-name>
+# Two-stage intelligent cleanup (recommended)
+node scripts/branch-cleanup-v2.js --repo EHG                    # Preview
+node scripts/branch-cleanup-v2.js --repo EHG --execute          # Stage 1 only
+node scripts/branch-cleanup-v2.js --repo EHG --execute --stage2 # + LIKELY_SAFE
 
-# Force delete a local branch (if unmerged)
-git branch -D <branch-name>
+# Single branch analysis
+node scripts/branch-analyze-single.js <branch-name> --repo EHG
 
-# Delete a remote branch
-git push origin --delete <branch-name>
-
-# Create PR for a specific branch
-git checkout <branch-name> && gh pr create
-
-# Merge another branch into current
-git merge <branch-name>
+# Manual deletion
+git branch -D <branch-name>              # Local
+git push origin --delete <branch-name>   # Remote
 ```

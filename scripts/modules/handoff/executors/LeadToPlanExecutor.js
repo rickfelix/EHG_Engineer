@@ -95,19 +95,22 @@ export class LeadToPlanExecutor extends BaseExecutor {
     });
 
     // LEO v4.4.1: Proactive Branch Creation Gate
-    // Creates branch EARLY (at LEAD approval) instead of reactively at PLAN-TO-EXEC
-    // This ensures branch exists before any implementation work begins
-    gates.push({
-      name: 'SD_BRANCH_PREPARATION',
-      validator: async (ctx) => {
-        console.log('\n🌿 GATE: SD Branch Preparation (Proactive Creation)');
-        console.log('-'.repeat(50));
-        return this._ensureSDBranchExists(ctx.sd);
-      },
-      required: false, // Soft gate - creates branch but doesn't block handoff
-      weight: 0.9,
-      remediation: 'Branch creation failed. Run manually: npm run sd:branch ' + (_sd?.id || '<SD-ID>')
-    });
+    // DISABLED (2026-01-09): Removed proactive branch creation at LEAD-TO-PLAN
+    // Root cause analysis found this created 192+ orphaned branches because:
+    // - SDs that never proceed to EXEC still get branches
+    // - Infrastructure SDs create branches in wrong repo (EHG vs EHG_Engineer)
+    // - Ship command already has just-in-time branch creation (Step 3)
+    //
+    // Branches are now created on-demand when /ship is invoked.
+    // See: scripts/branch-cleanup-intelligent.js for orphan cleanup.
+    //
+    // gates.push({
+    //   name: 'SD_BRANCH_PREPARATION',
+    //   validator: async (ctx) => this._ensureSDBranchExists(ctx.sd),
+    //   required: false,
+    //   weight: 0.9,
+    //   remediation: 'Branch creation failed. Run manually: npm run sd:branch ' + (_sd?.id || '<SD-ID>')
+    // });
 
     return gates;
   }
