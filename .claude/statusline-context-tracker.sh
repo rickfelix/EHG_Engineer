@@ -177,14 +177,13 @@ if [ -f "$STATE_FILE" ]; then
     LAST_ACTIVE=$(jq -r '.last_active_epoch // 0' "$STATE_FILE" 2>/dev/null || echo "0")
     CURRENT_EPOCH=$(date +%s)
 
-    # Check if any activity occurred (tokens changed)
+    # Check if any activity occurred (use cumulative totals, not per-call values)
+    # TOTAL_OUTPUT only increases when Claude generates new output
     TOKENS_CHANGED="false"
-    if [ "$OUTPUT_TOKENS" -gt "$PREV_OUTPUT" ]; then
+    if [ "$TOTAL_OUTPUT" -gt "$PREV_OUTPUT" ]; then
         TOKENS_CHANGED="true"  # Claude is generating output
-    elif [ "$INPUT_TOKENS" -gt "$PREV_INPUT" ]; then
-        TOKENS_CHANGED="true"  # Claude is processing new input
-    elif [ "$CONTEXT_USED" -gt "$PREV_CONTEXT" ]; then
-        TOKENS_CHANGED="true"  # Context grew (tool results, etc.)
+    elif [ "$TOTAL_INPUT" -gt "$PREV_INPUT" ]; then
+        TOKENS_CHANGED="true"  # New input being processed
     fi
 
     # Update last_active timestamp if activity detected
@@ -233,8 +232,8 @@ cat > "$STATE_FILE" << EOF
   "last_status": "$STATUS",
   "last_update": "$(date -Iseconds)",
   "last_update_epoch": $(date +%s),
-  "last_output_tokens": $OUTPUT_TOKENS,
-  "last_input_tokens": $INPUT_TOKENS,
+  "last_output_tokens": $TOTAL_OUTPUT,
+  "last_input_tokens": $TOTAL_INPUT,
   "last_active_epoch": $LAST_ACTIVE,
   "session_id": "$SESSION_ID",
   "compaction_detected": $COMPACTION_DETECTED,
