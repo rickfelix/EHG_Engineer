@@ -268,8 +268,8 @@ ACTIVITY_BAR+="$LABEL"
 for ((i=0; i<PADDING_RIGHT; i++)); do ACTIVITY_BAR+=" "; done
 ACTIVITY_SIGNAL="${ACTIVITY_COLOR}[${ACTIVITY_BAR}]${RESET}"
 
-# Update state file
-cat > "$STATE_FILE" << EOF
+# Update state file (atomic write to prevent race condition with set-activity-state.sh)
+cat > "${STATE_FILE}.tmp" << EOF
 {
   "last_context_used": $CONTEXT_USED,
   "last_percent": $PERCENT_USED,
@@ -286,6 +286,7 @@ cat > "$STATE_FILE" << EOF
   "activity_state": "$ACTIVITY_STATE"
 }
 EOF
+mv "${STATE_FILE}.tmp" "$STATE_FILE"
 
 # Batch logging (log every 10 seconds or on significant change)
 SHOULD_LOG="false"
