@@ -9,7 +9,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/mnt/c/_EHG/EHG_Engineer/.claude/set-activity-state.sh idle && sleep 0.5 && /mnt/c/_EHG/EHG_Engineer/.claude/notify-user.sh complete",
+            "command": "/mnt/c/_EHG/EHG_Engineer/.claude/set-activity-state.sh idle && sleep 1.5 && /mnt/c/_EHG/EHG_Engineer/.claude/notify-user.sh complete",
             "timeout": 6
           }
         ]
