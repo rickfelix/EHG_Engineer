@@ -5,6 +5,7 @@
 # Purpose: Capture accurate token usage from Claude Code status line
 #
 # Features:
+#   - Wide traffic signal bar (green=running / red=idle)
 #   - Server-authoritative token counting (via current_usage)
 #   - Cache-aware calculations (includes cache_read tokens)
 #   - Threshold alerts (WARNING @ 70%, CRITICAL @ 90%)
@@ -69,6 +70,34 @@ TOTAL_OUTPUT=$(echo "$INPUT" | jq -r '.context_window.total_output_tokens // 0')
 # Extract session info
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "unknown"')
 CWD=$(echo "$INPUT" | jq -r '.cwd // "unknown"')
+
+# Extract project name (last directory component)
+PROJECT_NAME=$(basename "$CWD" 2>/dev/null || echo "unknown")
+
+# Get git branch (if in a git repo)
+if [ -d "$CWD/.git" ] || git -C "$CWD" rev-parse --git-dir &>/dev/null 2>&1; then
+    GIT_BRANCH=$(git -C "$CWD" symbolic-ref --short HEAD 2>/dev/null || git -C "$CWD" describe --tags --exact-match 2>/dev/null || echo "detached")
+    # Check for uncommitted changes (dirty indicator)
+    if ! git -C "$CWD" diff --quiet 2>/dev/null || ! git -C "$CWD" diff --cached --quiet 2>/dev/null; then
+        GIT_DIRTY="*"
+    else
+        GIT_DIRTY=""
+    fi
+else
+    GIT_BRANCH=""
+    GIT_DIRTY=""
+fi
+
+# Abbreviate model name
+case "$MODEL" in
+    *"Opus"*"4.5"*) MODEL_SHORT="O4.5" ;;
+    *"Opus"*"4"*) MODEL_SHORT="O4" ;;
+    *"Sonnet"*"4"*) MODEL_SHORT="S4" ;;
+    *"Sonnet"*"3.5"*) MODEL_SHORT="S3.5" ;;
+    *"Haiku"*"3.5"*) MODEL_SHORT="H3.5" ;;
+    *"Haiku"*) MODEL_SHORT="H" ;;
+    *) MODEL_SHORT=$(echo "$MODEL" | cut -c1-4) ;;
+esac
 
 # Calculate accurate context usage (research formula)
 # CONTEXT_USED = input_tokens + cache_creation_input_tokens + cache_read_input_tokens
@@ -135,6 +164,33 @@ if [ -f "$STATE_FILE" ]; then
     fi
 fi
 
+# Detect activity (is Claude actively generating?)
+# Track output token changes - if increasing, Claude is running
+ACTIVITY_STATE="idle"
+ACTIVITY_COLOR="\033[0;31m"  # Red = stopped/waiting
+if [ -f "$STATE_FILE" ]; then
+    PREV_OUTPUT=$(jq -r '.last_output_tokens // 0' "$STATE_FILE" 2>/dev/null || echo "0")
+    PREV_UPDATE=$(jq -r '.last_update_epoch // 0' "$STATE_FILE" 2>/dev/null || echo "0")
+    CURRENT_EPOCH=$(date +%s)
+    TIME_SINCE_UPDATE=$((CURRENT_EPOCH - PREV_UPDATE))
+
+    # If output tokens increased recently (within last 2 seconds), Claude is running
+    if [ "$OUTPUT_TOKENS" -gt "$PREV_OUTPUT" ] && [ "$TIME_SINCE_UPDATE" -le 2 ]; then
+        ACTIVITY_STATE="running"
+        ACTIVITY_COLOR="\033[0;32m"  # Green = running
+    elif [ "$TIME_SINCE_UPDATE" -le 1 ]; then
+        # Just updated, might still be running
+        ACTIVITY_STATE="running"
+        ACTIVITY_COLOR="\033[0;32m"
+    fi
+fi
+
+# Build activity signal bar (same width as progress bar for visibility)
+BAR_WIDTH=20
+ACTIVITY_BAR=""
+for ((i=0; i<BAR_WIDTH; i++)); do ACTIVITY_BAR+="█"; done
+ACTIVITY_SIGNAL="${ACTIVITY_COLOR}[${ACTIVITY_BAR}]${RESET}"
+
 # Update state file
 cat > "$STATE_FILE" << EOF
 {
@@ -142,8 +198,11 @@ cat > "$STATE_FILE" << EOF
   "last_percent": $PERCENT_USED,
   "last_status": "$STATUS",
   "last_update": "$(date -Iseconds)",
+  "last_update_epoch": $(date +%s),
+  "last_output_tokens": $OUTPUT_TOKENS,
   "session_id": "$SESSION_ID",
-  "compaction_detected": $COMPACTION_DETECTED
+  "compaction_detected": $COMPACTION_DETECTED,
+  "activity_state": "$ACTIVITY_STATE"
 }
 EOF
 
@@ -178,18 +237,48 @@ EOF
 fi
 
 # Format output for status line
-# Format: [Model] Context: XX% (XX,XXXt) [STATUS]
 TOKENS_FORMATTED=$(printf "%'d" $CONTEXT_USED)
 
-# Build status line
-OUTPUT="[$MODEL] ${PERCENT_USED}% (${TOKENS_FORMATTED}t)"
+# Build visual progress bar
+BAR_WIDTH=20
+FILLED=$((PERCENT_USED * BAR_WIDTH / 100))
+EMPTY=$((BAR_WIDTH - FILLED))
 
-# Add cache indicator if significant
-if [ "$CACHE_PERCENT" -gt 10 ]; then
-    OUTPUT="$OUTPUT 📦${CACHE_PERCENT}%"
+# Use different characters based on status
+if [ "$PERCENT_USED" -ge "$EMERGENCY_THRESHOLD" ]; then
+    FILL_CHAR="█"
+    EMPTY_CHAR="░"
+    BAR_COLOR="\033[1;31m"  # Bold red
+elif [ "$PERCENT_USED" -ge "$CRITICAL_THRESHOLD" ]; then
+    FILL_CHAR="█"
+    EMPTY_CHAR="░"
+    BAR_COLOR="\033[0;31m"  # Red
+elif [ "$PERCENT_USED" -ge "$WARNING_THRESHOLD" ]; then
+    FILL_CHAR="█"
+    EMPTY_CHAR="░"
+    BAR_COLOR="\033[0;33m"  # Yellow
+else
+    FILL_CHAR="█"
+    EMPTY_CHAR="░"
+    BAR_COLOR="\033[0;32m"  # Green
 fi
 
-# Add status indicator
+# Build the bar string
+BAR=""
+for ((i=0; i<FILLED; i++)); do BAR+="$FILL_CHAR"; done
+for ((i=0; i<EMPTY; i++)); do BAR+="$EMPTY_CHAR"; done
+
+# Build status line with visual bar
+# Format: [████████████████████] project:branch* [████████░░░░] 45% (O4.5)
+#         ^-- activity signal    ^-- project      ^-- context bar
+if [ -n "$GIT_BRANCH" ]; then
+    PROJECT_INFO="${PROJECT_NAME}:${GIT_BRANCH}${GIT_DIRTY}"
+else
+    PROJECT_INFO="${PROJECT_NAME}"
+fi
+OUTPUT="${ACTIVITY_SIGNAL} ${PROJECT_INFO} ${BAR_COLOR}[${BAR}]${RESET} ${PERCENT_USED}% (${MODEL_SHORT})"
+
+# Add status indicator for warnings
 if [ "$STATUS" != "HEALTHY" ]; then
     OUTPUT="$OUTPUT $ICON"
 fi
@@ -199,5 +288,5 @@ if [ "$COMPACTION_DETECTED" = "true" ]; then
     OUTPUT="$OUTPUT ♻️"
 fi
 
-# Output the status line
-echo "$OUTPUT"
+# Output the status line (with ANSI colors)
+echo -e "$OUTPUT"
