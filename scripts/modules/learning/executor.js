@@ -192,7 +192,41 @@ async function applyChecklistItemChange(improvement) {
 }
 
 /**
+ * Mark patterns as resolved when an improvement addresses them
+ */
+async function resolvePatterns(patternIds, improvementId) {
+  if (!patternIds || patternIds.length === 0) return [];
+
+  const results = [];
+  const now = new Date().toISOString();
+
+  for (const patternId of patternIds) {
+    const { error } = await supabase
+      .from('issue_patterns')
+      .update({
+        status: 'resolved',
+        resolution_date: now,
+        resolution_notes: `Addressed by improvement ${improvementId} via /learn command`
+      })
+      .eq('pattern_id', patternId);
+
+    if (error) {
+      console.error(`Failed to resolve pattern ${patternId}:`, error.message);
+      results.push({ pattern_id: patternId, success: false, error: error.message });
+    } else {
+      console.log(`✓ Resolved pattern: ${patternId}`);
+      results.push({ pattern_id: patternId, success: true });
+    }
+  }
+
+  return results;
+}
+
+/**
  * Execute approved improvements
+ * @param {Object} reviewedContext - The reviewed learning context
+ * @param {Object} decisions - User decisions: { itemId: { status, reason, resolves_patterns?: [] } }
+ * @param {string} sdId - Optional SD ID
  */
 export async function executeApprovedImprovements(reviewedContext, decisions, sdId = null) {
   console.log('\nExecuting approved improvements...\n');
@@ -202,6 +236,7 @@ export async function executeApprovedImprovements(reviewedContext, decisions, sd
 
   const executionLog = [];
   const appliedImprovements = [];
+  const resolvedPatterns = [];
   const rollbackPayload = {};
 
   // Process each decision
@@ -240,6 +275,18 @@ export async function executeApprovedImprovements(reviewedContext, decisions, sd
     if (result.success) {
       appliedImprovements.push(itemId);
       rollbackPayload[itemId] = result.rollback_data;
+
+      // Resolve linked patterns if specified in decision
+      if (decision.resolves_patterns && decision.resolves_patterns.length > 0) {
+        const patternResults = await resolvePatterns(decision.resolves_patterns, itemId);
+        resolvedPatterns.push(...patternResults.filter(r => r.success).map(r => r.pattern_id));
+        executionLog.push({
+          item_id: itemId,
+          action: 'PATTERNS_RESOLVED',
+          patterns: decision.resolves_patterns,
+          results: patternResults
+        });
+      }
     }
   }
 
@@ -275,6 +322,7 @@ export async function executeApprovedImprovements(reviewedContext, decisions, sd
     decision_id: decisionRecord.id,
     applied_count: appliedImprovements.length,
     applied_improvements: appliedImprovements,
+    resolved_patterns: resolvedPatterns,
     execution_log: executionLog,
     rollback_available: Object.keys(rollbackPayload).length > 0
   };
@@ -343,4 +391,5 @@ export async function rollbackDecision(decisionId) {
   };
 }
 
-export default { executeApprovedImprovements, rollbackDecision };
+export { resolvePatterns };
+export default { executeApprovedImprovements, rollbackDecision, resolvePatterns };

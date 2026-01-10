@@ -73,6 +73,7 @@ async function getIssuePatterns(limit = TOP_N) {
   const { data, error } = await supabase
     .from('issue_patterns')
     .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend')
+    .eq('status', 'active') // Only surface active patterns, not resolved ones
     .order('occurrence_count', { ascending: false })
     .limit(limit);
 

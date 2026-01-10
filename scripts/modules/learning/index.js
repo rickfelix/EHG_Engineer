@@ -85,6 +85,7 @@ async function applyCommand(decisionsJson, sdId = null) {
   console.log('='.repeat(60));
   console.log(`Decision ID: ${result.decision_id}`);
   console.log(`Improvements applied: ${result.applied_count}`);
+  console.log(`Patterns resolved: ${result.resolved_patterns?.length || 0}`);
   console.log(`Rollback available: ${result.rollback_available ? 'Yes' : 'No'}`);
 
   if (result.execution_log.length > 0) {
@@ -92,9 +93,14 @@ async function applyCommand(decisionsJson, sdId = null) {
     for (const entry of result.execution_log) {
       const icon = entry.action === 'APPLIED' ? '✅' :
                    entry.action === 'ACKNOWLEDGED' ? '📝' :
+                   entry.action === 'PATTERNS_RESOLVED' ? '🔒' :
                    entry.action === 'SKIPPED' ? '⏭️' : '❌';
       console.log(`  ${icon} [${entry.item_id}] ${entry.action} - ${entry.details || entry.reason || ''}`);
     }
+  }
+
+  if (result.resolved_patterns?.length > 0) {
+    console.log(`\n🔒 Resolved patterns (will not resurface): ${result.resolved_patterns.join(', ')}`);
   }
 
   if (result.applied_count > 0) {
@@ -192,15 +198,20 @@ async function main() {
         console.log('');
         console.log('Usage:');
         console.log('  node scripts/modules/learning/index.js process [--sd-id=<ID>]');
-        console.log('  node scripts/modules/learning/index.js apply --decisions=\'{"id": {"status": "APPROVED"}}\'');
+        console.log('  node scripts/modules/learning/index.js apply --decisions=\'<JSON>\'');
         console.log('  node scripts/modules/learning/index.js rollback <DECISION_ID>');
         console.log('  node scripts/modules/learning/index.js insights');
         console.log('');
         console.log('Commands:');
         console.log('  process   Query learning sources and display with Devil\'s Advocate');
-        console.log('  apply     Apply approved improvements');
+        console.log('  apply     Apply approved improvements (with optional pattern resolution)');
         console.log('  rollback  Undo a previous decision');
         console.log('  insights  Display historical learning metrics');
+        console.log('');
+        console.log('Decision JSON format:');
+        console.log('  {"ITEM_ID": {"status": "APPROVED", "resolves_patterns": ["PAT-001"]}}');
+        console.log('  - status: APPROVED or REJECTED');
+        console.log('  - resolves_patterns: (optional) pattern IDs this improvement addresses');
       }
     }
   } catch (error) {
