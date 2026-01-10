@@ -9,8 +9,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/mnt/c/_EHG/EHG_Engineer/.claude/set-activity-state.sh idle && /mnt/c/_EHG/EHG_Engineer/.claude/notify-user.sh complete",
-            "timeout": 5
+            "command": "/mnt/c/_EHG/EHG_Engineer/.claude/set-activity-state.sh idle && sleep 0.5 && /mnt/c/_EHG/EHG_Engineer/.claude/notify-user.sh complete",
+            "timeout": 6
           }
         ]
       }
@@ -27,6 +27,15 @@
       }
     ],
     "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/mnt/c/_EHG/EHG_Engineer/.claude/set-activity-state.sh running",
+            "timeout": 2
+          }
+        ]
+      },
       {
         "matcher": "Bash",
         "hooks": [
