@@ -360,13 +360,81 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
           console.log('   ✅ No open PRs found for this SD');
           console.log(`   Checked patterns: ${branchPatterns.join(', ')}`);
 
+          // Additional check: Verify no unmerged branches exist with commits
+          // This catches the case where work was done but no PR was ever created
+          const unmergedBranches = [];
+          for (const repo of repos) {
+            try {
+              // Check for remote branches matching SD pattern
+              const repoPath = repo === 'rickfelix/ehg' ? '/mnt/c/_EHG/ehg' : '/mnt/c/_EHG/EHG_Engineer';
+
+              // Get list of remote branches
+              const branchList = execSync('git branch -r', { encoding: 'utf8', cwd: repoPath, timeout: 10000 });
+
+              for (const pattern of branchPatterns) {
+                const matchingBranches = branchList.split('\n')
+                  .map(b => b.trim())
+                  .filter(b => b.toLowerCase().includes(pattern.toLowerCase()) && !b.includes('HEAD'));
+
+                for (const branch of matchingBranches) {
+                  // Check if branch has commits not in main
+                  const cleanBranch = branch.replace('origin/', '');
+                  try {
+                    const commitCount = execSync(
+                      `git rev-list --count origin/main..${branch}`,
+                      { encoding: 'utf8', cwd: repoPath, timeout: 10000 }
+                    ).trim();
+
+                    if (parseInt(commitCount) > 0) {
+                      unmergedBranches.push({
+                        branch: cleanBranch,
+                        repo: repo,
+                        commits: parseInt(commitCount)
+                      });
+                    }
+                  } catch (_e) {
+                    // Branch comparison failed - skip
+                  }
+                }
+              }
+            } catch (_repoError) {
+              // Skip repo if can't check branches
+            }
+          }
+
+          if (unmergedBranches.length > 0) {
+            console.log(`   ❌ Found ${unmergedBranches.length} unmerged branch(es) with commits:`);
+            unmergedBranches.forEach(b => {
+              console.log(`      - ${b.branch} (${b.commits} commits ahead of main)`);
+              console.log(`        Repo: ${b.repo}`);
+            });
+
+            return {
+              passed: false,
+              score: 0,
+              max_score: 100,
+              issues: [
+                `${unmergedBranches.length} unmerged branch(es) with commits - create PRs and merge before completion`,
+                ...unmergedBranches.map(b => `  → ${b.branch} (${b.commits} commits) in ${b.repo}`)
+              ],
+              warnings: [],
+              details: {
+                checkedPatterns: branchPatterns,
+                openPRs: 0,
+                unmergedBranches: unmergedBranches
+              }
+            };
+          }
+
+          console.log('   ✅ No unmerged branches with commits found');
+
           return {
             passed: true,
             score: 100,
             max_score: 100,
             issues: [],
             warnings: [],
-            details: { checkedPatterns: branchPatterns, openPRs: 0 }
+            details: { checkedPatterns: branchPatterns, openPRs: 0, unmergedBranches: 0 }
           };
 
         } catch (error) {
@@ -657,12 +725,21 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         '3. Re-run LEAD-FINAL-APPROVAL'
       ].join('\n'),
       'PR_MERGE_VERIFICATION': [
-        'All open PRs for this SD must be merged before completion:',
-        '1. Review open PRs listed above',
-        '2. Merge each PR: gh pr merge <PR-NUMBER> --repo <REPO>',
-        '3. Or close if no longer needed: gh pr close <PR-NUMBER> --repo <REPO>',
-        '4. Pull merged changes: git pull origin main',
-        '5. Re-run LEAD-FINAL-APPROVAL'
+        'All code for this SD must be merged to main before completion:',
+        '',
+        'For OPEN PRs:',
+        '1. Merge each PR: gh pr merge <PR-NUMBER> --repo <REPO> --merge --delete-branch',
+        '2. Or close if no longer needed: gh pr close <PR-NUMBER> --repo <REPO>',
+        '',
+        'For UNMERGED BRANCHES (no PR created):',
+        '1. cd to the repo with the branch',
+        '2. Push branch if not on remote: git push -u origin <branch>',
+        '3. Create PR: gh pr create --title "feat(<SD-ID>): <description>" --body "Merging SD work"',
+        '4. Merge PR: gh pr merge --merge --delete-branch',
+        '',
+        'After merging:',
+        '1. git checkout main && git pull',
+        '2. Re-run LEAD-FINAL-APPROVAL'
       ].join('\n')
     };
 
