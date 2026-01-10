@@ -1,7 +1,8 @@
 # LEO Protocol Self-Improvement System
 
 **Migration**: `20251210_retrospective_self_improvement_system.sql`
-**Status**: Ready for deployment
+**Updated**: 2026-01-10
+**Status**: Active (v2 - SD Creation Workflow)
 **Purpose**: Database-first protocol evolution through retrospective analysis
 
 ---
@@ -14,7 +15,18 @@ The Self-Improvement System enables LEO Protocol to learn from retrospectives an
 2. Improvements are extracted and queued automatically
 3. Evidence accumulates as patterns repeat
 4. High-evidence improvements are prioritized
-5. Applied improvements are tracked for effectiveness
+5. **Approved improvements create Strategic Directives** (v2 - January 2026)
+6. SD completion auto-resolves linked patterns
+
+### Key Change (v2 - January 2026)
+
+**Previous workflow**: `/learn apply` directly inserted metadata into database tables (no enforcement)
+
+**New workflow**: `/learn apply` creates Strategic Directives that go through LEAD→PLAN→EXEC for actual implementation
+
+```
+User runs /learn → Selects items → SD Created → LEO Protocol → Patterns Auto-Resolved
+```
 
 ## Key Features
 
@@ -45,10 +57,21 @@ CREATE TABLE protocol_improvement_queue (
   payload JSONB NOT NULL,          -- The actual data to apply
   description TEXT,                -- Human-readable description
   evidence_count INTEGER,          -- How many times observed
-  status TEXT,                     -- PENDING, APPROVED, APPLIED, etc.
-  effectiveness_score INTEGER      -- Post-application effectiveness (0-100)
+  status TEXT,                     -- PENDING, SD_CREATED, APPLIED, etc.
+  effectiveness_score INTEGER,     -- Post-application effectiveness (0-100)
+  -- New columns (v2 - January 2026)
+  assigned_sd_id UUID,             -- FK to strategic_directives_v2.id
+  assignment_date TIMESTAMPTZ      -- When assigned to SD
 );
 ```
+
+**Status Values (v2)**:
+- `PENDING`: Discovered in retrospectives, awaiting /learn review
+- `APPROVED`: Reviewed but not yet assigned to SD (legacy)
+- `SD_CREATED`: Assigned to an SD via /learn apply (new)
+- `APPLIED`: SD completed, improvement implemented
+- `REJECTED`: Reviewed and rejected
+- `SUPERSEDED`: Replaced by newer improvement
 
 **Database-First Enforcement**: Every improvement MUST specify `target_table` and `payload`, preventing vague "we should improve X" entries.
 
@@ -210,32 +233,42 @@ SET status = 'APPROVED',
 WHERE id = '550e8400-e29b-41d4-a716-446655440000';
 ```
 
-### Workflow 4: Applying an Improvement
+### Workflow 4: Applying an Improvement (v2 - SD Creation)
 
-```sql
--- Get payload details
-SELECT
-  target_table,
-  target_operation,
-  payload
-FROM protocol_improvement_queue
-WHERE id = '550e8400-e29b-41d4-a716-446655440000';
+**New Workflow (Default)**: `/learn apply` creates Strategic Directives instead of direct database changes.
 
--- Example payload for validation rule:
--- {
---   "rule_id": "PLAN-VAL-006",
---   "rule_name": "Database Schema Validation",
---   "phase": "PLAN",
---   "validation_query": "..."
--- }
-
--- Manually execute the change (example):
-INSERT INTO leo_validation_rules (rule_id, rule_name, phase, validation_query)
-VALUES ('PLAN-VAL-006', 'Database Schema Validation', 'PLAN', '...');
-
--- Mark as applied
-SELECT apply_protocol_improvement('550e8400-e29b-41d4-a716-446655440000');
+```bash
+# After reviewing items in /learn process:
+node scripts/modules/learning/index.js apply --decisions='{"ITEM_ID": {"status": "APPROVED"}}'
 ```
+
+**What Happens**:
+1. Classifies complexity (Quick-Fix vs Full SD using LEO classification rules)
+2. Creates SD in `strategic_directives_v2` (SD-LEARN-NNN or QF-YYYYMMDD-NNN)
+3. Tags source items with `assigned_sd_id` and `status: SD_CREATED`
+4. Displays next steps for LEO Protocol
+
+**SD Creation Example**:
+```
+Created SD-LEARN-007
+  Type: infrastructure
+  Items: 2 improvements tagged
+
+Next steps:
+  1. Run: npm run sd:next
+  2. SD-LEARN-007 will appear in queue
+  3. Follow LEAD→PLAN→EXEC workflow
+```
+
+**Legacy Workflow** (direct database apply):
+```bash
+node scripts/modules/learning/index.js apply --decisions='...' --legacy
+```
+
+**Auto-Resolution**: When SD completes via LEAD-FINAL-APPROVAL handoff:
+- Patterns → `status: 'resolved'`
+- Improvements → `status: 'APPLIED'`
+- `resolution_notes` set to "Resolved by SD-LEARN-XXX"
 
 ### Workflow 5: Measuring Effectiveness
 
@@ -499,18 +532,25 @@ Example:
 
 ### 4. Status Transitions
 
-Valid transitions:
+Valid transitions (v2):
 ```
-PENDING → APPROVED → APPLIED
+PENDING → APPROVED (legacy) → APPLIED
+PENDING → SD_CREATED → APPLIED (when SD completes)
 PENDING → REJECTED
 PENDING → SUPERSEDED
-APPROVED → SUPERSEDED
+SD_CREATED → SUPERSEDED (if SD cancelled)
+```
+
+**v2 Primary Path**:
+```
+PENDING → SD_CREATED → APPLIED
 ```
 
 Invalid transitions:
 ```
 APPLIED → PENDING (use new entry instead)
 REJECTED → APPROVED (use new entry instead)
+SD_CREATED → PENDING (reassign to different SD instead)
 ```
 
 ---
@@ -586,12 +626,16 @@ SELECT * FROM get_pre_handoff_warnings('LEAD_TO_PLAN');
 ## References
 
 - **Migration File**: `database/migrations/20251210_retrospective_self_improvement_system.sql`
+- **SD Integration Migration**: `database/migrations/20260110_learn_sd_integration.sql`
+- **Status Constraints Migration**: `database/migrations/20260110_learn_status_constraints.sql`
 - **Verification Script**: `scripts/verify-self-improvement-migration.js`
-- **Related Tables**: `retrospectives`, `issue_patterns`, `leo_validation_rules`
+- **Learning Module**: `scripts/modules/learning/index.js`, `executor.js`, `context-builder.js`
+- **Auto-Resolution Hook**: `scripts/modules/handoff/executors/LeadFinalApprovalExecutor.js`
+- **Related Tables**: `retrospectives`, `issue_patterns`, `protocol_improvement_queue`, `strategic_directives_v2`
 - **Related Scripts**: `scripts/handoff.js`, `scripts/generate-retrospective.js`
 
 ---
 
-**Last Updated**: 2025-12-10
-**Status**: Ready for deployment
+**Last Updated**: 2026-01-10
+**Status**: Active (v2 - SD Creation Workflow)
 **Next Review**: After 10 retrospectives processed

@@ -1,6 +1,6 @@
 # LEO Protocol Self-Improvement System
 
-**Generated**: 2025-12-10
+**Updated**: 2026-01-10
 **Status**: Active
 **Context Tier**: REFERENCE
 
@@ -8,14 +8,24 @@
 
 ## Overview
 
-The LEO Protocol Self-Improvement System is an evidence-based, automated mechanism for continuously improving the LEO Protocol based on learnings from completed Strategic Directives. The system creates a closed feedback loop: retrospectives identify improvements, improvements are queued and tracked, and effectiveness is measured through subsequent retrospectives.
+The LEO Protocol Self-Improvement System is an evidence-based mechanism for continuously improving the LEO Protocol based on learnings from completed Strategic Directives. The system creates a closed feedback loop: retrospectives identify improvements, improvements are queued and reviewed via `/learn`, and approved items create Strategic Directives that go through the full LEO Protocol for proper implementation.
+
+### Key Change (v2 - January 2026)
+
+**Previous workflow**: `/learn apply` directly inserted metadata into database tables (no enforcement)
+
+**New workflow**: `/learn apply` creates Strategic Directives that go through LEAD→PLAN→EXEC for actual implementation
+
+```
+User runs /learn → Selects items → SD Created → LEO Protocol → Patterns Auto-Resolved
+```
 
 ### Purpose
 
-- **Automate Protocol Evolution**: Convert retrospective learnings into protocol updates without manual intervention
+- **Enforce Implementation**: Approved improvements become SDs that require actual code/process changes
 - **Evidence-Based Changes**: All protocol improvements backed by specific SD evidence and impact data
 - **Prevent Recurring Issues**: Capture pain points and process improvements to prevent future occurrence
-- **Track Effectiveness**: Measure whether applied improvements actually solve the problems they were designed to address
+- **Track Effectiveness**: Auto-resolve patterns when SD completes, measure actual impact
 
 ### Key Benefits
 
@@ -27,7 +37,7 @@ From 74+ retrospectives analyzed:
 
 ---
 
-## Architecture Flow
+## Architecture Flow (v2)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -45,51 +55,53 @@ From 74+ retrospectives analyzed:
                          │
                          ▼
         ┌────────────────────────────────────────┐
-        │  EXTRACTION & ANALYSIS                 │
-        │  scripts/analyze-retrospectives-       │
-        │         for-protocol-improvements.mjs  │
+        │  EXTRACTION & QUEUING                  │
+        │  Trigger extracts improvements into:   │
+        │  • protocol_improvement_queue          │
+        │  • issue_patterns                      │
         └────────┬───────────────────────────────┘
                  │
                  ▼
     ┌────────────────────────────────────────────────┐
-    │  Pattern Detection                             │
-    │  • Recurring pain points (≥2 mentions)         │
-    │  • High-impact process improvements            │
-    │  • Sub-agent enhancement recommendations       │
-    │  • Testing infrastructure gaps                 │
+    │  /learn COMMAND                                │
+    │  node scripts/modules/learning/index.js        │
+    │  • Shows top patterns & improvements           │
+    │  • Devil's Advocate counter-arguments          │
+    │  • User selects items to approve               │
     └────────┬───────────────────────────────────────┘
              │
              ▼
 ┌────────────────────────────────────────────────────┐
-│  IMPROVEMENT QUEUE                                 │
-│  protocol_improvement_queue table (if exists)      │
-│  OR direct application via script                  │
-│  • priority, status, evidence_count                │
+│  SD CREATION (New in v2)                           │
+│  /learn apply creates Strategic Directive:         │
+│  • SD-LEARN-NNN (full SD) or QF-YYYYMMDD-NNN      │
+│  • Tags items with assigned_sd_id                  │
+│  • Sets status = 'SD_CREATED'                      │
 └────────┬───────────────────────────────────────────┘
          │
          ▼
 ┌────────────────────────────────────────────────────┐
-│  APPLICATION                                       │
-│  scripts/add-protocol-improvements-from-           │
-│          retrospectives.mjs                        │
-│  • Update leo_protocol_sections                   │
-│  • Add enforcement mechanisms                      │
-│  • Update handoff templates                        │
+│  LEO PROTOCOL EXECUTION                            │
+│  npm run sd:next → SD appears in queue             │
+│  • LEAD: Approve the improvement SD                │
+│  • PLAN: Create PRD with implementation details    │
+│  • EXEC: Implement actual code/process changes     │
 └────────┬───────────────────────────────────────────┘
          │
          ▼
 ┌────────────────────────────────────────────────────┐
-│  REGENERATION                                      │
-│  scripts/generate-claude-md-from-db.js             │
-│  • CLAUDE.md updated                               │
-│  • CLAUDE_LEAD/PLAN/EXEC.md updated                │
+│  AUTO-RESOLUTION (LeadFinalApprovalExecutor)       │
+│  When SD completes via LEAD-FINAL-APPROVAL:        │
+│  • Patterns set status = 'resolved'                │
+│  • Improvements set status = 'APPLIED'             │
+│  • resolution_notes = 'Resolved by SD-LEARN-XXX'   │
 └────────┬───────────────────────────────────────────┘
          │
          ▼
 ┌────────────────────────────────────────────────────┐
 │  EFFECTIVENESS TRACKING                            │
 │  • Next retrospectives measure impact              │
-│  • Pain point frequency monitored                  │
+│  • Resolved patterns won't resurface in /learn    │
 │  • Quality score trends analyzed                   │
 └────────────────────────────────────────────────────┘
 ```
@@ -148,37 +160,43 @@ From 74+ retrospectives analyzed:
 - `PROCESS_IMPROVEMENT` → Requires `protocol_improvements` array (enforced by trigger)
 - Other categories → protocol_improvements optional but recommended
 
-### 3. protocol_improvement_queue (Optional)
+### 3. protocol_improvement_queue
 
-**Status**: Proposed (not yet implemented)
-**Purpose**: Track improvement lifecycle from discovery to effectiveness measurement
+**Status**: Active (with SD integration as of January 2026)
+**Purpose**: Track improvement lifecycle from discovery to SD creation to resolution
 
-**Proposed Schema**:
+**Key Columns** (new in v2):
 ```sql
-CREATE TABLE protocol_improvement_queue (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  category TEXT NOT NULL,
-  improvement_text TEXT NOT NULL,
-  evidence_sds TEXT[] NOT NULL, -- Array of SD-XXX references
-  evidence_count INTEGER DEFAULT 1,
-  priority TEXT CHECK (priority IN ('high', 'medium', 'low')),
-  status TEXT CHECK (status IN ('pending', 'approved', 'applied', 'measuring', 'validated')),
-  affected_phase TEXT CHECK (affected_phase IN ('LEAD', 'PLAN', 'EXEC', 'ALL')),
-  target_table TEXT, -- leo_protocol_sections, leo_handoff_templates, etc.
-  target_section_id INTEGER, -- Foreign key to updated section
-  applied_at TIMESTAMPTZ,
-  effectiveness_score DECIMAL(3,2), -- 0.00-1.00 based on subsequent retrospectives
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- New columns for SD integration
+assigned_sd_id VARCHAR(50) REFERENCES strategic_directives_v2(id),
+assignment_date TIMESTAMPTZ
 ```
 
-**Lifecycle**:
-1. **pending**: Discovered in retrospectives, awaiting priority review
-2. **approved**: High-impact improvements (≥2 evidence SDs or high priority)
-3. **applied**: Protocol sections updated, changes live in CLAUDE.md
-4. **measuring**: Active for 3-5 SDs, collecting effectiveness data
-5. **validated**: Proven effective (pain point mentions reduced, quality scores improved)
+**Status Values**:
+- `PENDING`: Discovered in retrospectives, awaiting /learn review
+- `APPROVED`: Reviewed but not yet assigned to SD (legacy)
+- `SD_CREATED`: Assigned to an SD via /learn apply (new)
+- `APPLIED`: SD completed, improvement implemented
+- `REJECTED`: Reviewed and rejected
+- `SUPERSEDED`: Replaced by newer improvement
+
+**Lifecycle (v2)**:
+1. **PENDING**: Extracted from retrospectives, shown in `/learn`
+2. **SD_CREATED**: User approved via `/learn apply`, SD created
+3. **APPLIED**: SD completed via LEAD-FINAL-APPROVAL, auto-resolved
+
+### 4. issue_patterns (SD Integration)
+
+**New Columns** (added January 2026):
+```sql
+assigned_sd_id VARCHAR(50) REFERENCES strategic_directives_v2(id),
+assignment_date TIMESTAMPTZ,
+status TEXT CHECK (status IN ('active', 'assigned', 'resolved', 'obsolete'))
+```
+
+**Status Flow**:
+- `active` → `assigned` (when tagged via /learn apply)
+- `assigned` → `resolved` (when SD completes)
 
 ### 4. Helper Function: get_all_protocol_improvements()
 
@@ -546,9 +564,59 @@ ORDER BY occurrence_count DESC;
 
 ## Commands Reference
 
-### Analysis Commands
+### /learn Command (Primary Interface)
 
-**1. Analyze All Retrospectives for Patterns**
+**1. Process - Review Pending Items**
+```bash
+/learn
+# Or directly:
+node scripts/modules/learning/index.js process
+```
+
+**Output**:
+- Top 5 patterns (from issue_patterns)
+- Top 5 improvements (from protocol_improvement_queue)
+- Devil's Advocate counter-arguments for each item
+- Confidence scores with decay adjustment
+
+**Use Case**: Regular review of accumulated learnings
+
+---
+
+**2. Apply - Create SD from Approved Items**
+```bash
+node scripts/modules/learning/index.js apply --decisions='{"ITEM_ID": {"status": "APPROVED"}}'
+```
+
+**What It Does**:
+- Classifies complexity (Quick-Fix vs Full SD)
+- Creates SD in `strategic_directives_v2` (SD-LEARN-NNN or QF-YYYYMMDD-NNN)
+- Tags source items with `assigned_sd_id` and `status: SD_CREATED`
+- Displays next steps for LEO Protocol
+
+**Use Case**: After reviewing items in `/learn`, approve and create SD
+
+---
+
+**3. Insights - View Effectiveness Metrics**
+```bash
+/learn insights
+# Or directly:
+node scripts/modules/learning/index.js insights
+```
+
+**Output**:
+- Approval rates by category
+- Recurrence monitor (patterns that came back)
+- Top rejection reasons
+
+**Use Case**: Measure learning system effectiveness
+
+---
+
+### Legacy Analysis Commands
+
+**4. Analyze All Retrospectives for Patterns**
 ```bash
 node scripts/analyze-retrospectives-for-protocol-improvements.mjs
 ```
@@ -557,26 +625,8 @@ node scripts/analyze-retrospectives-for-protocol-improvements.mjs
 - Top success patterns (by frequency)
 - Top pain point categories (by frequency)
 - High-impact process improvements
-- Sub-agent enhancement recommendations
-- Testing infrastructure learnings
-- Recurring pain points (≥2 mentions)
 
-**Use Case**: Quarterly protocol review, identify what needs improvement
-
----
-
-**2. Apply Protocol Improvements from Retrospectives**
-```bash
-node scripts/add-protocol-improvements-from-retrospectives.mjs
-```
-
-**What It Does**:
-- Updates specific `leo_protocol_sections` (EXEC Dual Test, 6-Step Checklist)
-- Adds new protocol sections (Sub-Agent Auto-Trigger, User Story Mapping)
-- Updates `leo_handoff_templates` (test evidence requirements)
-- Displays success/failure summary
-
-**Use Case**: After identifying high-impact improvements, apply them to protocol
+**Use Case**: Deep analysis beyond what /learn surfaces
 
 ---
 
@@ -908,7 +958,7 @@ A: Prioritize by impact and evidence count. Test in isolation before combining. 
 
 ---
 
-**Last Updated**: 2025-12-10
+**Last Updated**: 2026-01-10
 **Related SD**: SD-LEO-LEARN-001 (Proactive Learning Integration)
 **Evidence Base**: 74+ retrospectives analyzed
-**System Status**: Active and continuously improving
+**System Status**: Active - v2 SD Creation Workflow (January 2026)

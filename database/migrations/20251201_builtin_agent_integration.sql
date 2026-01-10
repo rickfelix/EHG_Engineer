@@ -356,7 +356,7 @@ Skills provide patterns, templates, and examples. Apply them to your specific im
 **Frontend work**:
 - `component-architecture` - Component sizing, structure
 - `design-system` - Tailwind, styling conventions
-- `frontend-design` - EHG design system specifics
+- `ehg-frontend-design` - EHG design system specifics
 - `accessibility-guide` - WCAG 2.1 AA patterns
 
 **Testing work**:
