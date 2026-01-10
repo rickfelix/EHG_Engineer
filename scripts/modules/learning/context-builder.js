@@ -67,15 +67,44 @@ async function getRecentLessons(sdId = null, limit = TOP_N) {
 }
 
 /**
- * Query issue patterns sorted by occurrence count
+ * Query issue patterns with decay-adjusted confidence
+ * Uses v_patterns_with_decay view for recency-weighted ranking
  */
 async function getIssuePatterns(limit = TOP_N) {
-  const { data, error } = await supabase
-    .from('issue_patterns')
-    .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend')
-    .eq('status', 'active') // Only surface active patterns, not resolved ones
-    .order('occurrence_count', { ascending: false })
+  // Try decay view first, fall back to base table
+  let { data, error } = await supabase
+    .from('v_patterns_with_decay')
+    .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, days_since_update, decay_adjusted_confidence, recency_status')
+    .order('decay_adjusted_confidence', { ascending: false })
     .limit(limit);
+
+  // Fallback to base table if view doesn't exist yet
+  if (error && (error.message.includes('does not exist') || error.message.includes('schema cache'))) {
+    console.log('Note: Using base table (run migration for decay view)');
+    const fallback = await supabase
+      .from('issue_patterns')
+      .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, updated_at, created_at')
+      .eq('status', 'active')
+      .order('occurrence_count', { ascending: false })
+      .limit(limit);
+    data = fallback.data;
+    error = fallback.error;
+
+    // Calculate decay manually for fallback
+    if (data) {
+      data = data.map(p => {
+        const daysSince = Math.floor((Date.now() - new Date(p.updated_at || p.created_at).getTime()) / (1000 * 60 * 60 * 24));
+        const baseConfidence = 50 + (p.occurrence_count * 5);
+        const decayFactor = Math.exp(-0.023 * daysSince);
+        return {
+          ...p,
+          days_since_update: daysSince,
+          decay_adjusted_confidence: Math.round(baseConfidence * decayFactor),
+          recency_status: daysSince > 60 ? 'stale' : daysSince > 30 ? 'aging' : 'fresh'
+        };
+      });
+    }
+  }
 
   if (error) {
     console.error('Error querying issue_patterns:', error.message);
@@ -93,8 +122,48 @@ async function getIssuePatterns(limit = TOP_N) {
     proven_solutions: pattern.proven_solutions || [],
     prevention_checklist: pattern.prevention_checklist || [],
     trend: pattern.trend,
-    confidence: Math.min(100, 50 + (pattern.occurrence_count * 5))
+    days_since_update: pattern.days_since_update || 0,
+    recency_status: pattern.recency_status || 'fresh',
+    // Use decay-adjusted confidence if available, otherwise calculate
+    confidence: pattern.decay_adjusted_confidence || Math.min(100, 50 + (pattern.occurrence_count * 5)),
+    confidence_reason: pattern.recency_status === 'stale' ? 'reduced due to age (60+ days)' :
+                       pattern.recency_status === 'aging' ? 'slightly reduced due to age (30+ days)' : null
   }));
+}
+
+/**
+ * Find similar patterns using fuzzy matching
+ * Uses search_issue_patterns() function if available
+ */
+async function findSimilarPatterns(patterns) {
+  const similarityMap = {};
+  const SIMILARITY_THRESHOLD = 0.7;
+
+  for (const pattern of patterns) {
+    // Use RPC call to search_issue_patterns function
+    const { data, error } = await supabase.rpc('search_issue_patterns', {
+      query_text: pattern.content,
+      similarity_threshold: SIMILARITY_THRESHOLD,
+      result_limit: 3
+    });
+
+    if (!error && data && data.length > 1) {
+      // Filter out self and already-shown patterns
+      const similar = data
+        .filter(d => d.pattern_id !== pattern.id)
+        .filter(d => !patterns.some(p => p.id === d.pattern_id))
+        .map(d => ({
+          pattern_id: d.pattern_id,
+          similarity: Math.round(d.similarity_score * 100)
+        }));
+
+      if (similar.length > 0) {
+        similarityMap[pattern.id] = similar;
+      }
+    }
+  }
+
+  return similarityMap;
 }
 
 /**
@@ -130,7 +199,7 @@ async function getPendingImprovements(limit = TOP_N) {
 }
 
 /**
- * Build complete learning context
+ * Build complete learning context with intelligence enhancements
  */
 export async function buildLearningContext(sdId = null) {
   console.log('Building learning context...');
@@ -141,10 +210,31 @@ export async function buildLearningContext(sdId = null) {
     getPendingImprovements(TOP_N)
   ]);
 
+  // Find similar patterns (duplicate detection)
+  let similarPatterns = {};
+  try {
+    similarPatterns = await findSimilarPatterns(patterns);
+  } catch (e) {
+    // Similarity search is optional - continue without it
+    console.log('Note: Similarity search unavailable');
+  }
+
+  // Identify patterns that may be ready for resolution (decreasing trend)
+  const resolutionCandidates = patterns
+    .filter(p => p.trend === 'decreasing' || p.recency_status === 'stale')
+    .map(p => p.id);
+
   const context = {
     lessons,
     patterns,
     improvements,
+    // Intelligence metadata
+    intelligence: {
+      similar_patterns: similarPatterns,
+      resolution_candidates: resolutionCandidates,
+      stale_count: patterns.filter(p => p.recency_status === 'stale').length,
+      aging_count: patterns.filter(p => p.recency_status === 'aging').length
+    },
     summary: {
       total_lessons: lessons.length,
       total_patterns: patterns.length,
@@ -154,6 +244,10 @@ export async function buildLearningContext(sdId = null) {
   };
 
   console.log(`Found: ${lessons.length} lessons, ${patterns.length} patterns, ${improvements.length} improvements`);
+
+  if (resolutionCandidates.length > 0) {
+    console.log(`  → ${resolutionCandidates.length} pattern(s) may be ready for resolution`);
+  }
 
   return context;
 }

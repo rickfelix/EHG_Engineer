@@ -14,8 +14,17 @@
 /**
  * Generate Devil's Advocate counter-argument for a pattern
  */
-function generatePatternDA(pattern) {
+function generatePatternDA(pattern, intelligence = {}) {
   const challenges = [];
+  const suggestions = [];
+
+  // Challenge based on recency (new intelligence)
+  if (pattern.recency_status === 'stale') {
+    challenges.push(`Pattern is stale (${Math.round(pattern.days_since_update)} days old) - may no longer be relevant.`);
+    suggestions.push('Consider resolving this pattern if no longer occurring.');
+  } else if (pattern.recency_status === 'aging') {
+    challenges.push(`Pattern is aging (${Math.round(pattern.days_since_update)} days) - confidence reduced.`);
+  }
 
   // Challenge based on occurrence count
   if (pattern.occurrence_count < 3) {
@@ -23,7 +32,7 @@ function generatePatternDA(pattern) {
   }
 
   // Challenge based on severity
-  if (pattern.severity === 'LOW') {
+  if (pattern.severity === 'LOW' || pattern.severity === 'low') {
     challenges.push('Low severity - prioritizing this may distract from higher-impact issues.');
   }
 
@@ -40,6 +49,15 @@ function generatePatternDA(pattern) {
   // Challenge trend
   if (pattern.trend === 'decreasing') {
     challenges.push('Trend is decreasing - issue may be resolving naturally without intervention.');
+    suggestions.push('Consider resolving this pattern.');
+  }
+
+  // Check for similar patterns (duplicate detection)
+  const similarTo = intelligence.similar_patterns?.[pattern.id];
+  if (similarTo && similarTo.length > 0) {
+    const topSimilar = similarTo[0];
+    challenges.push(`May be duplicate of ${topSimilar.pattern_id} (${topSimilar.similarity}% similar).`);
+    suggestions.push(`Review ${topSimilar.pattern_id} for consolidation.`);
   }
 
   // Default challenge
@@ -50,7 +68,8 @@ function generatePatternDA(pattern) {
   return {
     ...pattern,
     da_counter_argument: challenges[0],
-    da_all_challenges: challenges
+    da_all_challenges: challenges,
+    da_suggestions: suggestions.length > 0 ? suggestions : null
   };
 }
 
@@ -134,14 +153,18 @@ function generateImprovementDA(improvement) {
  * Review all context items and add DA counter-arguments
  */
 export function reviewContext(context) {
+  const intelligence = context.intelligence || {};
+
   const reviewed = {
-    patterns: context.patterns.map(generatePatternDA),
+    patterns: context.patterns.map(p => generatePatternDA(p, intelligence)),
     lessons: context.lessons.map(generateLessonDA),
     improvements: context.improvements.map(generateImprovementDA),
+    intelligence: intelligence, // Pass through for display
     summary: {
       ...context.summary,
       reviewed_at: new Date().toISOString(),
-      da_mode: 'always_show' // Per triangulation consensus
+      da_mode: 'always_show', // Per triangulation consensus
+      resolution_candidates: intelligence.resolution_candidates?.length || 0
     }
   };
 
@@ -154,12 +177,39 @@ export function reviewContext(context) {
 export function formatReviewedContextForDisplay(reviewed) {
   const lines = [];
 
+  // Show intelligence summary if available
+  const intel = reviewed.intelligence || {};
+  if (intel.resolution_candidates?.length > 0 || intel.stale_count > 0) {
+    lines.push('\n## 🧠 Intelligence Summary');
+    if (intel.stale_count > 0) {
+      lines.push(`  - ${intel.stale_count} stale pattern(s) (60+ days) - consider resolving`);
+    }
+    if (intel.aging_count > 0) {
+      lines.push(`  - ${intel.aging_count} aging pattern(s) (30+ days) - confidence reduced`);
+    }
+    if (intel.resolution_candidates?.length > 0) {
+      lines.push(`  - ${intel.resolution_candidates.length} pattern(s) may be ready for resolution: ${intel.resolution_candidates.join(', ')}`);
+    }
+  }
+
   lines.push('\n## Patterns (with Devil\'s Advocate)');
   for (const p of reviewed.patterns) {
     lines.push(`\n**[${p.id}]** ${p.content}`);
     lines.push(`  - Category: ${p.category} | Severity: ${p.severity} | Occurrences: ${p.occurrence_count}`);
-    lines.push(`  - Confidence: ${p.confidence}%`);
+
+    // Show confidence with reason if decayed
+    if (p.confidence_reason) {
+      lines.push(`  - Confidence: ${p.confidence}% (${p.confidence_reason})`);
+    } else {
+      lines.push(`  - Confidence: ${p.confidence}%`);
+    }
+
     lines.push(`  - **🔴 DA:** ${p.da_counter_argument}`);
+
+    // Show suggestions if any
+    if (p.da_suggestions && p.da_suggestions.length > 0) {
+      lines.push(`  - **💡 Suggestion:** ${p.da_suggestions[0]}`);
+    }
   }
 
   lines.push('\n## Lessons (with Devil\'s Advocate)');
