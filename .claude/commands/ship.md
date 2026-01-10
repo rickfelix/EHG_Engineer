@@ -71,7 +71,95 @@ node scripts/branch-cleanup-v2.js --repo EHG --execute --stage2
 └─────────────────────────┴──────────┴──────────┴──────────┴──────────┘
 ```
 
-**Then proceed to Step 1.**
+**Then proceed to Step 0.5.**
+
+---
+
+### Step 0.5: Pre-Ship Verification (NEW)
+
+Before committing, run the preflight verification to ensure all SD work is ready for shipping.
+
+```bash
+node scripts/ship-preflight.js
+```
+
+**This verifies three things:**
+
+1. **Branch Verification** - No unmerged branches for current SD
+   - Checks for open PRs that need merging
+   - Detects branches with commits but no PR created
+
+2. **State Reconciliation** - Database SD status matches git state
+   - SD marked "completed" but branches unmerged → BLOCK
+   - SD "in_progress" but work already merged → WARN
+   - SD "in_progress" but no branch exists → WARN
+
+3. **Multi-Repo Coordination** - Related branches across repos identified
+   - Shows unified status table across EHG and EHG_Engineer
+   - Identifies coordination order (infrastructure before frontend)
+
+**Example output:**
+
+```
+═══════════════════════════════════════════════════════════
+  SHIP PREFLIGHT VERIFICATION
+═══════════════════════════════════════════════════════════
+
+  SD: SD-LEO-001
+
+📋 Pre-Ship Verification for SD-LEO-001
+═══════════════════════════════════════════════════════════
+
+✅ Branch Verification: PASS
+   No unmerged branches or open PRs found
+
+🔄 State Reconciliation
+   SD State: in_progress (EXEC)
+   Git State: 1 branch(es), all merged
+
+✅ State Reconciliation: PASS
+
+🔗 Multi-Repo Coordination
+┌──────────────────┬─────────────────────────────┬─────────┬────────┬────────┐
+│ Repository       │ Branch                      │ Commits │ PR #   │ Status │
+├──────────────────┼─────────────────────────────┼─────────┼────────┼────────┤
+│ EHG_Engineer     │ feat/SD-LEO-001-protocol    │ 0       │ -      │ Merged │
+└──────────────────┴─────────────────────────────┴─────────┴────────┴────────┘
+
+✅ Multi-Repo Coordination: PASS
+
+═══════════════════════════════════════════════════════════
+  PREFLIGHT SUMMARY
+═══════════════════════════════════════════════════════════
+
+  ✅ Branch Verification
+     No unmerged branches
+
+  ✅ State Reconciliation
+     States consistent
+
+  ✅ Multi-Repo Coordination
+     1 branch(es) coordinated
+
+----------------------------------------------------------
+  ✅ RESULT: PROCEED
+     All preflight checks passed
+```
+
+**Options:**
+
+```bash
+# Auto-create missing PRs for branches with commits
+node scripts/ship-preflight.js --create-prs
+
+# Auto-fix state mismatches (revert SD status, etc.)
+node scripts/ship-preflight.js --fix
+
+# JSON output for automation
+node scripts/ship-preflight.js --json
+```
+
+**If BLOCKED, follow the remediation steps before proceeding to Step 1.**
 
 ---
 

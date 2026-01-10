@@ -16,6 +16,9 @@
 export { ShippingContextBuilder } from './ShippingContextBuilder.js';
 export { ShippingDecisionEvaluator } from './ShippingDecisionEvaluator.js';
 export { ShippingExecutor } from './ShippingExecutor.js';
+export { ShippingPreflightVerifier } from './ShippingPreflightVerifier.js';
+export { SDGitStateReconciler } from './SDGitStateReconciler.js';
+export { MultiRepoCoordinator } from './MultiRepoCoordinator.js';
 
 /**
  * Convenience function to run automated shipping for a given decision type
@@ -92,6 +95,66 @@ export async function runFinalApprovalShipping(sdId, repoPath) {
       'LEAD-FINAL-APPROVAL',
       'BRANCH_CLEANUP'
     );
+  }
+
+  return results;
+}
+
+/**
+ * Run pre-ship verification for an SD
+ * Checks branch state, reconciles with database, and coordinates multi-repo
+ *
+ * @param {string} sdId - Strategic Directive ID
+ * @param {Object} options - Verification options
+ * @param {boolean} options.createPrs - Auto-create missing PRs
+ * @param {boolean} options.fix - Auto-fix state mismatches
+ * @param {boolean} options.verbose - Enable verbose output
+ * @returns {Promise<Object>} Verification results
+ */
+export async function runPreShipVerification(sdId, options = {}) {
+  const { ShippingPreflightVerifier } = await import('./ShippingPreflightVerifier.js');
+  const { SDGitStateReconciler } = await import('./SDGitStateReconciler.js');
+  const { MultiRepoCoordinator } = await import('./MultiRepoCoordinator.js');
+
+  const results = {
+    sdId,
+    branchVerification: null,
+    stateReconciliation: null,
+    multiRepoCoordination: null,
+    overallPassed: true,
+    hasWarnings: false
+  };
+
+  // Branch verification
+  const verifier = new ShippingPreflightVerifier(sdId, {
+    verbose: options.verbose,
+    createMissingPRs: options.createPrs
+  });
+  results.branchVerification = await verifier.verify();
+  if (!results.branchVerification.passed) {
+    results.overallPassed = false;
+  }
+
+  // State reconciliation
+  const reconciler = new SDGitStateReconciler(sdId, {
+    verbose: options.verbose,
+    autoFix: options.fix
+  });
+  results.stateReconciliation = await reconciler.reconcile();
+  if (results.stateReconciliation.mismatches?.length > 0) {
+    results.overallPassed = false;
+  } else if (results.stateReconciliation.warnings?.length > 0) {
+    results.hasWarnings = true;
+  }
+
+  // Multi-repo coordination
+  const coordinator = new MultiRepoCoordinator(sdId, {
+    verbose: options.verbose,
+    autoCreatePRs: options.createPrs
+  });
+  results.multiRepoCoordination = await coordinator.coordinate();
+  if (!results.multiRepoCoordination.passed) {
+    results.hasWarnings = true;
   }
 
   return results;
