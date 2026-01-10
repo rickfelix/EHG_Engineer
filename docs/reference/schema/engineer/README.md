@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-09T22:29:31.897Z
-**Tables**: 340
+**Generated**: 2026-01-10T01:18:40.647Z
+**Tables**: 342
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (340)
+## All Tables (342)
 
 ### LEO Protocol
 
@@ -250,6 +250,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [kr_progress_snapshots](tables/kr_progress_snapshots.md)
 - [lead_evaluations](tables/lead_evaluations.md)
 - [learning_configurations](tables/learning_configurations.md)
+- [learning_decisions](tables/learning_decisions.md)
 - [lifecycle_stage_config](tables/lifecycle_stage_config.md)
 - [llm_models](tables/llm_models.md)
 - [llm_providers](tables/llm_providers.md)
@@ -269,6 +270,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [opportunity_scores](tables/opportunity_scores.md)
 - [opportunity_sources](tables/opportunity_sources.md)
 - [orchestration_metrics](tables/orchestration_metrics.md)
+- [pattern_occurrences](tables/pattern_occurrences.md)
 - [pattern_subagent_mapping](tables/pattern_subagent_mapping.md)
 - [plan_conflict_rules](tables/plan_conflict_rules.md)
 - [plan_quality_gates](tables/plan_quality_gates.md)
