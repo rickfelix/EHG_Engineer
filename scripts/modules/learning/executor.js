@@ -145,50 +145,280 @@ async function applyProtocolSectionChange(improvement) {
 }
 
 /**
- * Apply validation rule changes
+ * Transform improvement payload to validation rule schema
+ * Payload: {impact, category, evidence, improvement, affected_phase}
+ * Target: {gate, rule_name, weight, criteria, required, active}
+ *
+ * Valid gates: '0', '1', '2A', '2B', '2C', '2D', '3', 'Q'
+ * Weight: decimal 0.0 to 1.0
+ * Criteria: JSONB object
  */
-async function applyValidationRuleChange(improvement) {
-  // Validation rules are typically stored in leo_protocol_sections or handoff configs
-  const { payload } = improvement;
+function transformToValidationRule(improvement) {
+  const { payload, description } = improvement;
 
-  // For now, log the change - actual implementation depends on rule structure
-  console.log('Validation rule change:', payload);
+  // Map phase/category to gate number
+  // Gates: 0=baseline, 1=exploration, 2A-D=validation stages, 3=completion, Q=quality
+  const gateMap = {
+    'LEAD': '1',
+    'PLAN': '2A',
+    'EXEC': '2B',
+    'handoff': '2C',
+    'HANDOFF_ENFORCEMENT': '2C',
+    'validation': '2D',
+    'quality': 'Q',
+    'completion': '3'
+  };
+  const gate = gateMap[payload.affected_phase] ||
+               gateMap[payload.category] ||
+               '2C'; // Default to validation stage
 
-  return `Validation rule registered: ${payload.rule_name || improvement.title}`;
+  // Generate rule name from description (first 50 chars, snake_case)
+  const ruleName = (description || payload.improvement || 'unnamed_rule')
+    .substring(0, 50)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+
+  // Weight as decimal (0.0 to 1.0) based on impact
+  const impactWeights = { 'critical': 0.95, 'high': 0.75, 'medium': 0.50, 'low': 0.25 };
+  const impactKey = payload.impact ? payload.impact.toLowerCase() : '';
+  const weight = impactWeights[impactKey] || 0.50;
+
+  // Criteria as JSONB object
+  const criteria = {
+    description: payload.improvement || description,
+    evidence: payload.evidence,
+    category: payload.category,
+    source: 'learn_command'
+  };
+
+  return {
+    gate,
+    rule_name: ruleName,
+    weight,
+    criteria,
+    required: payload.impact === 'critical',
+    active: true
+  };
 }
 
 /**
- * Apply sub-agent config changes
+ * Apply validation rule changes - actually inserts into leo_validation_rules
  */
-async function applySubAgentConfigChange(improvement) {
+async function applyValidationRuleChange(improvement) {
   const { payload } = improvement;
 
-  if (!payload.sub_agent_code) {
-    throw new Error('Missing sub_agent_code in payload');
+  // Validate required fields exist
+  if (!payload || (!payload.improvement && !improvement.description)) {
+    throw new Error('Missing improvement content in payload - cannot create validation rule');
+  }
+
+  // Transform payload to target schema
+  const ruleData = transformToValidationRule(improvement);
+
+  console.log('Transforming validation rule:', {
+    from: Object.keys(payload),
+    to: Object.keys(ruleData),
+    gate: ruleData.gate,
+    rule_name: ruleData.rule_name
+  });
+
+  // Insert into leo_validation_rules
+  const { data, error } = await supabase
+    .from('leo_validation_rules')
+    .insert(ruleData)
+    .select('id, gate, rule_name')
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to insert validation rule: ${error.message}`);
+  }
+
+  return `Inserted validation rule: ${data.rule_name} (gate: ${data.gate}, id: ${data.id})`;
+}
+
+/**
+ * Extract sub-agent code from improvement description
+ * Looks for patterns like "TESTING sub-agent", "DATABASE agent", etc.
+ */
+function extractSubAgentCode(improvement) {
+  const { description, payload } = improvement;
+  const text = description || payload?.improvement || '';
+
+  // Known sub-agent codes
+  const subAgentCodes = [
+    'TESTING', 'DATABASE', 'SECURITY', 'DESIGN', 'GITHUB', 'DOCMON',
+    'PERFORMANCE', 'REGRESSION', 'VALIDATION', 'UAT', 'RISK', 'RETRO',
+    'STORIES', 'API', 'DEPENDENCY', 'RCA', 'ANALYTICS', 'CRM', 'FINANCIAL',
+    'LAUNCH', 'MARKETING', 'MONITORING', 'PRICING', 'SALES', 'VALUATION'
+  ];
+
+  // Try to find sub-agent code in text
+  const upperText = text.toUpperCase();
+  for (const code of subAgentCodes) {
+    if (upperText.includes(code)) {
+      return code;
+    }
+  }
+
+  // If no match, check for "sub-agent" or "subagent" pattern
+  const match = text.match(/(\w+)\s*[-_]?\s*(?:sub[-_]?agent|agent)/i);
+  if (match) {
+    return match[1].toUpperCase();
+  }
+
+  return null;
+}
+
+/**
+ * Apply sub-agent config changes - updates leo_sub_agents with improved metadata
+ */
+async function applySubAgentConfigChange(improvement) {
+  const { payload, description } = improvement;
+
+  // Try to get sub_agent_code from payload or extract from description
+  let subAgentCode = payload?.sub_agent_code || extractSubAgentCode(improvement);
+
+  if (!subAgentCode) {
+    throw new Error('Cannot determine sub_agent_code from improvement. Include sub-agent name in description (e.g., "TESTING sub-agent")');
+  }
+
+  console.log('Updating sub-agent config:', {
+    code: subAgentCode,
+    improvement: (payload?.improvement || description)?.substring(0, 50)
+  });
+
+  // Check if sub-agent exists
+  const { data: existing, error: checkError } = await supabase
+    .from('leo_sub_agents')
+    .select('id, code, metadata')
+    .eq('code', subAgentCode)
+    .single();
+
+  if (checkError || !existing) {
+    throw new Error(`Sub-agent not found: ${subAgentCode}`);
+  }
+
+  // Build update payload - add improvement to metadata.improvements array
+  const currentMetadata = existing.metadata || {};
+  const improvements = currentMetadata.improvements || [];
+  improvements.push({
+    applied_at: new Date().toISOString(),
+    improvement: payload?.improvement || description,
+    source: 'learn_command'
+  });
+
+  const updateData = {
+    metadata: {
+      ...currentMetadata,
+      improvements,
+      last_improved_at: new Date().toISOString()
+    }
+  };
+
+  // If there's a description update, apply it
+  if (payload?.description) {
+    updateData.description = payload.description;
   }
 
   const { error } = await supabase
     .from('leo_sub_agents')
-    .update(payload)
-    .eq('code', payload.sub_agent_code);
+    .update(updateData)
+    .eq('code', subAgentCode);
 
   if (error) {
     throw new Error(`Failed to update sub-agent: ${error.message}`);
   }
 
-  return `Updated sub-agent config: ${payload.sub_agent_code}`;
+  return `Updated sub-agent config: ${subAgentCode} (added improvement to metadata)`;
 }
 
 /**
- * Apply checklist item changes
+ * Determine target table and section for checklist item
+ */
+function determineChecklistTarget(improvement) {
+  const { payload, description, target_phase } = improvement;
+  const text = (description || payload?.improvement || '').toLowerCase();
+
+  // Determine section based on content
+  if (text.includes('prd') || text.includes('requirement')) {
+    return { section_type: 'prd_checklist', protocol_id: 'leo-v4-3-3-ui-parity' };
+  }
+  if (text.includes('handoff') || text.includes('transition')) {
+    return { section_type: 'handoff_checklist', protocol_id: 'leo-v4-3-3-ui-parity' };
+  }
+  if (text.includes('exec') || text.includes('implementation')) {
+    return { section_type: 'exec_checklist', protocol_id: 'leo-v4-3-3-ui-parity' };
+  }
+  if (text.includes('lead') || text.includes('approval')) {
+    return { section_type: 'lead_checklist', protocol_id: 'leo-v4-3-3-ui-parity' };
+  }
+  if (text.includes('plan') || text.includes('design')) {
+    return { section_type: 'plan_checklist', protocol_id: 'leo-v4-3-3-ui-parity' };
+  }
+
+  // Default to general checklist
+  return { section_type: 'general_checklist', protocol_id: 'leo-v4-3-3-ui-parity' };
+}
+
+/**
+ * Apply checklist item changes - inserts into leo_protocol_sections as checklist entries
  */
 async function applyChecklistItemChange(improvement) {
-  // Checklist items are typically in PRD templates or handoff configs
-  const { payload } = improvement;
+  const { payload, description } = improvement;
 
-  console.log('Checklist item change:', payload);
+  // Validate required content
+  const checklistText = payload?.checklist_text || payload?.improvement || description;
+  if (!checklistText) {
+    throw new Error('Missing checklist text in payload - cannot create checklist item');
+  }
 
-  return `Checklist item registered: ${payload.checklist_text || improvement.title}`;
+  // Determine where to store this checklist item
+  const target = determineChecklistTarget(improvement);
+
+  console.log('Adding checklist item:', {
+    section_type: target.section_type,
+    text: checklistText.substring(0, 50)
+  });
+
+  // Get the next order_index for this section type
+  const { data: existingItems } = await supabase
+    .from('leo_protocol_sections')
+    .select('order_index')
+    .eq('protocol_id', target.protocol_id)
+    .eq('section_type', target.section_type)
+    .order('order_index', { ascending: false })
+    .limit(1);
+
+  const nextOrderIndex = (existingItems?.[0]?.order_index || 0) + 1;
+
+  // Insert the checklist item as a protocol section
+  const sectionData = {
+    protocol_id: target.protocol_id,
+    section_type: target.section_type,
+    title: `Checklist Item ${nextOrderIndex}`,
+    content: checklistText,
+    order_index: nextOrderIndex,
+    metadata: {
+      source: 'learn_command',
+      added_at: new Date().toISOString(),
+      improvement_id: improvement.id,
+      impact: payload?.impact,
+      category: payload?.category
+    }
+  };
+
+  const { data, error } = await supabase
+    .from('leo_protocol_sections')
+    .insert(sectionData)
+    .select('id, section_type, order_index')
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to insert checklist item: ${error.message}`);
+  }
+
+  return `Inserted checklist item: ${target.section_type} #${data.order_index} (id: ${data.id})`;
 }
 
 /**
