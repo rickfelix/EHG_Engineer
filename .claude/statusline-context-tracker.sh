@@ -8,9 +8,17 @@
 #   - Wide traffic signal bar (green=running / red=idle)
 #   - Server-authoritative token counting (via current_usage)
 #   - Cache-aware calculations (includes cache_read tokens)
-#   - Threshold alerts (WARNING @ 70%, CRITICAL @ 90%)
+#   - USABLE context percentage (accounts for 45K auto-compact buffer)
+#   - Threshold alerts (WARNING @ 60%, CRITICAL @ 80%, EMERGENCY @ 95%)
 #   - Batched logging to JSONL file
 #   - Compaction detection (non-monotonic usage)
+#
+# Context Calculation (v2.0 - Jan 2026):
+#   - Claude Code reserves ~45K tokens as buffer for auto-compact process
+#   - Auto-compact triggers at 80% of raw context (per v2.0.64+)
+#   - This script shows % of USABLE context (200K - 45K = 155K)
+#   - When display shows 100%, auto-compact is imminent
+#   - Raw % is logged for debugging but not displayed
 #
 # Installation:
 #   1. chmod +x ~/.claude/statusline-context-tracker.sh
@@ -21,6 +29,7 @@
 #      }
 #
 # Based on research: Token Accounting & Memory Utilization (Dec 2025)
+# Updated: Jan 2026 - Fixed percentage to show usable context
 # ============================================================================
 
 set -euo pipefail
@@ -31,11 +40,18 @@ USAGE_LOG="${LOG_DIR}/context-usage.jsonl"
 STATE_FILE="${LOG_DIR}/.context-state.json"
 MAX_LOG_SIZE=5242880  # 5MB rotation threshold
 
-# Thresholds (based on research recommendations)
+# Thresholds (based on Claude Code v2.0.64+ behavior)
+# Auto-compact triggers at 80% of context window (160K for 200K window)
+# Claude reserves ~40-45K tokens as buffer for compaction process
 CONTEXT_WINDOW=200000
-WARNING_THRESHOLD=70   # 70% - consider compaction
-CRITICAL_THRESHOLD=90  # 90% - must compact before handoff
-EMERGENCY_THRESHOLD=95 # 95% - blocked
+AUTOCOMPACT_BUFFER=45000  # Reserved by Claude Code for compaction
+AUTOCOMPACT_TRIGGER=80    # % at which auto-compact triggers (v2.0.64+)
+
+# Display thresholds based on USABLE context (after buffer)
+# Usable = CONTEXT_WINDOW - AUTOCOMPACT_BUFFER = ~155K
+WARNING_THRESHOLD=60   # 60% of usable = ~93K (safe zone ending)
+CRITICAL_THRESHOLD=80  # 80% of usable = ~124K (compact soon)
+EMERGENCY_THRESHOLD=95 # 95% of usable = ~147K (auto-compact imminent)
 
 # Ensure log directory exists
 mkdir -p "$LOG_DIR"
@@ -115,7 +131,25 @@ if [ "$CURRENT_USAGE" != "null" ]; then
 
     # The accurate context usage calculation
     CONTEXT_USED=$((INPUT_TOKENS + CACHE_CREATION + CACHE_READ))
-    PERCENT_USED=$((CONTEXT_USED * 100 / CONTEXT_SIZE))
+
+    # Calculate USABLE context (total minus auto-compact buffer)
+    # This gives accurate "% until compaction" rather than misleading raw %
+    USABLE_CONTEXT=$((CONTEXT_SIZE - AUTOCOMPACT_BUFFER))
+    if [ "$USABLE_CONTEXT" -le 0 ]; then
+        USABLE_CONTEXT=$CONTEXT_SIZE  # Fallback if buffer > context
+    fi
+
+    # Primary display: percentage of USABLE context
+    # This reflects reality: 100% usable = auto-compact triggers
+    PERCENT_USED=$((CONTEXT_USED * 100 / USABLE_CONTEXT))
+
+    # Cap at 100% for display (can exceed during edge cases)
+    if [ "$PERCENT_USED" -gt 100 ]; then
+        PERCENT_USED=100
+    fi
+
+    # Also track raw percentage for logging/debugging
+    RAW_PERCENT=$((CONTEXT_USED * 100 / CONTEXT_SIZE))
 
     # Cache efficiency metric
     CACHE_TOTAL=$((CACHE_CREATION + CACHE_READ))
@@ -131,6 +165,8 @@ else
     CACHE_READ=0
     CONTEXT_USED=0
     PERCENT_USED=0
+    RAW_PERCENT=0
+    USABLE_CONTEXT=$((CONTEXT_SIZE - AUTOCOMPACT_BUFFER))
     CACHE_PERCENT=0
 fi
 
@@ -237,6 +273,8 @@ cat > "$STATE_FILE" << EOF
 {
   "last_context_used": $CONTEXT_USED,
   "last_percent": $PERCENT_USED,
+  "last_raw_percent": $RAW_PERCENT,
+  "usable_context": $USABLE_CONTEXT,
   "last_status": "$STATUS",
   "last_update": "$(date -Iseconds)",
   "last_update_epoch": $(date +%s),
@@ -268,9 +306,9 @@ if [ "$SHOULD_LOG" = "true" ]; then
         mv "$USAGE_LOG" "${USAGE_LOG}.$(date +%Y%m%d-%H%M%S).bak"
     fi
 
-    # Append to JSONL log
+    # Append to JSONL log (includes both usable % and raw % for analysis)
     LOG_ENTRY=$(cat << EOF
-{"ts":"$(date -Iseconds)","session":"$SESSION_ID","model":"$MODEL_ID","context_used":$CONTEXT_USED,"context_size":$CONTEXT_SIZE,"percent":$PERCENT_USED,"input":$INPUT_TOKENS,"output":$OUTPUT_TOKENS,"cache_create":$CACHE_CREATION,"cache_read":$CACHE_READ,"status":"$STATUS","compaction":$COMPACTION_DETECTED,"cwd":"$CWD"}
+{"ts":"$(date -Iseconds)","session":"$SESSION_ID","model":"$MODEL_ID","context_used":$CONTEXT_USED,"context_size":$CONTEXT_SIZE,"usable_context":$USABLE_CONTEXT,"percent":$PERCENT_USED,"raw_percent":$RAW_PERCENT,"input":$INPUT_TOKENS,"output":$OUTPUT_TOKENS,"cache_create":$CACHE_CREATION,"cache_read":$CACHE_READ,"status":"$STATUS","compaction":$COMPACTION_DETECTED,"cwd":"$CWD"}
 EOF
 )
     echo "$LOG_ENTRY" >> "$USAGE_LOG"
