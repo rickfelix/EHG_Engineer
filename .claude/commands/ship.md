@@ -112,6 +112,20 @@ Options:
 2. Run `git checkout main && git pull` to sync local
 3. Confirm: "✅ PR #X merged and branch deleted. You're on main with latest changes."
 
+### Step 7: Suggest /learn (After Successful Merge)
+
+**After a successful merge, display this minimal prompt:**
+
+```
+💡 Run /learn to capture learnings from this session?
+```
+
+This is a non-blocking suggestion. The user can:
+- Run `/learn` to surface and apply protocol improvements
+- Dismiss and continue working
+
+**Why:** The `/learn` command benefits from fresh context after completing work. Suggesting it after `/ship` helps capture learnings while the session is still in memory.
+
 ---
 
 ## Example Flow
