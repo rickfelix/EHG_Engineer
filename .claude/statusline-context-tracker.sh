@@ -165,42 +165,50 @@ if [ -f "$STATE_FILE" ]; then
 fi
 
 # Detect activity (is Claude actively working?)
-# Track multiple signals: output tokens, input tokens, and context changes
+# Priority: 1) Hook-triggered state (instant), 2) Token change detection (fallback)
 ACTIVITY_STATE="idle"
 ACTIVITY_COLOR="\033[97;41m"  # White text on red background = your turn
-IDLE_THRESHOLD=4  # Seconds of no activity before showing red
+IDLE_THRESHOLD=4  # Seconds of no activity before showing red (fallback)
 
 if [ -f "$STATE_FILE" ]; then
+    # Check if state was set by hook (instant, accurate)
+    HOOK_TRIGGERED=$(jq -r '.hook_triggered // false' "$STATE_FILE" 2>/dev/null || echo "false")
+    HOOK_STATE=$(jq -r '.activity_state // "idle"' "$STATE_FILE" 2>/dev/null || echo "idle")
+
     PREV_OUTPUT=$(jq -r '.last_output_tokens // 0' "$STATE_FILE" 2>/dev/null || echo "0")
     PREV_INPUT=$(jq -r '.last_input_tokens // 0' "$STATE_FILE" 2>/dev/null || echo "0")
-    PREV_CONTEXT=$(jq -r '.last_context_used // 0' "$STATE_FILE" 2>/dev/null || echo "0")
     LAST_ACTIVE=$(jq -r '.last_active_epoch // 0' "$STATE_FILE" 2>/dev/null || echo "0")
     CURRENT_EPOCH=$(date +%s)
 
-    # Check if any activity occurred (use cumulative totals, not per-call values)
-    # TOTAL_OUTPUT only increases when Claude generates new output
-    TOKENS_CHANGED="false"
-    if [ "$TOTAL_OUTPUT" -gt "$PREV_OUTPUT" ]; then
-        TOKENS_CHANGED="true"  # Claude is generating output
-    elif [ "$TOTAL_INPUT" -gt "$PREV_INPUT" ]; then
-        TOKENS_CHANGED="true"  # New input being processed
-    fi
+    # If hook set the state, trust it immediately
+    if [ "$HOOK_TRIGGERED" = "true" ]; then
+        ACTIVITY_STATE="$HOOK_STATE"
+        if [ "$ACTIVITY_STATE" = "running" ]; then
+            ACTIVITY_COLOR="\033[97;42m"  # White text on green background
+        fi
+    else
+        # Fallback: detect from token changes
+        TOKENS_CHANGED="false"
+        if [ "$TOTAL_OUTPUT" -gt "$PREV_OUTPUT" ]; then
+            TOKENS_CHANGED="true"
+        elif [ "$TOTAL_INPUT" -gt "$PREV_INPUT" ]; then
+            TOKENS_CHANGED="true"
+        fi
 
-    # Update last_active timestamp if activity detected
-    if [ "$TOKENS_CHANGED" = "true" ]; then
-        LAST_ACTIVE=$CURRENT_EPOCH
-    fi
+        if [ "$TOKENS_CHANGED" = "true" ]; then
+            LAST_ACTIVE=$CURRENT_EPOCH
+        fi
 
-    # Show green if activity within threshold
-    TIME_SINCE_ACTIVE=$((CURRENT_EPOCH - LAST_ACTIVE))
-    if [ "$TIME_SINCE_ACTIVE" -le "$IDLE_THRESHOLD" ]; then
-        ACTIVITY_STATE="running"
-        ACTIVITY_COLOR="\033[97;42m"  # White text on green background = working
+        TIME_SINCE_ACTIVE=$((CURRENT_EPOCH - LAST_ACTIVE))
+        if [ "$TIME_SINCE_ACTIVE" -le "$IDLE_THRESHOLD" ]; then
+            ACTIVITY_STATE="running"
+            ACTIVITY_COLOR="\033[97;42m"  # White text on green background
+        fi
     fi
 else
     # First run - assume active (Claude just started)
     ACTIVITY_STATE="running"
-    ACTIVITY_COLOR="\033[97;42m"  # White text on green background = working
+    ACTIVITY_COLOR="\033[97;42m"  # White text on green background
     LAST_ACTIVE=$(date +%s)
 fi
 

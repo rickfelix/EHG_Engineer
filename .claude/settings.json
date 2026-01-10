@@ -4,6 +4,28 @@
     "command": "/mnt/c/_EHG/EHG_Engineer/.claude/statusline-context-tracker.sh"
   },
   "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/mnt/c/_EHG/EHG_Engineer/.claude/set-activity-state.sh idle",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/mnt/c/_EHG/EHG_Engineer/.claude/set-activity-state.sh running",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
