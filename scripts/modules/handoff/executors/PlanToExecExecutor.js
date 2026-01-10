@@ -151,6 +151,113 @@ export class PlanToExecExecutor extends BaseExecutor {
     });
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // GATE_PRD_EXISTS: PRD Existence Check (SD-LEARN-008 Fix)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Problem: EXEC phase could proceed without a proper PRD, leading to
+    // undocumented implementations and validation gaps.
+    //
+    // Fix: Block PLAN-TO-EXEC if no PRD exists for this SD. PRD must be:
+    //   - Present in product_requirements_v2 table
+    //   - Status must be 'approved' or 'ready_for_exec' (not 'draft' or 'planning')
+    // ═══════════════════════════════════════════════════════════════════════════
+    gates.push({
+      name: 'GATE_PRD_EXISTS',
+      validator: async (ctx) => {
+        console.log('\n📋 GATE: PRD Existence Check');
+        console.log('-'.repeat(50));
+        console.log('   Reference: SD-LEARN-008 (prevent undocumented EXEC)');
+
+        try {
+          // Get PRD for this SD
+          const sdUuid = ctx.sd?.id || ctx.sdId;
+          const prd = await this.prdRepo?.getBySdId(sdUuid);
+
+          if (!prd) {
+            console.log('   ❌ No PRD found for this SD');
+            console.log('');
+            console.log('   PLAN-TO-EXEC requires a PRD to ensure:');
+            console.log('   • Requirements are documented');
+            console.log('   • Acceptance criteria exist');
+            console.log('   • Implementation can be validated');
+
+            return {
+              passed: false,
+              score: 0,
+              max_score: 100,
+              issues: [
+                'BLOCKING: No PRD found for this SD',
+                'PRD is mandatory before EXEC phase can begin'
+              ],
+              warnings: [],
+              remediation: [
+                'Create a PRD for this SD using:',
+                '  node scripts/create-prd-template.js <SD-ID>',
+                'Or use the PRD creation wizard in the UI',
+                'Ensure PRD status is set to "approved" before retrying'
+              ].join('\n')
+            };
+          }
+
+          // Check PRD status
+          const validStatuses = ['approved', 'ready_for_exec', 'in_progress'];
+          if (!validStatuses.includes(prd.status)) {
+            console.log(`   ⚠️  PRD exists but status is '${prd.status}'`);
+            console.log('   ❌ PRD must be approved before EXEC phase');
+
+            return {
+              passed: false,
+              score: 0,
+              max_score: 100,
+              issues: [
+                `BLOCKING: PRD status is '${prd.status}', expected one of: ${validStatuses.join(', ')}`,
+                'PRD must be approved before implementation can begin'
+              ],
+              warnings: [],
+              remediation: [
+                `Update PRD status from '${prd.status}' to 'approved'`,
+                'Complete any required PRD review steps',
+                'Then retry this handoff'
+              ].join('\n')
+            };
+          }
+
+          console.log('   ✅ PRD exists and is approved');
+          console.log(`      PRD ID: ${prd.id}`);
+          console.log(`      Title: ${prd.title}`);
+          console.log(`      Status: ${prd.status}`);
+
+          // Store PRD for later gates
+          ctx._prd = prd;
+
+          return {
+            passed: true,
+            score: 100,
+            max_score: 100,
+            issues: [],
+            warnings: [],
+            details: {
+              prd_id: prd.id,
+              prd_title: prd.title,
+              prd_status: prd.status
+            }
+          };
+
+        } catch (error) {
+          console.log(`   ⚠️  PRD check error: ${error.message}`);
+          return {
+            passed: false,
+            score: 0,
+            max_score: 100,
+            issues: [`PRD check failed: ${error.message}`],
+            warnings: [],
+            remediation: 'Check database connectivity and PRD table access'
+          };
+        }
+      },
+      required: true
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // CATASTROPHIC PREVENTION: Architecture Verification (SD-BACKEND-002A Lesson)
     // ═══════════════════════════════════════════════════════════════════════════
     // Problem: EXEC phase started implementing Next.js API routes in a Vite SPA,

@@ -214,6 +214,130 @@ export async function checkExistingAssignments(items) {
 }
 
 /**
+ * Build success_metrics from selected items
+ * @param {Array} items - Selected patterns and improvements
+ * @returns {Array} success_metrics array
+ */
+export function buildSuccessMetrics(items) {
+  const metrics = [];
+
+  for (const item of items) {
+    if (item.pattern_id) {
+      // Pattern - metric is to eliminate recurrence
+      metrics.push({
+        metric: `${item.pattern_id} recurrence rate`,
+        target: '0 occurrences after implementation',
+        actual: `${item.occurrence_count || 1} occurrences currently`
+      });
+    } else {
+      // Improvement - metric is successful implementation
+      const desc = (item.description || 'Improvement').slice(0, 50);
+      metrics.push({
+        metric: `${desc}... implementation`,
+        target: '100% implemented and validated',
+        actual: '0% - pending implementation'
+      });
+    }
+  }
+
+  // Ensure at least one metric exists
+  if (metrics.length === 0) {
+    metrics.push({
+      metric: 'Learning items addressed',
+      target: '100%',
+      actual: '0%'
+    });
+  }
+
+  return metrics;
+}
+
+/**
+ * Build smoke_test_steps from selected items
+ * @param {Array} items - Selected patterns and improvements
+ * @returns {Array} smoke_test_steps array
+ */
+export function buildSmokeTestSteps(items) {
+  const steps = [];
+
+  for (const item of items) {
+    if (item.pattern_id) {
+      steps.push(`Verify ${item.pattern_id} no longer occurs in the codebase`);
+    } else {
+      const desc = (item.description || 'improvement').slice(0, 60);
+      steps.push(`Verify ${desc}... is implemented correctly`);
+    }
+  }
+
+  // Add standard verification step
+  steps.push('Run relevant tests to confirm no regressions');
+
+  return steps;
+}
+
+/**
+ * Build strategic_objectives from selected items
+ * @param {Array} items - Selected patterns and improvements
+ * @returns {Array} strategic_objectives array
+ */
+export function buildStrategicObjectives(items) {
+  const objectives = [];
+
+  for (const item of items) {
+    if (item.pattern_id) {
+      objectives.push(`Eliminate ${item.pattern_id} pattern from the codebase`);
+    } else {
+      const desc = (item.description || 'improvement').slice(0, 60);
+      objectives.push(`Implement: ${desc}`);
+    }
+  }
+
+  // Add standard objectives if needed
+  if (objectives.length === 0) {
+    objectives.push('Address all identified learning items');
+  }
+
+  return objectives;
+}
+
+/**
+ * Build key_principles from selected items
+ * @param {Array} items - Selected patterns and improvements
+ * @returns {Array} key_principles array
+ */
+export function buildKeyPrinciples(items) {
+  const principles = [
+    'Follow LEO Protocol for all changes',
+    'Ensure backward compatibility',
+    'Validate changes with appropriate sub-agents'
+  ];
+
+  // Add item-specific principles
+  const hasProtocolItems = items.some(i =>
+    i.category === 'protocol' ||
+    i.pattern_id?.includes('PROTOCOL') ||
+    i.description?.toLowerCase().includes('protocol')
+  );
+
+  if (hasProtocolItems) {
+    principles.push('Document protocol changes in CLAUDE.md');
+  }
+
+  const hasDatabaseItems = items.some(i =>
+    i.category === 'database' ||
+    i.pattern_id?.includes('DB') ||
+    i.description?.toLowerCase().includes('database') ||
+    i.description?.toLowerCase().includes('schema')
+  );
+
+  if (hasDatabaseItems) {
+    principles.push('Use DATABASE sub-agent for all schema changes');
+  }
+
+  return principles;
+}
+
+/**
  * Create SD in strategic_directives_v2 from learning items
  * @param {Array} items - Selected patterns and improvements
  * @param {'quick-fix' | 'full-sd'} type
@@ -223,6 +347,10 @@ export async function createSDFromLearning(items, type) {
   const sdKey = await generateSDId(type);
   const title = buildSDTitle(items);
   const description = buildSDDescription(items);
+  const successMetrics = buildSuccessMetrics(items);
+  const smokeTestSteps = buildSmokeTestSteps(items);
+  const strategicObjectives = buildStrategicObjectives(items);
+  const keyPrinciples = buildKeyPrinciples(items);
 
   const sdData = {
     id: randomUUID(),  // Generate UUID for primary key
@@ -239,6 +367,10 @@ export async function createSDFromLearning(items, type) {
     target_application: 'EHG_Engineer',
     created_by: 'LEARN-Agent',
     created_at: new Date().toISOString(),
+    success_metrics: successMetrics,
+    smoke_test_steps: smokeTestSteps,
+    strategic_objectives: strategicObjectives,
+    key_principles: keyPrinciples,
     metadata: {
       source: 'learn_command',
       source_items: items.map(i => i.id || i.pattern_id),

@@ -290,7 +290,37 @@ async function getPhaseSubAgentsForSd(phase, sd) {
     // LEO Protocol v4.4.1: SD type-aware PLAN_PRD sub-agent selection
     // ROOT CAUSE FIX: Feature/API SDs need TESTING during planning to create test requirements
     phaseAgentCodes = PLAN_PRD_BY_SD_TYPE[sdType] || PHASE_SUBAGENT_MAP[phase];
-    console.log(`   📋 SD Type: ${sdType}`);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SD-LEARN-008: Schema keyword detection for DATABASE auto-invocation
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Problem: SDs that mention schema/migration/table work but aren't typed as
+    // 'database' may not get DATABASE sub-agent validation.
+    //
+    // Fix: Detect schema-related keywords in SD description/scope and ensure
+    // DATABASE is included in the sub-agent list.
+    // ═══════════════════════════════════════════════════════════════════════════
+    const schemaKeywords = [
+      'schema', 'migration', 'table', 'column', 'constraint', 'index',
+      'foreign key', 'rls', 'row level security', 'trigger', 'function',
+      'alter table', 'create table', 'drop table', 'database'
+    ];
+
+    const sdContent = [
+      sd.title || '',
+      sd.description || '',
+      sd.scope || '',
+      sd.rationale || ''
+    ].join(' ').toLowerCase();
+
+    const hasSchemaContent = schemaKeywords.some(kw => sdContent.includes(kw));
+
+    if (hasSchemaContent && !phaseAgentCodes.includes('DATABASE')) {
+      console.log('   🔍 Schema keywords detected - adding DATABASE sub-agent');
+      phaseAgentCodes = [...phaseAgentCodes, 'DATABASE'];
+    }
+
+    console.log(`   📋 SD Type: ${sdType}${hasSchemaContent ? ' (schema detected)' : ''}`);
     console.log(`   📋 Using PLAN_PRD sub-agents: ${phaseAgentCodes.join(', ')}`);
   } else {
     // For other phases, use standard mapping
