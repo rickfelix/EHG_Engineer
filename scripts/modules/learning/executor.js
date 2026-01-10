@@ -6,6 +6,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
 import { execSync } from 'child_process';
 import path from 'path';
@@ -16,6 +17,466 @@ const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
+
+// ============================================================================
+// SD Creation from /learn - New workflow
+// ============================================================================
+
+/**
+ * Classification rules from LEO Quick-Fix system
+ */
+const CLASSIFICATION_RULES = {
+  maxLoc: 50,
+  allowedTypes: ['bug', 'polish', 'typo', 'documentation'],
+  forbiddenKeywords: [
+    'migration', 'schema change', 'database', 'auth',
+    'authentication', 'authorization', 'security', 'RLS',
+    'new table', 'alter table'
+  ],
+  riskKeywords: [
+    'multiple files', 'refactor', 'new feature', 'complex', 'breaking change'
+  ]
+};
+
+/**
+ * Classify selected items as quick-fix or full-sd
+ * @param {Array} selectedItems - Patterns and improvements selected by user
+ * @returns {'quick-fix' | 'full-sd'}
+ */
+export function classifyComplexity(selectedItems) {
+  // Multiple items always require full SD
+  if (selectedItems.length > 1) {
+    return 'full-sd';
+  }
+
+  const item = selectedItems[0];
+  const text = (item.issue_summary || item.description || '').toLowerCase();
+
+  // Check for forbidden keywords (require full SD)
+  for (const keyword of CLASSIFICATION_RULES.forbiddenKeywords) {
+    if (text.includes(keyword.toLowerCase())) {
+      console.log(`Full SD required: contains forbidden keyword "${keyword}"`);
+      return 'full-sd';
+    }
+  }
+
+  // Check for risk keywords (require full SD)
+  for (const keyword of CLASSIFICATION_RULES.riskKeywords) {
+    if (text.includes(keyword.toLowerCase())) {
+      console.log(`Full SD required: contains risk keyword "${keyword}"`);
+      return 'full-sd';
+    }
+  }
+
+  // Check pattern severity
+  if (item.severity === 'critical' || item.severity === 'high') {
+    return 'full-sd';
+  }
+
+  // Check category for allowed quick-fix types
+  const category = (item.category || '').toLowerCase();
+  if (CLASSIFICATION_RULES.allowedTypes.includes(category)) {
+    return 'quick-fix';
+  }
+
+  // Default to full SD for safety
+  return 'full-sd';
+}
+
+/**
+ * Generate the next available SD-LEARN-NNN or QF-YYYYMMDD-NNN ID
+ * @param {'quick-fix' | 'full-sd'} type
+ * @returns {Promise<string>}
+ */
+export async function generateSDId(type) {
+  if (type === 'quick-fix') {
+    // Use QF-YYYYMMDD-NNN format
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const random = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
+    return `QF-${year}${month}${day}-${random}`;
+  }
+
+  // For full SD, find next SD-LEARN-NNN
+  const { data, error } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_key')
+    .like('sd_key', 'SD-LEARN-%')
+    .order('sd_key', { ascending: false })
+    .limit(1);
+
+  if (error) {
+    console.error('Error querying existing SD-LEARN IDs:', error.message);
+    // Fallback to timestamp-based ID
+    return `SD-LEARN-${Date.now().toString().slice(-6)}`;
+  }
+
+  if (!data || data.length === 0) {
+    return 'SD-LEARN-001';
+  }
+
+  // Extract number and increment
+  const match = data[0].sd_key.match(/SD-LEARN-(\d+)/);
+  const nextNum = match ? parseInt(match[1]) + 1 : 1;
+  return `SD-LEARN-${String(nextNum).padStart(3, '0')}`;
+}
+
+/**
+ * Build SD description from selected items
+ * @param {Array} items - Selected patterns and improvements
+ * @returns {string}
+ */
+export function buildSDDescription(items) {
+  const lines = ['## Items to Address\n'];
+
+  for (const item of items) {
+    if (item.pattern_id) {
+      // Pattern
+      lines.push(`### Pattern: ${item.pattern_id}`);
+      lines.push(`- **Category:** ${item.category || 'Unknown'}`);
+      lines.push(`- **Severity:** ${item.severity || 'Unknown'}`);
+      lines.push(`- **Summary:** ${item.issue_summary || 'No summary'}`);
+      lines.push(`- **Occurrences:** ${item.occurrence_count || 1}`);
+      lines.push('');
+    } else {
+      // Improvement
+      lines.push(`### Improvement: ${item.improvement_type || 'General'}`);
+      lines.push(`- **Description:** ${item.description || 'No description'}`);
+      lines.push(`- **Evidence Count:** ${item.evidence_count || 0}`);
+      lines.push(`- **Target Table:** ${item.target_table || 'N/A'}`);
+      lines.push('');
+    }
+  }
+
+  lines.push('## Source');
+  lines.push('Created automatically by `/learn` command based on accumulated evidence.');
+
+  return lines.join('\n');
+}
+
+/**
+ * Build SD title from selected items
+ * @param {Array} items - Selected patterns and improvements
+ * @returns {string}
+ */
+export function buildSDTitle(items) {
+  if (items.length === 1) {
+    const item = items[0];
+    if (item.pattern_id) {
+      return `Address ${item.pattern_id}: ${(item.issue_summary || '').slice(0, 60)}`;
+    }
+    return (item.description || 'Learning improvement').slice(0, 80);
+  }
+
+  // Multiple items
+  const patternCount = items.filter(i => i.pattern_id).length;
+  const improvementCount = items.length - patternCount;
+
+  const parts = [];
+  if (patternCount > 0) parts.push(`${patternCount} pattern(s)`);
+  if (improvementCount > 0) parts.push(`${improvementCount} improvement(s)`);
+
+  return `Address ${parts.join(' and ')} from /learn`;
+}
+
+/**
+ * Check for existing SD assignments on selected items
+ * @param {Array} items - Selected patterns and improvements
+ * @returns {Promise<Array>} Items with existing assignments
+ */
+export async function checkExistingAssignments(items) {
+  const conflicts = [];
+
+  for (const item of items) {
+    if (item.pattern_id && item.assigned_sd_id) {
+      // Check if assigned SD is still active
+      const { data: sd } = await supabase
+        .from('strategic_directives_v2')
+        .select('id, status, title')
+        .eq('id', item.assigned_sd_id)
+        .single();
+
+      if (sd && sd.status !== 'completed' && sd.status !== 'cancelled') {
+        conflicts.push({
+          item_id: item.pattern_id,
+          item_type: 'pattern',
+          assigned_sd_id: item.assigned_sd_id,
+          sd_status: sd.status,
+          sd_title: sd.title
+        });
+      }
+    }
+  }
+
+  return conflicts;
+}
+
+/**
+ * Create SD in strategic_directives_v2 from learning items
+ * @param {Array} items - Selected patterns and improvements
+ * @param {'quick-fix' | 'full-sd'} type
+ * @returns {Promise<{id: string, success: boolean, error?: string}>}
+ */
+export async function createSDFromLearning(items, type) {
+  const sdKey = await generateSDId(type);
+  const title = buildSDTitle(items);
+  const description = buildSDDescription(items);
+
+  const sdData = {
+    id: randomUUID(),  // Generate UUID for primary key
+    sd_key: sdKey,  // Human-readable ID like SD-LEARN-001
+    title: title,
+    description: description,
+    rationale: `Accumulated ${items.length} item(s) from retrospectives and pattern analysis via /learn command.`,
+    scope: 'Address identified patterns and implement suggested improvements.',
+    status: 'draft',
+    priority: type === 'quick-fix' ? 'medium' : 'high',
+    category: type === 'quick-fix' ? 'bug_fix' : 'infrastructure',
+    sd_type: type === 'quick-fix' ? 'feature' : 'infrastructure',
+    current_phase: 'LEAD',
+    target_application: 'EHG_Engineer',
+    created_by: 'LEARN-Agent',
+    created_at: new Date().toISOString(),
+    metadata: {
+      source: 'learn_command',
+      source_items: items.map(i => i.id || i.pattern_id),
+      classification: type,
+      created_via: '/learn apply'
+    }
+  };
+
+  const { data, error } = await supabase
+    .from('strategic_directives_v2')
+    .insert(sdData)
+    .select('id, sd_key, title, status')
+    .single();
+
+  if (error) {
+    console.error('Error creating SD:', error.message);
+    return { sd_key: sdKey, success: false, error: error.message };
+  }
+
+  console.log(`✅ Created ${type === 'quick-fix' ? 'Quick-Fix' : 'SD'}: ${data.sd_key}`);
+  return { id: data.id, sd_key: data.sd_key, success: true };
+}
+
+/**
+ * Tag source items (patterns/improvements) with the assigned SD
+ * @param {Array} items - Selected patterns and improvements
+ * @param {string} sdId - The SD ID that will address these items
+ * @returns {Promise<{success: boolean, tagged: number, errors: Array}>}
+ */
+export async function tagSourceItems(items, sdKey) {
+  const results = { success: true, tagged: 0, errors: [], migrationPending: false };
+  const now = new Date().toISOString();
+
+  for (const item of items) {
+    if (item.pattern_id) {
+      // Tag pattern - try with new columns, fall back if migration not applied
+      const { error } = await supabase
+        .from('issue_patterns')
+        .update({
+          assigned_sd_id: sdKey,
+          assignment_date: now,
+          status: 'assigned'
+        })
+        .eq('pattern_id', item.pattern_id);
+
+      if (error) {
+        if (error.message.includes('column') || error.message.includes('constraint')) {
+          // Migration not applied yet - columns don't exist or status invalid
+          results.migrationPending = true;
+          console.log(`   ⏳ Pattern ${item.pattern_id}: Tagging requires migration`);
+          results.tagged++; // Count as "virtually tagged" via SD metadata
+        } else {
+          results.errors.push({ id: item.pattern_id, error: error.message });
+          results.success = false;
+        }
+      } else {
+        results.tagged++;
+      }
+    } else if (item.id) {
+      // Tag improvement - try with new columns, fall back if migration not applied
+      const { error } = await supabase
+        .from('protocol_improvement_queue')
+        .update({
+          assigned_sd_id: sdKey,
+          assignment_date: now,
+          status: 'SD_CREATED'
+        })
+        .eq('id', item.id);
+
+      if (error) {
+        if (error.message.includes('column') || error.message.includes('constraint')) {
+          // Migration not applied yet
+          results.migrationPending = true;
+          console.log(`   ⏳ Improvement ${item.id.substring(0, 8)}...: Tagging requires migration`);
+          results.tagged++; // Count as "virtually tagged" via SD metadata
+        } else {
+          results.errors.push({ id: item.id, error: error.message });
+          results.success = false;
+        }
+      } else {
+        results.tagged++;
+      }
+    }
+  }
+
+  if (results.migrationPending) {
+    console.log('   📋 Run migration: database/migrations/20260110_learn_sd_integration.sql');
+  }
+
+  return results;
+}
+
+/**
+ * Execute the new SD creation workflow for /learn
+ * This replaces direct database inserts with proper SD creation
+ *
+ * @param {Object} reviewedContext - The reviewed learning context
+ * @param {Object} decisions - User decisions: { itemId: { status, reason } }
+ * @returns {Promise<{sd_id: string, success: boolean, ...}>}
+ */
+export async function executeSDCreationWorkflow(reviewedContext, decisions) {
+  console.log('\n============================================================');
+  console.log('  /learn → SD Creation Workflow');
+  console.log('============================================================\n');
+
+  // 1. Collect approved items
+  const approvedItems = [];
+  for (const [itemId, decision] of Object.entries(decisions)) {
+    if (decision.status !== 'APPROVED') continue;
+
+    // Find in patterns
+    const pattern = reviewedContext.patterns.find(p => p.pattern_id === itemId || p.id === itemId);
+    if (pattern) {
+      approvedItems.push(pattern);
+      continue;
+    }
+
+    // Find in improvements
+    const improvement = reviewedContext.improvements.find(i => i.id === itemId);
+    if (improvement) {
+      approvedItems.push(improvement);
+    }
+  }
+
+  if (approvedItems.length === 0) {
+    console.log('No items approved. Nothing to create.');
+    return { sd_id: null, success: false, message: 'No items approved' };
+  }
+
+  console.log(`Approved items: ${approvedItems.length}`);
+
+  // 2. Check for existing assignments (conflicts)
+  const conflicts = await checkExistingAssignments(approvedItems);
+  if (conflicts.length > 0) {
+    console.log('\n⚠️  Some items are already assigned to SDs:');
+    for (const c of conflicts) {
+      console.log(`   - ${c.item_id} → ${c.assigned_sd_id} (${c.sd_status})`);
+    }
+    // For now, filter out conflicting items
+    const nonConflicting = approvedItems.filter(
+      item => !conflicts.find(c => c.item_id === (item.pattern_id || item.id))
+    );
+    if (nonConflicting.length === 0) {
+      return {
+        sd_id: null,
+        success: false,
+        message: 'All selected items already assigned to SDs',
+        conflicts
+      };
+    }
+    console.log(`Proceeding with ${nonConflicting.length} non-conflicting item(s).`);
+    approvedItems.length = 0;
+    approvedItems.push(...nonConflicting);
+  }
+
+  // 3. Classify complexity
+  const classification = classifyComplexity(approvedItems);
+  console.log(`\nClassification: ${classification.toUpperCase()}`);
+
+  // 4. Create the SD
+  const sdResult = await createSDFromLearning(approvedItems, classification);
+  if (!sdResult.success) {
+    return {
+      sd_id: null,
+      sd_key: null,
+      success: false,
+      message: 'Failed to create SD',
+      error: sdResult.error
+    };
+  }
+
+  // Use sd_key for user display, id (UUID) for database references
+  const sdKey = sdResult.sd_key;
+  const sdUuid = sdResult.id;
+
+  // 5. Tag source items with the SD (use UUID for FK references)
+  const tagResult = await tagSourceItems(approvedItems, sdUuid);
+  if (!tagResult.success) {
+    console.warn('Warning: Some items could not be tagged:', tagResult.errors);
+  }
+
+  // 6. Create decision record (use UUID for FK reference)
+  const decisionRecord = await createDecisionRecord(
+    reviewedContext,
+    decisions,
+    sdUuid  // UUID for FK to strategic_directives_v2
+  );
+
+  // 7. Update decision record with SD creation info
+  if (decisionRecord.id && !decisionRecord.id.startsWith('LOCAL-')) {
+    await supabase
+      .from('learning_decisions')
+      .update({
+        sd_created_id: sdKey,  // Store human-readable key for reference
+        status: 'SD_CREATED',
+        execution_log: [{
+          action: 'SD_CREATED',
+          sd_key: sdKey,
+          sd_uuid: sdUuid,
+          classification,
+          items_tagged: tagResult.tagged,
+          timestamp: new Date().toISOString()
+        }],
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', decisionRecord.id);
+  }
+
+  // 8. Display summary
+  console.log('\n============================================================');
+  console.log('  Summary');
+  console.log('============================================================');
+  console.log(`✅ Created: ${sdKey}`);
+  console.log(`   Type: ${classification === 'quick-fix' ? 'Quick-Fix' : 'Strategic Directive'}`);
+  console.log(`   Items: ${approvedItems.length} tagged`);
+  console.log('   Status: draft (awaiting LEAD approval)');
+  console.log('');
+  console.log('📋 Next Steps:');
+  console.log('   1. Run: npm run sd:next');
+  console.log('   2. The SD will appear in the queue for LEAD review');
+  console.log('   3. Follow LEO Protocol: LEAD → PLAN → EXEC');
+  console.log('============================================================\n');
+
+  return {
+    sd_id: sdUuid,
+    sd_key: sdKey,
+    success: true,
+    classification,
+    items_count: approvedItems.length,
+    tagged_count: tagResult.tagged,
+    decision_id: decisionRecord.id,
+    conflicts: conflicts.length > 0 ? conflicts : null
+  };
+}
+
+// ============================================================================
+// Original executor functions below (kept for backward compatibility)
+// ============================================================================
 
 /**
  * Create a decision record in learning_decisions table

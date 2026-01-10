@@ -13,7 +13,7 @@
 
 import { buildLearningContext, formatContextForDisplay } from './context-builder.js';
 import { reviewContext, formatReviewedContextForDisplay } from './reviewer.js';
-import { executeApprovedImprovements, rollbackDecision } from './executor.js';
+import { executeSDCreationWorkflow, executeApprovedImprovements, rollbackDecision } from './executor.js';
 import { buildInsightsReport, formatInsightsForDisplay } from './insights.js';
 
 /**
@@ -58,11 +58,12 @@ async function processCommand(sdId = null) {
 }
 
 /**
- * Apply command - execute approved decisions
+ * Apply command - create SD from approved decisions
+ * NEW WORKFLOW: Creates SD instead of directly applying changes
  */
-async function applyCommand(decisionsJson, sdId = null) {
+async function applyCommand(decisionsJson, sdId = null, useLegacy = false) {
   console.log('='.repeat(60));
-  console.log('  /learn APPLY - Executing Approved Improvements');
+  console.log('  /learn APPLY - Creating SD from Approved Items');
   console.log('='.repeat(60));
 
   let decisions;
@@ -77,7 +78,31 @@ async function applyCommand(decisionsJson, sdId = null) {
   const context = await buildLearningContext(sdId);
   const reviewed = reviewContext(context);
 
-  // Execute
+  // Use new SD creation workflow by default
+  if (!useLegacy) {
+    const result = await executeSDCreationWorkflow(reviewed, decisions);
+
+    if (!result.success) {
+      console.log('\n❌ SD creation failed:', result.message || result.error);
+      if (result.conflicts) {
+        console.log('\nConflicting assignments:');
+        for (const c of result.conflicts) {
+          console.log(`   - ${c.item_id} → ${c.assigned_sd_id} (${c.sd_status})`);
+        }
+      }
+      return result;
+    }
+
+    // Success - SD created
+    if (result.sd_id) {
+      console.log('\n💡 SD has been created. Follow LEO Protocol to implement the fix.');
+    }
+
+    return result;
+  }
+
+  // Legacy workflow (direct apply) - kept for backward compatibility
+  console.log('\n⚠️  Using legacy direct-apply workflow');
   const result = await executeApprovedImprovements(reviewed, decisions, sdId);
 
   console.log('\n' + '='.repeat(60));
@@ -167,13 +192,14 @@ async function main() {
         const decisionsJson = decisionsArg?.split('=').slice(1).join('=');
         const sdIdArg = args.find(a => a.startsWith('--sd-id='));
         const sdId = sdIdArg?.split('=')[1] || null;
+        const useLegacy = args.includes('--legacy');
 
         if (!decisionsJson) {
           console.error('Error: --decisions=<JSON> is required');
           process.exit(1);
         }
 
-        await applyCommand(decisionsJson, sdId);
+        await applyCommand(decisionsJson, sdId, useLegacy);
         break;
       }
 
@@ -198,20 +224,27 @@ async function main() {
         console.log('');
         console.log('Usage:');
         console.log('  node scripts/modules/learning/index.js process [--sd-id=<ID>]');
-        console.log('  node scripts/modules/learning/index.js apply --decisions=\'<JSON>\'');
+        console.log('  node scripts/modules/learning/index.js apply --decisions=\'<JSON>\' [--legacy]');
         console.log('  node scripts/modules/learning/index.js rollback <DECISION_ID>');
         console.log('  node scripts/modules/learning/index.js insights');
         console.log('');
         console.log('Commands:');
         console.log('  process   Query learning sources and display with Devil\'s Advocate');
-        console.log('  apply     Apply approved improvements (with optional pattern resolution)');
+        console.log('  apply     Create SD from approved items (default) or apply directly (--legacy)');
         console.log('  rollback  Undo a previous decision');
         console.log('  insights  Display historical learning metrics');
         console.log('');
+        console.log('New Workflow (default):');
+        console.log('  - Approved items create a Strategic Directive (SD)');
+        console.log('  - Patterns/improvements are tagged with the SD ID');
+        console.log('  - LEO Protocol handles implementation (LEAD→PLAN→EXEC)');
+        console.log('');
+        console.log('Legacy Workflow (--legacy flag):');
+        console.log('  - Directly inserts into target tables (no enforcement)');
+        console.log('');
         console.log('Decision JSON format:');
-        console.log('  {"ITEM_ID": {"status": "APPROVED", "resolves_patterns": ["PAT-001"]}}');
+        console.log('  {"ITEM_ID": {"status": "APPROVED"}}');
         console.log('  - status: APPROVED or REJECTED');
-        console.log('  - resolves_patterns: (optional) pattern IDs this improvement addresses');
       }
     }
   } catch (error) {

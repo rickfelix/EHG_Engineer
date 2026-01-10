@@ -6,21 +6,31 @@ Improve the LEO Protocol by learning from historical patterns, retrospectives, a
 
 The `/learn` command is a two-command suite designed to evolve the LEO Protocol systematically.
 
-1.  **`/learn`**: The main self-improvement loop (Process → Review → Approve → Apply).
+1.  **`/learn`**: The main self-improvement loop (Process → Review → Approve → Create SD).
 2.  **`/learn insights`**: Effectiveness analysis and trend reporting.
+
+## New Workflow (v2)
+
+**Key Change:** Instead of directly inserting metadata into tables (which had no enforcement), `/learn` now creates a **Strategic Directive (SD)** that goes through the full LEO Protocol workflow.
+
+```
+User selects items → SD Created → LEAD → PLAN → EXEC → Patterns Resolved
+```
+
+This ensures that approved improvements are actually implemented and validated.
 
 ## Usage
 
 ### `/learn`
 
-Run this command before starting a new Strategic Directive (SD) or periodically to apply accumulated protocol improvements.
+Run this command before starting a new Strategic Directive (SD) or periodically to address accumulated issues.
 
 **Phases:**
 
 1.  **PROCESS**: The system identifies relevant issue patterns, recent lessons, and pending protocol improvements.
 2.  **REVIEW (Devil's Advocate)**: For every proposed item, the system generates a counter-argument highlighting potential risks or downsides.
 3.  **PAUSE**: The system presents all items and waits for your explicit approval.
-4.  **APPLY**: Approved changes are executed, `CLAUDE.md` is updated, and an audit trail is created.
+4.  **CREATE SD**: Approved items create a Strategic Directive (or Quick-Fix) that goes through LEO Protocol.
 
 ### `/learn insights`
 
@@ -49,7 +59,7 @@ This will output:
 After running the process command, present the findings to the user using the AskUserQuestion tool with checkbox-style approval:
 
 ```
-For each category (Patterns, Lessons, Improvements), use AskUserQuestion with multiSelect: true to let the user approve items.
+For each category (Patterns, Improvements), use AskUserQuestion with multiSelect: true to let the user approve items.
 
 Example structure:
 {
@@ -67,28 +77,34 @@ Example structure:
 }
 ```
 
-**Step 3: Collect Rejection Reasons**
-
-For any REJECTED items, ask the user why:
-
-```
-Use AskUserQuestion to gather rejection reasons for items not selected.
-This feedback improves future /learn suggestions.
-```
-
-**Step 4: Execute APPLY Phase**
+**Step 3: Execute APPLY Phase (Creates SD)**
 
 Build the decisions JSON from user selections and run:
 
 ```bash
-node scripts/modules/learning/index.js apply --decisions='{"ITEM_ID": {"status": "APPROVED"}, "ITEM_ID_2": {"status": "REJECTED", "reason": "User provided reason"}}'
+node scripts/modules/learning/index.js apply --decisions='{"ITEM_ID": {"status": "APPROVED"}}'
 ```
 
-**Step 5: Summarize Results**
+This will:
+1. Classify complexity (Quick-Fix vs Full SD)
+2. Generate SD ID (SD-LEARN-NNN or QF-YYYYMMDD-NNN)
+3. Create the SD in `strategic_directives_v2`
+4. Tag source patterns/improvements with `assigned_sd_id`
+5. Display next steps
 
-- Report what was applied
-- Mention CLAUDE.md regeneration if protocol was updated
-- Provide the decision ID for potential rollback
+**Step 4: Summarize Results**
+
+- Report the created SD ID
+- Show classification (Quick-Fix or Full SD)
+- Display next steps: "Run `npm run sd:next` to continue with LEO Protocol"
+
+**Step 5: Continue with LEO Protocol**
+
+The created SD will appear in the SD queue. Follow normal LEO workflow:
+- LEAD approval
+- PLAN phase (PRD creation)
+- EXEC phase (implementation)
+- LEAD-FINAL-APPROVAL (auto-resolves patterns)
 
 ### When user runs `/learn insights`:
 
@@ -103,32 +119,59 @@ Display the output which shows:
 
 ---
 
+## Quick-Fix vs Full SD Classification
+
+The system automatically classifies based on LEO Quick-Fix rules:
+
+**Quick-Fix (QF) criteria - ALL must be true:**
+- Category in ['bug', 'polish', 'typo', 'documentation']
+- No forbidden keywords (database, auth, migration, security, RLS)
+- No risk keywords (refactor, complex, breaking change)
+- Single item selected
+
+**Full SD - ANY triggers:**
+- Category is 'feature' or 'infrastructure'
+- Contains forbidden/risk keywords
+- Multiple items selected
+
+---
+
+## SD Completion → Auto-Resolution
+
+When an SD created from `/learn` reaches LEAD-FINAL-APPROVAL:
+1. Patterns with `assigned_sd_id` are marked `status: 'resolved'`
+2. Improvements with `assigned_sd_id` are marked `status: 'APPLIED'`
+3. `resolution_notes` captures which SD resolved the pattern
+
+This closes the learning loop automatically.
+
+---
+
 ## Safety and Rollback
 
-- All changes are logged in the `learning_decisions` table.
-- If an improvement causes issues, use:
-  ```bash
-  node scripts/modules/learning/index.js rollback <DECISION_ID>
-  ```
+- All decisions are logged in the `learning_decisions` table with `sd_created_id`.
+- If an SD was created in error, cancel it before LEAD approval.
+- Legacy direct-apply mode available via `--legacy` flag (not recommended).
 
-## Key Design Decisions (Triangulation Consensus)
+## Key Design Decisions
 
 | Decision | Value |
 |----------|-------|
 | Commands | 2: `/learn` + `/learn insights` |
+| Apply Mode | Creates SD (new) or direct insert (legacy) |
 | DA Mode | Always show (no skip option) |
-| Approval | Checkbox-style, rejection reasons required |
+| Approval | Checkbox-style via AskUserQuestion |
 | Display | Top 5 per category |
-| Auto-suggest | Minimal ("💡 Run /learn?") after /ship |
-| Integration | Bidirectional with /ship |
+| Classification | Auto (Quick-Fix vs Full SD) |
+| Resolution | Auto on SD completion |
 
 ## Database Tables Used
 
 - `retrospectives` - Source of lessons
-- `issue_patterns` - Source of recurring patterns
-- `protocol_improvement_queue` - Source of pending improvements
-- `learning_decisions` - Audit trail for all decisions
-- `leo_protocol_sections` - Target for protocol updates
+- `issue_patterns` - Source of recurring patterns (now has `assigned_sd_id`)
+- `protocol_improvement_queue` - Source of pending improvements (now has `assigned_sd_id`)
+- `learning_decisions` - Audit trail (now has `sd_created_id`)
+- `strategic_directives_v2` - Target for created SDs
 
 ## Example Session
 
@@ -136,16 +179,33 @@ Display the output which shows:
 User: /learn
 
 Claude: [Runs process command]
-        [Displays patterns, lessons, improvements with DA]
+        [Displays patterns, improvements with DA]
         [Uses AskUserQuestion for approval]
 
-User: [Selects items to approve, provides rejection reasons]
+User: [Selects items to approve]
 
 Claude: [Runs apply command with decisions]
-        Applied 3 improvements. Decision ID: abc123
-        CLAUDE.md has been regenerated.
+        ============================================================
+          /learn → SD Creation Workflow
+        ============================================================
+        Approved items: 2
+        Classification: FULL-SD
+        ✅ Created: SD-LEARN-003
+           Type: Strategic Directive
+           Items: 2 tagged
+           Status: draft (awaiting LEAD approval)
 
-User: /learn insights
+        📋 Next Steps:
+           1. Run: npm run sd:next
+           2. The SD will appear in the queue for LEAD review
+           3. Follow LEO Protocol: LEAD → PLAN → EXEC
+        ============================================================
 
-Claude: [Displays approval rates, recurrence monitor, top rejections]
+User: npm run sd:next
+[Continues with normal LEO Protocol workflow]
+
+[After SD completion via LEAD-FINAL-APPROVAL]
+   📚 Resolving /learn items...
+   ✅ Resolved 1 pattern(s)
+   ✅ Applied 1 improvement(s)
 ```
