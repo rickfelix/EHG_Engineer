@@ -205,10 +205,24 @@ else
     LAST_ACTIVE=$(date +%s)
 fi
 
-# Build activity signal bar (same width as progress bar for visibility)
+# Build activity signal bar with embedded text label
 BAR_WIDTH=20
+if [ "$ACTIVITY_STATE" = "running" ]; then
+    LABEL="WORKING"
+else
+    LABEL="YOUR TURN"
+fi
+
+# Center the label in the bar
+LABEL_LEN=${#LABEL}
+PADDING=$(( (BAR_WIDTH - LABEL_LEN) / 2 ))
+PADDING_RIGHT=$(( BAR_WIDTH - LABEL_LEN - PADDING ))
+
+# Build bar with embedded text: ████WORKING█████
 ACTIVITY_BAR=""
-for ((i=0; i<BAR_WIDTH; i++)); do ACTIVITY_BAR+="█"; done
+for ((i=0; i<PADDING; i++)); do ACTIVITY_BAR+="█"; done
+ACTIVITY_BAR+="$LABEL"
+for ((i=0; i<PADDING_RIGHT; i++)); do ACTIVITY_BAR+="█"; done
 ACTIVITY_SIGNAL="${ACTIVITY_COLOR}[${ACTIVITY_BAR}]${RESET}"
 
 # Update state file
