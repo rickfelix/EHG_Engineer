@@ -164,25 +164,45 @@ if [ -f "$STATE_FILE" ]; then
     fi
 fi
 
-# Detect activity (is Claude actively generating?)
-# Track output token changes - if increasing, Claude is running
+# Detect activity (is Claude actively working?)
+# Track multiple signals: output tokens, input tokens, and context changes
 ACTIVITY_STATE="idle"
-ACTIVITY_COLOR="\033[0;31m"  # Red = stopped/waiting
+ACTIVITY_COLOR="\033[0;31m"  # Red = your turn (idle)
+IDLE_THRESHOLD=4  # Seconds of no activity before showing red
+
 if [ -f "$STATE_FILE" ]; then
     PREV_OUTPUT=$(jq -r '.last_output_tokens // 0' "$STATE_FILE" 2>/dev/null || echo "0")
-    PREV_UPDATE=$(jq -r '.last_update_epoch // 0' "$STATE_FILE" 2>/dev/null || echo "0")
+    PREV_INPUT=$(jq -r '.last_input_tokens // 0' "$STATE_FILE" 2>/dev/null || echo "0")
+    PREV_CONTEXT=$(jq -r '.last_context_used // 0' "$STATE_FILE" 2>/dev/null || echo "0")
+    LAST_ACTIVE=$(jq -r '.last_active_epoch // 0' "$STATE_FILE" 2>/dev/null || echo "0")
     CURRENT_EPOCH=$(date +%s)
-    TIME_SINCE_UPDATE=$((CURRENT_EPOCH - PREV_UPDATE))
 
-    # If output tokens increased recently (within last 2 seconds), Claude is running
-    if [ "$OUTPUT_TOKENS" -gt "$PREV_OUTPUT" ] && [ "$TIME_SINCE_UPDATE" -le 2 ]; then
-        ACTIVITY_STATE="running"
-        ACTIVITY_COLOR="\033[0;32m"  # Green = running
-    elif [ "$TIME_SINCE_UPDATE" -le 1 ]; then
-        # Just updated, might still be running
-        ACTIVITY_STATE="running"
-        ACTIVITY_COLOR="\033[0;32m"
+    # Check if any activity occurred (tokens changed)
+    TOKENS_CHANGED="false"
+    if [ "$OUTPUT_TOKENS" -gt "$PREV_OUTPUT" ]; then
+        TOKENS_CHANGED="true"  # Claude is generating output
+    elif [ "$INPUT_TOKENS" -gt "$PREV_INPUT" ]; then
+        TOKENS_CHANGED="true"  # Claude is processing new input
+    elif [ "$CONTEXT_USED" -gt "$PREV_CONTEXT" ]; then
+        TOKENS_CHANGED="true"  # Context grew (tool results, etc.)
     fi
+
+    # Update last_active timestamp if activity detected
+    if [ "$TOKENS_CHANGED" = "true" ]; then
+        LAST_ACTIVE=$CURRENT_EPOCH
+    fi
+
+    # Show green if activity within threshold
+    TIME_SINCE_ACTIVE=$((CURRENT_EPOCH - LAST_ACTIVE))
+    if [ "$TIME_SINCE_ACTIVE" -le "$IDLE_THRESHOLD" ]; then
+        ACTIVITY_STATE="running"
+        ACTIVITY_COLOR="\033[0;32m"  # Green = Claude is working
+    fi
+else
+    # First run - assume active (Claude just started)
+    ACTIVITY_STATE="running"
+    ACTIVITY_COLOR="\033[0;32m"
+    LAST_ACTIVE=$(date +%s)
 fi
 
 # Build activity signal bar (same width as progress bar for visibility)
@@ -200,6 +220,8 @@ cat > "$STATE_FILE" << EOF
   "last_update": "$(date -Iseconds)",
   "last_update_epoch": $(date +%s),
   "last_output_tokens": $OUTPUT_TOKENS,
+  "last_input_tokens": $INPUT_TOKENS,
+  "last_active_epoch": $LAST_ACTIVE,
   "session_id": "$SESSION_ID",
   "compaction_detected": $COMPACTION_DETECTED,
   "activity_state": "$ACTIVITY_STATE"
