@@ -430,6 +430,9 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     console.log('   ✅ is_working_on released (set to false)');
     console.log('   ✅ Completion timestamp recorded');
 
+    // Resolve patterns/improvements if this SD was created from /learn
+    await this._resolveLearningItems(sd);
+
     // Release the session claim
     await this._releaseSessionClaim(sd);
 
@@ -664,6 +667,82 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     };
 
     return remediations[gateName] || null;
+  }
+
+  /**
+   * Resolve patterns and improvements that were assigned to this SD via /learn
+   * This completes the /learn → SD → implementation → resolution cycle
+   * @param {object} sd - SD record
+   */
+  async _resolveLearningItems(sd) {
+    try {
+      // Check if this SD was created from /learn command
+      const metadata = sd.metadata || {};
+      if (metadata.source !== 'learn_command') {
+        return; // Not a /learn-created SD
+      }
+
+      console.log('\n   📚 Resolving /learn items...');
+
+      const sdId = sd.legacy_id || sd.id;
+      const now = new Date().toISOString();
+
+      // Resolve assigned patterns
+      const { data: patterns, error: patternQueryError } = await this.supabase
+        .from('issue_patterns')
+        .select('pattern_id, status')
+        .eq('assigned_sd_id', sdId)
+        .eq('status', 'assigned');
+
+      if (!patternQueryError && patterns && patterns.length > 0) {
+        const { error: patternUpdateError } = await this.supabase
+          .from('issue_patterns')
+          .update({
+            status: 'resolved',
+            resolution_date: now,
+            resolution_notes: `Resolved by ${sdId} via /learn workflow`
+          })
+          .eq('assigned_sd_id', sdId)
+          .eq('status', 'assigned');
+
+        if (!patternUpdateError) {
+          console.log(`   ✅ Resolved ${patterns.length} pattern(s)`);
+        } else {
+          console.log(`   ⚠️  Pattern resolution error: ${patternUpdateError.message}`);
+        }
+      }
+
+      // Resolve assigned improvements
+      const { data: improvements, error: impQueryError } = await this.supabase
+        .from('protocol_improvement_queue')
+        .select('id, status')
+        .eq('assigned_sd_id', sdId)
+        .eq('status', 'SD_CREATED');
+
+      if (!impQueryError && improvements && improvements.length > 0) {
+        const { error: impUpdateError } = await this.supabase
+          .from('protocol_improvement_queue')
+          .update({
+            status: 'APPLIED',
+            applied_at: now
+          })
+          .eq('assigned_sd_id', sdId)
+          .eq('status', 'SD_CREATED');
+
+        if (!impUpdateError) {
+          console.log(`   ✅ Applied ${improvements.length} improvement(s)`);
+        } else {
+          console.log(`   ⚠️  Improvement application error: ${impUpdateError.message}`);
+        }
+      }
+
+      if ((!patterns || patterns.length === 0) && (!improvements || improvements.length === 0)) {
+        console.log('   ℹ️  No pending items to resolve');
+      }
+    } catch (error) {
+      // Non-fatal - log but don't block completion
+      console.log(`   ⚠️  Learning item resolution error: ${error.message}`);
+    }
   }
 
   /**

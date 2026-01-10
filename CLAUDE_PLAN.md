@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-01-10 9:28:57 PM
+**Generated**: 2026-01-10 9:38:00 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -2121,6 +2121,12 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
 
 
 - **strengthen_handoff_validation_3_handoff_s_missin** (Gate 2C)
+  - Weight: 0.5
+  - Required: No
+  - Criteria: 4 criteria defined (source, category, evidence...)
+
+
+- **strengthen_handoff_validation_1_handoff_s_missin** (Gate 2C)
   - Weight: 0.5
   - Required: No
   - Criteria: 4 criteria defined (source, category, evidence...)
