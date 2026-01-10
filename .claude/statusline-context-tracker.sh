@@ -167,7 +167,7 @@ fi
 # Detect activity (is Claude actively working?)
 # Track multiple signals: output tokens, input tokens, and context changes
 ACTIVITY_STATE="idle"
-ACTIVITY_COLOR="\033[0;31m"  # Red = your turn (idle)
+ACTIVITY_COLOR="\033[97;41m"  # White text on red background = your turn
 IDLE_THRESHOLD=4  # Seconds of no activity before showing red
 
 if [ -f "$STATE_FILE" ]; then
@@ -196,12 +196,12 @@ if [ -f "$STATE_FILE" ]; then
     TIME_SINCE_ACTIVE=$((CURRENT_EPOCH - LAST_ACTIVE))
     if [ "$TIME_SINCE_ACTIVE" -le "$IDLE_THRESHOLD" ]; then
         ACTIVITY_STATE="running"
-        ACTIVITY_COLOR="\033[0;32m"  # Green = Claude is working
+        ACTIVITY_COLOR="\033[97;42m"  # White text on green background = working
     fi
 else
     # First run - assume active (Claude just started)
     ACTIVITY_STATE="running"
-    ACTIVITY_COLOR="\033[0;32m"
+    ACTIVITY_COLOR="\033[97;42m"  # White text on green background = working
     LAST_ACTIVE=$(date +%s)
 fi
 
@@ -218,11 +218,11 @@ LABEL_LEN=${#LABEL}
 PADDING=$(( (BAR_WIDTH - LABEL_LEN) / 2 ))
 PADDING_RIGHT=$(( BAR_WIDTH - LABEL_LEN - PADDING ))
 
-# Build bar with embedded text: ████WORKING█████
+# Build bar with embedded text using spaces (background color shows through)
 ACTIVITY_BAR=""
-for ((i=0; i<PADDING; i++)); do ACTIVITY_BAR+="█"; done
+for ((i=0; i<PADDING; i++)); do ACTIVITY_BAR+=" "; done
 ACTIVITY_BAR+="$LABEL"
-for ((i=0; i<PADDING_RIGHT; i++)); do ACTIVITY_BAR+="█"; done
+for ((i=0; i<PADDING_RIGHT; i++)); do ACTIVITY_BAR+=" "; done
 ACTIVITY_SIGNAL="${ACTIVITY_COLOR}[${ACTIVITY_BAR}]${RESET}"
 
 # Update state file
