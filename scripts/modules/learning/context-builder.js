@@ -214,7 +214,7 @@ export async function buildLearningContext(sdId = null) {
   let similarPatterns = {};
   try {
     similarPatterns = await findSimilarPatterns(patterns);
-  } catch (e) {
+  } catch (_e) {
     // Similarity search is optional - continue without it
     console.log('Note: Similarity search unavailable');
   }
