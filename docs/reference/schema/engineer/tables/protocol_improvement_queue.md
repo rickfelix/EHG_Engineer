@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-10T01:18:40.647Z
+**Generated**: 2026-01-10T03:37:46.398Z
 **Rows**: 24
 **RLS**: Enabled (5 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (18 total)
+## Columns (20 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -36,6 +36,8 @@
 | reviewed_by | `text` | YES | - | - |
 | applied_at | `timestamp with time zone` | YES | - | - |
 | effectiveness_score | `integer(32)` | YES | - | Post-application effectiveness score (0-100). Measured by reduction in related issue patterns after application. |
+| assigned_sd_id | `character varying(50)` | YES | - | SD that will implement this improvement. Set by /learn command when user approves. |
+| assignment_date | `timestamp with time zone` | YES | - | When improvement was assigned to an SD via /learn. |
 
 ## Constraints
 
@@ -43,6 +45,7 @@
 - `protocol_improvement_queue_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `protocol_improvement_queue_assigned_sd_id_fkey`: assigned_sd_id → strategic_directives_v2(id)
 - `protocol_improvement_queue_source_retro_id_fkey`: source_retro_id → retrospectives(id)
 
 ### Check Constraints
@@ -50,13 +53,17 @@
 - `protocol_improvement_queue_effectiveness_score_check`: CHECK (((effectiveness_score >= 0) AND (effectiveness_score <= 100)))
 - `protocol_improvement_queue_improvement_type_check`: CHECK ((improvement_type = ANY (ARRAY['VALIDATION_RULE'::text, 'CHECKLIST_ITEM'::text, 'SKILL_UPDATE'::text, 'PROTOCOL_SECTION'::text, 'SUB_AGENT_CONFIG'::text])))
 - `protocol_improvement_queue_source_type_check`: CHECK ((source_type = ANY (ARRAY['LEAD_TO_PLAN'::text, 'PLAN_TO_EXEC'::text, 'SD_COMPLETION'::text])))
-- `protocol_improvement_queue_status_check`: CHECK ((status = ANY (ARRAY['PENDING'::text, 'APPROVED'::text, 'APPLIED'::text, 'REJECTED'::text, 'SUPERSEDED'::text])))
+- `protocol_improvement_queue_status_check`: CHECK ((status = ANY (ARRAY['PENDING'::text, 'APPROVED'::text, 'SD_CREATED'::text, 'APPLIED'::text, 'REJECTED'::text, 'SUPERSEDED'::text])))
 - `protocol_improvement_queue_target_operation_check`: CHECK ((target_operation = ANY (ARRAY['INSERT'::text, 'UPDATE'::text, 'UPSERT'::text])))
 - `protocol_improvement_queue_target_phase_check`: CHECK ((target_phase = ANY (ARRAY['LEAD'::text, 'PLAN'::text, 'EXEC'::text, 'ALL'::text])))
-- `reviewed_fields_complete`: CHECK (((status = ANY (ARRAY['PENDING'::text, 'APPLIED'::text])) OR ((status = ANY (ARRAY['APPROVED'::text, 'REJECTED'::text, 'SUPERSEDED'::text])) AND (reviewed_at IS NOT NULL) AND (reviewed_by IS NOT NULL))))
+- `reviewed_fields_complete`: CHECK (((status = 'PENDING'::text) OR (status = 'SD_CREATED'::text) OR ((reviewed_by IS NOT NULL) AND (reviewed_at IS NOT NULL))))
 
 ## Indexes
 
+- `idx_protocol_queue_assigned_sd`
+  ```sql
+  CREATE INDEX idx_protocol_queue_assigned_sd ON public.protocol_improvement_queue USING btree (assigned_sd_id) WHERE (assigned_sd_id IS NOT NULL)
+  ```
 - `idx_protocol_queue_evidence`
   ```sql
   CREATE INDEX idx_protocol_queue_evidence ON public.protocol_improvement_queue USING btree (evidence_count DESC)

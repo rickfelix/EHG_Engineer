@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-10T01:18:40.647Z
-**Rows**: 2
+**Generated**: 2026-01-10T03:37:46.398Z
+**Rows**: 11
 **RLS**: Disabled
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (15 total)
+## Columns (16 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -33,6 +33,7 @@
 | confidence_score | `integer(32)` | YES | - | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| sd_created_id | `character varying(50)` | YES | - | SD created as a result of this learning decision. NULL if no SD was created. |
 
 ## Constraints
 
@@ -40,6 +41,7 @@
 - `learning_decisions_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `learning_decisions_sd_created_id_fkey`: sd_created_id → strategic_directives_v2(id)
 - `learning_decisions_sd_id_fkey`: sd_id → strategic_directives_v2(id)
 
 ## Indexes
