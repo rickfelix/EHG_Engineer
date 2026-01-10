@@ -70,12 +70,12 @@ See `~/.claude/skills/design-token-map/SKILL.md` for the complete token referenc
 
 1. **LEAD Phase**: Select reference image, define acceptance criteria
 2. **PLAN Phase**: Document component mapping, bind to API types
-3. **EXEC Phase**: Implement using `frontend-design` skill guidance
+3. **EXEC Phase**: Implement using `ehg-frontend-design` skill guidance
 4. **Validation**: Run DESIGN sub-agent for compliance check
 
 ## Related Skills
 
-- `frontend-design` - Overall design guidance
+- `ehg-frontend-design` - Overall design guidance
 - `ui-reference-workflow` - Step-by-step implementation workflow
 - `design-token-map` - Authoritative design tokens
 - `design-validation-gates` - Validation requirements
