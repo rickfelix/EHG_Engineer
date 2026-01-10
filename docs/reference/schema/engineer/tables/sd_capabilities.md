@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-10T04:01:49.496Z
-**Rows**: 0
+**Generated**: 2026-01-10T20:42:58.592Z
+**Rows**: 5
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (8 total)
+## Columns (9 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -26,6 +26,7 @@
 | action | `character varying(20)` | **NO** | - | - |
 | action_details | `jsonb` | YES | `'{}'::jsonb` | - |
 | created_at | `timestamp without time zone` | YES | `CURRENT_TIMESTAMP` | - |
+| category | `character varying(50)` | YES | - | - |
 
 ## Constraints
 
@@ -40,7 +41,8 @@
 
 ### Check Constraints
 - `sd_capabilities_action_check`: CHECK (((action)::text = ANY ((ARRAY['registered'::character varying, 'updated'::character varying, 'deprecated'::character varying])::text[])))
-- `sd_capabilities_capability_type_check`: CHECK (((capability_type)::text = ANY ((ARRAY['agent'::character varying, 'tool'::character varying, 'crew'::character varying, 'skill'::character varying])::text[])))
+- `sd_capabilities_capability_type_check`: CHECK (((capability_type)::text = ANY ((ARRAY['agent'::character varying, 'crew'::character varying, 'tool'::character varying, 'skill'::character varying, 'database_schema'::character varying, 'database_function'::character varying, 'rls_policy'::character varying, 'migration'::character varying, 'api_endpoint'::character varying, 'component'::character varying, 'hook'::character varying, 'service'::character varying, 'utility'::character varying, 'workflow'::character varying, 'webhook'::character varying, 'external_integration'::character varying, 'validation_rule'::character varying, 'quality_gate'::character varying, 'protocol'::character varying])::text[])))
+- `sd_capabilities_category_check`: CHECK (((category)::text = ANY ((ARRAY['ai_automation'::character varying, 'infrastructure'::character varying, 'application'::character varying, 'integration'::character varying, 'governance'::character varying])::text[])))
 
 ## Indexes
 
