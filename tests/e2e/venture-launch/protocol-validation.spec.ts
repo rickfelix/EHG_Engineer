@@ -429,10 +429,10 @@ test.describe('Data Persistence', () => {
     await page.locator('nav, [role="navigation"], main, .sidebar').first().waitFor({ timeout: 10000 });
 
     // Verify page loads consistently
-    const finalTitle = page.locator('h1, h2').first();
+    const finalTitle = await page.locator('h1, h2').first().textContent();
 
     // Both navigations should result in the same page structure
-    await expect(finalTitle).toHaveText();
+    expect(finalTitle).toBeTruthy();
     // Either same title or both are truthy (page loaded)
     if (initialTitle && finalTitle) {
       expect(typeof initialTitle).toBe('string');
