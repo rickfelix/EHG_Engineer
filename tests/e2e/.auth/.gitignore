@@ -1,0 +1,3 @@
+# Auth storage state contains sensitive session data
+user.json
+*.png
