@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-10T01:18:40.647Z
+**Generated**: 2026-01-10T03:37:46.398Z
 **Rows**: 16
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (19 total)
+## Columns (21 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -37,6 +37,8 @@
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
 | resolution_date | `timestamp with time zone` | YES | - | Date when the pattern root cause was resolved |
 | resolution_notes | `text` | YES | - | Notes explaining how the root cause was resolved |
+| assigned_sd_id | `character varying(50)` | YES | - | SD that will address this pattern. Set by /learn command when user approves. |
+| assignment_date | `timestamp with time zone` | YES | - | When pattern was assigned to an SD via /learn. |
 
 ## Constraints
 
@@ -44,14 +46,22 @@
 - `issue_patterns_pkey`: PRIMARY KEY (id)
 
 ### Foreign Keys
+- `issue_patterns_assigned_sd_id_fkey`: assigned_sd_id → strategic_directives_v2(id)
 - `issue_patterns_first_seen_sd_id_fkey`: first_seen_sd_id → strategic_directives_v2(id)
 - `issue_patterns_last_seen_sd_id_fkey`: last_seen_sd_id → strategic_directives_v2(id)
 
 ### Unique Constraints
 - `issue_patterns_pattern_id_key`: UNIQUE (pattern_id)
 
+### Check Constraints
+- `issue_patterns_status_check`: CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'assigned'::character varying, 'resolved'::character varying, 'obsolete'::character varying])::text[])))
+
 ## Indexes
 
+- `idx_issue_patterns_assigned_sd`
+  ```sql
+  CREATE INDEX idx_issue_patterns_assigned_sd ON public.issue_patterns USING btree (assigned_sd_id) WHERE (assigned_sd_id IS NOT NULL)
+  ```
 - `idx_issue_patterns_category`
   ```sql
   CREATE INDEX idx_issue_patterns_category ON public.issue_patterns USING btree (category)
