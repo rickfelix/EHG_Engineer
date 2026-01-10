@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-10T03:37:46.398Z
+**Generated**: 2026-01-10T04:01:49.496Z
 **Tables**: 342
 **Source**: Supabase PostgreSQL introspection
 
@@ -151,7 +151,7 @@ Part of EHG Immutable Laws v9.0.0 Manifesto enforcement. |
 | [folder_structure_snapshot](tables/folder_structure_snapshot.md) | 0 | ✅ | 2 | - |
 | [gate_requirements_templates](tables/gate_requirements_templates.md) | 5 | ✅ | 2 | Templates for generating verification gates with standard requirements |
 | [github_operations](tables/github_operations.md) | 0 | ✅ | 4 | Tracks all GitHub operations initiated by the LEO Protocol GitHub Sub-Agent |
-| [governance_audit_log](tables/governance_audit_log.md) | 60,597 | ✅ | 3 | - |
+| [governance_audit_log](tables/governance_audit_log.md) | 60,598 | ✅ | 3 | - |
 | [governance_policies](tables/governance_policies.md) | 0 | ✅ | 2 | - |
 | [governance_proposals](tables/governance_proposals.md) | 2 | ✅ | 2 | - |
 | [handoff_audit_log](tables/handoff_audit_log.md) | 2,902 | ✅ | 2 | Audit trail for all handoff creation attempts, including blocked bypasses |
