@@ -32,7 +32,10 @@ This agent works with companion **Claude Code Skills** for creative guidance. Sk
 
 | Skill | Purpose | Invoke When |
 |-------|---------|-------------|
-| `frontend-design` | Visual design patterns, colors, typography | Creating UI from scratch |
+| `frontend-design` | Reference-driven UI, Glass Cockpit patterns | Creating UI from references |
+| `design-token-map` | Authoritative colors, typography, spacing | Binding to design tokens |
+| `design-validation-gates` | Component sizing gates, accessibility blocking | Enforcing design standards |
+| `ui-reference-workflow` | Reference image → component pipeline | Building from mockups |
 | `component-architecture` | 300-600 LOC sizing, Shadcn patterns | Building components |
 | `accessibility-guide` | WCAG 2.1 AA implementation patterns | Making things accessible |
 | `design-system` | Tailwind conventions, responsive design | Applying CSS/responsive styles |
