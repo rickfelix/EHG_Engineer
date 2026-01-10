@@ -272,6 +272,7 @@ function extractSubAgentCode(improvement) {
 
 /**
  * Apply sub-agent config changes - updates leo_sub_agents with improved metadata
+ * If no specific sub-agent is identified, creates a protocol section instead
  */
 async function applySubAgentConfigChange(improvement) {
   const { payload, description } = improvement;
@@ -279,24 +280,60 @@ async function applySubAgentConfigChange(improvement) {
   // Try to get sub_agent_code from payload or extract from description
   let subAgentCode = payload?.sub_agent_code || extractSubAgentCode(improvement);
 
-  if (!subAgentCode) {
-    throw new Error('Cannot determine sub_agent_code from improvement. Include sub-agent name in description (e.g., "TESTING sub-agent")');
-  }
-
   console.log('Updating sub-agent config:', {
-    code: subAgentCode,
+    code: subAgentCode || '(all sub-agents)',
     improvement: (payload?.improvement || description)?.substring(0, 50)
   });
 
-  // Check if sub-agent exists
-  const { data: existing, error: checkError } = await supabase
-    .from('leo_sub_agents')
-    .select('id, code, metadata')
-    .eq('code', subAgentCode)
-    .single();
+  // Check if we have a valid sub-agent code and if the sub-agent exists
+  let existing = null;
+  if (subAgentCode) {
+    const { data, error: checkError } = await supabase
+      .from('leo_sub_agents')
+      .select('id, code, metadata')
+      .eq('code', subAgentCode)
+      .single();
 
-  if (checkError || !existing) {
-    throw new Error(`Sub-agent not found: ${subAgentCode}`);
+    if (!checkError && data) {
+      existing = data;
+    } else {
+      console.log(`Sub-agent '${subAgentCode}' not found - will create protocol section instead`);
+      subAgentCode = null; // Reset to trigger fallback
+    }
+  }
+
+  // If no valid sub-agent identified, this is a workflow improvement
+  // about sub-agents in general - create a protocol section instead
+  if (!subAgentCode) {
+    console.log('Creating protocol section for sub-agent workflow guidance');
+
+    const sectionData = {
+      protocol_id: 'leo-v4-3-3-ui-parity',
+      section_type: 'sub_agent_workflow',
+      title: 'Sub-Agent Trigger Guidance',
+      content: payload?.improvement || description,
+      order_index: 1,
+      metadata: {
+        source: 'learn_command',
+        added_at: new Date().toISOString(),
+        improvement_type: 'SUB_AGENT_CONFIG',
+        scope: 'all_sub_agents',
+        impact: payload?.impact,
+        evidence_count: payload?.evidence
+      }
+    };
+
+    const { data, error } = await supabase
+      .from('leo_protocol_sections')
+      .insert(sectionData)
+      .select('id, section_type, order_index')
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to create sub-agent workflow section: ${error.message}`);
+    }
+
+    return `Created protocol section for sub-agent workflow: ${data.section_type} (id: ${data.id})`;
   }
 
   // Build update payload - add improvement to metadata.improvements array
