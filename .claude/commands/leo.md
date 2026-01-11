@@ -107,26 +107,37 @@ When an SD reaches LEAD-FINAL-APPROVAL and is marked complete, suggest this sequ
 | 4 | `/document` | Feature/API SD | Update documentation |
 | 5 | `/learn` | Always | Capture learnings while fresh |
 
-**For UI/Feature SDs:**
-```
-🎯 UI Feature Completed
+**For UI/Feature SDs - Use AskUserQuestion:**
 
-Recommended sequence:
-1. /restart - Fresh servers for visual review
-2. Manual visual check - Verify UI renders
-3. /ship - Create PR and merge
-4. /document - Update feature documentation
-5. /learn - Capture session learnings
+```javascript
+{
+  "question": "UI Feature completed! What's next?",
+  "header": "Post-Completion",
+  "multiSelect": false,
+  "options": [
+    {"label": "/restart", "description": "Fresh servers for visual review (recommended first)"},
+    {"label": "/ship", "description": "Skip restart, go straight to shipping"},
+    {"label": "Done for now", "description": "End session"}
+  ]
+}
 ```
 
-**For Infrastructure/Database SDs:**
-```
-🔧 Infrastructure Work Completed
+**For Infrastructure/Database SDs - Use AskUserQuestion:**
 
-Recommended sequence:
-1. /ship - Create PR and merge
-2. /learn - Capture learnings
+```javascript
+{
+  "question": "Infrastructure work completed! What's next?",
+  "header": "Post-Completion",
+  "multiSelect": false,
+  "options": [
+    {"label": "/ship", "description": "Create PR and merge"},
+    {"label": "/learn", "description": "Capture learnings first"},
+    {"label": "Done for now", "description": "End session"}
+  ]
+}
 ```
+
+**Auto-invoke behavior:** When user selects a command option, immediately invoke that skill using the Skill tool.
 
 ### Starting New Work
 

@@ -394,27 +394,36 @@ The `/document` command connects to other commands in the workflow:
 
 ### After Documentation Updates
 
-**If documentation changes created uncommitted files:**
+**If documentation changes created uncommitted files - Use AskUserQuestion:**
+
+```javascript
+{
+  "question": "Documentation updated. Uncommitted changes detected. What's next?",
+  "header": "Next Step",
+  "multiSelect": false,
+  "options": [
+    {"label": "/ship", "description": "Commit and create PR for doc changes"},
+    {"label": "Done for now", "description": "Leave uncommitted, address later"}
+  ]
+}
 ```
-✅ Documentation Updated
 
-Files modified:
-- CLAUDE.md (regenerated)
-- docs/reference/xxx.md
+**If documentation is complete and committed - Use AskUserQuestion:**
 
-💡 Uncommitted changes detected. Run /ship to commit and create PR.
+```javascript
+{
+  "question": "Documentation updated and committed. What's next?",
+  "header": "Next Step",
+  "multiSelect": false,
+  "options": [
+    {"label": "/learn", "description": "Capture documentation patterns"},
+    {"label": "/leo next", "description": "Continue with next SD"},
+    {"label": "Done for now", "description": "End session"}
+  ]
+}
 ```
 
-**If documentation is complete and committed:**
-```
-✅ Documentation Updated
-
-All changes committed.
-
-💡 Next commands:
-   • /learn - Capture documentation patterns (if systemic improvement)
-   • /leo next - Continue with next SD
-```
+**Auto-invoke behavior:** When user selects a command option, immediately invoke that skill using the Skill tool.
 
 ### Related Commands
 

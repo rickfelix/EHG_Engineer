@@ -113,12 +113,21 @@ The created SD will appear in the SD queue. Follow normal LEO workflow:
 - EXEC phase (implementation)
 - LEAD-FINAL-APPROVAL (auto-resolves patterns)
 
-**After SD creation, suggest:**
-```
-✅ SD created: SD-LEARN-XXX
+**After SD creation - Use AskUserQuestion:**
 
-💡 Next: Run /leo next to start the LEO Protocol workflow for this SD
+```javascript
+{
+  "question": "SD created: SD-LEARN-XXX. What's next?",
+  "header": "Next Step",
+  "multiSelect": false,
+  "options": [
+    {"label": "/leo next", "description": "Start LEO Protocol workflow for this SD"},
+    {"label": "Done for now", "description": "End session, work on SD later"}
+  ]
+}
 ```
+
+**Auto-invoke behavior:** When user selects "/leo next", immediately invoke that skill using the Skill tool.
 
 This connects `/learn` → `/leo` in the command ecosystem.
 
