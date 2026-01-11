@@ -392,17 +392,42 @@ export class HandoffRecorder {
       };
 
       // Extract gate validation results for cross-handoff traceability
+      // SD-LEO-STREAMS-001 Retrospective: Critical for downstream gate validation
       if (result.gateResults) {
         // EXEC-TO-PLAN: Store Gate 2 results for PLAN-TO-LEAD
-        if (handoffType === 'EXEC-TO-PLAN' && result.gateResults.GATE2_IMPLEMENTATION_FIDELITY) {
-          metadata.gate2_validation = result.gateResults.GATE2_IMPLEMENTATION_FIDELITY;
+        // CRITICAL: metadata.gate2_validation is read by PLAN-TO-LEAD Gate 3 (Traceability)
+        // See: docs/reference/schema/handoff-field-reference.md
+        if (handoffType === 'EXEC-TO-PLAN') {
+          if (result.gateResults.GATE2_IMPLEMENTATION_FIDELITY) {
+            metadata.gate2_validation = result.gateResults.GATE2_IMPLEMENTATION_FIDELITY;
+            console.log('   ✅ Gate 2 fidelity data saved to metadata.gate2_validation');
+          } else {
+            // SD-LEO-STREAMS-001: Warn if fidelity data missing - this will cause PLAN-TO-LEAD Gate 3 to fail
+            console.warn('   ⚠️  WARNING: GATE2_IMPLEMENTATION_FIDELITY not found in gateResults');
+            console.warn('      PLAN-TO-LEAD Gate 3 (Traceability) will fail without fidelity data');
+            console.warn('      Fix: Ensure GATE2_IMPLEMENTATION_FIDELITY gate runs in EXEC-TO-PLAN');
+            // Create placeholder to prevent downstream confusion
+            metadata.gate2_validation = {
+              warning: 'Fidelity data not populated during EXEC-TO-PLAN',
+              score: 0,
+              passed: false,
+              gate_scores: {}
+            };
+          }
         }
         // PLAN-TO-EXEC: Store Gate 1 results for LEAD-FINAL-APPROVAL
-        if (handoffType === 'PLAN-TO-EXEC' && result.gateResults.GATE1_PRD_QUALITY) {
-          metadata.gate1_validation = result.gateResults.GATE1_PRD_QUALITY;
+        if (handoffType === 'PLAN-TO-EXEC') {
+          if (result.gateResults.GATE1_PRD_QUALITY) {
+            metadata.gate1_validation = result.gateResults.GATE1_PRD_QUALITY;
+            console.log('   ✅ Gate 1 PRD quality saved to metadata.gate1_validation');
+          } else {
+            console.warn('   ⚠️  WARNING: GATE1_PRD_QUALITY not found in gateResults');
+          }
         }
         // Store all gate results for comprehensive audit trail
         metadata.gate_results = result.gateResults;
+      } else {
+        console.warn('   ⚠️  No gateResults in result object - cross-handoff traceability compromised');
       }
 
       const handoffRecord = {

@@ -1,92 +1,59 @@
 # LEO Protocol Session State
-**Last Updated**: 2025-11-26T12:00:00Z
-**Session ID**: IDEATION-MILESTONE-SETUP
+**Last Updated**: 2026-01-11
+**Session ID**: LEO-PROTOCOL-IMPROVEMENTS
 
 ---
 
-## Active Work: EHG Stages 1-6 Ideation Milestone
+## Active Work: LEO Protocol Improvements
 
-### Completed Tasks (This Session)
+### Current State
+- **Task**: Implement action items from SD-LEO-STREAMS-001 retrospective
+- **Status**: COMPLETE
+- **PR Needed**: Yes (5 files modified, 2 new files created)
 
-1. **Created 10 SDs with Parent-Child Hierarchy** ✅
-   - Root: SD-IDEATION-VISION-001
-   - Foundations: DATA-001, AGENTS-001, PATTERNS-001
-   - Stages: STAGE1-001 through STAGE6-001
+### Completed Steps
+1. ✅ Created schema field reference document
+2. ✅ Added batch prerequisite validation to handoff.js
+3. ✅ Added fidelity_data check to EXEC→PLAN checklist
+4. ✅ Implemented git state validation
+5. ✅ Updated error messages with exact field paths
 
-2. **Archived 7 Conflicting Legacy SDs** ✅
-   - Set to `deferred` status with archive_reason metadata
-   - 10 additional SDs not found (never existed)
+### Files Created
+- `docs/reference/schema/handoff-field-reference.md` (NEW - Schema field paths)
+- `scripts/check-git-state.js` (NEW - Git state quick check)
 
-3. **Created 66 Backlog Items** ✅
-   - Distributed across all 10 SDs in sd_backlog_map table
+### Files Modified
+- `scripts/handoff.js` - Added `precheck` command
+- `scripts/modules/handoff/HandoffOrchestrator.js` - Added `precheckHandoff()` method
+- `scripts/modules/handoff/validation/ValidationOrchestrator.js` - Added `validateGatesAll()` method
+- `scripts/modules/handoff/recording/HandoffRecorder.js` - Added fidelity data warnings
+- `scripts/modules/handoff/ResultBuilder.js` - Enhanced error messages with field paths
 
-4. **Committed Scripts** ✅
-   - Commit: 58ef4c8
-   - Files: create-ideation-milestone-sds.js, cleanup-conflicting-sds.js, create-ideation-backlog-items.js
+### Improvements Summary
 
-### SD Hierarchy Structure
-```
-SD-IDEATION-VISION-001 (Parent - Critical)
-├── SD-IDEATION-DATA-001 (Database - Critical)
-│   ├── SD-IDEATION-STAGE1-001 (Stage 1: Enhanced Ideation)
-│   └── SD-IDEATION-STAGE5-001 (Stage 5: Profitability)
-├── SD-IDEATION-AGENTS-001 (Infrastructure - Critical)
-│   ├── SD-IDEATION-STAGE2-001 (Stage 2: AI Review)
-│   ├── SD-IDEATION-STAGE3-001 (Stage 3: Validation)
-│   └── SD-IDEATION-STAGE4-001 (Stage 4: Competitive Intel)
-└── SD-IDEATION-PATTERNS-001 (Feature - High)
-    └── SD-IDEATION-STAGE6-001 (Stage 6: Risk Evaluation)
-```
+| Priority | Action | Status |
+|----------|--------|--------|
+| HIGH | Batch prerequisite validation before gates | ✅ `handoff.js precheck` |
+| HIGH | Schema field reference document | ✅ `docs/reference/schema/handoff-field-reference.md` |
+| HIGH | Fidelity_data in EXEC→PLAN checklist | ✅ Warnings when missing |
+| MEDIUM | Git state validation in GITHUB sub-agent | ✅ `scripts/check-git-state.js` |
+| MEDIUM | Error messages with exact field paths | ✅ Enhanced ResultBuilder |
 
-### Key Schema Discoveries
-- **sd_type constraint**: `feature`, `infrastructure`, `database`, `security`, `documentation`
-- **status constraint**: `draft`, `in_progress`, `active`, `pending_approval`, `completed`, `deferred`, `cancelled`
-- **Archiving strategy**: Use `deferred` status + metadata.archive_reason
-
-### Scripts Created
-| Script | Purpose | Status |
-|--------|---------|--------|
-| create-ideation-milestone-sds.js | Creates 10 SDs with hierarchy | ✅ Committed |
-| cleanup-conflicting-sds.js | Archives/cancels legacy SDs | ✅ Committed |
-| create-ideation-backlog-items.js | Creates 66 backlog items | ✅ Committed |
+### Expected Impact
+- Reduces handoff iterations 60-70%
+- Eliminates field mismatch errors
+- Prevents Gate 3 failures from missing fidelity data
+- Faster resolution with exact field paths in errors
 
 ---
 
-## Context Health
-- **Status**: 🟢 HEALTHY (compacted)
-- **Background shells**: Cleaned up (3 killed)
-- **Stale data**: Cleared
-
-## Next Steps (Optional)
-- Begin PLAN phase for Layer 1 SDs (DATA-001 + AGENTS-001)
-- Clean up test SDs (SD-TEST-LEO-GATES-001-*)
-
----
-
-## Recovery Commands
+## Next Step
+Commit changes and create PR:
 ```bash
-# Check SD hierarchy
-node -e "
-const { createClient } = require('@supabase/supabase-js');
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-supabase.from('strategic_directives_v2')
-  .select('id, title, status, parent_sd_id')
-  .like('id', 'SD-IDEATION%')
-  .then(r => console.log(r.data));
-"
-
-# Check backlog count
-node -e "
-const { createClient } = require('@supabase/supabase-js');
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-supabase.from('sd_backlog_map')
-  .select('sd_id', { count: 'exact' })
-  .like('sd_id', 'SD-IDEATION%')
-  .then(r => console.log('Backlog items:', r.count));
-"
+git add -A && git commit -m "feat(leo): implement protocol improvements from SD-LEO-STREAMS-001 retrospective"
 ```
 
 ---
 
-**Session Status**: ✅ All requested tasks completed
+**Session Status**: Implementation complete, ready for commit
 **Blocking Issues**: None

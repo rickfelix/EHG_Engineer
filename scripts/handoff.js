@@ -477,6 +477,75 @@ async function main() {
       break;
     }
 
+    case 'precheck': {
+      // SD-LEO-STREAMS-001 Retrospective: Batch prerequisite validation
+      // Finds ALL issues at once, reducing handoff iterations 60-70%
+      const precheckType = args[1];
+      const precheckSdId = args[2];
+
+      if (!precheckType || !precheckSdId) {
+        console.log('Usage: node scripts/handoff.js precheck HANDOFF_TYPE SD-ID');
+        console.log('');
+        console.log('Runs ALL gate validations to find ALL issues at once.');
+        console.log('Use this BEFORE "execute" to fix everything in one iteration.');
+        console.log('');
+        console.log('Includes:');
+        console.log('  - Git state check (uncommitted/unpushed)');
+        console.log('  - All handoff gates (batch mode)');
+        console.log('  - Remediation suggestions');
+        console.log('');
+        console.log('Examples:');
+        console.log('  node scripts/handoff.js precheck PLAN-TO-EXEC SD-EXAMPLE-001');
+        console.log('  node scripts/handoff.js precheck exec-to-plan SD-EXAMPLE-001');
+        process.exit(1);
+      }
+
+      // Step 1: Quick git state check first
+      console.log('');
+      console.log('STEP 1: GIT STATE CHECK');
+      console.log('─'.repeat(50));
+      try {
+        const { checkGitState } = await import('./check-git-state.js');
+        const gitResult = await checkGitState();
+        if (!gitResult.passed) {
+          console.log('');
+          console.log('⛔ Git issues found - resolve before proceeding');
+          console.log('   Run: node scripts/check-git-state.js for details');
+          console.log('');
+          // Continue to show all other issues too
+        }
+      } catch (e) {
+        console.log(`   ⚠️  Could not run git check: ${e.message}`);
+      }
+
+      // Step 2: Run all handoff gates
+      console.log('');
+      console.log('STEP 2: HANDOFF GATE VALIDATION');
+      console.log('─'.repeat(50));
+      const precheckResult = await system.precheckHandoff(precheckType, precheckSdId);
+
+      console.log('');
+      if (precheckResult.success) {
+        console.log('✅ PRECHECK PASSED - All gates would pass');
+        console.log('='.repeat(50));
+        console.log('   You can now safely run:');
+        console.log(`   node scripts/handoff.js execute ${precheckType.toUpperCase()} ${precheckSdId}`);
+      } else {
+        console.log('❌ PRECHECK FAILED - Issues must be resolved first');
+        console.log('='.repeat(50));
+        console.log(`   Found ${precheckResult.issues.length} issue(s) across ${precheckResult.failedGates.length} gate(s)`);
+        console.log('');
+        console.log('   ALL ISSUES:');
+        precheckResult.issues.forEach((issue, idx) => {
+          console.log(`   ${idx + 1}. [${issue.gate}] ${issue.issue}`);
+        });
+        console.log('');
+        console.log('   Fix all issues above, then run precheck again.');
+      }
+      console.log('');
+      process.exit(precheckResult.success ? 0 : 1);
+    }
+
     case 'execute': {
       const handoffType = args[1];
       const sdId = args[2];
@@ -677,6 +746,7 @@ async function main() {
       console.log('  workflow SD-ID         - Show recommended workflow for SD type');
       console.log('  verify SD-ID           - Verify SD is truly complete (PAT-WF-NEXT-001)');
       console.log('  pending                - Show SDs stuck in pending_approval');
+      console.log('  precheck TYPE SD-ID    - Find ALL issues before execute (batch validation)');
       console.log('  execute TYPE SD-ID     - Execute handoff');
       console.log('  list [SD-ID]           - List handoff executions');
       console.log('  stats                  - Show system statistics');

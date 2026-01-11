@@ -267,6 +267,99 @@ export class ValidationOrchestrator {
     this.constraintsCache = null;
     this.constraintsCacheExpiry = 0;
   }
+
+  /**
+   * Run ALL gates without stopping on failure (batch prerequisite validation)
+   * SD-LEO-STREAMS-001 Retrospective: Reduces handoff iterations 60-70%
+   *
+   * Unlike validateGates() which stops on first required failure, this method
+   * runs ALL gates and collects ALL issues at once. Use this for pre-flight
+   * checks before attempting a handoff.
+   *
+   * @param {array} gates - Array of gate definitions
+   * @param {object} context - Shared context
+   * @returns {Promise<object>} Combined result with ALL issues
+   */
+  async validateGatesAll(gates, context = {}) {
+    console.log('');
+    console.log('🔎 BATCH PREREQUISITE VALIDATION (All Gates)');
+    console.log('='.repeat(60));
+
+    const results = {
+      passed: true,
+      totalScore: 0,
+      totalMaxScore: 0,
+      normalizedScore: 0,
+      gateCount: 0,
+      passedGates: [],
+      failedGates: [],
+      gateResults: {},
+      issues: [],       // ALL issues from ALL gates
+      warnings: []
+    };
+
+    let weightedScoreSum = 0;
+    let totalWeight = 0;
+
+    // Run ALL gates, don't stop on failure
+    for (const gate of gates) {
+      // Check condition if provided
+      if (gate.condition && !(await gate.condition(context))) {
+        console.log(`⏭️  Skipping ${gate.name} (condition not met)`);
+        continue;
+      }
+
+      const gateResult = await this.validateGate(gate.name, gate.validator, context);
+      results.gateResults[gate.name] = gateResult;
+
+      results.totalScore += gateResult.score;
+      results.totalMaxScore += gateResult.maxScore;
+      results.gateCount++;
+
+      const gateWeight = gate.weight || 1.0;
+      const gatePercentage = gateResult.maxScore > 0
+        ? (gateResult.score / gateResult.maxScore) * 100
+        : 0;
+      weightedScoreSum += gatePercentage * gateWeight;
+      totalWeight += gateWeight;
+
+      results.warnings.push(...gateResult.warnings);
+
+      // Collect issues but DON'T stop - this is the key difference
+      if (!gateResult.passed && gate.required !== false) {
+        results.passed = false;
+        results.failedGates.push({
+          name: gate.name,
+          issues: gateResult.issues,
+          score: gateResult.score,
+          maxScore: gateResult.maxScore
+        });
+        results.issues.push(...gateResult.issues.map(issue => ({
+          gate: gate.name,
+          issue
+        })));
+      } else {
+        results.passedGates.push(gate.name);
+      }
+    }
+
+    results.normalizedScore = totalWeight > 0
+      ? Math.round(weightedScoreSum / totalWeight)
+      : 0;
+
+    // Summary
+    console.log('');
+    console.log('─'.repeat(60));
+    console.log('BATCH VALIDATION SUMMARY');
+    console.log(`   Gates evaluated: ${results.gateCount}`);
+    console.log(`   Passed: ${results.passedGates.length} (${results.passedGates.join(', ') || 'none'})`);
+    console.log(`   Failed: ${results.failedGates.length} (${results.failedGates.map(g => g.name).join(', ') || 'none'})`);
+    console.log(`   Total issues: ${results.issues.length}`);
+    console.log(`   Score: ${results.normalizedScore}%`);
+    console.log('='.repeat(60));
+
+    return results;
+  }
 }
 
 export default ValidationOrchestrator;
