@@ -242,28 +242,37 @@ The `/triangulation-protocol` command connects to other commands:
 
 ### After Bug/Issue Confirmed
 
-**If issue is small (<50 LOC fix):**
+**If issue is small (<50 LOC fix) - Use AskUserQuestion:**
+
+```javascript
+{
+  "question": "Issue confirmed (~XX LOC fix). How would you like to proceed?",
+  "header": "Fix Approach",
+  "multiSelect": false,
+  "options": [
+    {"label": "/quick-fix [issue]", "description": "Small fix workflow with auto-merge"},
+    {"label": "Create full SD", "description": "Full LEO Protocol for this issue"},
+    {"label": "Done for now", "description": "Document and address later"}
+  ]
+}
 ```
-🔍 Ground-Truth Analysis Complete
 
-Issue confirmed: [description]
-Estimated fix: ~XX lines of code
+**If issue is larger (requires full SD) - Use AskUserQuestion:**
 
-💡 Suggested: Run /quick-fix [issue description]
-   Quick-fix workflow handles small fixes efficiently.
+```javascript
+{
+  "question": "Issue confirmed (>50 LOC). Requires full SD. What's next?",
+  "header": "SD Creation",
+  "multiSelect": false,
+  "options": [
+    {"label": "/learn", "description": "Create SD via learning patterns"},
+    {"label": "/leo next", "description": "Create SD manually via LEO Protocol"},
+    {"label": "Done for now", "description": "Document and address later"}
+  ]
+}
 ```
 
-**If issue is larger (requires full SD):**
-```
-🔍 Ground-Truth Analysis Complete
-
-Issue confirmed: [description]
-Scope: Too large for quick-fix (>50 LOC or multiple files)
-
-💡 Suggested:
-   1. Create SD via /learn (if pattern-based) or manual SD creation
-   2. Follow LEO Protocol: /leo next → LEAD → PLAN → EXEC
-```
+**Auto-invoke behavior:** When user selects a command option, immediately invoke that skill using the Skill tool.
 
 ### Related Commands
 

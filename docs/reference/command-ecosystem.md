@@ -181,18 +181,55 @@ Issue Reported
 Each command file (`.claude/commands/*.md`) includes a "Command Ecosystem Integration" section that:
 
 1. **Documents connections** - What commands it suggests and when
-2. **Provides templates** - Example output showing suggestions
+2. **Provides templates** - AskUserQuestion JSON for interactive suggestions
 3. **Lists conditions** - When each suggestion applies
+4. **Specifies auto-invoke** - Selected commands execute immediately
+
+## Suggestion UX Pattern
+
+All command suggestions use `AskUserQuestion` with auto-invoke behavior:
+
+### Standard Pattern
+
+```javascript
+// After completing a command action
+{
+  "question": "Action complete. What would you like to do next?",
+  "header": "Next Step",
+  "multiSelect": false,
+  "options": [
+    {"label": "/command-name", "description": "Brief description of what it does"},
+    {"label": "Done for now", "description": "End session, no further action"}
+  ]
+}
+```
+
+### Auto-Invoke Behavior
+
+When user selects a command option (e.g., "/learn"), the system immediately invokes that skill using the Skill tool. This provides:
+- **One-click workflow** - No need to type commands
+- **Contextual continuity** - Session state preserved
+- **Reduced friction** - Faster task completion
+
+### "Done for now" Option
+
+Every suggestion set includes a "Done for now" option allowing users to:
+- End the current workflow
+- Address remaining work later
+- Exit without further action
 
 ## Best Practices
 
-1. **Suggestions are non-blocking** - User can always ignore and proceed differently
-2. **Context-aware** - Suggestions change based on SD type, session length, etc.
-3. **Not circular** - Commands don't suggest themselves
-4. **Progressive** - Flow moves forward (completion → shipping → learning → new work)
+1. **Interactive suggestions** - Use AskUserQuestion, not plain text
+2. **Auto-invoke on selection** - Don't just acknowledge, execute the command
+3. **Context-aware options** - Filter options based on SD type, session state
+4. **Always include exit** - "Done for now" option in every suggestion
+5. **Not circular** - Commands don't suggest themselves
+6. **Progressive** - Flow moves forward (completion → shipping → learning → new work)
 
 ## Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1.0 | 2026-01-11 | Added AskUserQuestion pattern with auto-invoke behavior |
 | 1.0.0 | 2026-01-11 | Initial command ecosystem implementation |

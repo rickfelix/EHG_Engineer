@@ -186,24 +186,37 @@ The `/quick-fix` command connects to other commands:
 
 ### After Quick-Fix Completion
 
-**When PR is created with auto-merge:**
-```
-✅ Quick-Fix Complete: QF-YYYYMMDD-NNN
+**When PR is created with auto-merge - Use AskUserQuestion:**
 
-PR #XX created with auto-merge enabled.
-
-💡 Next commands:
-   • /learn - Capture any patterns from this fix (optional)
-   • /leo next - Continue with next SD if queue has work
+```javascript
+{
+  "question": "Quick-Fix complete! PR #XX created with auto-merge. What's next?",
+  "header": "Next Step",
+  "multiSelect": false,
+  "options": [
+    {"label": "/learn", "description": "Capture patterns from this fix"},
+    {"label": "/leo next", "description": "Continue with next SD"},
+    {"label": "Done for now", "description": "End session"}
+  ]
+}
 ```
 
-**If quick-fix was triggered by `/triangulation-protocol`:**
-```
-✅ Quick-Fix Complete
+**If quick-fix was triggered by `/triangulation-protocol` - Use AskUserQuestion:**
 
-This fix addressed the issue identified during triangulation.
-Consider running /learn if this revealed a systemic pattern.
+```javascript
+{
+  "question": "Quick-Fix complete! Issue from triangulation resolved. What's next?",
+  "header": "Next Step",
+  "multiSelect": false,
+  "options": [
+    {"label": "/learn", "description": "This revealed a systemic pattern"},
+    {"label": "/leo next", "description": "Continue with SD work"},
+    {"label": "Done for now", "description": "End session"}
+  ]
+}
 ```
+
+**Auto-invoke behavior:** When user selects a command option, immediately invoke that skill using the Skill tool.
 
 ### Related Commands
 

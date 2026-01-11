@@ -202,28 +202,38 @@ Options:
 
 ### Step 7: Post-Merge Command Ecosystem (NEW)
 
-**After a successful merge, display contextual suggestions based on the work just shipped:**
+**After a successful merge, present contextual suggestions using AskUserQuestion:**
 
 ```
 ✅ PR #X merged and branch deleted.
-
-📋 Next Steps (choose based on your context):
 ```
 
-| Condition | Suggest | Why |
-|-----------|---------|-----|
-| Always | `/learn` | Capture learnings while context is fresh |
-| Feature/API SD just completed | `/document` | Update documentation for new functionality |
-| More SDs in queue | `/leo next` | Continue with next SD |
-| Long session (>2 hours) | `/restart` | Fresh environment before next work |
+**Use AskUserQuestion with these options (adapt based on context):**
 
-**Present as non-blocking suggestion:**
+```javascript
+// Standard post-merge options
+{
+  "question": "What would you like to do next?",
+  "header": "Next Step",
+  "multiSelect": false,
+  "options": [
+    {"label": "/learn", "description": "Capture learnings from this session"},
+    {"label": "/document", "description": "Update documentation (feature/API work)"},
+    {"label": "/leo next", "description": "Continue with next SD in queue"},
+    {"label": "Done for now", "description": "End session, no further action"}
+  ]
+}
 ```
-💡 Suggested next commands:
-   • /learn - Capture learnings from this session
-   • /document - Update docs if feature/API work (detects SD type)
-   • /leo next - Continue with next SD in queue
-```
+
+**Auto-invoke behavior:** When user selects a command option (e.g., "/learn"), immediately invoke that skill using the Skill tool. Do NOT just acknowledge - execute the command.
+
+**Context-aware option filtering:**
+| Condition | Include Option |
+|-----------|----------------|
+| Always | `/learn`, "Done for now" |
+| Feature/API SD just completed | `/document` |
+| More SDs in queue | `/leo next` |
+| Long session (>2 hours) | `/restart` |
 
 **Why:** The command ecosystem connects related workflows. `/ship` is often the end of one work unit but the beginning of another.
 
