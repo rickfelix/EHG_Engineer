@@ -98,13 +98,29 @@ This will:
 - Show classification (Quick-Fix or Full SD)
 - Display next steps: "Run `npm run sd:next` to continue with LEO Protocol"
 
-**Step 5: Continue with LEO Protocol**
+**Step 5: Continue with LEO Protocol (Command Ecosystem)**
+
+### Cross-Reference
+
+This command is part of the **Command Ecosystem**. For full workflow context, see:
+- **[Command Ecosystem Reference](../../docs/reference/command-ecosystem.md)** - Complete inter-command flow diagram and relationships
+
+---
 
 The created SD will appear in the SD queue. Follow normal LEO workflow:
 - LEAD approval
 - PLAN phase (PRD creation)
 - EXEC phase (implementation)
 - LEAD-FINAL-APPROVAL (auto-resolves patterns)
+
+**After SD creation, suggest:**
+```
+✅ SD created: SD-LEARN-XXX
+
+💡 Next: Run /leo next to start the LEO Protocol workflow for this SD
+```
+
+This connects `/learn` → `/leo` in the command ecosystem.
 
 ### When user runs `/learn insights`:
 

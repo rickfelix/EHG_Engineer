@@ -229,6 +229,63 @@ Before approving an SD as "complete":
 
 ---
 
+## Command Ecosystem Integration
+
+### Cross-Reference
+
+This command is part of the **Command Ecosystem**. For full workflow context, see:
+- **[Command Ecosystem Reference](../../docs/reference/command-ecosystem.md)** - Complete inter-command flow diagram and relationships
+
+---
+
+The `/triangulation-protocol` command connects to other commands:
+
+### After Bug/Issue Confirmed
+
+**If issue is small (<50 LOC fix):**
+```
+🔍 Ground-Truth Analysis Complete
+
+Issue confirmed: [description]
+Estimated fix: ~XX lines of code
+
+💡 Suggested: Run /quick-fix [issue description]
+   Quick-fix workflow handles small fixes efficiently.
+```
+
+**If issue is larger (requires full SD):**
+```
+🔍 Ground-Truth Analysis Complete
+
+Issue confirmed: [description]
+Scope: Too large for quick-fix (>50 LOC or multiple files)
+
+💡 Suggested:
+   1. Create SD via /learn (if pattern-based) or manual SD creation
+   2. Follow LEO Protocol: /leo next → LEAD → PLAN → EXEC
+```
+
+### Related Commands
+
+| Finding | Suggest |
+|---------|---------|
+| Bug confirmed, <50 LOC | `/quick-fix` |
+| Systemic issue, pattern-based | `/learn` (creates SD) |
+| Feature gap confirmed | Create SD manually |
+| Documentation mismatch | `/document` |
+
+### Before Triangulation
+
+If uncertain whether an issue exists:
+```
+Before running triangulation:
+• Gather evidence from multiple AI models (OpenAI, Gemini, Claude)
+• Prepare the Standard Prompt Template (see above)
+• Have specific features/claims to verify
+```
+
+---
+
 *Protocol Version: 1.0*
 *Created: 2026-01-01*
 *Based on: Genesis Triangulation Audit findings*

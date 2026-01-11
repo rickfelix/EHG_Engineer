@@ -200,19 +200,61 @@ Options:
 2. Run `git checkout main && git pull` to sync local
 3. Confirm: "✅ PR #X merged and branch deleted. You're on main with latest changes."
 
-### Step 7: Suggest /learn (After Successful Merge)
+### Step 7: Post-Merge Command Ecosystem (NEW)
 
-**After a successful merge, display this minimal prompt:**
+**After a successful merge, display contextual suggestions based on the work just shipped:**
 
 ```
-💡 Run /learn to capture learnings from this session?
+✅ PR #X merged and branch deleted.
+
+📋 Next Steps (choose based on your context):
 ```
 
-This is a non-blocking suggestion. The user can:
-- Run `/learn` to surface and apply protocol improvements
-- Dismiss and continue working
+| Condition | Suggest | Why |
+|-----------|---------|-----|
+| Always | `/learn` | Capture learnings while context is fresh |
+| Feature/API SD just completed | `/document` | Update documentation for new functionality |
+| More SDs in queue | `/leo next` | Continue with next SD |
+| Long session (>2 hours) | `/restart` | Fresh environment before next work |
 
-**Why:** The `/learn` command benefits from fresh context after completing work. Suggesting it after `/ship` helps capture learnings while the session is still in memory.
+**Present as non-blocking suggestion:**
+```
+💡 Suggested next commands:
+   • /learn - Capture learnings from this session
+   • /document - Update docs if feature/API work (detects SD type)
+   • /leo next - Continue with next SD in queue
+```
+
+**Why:** The command ecosystem connects related workflows. `/ship` is often the end of one work unit but the beginning of another.
+
+---
+
+### Cross-Reference
+
+This command is part of the **Command Ecosystem**. For full workflow context, see:
+- **[Command Ecosystem Reference](../../docs/reference/command-ecosystem.md)** - Complete inter-command flow diagram and relationships
+
+---
+
+### Pre-Ship: /restart for UI Work (IMPORTANT)
+
+**If the SD involved UI changes**, suggest running `/restart` BEFORE shipping to verify visual changes in a clean environment:
+
+```
+🎯 UI Changes Detected
+
+Before shipping, consider:
+1. Run /restart - Clean server environment
+2. Visual review - Verify UI renders correctly
+3. Then proceed with /ship
+
+This catches render issues that may only appear after server restart.
+```
+
+**When to suggest:**
+- SD type is `feature` with UI components
+- Files modified include `*.tsx`, `pages/`, `components/`
+- PRD mentions UI, dashboard, or visual changes
 
 ---
 

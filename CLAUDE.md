@@ -63,8 +63,31 @@ This command provides:
 - `bash scripts/leo-stack.sh status` - Check server status
 - `bash scripts/leo-stack.sh stop` - Stop all servers
 
+## Slash Commands & Command Ecosystem
+
+LEO Protocol includes intelligent slash commands that interconnect based on workflow context:
+
+| Command | Purpose | Key Integration |
+|---------|---------|-----------------|
+| `/leo` | Protocol orchestrator, SD queue management | Suggests post-completion sequence |
+| `/restart` | Restart all LEO stack servers | Pre-ship for UI work, post-completion |
+| `/ship` | Commit, create PR, merge workflow | Always after completion, suggests /learn |
+| `/learn` | Self-improvement, pattern capture | After shipping, creates SDs |
+| `/document` | Update documentation | After feature/API work |
+| `/quick-fix` | Small bug fixes (<50 LOC) | After triangulation confirms small bug |
+| `/triangulation-protocol` | Multi-AI ground-truth verification | Before fixes, suggests /quick-fix |
+
+**Command Ecosystem**: Commands intelligently suggest related commands based on context. See full workflow:
+- **[Command Ecosystem Reference](docs/reference/command-ecosystem.md)** - Complete inter-command flow diagram
+
+**Example Flow (UI Feature Completion)**:
+```
+LEAD-FINAL-APPROVAL → /restart → Visual Review → /ship → /document → /learn → /leo next
+```
+
+
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-11 10:44:28 PM
+**Last Generated**: 2026-01-11 8:27:45 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
