@@ -4,6 +4,72 @@ Master index for navigating the documentation library.
 
 ---
 
+## ⚠️ DATABASE-FIRST DOCUMENTATION ARCHITECTURE
+
+**IMPORTANT FOR AI MODELS**: LEO Protocol documentation lives in the Supabase database, not markdown files.
+
+### Source of Truth
+
+| Documentation Type | Source | Access Method |
+|--------------------|--------|---------------|
+| **LEO Protocol** (CLAUDE*.md) | `leo_protocol_sections` table | Query database, then regenerate files |
+| **Sub-Agents** | `leo_sub_agents` table | Query database, then regenerate files |
+| **Triggers** | `leo_sub_agent_triggers` table | Query database, then regenerate files |
+| **Skills** | `.claude/skills/*.md` | Direct file edit |
+| **Reference Docs** | `docs/reference/*.md` | Direct file edit |
+
+### Updating LEO Protocol Documentation
+
+```bash
+# 1. Query database for section
+node -e "
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+supabase.from('leo_protocol_sections')
+  .select('id, title, content')
+  .ilike('title', '%search term%')
+  .then(({data}) => console.log(JSON.stringify(data, null, 2)));
+"
+
+# 2. Update database section content
+# (Use UPDATE SQL or Node.js script)
+
+# 3. Regenerate CLAUDE*.md files
+node scripts/generate-claude-md-from-db.js
+
+# 4. Verify changes
+grep -n "your change" CLAUDE*.md
+```
+
+### Key Database Tables
+
+| Table | Purpose | Count |
+|-------|---------|-------|
+| `leo_protocol_sections` | Protocol content blocks | ~370 sections |
+| `leo_sub_agents` | Sub-agent definitions | ~25 agents |
+| `leo_sub_agent_triggers` | Trigger keywords | ~350 triggers |
+| `strategic_directives_v2` | SD metadata | Active SDs |
+| `ai_generated_documents` | AI docs | Generated content |
+
+### Documentation Principles
+
+1. **Database-First**: LEO Protocol docs in database, NOT files
+2. **Auto-Generated**: CLAUDE*.md files regenerated from database
+3. **Direct Edits Only For**: Skills, reference docs, guides
+4. **Version Control**: Files checked into git AFTER regeneration
+
+### For AI Models Crawling This Repo
+
+If you're reading this as part of codebase ingestion:
+
+- **Do NOT treat CLAUDE*.md files as source of truth** - they're generated artifacts
+- **Query the database** via scripts to get current protocol state
+- **Use /document command** (`.claude/commands/document.md`) for updates
+- **Invoke DOCMON sub-agent** for database-first validation
+
+---
+
 ## Quick Start
 
 | Document | Purpose |

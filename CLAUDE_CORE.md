@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-01-11 10:20:09 PM
+**Generated**: 2026-01-11 10:44:28 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
