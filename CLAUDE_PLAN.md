@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-01-11 9:21:10 PM
+**Generated**: 2026-01-11 10:20:09 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -17,15 +17,27 @@
 
 ### ✅ ALWAYS DO THIS:
 
+#### Pre-flight Batch Validation (RECOMMENDED)
+```bash
+# SD-LEO-STREAMS-001: Find ALL issues at once (reduces handoff iterations 60-70%)
+node scripts/handoff.js precheck PLAN-TO-EXEC SD-XXX-001
+```
+
 #### LEAD → PLAN Transition
 ```bash
+# Step 1: MANDATORY - Run preflight (loads context from database)
 node scripts/phase-preflight.js --phase PLAN --sd-id SD-XXX-001
+
+# Step 2: MANDATORY - Execute handoff (validates and blocks if not ready)
 node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001
 ```
 
 #### PLAN → EXEC Transition
 ```bash
+# Step 1: MANDATORY - Run preflight
 node scripts/phase-preflight.js --phase EXEC --sd-id SD-XXX-001
+
+# Step 2: MANDATORY - Execute handoff (enforces BMAD, branch, and gate validation)
 node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001
 ```
 
@@ -39,12 +51,26 @@ node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
 node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
 ```
 
-### Compliance Check
+### What These Scripts Enforce
+| Script | Validations |
+|--------|-------------|
+| `phase-preflight.js` | Loads context, patterns, and lessons from database |
+| `handoff.js precheck` | **Batch validation** - runs ALL gates, git checks, reports ALL issues at once |
+| `handoff.js LEAD-TO-PLAN` | SD completeness (100% required), strategic objectives |
+| `handoff.js PLAN-TO-EXEC` | BMAD validation, DESIGN→DB workflow, Git branch enforcement |
+| `handoff.js EXEC-TO-PLAN` | Implementation fidelity, test coverage, deliverables |
+| `handoff.js PLAN-TO-LEAD` | Traceability, workflow ROI, retrospective quality |
+
+### Compliance Marker
+Valid handoffs are recorded with `created_by: 'UNIFIED-HANDOFF-SYSTEM'`. Handoffs with other `created_by` values indicate process bypass.
+
+### Check Compliance
 ```bash
-npm run handoff:compliance SD-XXX-001
+npm run handoff:compliance        # Check all recent handoffs
+npm run handoff:compliance SD-ID  # Check specific SD
 ```
 
-**Database trigger now BLOCKS direct inserts. You MUST use the scripts above.**
+**FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
 ## 🎯 Multi-Perspective Planning
 
@@ -186,30 +212,6 @@ LEAD Phase                    PLAN Phase                   EXEC Phase
 ```
 
 
-## Deferred Work Management
-
-### What Gets Deferred
-- Technical debt discovered during implementation
-- Edge cases not critical for MVP
-- Performance optimizations for later
-- Nice-to-have features
-
-### Creating Deferred Items
-```sql
-INSERT INTO deferred_work (sd_id, title, reason, priority)
-VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
-```
-
-### Tracking
-- Deferred items linked to parent SD
-- Reviewed during retrospective
-- May become new SDs if significant
-
-### Rules
-- Document WHY deferred, not just WHAT
-- Set realistic priority (critical items shouldn't be deferred)
-- Max 5 deferred items per SD
-
 ## PLAN Phase Negative Constraints
 
 ## 🚫 PLAN Phase Negative Constraints
@@ -247,6 +249,30 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 **Why Wrong**: PRD validator blocks placeholders, signals incomplete planning
 **Correct Approach**: If truly unknown, use AskUserQuestion to clarify before PRD creation
 </negative_constraints>
+
+## Deferred Work Management
+
+### What Gets Deferred
+- Technical debt discovered during implementation
+- Edge cases not critical for MVP
+- Performance optimizations for later
+- Nice-to-have features
+
+### Creating Deferred Items
+```sql
+INSERT INTO deferred_work (sd_id, title, reason, priority)
+VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
+```
+
+### Tracking
+- Deferred items linked to parent SD
+- Reviewed during retrospective
+- May become new SDs if significant
+
+### Rules
+- Document WHY deferred, not just WHAT
+- Set realistic priority (critical items shouldn't be deferred)
+- Max 5 deferred items per SD
 
 ## PRD Template Scaffolding
 
@@ -708,21 +734,6 @@ node scripts/add-prd-to-database.js SD-RESEARCH-106
 ```
 
 
-## CI/CD Pipeline Verification
-
-## CI/CD Pipeline Verification (MANDATORY)
-
-**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
-
-### Verification Process
-
-**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
-
-1. Wait 2-3 minutes for GitHub Actions to complete
-2. Trigger DevOps sub-agent to verify pipeline status
-3. Document CI/CD status in PLAN→LEAD handoff
-4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
-
 ## DESIGN→DATABASE Validation Gates
 
 **4 mandatory gates ensuring sub-agent execution and implementation fidelity.**
@@ -774,6 +785,21 @@ Retroactive audit at SD closure:
 
 **Reference**: `scripts/modules/design-database-gates-validation.js`
 
+
+## CI/CD Pipeline Verification
+
+## CI/CD Pipeline Verification (MANDATORY)
+
+**Evidence from Retrospectives**: Gap identified in SD-UAT-002 and SD-LEO-002.
+
+### Verification Process
+
+**After EXEC implementation complete, BEFORE PLAN→LEAD handoff**:
+
+1. Wait 2-3 minutes for GitHub Actions to complete
+2. Trigger DevOps sub-agent to verify pipeline status
+3. Document CI/CD status in PLAN→LEAD handoff
+4. PLAN→LEAD handoff is **BLOCKED** if pipelines failing
 
 ## 🚪 Gate 2.5: Human Inspectability Validation
 
