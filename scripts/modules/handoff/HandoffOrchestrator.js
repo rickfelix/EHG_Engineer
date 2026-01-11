@@ -124,6 +124,108 @@ export class HandoffOrchestrator {
   }
 
   /**
+   * Batch prerequisite validation - checks ALL gates without stopping
+   * SD-LEO-STREAMS-001 Retrospective: Reduces handoff iterations 60-70%
+   *
+   * Use this BEFORE executeHandoff() to find ALL issues at once.
+   *
+   * @param {string} handoffType - Handoff type (case-insensitive)
+   * @param {string} sdId - Strategic Directive ID
+   * @param {object} options - Options
+   * @returns {Promise<object>} Batch validation result with ALL issues
+   */
+  async precheckHandoff(handoffType, sdId, options = {}) {
+    const normalizedType = handoffType.toUpperCase();
+
+    console.log('');
+    console.log('🔎 BATCH PREREQUISITE PRE-CHECK');
+    console.log('='.repeat(60));
+    console.log(`   Handoff Type: ${normalizedType}`);
+    console.log(`   SD: ${sdId}`);
+    console.log('   Mode: Find ALL issues (no early stopping)');
+    console.log('='.repeat(60));
+
+    try {
+      // Validate handoff type
+      if (!this.supportedHandoffs.includes(normalizedType)) {
+        return {
+          success: false,
+          issues: [{ gate: 'HANDOFF_TYPE', issue: `Unsupported type: ${normalizedType}. Valid: ${this.supportedHandoffs.join(', ')}` }],
+          passedGates: [],
+          failedGates: [{ name: 'HANDOFF_TYPE', issues: ['Unsupported handoff type'] }]
+        };
+      }
+
+      // Verify SD exists
+      const sd = await this.sdRepo.getById(sdId);
+      if (!sd) {
+        return {
+          success: false,
+          issues: [{ gate: 'SD_EXISTS', issue: `SD not found: ${sdId}` }],
+          passedGates: [],
+          failedGates: [{ name: 'SD_EXISTS', issues: ['SD not found'] }]
+        };
+      }
+
+      // Get executor and gates
+      const executor = await this._getExecutor(normalizedType);
+      if (!executor) {
+        return {
+          success: false,
+          issues: [{ gate: 'EXECUTOR', issue: `No executor for: ${normalizedType}` }],
+          passedGates: [],
+          failedGates: [{ name: 'EXECUTOR', issues: ['No executor found'] }]
+        };
+      }
+
+      // Get gates for this handoff type
+      const gates = await executor.getRequiredGates(sd, options);
+
+      // Run ALL gates using batch validation (doesn't stop on first failure)
+      const result = await this.validationOrchestrator.validateGatesAll(gates, {
+        sdId,
+        sd,
+        options,
+        supabase: this.supabase
+      });
+
+      // Add actionable remediation for each failed gate
+      if (result.failedGates.length > 0) {
+        console.log('');
+        console.log('📋 REMEDIATION ACTIONS');
+        console.log('─'.repeat(60));
+        result.failedGates.forEach((gate, idx) => {
+          const remediation = executor.getRemediation ? executor.getRemediation(gate.name) : null;
+          console.log(`   ${idx + 1}. ${gate.name}`);
+          gate.issues.forEach(issue => console.log(`      ❌ ${issue}`));
+          if (remediation) {
+            console.log(`      💡 ${remediation}`);
+          }
+        });
+        console.log('─'.repeat(60));
+      }
+
+      return {
+        success: result.passed,
+        handoffType: normalizedType,
+        sdId,
+        sdTitle: sd.title,
+        ...result
+      };
+
+    } catch (error) {
+      console.error('❌ Precheck error:', error.message);
+      return {
+        success: false,
+        error: error.message,
+        issues: [{ gate: 'SYSTEM', issue: error.message }],
+        passedGates: [],
+        failedGates: [{ name: 'SYSTEM', issues: [error.message] }]
+      };
+    }
+  }
+
+  /**
    * List handoff executions
    * @param {object} filters - Query filters
    * @returns {Promise<array>} Execution records
