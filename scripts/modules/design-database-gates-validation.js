@@ -14,7 +14,7 @@
 import { calculateAdaptiveThreshold } from './adaptive-threshold-calculator.js';
 import { getPatternStats } from './pattern-tracking.js';
 // Import centralized SD type checking (replaces local shouldValidateDesignDatabase)
-import { requiresDesignDatabaseGates, requiresDesignDatabaseGatesSync } from './sd-type-checker.js';
+import { requiresDesignDatabaseGates, requiresDesignDatabaseGatesSync, validateStreamCompletion } from './sd-type-checker.js';
 
 /**
  * Validate DESIGN→DATABASE workflow for PLAN→EXEC handoff
@@ -30,8 +30,9 @@ import { requiresDesignDatabaseGates, requiresDesignDatabaseGatesSync } from './
  * 7. Execution order correct (5 pts, partial 3) - MINOR
  * 8. PRD via script (10 pts, partial 5) - MAJOR
  * 9. User stories ≥80% context (10 pts, proportional) - MAJOR
+ * 10. Stream completion status (INFO only) - SD-LEO-STREAMS-001
  *
- * Total: 100 points
+ * Total: 100 points (Check 10 is informational, not scored)
  * Philosophy: Front-load critical prerequisites before implementation
  *
  * @param {string} sd_id - Strategic Directive ID
@@ -428,6 +429,52 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
         validation.gate_scores.stories_context_coverage = proportionalScore;
         console.log(`   ⚠️  User stories context coverage: ${coverage.toFixed(1)}% (below 80%) (${proportionalScore}/10)`);
       }
+    }
+
+    // ===================================================================
+    // CHECK 10: Stream Completion (SD-LEO-STREAMS-001)
+    // SD-LEO-STREAMS-001: Design & Architecture stream validation
+    // Non-blocking for now (informational), will become enforced in future
+    // ===================================================================
+    console.log('\n[10/10] Checking stream completion status (INFO - SD-LEO-STREAMS-001)...');
+
+    try {
+      // Get PRD text for conditional stream evaluation
+      const prdText = [
+        prdData?.metadata?.executive_summary || '',
+        prdData?.metadata?.description || '',
+        JSON.stringify(prdData?.metadata?.functional_requirements || [])
+      ].join(' ');
+
+      const streamStatus = await validateStreamCompletion(sd_id, supabase, { prdText });
+
+      if (streamStatus.error) {
+        console.log(`   ⚠️  Stream validation unavailable: ${streamStatus.error}`);
+      } else {
+        validation.details.stream_completion = {
+          score: streamStatus.score,
+          totalRequired: streamStatus.totalRequired,
+          completedCount: streamStatus.completedCount,
+          missingRequired: streamStatus.missingRequired || [],
+          missingConditional: streamStatus.missingConditional || []
+        };
+
+        if (streamStatus.complete) {
+          console.log(`   ✅ All ${streamStatus.totalRequired} required streams complete`);
+        } else {
+          console.log(`   ℹ️  Stream completion: ${streamStatus.score}% (${streamStatus.completedCount}/${streamStatus.totalRequired})`);
+          if (streamStatus.missingRequired?.length > 0) {
+            console.log(`      Missing required: ${streamStatus.missingRequired.join(', ')}`);
+            validation.warnings.push(`[STREAM] Missing required streams: ${streamStatus.missingRequired.join(', ')}`);
+          }
+          if (streamStatus.missingConditional?.length > 0) {
+            console.log(`      Missing conditional (activated): ${streamStatus.missingConditional.join(', ')}`);
+            validation.warnings.push(`[STREAM] Missing conditional streams: ${streamStatus.missingConditional.join(', ')}`);
+          }
+        }
+      }
+    } catch (streamError) {
+      console.log(`   ⚠️  Stream check error: ${streamError.message}`);
     }
 
     // ===================================================================
