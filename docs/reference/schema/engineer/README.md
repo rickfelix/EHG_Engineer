@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: /mnt/c/_EHG/EHG_Engineer/
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-11T00:33:39.932Z
-**Tables**: 343
+**Generated**: 2026-01-11T02:41:15.246Z
+**Tables**: 345
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (343)
+## All Tables (345)
 
 ### LEO Protocol
 
@@ -85,6 +85,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sd_scope_deliverables](tables/sd_scope_deliverables.md)
 - [sd_session_activity](tables/sd_session_activity.md)
 - [sd_state_transitions](tables/sd_state_transitions.md)
+- [sd_stream_completions](tables/sd_stream_completions.md)
+- [sd_stream_requirements](tables/sd_stream_requirements.md)
 - [sd_subagent_deliverable_mapping](tables/sd_subagent_deliverable_mapping.md)
 - [sd_testing_status](tables/sd_testing_status.md)
 - [sd_type_change_audit](tables/sd_type_change_audit.md)
