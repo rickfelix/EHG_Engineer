@@ -323,6 +323,247 @@ export async function getSkippedSubAgents(sd, options = {}) {
   return []; // Code-producing SDs run all sub-agents
 }
 
+// ============================================================================
+// STREAM FUNCTIONS (SD-LEO-STREAMS-001)
+// Design & Architecture stream requirements by SD type
+// ============================================================================
+
+// Stream requirement cache (keyed by SD type)
+const streamRequirementsCache = new Map();
+
+/**
+ * Get stream requirements for an SD type from database
+ *
+ * @param {string} sdType - SD type (feature, enhancement, bugfix, etc.)
+ * @param {Object} supabase - Supabase client instance
+ * @returns {Promise<Array>} Stream requirements with levels and metadata
+ */
+export async function getStreamRequirements(sdType, supabase) {
+  if (!sdType || !supabase) {
+    return [];
+  }
+
+  const normalizedType = sdType.toLowerCase();
+
+  // Check cache first
+  if (streamRequirementsCache.has(normalizedType)) {
+    return streamRequirementsCache.get(normalizedType);
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('sd_stream_requirements')
+      .select('*')
+      .eq('sd_type', normalizedType)
+      .order('stream_category')
+      .order('stream_name');
+
+    if (error) {
+      console.warn(`Failed to fetch stream requirements: ${error.message}`);
+      return [];
+    }
+
+    // Cache the results
+    streamRequirementsCache.set(normalizedType, data || []);
+    return data || [];
+  } catch (err) {
+    console.warn(`Stream requirements lookup error: ${err.message}`);
+    return [];
+  }
+}
+
+/**
+ * Evaluate which conditional streams should activate based on PRD content
+ *
+ * @param {string} prdText - Full text of PRD (description + requirements)
+ * @param {string} sdType - SD type
+ * @param {Object} supabase - Supabase client instance
+ * @returns {Promise<Array>} Activated conditional streams with match details
+ */
+export async function evaluateConditionalStreams(prdText, sdType, supabase) {
+  if (!prdText || !sdType || !supabase) {
+    return [];
+  }
+
+  const streams = await getStreamRequirements(sdType, supabase);
+  const conditionalStreams = streams.filter(s => s.requirement_level === 'conditional');
+  const normalizedText = prdText.toLowerCase();
+
+  const activatedStreams = [];
+
+  for (const stream of conditionalStreams) {
+    const keywords = stream.conditional_keywords || [];
+    const matches = keywords.filter(kw => normalizedText.includes(kw.toLowerCase()));
+
+    // Require 2+ keyword matches to activate (conservative approach)
+    if (matches.length >= 2) {
+      activatedStreams.push({
+        stream_name: stream.stream_name,
+        stream_category: stream.stream_category,
+        activated: true,
+        matched_keywords: matches,
+        match_count: matches.length,
+        minimum_depth: stream.minimum_depth,
+        validation_sub_agent: stream.validation_sub_agent
+      });
+    }
+  }
+
+  return activatedStreams;
+}
+
+/**
+ * Validate stream completion status for an SD
+ *
+ * @param {string} sdId - Strategic Directive ID
+ * @param {Object} supabase - Supabase client instance
+ * @param {Object} options - Options
+ * @param {string} options.prdText - PRD text for conditional evaluation
+ * @returns {Promise<Object>} Completion status with missing streams and score
+ */
+export async function validateStreamCompletion(sdId, supabase, options = {}) {
+  if (!sdId || !supabase) {
+    return { complete: false, missing: [], score: 0, error: 'Invalid parameters' };
+  }
+
+  try {
+    // Get the SD to determine type
+    const { data: sd, error: sdError } = await supabase
+      .from('strategic_directives_v2')
+      .select('sd_type, id')
+      .eq('id', sdId)
+      .single();
+
+    if (sdError || !sd) {
+      return { complete: false, missing: [], score: 0, error: 'SD not found' };
+    }
+
+    const sdType = (sd.sd_type || 'feature').toLowerCase();
+
+    // Get required and conditional streams for this SD type
+    const allStreams = await getStreamRequirements(sdType, supabase);
+
+    // Separate by requirement level
+    const requiredStreams = allStreams.filter(s => s.requirement_level === 'required');
+    let conditionalStreams = [];
+
+    // Evaluate conditional streams if PRD text provided
+    if (options.prdText) {
+      conditionalStreams = await evaluateConditionalStreams(options.prdText, sdType, supabase);
+    }
+
+    // Get completion records for this SD
+    const { data: completions, error: compError } = await supabase
+      .from('sd_stream_completions')
+      .select('stream_name, status, completed_at')
+      .eq('sd_id', sdId);
+
+    if (compError) {
+      return { complete: false, missing: [], score: 0, error: compError.message };
+    }
+
+    const completedStreamNames = new Set(
+      (completions || [])
+        .filter(c => c.status === 'completed')
+        .map(c => c.stream_name)
+    );
+
+    // Check required streams
+    const missingRequired = requiredStreams
+      .filter(s => !completedStreamNames.has(s.stream_name))
+      .map(s => s.stream_name);
+
+    // Check activated conditional streams
+    const missingConditional = conditionalStreams
+      .filter(s => !completedStreamNames.has(s.stream_name))
+      .map(s => s.stream_name);
+
+    const allMissing = [...missingRequired, ...missingConditional];
+    const totalRequired = requiredStreams.length + conditionalStreams.length;
+    const completedCount = totalRequired - allMissing.length;
+    const score = totalRequired > 0 ? Math.round((completedCount / totalRequired) * 100) : 100;
+
+    return {
+      complete: allMissing.length === 0,
+      missing: allMissing,
+      missingRequired,
+      missingConditional,
+      score,
+      totalRequired,
+      completedCount,
+      sdType
+    };
+  } catch (err) {
+    return { complete: false, missing: [], score: 0, error: err.message };
+  }
+}
+
+/**
+ * Get applicable streams for an SD with activation status
+ * Returns all streams with their requirement level and activation status
+ *
+ * @param {string} sdType - SD type
+ * @param {string} prdText - Optional PRD text for conditional evaluation
+ * @param {Object} supabase - Supabase client instance
+ * @returns {Promise<Object>} Categorized streams (design/architecture) with activation status
+ */
+export async function getApplicableStreams(sdType, prdText, supabase) {
+  const allStreams = await getStreamRequirements(sdType, supabase);
+  const conditionalActivations = prdText
+    ? await evaluateConditionalStreams(prdText, sdType, supabase)
+    : [];
+
+  const activatedNames = new Set(conditionalActivations.map(s => s.stream_name));
+
+  const result = {
+    design: [],
+    architecture: [],
+    summary: {
+      required: 0,
+      optional: 0,
+      conditional_activated: 0,
+      skip: 0
+    }
+  };
+
+  for (const stream of allStreams) {
+    const isActivated = stream.requirement_level === 'conditional' && activatedNames.has(stream.stream_name);
+    const effectiveLevel = isActivated ? 'required' : stream.requirement_level;
+
+    const streamInfo = {
+      name: stream.stream_name,
+      requirement_level: stream.requirement_level,
+      effective_level: effectiveLevel,
+      activated: isActivated,
+      minimum_depth: stream.minimum_depth,
+      validation_sub_agent: stream.validation_sub_agent,
+      description: stream.description
+    };
+
+    if (stream.stream_category === 'design') {
+      result.design.push(streamInfo);
+    } else {
+      result.architecture.push(streamInfo);
+    }
+
+    // Update summary
+    if (effectiveLevel === 'required') result.summary.required++;
+    else if (effectiveLevel === 'optional') result.summary.optional++;
+    else if (effectiveLevel === 'skip') result.summary.skip++;
+
+    if (isActivated) result.summary.conditional_activated++;
+  }
+
+  return result;
+}
+
+/**
+ * Clear stream requirements cache (useful for testing)
+ */
+export function clearStreamCache() {
+  streamRequirementsCache.clear();
+}
+
 /**
  * Clear the classification cache (useful for testing)
  */
@@ -352,6 +593,13 @@ export default {
   getSkippedSubAgents,
   clearCache,
   getCacheStats,
+  // Stream functions (SD-LEO-STREAMS-001)
+  getStreamRequirements,
+  evaluateConditionalStreams,
+  validateStreamCompletion,
+  getApplicableStreams,
+  clearStreamCache,
+  // Constants
   SD_TYPE_CATEGORIES,
   SCORING_WEIGHTS,
   THRESHOLD_PROFILES

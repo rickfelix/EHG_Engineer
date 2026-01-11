@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-01-10 2:59:05 PM
+**Generated**: 2026-01-11 9:21:10 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
@@ -133,70 +133,6 @@ Before writing ANY code, EXEC MUST:
 - ❌ **CRITICAL**: Proceeding with implementation when requirements are ambiguous
 - ❌ **CRITICAL**: Putting admin UI code in EHG_Engineer (all UI goes to EHG)
 
-## Branch Creation (Automated at LEAD-TO-PLAN)
-
-## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
-
-### Automatic Branch Creation
-
-As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
-
-1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
-2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
-3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
-4. Database is updated with branch name for tracking
-
-### Manual Branch Creation (If Needed)
-
-If branch creation fails or you need to create one manually:
-
-```bash
-# Create branch for an SD (looks up title from database)
-npm run sd:branch SD-XXX-001
-
-# Create with auto-stash (non-interactive)
-npm run sd:branch:auto SD-XXX-001
-
-# Check if branch exists
-npm run sd:branch:check SD-XXX-001
-
-# Full command with options
-node scripts/create-sd-branch.js SD-XXX-001 --app EHG --auto-stash
-```
-
-### Branch Naming Convention
-
-| SD Type | Branch Prefix | Example |
-|---------|---------------|---------|
-| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
-| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
-| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
-| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
-| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
-
-### Branch Hygiene Rules
-
-From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
-- **≤7 days stale** at PLAN-TO-EXEC handoff
-- **One SD per branch** (no mixing work)
-- **Merge main at phase transitions**
-
-### When Branch is Created
-
-```
-LEAD Phase                    PLAN Phase                   EXEC Phase
-    |                              |                            |
-    |   LEAD-TO-PLAN handoff       |                            |
-    |---[Branch Created Here]----->|                            |
-    |                              |   PRD Creation             |
-    |                              |   Sub-agent validation     |
-    |                              |                            |
-    |                              |   PLAN-TO-EXEC handoff     |
-    |                              |---[Branch Validated]------>|
-    |                              |                            |
-```
-
-
 ## ❌ Anti-Patterns from Retrospectives (EXEC Phase)
 
 **Source**: Analysis of 175 high-quality retrospectives (score ≥60)
@@ -284,6 +220,70 @@ If `research_confidence_score = 0.00`, you skipped this step.
 | Simulate sub-agents | 15% quality loss | Execute actual tools |
 
 **Pattern References**: PAT-RECURSION-001 through PAT-RECURSION-005
+
+## Branch Creation (Automated at LEAD-TO-PLAN)
+
+## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
+
+### Automatic Branch Creation
+
+As of LEO v4.4.1, **branch creation is automated** during the LEAD-TO-PLAN handoff:
+
+1. When you run `node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001`
+2. The `SD_BRANCH_PREPARATION` gate automatically creates the branch
+3. Branch is created with correct naming: `<type>/<SD-ID>-<slug>`
+4. Database is updated with branch name for tracking
+
+### Manual Branch Creation (If Needed)
+
+If branch creation fails or you need to create one manually:
+
+```bash
+# Create branch for an SD (looks up title from database)
+npm run sd:branch SD-XXX-001
+
+# Create with auto-stash (non-interactive)
+npm run sd:branch:auto SD-XXX-001
+
+# Check if branch exists
+npm run sd:branch:check SD-XXX-001
+
+# Full command with options
+node scripts/create-sd-branch.js SD-XXX-001 --app EHG --auto-stash
+```
+
+### Branch Naming Convention
+
+| SD Type | Branch Prefix | Example |
+|---------|---------------|---------|
+| Feature | `feat/` | `feat/SD-UAT-001-user-auth` |
+| Fix | `fix/` | `fix/SD-FIX-001-login-bug` |
+| Docs | `docs/` | `docs/SD-DOCS-001-api-guide` |
+| Refactor | `refactor/` | `refactor/SD-REFACTOR-001-cleanup` |
+| Test | `test/` | `test/SD-TEST-001-e2e-coverage` |
+
+### Branch Hygiene Rules
+
+From CLAUDE_EXEC.md (enforced at PLAN-TO-EXEC):
+- **≤7 days stale** at PLAN-TO-EXEC handoff
+- **One SD per branch** (no mixing work)
+- **Merge main at phase transitions**
+
+### When Branch is Created
+
+```
+LEAD Phase                    PLAN Phase                   EXEC Phase
+    |                              |                            |
+    |   LEAD-TO-PLAN handoff       |                            |
+    |---[Branch Created Here]----->|                            |
+    |                              |   PRD Creation             |
+    |                              |   Sub-agent validation     |
+    |                              |                            |
+    |                              |   PLAN-TO-EXEC handoff     |
+    |                              |---[Branch Validated]------>|
+    |                              |                            |
+```
+
 
 ## EXEC Phase Negative Constraints
 
@@ -550,6 +550,24 @@ EXEC→PLAN handoffs now have **intelligent verification**:
 | **300-600** | ✅ **OPTIMAL** | Sweet spot |
 | **>800** | **MUST split** | Too complex |
 
+## TODO Comment Standard
+
+## TODO Comment Standard (When Deferring Work)
+
+**Evidence from Retrospectives**: Proven pattern in SD-UAT-003 saved 4-6 hours.
+
+### Standard TODO Format
+
+```typescript
+// TODO (SD-ID): Action required
+// Requires: Dependencies, prerequisites
+// Estimated effort: X-Y hours
+// Current state: Mock/temporary/placeholder
+```
+
+**Success Pattern** (SD-UAT-003):
+> "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
+
 ## Human-Like E2E Testing Fixtures
 
 ### Human-Like E2E Testing Enhancements (LEO v4.4)
@@ -633,24 +651,6 @@ All human-like test results are automatically included in the LEO evidence pack:
 - `test_results.attachments.accessibility` - axe-core violations
 - `test_results.attachments.chaos` - resilience test results
 - `test_results.attachments.llm_ux` - LLM evaluation scores
-
-## TODO Comment Standard
-
-## TODO Comment Standard (When Deferring Work)
-
-**Evidence from Retrospectives**: Proven pattern in SD-UAT-003 saved 4-6 hours.
-
-### Standard TODO Format
-
-```typescript
-// TODO (SD-ID): Action required
-// Requires: Dependencies, prerequisites
-// Estimated effort: X-Y hours
-// Current state: Mock/temporary/placeholder
-```
-
-**Success Pattern** (SD-UAT-003):
-> "Comprehensive TODO comments provided clear future work path. Saved 4-6 hours."
 
 ## EXEC Dual Test Requirement
 
@@ -1589,6 +1589,6 @@ Verifies LEAD to PLAN handoff requirements are met before allowing transition.
 
 ---
 
-*Generated from database: 2026-01-10*
+*Generated from database: 2026-01-11*
 *Protocol Version: 4.3.3*
 *Load when: User mentions EXEC, implementation, coding, or testing*
