@@ -173,4 +173,47 @@ Quick-fix will auto-escalate to full SD if:
 
 ---
 
+## Command Ecosystem Integration
+
+### Cross-Reference
+
+This command is part of the **Command Ecosystem**. For full workflow context, see:
+- **[Command Ecosystem Reference](../../docs/reference/command-ecosystem.md)** - Complete inter-command flow diagram and relationships
+
+---
+
+The `/quick-fix` command connects to other commands:
+
+### After Quick-Fix Completion
+
+**When PR is created with auto-merge:**
+```
+✅ Quick-Fix Complete: QF-YYYYMMDD-NNN
+
+PR #XX created with auto-merge enabled.
+
+💡 Next commands:
+   • /learn - Capture any patterns from this fix (optional)
+   • /leo next - Continue with next SD if queue has work
+```
+
+**If quick-fix was triggered by `/triangulation-protocol`:**
+```
+✅ Quick-Fix Complete
+
+This fix addressed the issue identified during triangulation.
+Consider running /learn if this revealed a systemic pattern.
+```
+
+### Related Commands
+
+| Command | When to Use |
+|---------|-------------|
+| `/triangulation-protocol` | Before quick-fix, to confirm bug exists |
+| `/ship` | Auto-merge handles this for quick-fixes |
+| `/learn` | If fix reveals recurring pattern |
+| `/leo next` | After fix, to continue SD work |
+
+---
+
 **Now proceed with Step 1 above to gather issue details from the user.**

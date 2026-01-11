@@ -77,3 +77,59 @@ Then ask the user which action they'd like to take.
 - App runs on port 8080
 - Agent Platform runs on port 8000
 - Stack script: scripts/leo-stack.sh
+
+## Command Ecosystem Integration
+
+### Cross-Reference
+
+This command is part of the **Command Ecosystem**. For full workflow context, see:
+- **[Command Ecosystem Reference](../../docs/reference/command-ecosystem.md)** - Complete inter-command flow diagram and relationships
+
+---
+
+The `/leo` command connects to other commands at key workflow points:
+
+### After LEAD-FINAL-APPROVAL (SD Completion)
+
+When an SD reaches LEAD-FINAL-APPROVAL and is marked complete, suggest this sequence:
+
+```
+✅ SD Completed: SD-XXX-001
+
+📋 Post-Completion Sequence:
+```
+
+| Step | Command | Condition | Why |
+|------|---------|-----------|-----|
+| 1 | `/restart` | UI/feature SD, or long session | Clean environment before shipping |
+| 2 | Visual review | If UI changes | Verify renders correctly |
+| 3 | `/ship` | Always | Commit, PR, merge the work |
+| 4 | `/document` | Feature/API SD | Update documentation |
+| 5 | `/learn` | Always | Capture learnings while fresh |
+
+**For UI/Feature SDs:**
+```
+🎯 UI Feature Completed
+
+Recommended sequence:
+1. /restart - Fresh servers for visual review
+2. Manual visual check - Verify UI renders
+3. /ship - Create PR and merge
+4. /document - Update feature documentation
+5. /learn - Capture session learnings
+```
+
+**For Infrastructure/Database SDs:**
+```
+🔧 Infrastructure Work Completed
+
+Recommended sequence:
+1. /ship - Create PR and merge
+2. /learn - Capture learnings
+```
+
+### Starting New Work
+
+After `/leo next` shows the SD queue:
+- If continuing an SD → Load appropriate CLAUDE_*.md context
+- If starting fresh → Suggest `/restart` if long session (>2 hours)

@@ -83,6 +83,17 @@ If still failing after Level 4:
 
 4. **Move to next SD** via `npm run sd:next`
 
+## Command Ecosystem Integration
+
+### Cross-Reference
+
+This command is part of the **Command Ecosystem**. For full workflow context, see:
+- **[Command Ecosystem Reference](../../docs/reference/command-ecosystem.md)** - Complete inter-command flow diagram and relationships
+
+**Note**: `/escalate` is typically invoked when handoffs or sub-agents fail, requiring progressive diagnosis and remediation.
+
+---
+
 ## Time Budgets
 
 | Level | Max Time | Action if Exceeded |

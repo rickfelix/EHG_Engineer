@@ -86,6 +86,17 @@ The context monitor will:
 → Compress historical handoff data
 ```
 
+## Command Ecosystem Integration
+
+### Cross-Reference
+
+This command is part of the **Command Ecosystem**. For full workflow context, see:
+- **[Command Ecosystem Reference](../../docs/reference/command-ecosystem.md)** - Complete inter-command flow diagram and relationships
+
+**Note**: `/context-compact` is typically suggested by other commands when context exceeds 70% usage.
+
+---
+
 ## After Compaction
 
 You'll receive:

@@ -380,3 +380,56 @@ supabase.from('leo_protocol_sections')
 4. **Idempotent**: Running twice should not duplicate content
 5. **Skill Integration**: Use documentation skills for patterns
 6. **DOCMON Validation**: Verify database-first compliance
+
+## Command Ecosystem Integration
+
+### Cross-Reference
+
+This command is part of the **Command Ecosystem**. For full workflow context, see:
+- **[Command Ecosystem Reference](../../docs/reference/command-ecosystem.md)** - Complete inter-command flow diagram and relationships
+
+---
+
+The `/document` command connects to other commands in the workflow:
+
+### After Documentation Updates
+
+**If documentation changes created uncommitted files:**
+```
+✅ Documentation Updated
+
+Files modified:
+- CLAUDE.md (regenerated)
+- docs/reference/xxx.md
+
+💡 Uncommitted changes detected. Run /ship to commit and create PR.
+```
+
+**If documentation is complete and committed:**
+```
+✅ Documentation Updated
+
+All changes committed.
+
+💡 Next commands:
+   • /learn - Capture documentation patterns (if systemic improvement)
+   • /leo next - Continue with next SD
+```
+
+### Related Commands
+
+| Scenario | Suggest |
+|----------|---------|
+| After `/ship` (feature SD) | `/document` auto-suggested |
+| After documentation changes | `/ship` to commit |
+| Documentation reveals pattern | `/learn` |
+| Before starting new SD | `/leo next` |
+
+### When to Invoke /document
+
+| Trigger | Action |
+|---------|--------|
+| Feature SD completed | Update feature docs in `docs/04_features/` |
+| API SD completed | Update OpenAPI specs |
+| Protocol changes in session | Update `leo_protocol_sections` DB |
+| New command/script created | Update reference docs |
