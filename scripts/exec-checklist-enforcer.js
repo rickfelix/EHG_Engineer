@@ -14,6 +14,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
 import _path from 'path';
+import { isPortInUse } from '../lib/utils/process-utils.js';
 
 const execAsync = promisify(exec);
 dotenv.config();
@@ -375,11 +376,11 @@ class EXECChecklistEnforcer {
   async verifyPort(prd) {
     const expectedPort = prd.metadata?.port || '3000';
 
-    // Check if port is in use
+    // Check if port is in use (cross-platform)
     try {
-      const { stdout } = await execAsync(`lsof -i :${expectedPort} | grep LISTEN`);
+      const portActive = await isPortInUse(parseInt(expectedPort, 10));
 
-      if (stdout) {
+      if (portActive) {
         return {
           passed: true,
           evidence: `Port ${expectedPort} is active`
