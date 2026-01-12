@@ -116,3 +116,7 @@ src/client/dist/
 
 # Archived bootstrap scripts (local reference only)
 /docs/archive/
+
+# Claude Code temp files (Windows migration artifacts)
+tmpclaude-*-cwd
+nul

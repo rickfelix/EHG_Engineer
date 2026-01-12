@@ -19,18 +19,17 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
-import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { warnIfTempFilesExceedThreshold } from '../lib/root-temp-checker.mjs';
 import { getEstimatedDuration, formatEstimateShort } from './lib/duration-estimator.js';
 
-// Load environment from EHG_Engineer regardless of cwd
-const envPath = '/mnt/c/_EHG/EHG_Engineer/.env';
-if (fs.existsSync(envPath)) {
-  dotenv.config({ path: envPath });
-} else {
-  dotenv.config();
-}
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment from EHG_Engineer (Windows-compatible)
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 // Import session manager (dynamic import for ESM compatibility)
 let sessionManager;
@@ -371,8 +370,8 @@ class SDNextSelector {
     // Method 1: Check git commits for SD references (last 7 days)
     try {
       const gitLog = execSync(
-        'git log --oneline --since="7 days ago" --format="%s" 2>/dev/null || echo ""',
-        { encoding: 'utf8', cwd: process.cwd() }
+        'git log --oneline --since="7 days ago" --format="%s"',
+        { encoding: 'utf8', cwd: process.cwd(), stdio: ['pipe', 'pipe', 'ignore'] }
       );
 
       const sdPattern = /SD-[A-Z0-9-]+/g;
