@@ -14,7 +14,8 @@
 The EHG ecosystem consists of two primary components sharing a consolidated database:
 
 1. **EHG** (Unified Frontend) - PORT 8080
-   - **Path**: `/mnt/c/_EHG/EHG/`
+   - **Path (Linux/WSL)**: `/mnt/c/_EHG/EHG/`
+   - **Path (Windows)**: `C:\Users\rickf\Projects\_EHG\ehg\`
    - **Purpose**: Complete application frontend (user features + admin dashboard)
    - **Database**: dedlbzhpgkmetvhbkyzq (Supabase) - CONSOLIDATED
    - **GitHub**: https://github.com/rickfelix/ehg.git
@@ -28,7 +29,8 @@ The EHG ecosystem consists of two primary components sharing a consolidated data
    - **Role**: ALL UI FEATURES - both user and admin
 
 2. **EHG_Engineer** (Backend API) - PORT 3000
-   - **Path**: `/mnt/c/_EHG/EHG_Engineer/`
+   - **Path (Linux/WSL)**: `/mnt/c/_EHG/EHG_Engineer/`
+   - **Path (Windows)**: `C:\Users\rickf\Projects\_EHG\EHG_Engineer\`
    - **Purpose**: Backend API server + LEO Protocol scripts
    - **Database**: dedlbzhpgkmetvhbkyzq (Supabase) - CONSOLIDATED
    - **GitHub**: https://github.com/rickfelix/EHG_Engineer.git
@@ -39,7 +41,8 @@ The EHG ecosystem consists of two primary components sharing a consolidated data
    - **Role**: BACKEND SERVICES ONLY - no standalone frontend
 
 3. **Agent Platform** (AI Backend) - PORT 8000
-   - **Path**: `/mnt/c/_EHG/EHG/agent-platform/`
+   - **Path (Linux/WSL)**: `/mnt/c/_EHG/EHG/agent-platform/`
+   - **Path (Windows)**: `C:\Users\rickf\Projects\_EHG\ehg\agent-platform\`
    - **Purpose**: AI research backend for venture creation
    - **Built with**: FastAPI + Python
 
@@ -47,11 +50,15 @@ The EHG ecosystem consists of two primary components sharing a consolidated data
 
 ### ⚠️ CRITICAL: During EXEC Phase Implementation
 1. **Read PRD** from EHG_Engineer database (or via API)
-2. **Navigate** to `/mnt/c/_EHG/EHG/` for ALL frontend work
+2. **Navigate** to EHG directory for ALL frontend work:
+   - Linux/WSL: `/mnt/c/_EHG/EHG/`
+   - Windows: `C:\Users\rickf\Projects\_EHG\ehg\`
 3. **For admin features**: Implement in `/src/components/admin/` or `/src/pages/admin/`
 4. **For user features**: Implement in `/src/components/` or `/src/pages/`
 5. **Push changes** to EHG's GitHub repo: `rickfelix/ehg.git`
-6. **For backend API changes**: Navigate to `/mnt/c/_EHG/EHG_Engineer/`
+6. **For backend API changes**: Navigate to EHG_Engineer:
+   - Linux/WSL: `/mnt/c/_EHG/EHG_Engineer/`
+   - Windows: `C:\Users\rickf\Projects\_EHG\EHG_Engineer\`
 
 ### 🔄 Workflow Relationship
 ```
@@ -63,8 +70,18 @@ EHG_Engineer (Backend)              EHG (Unified Frontend)
 ```
 
 ### Stack Startup
+
+**Linux/WSL:**
 ```bash
 bash scripts/leo-stack.sh restart   # Starts all 3 servers
+# Port 3000: EHG_Engineer backend API
+# Port 8080: EHG unified frontend
+# Port 8000: Agent Platform AI backend
+```
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\leo-stack.ps1 restart   # Starts all 3 servers (requires leo-stack.ps1)
 # Port 3000: EHG_Engineer backend API
 # Port 8080: EHG unified frontend
 # Port 8000: Agent Platform AI backend
@@ -368,7 +385,8 @@ These principles override default behavior and must be internalized before start
 
 ### Application-Aware (VERIFICATION)
 **Verify directory BEFORE writing ANY code.**
-- `cd /mnt/c/_EHG/ehg && pwd` for customer features
+- Linux/WSL: `cd /mnt/c/_EHG/ehg && pwd` for customer features
+- Windows: `cd C:\Users\rickf\Projects\_EHG\ehg; pwd` for customer features
 - `git remote -v` to confirm correct repository
 - Wrong directory = STOP immediately
 
@@ -877,11 +895,11 @@ Patterns exceeding these thresholds auto-create CRITICAL SDs:
 
 **CRITICAL**: Genesis spans TWO codebases:
 
-| Codebase | Path | Contents |
-|----------|------|----------|
-| **EHG_Engineer** | `/lib/genesis/` | Infrastructure (quality gates, TTL, patterns) |
-| **EHG App** | `/lib/genesis/` | Orchestrators (ScaffoldEngine, repo-creator) |
-| **EHG App** | `/scripts/genesis/` | Pipeline (genesis-pipeline.js, soul-extractor.js) |
+| Codebase | Path (Linux/WSL) | Path (Windows) | Contents |
+|----------|------------------|----------------|----------|
+| **EHG_Engineer** | `/mnt/c/_EHG/EHG_Engineer/lib/genesis/` | `C:\Users\rickf\Projects\_EHG\EHG_Engineer\lib\genesis\` | Infrastructure (quality gates, TTL, patterns) |
+| **EHG App** | `/mnt/c/_EHG/ehg/lib/genesis/` | `C:\Users\rickf\Projects\_EHG\ehg\lib\genesis\` | Orchestrators (ScaffoldEngine, repo-creator) |
+| **EHG App** | `/mnt/c/_EHG/ehg/scripts/genesis/` | `C:\Users\rickf\Projects\_EHG\ehg\scripts\genesis\` | Pipeline (genesis-pipeline.js, soul-extractor.js) |
 
 ### Quick Reference
 | Task | Location |
@@ -1117,7 +1135,17 @@ For SQL migrations, use the Supabase CLI or dashboard SQL editor:
 **EHG (Port 8080)**: Unified frontend (user + admin at /admin/*)
 
 **API Changes**: Restart server → Test endpoints
-**Commands**: `pkill -f "node server.js" && PORT=3000 node server.js`
+
+**Linux/WSL:**
+```bash
+pkill -f "node server.js" && PORT=3000 node server.js
+```
+
+**Windows (PowerShell):**
+```powershell
+Get-Process -Name node -ErrorAction SilentlyContinue | Where-Object {$_.CommandLine -like "*server.js*"} | Stop-Process -Force
+$env:PORT=3000; node server.js
+```
 
 **Frontend Changes**: Make changes in EHG repository (/mnt/c/_EHG/EHG/)
 **Complete Guide**: See `docs/01_architecture/UNIFIED-FRONTEND-ARCHITECTURE.md`

@@ -13,6 +13,7 @@ import dotenv from 'dotenv';
 import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { isPortInUse } from '../lib/utils/process-utils.js';
 
 // Load environment variables
 dotenv.config({ path: '.env.uat' });
@@ -64,22 +65,7 @@ process.on('SIGTERM', () => {
   process.exit(0);
 });
 
-// Check if port is in use
-async function isPortInUse(port) {
-  return new Promise((resolve) => {
-    const checkProcess = spawn('lsof', ['-i', `:${port}`], {
-      stdio: 'pipe'
-    });
-
-    checkProcess.on('close', (code) => {
-      resolve(code === 0); // Port is in use if lsof returns 0
-    });
-
-    checkProcess.on('error', () => {
-      resolve(false); // If lsof fails, assume port is free
-    });
-  });
-}
+// isPortInUse is imported from ../lib/utils/process-utils.js (cross-platform)
 
 // Wait for server to be ready
 async function waitForServer(url, maxAttempts = 30) {

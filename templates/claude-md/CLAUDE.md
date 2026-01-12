@@ -59,7 +59,8 @@ Automatic triggers:
 - "test/coverage" → Testing Sub-Agent
 
 ## Repository Guidelines
-- LEO Protocol: /mnt/c/_EHG/EHG_Engineer/
+- LEO Protocol (Linux/WSL): /mnt/c/_EHG/EHG_Engineer/
+- LEO Protocol (Windows): C:\Users\rickf\Projects\_EHG\EHG_Engineer\
 - Implementations: Project-specific repositories
 - Never mix protocol and implementation files
 

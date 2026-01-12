@@ -2,6 +2,7 @@
 
 ## Quick Start
 
+**Linux/WSL:**
 ```bash
 # 1. Navigate to staging directory
 cd /mnt/c/_EHG/EHG_Engineer/ops/stage
@@ -10,6 +11,15 @@ cd /mnt/c/_EHG/EHG_Engineer/ops/stage
 chmod +x bootstrap.sh
 
 # 3. Launch staging database
+docker-compose up -d
+```
+
+**Windows (PowerShell):**
+```powershell
+# 1. Navigate to staging directory
+cd C:\Users\rickf\Projects\_EHG\EHG_Engineer\ops\stage
+
+# 2. Launch staging database (no chmod needed on Windows)
 docker-compose up -d
 
 # 4. Wait for health check (30-60 seconds)
@@ -97,12 +107,23 @@ PGPASSWORD=cdx_K9mN3pQ7wL5xR2vT8bF6hJ4sD1aG psql -h 127.0.0.1 -p 5434 -U codex_s
 ## Troubleshooting
 
 ### Container won't start
+
+**Linux/WSL:**
 ```bash
 # Check logs
 docker-compose logs postgres_staging
 
 # Verify port availability
 lsof -i :5434
+```
+
+**Windows (PowerShell):**
+```powershell
+# Check logs
+docker-compose logs postgres_staging
+
+# Verify port availability
+netstat -ano | findstr :5434
 ```
 
 ### Connection refused
@@ -139,11 +160,24 @@ docker exec ehg_staging_db psql -U ehg_admin -d ehg_stage \
 
 ## Emergency Reset
 
+**Linux/WSL:**
 ```bash
 # Full nuclear option (destroys everything)
 docker-compose down -v
 docker system prune -f
 rm -rf /var/lib/docker/volumes/ehg_staging_data
+
+# Then restart fresh
+docker-compose up -d
+```
+
+**Windows (PowerShell):**
+```powershell
+# Full nuclear option (destroys everything)
+docker-compose down -v
+docker system prune -f
+# Docker Desktop manages volumes differently - use docker volume rm
+docker volume rm ehg_staging_data 2>$null
 
 # Then restart fresh
 docker-compose up -d

@@ -71,22 +71,47 @@ bash scripts/leo-stack.sh start-agent
 If you prefer to start servers manually:
 
 ### EHG_Engineer (Port 3000)
+
+**Linux/WSL:**
 ```bash
 cd /mnt/c/_EHG/EHG_Engineer
 PORT=3000 node server.js
 ```
 
+**Windows (PowerShell):**
+```powershell
+cd C:\Users\rickf\Projects\_EHG\EHG_Engineer
+$env:PORT=3000; node server.js
+```
+
 ### EHG App (Port 8080)
+
+**Linux/WSL:**
 ```bash
 cd /mnt/c/_EHG/EHG
 PORT=8080 npm run dev -- --host 0.0.0.0
 ```
 
+**Windows (PowerShell):**
+```powershell
+cd C:\Users\rickf\Projects\_EHG\ehg
+$env:PORT=8080; npm run dev -- --host 0.0.0.0
+```
+
 ### Agent Platform (Port 8000)
+
+**Linux/WSL:**
 ```bash
 cd /mnt/c/_EHG/EHG/agent-platform
 source venv/bin/activate
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+**Windows (PowerShell):**
+```powershell
+cd C:\Users\rickf\Projects\_EHG\ehg\agent-platform
+.\venv_win\Scripts\Activate.ps1
+$env:ENV_FILE=".env.production"; python -m uvicorn app.main:app --reload --port 8000
 ```
 
 ## Prerequisites
@@ -101,9 +126,17 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 - Redis server running (optional, for caching)
 
 **First-time setup for Agent Platform:**
+
+**Linux/WSL:**
 ```bash
 cd /mnt/c/_EHG/EHG/agent-platform
 bash INSTALL.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+cd C:\Users\rickf\Projects\_EHG\ehg\agent-platform
+.\INSTALL.ps1
 ```
 
 ## Troubleshooting
@@ -112,12 +145,25 @@ bash INSTALL.sh
 
 If you get "port already in use" errors:
 
+**Linux/WSL:**
 ```bash
 # Check what's using a port
 lsof -i :3000  # or :8080, :8000
 
 # Kill a process on a specific port
 lsof -ti:3000 | xargs kill -9
+```
+
+**Windows (PowerShell):**
+```powershell
+# Check what's using a port
+netstat -ano | findstr :3000
+
+# Find the process ID (PID) from the output, then kill it
+taskkill /F /PID <PID>
+
+# Or use Get-NetTCPConnection
+Get-NetTCPConnection -LocalPort 3000 | Select-Object OwningProcess
 ```
 
 ### WSL2 Networking Issues (Port 8080 not loading in browser)
@@ -138,21 +184,37 @@ If localhost:8080 doesn't load in Windows browser:
 ### Agent Platform Not Starting
 
 **Check if virtual environment exists:**
+
+**Linux/WSL:**
 ```bash
 cd /mnt/c/_EHG/EHG/agent-platform
 ls -la venv/
 ```
 
-If not, run:
-```bash
-bash INSTALL.sh
+**Windows:**
+```powershell
+cd C:\Users\rickf\Projects\_EHG\ehg\agent-platform
+Test-Path venv_win
 ```
 
+If not, run the setup:
+- **Linux/WSL:** `bash INSTALL.sh`
+- **Windows:** `.\INSTALL.ps1`
+
 **Check if dependencies are installed:**
+
+**Linux/WSL:**
 ```bash
 cd /mnt/c/_EHG/EHG/agent-platform
 source venv/bin/activate
 pip list | grep fastapi
+```
+
+**Windows:**
+```powershell
+cd C:\Users\rickf\Projects\_EHG\ehg\agent-platform
+.\venv_win\Scripts\Activate.ps1
+pip list | Select-String fastapi
 ```
 
 **Agent Platform shows as "running" but doesn't respond:**
