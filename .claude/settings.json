@@ -1,7 +1,7 @@
 {
   "statusLine": {
     "type": "command",
-    "command": "/mnt/c/_EHG/EHG_Engineer/.claude/statusline-context-tracker.sh"
+    "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.claude\\statusline-context-tracker.ps1"
   },
   "hooks": {
     "Stop": [
@@ -9,8 +9,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/mnt/c/_EHG/EHG_Engineer/.claude/set-activity-state.sh idle && sleep 1.5 && /mnt/c/_EHG/EHG_Engineer/.claude/notify-user.sh complete",
-            "timeout": 6
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.claude\\set-activity-state.ps1 -State idle",
+            "timeout": 2
           }
         ]
       }
@@ -20,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/mnt/c/_EHG/EHG_Engineer/.claude/set-activity-state.sh running",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.claude\\set-activity-state.ps1 -State running",
             "timeout": 2
           }
         ]
@@ -31,32 +31,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/mnt/c/_EHG/EHG_Engineer/.claude/set-activity-state.sh running",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.claude\\set-activity-state.ps1 -State running",
             "timeout": 2
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node /mnt/c/_EHG/EHG_Engineer/scripts/claude-hook.js prompt-submit",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "cat > /tmp/claude-hook-debug.json && echo \"$(date): raw input saved\" >> /tmp/claude-model-tracking.log",
-            "timeout": 10
           }
         ]
       }
     ]
+  },
+  "permissions": {
+    "allow": []
   }
 }
