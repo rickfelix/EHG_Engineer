@@ -4,9 +4,15 @@
  *
  * Consolidates 7 duplicate gate validation patterns into a single orchestrator.
  * Provides consistent validation interface across all handoff types.
+ *
+ * Enhanced for SD-VALIDATION-REGISTRY-001:
+ * - Database-driven validation rules from leo_validation_rules
+ * - Integration with ValidatorRegistry for dynamic validator resolution
+ * - Caching for performance optimization
  */
 
 import ResultBuilder from '../ResultBuilder.js';
+import { validatorRegistry } from './ValidatorRegistry.js';
 
 export class ValidationOrchestrator {
   constructor(supabase, options = {}) {
@@ -21,6 +27,14 @@ export class ValidationOrchestrator {
     // Schema constraints cache
     this.constraintsCache = null;
     this.constraintsCacheExpiry = 0;
+
+    // Validation rules cache (SD-VALIDATION-REGISTRY-001)
+    this.rulesCache = new Map();
+    this.rulesCacheExpiry = new Map();
+    this.RULES_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+    // Validator registry
+    this.validatorRegistry = options.validatorRegistry || validatorRegistry;
   }
 
   /**
@@ -266,6 +280,257 @@ export class ValidationOrchestrator {
   clearCache() {
     this.constraintsCache = null;
     this.constraintsCacheExpiry = 0;
+    this.rulesCache.clear();
+    this.rulesCacheExpiry.clear();
+  }
+
+  // ============================================
+  // Database-Driven Validation Rules (SD-VALIDATION-REGISTRY-001)
+  // ============================================
+
+  /**
+   * Load validation rules from database for a specific handoff type
+   * @param {string} handoffType - LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN, PLAN-TO-LEAD, LEAD-FINAL-APPROVAL
+   * @returns {Promise<Array>} Array of validation rules
+   */
+  async loadValidationRules(handoffType) {
+    const now = Date.now();
+    const cacheKey = handoffType;
+
+    // Check cache
+    if (this.rulesCache.has(cacheKey)) {
+      const expiry = this.rulesCacheExpiry.get(cacheKey);
+      if (now < expiry) {
+        console.log(`📋 Using cached validation rules for ${handoffType} (${this.rulesCache.get(cacheKey).length} rules)`);
+        return this.rulesCache.get(cacheKey);
+      }
+    }
+
+    console.log(`📥 Loading validation rules from database for ${handoffType}...`);
+
+    try {
+      const { data, error } = await this.supabase
+        .from('leo_validation_rules')
+        .select('*')
+        .eq('handoff_type', handoffType)
+        .eq('active', true)
+        .order('gate', { ascending: true })
+        .order('execution_order', { ascending: true });
+
+      if (error) {
+        // Check for table not existing
+        if (error.code === '42P01') {
+          console.warn('⚠️  leo_validation_rules table not found - using hardcoded gates only');
+          return [];
+        }
+        throw error;
+      }
+
+      const rules = data || [];
+
+      // Cache the results
+      this.rulesCache.set(cacheKey, rules);
+      this.rulesCacheExpiry.set(cacheKey, now + this.RULES_CACHE_TTL_MS);
+
+      console.log(`✅ Loaded ${rules.length} validation rules for ${handoffType}`);
+      if (rules.length > 0) {
+        const gateGroups = rules.reduce((acc, r) => {
+          acc[r.gate] = (acc[r.gate] || 0) + 1;
+          return acc;
+        }, {});
+        console.log(`   Gates: ${Object.entries(gateGroups).map(([g, c]) => `${g}(${c})`).join(', ')}`);
+      }
+
+      return rules;
+    } catch (error) {
+      console.error(`❌ Failed to load validation rules: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Build gates array from database rules merged with hardcoded gates
+   * @param {Array} hardcodedGates - Original hardcoded gates from executor
+   * @param {string} handoffType - The handoff type
+   * @param {object} context - Context for validators (sdId, sd, prd, supabase, options)
+   * @returns {Promise<Array>} Merged gates array ready for validateGates()
+   */
+  async buildGatesFromRules(hardcodedGates, handoffType, context = {}) {
+    // Load rules from database
+    const dbRules = await this.loadValidationRules(handoffType);
+
+    if (dbRules.length === 0) {
+      console.log('ℹ️  No database rules found, using hardcoded gates only');
+      return hardcodedGates;
+    }
+
+    // Group rules by gate
+    const rulesByGate = dbRules.reduce((acc, rule) => {
+      if (!acc[rule.gate]) acc[rule.gate] = [];
+      acc[rule.gate].push(rule);
+      return acc;
+    }, {});
+
+    // Build gates from database rules
+    const dbGates = [];
+    for (const [gate, rules] of Object.entries(rulesByGate)) {
+      for (const rule of rules) {
+        const validator = this.validatorRegistry.getOrCreateFallback(rule.rule_name, rule);
+
+        dbGates.push({
+          name: `${gate}:${rule.rule_name}`,
+          weight: rule.weight || 0,
+          required: rule.required,
+          validator: async (ctx) => {
+            const mergedContext = { ...context, ...ctx };
+            const result = await validator(mergedContext);
+            return this.validatorRegistry.normalizeResult(result);
+          },
+          meta: {
+            gate: rule.gate,
+            ruleName: rule.rule_name,
+            criteria: rule.criteria,
+            executionOrder: rule.execution_order,
+            fromDatabase: true
+          }
+        });
+      }
+    }
+
+    // Merge strategy: database rules take precedence, hardcoded fill gaps
+    const dbGateNames = new Set(dbGates.map(g => g.meta?.ruleName || g.name));
+    const uniqueHardcodedGates = hardcodedGates.filter(g => {
+      // Keep hardcoded gate if no equivalent in database
+      const baseName = g.name.includes(':') ? g.name.split(':')[1] : g.name;
+      return !dbGateNames.has(baseName) && !dbGateNames.has(g.name);
+    });
+
+    // Combine and sort
+    const mergedGates = [...dbGates, ...uniqueHardcodedGates];
+    mergedGates.sort((a, b) => {
+      const orderA = a.meta?.executionOrder ?? 50;
+      const orderB = b.meta?.executionOrder ?? 50;
+      return orderA - orderB;
+    });
+
+    console.log('\n📋 Merged gate configuration:');
+    console.log(`   Database rules: ${dbGates.length}`);
+    console.log(`   Hardcoded gates retained: ${uniqueHardcodedGates.length}`);
+    console.log(`   Total gates: ${mergedGates.length}`);
+
+    return mergedGates;
+  }
+
+  /**
+   * Get rules for a specific gate
+   * @param {string} handoffType - The handoff type
+   * @param {string} gate - The gate code (L, 0, 1, 2A, 2B, etc.)
+   * @returns {Promise<Array>} Rules for the specified gate
+   */
+  async getRulesForGate(handoffType, gate) {
+    const allRules = await this.loadValidationRules(handoffType);
+    return allRules.filter(r => r.gate === gate);
+  }
+
+  /**
+   * Validate a specific gate using database rules
+   * @param {string} handoffType - The handoff type
+   * @param {string} gate - The gate code
+   * @param {object} context - Validation context
+   * @returns {Promise<object>} Validation result
+   */
+  async validateGateFromRules(handoffType, gate, context = {}) {
+    const rules = await this.getRulesForGate(handoffType, gate);
+
+    if (rules.length === 0) {
+      return {
+        passed: true,
+        score: 100,
+        maxScore: 100,
+        warnings: [`No database rules found for gate ${gate}`],
+        issues: []
+      };
+    }
+
+    // Build gates from rules
+    const gates = rules.map(rule => ({
+      name: rule.rule_name,
+      weight: rule.weight || (1 / rules.length),
+      required: rule.required,
+      validator: async (ctx) => {
+        const validator = this.validatorRegistry.getOrCreateFallback(rule.rule_name, rule);
+        return validator({ ...context, ...ctx });
+      }
+    }));
+
+    // Use existing validateGates method
+    return this.validateGates(gates, context);
+  }
+
+  /**
+   * Get summary of all validation rules
+   * @returns {Promise<object>} Summary statistics
+   */
+  async getValidationRulesSummary() {
+    try {
+      const { data, error } = await this.supabase
+        .from('leo_validation_rules')
+        .select('gate, handoff_type, rule_name, weight, required, active')
+        .eq('active', true);
+
+      if (error) throw error;
+
+      const summary = {
+        totalRules: data.length,
+        byGate: {},
+        byHandoffType: {},
+        weightedGates: []
+      };
+
+      for (const rule of data) {
+        // By gate
+        if (!summary.byGate[rule.gate]) {
+          summary.byGate[rule.gate] = { count: 0, totalWeight: 0 };
+        }
+        summary.byGate[rule.gate].count++;
+        summary.byGate[rule.gate].totalWeight += rule.weight || 0;
+
+        // By handoff type
+        if (rule.handoff_type) {
+          if (!summary.byHandoffType[rule.handoff_type]) {
+            summary.byHandoffType[rule.handoff_type] = { count: 0, gates: new Set() };
+          }
+          summary.byHandoffType[rule.handoff_type].count++;
+          summary.byHandoffType[rule.handoff_type].gates.add(rule.gate);
+        }
+      }
+
+      // Convert Sets to arrays for JSON serialization
+      for (const ht of Object.keys(summary.byHandoffType)) {
+        summary.byHandoffType[ht].gates = Array.from(summary.byHandoffType[ht].gates);
+      }
+
+      // Check which gates have weights that sum to 1.0
+      for (const [gate, info] of Object.entries(summary.byGate)) {
+        if (Math.abs(info.totalWeight - 1.0) < 0.01) {
+          summary.weightedGates.push(gate);
+        }
+      }
+
+      return summary;
+    } catch (error) {
+      console.error(`Failed to get validation rules summary: ${error.message}`);
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * Clear only the rules cache (not constraints)
+   */
+  clearRulesCache() {
+    this.rulesCache.clear();
+    this.rulesCacheExpiry.clear();
+    console.log('🗑️  Validation rules cache cleared');
   }
 
   /**

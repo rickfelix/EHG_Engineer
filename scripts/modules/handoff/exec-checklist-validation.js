@@ -10,9 +10,13 @@
  * 1. exec_checklist array must exist and have ≥1 items
  * 2. Each item should have user_story_ids array (warning mode, not blocking)
  * 3. user_story_ids must reference valid story keys in user_stories table
+ * 4. Score must meet threshold (80%) for pass - SD-VALIDATION-REGISTRY-001
  *
  * Integration: Called from unified-handoff-system.js during PLAN→EXEC
  */
+
+// Pass threshold updated to 80% per SD-VALIDATION-REGISTRY-001
+const PASS_THRESHOLD = 80;
 
 /**
  * Validate exec_checklist for PLAN→EXEC handoff
@@ -158,10 +162,16 @@ export async function validateExecChecklist(sdId, prd, supabase, options = {}) {
     }
   }
 
+  // Check threshold (SD-VALIDATION-REGISTRY-001: updated to 80%)
+  if (result.passed && result.score < PASS_THRESHOLD) {
+    result.passed = false;
+    result.issues.push(`Score ${result.score}% below threshold ${PASS_THRESHOLD}%`);
+  }
+
   // Final summary
   if (!silent) {
     console.log('-'.repeat(50));
-    console.log(`   Score: ${result.score}/100`);
+    console.log(`   Score: ${result.score}/100 (threshold: ${PASS_THRESHOLD}%)`);
     console.log(`   Status: ${result.passed ? '✅ PASS' : '❌ FAIL'}`);
 
     if (result.warnings.length > 0) {
