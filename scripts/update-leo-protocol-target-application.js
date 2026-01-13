@@ -50,12 +50,12 @@ Before writing ANY code, EXEC MUST:
 \`\`\`
 
 1. **APPLICATION CHECK** ⚠️ CRITICAL
-   - **ALL UI changes** (user AND admin) go to \`/mnt/c/_EHG/EHG/\`
-   - **User features**: \`/mnt/c/_EHG/EHG/src/components/\` and \`/src/pages/\`
-   - **Admin features**: \`/mnt/c/_EHG/EHG/src/components/admin/\` and \`/src/pages/admin/\`
-   - **Stage components**: \`/mnt/c/_EHG/EHG/src/components/stages/admin/\`
-   - **Backend API only**: \`/mnt/c/_EHG/EHG_Engineer/\` (routes, scripts, no UI)
-   - Verify: \`cd /mnt/c/_EHG/EHG && pwd\`
+   - **ALL UI changes** (user AND admin) go to \`../ehg/\`
+   - **User features**: \`../ehg/src/components/\` and \`/src/pages/\`
+   - **Admin features**: \`../ehg/src/components/admin/\` and \`/src/pages/admin/\`
+   - **Stage components**: \`../ehg/src/components/stages/admin/\`
+   - **Backend API only**: \`./\` (routes, scripts, no UI)
+   - Verify: \`cd ../ehg && pwd\`
    - Check GitHub: \`git remote -v\` should show \`rickfelix/ehg.git\` for frontend
 
 2. **URL Verification** ✅
@@ -118,9 +118,9 @@ const UPDATED_SD_EXECUTION_PROTOCOL = `# STRATEGIC DIRECTIVE EXECUTION PROTOCOL
 
 | Component | Path | Port | Purpose |
 |-----------|------|------|---------|
-| **EHG** (Unified Frontend) | \`/mnt/c/_EHG/EHG/\` | 8080 | ALL UI (user + admin features) |
-| **EHG_Engineer** (Backend) | \`/mnt/c/_EHG/EHG_Engineer/\` | 3000 | API routes, scripts, no UI |
-| **Agent Platform** | \`/mnt/c/_EHG/EHG/agent-platform/\` | 8000 | AI research backend |
+| **EHG** (Unified Frontend) | \`../ehg/\` | 8080 | ALL UI (user + admin features) |
+| **EHG_Engineer** (Backend) | \`./\` | 3000 | API routes, scripts, no UI |
+| **Agent Platform** | \`../ehg/agent-platform/\` | 8000 | AI research backend |
 
 > **NOTE (SD-ARCH-EHG-006)**: Both applications use the **CONSOLIDATED** database (dedlbzhpgkmetvhbkyzq).
 
@@ -128,11 +128,11 @@ const UPDATED_SD_EXECUTION_PROTOCOL = `# STRATEGIC DIRECTIVE EXECUTION PROTOCOL
 
 | Feature Type | Target Directory | Repository |
 |--------------|------------------|------------|
-| **User Features** | \`/mnt/c/_EHG/EHG/src/\` | rickfelix/ehg.git |
-| **Admin Features** | \`/mnt/c/_EHG/EHG/src/components/admin/\` | rickfelix/ehg.git |
-| **Admin Pages** | \`/mnt/c/_EHG/EHG/src/pages/admin/\` | rickfelix/ehg.git |
-| **Stage Components** | \`/mnt/c/_EHG/EHG/src/components/stages/admin/\` | rickfelix/ehg.git |
-| **Backend API** | \`/mnt/c/_EHG/EHG_Engineer/\` | rickfelix/EHG_Engineer.git |
+| **User Features** | \`../ehg/src/\` | rickfelix/ehg.git |
+| **Admin Features** | \`../ehg/src/components/admin/\` | rickfelix/ehg.git |
+| **Admin Pages** | \`../ehg/src/pages/admin/\` | rickfelix/ehg.git |
+| **Stage Components** | \`../ehg/src/components/stages/admin/\` | rickfelix/ehg.git |
+| **Backend API** | \`./\` | rickfelix/EHG_Engineer.git |
 
 **Key Rule**: ALL UI changes go to EHG. Only backend API/script changes go to EHG_Engineer.
 
@@ -167,9 +167,9 @@ const UPDATED_TESTING_ARCHITECTURE = `**Multi-App Testing**: Two test suites for
 | **EHG_Engineer** (Backend) | Vitest + Jest | API routes, scripts, database operations |
 
 **Test Location by Feature**:
-- User features: \`/mnt/c/_EHG/EHG/tests/\`
-- Admin features: \`/mnt/c/_EHG/EHG/tests/\` (same as user, different routes)
-- Backend API: \`/mnt/c/_EHG/EHG_Engineer/tests/\`
+- User features: \`../ehg/tests/\`
+- Admin features: \`../ehg/tests/\` (same as user, different routes)
+- Backend API: \`./tests/\`
 
 **Full Guide**: See \`docs/reference/multi-app-testing.md\``;
 

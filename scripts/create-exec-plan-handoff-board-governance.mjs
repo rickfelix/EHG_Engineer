@@ -60,7 +60,7 @@ Successfully implemented AI Board of Directors governance system with 6 board me
 ## Deliverables Manifest
 
 ### Database Migrations
-- **File**: /mnt/c/_EHG/EHG/database/migrations/20251011_board_governance_mvp.sql
+- **File**: ../ehg/database/migrations/20251011_board_governance_mvp.sql
 - **Status**: Applied successfully
 - **Tables Created**: board_members, board_meetings, board_meeting_attendance
 - **Tables Enhanced**: raid_log (3 new columns)
@@ -68,32 +68,32 @@ Successfully implemented AI Board of Directors governance system with 6 board me
 - **Seed Data**: 6 board members with voting weights (1.00-1.50)
 
 ### Backend Files (Python - CrewAI)
-1. **/mnt/c/_EHG/EHG/agent-platform/app/crews/board_directors_crew.py** (580 LOC)
+1. **../ehg/agent-platform/app/crews/board_directors_crew.py** (580 LOC)
    - BoardDirectorsCrew class with 3 hardcoded workflow templates
    - Workflows: Weekly Meeting, Emergency Session, Investment Approval
    - Weighted voting system implementation
 
-2. **/mnt/c/_EHG/EHG/scripts/create-board-member-agents.mjs** (100 LOC)
+2. **../ehg/scripts/create-board-member-agents.mjs** (100 LOC)
    - Script to create 6 board member agents in database
    - Status: Executed successfully
 
 ### Frontend Files (TypeScript/React)
-1. **/mnt/c/_EHG/EHG/src/components/board/BoardMeetingDashboard.tsx** (520 LOC)
+1. **../ehg/src/components/board/BoardMeetingDashboard.tsx** (520 LOC)
    - Meetings dashboard with tabs (upcoming, active, past)
    - Metrics overview (5 cards)
    - Meeting detail modal with decisions and voting records
 
-2. **/mnt/c/_EHG/EHG/src/components/board/BoardMemberManagement.tsx** (420 LOC)
+2. **../ehg/src/components/board/BoardMemberManagement.tsx** (420 LOC)
    - Board member grid view with stats
    - Voting weight editor
    - Participation tracking
 
-3. **/mnt/c/_EHG/EHG/src/components/board/RAIDLogBoardView.tsx** (280 LOC)
+3. **../ehg/src/components/board/RAIDLogBoardView.tsx** (280 LOC)
    - RAID Log with board decision tracking
    - Filters by decision_level and item_type
    - Voting record display
 
-4. **/mnt/c/_EHG/EHG/src/components/board/index.ts** (3 LOC)
+4. **../ehg/src/components/board/index.ts** (3 LOC)
    - Component exports
 
 ### Agents Created
@@ -240,7 +240,7 @@ Successfully implemented AI Board of Directors governance system with 6 board me
   metadata: {
     database_migrations: [
       {
-        file: '/mnt/c/_EHG/EHG/database/migrations/20251011_board_governance_mvp.sql',
+        file: '../ehg/database/migrations/20251011_board_governance_mvp.sql',
         status: 'applied',
         tables_created: ['board_members', 'board_meetings', 'board_meeting_attendance'],
         tables_enhanced: ['raid_log'],
@@ -250,13 +250,13 @@ Successfully implemented AI Board of Directors governance system with 6 board me
     ],
     backend_files: [
       {
-        file: '/mnt/c/_EHG/EHG/agent-platform/app/crews/board_directors_crew.py',
+        file: '../ehg/agent-platform/app/crews/board_directors_crew.py',
         loc: 580,
         description: 'BoardDirectorsCrew with 3 hardcoded workflow templates',
         workflows: ['Weekly Meeting', 'Emergency Session', 'Investment Approval']
       },
       {
-        file: '/mnt/c/_EHG/EHG/scripts/create-board-member-agents.mjs',
+        file: '../ehg/scripts/create-board-member-agents.mjs',
         loc: 100,
         description: 'Script to create 6 board member agents',
         status: 'executed'
@@ -264,22 +264,22 @@ Successfully implemented AI Board of Directors governance system with 6 board me
     ],
     frontend_files: [
       {
-        file: '/mnt/c/_EHG/EHG/src/components/board/BoardMeetingDashboard.tsx',
+        file: '../ehg/src/components/board/BoardMeetingDashboard.tsx',
         loc: 520,
         description: 'Board meetings dashboard with tabs, metrics, and meeting detail modal'
       },
       {
-        file: '/mnt/c/_EHG/EHG/src/components/board/BoardMemberManagement.tsx',
+        file: '../ehg/src/components/board/BoardMemberManagement.tsx',
         loc: 420,
         description: 'Board member management with voting weight editor'
       },
       {
-        file: '/mnt/c/_EHG/EHG/src/components/board/RAIDLogBoardView.tsx',
+        file: '../ehg/src/components/board/RAIDLogBoardView.tsx',
         loc: 280,
         description: 'RAID Log with board decision tracking (board_meeting_id, voting_record, decision_level)'
       },
       {
-        file: '/mnt/c/_EHG/EHG/src/components/board/index.ts',
+        file: '../ehg/src/components/board/index.ts',
         loc: 3,
         description: 'Component exports'
       }

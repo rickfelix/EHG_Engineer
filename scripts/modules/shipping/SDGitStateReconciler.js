@@ -12,15 +12,23 @@
 
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Repository paths
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '../../..');
+const EHG_ROOT = path.resolve(__dirname, '../../../../ehg');
+
+// Repository paths (dynamically resolved)
 const REPO_PATHS = {
-  'rickfelix/ehg': '/mnt/c/_EHG/ehg',
-  'rickfelix/EHG_Engineer': '/mnt/c/_EHG/EHG_Engineer'
+  'rickfelix/ehg': EHG_ROOT,
+  'rickfelix/EHG_Engineer': EHG_ENGINEER_ROOT
 };
 
 // SD status categories

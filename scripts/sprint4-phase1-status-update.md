@@ -19,7 +19,7 @@
 ### 1. Fixed Strict Mode Violations (3 instances)
 **Issue**: `getByText(/running/i)` matched multiple elements
 **Fix**: Added `.first()` to all ambiguous selectors
-**Files Modified**: `/mnt/c/_EHG/EHG/tests/e2e/ab-testing-sprint3.spec.ts`
+**Files Modified**: `../ehg/tests/e2e/ab-testing-sprint3.spec.ts`
 - Line 340 (US-021-AC1)
 - Line 413 (US-021-AC3)
 - Line 466 (US-021-AC5)
@@ -181,11 +181,11 @@ Acknowledge that 71.4% (20/28) is close to target and:
 
 ## Files Modified
 
-1. `/mnt/c/_EHG/EHG/tests/e2e/ab-testing-sprint3.spec.ts`
+1. `../ehg/tests/e2e/ab-testing-sprint3.spec.ts`
    - Lines 321, 372, 408, 464: Increased timeouts
    - Lines 340, 413, 466: Added `.first()` to strict mode violations
 
-2. `/mnt/c/_EHG/EHG/src/components/agents/ABTestingTab.tsx`
+2. `../ehg/src/components/agents/ABTestingTab.tsx`
    - Line 361: Added `setTests(prev => [data, ...prev])` for immediate state update
 
 ---

@@ -68,7 +68,7 @@ async function updatePrdWithFindings() {
           impact: 'Chairman decisions API will FAIL - broken production endpoint',
           fix: 'Either create venture_decisions table or update API to use chairman_decisions',
           files_affected: [
-            '/mnt/c/_EHG/EHG/src/pages/api/v2/chairman/decisions.ts:47'
+            '../ehg/src/pages/api/v2/chairman/decisions.ts:47'
           ]
         },
         {

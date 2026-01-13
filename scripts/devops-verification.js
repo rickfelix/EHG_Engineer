@@ -9,7 +9,14 @@
 import { createClient } from '@supabase/supabase-js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { fileURLToPath } from 'url';
+import path from 'path';
 import dotenv from 'dotenv';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ROOT = path.resolve(__dirname, '../../ehg');
 
 dotenv.config();
 
@@ -48,7 +55,7 @@ async function verifyDevOps(sdId) {
   // Check GitHub Actions status (if in EHG repo)
   try {
     console.log('\n📊 Checking GitHub Actions...');
-    const { stdout } = await execAsync('cd /mnt/c/_EHG/EHG && gh run list --limit 5 --json conclusion,status,name,createdAt');
+    const { stdout } = await execAsync(`cd "${EHG_ROOT}" && gh run list --limit 5 --json conclusion,status,name,createdAt`);
     const runs = JSON.parse(stdout);
 
     const latestRun = runs[0];
@@ -68,8 +75,8 @@ async function verifyDevOps(sdId) {
   // Check git status
   try {
     console.log('\n📝 Checking Git status...');
-    const { stdout: gitLog } = await execAsync('cd /mnt/c/_EHG/EHG && git log --oneline -1');
-    const { stdout: gitStatus } = await execAsync('cd /mnt/c/_EHG/EHG && git status --porcelain');
+    const { stdout: gitLog } = await execAsync(`cd "${EHG_ROOT}" && git log --oneline -1`);
+    const { stdout: gitStatus } = await execAsync(`cd "${EHG_ROOT}" && git status --porcelain`);
 
     verification.checks.git = {
       latest_commit: gitLog.trim(),

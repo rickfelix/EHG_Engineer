@@ -40,7 +40,7 @@ async function getFunctionDef() {
     const path = await import('path');
     const glob = await import('glob');
     
-    const migrationDir = '/mnt/c/_EHG/EHG_Engineer/database/migrations';
+    const migrationDir = './database/migrations';
     const files = glob.sync(`${migrationDir}/*progress*.sql`);
     
     if (files.length === 0) {

@@ -35,9 +35,9 @@ MAX_WSL_HEALTH_FAILURES=3  # Max consecutive WSL health check failures before ab
 WSL_RECOVERY_DELAY=3  # Extra delay after detecting WSL stress
 
 # Directories
-ENGINEER_DIR="/mnt/c/_EHG/EHG_Engineer"
-APP_DIR="/mnt/c/_EHG/EHG"
-AGENT_DIR="/mnt/c/_EHG/EHG/agent-platform"
+ENGINEER_DIR="."
+APP_DIR="../ehg"
+AGENT_DIR="../ehg/agent-platform"
 
 # PID file locations
 PID_DIR="$ENGINEER_DIR/.pids"

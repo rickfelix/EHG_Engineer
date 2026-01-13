@@ -187,7 +187,7 @@ const action_items = `
 **EXEC IMPLEMENTATION PHASE (Phase 3) - Required Actions**:
 
 1. **Navigate to EHG Application** ⏳ (CRITICAL)
-   - cd /mnt/c/_EHG/EHG
+   - cd ../ehg
    - Verify with: git remote -v (should show rickfelix/ehg.git)
    - ALL code changes must be in EHG app, NOT EHG_Engineer!
 
@@ -329,7 +329,7 @@ async function createHandoff() {
   console.log('   ✅ LEAD guidance compliance: 100%');
   console.log('');
   console.log('📌 NEXT: EXEC agent should accept handoff and begin implementation');
-  console.log('   Location: /mnt/c/_EHG/EHG (EHG application, NOT EHG_Engineer)');
+  console.log('   Location: ../ehg (EHG application, NOT EHG_Engineer)');
   console.log('   Duration: <1 hour');
   console.log('');
 }

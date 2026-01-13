@@ -64,9 +64,9 @@ async function splitSD041() {
 **Context**: SD-041 discovered extensive existing infrastructure (698-line service + 1,300 lines UI) that uses mock data. This SD focuses solely on integrating that infrastructure.
 
 **Existing Assets**:
-- Service: /mnt/c/_EHG/EHG/src/lib/services/knowledgeManagementService.ts (698 lines)
-- UI: /mnt/c/_EHG/EHG/src/components/data/KnowledgeBaseSystem.tsx (644 lines)
-- UI: /mnt/c/_EHG/EHG/src/components/eva/KnowledgeBase.tsx (656 lines)
+- Service: ../ehg/src/lib/services/knowledgeManagementService.ts (698 lines)
+- UI: ../ehg/src/components/data/KnowledgeBaseSystem.tsx (644 lines)
+- UI: ../ehg/src/components/eva/KnowledgeBase.tsx (656 lines)
 - Route: /knowledge-base (configured in App.tsx)
 
 **Gap**: UI components use hardcoded mock data, NOT connected to service layer.

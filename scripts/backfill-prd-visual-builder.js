@@ -256,7 +256,7 @@ async function backfillPRD() {
     // Metadata
     metadata: {
       target_app: 'EHG',
-      implementation_path: '/mnt/c/_EHG/EHG/src/components/workflow-builder/',
+      implementation_path: '../ehg/src/components/workflow-builder/',
       database_tables: ['crewai_flows', 'crewai_flow_executions', 'crewai_flow_templates'],
       routes: ['/ai-agents (Workflows tab)'],
       components_created: ['FlowCanvas.tsx', 'NodePalette.tsx'],

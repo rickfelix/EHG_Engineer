@@ -65,7 +65,7 @@ http://localhost:8080/eva-assistant (EHG app, port 8080)
 5. BP-EVA-CONTENT-007: Settings & Testing (16h) - E2E with Playwright
 
 ## EXEC Checklist (MANDATORY)
-1. Verify: /mnt/c/_EHG/EHG (NOT EHG_Engineer)
+1. Verify: ../ehg (NOT EHG_Engineer)
 2. Apply migration: 20251011_eva_content_catalogue_mvp.sql to EHG DB
 3. Navigate: http://localhost:8080/eva-assistant (verify accessible)
 4. Install: react-markdown, react-table, recharts, framer-motion

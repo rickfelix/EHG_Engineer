@@ -745,7 +745,7 @@ const prdData = {
       content: PRD_CONTENT,
       target_url: 'http://localhost:5173',  // EHG app
       component_name: 'EVARealtimeVoice, ChairmanDashboard',
-      app_path: '/mnt/c/_EHG/EHG',
+      app_path: '../ehg',
       port: 5173,
       metadata: {
         created_by: 'PLAN',

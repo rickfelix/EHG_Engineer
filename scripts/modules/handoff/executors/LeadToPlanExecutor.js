@@ -11,7 +11,20 @@
 import BaseExecutor from './BaseExecutor.js';
 import { execSync } from 'child_process';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import readline from 'readline';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function getRepoPath(repoName) {
+  const normalizedName = repoName.toLowerCase();
+  if (normalizedName.includes('engineer')) {
+    return path.resolve(__dirname, '../../../../');
+  }
+  return path.resolve(__dirname, '../../../../../ehg');
+}
 // validateSDHandoffState - available for future validation needs
 import { validateSDHandoffState as _validateSDHandoffState, quickPreflightCheck } from '../../../lib/handoff-preflight.js';
 // SD Branch Creation (proactive branch setup at LEAD-TO-PLAN)
@@ -138,12 +151,10 @@ export class LeadToPlanExecutor extends BaseExecutor {
       const title = sd.title || '';
       const targetApp = sd.target_application || 'EHG';
 
-      // Determine repo path
-      const repoPaths = {
-        EHG: '/mnt/c/_EHG/EHG',
-        EHG_Engineer: '/mnt/c/_EHG/EHG_Engineer'
-      };
-      const repoPath = repoPaths[targetApp];
+      // Determine repo path (cross-platform)
+      const repoPath = targetApp.toLowerCase().includes('engineer')
+        ? getRepoPath('EHG_Engineer')
+        : getRepoPath('EHG');
 
       if (!repoPath) {
         warnings.push(`Unknown target_application: ${targetApp} - skipping branch creation`);

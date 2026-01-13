@@ -102,7 +102,7 @@ if [ "$RESTART_FRONTEND" = true ]; then
 
     # Start it again using leo-stack
     echo "   Starting EHG app..."
-    cd /mnt/c/_EHG/EHG && npm run dev > /tmp/ehg-dev.log 2>&1 &
+    cd ../ehg && npm run dev > /tmp/ehg-dev.log 2>&1 &
 
     # Wait for it to be ready
     echo "   Waiting for EHG to be ready..."

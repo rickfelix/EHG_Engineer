@@ -8,10 +8,17 @@
 
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 
-const AGENT_PLATFORM_PATH = '/mnt/c/_EHG/EHG/agent-platform';
-const OUTPUT_DIR = '/mnt/c/_EHG/EHG_Engineer/docs/strategic-directives/SD-CREWAI-ARCHITECTURE-001/discovery/artifacts';
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
+const EHG_ROOT = path.resolve(__dirname, '../../ehg');
+
+const AGENT_PLATFORM_PATH = path.join(EHG_ROOT, 'agent-platform');
+const OUTPUT_DIR = path.join(EHG_ENGINEER_ROOT, 'docs/strategic-directives/SD-CREWAI-ARCHITECTURE-001/discovery/artifacts');
 
 // Ensure output directory exists
 if (!fs.existsSync(OUTPUT_DIR)) {
@@ -57,7 +64,7 @@ crewFiles.forEach((filePath, index) => {
   crewInventory.push({
     index: index + 1,
     file_name: fileName,
-    file_path: filePath.replace('/mnt/c/_EHG/EHG/', ''),
+    file_path: path.relative(EHG_ROOT, filePath),
     class_name: className,
     agent_count: agentCount,
     line_count: lineCount,
@@ -123,7 +130,7 @@ agentFiles.forEach((filePath, index) => {
   agentInventory.push({
     index: index + 1,
     file_name: fileName,
-    file_path: filePath.replace('/mnt/c/_EHG/EHG/', ''),
+    file_path: path.relative(EHG_ROOT, filePath),
     class_name: className,
     category: category,
     role: role,

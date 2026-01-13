@@ -33,7 +33,7 @@ const supabase = createClient(
   process.env.SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const DEFAULT_REPO_PATH = '/mnt/c/_EHG/EHG';
+const DEFAULT_REPO_PATH = '../ehg';
 
 /**
  * Main function

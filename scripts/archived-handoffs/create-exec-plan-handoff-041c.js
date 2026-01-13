@@ -65,8 +65,8 @@ All 30 acceptance criteria from PRD are implemented and ready for PLAN verificat
 - faq_entries (with auto-updated search_vector trigger)
 - doc_reviews (audit trail for approvals)
 
-**File**: /mnt/c/_EHG/EHG/database/migrations/create-ai-docs-schema.sql
-**Migration Script**: /mnt/c/_EHG/EHG/scripts/apply-ai-docs-migration.js
+**File**: ../ehg/database/migrations/create-ai-docs-schema.sql
+**Migration Script**: ../ehg/scripts/apply-ai-docs-migration.js
 
 ### 2. GitHub Webhook Endpoint
 - HMAC SHA-256 signature validation
@@ -74,7 +74,7 @@ All 30 acceptance criteria from PRD are implemented and ready for PLAN verificat
 - Webhook event storage with audit trail
 - GET endpoint for webhook history
 
-**File**: /mnt/c/_EHG/EHG/app/api/webhooks/github/route.ts
+**File**: ../ehg/app/api/webhooks/github/route.ts
 **URL**: POST /api/webhooks/github
 
 ### 3. AI Analysis Service
@@ -84,7 +84,7 @@ All 30 acceptance criteria from PRD are implemented and ready for PLAN verificat
 - Retry logic (max 3 attempts)
 - Error handling and job status management
 
-**File**: /mnt/c/_EHG/EHG/src/services/ai-docs-analyzer.ts
+**File**: ../ehg/src/services/ai-docs-analyzer.ts
 **Functions**: analyzeCodeChanges(), retryAnalysis(), extractCodeChanges()
 
 ### 4. Documentation Generator
@@ -94,7 +94,7 @@ All 30 acceptance criteria from PRD are implemented and ready for PLAN verificat
 - Version snapshot creation
 - Full-text search support
 
-**File**: /mnt/c/_EHG/EHG/src/services/doc-generator.ts
+**File**: ../ehg/src/services/doc-generator.ts
 **Functions**: generateDocumentation(), publishDocumentation(), archiveDocumentation(), searchDocumentation(), searchFAQ()
 
 ### 5. Admin Dashboard UI
@@ -104,7 +104,7 @@ All 30 acceptance criteria from PRD are implemented and ready for PLAN verificat
 - Webhook events monitoring
 - AI analysis jobs performance metrics (tokens, cost, latency)
 
-**File**: /mnt/c/_EHG/EHG/src/components/ai-docs/AIDocsAdminDashboard.tsx
+**File**: ../ehg/src/components/ai-docs/AIDocsAdminDashboard.tsx
 **Components**: Document list, preview, webhook tracker, analysis metrics
 
 ### 6. Dependencies Installed
@@ -112,7 +112,7 @@ All 30 acceptance criteria from PRD are implemented and ready for PLAN verificat
 - marked ^16.3.0
 - @types/marked ^5.0.2
 
-**Updated**: /mnt/c/_EHG/EHG/package.json
+**Updated**: ../ehg/package.json
   `.trim(),
 
   key_decisions: `

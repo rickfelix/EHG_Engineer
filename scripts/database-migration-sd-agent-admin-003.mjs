@@ -123,8 +123,8 @@ This is a fresh start after SD-AGENT-ADMIN-002 was marked complete but had 57/57
 - 3 RLS policy updates required
 
 **Existing Infrastructure**:
-- /mnt/c/_EHG/EHG/src/components/agents/AgentSettingsTab.tsx (654 LOC, functional)
-- /mnt/c/_EHG/EHG/src/components/agents/AgentPresetsTab.tsx (658 LOC, CRUD complete)
+- ../ehg/src/components/agents/AgentSettingsTab.tsx (654 LOC, functional)
+- ../ehg/src/components/agents/AgentPresetsTab.tsx (658 LOC, CRUD complete)
 - Recharts library (113+ components)
 - Radix UI library (complete)`,
 

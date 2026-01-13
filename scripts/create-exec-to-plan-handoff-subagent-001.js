@@ -248,7 +248,7 @@ const handoff = {
   // Additional context for PLAN Verification agent
   technical_context: {
     target_application: 'EHG_Engineer',
-    working_directory: '/mnt/c/_EHG/EHG_Engineer',
+    working_directory: '.',
     database: 'dedlbzhpgkmetvhbkyzq (Supabase)',
     port: 3000,
     key_files: [

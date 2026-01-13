@@ -222,10 +222,10 @@ const MIN_STALE_HOURS = 2;
 // Protected branches (never deleted)
 const PROTECTED_BRANCHES = ['main', 'master', 'develop', 'staging', 'production'];
 
-// Repos to scan
+// Repos to scan (relative paths from EHG_Engineer)
 const REPO_PATHS = {
-  EHG: '/mnt/c/_EHG/EHG',
-  EHG_Engineer: '/mnt/c/_EHG/EHG_Engineer'
+  EHG: '../ehg',
+  EHG_Engineer: './'
 };
 ```
 

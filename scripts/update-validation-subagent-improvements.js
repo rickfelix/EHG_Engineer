@@ -164,8 +164,8 @@ node scripts/orchestrate-phase-subagents.js PLAN_VERIFY <SD-ID>
 
 **Current State**: Manual grep/find commands
 \`\`\`bash
-grep -r "feature_name" /mnt/c/_EHG/EHG/src
-find /mnt/c/_EHG/EHG/src/components -name "*ComponentName*"
+grep -r "feature_name" ../ehg/src
+find ../ehg/src/components -name "*ComponentName*"
 \`\`\`
 
 **Issue**: Takes 15+ minutes, 70% accuracy, prone to human error
@@ -323,13 +323,13 @@ function detectTargetRepository(sd) {
 **Validation Scope by Repository**:
 
 **EHG_Engineer SDs** (Management Dashboard):
-- Validate against: \`/mnt/c/_EHG/EHG_Engineer/\`
+- Validate against: \`./\`
 - Check LEO Protocol tables: \`strategic_directives_v2\`, \`product_requirements_v2\`
 - Check management UI components
 - **Cross-check**: Ensure not duplicating EHG app features
 
 **EHG SDs** (Business Application):
-- Validate against: \`/mnt/c/_EHG/EHG/\`
+- Validate against: \`../ehg/\`
 - Check business tables: \`ventures\`, \`users\`, etc.
 - Check customer-facing UI components
 - **Cross-check**: Ensure not duplicating management features
@@ -337,8 +337,8 @@ function detectTargetRepository(sd) {
 **Example Output**:
 \`\`\`
 🎯 Target Repository: EHG (Business Application)
-📂 Primary Search: /mnt/c/_EHG/EHG/
-🔗 Cross-Check: /mnt/c/_EHG/EHG_Engineer/ (no management features found ✓)
+📂 Primary Search: ../ehg/
+🔗 Cross-Check: ./ (no management features found ✓)
 
 Duplicate Check Results:
 - EHG: No duplicates found ✓

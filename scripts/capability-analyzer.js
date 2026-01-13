@@ -24,8 +24,16 @@ import {
   getCapabilityType,
 } from '../lib/capabilities/capability-taxonomy.js';
 
-const EHG_ROOT = process.env.EHG_ROOT || '/mnt/c/_EHG/EHG';
-const ENGINEER_ROOT = process.env.ENGINEER_ROOT || process.cwd();
+import { fileURLToPath } from 'url';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
+const DEFAULT_EHG_ROOT = path.resolve(__dirname, '../../ehg');
+
+const EHG_ROOT = process.env.EHG_ROOT || DEFAULT_EHG_ROOT;
+const ENGINEER_ROOT = process.env.ENGINEER_ROOT || EHG_ENGINEER_ROOT;
 
 /**
  * Capability detection patterns for codebase scanning

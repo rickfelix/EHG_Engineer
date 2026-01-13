@@ -44,7 +44,7 @@ async function generateFinalReport() {
   console.log(`Priority:        ${sd.priority.toUpperCase()}`);
   console.log(`Current Phase:   ${sd.current_phase}`);
   console.log(`Overall Progress: ${sd.progress}%`);
-  console.log('Target App:      EHG Application (/mnt/c/_EHG/EHG/)');
+  console.log('Target App:      EHG Application (../ehg/)');
 
   // Check PRD
   const { data: prd } = await supabase
@@ -174,10 +174,10 @@ async function generateFinalReport() {
   console.log('\n🚀 READY TO EXECUTE');
   console.log('═════════════════════════════════════════════════════════════');
   console.log('1. Start EHG application:');
-  console.log('   cd /mnt/c/_EHG/EHG && npm run dev');
+  console.log('   cd ../ehg && npm run dev');
   console.log('');
   console.log('2. Run UAT tests:');
-  console.log('   cd /mnt/c/_EHG/EHG_Engineer');
+  console.log('   cd .');
   console.log('   npx playwright test');
   console.log('');
   console.log('3. View UAT Dashboard:');

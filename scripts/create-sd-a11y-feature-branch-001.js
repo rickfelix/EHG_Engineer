@@ -1,4 +1,4 @@
-const db = require('/mnt/c/_EHG/EHG_Engineer/lib/supabase-connection.js');
+const db = require('./lib/supabase-connection.js');
 
 async function createSD() {
   const client = await db.createDatabaseClient('engineer', {verify: true});

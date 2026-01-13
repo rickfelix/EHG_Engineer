@@ -188,7 +188,7 @@ This PRD defines the implementation roadmap for **SD-EVA-MEETING-002**, transfor
         component_architecture: [
           {
             component: 'EVAMeetingNavBar.tsx',
-            location: '/mnt/c/_EHG/EHG/src/components/eva-meeting/',
+            location: '../ehg/src/components/eva-meeting/',
             size: '~150 LOC',
             dependencies: ['Shadcn Button', 'Lucide icons', 'Badge'],
             props: ['onMicToggle', 'onCameraToggle', 'onEndSession', 'isMicActive', 'isCameraActive'],
@@ -196,7 +196,7 @@ This PRD defines the implementation roadmap for **SD-EVA-MEETING-002**, transfor
           },
           {
             component: 'EVAMeetingDashboard.tsx',
-            location: '/mnt/c/_EHG/EHG/src/components/eva-meeting/',
+            location: '../ehg/src/components/eva-meeting/',
             size: '~300 LOC',
             dependencies: ['Recharts', 'Shadcn Card'],
             data_sources: ['Mock data (Phase 1), Real venture data (Phase 2)'],
@@ -205,7 +205,7 @@ This PRD defines the implementation roadmap for **SD-EVA-MEETING-002**, transfor
           },
           {
             component: 'AudioWaveform.tsx',
-            location: '/mnt/c/_EHG/EHG/src/components/eva-meeting/',
+            location: '../ehg/src/components/eva-meeting/',
             size: '~200 LOC',
             dependencies: ['Canvas API', 'EVARealtimeVoice (audio level props)'],
             performance: '60fps via requestAnimationFrame',
@@ -648,7 +648,7 @@ This PRD defines the implementation roadmap for **SD-EVA-MEETING-002**, transfor
       // Metadata
       metadata: {
         target_application: 'EHG',
-        application_path: '/mnt/c/_EHG/EHG/',
+        application_path: '../ehg/',
         url: 'http://localhost:5173/eva-assistant',
         port: 5173,
 
@@ -669,19 +669,19 @@ This PRD defines the implementation roadmap for **SD-EVA-MEETING-002**, transfor
         new_components: [
           {
             name: 'EVAMeetingNavBar.tsx',
-            path: '/mnt/c/_EHG/EHG/src/components/eva-meeting/EVAMeetingNavBar.tsx',
+            path: '../ehg/src/components/eva-meeting/EVAMeetingNavBar.tsx',
             size: '~150 LOC',
             purpose: 'Top navigation bar with title, status, controls'
           },
           {
             name: 'EVAMeetingDashboard.tsx',
-            path: '/mnt/c/_EHG/EHG/src/components/eva-meeting/EVAMeetingDashboard.tsx',
+            path: '../ehg/src/components/eva-meeting/EVAMeetingDashboard.tsx',
             size: '~300 LOC',
             purpose: 'Custom dashboard with 7 specific metrics'
           },
           {
             name: 'AudioWaveform.tsx',
-            path: '/mnt/c/_EHG/EHG/src/components/eva-meeting/AudioWaveform.tsx',
+            path: '../ehg/src/components/eva-meeting/AudioWaveform.tsx',
             size: '~200 LOC',
             purpose: 'Real-time waveform visualization (Canvas API, 60fps)'
           }
@@ -690,7 +690,7 @@ This PRD defines the implementation roadmap for **SD-EVA-MEETING-002**, transfor
         modified_components: [
           {
             name: 'EVAAssistantPage.tsx',
-            path: '/mnt/c/_EHG/EHG/src/pages/EVAAssistantPage.tsx',
+            path: '../ehg/src/pages/EVAAssistantPage.tsx',
             current_size: '261 LOC',
             changes: [
               'Dark navy theme (all className updates)',

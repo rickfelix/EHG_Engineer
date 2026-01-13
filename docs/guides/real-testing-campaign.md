@@ -36,7 +36,7 @@ node scripts/apply-testing-schema-enhancement.cjs
 Ensure test suites are available:
 
 ```bash
-cd /mnt/c/_EHG/EHG
+# From EHG directory (../ehg from EHG_Engineer)
 
 # Verify unit tests
 npm run test:unit -- --run
@@ -52,7 +52,7 @@ npm run test:e2e -- --list
 Run in background for hours without intervention:
 
 ```bash
-cd /mnt/c/_EHG/EHG_Engineer
+# From EHG_Engineer root directory
 
 # Launch campaign in background
 nohup node scripts/batch-test-completed-sds-real.cjs > /tmp/real-testing-output.log 2>&1 &
@@ -66,8 +66,7 @@ echo $! > /tmp/batch-test-pid.txt
 Run with live monitoring in separate terminal:
 
 ```bash
-# Terminal 1: Launch campaign
-cd /mnt/c/_EHG/EHG_Engineer
+# Terminal 1: Launch campaign (from EHG_Engineer root)
 node scripts/batch-test-completed-sds-real.cjs
 
 # Terminal 2: Monitor progress
@@ -245,8 +244,8 @@ Real campaign will show:
 ### Build Failures
 
 ```bash
-# Rebuild EHG app
-cd /mnt/c/_EHG/EHG
+# Rebuild EHG app (from EHG directory)
+cd ../ehg
 npm run build
 ```
 

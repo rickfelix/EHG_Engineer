@@ -198,7 +198,7 @@ test.beforeEach(async ({ page, context }) => {
 - \`flags-on\` project: \`EHG_MOCK_MODE=true\`, feature flags ON
 
 ### TR-4: Directory Structure
-**Target Application**: \`/mnt/c/_EHG/EHG\` (EHG customer-facing app)
+**Target Application**: \`../ehg\` (EHG customer-facing app)
 **Test Files Location**:
 - \`tests/e2e/\` (E2E tests)
 - \`tests/dev/\` (Development tests)
@@ -250,7 +250,7 @@ test.beforeEach(async ({ page, context }) => {
 ### TS-1: Mock Project Tests Pass
 **Scenario**: All venture workflow tests pass without database
 **Steps**:
-1. Navigate to \`/mnt/c/_EHG/EHG\`
+1. Navigate to \`../ehg\`
 2. Run \`npx playwright test --project=mock\`
 3. Filter for venture tests: \`npx playwright test tests/e2e/ventures*.spec.ts tests/dev/ventures*.spec.ts --project=mock\`
 **Expected**: 100% pass rate, zero failures due to missing mocks
@@ -415,7 +415,7 @@ test.beforeEach(async ({ page, context }) => {
 - ✅ Playwright installed and configured
 - ✅ Two projects defined (mock, flags-on)
 - ✅ Reference implementations exist
-- ✅ /mnt/c/_EHG/EHG repository accessible
+- ✅ ../ehg repository accessible
 
 ### Assumptions
 - Test files can be modified without breaking existing tests
@@ -429,29 +429,29 @@ test.beforeEach(async ({ page, context }) => {
 
 ### Files to Modify
 \`\`\`
-/mnt/c/_EHG/EHG/tests/dev/ventures-authenticated.spec.ts
-/mnt/c/_EHG/EHG/tests/dev/ventures-crud.spec.ts
-/mnt/c/_EHG/EHG/tests/e2e/new-venture.spec.ts
-/mnt/c/_EHG/EHG/tests/README.md
+../ehg/tests/dev/ventures-authenticated.spec.ts
+../ehg/tests/dev/ventures-crud.spec.ts
+../ehg/tests/e2e/new-venture.spec.ts
+../ehg/tests/README.md
 \`\`\`
 
 ### Files to Create
 \`\`\`
-/mnt/c/_EHG/EHG/docs/testing/mock-handler-patterns.md
+../ehg/docs/testing/mock-handler-patterns.md
 \`\`\`
 
 ### Reference Files
 \`\`\`
-/mnt/c/_EHG/EHG/tests/e2e/ventures.spec.ts (Pattern A)
-/mnt/c/_EHG/EHG/tests/e2e/calibration.spec.ts (Pattern B)
-/mnt/c/_EHG/EHG/playwright.config.ts (Project config)
+../ehg/tests/e2e/ventures.spec.ts (Pattern A)
+../ehg/tests/e2e/calibration.spec.ts (Pattern B)
+../ehg/playwright.config.ts (Project config)
 \`\`\`
 
 ---
 
 **PRD Version**: 1.0
 **Created By**: PLAN Agent
-**Target Application**: /mnt/c/_EHG/EHG (EHG customer-facing app)
+**Target Application**: ../ehg (EHG customer-facing app)
 **Estimated Effort**: 4-6 hours
 **Priority**: HIGH
 **Status**: Ready for EXEC
@@ -508,7 +508,7 @@ test.beforeEach(async ({ page, context }) => {
     console.log('   - Estimated Effort: 4-6 hours');
 
     console.log('\n🎯 Ready for EXEC Phase');
-    console.log('   Navigate to: /mnt/c/_EHG/EHG');
+    console.log('   Navigate to: ../ehg');
     console.log('   Start with: tests/dev/ventures-authenticated.spec.ts');
 
     console.log('\n================================================================');

@@ -147,9 +147,9 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANO
 
 ## File Location
 
-**SQL Script**: `/mnt/c/_EHG/EHG_Engineer/scripts/apply-complete-sd-testing-migration.sql`
+**SQL Script**: `./scripts/apply-complete-sd-testing-migration.sql`
 
-**This File**: `/mnt/c/_EHG/EHG_Engineer/scripts/APPLY-MIGRATION-INSTRUCTIONS.md`
+**This File**: `./scripts/APPLY-MIGRATION-INSTRUCTIONS.md`
 
 ---
 

@@ -233,7 +233,7 @@ async function runRealTests(sd_id, attempt = 1) {
       output = execSync(
         `node scripts/qa-engineering-director-enhanced.js ${sd_id} ${qaFlags}`,
         {
-          cwd: '/mnt/c/_EHG/EHG_Engineer',
+          cwd: '.',
           encoding: 'utf8',
           timeout: 3600000, // 60 min max per SD
           stdio: 'pipe'

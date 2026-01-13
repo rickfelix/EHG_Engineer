@@ -12,7 +12,7 @@ const path = require('path');
 const readline = require('readline');
 const { execSync, spawn } = require('child_process');
 
-const ENGINEER_DIR = '/mnt/c/_EHG/EHG_Engineer';
+const ENGINEER_DIR = '.';
 
 const rl = readline.createInterface({
   input: process.stdin,

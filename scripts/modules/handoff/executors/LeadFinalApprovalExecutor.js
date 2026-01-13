@@ -16,6 +16,20 @@
 
 import BaseExecutor from './BaseExecutor.js';
 import ResultBuilder from '../ResultBuilder.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function getRepoPath(repoName) {
+  const normalizedName = repoName.toLowerCase();
+  if (normalizedName.includes('engineer')) {
+    return path.resolve(__dirname, '../../../../');
+  }
+  return path.resolve(__dirname, '../../../../../ehg');
+}
 
 export class LeadFinalApprovalExecutor extends BaseExecutor {
   constructor(dependencies = {}) {
@@ -366,7 +380,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
           for (const repo of repos) {
             try {
               // Check for remote branches matching SD pattern
-              const repoPath = repo === 'rickfelix/ehg' ? '/mnt/c/_EHG/ehg' : '/mnt/c/_EHG/EHG_Engineer';
+              const repoPath = repo === 'rickfelix/ehg' ? getRepoPath('EHG') : getRepoPath('EHG_Engineer');
 
               // Get list of remote branches
               const branchList = execSync('git branch -r', { encoding: 'utf8', cwd: repoPath, timeout: 10000 });

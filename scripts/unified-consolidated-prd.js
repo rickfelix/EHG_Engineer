@@ -161,7 +161,7 @@ function createPRDContent(sd, backlogItems, userStories) {
       }))
     },
     implementation_notes: {
-      target_application: '/mnt/c/_EHG/EHG/',
+      target_application: '../ehg/',
       framework: 'Vite + React + Shadcn + TypeScript',
       database: 'liapbndqlqxdcgpwntbv (Supabase)',
       github_repo: 'https://github.com/rickfelix/ehg.git'

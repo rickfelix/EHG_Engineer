@@ -71,13 +71,13 @@ async function createPRDData() {
     components: [
       {
         name: 'scaffoldStage1()',
-        location: '/mnt/c/_EHG/EHG/src/services/ventures.ts',
+        location: '../ehg/src/services/ventures.ts',
         current_state: 'No-op stub (lines 151-154)',
         changes_required: 'Replace with ~30 LOC database update logic'
       },
       {
         name: 'VentureCreationDialog',
-        location: '/mnt/c/_EHG/EHG/src/components/ventures/VentureCreationDialog.tsx',
+        location: '../ehg/src/components/ventures/VentureCreationDialog.tsx',
         current_state: 'Calls scaffoldStage1() but no navigation (line 82)',
         changes_required: 'Add navigate() call with Stage 1 URL (~3 LOC)'
       },

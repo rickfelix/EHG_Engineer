@@ -34,12 +34,40 @@ export { ProcessManager, getProcessManager };
  */
 export class CodebaseSearchService {
   constructor(options = {}) {
+    // Cross-platform path defaults (SD-WIN-MIG-005 fix)
+    const __dirname = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/i, '$1'));
+    const projectRoot = path.resolve(__dirname, '../..');
+    const ehgRoot = path.resolve(projectRoot, '../ehg');
+    const parentDir = path.resolve(projectRoot, '..');
+
     this.defaultPaths = options.paths || [
-      '/mnt/c/_EHG/EHG/src',
-      '/mnt/c/_EHG/EHG_Engineer/src'
+      path.join(ehgRoot, 'src'),
+      path.join(projectRoot, 'src')
     ];
     this.maxResults = options.maxResults || 10;
     this.timeout = options.timeout || 5000;
+    // Store parent directory for making relative paths
+    this._parentDir = parentDir;
+  }
+
+  /**
+   * Convert absolute path to relative path from parent directory
+   * Handles both WSL and Windows paths
+   */
+  _makeRelativePath(filePath) {
+    // Normalize to forward slashes for comparison
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    const normalizedParent = this._parentDir.replace(/\\/g, '/');
+
+    // If path starts with parent dir, make it relative
+    if (normalizedPath.startsWith(normalizedParent)) {
+      return normalizedPath.slice(normalizedParent.length + 1);
+    }
+    // Handle WSL paths for backwards compatibility
+    if (normalizedPath.includes('/mnt/c/_EHG/')) {
+      return normalizedPath.replace(/.*\/mnt\/c\/_EHG\//, '');
+    }
+    return filePath;
   }
 
   // ===========================================================================
@@ -186,7 +214,7 @@ export class CodebaseSearchService {
           if (content.toLowerCase().includes(keyword)) {
             results.push({
               path: filePath,
-              relativePath: filePath.replace('/mnt/c/_EHG/', ''),
+              relativePath: this._makeRelativePath(filePath),
               matched: keyword
             });
           }
@@ -222,7 +250,7 @@ export class CodebaseSearchService {
             if (pattern.test(lines[i])) {
               results.push({
                 path: filePath,
-                relativePath: filePath.replace('/mnt/c/_EHG/', ''),
+                relativePath: this._makeRelativePath(filePath),
                 line: i + 1,
                 content: lines[i].trim().substring(0, 200)
               });

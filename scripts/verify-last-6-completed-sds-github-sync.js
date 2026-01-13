@@ -35,8 +35,8 @@ const supabase = createClient(
 
 // Repository paths
 const REPOS = {
-  EHG: '/mnt/c/_EHG/EHG',
-  EHG_Engineer: '/mnt/c/_EHG/EHG_Engineer'
+  EHG: '../ehg',
+  EHG_Engineer: '.'
 };
 
 /**

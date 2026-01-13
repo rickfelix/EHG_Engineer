@@ -44,7 +44,7 @@ async function createHandoff() {
 - Sora 2 API smoke test executed
 - Result: FAIL (404 Not Found - endpoint doesn't exist)
 - Decision: Proceed with manual workflow scope
-- Evidence: /mnt/c/_EHG/phase-0-results.json
+- Evidence: ../_EHG/phase-0-results.json
 
 ✅ **SIMPLICITY FIRST Gate**: PASSED
 - Q1 (Document vs Implement): Implement justified - net new feature
@@ -67,45 +67,45 @@ async function createHandoff() {
     // Element 3: Deliverables Manifest
     deliverables_manifest: `
 **Documentation Created** (7 files):
-1. /mnt/c/_EHG/EHG_Engineer/temp-sub-agent-systems-analyst-assessment.md (4,200 words)
+1. ./temp-sub-agent-systems-analyst-assessment.md (4,200 words)
    - Duplicate detection analysis
    - 60% code reuse opportunities identified
    - Verdict: APPROVE with EXTEND strategy
 
-2. /mnt/c/_EHG/EHG_Engineer/temp-sub-agent-database-architect-assessment.md (3,800 words)
+2. ./temp-sub-agent-database-architect-assessment.md (3,800 words)
    - 4-table schema design (variant_groups, video_variants, variant_performance, use_case_templates)
    - Two-phase migration strategy for circular FK
    - Verdict: APPROVE (95% confidence)
 
-3. /mnt/c/_EHG/EHG_Engineer/temp-sub-agent-design-assessment.md (4,100 words)
+3. ./temp-sub-agent-design-assessment.md (4,100 words)
    - 9-component UI architecture
    - Component sizing: <600 LOC per component
    - WCAG 2.1 AA compliance requirements
    - Verdict: APPROVE (90% confidence)
 
-4. /mnt/c/_EHG/EHG_Engineer/temp-subagent-issues-to-fix.md (2,500 words)
+4. ./temp-subagent-issues-to-fix.md (2,500 words)
    - 1 BLOCKING issue (backlog items - WAIVED)
    - 3 scope adjustments identified and documented
    - 3 clarifications resolved
 
-5. /mnt/c/_EHG/EHG_Engineer/temp-backlog-exception-sd-video-variant-001.md (1,800 words)
+5. ./temp-backlog-exception-sd-video-variant-001.md (1,800 words)
    - Waived backlog requirement with justification
    - SD has top 5% description quality (4,300+ words)
    - PLAN agent to generate user stories from SD scope
 
-6. /mnt/c/_EHG/EHG_Engineer/temp-api-access-and-clarifications.md (5,200 words)
+6. ./temp-api-access-and-clarifications.md (5,200 words)
    - Sora 2 API access verification (key found, access uncertain)
    - Round 2 iteration model definition (+3 DB columns, +230 LOC)
    - Manual workflow cost breakdown ($1,004 = $615 labor + $322 materials + $67 overhead)
 
-7. /mnt/c/_EHG/phase-0-results.json (Phase 0 smoke test evidence)
+7. ../_EHG/phase-0-results.json (Phase 0 smoke test evidence)
    - Test date: 2025-10-10
    - Result: FAIL (404 Not Found)
    - Decision: Manual workflow scope
    - Budget: $1,004 per test
 
 **Code Created**:
-8. /mnt/c/_EHG/ehg/scripts/test-sora-api-connection.cjs (180 LOC)
+8. ../ehg/scripts/test-sora-api-connection.cjs (180 LOC)
    - Phase 0 smoke test script
    - Tests both sora-2.0 and sora-turbo models
    - Validates OpenAI API key and endpoint connectivity
@@ -336,10 +336,10 @@ Rationale:
 - [ ] Manual workflow scope confirmed (no API integration)
 
 **CONTEXT REFERENCES**:
-- Sub-agent assessments: /mnt/c/_EHG/EHG_Engineer/temp-sub-agent-*.md (3 files)
-- Phase 0 evidence: /mnt/c/_EHG/phase-0-results.json
-- API clarifications: /mnt/c/_EHG/EHG_Engineer/temp-api-access-and-clarifications.md
-- Backlog exception: /mnt/c/_EHG/EHG_Engineer/temp-backlog-exception-sd-video-variant-001.md
+- Sub-agent assessments: ./temp-sub-agent-*.md (3 files)
+- Phase 0 evidence: ../_EHG/phase-0-results.json
+- API clarifications: ./temp-api-access-and-clarifications.md
+- Backlog exception: ./temp-backlog-exception-sd-video-variant-001.md
     `
   };
 

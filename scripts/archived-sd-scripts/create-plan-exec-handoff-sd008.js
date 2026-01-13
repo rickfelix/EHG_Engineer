@@ -78,7 +78,7 @@ async function createPlanExecHandoff() {
             'Priority mapping (Very High→CRITICAL, etc.)'
           ],
           items_pending: [
-            'Implementation in /mnt/c/_EHG/EHG/',
+            'Implementation in ../ehg/',
             'Unit test creation',
             'Integration testing',
             'Documentation updates'
@@ -129,7 +129,7 @@ async function createPlanExecHandoff() {
           next_phase_estimate: '16-24 hours for implementation across 10 user stories'
         },
         '7_action_items_for_receiver': [
-          'Navigate to /mnt/c/_EHG/EHG/ for implementation',
+          'Navigate to ../ehg/ for implementation',
           'Review PRD ID: ' + prd.id,
           'Start with CRITICAL priority stories (Very High backlog items)',
           'Implement authentication abstraction layer first',
@@ -214,7 +214,7 @@ async function createPlanExecHandoff() {
 
     console.log(chalk.green('\n✅ Handoff Complete!'));
     console.log(chalk.cyan('\nNext Steps for EXEC:'));
-    console.log('1. cd /mnt/c/_EHG/EHG/');
+    console.log('1. cd ../ehg/');
     console.log('2. Review PRD and user stories');
     console.log('3. Implement integrations based on priority');
     console.log('4. Create tests for each integration');

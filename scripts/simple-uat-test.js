@@ -98,7 +98,7 @@ async function runLoginTest() {
 
       if (notes.toLowerCase().includes('404') || notes.toLowerCase().includes('not found')) {
         console.log('  • Check if the EHG app is running on port 5173');
-        console.log('  • Run: cd /mnt/c/_EHG/EHG && npm run dev');
+        console.log('  • Run: cd ../ehg && npm run dev (from EHG_Engineer root)');
       } else if (notes.toLowerCase().includes('credential') || notes.toLowerCase().includes('password')) {
         console.log('  • Verify the credentials are correct');
         console.log('  • Check if the user exists in the database');

@@ -10,7 +10,7 @@ import PerformanceSubAgentV2 from '../lib/agents/performance-sub-agent-v2';
 async function quickVerify() {
   console.log('\n🚀 QUICK IMPROVEMENT VERIFICATION\n');
   
-  const basePath = '/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase';
+  const basePath = './applications/APP001/codebase';
   
   // Test 1: Performance grouping
   console.log('1️⃣ Performance Sub-Agent Grouping Test:');

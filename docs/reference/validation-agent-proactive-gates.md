@@ -110,8 +110,8 @@ node scripts/execute-subagent.js --code VALIDATION --sd-id <SD-ID>
 node scripts/execute-subagent.js --code VALIDATION --sd-id <SD-ID>
 
 # Search for similar implementations
-grep -r "feature_name" /mnt/c/_EHG/EHG/src
-find /mnt/c/_EHG/EHG/src/components -name "*ComponentName*"
+grep -r "feature_name" ../ehg/src
+find ../ehg/src/components -name "*ComponentName*"
 ```
 
 **Warns When**:

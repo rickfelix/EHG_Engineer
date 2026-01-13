@@ -232,7 +232,7 @@ async function main() {
 
     // Write detailed results to file
     const fs = await import('fs');
-    const resultsPath = '/mnt/c/_EHG/EHG_Engineer/verification-results-hardening-v2-001a.json';
+    const resultsPath = './verification-results-hardening-v2-001a.json';
     fs.writeFileSync(resultsPath, JSON.stringify(results, null, 2));
     console.log(`📄 Detailed results saved to: ${resultsPath}`);
 

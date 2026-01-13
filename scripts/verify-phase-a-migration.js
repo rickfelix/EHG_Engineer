@@ -504,7 +504,7 @@ verifyMigration()
   .then(results => {
     // Write results to file for chairman review
     const fs = require('fs');
-    const resultsPath = '/mnt/c/_EHG/EHG_Engineer/logs/phase-a-verification-results.json';
+    const resultsPath = './logs/phase-a-verification-results.json';
     fs.writeFileSync(resultsPath, JSON.stringify(results, null, 2));
     console.log(`📄 Detailed results written to: ${resultsPath}\n`);
 

@@ -82,7 +82,7 @@ async function verifyGTMRoutes() {
       console.log('1. Navigate to https://liapbndqlqxdcgpwntbv.supabase.co');
       console.log('2. Test /gtm-intelligence navigation link');
       console.log('3. Test /gtm-timing navigation link');
-      console.log('4. Code cleanup required in /mnt/c/_EHG/EHG/src/App.tsx:');
+      console.log('4. Code cleanup required in ../ehg/src/App.tsx:');
       console.log('   - DELETE line 111: GTMStrategistPage lazy load');
       console.log('   - DELETE lines 963-974: /gtm-strategist route definition');
     } else {

@@ -82,7 +82,7 @@ console.log('   Progress:', sdUpdate.progress_percentage + '%');
 console.log('');
 console.log('📋 PLAN VERIFICATION PHASE - NEXT STEPS:');
 console.log('───────────────────────────────────────────────────────────');
-console.log('   1. Push commit to remote (cd /mnt/c/_EHG/EHG && git push)');
+console.log('   1. Push commit to remote (cd ../ehg && git push)');
 console.log('   2. Wait for CI/CD green (gh run list --limit 5)');
 console.log('   3. Execute QA Director (E2E validation)');
 console.log('   4. Execute DevOps Architect (CI/CD verification)');

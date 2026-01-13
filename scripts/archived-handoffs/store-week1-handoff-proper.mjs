@@ -31,14 +31,14 @@ const handoffData = {
       'Settings button in ChairmanDashboard'
     ],
     files_created: [
-      '/mnt/c/_EHG/EHG/src/hooks/useChairmanConfig.ts',
-      '/mnt/c/_EHG/EHG/src/components/chairman/KPISelector.tsx',
-      '/mnt/c/_EHG/EHG/src/components/chairman/AlertConfiguration.tsx',
-      '/mnt/c/_EHG/EHG/src/pages/ChairmanSettingsPage.tsx'
+      '../ehg/src/hooks/useChairmanConfig.ts',
+      '../ehg/src/components/chairman/KPISelector.tsx',
+      '../ehg/src/components/chairman/AlertConfiguration.tsx',
+      '../ehg/src/pages/ChairmanSettingsPage.tsx'
     ],
     files_modified: [
-      '/mnt/c/_EHG/EHG/src/App.tsx',
-      '/mnt/c/_EHG/EHG/src/components/ventures/ChairmanDashboard.tsx'
+      '../ehg/src/App.tsx',
+      '../ehg/src/components/ventures/ChairmanDashboard.tsx'
     ],
     scope_deviations: [
       'Simplified widget layout (toggles only, no drag-and-drop)',

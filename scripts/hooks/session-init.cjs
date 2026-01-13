@@ -17,7 +17,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const SESSION_STATE_FILE = path.join(process.env.HOME || '/tmp', '.claude-session-state.json');
-const ENGINEER_DIR = '/mnt/c/_EHG/EHG_Engineer';
+const ENGINEER_DIR = '.';
 
 /**
  * Detect current SD from git branch or working_on flag

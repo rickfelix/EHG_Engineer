@@ -45,7 +45,7 @@ const prdData = {
 
     target_url: 'http://localhost:5173/ventures',
     component_name: 'VentureTimelineView',
-    app_path: '/mnt/c/_EHG/EHG',
+    app_path: '../ehg',
     port: 5173,
 
     content: `# Product Requirements Document: Venture Timeline Tab
@@ -265,8 +265,8 @@ Add comprehensive timeline/Gantt visualization to the ventures management interf
 ## Technical Specifications
 
 ### Architecture
-- **Component Path**: /mnt/c/_EHG/EHG/src/components/ventures/VentureTimelineView.tsx
-- **Parent Component**: /mnt/c/_EHG/EHG/src/pages/VenturesPage.tsx
+- **Component Path**: ../ehg/src/components/ventures/VentureTimelineView.tsx
+- **Parent Component**: ../ehg/src/pages/VenturesPage.tsx
 - **Integration Point**: Tabs component (4th tab after Grid/Kanban/Table)
 
 ### Database Schema

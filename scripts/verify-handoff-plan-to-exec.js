@@ -15,9 +15,16 @@ import HandoffValidator from './handoff-validator.js';
 import { validateUserStoriesForHandoff, getUserStoryImprovementGuidance } from './modules/user-story-quality-validation.js';
 import { validatePRDForHandoff, getPRDImprovementGuidance } from './modules/prd-quality-validation.js';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import fs from 'fs';
 import dotenv from 'dotenv';
 dotenv.config();
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
+const EHG_ROOT = path.resolve(__dirname, '../../ehg');
 
 class PlanToExecVerifier {
   constructor() {
@@ -615,7 +622,7 @@ class PlanToExecVerifier {
       }
       
       // 6. Validate handoff content (if provided)
-      const handoffPath = `/mnt/c/_EHG/EHG_Engineer/handoffs/PLAN-to-EXEC-${sdId}.md`;
+      const handoffPath = path.join(EHG_ENGINEER_ROOT, 'handoffs', `PLAN-to-EXEC-${sdId}.md`);
       let handoffValidation = null;
       let planPresentationValidation = null;
 

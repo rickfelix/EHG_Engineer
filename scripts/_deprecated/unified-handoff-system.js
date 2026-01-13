@@ -632,7 +632,7 @@ class UnifiedHandoffSystem {
           targetApp === 'engineer' ||
           targetApp === 'ehg engineer') {
         console.log(`   Repository determined by target_application: "${sd.target_application}" → EHG_Engineer`);
-        return '/mnt/c/_EHG/EHG_Engineer';
+        return '.';
       }
 
       // Match EHG application repository
@@ -642,7 +642,7 @@ class UnifiedHandoffSystem {
           targetApp === 'ehg app' ||
           targetApp === 'ehg-app') {
         console.log(`   Repository determined by target_application: "${sd.target_application}" → EHG`);
-        return '/mnt/c/_EHG/EHG';
+        return '../ehg';
       }
 
       // If target_application is set but doesn't match, warn and fall through to heuristics
@@ -658,12 +658,12 @@ class UnifiedHandoffSystem {
 
     // Check if SD ID starts with engineering prefix patterns
     if (engineeringKeywords.some(keyword => sd.id.toLowerCase().includes(keyword))) {
-      return '/mnt/c/_EHG/EHG_Engineer';
+      return '.';
     }
 
     // Check if SD category is engineering-related
     if (sd.category && engineeringCategories.includes(sd.category.toLowerCase())) {
-      return '/mnt/c/_EHG/EHG_Engineer';
+      return '.';
     }
 
     // Check if title contains engineering keywords
@@ -674,12 +674,12 @@ class UnifiedHandoffSystem {
           titleLower.includes('leo ') ||
           titleLower.includes('gate ') ||
           titleLower.includes('handoff')) {
-        return '/mnt/c/_EHG/EHG_Engineer';
+        return '.';
       }
     }
 
     // Default to EHG application for customer-facing features
-    return '/mnt/c/_EHG/EHG';
+    return '../ehg';
   }
 
   /**

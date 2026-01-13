@@ -12,9 +12,16 @@
 import { createClient } from '@supabase/supabase-js';
 import HandoffValidator from './handoff-validator.js';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import fs from 'fs';
 import dotenv from 'dotenv';
 dotenv.config();
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
+const EHG_ROOT = path.resolve(__dirname, '../../ehg');
 
 class LeadToPlanVerifier {
   constructor() {
@@ -346,7 +353,7 @@ class LeadToPlanVerifier {
       }
       
       // 6. Validate handoff content (if provided)
-      const handoffPath = `/mnt/c/_EHG/EHG_Engineer/handoffs/LEAD-to-PLAN-${sdId}.md`;
+      const handoffPath = path.join(EHG_ENGINEER_ROOT, 'handoffs', `LEAD-to-PLAN-${sdId}.md`);
       let handoffValidation = null;
       
       if (fs.existsSync(handoffPath)) {
@@ -753,7 +760,7 @@ class LeadToPlanVerifier {
    */
   validateVisionDocumentReferences(sd) {
     const result = { warnings: [] };
-    const projectRoot = '/mnt/c/_EHG/EHG_Engineer';
+    const projectRoot = EHG_ENGINEER_ROOT;
 
     // Check if SD references vision documents
     const visionRefs = sd.metadata?.vision_document_references || [];
@@ -1249,7 +1256,7 @@ class LeadToPlanVerifier {
       }
       
       // Check filesystem accessibility
-      const projectRoot = '/mnt/c/_EHG/EHG_Engineer';
+      const projectRoot = EHG_ENGINEER_ROOT;
       if (!fs.existsSync(projectRoot)) {
         check.ready = false;
         check.issues.push('Project filesystem not accessible');

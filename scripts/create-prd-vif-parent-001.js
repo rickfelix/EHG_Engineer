@@ -234,7 +234,7 @@ Target: 70% reduction in idea-to-evaluation time (20min → 6min) while maintain
       constraints: [
         'GCIA monthly budget: $50 (300-500 scans maximum)',
         'Timeline: 6 weeks (240 hours total across 3 sub-directives)',
-        'Target application: /mnt/c/_EHG/EHG/ (EHG app, NOT EHG_Engineer)',
+        'Target application: ../ehg/ (EHG app, NOT EHG_Engineer)',
         'Technology stack: Vite + React + Shadcn + TypeScript',
         'Database: Supabase PostgreSQL (liapbndqlqxdcgpwntbv)',
         'Component sizing: 300-600 LOC optimal',
@@ -272,7 +272,7 @@ Target: 70% reduction in idea-to-evaluation time (20min → 6min) while maintain
 
       // System Architecture
       system_architecture: {
-        target_application: '/mnt/c/_EHG/EHG/',
+        target_application: '../ehg/',
         database: 'Supabase PostgreSQL (liapbndqlqxdcgpwntbv)',
         frontend_stack: 'Vite + React 18 + TypeScript 5 + Shadcn',
         api_integrations: ['OpenAI API', 'Anthropic Claude API'],
@@ -351,7 +351,7 @@ Target: 70% reduction in idea-to-evaluation time (20min → 6min) while maintain
       ],
 
       exec_checklist: [
-        { text: 'Navigate to /mnt/c/_EHG/EHG/ (NOT EHG_Engineer)', checked: false },
+        { text: 'Navigate to ../ehg/ (NOT EHG_Engineer)', checked: false },
         { text: 'Create database schema for ventures and tiers', checked: false },
         { text: 'Implement Tier 0/1/2 capture forms', checked: false },
         { text: 'Build tier routing and complexity detection', checked: false },

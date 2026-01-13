@@ -51,7 +51,7 @@ async function createPRDData() {
 
   technical_requirements: JSON.stringify([
     'Use existing agents.ts TypeScript interfaces (AIAgent, AgentTask, AgentPerformanceMetrics)',
-    'Implement in /mnt/c/_EHG/EHG/src/pages/Agents.tsx (target application: EHG)',
+    'Implement in ../ehg/src/pages/Agents.tsx (target application: EHG)',
     'Reuse UI patterns from TeamManagementInterface.tsx (card layout, tabs, badges)',
     'Use Shadcn UI components: Card, Badge, Tabs, Avatar, Select, Button, Dialog',
     'Mock data structure: Array of AIAgent objects matching agents.ts interface',
@@ -94,8 +94,8 @@ async function createPRDData() {
   ]),
 
   dependencies: JSON.stringify([
-    'Existing TypeScript interfaces: /mnt/c/_EHG/EHG/src/types/agents.ts',
-    'Existing UI pattern: /mnt/c/_EHG/EHG/src/components/team/TeamManagementInterface.tsx',
+    'Existing TypeScript interfaces: ../ehg/src/types/agents.ts',
+    'Existing UI pattern: ../ehg/src/components/team/TeamManagementInterface.tsx',
     'Shadcn UI library (already installed in EHG app)',
     'React Router configuration (verify /agents route)',
     'lucide-react icons library'
@@ -105,7 +105,7 @@ async function createPRDData() {
     {
       risk: 'Implementation in wrong application directory (EHG_Engineer instead of EHG)',
       severity: 'critical',
-      mitigation: 'EXEC must verify pwd shows /mnt/c/_EHG/EHG before starting',
+      mitigation: 'EXEC must verify pwd shows ../ehg before starting',
       probability: 'low'
     },
     {
@@ -142,7 +142,7 @@ async function createPRDData() {
     'Shadcn UI components are fully installed and working',
     'TypeScript configuration is strict mode enabled',
     'EHG dev server runs on port 5173 (Vite default)',
-    'User has access to both /mnt/c/_EHG/EHG/ and /mnt/c/_EHG/EHG_Engineer/',
+    'User has access to both ../ehg/ and ./',
     'TeamManagementInterface.tsx is a good reference pattern',
     'Mock data will be sufficient for MVP validation'
   ]),

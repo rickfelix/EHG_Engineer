@@ -19,6 +19,12 @@ import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
 import dotenv from 'dotenv';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ROOT = path.resolve(__dirname, '../../ehg');
 
 dotenv.config();
 
@@ -208,7 +214,7 @@ function matchFileToDeliverable(filePath, deliverables) {
  * Sync deliverables from git history
  */
 async function syncDeliverables(sdId, options = {}) {
-  const { repoPath = '/mnt/c/_EHG/EHG', silent = false } = options;
+  const { repoPath = EHG_ROOT, silent = false } = options;
 
   if (!silent) {
     console.log('\n📊 Sync Deliverables from Git');
@@ -369,7 +375,7 @@ async function main() {
 Usage: node scripts/sync-deliverables-from-git.js <SD-ID> [options]
 
 Options:
-  --repo-path <path>  Path to git repository (default: /mnt/c/_EHG/EHG)
+  --repo-path <path>  Path to git repository (default: ../ehg relative to EHG_Engineer)
   --help              Show this help message
 
 Example:
@@ -380,7 +386,7 @@ Example:
 
   const sdId = args[0];
   const repoPathIdx = args.indexOf('--repo-path');
-  const repoPath = repoPathIdx !== -1 ? args[repoPathIdx + 1] : '/mnt/c/_EHG/EHG';
+  const repoPath = repoPathIdx !== -1 ? args[repoPathIdx + 1] : EHG_ROOT;
 
   await syncDeliverables(sdId, { repoPath });
 }

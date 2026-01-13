@@ -53,7 +53,7 @@ export default defineConfig({
 
   // webServer commented out - EHG should be running separately
   // webServer: {
-  //   command: 'cd /mnt/c/_EHG/EHG && npm run dev',
+  //   command: 'npm run dev',  // Run from EHG directory
   //   port: 8082,
   //   reuseExistingServer: !process.env.CI,
   // },

@@ -19,6 +19,10 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
+const EHG_ROOT = path.resolve(__dirname, '../../ehg');
+
 dotenv.config();
 
 const supabase = createClient(
@@ -190,7 +194,7 @@ class UniversalPhaseExecutor {
 
   async executeEXECPhase(sd, options) {
     console.log('   💻 EXEC Phase: ACTUAL IMPLEMENTATION REQUIRED');
-    console.log(chalk.red('   🚨 CRITICAL: This phase requires REAL code changes in /mnt/c/_EHG/EHG/'));
+    console.log(chalk.red('   🚨 CRITICAL: This phase requires REAL code changes in the EHG application directory'));
 
     // MANDATORY: Verify we have a PRD to implement
     const { data: prd } = await supabase
@@ -249,7 +253,7 @@ class UniversalPhaseExecutor {
     console.log(chalk.red.bold('\n   🛑 IMPLEMENTATION BLOCKER:'));
     console.log(chalk.red('   This EXEC phase will NOT automatically mark as complete.'));
     console.log(chalk.red('   You MUST:'));
-    console.log(chalk.red('     1. Navigate to /mnt/c/_EHG/EHG/'));
+    console.log(chalk.red('     1. Navigate to the EHG application directory'));
     console.log(chalk.red('     2. Implement the user stories above'));
     console.log(chalk.red('     3. Make git commits with the SD-ID'));
     console.log(chalk.red('     4. Run validation to verify implementation'));
@@ -486,8 +490,8 @@ class UniversalPhaseExecutor {
 
       // Check both repos for git commits mentioning the SD-ID
       const repos = [
-        '/mnt/c/_EHG/EHG_Engineer',
-        '/mnt/c/_EHG/EHG'
+        EHG_ENGINEER_ROOT,
+        EHG_ROOT
       ];
 
       let totalCommits = 0;
@@ -656,7 +660,7 @@ class UniversalPhaseExecutor {
 
     if (phase === 'PLAN') {
       console.log(chalk.yellow('\n   📍 CRITICAL for EXEC phase:'));
-      console.log('     • Navigate to /mnt/c/_EHG/EHG/ for implementation');
+      console.log('     • Navigate to the EHG application directory for implementation');
       console.log('     • Review PRD before starting');
       console.log('     • Implement based on priority order');
     }

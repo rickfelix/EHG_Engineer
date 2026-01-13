@@ -37,7 +37,7 @@ async function validateTestPlans() {
 
   try {
     const { stdout } = await execAsync(
-      'find /mnt/c/_EHG/EHG_Engineer -name "*test*plan*.md" -type f 2>/dev/null || true'
+      'find . -name "*test*plan*.md" -type f 2>/dev/null || true'
     );
 
     const testPlanFiles = stdout

@@ -29,7 +29,7 @@ async function createPLANExecHandoff() {
     phase: 'implementation',
 
     // 7 Mandatory Elements
-    executive_summary: 'Technical implementation of enhanced Venture Detail with comprehensive stage view integration. PRD defines 8 user stories across 4 implementation phases. Target: /mnt/c/_EHG/EHG/src/pages/VentureDetail.tsx and VentureDetailEnhanced.tsx. Build upon existing venture detail components while integrating with 40+ Stage components for seamless stage-by-stage navigation, real-time analytics, and enhanced workflow management.',
+    executive_summary: 'Technical implementation of enhanced Venture Detail with comprehensive stage view integration. PRD defines 8 user stories across 4 implementation phases. Target: ../ehg/src/pages/VentureDetail.tsx and VentureDetailEnhanced.tsx. Build upon existing venture detail components while integrating with 40+ Stage components for seamless stage-by-stage navigation, real-time analytics, and enhanced workflow management.',
 
     completeness_report: {
       prd_generated: true,
@@ -58,7 +58,7 @@ async function createPLANExecHandoff() {
     ],
 
     key_decisions: {
-      target_files: '/mnt/c/_EHG/EHG/src/pages/VentureDetail.tsx, VentureDetailEnhanced.tsx',
+      target_files: '../ehg/src/pages/VentureDetail.tsx, VentureDetailEnhanced.tsx',
       enhancement_approach: 'Enhance existing venture detail components with comprehensive stage view capabilities',
       ui_framework: 'React TypeScript with Shadcn UI components',
       state_management: 'React Query for server state, React Context for stage navigation',
@@ -84,14 +84,14 @@ async function createPLANExecHandoff() {
       implementation_effort: '3 days',
       required_skills: 'React TypeScript, Supabase, Stage Component Integration, Real-time Systems, Analytics UI/UX',
       complexity_level: 'MEDIUM-HIGH - Complex stage integration with existing components',
-      target_application: '/mnt/c/_EHG/EHG/ (NOT EHG_Engineer!)',
+      target_application: '../ehg/ (NOT EHG_Engineer!)',
       port_number: 'Check existing dev server or start new',
       database_changes: 'Schema extensions for stage analytics and tracking',
       testing_requirements: 'Component + integration testing for stage workflows'
     },
 
     action_items: [
-      'CRITICAL: Navigate to /mnt/c/_EHG/EHG/ before ANY code changes',
+      'CRITICAL: Navigate to ../ehg/ before ANY code changes',
       'Verify target URLs and existing VentureDetail components',
       'Screenshot current state before modifications',
       'Implement enhanced stage navigation with breadcrumbs',
@@ -193,7 +193,7 @@ createPLANExecHandoff().then(handoff => {
   console.log('Handoff ID:', handoff.id);
   console.log('PRD ID:', handoff.metadata.prd_id);
   console.log('Ready for: EXEC phase (implementation)');
-  console.log('\n🚨 CRITICAL: Implementation target is /mnt/c/_EHG/EHG/ (NOT EHG_Engineer!)');
+  console.log('\n🚨 CRITICAL: Implementation target is ../ehg/ (NOT EHG_Engineer!)');
   console.log('🎯 Target Components: VentureDetail.tsx, VentureDetailEnhanced.tsx');
   console.log('💼 Business Impact: MEDIUM-HIGH - Enhanced venture execution efficiency through improved stage visibility');
 }).catch(error => {

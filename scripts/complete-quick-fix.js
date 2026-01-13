@@ -19,6 +19,8 @@ import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
 import dotenv from 'dotenv';
 import readline from 'readline';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { restartLeoStack, verifyServerRestart as _verifyServerRestart } from '../lib/server-manager.js';
 import { runSelfVerification } from '../lib/quickfix-self-verifier.js';
 import { runComplianceRubric } from '../lib/quickfix-compliance-rubric.js';
@@ -27,6 +29,12 @@ import {
   captureConsoleErrorsAfterFix,
   generateEvidenceSummary
 } from '../lib/utils/quickfix-evidence-capture.js';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
+const EHG_ROOT = path.resolve(__dirname, '../../ehg');
 
 // Auto-refinement constants
 const MAX_REFINEMENT_ATTEMPTS = 3;
@@ -39,8 +47,8 @@ const TEST_TIMEOUT_E2E = 300000;  // 5 minutes for E2E tests
 
 // Repository paths for target application
 const REPO_PATHS = {
-  EHG: '/mnt/c/_EHG/EHG',
-  EHG_Engineer: '/mnt/c/_EHG/EHG_Engineer'
+  EHG: EHG_ROOT,
+  EHG_Engineer: EHG_ENGINEER_ROOT
 };
 
 dotenv.config();

@@ -367,18 +367,18 @@ Market examples: ChatGPT Canvas view, Claude Projects, Gemini multimodal chat - 
       ],
 
       target_application_context: {
-        implementation_path: '/mnt/c/_EHG/EHG/',
+        implementation_path: '../ehg/',
         database: 'liapbndqlqxdcgpwntbv',
         github_repo: 'rickfelix/ehg.git',
         port: 8080,
-        critical_check: 'MUST verify pwd shows /mnt/c/_EHG/EHG before ANY code changes!'
+        critical_check: 'MUST verify pwd shows ../ehg before ANY code changes!'
       },
 
       // Codebase alignment analysis
       codebase_alignment: {
         reusable_components: {
           EVARealtimeVoice: {
-            location: '/mnt/c/_EHG/EHG/src/components/eva/EVARealtimeVoice.tsx',
+            location: '../ehg/src/components/eva/EVARealtimeVoice.tsx',
             lines: 760,
             capabilities: [
               'OpenAI Real-Time Voice integration',
@@ -391,7 +391,7 @@ Market examples: ChatGPT Canvas view, Claude Projects, Gemini multimodal chat - 
             reuse_percentage: '100% - integrate as-is, extend with onTranscript for meeting transcript'
           },
           EVAAssistantPage: {
-            location: '/mnt/c/_EHG/EHG/src/pages/EVAAssistantPage.tsx',
+            location: '../ehg/src/pages/EVAAssistantPage.tsx',
             lines: 528,
             capabilities: [
               '3-column grid layout pattern (main + sidebar)',
@@ -403,7 +403,7 @@ Market examples: ChatGPT Canvas view, Claude Projects, Gemini multimodal chat - 
             reuse_percentage: '60% - reuse layout grid, session patterns, adapt for meeting view'
           },
           EnhancedCharts: {
-            location: '/mnt/c/_EHG/EHG/src/components/analytics/EnhancedCharts.tsx',
+            location: '../ehg/src/components/analytics/EnhancedCharts.tsx',
             lines: 455,
             capabilities: [
               'Recharts integration (Bar, Line, Area, Pie, Radial)',
@@ -418,7 +418,7 @@ Market examples: ChatGPT Canvas view, Claude Projects, Gemini multimodal chat - 
             reuse_percentage: '95% - import and render in ScreenSharePanel with minimal wrapper'
           },
           EVAOrchestrationDashboard: {
-            location: '/mnt/c/_EHG/EHG/src/components/eva/EVAOrchestrationDashboard.tsx',
+            location: '../ehg/src/components/eva/EVAOrchestrationDashboard.tsx',
             lines: 460,
             capabilities: [
               'Session status cards',
@@ -527,7 +527,7 @@ Market examples: ChatGPT Canvas view, Claude Projects, Gemini multimodal chat - 
   console.log('   4. Voice/Video Controls & Transcript System');
   console.log('   5. Reusability & Codebase Alignment Strategy');
   console.log('\n📍 CRITICAL: Implementation Target');
-  console.log('   Application: EHG (/mnt/c/_EHG/EHG/)');
+  console.log('   Application: EHG (../ehg/)');
   console.log('   Database: liapbndqlqxdcgpwntbv');
   console.log('   GitHub: rickfelix/ehg.git');
   console.log('   Route: /eva-meeting');
@@ -539,7 +539,7 @@ Market examples: ChatGPT Canvas view, Claude Projects, Gemini multimodal chat - 
   console.log('   1. LEAD reviews strategic alignment and priority');
   console.log('   2. Execute 5 comprehensive prompts for detailed design');
   console.log('   3. PLAN creates comprehensive PRD with mockups');
-  console.log('   4. EXEC implements in /mnt/c/_EHG/EHG/ (NOT EHG_Engineer!)');
+  console.log('   4. EXEC implements in ../ehg/ (NOT EHG_Engineer!)');
   console.log('   5. Test meeting interface with real EVA voice sessions');
 }
 

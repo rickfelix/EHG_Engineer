@@ -294,7 +294,7 @@ function generateAllStages() {
   let totalFiles = 0;
   
   stages.forEach(stage => {
-    const baseDir = `/mnt/c/_EHG/EHG_Engineer/docs/workflow/dossiers/stage-${stage.id}`;
+    const baseDir = `./docs/workflow/dossiers/stage-${stage.id}`;
     
     // Generate remaining files (5-10, excluding already generated 1-4, 11)
     const files = [

@@ -21,7 +21,7 @@ echo "1️⃣ Starting EHG Engineer Dashboard..."
 if check_port 3456; then
     echo "   ⚠️  Port 3456 already in use (EHG Engineer Dashboard may be running)"
 else
-    cd /mnt/c/_EHG/EHG_Engineer
+    cd .
     if [ ! -d "node_modules" ]; then
         echo "   📦 Installing EHG Engineer dependencies..."
         npm install
@@ -39,7 +39,7 @@ echo "2️⃣ Starting Main EHG Application..."
 if check_port 8080; then
     echo "   ⚠️  Port 8080 already in use (Main EHG may be running)"
 else
-    cd /mnt/c/_EHG/ehg
+    cd ../ehg
     if [ ! -d "node_modules" ]; then
         echo "   📦 Installing Main EHG dependencies..."
         npm install

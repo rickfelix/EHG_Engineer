@@ -79,14 +79,14 @@ Protocol Enhancement Achievements:
     primary_artifacts: [
       {
         name: 'EVA Assistant Page Implementation',
-        location: '/mnt/c/_EHG/EHG/src/pages/EVAAssistantPage.tsx',
+        location: '../ehg/src/pages/EVAAssistantPage.tsx',
         status: 'Complete',
         loc: 261,
         features: '2-panel layout, voice integration, dashboard display, controls'
       },
       {
         name: 'E2E Test Suite',
-        location: '/mnt/c/_EHG/EHG/tests/e2e/eva-meeting-sd-eva-meeting-001.spec.ts',
+        location: '../ehg/tests/e2e/eva-meeting-sd-eva-meeting-001.spec.ts',
         status: 'Complete',
         coverage: '6/6 user stories (100%)',
         results: '12/12 tests passing'
@@ -100,7 +100,7 @@ Protocol Enhancement Achievements:
       },
       {
         name: 'Test Evidence',
-        location: '/mnt/c/_EHG/EHG/tests/e2e/evidence/SD-EVA-MEETING-001/',
+        location: '../ehg/tests/e2e/evidence/SD-EVA-MEETING-001/',
         status: 'Complete',
         screenshots: 6,
         playwright_report: 'HTML report generated'
@@ -116,21 +116,21 @@ Protocol Enhancement Achievements:
     protocol_enhancement_artifacts: [
       {
         name: 'Enhanced QA Engineering Director',
-        location: '/mnt/c/_EHG/EHG_Engineer/scripts/qa-engineering-director-enhanced.js',
+        location: './scripts/qa-engineering-director-enhanced.js',
         status: 'Complete',
         enhancement: 'Mandatory user story validation in Pre-flight checks',
         blocks_on: 'No user stories found'
       },
       {
         name: 'Enhanced PLAN→EXEC Handoff Validator',
-        location: '/mnt/c/_EHG/EHG_Engineer/scripts/verify-handoff-plan-to-exec.js',
+        location: './scripts/verify-handoff-plan-to-exec.js',
         status: 'Complete',
         enhancement: 'Mandatory user story check before PRD validation',
         blocks_on: 'No user stories exist'
       },
       {
         name: 'Product Requirements Expert Auto-Trigger',
-        location: '/mnt/c/_EHG/EHG_Engineer/scripts/modules/auto-trigger-stories.mjs',
+        location: './scripts/modules/auto-trigger-stories.mjs',
         status: 'Complete',
         enhancement: 'Auto-trigger user story generation on PRD creation',
         integration: 'Integrated into add-prd-to-database.js'

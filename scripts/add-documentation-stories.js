@@ -37,7 +37,7 @@ const newStories = [
       'Export gap report to Markdown for manual review',
       'Configurable scanning rules: exclude test files, include only public APIs, etc.'
     ],
-    technical_notes: 'Leverage existing /mnt/c/_EHG/EHG_Engineer/lib/agents/documentation-sub-agent.js (DocumentationSubAgentV2 class), extend intelligentAnalyze() method to scan /mnt/c/_EHG/EHG/docs/ and /mnt/c/_EHG/EHG/src/, use findDocumentationFiles(), analyzeDocFile(), checkMissingDocumentation(), analyzeCodeDocSync() methods, store results in database table documentation_gap_analysis (gap_id, sd_id, gap_type ENUM, severity, description, recommended_action, status, created_at), create DocGapDashboard.tsx component to visualize health metrics',
+    technical_notes: 'Leverage existing ./lib/agents/documentation-sub-agent.js (DocumentationSubAgentV2 class), extend intelligentAnalyze() method to scan ../ehg/docs/ and ../ehg/src/, use findDocumentationFiles(), analyzeDocFile(), checkMissingDocumentation(), analyzeCodeDocSync() methods, store results in database table documentation_gap_analysis (gap_id, sd_id, gap_type ENUM, severity, description, recommended_action, status, created_at), create DocGapDashboard.tsx component to visualize health metrics',
     story_points: 5,
     priority: 'critical',
     status: 'ready'
@@ -130,7 +130,7 @@ const newStories = [
       'DOCMON validates: All described UI elements exist in codebase, all workflows match implemented routes',
       'Links to related API endpoints for advanced users'
     ],
-    technical_notes: 'Document as-built UI from SD-AGENT-ADMIN-001 implementation (US-012 through US-019), use scripts/screenshot-ui-workflows.js to capture actual screenshots from /mnt/c/_EHG/EHG/ application, store screenshots in docs/guides/images/, validate UI element descriptions against component source code in src/components/, use DOCMON to check that all mentioned routes exist in src/App.tsx or routing config',
+    technical_notes: 'Document as-built UI from SD-AGENT-ADMIN-001 implementation (US-012 through US-019), use scripts/screenshot-ui-workflows.js to capture actual screenshots from ../ehg/ application, store screenshots in docs/guides/images/, validate UI element descriptions against component source code in src/components/, use DOCMON to check that all mentioned routes exist in src/App.tsx or routing config',
     story_points: 8,
     priority: 'high',
     status: 'ready'

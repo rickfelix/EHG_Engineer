@@ -15,12 +15,12 @@ from typing import List, Tuple
 
 # Files to fix (high priority first)
 PRIORITY_FILES = [
-    "/mnt/c/_EHG/ehg/src/components/board/BoardMemberManagement.tsx",
-    "/mnt/c/_EHG/ehg/src/components/agents/AgentDeployDialog.tsx",
-    "/mnt/c/_EHG/ehg/src/components/agents/AgentPresetsTab.tsx",
-    "/mnt/c/_EHG/ehg/src/components/agents/SearchPreferencesTab.tsx",
-    "/mnt/c/_EHG/ehg/src/components/analytics/AnalyticsDashboard.tsx",
-    "/mnt/c/_EHG/ehg/src/components/analytics/DecisionHistoryTable.tsx",
+    "../ehg/src/components/board/BoardMemberManagement.tsx",
+    "../ehg/src/components/agents/AgentDeployDialog.tsx",
+    "../ehg/src/components/agents/AgentPresetsTab.tsx",
+    "../ehg/src/components/agents/SearchPreferencesTab.tsx",
+    "../ehg/src/components/analytics/AnalyticsDashboard.tsx",
+    "../ehg/src/components/analytics/DecisionHistoryTable.tsx",
 ]
 
 def generate_id_from_label(label_text: str) -> str:

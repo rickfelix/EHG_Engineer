@@ -35,49 +35,49 @@ const handoffContent = {
     ],
     files_verified: [
       {
-        file: '/mnt/c/_EHG/EHG/src/hooks/useExecutiveReports.ts',
+        file: '../ehg/src/hooks/useExecutiveReports.ts',
         status: 'VERIFIED',
         quality: 'EXCELLENT',
         notes: 'Proper React Query patterns, localStorage fallback, comprehensive CRUD'
       },
       {
-        file: '/mnt/c/_EHG/EHG/src/components/reports/ReportTemplateSelector.tsx',
+        file: '../ehg/src/components/reports/ReportTemplateSelector.tsx',
         status: 'VERIFIED',
         quality: 'EXCELLENT',
         notes: '3 templates with clear descriptions and section lists'
       },
       {
-        file: '/mnt/c/_EHG/EHG/src/components/reports/ReportSectionEditor.tsx',
+        file: '../ehg/src/components/reports/ReportSectionEditor.tsx',
         status: 'VERIFIED',
         quality: 'EXCELLENT',
         notes: 'Dynamic rendering based on section type, proper form handling'
       },
       {
-        file: '/mnt/c/_EHG/EHG/src/components/reports/ReportPreview.tsx',
+        file: '../ehg/src/components/reports/ReportPreview.tsx',
         status: 'VERIFIED',
         quality: 'EXCELLENT',
         notes: 'Live preview with mock data, clean layout'
       },
       {
-        file: '/mnt/c/_EHG/EHG/src/pages/ReportBuilderPage.tsx',
+        file: '../ehg/src/pages/ReportBuilderPage.tsx',
         status: 'VERIFIED',
         quality: 'EXCELLENT',
         notes: 'Split view, 2-step flow, proper state management'
       },
       {
-        file: '/mnt/c/_EHG/EHG/src/components/reports/PDFExportButton.tsx',
+        file: '../ehg/src/components/reports/PDFExportButton.tsx',
         status: 'VERIFIED',
         quality: 'EXCELLENT',
         notes: '@react-pdf/renderer integration, professional PDF layout'
       },
       {
-        file: '/mnt/c/_EHG/EHG/src/pages/ReportHistoryPage.tsx',
+        file: '../ehg/src/pages/ReportHistoryPage.tsx',
         status: 'VERIFIED',
         quality: 'EXCELLENT',
         notes: 'List view, delete dialog, status badges, empty state'
       },
       {
-        file: '/mnt/c/_EHG/EHG/src/App.tsx',
+        file: '../ehg/src/App.tsx',
         status: 'VERIFIED',
         quality: 'EXCELLENT',
         notes: 'Routes added correctly with lazy loading and protected route wrappers'

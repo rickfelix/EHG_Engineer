@@ -242,7 +242,7 @@ Evidence:
   scope: JSON.stringify({
     in_scope: ['Apply all pending migrations via npx supabase db push'],
     out_of_scope: ['Creating new migrations', 'Schema redesign'],
-    fix_approach: 'cd /mnt/c/_EHG/EHG && npx supabase db push'
+    fix_approach: 'cd ../ehg && npx supabase db push'
   }),
 
   category: 'infrastructure',
@@ -260,7 +260,7 @@ Evidence:
   ],
 
   key_changes: [
-    'Run: cd /mnt/c/_EHG/EHG && npx supabase db push'
+    'Run: cd ../ehg && npx supabase db push'
   ],
 
   metadata: {

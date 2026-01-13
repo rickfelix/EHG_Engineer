@@ -10,7 +10,7 @@ import fs from 'fs';
 
 async function testSecurity() {
   const agent = new SecuritySubAgent();
-  const basePath = '/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase';
+  const basePath = './applications/APP001/codebase';
   
   console.log('🔍 Testing Security Sub-Agent on EHG Application');
   console.log(`📁 Base Path: ${basePath}`);

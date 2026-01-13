@@ -234,7 +234,7 @@ However, the codebase still contains Stage26 through Stage52 component files fro
 
 ## Files to Delete
 
-Location: /mnt/c/_EHG/EHG/src/components/stages/
+Location: ../ehg/src/components/stages/
 - Stage26OperationalExcellence.tsx
 - Stage40VentureActive.tsx
 - Stage52DataManagementKB.tsx
@@ -315,7 +315,7 @@ The test runner expects arrays but receives non-array values:
 
     rationale: `Google Anti-Gravity verified the test failure in the codebase:
 
-"Your repo already records the exact failure: /mnt/c/_EHG/EHG_Engineer/docs/integration-test-results.json shows:
+"Your repo already records the exact failure: ./docs/integration-test-results.json shows:
 - docFindings.map is not a function
 - hub.getAllFindings is not a function"
 

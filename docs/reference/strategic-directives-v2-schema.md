@@ -338,12 +338,12 @@ const { data, error } = await supabase
 ## References
 
 - **Example Scripts**:
-  - `/mnt/c/_EHG/EHG_Engineer/scripts/create-sd-041c.js` - Simple SD
-  - `/mnt/c/_EHG/EHG_Engineer/scripts/create-sd-agent-platform-001.js` - Rich metadata
-  - `/mnt/c/_EHG/EHG_Engineer/scripts/create-auth-setup-sd.js` - Critical priority
+  - `scripts/create-sd-041c.js` - Simple SD
+  - `scripts/create-sd-agent-platform-001.js` - Rich metadata
+  - `scripts/create-auth-setup-sd.js` - Critical priority
 
 - **Connection Pattern**:
-  - `/mnt/c/_EHG/EHG_Engineer/scripts/lib/supabase-connection.js` - Proper connection setup
+  - `scripts/lib/supabase-connection.js` - Proper connection setup
 
 ---
 

@@ -150,7 +150,7 @@ class SchemaDocumentationGenerator {
         description: CONFIG.databaseTarget === 'ehg'
           ? 'Business Application (Customer-Facing) - CONSOLIDATED DB'
           : 'LEO Protocol Management Dashboard - CONSOLIDATED DB',
-        path: CONFIG.databaseTarget === 'ehg' ? '/mnt/c/_EHG/EHG/' : '/mnt/c/_EHG/EHG_Engineer/',
+        path: CONFIG.databaseTarget === 'ehg' ? '../ehg/' : 'EHG_Engineer (this repository)',
         purpose: CONFIG.databaseTarget === 'ehg'
           ? 'Customer features, business logic, user-facing functionality'
           : 'Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration'

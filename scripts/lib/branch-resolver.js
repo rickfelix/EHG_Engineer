@@ -29,6 +29,12 @@
 
 import { execSync } from 'child_process';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DEFAULT_EHG_PATH = path.resolve(__dirname, '../../../ehg');
 
 /**
  * Resolve the feature branch for an SD with full validation
@@ -43,7 +49,7 @@ import path from 'path';
  */
 export async function resolveBranch(supabase, sdId, options = {}) {
   const {
-    repoPath = '/mnt/c/_EHG/ehg',
+    repoPath = DEFAULT_EHG_PATH,
     autoStore = true,
     verbose = false
   } = options;
@@ -79,8 +85,8 @@ export async function resolveBranch(supabase, sdId, options = {}) {
     // Determine target repo path based on target_application
     const targetApp = sd.target_application || 'EHG';
     const actualRepoPath = targetApp === 'EHG_Engineer'
-      ? '/mnt/c/_EHG/EHG_Engineer'
-      : '/mnt/c/_EHG/ehg';
+      ? path.resolve(__dirname, '../..')
+      : DEFAULT_EHG_PATH;
 
     result.repoPath = actualRepoPath;
     result.details.targetApplication = targetApp;

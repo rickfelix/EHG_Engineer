@@ -457,7 +457,7 @@ await githubOriginal.execute(sdId, subAgent, options);
 
 ### Step 3: Update Sync Manager
 
-In `/mnt/c/_EHG/EHG_Engineer/lib/sync/sync-manager.js`:
+In `lib/sync/sync-manager.js`:
 
 **Before**:
 ```javascript

@@ -151,58 +151,58 @@ async function createExecPlanHandoff() {
 ## Code Deliverables (8 Files, ~2380 LOC)
 
 ### Phase 1: Core Renderers (~930 LOC)
-1. \`/mnt/c/_EHG/EHG/src/components/eva-content/TextBlockRenderer.tsx\` (220 LOC)
+1. \`../ehg/src/components/eva-content/TextBlockRenderer.tsx\` (220 LOC)
    - Markdown rendering with react-markdown
    - Custom component renderers (headings, links, code blocks, etc.)
    - Dark theme styling matching EHG design system
 
-2. \`/mnt/c/_EHG/EHG/src/components/eva-content/DataTableRenderer.tsx\` (380 LOC)
+2. \`../ehg/src/components/eva-content/DataTableRenderer.tsx\` (380 LOC)
    - Column sorting (ascending/descending)
    - Column filtering (text search in header)
    - Pagination (25/50/100 rows per page)
    - Responsive table with dark theme
 
-3. \`/mnt/c/_EHG/EHG/src/components/eva-content/ChartRenderer.tsx\` (330 LOC)
+3. \`../ehg/src/components/eva-content/ChartRenderer.tsx\` (330 LOC)
    - 4 chart types: BarChart, LineChart, PieChart, AreaChart
    - Custom dark-themed tooltip component
    - Responsive sizing (ResponsiveContainer)
    - Legend and grid support
 
 ### Phase 2: Layout Engine (~450 LOC)
-4. \`/mnt/c/_EHG/EHG/src/components/eva-content/LayoutEngine.tsx\` (380 LOC)
+4. \`../ehg/src/components/eva-content/LayoutEngine.tsx\` (380 LOC)
    - Fetches content from content_catalogue table
    - Dynamically renders TextBlock/DataTable/Chart based on content_type_id
    - Supports multiple layouts (vertical, horizontal, grid)
    - Real-time updates via Supabase subscriptions
    - Loading, error, and empty state handling
 
-5. \`/mnt/c/_EHG/EHG/src/pages/EVAAssistantPage.tsx\` (~70 LOC changes)
+5. \`../ehg/src/pages/EVAAssistantPage.tsx\` (~70 LOC changes)
    - Added tab system: Dashboard | Content
    - Tab controls in right panel header
    - Conditional rendering based on activeTab state
    - Content counter badge showing number of items
 
 ### Phase 3: Services Layer (~900 LOC)
-6. \`/mnt/c/_EHG/EHG/src/services/eva-content/contentTypeService.ts\` (480 LOC)
+6. \`../ehg/src/services/eva-content/contentTypeService.ts\` (480 LOC)
    - CRUD operations: createContent, getContent, listContent, updateContent, deleteContent
    - Publishing workflow: publishContent, unpublishContent
    - Type-safe interfaces: ContentType, ContentItem, CreateContentParams
    - Utility functions: getContentByTypeName, getContentCountByStatus
    - Error handling and user authentication checks
 
-7. \`/mnt/c/_EHG/EHG/src/services/eva-content/evaContentService.ts\` (380 LOC)
+7. \`../ehg/src/services/eva-content/evaContentService.ts\` (380 LOC)
    - EVA command parsing: generateFromEVACommand (keyword-based)
    - Content creators: createTextBlock, createDataTable, createChart
    - Batch operations: createFromConversation
    - Content type detection from natural language
    - Integration with contentTypeService
 
-8. \`/mnt/c/_EHG/EHG/src/services/eva-content/index.ts\` (~40 LOC)
+8. \`../ehg/src/services/eva-content/index.ts\` (~40 LOC)
    - Centralized exports for all EVA Content services
    - Clean API surface for consumers
 
 ### Phase 4: Testing (~100 LOC)
-9. \`/mnt/c/_EHG/EHG/tests/e2e/eva-content-catalogue.spec.ts\` (~100 LOC)
+9. \`../ehg/tests/e2e/eva-content-catalogue.spec.ts\` (~100 LOC)
    - 6 smoke tests for integration validation
    - Tab switching, empty states, file existence checks
    - Precise selectors to avoid conflicts
@@ -210,7 +210,7 @@ async function createExecPlanHandoff() {
 ## Database Deliverables
 
 ### Migration File
-- \`/mnt/c/_EHG/EHG_Engineer/database/migrations/20251011_eva_content_catalogue_mvp.sql\` (26.3 KB, 661 lines)
+- \`./database/migrations/20251011_eva_content_catalogue_mvp.sql\` (26.3 KB, 661 lines)
   - 9 tables created with RLS policies
   - Seed data: 3 content types, 1 default layout
   - GIN indexes for JSON columns
@@ -537,15 +537,15 @@ No active blockers preventing PLAN verification or deployment.
 
 ### Testing Validation
 - [ ] Run E2E smoke tests
-  - Command: \`cd /mnt/c/_EHG/EHG && npm run test:e2e -- tests/e2e/eva-content-catalogue.spec.ts\`
+  - Command: \`cd ../ehg && npm run test:e2e -- tests/e2e/eva-content-catalogue.spec.ts\`
   - Expected: 6 tests (ideally all passing, acceptable: 4+ passing with minor selector fixes)
 
 - [ ] Run unit tests (existing suite)
-  - Command: \`cd /mnt/c/_EHG/EHG && npm run test:unit\`
+  - Command: \`cd ../ehg && npm run test:unit\`
   - Expected: Existing tests still pass (no regressions introduced)
 
 - [ ] Verify build
-  - Command: \`cd /mnt/c/_EHG/EHG && npm run build\`
+  - Command: \`cd ../ehg && npm run build\`
   - Expected: Build succeeds with no errors
 
 ### Functional Validation

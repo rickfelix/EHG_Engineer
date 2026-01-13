@@ -267,7 +267,7 @@ async function createHandoff() {
         action: 'Set up development environment',
         priority: 'CRITICAL',
         deadline: 'Day 1',
-        details: 'cd /mnt/c/_EHG/EHG, verify dev server runs, install new dependencies (fuse.js)'
+        details: 'cd ../ehg, verify dev server runs, install new dependencies (fuse.js)'
       },
       {
         action: 'Implement Phase 1: Navigation Taxonomy (3 days)',

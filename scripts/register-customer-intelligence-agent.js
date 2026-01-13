@@ -7,7 +7,7 @@
  * when the agent registration API (POST /api/agents) is implemented.
  *
  * Related: SD-CUSTOMER-INTEL-001
- * Agent File: /mnt/c/_EHG/EHG/agent-platform/app/agents/research/customer_intelligence_agent.py
+ * Agent File: ../ehg/agent-platform/app/agents/research/customer_intelligence_agent.py
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -140,7 +140,7 @@ async function documentAgent() {
   console.log(`   Stages: ${agentDefinition.integration_stages.join(', ')}`);
 
   console.log('\n📁 File Location:');
-  console.log('   /mnt/c/_EHG/EHG/agent-platform/app/agents/research/customer_intelligence_agent.py');
+  console.log('   ../ehg/agent-platform/app/agents/research/customer_intelligence_agent.py');
 
   console.log('\n📝 Status:');
   console.log('   ✅ Agent Python file created');

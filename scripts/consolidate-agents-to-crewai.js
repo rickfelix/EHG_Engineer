@@ -17,7 +17,7 @@
  * - 1 Research Manager
  */
 
-import { createDatabaseClient } from '/mnt/c/_EHG/EHG/scripts/lib/supabase-connection.js';
+import { createDatabaseClient } from '../ehg/scripts/lib/supabase-connection.js';
 import dotenv from 'dotenv';
 
 dotenv.config();

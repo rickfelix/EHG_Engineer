@@ -23,7 +23,7 @@ async function executeSql() {
   try {
     // Read the SQL file
     const sqlContent = await fs.readFile(
-      '/mnt/c/_EHG/EHG_Engineer/database/schema/sd_execution_timeline.sql',
+      './database/schema/sd_execution_timeline.sql',
       'utf-8'
     );
 
@@ -56,7 +56,7 @@ async function executeSql() {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('1. Go to: https://supabase.com/dashboard/project/dedlbzhpgkmetvhbkyzq/editor');
     console.log('2. Make sure you\'re in the SQL Editor tab');
-    console.log('3. Copy the SQL from: /mnt/c/_EHG/EHG_Engineer/database/schema/sd_execution_timeline.sql');
+    console.log('3. Copy the SQL from: ./database/schema/sd_execution_timeline.sql');
     console.log('4. Paste and click "Run"\n');
 
     console.log('Option 2: Use Supabase CLI (if installed)');

@@ -143,7 +143,7 @@ ${sd.scope.split('EXCLUDED FROM SCOPE:')[1]?.split('SYSTEMS AFFECTED:')[0] || 'S
 - **Schema Updates**: ventures table (workflow columns)
 - **Migration**: ideas → ventures.metadata (zero data loss requirement)
 
-**See**: /mnt/c/_EHG/EHG/supabase/migrations/2025110 3_*.sql
+**See**: ../ehg/supabase/migrations/2025110 3_*.sql
 
 ### Application Components
 - **recursionEngine.ts**: Core recursion detection service

@@ -47,14 +47,14 @@ async function updateSD045LeadPhase() {
             'Health monitoring dashboard'
           ],
           infrastructure_discovered: {
-            TeamManagementInterface: '/mnt/c/_EHG/EHG/src/components/team/TeamManagementInterface.tsx (622 LOC)',
-            AgentTypes: '/mnt/c/_EHG/EHG/src/types/agents.ts (182 LOC)',
-            AgentsPageStub: '/mnt/c/_EHG/EHG/src/pages/Agents.tsx (17 LOC stub)'
+            TeamManagementInterface: '../ehg/src/components/team/TeamManagementInterface.tsx (622 LOC)',
+            AgentTypes: '../ehg/src/types/agents.ts (182 LOC)',
+            AgentsPageStub: '../ehg/src/pages/Agents.tsx (17 LOC stub)'
           },
           action_items_for_plan: [
             'Create comprehensive PRD with functional/technical requirements',
             'Trigger Design Sub-Agent for UI/UX review',
-            'Verify target application path (/mnt/c/_EHG/EHG/)',
+            'Verify target application path (../ehg/)',
             'Create PLAN checklist with implementation tasks',
             'Create PLAN→EXEC handoff'
           ]

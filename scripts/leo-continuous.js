@@ -25,6 +25,7 @@
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -37,8 +38,13 @@ const { mapHierarchy, getDepthFirstOrder, getNextIncomplete, isHierarchyComplete
 const { checkpoint, reloadProtocol, validatePhase } = checkpointSystem;
 const { analyzeFailure, attemptFix, skipAndLog } = rootCauseResolver;
 
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
+
 // Load environment
-const envPath = '/mnt/c/_EHG/EHG_Engineer/.env';
+const envPath = path.join(EHG_ENGINEER_ROOT, '.env');
 if (fs.existsSync(envPath)) {
   dotenv.config({ path: envPath });
 } else {
@@ -80,7 +86,7 @@ let stats = {
  * Load the orchestration template and inject SD ID
  */
 async function loadOrchestrationTemplate(sdId) {
-  const templatePath = '/mnt/c/_EHG/EHG_Engineer/templates/sd-orchestration-prompt.md';
+  const templatePath = path.join(EHG_ENGINEER_ROOT, 'templates/sd-orchestration-prompt.md');
 
   try {
     let template = fs.readFileSync(templatePath, 'utf-8');

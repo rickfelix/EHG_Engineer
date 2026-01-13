@@ -34,7 +34,7 @@ async function createHandoff() {
 - FAQ auto-generation from feature changes
 - Admin dashboard for reviewing/editing AI-generated docs
 
-**Target Application**: EHG (/mnt/c/_EHG/EHG/)
+**Target Application**: EHG (../ehg/)
 **Priority**: HIGH (documentation quality directly impacts user adoption)
 **Complexity**: Medium (AI integration + GitHub webhooks + template engine)`,
 
@@ -45,7 +45,7 @@ async function createHandoff() {
    - SD-041C status: active
    - Current phase: LEAD
    - Target application: EHG
-   - Implementation path: /mnt/c/_EHG/EHG/
+   - Implementation path: ../ehg/
 
 2. **Strategic Context Documentation**
    - Problem: Manual documentation becomes outdated quickly
@@ -256,7 +256,7 @@ async function createHandoff() {
       protocol_version: 'v4.2.0_story_gates',
       activation_status: 'activated',
       target_application: 'EHG',
-      implementation_path: '/mnt/c/_EHG/EHG/',
+      implementation_path: '../ehg/',
       priority: 'high',
       estimated_total_hours: 18.16,
       estimated_plan_hours: 4,

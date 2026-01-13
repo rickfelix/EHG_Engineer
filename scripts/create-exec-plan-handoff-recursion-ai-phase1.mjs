@@ -347,7 +347,7 @@ From SD-VENTURE-UNIFICATION-001:
 
 3. **Run E2E Tests** (1 hour)
    \`\`\`bash
-   cd /mnt/c/_EHG/EHG
+   cd ../ehg
    npm run test:e2e -- --grep "recursion"
    \`\`\`
    - Test US-001: Recursion validation flow

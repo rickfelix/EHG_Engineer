@@ -55,13 +55,13 @@ You have access to comprehensive, auto-generated schema documentation:
 - **Quick Reference**: `docs/reference/schema/engineer/database-schema-overview.md` (~15-20KB)
 - **Detailed Tables**: `docs/reference/schema/engineer/tables/[table_name].md` (2-5KB each)
 - **Purpose**: Strategic Directives, PRDs, retrospectives, LEO Protocol configuration
-- **Repository**: /mnt/c/_EHG/EHG_Engineer/
+- **Repository**: EHG_Engineer (this repository)
 
 **EHG Application Database** (Customer-Facing):
 - **Quick Reference**: `docs/reference/schema/ehg/database-schema-overview.md` (~15-20KB)
 - **Detailed Tables**: `docs/reference/schema/ehg/tables/[table_name].md` (2-5KB each)
 - **Purpose**: Customer features, business logic, user-facing functionality
-- **Repository**: /mnt/c/_EHG/EHG/
+- **Repository**: EHG (sibling repository ../ehg)
 
 ### When to Reference Schema Docs
 

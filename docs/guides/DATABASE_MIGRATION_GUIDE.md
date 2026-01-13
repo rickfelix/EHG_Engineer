@@ -69,7 +69,7 @@ SD-VIDEO-VARIANT-001   | Sora 2 Video Variant Testing & Optimization Engine | 0
 **After migration succeeds**, return to terminal and run:
 
 ```bash
-cd /mnt/c/_EHG/EHG_Engineer
+# From EHG_Engineer root directory
 export SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlZGxiemhwZ2ttZXR2aGJreXpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MTE5MzcsImV4cCI6MjA3MjA4NzkzN30.o-AUQPUXAobkhMfdxa5g3oDkcneXNnmwK80KfAER16g"
 node scripts/populate-sd-video-variant-fields.cjs
 ```
@@ -202,11 +202,11 @@ Once handoff is approved, proceed to:
 - **Migration SQL**: `database/migrations/add_progress_percentage_column.sql`
 - **Populate Script**: `scripts/populate-sd-video-variant-fields.cjs`
 - **Blocking Issue**: `BLOCKING_ISSUE_SD_VIDEO_VARIANT.md`
-- **Phase 0 Results**: `/mnt/c/_EHG/phase-0-results.json`
+- **Phase 0 Results**: `../phase-0-results.json` (parent directory)
 - **Sub-Agent Assessments**: `temp-sub-agent-*.md` (3 files)
 
 ---
 
 **Ready to Execute**: ✅ YES  
-**Migration File Location**: `/mnt/c/_EHG/EHG_Engineer/database/migrations/add_progress_percentage_column.sql`  
+**Migration File Location**: `database/migrations/add_progress_percentage_column.sql`  
 **Supabase Dashboard**: https://supabase.com/dashboard/project/dedlbzhpgkmetvhbkyzq/sql

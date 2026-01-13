@@ -10,7 +10,7 @@ import path from 'path';
 import fs from 'fs';
 
 // Test path - use current project
-const testPath = '/mnt/c/_EHG/EHG_Engineer';
+const testPath = '.';
 
 console.log('🔍 Verifying Dynamic Sub-Agent Implementation');
 console.log(`📁 Test Path: ${testPath}\n`);

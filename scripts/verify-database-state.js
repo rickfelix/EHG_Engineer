@@ -6,8 +6,17 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
 import dotenv from "dotenv";
 dotenv.config();
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
+const EHG_ROOT = path.resolve(__dirname, '../../ehg');
 
 async function verifyDatabaseState() {
   console.log('🔍 LEO Protocol v4.1.2 - Database Verification');
@@ -79,19 +88,18 @@ async function verifyDatabaseState() {
     
     // 4. Check for forbidden files
     console.log('\nChecking for forbidden files...');
-    import fs from 'fs';
     const forbiddenPaths = [
-      '/mnt/c/_EHG/EHG_Engineer/docs/strategic-directives/',
-      '/mnt/c/_EHG/EHG_Engineer/docs/prds/',
-      '/mnt/c/_EHG/EHG_Engineer/handoffs/'
+      path.join(EHG_ENGINEER_ROOT, 'docs', 'strategic-directives'),
+      path.join(EHG_ENGINEER_ROOT, 'docs', 'prds'),
+      path.join(EHG_ENGINEER_ROOT, 'handoffs')
     ];
     
     let filesFound = false;
-    for (const path of forbiddenPaths) {
+    for (const dirPath of forbiddenPaths) {
       try {
-        const files = fs.readdirSync(path).filter(f => f.endsWith('.md'));
+        const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.md'));
         if (files.length > 0) {
-          console.log(`❌ Files found in ${path}: ${files.join(', ')}`);
+          console.log(`❌ Files found in ${dirPath}: ${files.join(', ')}`);
           filesFound = true;
         }
       } catch (_e) {

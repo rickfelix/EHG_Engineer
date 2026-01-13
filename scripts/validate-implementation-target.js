@@ -13,11 +13,15 @@ import { execSync } from 'child_process';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
+const EHG_ROOT = path.resolve(__dirname, '../../ehg');
+
 class ImplementationValidator {
   constructor() {
     this.currentDir = process.cwd();
-    this.ehgEngineerPath = '/mnt/c/_EHG/EHG_Engineer';
-    this.ehgAppPath = '/mnt/c/_EHG/EHG';
+    this.ehgEngineerPath = EHG_ENGINEER_ROOT;
+    this.ehgAppPath = EHG_ROOT;
   }
 
   checkCurrentLocation() {
@@ -121,12 +125,12 @@ class ImplementationValidator {
     const table = [
       ['Task', 'Location', 'Path'],
       ['─────────────────────────', '──────────', '─────────────────────'],
-      ['Implement new feature', 'EHG App', '/mnt/c/_EHG/EHG'],
-      ['Fix customer bug', 'EHG App', '/mnt/c/_EHG/EHG'],
-      ['Update UI components', 'EHG App', '/mnt/c/_EHG/EHG'],
-      ['Create Strategic Directive', 'EHG_Engineer', '/mnt/c/_EHG/EHG_Engineer'],
-      ['Generate PRD', 'EHG_Engineer', '/mnt/c/_EHG/EHG_Engineer'],
-      ['Update dashboard', 'EHG_Engineer', '/mnt/c/_EHG/EHG_Engineer'],
+      ['Implement new feature', 'EHG App', EHG_ROOT],
+      ['Fix customer bug', 'EHG App', EHG_ROOT],
+      ['Update UI components', 'EHG App', EHG_ROOT],
+      ['Create Strategic Directive', 'EHG_Engineer', EHG_ENGINEER_ROOT],
+      ['Generate PRD', 'EHG_Engineer', EHG_ENGINEER_ROOT],
+      ['Update dashboard', 'EHG_Engineer', EHG_ENGINEER_ROOT],
     ];
 
     table.forEach(row => {

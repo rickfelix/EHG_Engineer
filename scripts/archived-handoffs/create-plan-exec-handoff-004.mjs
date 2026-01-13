@@ -172,7 +172,7 @@ const handoff = {
         "Supabase connection issues"
       ],
       dependencies: [
-        "EHG application at /mnt/c/_EHG/EHG/",
+        "EHG application at ../ehg/",
         "Supabase database: liapbndqlqxdcgpwntbv",
         "React Query configured and working",
         "Shadcn/UI component library available"
@@ -206,7 +206,7 @@ const handoff = {
     },
     "7_action_items_for_receiver": {
       pre_implementation_validation: [
-        "CRITICAL: Verify target app is /mnt/c/_EHG/EHG/ (EHG app, NOT EHG_Engineer!)",
+        "CRITICAL: Verify target app is ../ehg/ (EHG app, NOT EHG_Engineer!)",
         "Run: npx supabase gen types typescript --project-id liapbndqlqxdcgpwntbv",
         "Verify RLS policies: SELECT * FROM [each_table] (should succeed with proper filtering)",
         "Test Supabase connection: import { supabase } from '@/integrations/supabase/client'",

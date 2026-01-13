@@ -70,7 +70,7 @@ Replace mockVentures array in VentureGrid.tsx with live Supabase database querie
       },
       {
         item: 'Target Component Identified',
-        location: '/mnt/c/_EHG/EHG/src/components/venture/VentureGrid.tsx',
+        location: '../ehg/src/components/venture/VentureGrid.tsx',
         status: 'verified',
         verification: 'File read confirms mock data on lines 40-120'
       },
@@ -117,7 +117,7 @@ Replace mockVentures array in VentureGrid.tsx with live Supabase database querie
       {
         decision: 'Target application is EHG, not EHG_Engineer',
         rationale: 'Customer-facing features go in EHG app. EHG_Engineer is management dashboard only.',
-        impact: 'CRITICAL - EXEC must navigate to /mnt/c/_EHG/EHG',
+        impact: 'CRITICAL - EXEC must navigate to ../ehg',
         alternatives_considered: 'None - this is architectural requirement'
       }
     ],
@@ -181,7 +181,7 @@ Replace mockVentures array in VentureGrid.tsx with live Supabase database querie
         'RLS policies (verify needed)'
       ],
       environment_requirements: [
-        'Access to /mnt/c/_EHG/EHG directory',
+        'Access to ../ehg directory',
         'EHG database credentials in .env',
         'Dev server capability (npm run dev)',
         'Testing environment'
@@ -194,8 +194,8 @@ Replace mockVentures array in VentureGrid.tsx with live Supabase database querie
         id: 'AI-1',
         priority: 'critical',
         action: 'Navigate to EHG application directory',
-        command: 'cd /mnt/c/_EHG/EHG && pwd',
-        verification: 'Output shows /mnt/c/_EHG/EHG (NOT EHG_Engineer!)',
+        command: 'cd ../ehg && pwd',
+        verification: 'Output shows ../ehg (NOT EHG_Engineer!)',
         blocking: true
       },
       {
@@ -218,7 +218,7 @@ Replace mockVentures array in VentureGrid.tsx with live Supabase database querie
         id: 'AI-4',
         priority: 'high',
         action: 'Read VentureGrid.tsx completely',
-        command: 'Read /mnt/c/_EHG/EHG/src/components/venture/VentureGrid.tsx',
+        command: 'Read ../ehg/src/components/venture/VentureGrid.tsx',
         verification: 'Understand current implementation',
         blocking: false
       },

@@ -102,4 +102,4 @@ const supabase = createClient(
 ```
 
 ## Current Working Directory
-`/mnt/c/_EHG/EHG_Engineer`
+`.`

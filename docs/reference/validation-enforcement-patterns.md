@@ -134,9 +134,9 @@ node scripts/systems-analyst-codebase-audit.js <SD-ID>
 **Search Pattern**:
 ```bash
 # Manual duplicate check (if needed)
-grep -r "authentication" /mnt/c/_EHG/EHG/src
-grep -r "Supabase.*Auth" /mnt/c/_EHG/EHG/src
-find /mnt/c/_EHG/EHG/src -name "*auth*"
+grep -r "authentication" ../ehg/src
+grep -r "Supabase.*Auth" ../ehg/src
+find ../ehg/src -name "*auth*"
 ```
 
 **Evidence**: SD-UAT-020 - Discovered existing Supabase Auth mid-implementation → wasted effort on custom solution
@@ -172,7 +172,7 @@ find /mnt/c/_EHG/EHG/src -name "*auth*"
 ```bash
 # GATE 1: Code review MANDATORY for UI/UX SDs claiming issues
 # Step 1: Read actual source code
-cat /mnt/c/_EHG/EHG/src/components/auth/LoginForm.tsx
+cat ../ehg/src/components/auth/LoginForm.tsx
 
 # Step 2: Verify EACH claim against implementation
 # Claim 1: "Color contrast fails WCAG AA" → Check CSS, verify with tool
@@ -237,12 +237,12 @@ node scripts/systems-analyst-codebase-audit.js <SD-ID>
 **Infrastructure Search Pattern**:
 ```bash
 # Check configuration files
-cat /mnt/c/_EHG/EHG/src/lib/supabase.ts
-grep -r "createClient" /mnt/c/_EHG/EHG/src
+cat ../ehg/src/lib/supabase.ts
+grep -r "createClient" ../ehg/src
 
 # Check existing auth usage
-grep -r "supabase.auth" /mnt/c/_EHG/EHG/src
-grep -r "signIn\|signUp\|signOut" /mnt/c/_EHG/EHG/src
+grep -r "supabase.auth" ../ehg/src
+grep -r "signIn\|signUp\|signOut" ../ehg/src
 
 # Check database tables
 node -e "
@@ -342,8 +342,8 @@ await client.connect();
 ```bash
 # GATE 3: Pattern validation BEFORE writing code
 # Step 1: Search for existing patterns
-grep -r "createDatabaseClient" /mnt/c/_EHG/EHG/scripts
-cat /mnt/c/_EHG/EHG/scripts/lib/supabase-connection.js
+grep -r "createDatabaseClient" ../ehg/scripts
+cat ../ehg/scripts/lib/supabase-connection.js
 
 # Step 2: Use established pattern
 import { createDatabaseClient } from '../lib/supabase-connection.js';
@@ -529,7 +529,7 @@ if (scopeCreep.length > 0) {
 
 **Validation Gate Approach (GATE 1)**:
 1. Invoked validation agent for code review
-2. Read source code: `/mnt/c/_EHG/EHG/src/components/auth/LoginForm.tsx`
+2. Read source code: `../ehg/src/components/auth/LoginForm.tsx`
 3. Verified each claim against implementation
 4. Result: 2/5 claims verified, 3/5 false claims
 5. Updated SD scope to reflect verified issues only

@@ -8,7 +8,7 @@
 ## Files Created
 
 ### 1. Main Reference Documentation
-**File**: `/mnt/c/_EHG/EHG_Engineer/docs/reference/protocol-self-improvement.md` (33KB)
+**File**: `docs/reference/protocol-self-improvement.md` (33KB)
 
 **Contents**:
 - Overview and purpose
@@ -31,7 +31,7 @@
 ---
 
 ### 2. CLAUDE.md Router Entry Proposal
-**File**: `/mnt/c/_EHG/EHG_Engineer/docs/reference/protocol-self-improvement-claude-section.json`
+**File**: `docs/reference/protocol-self-improvement-claude-section.json`
 
 **Purpose**: Proposed entry for `leo_protocol_sections` table to add Protocol Self-Improvement to CLAUDE.md router
 
@@ -78,7 +78,7 @@ VALUES (
 ---
 
 ### 3. Retrospective Patterns Skill Content
-**File**: `/mnt/c/_EHG/EHG_Engineer/docs/reference/retrospective-patterns-skill-content.md` (15KB)
+**File**: `docs/reference/retrospective-patterns-skill-content.md` (15KB)
 
 **Purpose**: Content for `leo_skills` table (skill_key: 'retrospective-patterns') to guide models in creating high-quality retrospectives
 

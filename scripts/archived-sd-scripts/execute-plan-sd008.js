@@ -150,7 +150,7 @@ async function executePlanPhaseSD008() {
     console.log(chalk.cyan('\nNext Steps:'));
     console.log('1. Review PRD for completeness');
     console.log('2. Create PLAN→EXEC handoff');
-    console.log('3. Begin EXEC phase implementation in /mnt/c/_EHG/EHG/');
+    console.log('3. Begin EXEC phase implementation in ../ehg/');
 
     return savedPrd;
 

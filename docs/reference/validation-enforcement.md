@@ -376,7 +376,7 @@ node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 **Fixes:**
 - **Unit tests:** Run `npm test` and fix failures
-- **App directory:** Ensure you're in `/mnt/c/_EHG/EHG_Engineer`
+- **App directory:** Ensure you're in the EHG_Engineer project root
 - **Ambiguity:** Remove FIXME/HACK/TODO? comments
 - **Server restart:** Restart dev server and run E2E tests
 - **Stubbed code:** Implement all placeholder functions

@@ -120,7 +120,7 @@ const documentationSubAgentProfile = {
           'Cross-application integration patterns'
         ],
         structure: {
-          root: '/mnt/c/_EHG/EHG_Engineer',
+          root: '.',
           docs_path: '/docs',
           applications_path: '/applications',
           special_files: ['CLAUDE.md', 'CLAUDE-LEO.md', 'README.md']

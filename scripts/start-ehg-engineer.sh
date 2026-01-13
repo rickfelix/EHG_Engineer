@@ -7,7 +7,7 @@ echo "🔧 Starting EHG Engineer (LEO Protocol)..."
 echo "========================================="
 
 # Navigate to EHG Engineer directory
-cd /mnt/c/_EHG/EHG_Engineer
+cd .
 
 # Check if node_modules exists
 if [ ! -d "node_modules" ]; then

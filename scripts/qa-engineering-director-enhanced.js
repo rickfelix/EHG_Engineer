@@ -25,6 +25,13 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { execSync } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ROOT = path.resolve(__dirname, '../../ehg');
 
 // Import all 7 intelligence modules
 import { validateBuild } from './modules/qa/build-validator.js';
@@ -401,7 +408,7 @@ export async function executeQADirector(sd_id, options = {}) {
       let unitTestResults;
       try {
         const output = execSync('npx vitest run tests/unit --reporter=verbose --no-watch --run', {
-          cwd: '/mnt/c/_EHG/EHG',
+          cwd: EHG_ROOT,
           encoding: 'utf8',
           timeout: 300000, // 5 min timeout
           stdio: 'pipe',
@@ -440,7 +447,7 @@ export async function executeQADirector(sd_id, options = {}) {
       const devServerReady = await checkDevServerHealth(5173, 10);
       if (!devServerReady) {
         console.log('      ⚠️  Dev server not responding on port 5173');
-        console.log('      💡 Start dev server: cd /mnt/c/_EHG/EHG && npm run dev -- --port 5173');
+        console.log('      💡 Start dev server: cd ${EHG_ROOT} && npm run dev -- --port 5173');
         e2eTestResults = {
           success: false,
           total_tests: 0,
@@ -457,7 +464,7 @@ export async function executeQADirector(sd_id, options = {}) {
           const smokeTestFile = 'tests/e2e/board-governance.spec.ts';
 
           const output = execSync(`npm run test:e2e -- ${smokeTestFile} --project=mock`, {
-            cwd: '/mnt/c/_EHG/EHG',
+            cwd: EHG_ROOT,
             encoding: 'utf8',
             timeout: 600000, // 10 min timeout for E2E
             stdio: 'pipe'

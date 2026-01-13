@@ -11,10 +11,18 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { calculateAdaptiveThreshold } from './adaptive-threshold-calculator.js';
 import { getPatternStats } from './pattern-tracking.js';
 
 const execAsync = promisify(exec);
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '../..');
+const EHG_ROOT = path.resolve(__dirname, '../../../ehg');
 
 /**
  * Validate end-to-end traceability for PLAN→LEAD handoff
@@ -73,9 +81,9 @@ export async function validateGate3PlanToLead(sd_id, supabase, gate2Results = nu
     // Determine git repo path from target_application
     const targetApp = sdData.target_application || sdData.metadata?.target_application;
     if (targetApp === 'EHG') {
-      gitRepoPath = '/mnt/c/_EHG/EHG';
+      gitRepoPath = EHG_ROOT;
     } else if (targetApp === 'EHG_Engineer') {
-      gitRepoPath = '/mnt/c/_EHG/EHG_Engineer';
+      gitRepoPath = EHG_ENGINEER_ROOT;
     }
     console.log(`   Git Repo: ${gitRepoPath}`);
   }

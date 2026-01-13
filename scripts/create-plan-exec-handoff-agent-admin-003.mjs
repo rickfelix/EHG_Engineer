@@ -90,8 +90,8 @@ try {
    - 6 RLS policies created (anon SELECT access for demo)
    - 4 triggers created (auto-update timestamps)
    - 1 partitioned table (agent_executions by month, 3 partitions created)
-   - Migration script: /mnt/c/_EHG/EHG/scripts/apply-migration-sd-agent-admin-003.mjs
-   - Migration file: /mnt/c/_EHG/EHG/database/migrations/sd-agent-admin-003-agent-platform-tables.sql
+   - Migration script: ../ehg/scripts/apply-migration-sd-agent-admin-003.mjs
+   - Migration file: ../ehg/database/migrations/sd-agent-admin-003-agent-platform-tables.sql
 
 4. ✅ **RLS Policy Updates**:
    - All 6 tables have RLS enabled
@@ -130,8 +130,8 @@ try {
    - Format: All stories include title, user_role, user_want, user_benefit, acceptance_criteria, test_scenarios
 
 3. **Database Migration** ✅
-   - Migration File: /mnt/c/_EHG/EHG/database/migrations/sd-agent-admin-003-agent-platform-tables.sql
-   - Application Script: /mnt/c/_EHG/EHG/scripts/apply-migration-sd-agent-admin-003.mjs
+   - Migration File: ../ehg/database/migrations/sd-agent-admin-003-agent-platform-tables.sql
+   - Application Script: ../ehg/scripts/apply-migration-sd-agent-admin-003.mjs
    - Tables Created: 6 (prompt_templates, prompt_ab_tests, ab_test_results, search_preferences, agent_executions, performance_alerts)
    - Execution Status: ✅ Applied successfully (74 statements executed, 0 errors)
 
@@ -160,16 +160,16 @@ try {
    - Coverage Target: 100% user story coverage (MANDATORY)
 
 **Reference Files**:
-- User Story Batch 1: /mnt/c/_EHG/EHG_Engineer/scripts/generate-user-stories-agent-admin-003-fixed.mjs (US-001 to US-030)
-- User Story Batch 2: /mnt/c/_EHG/EHG_Engineer/scripts/generate-user-stories-agent-admin-003-batch2.mjs (US-031 to US-057)
-- PRD Creation: /mnt/c/_EHG/EHG_Engineer/scripts/create-prd-agent-admin-003-db-direct.mjs`,
+- User Story Batch 1: ./scripts/generate-user-stories-agent-admin-003-fixed.mjs (US-001 to US-030)
+- User Story Batch 2: ./scripts/generate-user-stories-agent-admin-003-batch2.mjs (US-031 to US-057)
+- PRD Creation: ./scripts/create-prd-agent-admin-003-db-direct.mjs`,
 
     // key_decisions
     `**Decision 1**: Use Database Sub-Agent Pattern for All Database Operations
 - Rationale: Bypasses RLS restrictions for migration and setup scripts
 - Impact: All database operations use direct PostgreSQL connection via createDatabaseClient('ehg')
 - Evidence: Successful migration without RLS authentication issues
-- Pattern file: /mnt/c/_EHG/EHG/scripts/lib/supabase-connection.js
+- Pattern file: ../ehg/scripts/lib/supabase-connection.js
 
 **Decision 2**: Partitioned agent_executions Table by Month
 - Rationale: Performance at scale (millions of executions expected)
@@ -270,8 +270,8 @@ try {
     `**Priority 1 - EXEC Agent (Immediate)**:
 
 1. **Application Context Verification** (5 minutes)
-   - Navigate to: cd /mnt/c/_EHG/EHG
-   - Verify: pwd should show /mnt/c/_EHG/EHG (NOT EHG_Engineer!)
+   - Navigate to: cd ../ehg
+   - Verify: pwd should show ../ehg (NOT EHG_Engineer!)
    - Verify: git remote -v should show rickfelix/ehg.git
    - Start dev server: npm run dev -- --port 5173
 
@@ -334,8 +334,8 @@ try {
 **Key References for EXEC**:
 - PRD: Query product_requirements_v2 WHERE id = 'PRD-AGENT-ADMIN-003'
 - User Stories: Query user_stories WHERE sd_id = 'SD-AGENT-ADMIN-003' ORDER BY story_key
-- Database Schema: /mnt/c/_EHG/EHG/database/migrations/sd-agent-admin-003-agent-platform-tables.sql
-- Application: /mnt/c/_EHG/EHG/ (NOT EHG_Engineer!)
+- Database Schema: ../ehg/database/migrations/sd-agent-admin-003-agent-platform-tables.sql
+- Application: ../ehg/ (NOT EHG_Engineer!)
 - Dev Server Port: 5173 (NOT 3000!)`,
 
     // metadata (JSONB)
@@ -388,7 +388,7 @@ try {
   console.log('   - Database: 6 tables created (74 statements, 0 errors)');
   console.log('   - RLS Policies: 6 policies enabled (anon SELECT access)');
   console.log('   - Existing Code: 30% reusable (AgentSettingsTab, AgentPresetsTab)');
-  console.log('   - Target: EHG application (/mnt/c/_EHG/EHG/)');
+  console.log('   - Target: EHG application (../ehg/)');
   console.log('   - Dev Server: Port 5173\n');
   console.log('🚀 Next Phase: EXEC Implementation');
   console.log('   Estimated: 56-71 hours for 57 user stories');

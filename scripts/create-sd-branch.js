@@ -31,15 +31,20 @@ import dotenv from 'dotenv';
 import readline from 'readline';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
 const execAsync = promisify(exec);
 
-// Repository paths
+// Repository paths (cross-platform)
 const REPO_PATHS = {
-  EHG: '/mnt/c/_EHG/EHG',
-  EHG_Engineer: '/mnt/c/_EHG/EHG_Engineer'
+  EHG: path.resolve(__dirname, '../../ehg'),
+  EHG_Engineer: path.resolve(__dirname, '..')
 };
 
 /**

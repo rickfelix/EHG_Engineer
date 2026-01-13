@@ -20,7 +20,7 @@ const fs = require('fs');
 const path = require('path');
 
 const SESSION_STATE_FILE = path.join(process.env.HOME || '/tmp', '.claude-session-state.json');
-const ENGINEER_DIR = '/mnt/c/_EHG/EHG_Engineer';
+const ENGINEER_DIR = '.';
 
 // Phase context document mapping
 const PHASE_CONTEXT_DOCS = {

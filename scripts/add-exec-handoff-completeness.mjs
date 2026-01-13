@@ -42,7 +42,7 @@ async function main() {
 ✅ Direct PostgreSQL connections for transaction safety
 ✅ CrewAI integration structure following established patterns
 
-**Code Location**: /mnt/c/_EHG/EHG/agent-platform/app/crews/board_directors_crew.py
+**Code Location**: ../ehg/agent-platform/app/crews/board_directors_crew.py
 **Pattern**: Class methods for workflows (standard CrewAI approach)
 
 ### Frontend Layer: 100% Complete
@@ -52,7 +52,7 @@ async function main() {
 ✅ Total: 1,220 LOC across 3 components
 ✅ All components within acceptable sizing range (280-520 LOC)
 
-**Code Location**: /mnt/c/_EHG/EHG/src/components/board/
+**Code Location**: ../ehg/src/components/board/
 **Tech Stack**: React, TypeScript, Shadcn UI components
 
 ### Testing: 99.5% Complete

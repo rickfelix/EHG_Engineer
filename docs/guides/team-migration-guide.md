@@ -220,7 +220,7 @@ node templates/execute-phase.js EXEC SD-050 --force
 #### "Template not found"
 **Solution**: Ensure you're running from project root directory
 ```bash
-# Run from /mnt/c/_EHG/EHG_Engineer/
+# Run from EHG_Engineer root directory
 pwd  # Should show project root
 ```
 

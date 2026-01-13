@@ -21,23 +21,29 @@ import { createClient } from '@supabase/supabase-js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { writeFileSync, readdirSync, statSync, existsSync } from 'fs';
-import { join } from 'path';
+import { join, dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const execAsync = promisify(exec);
 
-// Base directory for repo discovery
-const EHG_BASE_DIR = '/mnt/c/_EHG';
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Base directory for repo discovery (parent of EHG_Engineer)
+const EHG_BASE_DIR = resolve(__dirname, '../..');
 
 // Repositories to permanently ignore (archive/inactive repos with messy state)
 const IGNORED_REPOS = ['ehg-replit-archive', 'solara2'];
 
 // Static repo paths (fallback if discovery fails)
 const STATIC_REPO_PATHS = {
-  EHG: '/mnt/c/_EHG/EHG',
-  EHG_Engineer: '/mnt/c/_EHG/EHG_Engineer'
+  EHG: resolve(EHG_BASE_DIR, 'ehg'),
+  ehg: resolve(EHG_BASE_DIR, 'ehg'),
+  EHG_Engineer: resolve(EHG_BASE_DIR, 'EHG_Engineer')
 };
 
 /**

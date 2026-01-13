@@ -8,7 +8,14 @@
  */
 
 import { readdir, stat } from 'fs/promises';
-import { join } from 'path';
+import { join, dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const EHG_ENGINEER_ROOT = resolve(__dirname, '../../..');
+const EHG_ROOT = resolve(__dirname, '../../../../ehg');
 
 /**
  * Discover test infrastructure and generate recommendations
@@ -17,8 +24,8 @@ import { join } from 'path';
  */
 export async function discoverAndRecommend(targetApp = 'ehg') {
   const appPath = targetApp === 'ehg'
-    ? '/mnt/c/_EHG/EHG'
-    : '/mnt/c/_EHG/EHG_Engineer';
+    ? EHG_ROOT
+    : EHG_ENGINEER_ROOT;
 
   console.log(`🔍 Infrastructure Discovery: Scanning ${targetApp} test infrastructure...`);
 

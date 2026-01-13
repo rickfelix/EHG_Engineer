@@ -11,8 +11,8 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 
-const SETTINGS_PATH = '/mnt/c/_EHG/EHG_Engineer/.claude/settings.json';
-const HOOKS_DIR = '/mnt/c/_EHG/EHG_Engineer/scripts/hooks';
+const SETTINGS_PATH = './.claude/settings.json';
+const HOOKS_DIR = './scripts/hooks';
 
 // Available hooks with descriptions
 const AVAILABLE_HOOKS = {

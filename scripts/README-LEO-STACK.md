@@ -74,7 +74,7 @@ If you prefer to start servers manually:
 
 **Linux/WSL:**
 ```bash
-cd /mnt/c/_EHG/EHG_Engineer
+cd .
 PORT=3000 node server.js
 ```
 
@@ -88,7 +88,7 @@ $env:PORT=3000; node server.js
 
 **Linux/WSL:**
 ```bash
-cd /mnt/c/_EHG/EHG
+cd ../ehg
 PORT=8080 npm run dev -- --host 0.0.0.0
 ```
 
@@ -102,7 +102,7 @@ $env:PORT=8080; npm run dev -- --host 0.0.0.0
 
 **Linux/WSL:**
 ```bash
-cd /mnt/c/_EHG/EHG/agent-platform
+cd ../ehg/agent-platform
 source venv/bin/activate
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
@@ -129,7 +129,7 @@ $env:ENV_FILE=".env.production"; python -m uvicorn app.main:app --reload --port 
 
 **Linux/WSL:**
 ```bash
-cd /mnt/c/_EHG/EHG/agent-platform
+cd ../ehg/agent-platform
 bash INSTALL.sh
 ```
 
@@ -187,7 +187,7 @@ If localhost:8080 doesn't load in Windows browser:
 
 **Linux/WSL:**
 ```bash
-cd /mnt/c/_EHG/EHG/agent-platform
+cd ../ehg/agent-platform
 ls -la venv/
 ```
 
@@ -205,7 +205,7 @@ If not, run the setup:
 
 **Linux/WSL:**
 ```bash
-cd /mnt/c/_EHG/EHG/agent-platform
+cd ../ehg/agent-platform
 source venv/bin/activate
 pip list | grep fastapi
 ```
@@ -513,11 +513,11 @@ MIN_FREE_MEMORY_MB=500       # Minimum memory warning (default: 500MB)
 **Solution:**
 ```bash
 # Check if process is actually running
-cat /mnt/c/_EHG/EHG_Engineer/.pids/leo-stack.lock
+cat ./.pids/leo-stack.lock
 ps -p <PID>
 
 # If stale, remove lock
-rm /mnt/c/_EHG/EHG_Engineer/.pids/leo-stack.lock
+rm ./.pids/leo-stack.lock
 ```
 
 ### "Port still in use after cleanup"

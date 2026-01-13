@@ -39,7 +39,7 @@ async function runMigration() {
 ### Recent Success Examples:
 - `scripts/run-intelligence-migration.js` (Oct 17, 2025)
 - `scripts/run-wizard-analytics-migration.js` (Oct 23, 2025)
-- 48 other migration scripts in `/mnt/c/_EHG/EHG/scripts/`
+- 48 other migration scripts in `../ehg/scripts/` (EHG repository)
 
 ---
 
@@ -131,19 +131,19 @@ The database sub-agent saying "manual required" was a **workaround**, not a **ro
 
 1. **Search for Existing Patterns**:
    ```bash
-   ls -la /mnt/c/_EHG/EHG/scripts/*migration*.js
+   ls -la ../ehg/scripts/*migration*.js
    ```
    Expected: 50+ migration scripts found
 
 2. **Check for `createDatabaseClient` Usage**:
    ```bash
-   grep -r "createDatabaseClient" /mnt/c/_EHG/EHG/scripts/ | wc -l
+   grep -r "createDatabaseClient" ../ehg/scripts/ | wc -l
    ```
    Expected: 50+ matches
 
 3. **Read Example Script**:
    ```bash
-   cat /mnt/c/_EHG/EHG/scripts/run-intelligence-migration.js
+   cat ../ehg/scripts/run-intelligence-migration.js
    ```
    Expected: Working pattern with verification
 
@@ -195,8 +195,8 @@ Follow the established pattern from 50+ existing scripts.
 
 ## References
 
-- **Working Scripts**: `/mnt/c/_EHG/EHG/scripts/*migration*.js` (50+ examples)
-- **Connection Utility**: `/mnt/c/_EHG/EHG/scripts/lib/supabase-connection.js`
+- **Working Scripts**: `../ehg/scripts/*migration*.js` (50+ examples)
+- **Connection Utility**: `../ehg/scripts/lib/supabase-connection.js`
 - **Recent Success**: `run-wizard-analytics-migration.js` (SD-VWC-PHASE4-001)
 - **Retrospective**: SD-2025-1020-E2E-SELECTORS (Oct 20, 2025)
 - **Documentation**: `docs/database-migration-validation-guide.md`

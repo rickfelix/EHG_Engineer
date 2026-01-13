@@ -108,7 +108,7 @@ export default ${componentName};
  * Main execution
  */
 async function main() {
-  const outputDir = '/mnt/c/_EHG/EHG/src/components/stages/v2';
+  const outputDir = '../ehg/src/components/stages/v2';
 
   console.log('\\n🔧 Generating V2 Stage Shell Components');
   console.log('='.repeat(60));

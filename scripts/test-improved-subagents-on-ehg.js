@@ -24,7 +24,7 @@ import EXECCoordinationTool from '../lib/agents/exec-coordination-tool';
 
 class ImprovedSubAgentTester {
   constructor() {
-    this.basePath = '/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase';
+    this.basePath = './applications/APP001/codebase';
     this.results = {
       timestamp: new Date().toISOString(),
       improvements: {},

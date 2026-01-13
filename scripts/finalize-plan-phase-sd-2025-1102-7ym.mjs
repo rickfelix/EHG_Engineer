@@ -97,7 +97,7 @@ async function finalizePlanPhase() {
       functional_requirements: 6,
       test_scenarios: 6,
       feature_branch: 'feat/SD-2025-1102-7YM-optimize-ventures-management-attributes',
-      target_repository: '/mnt/c/_EHG/EHG',
+      target_repository: '../ehg',
       exec_ready_items: [
         'PRD approved with detailed requirements',
         'User stories with implementation_context',

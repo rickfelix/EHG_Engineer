@@ -24,7 +24,7 @@ async function updateSDQUALITY001() {
     description: `EHG application has extensive E2E (Playwright), integration, accessibility, security, and performance test coverage (63 total test files), but only 4 unit test files covering 528 source files in src/ directory.
 
 **ACTUAL STATE (Discovered via Investigation)**:
-- ✅ 63 test files in /mnt/c/_EHG/EHG/tests/
+- ✅ 63 test files in ../ehg/tests/
 - ✅ Extensive E2E test suite (Playwright)
 - ✅ Integration tests configured
 - ✅ Accessibility tests (a11y)
@@ -39,8 +39,8 @@ async function updateSDQUALITY001() {
 - Actual gap: Unit test coverage for business logic
 
 **ROOT CAUSE**:
-- Tests for EHG stored in /mnt/c/_EHG/EHG/tests/
-- Tests for EHG_Engineer stored in /mnt/c/_EHG/EHG_Engineer/tests/
+- Tests for EHG stored in ../ehg/tests/
+- Tests for EHG_Engineer stored in ./tests/
 - Multi-application architecture was not documented
 - Original SD author looked in wrong location or only counted unit tests
 
@@ -110,7 +110,7 @@ async function updateSDQUALITY001() {
 
     implementation_guidelines: [
       '**PHASE 1: Infrastructure Verification (Week 1)**',
-      '1. Verify Vitest configuration in /mnt/c/_EHG/EHG/vitest.config.ts',
+      '1. Verify Vitest configuration in ../ehg/vitest.config.ts',
       '2. Confirm v8 coverage provider and thresholds (80% configured)',
       '3. Create tests/unit/factories/ for test data generation',
       '4. Create tests/unit/mocks/ for Supabase and API mocking',
@@ -207,8 +207,8 @@ async function updateSDQUALITY001() {
         root_cause: 'Multi-application architecture not documented, tests in wrong location'
       },
       test_locations: {
-        ehg_application: '/mnt/c/_EHG/EHG/tests/',
-        ehg_engineer: '/mnt/c/_EHG/EHG_Engineer/tests/'
+        ehg_application: '../ehg/tests/',
+        ehg_engineer: './tests/'
       },
       current_test_coverage: {
         total_test_files: 63,
@@ -261,8 +261,8 @@ async function updateSDQUALITY001() {
   console.log('  ✓ Tests located in correct application directories\n');
 
   console.log('📁 Test Locations:');
-  console.log('  ✓ EHG tests: /mnt/c/_EHG/EHG/tests/');
-  console.log('  ✓ EHG_Engineer tests: /mnt/c/_EHG/EHG_Engineer/tests/\n');
+  console.log('  ✓ EHG tests: ../ehg/tests/');
+  console.log('  ✓ EHG_Engineer tests: ./tests/\n');
 
   console.log('🚀 Next Steps:');
   console.log('  1. Review corrected SD-QUALITY-001 in dashboard');

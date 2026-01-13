@@ -181,8 +181,8 @@ async function detectRepository(sdId) {
 
 | Target App | Path | Git Remote |
 |------------|------|------------|
-| EHG | /mnt/c/_EHG/EHG/ | rickfelix/ehg.git |
-| EHG_Engineer | /mnt/c/_EHG/EHG_Engineer/ | rickfelix/EHG_Engineer.git |
+| EHG | ../ehg | rickfelix/ehg.git |
+| EHG_Engineer | ./ (current) | rickfelix/EHG_Engineer.git |
 
 ---
 
