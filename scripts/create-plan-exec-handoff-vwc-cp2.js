@@ -243,7 +243,7 @@ async function createPlanExecHandoff() {
    - WAVE browser extension: Manual install by developer
 
 ✅ **Planning Documentation**
-   - Comprehensive planning document: /mnt/c/_EHG/EHG_Engineer/docs/checkpoint-2-plan-vwc.md
+   - Comprehensive planning document: ./docs/checkpoint-2-plan-vwc.md
    - 300 lines covering scope, user stories, implementation plan, risks, success criteria
 
 **Checkpoint 2 Planning**: 100% complete`,

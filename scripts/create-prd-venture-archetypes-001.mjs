@@ -48,7 +48,7 @@ This PRD defines Phase 1 implementation: archetype configuration in settings, se
 5. Establish company-wide archetype library for reusability and standardization
 
 **Target Users**: Venture creators, company admins, portfolio managers
-**Target Application**: EHG (customer-facing app at /mnt/c/_EHG/EHG/)
+**Target Application**: EHG (customer-facing app at ../ehg/)
 **Business Value**: Differentiation, brand consistency, improved UX, reusable templates`,
 
     technical_context: `**Existing Infrastructure** (from Systems Analyst sub-agent):
@@ -105,21 +105,21 @@ This PRD defines Phase 1 implementation: archetype configuration in settings, se
     technical_requirements: `**Component Architecture** (300-600 LOC optimal per component):
 
 1. **ArchetypesSettingsTab.tsx** (~350 LOC)
-   - Location: /mnt/c/_EHG/EHG/app/settings/ArchetypesSettingsTab.tsx
+   - Location: ../ehg/app/settings/ArchetypesSettingsTab.tsx
    - Parent: app/settings/page.tsx (add as 7th tab)
    - Responsibilities: List view (Card grid), Create/Edit dialog, Delete confirmation, Preview component
    - Dependencies: Shadcn (Card, Dialog, Button, Input, Textarea), Supabase client
    - Sizing target: 350 LOC (within 300-600 optimal range)
 
 2. **ArchetypeSelector.tsx** (~120 LOC)
-   - Location: /mnt/c/_EHG/EHG/src/components/ventures/ArchetypeSelector.tsx
+   - Location: ../ehg/src/components/ventures/ArchetypeSelector.tsx
    - Parent: VentureCreationDialog.tsx (add after category, before assumptions)
    - Responsibilities: Dropdown with archetype list, description display on hover
    - Dependencies: Shadcn Select, Supabase query for archetypes
    - Sizing target: 120 LOC (within 300-600 optimal range)
 
 3. **ThemePreview.tsx** (~80 LOC)
-   - Location: /mnt/c/_EHG/EHG/src/components/ventures/ThemePreview.tsx
+   - Location: ../ehg/src/components/ventures/ThemePreview.tsx
    - Parent: ArchetypesSettingsTab.tsx (preview section)
    - Responsibilities: Visual mockup showing colors, typography, spacing
    - Dependencies: Tailwind, archetype visual_theme JSONB
@@ -220,7 +220,7 @@ This PRD defines Phase 1 implementation: archetype configuration in settings, se
      - Phase 2: node scripts/validate-migration-files.js SD-VENTURE-ARCHETYPES-001 --verify-db --check-seed-data
 
 2. **ArchetypesSettingsTab Component** (90-120 min):
-   - Create /mnt/c/_EHG/EHG/app/settings/ArchetypesSettingsTab.tsx
+   - Create ../ehg/app/settings/ArchetypesSettingsTab.tsx
    - Implement list view (Card grid with archetype cards)
    - Implement Create/Edit dialog (name, description, visual_theme fields)
    - Implement Delete confirmation (check is_default = false)
@@ -228,7 +228,7 @@ This PRD defines Phase 1 implementation: archetype configuration in settings, se
    - Add to app/settings/page.tsx as 7th tab
 
 3. **ArchetypeSelector Component** (45-60 min):
-   - Create /mnt/c/_EHG/EHG/src/components/ventures/ArchetypeSelector.tsx
+   - Create ../ehg/src/components/ventures/ArchetypeSelector.tsx
    - Implement Select dropdown with archetype options
    - Query venture_archetypes table (company-scoped)
    - Display archetype description on hover
@@ -236,7 +236,7 @@ This PRD defines Phase 1 implementation: archetype configuration in settings, se
    - Add to VentureCreationDialog.tsx (after category field)
 
 4. **ThemePreview Component** (30-45 min):
-   - Create /mnt/c/_EHG/EHG/src/components/ventures/ThemePreview.tsx
+   - Create ../ehg/src/components/ventures/ThemePreview.tsx
    - Render visual mockup using visual_theme JSONB
    - Show colors (swatches), typography (sample text), spacing (box model)
    - Used in ArchetypesSettingsTab for archetype preview
@@ -262,7 +262,7 @@ This PRD defines Phase 1 implementation: archetype configuration in settings, se
     test_scenarios: `**E2E Testing Strategy** (Playwright - MANDATORY):
 
 **Test Infrastructure**:
-- Framework: Playwright (existing setup at /mnt/c/_EHG/EHG/)
+- Framework: Playwright (existing setup at ../ehg/)
 - Mode: Dev mode (port 5173, NOT preview 4173)
 - Coverage Requirement: 100% user story coverage
 - Evidence: Screenshots (success), videos (failures), HTML reports

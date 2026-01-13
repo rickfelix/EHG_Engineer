@@ -179,8 +179,8 @@ const handoff = {
     {
       priority: 'CRITICAL',
       item: 'Application Context Validation',
-      details: 'CRITICAL: Verify target application is EHG_Engineer (/mnt/c/_EHG/EHG_Engineer), NOT EHG (/mnt/c/_EHG/EHG). This SD modifies LEO Protocol infrastructure (management), not customer features.',
-      acceptance_criteria: 'pwd shows /mnt/c/_EHG/EHG_Engineer before any implementation',
+      details: 'CRITICAL: Verify target application is EHG_Engineer (.), NOT EHG (../ehg). This SD modifies LEO Protocol infrastructure (management), not customer features.',
+      acceptance_criteria: 'pwd shows . before any implementation',
       estimated_effort: '1 minute'
     },
     {
@@ -237,7 +237,7 @@ const handoff = {
   // Additional context for EXEC agent
   technical_context: {
     target_application: 'EHG_Engineer',
-    working_directory: '/mnt/c/_EHG/EHG_Engineer',
+    working_directory: '.',
     database: 'dedlbzhpgkmetvhbkyzq (Supabase)',
     port: 3000,
     key_files: [

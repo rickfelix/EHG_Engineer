@@ -158,7 +158,7 @@ const prdContent = {
     components: [
       {
         name: 'useRealtimeSubscription<T>',
-        location: '/mnt/c/_EHG/EHG/src/hooks/realtime/useRealtimeSubscription.ts',
+        location: '../ehg/src/hooks/realtime/useRealtimeSubscription.ts',
         type: 'React Hook',
         responsibilities: [
           'Generic real-time subscription management',

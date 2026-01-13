@@ -102,7 +102,7 @@ async function createExecPlanVerificationHandoff() {
       created_at: new Date().toISOString(),
       implementation_commit: 'f0c3ec3',
       implementation_url: 'http://localhost:8080/chairman',
-      application_path: '/mnt/c/_EHG/EHG/',
+      application_path: '../ehg/',
       total_implementation_phases: 4,
       phases_completed: 1,
       user_stories_total: 8,

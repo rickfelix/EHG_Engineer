@@ -97,7 +97,7 @@ async function createStrategicDirective() {
         'without_mocks': 'ventures-authenticated.spec.ts, ventures-crud.spec.ts'
       },
       estimated_effort_hours: 8,
-      implementation_path: '/mnt/c/_EHG/EHG',
+      implementation_path: '../ehg',
       created_by: 'INVESTIGATION_ANALYSIS',
       investigation_date: new Date().toISOString()
     },
@@ -153,7 +153,7 @@ async function createStrategicDirective() {
     console.log('   - Affected Tests: 3 files need mock handlers');
     console.log('   - Reference Implementation: ventures.spec.ts');
     console.log('   - Estimated Effort: 6-8 hours');
-    console.log('   - Target Application: /mnt/c/_EHG/EHG (EHG app)');
+    console.log('   - Target Application: ../ehg (EHG app)');
 
     console.log('\n📋 Next Steps:');
     console.log('   1. LEAD: Review and approve SD-TEST-MOCK-001');

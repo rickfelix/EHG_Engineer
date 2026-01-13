@@ -15,18 +15,23 @@
 
 import { execSync } from 'child_process';
 import { existsSync, readdirSync, statSync } from 'fs';
-import { join } from 'path';
+import { join, dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
 
-// Base directory for repo discovery
-const EHG_BASE_DIR = '/mnt/c/_EHG';
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Dynamic base directory (parent of EHG_Engineer)
+const EHG_BASE_DIR = resolve(__dirname, '../../../../..');
 
 // Repositories to permanently ignore (archive/inactive repos)
 const IGNORED_REPOS = ['ehg-replit-archive', 'solara2'];
 
-// Static repo paths (fallback if discovery fails)
+// Dynamic repo paths
 const STATIC_REPO_PATHS = {
-  ehg: { name: 'ehg', path: '/mnt/c/_EHG/ehg', github: 'rickfelix/ehg', priority: 2 },
-  EHG_Engineer: { name: 'EHG_Engineer', path: '/mnt/c/_EHG/EHG_Engineer', github: 'rickfelix/EHG_Engineer', priority: 1 }
+  ehg: { name: 'ehg', path: resolve(EHG_BASE_DIR, 'ehg'), github: 'rickfelix/ehg', priority: 2 },
+  EHG_Engineer: { name: 'EHG_Engineer', path: resolve(EHG_BASE_DIR, 'EHG_Engineer'), github: 'rickfelix/EHG_Engineer', priority: 1 }
 };
 
 // Repo coordination order (lower = earlier)

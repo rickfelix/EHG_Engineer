@@ -117,12 +117,12 @@ COMMENT ON COLUMN executive_reports.report_type IS 'Template type: board_update,
     console.log('✅ Schema design complete');
     console.log('');
     console.log('📝 Next: Migration needs to be applied to EHG database');
-    console.log('   File location: /mnt/c/_EHG/EHG/database/migrations/create-executive-reports.sql');
+    console.log('   File location: ../ehg/database/migrations/create-executive-reports.sql');
 
     // Write migration to file
     const fs = await import('fs/promises');
     await fs.writeFile(
-      '/mnt/c/_EHG/EHG/database/migrations/create-executive-reports.sql',
+      '../ehg/database/migrations/create-executive-reports.sql',
       migrationSQL
     );
 

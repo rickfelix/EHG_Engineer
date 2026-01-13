@@ -14,6 +14,7 @@ import { promisify } from 'util';
 import { existsSync } from 'fs';
 import { readdir, readFile } from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { calculateAdaptiveThreshold } from './adaptive-threshold-calculator.js';
 import { getPatternStats } from './pattern-tracking.js';
 import {
@@ -22,6 +23,12 @@ import {
 } from '../../lib/utils/sd-type-validation.js';
 
 const execAsync = promisify(exec);
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '../..');
+const EHG_ROOT = path.resolve(__dirname, '../../../ehg');
 
 // Cache for SD search terms to avoid repeated database queries
 const searchTermsCache = new Map();
@@ -96,16 +103,16 @@ async function gitLogForSD(cmdTemplate, searchTerms, options = {}) {
  * Returns the root path of the implementation repository
  *
  * Strategy:
- * 1. Check if SD has commits in /mnt/c/_EHG/EHG (application repo)
- * 2. If not found, default to /mnt/c/_EHG/EHG_Engineer (governance repo)
+ * 1. Check if SD has commits in EHG (application repo)
+ * 2. If not found, default to EHG_Engineer (governance repo)
  *
  * @param {string} sd_id - Strategic Directive ID
  * @returns {Promise<string>} - Root path of implementation repository
  */
 async function detectImplementationRepo(sd_id, supabase) {
   const repos = [
-    '/mnt/c/_EHG/EHG',           // Application repo (priority)
-    '/mnt/c/_EHG/EHG_Engineer'   // Governance repo (fallback)
+    EHG_ROOT,           // Application repo (priority)
+    EHG_ENGINEER_ROOT   // Governance repo (fallback)
   ];
 
   // SD-VENTURE-STAGE0-UI-001: Also search by legacy_id (SD-XXX-001 format)
@@ -306,9 +313,9 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
     const { stdout: gitRoot } = await execAsync('git rev-parse --show-toplevel');
     const workingDirectory = gitRoot.trim();
 
-    // Expected directory: /mnt/c/_EHG/EHG_Engineer
-    const expectedDir = '/mnt/c/_EHG/EHG_Engineer';
-    const wrongDir = '/mnt/c/_EHG/EHG';
+    // Expected directory: EHG_Engineer root
+    const expectedDir = EHG_ENGINEER_ROOT;
+    const wrongDir = EHG_ROOT;
 
     if (workingDirectory === wrongDir) {
       validation.issues.push('[PREFLIGHT] CRITICAL: EXEC worked in wrong codebase (ehg instead of EHG_Engineer)');

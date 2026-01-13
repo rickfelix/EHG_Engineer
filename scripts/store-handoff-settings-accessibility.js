@@ -265,7 +265,7 @@ Plan:
    - [ ] Confirm PERFORMANCE blocker is false positive (pre-existing issues)
    - [ ] Verify grep shows 0 issues in modified files:
      \`\`\`bash
-     cd /mnt/c/_EHG/EHG
+     cd ../ehg
      grep -r "<button" src/components/settings/UserProfileSettings.tsx src/components/chairman/CompanySelector.tsx | grep -v "aria-label" | grep -v "children"
      # Should return: (empty - no issues)
      \`\`\`
@@ -273,7 +273,7 @@ Plan:
 3. Execute Manual Accessibility Verification (OPTIONAL)
    \`\`\`bash
    # Navigate to settings page
-   cd /mnt/c/_EHG/EHG
+   cd ../ehg
    npm run dev -- --port 8080
 
    # Use Playwright MCP to verify:

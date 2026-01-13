@@ -143,10 +143,10 @@ class URLVerifier {
   identifyApplicationPath() {
     // Map common ports to application paths
     const portMappings = {
-      '3000': '/mnt/c/_EHG/EHG_Engineer',
-      '3456': '/mnt/c/_EHG/EHG_Engineer',
-      '8080': '/mnt/c/_EHG/EHG',
-      '5173': '/mnt/c/_EHG/EHG', // Vite default
+      '3000': '.',
+      '3456': '.',
+      '8080': '../ehg',
+      '5173': '../ehg', // Vite default
     };
     
     this.results.applicationPath = portMappings[this.results.port] || 'Unknown';

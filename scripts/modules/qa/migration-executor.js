@@ -9,9 +9,17 @@
 
 import { execSync } from 'child_process';
 import { readFile } from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
 dotenv.config();
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '../../..');
+const EHG_ROOT = path.resolve(__dirname, '../../../../ehg');
 
 /**
  * Execute pending database migrations
@@ -23,8 +31,8 @@ export async function executePendingMigrations(pendingMigrations, targetApp = 'e
   console.log(`🚀 Migration Executor: Applying ${pendingMigrations.length} pending migration(s)...`);
 
   const appPath = targetApp === 'ehg'
-    ? '/mnt/c/_EHG/EHG'
-    : '/mnt/c/_EHG/EHG_Engineer';
+    ? EHG_ROOT
+    : EHG_ENGINEER_ROOT;
 
   // NOTE: As of SD-ARCH-EHG-006 (2025-11-30), both apps use CONSOLIDATED database
   const projectRef = 'dedlbzhpgkmetvhbkyzq';  // CONSOLIDATED: replaces old liapbndqlqxdcgpwntbv

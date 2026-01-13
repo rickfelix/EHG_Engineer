@@ -16,7 +16,7 @@ Since we only have the anon key (not service role), you need to run the migratio
 
 ### Step 3: Run the Migration
 
-1. Open the file: `/mnt/c/_EHG/EHG_Engineer/database/migrations/uat-simple-tracking.sql`
+1. Open the file: `./database/migrations/uat-simple-tracking.sql`
 2. Copy the **entire contents** of the file
 3. Paste into the SQL Editor
 4. Click the **Run** button (or press Ctrl+Enter)

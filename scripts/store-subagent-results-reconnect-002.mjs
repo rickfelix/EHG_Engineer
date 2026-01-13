@@ -31,7 +31,7 @@ const update = {
       sub_agent: 'QA Engineering Director',
       verified_at: new Date().toISOString(),
       test_coverage_found: {
-        ventures_service: 'PARTIAL - /mnt/c/_EHG/EHG/tests/unit/services/ventures.test.ts',
+        ventures_service: 'PARTIAL - ../ehg/tests/unit/services/ventures.test.ts',
         venture_creation_dialog: 'NO - no unit test file exists',
         scaffold_stage1_function: 'NO'
       },
@@ -46,7 +46,7 @@ const update = {
       recommended_tests: [
         {
           type: 'unit',
-          file: '/mnt/c/_EHG/EHG/tests/unit/services/ventures.test.ts',
+          file: '../ehg/tests/unit/services/ventures.test.ts',
           test_cases: [
             'scaffoldStage1() should update venture with current_workflow_stage=1',
             'scaffoldStage1() should set workflow_status to pending',
@@ -57,7 +57,7 @@ const update = {
         },
         {
           type: 'unit',
-          file: '/mnt/c/_EHG/EHG/tests/unit/components/VentureCreationDialog.test.tsx',
+          file: '../ehg/tests/unit/components/VentureCreationDialog.test.tsx',
           test_cases: [
             'VentureCreationDialog should call scaffoldStage1() after successful createVenture()',
             'VentureCreationDialog should navigate to stage1Url returned by scaffoldStage1()',

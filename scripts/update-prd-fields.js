@@ -12,7 +12,7 @@ async function updatePRD() {
     .update({
       target_url: 'http://localhost:3000/dashboard',
       component_name: 'Dashboard',
-      app_path: '/mnt/c/_EHG/EHG_Engineer',
+      app_path: '.',
       port: 3000
     })
     .eq('id', 'PRD-SD-001');

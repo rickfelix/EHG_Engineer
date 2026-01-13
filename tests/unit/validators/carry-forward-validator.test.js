@@ -81,7 +81,7 @@ describe('Carry-Forward Validator', () => {
 
       const result = await validateCarryForward(sd, {
         phase: 'PLAN_ENTRY',
-        projectRoot: '/mnt/c/_EHG/EHG_Engineer',
+        projectRoot: process.cwd(),
         fetchAncestors: mockFetchAncestors
       });
 
@@ -394,7 +394,7 @@ describe('Carry-Forward Validator', () => {
 
       const result = await validateCarryForward(sd, {
         phase: 'PLAN_ENTRY',
-        projectRoot: '/mnt/c/_EHG/EHG_Engineer'
+        projectRoot: process.cwd()
       });
 
       expect(result.gates[Gates.G9_FILE_PATHS_VALID].status).toBe(ValidationSeverity.PASS);
@@ -422,7 +422,7 @@ describe('Carry-Forward Validator', () => {
 
       const result = await validateCarryForward(sd, {
         phase: 'PLAN_ENTRY',
-        projectRoot: '/mnt/c/_EHG/EHG_Engineer'
+        projectRoot: process.cwd()
       });
 
       expect(result.gates[Gates.G9_FILE_PATHS_VALID].status).toBe(ValidationSeverity.FAIL);

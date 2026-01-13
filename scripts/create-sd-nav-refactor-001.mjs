@@ -33,7 +33,7 @@ async function createNavRefactorSD() {
 
     description: `Refactor EHG app sidebar navigation to database-driven architecture with maturity filtering (Draft/Dev/Complete), prioritizing Venture Workflow (40 stages) + EVA Assistant. Includes user preferences, admin controls, and 0-route-loss migration with feature flag rollout.
 
-Target Application: EHG (/mnt/c/_EHG/EHG)
+Target Application: EHG (../ehg)
 Database: Supabase (liapbndqlqxdcgpwntbv)`,
 
     strategic_intent: `Transform navigation from hard-coded taxonomy to flexible, database-driven system that adapts to user preferences and feature maturity while maintaining 100% route parity during migration.`,

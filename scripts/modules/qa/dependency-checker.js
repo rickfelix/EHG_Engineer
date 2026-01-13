@@ -9,9 +9,17 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
 dotenv.config();
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '../../..');
+const EHG_ROOT = path.resolve(__dirname, '../../../../ehg');
 
 /**
  * Check for cross-SD dependencies
@@ -102,8 +110,8 @@ export async function checkCrossSDDependencies(sd_id, targetApp = 'ehg') {
  */
 async function analyzeSDImports(sd_id, targetApp) {
   const appPath = targetApp === 'ehg'
-    ? '/mnt/c/_EHG/EHG/src'
-    : '/mnt/c/_EHG/EHG_Engineer/src';
+    ? path.join(EHG_ROOT, 'src')
+    : path.join(EHG_ENGINEER_ROOT, 'src');
 
   try {
     // Search for import statements

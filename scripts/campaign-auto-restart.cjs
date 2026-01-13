@@ -46,7 +46,7 @@ function startCampaign() {
   log('═══════════════════════════════════════════════════════════');
 
   campaignProcess = spawn('node', ['scripts/batch-test-completed-sds-real.cjs'], {
-    cwd: '/mnt/c/_EHG/EHG_Engineer',
+    cwd: '.',
     stdio: 'inherit',
     detached: false
   });

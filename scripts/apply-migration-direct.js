@@ -57,7 +57,7 @@ async function applyMigration() {
       console.log('Table does not exist and cannot create via API.');
       console.log('Please apply the migration via Supabase SQL Editor.');
       console.log('');
-      console.log('Migration file: /mnt/c/_EHG/EHG/supabase/migrations/20251218_create_venture_decisions_table.sql');
+      console.log('Migration file: ../ehg/supabase/migrations/20251218_create_venture_decisions_table.sql');
       console.log('');
       console.log('Or copy this SQL to Supabase SQL Editor:');
       console.log(`

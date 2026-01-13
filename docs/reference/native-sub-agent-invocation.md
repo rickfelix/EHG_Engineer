@@ -232,7 +232,7 @@ When user provides SD-ID, invoke scripts:
 which rg
 
 # Check file location
-ls -la /mnt/c/_EHG/EHG_Engineer/.claude/agents/
+ls -la .claude/agents/
 
 # Validate YAML syntax
 cat .claude/agents/your-agent.md | head -10
@@ -240,7 +240,7 @@ cat .claude/agents/your-agent.md | head -10
 # Restart session
 exit
 claude code
-cd /mnt/c/_EHG/EHG_Engineer
+cd EHG_Engineer  # navigate to project root
 /agents
 ```
 

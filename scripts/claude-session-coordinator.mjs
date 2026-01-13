@@ -20,7 +20,7 @@ import fs from 'fs';
 import dotenv from 'dotenv';
 
 // Load environment
-const envPath = '/mnt/c/_EHG/EHG_Engineer/.env';
+const envPath = './.env';
 if (fs.existsSync(envPath)) {
   dotenv.config({ path: envPath });
 } else {

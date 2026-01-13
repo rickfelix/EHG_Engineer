@@ -24,7 +24,7 @@ import path from 'path';
  * @returns {Promise<Object>} { ready: boolean, issues: string[] }
  */
 export async function checkEnvironmentReadiness(supabase, options = {}) {
-  const projectRoot = options.projectRoot || '/mnt/c/_EHG/EHG_Engineer';
+  const projectRoot = options.projectRoot || '.';
 
   const check = {
     ready: true,

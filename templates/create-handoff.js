@@ -16,6 +16,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const EHG_ROOT = path.resolve(__dirname, '../../ehg');
+
 dotenv.config();
 
 const supabase = createClient(
@@ -83,7 +86,7 @@ class UniversalHandoffCreator {
             prd_id: prd.id,
             prd_title: prd.title,
             user_story_count: content.user_stories?.length || 0,
-            target_app: '/mnt/c/_EHG/EHG/',
+            target_app: EHG_ROOT,
             priorities: this.getPriorityDistribution(content.user_stories)
           };
         }
@@ -151,7 +154,7 @@ class UniversalHandoffCreator {
       '{sd_title}': sd.title,
       '{sd_id}': sd.id,
       '{user_story_count}': context.user_story_count || 'N/A',
-      '{target_app}': context.target_app || '/mnt/c/_EHG/EHG/',
+      '{target_app}': context.target_app || EHG_ROOT,
       '{prd_id}': context.prd_id || '',
       '{prd_title}': context.prd_title || ''
     };

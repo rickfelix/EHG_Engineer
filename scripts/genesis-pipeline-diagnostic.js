@@ -15,7 +15,14 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
+import path from 'path';
 import dotenv from 'dotenv';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ROOT = path.resolve(__dirname, '../../ehg');
 
 dotenv.config();
 
@@ -178,8 +185,8 @@ async function checkPipelineIntegration() {
   console.log('─'.repeat(50));
 
   // Check EHG App genesis directory
-  const ehgGenesisPath = '/mnt/c/_EHG/ehg/lib/genesis';
-  const ehgScriptsPath = '/mnt/c/_EHG/ehg/scripts/genesis';
+  const ehgGenesisPath = path.join(EHG_ROOT, 'lib/genesis');
+  const ehgScriptsPath = path.join(EHG_ROOT, 'scripts/genesis');
 
   console.log(`📍 EHG App genesis location: ${ehgGenesisPath}`);
   console.log(`📍 EHG App scripts location: ${ehgScriptsPath}`);

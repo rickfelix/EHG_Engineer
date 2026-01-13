@@ -14,7 +14,7 @@ GitHub Actions → Webhook → EHG_Engineer API → LEO Protocol → Sub-Agents 
 
 ### Run Migration
 ```bash
-cd /mnt/c/_EHG/EHG_Engineer
+# From EHG_Engineer root directory
 psql $SUPABASE_DB_URL -f database/migrations/leo-ci-cd-integration.sql
 ```
 
@@ -169,7 +169,7 @@ const subscription = supabase
 
 ### 7.1 Run Integration Tests
 ```bash
-cd /mnt/c/_EHG/EHG_Engineer
+# From EHG_Engineer root directory
 node scripts/test-leo-ci-cd-integration.js
 ```
 

@@ -29,7 +29,7 @@ async function createPLANExecHandoff() {
     phase: 'implementation',
 
     // 7 Mandatory Elements
-    executive_summary: 'Technical implementation of enhanced Stage 15 Pricing Strategy with advanced analytics, Chairman oversight, and automated intelligence. PRD defines 8 user stories across 4 implementation phases. Target: /mnt/c/_EHG/EHG/src/components/stages/Stage15PricingStrategy.tsx. Build upon existing comprehensive pricing component (374 lines) with incremental enhancements for real-time analytics, executive dashboards, portfolio optimization, and competitive intelligence automation.',
+    executive_summary: 'Technical implementation of enhanced Stage 15 Pricing Strategy with advanced analytics, Chairman oversight, and automated intelligence. PRD defines 8 user stories across 4 implementation phases. Target: ../ehg/src/components/stages/Stage15PricingStrategy.tsx. Build upon existing comprehensive pricing component (374 lines) with incremental enhancements for real-time analytics, executive dashboards, portfolio optimization, and competitive intelligence automation.',
 
     completeness_report: {
       prd_generated: true,
@@ -58,7 +58,7 @@ async function createPLANExecHandoff() {
     ],
 
     key_decisions: {
-      target_file: '/mnt/c/_EHG/EHG/src/components/stages/Stage15PricingStrategy.tsx',
+      target_file: '../ehg/src/components/stages/Stage15PricingStrategy.tsx',
       enhancement_approach: 'Incremental enhancement preserving existing 374-line comprehensive component',
       ui_framework: 'React TypeScript with Shadcn UI components',
       state_management: 'React Query for server state, React Context for UI state',
@@ -83,14 +83,14 @@ async function createPLANExecHandoff() {
       implementation_effort: '2-3 days',
       required_skills: 'React TypeScript, Supabase, Advanced Analytics UI, Executive Dashboard Design',
       complexity_level: 'MEDIUM - Building on solid foundation',
-      target_application: '/mnt/c/_EHG/EHG/ (NOT EHG_Engineer!)',
+      target_application: '../ehg/ (NOT EHG_Engineer!)',
       port_number: 'Check existing dev server or start new',
       database_changes: 'Schema extensions for pricing analytics',
       testing_requirements: 'Component + integration testing for pricing features'
     },
 
     action_items: [
-      'CRITICAL: Navigate to /mnt/c/_EHG/EHG/ before ANY code changes',
+      'CRITICAL: Navigate to ../ehg/ before ANY code changes',
       'Verify target URL and existing Stage15PricingStrategy component',
       'Screenshot current state before modifications',
       'Implement PricingAnalyticsDashboard with real-time metrics',
@@ -192,7 +192,7 @@ createPLANExecHandoff().then(handoff => {
   console.log('Handoff ID:', handoff.id);
   console.log('PRD ID:', handoff.metadata.prd_id);
   console.log('Ready for: EXEC phase (implementation)');
-  console.log('\n🚨 CRITICAL: Implementation target is /mnt/c/_EHG/EHG/ (NOT EHG_Engineer!)');
+  console.log('\n🚨 CRITICAL: Implementation target is ../ehg/ (NOT EHG_Engineer!)');
   console.log('🎯 Target Component: Stage15PricingStrategy.tsx');
   console.log('💼 Business Impact: HIGH - Direct revenue optimization through pricing intelligence');
 }).catch(error => {

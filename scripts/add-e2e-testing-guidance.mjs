@@ -112,7 +112,7 @@ webServer: {
 
 4. **Restart dev server**:
    \`\`\`bash
-   cd /mnt/c/_EHG/EHG
+   cd ../ehg
    npm run dev -- --port 5173
    \`\`\`
 

@@ -16,7 +16,7 @@ async function applyMigration() {
   let client;
   try {
     // Read migration file
-    const migrationFile = '/mnt/c/_EHG/EHG/database/migrations/COMPLETE_gtm_navigation_setup.sql';
+    const migrationFile = '../ehg/database/migrations/COMPLETE_gtm_navigation_setup.sql';
     const migrationSQL = readFileSync(migrationFile, 'utf-8');
     console.log(`\n📄 Migration file loaded (${migrationSQL.length} characters)`);
 

@@ -22,18 +22,25 @@
  *
  * Usage:
  *   node scripts/verify-git-branch-status.js SD-XXX "Title" /path/to/app
- *   node scripts/verify-git-branch-status.js SD-XXX "Title"  # defaults to /mnt/c/_EHG/EHG
+ *   node scripts/verify-git-branch-status.js SD-XXX "Title"  # defaults to EHG_ROOT (cross-platform)
  */
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import fs from 'fs';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
+const EHG_ROOT = path.resolve(__dirname, '../../ehg');
 
 const execAsync = promisify(exec);
 
 class GitBranchVerifier {
-  constructor(sdId, sdTitle, appPath = '/mnt/c/_EHG/EHG') {
+  constructor(sdId, sdTitle, appPath = EHG_ROOT) {
     this.sdId = sdId;
     this.sdTitle = sdTitle || '';
     this.appPath = appPath;
@@ -582,11 +589,11 @@ async function main() {
     console.log('Arguments:');
     console.log('  SD-XXX     Strategic Directive ID (required)');
     console.log('  "SD Title" Strategic Directive title for branch naming (required)');
-    console.log('  APP_PATH   Path to application directory (default: /mnt/c/_EHG/EHG)');
+    console.log('  APP_PATH   Path to application directory (default: EHG_ROOT)');
     console.log('');
     console.log('Examples:');
     console.log('  node verify-git-branch-status.js SD-EXPORT-001 "Data Export Feature"');
-    console.log('  node verify-git-branch-status.js SD-EXPORT-001 "Data Export Feature" /mnt/c/_EHG/EHG');
+    console.log('  node verify-git-branch-status.js SD-EXPORT-001 "Data Export Feature" /path/to/ehg');
     console.log('');
     console.log('Features:');
     console.log('  • Auto-creates branch if missing');
@@ -603,7 +610,7 @@ async function main() {
 
   const sdId = args[0];
   const sdTitle = args[1] || '';
-  const appPath = args[2] || '/mnt/c/_EHG/EHG';
+  const appPath = args[2] || EHG_ROOT;
 
   const verifier = new GitBranchVerifier(sdId, sdTitle, appPath);
   const results = await verifier.verify();

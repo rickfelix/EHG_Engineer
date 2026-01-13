@@ -7,7 +7,7 @@
 ## Critical: Genesis Spans Two Codebases
 
 ```
-/mnt/c/_EHG/
+# From parent directory containing both repos
 ├── EHG_Engineer/           # Backend + Infrastructure
 │   └── lib/genesis/        # 9 files, 2,578 LOC
 │       ├── branch-lifecycle.js

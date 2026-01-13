@@ -8,8 +8,14 @@
  */
 
 import { execSync } from 'child_process';
-// path - available for future path operations
-import path from 'path'; // eslint-disable-line no-unused-vars
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '../../..');
+const EHG_ROOT = path.resolve(__dirname, '../../../../ehg');
 
 /**
  * Verify component integration
@@ -19,8 +25,8 @@ import path from 'path'; // eslint-disable-line no-unused-vars
  */
 export async function verifyComponentIntegration(componentPaths, targetApp = 'ehg') {
   const appPath = targetApp === 'ehg'
-    ? '/mnt/c/_EHG/EHG'
-    : '/mnt/c/_EHG/EHG_Engineer';
+    ? EHG_ROOT
+    : EHG_ENGINEER_ROOT;
 
   console.log(`🔍 Integration Checker: Verifying ${componentPaths.length} component(s)...`);
 
@@ -127,8 +133,8 @@ function extractComponentName(filePath) {
  */
 export async function findNewComponents(targetApp = 'ehg') {
   const appPath = targetApp === 'ehg'
-    ? '/mnt/c/_EHG/EHG/src/components'
-    : '/mnt/c/_EHG/EHG_Engineer/src/client/src/components';
+    ? path.join(EHG_ROOT, 'src/components')
+    : path.join(EHG_ENGINEER_ROOT, 'src/client/src/components');
 
   try {
     // Find components modified in last 24 hours, sort by modification time

@@ -4,7 +4,7 @@
 # Usage: bash scripts/create-sd-worktree.sh <SD-ID>
 # Example: bash scripts/create-sd-worktree.sh SD-STAGE-09-001
 #
-# Creates a worktree at /mnt/c/_EHG/ehg-worktrees/<SD-ID>
+# Creates a worktree at ../ehg-worktrees/<SD-ID>
 # with a feature branch named feat/<SD-ID>
 
 set -e
@@ -18,8 +18,8 @@ if [ -z "$SD_ID" ]; then
 fi
 
 # Configuration
-MAIN_REPO="/mnt/c/_EHG/ehg"
-WORKTREE_BASE="/mnt/c/_EHG/ehg-worktrees"
+MAIN_REPO="../ehg"
+WORKTREE_BASE="../ehg-worktrees"
 WORKTREE_PATH="${WORKTREE_BASE}/${SD_ID}"
 BRANCH_NAME="feat/${SD_ID}"
 

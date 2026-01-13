@@ -40,7 +40,7 @@ console.log('══════════════════════�
 console.log('');
 console.log(`📱 Target Application: ${targetApp}`);
 console.log(`🔍 Filter: Only Strategic Directives with target_application='${targetApp}'`);
-console.log(`📁 Test Location: ${targetApp === 'EHG' ? '/mnt/c/_EHG/ehg' : '/mnt/c/_EHG/EHG_Engineer'}`);
+console.log(`📁 Test Location: ${targetApp === 'EHG' ? '../ehg' : '.'}`);
 console.log('');
 console.log('⚙️  Features:');
 console.log('  • Auto-restart on crashes (max 5 attempts)');

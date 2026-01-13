@@ -37,7 +37,7 @@ async function createHandoff() {
 - 4 tables need creation (exploration_branches, opportunity_signals, timing_optimizations, security_incidents)
 - Impact: Low - minimal schema work required
 
-**Target Application**: EHG (/mnt/c/_EHG/EHG/) - customer-facing app
+**Target Application**: EHG (../ehg/) - customer-facing app
 **Priority**: HIGH (significant platform value unlock)
 **Complexity**: Medium-High (45 components, but most infrastructure exists)`,
 
@@ -48,7 +48,7 @@ async function createHandoff() {
    - SD-RECONNECT-007 metadata updated (scope: 4 → 45 components)
    - Component inventory documented (23 dashboards + 22 other components)
    - 3-tier integration approach defined
-   - Target application confirmed: /mnt/c/_EHG/EHG/
+   - Target application confirmed: ../ehg/
 
 2. **Comprehensive Component Audit**
    - 31 total dashboard components discovered in EHG app
@@ -154,7 +154,7 @@ Reference: apply-demo-migration-pg.js in EHG scripts directory (working pattern)
 1. **Principal Database Architect**
    - Status: COMPLETED
    - Deliverable: Schema analysis for 13 tables (9 exist, 4 to create)
-   - Script: analyze-schema-sd-reconnect-007.cjs (in /mnt/c/_EHG/EHG/scripts/)
+   - Script: analyze-schema-sd-reconnect-007.cjs (in ../ehg/scripts/)
    - Result: Confirmed minimal schema work required
 
 2. **Design Sub-Agent** (Pending PLAN Phase)

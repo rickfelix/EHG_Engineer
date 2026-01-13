@@ -249,8 +249,8 @@ const result = {
     risk_level: 'LOW',
     patterns_applied: ['PAT-004', 'SD-UAT-020', 'SD-A11Y-FEATURE-BRANCH-001'],
     files_modified: [
-      '/mnt/c/_EHG/EHG/src/components/chairman/ChairmanOverrideInterface.tsx',
-      '/mnt/c/_EHG/EHG/src/pages/VenturesPage.tsx'
+      '../ehg/src/components/chairman/ChairmanOverrideInterface.tsx',
+      '../ehg/src/pages/VenturesPage.tsx'
     ]
   }
 };

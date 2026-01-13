@@ -64,7 +64,7 @@ async function addTestingArchitectureSection() {
 The EHG ecosystem consists of two separate applications with **independent test suites**:
 
 #### 1. EHG_Engineer Application (Management Dashboard)
-- **Test Location**: \`/mnt/c/_EHG/EHG_Engineer/tests/\`
+- **Test Location**: \`./tests/\`
 - **Test Framework**: Vitest + Jest
 - **Coverage Target**: 50% minimum for management features
 - **Test Types**: Unit tests, integration tests for LEO Protocol
@@ -72,7 +72,7 @@ The EHG ecosystem consists of two separate applications with **independent test 
 - **Purpose**: Testing SD management, PRD tracking, dashboard functionality
 
 #### 2. EHG Application (Business Application)
-- **Test Location**: \`/mnt/c/_EHG/EHG/tests/\`
+- **Test Location**: \`../ehg/tests/\`
 - **Test Framework**: Vitest (unit), Playwright (E2E)
 - **Coverage Targets**:
   - Unit: 50% minimum
@@ -100,10 +100,10 @@ The EHG ecosystem consists of two separate applications with **independent test 
 2. **Navigate to Correct Directory**:
    \`\`\`bash
    # For EHG_Engineer tests:
-   cd /mnt/c/_EHG/EHG_Engineer && npm run test
+   cd . && npm run test
 
    # For EHG application tests:
-   cd /mnt/c/_EHG/EHG && npm run test:unit
+   cd ../ehg && npm run test:unit
    \`\`\`
 
 3. **Verify Test Location**:

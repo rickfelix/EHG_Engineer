@@ -15,6 +15,15 @@
 import path from 'path';
 import { getCodebaseSearchService } from './CodebaseSearchService.js';
 
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __dirname = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/i, '$1'));
+const projectRoot = path.resolve(__dirname, '../..');
+const ehgRoot = path.resolve(projectRoot, '../ehg');
+const DEFAULT_SEARCH_PATHS = [
+  path.join(ehgRoot, 'src'),
+  path.join(projectRoot, 'src')
+];
+
 // =============================================================================
 // STAGE 1: Extract Intent (<=80 words)
 // =============================================================================
@@ -206,7 +215,7 @@ export async function scanCodebase(intent) {
         const componentResults = await searchService.searchComponents(
           keyword,
           ['.tsx', '.jsx'],
-          ['/mnt/c/_EHG/EHG/src', '/mnt/c/_EHG/EHG_Engineer/src']
+          DEFAULT_SEARCH_PATHS
         );
 
         componentResults.forEach(result => {

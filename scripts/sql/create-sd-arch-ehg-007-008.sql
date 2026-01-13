@@ -114,8 +114,8 @@ EXCLUDED FROM SCOPE:
     jsonb_build_object(
         'estimated_effort_hours', 24,
         'complexity', 'MEDIUM',
-        'source_path', '/mnt/c/_EHG/EHG_Engineer/src/client/src/components/stages/',
-        'target_path', '/mnt/c/_EHG/EHG/src/components/stages/admin/',
+        'source_path', './src/client/src/components/stages/',
+        'target_path', '../ehg/src/components/stages/admin/',
         'parent_sd', 'SD-ARCH-EHG-006',
         'component_count', 19
     ),

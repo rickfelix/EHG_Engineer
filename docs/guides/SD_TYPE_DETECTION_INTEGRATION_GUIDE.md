@@ -277,5 +277,5 @@ After integration:
 ## References
 
 - Original Issue: SD-PLAN-PRESENT-001 retrospective, Issue #4
-- Created Utility: `/mnt/c/_EHG/EHG_Engineer/lib/utils/sd-type-detection.js`
+- Created Utility: `lib/utils/sd-type-detection.js`
 - Related: Handoff storage architecture, progress calculation RPC function

@@ -20,7 +20,7 @@
         "digest": {}
       },
       "parameters": {
-        "task": "Looking at the file /mnt/c/_EHG/EHG_Engineer/test-files/sample-code.js, generate a patch to add a new function called getCurrentTimestamp that returns Date.now()"
+        "task": "Looking at the file ./test-files/sample-code.js, generate a patch to add a new function called getCurrentTimestamp that returns Date.now()"
       }
     },
     "materials": [

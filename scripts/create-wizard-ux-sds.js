@@ -381,7 +381,7 @@ async function main() {
   console.log('   1. Review SDs in EHG_Engineer dashboard');
   console.log('   2. LEAD pre-approval validation (Systems Analyst, Database Architect, Security, Design)');
   console.log('   3. PLAN phase: Create PRDs with user stories');
-  console.log('   4. Navigate to /mnt/c/_EHG/EHG/ for implementation');
+  console.log('   4. Navigate to ../ehg/ for implementation');
   console.log('   5. Execute LEAD→PLAN→EXEC workflow');
 }
 

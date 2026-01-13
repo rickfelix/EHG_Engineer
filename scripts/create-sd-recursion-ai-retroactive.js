@@ -58,7 +58,7 @@ async function main() {
       sequence_rank: 1000, // Required field - set to low priority
       metadata: {
         completion_notes: 'All backend tests passing. 82/100 retro quality score.',
-        repository: '/mnt/c/_EHG/EHG_Engineer/',
+        repository: './',
         completion_summary: 'Recursive refinement implemented with 5 iterations, quality scoring, and LLM integration for intelligence database.'
       }
     };

@@ -112,10 +112,10 @@ From retrospectives:
 
 ## Search Patterns
 
-**Component Search**:
+**Component Search** (in EHG app directory):
 ```bash
-find /mnt/c/_EHG/EHG/src -name "*ComponentName*"
-grep -r "specific feature" /mnt/c/_EHG/EHG/src
+find src -name "*ComponentName*"
+grep -r "specific feature" src
 ```
 
 **Database Table Search**:
@@ -130,10 +130,10 @@ const { createDatabaseClient } = require('./scripts/lib/supabase-connection.js')
 "
 ```
 
-**Script/Utility Search**:
+**Script/Utility Search** (in EHG app directory):
 ```bash
-find /mnt/c/_EHG/EHG/scripts -name "*keyword*"
-grep -r "function name" /mnt/c/_EHG/EHG/src/lib
+find scripts -name "*keyword*"
+grep -r "function name" src/lib
 ```
 
 ## Mandatory Validation Gates (NEW - CRITICAL)
@@ -422,15 +422,17 @@ Use IDE MCP to check for TypeScript errors without running a full build. This is
 **Integration Verification Workflow**:
 ```
 After code changes:
-1. mcp__ide__getDiagnostics({ uri: "file:///mnt/c/_EHG/EHG_Engineer/src/components/NewComponent.tsx" })
+1. mcp__ide__getDiagnostics({ uri: "file://<project-root>/src/components/NewComponent.tsx" })
 2. Check for TypeScript errors before committing
 3. If errors found → Fix before proceeding to E2E tests
 ```
 
+Note: Replace `<project-root>` with your actual project path.
+
 **Example: Validate Integration**:
 ```
-// Check specific file for errors
-mcp__ide__getDiagnostics({ uri: "file:///mnt/c/_EHG/EHG/src/components/ventures/CreateVentureDialog.tsx" })
+// Check specific file for errors (replace <ehg-path> with EHG app path)
+mcp__ide__getDiagnostics({ uri: "file://<ehg-path>/src/components/ventures/CreateVentureDialog.tsx" })
 
 // Check all diagnostics (useful after refactoring)
 mcp__ide__getDiagnostics({})

@@ -13,7 +13,7 @@
 ### Two Distinct Applications
 
 **EHG** (Customer-Facing Business App) - **PRIMARY IMPLEMENTATION TARGET**
-- **Path**: `/mnt/c/_EHG/EHG/`
+- **Path**: `../ehg` (sibling directory from EHG_Engineer)
 - **Database**: liapbndqlqxdcgpwntbv (Supabase)
 - **GitHub**: https://github.com/rickfelix/ehg.git
 - **Port**: 5173 (dev), 4173 (preview)
@@ -21,7 +21,7 @@
 - **Role**: ALL customer features implemented here
 
 **EHG_Engineer** (Management Dashboard) - **RARE IMPLEMENTATION TARGET**
-- **Path**: `/mnt/c/_EHG/EHG_Engineer/`
+- **Path**: Current directory (EHG_Engineer)
 - **Database**: dedlbzhpgkmetvhbkyzq (Supabase)
 - **GitHub**: https://github.com/rickfelix/EHG_Engineer.git
 - **Port**: 3000-3001
@@ -31,9 +31,9 @@
 
 **MANDATORY Before ANY Code**:
 ```bash
-# 1. Verify correct application
-cd /mnt/c/_EHG/EHG && pwd
-# Expected: /mnt/c/_EHG/EHG (NOT EHG_Engineer!)
+# 1. Verify correct application (from EHG_Engineer, navigate to sibling)
+cd ../ehg && pwd
+# Expected: ../ehg directory (NOT EHG_Engineer!)
 
 # 2. Verify correct repository
 git remote -v
@@ -71,7 +71,7 @@ git remote -v
 ```bash
 # Identify exact file path of target component
 # Confirm component exists at specified location
-# Example: /mnt/c/_EHG/EHG/src/components/Dashboard/Settings.tsx
+# Example: ../ehg/src/components/Dashboard/Settings.tsx
 ```
 
 **3. Application Context**
@@ -91,7 +91,7 @@ supabase.from('users').select('count').limit(1).then(r => console.log('DB:', r.e
 **4. Build Validation**
 ```bash
 # Verify project builds BEFORE making changes
-cd /mnt/c/_EHG/EHG
+cd ../ehg
 npm run type-check
 npm run build:skip-checks
 ```
@@ -110,7 +110,7 @@ pkill -f "vite" || pkill -f "node server.js"
 npm run build:client
 
 # 3. Restart dev server
-cd /mnt/c/_EHG/EHG
+cd ../ehg
 npm run dev -- --port 5173
 
 # 4. Wait for ready message
@@ -163,7 +163,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 **1. Unit Tests** (Business Logic)
 ```bash
-cd /mnt/c/_EHG/EHG
+cd ../ehg
 npm run test:unit
 ```
 - Validates: Service layer, business logic, data transformations
@@ -172,7 +172,7 @@ npm run test:unit
 
 **2. E2E Tests** (User Flows)
 ```bash
-cd /mnt/c/_EHG/EHG
+cd ../ehg
 npm run test:e2e
 ```
 - Validates: User flows, component rendering, integration
@@ -316,20 +316,20 @@ Read('large-file.js', { offset: 100, limit: 50 })
 ### Application Navigation
 ```bash
 # Navigate to EHG app
-cd /mnt/c/_EHG/EHG
+cd ../ehg
 
 # Navigate to EHG_Engineer
-cd /mnt/c/_EHG/EHG_Engineer
+cd ../ehg_Engineer
 ```
 
 ### Development Server
 ```bash
 # Start dev server (EHG)
-cd /mnt/c/_EHG/EHG
+cd ../ehg
 npm run dev -- --port 5173
 
 # Start dev server (EHG_Engineer)
-cd /mnt/c/_EHG/EHG_Engineer
+cd ../ehg_Engineer
 PORT=3000 node server.js
 ```
 
@@ -396,7 +396,7 @@ gh run view [run-id]
 
 ### 1. Wrong Directory
 **Symptom**: Changes not reflected, wrong database
-**Fix**: `cd /mnt/c/_EHG/EHG && pwd` to verify
+**Fix**: `cd ../ehg && pwd` to verify
 
 ### 2. No Server Restart
 **Symptom**: Changes not visible, old code running

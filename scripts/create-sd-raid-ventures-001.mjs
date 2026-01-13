@@ -187,13 +187,13 @@ async function createStrategicDirective() {
       codebase_analysis: {
         existing_infrastructure: {
           raid_log_table: {
-            location: '/mnt/c/_EHG/EHG/database/migrations/_archive/create-raid-log-table.sql',
+            location: '../ehg/database/migrations/_archive/create-raid-log-table.sql',
             status: 'ALREADY EXISTS - DO NOT RECREATE',
             schema: 'raid_log with type (Risk, Action, Issue, Decision), severity_index, status, venture_id FK',
             usage: 'PortfolioRisksCard.tsx already queries this table'
           },
           workflow_stages: {
-            location: '/mnt/c/_EHG/EHG/src/constants/workflows.ts',
+            location: '../ehg/src/constants/workflows.ts',
             lines: '582-912 (913 total lines)',
             categories: {
               ideation: 'stages 1-2 (2 stages)',
@@ -207,7 +207,7 @@ async function createStrategicDirective() {
             usage_confirmed: 'WorkflowProgress.tsx, VentureStageNavigation.tsx, LiveWorkflowMap.tsx'
           },
           ventures_page: {
-            location: '/mnt/c/_EHG/EHG/src/pages/VenturesPage.tsx',
+            location: '../ehg/src/pages/VenturesPage.tsx',
             view_modes: ['table', 'grid', 'kanban', 'stages', 'distribution', 'timeline'],
             extensibility: 'HIGHLY EXTENSIBLE - just add "list" to type union',
             url_sync: true,
@@ -216,19 +216,19 @@ async function createStrategicDirective() {
           reusable_components: [
             {
               name: 'PortfolioRisksCard.tsx',
-              location: '/mnt/c/_EHG/EHG/src/components/chairman/PortfolioRisksCard.tsx',
+              location: '../ehg/src/components/chairman/PortfolioRisksCard.tsx',
               pattern: 'RAID query + severity color coding (HIGH/MED/LOW)',
               reuse: 'Extract severity/status badge logic'
             },
             {
               name: 'useVentures.ts',
-              location: '/mnt/c/_EHG/EHG/src/hooks/useVentures.ts',
+              location: '../ehg/src/hooks/useVentures.ts',
               pattern: 'Simple React Query hook returning Venture[]',
               reuse: 'Extension point for RAID summary'
             },
             {
               name: 'WorkflowProgress.tsx',
-              location: '/mnt/c/_EHG/EHG/src/components/workflow/WorkflowProgress.tsx',
+              location: '../ehg/src/components/workflow/WorkflowProgress.tsx',
               pattern: 'Category-based status calculation',
               reuse: 'Category progress calculation pattern'
             }
@@ -279,11 +279,11 @@ async function createStrategicDirective() {
       },
 
       target_application_context: {
-        implementation_path: '/mnt/c/_EHG/EHG/',
+        implementation_path: '../ehg/',
         database: 'liapbndqlqxdcgpwntbv',
         github_repo: 'rickfelix/ehg.git',
         port: 8080,
-        critical_check: 'MUST verify pwd shows /mnt/c/_EHG/EHG before ANY code changes!'
+        critical_check: 'MUST verify pwd shows ../ehg before ANY code changes!'
       }
     }
   };
@@ -315,14 +315,14 @@ async function createStrategicDirective() {
   console.log('   ✅ WORKFLOW_STAGES/STAGE_CATEGORIES ready to use');
   console.log('   ✅ VenturesPage view mode infrastructure highly extensible');
   console.log('\n📍 CRITICAL: Implementation Target');
-  console.log('   Application: EHG (/mnt/c/_EHG/EHG/)');
+  console.log('   Application: EHG (../ehg/)');
   console.log('   Database: liapbndqlqxdcgpwntbv');
   console.log('   GitHub: rickfelix/ehg.git');
   console.log('\n🚀 Next Steps:');
   console.log('   1. LEAD review and approval');
   console.log('   2. PLAN creates comprehensive PRD');
   console.log('   3. PLAN→EXEC handoff with codebase analysis findings');
-  console.log('   4. EXEC implements in /mnt/c/_EHG/EHG/ (NOT EHG_Engineer!)');
+  console.log('   4. EXEC implements in ../ehg/ (NOT EHG_Engineer!)');
 }
 
 createStrategicDirective().catch(console.error);

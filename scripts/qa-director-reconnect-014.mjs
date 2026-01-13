@@ -34,8 +34,8 @@ const assessment = {
 
   // Step 1: Determine target application
   target_application: 'EHG (Business Application)',
-  target_path: '/mnt/c/_EHG/EHG',
-  test_directory: '/mnt/c/_EHG/EHG/tests',
+  target_path: '../ehg',
+  test_directory: '../ehg/tests',
 
   // Step 2: Implementation analysis
   implementation_summary: {
@@ -81,7 +81,7 @@ function analyzeTestInfrastructure() {
   console.log('📂 STEP 1: ANALYZING TEST INFRASTRUCTURE');
   console.log('-'.repeat(70));
 
-  const testPath = '/mnt/c/_EHG/EHG/tests';
+  const testPath = '../ehg/tests';
 
   // Check if test directory exists
   if (!fs.existsSync(testPath)) {
@@ -130,7 +130,7 @@ function searchRelatedTests() {
   ];
 
   const relatedTests = [];
-  const testPath = '/mnt/c/_EHG/EHG/tests';
+  const testPath = '../ehg/tests';
 
   if (!fs.existsSync(testPath)) {
     console.log('⚠️  Cannot search - test directory does not exist');
@@ -203,8 +203,8 @@ function attemptTestExecution() {
   console.log('-'.repeat(70));
 
   const testCommands = [
-    { name: 'Unit Tests', cmd: 'cd /mnt/c/_EHG/EHG && npm run test:unit 2>&1 || true', timeout: 30000 },
-    { name: 'Coverage Report', cmd: 'cd /mnt/c/_EHG/EHG && npm run test:coverage 2>&1 || true', timeout: 30000 }
+    { name: 'Unit Tests', cmd: 'cd ../ehg && npm run test:unit 2>&1 || true', timeout: 30000 },
+    { name: 'Coverage Report', cmd: 'cd ../ehg && npm run test:coverage 2>&1 || true', timeout: 30000 }
   ];
 
   testCommands.forEach(({ name, cmd }) => {
@@ -238,8 +238,8 @@ function analyzeCoverage() {
 
   // Check for coverage reports
   const coveragePaths = [
-    '/mnt/c/_EHG/EHG/coverage/coverage-summary.json',
-    '/mnt/c/_EHG/EHG/coverage/lcov.info'
+    '../ehg/coverage/coverage-summary.json',
+    '../ehg/coverage/lcov.info'
   ];
 
   let coverageFound = false;

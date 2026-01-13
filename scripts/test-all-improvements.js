@@ -28,7 +28,7 @@ async function testAllImprovements() {
   console.log('\n🚀 TESTING ALL 5 NEW IMPROVEMENTS\n');
   console.log('=' .repeat(50));
   
-  const basePath = '/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase';
+  const basePath = './applications/APP001/codebase';
   
   // Initialize all systems
   const hub = getHub();

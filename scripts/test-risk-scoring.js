@@ -15,7 +15,7 @@
 import { getRiskContext, calculateContextualConfidence, getAggregateRiskStats } from '../lib/utils/risk-context.js';
 
 const testFile = process.argv[2] || 'src/components/Dashboard.tsx';
-const repoPath = '/mnt/c/_EHG/EHG';
+const repoPath = '../ehg';
 
 console.log('🧪 Testing Contextual Risk Scoring System\n');
 console.log('='.repeat(60));

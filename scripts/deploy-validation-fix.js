@@ -18,7 +18,7 @@ const supabase = createClient(
 async function deployFix() {
   console.log('🚀 Deploying User Story Validation Fix\n');
 
-  const migrationFile = '/mnt/c/_EHG/EHG_Engineer/database/migrations/20251016_fix_user_story_validation_check.sql';
+  const migrationFile = './database/migrations/20251016_fix_user_story_validation_check.sql';
   const sql = fs.readFileSync(migrationFile, 'utf8');
 
   console.log('Reading migration file...');

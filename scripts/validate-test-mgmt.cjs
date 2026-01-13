@@ -12,7 +12,7 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config({ path: '/mnt/c/_EHG/EHG_Engineer/.env' });
+require('dotenv').config({ path: './.env' });
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,

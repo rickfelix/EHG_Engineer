@@ -245,7 +245,7 @@ Acceptance Criteria:
 - Maintainability: 300-600 LOC per component
 
 ## EXEC Pre-Implementation Checklist
-1. Verify application: /mnt/c/_EHG/EHG (NOT EHG_Engineer)
+1. Verify application: ../ehg (NOT EHG_Engineer)
 2. Apply migration to EHG database
 3. Navigate to http://localhost:8080/eva-assistant
 4. Install dependencies: react-markdown, react-table, recharts
@@ -323,7 +323,7 @@ Acceptance Criteria:
       ]), // plan_checklist
 
       JSON.stringify([
-        { step: 'Verify application directory (/mnt/c/_EHG/EHG)', status: 'pending', critical: true },
+        { step: 'Verify application directory (../ehg)', status: 'pending', critical: true },
         { step: 'Apply migration to EHG database', status: 'pending', critical: true },
         { step: 'Navigate to http://localhost:8080/eva-assistant', status: 'pending', critical: true },
         { step: 'Install dependencies', status: 'pending', critical: true },

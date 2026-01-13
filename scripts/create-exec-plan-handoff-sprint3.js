@@ -42,7 +42,7 @@ TESTING SUMMARY:
 • E2E Tests: 14/26 passing (54% coverage)
 • QA Director: CONDITIONAL_PASS (50% confidence)
 • Framework: Playwright on port 5173 (dev mode)
-• Evidence: /mnt/c/_EHG/EHG/tests/E2E_TESTING_SESSION_SUMMARY.md
+• Evidence: ../ehg/tests/E2E_TESTING_SESSION_SUMMARY.md
 
 FULL SD STATUS:
 • Sprint 3 Progress: 100% (14 user stories)
@@ -50,20 +50,20 @@ FULL SD STATUS:
 • Remaining: Sprints 4-7 (38 stories)`,
 
     deliverables_manifest: `CODE DELIVERABLES:
-1. /mnt/c/_EHG/EHG/src/components/agents/ABTestingTab.tsx
+1. ../ehg/src/components/agents/ABTestingTab.tsx
    - Multi-step wizard component (4 stages)
    - Functional component with useState hooks
    - Tailwind CSS styling
    - Ready for API integration
 
 TEST DELIVERABLES:
-2. /mnt/c/_EHG/EHG/tests/e2e/ab-testing-sprint3.spec.ts
+2. ../ehg/tests/e2e/ab-testing-sprint3.spec.ts
    - 26 test scenarios (14 passing, 12 failing)
    - Covers: step navigation, form submission, validation
    - Test IDs: data-testid attributes for reliability
 
 DOCUMENTATION:
-3. /mnt/c/_EHG/EHG/tests/E2E_TESTING_SESSION_SUMMARY.md
+3. ../ehg/tests/E2E_TESTING_SESSION_SUMMARY.md
    - Comprehensive testing session log
    - Troubleshooting patterns documented
    - Dev server configuration notes
@@ -259,7 +259,7 @@ LEO Protocol, or if full SD completion is required before handoff.`,
       user_stories_total: 57,
       feature_completeness_pct: 100,
       sd_progress_pct: 40,
-      test_evidence_path: '/mnt/c/_EHG/EHG/tests/E2E_TESTING_SESSION_SUMMARY.md',
+      test_evidence_path: '../ehg/tests/E2E_TESTING_SESSION_SUMMARY.md',
       handoff_type_note: 'Sprint-based partial completion (not full SD)',
       rls_verification: 'policies_exist_verified'
     },

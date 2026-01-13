@@ -16,7 +16,7 @@
 - Line 413: US-021-AC3 - Added `.first()` to status change verification
 - Line 466: US-021-AC5 - Added `.first()` to winner declaration flow
 
-**File**: `/mnt/c/_EHG/EHG/tests/e2e/ab-testing-sprint3.spec.ts`
+**File**: `../ehg/tests/e2e/ab-testing-sprint3.spec.ts`
 
 **Result**: Eliminated all strict mode violations for `/running/i` selector
 
@@ -129,7 +129,7 @@
 
 ## 📁 Modified Files
 
-1. `/mnt/c/_EHG/EHG/tests/e2e/ab-testing-sprint3.spec.ts`
+1. `../ehg/tests/e2e/ab-testing-sprint3.spec.ts`
    - Lines 340, 413, 466: Added `.first()` to `/running/i` selectors
 
 ---

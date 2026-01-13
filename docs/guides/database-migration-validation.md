@@ -243,8 +243,8 @@ Reason: Tables exist but seed data was not inserted (silent failure)
 ```bash
 # Check which database you're targeting
 echo $EHG_SUPABASE_URL
-# Apply migration
-cd /mnt/c/_EHG/EHG && supabase db push
+# Apply migration (from EHG directory)
+cd ../ehg && supabase db push
 ```
 
 ### "schema cache error"

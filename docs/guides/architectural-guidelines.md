@@ -133,10 +133,10 @@ npm test
 
 ### Check for Duplicate Files
 ```bash
-# Find duplicate service files
-for file in /mnt/c/_EHG/EHG_Engineer/lib/dashboard/*.js; do
+# Find duplicate service files (run from EHG_Engineer root)
+for file in lib/dashboard/*.js; do
   basename_file=$(basename "$file")
-  if [ -f "/mnt/c/_EHG/EHG_Engineer/src/services/$basename_file" ]; then
+  if [ -f "src/services/$basename_file" ]; then
     echo "Duplicate: $basename_file"
   fi
 done

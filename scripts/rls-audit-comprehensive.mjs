@@ -224,7 +224,7 @@ async function auditRLS() {
   }
 
   // Save report
-  const reportPath = '/mnt/c/_EHG/EHG_Engineer/database/rls-audit-report.json';
+  const reportPath = './database/rls-audit-report.json';
   fs.writeFileSync(reportPath, JSON.stringify(auditReport, null, 2));
   console.log('\nReport saved to: ' + reportPath);
 

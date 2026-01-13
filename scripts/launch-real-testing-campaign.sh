@@ -10,21 +10,21 @@ echo "════════════════════════�
 echo ""
 
 # Change to project directory
-cd /mnt/c/_EHG/EHG_Engineer
+cd .
 
 # Pre-flight checks
 echo "📋 Pre-flight Checks:"
 echo "───────────────────────────────────────────────────────────"
 
 # Check if EHG app exists
-if [ ! -d "/mnt/c/_EHG/ehg" ]; then
-  echo "❌ EHG application not found at /mnt/c/_EHG/ehg"
+if [ ! -d "../ehg" ]; then
+  echo "❌ EHG application not found at ../ehg"
   exit 1
 fi
 echo "✅ EHG application found"
 
 # Check if test scripts exist
-if [ ! -f "/mnt/c/_EHG/ehg/package.json" ]; then
+if [ ! -f "../ehg/package.json" ]; then
   echo "❌ EHG package.json not found"
   exit 1
 fi

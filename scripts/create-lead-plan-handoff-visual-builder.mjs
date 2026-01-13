@@ -65,7 +65,7 @@ async function createHandoff() {
             }
           ],
           priority_verified: 'critical',
-          target_app_confirmed: 'EHG_Engineer (/mnt/c/_EHG/EHG_Engineer)'
+          target_app_confirmed: 'EHG_Engineer (.)'
         },
         blocking_dependencies: [
           {
@@ -249,7 +249,7 @@ async function createHandoff() {
             action: 'Add React Flow dependency',
             package: '@xyflow/react',
             version: '^11.0.0',
-            command: 'cd /mnt/c/_EHG/EHG_Engineer && npm install @xyflow/react'
+            command: 'cd . && npm install @xyflow/react'
           },
           {
             action: 'Add Monaco Editor dependency (for code preview)',

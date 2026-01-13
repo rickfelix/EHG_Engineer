@@ -10,14 +10,21 @@
 import { createClient } from '@supabase/supabase-js';
 import { readdir, readFile } from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '../../..');
+const EHG_ROOT = path.resolve(__dirname, '../../../../ehg');
 
 // Load EHG_Engineer .env first
 dotenv.config();
 
 // Also load EHG app .env to have both sets of credentials available
 // Using override: false ensures EHG_Engineer vars take precedence
-dotenv.config({ path: '/mnt/c/_EHG/EHG/.env', override: false });
+dotenv.config({ path: path.join(EHG_ROOT, '.env'), override: false });
 
 /**
  * Verify database migrations for SD
@@ -99,8 +106,8 @@ export async function verifyDatabaseMigrations(sd_id, targetApp = 'ehg') {
  */
 async function findSDMigrationFiles(sd_id, targetApp) {
   const migrationsPath = targetApp === 'ehg'
-    ? '/mnt/c/_EHG/EHG/supabase/migrations'
-    : '/mnt/c/_EHG/EHG_Engineer/database/migrations';
+    ? path.join(EHG_ROOT, 'supabase/migrations')
+    : path.join(EHG_ENGINEER_ROOT, 'database/migrations');
 
   try {
     const files = await readdir(migrationsPath);

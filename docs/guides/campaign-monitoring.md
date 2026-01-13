@@ -63,7 +63,7 @@ scripts/campaign-auto-restart.cjs            - Auto-restart wrapper (NEW)
 ### Option 1: Run Campaign with Auto-Restart (RECOMMENDED)
 
 ```bash
-cd /mnt/c/_EHG/EHG_Engineer
+# From EHG_Engineer root directory
 node scripts/campaign-auto-restart.cjs
 
 # Benefits:
@@ -75,7 +75,7 @@ node scripts/campaign-auto-restart.cjs
 ### Option 2: Run Campaign Directly
 
 ```bash
-cd /mnt/c/_EHG/EHG_Engineer
+# From EHG_Engineer root directory
 node scripts/batch-test-completed-sds-real.cjs
 
 # Benefits:

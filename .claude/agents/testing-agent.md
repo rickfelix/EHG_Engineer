@@ -124,23 +124,23 @@ The LEO Stack has TWO UI codebases that share a consolidated database:
 - Integration tests: `npm run test:integration`
 
 **EHG (Unified Frontend)**:
-- UI E2E tests: Run in `/mnt/c/_EHG/EHG/`
-- A11y tests: Run in `/mnt/c/_EHG/EHG/`
-- Visual tests: Run in `/mnt/c/_EHG/EHG/`
+- UI E2E tests: Run in `the EHG app directory`
+- A11y tests: Run in `the EHG app directory`
+- Visual tests: Run in `the EHG app directory`
 
 ### Running Tests
 
 1. **Start LEO Stack**: `./scripts/leo-stack.sh restart`
 2. **Run API tests**: `npm run test:e2e` (in EHG_Engineer)
-3. **Run UI tests**: `cd /mnt/c/_EHG/EHG && npm run test:e2e`
+3. **Run UI tests**: In the EHG app directory, run `npm run test:e2e`
 
 **Modern Playwright Capabilities** (2025 Quick Wins):
 - **Role-Based Locators**: Use `getByRole()`, `getByLabel()` for resilient, accessible selectors
-  - Reference: `/mnt/c/_EHG/EHG/docs/testing/locator-strategy-guide.md`
+  - Reference: `docs/testing/locator-strategy-guide.md` (in EHG app)
 - **Visual Regression**: Use `toHaveScreenshot()` to catch unintended UI changes
-  - Reference: `/mnt/c/_EHG/EHG/docs/testing/visual-regression-guide.md`
+  - Reference: `docs/testing/visual-regression-guide.md` (in EHG app)
 - **UI Mode Debugging**: Interactive test runner with `npm run test:e2e:ui`
-  - Reference: `/mnt/c/_EHG/EHG/docs/testing/ui-mode-debugging.md`
+  - Reference: `docs/testing/ui-mode-debugging.md` (in EHG app)
 - **Enhanced Reporting**: JSON output, HAR recording, automatic traces on failure
 - **Configuration**: Multiple playwright configs for different targets
 
@@ -231,8 +231,10 @@ Use Context7 for version-accurate Playwright documentation when writing or debug
 Use IDE MCP to check for TypeScript errors in test files without running the build:
 
 ```
-mcp__ide__getDiagnostics({ uri: "file:///mnt/c/_EHG/EHG_Engineer/tests/e2e/venture-creation/create-venture.spec.ts" })
+mcp__ide__getDiagnostics({ uri: "file://<project-root>/tests/e2e/venture-creation/create-venture.spec.ts" })
 ```
+
+Note: Replace `<project-root>` with your actual EHG_Engineer path.
 
 ## Remember
 

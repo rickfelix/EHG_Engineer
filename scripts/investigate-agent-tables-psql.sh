@@ -8,7 +8,7 @@ echo "   Database: liapbndqlqxdcgpwntbv (EHG business app)"
 echo "════════════════════════════════════════════════════════════════"
 echo ""
 
-cd /mnt/c/_EHG/ehg
+cd ../ehg
 
 # Get database URL from environment
 if [ -f .env ]; then

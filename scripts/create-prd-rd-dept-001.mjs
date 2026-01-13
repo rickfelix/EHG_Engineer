@@ -48,7 +48,7 @@ async function createRDDepartmentPRD() {
 
 **First Use Case**: Deep research for viral video creation workflow (Sora integration).
 
-**Target Application**: EHG (/mnt/c/_EHG/EHG)`,
+**Target Application**: EHG (../ehg)`,
 
     business_context: `**Current State**: Manual research is time-consuming (2-3 days per request), inconsistent quality, not reusable across departments, expensive ($1,600-$3,200 per request).
 
@@ -671,7 +671,7 @@ VP of Research (Strategic oversight, final approval)
     ],
 
     exec_checklist: [
-      {task: 'Navigate to /mnt/c/_EHG/EHG', status: 'pending'},
+      {task: 'Navigate to ../ehg', status: 'pending'},
       {task: 'Create 5 database tables with RLS', status: 'pending'},
       {task: 'Seed 7 agents (1 VP, 1 Manager, 5 Analysts)', status: 'pending'},
       {task: 'Implement 11 service files (~1,200 LOC)', status: 'pending'},
@@ -772,7 +772,7 @@ VP of Research (Strategic oversight, final approval)
       api_endpoints: 9,
       first_use_case: 'Viral video research for Creative Media Sora integration',
       target_application: 'EHG',
-      implementation_path: '/mnt/c/_EHG/EHG',
+      implementation_path: '../ehg',
       out_of_scope: [
         'External API integrations (Crunchbase, PitchBook)',
         'Real-time market data feeds',
@@ -820,7 +820,7 @@ VP of Research (Strategic oversight, final approval)
   console.log('\n🎯 Next Steps (LEO Protocol):');
   console.log('  1. PLAN creates PLAN→EXEC handoff:');
   console.log('     node scripts/unified-handoff-system.js execute PLAN-to-EXEC SD-RD-DEPT-001');
-  console.log('  2. EXEC implements in /mnt/c/_EHG/EHG (NOT EHG_Engineer!)');
+  console.log('  2. EXEC implements in ../ehg (NOT EHG_Engineer!)');
   console.log('  3. EXEC runs 5 smoke tests');
   console.log('  4. EXEC creates EXEC→PLAN handoff');
   console.log('  5. PLAN supervisor verification with all sub-agents');

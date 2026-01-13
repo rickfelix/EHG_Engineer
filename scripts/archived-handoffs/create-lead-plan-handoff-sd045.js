@@ -82,21 +82,21 @@ const handoffData = {
       infrastructure_audit: [
         {
           component: 'TeamManagementInterface.tsx',
-          path: '/mnt/c/_EHG/EHG/src/components/team/TeamManagementInterface.tsx',
+          path: '../ehg/src/components/team/TeamManagementInterface.tsx',
           lines: 622,
           reuse_potential: '90%',
           status: 'complete - will serve as UI pattern'
         },
         {
           component: 'agents.ts TypeScript interfaces',
-          path: '/mnt/c/_EHG/EHG/src/types/agents.ts',
+          path: '../ehg/src/types/agents.ts',
           lines: 182,
           reuse_potential: '100%',
           status: 'complete - all types defined'
         },
         {
           component: 'Agents.tsx page stub',
-          path: '/mnt/c/_EHG/EHG/src/pages/Agents.tsx',
+          path: '../ehg/src/pages/Agents.tsx',
           lines: 17,
           reuse_potential: '0%',
           status: 'stub - needs full implementation'
@@ -119,7 +119,7 @@ const handoffData = {
         approved_by: 'LEAD'
       },
       {
-        decision: 'Implement in /mnt/c/_EHG/EHG/ (EHG customer app)',
+        decision: 'Implement in ../ehg/ (EHG customer app)',
         rationale: 'SD-045 targets EHG business application, NOT EHG_Engineer management dashboard',
         impact: 'Critical path decision - prevents implementation in wrong application',
         approved_by: 'LEAD'
@@ -144,7 +144,7 @@ const handoffData = {
         {
           risk: 'Implementation in wrong application directory',
           severity: 'critical',
-          mitigation: 'Mandatory verification: EXEC must confirm pwd shows /mnt/c/_EHG/EHG before coding',
+          mitigation: 'Mandatory verification: EXEC must confirm pwd shows ../ehg before coding',
           probability: 'low'
         },
         {
@@ -230,8 +230,8 @@ const handoffData = {
         priority: 'critical',
         estimated_time: '15 minutes',
         verification_steps: [
-          'Confirm implementation will be in /mnt/c/_EHG/EHG/',
-          'Verify /mnt/c/_EHG/EHG/src/pages/Agents.tsx exists',
+          'Confirm implementation will be in ../ehg/',
+          'Verify ../ehg/src/pages/Agents.tsx exists',
           'Check routing configuration includes /agents path',
           'Confirm dev server runs on port 5173 (Vite default)'
         ]

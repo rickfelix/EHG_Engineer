@@ -118,7 +118,7 @@ const handoff = {
         issue: 'Stage1DraftIdea component path assumption',
         severity: 'LOW',
         impact: 'If component moved or renamed, import will fail',
-        workaround: 'Verified component exists at /mnt/c/_EHG/EHG/src/components/stages/Stage1DraftIdea.tsx (573 LOC)',
+        workaround: 'Verified component exists at ../ehg/src/components/stages/Stage1DraftIdea.tsx (573 LOC)',
         resolution_plan: 'No action needed - component verified in codebase'
       },
       {

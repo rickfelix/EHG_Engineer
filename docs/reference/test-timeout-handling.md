@@ -54,7 +54,7 @@ When tests timeout, follow this escalation path:
 **Time Limit**: 60 seconds
 
 ```bash
-cd /mnt/c/_EHG/EHG
+cd ../ehg
 vitest run tests/unit --no-coverage --reporter=verbose
 ```
 
@@ -73,7 +73,7 @@ vitest run tests/unit --no-coverage --reporter=verbose
 **Time Limit**: 30 seconds
 
 ```bash
-cd /mnt/c/_EHG/EHG
+cd ../ehg
 vitest run tests/unit --no-coverage --grep="Settings|Notification"
 ```
 

@@ -29,7 +29,7 @@ async function createPlanExecHandoff() {
     phase: 'execution',
 
     // 7 Mandatory Elements
-    executive_summary: 'Execute implementation of comprehensive Chairman Dashboard providing executive-level oversight and strategic decision-making tools. The PRD defines 8 user stories across venture portfolio management, strategic KPI monitoring, financial analytics, operational intelligence, executive reporting, decision support, mobile access, and real-time data integration. Target implementation in EHG application at /mnt/c/_EHG/EHG with 4-phase delivery approach over 4 days.',
+    executive_summary: 'Execute implementation of comprehensive Chairman Dashboard providing executive-level oversight and strategic decision-making tools. The PRD defines 8 user stories across venture portfolio management, strategic KPI monitoring, financial analytics, operational intelligence, executive reporting, decision support, mobile access, and real-time data integration. Target implementation in EHG application at ../ehg with 4-phase delivery approach over 4 days.',
 
     completeness_report: {
       prd_generated: true,
@@ -56,7 +56,7 @@ async function createPlanExecHandoff() {
     ],
 
     key_decisions: {
-      implementation_target: 'EHG application at /mnt/c/_EHG/EHG/',
+      implementation_target: 'EHG application at ../ehg/',
       technology_stack: 'React with TypeScript, Shadcn UI components, Supabase',
       architecture_approach: 'Executive-focused dashboard with drill-down capabilities',
       data_strategy: 'Real-time integration with venture, financial, and operational systems',
@@ -77,7 +77,7 @@ async function createPlanExecHandoff() {
 
     resource_utilization: {
       estimated_effort: '4 days across 4 implementation phases',
-      target_application: '/mnt/c/_EHG/EHG/',
+      target_application: '../ehg/',
       required_skills: 'React, TypeScript, Executive Dashboard Design, Data Visualization',
       implementation_phases: [
         'Phase 1: Core Dashboard Foundation (1.5 days)',
@@ -90,7 +90,7 @@ async function createPlanExecHandoff() {
     },
 
     action_items: [
-      'Navigate to EHG application directory: /mnt/c/_EHG/EHG/',
+      'Navigate to EHG application directory: ../ehg/',
       'Create chairman dashboard database schema and tables',
       'Implement ChairmanDashboard main component with executive navigation',
       'Build VenturePortfolioOverview with real-time venture data',
@@ -185,7 +185,7 @@ createPlanExecHandoff().then(handoff => {
   console.log('\n✅ PLAN→EXEC Handoff Complete');
   console.log('Handoff ID:', handoff.id);
   console.log('PRD ID:', handoff.metadata.prd_id);
-  console.log('Ready for: EXEC phase (implementation in /mnt/c/_EHG/EHG/)');
+  console.log('Ready for: EXEC phase (implementation in ../ehg/)');
 }).catch(error => {
   console.error('Handoff creation failed:', error);
   process.exit(1);

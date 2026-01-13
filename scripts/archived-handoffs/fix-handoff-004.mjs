@@ -18,7 +18,7 @@ const handoff = {
     recommendation: 'Schedule 5 focused implementation sessions (1 per week/feature)',
     next_action: 'Begin with Week 1: Chairman Dashboard Personalization (REQ-001)',
     pre_implementation_checklist: [
-      "Verify target app: /mnt/c/_EHG/EHG/",
+      "Verify target app: ../ehg/",
       "Generate TypeScript types: npx supabase gen types typescript",
       "Verify RLS policies for 8 tables",
       "Test Supabase connection",

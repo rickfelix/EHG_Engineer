@@ -10,7 +10,7 @@ import fs from 'fs';
 
 async function testDesign() {
   const agent = new DesignSubAgent();
-  const basePath = '/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase';
+  const basePath = './applications/APP001/codebase';
   
   console.log('🎨 Testing Design Sub-Agent on EHG Application');
   console.log(`📁 Base Path: ${basePath}`);

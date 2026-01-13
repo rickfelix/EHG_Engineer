@@ -4,7 +4,7 @@ import { createClient as _createClient } from '@supabase/supabase-js';
 import { createDatabaseClient } from '../lib/supabase-connection.js';
 import dotenv from 'dotenv';
 
-dotenv.config({ path: '/mnt/c/_EHG/EHG_Engineer/.env' });
+dotenv.config({ path: './.env' });
 
 async function checkConstraint() {
   const client = await createDatabaseClient('engineer', { verify: false });

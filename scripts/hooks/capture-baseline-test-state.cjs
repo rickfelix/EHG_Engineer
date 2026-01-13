@@ -18,8 +18,8 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const SESSION_STATE_FILE = path.join(process.env.HOME || '/tmp', '.claude-session-state.json');
-const ENGINEER_DIR = '/mnt/c/_EHG/EHG_Engineer';
-const APP_DIR = '/mnt/c/_EHG/EHG';
+const ENGINEER_DIR = '.';
+const APP_DIR = '../ehg';
 
 /**
  * Load current session state

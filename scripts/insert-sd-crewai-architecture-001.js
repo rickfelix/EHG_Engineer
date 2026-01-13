@@ -177,7 +177,7 @@ ACCEPTANCE CRITERIA:
   metadata: JSON.stringify({
     discovery_date: '2025-11-05',
     discovery_context: 'Stage Operating Dossier Phase 0 discovery',
-    python_platform_location: '/mnt/c/_EHG/EHG/agent-platform/',
+    python_platform_location: '../ehg/agent-platform/',
     python_agents_count: '15+',
     python_crews_count: '15+',
     empty_tables: [

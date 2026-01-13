@@ -7,7 +7,7 @@ echo "🚀 Starting Main EHG Application..."
 echo "=================================="
 
 # Navigate to EHG directory
-cd /mnt/c/_EHG/ehg
+cd ../ehg
 
 # Check if node_modules exists
 if [ ! -d "node_modules" ]; then

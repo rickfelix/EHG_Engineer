@@ -42,7 +42,7 @@ This guide explains how to integrate the Customer Intelligence dashboard into St
 
 ### Step 1: Import CustomerIntelligenceTab into Stage 3
 
-**File**: `/mnt/c/_EHG/EHG/src/components/stages/Stage3ComprehensiveValidation.tsx`
+**File**: `../ehg/src/components/stages/Stage3ComprehensiveValidation.tsx` (EHG repository)
 
 **Add import**:
 ```typescript
@@ -99,7 +99,7 @@ import { BarChart, Users, DollarSign, Cog, Shield, CheckCircle2, Sparkles } from
 
 ## Database Schema (Already Created ✅)
 
-**Migration File**: `/mnt/c/_EHG/EHG/supabase/migrations/20251011_customer_intelligence_system.sql`
+**Migration File**: `../ehg/supabase/migrations/20251011_customer_intelligence_system.sql` (EHG repository)
 
 **Tables** (5 total):
 - `customer_personas` - Persona data with demographics, psychographics, JTBD
@@ -129,7 +129,7 @@ import { BarChart, Users, DollarSign, Cog, Shield, CheckCircle2, Sparkles } from
 
 ### Agent Integration
 
-**Agent File**: `/mnt/c/_EHG/EHG/agent-platform/app/agents/research/customer_intelligence_agent.py`
+**Agent File**: `../ehg/agent-platform/app/agents/research/customer_intelligence_agent.py` (EHG repository)
 
 **Status**: Agent code complete, pending registration in CrewAI platform
 
@@ -236,7 +236,8 @@ import { BarChart, Users, DollarSign, Cog, Shield, CheckCircle2, Sparkles } from
 ## File Structure
 
 ```
-/mnt/c/_EHG/EHG/src/
+# EHG Repository (../ehg from EHG_Engineer)
+ehg/src/
 ├── components/
 │   ├── personas/
 │   │   ├── PersonaBuilder.tsx             ✅ COMPLETE
@@ -251,11 +252,11 @@ import { BarChart, Users, DollarSign, Cog, Shield, CheckCircle2, Sparkles } from
 └── types/
     └── customerIntelligence.ts            ❌ TO BE CREATED (optional, types exported from components)
 
-/mnt/c/_EHG/EHG/agent-platform/
+ehg/agent-platform/
 └── app/agents/research/
     └── customer_intelligence_agent.py     ✅ COMPLETE
 
-/mnt/c/_EHG/EHG/supabase/migrations/
+ehg/supabase/migrations/
 └── 20251011_customer_intelligence_system.sql  ✅ COMPLETE (pending execution)
 ```
 
@@ -328,9 +329,9 @@ None at this time. All UI components complete and ready for integration.
 ## References
 
 - **Strategic Directive**: SD-CUSTOMER-INTEL-001
-- **Database Migration**: `/mnt/c/_EHG/EHG/supabase/migrations/20251011_customer_intelligence_system.sql`
-- **Agent Definition**: `/mnt/c/_EHG/EHG_Engineer/customer-intelligence-agent-definition.json`
-- **Agent Code**: `/mnt/c/_EHG/EHG/agent-platform/app/agents/research/customer_intelligence_agent.py`
+- **Database Migration**: `../ehg/supabase/migrations/20251011_customer_intelligence_system.sql` (EHG repository)
+- **Agent Definition**: `customer-intelligence-agent-definition.json` (EHG_Engineer root)
+- **Agent Code**: `../ehg/agent-platform/app/agents/research/customer_intelligence_agent.py` (EHG repository)
 
 ---
 

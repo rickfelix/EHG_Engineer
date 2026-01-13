@@ -28,7 +28,7 @@ const UPDATED_APPLICATION_ARCHITECTURE = `### Unified Application Architecture (
 The EHG ecosystem consists of two primary components sharing a consolidated database:
 
 1. **EHG** (Unified Frontend) - PORT 8080
-   - **Path**: \`/mnt/c/_EHG/EHG/\`
+   - **Path**: \`../ehg/\`
    - **Purpose**: Complete application frontend (user features + admin dashboard)
    - **Database**: dedlbzhpgkmetvhbkyzq (Supabase) - CONSOLIDATED
    - **GitHub**: https://github.com/rickfelix/ehg.git
@@ -42,7 +42,7 @@ The EHG ecosystem consists of two primary components sharing a consolidated data
    - **Role**: ALL UI FEATURES - both user and admin
 
 2. **EHG_Engineer** (Backend API) - PORT 3000
-   - **Path**: \`/mnt/c/_EHG/EHG_Engineer/\`
+   - **Path**: \`./\`
    - **Purpose**: Backend API server + LEO Protocol scripts
    - **Database**: dedlbzhpgkmetvhbkyzq (Supabase) - CONSOLIDATED
    - **GitHub**: https://github.com/rickfelix/EHG_Engineer.git
@@ -53,7 +53,7 @@ The EHG ecosystem consists of two primary components sharing a consolidated data
    - **Role**: BACKEND SERVICES ONLY - no standalone frontend
 
 3. **Agent Platform** (AI Backend) - PORT 8000
-   - **Path**: \`/mnt/c/_EHG/EHG/agent-platform/\`
+   - **Path**: \`../ehg/agent-platform/\`
    - **Purpose**: AI research backend for venture creation
    - **Built with**: FastAPI + Python
 
@@ -61,11 +61,11 @@ The EHG ecosystem consists of two primary components sharing a consolidated data
 
 ### ⚠️ CRITICAL: During EXEC Phase Implementation
 1. **Read PRD** from EHG_Engineer database (or via API)
-2. **Navigate** to \`/mnt/c/_EHG/EHG/\` for ALL frontend work
+2. **Navigate** to \`../ehg/\` for ALL frontend work
 3. **For admin features**: Implement in \`/src/components/admin/\` or \`/src/pages/admin/\`
 4. **For user features**: Implement in \`/src/components/\` or \`/src/pages/\`
 5. **Push changes** to EHG's GitHub repo: \`rickfelix/ehg.git\`
-6. **For backend API changes**: Navigate to \`/mnt/c/_EHG/EHG_Engineer/\`
+6. **For backend API changes**: Navigate to \`./\`
 
 ### 🔄 Workflow Relationship
 \`\`\`
@@ -88,10 +88,10 @@ bash scripts/leo-stack.sh restart   # Starts all 3 servers
 const UPDATED_SD_EXECUTION_PROTOCOL = `### Application Context for Implementation
 
 **Target Applications** (by feature type):
-- **User Features** → \`/mnt/c/_EHG/EHG/src/\` (user-facing components)
-- **Admin Features** → \`/mnt/c/_EHG/EHG/src/components/admin/\` or \`/src/pages/admin/\`
-- **Backend API** → \`/mnt/c/_EHG/EHG_Engineer/\` (routes, server logic)
-- **Stage Components** → \`/mnt/c/_EHG/EHG/src/components/stages/admin/\` (19 stage components)
+- **User Features** → \`../ehg/src/\` (user-facing components)
+- **Admin Features** → \`../ehg/src/components/admin/\` or \`/src/pages/admin/\`
+- **Backend API** → \`./\` (routes, server logic)
+- **Stage Components** → \`../ehg/src/components/stages/admin/\` (19 stage components)
 
 **Git Repositories**:
 - EHG (Frontend): \`rickfelix/ehg.git\`
@@ -101,10 +101,10 @@ const UPDATED_SD_EXECUTION_PROTOCOL = `### Application Context for Implementatio
 
 // Updated EXEC Implementation Requirements - just the app check portion
 const _UPDATED_EXEC_APP_CHECK = `1. **APPLICATION CHECK** ⚠️ CRITICAL
-   - For **user features**: \`/mnt/c/_EHG/EHG/\`
-   - For **admin features**: \`/mnt/c/_EHG/EHG/src/components/admin/\` or \`/src/pages/admin/\`
-   - For **backend API changes**: \`/mnt/c/_EHG/EHG_Engineer/\`
-   - Verify: \`cd /mnt/c/_EHG/EHG && pwd\` for frontend work
+   - For **user features**: \`../ehg/\`
+   - For **admin features**: \`../ehg/src/components/admin/\` or \`/src/pages/admin/\`
+   - For **backend API changes**: \`./\`
+   - Verify: \`cd ../ehg && pwd\` for frontend work
    - Check GitHub: \`git remote -v\` should show \`rickfelix/ehg.git\` for frontend
    - ⚠️ EHG_Engineer is now BACKEND ONLY - no frontend code there!`;
 
@@ -165,7 +165,7 @@ async function main() {
 
     // Note about EXEC Implementation Requirements (ID: 210)
     console.log('\n⚠️  Section 210 (EXEC Implementation Requirements) may need manual review');
-    console.log('   The APPLICATION CHECK instructions reference /mnt/c/_EHG/EHG/');
+    console.log('   The APPLICATION CHECK instructions reference ../ehg/');
     console.log('   This is now correct (case-insensitive), but could be updated for clarity.\n');
 
     console.log('✅ Database updates complete!\n');

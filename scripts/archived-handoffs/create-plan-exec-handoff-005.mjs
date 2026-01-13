@@ -104,7 +104,7 @@ const handoff = {
       ],
       blockers: [],
       dependencies: [
-        "EHG application must be at /mnt/c/_EHG/EHG/ (NOT EHG_Engineer)",
+        "EHG application must be at ../ehg/ (NOT EHG_Engineer)",
         "TypeScript compiler (tsc) must be available",
         "Dev server must be restarted after component changes"
       ]
@@ -127,7 +127,7 @@ const handoff = {
     },
     "7_action_items_for_receiver": {
       immediate_actions: [
-        "Verify target app: cd /mnt/c/_EHG/EHG && pwd (NOT EHG_Engineer!)",
+        "Verify target app: cd ../ehg && pwd (NOT EHG_Engineer!)",
         "Verify current working directory before any file operations",
         "Start with Phase 1: Run duplicate audit command from REQ-001",
         "Document all duplicate basenames found",
@@ -191,5 +191,5 @@ if (error) {
   console.log('Handoff Type: technical_to_implementation');
   console.log('All 7 mandatory elements included');
   console.log('\n✅ Phase: PLAN_TO_EXEC_HANDOFF → EXEC');
-  console.log('\n🎯 EXEC Agent: Start with Phase 1 duplicate audit at /mnt/c/_EHG/EHG/');
+  console.log('\n🎯 EXEC Agent: Start with Phase 1 duplicate audit at ../ehg/');
 }

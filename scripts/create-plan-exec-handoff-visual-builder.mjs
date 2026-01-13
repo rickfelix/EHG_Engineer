@@ -36,7 +36,7 @@ async function createHandoff() {
 
 **CRITICAL BLOCKER**: Board infrastructure tables (board_members, board_meetings, board_meeting_attendance) DO NOT EXIST. Migration file created: database/migrations/20251011_board_infrastructure_tables.sql. EXEC MUST apply via Supabase CLI before implementation begins.
 
-**Target Application**: EHG_Engineer (management dashboard) at /mnt/c/_EHG/EHG_Engineer
+**Target Application**: EHG_Engineer (management dashboard) at .
 **Route**: /board-visual-builder
 **Database**: dedlbzhpgkmetvhbkyzq (EHG_Engineer Supabase)`,
 
@@ -79,7 +79,7 @@ async function createHandoff() {
           react_flow: '@xyflow/react v11.11.0 - ✅ Added to src/client/package.json',
           monaco_editor: '@monaco-editor/react v4.6.0 - ✅ Added to src/client/package.json',
           installation_required: true,
-          command: 'cd /mnt/c/_EHG/EHG_Engineer/src/client && npm install'
+          command: 'cd ./src/client && npm install'
         },
         component_architecture: {
           total_components: 8,
@@ -332,7 +332,7 @@ async function createHandoff() {
           {
             priority: 'CRITICAL - Day 1',
             action: 'Install npm dependencies',
-            command: 'cd /mnt/c/_EHG/EHG_Engineer/src/client && npm install',
+            command: 'cd ./src/client && npm install',
             verification: 'Check node_modules/@xyflow/react and node_modules/@monaco-editor/react exist',
             blocker: true,
             estimated_time: '5 minutes'
@@ -341,7 +341,7 @@ async function createHandoff() {
             priority: 'HIGH - Day 1',
             action: 'Verify application context',
             checklist: [
-              'Confirm target app: /mnt/c/_EHG/EHG_Engineer (NOT /mnt/c/_EHG/EHG)',
+              'Confirm target app: . (NOT ../ehg)',
               'Verify route: /board-visual-builder will be added',
               'Check GitHub remote: rickfelix/EHG_Engineer.git',
               'Verify database: dedlbzhpgkmetvhbkyzq (EHG_Engineer Supabase)'

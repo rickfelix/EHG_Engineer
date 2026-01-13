@@ -213,8 +213,8 @@ pkill -f "node server.js" && PORT=3000 node server.js
 
 **For UI Changes** (EHG repository):
 ```bash
-# Navigate to EHG
-cd /mnt/c/_EHG/EHG
+# Navigate to EHG app directory (sibling to EHG_Engineer)
+# Windows: cd ..\ehg  |  WSL/Linux: cd ../ehg
 
 # Start dev server (Vite hot reload)
 npm run dev

@@ -52,8 +52,8 @@ async function createHandoff() {
 - **Columns**: 11 (id, venture_id, stage_number, milestone_name, start/end dates, status, dependencies, metadata, timestamps)
 - **Indexes**: 3 (venture_id, status, stage_number)
 - **RLS Policies**: 4 (SELECT, INSERT, UPDATE, DELETE with portfolio-level access)
-- **Migration Script**: /mnt/c/_EHG/EHG/database/migrations/create-venture-milestones-table.sql
-- **Execution Script**: /mnt/c/_EHG/EHG/scripts/apply-venture-milestones-migration.js
+- **Migration Script**: ../ehg/database/migrations/create-venture-milestones-table.sql
+- **Execution Script**: ../ehg/scripts/apply-venture-milestones-migration.js
 
 ### ✅ Design Sub-Agent Review (Complete)
 - **Mode**: Integrated (UI + UX)
@@ -69,8 +69,8 @@ async function createHandoff() {
   - Mobile strategy (collapse to list <768px)
 
 ### ✅ Technical Architecture (Complete)
-- **Component Path**: /mnt/c/_EHG/EHG/src/components/ventures/VentureTimelineView.tsx
-- **Parent**: /mnt/c/_EHG/EHG/src/pages/VenturesPage.tsx (4th tab)
+- **Component Path**: ../ehg/src/components/ventures/VentureTimelineView.tsx
+- **Parent**: ../ehg/src/pages/VenturesPage.tsx (4th tab)
 - **State Management**: React Query (5min stale time)
 - **URL Params**: useSearchParams for filter persistence
 - **Libraries**: gantt-task-react, React Query, react-router-dom
@@ -85,26 +85,26 @@ async function createHandoff() {
     deliverables_manifest: `## Implementation Artifacts for EXEC
 
 ### 1. Database Migration
-**File**: /mnt/c/_EHG/EHG/database/migrations/create-venture-milestones-table.sql
-**Execute**: \`cd /mnt/c/_EHG/EHG && node scripts/apply-venture-milestones-migration.js\`
+**File**: ../ehg/database/migrations/create-venture-milestones-table.sql
+**Execute**: \`cd ../ehg && node scripts/apply-venture-milestones-migration.js\`
 **Verify**: Check venture_milestones table exists with 11 columns + 3 indexes + 4 RLS policies
 
 ### 2. Component Files to Create
 **Primary Component**:
 \`\`\`
-/mnt/c/_EHG/EHG/src/components/ventures/VentureTimelineView.tsx
+../ehg/src/components/ventures/VentureTimelineView.tsx
 \`\`\`
 
 **Supporting Files**:
 \`\`\`
-/mnt/c/_EHG/EHG/src/hooks/useVenturesTimeline.ts     // Data fetching hook
-/mnt/c/_EHG/EHG/src/hooks/useMilestoneDrag.ts        // Drag-to-adjust logic
-/mnt/c/_EHG/EHG/src/utils/criticalPath.ts            // Topological sort algorithm
-/mnt/c/_EHG/EHG/src/utils/milestoneAutoPopulate.ts   // Auto-generate 40 milestones
+../ehg/src/hooks/useVenturesTimeline.ts     // Data fetching hook
+../ehg/src/hooks/useMilestoneDrag.ts        // Drag-to-adjust logic
+../ehg/src/utils/criticalPath.ts            // Topological sort algorithm
+../ehg/src/utils/milestoneAutoPopulate.ts   // Auto-generate 40 milestones
 \`\`\`
 
 ### 3. Integration Point
-**Parent Component**: /mnt/c/_EHG/EHG/src/pages/VenturesPage.tsx
+**Parent Component**: ../ehg/src/pages/VenturesPage.tsx
 **Action**: Add <VentureTimelineView> as 4th tab after Grid/Kanban/Table
 
 \`\`\`tsx
@@ -141,9 +141,9 @@ async function createHandoff() {
 
 ### 5. Test Files to Create
 \`\`\`
-/mnt/c/_EHG/EHG/tests/unit/criticalPath.test.ts
-/mnt/c/_EHG/EHG/tests/integration/ventureMilestones.test.ts
-/mnt/c/_EHG/EHG/tests/e2e/ventureTimeline.spec.ts
+../ehg/tests/unit/criticalPath.test.ts
+../ehg/tests/integration/ventureMilestones.test.ts
+../ehg/tests/e2e/ventureTimeline.spec.ts
 \`\`\`
 
 ### 6. Performance Benchmarks
@@ -173,7 +173,7 @@ async function createHandoff() {
    Decision: Topological sort (Kahn's algorithm) in browser
    Alternative Rejected: Database stored procedure
    Rationale: Flexibility for UI updates, acceptable perf for <100 ventures
-   File: /mnt/c/_EHG/EHG/src/utils/criticalPath.ts
+   File: ../ehg/src/utils/criticalPath.ts
 
 **5. Mobile Strategy - List Collapse**
    Decision: <768px screens show vertical list, not Gantt
@@ -258,33 +258,33 @@ async function createHandoff() {
 #### 1. Pre-Implementation Verification (30 min)
 **MANDATORY per CLAUDE.md Section "EXEC Agent Implementation Requirements"**:
 - [ ] Navigate to http://localhost:5173/ventures (verify page loads)
-- [ ] Confirm ventures page exists at /mnt/c/_EHG/EHG/src/pages/VenturesPage.tsx
+- [ ] Confirm ventures page exists at ../ehg/src/pages/VenturesPage.tsx
 - [ ] Take screenshot of current state (before changes)
 - [ ] Identify exact location for Timeline tab (after Table tab)
-- [ ] Verify: \`cd /mnt/c/_EHG/EHG && pwd\` shows /mnt/c/_EHG/EHG (NOT EHG_Engineer!)
+- [ ] Verify: \`cd ../ehg && pwd\` shows ../ehg (NOT EHG_Engineer!)
 
 #### 2. Database Migration (1 hour)
 \`\`\`bash
-cd /mnt/c/_EHG/EHG
+cd ../ehg
 node scripts/apply-venture-milestones-migration.js
 \`\`\`
 **Verify**: Check venture_milestones table exists, 11 columns, 3 indexes, 4 RLS policies
 
 #### 3. Create Data Layer (2 hours)
-- [ ] Create /mnt/c/_EHG/EHG/src/hooks/useVenturesTimeline.ts
-- [ ] Create /mnt/c/_EHG/EHG/src/utils/criticalPath.ts (topological sort)
-- [ ] Create /mnt/c/_EHG/EHG/src/utils/milestoneAutoPopulate.ts
+- [ ] Create ../ehg/src/hooks/useVenturesTimeline.ts
+- [ ] Create ../ehg/src/utils/criticalPath.ts (topological sort)
+- [ ] Create ../ehg/src/utils/milestoneAutoPopulate.ts
 
 ### 🟡 HIGH PRIORITY - Core Features
 
 #### 4. Build VentureTimelineView Component (4 hours)
-- [ ] Create /mnt/c/_EHG/EHG/src/components/ventures/VentureTimelineView.tsx
+- [ ] Create ../ehg/src/components/ventures/VentureTimelineView.tsx
 - [ ] Integrate gantt-task-react library
 - [ ] Transform venture data → Gantt tasks format
 - [ ] Add loading skeleton (from Design Sub-Agent specs)
 
 #### 5. Add Timeline Tab to VenturesPage (1 hour)
-- [ ] Edit /mnt/c/_EHG/EHG/src/pages/VenturesPage.tsx
+- [ ] Edit ../ehg/src/pages/VenturesPage.tsx
 - [ ] Add <TabsTrigger value="timeline">Timeline</TabsTrigger>
 - [ ] Add <TabsContent value="timeline"><VentureTimelineView /></TabsContent>
 - [ ] Add dwell time alert badge count
@@ -297,7 +297,7 @@ node scripts/apply-venture-milestones-migration.js
 ### 🟢 MEDIUM PRIORITY - Interactive Features
 
 #### 7. Drag-to-Adjust Milestone Dates (3 hours)
-- [ ] Create /mnt/c/_EHG/EHG/src/hooks/useMilestoneDrag.ts
+- [ ] Create ../ehg/src/hooks/useMilestoneDrag.ts
 - [ ] Implement drag handlers (gantt-task-react onDateChange)
 - [ ] Dependency validation (prevent Stage 15 before Stage 14)
 - [ ] Warning modal for conflicts
@@ -330,7 +330,7 @@ node scripts/apply-venture-milestones-migration.js
 ### ⚠️ CRITICAL REMINDERS (from CLAUDE.md)
 1. **Server Restart**: After ANY changes, kill dev server + restart + hard refresh browser
 2. **Commit Timing**: Commit after each major task completion
-3. **Application Check**: You are in /mnt/c/_EHG/EHG (customer app), NOT EHG_Engineer!
+3. **Application Check**: You are in ../ehg (customer app), NOT EHG_Engineer!
 4. **No File Creation**: Do NOT create PRD/handoff markdown files, only code files`,
 
     metadata: {
@@ -351,17 +351,17 @@ node scripts/apply-venture-milestones-migration.js
       critical_tasks: 11,
 
       files_to_create: [
-        '/mnt/c/_EHG/EHG/src/components/ventures/VentureTimelineView.tsx',
-        '/mnt/c/_EHG/EHG/src/hooks/useVenturesTimeline.ts',
-        '/mnt/c/_EHG/EHG/src/hooks/useMilestoneDrag.ts',
-        '/mnt/c/_EHG/EHG/src/utils/criticalPath.ts',
-        '/mnt/c/_EHG/EHG/src/utils/milestoneAutoPopulate.ts',
-        '/mnt/c/_EHG/EHG/tests/unit/criticalPath.test.ts',
-        '/mnt/c/_EHG/EHG/tests/e2e/ventureTimeline.spec.ts'
+        '../ehg/src/components/ventures/VentureTimelineView.tsx',
+        '../ehg/src/hooks/useVenturesTimeline.ts',
+        '../ehg/src/hooks/useMilestoneDrag.ts',
+        '../ehg/src/utils/criticalPath.ts',
+        '../ehg/src/utils/milestoneAutoPopulate.ts',
+        '../ehg/tests/unit/criticalPath.test.ts',
+        '../ehg/tests/e2e/ventureTimeline.spec.ts'
       ],
 
       files_to_edit: [
-        '/mnt/c/_EHG/EHG/src/pages/VenturesPage.tsx'
+        '../ehg/src/pages/VenturesPage.tsx'
       ],
 
       performance_benchmarks: {

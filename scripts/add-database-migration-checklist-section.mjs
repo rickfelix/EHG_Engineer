@@ -21,7 +21,7 @@ async function addSections() {
 **Evidence**: SD-AGENT-MIGRATION-001 - Attempted migrations with wrong region (aws-0 vs aws-1), incorrect SSL parameters, and manual psql commands before reading the established pattern. User had to redirect: "Before you blindly go trying things to solve problems, why don't you take a smart approach and make sure you fully understand what is described in the Supabase database sub-agent?"
 
 #### Step 1: Read the Established Pattern (5 minutes)
-- [ ] Read \`/mnt/c/_EHG/EHG/scripts/lib/supabase-connection.js\` (198 lines)
+- [ ] Read \`../ehg/scripts/lib/supabase-connection.js\` (198 lines)
 - [ ] Read reference implementation: \`scripts/database-subagent-apply-agent-admin-migration.js\`
 - [ ] Understand: Region (aws-1), SSL config, connection format, helper functions
 

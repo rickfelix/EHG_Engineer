@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 const { Client } = pg;
 
 // Load environment from EHG_Engineer for database credentials
-dotenv.config({ path: '/mnt/c/_EHG/EHG_Engineer/.env' });
+dotenv.config({ path: './.env' });
 dotenv.config();
 
 // EHG_Engineer database

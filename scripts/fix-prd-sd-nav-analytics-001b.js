@@ -20,9 +20,9 @@ async function fixPRD() {
     // Detailed executive summary
     executive_summary: `This PRD addresses three navigation audit issues (NAV-19, NAV-20, NAV-27) in the Analytics section:
 
-NAV-19 ISSUE: The useAnalyticsData.ts hook at /mnt/c/_EHG/ehg/src/hooks/useAnalyticsData.ts returns mock data unconditionally on lines 12-54, 62-176, and 184-263. This violates the established demo mode gating pattern from useVentureData.ts where mock data should only appear when localStorage ehg_demo_mode equals true.
+NAV-19 ISSUE: The useAnalyticsData.ts hook at ../ehg/src/hooks/useAnalyticsData.ts returns mock data unconditionally on lines 12-54, 62-176, and 184-263. This violates the established demo mode gating pattern from useVentureData.ts where mock data should only appear when localStorage ehg_demo_mode equals true.
 
-NAV-20 ISSUE: The Competitive Intelligence page at /mnt/c/_EHG/ehg/src/pages/competitive-intelligence.tsx lacks a venture selector dropdown, preventing users from analyzing specific ventures. The ProfitabilityPage.tsx demonstrates the correct pattern using useState, useMemo, and the useVentures hook.
+NAV-20 ISSUE: The Competitive Intelligence page at ../ehg/src/pages/competitive-intelligence.tsx lacks a venture selector dropdown, preventing users from analyzing specific ventures. The ProfitabilityPage.tsx demonstrates the correct pattern using useState, useMemo, and the useVentures hook.
 
 NAV-27 ISSUE: GTM Intelligence navigation placement in the sidebar requires verification to ensure it appears correctly under the Analytics section.
 
@@ -128,7 +128,7 @@ BUSINESS IMPACT: Users see fake analytics data in production mode, causing confu
 
     // Detailed implementation approach
     implementation_approach: `PHASE 1: Demo Mode Gating in useAnalyticsData.ts (FR-NAV-19)
-Step 1.1: Open /mnt/c/_EHG/ehg/src/hooks/useAnalyticsData.ts
+Step 1.1: Open ../ehg/src/hooks/useAnalyticsData.ts
 Step 1.2: In usePortfolioAnalytics (line 9), add before return: const isDemoMode = localStorage.getItem("ehg_demo_mode") === "true"; if (!isDemoMode) return useQuery({ queryKey: ["portfolio-analytics", timeframe], queryFn: async () => null });
 Step 1.3: In useVentureAnalytics (line 59), add similar check returning empty array
 Step 1.4: In useAIInsights (line 181), add similar check returning empty array

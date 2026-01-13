@@ -61,8 +61,8 @@ const parentSD = {
   sequence_rank: 1,
   metadata: JSON.stringify({
     doc_locations: [
-      '/mnt/c/_EHG/EHG/docs/',
-      '/mnt/c/_EHG/EHG_Engineer/docs/',
+      '../ehg/docs/',
+      './docs/',
       'README files',
       'CLAUDE.md files'
     ],

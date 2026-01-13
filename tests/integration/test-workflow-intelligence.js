@@ -20,9 +20,16 @@
 import { createClient } from '@supabase/supabase-js';
 import { execute as executeDesignSubAgent } from '../../lib/sub-agents/design.js';
 import { getCacheStats, clearCache } from '../../lib/workflow-review/pattern-cache.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
 dotenv.config();
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ROOT = path.resolve(__dirname, '../../../ehg');
 
 // Use SERVICE_ROLE_KEY for test data setup (bypasses RLS)
 const supabaseAdmin = createClient(
@@ -169,7 +176,7 @@ async function runIntelligentWorkflowReview() {
       { name: 'DESIGN', code: 'DESIGN' },
       {
         workflow_review: true,
-        repo_path: '/mnt/c/_EHG/EHG',
+        repo_path: EHG_ROOT,
         supabaseClient: supabaseAdmin
       }
     );

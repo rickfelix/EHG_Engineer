@@ -38,8 +38,8 @@ THREE-WAY ANALYSIS SOURCES:
 - Google Gemini: ehg repo verification
 
 KEY DISCOVERY: Two-Repo Architecture
-- /mnt/c/_EHG/EHG_Engineer: Infrastructure, migrations, tooling, LEO Protocol
-- /mnt/c/_EHG/EHG (c:\\_EHG\\ehg): Next.js app, APIs, chairman services
+- .: Infrastructure, migrations, tooling, LEO Protocol
+- ../ehg (c:\\_EHG\\ehg): Next.js app, APIs, chairman services
 
 CRITICAL FINDINGS (All 3 AIs Agree):
 1. RLS policies use USING(true) - anyone can read/modify critical tables
@@ -134,8 +134,8 @@ OUT OF SCOPE:
       total_child_sds: 6,
       estimated_duration: '2-3 weeks (3 phases)',
       two_repo_architecture: {
-        ehg_engineer: '/mnt/c/_EHG/EHG_Engineer',
-        ehg: '/mnt/c/_EHG/EHG'
+        ehg_engineer: '.',
+        ehg: '../ehg'
       },
       vision_document_references: [
         'docs/vision/specs/00_VISION_V2_CHAIRMAN_OS.md',

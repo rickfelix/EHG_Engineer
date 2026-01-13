@@ -19,7 +19,7 @@
    - Navigate to "SQL Editor"
 
 2. **Copy Migration SQL**
-   - Open: `/mnt/c/_EHG/EHG_Engineer/database/migrations/20251016_fix_retrospective_trigger_for_embeddings.sql`
+   - Open: `database/migrations/20251016_fix_retrospective_trigger_for_embeddings.sql`
    - Copy entire contents
 
 3. **Execute in SQL Editor**
@@ -36,8 +36,7 @@
 ## Option 2: Apply via psql Command Line
 
 ```bash
-# Navigate to project root
-cd /mnt/c/_EHG/EHG_Engineer
+# From EHG_Engineer root directory
 
 # Get your database connection string from .env
 # Look for: DATABASE_URL or SUPABASE_DB_URL

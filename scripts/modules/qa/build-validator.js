@@ -8,8 +8,14 @@
  */
 
 import { execSync } from 'child_process';
-// path - available for future path operations
-import path from 'path'; // eslint-disable-line no-unused-vars
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '../../..');
+const EHG_ROOT = path.resolve(__dirname, '../../../../ehg');
 
 /**
  * Validate build for target application
@@ -18,8 +24,8 @@ import path from 'path'; // eslint-disable-line no-unused-vars
  */
 export async function validateBuild(targetApp = 'ehg') {
   const appPath = targetApp === 'ehg'
-    ? '/mnt/c/_EHG/EHG'
-    : '/mnt/c/_EHG/EHG_Engineer';
+    ? EHG_ROOT
+    : EHG_ENGINEER_ROOT;
 
   console.log(`🔍 Build Validator: Checking ${targetApp} build...`);
 

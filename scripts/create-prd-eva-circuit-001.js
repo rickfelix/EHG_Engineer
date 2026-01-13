@@ -473,7 +473,7 @@ See structured \`implementation_approach\` field for phased implementation plan.
 
 ## References
 
-- Context7 CircuitBreaker: /mnt/c/_EHG/EHG_Engineer/scripts/context7-circuit-breaker.js
+- Context7 CircuitBreaker: ./scripts/context7-circuit-breaker.js
 - circuit_breaker_state table: database/schema/*
 - eva_actions table: SD-EVA-DECISION-001
 - system_alerts table: database/schema/*

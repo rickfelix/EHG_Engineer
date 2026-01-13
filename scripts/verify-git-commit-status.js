@@ -15,18 +15,25 @@
  *
  * Usage:
  *   node scripts/verify-git-commit-status.js SD-XXX /path/to/app
- *   node scripts/verify-git-commit-status.js SD-XXX  # defaults to /mnt/c/_EHG/EHG
+ *   node scripts/verify-git-commit-status.js SD-XXX  # defaults to EHG_ROOT (cross-platform)
  */
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import fs from 'fs';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
+const EHG_ROOT = path.resolve(__dirname, '../../ehg');
 
 const execAsync = promisify(exec);
 
 class GitCommitVerifier {
-  constructor(sdId, appPath = '/mnt/c/_EHG/EHG', options = {}) {
+  constructor(sdId, appPath = EHG_ROOT, options = {}) {
     this.sdId = sdId;
     this.legacyId = options.legacyId || null; // SD-VENTURE-STAGE0-UI-001: Support legacy_id search
     this.appPath = appPath;
@@ -460,11 +467,11 @@ async function main() {
     console.log('');
     console.log('Arguments:');
     console.log('  SD-XXX     Strategic Directive ID (required)');
-    console.log('  APP_PATH   Path to application directory (default: /mnt/c/_EHG/EHG)');
+    console.log('  APP_PATH   Path to application directory (default: EHG_ROOT)');
     console.log('');
     console.log('Examples:');
     console.log('  node verify-git-commit-status.js SD-EXPORT-001');
-    console.log('  node verify-git-commit-status.js SD-EXPORT-001 /mnt/c/_EHG/EHG');
+    console.log('  node verify-git-commit-status.js SD-EXPORT-001 /path/to/ehg');
     console.log('');
     console.log('Exit Codes:');
     console.log('  0 = PASS (all checks passed)');
@@ -473,7 +480,7 @@ async function main() {
   }
 
   const sdId = args[0];
-  const appPath = args[1] || '/mnt/c/_EHG/EHG';
+  const appPath = args[1] || EHG_ROOT;
 
   const verifier = new GitCommitVerifier(sdId, appPath);
   const results = await verifier.verify();

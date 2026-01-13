@@ -42,7 +42,7 @@ async function checkFullAvatarStatus() {
       console.log('❌ Avatar tables DO NOT exist');
       console.log('');
       console.log('📝 Migration not applied yet.');
-      console.log('   File: /mnt/c/_EHG/EHG/database/migrations/20251010000001_agent_avatars_automation.sql');
+      console.log('   File: ../ehg/database/migrations/20251010000001_agent_avatars_automation.sql');
       console.log('');
       console.log('💡 To apply migration:');
       console.log('   Run the migration SQL file against the database');

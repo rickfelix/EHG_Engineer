@@ -27,7 +27,7 @@ async function createHandoff() {
 - ✅ Technical architecture documented
 
 **Implementation Scope**:
-EXEC agent will implement in EHG application (/mnt/c/_EHG/EHG/) with the following components:
+EXEC agent will implement in EHG application (../ehg/) with the following components:
 1. GitHub webhook endpoint (/api/webhooks/github)
 2. AI analysis service (Anthropic Claude 3.5 Sonnet integration)
 3. Documentation template engine (Handlebars + Markdown)
@@ -35,7 +35,7 @@ EXEC agent will implement in EHG application (/mnt/c/_EHG/EHG/) with the followi
 5. Admin dashboard UI (Shadcn + React + TailwindCSS)
 6. Database migration (6 tables)
 
-**Target Application**: EHG (/mnt/c/_EHG/EHG/)
+**Target Application**: EHG (../ehg/)
 **Estimated EXEC Time**: 10 hours
 **Critical Path**: Webhook → AI → Template → Dashboard → Publish`,
 
@@ -293,8 +293,8 @@ Rationale:
 ### Phase 1: Setup & Migration (30 min)
 1. **Navigate to EHG Application**
    \`\`\`bash
-   cd /mnt/c/_EHG/EHG
-   pwd  # Verify: /mnt/c/_EHG/EHG
+   cd ../ehg
+   pwd  # Verify: ../ehg
    git remote -v  # Verify: rickfelix/ehg.git
    \`\`\`
 
@@ -377,7 +377,7 @@ Rationale:
 
 **CRITICAL Pre-Implementation Checklist** (MANDATORY):
 - [ ] URL verification: Navigate to /admin/documentation (will be created)
-- [ ] Application context: Confirm /mnt/c/_EHG/EHG (NOT EHG_Engineer!)
+- [ ] Application context: Confirm ../ehg (NOT EHG_Engineer!)
 - [ ] Port confirmed: Check which port EHG runs on
 - [ ] Database verified: Supabase liapbndqlqxdcgpwntbv (EHG app database)
 - [ ] Screenshot: Take before/after screenshots`,
@@ -396,7 +396,7 @@ Rationale:
       test_scenarios_complete: true,
       estimated_exec_hours: 12,
       target_application: 'EHG',
-      implementation_path: '/mnt/c/_EHG/EHG/',
+      implementation_path: '../ehg/',
       database: 'liapbndqlqxdcgpwntbv',
       github_repo: 'rickfelix/ehg.git',
       total_files_to_create: 8,
@@ -431,12 +431,12 @@ Rationale:
   console.log('   Type: technical_to_implementation');
   console.log('   Elements: 7/7 (all mandatory elements included)');
   console.log('\n🎯 EXEC Phase Ready:');
-  console.log('   Target: EHG application (/mnt/c/_EHG/EHG/)');
+  console.log('   Target: EHG application (../ehg/)');
   console.log('   Database: liapbndqlqxdcgpwntbv');
   console.log('   Estimated: 12 hours');
   console.log('   Files to create: 8');
   console.log('   Dependencies: 4 (@anthropic-ai/sdk, handlebars, bull, react-markdown)');
-  console.log('\n⚠️  CRITICAL: EXEC must navigate to /mnt/c/_EHG/EHG/ BEFORE implementation!');
+  console.log('\n⚠️  CRITICAL: EXEC must navigate to ../ehg/ BEFORE implementation!');
   console.log('\n✅ PLAN phase complete for SD-041C!');
 }
 

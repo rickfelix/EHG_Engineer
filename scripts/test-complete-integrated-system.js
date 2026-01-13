@@ -64,7 +64,7 @@ async function testCompleteSystem() {
     // 1. Security Agent Test (SD-FOUNDATION-V3-003: Replaced non-existent DocumentationSubAgentV2)
     console.log('🔒 Testing Security Sub-Agent...');
     try {
-      const securityResult = await securityAgent.execute('/mnt/c/_EHG/EHG_Engineer');
+      const securityResult = await securityAgent.execute('.');
       const securityFindings = securityResult.findings || [];
       results.agents.security = {
         findings: securityFindings.length,
@@ -86,7 +86,7 @@ async function testCompleteSystem() {
     // 2. Testing Agent Test (SD-FOUNDATION-V3-003: Using V1 TestingSubAgent)
     console.log('🧪 Testing Testing Sub-Agent...');
     try {
-      const testResult = await testAgent.execute('/mnt/c/_EHG/EHG_Engineer');
+      const testResult = await testAgent.execute('.');
       const testFindings = testResult.findings || [];
       results.agents.testing = {
         findings: testFindings.length,
@@ -108,7 +108,7 @@ async function testCompleteSystem() {
     // 3. API Agent Test
     console.log('🌐 Testing API Sub-Agent...');
     try {
-      const apiResult = await apiAgent.execute('/mnt/c/_EHG/EHG_Engineer');
+      const apiResult = await apiAgent.execute('.');
       const apiFindings = apiResult.findings || [];
       results.agents.api = {
         findings: apiFindings.length,
@@ -130,7 +130,7 @@ async function testCompleteSystem() {
     // 4. Dependency Agent Test
     console.log('📦 Testing Dependency Sub-Agent...');
     try {
-      const depResult = await depAgent.execute('/mnt/c/_EHG/EHG_Engineer');
+      const depResult = await depAgent.execute('.');
       const depFindings = depResult.findings || [];
       results.agents.dependencies = {
         findings: depFindings.length,

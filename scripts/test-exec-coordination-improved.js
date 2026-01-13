@@ -72,7 +72,7 @@ async function testCoordinationWithImprovedAgents() {
     const testAgent = new IntelligentBaseSubAgent('Test', '🧪');
     
     // Test codebase profiling
-    const testPath = '/mnt/c/_EHG/EHG_Engineer';
+    const testPath = '.';
     await testAgent.learnCodebase(testPath);
     
     console.log('Codebase Profile:');

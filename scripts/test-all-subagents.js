@@ -22,7 +22,7 @@ import APISubAgent from '../lib/agents/api-sub-agent';
 
 class SubAgentIntegrationTester {
   constructor(basePath) {
-    this.basePath = basePath || '/mnt/c/_EHG/EHG_Engineer/applications/APP001/codebase';
+    this.basePath = basePath || './applications/APP001/codebase';
     this.results = {
       timestamp: new Date().toISOString(),
       basePath: this.basePath,

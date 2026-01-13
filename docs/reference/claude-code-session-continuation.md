@@ -145,8 +145,8 @@ Bash('wc -l SystemConfiguration.tsx'); // Confirm: 503 LOC ✅
 ## EXEC Pre-Implementation Checklist
 - [ ] Application: [EHG or EHG_Engineer - VERIFIED via pwd]
   ```bash
-  cd /mnt/c/_EHG/EHG && pwd
-  # Expected: /mnt/c/_EHG/EHG
+  cd ../ehg && pwd
+  # Expected: EHG directory
   ```
 
 - [ ] GitHub remote: [verified via git remote -v]
@@ -293,7 +293,7 @@ npm run dev
 
 2. **Verify Application State**:
    ```bash
-   cd /mnt/c/_EHG/EHG && pwd  # Confirm directory
+   cd ../ehg && pwd  # Confirm directory
    git status                  # Check for uncommitted changes
    git log -1                  # See last commit
    ```
@@ -479,7 +479,7 @@ Bash('cat Component.tsx | head -20');  // Verify content
 
 ## Technical Context
 ### Application
-- **Path**: /mnt/c/_EHG/EHG
+- **Path**: ../ehg (sibling directory)
 - **Repository**: rickfelix/ehg.git
 - **Branch**: [branch name]
 - **Last Commit**: [commit SHA]

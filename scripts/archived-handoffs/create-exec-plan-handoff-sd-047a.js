@@ -146,26 +146,26 @@ Implemented comprehensive Gantt chart timeline visualization for venture managem
     deliverables_manifest: `## Deliverables Manifest
 
 ### Database Layer
-- \`/mnt/c/_EHG/EHG/database/migrations/create-venture-milestones-table.sql\` (72 lines)
-- \`/mnt/c/_EHG/EHG/scripts/apply-venture-milestones-migration.js\` (105 lines)
+- \`../ehg/database/migrations/create-venture-milestones-table.sql\` (72 lines)
+- \`../ehg/scripts/apply-venture-milestones-migration.js\` (105 lines)
 
 ### Type Definitions
-- \`/mnt/c/_EHG/EHG/src/types/milestone.ts\` (51 lines)
+- \`../ehg/src/types/milestone.ts\` (51 lines)
 
 ### Data Access Layer
-- \`/mnt/c/_EHG/EHG/src/hooks/useVenturesTimeline.ts\` (95 lines)
-- \`/mnt/c/_EHG/EHG/src/hooks/useMilestoneDrag.ts\` (159 lines)
+- \`../ehg/src/hooks/useVenturesTimeline.ts\` (95 lines)
+- \`../ehg/src/hooks/useMilestoneDrag.ts\` (159 lines)
 
 ### Business Logic
-- \`/mnt/c/_EHG/EHG/src/utils/criticalPath.ts\` (252 lines)
-- \`/mnt/c/_EHG/EHG/src/utils/milestoneAutoPopulate.ts\` (148 lines)
+- \`../ehg/src/utils/criticalPath.ts\` (252 lines)
+- \`../ehg/src/utils/milestoneAutoPopulate.ts\` (148 lines)
 
 ### UI Components
-- \`/mnt/c/_EHG/EHG/src/components/ventures/VentureTimelineView.tsx\` (218 lines)
-- \`/mnt/c/_EHG/EHG/src/lib/supabase.ts\` (16 lines)
+- \`../ehg/src/components/ventures/VentureTimelineView.tsx\` (218 lines)
+- \`../ehg/src/lib/supabase.ts\` (16 lines)
 
 ### Integration
-- \`/mnt/c/_EHG/EHG/src/pages/VenturesPage.tsx\` (Modified: +6 lines)
+- \`../ehg/src/pages/VenturesPage.tsx\` (Modified: +6 lines)
 
 ### Git Commit
 - Commit Hash: 4d3e48f

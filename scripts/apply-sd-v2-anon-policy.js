@@ -15,7 +15,7 @@ async function main() {
 
   try {
     // Read migration file
-    const migrationPath = '/mnt/c/_EHG/EHG_Engineer/database/migrations/20251218_fix_strategic_directives_v2_anon_policy.sql';
+    const migrationPath = './database/migrations/20251218_fix_strategic_directives_v2_anon_policy.sql';
     const sqlContent = readFileSync(migrationPath, 'utf8');
 
     console.log('📄 Migration file loaded');

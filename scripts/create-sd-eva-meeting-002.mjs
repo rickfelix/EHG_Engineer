@@ -295,7 +295,7 @@ This SD addresses visual gaps to match industry standards and client expectation
     phase: 'Phase 2 Visual Polish (follows Phase 1 MVP)',
     estimated_effort: '18-27 hours (~3-5 sprints)',
     target_application: 'EHG',
-    application_path: '/mnt/c/_EHG/EHG/',
+    application_path: '../ehg/',
     database_changes: false,
     requires_migrations: false,
     mockup_reference: 'Screenshot 2025-10-08 173653.png',
@@ -392,7 +392,7 @@ async function createSD() {
     console.log('');
     console.log('🎯 Estimated Effort: 18-27 hours (~3-5 sprints)');
     console.log('🔗 Dependencies: SD-EVA-MEETING-001 (completed ✅)');
-    console.log('📱 Target Application: EHG (/mnt/c/_EHG/EHG/)');
+    console.log('📱 Target Application: EHG (../ehg/)');
     console.log('');
     console.log('🚀 Next Steps:');
     console.log('   1. LEAD Pre-Approval: Run 5-step evaluation checklist');

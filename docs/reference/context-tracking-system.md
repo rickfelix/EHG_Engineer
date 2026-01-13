@@ -108,7 +108,7 @@ Already configured in `.claude/settings.json`:
 {
   "statusLine": {
     "type": "command",
-    "command": "/mnt/c/_EHG/EHG_Engineer/.claude/statusline-context-tracker.sh"
+    "command": ".claude/statusline-context-tracker.sh"
   }
 }
 ```

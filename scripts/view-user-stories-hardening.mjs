@@ -3,7 +3,7 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
-dotenv.config({ path: '/mnt/c/_EHG/EHG_Engineer/.env' });
+dotenv.config({ path: './.env' });
 
 const supabase = createClient(
   process.env.SUPABASE_URL,

@@ -26,9 +26,14 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
+const EHG_ROOT = path.resolve(__dirname, '../../ehg');
+const PARENT_DIR = path.resolve(__dirname, '../..');
+
 class FileTreeGenerator {
   constructor() {
-    this.projectRoot = path.join(__dirname, '..');
+    this.projectRoot = EHG_ENGINEER_ROOT;
     this.outputFile = path.join(this.projectRoot, '.claude', 'file-trees.md');
 
     // Directories to exclude
@@ -83,12 +88,12 @@ class FileTreeGenerator {
 
       // Generate trees for both applications
       const engineerTree = await this.generateTree(
-        '/mnt/c/_EHG/EHG_Engineer',
+        EHG_ENGINEER_ROOT,
         'EHG_Engineer (Management Dashboard)'
       );
 
       const ehgTree = await this.generateTree(
-        '/mnt/c/_EHG/EHG',
+        EHG_ROOT,
         'EHG (Business Application)'
       );
 
@@ -174,7 +179,7 @@ class FileTreeGenerator {
         const entry = entries[i];
         const isLast = i === entries.length - 1;
         const entryPath = path.join(dirPath, entry.name);
-        const relativePath = path.relative('/mnt/c/_EHG/', entryPath);
+        const relativePath = path.relative(PARENT_DIR, entryPath);
 
         // Skip excluded directories
         if (entry.isDirectory() && this.excludeDirs.has(entry.name)) {

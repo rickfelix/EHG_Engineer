@@ -19,7 +19,7 @@
  * Options:
  *   --max-iterations=N    Max iterations (default: 3)
  *   --auto-apply-threshold=N  Confidence threshold for auto-apply (default: 0.90)
- *   --repo-path=PATH      Path to codebase (default: /mnt/c/_EHG/EHG)
+ *   --repo-path=PATH      Path to codebase (default: ../ehg relative to this script)
  *
  * Added: 2025-01-15 (SD-DESIGN-WORKFLOW-REVIEW-001)
  */
@@ -31,6 +31,13 @@ import { applyFixes } from '../lib/workflow-review/story-updater.js';
 import { getCacheStats, refreshCache as _refreshCache } from '../lib/workflow-review/pattern-cache.js';
 import readline from 'readline';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ROOT = path.resolve(__dirname, '../../ehg');
 
 dotenv.config();
 
@@ -57,7 +64,7 @@ const supabaseAdmin = createClient(
 const config = {
   maxIterations: 3,
   autoApplyThreshold: 0.90,
-  repoPath: '/mnt/c/_EHG/EHG'
+  repoPath: EHG_ROOT
 };
 
 /**

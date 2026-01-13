@@ -13,10 +13,17 @@
 
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
+
 // Load environment from EHG_Engineer regardless of cwd
-const envPath = '/mnt/c/_EHG/EHG_Engineer/.env';
+const envPath = path.join(EHG_ENGINEER_ROOT, '.env');
 if (fs.existsSync(envPath)) {
   dotenv.config({ path: envPath });
 } else {

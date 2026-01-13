@@ -37,32 +37,32 @@ async function addExplorationSummary() {
     exploration_date: new Date().toISOString(),
     files_explored: [
       {
-        path: '/mnt/c/_EHG/EHG_Engineer/database/migrations/20251214_add_missing_rls_policies.sql',
+        path: './database/migrations/20251214_add_missing_rls_policies.sql',
         findings: 'RLS policies use USING(true) pattern - grants anyone read/modify access. 165 files found with this pattern across both repos.',
         relevance: 'critical - security issue'
       },
       {
-        path: '/mnt/c/_EHG/EHG/src/pages/api/v2/chairman/decisions.ts',
+        path: '../ehg/src/pages/api/v2/chairman/decisions.ts',
         findings: 'Queries venture_decisions table. N+1 query pattern at lines 93-134 - loops through decisions calling getDecisionEvidence per-decision instead of batch.',
         relevance: 'high - performance and split-brain issue'
       },
       {
-        path: '/mnt/c/_EHG/EHG/src/services/evaStateMachines.ts',
+        path: '../ehg/src/services/evaStateMachines.ts',
         findings: 'Venture state machine maps status to states. Uses ventures table for status. Split-brain concern - UI writes to venture_decisions, state machine reads from ventures.',
         relevance: 'high - correctness issue'
       },
       {
-        path: '/mnt/c/_EHG/EHG_Engineer/database/migrations/20251206_factory_architecture.sql',
+        path: './database/migrations/20251206_factory_architecture.sql',
         findings: 'Contains advance_venture_stage function (without fn_ prefix). Function naming drift between fn_advance_venture_stage and advance_venture_stage.',
         relevance: 'medium - consistency issue'
       },
       {
-        path: '/mnt/c/_EHG/EHG/src/services/chairmanEvidenceService.ts',
+        path: '../ehg/src/services/chairmanEvidenceService.ts',
         findings: 'Multiple as any casts at lines 129, 142, 202, 220 for epistemic_evidence JSONB field. Type safety compromised.',
         relevance: 'medium - type safety issue'
       },
       {
-        path: '/mnt/c/_EHG/EHG/database/migrations/20251030_RLS_PROPER_PATTERN.sql',
+        path: '../ehg/database/migrations/20251030_RLS_PROPER_PATTERN.sql',
         findings: 'Shows documented pattern for RLS - uses USING(true) for public read, authenticated full access. Pattern confirmed across multiple files.',
         relevance: 'critical - confirms security pattern'
       }
