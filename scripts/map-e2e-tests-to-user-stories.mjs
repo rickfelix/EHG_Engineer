@@ -22,6 +22,10 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import fs from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -31,8 +35,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-const EHG_APP_PATH = '/mnt/c/_EHG/EHG';
-const E2E_TEST_DIR = `${EHG_APP_PATH}/tests/e2e`;
+// Cross-platform path (relative from scripts/ to ehg/)
+const EHG_APP_PATH = process.env.EHG_APP_PATH || path.join(__dirname, '../../ehg');
+const E2E_TEST_DIR = path.join(EHG_APP_PATH, 'tests/e2e');
 
 /**
  * Recursively find all .spec.ts files in directory
@@ -70,7 +75,7 @@ async function scanE2ETestFiles() {
 
   for (const file of testFiles) {
     const content = await fs.readFile(file, 'utf-8');
-    const relativePath = file.replace(`${EHG_APP_PATH}/`, '');
+    const relativePath = path.relative(EHG_APP_PATH, file).replace(/\\/g, '/');
 
     // Extract all test() declarations with US-XXX references
     // Matches: test('US-001: Description', async ({ page }) => {
