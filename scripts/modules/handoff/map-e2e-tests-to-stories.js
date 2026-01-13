@@ -10,9 +10,14 @@
 
 import fs from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-const EHG_APP_PATH = '/mnt/c/_EHG/EHG';
-const E2E_TEST_DIR = `${EHG_APP_PATH}/tests/e2e`;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Cross-platform path (relative from scripts/modules/handoff/ to ehg/)
+const EHG_APP_PATH = process.env.EHG_APP_PATH || path.join(__dirname, '../../../../ehg');
+const E2E_TEST_DIR = path.join(EHG_APP_PATH, 'tests/e2e');
 
 /**
  * Recursively find all .spec.ts files in directory
@@ -51,7 +56,7 @@ async function scanE2ETestFiles() {
   for (const file of testFiles) {
     try {
       const content = await fs.readFile(file, 'utf-8');
-      const relativePath = file.replace(`${EHG_APP_PATH}/`, '');
+      const relativePath = path.relative(EHG_APP_PATH, file).replace(/\\/g, '/');
 
       // Extract all test() declarations with US-XXX references
       // Matches: test('US-001: Description', async ({ page }) => {
