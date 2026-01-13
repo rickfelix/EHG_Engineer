@@ -47,6 +47,23 @@ node scripts/leo.js add-project
 # 3. Register: node scripts/leo-register-from-env.js
 ```
 
+### Windows Setup
+
+For Windows development without WSL, use the PowerShell scripts:
+
+```powershell
+# Start all servers
+.\scripts\leo-stack.ps1 start
+
+# Check status
+.\scripts\leo-stack.ps1 status
+
+# Run tests
+npm run test:smoke
+```
+
+See the complete [Windows Setup Guide](docs/guides/windows-setup-guide.md) for detailed instructions.
+
 ## Project Registry
 
 All projects are managed in `applications/registry.json`:
@@ -93,6 +110,7 @@ EHG_Engineer/
 
 ## Important Files
 
+- [Windows Setup Guide](docs/guides/windows-setup-guide.md) - Windows development without WSL
 - [IMPORTANT_DATABASE_DISTINCTION.md](docs/operations/IMPORTANT_DATABASE_DISTINCTION.md) - Critical info about database separation
 - [PROJECT_REGISTRATION_GUIDE.md](docs/guides/PROJECT_REGISTRATION_GUIDE.md) - How to add new projects
 - [SIMPLE_PROJECT_SETUP.md](docs/guides/SIMPLE_PROJECT_SETUP.md) - Simplified setup instructions
