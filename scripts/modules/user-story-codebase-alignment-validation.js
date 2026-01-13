@@ -14,13 +14,20 @@
 
 import fs from 'fs';
 import path from 'path';
-import { glob } from 'glob';
+import glob from 'glob';
+import { fileURLToPath } from 'url';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const EHG_ENGINEER_ROOT = path.resolve(__dirname, '../..');
+const EHG_ROOT = path.resolve(__dirname, '../../../ehg');
 
 // Default application paths by target_application
 const APP_PATHS = {
-  EHG: '/mnt/c/_EHG/EHG',
-  EHG_Engineer: '/mnt/c/_EHG/EHG_Engineer',
-  default: '/mnt/c/_EHG/EHG'
+  EHG: EHG_ROOT,
+  EHG_Engineer: EHG_ENGINEER_ROOT,
+  default: EHG_ROOT
 };
 
 /**

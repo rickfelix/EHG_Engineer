@@ -6,6 +6,27 @@
  */
 
 import ResultBuilder from '../ResultBuilder.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Cross-platform path resolution (SD-WIN-MIG-005 fix)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+/**
+ * Get cross-platform repository path
+ * @param {string} repoName - 'EHG_Engineer' or 'EHG'/'ehg'
+ * @returns {string} Resolved absolute path
+ */
+function getRepoPath(repoName) {
+  const normalizedName = repoName.toLowerCase();
+  if (normalizedName.includes('engineer')) {
+    // EHG_Engineer is 4 levels up from this file: executors -> handoff -> modules -> scripts -> root
+    return path.resolve(__dirname, '../../../../');
+  }
+  // EHG/ehg is sibling to EHG_Engineer
+  return path.resolve(__dirname, '../../../../../ehg');
+}
 
 export class BaseExecutor {
   constructor(dependencies = {}) {
@@ -44,14 +65,26 @@ export class BaseExecutor {
       // Step 2.5: Auto-claim SD for this session (sets is_working_on = true)
       await this._claimSDForSession(sdId, sd);
 
-      // Step 3: Run required gates
-      const gates = await this.getRequiredGates(sd, options);
-      const gateResults = await this.validationOrchestrator.validateGates(gates, {
+      // Step 3: Run required gates (with database rule integration - SD-VALIDATION-REGISTRY-001)
+      const hardcodedGates = await this.getRequiredGates(sd, options);
+
+      // Merge hardcoded gates with database rules
+      const validationContext = {
         sdId,
+        sd_id: sdId,  // Alias for validators that use sd_id
         sd,
         options,
         supabase: this.supabase
-      });
+      };
+
+      // Use database-driven gates when available, fall back to hardcoded
+      const gates = await this.validationOrchestrator.buildGatesFromRules(
+        hardcodedGates,
+        this.handoffType,
+        validationContext
+      );
+
+      const gateResults = await this.validationOrchestrator.validateGates(gates, validationContext);
 
       if (!gateResults.passed) {
         const remediation = this.getRemediation(gateResults.failedGate);
@@ -247,14 +280,14 @@ export class BaseExecutor {
           targetApp === 'ehg_engineer' ||
           targetApp === 'ehg-engineer') {
         console.log(`   Repository determined by target_application: "${sd.target_application}" → EHG_Engineer`);
-        return '/mnt/c/_EHG/EHG_Engineer';
+        return getRepoPath('EHG_Engineer');
       }
 
       if (targetApp === 'ehg' ||
           targetApp === 'app' ||
           targetApp === 'application') {
         console.log(`   Repository determined by target_application: "${sd.target_application}" → EHG`);
-        return '/mnt/c/_EHG/EHG';
+        return getRepoPath('EHG');
       }
 
       console.warn(`   ⚠️  Unknown target_application value: "${sd.target_application}"`);
@@ -267,11 +300,11 @@ export class BaseExecutor {
     const engineeringKeywords = ['eng/', 'tool/', 'infra/', 'pipeline/', 'build/', 'deploy/'];
 
     if (engineeringKeywords.some(keyword => sd.id.toLowerCase().includes(keyword))) {
-      return '/mnt/c/_EHG/EHG_Engineer';
+      return getRepoPath('EHG_Engineer');
     }
 
     if (sd.category && engineeringCategories.includes(sd.category.toLowerCase())) {
-      return '/mnt/c/_EHG/EHG_Engineer';
+      return getRepoPath('EHG_Engineer');
     }
 
     if (sd.title) {
@@ -281,11 +314,11 @@ export class BaseExecutor {
           titleLower.includes('leo ') ||
           titleLower.includes('gate ') ||
           titleLower.includes('handoff')) {
-        return '/mnt/c/_EHG/EHG_Engineer';
+        return getRepoPath('EHG_Engineer');
       }
     }
 
-    return '/mnt/c/_EHG/EHG';
+    return getRepoPath('EHG');
   }
 }
 
