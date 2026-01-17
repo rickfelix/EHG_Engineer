@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-01-11 8:27:45 AM
+**Generated**: 2026-01-17 12:45:44 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -212,6 +212,30 @@ LEAD Phase                    PLAN Phase                   EXEC Phase
 ```
 
 
+## Deferred Work Management
+
+### What Gets Deferred
+- Technical debt discovered during implementation
+- Edge cases not critical for MVP
+- Performance optimizations for later
+- Nice-to-have features
+
+### Creating Deferred Items
+```sql
+INSERT INTO deferred_work (sd_id, title, reason, priority)
+VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
+```
+
+### Tracking
+- Deferred items linked to parent SD
+- Reviewed during retrospective
+- May become new SDs if significant
+
+### Rules
+- Document WHY deferred, not just WHAT
+- Set realistic priority (critical items shouldn't be deferred)
+- Max 5 deferred items per SD
+
 ## PLAN Phase Negative Constraints
 
 ## 🚫 PLAN Phase Negative Constraints
@@ -249,30 +273,6 @@ Task(subagent_type="database-agent", prompt="Execute DATABASE analysis for SD-XX
 **Why Wrong**: PRD validator blocks placeholders, signals incomplete planning
 **Correct Approach**: If truly unknown, use AskUserQuestion to clarify before PRD creation
 </negative_constraints>
-
-## Deferred Work Management
-
-### What Gets Deferred
-- Technical debt discovered during implementation
-- Edge cases not critical for MVP
-- Performance optimizations for later
-- Nice-to-have features
-
-### Creating Deferred Items
-```sql
-INSERT INTO deferred_work (sd_id, title, reason, priority)
-VALUES ('SD-XXX', 'Title', 'Reason for deferral', 'low');
-```
-
-### Tracking
-- Deferred items linked to parent SD
-- Reviewed during retrospective
-- May become new SDs if significant
-
-### Rules
-- Document WHY deferred, not just WHAT
-- Set realistic priority (critical items shouldn't be deferred)
-- Max 5 deferred items per SD
 
 ## PRD Template Scaffolding
 
@@ -382,6 +382,23 @@ node scripts/detect-stubbed-code.js <SD-ID>
 **Exit Requirement**: Zero stubbed code in production files, OR documented in "Known Issues" with follow-up SD created.
 
 
+## Enhanced QA Engineering Director v2.0 - Testing-First Edition
+
+**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
+
+**Core Capabilities:**
+1. Professional test case generation from user stories
+2. Pre-test build validation (saves 2-3 hours)
+3. Database migration verification (prevents 1-2 hours debugging)
+4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
+5. Test infrastructure discovery and reuse
+
+**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
+
+**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
+
+**Full Guide**: See `docs/reference/qa-director-guide.md`
+
 ## ✅ Scope Verification with Explore (PLAN_VERIFY)
 
 ## Scope Verification with Explore
@@ -452,23 +469,6 @@ This change [describe]. Options:
 
 Which do you prefer?"
 ```
-
-## Enhanced QA Engineering Director v2.0 - Testing-First Edition
-
-**Enhanced QA Engineering Director v2.0**: Mission-critical testing automation with comprehensive E2E validation.
-
-**Core Capabilities:**
-1. Professional test case generation from user stories
-2. Pre-test build validation (saves 2-3 hours)
-3. Database migration verification (prevents 1-2 hours debugging)
-4. **Mandatory E2E testing via Playwright** (REQUIRED for approval)
-5. Test infrastructure discovery and reuse
-
-**5-Phase Workflow**: Pre-flight checks → Test generation → E2E execution → Evidence collection → Verdict & learnings
-
-**Activation**: Auto-triggers on `EXEC_IMPLEMENTATION_COMPLETE`, coverage keywords, testing evidence requests
-
-**Full Guide**: See `docs/reference/qa-director-guide.md`
 
 ## Database Schema Documentation
 
@@ -2020,108 +2020,6 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
 ## Validation Rules
 
 
-- **hasADR** (Gate 2A)
-  - Weight: 0.35
-  - Required: Yes
-  - Criteria: 
-
-
-- **hasInterfaces** (Gate 2A)
-  - Weight: 0.35
-  - Required: Yes
-  - Criteria: 
-
-
-- **hasTechDesign** (Gate 2A)
-  - Weight: 0.3
-  - Required: Yes
-  - Criteria: 
-
-
-- **designArtifacts** (Gate 2B)
-  - Weight: 0.5
-  - Required: Yes
-  - Criteria: 
-
-
-- **dbSchemaReady** (Gate 2B)
-  - Weight: 0.5
-  - Required: Yes
-  - Criteria: 
-
-
-- **securityScanClean** (Gate 2C)
-  - Weight: 0.6
-  - Required: Yes
-  - Criteria: 
-
-
-- **riskSpikesClosed** (Gate 2C)
-  - Weight: 0.4
-  - Required: Yes
-  - Criteria: 
-
-
-- **nfrBudgetsPresent** (Gate 2D)
-  - Weight: 0.3
-  - Required: Yes
-  - Criteria: 
-
-
-- **coverageTargetSet** (Gate 2D)
-  - Weight: 0.3
-  - Required: Yes
-  - Criteria: 
-
-
-- **testPlanMatrices** (Gate 2D)
-  - Weight: 0.4
-  - Required: Yes
-  - Criteria: 
-
-
-- **supervisorChecklistPass** (Gate 3)
-  - Weight: 1
-  - Required: Yes
-  - Criteria: 
-
-
-- **hasESLintPass** (Gate 0)
-  - Weight: 0.4
-  - Required: Yes
-  - Criteria: 5 criteria defined (command, timeout_ms, description...)
-
-
-- **hasTypeScriptPass** (Gate 0)
-  - Weight: 0.4
-  - Required: Yes
-  - Criteria: 5 criteria defined (command, timeout_ms, description...)
-
-
-- **hasImportsPass** (Gate 0)
-  - Weight: 0.2
-  - Required: No
-  - Criteria: 5 criteria defined (command, blocking, timeout_ms...)
-
-
-- **hasUnitTestsExecuted** (Gate 1)
-  - Weight: 0.4
-  - Required: Yes
-  - Criteria: 5 criteria defined (command, timeout, description...)
-
-
-- **hasUnitTestsPassing** (Gate 1)
-  - Weight: 0.4
-  - Required: Yes
-  - Criteria: 4 criteria defined (command, description, successCriteria...)
-
-
-- **hasCoverageThreshold** (Gate 1)
-  - Weight: 0.2
-  - Required: No
-  - Criteria: 5 criteria defined (command, description, minCoverage...)
-
-
 - **hasTestEvidence** (Gate Q)
   - Weight: 0.35
   - Required: Yes
@@ -2146,20 +2044,350 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
   - Criteria: 5 criteria defined (command, description, naming_pattern...)
 
 
-- **strengthen_handoff_validation_3_handoff_s_missin** (Gate 2C)
-  - Weight: 0.5
-  - Required: No
-  - Criteria: 4 criteria defined (source, category, evidence...)
+- **sdExistenceCheck** (Gate L)
+  - Weight: 0.15
+  - Required: Yes
+  - Criteria: checks: ["id_exists","status_active","not_archived"]; description: "Strategic Directive exists and is active"
 
 
-- **strengthen_handoff_validation_1_handoff_s_missin** (Gate 2C)
-  - Weight: 0.5
+- **sdObjectivesDefined** (Gate L)
+  - Weight: 0.25
+  - Required: Yes
+  - Criteria: min_items: 2; description: "Strategic objectives defined with measurable outcomes"; required_fields: ["strategic_objectives","success_metrics"]
+
+
+- **sdPrioritySet** (Gate L)
+  - Weight: 0.2
+  - Required: Yes
+  - Criteria: description: "Priority is set to critical, high, medium, or low"; valid_values: ["critical","high","medium","low"]
+
+
+- **sdSuccessCriteria** (Gate L)
+  - Weight: 0.25
+  - Required: Yes
+  - Criteria: min_items: 3; description: "Success criteria defined with measurable items"
+
+
+- **sdRisksIdentified** (Gate L)
+  - Weight: 0.15
   - Required: No
-  - Criteria: 4 criteria defined (source, category, evidence...)
+  - Criteria: allow_empty: true; description: "Risks array is defined (can be empty for low-risk SDs)"
+
+
+- **hasESLintPass** (Gate 0)
+  - Weight: 0.4
+  - Required: Yes
+  - Criteria: 5 criteria defined (command, timeout_ms, description...)
+
+
+- **hasTypeScriptPass** (Gate 0)
+  - Weight: 0.4
+  - Required: Yes
+  - Criteria: 5 criteria defined (command, timeout_ms, description...)
+
+
+- **hasImportsPass** (Gate 0)
+  - Weight: 0.2
+  - Required: No
+  - Criteria: 5 criteria defined (command, blocking, timeout_ms...)
+
+
+- **prdQualityValidation** (Gate 1)
+  - Weight: 0.15
+  - Required: Yes
+  - Criteria: 4 criteria defined (model, uses_ai, min_score...)
+
+
+- **userStoryQualityValidation** (Gate 1)
+  - Weight: 0.15
+  - Required: Yes
+  - Criteria: 4 criteria defined (uses_ai, min_score, description...)
+
+
+- **designSubAgentExecution** (Gate 1)
+  - Weight: 0.12
+  - Required: Yes
+  - Criteria: checks: ["execution_exists","verdict_not_fail"]; description: "DESIGN sub-agent executed and analysis stored"; sub_agent_code: "DESIGN"
+
+
+- **databaseSubAgentExecution** (Gate 1)
+  - Weight: 0.12
+  - Required: Yes
+  - Criteria: checks: ["execution_exists","design_informed"]; description: "DATABASE sub-agent executed and informed by DESIGN"; sub_agent_code: "DATABASE"
+
+
+- **bmadContextEngineering** (Gate 1)
+  - Weight: 0.1
+  - Required: Yes
+  - Criteria: checks: ["implementation_context","checkpoint_plan"]; description: "User story context engineering >= 80% coverage"; min_coverage: 80
+
+
+- **goalSummaryValidation** (Gate 1)
+  - Weight: 0.08
+  - Required: Yes
+  - Criteria: max_length: 300; description: "Goal summary present and <= 300 chars"
+
+
+- **fileScopeValidation** (Gate 1)
+  - Weight: 0.08
+  - Required: Yes
+  - Criteria: description: "File scope has create/modify/delete arrays"; required_arrays: ["create","modify","delete"]
+
+
+- **executionPlanValidation** (Gate 1)
+  - Weight: 0.1
+  - Required: Yes
+  - Criteria: min_steps: 1; description: "Execution plan has >= 1 step"
+
+
+- **testingStrategyValidation** (Gate 1)
+  - Weight: 0.1
+  - Required: Yes
+  - Criteria: description: "Testing strategy defines unit_tests and e2e_tests"; required_sections: ["unit_tests","e2e_tests"]
+
+
+- **uiComponentsImplemented** (Gate 2A)
+  - Weight: 0.4
+  - Required: Yes
+  - Criteria: checks: ["component_files_exist","naming_conventions"]; description: "UI components created matching design specifications"
+
+
+- **userWorkflowsImplemented** (Gate 2A)
+  - Weight: 0.35
+  - Required: Yes
+  - Criteria: checks: ["workflows_in_deliverables"]; description: "User workflows implemented as designed"
+
+
+- **userActionsSupported** (Gate 2A)
+  - Weight: 0.25
+  - Required: No
+  - Criteria: checks: ["create","update","delete","insert"]; description: "CRUD operations found in code changes"
+
+
+- **migrationsCreatedAndExecuted** (Gate 2B)
+  - Weight: 0.6
+  - Required: Yes
+  - Criteria: checks: ["migration_files_exist","migrations_executed"]; critical: true; description: "CRITICAL: Database migrations exist AND executed in database"
+
+
+- **rlsPoliciesImplemented** (Gate 2B)
+  - Weight: 0.2
+  - Required: No
+  - Criteria: checks: ["CREATE_POLICY","ALTER_POLICY"]; description: "RLS policies created for new tables"
+
+
+- **migrationComplexityAligned** (Gate 2B)
+  - Weight: 0.2
+  - Required: No
+  - Criteria: checks: ["line_count","complexity_appropriate"]; description: "Migration complexity matches design requirements"
+
+
+- **databaseQueriesIntegrated** (Gate 2C)
+  - Weight: 0.4
+  - Required: Yes
+  - Criteria: checks: [".select(",".insert(",".update(",".from("]; description: "Database queries found in code (.select, .insert, .update)"
+
+
+- **formUiIntegration** (Gate 2C)
+  - Weight: 0.4
+  - Required: Yes
+  - Criteria: checks: ["useState","useForm","onSubmit","Input","Button"]; description: "Form/UI integration found (useState, useForm, onSubmit)"
+
+
+- **dataValidationImplemented** (Gate 2C)
+  - Weight: 0.2
+  - Required: No
+  - Criteria: checks: ["zod","validate","schema",".required()"]; description: "Data validation found (zod, schema, required)"
+
+
+- **e2eTestCoverage** (Gate 2D)
+  - Weight: 0.4
+  - Required: Yes
+  - Criteria: 4 criteria defined (checks, critical, test_dirs...)
+
+
+- **testingSubAgentVerified** (Gate 2D)
+  - Weight: 0.3
+  - Required: Yes
+  - Criteria: description: "TESTING sub-agent executed with PASS verdict"; sub_agent_code: "TESTING"; expected_verdict: "PASS"
+
+
+- **screenshotEvidenceExists** (Gate 2D)
+  - Weight: 0.15
+  - Required: No
+  - Criteria: checks: ["screenshot_url_valid"]; description: "E2E test screenshots exist"
+
+
+- **playwrightReportExists** (Gate 2D)
+  - Weight: 0.15
+  - Required: No
+  - Criteria: checks: ["playwright_report_url_valid"]; description: "Playwright report URL exists and valid"
+
+
+- **recommendationAdherence** (Gate 3)
+  - Weight: 0.3
+  - Required: Yes
+  - Criteria: checks: ["design_adherence_percent","database_adherence_percent"]; description: "CRITICAL: EXEC delivered what PLAN designed"; min_adherence: 80
+
+
+- **implementationQuality** (Gate 3)
+  - Weight: 0.3
+  - Required: Yes
+  - Criteria: checks: ["gate2_score","test_coverage_documented"]; description: "CRITICAL: Gate 2 passed with acceptable score"; min_gate2_score: 70
+
+
+- **traceabilityMapping** (Gate 3)
+  - Weight: 0.25
+  - Required: Yes
+  - Criteria: checks: ["commits_reference_sd","design_code_mapping","database_schema_mapping"]; description: "PRD->Implementation, Design->Code, DB->Schema tracing"
+
+
+- **subAgentEffectiveness** (Gate 3)
+  - Weight: 0.1
+  - Required: No
+  - Criteria: checks: ["sub_agents_executed","substantial_recommendations"]; description: "Sub-agents executed with substantial recommendations"
+
+
+- **lessonsCaptured** (Gate 3)
+  - Weight: 0.05
+  - Required: No
+  - Criteria: checks: ["retrospective_prepared","workflow_effectiveness_noted"]; description: "Retrospective preparation and workflow notes"
+
+
+- **executiveSummaryComplete** (Gate Q)
+  - Weight: 0
+  - Required: No
+  - Criteria: min_length: 100; description: "Executive summary is complete and specific"
+
+
+- **keyDecisionsDocumented** (Gate Q)
+  - Weight: 0
+  - Required: No
+  - Criteria: description: "Key decisions documented with rationale"; check_decision_language: true
+
+
+- **knownIssuesTracked** (Gate Q)
+  - Weight: 0
+  - Required: No
+  - Criteria: allow_none: true; description: "Known issues tracked or explicitly none"
+
+
+- **actionItemsPresent** (Gate Q)
+  - Weight: 0
+  - Required: No
+  - Criteria: min_items: 3; description: "Action items for next phase >= 3"
+
+
+- **completenessReportValid** (Gate Q)
+  - Weight: 0
+  - Required: No
+  - Criteria: description: "Completeness report has phase, score, status"; required_fields: ["phase","score","status"]
+
+
+- **valueDelivered** (Gate 4)
+  - Weight: 0.35
+  - Required: Yes
+  - Criteria: questions: ["Does this solve a real business problem?","Is this the simplest solution?","Are we building whats needed vs nice-to-have?"]; description: "Strategic value delivered: solves real business problem"
+
+
+- **patternEffectiveness** (Gate 4)
+  - Weight: 0.3
+  - Required: Yes
+  - Criteria: questions: ["Did EXEC over-engineer this?","Whats the ROI/complexity ratio?"]; description: "Pattern effectiveness: no over-engineering, good ROI"
+
+
+- **executiveValidation** (Gate 4)
+  - Weight: 0.25
+  - Required: Yes
+  - Criteria: checks: ["pr_merged","user_stories_complete","retrospective_exists"]; description: "Executive validation: PR merged, user stories complete"
+
+
+- **processAdherence** (Gate 4)
+  - Weight: 0.1
+  - Required: No
+  - Criteria: checks: ["all_gates_passed","protocol_followed"]; description: "Process adherence: all gates passed, protocol followed"
+
+
+- **sdTransitionReadiness** (Gate L)
+  - Weight: 0
+  - Required: Yes
+  - Criteria: checks: ["status_valid","not_blocked"]; description: "SD transition readiness check"
+
+
+- **targetApplicationValidation** (Gate L)
+  - Weight: 0
+  - Required: Yes
+  - Criteria: description: "Target application is valid and accessible"; valid_targets: ["EHG","EHG_Engineer"]
+
+
+- **architectureVerification** (Gate 1)
+  - Weight: 0
+  - Required: No
+  - Criteria: checks: ["adr_exists","interfaces_defined"]; description: "Architecture verification gate"
+
+
+- **explorationAudit** (Gate 1)
+  - Weight: 0
+  - Required: No
+  - Criteria: checks: ["files_explored","patterns_identified"]; description: "Exploration audit - codebase understanding verified"
+
+
+- **branchEnforcement** (Gate 1)
+  - Weight: 0
+  - Required: Yes
+  - Criteria: checks: ["branch_exists","branch_naming_valid"]; description: "Git branch enforcement - feature branch created"
+
+
+- **subAgentOrchestration** (Gate 3)
+  - Weight: 0
+  - Required: Yes
+  - Criteria: description: "Sub-agent orchestration complete"; required_agents: ["DESIGN","DATABASE","TESTING"]
+
+
+- **retrospectiveQualityGate** (Gate 3)
+  - Weight: 0
+  - Required: No
+  - Criteria: description: "Retrospective quality gate - lessons captured"; min_quality_score: 70
+
+
+- **gitCommitEnforcement** (Gate 3)
+  - Weight: 0
+  - Required: Yes
+  - Criteria: checks: ["commits_exist","commits_reference_sd"]; description: "Git commits reference SD ID"
+
+
+- **planToLeadHandoffExists** (Gate 4)
+  - Weight: 0
+  - Required: Yes
+  - Criteria: status: "accepted"; description: "PLAN-TO-LEAD handoff exists and accepted"
+
+
+- **userStoriesComplete** (Gate 4)
+  - Weight: 0
+  - Required: Yes
+  - Criteria: coverage: 100; description: "All user stories validated and complete"
+
+
+- **retrospectiveExists** (Gate 4)
+  - Weight: 0
+  - Required: Yes
+  - Criteria: required: true; description: "Retrospective exists for this SD"
+
+
+- **prMergeVerification** (Gate 4)
+  - Weight: 0
+  - Required: Yes
+  - Criteria: checks: ["pr_exists","pr_merged"]; description: "PR merged to main branch"
+
+
+- **sdTypeValidation** (Gate 0)
+  - Weight: 0.1
+  - Required: No
+  - Criteria: category: "sd_quality"; description: "SD-LEO-001: Validate SD type matches content-based detection"; handoff_type: "LEAD-TO-PLAN"
 
 
 ---
 
-*Generated from database: 2026-01-11*
+*Generated from database: 2026-01-17*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*
