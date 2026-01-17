@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-01-11 8:27:45 AM
+**Generated**: 2026-01-17 12:45:44 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -14,8 +14,7 @@
 The EHG ecosystem consists of two primary components sharing a consolidated database:
 
 1. **EHG** (Unified Frontend) - PORT 8080
-   - **Path (Linux/WSL)**: `/mnt/c/_EHG/EHG/`
-   - **Path (Windows)**: `C:\Users\rickf\Projects\_EHG\ehg\`
+   - **Path**: `/mnt/c/_EHG/EHG/`
    - **Purpose**: Complete application frontend (user features + admin dashboard)
    - **Database**: dedlbzhpgkmetvhbkyzq (Supabase) - CONSOLIDATED
    - **GitHub**: https://github.com/rickfelix/ehg.git
@@ -29,8 +28,7 @@ The EHG ecosystem consists of two primary components sharing a consolidated data
    - **Role**: ALL UI FEATURES - both user and admin
 
 2. **EHG_Engineer** (Backend API) - PORT 3000
-   - **Path (Linux/WSL)**: `/mnt/c/_EHG/EHG_Engineer/`
-   - **Path (Windows)**: `C:\Users\rickf\Projects\_EHG\EHG_Engineer\`
+   - **Path**: `/mnt/c/_EHG/EHG_Engineer/`
    - **Purpose**: Backend API server + LEO Protocol scripts
    - **Database**: dedlbzhpgkmetvhbkyzq (Supabase) - CONSOLIDATED
    - **GitHub**: https://github.com/rickfelix/EHG_Engineer.git
@@ -41,8 +39,7 @@ The EHG ecosystem consists of two primary components sharing a consolidated data
    - **Role**: BACKEND SERVICES ONLY - no standalone frontend
 
 3. **Agent Platform** (AI Backend) - PORT 8000
-   - **Path (Linux/WSL)**: `/mnt/c/_EHG/EHG/agent-platform/`
-   - **Path (Windows)**: `C:\Users\rickf\Projects\_EHG\ehg\agent-platform\`
+   - **Path**: `/mnt/c/_EHG/EHG/agent-platform/`
    - **Purpose**: AI research backend for venture creation
    - **Built with**: FastAPI + Python
 
@@ -50,15 +47,11 @@ The EHG ecosystem consists of two primary components sharing a consolidated data
 
 ### ⚠️ CRITICAL: During EXEC Phase Implementation
 1. **Read PRD** from EHG_Engineer database (or via API)
-2. **Navigate** to EHG directory for ALL frontend work:
-   - Linux/WSL: `/mnt/c/_EHG/EHG/`
-   - Windows: `C:\Users\rickf\Projects\_EHG\ehg\`
+2. **Navigate** to `/mnt/c/_EHG/EHG/` for ALL frontend work
 3. **For admin features**: Implement in `/src/components/admin/` or `/src/pages/admin/`
 4. **For user features**: Implement in `/src/components/` or `/src/pages/`
 5. **Push changes** to EHG's GitHub repo: `rickfelix/ehg.git`
-6. **For backend API changes**: Navigate to EHG_Engineer:
-   - Linux/WSL: `/mnt/c/_EHG/EHG_Engineer/`
-   - Windows: `C:\Users\rickf\Projects\_EHG\EHG_Engineer\`
+6. **For backend API changes**: Navigate to `/mnt/c/_EHG/EHG_Engineer/`
 
 ### 🔄 Workflow Relationship
 ```
@@ -70,18 +63,8 @@ EHG_Engineer (Backend)              EHG (Unified Frontend)
 ```
 
 ### Stack Startup
-
-**Linux/WSL:**
 ```bash
 bash scripts/leo-stack.sh restart   # Starts all 3 servers
-# Port 3000: EHG_Engineer backend API
-# Port 8080: EHG unified frontend
-# Port 8000: Agent Platform AI backend
-```
-
-**Windows (PowerShell):**
-```powershell
-.\scripts\leo-stack.ps1 restart   # Starts all 3 servers (requires leo-stack.ps1)
 # Port 3000: EHG_Engineer backend API
 # Port 8080: EHG unified frontend
 # Port 8000: Agent Platform AI backend
@@ -397,8 +380,27 @@ These principles override default behavior and must be internalized before start
 - CI/CD pipeline status (green checks required)
 - Sub-agent verification results in database
 
-**REMEMBER**: The goal is NOT to complete SDs quickly. The goal is to complete SDs CORRECTLY. A properly implemented SD that takes 8 hours is infinitely better than a rushed implementation that takes 4 hours but requires 6 hours of fixes.
+### Anti-Bias Rules (MANDATORY)
 
+Claude has documented cognitive biases. These rules OVERRIDE those biases:
+
+| Bias | Incorrect Behavior | Correct Behavior |
+|------|-------------------|------------------|
+| **Efficiency bias** | Skip workflow steps to ship faster | Full workflow is non-negotiable |
+| **Completion bias** | Interpret "complete" as "code works" | "Complete" = database status + all validations |
+| **Abstraction bias** | Treat children as sub-tasks | Children are INDEPENDENT SDs |
+| **Autonomy bias** | "Continue autonomously" = no human gates | Each phase still requires validation |
+
+**RULE**: When ANY bias-pattern is detected, STOP and verify with user.
+
+**NEVER**:
+- Ship code without completing full LEO Protocol
+- Skip LEAD approval for child SDs
+- Skip PRD creation for child SDs
+- Skip handoffs for child SDs
+- Mark parent complete before all children complete in database
+
+**REMEMBER**: The goal is NOT to complete SDs quickly. The goal is to complete SDs CORRECTLY. A properly implemented SD that takes 8 hours is infinitely better than a rushed implementation that takes 4 hours but requires 6 hours of fixes.
 
 ## 🖥️ UI Parity Requirement (MANDATORY)
 
@@ -796,6 +798,37 @@ After ANY code changes:
 (Must be sequential - second read depends on first)
 ```
 
+## Critical Term Definitions
+
+## 🚫 CRITICAL TERM DEFINITIONS (BINDING)
+
+These definitions are BINDING. Misinterpretation is a protocol violation.
+
+### "Complete an SD"
+**Definition**: An SD is "complete" ONLY when:
+1. Full LEAD→PLAN→EXEC cycle executed (per sd_type requirements)
+2. Database status = 'completed'
+3. All required handoffs recorded
+4. Retrospective created
+5. LEO Protocol validation trigger passes
+
+**NOT complete**: Code shipped but database shows 'draft'/'in_progress'
+
+### "Continue autonomously"
+**Definition**: Execute the current SD through its full LEO Protocol workflow.
+**NOT**: Skip workflow steps for efficiency.
+**STOP condition**: If instruction is ambiguous about workflow requirements, ASK.
+
+### "Child SD"
+**Definition**: An INDEPENDENT Strategic Directive that requires its own full LEAD→PLAN→EXEC cycle.
+**NOT**: A sub-task or implementation detail of the parent.
+**Each child**: Has its own PRD, handoffs, retrospective, and completion validation.
+
+### "Ship" vs "Complete"
+**Ship**: Code merged to main branch.
+**Complete**: Ship + database status 'completed' + all handoffs + retrospective.
+**CRITICAL**: Shipping is NECESSARY but NOT SUFFICIENT for completion.
+
 ## 🔍 Issue Pattern Search (Knowledge Base)
 
 Before implementing fixes or designing features, search the pattern database for known issues and proven solutions.
@@ -895,11 +928,11 @@ Patterns exceeding these thresholds auto-create CRITICAL SDs:
 
 **CRITICAL**: Genesis spans TWO codebases:
 
-| Codebase | Path (Linux/WSL) | Path (Windows) | Contents |
-|----------|------------------|----------------|----------|
-| **EHG_Engineer** | `/mnt/c/_EHG/EHG_Engineer/lib/genesis/` | `C:\Users\rickf\Projects\_EHG\EHG_Engineer\lib\genesis\` | Infrastructure (quality gates, TTL, patterns) |
-| **EHG App** | `/mnt/c/_EHG/ehg/lib/genesis/` | `C:\Users\rickf\Projects\_EHG\ehg\lib\genesis\` | Orchestrators (ScaffoldEngine, repo-creator) |
-| **EHG App** | `/mnt/c/_EHG/ehg/scripts/genesis/` | `C:\Users\rickf\Projects\_EHG\ehg\scripts\genesis\` | Pipeline (genesis-pipeline.js, soul-extractor.js) |
+| Codebase | Path | Contents |
+|----------|------|----------|
+| **EHG_Engineer** | `/lib/genesis/` | Infrastructure (quality gates, TTL, patterns) |
+| **EHG App** | `/lib/genesis/` | Orchestrators (ScaffoldEngine, repo-creator) |
+| **EHG App** | `/scripts/genesis/` | Pipeline (genesis-pipeline.js, soul-extractor.js) |
 
 ### Quick Reference
 | Task | Location |
@@ -977,6 +1010,35 @@ Each child SD needs LEAD approval because:
 
 LEAD is not redundant - it's essential validation per child.
 
+### Orchestrator STOP Conditions (MANDATORY)
+
+When working on orchestrator SDs, STOP and verify if:
+
+1. **Instruction ambiguity**: "Continue autonomously" or similar without explicit workflow guidance
+   - STOP: Ask "Should each child go through full LEAD→PLAN→EXEC, or is there a streamlined path?"
+
+2. **Efficiency temptation**: Urge to ship children faster by skipping steps
+   - STOP: The existing workflow exists for a reason. Do not optimize.
+
+3. **Batch completion**: Desire to mark multiple children complete at once
+   - STOP: Each child completes independently through LEO validation
+
+4. **Database status mismatch**: Code shipped but database shows incomplete
+   - STOP: Code shipped ≠ SD complete. Complete the protocol.
+
+### Child SD Completion Checklist
+
+Before claiming a child SD is "complete", verify ALL:
+- [ ] Child has its own PRD in `product_requirements_v2`
+- [ ] LEAD-TO-PLAN handoff recorded
+- [ ] PLAN-TO-EXEC handoff recorded
+- [ ] Implementation merged to main
+- [ ] EXEC-TO-PLAN handoff recorded
+- [ ] PLAN-TO-LEAD handoff recorded
+- [ ] Retrospective created
+- [ ] Database status = 'completed' (trigger passes)
+- [ ] Parent progress recalculated
+
 ### Progress Calculation
 
 Parent progress = weighted average of child progress:
@@ -1003,8 +1065,8 @@ SELECT calculate_parent_sd_progress('SD-PARENT-001');
 SELECT get_next_child_sd('SD-PARENT-001');
 
 -- Detect orchestrator (for gate bypass)
-SELECT COUNT(*) > 0 as is_orchestrator 
-FROM strategic_directives_v2 
+SELECT COUNT(*) > 0 as is_orchestrator
+FROM strategic_directives_v2
 WHERE parent_sd_id = 'SD-XXX';
 ```
 
@@ -1135,17 +1197,7 @@ For SQL migrations, use the Supabase CLI or dashboard SQL editor:
 **EHG (Port 8080)**: Unified frontend (user + admin at /admin/*)
 
 **API Changes**: Restart server → Test endpoints
-
-**Linux/WSL:**
-```bash
-pkill -f "node server.js" && PORT=3000 node server.js
-```
-
-**Windows (PowerShell):**
-```powershell
-Get-Process -Name node -ErrorAction SilentlyContinue | Where-Object {$_.CommandLine -like "*server.js*"} | Stop-Process -Force
-$env:PORT=3000; node server.js
-```
+**Commands**: `pkill -f "node server.js" && PORT=3000 node server.js`
 
 **Frontend Changes**: Make changes in EHG repository (/mnt/c/_EHG/EHG/)
 **Complete Guide**: See `docs/01_architecture/UNIFIED-FRONTEND-ARCHITECTURE.md`
@@ -1536,7 +1588,29 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. UI Canon Alignment - Retrospective ⭐
+### 1. Sovereign Industrial Expansion - Stages 7-25 Materialization (Orchestrator) ⭐
+**Category**: PROCESS_IMPROVEMENT | **Date**: 12/27/2025 | **Score**: 100
+
+**Key Improvements**:
+- LEO Protocol artifacts should be created BEFORE implementation, not retroactively
+- Handoff chain documentation should accompany development from the start
+
+**Action Items**:
+- [ ] Create orchestrator SD template with built-in child tracking
+- [ ] Enforce LEO Protocol compliance for all SDs from LEAD phase
+
+### 2. Mock Infrastructure: Config, Registry, and Utilities - Retrospective ⭐
+**Category**: PROCESS_IMPROVEMENT | **Date**: 12/28/2025 | **Score**: 100
+
+**Key Improvements**:
+- Root Cause: jsdom test environment does not properly mock localStorage between test cases, causing 2...
+- Root Cause: Handoff validation system requires multiple sub-agent validations that may not be applic...
+
+**Action Items**:
+- [ ] Document mock system usage in docs/mock-data-system.md (in SD-MOCK-POLISH)
+- [ ] Complete missing handoff documentation
+
+### 3. UI Canon Alignment - Retrospective ⭐
 **Category**: TESTING_STRATEGY | **Date**: 12/19/2025 | **Score**: 100
 
 **Key Improvements**:
@@ -1547,7 +1621,7 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 - [ ] Add eslint rule to deprecate IDEATION_STAGES import and suggest VENTURE_STAGES
 - [ ] Configure separate Playwright timeouts for mock-mode tests (30s) vs real-mode te...
 
-### 2. Settings Tab Clarity + Feature Catalog Copy (NAV-48 + NAV-49) - Retrospective ⭐
+### 4. Settings Tab Clarity + Feature Catalog Copy (NAV-48 + NAV-49) - Retrospective ⭐
 **Category**: APPLICATION_ISSUE | **Date**: 12/26/2025 | **Score**: 100
 
 **Key Improvements**:
@@ -1558,38 +1632,16 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 - [ ] Add timeout fallback for AI quality assessment in handoffs
 - [ ] Complete missing handoff documentation
 
-### 3. Vision V2: EVA Orchestration Layer - Retrospective ⭐
-**Category**: DATABASE_SCHEMA | **Date**: 12/14/2025 | **Score**: 100
+### 5. Mock Polish: UI Indicator, Developer Toggle, Documentation - Retrospective ⭐
+**Category**: PROCESS_IMPROVEMENT | **Date**: 12/28/2025 | **Score**: 100
 
 **Key Improvements**:
-- No unified test evidence found - consider running comprehensive E2E tests
-- No unified test evidence found - consider running comprehensive E2E tests
+- Initial PLAN-TO-EXEC handoff blocked due to missing exploration_summary
+- Documentation commit was on wrong branch causing false positive in stub detection
 
 **Action Items**:
-- [ ] Add reset_sd_phase RPC function for administrative phase corrections
-- [ ] Maintain E2E test path auto-generation for all SD types
-
-### 4. Legacy Protocol Cleanup (The Exorcism) - Retrospective ⭐
-**Category**: DEPLOYMENT_ISSUE | **Date**: 12/16/2025 | **Score**: 100
-
-**Key Improvements**:
-- Should have documented rollback procedure before starting
-- E2E tests could verify UI still renders Stage1-25 correctly
-
-**Action Items**:
-- [ ] Create rollback procedure for stage component deletions
-- [ ] Add E2E test verifying Stage1-25 UI renders correctly
-
-### 5. Sovereign Industrial Expansion - Stages 7-25 Materialization (Orchestrator) ⭐
-**Category**: PROCESS_IMPROVEMENT | **Date**: 12/27/2025 | **Score**: 100
-
-**Key Improvements**:
-- LEO Protocol artifacts should be created BEFORE implementation, not retroactively
-- Handoff chain documentation should accompany development from the start
-
-**Action Items**:
-- [ ] Create orchestrator SD template with built-in child tracking
-- [ ] Enforce LEO Protocol compliance for all SDs from LEAD phase
+- [ ] Owner: LEO Protocol Maintainer | Deadline: 2025-01-15 | Action: Auto-populate ex...
+- [ ] Owner: CI/CD Team | Deadline: 2025-01-10 | Action: Modify stubbed code detection...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1780,7 +1832,7 @@ Handles customer relationship management, lead tracking, customer success metric
 
 ---
 
-*Generated from database: 2026-01-11*
+*Generated from database: 2026-01-17*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

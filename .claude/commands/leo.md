@@ -144,3 +144,54 @@ When an SD reaches LEAD-FINAL-APPROVAL and is marked complete, suggest this sequ
 After `/leo next` shows the SD queue:
 - If continuing an SD → Load appropriate CLAUDE_*.md context
 - If starting fresh → Suggest `/restart` if long session (>2 hours)
+
+### Orchestrator SD Detection (MANDATORY)
+
+**CRITICAL**: When starting work on an SD that has children (orchestrator pattern), you MUST run the preflight check BEFORE any implementation work.
+
+#### Detection Query
+```bash
+# Check if SD is an orchestrator (has children)
+node -e "
+const { createClient } = require('@supabase/supabase-js');
+require('dotenv').config();
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+supabase.from('strategic_directives_v2').select('id').eq('parent_sd_id', 'SD-XXX-001').then(({data}) => {
+  console.log('Children:', data?.length || 0);
+  if (data?.length > 0) console.log('⚠️ ORCHESTRATOR DETECTED - Run preflight!');
+});
+"
+```
+
+#### Preflight Check (MANDATORY for orchestrators)
+When an orchestrator is detected, run the preflight check:
+```bash
+node scripts/orchestrator-preflight.js SD-XXX-001
+```
+
+The preflight will:
+1. Show all children and their SD types
+2. Display workflow requirements PER CHILD (PRD required, E2E required, min handoffs, gate threshold)
+3. Require explicit confirmation before proceeding
+
+#### Why This Matters
+
+Without the preflight:
+- **Efficiency bias** causes Claude to treat children as sub-tasks
+- **Completion bias** causes "ship code" to be confused with "complete SD"
+- Children get code shipped but don't go through full LEAD→PLAN→EXEC
+- Database shows 'draft'/'in_progress' while code is on main
+
+With the preflight:
+- Workflow requirements are visible BEFORE work starts (not just at completion validation)
+- Each child's SD-type-specific requirements are explicit
+- Explicit confirmation prevents rationalization
+
+#### Autonomous Orchestrator Workflow
+
+When starting work on an orchestrator SD:
+1. **Run preflight automatically** - `node scripts/orchestrator-preflight.js SD-XXX-001`
+2. **Display the requirements** - Let the user see child workflow requirements
+3. **Proceed with full workflow** - No confirmation needed; full LEAD→PLAN→EXEC for each child is the ONLY correct path
+
+**There is no question about how to proceed.** Children are independent SDs requiring full workflow. The preflight is for visibility, not approval.
