@@ -256,10 +256,22 @@ export class ValidatorRegistry {
     }, 'PRD quality validation using AI-powered Russian Judge rubric');
 
     this.register('userStoryQualityValidation', async (context) => {
-      const { prd, options = {} } = context;
-      const stories = prd?.user_stories || [];
+      const { prd, sd_id, supabase, options = {} } = context;
+
+      // SD-LEO-001: First check PRD content, then check user_stories table
+      let stories = prd?.user_stories || prd?.content?.user_stories || [];
+
+      // If no stories in PRD, check the user_stories table
+      if (stories.length === 0 && supabase && (sd_id || prd?.sd_id)) {
+        const { data: tableStories } = await supabase
+          .from('user_stories')
+          .select('*')
+          .eq('sd_id', sd_id || prd?.sd_id);
+        stories = tableStories || [];
+      }
+
       if (stories.length === 0) {
-        return { passed: false, score: 0, max_score: 100, issues: ['No user stories found in PRD'] };
+        return { passed: false, score: 0, max_score: 100, issues: ['No user stories found in PRD or user_stories table'] };
       }
       const result = await validateUserStoriesForHandoff(stories, options);
       return this.normalizeResult(result);
