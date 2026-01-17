@@ -256,7 +256,7 @@ export class ValidatorRegistry {
     }, 'PRD quality validation using AI-powered Russian Judge rubric');
 
     this.register('userStoryQualityValidation', async (context) => {
-      const { prd, sd_id, supabase, options = {} } = context;
+      const { prd, sd, sd_id, supabase, options = {} } = context;
 
       // SD-LEO-001: First check PRD content, then check user_stories table
       let stories = prd?.user_stories || prd?.content?.user_stories || [];
@@ -273,12 +273,46 @@ export class ValidatorRegistry {
       if (stories.length === 0) {
         return { passed: false, score: 0, max_score: 100, issues: ['No user stories found in PRD or user_stories table'] };
       }
-      const result = await validateUserStoriesForHandoff(stories, options);
-      return this.normalizeResult(result);
+
+      // SD-LEO-001: Pass SD type to enable heuristic validation for infrastructure/database SDs
+      const validationOptions = {
+        ...options,
+        sdType: sd?.sd_type || '',
+        sdCategory: sd?.category || ''
+      };
+
+      const result = await validateUserStoriesForHandoff(stories, validationOptions);
+
+      // SD-LEO-001: Map result fields to normalizeResult expected format
+      // validateUserStoriesForHandoff returns: { valid, averageScore, issues, warnings, ... }
+      // normalizeResult expects: { passed, score, issues, warnings, ... }
+      return this.normalizeResult({
+        passed: result.valid,
+        score: result.averageScore,
+        max_score: 100,
+        issues: result.issues,
+        warnings: result.warnings,
+        details: result
+      });
     }, 'User story quality validation');
 
     this.register('designSubAgentExecution', async (context) => {
-      const { sd_id, supabase } = context;
+      const { sd, sd_id, supabase } = context;
+
+      // SD-LEO-001: Only 'feature' and 'database' SDs require DESIGN sub-agent
+      // Aligns with SD_TYPE_CATEGORIES.DESIGN_DATABASE_GATES from sd-type-checker.js
+      const requiresDesignGate = ['feature', 'database'];
+      const sdType = (sd?.sd_type || '').toLowerCase();
+      if (!requiresDesignGate.includes(sdType)) {
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [`DESIGN sub-agent skipped for ${sdType} SD type`]
+        };
+      }
+
       // Check for DESIGN sub-agent execution
       const { data, error } = await supabase
         .from('sd_sub_agent_executions')
@@ -301,7 +335,22 @@ export class ValidatorRegistry {
     }, 'DESIGN sub-agent execution verification');
 
     this.register('databaseSubAgentExecution', async (context) => {
-      const { sd_id, supabase } = context;
+      const { sd, sd_id, supabase } = context;
+
+      // SD-LEO-001: Only 'feature' and 'database' SDs require DATABASE sub-agent
+      // Aligns with SD_TYPE_CATEGORIES.DESIGN_DATABASE_GATES from sd-type-checker.js
+      const requiresDatabaseGate = ['feature', 'database'];
+      const sdType = (sd?.sd_type || '').toLowerCase();
+      if (!requiresDatabaseGate.includes(sdType)) {
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [`DATABASE sub-agent skipped for ${sdType} SD type`]
+        };
+      }
+
       const { data, error } = await supabase
         .from('sd_sub_agent_executions')
         .select('*')
@@ -342,8 +391,23 @@ export class ValidatorRegistry {
     }, 'Goal summary validation (max 300 chars)');
 
     this.register('fileScopeValidation', async (context) => {
-      const { prd } = context;
-      const fileScope = prd?.file_scope || {};
+      const { sd, prd } = context;
+
+      // SD-LEO-001: Skip file_scope validation for infrastructure/documentation SDs
+      const skipTypes = ['infrastructure', 'documentation', 'orchestrator'];
+      const sdType = (sd?.sd_type || '').toLowerCase();
+      if (skipTypes.includes(sdType)) {
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [`file_scope validation skipped for ${sdType} SD type`]
+        };
+      }
+
+      // Check both prd.file_scope and prd.metadata.file_scope
+      const fileScope = prd?.file_scope || prd?.metadata?.file_scope || {};
       const issues = [];
 
       if (!fileScope.create && !fileScope.modify && !fileScope.delete) {
@@ -367,7 +431,21 @@ export class ValidatorRegistry {
     }, 'File scope validation');
 
     this.register('executionPlanValidation', async (context) => {
-      const { prd } = context;
+      const { sd, prd } = context;
+
+      // SD-LEO-001: Skip for infrastructure/documentation SDs
+      const skipTypes = ['infrastructure', 'documentation', 'orchestrator'];
+      const sdType = (sd?.sd_type || '').toLowerCase();
+      if (skipTypes.includes(sdType)) {
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [`execution_plan validation skipped for ${sdType} SD type`]
+        };
+      }
+
       const executionPlan = prd?.execution_plan || prd?.implementation_steps || [];
 
       if (!executionPlan || executionPlan.length === 0) {
@@ -378,7 +456,21 @@ export class ValidatorRegistry {
     }, 'Execution plan validation (min 1 step)');
 
     this.register('testingStrategyValidation', async (context) => {
-      const { prd } = context;
+      const { sd, prd } = context;
+
+      // SD-LEO-001: Skip for infrastructure/documentation SDs
+      const skipTypes = ['infrastructure', 'documentation', 'orchestrator'];
+      const sdType = (sd?.sd_type || '').toLowerCase();
+      if (skipTypes.includes(sdType)) {
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [`testing_strategy validation skipped for ${sdType} SD type`]
+        };
+      }
+
       const testing = prd?.testing_strategy || prd?.testing || {};
       const issues = [];
 
