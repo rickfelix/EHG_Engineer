@@ -159,7 +159,49 @@ node scripts/ship-preflight.js --fix
 node scripts/ship-preflight.js --json
 ```
 
-**If BLOCKED, follow the remediation steps before proceeding to Step 1.**
+**If BLOCKED, follow the remediation steps before proceeding to Step 0.6.**
+
+---
+
+### Step 0.6: Code Simplification (OPTIONAL)
+
+Before committing, consider running `/simplify` to clean up code without changing behavior.
+
+**When to run:**
+- Session had rapid iteration (multiple debug cycles)
+- Code works but feels "messy"
+- Pre-PR polish desired
+
+**Quick check:**
+```javascript
+import { SimplificationEngine } from './lib/simplifier/simplification-engine.js';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const engine = new SimplificationEngine(supabase);
+const files = engine.getSessionChangedFiles();
+
+if (files.length > 0) {
+  console.log(`📝 ${files.length} files changed - consider /simplify`);
+  const results = await engine.simplify(files, { dryRun: true });
+  if (results.totalChanges > 0) {
+    console.log(`   🔧 ${results.totalChanges} simplifications available`);
+  }
+}
+```
+
+**If changes found:**
+1. Run `/simplify` to preview
+2. Review changes (especially `logic` type rules)
+3. Run `/simplify --apply` if acceptable
+4. Proceed to Step 1
+
+**Skip if:**
+- No simplifications found
+- Time-sensitive shipping
+- Changes are too risky (manual cleanup preferred)
+
+See `/simplify` command for full details.
 
 ---
 

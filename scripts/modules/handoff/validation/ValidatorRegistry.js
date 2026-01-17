@@ -242,6 +242,57 @@ export class ValidatorRegistry {
       return { passed: true, score: 100, max_score: 100, issues: [] };
     }, 'Verify risks are identified (optional for low-risk SDs)');
 
+    // SD-LEO-001: SD Type Validation - Ensures SD type matches detected type from content
+    this.register('sdTypeValidation', async (context) => {
+      const { sd } = context;
+      if (!sd) {
+        return { passed: false, score: 0, max_score: 100, issues: ['No SD provided'] };
+      }
+
+      // Dynamic import to avoid circular dependencies
+      const { detectSDType } = await import('../../../lib/utils/sd-type-detection.js');
+      const detection = detectSDType(sd);
+
+      const currentType = (sd.sd_type || '').toLowerCase();
+      const detectedType = (detection.type || '').toLowerCase();
+
+      // If no type set, warn but don't fail
+      if (!currentType) {
+        return {
+          passed: true,
+          score: 70,
+          max_score: 100,
+          issues: [],
+          warnings: [`SD type not set. Detection suggests: ${detection.type} (${detection.confidence}% confidence)`]
+        };
+      }
+
+      // Check for mismatch
+      if (currentType !== detectedType) {
+        // High confidence detection should be a warning
+        if (detection.confidence >= 70) {
+          return {
+            passed: true,
+            score: 80,
+            max_score: 100,
+            issues: [],
+            warnings: [
+              `SD type mismatch: set as '${currentType}' but detection suggests '${detection.type}' (${detection.confidence}% confidence)`,
+              `Reason: ${detection.reason}`
+            ]
+          };
+        }
+      }
+
+      return {
+        passed: true,
+        score: 100,
+        max_score: 100,
+        issues: [],
+        warnings: []
+      };
+    }, 'SD-LEO-001: Validate SD type matches content-based detection');
+
     // ========================================
     // Gate 1 - PLAN to EXEC Validation
     // ========================================
