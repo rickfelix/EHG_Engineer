@@ -30,7 +30,23 @@ The `/restart` command connects to other commands in the workflow:
 
 ### Post-Restart Suggestions
 
-**If SD just completed (LEAD-FINAL-APPROVAL passed) - Use AskUserQuestion:**
+**If SD requires UAT (feature, bugfix, security, refactor, enhancement) - Use AskUserQuestion:**
+
+```javascript
+{
+  "question": "Servers restarted. Ready for User Acceptance Testing?",
+  "header": "Post-Restart",
+  "multiSelect": false,
+  "options": [
+    {"label": "/uat (Recommended)", "description": "Run human acceptance testing before shipping"},
+    {"label": "Skip UAT, /ship", "description": "Ship without formal UAT (not recommended for features)"},
+    {"label": "/leo next", "description": "Check SD queue first"},
+    {"label": "Done for now", "description": "End session"}
+  ]
+}
+```
+
+**If SD is infrastructure/database/docs (UAT exempt) - Use AskUserQuestion:**
 
 ```javascript
 {
@@ -66,8 +82,17 @@ The `/restart` command connects to other commands in the workflow:
 
 | Scenario | Suggest /restart | Why |
 |----------|------------------|-----|
+| Before `/uat` for feature SDs | Yes | Clean environment for UAT testing |
 | Before `/ship` with UI changes | Yes | Verify renders in clean environment |
 | After LEAD-FINAL-APPROVAL | Yes (if UI) | Fresh state for visual verification |
 | Long session (>2 hours) | Yes | Prevents stale server state |
 | After major implementation | Yes | Ensure changes are reflected |
 | Quick-fix or small changes | Optional | Usually not needed |
+
+### Typical Flow After /restart
+
+```
+/restart → /uat → /ship → /document → /learn
+```
+
+For UAT-requiring SDs (feature, bugfix, security, refactor, enhancement), always suggest /uat before /ship.

@@ -28,25 +28,39 @@ The LEO Protocol commands form an interconnected ecosystem where each command su
                     │           SD COMPLETION (LEAD-FINAL)            │
                     └─────────────────────────────────────────────────┘
                                           │
+                                          ▼
+                                  ┌───────────┐
+                                  │  /restart │
+                                  │ (UI work) │
+                                  └───────────┘
+                                          │
                     ┌─────────────────────┼─────────────────────┐
                     │                     │                     │
                     ▼                     ▼                     ▼
             ┌───────────┐         ┌───────────┐         ┌───────────┐
-            │  /restart │◄───────►│   /ship   │◄───────►│ /document │
-            │ (UI work) │         │  (always) │         │ (feature) │
+            │   /uat    │────────►│   /ship   │◄───────►│ /document │
+            │(features) │         │  (always) │         │ (feature) │
             └───────────┘         └───────────┘         └───────────┘
                     │                     │                     │
                     │                     ▼                     │
                     │             ┌───────────┐                 │
-                    └────────────►│  /learn   │◄────────────────┘
-                                  │  (always) │
-                                  └───────────┘
-                                          │
-                                          ▼
-                                  ┌───────────┐
-                                  │ /leo next │
-                                  │(new work) │
-                                  └───────────┘
+                    │             │  /learn   │◄────────────────┘
+                    │             │  (always) │
+                    │             └───────────┘
+                    │                     │
+                    ▼                     ▼
+            ┌───────────┐         ┌───────────┐
+            │/quick-fix │         │ /leo next │
+            │(<50 LOC)  │         │(new work) │
+            └───────────┘         └───────────┘
+```
+
+### /uat Position in Workflow
+```
+LEAD-FINAL-APPROVAL → /restart → /uat → /ship → /document → /learn → /leo next
+                                   │
+                                   └── defect found → /quick-fix (auto-merge)
+                                                  or → Create SD (full workflow)
 ```
 
 ## Command Ecosystem Map
@@ -55,11 +69,15 @@ The LEO Protocol commands form an interconnected ecosystem where each command su
 
 | Step | After | Condition | Suggest | Why |
 |------|-------|-----------|---------|-----|
-| 1 | LEAD-FINAL-APPROVAL | UI/feature SD | `/restart` | Clean environment for visual review |
-| 2 | `/restart` | SD completed | Visual review → `/ship` | Verify before committing |
-| 3 | `/ship` (merge) | Always | `/learn` | Capture learnings while fresh |
-| 4 | `/ship` (merge) | Feature/API SD | `/document` | Update documentation |
-| 5 | `/ship` (merge) | More SDs queued | `/leo next` | Continue work |
+| 1 | LEAD-FINAL-APPROVAL | UI/feature SD | `/restart` | Clean environment for UAT |
+| 2 | `/restart` | Feature/bugfix/security/refactor/enhancement | `/uat` | Human acceptance testing |
+| 2a | `/restart` | Infrastructure/database/docs | `/ship` | UAT not required |
+| 3 | `/uat` | GREEN or YELLOW gate | `/ship` | Proceed to shipping |
+| 3a | `/uat` | Defect found, <=50 LOC | `/quick-fix` | Auto-merge fix |
+| 3b | `/uat` | Defect found, >50 LOC | Create SD | Full workflow for fix |
+| 4 | `/ship` (merge) | Always | `/learn` | Capture learnings while fresh |
+| 5 | `/ship` (merge) | Feature/API SD | `/document` | Update documentation |
+| 6 | `/ship` (merge) | More SDs queued | `/leo next` | Continue work |
 
 ### Secondary Flows
 
@@ -91,8 +109,14 @@ The LEO Protocol commands form an interconnected ecosystem where each command su
 
 ### `/restart` - Environment Reset
 - **Primary**: Restart all LEO stack servers
-- **Suggests**: Visual review → `/ship` (if SD completed)
+- **Suggests**: `/uat` (for feature/bugfix/security/refactor/enhancement SDs)
 - **Receives from**: `/leo` (after LEAD-FINAL for UI work)
+
+### `/uat` - Human Acceptance Testing
+- **Primary**: Interactive UAT execution with Given/When/Then scenarios
+- **Suggests**: `/ship` (GREEN/YELLOW gate), `/quick-fix` (defect found)
+- **Receives from**: `/restart` (for UAT-requiring SD types)
+- **Quality Gates**: GREEN (0 fails, >=85%), YELLOW (has fails, >=85%), RED (<85%)
 
 ### `/ship` - Code Shipping
 - **Primary**: Commit, create PR, merge
