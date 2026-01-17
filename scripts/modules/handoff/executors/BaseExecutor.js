@@ -68,11 +68,20 @@ export class BaseExecutor {
       // Step 3: Run required gates (with database rule integration - SD-VALIDATION-REGISTRY-001)
       const hardcodedGates = await this.getRequiredGates(sd, options);
 
+      // SD-LEO-001: Load PRD for validators that need it (e.g., prdQualityValidation)
+      // This fixes the "No PRD provided" error in PLAN-TO-EXEC handoffs
+      let prd = null;
+      if (this.prdRepo) {
+        prd = await this.prdRepo.getBySdId(sd.id);
+      }
+
       // Merge hardcoded gates with database rules
       const validationContext = {
         sdId,
         sd_id: sdId,  // Alias for validators that use sd_id
         sd,
+        prd,          // SD-LEO-001: Include PRD in context for validators
+        prdId: prd?.id,  // Also provide prdId for convenience
         options,
         supabase: this.supabase
       };
