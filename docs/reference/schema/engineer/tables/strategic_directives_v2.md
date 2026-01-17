@@ -2,15 +2,15 @@
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
-**Repository**: /mnt/c/_EHG/EHG_Engineer/
+**Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-11T02:41:15.246Z
-**Rows**: 427
+**Generated**: 2026-01-17T11:36:37.316Z
+**Rows**: 434
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
-⚠️ **CRITICAL**: This schema is for **EHG_Engineer** database. Implementations go in /mnt/c/_EHG/EHG_Engineer/
+⚠️ **CRITICAL**: This schema is for **EHG_Engineer** database. Implementations go in EHG_Engineer (this repository)
 
 ---
 
@@ -355,6 +355,16 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION trigger_retro_notification()`
+
+### tr_sd_baseline_sync
+
+- **Timing**: AFTER INSERT
+- **Action**: `EXECUTE FUNCTION fn_sync_sd_to_baseline()`
+
+### tr_sd_baseline_sync
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION fn_sync_sd_to_baseline()`
 
 ### trg_auto_complete_parent_orchestrator
 
