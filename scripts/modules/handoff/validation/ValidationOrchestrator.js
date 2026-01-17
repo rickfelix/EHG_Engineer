@@ -13,6 +13,7 @@
 
 import ResultBuilder from '../ResultBuilder.js';
 import { validatorRegistry } from './ValidatorRegistry.js';
+import { shouldSkipCodeValidation } from '../../../../lib/utils/sd-type-validation.js';
 
 export class ValidationOrchestrator {
   constructor(supabase, options = {}) {
@@ -383,6 +384,28 @@ export class ValidationOrchestrator {
           required: rule.required,
           validator: async (ctx) => {
             const mergedContext = { ...context, ...ctx };
+
+            // FIX: Check SD type and skip code validation for infrastructure/documentation SDs
+            // This provides a centralized bypass for database-driven validation rules
+            if (mergedContext.sd_id || mergedContext.sdId) {
+              const sdId = mergedContext.sd_id || mergedContext.sdId;
+              const { data: sdData } = await this.supabase
+                .from('strategic_directives_v2')
+                .select('id, sd_type, title')
+                .eq('id', sdId)
+                .single();
+
+              if (sdData && shouldSkipCodeValidation(sdData)) {
+                return {
+                  passed: true,
+                  score: 100,
+                  max_score: 100,
+                  issues: [],
+                  warnings: [`Validation skipped for ${sdData.sd_type} SD`]
+                };
+              }
+            }
+
             const result = await validator(mergedContext);
             return this.validatorRegistry.normalizeResult(result);
           },

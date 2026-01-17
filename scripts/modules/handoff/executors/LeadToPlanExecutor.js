@@ -1101,7 +1101,8 @@ export class LeadToPlanExecutor extends BaseExecutor {
     const sdType = (sd.sd_type || 'feature').toLowerCase();
 
     // SD types that don't require smoke test specification
-    const EXEMPT_SD_TYPES = ['documentation', 'infrastructure', 'refactor', 'orchestrator'];
+    // FIX: Added 'docs' as alias for 'documentation'
+    const EXEMPT_SD_TYPES = ['documentation', 'docs', 'infrastructure', 'refactor', 'orchestrator'];
 
     if (EXEMPT_SD_TYPES.includes(sdType)) {
       console.log(`   ℹ️  SD Type: ${sdType} - smoke test specification not required`);

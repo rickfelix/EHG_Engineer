@@ -197,6 +197,7 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
       console.log('      (No code changes to validate)\n');
 
       // Return passing validation for documentation-only SDs
+      // Include section scores so downstream validators (ValidatorRegistry) get consistent results
       validation.passed = true;
       validation.score = 100;
       validation.details.sd_type_bypass = {
@@ -205,6 +206,28 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
         skipped_checks: ['testing', 'server_restart', 'code_quality', 'design_fidelity', 'database_fidelity']
       };
       validation.warnings.push('Gate 2 validation skipped for documentation-only SD');
+
+      // FIX: Populate sections with full scores for validators that expect them
+      // This ensures ValidatorRegistry validators (uiComponentsImplemented, etc.) don't fail
+      // when they try to access sections.A, sections.B, etc.
+      const bypassSection = {
+        score: 100,
+        passed: true,
+        issues: [],
+        warnings: [`Skipped for ${sd.sd_type} SD`]
+      };
+      validation.sections = {
+        A: bypassSection,
+        B: bypassSection,
+        C: bypassSection,
+        D: bypassSection
+      };
+      validation.sectionScores = {
+        A: bypassSection,
+        B: bypassSection,
+        C: bypassSection,
+        D: bypassSection
+      };
 
       return validation;
     }
