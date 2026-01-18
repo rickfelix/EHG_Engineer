@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-18T00:48:15.335Z
+**Generated**: 2026-01-18T14:23:18.070Z
 **Rows**: 0
-**RLS**: Disabled
+**RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -41,6 +41,28 @@
   ```sql
   CREATE UNIQUE INDEX feedback_sd_map_pkey ON public.feedback_sd_map USING btree (feedback_id, sd_id)
   ```
+
+## RLS Policies
+
+### 1. delete_feedback_sd_map_policy (DELETE)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+
+### 2. insert_feedback_sd_map_policy (INSERT)
+
+- **Roles**: {service_role}
+- **With Check**: `true`
+
+### 3. select_feedback_sd_map_policy (SELECT)
+
+- **Roles**: {authenticated}
+- **Using**: `true`
+
+### 4. update_feedback_sd_map_policy (UPDATE)
+
+- **Roles**: {service_role}
+- **Using**: `true`
 
 ---
 
