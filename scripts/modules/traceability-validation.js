@@ -348,7 +348,8 @@ async function validateRecommendationAdherence(_sd_id, designAnalysis, databaseA
 
   // SD-MOCK-POLISH: Docs/Infrastructure SDs that passed EXEC-TO-PLAN (Gate 2) get full credit
   // These SDs focus on documentation, polish, and minor enhancements without design/database changes
-  const isDocsSD = sdType === 'docs' || sdType === 'infrastructure';
+  // SD-LIFECYCLE-GAP-002 FIX: Also check sdCategory for infrastructure (category vs sd_type consistency)
+  const isDocsSD = sdType === 'docs' || sdType === 'infrastructure' || sdCategory === 'infrastructure';
   if (isDocsSD && gate2Data && gate2Data.score >= 80) {
     console.log('   ✅ Docs/Infrastructure SD passed EXEC-TO-PLAN - Section A full credit (30/30)');
     console.log('   💡 Docs SDs validated via implementation quality, not design/database fidelity');
@@ -575,7 +576,8 @@ async function validateTraceabilityMapping(sd_id, sdUuid, designAnalysis, databa
   const isDatabaseSD = sdCategory === 'database';
 
   // SD-MOCK-POLISH: Determine if this is a docs/infrastructure SD
-  const isDocsSD = sdType === 'docs' || sdType === 'infrastructure';
+  // SD-LIFECYCLE-GAP-002 FIX: Also check sdCategory for infrastructure (category vs sd_type consistency)
+  const isDocsSD = sdType === 'docs' || sdType === 'infrastructure' || sdCategory === 'infrastructure';
 
   console.log('\n   [C] Traceability Mapping...');
   if (isSecuritySD) {
