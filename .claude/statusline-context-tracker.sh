@@ -65,6 +65,19 @@ if ! command -v jq &> /dev/null; then
     exit 0
 fi
 
+# Graceful fallback: if input is empty or invalid JSON, show minimal status
+if [ -z "$INPUT" ] || ! echo "$INPUT" | jq empty 2>/dev/null; then
+    # Try to show last known state from cache
+    if [ -f "$STATE_FILE" ] && jq empty "$STATE_FILE" 2>/dev/null; then
+        LAST_PERCENT=$(jq -r '.last_percent // 0' "$STATE_FILE" 2>/dev/null || echo "0")
+        LAST_STATUS=$(jq -r '.last_status // "UNKNOWN"' "$STATE_FILE" 2>/dev/null || echo "UNKNOWN")
+        echo "⏳ (cached) ${LAST_PERCENT}% | ${LAST_STATUS}"
+    else
+        echo "⏳ Waiting for data..."
+    fi
+    exit 0
+fi
+
 # Extract model info
 MODEL=$(echo "$INPUT" | jq -r '.model.display_name // "Unknown"')
 MODEL_ID=$(echo "$INPUT" | jq -r '.model.id // "unknown"')
@@ -193,10 +206,18 @@ RESET="\033[0m"
 # Detect compaction (non-monotonic usage)
 COMPACTION_DETECTED="false"
 if [ -f "$STATE_FILE" ]; then
-    PREV_USAGE=$(jq -r '.last_context_used // 0' "$STATE_FILE" 2>/dev/null || echo "0")
-    if [ "$CONTEXT_USED" -lt "$PREV_USAGE" ] && [ "$PREV_USAGE" -gt 0 ]; then
-        COMPACTION_DETECTED="true"
-        COMPACTION_DELTA=$((PREV_USAGE - CONTEXT_USED))
+    # Validate state file is valid JSON before reading
+    if jq empty "$STATE_FILE" 2>/dev/null; then
+        PREV_USAGE=$(jq -r '.last_context_used // 0' "$STATE_FILE" 2>/dev/null || echo "0")
+        # Ensure PREV_USAGE is a valid integer
+        [[ -z "$PREV_USAGE" || ! "$PREV_USAGE" =~ ^[0-9]+$ ]] && PREV_USAGE=0
+        if [ "$CONTEXT_USED" -lt "$PREV_USAGE" ] && [ "$PREV_USAGE" -gt 0 ]; then
+            COMPACTION_DETECTED="true"
+            COMPACTION_DELTA=$((PREV_USAGE - CONTEXT_USED))
+        fi
+    else
+        # State file is corrupted, recreate it
+        rm -f "$STATE_FILE" 2>/dev/null
     fi
 fi
 
@@ -206,7 +227,7 @@ ACTIVITY_STATE="idle"
 ACTIVITY_COLOR="\033[97;41m"  # White text on red background = your turn
 IDLE_THRESHOLD=4  # Seconds of no activity before showing red (fallback)
 
-if [ -f "$STATE_FILE" ]; then
+if [ -f "$STATE_FILE" ] && jq empty "$STATE_FILE" 2>/dev/null; then
     # Check if state was set by hook (instant, accurate)
     HOOK_TRIGGERED=$(jq -r '.hook_triggered // false' "$STATE_FILE" 2>/dev/null || echo "false")
     HOOK_STATE=$(jq -r '.activity_state // "idle"' "$STATE_FILE" 2>/dev/null || echo "idle")
@@ -214,6 +235,11 @@ if [ -f "$STATE_FILE" ]; then
     PREV_OUTPUT=$(jq -r '.last_output_tokens // 0' "$STATE_FILE" 2>/dev/null || echo "0")
     PREV_INPUT=$(jq -r '.last_input_tokens // 0' "$STATE_FILE" 2>/dev/null || echo "0")
     LAST_ACTIVE=$(jq -r '.last_active_epoch // 0' "$STATE_FILE" 2>/dev/null || echo "0")
+
+    # Ensure all values are valid integers (fix: empty strings cause integer comparison errors)
+    [[ -z "$PREV_OUTPUT" || ! "$PREV_OUTPUT" =~ ^[0-9]+$ ]] && PREV_OUTPUT=0
+    [[ -z "$PREV_INPUT" || ! "$PREV_INPUT" =~ ^[0-9]+$ ]] && PREV_INPUT=0
+    [[ -z "$LAST_ACTIVE" || ! "$LAST_ACTIVE" =~ ^[0-9]+$ ]] && LAST_ACTIVE=0
     CURRENT_EPOCH=$(date +%s)
 
     # If hook set the state, trust it immediately
@@ -290,8 +316,9 @@ mv "${STATE_FILE}.tmp" "$STATE_FILE"
 
 # Batch logging (log every 10 seconds or on significant change)
 SHOULD_LOG="false"
-if [ -f "$STATE_FILE" ]; then
+if [ -f "$STATE_FILE" ] && jq empty "$STATE_FILE" 2>/dev/null; then
     LAST_LOG_TIME=$(jq -r '.last_log_time // 0' "$STATE_FILE" 2>/dev/null || echo "0")
+    [[ -z "$LAST_LOG_TIME" || ! "$LAST_LOG_TIME" =~ ^[0-9]+$ ]] && LAST_LOG_TIME=0
     CURRENT_TIME=$(date +%s)
     TIME_DIFF=$((CURRENT_TIME - LAST_LOG_TIME))
 
@@ -299,6 +326,9 @@ if [ -f "$STATE_FILE" ]; then
     if [ "$TIME_DIFF" -ge 10 ] || [ "$COMPACTION_DETECTED" = "true" ]; then
         SHOULD_LOG="true"
     fi
+else
+    # No valid state file, should log
+    SHOULD_LOG="true"
 fi
 
 if [ "$SHOULD_LOG" = "true" ]; then
