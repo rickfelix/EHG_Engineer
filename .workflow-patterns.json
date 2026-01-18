@@ -14,7 +14,7 @@
   "confirmation_modals": [
     {
       "pattern": "Confirmation Dialog",
-      "count": 417,
+      "count": 442,
       "confidence": "high"
     }
   ],
@@ -29,7 +29,7 @@
   "loading_patterns": [
     {
       "pattern": "Loading states (isLoading, Skeleton)",
-      "count": 2095,
+      "count": 2100,
       "confidence": "high"
     }
   ],
@@ -40,5 +40,5 @@
       "confidence": "high"
     }
   ],
-  "last_scan": "2026-01-09T21:34:04.470Z"
+  "last_scan": "2026-01-11T02:09:07.872Z"
 }
