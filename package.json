@@ -185,6 +185,7 @@
     "sd:baseline:intelligent:preview": "node scripts/sd-baseline-intelligent.js --preview",
     "sd:baseline:intelligent:dry": "node scripts/sd-baseline-intelligent.js --dry-run",
     "sd:status": "node scripts/sd-status.js",
+    "sd:preflight": "node scripts/child-sd-preflight.js",
     "sd:burnrate": "node scripts/sd-burnrate.js",
     "sd:branch": "node scripts/create-sd-branch.js",
     "sd:branch:check": "node scripts/create-sd-branch.js --check",

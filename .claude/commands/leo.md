@@ -195,3 +195,52 @@ When starting work on an orchestrator SD:
 3. **Proceed with full workflow** - No confirmation needed; full LEAD→PLAN→EXEC for each child is the ONLY correct path
 
 **There is no question about how to proceed.** Children are independent SDs requiring full workflow. The preflight is for visibility, not approval.
+
+### Child SD Pre-Work Validation (MANDATORY)
+
+**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), you MUST run the child SD preflight validation.
+
+#### Detection
+When starting work on an SD that has a `parent_sd_id`:
+1. Automatically detect it as a child SD
+2. Run preflight validation BEFORE any work
+
+#### Validation Command
+```bash
+node scripts/child-sd-preflight.js SD-XXX-001
+```
+
+#### What It Validates
+1. **Dependency Chain**: Each SD in `dependency_chain` must be:
+   - Status: `completed`
+   - Progress: `100%`
+   - All required handoffs accepted (varies by SD type)
+
+2. **Parent Context**: Parent orchestrator is loaded for reference
+
+#### If BLOCKED
+- Stop immediately
+- Do not start LEAD phase
+- Complete blocking dependency first
+- Return to original SD after dependencies satisfied
+
+#### If PASS
+- Proceed with normal LEAD→PLAN→EXEC workflow
+- Parent context loaded for reference
+
+#### Example Output (BLOCKED)
+```
+❌ RESULT: BLOCKED
+   Cannot start SD-QUALITY-CLI-001 until dependencies are complete.
+
+   🚫 SD-QUALITY-DB-001 is not complete:
+      - Status: in_progress (expected: completed)
+      - Progress: 60% (expected: 100%)
+      - Handoffs: 2/4 (expected: 4)
+
+   ACTION: Complete SD-QUALITY-DB-001 first, then return to this SD.
+```
+
+#### Integration with sd:next
+The `npm run sd:next` command shows dependency status in the queue display.
+Child SDs with incomplete dependencies show as BLOCKED.
