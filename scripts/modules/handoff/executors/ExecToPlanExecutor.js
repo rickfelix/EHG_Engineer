@@ -192,7 +192,7 @@ export class ExecToPlanExecutor extends BaseExecutor {
 
         // 1. Check SD type exemptions (same as MANDATORY_TESTING_VALIDATION)
         const sdType = (ctx.sd?.sd_type || 'feature').toLowerCase();
-        const EXEMPT_TYPES = ['documentation', 'docs', 'infrastructure', 'orchestrator', 'qa'];
+        const EXEMPT_TYPES = ['documentation', 'docs', 'infrastructure', 'orchestrator', 'qa', 'database'];
 
         if (EXEMPT_TYPES.includes(sdType)) {
           console.log(`   ℹ️  ${sdType} type SD - test evidence capture SKIPPED`);
@@ -425,7 +425,7 @@ export class ExecToPlanExecutor extends BaseExecutor {
 
         // 1. Check SD type exemptions
         const sdType = (ctx.sd?.sd_type || 'feature').toLowerCase();
-        const EXEMPT_TYPES = ['documentation', 'docs', 'infrastructure', 'orchestrator', 'qa'];
+        const EXEMPT_TYPES = ['documentation', 'docs', 'infrastructure', 'orchestrator', 'qa', 'database'];
 
         if (EXEMPT_TYPES.includes(sdType)) {
           console.log(`   ℹ️  ${sdType} type SD - TESTING validation SKIPPED`);
