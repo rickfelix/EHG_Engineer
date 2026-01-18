@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-18T14:23:18.070Z
-**Tables**: 349
+**Generated**: 2026-01-18T21:49:49.245Z
+**Tables**: 355
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (349)
+## All Tables (355)
 
 ### LEO Protocol
 
@@ -182,8 +182,12 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [companies](tables/companies.md)
 - [competitors](tables/competitors.md)
 - [compliance_alerts](tables/compliance_alerts.md)
+- [compliance_artifact_templates](tables/compliance_artifact_templates.md)
+- [compliance_checklist_items](tables/compliance_checklist_items.md)
+- [compliance_checklists](tables/compliance_checklists.md)
 - [compliance_checks](tables/compliance_checks.md)
 - [compliance_events](tables/compliance_events.md)
+- [compliance_gate_events](tables/compliance_gate_events.md)
 - [compliance_policies](tables/compliance_policies.md)
 - [compliance_violations](tables/compliance_violations.md)
 - [component_registry_embeddings](tables/component_registry_embeddings.md)
@@ -375,6 +379,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [validation_evidence](tables/validation_evidence.md)
 - [venture_archetypes](tables/venture_archetypes.md)
 - [venture_artifacts](tables/venture_artifacts.md)
+- [venture_compliance_artifacts](tables/venture_compliance_artifacts.md)
+- [venture_compliance_progress](tables/venture_compliance_progress.md)
 - [venture_decisions](tables/venture_decisions.md)
 - [venture_documents](tables/venture_documents.md)
 - [venture_drafts](tables/venture_drafts.md)
