@@ -167,6 +167,113 @@ async function findSimilarPatterns(patterns) {
 }
 
 /**
+ * SD-QUALITY-INT-001: Query resolved feedback for learning patterns
+ * Extracts learnings from resolved issues with high occurrence counts
+ */
+async function getResolvedFeedbackLearnings(limit = TOP_N) {
+  const { data, error } = await supabase
+    .from('feedback')
+    .select('id, title, description, type, error_type, priority, occurrence_count, resolution_notes, resolution_sd_id, created_at, updated_at')
+    .in('status', ['resolved', 'shipped'])
+    .not('resolution_notes', 'is', null)
+    .order('occurrence_count', { ascending: false })
+    .order('updated_at', { ascending: false })
+    .limit(limit * 2); // Get more to filter
+
+  if (error) {
+    console.error('Error querying feedback for learnings:', error.message);
+    return [];
+  }
+
+  // Transform resolved feedback into learning items
+  const learnings = [];
+  for (const feedback of (data || [])) {
+    // Skip items without meaningful resolution notes
+    if (!feedback.resolution_notes || feedback.resolution_notes.length < 20) {
+      continue;
+    }
+
+    // Calculate confidence based on occurrence count and resolution completeness
+    const baseConfidence = 50;
+    const occurrenceBonus = Math.min(30, feedback.occurrence_count * 5);
+    const resolutionBonus = feedback.resolution_sd_id ? 15 : 0;
+    const confidence = Math.min(100, baseConfidence + occurrenceBonus + resolutionBonus);
+
+    learnings.push({
+      id: `FB-${feedback.id.substring(0, 8)}`,
+      source_type: 'feedback',
+      source_id: feedback.id,
+      type: feedback.type,
+      error_type: feedback.error_type,
+      title: feedback.title,
+      content: `${feedback.title}: ${feedback.resolution_notes}`,
+      occurrence_count: feedback.occurrence_count || 1,
+      resolution_sd_id: feedback.resolution_sd_id,
+      priority: feedback.priority,
+      confidence,
+      created_at: feedback.created_at,
+      resolved_at: feedback.updated_at
+    });
+  }
+
+  return learnings.slice(0, limit);
+}
+
+/**
+ * SD-QUALITY-INT-001: Get recurring error patterns from feedback table
+ * Groups similar errors and identifies patterns
+ */
+async function getRecurringFeedbackPatterns(limit = TOP_N) {
+  const { data, error } = await supabase
+    .from('feedback')
+    .select('id, title, error_type, priority, occurrence_count, status, created_at')
+    .eq('type', 'issue')
+    .gt('occurrence_count', 2) // Only patterns with multiple occurrences
+    .order('occurrence_count', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('Error querying feedback patterns:', error.message);
+    return [];
+  }
+
+  // Group by error type if available
+  const byErrorType = {};
+  for (const fb of (data || [])) {
+    const key = fb.error_type || 'unknown';
+    if (!byErrorType[key]) {
+      byErrorType[key] = {
+        error_type: key,
+        items: [],
+        total_occurrences: 0
+      };
+    }
+    byErrorType[key].items.push(fb);
+    byErrorType[key].total_occurrences += fb.occurrence_count || 1;
+  }
+
+  // Convert to array and sort by total occurrences
+  return Object.values(byErrorType)
+    .sort((a, b) => b.total_occurrences - a.total_occurrences)
+    .slice(0, limit)
+    .map(group => ({
+      id: `FBP-${group.error_type.substring(0, 10)}`,
+      source_type: 'feedback_pattern',
+      error_type: group.error_type,
+      content: `Recurring ${group.error_type} errors (${group.total_occurrences} total occurrences across ${group.items.length} issues)`,
+      total_occurrences: group.total_occurrences,
+      item_count: group.items.length,
+      items: group.items.map(i => ({
+        id: i.id,
+        title: i.title,
+        status: i.status,
+        occurrences: i.occurrence_count
+      })),
+      confidence: Math.min(100, 40 + (group.total_occurrences * 3))
+    }));
+}
+
+/**
  * Query pending protocol improvements sorted by evidence count
  */
 async function getPendingImprovements(limit = TOP_N) {
@@ -200,14 +307,17 @@ async function getPendingImprovements(limit = TOP_N) {
 
 /**
  * Build complete learning context with intelligence enhancements
+ * SD-QUALITY-INT-001: Now includes feedback table learnings
  */
 export async function buildLearningContext(sdId = null) {
   console.log('Building learning context...');
 
-  const [lessons, patterns, improvements] = await Promise.all([
+  const [lessons, patterns, improvements, feedbackLearnings, feedbackPatterns] = await Promise.all([
     getRecentLessons(sdId, TOP_N),
     getIssuePatterns(TOP_N),
-    getPendingImprovements(TOP_N)
+    getPendingImprovements(TOP_N),
+    getResolvedFeedbackLearnings(TOP_N),
+    getRecurringFeedbackPatterns(TOP_N)
   ]);
 
   // Find similar patterns (duplicate detection)
@@ -228,22 +338,31 @@ export async function buildLearningContext(sdId = null) {
     lessons,
     patterns,
     improvements,
+    // SD-QUALITY-INT-001: Feedback-derived learnings
+    feedback_learnings: feedbackLearnings,
+    feedback_patterns: feedbackPatterns,
     // Intelligence metadata
     intelligence: {
       similar_patterns: similarPatterns,
       resolution_candidates: resolutionCandidates,
       stale_count: patterns.filter(p => p.recency_status === 'stale').length,
-      aging_count: patterns.filter(p => p.recency_status === 'aging').length
+      aging_count: patterns.filter(p => p.recency_status === 'aging').length,
+      // Feedback intelligence
+      feedback_learning_count: feedbackLearnings.length,
+      recurring_error_types: feedbackPatterns.length
     },
     summary: {
       total_lessons: lessons.length,
       total_patterns: patterns.length,
       total_improvements: improvements.length,
+      total_feedback_learnings: feedbackLearnings.length,
+      total_feedback_patterns: feedbackPatterns.length,
       generated_at: new Date().toISOString()
     }
   };
 
   console.log(`Found: ${lessons.length} lessons, ${patterns.length} patterns, ${improvements.length} improvements`);
+  console.log(`       ${feedbackLearnings.length} feedback learnings, ${feedbackPatterns.length} recurring error types`);
 
   if (resolutionCandidates.length > 0) {
     console.log(`  → ${resolutionCandidates.length} pattern(s) may be ready for resolution`);
@@ -254,6 +373,7 @@ export async function buildLearningContext(sdId = null) {
 
 /**
  * Format context for display
+ * SD-QUALITY-INT-001: Now includes feedback learnings
  */
 export function formatContextForDisplay(context) {
   const lines = [];
@@ -284,6 +404,32 @@ export function formatContextForDisplay(context) {
     lines.push(`  - Type: ${i.improvement_type} | Evidence: ${i.evidence_count} | Target: ${i.target_table}`);
     lines.push(`  - ${i.content}`);
     lines.push('');
+  }
+
+  // SD-QUALITY-INT-001: Feedback table learnings
+  if (context.feedback_learnings?.length > 0) {
+    lines.push('\n## Feedback Learnings (from resolved feedback)');
+    lines.push('Solutions extracted from resolved issues:\n');
+    for (const fb of context.feedback_learnings) {
+      lines.push(`**[${fb.id}]** ${fb.title}`);
+      lines.push(`  - Type: ${fb.error_type || fb.type} | Priority: ${fb.priority} | Occurrences: ${fb.occurrence_count}`);
+      lines.push(`  - Resolution: ${fb.content.substring(fb.title.length + 2)}`);
+      if (fb.resolution_sd_id) {
+        lines.push(`  - Resolved via: ${fb.resolution_sd_id}`);
+      }
+      lines.push('');
+    }
+  }
+
+  // SD-QUALITY-INT-001: Recurring error patterns
+  if (context.feedback_patterns?.length > 0) {
+    lines.push('\n## Recurring Error Patterns (from feedback)');
+    lines.push('Error types occurring frequently:\n');
+    for (const fp of context.feedback_patterns) {
+      lines.push(`**[${fp.id}]** ${fp.content}`);
+      lines.push(`  - Total occurrences: ${fp.total_occurrences} across ${fp.item_count} issues | Confidence: ${fp.confidence}%`);
+      lines.push('');
+    }
   }
 
   return lines.join('\n');

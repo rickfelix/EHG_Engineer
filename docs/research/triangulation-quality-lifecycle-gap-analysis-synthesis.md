@@ -1,212 +1,183 @@
-# Quality Lifecycle System Gap Analysis - Triangulation Synthesis
+# Quality Lifecycle System - Gap Analysis Triangulation Synthesis (CORRECTED)
 
-**Date**: 2026-01-18
-**Analysts**: Claude (Opus 4.5), OpenAI (GPT-4), Gemini (AntiGravity)
-**Subject**: SD-QUALITY-LIFECYCLE-001 and Children - Implementation Gap Consensus
-
----
-
-## Methodology
-
-Three independent AI systems analyzed the same codebase evidence against PRD requirements without seeing each other's conclusions. This synthesis identifies:
-- **Consensus findings** (all three agree)
-- **Majority findings** (two of three agree)
-- **Divergent findings** (disagreement requiring investigation)
+**Date**: 2026-01-18 (Updated)
+**Protocol Version**: 1.1 (with multi-repo awareness)
+**Participants**: Claude Code, OpenAI, Gemini, AntiGravity
 
 ---
 
-## Implementation Status Comparison
+## IMPORTANT: Correction Notice
 
-| SD | Claude | OpenAI | Gemini | Consensus |
-|----|--------|--------|--------|-----------|
-| SD-QUALITY-LIFECYCLE-001 | N/A (orchestrator) | MISSING | N/A | Orchestrator - no implementation expected |
-| SD-QUALITY-DB-001 | COMPLETE | PARTIAL | COMPLETE | **MAJORITY: COMPLETE** |
-| SD-QUALITY-CLI-001 | COMPLETE | PARTIAL | COMPLETE | **MAJORITY: COMPLETE** |
-| SD-QUALITY-TRIAGE-001 | COMPLETE | PARTIAL | COMPLETE | **MAJORITY: COMPLETE** |
-| SD-QUALITY-UI-001 | **MISSING** | **MISSING** | **MISSING** | **CONSENSUS: MISSING** |
-| SD-QUALITY-INT-001 | COMPLETE | PARTIAL | PARTIAL | **MAJORITY: PARTIAL** |
+This synthesis supersedes the previous version dated 2026-01-18. The original analysis incorrectly concluded that SD-QUALITY-UI-001 was "MISSING" due to **multi-repository blindness** - only EHG_Engineer was checked, missing the complete implementation in the EHG (frontend) repository.
 
 ---
 
-## Consensus Findings (All Three Agree)
+## Executive Summary
 
-### 1. SD-QUALITY-UI-001 Is Not Implemented
+After correcting for multi-repository blindness, all four AI models reached consensus on Quality Lifecycle System completion status. The system is approximately **60% complete**, with the Web UI being the most complete component and CLI being the largest gap.
 
-**Unanimous**: All three analysts found zero implementation of the Web UI requirements.
-
-| Finding | Claude | OpenAI | Gemini |
-|---------|--------|--------|--------|
-| No `pages/quality/` directory | ✓ | ✓ | ✓ |
-| No `pages/api/feedback.ts` | ✓ | ✓ | ✓ |
-| No React components | ✓ | ✓ | ✓ |
-| 10 functional requirements, 0 implemented | ✓ | ✓ | ✓ |
-| Database shows "completed" - false positive | ✓ | ✓ | ✓ |
-
-**Gemini's term**: "Phantomware" - specified and marked done, but not present.
-
-### 2. SD-QUALITY-LIFECYCLE-001 Missing Retrospective
-
-**Unanimous**: The orchestrator SD has no retrospective record.
-
-### 3. Browser Error Capture (FR-005 in INT-001) Is Missing
-
-**Unanimous**: `lib/feedback-capture.js` is server-side only. No client-side JavaScript for `window.onerror` capture exists.
-
-### 4. Database Schema Is Largely Complete
-
-**Unanimous**: The migration `391_quality_lifecycle_schema.sql` implements:
-- Unified `feedback` table with required columns
-- `releases` table
-- `feedback_sd_map` junction table
-- `target_release_id` on strategic_directives_v2
+**Critical Lesson Learned**: Initial assessment claimed UI was 0% complete when it was actually 90% complete in the EHG (frontend) repository. The triangulation protocol has been updated to v1.1 with mandatory multi-repo checks.
 
 ---
 
-## Majority Findings (Two of Three Agree)
+## Multi-Repository Architecture
 
-### 1. CLI Implementation Is Complete
+| Repository | Purpose | Location |
+|------------|---------|----------|
+| **EHG** | Frontend (React/Vite) | `C:/_EHG/EHG/` |
+| **EHG_Engineer** | Backend/Tooling | `C:/_EHG/EHG_Engineer/` |
 
-| Analyst | Assessment | Reasoning |
-|---------|------------|-----------|
-| **Claude** | COMPLETE | Skill file defines all required commands and aliases |
-| **Gemini** | COMPLETE | "Relies on Claude Code's markdown execution engine, which is appropriate" |
-| OpenAI | PARTIAL | "Implementation is spec-level in markdown, not executable CLI code" |
+### Component Distribution
 
-**Resolution**: OpenAI interpreted "CLI" as requiring traditional executable code. Claude and Gemini recognized that Claude Code slash commands ARE the CLI implementation for this project. The majority view is correct for this codebase architecture.
-
-### 2. Triage Engine Is Mostly Complete
-
-| Analyst | Assessment | Key Gap Noted |
-|---------|------------|---------------|
-| **Claude** | COMPLETE | None noted |
-| **Gemini** | COMPLETE | FR-002 enhancement matrix is "placeholder logic" |
-| OpenAI | PARTIAL | Missing value/effort matrix, burst thresholds wrong |
-
-**Resolution**: All three agree the core triage logic exists. The disagreement is about completeness of enhancement prioritization.
+| Component Type | Repository | Path Pattern |
+|----------------|------------|--------------|
+| Web UI pages | EHG | `src/pages/quality/*.tsx` |
+| React components | EHG | `src/components/quality/*.tsx` |
+| CLI skills | EHG_Engineer | `.claude/skills/*.md` |
+| Library modules | EHG_Engineer | `lib/quality/*.js` |
+| Database migrations | EHG_Engineer | `database/migrations/*.sql` |
 
 ---
 
-## Divergent Findings (Requiring Investigation)
+## Triangulation Results
 
-### 1. RLS Policies on `feedback_sd_map`
+### Child SD Completion Status
 
-| Analyst | Finding |
-|---------|---------|
-| Claude | RLS complete |
-| **OpenAI** | Missing RLS on `feedback_sd_map` |
-| Gemini | RLS complete |
+| SD | Claude | OpenAI | Gemini | AntiGravity | **Consensus** |
+|----|--------|--------|--------|-------------|---------------|
+| SD-QUALITY-DB-001 | COMPLETE | COMPLETE | COMPLETE | COMPLETE | **COMPLETE (100%)** |
+| SD-QUALITY-CLI-001 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED | **NOT STARTED (0%)** |
+| SD-QUALITY-TRIAGE-001 | PARTIAL | PARTIAL | PARTIAL | PARTIAL (20%) | **PARTIAL (~20%)** |
+| SD-QUALITY-UI-001 | COMPLETE | WORKS | WORKS | COMPLETE | **COMPLETE (~90%)** |
+| SD-QUALITY-INT-001 | PARTIAL | PARTIAL | PARTIAL | PARTIAL (60%) | **PARTIAL (~60%)** |
 
-**Investigation Required**: Check if `feedback_sd_map` has explicit RLS policies in the migration.
+### Component-Level Status
 
-### 2. Priority Calculator P0-P4 vs P0-P3
-
-| Analyst | Finding |
-|---------|---------|
-| Claude | Not checked |
-| **OpenAI** | "Only supports P0-P3, not P0-P4" |
-| Gemini | Not flagged |
-
-**Investigation Required**: Verify priority levels in `priority-calculator.js`.
-
-### 3. Burst Detection Thresholds
-
-| Analyst | Finding |
-|---------|---------|
-| Claude | Not checked |
-| **OpenAI** | "Uses minOccurrences: 3 and 5-min window, not 100+/minute" |
-| Gemini | Marked complete |
-
-**Investigation Required**: Compare PRD burst threshold (100+/minute) against actual implementation.
-
-### 4. Error Handler `source_type` Values
-
-| Analyst | Finding |
-|---------|---------|
-| Claude | Not flagged |
-| **OpenAI** | "Uses `uncaught_exception`/`unhandled_rejection` rather than `error_capture`" |
-| Gemini | Not flagged |
-
-**Investigation Required**: Verify if PRD specified exact `source_type` values.
+| Component | Status | Repository | Evidence |
+|-----------|--------|------------|----------|
+| `feedback` table | WORKS | EHG_Engineer | `database/migrations/391_quality_lifecycle_schema.sql` |
+| `feedback_sd_map` table | WORKS | EHG_Engineer | Same migration file |
+| `releases` table | WORKS | EHG_Engineer | Same migration file |
+| `/inbox` command | MISSING | EHG_Engineer | Spec exists, no skill implementation |
+| `/feedback` alias | MISSING | EHG_Engineer | No implementation |
+| Error capture | WORKS | EHG_Engineer | `lib/feedback-capture.js` |
+| Priority Calculator | DISCONNECTED | EHG_Engineer | `lib/quality/priority-calculator.js` (0 consumers) |
+| Burst Detector | DISCONNECTED | EHG_Engineer | `lib/quality/burst-detector.js` (0 consumers) |
+| UAT Recorder | WORKS | EHG_Engineer | `lib/uat/result-recorder.js:224` |
+| Feedback Widget | WORKS | EHG | `src/components/quality/FeedbackWidget.tsx` (307 lines) |
+| Inbox Page | WORKS | EHG | `src/pages/quality/QualityInboxPage.tsx` (358 lines) |
+| Backlog Page | WORKS | EHG | `src/pages/quality/QualityBacklogPage.tsx` (290 lines) |
+| Releases Page | WORKS | EHG | `src/pages/quality/QualityReleasesPage.tsx` (349 lines) |
+| Patterns Page | WORKS | EHG | `src/pages/quality/QualityPatternsPage.tsx` (392 lines) |
 
 ---
 
-## Retrospective Status Summary
+## Critical Gaps Identified
 
-| SD | Claude | OpenAI | Gemini | Consensus |
-|----|--------|--------|--------|-----------|
-| SD-QUALITY-LIFECYCLE-001 | MISSING | MISSING | MISSING | **MISSING** |
-| SD-QUALITY-DB-001 | PUBLISHED | PUBLISHED | PUBLISHED | Published |
-| SD-QUALITY-CLI-001 | PUBLISHED | PUBLISHED | PUBLISHED | Published |
-| SD-QUALITY-TRIAGE-001 | PUBLISHED | PUBLISHED | PUBLISHED | Published |
-| SD-QUALITY-UI-001 | PUBLISHED+DRAFT | False Positive | False Positive | **FALSE POSITIVE** |
-| SD-QUALITY-INT-001 | PUBLISHED | PUBLISHED | PUBLISHED | Published |
+### 1. Missing CLI Entry Point (SD-QUALITY-CLI-001)
 
----
+**Impact**: Entire CLI workflow blocked
 
-## Recommended Actions (Consensus)
+| Item | Status |
+|------|--------|
+| Command spec | EXISTS (`.claude/commands/inbox.md`, 283 lines) |
+| Skill implementation | MISSING (`.claude/skills/inbox.md` does not exist) |
+| User can invoke | NO |
 
-### P0 - Critical (All Three Agree)
+**Vision Requirement**: User invokes `/inbox` to classify and triage feedback from terminal.
 
-1. **Reset SD-QUALITY-UI-001 Status**
-   - Change from "completed" to "draft" or "not_started"
-   - This is a false positive completion marker
-   - Options: Reopen SD, create replacement SD, or descope Web UI
+### 2. Disconnected Triage Logic (SD-QUALITY-TRIAGE-001)
 
-2. **Create Retrospective for SD-QUALITY-LIFECYCLE-001**
-   - Orchestrator SD has no retrospective record
-   - Required for proper closure
+**Impact**: Dead code, priority logic duplicated
 
-### P1 - High (Majority Agree)
+| Module | Location | Consumers |
+|--------|----------|-----------|
+| `priority-calculator.js` | `lib/quality/` | 0 |
+| `burst-detector.js` | `lib/quality/` | 0 |
+| `snooze-manager.js` | `lib/quality/` | 0 |
+| `ignore-patterns.js` | `lib/quality/` | 0 |
+| `triage-engine.js` | `lib/quality/` | 0 |
 
-3. **Implement Browser Error Capture** (when/if UI exists)
-   - FR-005 of SD-QUALITY-INT-001 depends on frontend
-   - Create client-side `window.onerror` handler
+**Duplication Issue**: `FeedbackWidget.tsx:47-58` implements its own `calculatePriority()` instead of using the backend module.
 
-4. **Enhance Value/Effort Matrix for Enhancements**
-   - `priority-calculator.js` focuses on severity mapping
-   - Add explicit value_estimate × effort_estimate → priority logic
+### 3. Incomplete Integrations (SD-QUALITY-INT-001)
 
-### P2 - Medium (Single Analyst Findings - Verify)
-
-5. **Verify RLS on `feedback_sd_map`**
-   - OpenAI flagged as missing
-   - Need to confirm in migration file
-
-6. **Verify Burst Detection Thresholds**
-   - PRD: 100+ errors/minute
-   - OpenAI claims: 3 occurrences, 5-min window
-   - Either fix or document justified deviation
-
-7. **Verify Priority Levels (P0-P3 vs P0-P4)**
-   - PRD mentions P0-P4 for issues
-   - Implementation may only support P0-P3
+| Integration | Status |
+|-------------|--------|
+| Error capture -> DB | WORKS |
+| UAT -> DB | WORKS |
+| Risk Router -> Triage | NOT INTEGRATED |
+| `/learn` -> Feedback | NOT INTEGRATED |
 
 ---
 
-## Production Readiness Assessment
+## Overall Completion
 
-| Use Case | Claude | OpenAI | Gemini | Consensus |
-|----------|--------|--------|--------|-----------|
-| CLI-only workflows | Ready | Not Ready | Ready | **READY** (2/3) |
-| Web UI workflows | Not Ready | Not Ready | Not Ready | **NOT READY** (3/3) |
+```
+Database (SD-QUALITY-DB-001):     ████████████████████ 100%
+CLI (SD-QUALITY-CLI-001):         ░░░░░░░░░░░░░░░░░░░░   0%
+Triage (SD-QUALITY-TRIAGE-001):   ████░░░░░░░░░░░░░░░░  20%
+UI (SD-QUALITY-UI-001):           ██████████████████░░  90%
+Integration (SD-QUALITY-INT-001): ████████████░░░░░░░░  60%
 
-### Summary
-
-The Quality Lifecycle System is **production-ready for CLI-only use**. The database schema, CLI commands (via Claude Code), triage engine, and server-side integrations are functional.
-
-The system is **not production-ready for Web UI use**. The entire `/quality` section, feedback widget, and API endpoints are missing despite being marked "completed" in the database.
-
----
-
-## Files Created
-
-| File | Analyst |
-|------|---------|
-| `docs/research/triangulation-quality-lifecycle-claude-analysis.md` | Claude |
-| `docs/research/triangulation-quality-lifecycle-openai-analysis.md` | OpenAI |
-| `docs/research/triangulation-quality-lifecycle-gemini-analysis.md` | Gemini |
-| `docs/research/triangulation-quality-lifecycle-gap-analysis-synthesis.md` | Synthesis |
+OVERALL:                          ████████████░░░░░░░░  ~60%
+```
 
 ---
 
-*Triangulation synthesis completed 2026-01-18*
+## Priority Recommendations (Unanimous)
+
+All four AI models agreed on this priority order:
+
+1. **SD-QUALITY-CLI-001** - Create `/inbox` skill
+   - Single biggest gap
+   - Blocks entire CLI triage workflow
+   - Spec already exists, just needs implementation
+
+2. **SD-QUALITY-TRIAGE-001** - Wire up existing modules
+   - Quick win (code exists, just disconnected)
+   - Modify `feedback-capture.js` and `result-recorder.js` to use `priority-calculator.js`
+
+3. **SD-QUALITY-INT-001** - Complete remaining integrations
+   - Risk Router connection
+   - `/learn` integration
+
+---
+
+## Lessons Learned
+
+### Multi-Repository Blindness
+
+**Problem**: External AIs only received evidence from EHG_Engineer, causing them to report UI as 0% complete.
+
+**Solution**: Updated Triangulation Protocol to v1.1 with:
+- Mandatory multi-repo awareness section
+- Pre-triangulation checklist requiring both repos
+- Updated prompt template with repo column
+- Cross-repo verification commands
+
+**Files Updated**:
+- `.claude/commands/triangulation-protocol.md` (v1.0 -> v1.1)
+- `scripts/temp/quality-lifecycle-gap-analysis-triangulation-prompt.md`
+
+---
+
+## Source Documents
+
+- Vision: `docs/vision/quality-lifecycle-system.md`
+- Prompt: `scripts/temp/quality-lifecycle-gap-analysis-triangulation-prompt.md`
+- Protocol: `.claude/commands/triangulation-protocol.md`
+
+---
+
+## Correction History
+
+| Date | Change |
+|------|--------|
+| 2026-01-18 (original) | Initial synthesis - incorrectly marked UI as MISSING |
+| 2026-01-18 (corrected) | Updated with multi-repo findings, UI is COMPLETE in EHG repo |
+
+---
+
+*Synthesis generated: 2026-01-18*
+*Triangulation Protocol Version: 1.1*
