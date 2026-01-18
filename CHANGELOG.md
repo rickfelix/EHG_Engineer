@@ -1,5 +1,47 @@
 # Changelog
 
+## 2026-01-18
+
+### Multi-Repository Architecture
+- **Centralized Multi-Repo Module**: Created `lib/multi-repo/index.js` consolidating repo discovery and coordination logic
+  - Repository discovery and metadata management
+  - Git status checking (uncommitted changes, unpushed commits)
+  - SD-to-repo mapping (determines affected repos by SD type/keywords)
+  - Branch operations (find SD-related branches across repos)
+  - Display helpers for console output
+  - Reduces duplication across 3 different scripts
+- **Multi-Repo Status CLI**: Enhanced `scripts/multi-repo-status.js` to use centralized module
+  - Reduced from 330 to 123 lines
+  - Added `--sd SD-XXX` flag for SD-specific checks
+  - Shows which repos have uncommitted work per SD
+- **Ship Workflow Enhancement**: Added Step 0.1 to `/ship` command
+  - Automatically checks all repos for uncommitted changes before shipping
+  - Prevents shipping backend while frontend changes sit uncommitted
+  - Provides actionable recommendations when changes found
+
+### Quality Lifecycle System - 100% Completion
+- **SD-QUALITY-INT-001**: Completed final integration tasks
+  - Risk Router notification for P0/P1 feedback with auto-escalation
+  - /learn integration with feedback table (resolved learnings and recurring patterns)
+  - Feedback-to-SD promotion API endpoint (POST /api/feedback/:id/promote-to-sd)
+- **SD-QUALITY-UI-001**: Completed final UI tasks
+  - Added breadcrumb labels (quality, inbox, backlog, releases, patterns)
+  - Added "Promote to SD" button in FeedbackDetailPanel
+  - Wired onPromoteToSD handler with toast notifications
+- **Multi-Repo Ship**: Successfully shipped both EHG (frontend) and EHG_Engineer (backend) changes
+  - PR #351 (backend) - Integration and triage engine
+  - PR #120 (frontend) - UI components and handlers
+
+### Documentation
+- **Multi-Repo Module API Reference**: `docs/reference/multi-repo-module.md`
+  - Complete API documentation with examples
+  - Configuration reference (KNOWN_REPOS, COMPONENT_REPO_MAP)
+  - Usage patterns and integration guide
+- **Multi-Repo Architecture**: `docs/01_architecture/multi-repo-architecture.md`
+  - EHG ecosystem structure (frontend + backend repos)
+  - Coordination patterns and workflows
+  - Deployment architecture and future enhancements
+
 ## 2026-01-02
 
 ### Portfolio Glide Path Dashboard
