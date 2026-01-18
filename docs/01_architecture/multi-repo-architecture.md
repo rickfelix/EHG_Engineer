@@ -438,6 +438,16 @@ Both repos import from `@ehg/types` for consistency.
 - Net code reduction: 90 lines
 - Benefit: Single source of truth, consistent behavior across all commands
 
+**Phase 2 SD-Aware Intelligence (2026-01-18)**:
+- Added multi-repo awareness to LEO Protocol commands
+- Commands now check for uncommitted changes before critical operations
+- SD-aware: Only checks repos affected by the SD type (via `getAffectedRepos()`)
+- Enhanced commands:
+  - `sd-next.js` - Shows MULTI-REPO WARNING banner on startup
+  - `handoff.js` - STEP 0 multi-repo check in precheck, warning in execute
+  - `sd-verify.js` - Multi-repo status in verification checklist, blocks completion if uncommitted
+- Benefit: Prevents forgetting uncommitted work in related repos during phase transitions
+
 ### Multi-Repo Status CLI
 
 **Location**: `scripts/multi-repo-status.js`
@@ -458,6 +468,32 @@ bash scripts/leo-stack.sh restart   # Restart both servers
 bash scripts/leo-stack.sh status    # Check status
 bash scripts/leo-stack.sh stop      # Stop both servers
 ```
+
+### Phase 2 Command Enhancements
+
+**sd-next.js** (SD Queue Display):
+- Loads multi-repo status on startup via `loadMultiRepoStatus()`
+- Displays MULTI-REPO WARNING banner if uncommitted changes exist
+- Shows affected repos with change counts
+- Warns user to commit before starting new SD work
+
+**handoff.js** (Phase Transitions):
+- STEP 0 in `precheck`: Checks all repos before validation
+- Warning in `execute`: Alerts about uncommitted changes before handoff
+- SD-aware filtering: Only checks repos affected by the SD type
+- Uses `checkMultiRepoStatus()` and `displayMultiRepoStatus()` helpers
+
+**sd-verify.js** (SD Completion):
+- Verification checklist includes multi-repo status check
+- `completeSD()` function blocks completion if uncommitted changes exist
+- Shows detailed repo status with change counts
+- Provides remediation guidance (run multi-repo-status.js)
+
+**Benefits**:
+- Prevents shipping backend changes while frontend changes sit uncommitted (and vice versa)
+- Reduces risk of incomplete SD work across repos
+- Provides early warnings before critical operations
+- Maintains consistency across all LEO Protocol entry points
 
 ---
 
