@@ -297,7 +297,7 @@ ${this.formatDependencies(prd.dependencies)}
 ${this.formatRisks(prd.risks)}
 
 ## Failure Modes
-${this.formatFailureModes(prd.failure_modes)}
+${this.formatFailureModes(prd.failure_modes || prd.metadata?.failure_modes?.modes)}
 
 ## Additional Context
 Status: ${prd.status || 'Not set'}
