@@ -21,6 +21,46 @@ AIs routinely conflate:
 | Commented code | "The pattern exists" | Comment ≠ Execution |
 | Database schema | "The table exists" | Schema ≠ Business logic |
 | Test files | "It's tested" | Test ≠ Production code |
+| **Single repo check** | **"It's MISSING"** | **Exists in different repo** |
+
+---
+
+## CRITICAL: Multi-Repository Awareness
+
+### The Multi-Repo Blindness Failure Mode
+
+**Problem**: Claiming a feature is "MISSING" when only checking one repository in a multi-repo architecture.
+
+**Real Example** (2026-01-18): Quality Lifecycle UI was assessed as 0% complete by external AIs because they only received evidence from EHG_Engineer (backend). The implementation was 90% complete in EHG (frontend).
+
+### EHG Project Repository Map
+
+| Repository | Purpose | Location | Contains |
+|------------|---------|----------|----------|
+| **EHG** | Frontend (React/Vite) | `C:/_EHG/EHG/` | UI components, pages, routes, React hooks |
+| **EHG_Engineer** | Backend/Tooling | `C:/_EHG/EHG_Engineer/` | CLI tools, scripts, lib modules, database |
+
+### Component → Repository Mapping
+
+| Component Type | Expected Repository | Path Pattern |
+|----------------|---------------------|--------------|
+| Web UI pages | **EHG** | `src/pages/**/*.tsx` |
+| React components | **EHG** | `src/components/**/*.tsx` |
+| Routes | **EHG** | `src/routes/*.tsx` |
+| CLI commands/skills | **EHG_Engineer** | `.claude/skills/*.md`, `.claude/commands/*.md` |
+| Library modules | **EHG_Engineer** | `lib/**/*.js` |
+| Database migrations | **EHG_Engineer** | `database/migrations/*.sql` |
+| API endpoints (Supabase) | **Both** | Direct Supabase calls from either repo |
+
+### Pre-Triangulation Checklist
+
+Before claiming ANY component is MISSING:
+```
+[ ] Checked EHG_Engineer repository
+[ ] Checked EHG repository
+[ ] Searched for component by name across both repos
+[ ] Verified recent git commits in both repos
+```
 
 ---
 
@@ -96,20 +136,31 @@ Use this when sending to OpenAI, Gemini, or other models:
 ```markdown
 # [SYSTEM NAME] Ground-Truth Audit
 
+## CRITICAL: Multi-Repository Architecture
+This system spans MULTIPLE repositories. Evidence must be gathered from ALL:
+
+| Repository | Purpose | Contains |
+|------------|---------|----------|
+| **EHG** | Frontend | UI components, pages, routes |
+| **EHG_Engineer** | Backend/Tooling | CLI tools, scripts, lib modules |
+
+**FAILURE MODE**: Do NOT claim "MISSING" without checking BOTH repos.
+
 ## Your Task
 Audit the [SYSTEM] implementation. For each feature, classify as:
 - WORKS: Code exists + integrated + has user entry point
 - DISCONNECTED: Code exists + no integration path
 - STUBBED: Function exists but placeholder/TODO
 - PLANNED: In docs only, no code
-- MISSING: Not found
+- MISSING: Not found **in ANY repository**
 
 ## Evidence Requirements
 For EVERY claim, provide:
-1. File path where you found evidence
-2. Line number(s)
-3. 3-5 line code snippet
-4. Your classification with justification
+1. **Repository name** (EHG or EHG_Engineer)
+2. File path where you found evidence
+3. Line number(s)
+4. 3-5 line code snippet
+5. Your classification with justification
 
 ## Do NOT Trust as Implementation Evidence
 - Documentation files (/docs/*)
@@ -124,11 +175,12 @@ Before scoring any feature, answer:
 1. Can a user trigger this from UI/CLI/API today?
 2. Does the code path execute end-to-end?
 3. What function calls connect entry point to implementation?
+4. **Did I check BOTH repositories?**
 
 ## Output Format
-| Feature | Status | Evidence (file:line) | Entry Point | Call Chain |
-|---------|--------|---------------------|-------------|------------|
-| [name]  | [status] | path:123 | Yes/No | A→B→C or "None" |
+| Feature | Status | Repo | Evidence (file:line) | Entry Point | Call Chain |
+|---------|--------|------|---------------------|-------------|------------|
+| [name]  | [status] | EHG/EHG_Engineer | path:123 | Yes/No | A→B→C or "None" |
 
 ## Scoring Rules
 - Only score WORKS features with Entry Point = Yes
@@ -175,6 +227,7 @@ Adjusted Score: Y/10
 
 ## Quick Reference: Verification Commands
 
+### Single Repository Commands
 ```bash
 # File exists?
 ls -la /path/to/file.ts
@@ -193,6 +246,26 @@ grep -rn "ComponentName" src/pages/ src/app/
 
 # Import chain?
 grep -rn "from.*moduleName\|import.*moduleName" --include="*.ts"
+```
+
+### Multi-Repository Commands (CRITICAL)
+```bash
+# Check EHG_Engineer (backend/tooling)
+cd C:/_EHG/EHG_Engineer
+ls -la src/  lib/  .claude/skills/
+grep -rn "featureName" --include="*.js" --include="*.ts"
+
+# Check EHG (frontend UI)
+cd C:/_EHG/EHG
+ls -la src/pages/  src/components/  src/routes/
+grep -rn "FeatureName" --include="*.tsx"
+
+# Check recent commits in BOTH repos
+cd C:/_EHG/EHG_Engineer && git log --oneline -10 -- "src/" "lib/"
+cd C:/_EHG/EHG && git log --oneline -10 -- "src/pages/" "src/components/"
+
+# Search across BOTH repos at once
+for repo in EHG EHG_Engineer; do echo "=== $repo ===" && grep -rn "searchTerm" C:/_EHG/$repo/src/ --include="*.ts" --include="*.tsx" 2>/dev/null; done
 ```
 
 ---
@@ -295,6 +368,7 @@ Before running triangulation:
 
 ---
 
-*Protocol Version: 1.0*
+*Protocol Version: 1.1*
 *Created: 2026-01-01*
+*Updated: 2026-01-18 - Added multi-repository awareness (Quality Lifecycle audit lesson)*
 *Based on: Genesis Triangulation Audit findings*

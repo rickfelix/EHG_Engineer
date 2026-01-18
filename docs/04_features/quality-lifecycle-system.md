@@ -274,7 +274,7 @@ Configuration:
 
 ### 5. System Integrations (SD-QUALITY-INT-001)
 
-**Purpose**: Error capture, /uat integration, Risk Router
+**Purpose**: Error capture, /uat integration, Risk Router, /learn integration
 
 #### Automatic Error Capture
 
@@ -304,6 +304,35 @@ window.addEventListener('unhandledrejection', captureError);
 - If same hash seen within 5 minutes → increment `occurrence_count`
 - Store `first_seen` and `last_seen` timestamps
 
+#### Risk Router Integration
+
+**Purpose**: Auto-escalate high-severity feedback for immediate attention
+
+**Automatic Notification**: P0/P1 feedback triggers risk assessment
+```javascript
+// In feedback-capture.js after insert
+if (['P0', 'P1'].includes(priorityResult.priority)) {
+  await notifyHighSeverityFeedback(feedbackRecord);
+}
+```
+
+**Risk Assessment Includes**:
+- Risk level: LOW/MEDIUM/HIGH (score-based)
+- Risk factors: security, database, payment, infrastructure
+- Quick-fix eligibility: <50 LOC and no risky keywords
+- Routing recommendation: `/quick-fix` or Full SD
+
+**Escalation Actions** (stored in metadata):
+- P0: `IMMEDIATE_ATTENTION_REQUIRED`
+- P0 + HIGH risk: `RECOMMEND_FULL_SD`
+
+**Query High-Severity Feedback**:
+```javascript
+import { getHighSeverityFeedback } from 'lib/uat/risk-router.js';
+const urgent = await getHighSeverityFeedback();
+// Returns P0/P1 items with routing recommendations
+```
+
 #### /uat Integration
 
 **Current Behavior**: `/uat` test failures create feedback records
@@ -325,15 +354,69 @@ window.addEventListener('unhandledrejection', captureError);
 - `/quick-fix` if <50 LOC and no risky keywords
 - Full SD creation otherwise
 
-#### /learn Connection
+#### /learn Integration
 
-When feedback is resolved:
-- Pattern detection: Same error_hash 3+ times → create pattern
-- Same category recurs → flag for `/learn`
+**Purpose**: Extract learnings from resolved feedback and recurring errors
 
+**Feedback Learnings** (`getResolvedFeedbackLearnings()`):
+- Queries: `status IN ('resolved', 'shipped')` with `resolution_notes`
+- Filters: Occurrence count > 1, meaningful resolution notes
+- Returns: Top 5 learnings with confidence scores
+
+**Recurring Error Patterns** (`getRecurringFeedbackPatterns()`):
+- Queries: `type = 'issue'` with `occurrence_count > 2`
+- Groups: By `error_type` field
+- Returns: Top 5 error patterns by total occurrences
+
+**Learning Context**:
+```javascript
+// /learn now includes feedback sources
+import { buildLearningContext } from 'scripts/modules/learning/context-builder.js';
+const context = await buildLearningContext();
+
+// context.feedback_learnings: Resolved issues with solutions
+// context.feedback_patterns: Recurring error types
 ```
-feedback (resolved) → pattern detection → issue_patterns → /learn → improvement SD
+
+**Workflow**:
 ```
+feedback (resolved) → getResolvedFeedbackLearnings() → /learn → improvement SD
+feedback (recurring) → getRecurringFeedbackPatterns() → /learn → pattern fix SD
+```
+
+#### Feedback-to-SD Promotion
+
+**Purpose**: Convert feedback items into Strategic Directives
+
+**UI Flow**:
+1. User clicks "Promote to SD" button in `/quality/inbox` detail panel
+2. Frontend calls `POST /api/feedback/:id/promote-to-sd`
+3. Backend creates SD with metadata linking back to feedback
+4. Feedback updated with `resolution_sd_id` reference
+
+**API Endpoint**:
+```javascript
+POST /api/feedback/:id/promote-to-sd
+Body: {
+  title: string,         // Optional, uses feedback.title if omitted
+  description: string,   // Optional, uses feedback.description if omitted
+  priority: string       // Optional, maps from feedback.priority
+}
+Response: {
+  success: true,
+  sd_id: 'SD-FB-20260118-ABC',  // Generated SD ID
+  feedback_id: 'uuid',
+  message: 'Feedback successfully promoted to Strategic Directive'
+}
+```
+
+**SD Generation**:
+- ID format: `SD-FB-YYYYMMDD-XXX`
+- Priority mapping: P0→critical, P1→high, P2→medium, P3→low
+- Category: `enhancement` if type='enhancement', else `bug_fix`
+- Metadata: Includes `feedback_id`, `occurrence_count`, `error_type`
+
+**Result**: Feedback shows badge with SD link in detail panel
 
 ### 6. Triangulation Fixes (SD-QUALITY-FIXES-001)
 
@@ -1072,18 +1155,33 @@ This system was validated through FOUR rounds of multi-AI triangulation:
 
 ### Strategic Directives
 
-| SD ID | Title | Status |
-|-------|-------|--------|
-| SD-QUALITY-LIFECYCLE-001 | Orchestrator | Completed |
-| SD-QUALITY-DB-001 | Database Foundation | Completed |
-| SD-QUALITY-CLI-001 | /inbox CLI Command | Completed |
-| SD-QUALITY-TRIAGE-001 | Triage & Prioritization | Completed |
-| SD-QUALITY-UI-001 | /quality Web UI Section | Completed |
-| SD-QUALITY-INT-001 | System Integrations | Completed |
-| SD-QUALITY-FIXES-001 | Triangulation Fixes | Completed |
+| SD ID | Title | Status | Completion Date |
+|-------|-------|--------|-----------------|
+| SD-QUALITY-LIFECYCLE-001 | Orchestrator | ✅ Completed | 2026-01-18 |
+| SD-QUALITY-DB-001 | Database Foundation | ✅ Completed | 2026-01-18 |
+| SD-QUALITY-CLI-001 | /inbox CLI Command | ✅ Completed | 2026-01-18 |
+| SD-QUALITY-TRIAGE-001 | Triage & Prioritization | ✅ Completed | 2026-01-18 |
+| SD-QUALITY-UI-001 | /quality Web UI Section | ✅ Completed | 2026-01-18 |
+| SD-QUALITY-INT-001 | System Integrations | ✅ Completed | 2026-01-18 |
+| SD-QUALITY-FIXES-001 | Triangulation Fixes | ✅ Completed | 2026-01-18 |
+
+**All child SDs reached 100% completion on 2026-01-18**
+
+### Final Session Completion (2026-01-18)
+
+**SD-QUALITY-UI-001** (90% → 100%):
+- Added breadcrumb labels: `quality`, `inbox`, `backlog`, `releases`, `patterns`
+- Added "Promote to SD" button in FeedbackDetailPanel.tsx
+- Wired onPromoteToSD handler in QualityInboxPage.tsx
+
+**SD-QUALITY-INT-001** (60% → 100%):
+- Risk Router notification for P0/P1 feedback (auto-escalation)
+- /learn integration with feedback table (2 new query functions)
+- Feedback-to-SD promotion API endpoint (`POST /api/feedback/:id/promote-to-sd`)
 
 ---
 
 **Documentation generated**: 2026-01-18
 **Based on**: SD-QUALITY-LIFECYCLE-001 (orchestrator + 6 children)
 **Validated by**: Claude Opus 4.5, OpenAI GPT-4o, AntiGravity (Gemini)
+**System Status**: 100% Complete - All 6 child SDs operational
