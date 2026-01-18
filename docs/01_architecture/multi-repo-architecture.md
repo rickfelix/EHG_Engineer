@@ -425,8 +425,18 @@ Both repos import from `@ehg/types` for consistency.
 ### Multi-Repo Manager Module
 
 **Location**: `lib/multi-repo/index.js`
-**Purpose**: Centralized multi-repo operations
+**Purpose**: Centralized multi-repo operations (single source of truth)
 **Docs**: [Multi-Repo Module Reference](../reference/multi-repo-module.md)
+
+**Phase 1 Refactoring (2026-01-18)**:
+- Eliminated duplicated repo discovery logic across 3 scripts
+- Added named exports for config constants (`EHG_BASE_DIR`, `KNOWN_REPOS`, `COMPONENT_REPO_MAP`, `IGNORED_REPOS`)
+- Scripts now import from centralized module:
+  - `MultiRepoCoordinator.js` - Reduced by ~70 lines
+  - `branch-cleanup-v2.js` - Reduced by ~50 lines
+  - `multi-repo-status.js` - Already using centralized module (123 lines)
+- Net code reduction: 90 lines
+- Benefit: Single source of truth, consistent behavior across all commands
 
 ### Multi-Repo Status CLI
 

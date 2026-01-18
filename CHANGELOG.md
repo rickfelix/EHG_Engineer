@@ -18,6 +18,11 @@
   - Automatically checks all repos for uncommitted changes before shipping
   - Prevents shipping backend while frontend changes sit uncommitted
   - Provides actionable recommendations when changes found
+- **Phase 1 Refactoring (PR #355)**: Consolidated duplicated repo discovery logic
+  - `MultiRepoCoordinator.js`: Removed 70 lines of duplicated discovery code
+  - `branch-cleanup-v2.js`: Removed 50 lines of duplicated discovery code
+  - Exported config constants from `lib/multi-repo/index.js` for reuse
+  - Net reduction: 90 lines, single source of truth for all repo operations
 
 ### Quality Lifecycle System - 100% Completion
 - **SD-QUALITY-INT-001**: Completed final integration tasks
