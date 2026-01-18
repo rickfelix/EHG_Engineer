@@ -13,78 +13,53 @@
  *   node scripts/branch-cleanup-v2.js --all               # All discovered repos
  *   node scripts/branch-cleanup-v2.js --discover          # List discovered repos
  *
+ * Now uses centralized lib/multi-repo module for repository discovery.
+ *
  * @module branch-cleanup-v2
- * @version 2.1.0 - Multi-repo support
+ * @version 3.0.0 - Uses centralized lib/multi-repo module
  */
 
 import { createClient } from '@supabase/supabase-js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { writeFileSync, readdirSync, statSync, existsSync } from 'fs';
-import { join, dirname, resolve } from 'path';
-import { fileURLToPath } from 'url';
+import { writeFileSync } from 'fs';
 import dotenv from 'dotenv';
+import {
+  discoverRepos as discoverReposFromLib,
+  EHG_BASE_DIR
+} from '../lib/multi-repo/index.js';
 
 dotenv.config();
 
 const execAsync = promisify(exec);
 
-// Cross-platform path resolution (SD-WIN-MIG-005 fix)
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Base directory for repo discovery (parent of EHG_Engineer)
-const EHG_BASE_DIR = resolve(__dirname, '../..');
-
-// Repositories to permanently ignore (archive/inactive repos with messy state)
-const IGNORED_REPOS = ['ehg-replit-archive', 'solara2'];
-
-// Static repo paths (fallback if discovery fails)
-const STATIC_REPO_PATHS = {
-  EHG: resolve(EHG_BASE_DIR, 'ehg'),
-  ehg: resolve(EHG_BASE_DIR, 'ehg'),
-  EHG_Engineer: resolve(EHG_BASE_DIR, 'EHG_Engineer')
-};
-
 /**
- * Discover all git repositories in the EHG base directory
+ * Get repo paths from centralized module
+ * Converts full repo info objects to simple name→path mapping for backward compatibility
  * @returns {Object} Map of repo name to path
  */
-function discoverRepos() {
-  const repos = {};
+function getRepoPaths() {
+  const repos = discoverReposFromLib();
+  const paths = {};
 
-  try {
-    const entries = readdirSync(EHG_BASE_DIR);
-
-    for (const entry of entries) {
-      // Skip ignored repos
-      if (IGNORED_REPOS.includes(entry)) {
-        continue;
-      }
-
-      const fullPath = join(EHG_BASE_DIR, entry);
-      const gitPath = join(fullPath, '.git');
-
-      try {
-        const stat = statSync(fullPath);
-        if (stat.isDirectory() && existsSync(gitPath)) {
-          // Found a git repo
-          repos[entry] = fullPath;
-        }
-      } catch {
-        // Skip entries we can't stat
-      }
+  for (const [name, info] of Object.entries(repos)) {
+    paths[name] = info.path;
+    // Also add lowercase alias for case-insensitive matching
+    if (name !== name.toLowerCase()) {
+      paths[name.toLowerCase()] = info.path;
     }
-  } catch (error) {
-    console.log(`⚠️ Could not discover repos: ${error.message}`);
-    return STATIC_REPO_PATHS;
   }
 
-  return Object.keys(repos).length > 0 ? repos : STATIC_REPO_PATHS;
+  // Add EHG alias for ehg (legacy compatibility)
+  if (paths.ehg && !paths.EHG) {
+    paths.EHG = paths.ehg;
+  }
+
+  return paths;
 }
 
-// Dynamically discover repos
-const REPO_PATHS = discoverRepos();
+// Dynamically discover repos using centralized module
+const REPO_PATHS = getRepoPaths();
 
 const PROTECTED_BRANCHES = ['main', 'master', 'develop', 'staging', 'production'];
 const MIN_STALE_HOURS = 2;
