@@ -7,40 +7,18 @@
  * - Determine coordination order (infrastructure before frontend)
  * - Execute coordinated PR creation and merges
  *
- * Pattern extracted from branch-cleanup-v2.js repo discovery
+ * Now uses centralized lib/multi-repo module for repository discovery.
  *
  * @module shipping/MultiRepoCoordinator
- * @version 1.0.0
+ * @version 2.0.0 - Uses centralized lib/multi-repo module
  */
 
 import { execSync } from 'child_process';
-import { existsSync, readdirSync, statSync } from 'fs';
-import { join, dirname, resolve } from 'path';
-import { fileURLToPath } from 'url';
-
-// Cross-platform path resolution (SD-WIN-MIG-005 fix)
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Dynamic base directory (parent of EHG_Engineer)
-const EHG_BASE_DIR = resolve(__dirname, '../../../../..');
-
-// Repositories to permanently ignore (archive/inactive repos)
-const IGNORED_REPOS = ['ehg-replit-archive', 'solara2'];
-
-// Dynamic repo paths
-const STATIC_REPO_PATHS = {
-  ehg: { name: 'ehg', path: resolve(EHG_BASE_DIR, 'ehg'), github: 'rickfelix/ehg', priority: 2 },
-  EHG_Engineer: { name: 'EHG_Engineer', path: resolve(EHG_BASE_DIR, 'EHG_Engineer'), github: 'rickfelix/EHG_Engineer', priority: 1 }
-};
-
-// Repo coordination order (lower = earlier)
-// Infrastructure repos should be merged before frontend repos
-const REPO_PRIORITY = {
-  EHG_Engineer: 1,  // Infrastructure/tooling
-  ehg: 2,           // Frontend app
-  EHG: 2            // Legacy alias for ehg
-};
+import { existsSync } from 'fs';
+import {
+  discoverRepos as discoverReposFromLib,
+  getPrimaryRepos
+} from '../../../lib/multi-repo/index.js';
 
 export class MultiRepoCoordinator {
   /**
@@ -61,63 +39,19 @@ export class MultiRepoCoordinator {
 
   /**
    * Discover all git repositories in the EHG base directory
+   * Uses centralized lib/multi-repo module
    * @returns {Object} Map of repo name to repo info
    */
   discoverRepos() {
-    const repos = {};
-
     try {
-      const entries = readdirSync(EHG_BASE_DIR);
-
-      for (const entry of entries) {
-        // Skip ignored repos
-        if (IGNORED_REPOS.includes(entry)) {
-          continue;
-        }
-
-        const fullPath = join(EHG_BASE_DIR, entry);
-        const gitPath = join(fullPath, '.git');
-
-        try {
-          const stat = statSync(fullPath);
-          if (stat.isDirectory() && existsSync(gitPath)) {
-            // Determine GitHub repo name
-            let githubRepo = `rickfelix/${entry}`;
-            try {
-              const remoteUrl = execSync('git remote get-url origin', {
-                encoding: 'utf8',
-                cwd: fullPath,
-                timeout: 5000
-              }).trim();
-
-              // Extract repo from git URL
-              const match = remoteUrl.match(/github\.com[:/](.+?)(?:\.git)?$/);
-              if (match) {
-                githubRepo = match[1];
-              }
-            } catch {
-              // Use default
-            }
-
-            repos[entry] = {
-              name: entry,
-              path: fullPath,
-              github: githubRepo,
-              priority: REPO_PRIORITY[entry] || 99
-            };
-          }
-        } catch {
-          // Skip entries we can't stat
-        }
-      }
+      return discoverReposFromLib();
     } catch (error) {
       if (this.options.verbose) {
         console.log(`   ⚠️  Could not discover repos: ${error.message}`);
       }
-      return STATIC_REPO_PATHS;
+      // Fallback to primary repos from centralized config
+      return getPrimaryRepos();
     }
-
-    return Object.keys(repos).length > 0 ? repos : STATIC_REPO_PATHS;
   }
 
   /**
