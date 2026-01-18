@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-18T00:33:06.277Z
+**Generated**: 2026-01-18T00:48:15.335Z
 **Rows**: 449
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (77 total)
+## Columns (78 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -99,6 +99,7 @@ Use the id column instead - it is the canonical identifier. |
 | smoke_test_steps | `jsonb` | YES | `'[]'::jsonb` | SD-specific smoke test steps. Array of {step_number, instruction, expected_outcome, evidence_url}. Populated from template + SD context. Required for feature SDs. |
 | human_verification_status | `text` | YES | `'not_required'::text` | Status of human-verifiable outcome validation: not_required, pending, in_progress, passed, failed |
 | llm_ux_score | `integer(32)` | YES | - | LLM UX Oracle average score for this SD (0-100). NULL if not evaluated. |
+| target_release_id | `uuid` | YES | - | - |
 
 ## Constraints
 
@@ -107,6 +108,7 @@ Use the id column instead - it is the canonical identifier. |
 
 ### Foreign Keys
 - `strategic_directives_v2_parent_sd_id_fkey`: parent_sd_id → strategic_directives_v2(id)
+- `strategic_directives_v2_target_release_id_fkey`: target_release_id → releases(id)
 
 ### Unique Constraints
 - `strategic_directives_v2_legacy_id_unique`: UNIQUE (legacy_id)
@@ -149,6 +151,10 @@ Use the id column instead - it is the canonical identifier. |
 - `idx_sd_parent_sd_id`
   ```sql
   CREATE INDEX idx_sd_parent_sd_id ON public.strategic_directives_v2 USING btree (parent_sd_id)
+  ```
+- `idx_sd_release`
+  ```sql
+  CREATE INDEX idx_sd_release ON public.strategic_directives_v2 USING btree (target_release_id)
   ```
 - `idx_sd_uuid_id`
   ```sql
