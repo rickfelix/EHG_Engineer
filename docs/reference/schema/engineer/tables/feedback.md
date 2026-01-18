@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-18T00:48:15.335Z
+**Generated**: 2026-01-18T14:23:18.070Z
 **Rows**: 0
 **RLS**: Enabled (4 policies)
 
@@ -69,7 +69,7 @@
 ### Check Constraints
 - `feedback_effort_estimate_check`: CHECK (((effort_estimate)::text = ANY ((ARRAY['small'::character varying, 'medium'::character varying, 'large'::character varying])::text[])))
 - `feedback_severity_check`: CHECK (((severity)::text = ANY ((ARRAY['critical'::character varying, 'high'::character varying, 'medium'::character varying, 'low'::character varying])::text[])))
-- `feedback_source_type_check`: CHECK (((source_type)::text = ANY ((ARRAY['manual_feedback'::character varying, 'auto_capture'::character varying, 'uat_failure'::character varying])::text[])))
+- `feedback_source_type_check`: CHECK (((source_type)::text = ANY ((ARRAY['manual_feedback'::character varying, 'auto_capture'::character varying, 'uat_failure'::character varying, 'error_capture'::character varying, 'uncaught_exception'::character varying, 'unhandled_rejection'::character varying, 'manual_capture'::character varying])::text[])))
 - `feedback_status_check`: CHECK (((status)::text = ANY ((ARRAY['new'::character varying, 'triaged'::character varying, 'in_progress'::character varying, 'resolved'::character varying, 'wont_fix'::character varying, 'backlog'::character varying, 'shipped'::character varying])::text[])))
 - `feedback_type_check`: CHECK (((type)::text = ANY ((ARRAY['issue'::character varying, 'enhancement'::character varying])::text[])))
 - `feedback_value_estimate_check`: CHECK (((value_estimate)::text = ANY ((ARRAY['high'::character varying, 'medium'::character varying, 'low'::character varying])::text[])))
