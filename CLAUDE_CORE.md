@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-01-17 12:45:44 PM
+**Generated**: 2026-01-18 10:26:56 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -70,6 +70,27 @@ bash scripts/leo-stack.sh restart   # Starts all 3 servers
 # Port 8000: Agent Platform AI backend
 ```
 
+## 🚀 Session Verification & Quick Start (MANDATORY)
+
+## Session Start Checklist
+
+### Required Verification
+1. **Check Priority**: `npm run prio:top3`
+2. **Git Status**: Clean working directory?
+3. **Context Load**: CLAUDE_CORE.md + phase file
+
+### Before Starting Work
+- Verify SD is in correct phase
+- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
+- Review recent handoffs if continuing
+
+### Key Commands
+| Command | Purpose |
+|---------|---------|
+| `npm run prio:top3` | Top priority SDs |
+| `git status` | Working tree status |
+| `npm run handoff:latest` | Latest handoff |
+
 ## 🔍 Session Start Verification (MANDATORY)
 
 **Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
@@ -104,27 +125,6 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 - If records don't exist, CREATE them before proceeding
 
 **Pattern Reference**: PAT-SESS-VER-001
-
-## 🚀 Session Verification & Quick Start (MANDATORY)
-
-## Session Start Checklist
-
-### Required Verification
-1. **Check Priority**: `npm run prio:top3`
-2. **Git Status**: Clean working directory?
-3. **Context Load**: CLAUDE_CORE.md + phase file
-
-### Before Starting Work
-- Verify SD is in correct phase
-- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
-- Review recent handoffs if continuing
-
-### Key Commands
-| Command | Purpose |
-|---------|---------|
-| `npm run prio:top3` | Top priority SDs |
-| `git status` | Working tree status |
-| `npm run handoff:latest` | Latest handoff |
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -192,6 +192,37 @@ npm run handoff:compliance SD-ID  # Check specific SD
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
+## Mandatory Agent Invocation Rules
+
+**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
+
+### Task Type -> Required Agent
+
+| Task Keywords | MUST Invoke | Purpose |
+|---------------|-------------|---------|
+| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
+| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
+| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
+| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
+| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
+| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
+| database, migration, schema | **database-agent** | Schema validation |
+| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
+
+### Why This Exists
+
+**Incident**: Human-like testing perspective interpreted as manual content inspection.
+**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
+**Root Cause**: Ad-hoc review instead of specialized agent invocation.
+**Prevention**: Explicit rules mandate agent use for specialized tasks.
+
+### How to Apply
+
+1. Detect task type from user request keywords
+2. Invoke required agent(s) BEFORE making changes
+3. Agent findings inform implementation
+4. Re-run agent AFTER changes to verify fixes
+
 ## 🤖 Built-in Agent Integration
 
 ## Built-in Agent Integration
@@ -233,37 +264,6 @@ Task(subagent_type="Explore", prompt="Identify affected areas")
 ```
 
 This is faster than sequential exploration and provides comprehensive coverage.
-
-## Mandatory Agent Invocation Rules
-
-**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
-
-### Task Type -> Required Agent
-
-| Task Keywords | MUST Invoke | Purpose |
-|---------------|-------------|---------|
-| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
-| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
-| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
-| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
-| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
-| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
-| database, migration, schema | **database-agent** | Schema validation |
-| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
-
-### Why This Exists
-
-**Incident**: Human-like testing perspective interpreted as manual content inspection.
-**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
-**Root Cause**: Ad-hoc review instead of specialized agent invocation.
-**Prevention**: Explicit rules mandate agent use for specialized tasks.
-
-### How to Apply
-
-1. Detect task type from user request keywords
-2. Invoke required agent(s) BEFORE making changes
-3. Agent findings inform implementation
-4. Re-run agent AFTER changes to verify fixes
 
 ## Work Tracking Policy
 
@@ -612,6 +612,73 @@ To request an exception to this block:
 4. Mark Stage 7 SD with `ui_debt_acknowledged: true`
 
 **No exceptions without explicit LEAD approval.**
+
+## Child SD Pre-Work Validation (MANDATORY)
+
+### Child SD Pre-Work Validation
+
+**CRITICAL**: Before starting work on any child SD (SD with parent_sd_id), you MUST run the preflight validation.
+
+#### When to Run
+- Before starting work on ANY child SD
+- The validation is automatic - run it immediately when selecting a child SD
+
+#### Validation Command
+```bash
+node scripts/child-sd-preflight.js SD-XXX-001
+```
+
+#### What It Checks
+1. **Is Child SD**: Verifies the SD has a parent_sd_id (is a child)
+2. **Dependency Chain**: For each SD in the dependency_chain:
+   - Status must be `completed`
+   - Progress must be `100%`
+   - Required handoffs must be present (varies by SD type)
+3. **Parent Context**: Loads parent orchestrator for reference
+
+#### Validation Results
+
+**PASS** - Ready to work:
+- SD is not a child (standalone), OR
+- SD is a child with no dependencies, OR
+- All dependency SDs are complete with required handoffs
+
+**BLOCKED** - Cannot proceed:
+- One or more dependency SDs are incomplete
+- Missing required handoffs on dependencies
+- Action: Complete the blocking dependency first
+
+#### Example Output (BLOCKED)
+```
+═══════════════════════════════════════════════════════════
+  CHILD SD PRE-WORK VALIDATION
+═══════════════════════════════════════════════════════════
+
+📋 SD: SD-QUALITY-CLI-001 (/inbox CLI Command)
+   Parent: SD-QUALITY-LIFECYCLE-001 (Quality Lifecycle System)
+
+🔗 DEPENDENCY CHECK
+┌─────────────────────────┬──────────┬──────────┬──────────┐
+│ Dependency              │ Status   │ Progress │ Handoffs │
+├─────────────────────────┼──────────┼──────────┼──────────┤
+│ SD-QUALITY-DB-001       │ in_prog  │ 60%      │ 2/4      │
+└─────────────────────────┴──────────┴──────────┴──────────┘
+
+❌ RESULT: BLOCKED
+   Cannot start SD-QUALITY-CLI-001 until dependencies are complete.
+
+   🚫 SD-QUALITY-DB-001 is not complete:
+      - Status: in_progress (expected: completed)
+      - Progress: 60% (expected: 100%)
+      - Handoffs: 2/4 (expected: 4)
+
+   ACTION: Complete SD-QUALITY-DB-001 first, then return to this SD.
+```
+
+#### Integration with Workflow
+- `npm run sd:next` shows dependency status in the queue
+- Child SDs with incomplete dependencies show as BLOCKED
+- Complete dependencies in sequence before proceeding
 
 ## Global Negative Constraints
 
@@ -1832,7 +1899,7 @@ Handles customer relationship management, lead tracking, customer success metric
 
 ---
 
-*Generated from database: 2026-01-17*
+*Generated from database: 2026-01-18*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

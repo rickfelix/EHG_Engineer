@@ -36,6 +36,7 @@
       "pattern_search_guide",
       "ai_quality_russian_judge",
       "parent_child_overview",
+      "child_sd_preflight_validation",
       "negative_constraints_global",
       "sd_type_workflow_paths",
       "work_tracking_policy",

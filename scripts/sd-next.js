@@ -24,6 +24,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { warnIfTempFilesExceedThreshold } from '../lib/root-temp-checker.mjs';
 import { getEstimatedDuration, formatEstimateShort } from './lib/duration-estimator.js';
+import { checkDependencyStatus } from './child-sd-preflight.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -816,6 +817,11 @@ class SDNextSelector {
       }
     }
 
+    // Show sibling dependency status for child SDs (pre-computed)
+    if (item.childDepStatus && !item.childDepStatus.allComplete) {
+      console.log(`${colors.dim}${indent}        └─ Child deps: ${item.childDepStatus.summary}${colors.reset}`);
+    }
+
     // Display children recursively
     const children = childItems.get(sdId) || childItems.get(item.id) || [];
     const childrenInTrack = children.filter(c => allItems.includes(c));
@@ -875,10 +881,22 @@ class SDNextSelector {
 
         if (sd && sd.is_active && sd.status !== 'completed' && sd.status !== 'cancelled') {
           const depsResolved = await this.checkDependenciesResolved(sd.dependencies);
+
+          // Check child dependency status if this is a child SD
+          let childDepStatus = null;
+          if (sd.parent_sd_id) {
+            try {
+              childDepStatus = await checkDependencyStatus(sd.legacy_id || sd.id);
+            } catch {
+              // Silently ignore errors
+            }
+          }
+
           tracks[trackKey].push({
             ...item,
             ...sd,
             deps_resolved: depsResolved,
+            childDepStatus,
             actual: this.actuals[item.sd_id]
           });
         }
