@@ -199,22 +199,39 @@ async function getSDDetails(sdId) {
       .from('strategic_directives_v2')
       .select('*')
       .eq('id', sdId)
-      .single();
+      .maybeSingle();  // SD-TECH-DEBT-HANDOFF-001: Use maybeSingle() to avoid coercion error
     data = result.data;
     error = result.error;
   } else {
-    // Try legacy_id or sd_key lookup
-    const result = await supabase
+    // Try legacy_id first, then sd_key (avoid .or() with .single() which can fail)
+    // SD-TECH-DEBT-HANDOFF-001: Split into two queries to avoid "Cannot coerce" error
+    const legacyResult = await supabase
       .from('strategic_directives_v2')
       .select('*')
-      .or(`legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
-      .single();
-    data = result.data;
-    error = result.error;
+      .eq('legacy_id', sdId)
+      .maybeSingle();
+
+    if (legacyResult.data) {
+      data = legacyResult.data;
+      error = legacyResult.error;
+    } else {
+      // Try sd_key if legacy_id not found
+      const keyResult = await supabase
+        .from('strategic_directives_v2')
+        .select('*')
+        .eq('sd_key', sdId)
+        .maybeSingle();
+      data = keyResult.data;
+      error = keyResult.error;
+    }
   }
 
   if (error) {
     throw new Error(`Failed to get SD details: ${error.message}`);
+  }
+
+  if (!data) {
+    throw new Error(`SD not found: ${sdId}`);
   }
 
   return data;
