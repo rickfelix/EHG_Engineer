@@ -95,8 +95,14 @@ export async function validateGate4LeadFinal(sd_id, supabase, allGateResults = {
           if (handoff.handoff_type === 'EXEC-TO-PLAN' && handoff.metadata?.gate2_validation) {
             gateResults.gate2 = handoff.metadata.gate2_validation;
           }
-          if (handoff.handoff_type === 'PLAN-TO-LEAD' && handoff.metadata?.gate3_validation) {
-            gateResults.gate3 = handoff.metadata.gate3_validation;
+          // SD-LIFECYCLE-GAP-002 FIX: Check both gate3_validation and gate_results.GATE3_TRACEABILITY
+          // The unified handoff system stores Gate 3 results in gate_results object
+          if (handoff.handoff_type === 'PLAN-TO-LEAD') {
+            if (handoff.metadata?.gate3_validation) {
+              gateResults.gate3 = handoff.metadata.gate3_validation;
+            } else if (handoff.metadata?.gate_results?.GATE3_TRACEABILITY) {
+              gateResults.gate3 = handoff.metadata.gate_results.GATE3_TRACEABILITY;
+            }
           }
         }
       }
