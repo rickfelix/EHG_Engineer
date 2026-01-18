@@ -275,13 +275,18 @@ export class PlanToLeadExecutor extends BaseExecutor {
         // SD-VENTURE-STAGE0-UI-001: Use UUID (ctx.sd.id) not legacy_id (ctx.sdId)
         // because retrospectives are stored with the SD's UUID
         const sdUuid = ctx.sd?.id || ctx.sdId;
-        const { data: retrospective } = await this.supabase
+        const { data: retrospective, error: retroError } = await this.supabase
           .from('retrospectives')
           .select('*')
           .eq('sd_id', sdUuid)
           .order('created_at', { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle();
+
+        // SD-TECH-DEBT-HANDOFF-001: Use maybeSingle() to handle missing retrospectives gracefully
+        if (retroError && retroError.code !== 'PGRST116') {
+          console.log(`   ⚠️  Retrospective query error: ${retroError.message}`);
+        }
 
         // Store orchestrator context for use in executeSpecific (prevents re-query issues)
         ctx._isOrchestrator = isOrchestrator;
