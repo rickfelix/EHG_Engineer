@@ -17,6 +17,7 @@ import { createHandoffSystem } from './modules/handoff/index.js';
 import { createClient } from '@supabase/supabase-js';
 import { shouldSkipCodeValidation, getValidationRequirements } from '../lib/utils/sd-type-validation.js';
 import { normalizeSDId } from './modules/sd-id-normalizer.js';
+import { checkUncommittedChanges, getAffectedRepos } from '../lib/multi-repo/index.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -418,6 +419,88 @@ function displayCompletionVerification(result) {
   console.log('');
 }
 
+/**
+ * Check multi-repo status for SD-related work
+ * Phase 2 Enhancement: Prevents shipping with uncommitted changes in related repos
+ */
+function checkMultiRepoStatus(sdInfo = null) {
+  try {
+    const status = checkUncommittedChanges(true);
+
+    if (!status || !status.hasChanges) {
+      return { passed: true, status: null };
+    }
+
+    // If SD info provided, check if changes are in affected repos
+    let affectedRepos = ['ehg', 'EHG_Engineer']; // Default: both repos
+    if (sdInfo) {
+      try {
+        affectedRepos = getAffectedRepos({
+          title: sdInfo.title || '',
+          description: sdInfo.description || '',
+          sd_type: sdInfo.sd_type || 'feature'
+        });
+      } catch {
+        // Keep default
+      }
+    }
+
+    // Filter to only affected repos
+    const relevantChanges = status.summary.filter(repo => {
+      const repoName = repo.name.toLowerCase();
+      return affectedRepos.some(ar => ar.toLowerCase() === repoName);
+    });
+
+    const hasRelevantChanges = relevantChanges.some(r =>
+      r.uncommittedCount > 0 || r.unpushedCount > 0
+    );
+
+    return {
+      passed: !hasRelevantChanges,
+      status,
+      relevantChanges,
+      affectedRepos
+    };
+  } catch {
+    // If multi-repo check fails, don't block
+    return { passed: true, status: null, error: 'Could not check multi-repo status' };
+  }
+}
+
+/**
+ * Display multi-repo status for handoff context
+ */
+function displayMultiRepoStatus(multiRepoResult, phaseName = 'Handoff') {
+  if (!multiRepoResult.status || multiRepoResult.passed) {
+    console.log('   ✅ Multi-Repo Status: All repositories clean');
+    return;
+  }
+
+  console.log('');
+  console.log('⚠️  MULTI-REPO WARNING');
+  console.log('─'.repeat(50));
+  console.log('   Uncommitted changes found in related repositories:');
+  console.log('');
+
+  for (const repo of multiRepoResult.relevantChanges) {
+    if (repo.uncommittedCount > 0 || repo.unpushedCount > 0) {
+      const icon = repo.uncommittedCount > 0 ? '📝' : '📤';
+      console.log(`   ${icon} ${repo.displayName} (${repo.branch})`);
+      if (repo.uncommittedCount > 0) {
+        console.log(`      ${repo.uncommittedCount} uncommitted change(s)`);
+      }
+      if (repo.unpushedCount > 0) {
+        console.log(`      ${repo.unpushedCount} unpushed commit(s)`);
+      }
+    }
+  }
+
+  console.log('');
+  console.log(`   💡 Consider shipping changes in all repos before ${phaseName}`);
+  console.log('   Run: node scripts/multi-repo-status.js for details');
+  console.log('─'.repeat(50));
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
@@ -500,6 +583,14 @@ async function main() {
         process.exit(1);
       }
 
+      // Step 0: Multi-repo status check (Phase 2 Enhancement)
+      console.log('');
+      console.log('STEP 0: MULTI-REPO STATUS CHECK');
+      console.log('─'.repeat(50));
+      const workflowInfoForPrecheck = await getSDWorkflow(precheckSdId);
+      const multiRepoResult = checkMultiRepoStatus(workflowInfoForPrecheck.sd);
+      displayMultiRepoStatus(multiRepoResult, 'phase transition');
+
       // Step 1: Quick git state check first
       console.log('');
       console.log('STEP 1: GIT STATE CHECK');
@@ -580,6 +671,12 @@ async function main() {
           console.log('⚠️  NOTE: This handoff is OPTIONAL for this SD type.');
           console.log('   You may skip it and proceed directly to the next required handoff.');
           console.log('');
+        }
+
+        // Phase 2 Enhancement: Check multi-repo status before execution
+        const multiRepoCheck = checkMultiRepoStatus(workflowInfo.sd);
+        if (!multiRepoCheck.passed) {
+          displayMultiRepoStatus(multiRepoCheck, handoffType);
         }
       }
 

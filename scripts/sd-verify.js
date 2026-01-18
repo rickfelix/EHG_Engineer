@@ -16,6 +16,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { execSync } from 'child_process';
+import { checkUncommittedChanges, getAffectedRepos } from '../lib/multi-repo/index.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -199,8 +200,57 @@ async function verifySD(sdId) {
     console.log(`${colors.yellow}⚠${colors.reset} No retrospective found (recommended for learning capture)`);
   }
 
+  // 6. Phase 2 Enhancement: Check multi-repo status
+  console.log('');
+  let multiRepoClean = true;
+  try {
+    const multiRepoStatus = checkUncommittedChanges(true);
+    if (multiRepoStatus && multiRepoStatus.hasChanges) {
+      // Get affected repos for this SD
+      const affectedRepos = getAffectedRepos({
+        title: sd.title || '',
+        description: sd.description || '',
+        sd_type: sd.sd_type || 'feature'
+      });
+
+      // Check if any affected repo has uncommitted changes
+      const relevantChanges = multiRepoStatus.summary.filter(repo => {
+        const repoName = repo.name.toLowerCase();
+        return affectedRepos.some(ar => ar.toLowerCase() === repoName);
+      });
+
+      const hasRelevantChanges = relevantChanges.some(r =>
+        r.uncommittedCount > 0 || r.unpushedCount > 0
+      );
+
+      if (hasRelevantChanges) {
+        console.log(`${colors.yellow}⚠${colors.reset} Multi-repo status: UNCOMMITTED CHANGES`);
+        for (const repo of relevantChanges) {
+          if (repo.uncommittedCount > 0 || repo.unpushedCount > 0) {
+            console.log(`  ${colors.dim}${repo.displayName}: ${repo.uncommittedCount} uncommitted, ${repo.unpushedCount} unpushed${colors.reset}`);
+          }
+        }
+        multiRepoClean = false;
+      } else {
+        console.log(`${colors.green}✓${colors.reset} Multi-repo status: All affected repositories clean`);
+      }
+    } else {
+      console.log(`${colors.green}✓${colors.reset} Multi-repo status: All repositories clean`);
+    }
+  } catch {
+    console.log(`${colors.dim}○${colors.reset} Multi-repo status: Could not check`);
+  }
+
   console.log(`\n${colors.bold}───────────────────────────────────────────────────────────────────${colors.reset}`);
   console.log(`${colors.bold}RECOMMENDED ACTIONS${colors.reset}\n`);
+
+  // Phase 2: Warn about uncommitted changes
+  if (!multiRepoClean) {
+    console.log(`${colors.yellow}${colors.bold}⚠️  MULTI-REPO WARNING${colors.reset}`);
+    console.log('  Uncommitted changes found in related repositories.');
+    console.log('  Ship changes before completing SD to avoid losing work.');
+    console.log(`  ${colors.dim}Run: node scripts/multi-repo-status.js for details${colors.reset}\n`);
+  }
 
   // Determine next action based on state
   if (sd.status === 'review' && sd.current_phase === 'EXEC_COMPLETE') {
@@ -231,7 +281,7 @@ async function completeSD(sdId) {
   // Get SD
   const { data: sd, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, sd_key, title, current_phase, status')
+    .select('id, legacy_id, sd_key, title, current_phase, status, sd_type, description')
     .or(`legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
     .single();
 
@@ -243,6 +293,44 @@ async function completeSD(sdId) {
   const actualSdId = sd.legacy_id || sd.sd_key;
   console.log(`SD: ${actualSdId}`);
   console.log(`Title: ${sd.title}\n`);
+
+  // Phase 2 Enhancement: Check multi-repo status before completing
+  try {
+    const multiRepoStatus = checkUncommittedChanges(true);
+    if (multiRepoStatus && multiRepoStatus.hasChanges) {
+      const affectedRepos = getAffectedRepos({
+        title: sd.title || '',
+        description: sd.description || '',
+        sd_type: sd.sd_type || 'feature'
+      });
+
+      const relevantChanges = multiRepoStatus.summary.filter(repo => {
+        const repoName = repo.name.toLowerCase();
+        return affectedRepos.some(ar => ar.toLowerCase() === repoName);
+      });
+
+      const hasRelevantChanges = relevantChanges.some(r =>
+        r.uncommittedCount > 0 || r.unpushedCount > 0
+      );
+
+      if (hasRelevantChanges) {
+        console.log(`${colors.yellow}${colors.bold}⚠️  MULTI-REPO WARNING${colors.reset}`);
+        console.log('  Uncommitted changes found in related repositories:');
+        for (const repo of relevantChanges) {
+          if (repo.uncommittedCount > 0 || repo.unpushedCount > 0) {
+            console.log(`    ${repo.displayName}: ${repo.uncommittedCount} uncommitted, ${repo.unpushedCount} unpushed`);
+          }
+        }
+        console.log('');
+        console.log(`${colors.yellow}  Ship changes in all repos before completing SD.${colors.reset}`);
+        console.log(`  ${colors.dim}Run: node scripts/multi-repo-status.js for details${colors.reset}\n`);
+        console.log(`${colors.red}✗ SD completion blocked - ship uncommitted changes first${colors.reset}\n`);
+        return;
+      }
+    }
+  } catch {
+    // If check fails, proceed with completion
+  }
 
   // Update to completed
   const { error: updateError } = await supabase
