@@ -71,11 +71,90 @@ node scripts/branch-cleanup-v2.js --repo EHG --execute --stage2
 └─────────────────────────┴──────────┴──────────┴──────────┴──────────┘
 ```
 
+**Then proceed to Step 0.1.**
+
+---
+
+### Step 0.1: Multi-Repo Uncommitted Changes Check (CRITICAL)
+
+**IMPORTANT**: This step catches uncommitted changes across ALL repositories, preventing the common mistake of shipping backend changes while frontend changes sit uncommitted (or vice versa).
+
+```bash
+node scripts/multi-repo-status.js
+```
+
+**What it checks:**
+- Scans all EHG repositories (EHG, EHG_Engineer, etc.)
+- Detects uncommitted/unstaged changes in each repo
+- Detects unpushed commits
+- Categorizes changes by type (quality, api, ui, config, docs)
+
+**Example output when changes found:**
+
+```
+═══════════════════════════════════════════════════════════
+  MULTI-REPO STATUS CHECK
+═══════════════════════════════════════════════════════════
+
+  Scanned 2 repositories
+  ⚠️  Found changes in 1 repo(s)
+
+────────────────────────────────────────────────────────────
+📂 ehg (branch: main)
+   📝 3 uncommitted change(s):
+      M src/components/quality/FeedbackDetailPanel.tsx
+      M src/pages/quality/QualityInboxPage.tsx
+      M src/components/navigation/BreadcrumbNavigation.tsx
+
+═══════════════════════════════════════════════════════════
+  RECOMMENDATIONS
+═══════════════════════════════════════════════════════════
+
+  📂 ehg:
+     cd C:\Users\rickf\Projects\_EHG\ehg
+     git checkout -b feat/SD-XXX-description  # Create feature branch
+     git add .
+     git commit -m "feat: description"
+     git push -u origin HEAD
+
+────────────────────────────────────────────────────────────
+  ⚠️  Ship these changes before or with current work to avoid
+     leaving related changes uncommitted across repositories.
+```
+
+**If changes found in OTHER repos:**
+
+1. **Option A: Ship the other repo first**
+   - Navigate to that repo
+   - Run `/ship` there first
+   - Return to original repo
+
+2. **Option B: Ship together (coordinated)**
+   - Use AskUserQuestion to confirm: "Found uncommitted changes in EHG repo. Ship those first?"
+   - If yes, switch to that repo and complete the ship flow
+   - Then return to original repo
+
+3. **Option C: Intentionally skip (rare)**
+   - If changes are unrelated, proceed with caution
+   - Document why in commit message
+
+**If all repos clean:**
+```
+═══════════════════════════════════════════════════════════
+  MULTI-REPO STATUS CHECK
+═══════════════════════════════════════════════════════════
+
+  Scanned 2 repositories
+
+  ✅ All repositories are clean
+     No uncommitted changes or unpushed commits found
+```
+
 **Then proceed to Step 0.5.**
 
 ---
 
-### Step 0.5: Pre-Ship Verification (NEW)
+### Step 0.5: Pre-Ship Verification
 
 Before committing, run the preflight verification to ensure all SD work is ready for shipping.
 
