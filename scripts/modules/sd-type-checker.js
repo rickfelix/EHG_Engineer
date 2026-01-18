@@ -27,7 +27,8 @@ export const SD_TYPE_CATEGORIES = {
   // PAT-SD-API-CATEGORY-003: api/backend SDs produce code but need unit/integration tests, not E2E
   // SD-UNIFIED-PATH-1.0: orchestrator added - parent SDs coordinate, children produce code
   // SD-UNIFIED-PATH-2.2.1: database added - DB SDs work via migrations, not app code changes
-  NON_CODE: ['infrastructure', 'documentation', 'process', 'qa', 'api', 'backend', 'orchestrator', 'database'],
+  // FIX: Added 'docs' alias for 'documentation' - commonly used abbreviation
+  NON_CODE: ['infrastructure', 'documentation', 'docs', 'process', 'qa', 'api', 'backend', 'orchestrator', 'database'],
 
   // SDs that produce code and need full validation
   // LEO Protocol v4.4.1: Added 'enhancement' - improvements to existing features (lighter validation than 'feature')
@@ -82,6 +83,7 @@ export const THRESHOLD_PROFILES = {
   // Infrastructure SDs have lower quality thresholds (simpler by design)
   infrastructure: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50 },
   documentation: { retrospectiveQuality: 50, sdCompletion: 50, prdQuality: 50 },
+  docs: { retrospectiveQuality: 50, sdCompletion: 50, prdQuality: 50 }, // Alias for documentation
   process: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50 },
   qa: { retrospectiveQuality: 55, sdCompletion: 55, prdQuality: 50 },  // SD-E2E-WEBSOCKET-AUTH-006
 
@@ -183,7 +185,8 @@ function isValidSDType(type) {
   const validTypes = [
     'feature', 'enhancement',  // LEO v4.4.1: enhancement = improvements to existing features
     'infrastructure', 'database', 'security',
-    'documentation', 'bugfix', 'refactor', 'performance', 'process',
+    'documentation', 'docs',  // docs = alias for documentation
+    'bugfix', 'refactor', 'performance', 'process',
     'orchestrator',  // Parent SDs with children - auto-set by trigger
     'qa'  // SD-E2E-WEBSOCKET-AUTH-006: test cleanup/review tasks
   ];

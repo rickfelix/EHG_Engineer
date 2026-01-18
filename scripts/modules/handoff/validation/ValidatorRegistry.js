@@ -28,6 +28,7 @@ import { validateCrossSDConsistency } from '../../cross-sd-consistency-validatio
 import { validateSDContractCompliance, validateContractGate } from '../../contract-validation.js';
 import { validateHandoffContentQuality, validateHandoffForQuality } from '../../handoff-content-quality-validation.js';
 import { validateStoryDependencies } from '../../user-story-dependency-validation.js';
+import { shouldSkipCodeValidation } from '../../../../lib/utils/sd-type-validation.js';
 import { validateStoryCodebaseAlignment, validateAllStoriesCodebaseAlignment } from '../../user-story-codebase-alignment-validation.js';
 import { validateExecChecklist } from '../exec-checklist-validation.js';
 
@@ -634,6 +635,24 @@ export class ValidatorRegistry {
 
     this.register('testingSubAgentVerified', async (context) => {
       const { sd_id, supabase } = context;
+
+      // FIX: Check if this SD type should skip code validation (infrastructure, documentation, etc.)
+      const { data: sdData } = await supabase
+        .from('strategic_directives_v2')
+        .select('id, sd_type, title')
+        .eq('id', sd_id)
+        .single();
+
+      if (sdData && shouldSkipCodeValidation(sdData)) {
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [`TESTING validation skipped for ${sdData.sd_type} SD`]
+        };
+      }
+
       const { data, error } = await supabase
         .from('sd_sub_agent_executions')
         .select('*')
@@ -916,6 +935,24 @@ export class ValidatorRegistry {
 
     this.register('subAgentOrchestration', async (context) => {
       const { sd_id, supabase } = context;
+
+      // FIX: Check if this SD type should skip sub-agent orchestration validation
+      const { data: sdData } = await supabase
+        .from('strategic_directives_v2')
+        .select('id, sd_type, title')
+        .eq('id', sd_id)
+        .single();
+
+      if (sdData && shouldSkipCodeValidation(sdData)) {
+        return {
+          passed: true,
+          score: 100,
+          max_score: 100,
+          issues: [],
+          warnings: [`Sub-agent orchestration skipped for ${sdData.sd_type} SD`]
+        };
+      }
+
       const requiredAgents = ['DESIGN', 'DATABASE'];
       const issues = [];
 
