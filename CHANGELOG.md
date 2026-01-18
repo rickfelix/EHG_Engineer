@@ -23,6 +23,12 @@
   - `branch-cleanup-v2.js`: Removed 50 lines of duplicated discovery code
   - Exported config constants from `lib/multi-repo/index.js` for reuse
   - Net reduction: 90 lines, single source of truth for all repo operations
+- **Phase 2 SD-Aware Intelligence (PR #357)**: Added multi-repo awareness to LEO Protocol commands
+  - `sd-next.js`: Shows MULTI-REPO WARNING banner when uncommitted changes detected
+  - `handoff.js`: STEP 0 multi-repo check before phase transitions (precheck and execute)
+  - `sd-verify.js`: Verification checklist includes multi-repo status, blocks SD completion if uncommitted
+  - SD-aware: Only checks repos affected by SD type (via `getAffectedRepos()`)
+  - Prevents forgetting uncommitted work in related repos during critical operations
 
 ### Quality Lifecycle System - 100% Completion
 - **SD-QUALITY-INT-001**: Completed final integration tasks
