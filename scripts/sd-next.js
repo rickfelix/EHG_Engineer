@@ -25,6 +25,10 @@ import dotenv from 'dotenv';
 import { warnIfTempFilesExceedThreshold } from '../lib/root-temp-checker.mjs';
 import { getEstimatedDuration, formatEstimateShort } from './lib/duration-estimator.js';
 import { checkDependencyStatus } from './child-sd-preflight.js';
+import {
+  getAffectedRepos,
+  checkUncommittedChanges
+} from '../lib/multi-repo/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -160,6 +164,7 @@ class SDNextSelector {
     this.vision = null; // Strategic vision
     this.sdHierarchy = new Map(); // parent_sd_id -> children[]
     this.allSDs = new Map(); // sd_id -> sd details
+    this.multiRepoStatus = null; // Multi-repo uncommitted changes status
   }
 
   async run() {
@@ -183,12 +188,16 @@ class SDNextSelector {
     await this.loadConflicts();
     await this.loadActiveSessions();
     await this.loadPendingProposals();
+    this.loadMultiRepoStatus(); // Phase 2: Multi-repo intelligence
 
     // Display OKR scorecard (strategic visibility)
     this.displayOKRScorecard();
 
     // Display active sessions
     await this.displayActiveSessions();
+
+    // Display multi-repo warning if uncommitted changes exist (Phase 2)
+    this.displayMultiRepoWarning();
 
     if (!this.baseline) {
       await this.showFallbackQueue();
@@ -427,6 +436,61 @@ class SDNextSelector {
   }
 
   /**
+   * Load multi-repo status (Phase 2 multi-repo intelligence)
+   * Checks for uncommitted changes across all EHG repositories
+   */
+  loadMultiRepoStatus() {
+    try {
+      this.multiRepoStatus = checkUncommittedChanges(true); // primary repos only
+    } catch {
+      // Non-fatal - continue without multi-repo status
+      this.multiRepoStatus = null;
+    }
+  }
+
+  /**
+   * Get affected repos for an SD
+   * @param {Object} sd - SD object with title, description, sd_type
+   * @returns {Array} List of affected repo names
+   */
+  getSDRepos(sd) {
+    try {
+      return getAffectedRepos({
+        title: sd.title || '',
+        description: sd.description || '',
+        sd_type: sd.sd_type || sd.metadata?.sd_type || 'feature'
+      });
+    } catch {
+      return ['ehg', 'EHG_Engineer']; // Default to both
+    }
+  }
+
+  /**
+   * Display multi-repo status warning if uncommitted changes exist
+   */
+  displayMultiRepoWarning() {
+    if (!this.multiRepoStatus || !this.multiRepoStatus.hasChanges) return;
+
+    console.log(`\n${colors.bold}───────────────────────────────────────────────────────────────────${colors.reset}`);
+    console.log(`${colors.bgYellow}${colors.bold} MULTI-REPO WARNING ${colors.reset}\n`);
+
+    for (const repo of this.multiRepoStatus.summary) {
+      const icon = repo.uncommittedCount > 0 ? '📝' : '📤';
+      console.log(`  ${icon} ${colors.bold}${repo.displayName}${colors.reset} (${repo.branch})`);
+
+      if (repo.uncommittedCount > 0) {
+        console.log(`     ${repo.uncommittedCount} uncommitted change(s)`);
+      }
+      if (repo.unpushedCount > 0) {
+        console.log(`     ${repo.unpushedCount} unpushed commit(s)`);
+      }
+    }
+
+    console.log(`\n  ${colors.yellow}⚠️  Commit changes before starting new SD work${colors.reset}`);
+    console.log(`  ${colors.dim}Run: node scripts/multi-repo-status.js for details${colors.reset}`);
+  }
+
+  /**
    * Load pending SD proposals (LEO Protocol v4.4)
    */
   async loadPendingProposals() {
@@ -476,7 +540,7 @@ class SDNextSelector {
           this.sdHierarchy.get(sd.parent_sd_id).push(sd);
         }
       }
-    } catch (e) {
+    } catch {
       // Non-fatal - continue without hierarchy
     }
   }
@@ -738,7 +802,6 @@ class SDNextSelector {
     const childItems = new Map(); // parent_sd_id -> children
 
     for (const item of items) {
-      const sdId = item.legacy_id || item.sd_id;
       if (item.parent_sd_id) {
         if (!childItems.has(item.parent_sd_id)) {
           childItems.set(item.parent_sd_id, []);
