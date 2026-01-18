@@ -498,8 +498,14 @@ export class ValidatorRegistry {
         };
       }
 
-      const executionPlan = prd?.execution_plan || prd?.implementation_steps ||
-        prd?.planning_section?.implementation_steps || [];
+      // SD-LIFECYCLE-GAP-004: Check for non-empty arrays only (empty [] is truthy but useless)
+      const getSteps = (arr) => Array.isArray(arr) && arr.length > 0 ? arr : null;
+      const executionPlan =
+        getSteps(prd?.execution_plan) ||
+        getSteps(prd?.implementation_steps) ||
+        getSteps(prd?.planning_section?.implementation_steps) ||
+        getSteps(prd?.metadata?.execution_plan?.steps) ||
+        [];
 
       if (!executionPlan || executionPlan.length === 0) {
         return { passed: false, score: 0, max_score: 100, issues: ['Execution plan has no steps'] };
@@ -512,15 +518,18 @@ export class ValidatorRegistry {
       const { sd, prd } = context;
 
       // SD-LEO-001: Skip for infrastructure/documentation SDs
+      // SD-LIFECYCLE-GAP-004: Also check category (sd_type and category can differ)
       const skipTypes = ['infrastructure', 'documentation', 'orchestrator'];
       const sdType = (sd?.sd_type || '').toLowerCase();
-      if (skipTypes.includes(sdType)) {
+      const sdCategory = (sd?.category || '').toLowerCase();
+      if (skipTypes.includes(sdType) || skipTypes.includes(sdCategory)) {
+        const skipReason = skipTypes.includes(sdType) ? sdType : sdCategory;
         return {
           passed: true,
           score: 100,
           max_score: 100,
           issues: [],
-          warnings: [`testing_strategy validation skipped for ${sdType} SD type`]
+          warnings: [`testing_strategy validation skipped for ${skipReason} SD`]
         };
       }
 

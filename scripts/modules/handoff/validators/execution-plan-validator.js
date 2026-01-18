@@ -12,7 +12,8 @@
  */
 export async function validateExecutionPlan(context) {
   const { prd } = context;
-  const executionPlan = prd?.execution_plan || prd?.implementation_steps || [];
+  // SD-LIFECYCLE-GAP-004: Also check metadata.execution_plan.steps (standard PRD structure)
+  const executionPlan = prd?.execution_plan || prd?.implementation_steps || prd?.metadata?.execution_plan?.steps || [];
 
   if (!executionPlan || executionPlan.length === 0) {
     return {
