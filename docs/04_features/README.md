@@ -92,6 +92,24 @@ Features organized by development stage number:
 | `opportunity_matrix_analyzer.md` | Opportunity matrix analysis tool |
 | `strategic_intelligence_scaling.md` | Strategic intelligence scaling |
 
+### Venture Lifecycle Protocols
+
+**SD-LIFECYCLE-GAP-000 Remediation** (Completed 2026-01-18):
+
+| File | SD | Description |
+|------|-----|-------------|
+| `venture-lifecycle-gap-remediation-overview.md` | SD-000 | Master overview of lifecycle gap remediation (25-stage model hardening) |
+| `capability-router-protocol.md` | SD-004 | Multi-venture portfolio coordination protocol |
+| `risk-recalibration-protocol.md` | SD-005 | Strategic risk forecasting at phase boundaries (Gates 3, 4, 5, 6) |
+| `stage20-compliance-gate.md` | SD-002 | Security & compliance certification gate (Gate 6 enforcement) |
+
+**Related Workflow Documentation**:
+- `../workflow/phase7-orbit-verification.md` (SD-003) - Post-MVP feature expansion framework (Phase 7: The Orbit)
+
+**Related Legacy Documentation** (40-stage model):
+- `37_strategic_risk_forecasting.md` - Original strategic risk forecasting concept
+- `39_multi_venture_coordination.md` - Original multi-venture coordination concept
+
 ### Development & Operations
 
 | File | Description |

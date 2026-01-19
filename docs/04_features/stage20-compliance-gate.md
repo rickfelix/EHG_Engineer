@@ -247,6 +247,7 @@ GROUP BY archetype;
 
 ## Related Documentation
 
+- **Parent Initiative**: [Venture Lifecycle Gap Remediation Overview](./venture-lifecycle-gap-remediation-overview.md)
 - **Database Schema**: [stage20-compliance-schema.md](../database/stage20-compliance-schema.md)
 - **RLS Policies**: [database-agent-patterns.md](../reference/database-agent-patterns.md)
 - **Stage 20 Overview**: [stages/stage-20-security-performance.md](../stages/stage-20-security-performance.md)
