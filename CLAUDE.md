@@ -87,7 +87,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /ship → /document → /
 
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-19 10:37:44 PM
+**Last Generated**: 2026-01-19 11:57:10 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -147,7 +147,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /ship → /document → /
 | `PRICING` | pricing, price point, pricing strategy, unit economics, subscription, freemium, tiered pricing, cac, ltv, revenue model |
 | `RCA` | sub_agent_blocked, ci_pipeline_failure, quality_gate_critical, test_regression, handoff_rejection, sub_agent_fail, quality_degradation, pattern_recurrence, performance_regression, diagnose defect (+2 more) |
 | `REGRESSION` | refactor, refactoring, backward compatibility, backwards compatible, breaking change, regression, restructure, no behavior change, no functional change, api signature (+17 more) |
-| `RETRO` | lead_rejection, plan_verification_complete, plan_complexity_high, exec_sprint_complete, exec_quality_issue, handoff_rejected, handoff_delay, phase_complete, sd_status_completed, sd_status_blocked (+10 more) |
+| `RETRO` | lead_rejection, plan_verification_complete, plan_complexity_high, exec_sprint_complete, exec_quality_issue, handoff_rejected, handoff_delay, phase_complete, sd_status_completed, sd_status_blocked (+18 more) |
 | `RISK` | high risk, complex, architecture, sophisticated, advanced, overhaul, redesign, authorization, rls, permission (+35 more) |
 | `SALES` | sales, sales playbook, sales process, pipeline, deal flow, quota, sales cycle, objection handling, sales enablement, closing |
 | `SECURITY` | authentication, security, security auth pattern |

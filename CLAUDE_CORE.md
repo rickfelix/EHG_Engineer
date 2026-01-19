@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-01-19 10:37:44 PM
+**Generated**: 2026-01-19 11:57:10 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -214,37 +214,6 @@ npm run handoff:compliance SD-ID  # Check specific SD
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
-## Mandatory Agent Invocation Rules
-
-**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
-
-### Task Type -> Required Agent
-
-| Task Keywords | MUST Invoke | Purpose |
-|---------------|-------------|---------|
-| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
-| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
-| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
-| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
-| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
-| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
-| database, migration, schema | **database-agent** | Schema validation |
-| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
-
-### Why This Exists
-
-**Incident**: Human-like testing perspective interpreted as manual content inspection.
-**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
-**Root Cause**: Ad-hoc review instead of specialized agent invocation.
-**Prevention**: Explicit rules mandate agent use for specialized tasks.
-
-### How to Apply
-
-1. Detect task type from user request keywords
-2. Invoke required agent(s) BEFORE making changes
-3. Agent findings inform implementation
-4. Re-run agent AFTER changes to verify fixes
-
 ## 🤖 Built-in Agent Integration
 
 ## Built-in Agent Integration
@@ -287,6 +256,275 @@ Task(subagent_type="Explore", prompt="Identify affected areas")
 
 This is faster than sequential exploration and provides comprehensive coverage.
 
+## Mandatory Agent Invocation Rules
+
+**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
+
+### Task Type -> Required Agent
+
+| Task Keywords | MUST Invoke | Purpose |
+|---------------|-------------|---------|
+| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
+| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
+| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
+| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
+| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
+| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
+| database, migration, schema | **database-agent** | Schema validation |
+| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
+
+### Why This Exists
+
+**Incident**: Human-like testing perspective interpreted as manual content inspection.
+**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
+**Root Cause**: Ad-hoc review instead of specialized agent invocation.
+**Prevention**: Explicit rules mandate agent use for specialized tasks.
+
+### How to Apply
+
+1. Detect task type from user request keywords
+2. Invoke required agent(s) BEFORE making changes
+3. Agent findings inform implementation
+4. Re-run agent AFTER changes to verify fixes
+
+## Claude Code Plan Mode Integration
+
+**Status**: ✅ ACTIVE | **Version**: 1.0.0 | **Implemented**: 2026-01-18
+
+### Overview
+
+Claude Code's native Plan Mode has been integrated with the LEO Protocol to provide:
+1. **Automatic Permission Bundling** - Pre-approve phase-specific bash commands (reduces prompts by 70-80%)
+2. **Intelligent Plan Generation** - SD-type aware action plans loaded into Claude's plan file
+3. **Phase Transition Automation** - Plan Mode activates automatically at phase boundaries
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    LEO Protocol                              │
+│  (Phase: LEAD → PLAN → EXEC → VERIFY → FINAL)              │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+         ┌─────────────┴──────────────┐
+         │                            │
+    Phase Boundary              Session Start
+         │                            │
+         ▼                            ▼
+┌────────────────────────────────────────────────────────────┐
+│           LEOPlanModeOrchestrator                           │
+│  • Loads SD context from database                           │
+│  • Generates intelligent plan based on SD type              │
+│  • Bundles phase-specific permissions                       │
+│  • Writes plan to ~/.claude/plans/                          │
+└────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────────────────────┐
+│             Claude Code Plan Mode                           │
+│  • Permission pre-approval active                           │
+│  • LEO action plan visible to AI                            │
+│  • Reduced friction during execution                        │
+└────────────────────────────────────────────────────────────┘
+```
+
+### Module Location
+
+`scripts/modules/plan-mode/`:
+- `LEOPlanModeOrchestrator.js` - Main orchestrator class
+- `phase-permissions.js` - Permission mappings per phase
+- `plan-templates.js` - Basic fallback templates
+- `sd-context-loader.js` - Database SD context loading
+- `intelligent-plan-templates.js` - SD-type aware plan generation
+
+### SD Type Profiles
+
+The system recognizes 8 SD types with customized workflows:
+
+| SD Type | Workflow | Sub-Agents | Testing | PR Size Target |
+|---------|----------|------------|---------|----------------|
+| `feature` | full | RISK, VALIDATION, STORIES | comprehensive | 100 (max 400) |
+| `enhancement` | standard | VALIDATION | standard | 75 (max 200) |
+| `bug` | fast | RCA | regression | 50 (max 100) |
+| `infrastructure` | careful | RISK, GITHUB, REGRESSION | comprehensive | 50 (max 150) |
+| `refactor` | careful | REGRESSION, VALIDATION | comprehensive | 100 (max 300) |
+| `security` | careful | SECURITY, RISK | comprehensive | 50 (max 150) |
+| `documentation` | light | DOCMON | minimal | no limit |
+| `uat` | testing | UAT, TESTING | uat | no limit |
+
+**Complexity Levels**: simple, moderate, complex - adjust workflow intensity
+
+### Automatic Activation
+
+**1. Session Start** (`scripts/hooks/session-init.cjs`):
+```javascript
+if (state.current_sd && isPlanModeEnabled()) {
+  const phase = state.current_phase || 'LEAD';
+  requestPlanModeEntry(state.current_sd, phase);
+}
+```
+
+**2. Phase Transitions** (`scripts/modules/handoff/executors/BaseExecutor.js`):
+```javascript
+async _handlePlanModeTransition(sdId, sd, options) {
+  const orchestrator = new LEOPlanModeOrchestrator();
+  const targetPhase = this._getTargetPhase();
+
+  await orchestrator.requestPlanModeEntry({
+    sdId,
+    phase: targetPhase,
+    reason: 'phase_transition'
+  });
+}
+```
+
+### Permission Bundling
+
+Pre-approved permissions per phase eliminate repetitive prompts:
+
+**LEAD Phase**:
+- Run SD queue commands
+- Run handoff scripts
+- Check git status
+
+**PLAN Phase**:
+- Run PRD generation scripts
+- Run sub-agent orchestration
+- Create git branches
+
+**EXEC Phase**:
+- Run tests
+- Run build commands
+- Git operations (commit, push)
+- Run handoff scripts
+
+**VERIFY Phase**:
+- Run verification scripts
+- Run handoff scripts
+
+**FINAL Phase**:
+- Merge operations
+- Archive commands
+
+### Intelligent Plan Templates
+
+Plans are generated dynamically based on SD context:
+
+```javascript
+// Load SD from database
+const sdContext = await loadSDContext(sdId);
+
+// Generate plan matching SD type + complexity
+const planContent = generateIntelligentPlan('LEAD', sdContext);
+
+// Write to Claude's plan file
+fs.writeFileSync('~/.claude/plans/SD-XXX-001-LEAD.md', planContent);
+```
+
+**Fallback Behavior**: If database unavailable, infers SD type from ID pattern:
+- `SD-BUG-FIX-001` → bug type
+- `SD-INFRA-*` → infrastructure type
+- `SD-DOC-*` → documentation type
+
+### Configuration
+
+`.claude/leo-plan-mode-config.json`:
+```json
+{
+  "leo_plan_mode": {
+    "enabled": true,
+    "auto_enter_on_sd_detection": true,
+    "auto_exit_on_exec_phase": true,
+    "permission_pre_approval": true
+  }
+}
+```
+
+### Retrospective Learning (SD-PLAN-MODE-003)
+
+RETRO sub-agent now captures Plan Mode learnings via 8 triggers:
+- `plan mode`, `plan mode integration`, `permission bundling`
+- `phase transition`, `plan file generation`, `intelligent plan`
+- `sd type profile`, `workflow intensity`
+
+**Key Metrics Tracked**:
+- Permission Prompt Reduction: Target 70-80% per phase
+- Plan File Success Rate: Target 95%+
+- SD Type Detection Accuracy
+- Phase Transition Latency: <500ms
+
+### Usage (Automatic)
+
+**Plan Mode activates automatically** - no manual commands required:
+
+1. **At session start**: If SD detected on current branch
+2. **At phase boundaries**: Before each handoff execution
+3. **Status visible**: `[plan-mode] Plan Mode requested for SD-XXX-001 (LEAD phase)`
+
+**Manual Control** (if needed):
+```javascript
+const { LEOPlanModeOrchestrator } = require('./scripts/modules/plan-mode');
+const orchestrator = new LEOPlanModeOrchestrator();
+
+// Enter Plan Mode
+await orchestrator.requestPlanModeEntry({
+  sdId: 'SD-XXX-001',
+  phase: 'LEAD',
+  reason: 'manual_entry'
+});
+
+// Exit Plan Mode
+await orchestrator.requestPlanModeExit({
+  sdId: 'SD-XXX-001',
+  phase: 'EXEC',
+  allowedPrompts: orchestrator.getPhasePermissions('EXEC')
+});
+```
+
+### Expected Impact
+
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| Permission prompts per phase | 4-8 | 0-2 | 70-80% reduction |
+| Plan availability | Manual | Automatic | 100% |
+| SD type awareness | No | Yes | Context-rich plans |
+| Workflow friction | High | Low | Smoother transitions |
+
+### References
+
+- **Implementation**: PRs #381, #382, #383, #384, #385
+- **Module**: `scripts/modules/plan-mode/`
+- **Config**: `.claude/leo-plan-mode-config.json`
+- **Retro Agent**: `.claude/agents/retro-agent.md` (Plan Mode Patterns section)
+
+
+## Sub-Agent Model Routing
+
+**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
+
+### Model Selection Rule
+- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
+- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
+- If you need to specify a model explicitly, use `model: 'sonnet'`
+
+### Why This Matters
+- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
+- Claude Code Max subscription does not include Haiku access
+- Sonnet provides the right balance of speed and quality for sub-agent work
+
+### Examples
+```javascript
+// CORRECT - Use sonnet or omit model
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
+Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
+
+// WRONG - Never use haiku
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
+```
+
+*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
+
+
 ## Work Tracking Policy
 
 **ALL changes to main must be tracked** as either:
@@ -319,32 +557,38 @@ The pre-push hook automatically:
 2. Verifies completion status in database
 3. Blocks if not ready for merge
 
-## Sub-Agent Model Routing
+## 🖥️ UI Parity Requirement (MANDATORY)
 
-**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
+**Every backend data contract field MUST have a corresponding UI representation.**
 
-### Model Selection Rule
-- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
-- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
-- If you need to specify a model explicitly, use `model: 'sonnet'`
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
 
-### Why This Matters
-- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
-- Claude Code Max subscription does not include Haiku access
-- Sonnet provides the right balance of speed and quality for sub-agent work
+### Requirements
 
-### Examples
-```javascript
-// CORRECT - Use sonnet or omit model
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
-Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
 
-// WRONG - Never use haiku
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
-```
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
 
-*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
 
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Execution Philosophy
 
@@ -423,39 +667,6 @@ Claude has documented cognitive biases. These rules OVERRIDE those biases:
 - Mark parent complete before all children complete in database
 
 **REMEMBER**: The goal is NOT to complete SDs quickly. The goal is to complete SDs CORRECTLY. A properly implemented SD that takes 8 hours is infinitely better than a rushed implementation that takes 4 hours but requires 6 hours of fixes.
-
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## 🎯 Skill Integration (Claude Code Skills)
 
@@ -635,6 +846,54 @@ To request an exception to this block:
 
 **No exceptions without explicit LEAD approval.**
 
+## Global Negative Constraints
+
+## 🚫 Global Negative Constraints
+
+<negative_constraints phase="GLOBAL">
+These anti-patterns apply across ALL phases. Violating them leads to failed handoffs, rework, and wasted effort.
+
+### NC-001: No Markdown Files as Source of Truth
+**Anti-Pattern**: Creating or updating markdown files (*.md) to store requirements, PRDs, or status
+**Why Wrong**: Data becomes stale, conflicts with database, no validation
+**Correct Approach**: Use database tables (strategic_directives_v2, product_requirements_v2) via scripts
+
+### NC-002: No Bypassing Process Scripts
+**Anti-Pattern**: Directly inserting into database tables instead of using handoff.js, add-prd-to-database.js
+**Why Wrong**: Skips validation gates, breaks audit trail, causes inconsistent state
+**Correct Approach**: Always use the designated scripts for phase transitions
+
+### NC-003: No Guessing File Locations
+**Anti-Pattern**: Assuming file paths based on naming conventions without verification
+**Why Wrong**: Leads to wrong file edits, missing imports, broken builds
+**Correct Approach**: Use Glob/Grep to find exact paths, read files before editing
+
+### NC-004: No Implementation Without Reading
+**Anti-Pattern**: Starting to code before reading existing implementation
+**Why Wrong**: Duplicates existing functionality, conflicts with patterns, wastes time
+**Correct Approach**: Read ≥5 relevant files before writing any code
+
+### NC-005: No Workarounds Before Root Cause Analysis
+**Anti-Pattern**: Implementing quick fixes without understanding why something fails
+**Why Wrong**: 2-3x time multiplier, masks real issues, accumulates technical debt
+**Correct Approach**: Identify root cause first, then fix. Document if workaround needed.
+
+
+### NC-006: No Background Execution or TaskOutput
+**Anti-Pattern**: Using `run_in_background: true` or TaskOutput tool for validation/handoff commands
+**Why Wrong**: Slows down workflow, requires extra round-trips, breaks conversational flow
+**Correct Approach**:
+- Run all commands inline with appropriate timeouts (up to 180000ms for long validations)
+- NEVER use `run_in_background` parameter for handoff.js, validation scripts, or any LEO process scripts
+- If command output is long, use direct execution and let it complete
+- Avoid piping (`| grep`, `| tail`) on long-running commands as it can trigger background execution
+**Affected Commands** (MUST run inline):
+- `node scripts/handoff.js execute ...`
+- `node scripts/add-prd-to-database.js ...`
+- `node scripts/phase-preflight.js ...`
+- Any validation or quality gate scripts
+</negative_constraints>
+
 ## Child SD Pre-Work Validation (MANDATORY)
 
 ### Child SD Pre-Work Validation
@@ -701,54 +960,6 @@ node scripts/child-sd-preflight.js SD-XXX-001
 - `npm run sd:next` shows dependency status in the queue
 - Child SDs with incomplete dependencies show as BLOCKED
 - Complete dependencies in sequence before proceeding
-
-## Global Negative Constraints
-
-## 🚫 Global Negative Constraints
-
-<negative_constraints phase="GLOBAL">
-These anti-patterns apply across ALL phases. Violating them leads to failed handoffs, rework, and wasted effort.
-
-### NC-001: No Markdown Files as Source of Truth
-**Anti-Pattern**: Creating or updating markdown files (*.md) to store requirements, PRDs, or status
-**Why Wrong**: Data becomes stale, conflicts with database, no validation
-**Correct Approach**: Use database tables (strategic_directives_v2, product_requirements_v2) via scripts
-
-### NC-002: No Bypassing Process Scripts
-**Anti-Pattern**: Directly inserting into database tables instead of using handoff.js, add-prd-to-database.js
-**Why Wrong**: Skips validation gates, breaks audit trail, causes inconsistent state
-**Correct Approach**: Always use the designated scripts for phase transitions
-
-### NC-003: No Guessing File Locations
-**Anti-Pattern**: Assuming file paths based on naming conventions without verification
-**Why Wrong**: Leads to wrong file edits, missing imports, broken builds
-**Correct Approach**: Use Glob/Grep to find exact paths, read files before editing
-
-### NC-004: No Implementation Without Reading
-**Anti-Pattern**: Starting to code before reading existing implementation
-**Why Wrong**: Duplicates existing functionality, conflicts with patterns, wastes time
-**Correct Approach**: Read ≥5 relevant files before writing any code
-
-### NC-005: No Workarounds Before Root Cause Analysis
-**Anti-Pattern**: Implementing quick fixes without understanding why something fails
-**Why Wrong**: 2-3x time multiplier, masks real issues, accumulates technical debt
-**Correct Approach**: Identify root cause first, then fix. Document if workaround needed.
-
-
-### NC-006: No Background Execution or TaskOutput
-**Anti-Pattern**: Using `run_in_background: true` or TaskOutput tool for validation/handoff commands
-**Why Wrong**: Slows down workflow, requires extra round-trips, breaks conversational flow
-**Correct Approach**:
-- Run all commands inline with appropriate timeouts (up to 180000ms for long validations)
-- NEVER use `run_in_background` parameter for handoff.js, validation scripts, or any LEO process scripts
-- If command output is long, use direct execution and let it complete
-- Avoid piping (`| grep`, `| tail`) on long-running commands as it can trigger background execution
-**Affected Commands** (MUST run inline):
-- `node scripts/handoff.js execute ...`
-- `node scripts/add-prd-to-database.js ...`
-- `node scripts/phase-preflight.js ...`
-- Any validation or quality gate scripts
-</negative_constraints>
 
 ## 🔄 Git Commit Guidelines
 
@@ -1817,7 +2028,7 @@ Performance engineering lead with 20+ years optimizing high-scale systems.
 
 **🆕 NEW in v4.0.0**: Proactive lear
 
-**Trigger Keywords**: `LEAD_APPROVAL_COMPLETE`, `LEAD_REJECTION`, `PLAN_VERIFICATION_COMPLETE`, `PLAN_COMPLEXITY_HIGH`, `EXEC_SPRINT_COMPLETE`, `EXEC_QUALITY_ISSUE`, `HANDOFF_REJECTED`, `HANDOFF_DELAY`, `PHASE_COMPLETE`, `SD_STATUS_COMPLETED`, `SD_STATUS_BLOCKED`, `PATTERN_DETECTED`, `SUBAGENT_MULTIPLE_FAILURES`, `WEEKLY_LEO_REVIEW`, `LEAD_PRE_APPROVAL_REVIEW`, `capture this lesson`, `capture this insight`, `remember this`, `learning`, `lesson learned`, `insight`
+**Trigger Keywords**: `LEAD_APPROVAL_COMPLETE`, `LEAD_REJECTION`, `PLAN_VERIFICATION_COMPLETE`, `PLAN_COMPLEXITY_HIGH`, `EXEC_SPRINT_COMPLETE`, `EXEC_QUALITY_ISSUE`, `HANDOFF_REJECTED`, `HANDOFF_DELAY`, `PHASE_COMPLETE`, `SD_STATUS_COMPLETED`, `SD_STATUS_BLOCKED`, `PATTERN_DETECTED`, `SUBAGENT_MULTIPLE_FAILURES`, `WEEKLY_LEO_REVIEW`, `LEAD_PRE_APPROVAL_REVIEW`, `capture this lesson`, `capture this insight`, `remember this`, `learning`, `lesson learned`, `insight`, `plan mode`, `plan mode integration`, `permission bundling`, `plan file generation`, `intelligent plan`, `sd type profile`, `workflow intensity`, `phase transition`
 
 #### Financial Modeling Sub-Agent (`FINANCIAL`)
 Handles financial projections, P&L modeling, cash flow analysis, business model canvas financial sec
