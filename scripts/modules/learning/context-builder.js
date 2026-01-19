@@ -21,6 +21,15 @@ const supabase = createClient(
 
 const TOP_N = 5;
 
+// Intelligent filtering thresholds
+const FILTER_CONFIG = {
+  MIN_OCCURRENCE_FOR_PATTERN: 3,    // Minimum occurrences to be considered a pattern (not incident)
+  MIN_CONFIDENCE_THRESHOLD: 50,      // Minimum confidence % to surface
+  STALE_DAYS_THRESHOLD: 60,          // Days after which declining patterns are filtered
+  ACTIONABILITY_BONUS: 15,           // Bonus confidence for items with proven solutions
+  SESSION_RECENCY_DAYS: 7,           // Prioritize learnings from last 7 days
+};
+
 /**
  * Query recent retrospectives for lessons learned
  */
@@ -69,14 +78,23 @@ async function getRecentLessons(sdId = null, limit = TOP_N) {
 /**
  * Query issue patterns with decay-adjusted confidence
  * Uses v_patterns_with_decay view for recency-weighted ranking
+ *
+ * INTELLIGENT FILTERING (v2):
+ * - Minimum occurrence threshold (3+) - incidents aren't patterns
+ * - Minimum confidence threshold (50%)
+ * - Auto-filter stale (60+ days) patterns with declining trend
+ * - Actionability bonus for patterns with proven solutions
  */
 async function getIssuePatterns(limit = TOP_N) {
   // Try decay view first, fall back to base table
+  // Query more than needed to allow for filtering
+  const queryLimit = limit * 3;
+
   let { data, error } = await supabase
     .from('v_patterns_with_decay')
     .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, days_since_update, decay_adjusted_confidence, recency_status')
     .order('decay_adjusted_confidence', { ascending: false })
-    .limit(limit);
+    .limit(queryLimit);
 
   // Fallback to base table if view doesn't exist yet
   if (error && (error.message.includes('does not exist') || error.message.includes('schema cache'))) {
@@ -86,7 +104,7 @@ async function getIssuePatterns(limit = TOP_N) {
       .select('pattern_id, category, severity, issue_summary, occurrence_count, proven_solutions, prevention_checklist, trend, updated_at, created_at')
       .eq('status', 'active')
       .order('occurrence_count', { ascending: false })
-      .limit(limit);
+      .limit(queryLimit);
     data = fallback.data;
     error = fallback.error;
 
@@ -108,27 +126,67 @@ async function getIssuePatterns(limit = TOP_N) {
 
   if (error) {
     console.error('Error querying issue_patterns:', error.message);
-    return [];
+    return { patterns: [], filtered: { lowOccurrence: 0, lowConfidence: 0, staleDecline: 0 } };
   }
 
-  return (data || []).map(pattern => ({
-    id: pattern.pattern_id,
-    source_type: 'issue_pattern',
-    source_id: pattern.pattern_id,
-    category: pattern.category,
-    severity: pattern.severity,
-    content: pattern.issue_summary,
-    occurrence_count: pattern.occurrence_count,
-    proven_solutions: pattern.proven_solutions || [],
-    prevention_checklist: pattern.prevention_checklist || [],
-    trend: pattern.trend,
-    days_since_update: pattern.days_since_update || 0,
-    recency_status: pattern.recency_status || 'fresh',
-    // Use decay-adjusted confidence if available, otherwise calculate
-    confidence: pattern.decay_adjusted_confidence || Math.min(100, 50 + (pattern.occurrence_count * 5)),
-    confidence_reason: pattern.recency_status === 'stale' ? 'reduced due to age (60+ days)' :
-                       pattern.recency_status === 'aging' ? 'slightly reduced due to age (30+ days)' : null
-  }));
+  // Track what gets filtered out for transparency
+  const filtered = { lowOccurrence: 0, lowConfidence: 0, staleDecline: 0, total: (data || []).length };
+
+  const patterns = (data || [])
+    .map(pattern => {
+      // Calculate base confidence with actionability bonus
+      let baseConfidence = pattern.decay_adjusted_confidence || Math.min(100, 50 + (pattern.occurrence_count * 5));
+
+      // Actionability bonus: patterns with proven solutions are more valuable
+      const hasProvenSolutions = pattern.proven_solutions?.length > 0;
+      if (hasProvenSolutions) {
+        baseConfidence = Math.min(100, baseConfidence + FILTER_CONFIG.ACTIONABILITY_BONUS);
+      }
+
+      return {
+        id: pattern.pattern_id,
+        source_type: 'issue_pattern',
+        source_id: pattern.pattern_id,
+        category: pattern.category,
+        severity: pattern.severity,
+        content: pattern.issue_summary,
+        occurrence_count: pattern.occurrence_count,
+        proven_solutions: pattern.proven_solutions || [],
+        prevention_checklist: pattern.prevention_checklist || [],
+        trend: pattern.trend,
+        days_since_update: pattern.days_since_update || 0,
+        recency_status: pattern.recency_status || 'fresh',
+        confidence: baseConfidence,
+        has_actionable_solution: hasProvenSolutions,
+        confidence_reason: hasProvenSolutions ? 'boosted: has proven solutions' :
+                           pattern.recency_status === 'stale' ? 'reduced: age (60+ days)' :
+                           pattern.recency_status === 'aging' ? 'reduced: age (30+ days)' : null
+      };
+    })
+    .filter(pattern => {
+      // Filter 1: Minimum occurrences (incidents aren't patterns)
+      if (pattern.occurrence_count < FILTER_CONFIG.MIN_OCCURRENCE_FOR_PATTERN) {
+        filtered.lowOccurrence++;
+        return false;
+      }
+
+      // Filter 2: Minimum confidence threshold
+      if (pattern.confidence < FILTER_CONFIG.MIN_CONFIDENCE_THRESHOLD) {
+        filtered.lowConfidence++;
+        return false;
+      }
+
+      // Filter 3: Stale + declining = not worth surfacing
+      if (pattern.recency_status === 'stale' && pattern.trend === 'decreasing') {
+        filtered.staleDecline++;
+        return false;
+      }
+
+      return true;
+    })
+    .slice(0, limit);
+
+  return { patterns, filtered };
 }
 
 /**
@@ -308,17 +366,27 @@ async function getPendingImprovements(limit = TOP_N) {
 /**
  * Build complete learning context with intelligence enhancements
  * SD-QUALITY-INT-001: Now includes feedback table learnings
+ *
+ * INTELLIGENT FILTERING (v2):
+ * - Filters out low-value patterns (< 3 occurrences, < 50% confidence)
+ * - Shows what was filtered for transparency
+ * - Prioritizes actionable items with proven solutions
  */
 export async function buildLearningContext(sdId = null) {
-  console.log('Building learning context...');
+  console.log('Building learning context with intelligent filtering...');
+  console.log(`  Thresholds: min ${FILTER_CONFIG.MIN_OCCURRENCE_FOR_PATTERN} occurrences, min ${FILTER_CONFIG.MIN_CONFIDENCE_THRESHOLD}% confidence`);
 
-  const [lessons, patterns, improvements, feedbackLearnings, feedbackPatterns] = await Promise.all([
+  const [lessons, patternResult, improvements, feedbackLearnings, feedbackPatterns] = await Promise.all([
     getRecentLessons(sdId, TOP_N),
     getIssuePatterns(TOP_N),
     getPendingImprovements(TOP_N),
     getResolvedFeedbackLearnings(TOP_N),
     getRecurringFeedbackPatterns(TOP_N)
   ]);
+
+  // Extract patterns and filtered stats
+  const patterns = patternResult.patterns || [];
+  const patternFiltered = patternResult.filtered || { lowOccurrence: 0, lowConfidence: 0, staleDecline: 0, total: 0 };
 
   // Find similar patterns (duplicate detection)
   let similarPatterns = {};
@@ -333,6 +401,9 @@ export async function buildLearningContext(sdId = null) {
   const resolutionCandidates = patterns
     .filter(p => p.trend === 'decreasing' || p.recency_status === 'stale')
     .map(p => p.id);
+
+  // Calculate total filtered for summary
+  const totalFiltered = patternFiltered.lowOccurrence + patternFiltered.lowConfidence + patternFiltered.staleDecline;
 
   const context = {
     lessons,
@@ -349,7 +420,22 @@ export async function buildLearningContext(sdId = null) {
       aging_count: patterns.filter(p => p.recency_status === 'aging').length,
       // Feedback intelligence
       feedback_learning_count: feedbackLearnings.length,
-      recurring_error_types: feedbackPatterns.length
+      recurring_error_types: feedbackPatterns.length,
+      // Filtering transparency (v2)
+      filtering: {
+        patterns_scanned: patternFiltered.total,
+        patterns_filtered: totalFiltered,
+        filter_reasons: {
+          low_occurrence: patternFiltered.lowOccurrence,
+          low_confidence: patternFiltered.lowConfidence,
+          stale_declining: patternFiltered.staleDecline
+        },
+        thresholds: {
+          min_occurrences: FILTER_CONFIG.MIN_OCCURRENCE_FOR_PATTERN,
+          min_confidence: FILTER_CONFIG.MIN_CONFIDENCE_THRESHOLD,
+          stale_days: FILTER_CONFIG.STALE_DAYS_THRESHOLD
+        }
+      }
     },
     summary: {
       total_lessons: lessons.length,
@@ -357,15 +443,31 @@ export async function buildLearningContext(sdId = null) {
       total_improvements: improvements.length,
       total_feedback_learnings: feedbackLearnings.length,
       total_feedback_patterns: feedbackPatterns.length,
+      // Filtering summary (v2)
+      patterns_filtered_out: totalFiltered,
       generated_at: new Date().toISOString()
     }
   };
 
-  console.log(`Found: ${lessons.length} lessons, ${patterns.length} patterns, ${improvements.length} improvements`);
-  console.log(`       ${feedbackLearnings.length} feedback learnings, ${feedbackPatterns.length} recurring error types`);
+  // Enhanced logging with filtering transparency
+  console.log('\n📊 Learning Context Summary:');
+  console.log(`   Lessons: ${lessons.length}`);
+  console.log(`   Patterns: ${patterns.length} surfaced (${totalFiltered} filtered out)`);
+  if (totalFiltered > 0) {
+    console.log(`      └─ Filtered: ${patternFiltered.lowOccurrence} low-occurrence, ${patternFiltered.lowConfidence} low-confidence, ${patternFiltered.staleDecline} stale+declining`);
+  }
+  console.log(`   Improvements: ${improvements.length}`);
+  console.log(`   Feedback learnings: ${feedbackLearnings.length}`);
+  console.log(`   Recurring error types: ${feedbackPatterns.length}`);
 
   if (resolutionCandidates.length > 0) {
-    console.log(`  → ${resolutionCandidates.length} pattern(s) may be ready for resolution`);
+    console.log(`\n   → ${resolutionCandidates.length} pattern(s) may be ready for resolution`);
+  }
+
+  // Actionability summary
+  const actionablePatterns = patterns.filter(p => p.has_actionable_solution).length;
+  if (actionablePatterns > 0) {
+    console.log(`   → ${actionablePatterns} pattern(s) have proven solutions (actionable)`);
   }
 
   return context;
@@ -374,19 +476,40 @@ export async function buildLearningContext(sdId = null) {
 /**
  * Format context for display
  * SD-QUALITY-INT-001: Now includes feedback learnings
+ * v2: Shows filtering stats and highlights actionable items
  */
 export function formatContextForDisplay(context) {
   const lines = [];
 
-  lines.push('\n## Patterns (from issue_patterns)');
-  lines.push('High-occurrence issues with proven solutions:\n');
-  for (const p of context.patterns) {
-    lines.push(`**[${p.id}]** ${p.content}`);
-    lines.push(`  - Category: ${p.category} | Severity: ${p.severity} | Occurrences: ${p.occurrence_count}`);
-    if (p.proven_solutions?.length > 0) {
-      lines.push(`  - Proven solution: ${p.proven_solutions[0]?.solution || 'See details'}`);
-    }
+  // Show filtering summary if any patterns were filtered
+  if (context.intelligence?.filtering?.patterns_filtered > 0) {
+    lines.push('\n## Intelligent Filtering Applied');
+    lines.push(`Scanned ${context.intelligence.filtering.patterns_scanned} patterns, surfacing only high-value items:`);
+    const reasons = context.intelligence.filtering.filter_reasons;
+    if (reasons.low_occurrence > 0) lines.push(`  - ${reasons.low_occurrence} filtered: < ${context.intelligence.filtering.thresholds.min_occurrences} occurrences (incidents, not patterns)`);
+    if (reasons.low_confidence > 0) lines.push(`  - ${reasons.low_confidence} filtered: < ${context.intelligence.filtering.thresholds.min_confidence}% confidence`);
+    if (reasons.stale_declining > 0) lines.push(`  - ${reasons.stale_declining} filtered: stale (${context.intelligence.filtering.thresholds.stale_days}+ days) with declining trend`);
     lines.push('');
+  }
+
+  lines.push('\n## Patterns (from issue_patterns)');
+  if (context.patterns.length === 0) {
+    lines.push('*No patterns meet the quality threshold (3+ occurrences, 50%+ confidence)*');
+    lines.push('*This is a good sign - no recurring high-value issues to address!*\n');
+  } else {
+    lines.push('High-value recurring issues with proven solutions:\n');
+    for (const p of context.patterns) {
+      const actionableBadge = p.has_actionable_solution ? ' ✓ ACTIONABLE' : '';
+      lines.push(`**[${p.id}]** ${p.content}${actionableBadge}`);
+      lines.push(`  - Category: ${p.category} | Severity: ${p.severity} | Occurrences: ${p.occurrence_count} | Confidence: ${p.confidence}%`);
+      if (p.confidence_reason) {
+        lines.push(`  - Confidence note: ${p.confidence_reason}`);
+      }
+      if (p.proven_solutions?.length > 0) {
+        lines.push(`  - Proven solution: ${p.proven_solutions[0]?.solution || 'See details'}`);
+      }
+      lines.push('');
+    }
   }
 
   lines.push('\n## Lessons (from retrospectives)');
