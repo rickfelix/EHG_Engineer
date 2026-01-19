@@ -65,6 +65,9 @@ export class BaseExecutor {
       // Step 2.5: Auto-claim SD for this session (sets is_working_on = true)
       await this._claimSDForSession(sdId, sd);
 
+      // Step 2.6: SD-LEARN-010:US-004 - Auto-trigger DATABASE sub-agent for schema SDs
+      await this._autoTriggerDatabaseSubAgent(sd);
+
       // Step 3: Run required gates (with database rule integration - SD-VALIDATION-REGISTRY-001)
       const hardcodedGates = await this.getRequiredGates(sd, options);
 
@@ -78,7 +81,7 @@ export class BaseExecutor {
       // Merge hardcoded gates with database rules
       const validationContext = {
         sdId,
-        sd_id: sdId,  // Alias for validators that use sd_id
+        sd_id: sd?.id || sdId,  // Use UUID when available for database queries
         sd,
         prd,          // SD-LEO-001: Include PRD in context for validators
         prdId: prd?.id,  // Also provide prdId for convenience
@@ -95,15 +98,26 @@ export class BaseExecutor {
 
       const gateResults = await this.validationOrchestrator.validateGates(gates, validationContext);
 
+      // SD-LEARN-010:US-005: Handle bypass validation
       if (!gateResults.passed) {
-        const remediation = this.getRemediation(gateResults.failedGate);
-        return ResultBuilder.gateFailure(gateResults.failedGate, {
-          issues: gateResults.issues,
-          score: gateResults.totalScore,
-          max_score: gateResults.totalMaxScore,
-          warnings: gateResults.warnings,
-          details: gateResults.gateResults
-        }, remediation);
+        if (options.bypassValidation) {
+          console.log('');
+          console.log('⚠️  BYPASS ACTIVE: Gate failures overridden');
+          console.log(`   Failed gate: ${gateResults.failedGate}`);
+          console.log(`   Issues: ${gateResults.issues.length}`);
+          console.log('   Proceeding despite validation failures...');
+          console.log('');
+          // Continue execution despite gate failure
+        } else {
+          const remediation = this.getRemediation(gateResults.failedGate);
+          return ResultBuilder.gateFailure(gateResults.failedGate, {
+            issues: gateResults.issues,
+            score: gateResults.totalScore,
+            max_score: gateResults.totalMaxScore,
+            warnings: gateResults.warnings,
+            details: gateResults.gateResults
+          }, remediation);
+        }
       }
 
       // Step 4: Execute type-specific logic
@@ -187,6 +201,71 @@ export class BaseExecutor {
   }
 
   // ============ Helper methods ============
+
+  /**
+   * SD-LEARN-010:US-004: Auto-trigger DATABASE sub-agent for schema SDs
+   *
+   * Automatically invokes DATABASE sub-agent when SD has:
+   * - sd_type = 'database'
+   * - metadata.schema_changes = true
+   *
+   * Creates sub_agent_executions record with trigger_type='auto'
+   * Non-blocking: Errors are logged but handoff continues
+   *
+   * @param {object} sd - Strategic Directive record
+   */
+  async _autoTriggerDatabaseSubAgent(sd) {
+    try {
+      const sdType = (sd.sd_type || '').toLowerCase();
+      const hasSchemaChanges = sd.metadata?.schema_changes === true;
+
+      // Only trigger for database SDs or schema changes
+      if (sdType !== 'database' && !hasSchemaChanges) {
+        return;
+      }
+
+      console.log('\n   🗄️  DATABASE SUB-AGENT AUTO-TRIGGER (SD-LEARN-010:US-004)');
+      console.log(`      Reason: ${sdType === 'database' ? 'sd_type=database' : 'schema_changes=true'}`);
+
+      // Check if DATABASE sub-agent already executed for this SD
+      const { data: existingExecution } = await this.supabase
+        .from('sub_agent_execution_results')
+        .select('id, verdict')
+        .eq('sd_id', sd.id)
+        .eq('sub_agent_code', 'DATABASE')
+        .limit(1);
+
+      if (existingExecution && existingExecution.length > 0) {
+        console.log(`      ℹ️  DATABASE sub-agent already executed (verdict: ${existingExecution[0].verdict})`);
+        return;
+      }
+
+      // Auto-invoke DATABASE sub-agent
+      console.log('      🔄 Auto-invoking DATABASE sub-agent...');
+
+      try {
+        const { orchestrate } = await import('../../../orchestrate-phase-subagents.js');
+        const result = await orchestrate('PLAN_PRD', sd.id, {
+          specificSubAgent: 'DATABASE',
+          triggerType: 'auto',
+          autoRemediate: false
+        });
+
+        if (result.status === 'PASS' || result.status === 'COMPLETE') {
+          console.log('      ✅ DATABASE sub-agent auto-triggered successfully');
+        } else {
+          console.log(`      ⚠️  DATABASE sub-agent status: ${result.status}`);
+        }
+      } catch (invokeError) {
+        // Non-fatal - allow handoff to proceed
+        console.log(`      ⚠️  DATABASE auto-invoke unavailable: ${invokeError.message}`);
+        console.log('      → Proceeding with handoff - manual DATABASE invocation may be required');
+      }
+    } catch (error) {
+      // Non-fatal - allow handoff to proceed
+      console.log(`   [DATABASE Auto-Trigger] ⚠️ Error (non-blocking): ${error.message}`);
+    }
+  }
 
   /**
    * Auto-claim SD for the current session

@@ -640,10 +640,27 @@ async function main() {
     case 'execute': {
       const handoffType = args[1];
       const sdId = args[2];
-      const prdId = args[3];
+
+      // SD-LEARN-010:US-005: Parse bypass flags
+      // Scan all args for --bypass-validation and --bypass-reason
+      const bypassValidationIdx = args.findIndex(a => a === '--bypass-validation');
+      const bypassReasonIdx = args.findIndex(a => a === '--bypass-reason');
+      const bypassValidation = bypassValidationIdx !== -1;
+      let bypassReason = null;
+
+      if (bypassReasonIdx !== -1 && args[bypassReasonIdx + 1]) {
+        bypassReason = args[bypassReasonIdx + 1];
+      }
+
+      // Find prdId (third non-flag argument)
+      const nonFlagArgs = args.filter((a, i) =>
+        !a.startsWith('--') &&
+        (i <= 2 || (i === bypassReasonIdx + 1 ? false : true))
+      );
+      const prdId = nonFlagArgs[3];
 
       if (!handoffType || !sdId) {
-        console.log('Usage: node scripts/handoff.js execute HANDOFF_TYPE SD-ID [PRD-ID]');
+        console.log('Usage: node scripts/handoff.js execute HANDOFF_TYPE SD-ID [PRD-ID] [--bypass-validation --bypass-reason "reason"]');
         console.log('');
         console.log('Handoff Types (case-insensitive):');
         console.log('  LEAD-TO-PLAN        - Strategic to Planning handoff');
@@ -652,12 +669,121 @@ async function main() {
         console.log('  PLAN-TO-LEAD        - Verification to Final Approval handoff');
         console.log('  LEAD-FINAL-APPROVAL - Mark SD as completed (final step)');
         console.log('');
+        console.log('Emergency Bypass (SD-LEARN-010:US-005):');
+        console.log('  --bypass-validation       Skip validation gates (requires --bypass-reason)');
+        console.log('  --bypass-reason "..."     Justification (min 20 chars, required with bypass)');
+        console.log('  Rate limits: max 3 bypasses per SD, max 10 per day globally');
+        console.log('');
         console.log('TIP: Run "node scripts/handoff.js workflow SD-ID" to see recommended workflow');
         console.log('');
         console.log('Examples:');
         console.log('  node scripts/handoff.js execute PLAN-TO-EXEC SD-EXAMPLE-001');
         console.log('  node scripts/handoff.js execute plan-to-exec SD-EXAMPLE-001');
+        console.log('  node scripts/handoff.js execute EXEC-TO-PLAN SD-001 --bypass-validation --bypass-reason "Emergency production fix"');
         process.exit(1);
+      }
+
+      // Validate bypass flags (SD-LEARN-010:US-005)
+      if (bypassValidation && !bypassReason) {
+        console.error('');
+        console.error('❌ BYPASS ERROR: --bypass-validation requires --bypass-reason');
+        console.error('');
+        console.error('Usage: --bypass-validation --bypass-reason "Your justification (min 20 chars)"');
+        console.error('');
+        process.exit(1);
+      }
+
+      if (bypassReason && bypassReason.length < 20) {
+        console.error('');
+        console.error('❌ BYPASS ERROR: --bypass-reason must be at least 20 characters');
+        console.error(`   Provided: ${bypassReason.length} characters`);
+        console.error('');
+        console.error('Provide a meaningful justification for the bypass.');
+        console.error('');
+        process.exit(1);
+      }
+
+      // SD-LEARN-010:US-005: Rate limiting and audit logging for bypass
+      if (bypassValidation) {
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL,
+          process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        );
+
+        // Normalize SD ID to UUID for consistent logging
+        const canonicalSdId = await normalizeSDId(supabase, sdId);
+
+        // Check rate limits
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Check bypasses for this SD (max 3)
+        const { data: sdBypasses, error: sdError } = await supabase
+          .from('audit_log')
+          .select('id')
+          .eq('action_type', 'VALIDATION_BYPASS')
+          .eq('target_id', canonicalSdId || sdId)
+          .gte('timestamp', today.toISOString());
+
+        if (!sdError && sdBypasses && sdBypasses.length >= 3) {
+          console.error('');
+          console.error('❌ BYPASS RATE LIMIT: Max 3 bypasses per SD reached');
+          console.error(`   SD: ${sdId} has ${sdBypasses.length} bypasses today`);
+          console.error('');
+          console.error('   Request LEAD approval for additional bypasses.');
+          console.error('');
+          process.exit(1);
+        }
+
+        // Check global bypasses today (max 10)
+        const { data: globalBypasses, error: globalError } = await supabase
+          .from('audit_log')
+          .select('id')
+          .eq('action_type', 'VALIDATION_BYPASS')
+          .gte('timestamp', today.toISOString());
+
+        if (!globalError && globalBypasses && globalBypasses.length >= 10) {
+          console.error('');
+          console.error('❌ BYPASS RATE LIMIT: Max 10 global bypasses per day reached');
+          console.error(`   ${globalBypasses.length} bypasses have been used today`);
+          console.error('');
+          console.error('   Request LEAD approval for additional bypasses.');
+          console.error('');
+          process.exit(1);
+        }
+
+        // Log bypass to audit_log
+        const { error: logError } = await supabase
+          .from('audit_log')
+          .insert({
+            action_type: 'VALIDATION_BYPASS',
+            target_type: 'handoff',
+            target_id: canonicalSdId || sdId,
+            severity: 'warning',
+            description: `Bypass validation for ${handoffType} handoff`,
+            metadata: {
+              handoff_type: handoffType,
+              sd_id: sdId,
+              canonical_sd_id: canonicalSdId,
+              bypass_reason: bypassReason,
+              sd_bypasses_today: (sdBypasses?.length || 0) + 1,
+              global_bypasses_today: (globalBypasses?.length || 0) + 1
+            },
+            timestamp: new Date().toISOString()
+          });
+
+        if (logError) {
+          console.warn(`   ⚠️  Could not log bypass to audit_log: ${logError.message}`);
+        } else {
+          console.log('');
+          console.log('⚠️  BYPASS MODE ENABLED (SD-LEARN-010:US-005)');
+          console.log('─'.repeat(50));
+          console.log(`   Reason: ${bypassReason}`);
+          console.log(`   SD Bypasses Today: ${(sdBypasses?.length || 0) + 1}/3`);
+          console.log(`   Global Bypasses Today: ${(globalBypasses?.length || 0) + 1}/10`);
+          console.log('   ⚠️  Bypass logged to audit_log for review');
+          console.log('─'.repeat(50));
+        }
       }
 
       // Show workflow recommendation before executing
@@ -680,7 +806,12 @@ async function main() {
         }
       }
 
-      const result = await system.executeHandoff(handoffType, sdId, { prdId });
+      // SD-LEARN-010:US-005: Pass bypass flag to handoff system
+      const result = await system.executeHandoff(handoffType, sdId, {
+        prdId,
+        bypassValidation,
+        bypassReason
+      });
 
       if (result.success) {
         console.log('');

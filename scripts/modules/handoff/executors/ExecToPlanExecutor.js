@@ -136,9 +136,10 @@ export class ExecToPlanExecutor extends BaseExecutor {
         }
 
         // No handoffs at all
+        // SD-LEARN-010:US-002: ERR_CHAIN_INCOMPLETE error code for missing predecessor handoffs
         const planToExecHandoff = acceptedHandoffs;
         if (!planToExecHandoff || planToExecHandoff.length === 0) {
-          console.log('   ❌ No accepted PLAN-TO-EXEC handoff found');
+          console.log('   ❌ ERR_CHAIN_INCOMPLETE: Missing PLAN-TO-EXEC handoff');
           console.log('   ⚠️  LEO Protocol requires PLAN-TO-EXEC before EXEC-TO-PLAN');
           console.log('\n   REMEDIATION:');
           console.log('   1. Complete PLAN phase prerequisites (PRD, user stories, design analysis)');
@@ -150,7 +151,7 @@ export class ExecToPlanExecutor extends BaseExecutor {
             passed: false,
             score: 0,
             max_score: 100,
-            issues: ['BLOCKING: No accepted PLAN-TO-EXEC handoff found - LEO Protocol violation'],
+            issues: ['ERR_CHAIN_INCOMPLETE: Missing PLAN-TO-EXEC handoff - complete prerequisite before EXEC-TO-PLAN'],
             warnings: [],
             remediation: 'Complete PLAN-TO-EXEC handoff before attempting EXEC-TO-PLAN'
           };
@@ -460,8 +461,10 @@ export class ExecToPlanExecutor extends BaseExecutor {
         console.log('-'.repeat(50));
 
         // 1. Check SD type exemptions
+        // SD-LEARN-010:US-001: feature and qa SDs REQUIRE TESTING validation
+        // Only documentation, infrastructure, orchestrator, database types are exempt
         const sdType = (ctx.sd?.sd_type || 'feature').toLowerCase();
-        const EXEMPT_TYPES = ['documentation', 'docs', 'infrastructure', 'orchestrator', 'qa', 'database'];
+        const EXEMPT_TYPES = ['documentation', 'docs', 'infrastructure', 'orchestrator', 'database'];
 
         if (EXEMPT_TYPES.includes(sdType)) {
           console.log(`   ℹ️  ${sdType} type SD - TESTING validation SKIPPED`);
@@ -498,17 +501,19 @@ export class ExecToPlanExecutor extends BaseExecutor {
         }
 
         // 3. Validate execution exists
+        // SD-LEARN-010:US-001: ERR_TESTING_REQUIRED error code for missing TESTING execution
         if (!testingResults?.length) {
-          console.log('   ❌ BLOCKING: TESTING sub-agent must be executed');
+          console.log('   ❌ ERR_TESTING_REQUIRED: TESTING sub-agent must complete before EXEC-TO-PLAN');
           console.log('\n   REMEDIATION:');
-          console.log('   1. Run: node scripts/orchestrate-phase-subagents.js PLAN_VERIFY ' + (ctx.sdId || sdUuid));
-          console.log('   2. Ensure all E2E tests pass');
-          console.log('   3. Re-run EXEC-TO-PLAN handoff');
+          console.log('   1. Run TESTING sub-agent before completing EXEC phase');
+          console.log('   2. Command: node scripts/orchestrate-phase-subagents.js PLAN_VERIFY ' + (ctx.sdId || sdUuid));
+          console.log('   3. Ensure all E2E tests pass');
+          console.log('   4. Re-run EXEC-TO-PLAN handoff');
           return {
             passed: false,
             score: 0,
             max_score: 100,
-            issues: ['BLOCKING: TESTING sub-agent must be executed before EXEC-TO-PLAN handoff'],
+            issues: ['ERR_TESTING_REQUIRED: TESTING sub-agent must complete before EXEC-TO-PLAN for feature/qa SDs'],
             warnings: []
           };
         }
@@ -1186,14 +1191,16 @@ export class ExecToPlanExecutor extends BaseExecutor {
       ].join('\n'),
       'RCA_GATE': 'All P0/P1 RCRs must have verified CAPAs before handoff. Run: node scripts/root-cause-agent.js capa verify --capa-id <UUID>',
       'MANDATORY_TESTING_VALIDATION': [
-        'TESTING sub-agent is MANDATORY for code-producing SDs.',
+        'ERR_TESTING_REQUIRED: TESTING sub-agent is MANDATORY for feature/qa SDs.',
         '',
         'STEPS TO RESOLVE:',
-        '1. Run: node scripts/orchestrate-phase-subagents.js PLAN_VERIFY <SD-ID>',
-        '2. Ensure all E2E tests pass',
-        '3. Re-run EXEC-TO-PLAN handoff',
+        '1. Run TESTING sub-agent before completing EXEC phase',
+        '2. Command: node scripts/orchestrate-phase-subagents.js PLAN_VERIFY <SD-ID>',
+        '3. Ensure all E2E tests pass',
+        '4. Re-run EXEC-TO-PLAN handoff',
         '',
-        'EXEMPT SD TYPES: documentation, infrastructure, orchestrator'
+        'EXEMPT SD TYPES: documentation, docs, infrastructure, orchestrator, database',
+        'REQUIRED SD TYPES: feature, qa (SD-LEARN-010:US-001)'
       ].join('\n'),
       'TEST_EVIDENCE_AUTO_CAPTURE': [
         'Test evidence auto-capture helps populate story_test_mappings.',
