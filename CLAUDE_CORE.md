@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-01-18 10:26:56 AM
+**Generated**: 2026-01-19 10:37:44 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -171,15 +171,37 @@ node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
 node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
 ```
 
+### Emergency Bypass (SD-LEARN-010)
+For emergencies ONLY. Bypasses require audit logging and are rate-limited.
+
+```bash
+# Emergency bypass with mandatory justification (min 20 chars)
+node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001 \
+  --bypass-validation \
+  --bypass-reason "Production outage requires immediate fix - JIRA-12345"
+```
+
+**Rate Limits:**
+- 3 bypasses per SD maximum
+- 10 bypasses per day globally
+- All bypasses logged to `audit_log` table with severity=warning
+
 ### What These Scripts Enforce
 | Script | Validations |
 |--------|-------------|
 | `phase-preflight.js` | Loads context, patterns, and lessons from database |
 | `handoff.js precheck` | **Batch validation** - runs ALL gates, git checks, reports ALL issues at once |
 | `handoff.js LEAD-TO-PLAN` | SD completeness (100% required), strategic objectives |
-| `handoff.js PLAN-TO-EXEC` | BMAD validation, DESIGN→DB workflow, Git branch enforcement |
-| `handoff.js EXEC-TO-PLAN` | Implementation fidelity, test coverage, deliverables |
+| `handoff.js PLAN-TO-EXEC` | PRD exists (`ERR_NO_PRD`), chain completeness (`ERR_CHAIN_INCOMPLETE`) |
+| `handoff.js EXEC-TO-PLAN` | TESTING enforcement (`ERR_TESTING_REQUIRED`), chain completeness |
 | `handoff.js PLAN-TO-LEAD` | Traceability, workflow ROI, retrospective quality |
+
+### Error Codes (SD-LEARN-010)
+| Code | Meaning | Remediation |
+|------|---------|-------------|
+| `ERR_TESTING_REQUIRED` | TESTING sub-agent must run before EXEC-TO-PLAN (feature/qa SDs) | Run TESTING sub-agent first |
+| `ERR_CHAIN_INCOMPLETE` | Missing prerequisite handoff in chain | Complete missing handoff first |
+| `ERR_NO_PRD` | No PRD found for PLAN-TO-EXEC | Create PRD before proceeding |
 
 ### Compliance Marker
 Valid handoffs are recorded with `created_by: 'UNIFIED-HANDOFF-SYSTEM'`. Handoffs with other `created_by` values indicate process bypass.
@@ -1655,16 +1677,16 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. Sovereign Industrial Expansion - Stages 7-25 Materialization (Orchestrator) ⭐
-**Category**: PROCESS_IMPROVEMENT | **Date**: 12/27/2025 | **Score**: 100
+### 1. Integrate Risk Re-calibration UI Components into EHG Application - Retrospective ⭐
+**Category**: TESTING_STRATEGY | **Date**: 1/18/2026 | **Score**: 100
 
 **Key Improvements**:
-- LEO Protocol artifacts should be created BEFORE implementation, not retroactively
-- Handoff chain documentation should accompany development from the start
+- E2E test runs should be automated in CI before EXEC-TO-PLAN handoffs - currently manual evidence onl...
+- Documentation should include visual Mermaid flow diagrams from initial US-005 implementation
 
 **Action Items**:
-- [ ] Create orchestrator SD template with built-in child tracking
-- [ ] Enforce LEO Protocol compliance for all SDs from LEAD phase
+- [ ] Create reusable SD lookup utility
+- [ ] Add E2E test CI job for risk-recalibration
 
 ### 2. Mock Infrastructure: Config, Registry, and Utilities - Retrospective ⭐
 **Category**: PROCESS_IMPROVEMENT | **Date**: 12/28/2025 | **Score**: 100
@@ -1677,18 +1699,7 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 - [ ] Document mock system usage in docs/mock-data-system.md (in SD-MOCK-POLISH)
 - [ ] Complete missing handoff documentation
 
-### 3. UI Canon Alignment - Retrospective ⭐
-**Category**: TESTING_STRATEGY | **Date**: 12/19/2025 | **Score**: 100
-
-**Key Improvements**:
-- E2E test timeout configuration for mock mode
-- Deprecation enforcement for legacy stage constants
-
-**Action Items**:
-- [ ] Add eslint rule to deprecate IDEATION_STAGES import and suggest VENTURE_STAGES
-- [ ] Configure separate Playwright timeouts for mock-mode tests (30s) vs real-mode te...
-
-### 4. Settings Tab Clarity + Feature Catalog Copy (NAV-48 + NAV-49) - Retrospective ⭐
+### 3. Settings Tab Clarity + Feature Catalog Copy (NAV-48 + NAV-49) - Retrospective ⭐
 **Category**: APPLICATION_ISSUE | **Date**: 12/26/2025 | **Score**: 100
 
 **Key Improvements**:
@@ -1698,6 +1709,17 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 **Action Items**:
 - [ ] Add timeout fallback for AI quality assessment in handoffs
 - [ ] Complete missing handoff documentation
+
+### 4. Sovereign Industrial Expansion - Stages 7-25 Materialization (Orchestrator) ⭐
+**Category**: PROCESS_IMPROVEMENT | **Date**: 12/27/2025 | **Score**: 100
+
+**Key Improvements**:
+- LEO Protocol artifacts should be created BEFORE implementation, not retroactively
+- Handoff chain documentation should accompany development from the start
+
+**Action Items**:
+- [ ] Create orchestrator SD template with built-in child tracking
+- [ ] Enforce LEO Protocol compliance for all SDs from LEAD phase
 
 ### 5. Mock Polish: UI Indicator, Developer Toggle, Documentation - Retrospective ⭐
 **Category**: PROCESS_IMPROVEMENT | **Date**: 12/28/2025 | **Score**: 100
@@ -1899,7 +1921,7 @@ Handles customer relationship management, lead tracking, customer success metric
 
 ---
 
-*Generated from database: 2026-01-18*
+*Generated from database: 2026-01-19*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

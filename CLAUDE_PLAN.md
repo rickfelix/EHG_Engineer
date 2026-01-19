@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-01-18 10:26:56 AM
+**Generated**: 2026-01-19 10:37:44 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -51,15 +51,37 @@ node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
 node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
 ```
 
+### Emergency Bypass (SD-LEARN-010)
+For emergencies ONLY. Bypasses require audit logging and are rate-limited.
+
+```bash
+# Emergency bypass with mandatory justification (min 20 chars)
+node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001 \
+  --bypass-validation \
+  --bypass-reason "Production outage requires immediate fix - JIRA-12345"
+```
+
+**Rate Limits:**
+- 3 bypasses per SD maximum
+- 10 bypasses per day globally
+- All bypasses logged to `audit_log` table with severity=warning
+
 ### What These Scripts Enforce
 | Script | Validations |
 |--------|-------------|
 | `phase-preflight.js` | Loads context, patterns, and lessons from database |
 | `handoff.js precheck` | **Batch validation** - runs ALL gates, git checks, reports ALL issues at once |
 | `handoff.js LEAD-TO-PLAN` | SD completeness (100% required), strategic objectives |
-| `handoff.js PLAN-TO-EXEC` | BMAD validation, DESIGN→DB workflow, Git branch enforcement |
-| `handoff.js EXEC-TO-PLAN` | Implementation fidelity, test coverage, deliverables |
+| `handoff.js PLAN-TO-EXEC` | PRD exists (`ERR_NO_PRD`), chain completeness (`ERR_CHAIN_INCOMPLETE`) |
+| `handoff.js EXEC-TO-PLAN` | TESTING enforcement (`ERR_TESTING_REQUIRED`), chain completeness |
 | `handoff.js PLAN-TO-LEAD` | Traceability, workflow ROI, retrospective quality |
+
+### Error Codes (SD-LEARN-010)
+| Code | Meaning | Remediation |
+|------|---------|-------------|
+| `ERR_TESTING_REQUIRED` | TESTING sub-agent must run before EXEC-TO-PLAN (feature/qa SDs) | Run TESTING sub-agent first |
+| `ERR_CHAIN_INCOMPLETE` | Missing prerequisite handoff in chain | Complete missing handoff first |
+| `ERR_NO_PRD` | No PRD found for PLAN-TO-EXEC | Create PRD before proceeding |
 
 ### Compliance Marker
 Valid handoffs are recorded with `created_by: 'UNIFIED-HANDOFF-SYSTEM'`. Handoffs with other `created_by` values indicate process bypass.
@@ -2388,6 +2410,6 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
 
 ---
 
-*Generated from database: 2026-01-18*
+*Generated from database: 2026-01-19*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*
