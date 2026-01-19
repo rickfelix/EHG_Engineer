@@ -473,6 +473,47 @@ LIMIT 10;
 
 **Why**: Process improvement retrospectives without protocol improvements are incomplete. They identify problems but don't capture solutions for future SDs.
 
+## Plan Mode Integration Patterns (SD-PLAN-MODE-003)
+
+**Added via**: Database triggers for `plan mode`, `permission bundling`, `phase transition`, `intelligent plan`, `sd type profile`, `workflow intensity`
+
+### Pattern Categories to Capture
+
+When retrospectives mention Plan Mode, extract learnings in these categories:
+
+| Category | Look For | Example Insight |
+|----------|----------|-----------------|
+| **Permission Bundling** | Prompt reduction effectiveness, blocked commands | "Permission bundling reduced prompts by 75% during EXEC phase" |
+| **SD Type Detection** | Accuracy of type inference, fallback behavior | "Bug type inference from SD ID pattern worked for 90% of cases" |
+| **Plan Templates** | Template quality, missing actions, phase coverage | "LEAD template missing sub-agent orchestration step" |
+| **Phase Transitions** | Smooth vs problematic transitions, timing | "PLAN-TO-EXEC transition failed due to missing plan file" |
+| **Workflow Intensity** | Over/under-estimation, complexity mismatch | "Complex SD incorrectly classified as moderate, insufficient testing" |
+
+### Plan Mode Protocol Improvements
+
+When creating retrospectives for Plan Mode related SDs, populate `protocol_improvements` with:
+
+```json
+{
+  "protocol_improvements": [
+    {
+      "category": "WORKFLOW",
+      "improvement": "Add plan file validation before phase transition",
+      "evidence": "Phase transition failed silently when plan file wasn't written",
+      "impact": "Prevents workflow interruption during handoffs",
+      "affected_phase": "PLAN"
+    }
+  ]
+}
+```
+
+### Key Metrics to Track
+
+- **Permission Prompt Reduction**: Target 70-80% reduction per phase
+- **Plan File Success Rate**: Target 95%+ successful writes
+- **SD Type Detection Accuracy**: Track fallback vs database context usage
+- **Phase Transition Latency**: Should be <500ms
+
 ## Key Success Patterns
 
 From 74+ retrospectives analyzed:
