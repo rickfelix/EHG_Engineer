@@ -203,26 +203,38 @@ async function getSDDetails(sdId) {
     data = result.data;
     error = result.error;
   } else {
-    // Try legacy_id first, then sd_key (avoid .or() with .single() which can fail)
-    // SD-TECH-DEBT-HANDOFF-001: Split into two queries to avoid "Cannot coerce" error
-    const legacyResult = await supabase
+    // SD-EHG-001-FIX: Try id column first even if not UUID format (some SDs use string IDs like SD-EHG-001)
+    const idResult = await supabase
       .from('strategic_directives_v2')
       .select('*')
-      .eq('legacy_id', sdId)
+      .eq('id', sdId)
       .maybeSingle();
 
-    if (legacyResult.data) {
-      data = legacyResult.data;
-      error = legacyResult.error;
+    if (idResult.data) {
+      data = idResult.data;
+      error = idResult.error;
     } else {
-      // Try sd_key if legacy_id not found
-      const keyResult = await supabase
+      // Try legacy_id first, then sd_key (avoid .or() with .single() which can fail)
+      // SD-TECH-DEBT-HANDOFF-001: Split into two queries to avoid "Cannot coerce" error
+      const legacyResult = await supabase
         .from('strategic_directives_v2')
         .select('*')
-        .eq('sd_key', sdId)
+        .eq('legacy_id', sdId)
         .maybeSingle();
-      data = keyResult.data;
-      error = keyResult.error;
+
+      if (legacyResult.data) {
+        data = legacyResult.data;
+        error = legacyResult.error;
+      } else {
+        // Try sd_key if legacy_id not found
+        const keyResult = await supabase
+          .from('strategic_directives_v2')
+          .select('*')
+          .eq('sd_key', sdId)
+          .maybeSingle();
+        data = keyResult.data;
+        error = keyResult.error;
+      }
     }
   }
 
