@@ -242,10 +242,19 @@ Risk Re-calibration Form:
 
 ## Implementation References
 
-- `lib/governance/risk-recalibration-gate.js` - Gate validation logic
-- `database/migrations/YYYYMMDD_risk_recalibration_schema.sql` - Form storage
+### Database
+- **Migration**: `database/migrations/20260119_risk_recalibration_gates.sql` - Risk gate schema (26.4 KB)
+- **Tables**: `risk_recalibration_forms`, `risk_escalation_log`, `risk_gate_passage_log`
+- **Functions**: `fn_evaluate_risk_recalibration_gate()`, `fn_check_risk_escalation_triggers()`, `fn_record_risk_gate_passage()`
+- **View**: `v_risk_gate_dashboard` - Risk gate status for all ventures
+- **Documentation**: `docs/database/lifecycle-gap-migrations-summary.md` - Complete schema reference
+
+### Application Logic
+- `lib/governance/risk-recalibration-gate.js` - Gate validation logic (TO BE IMPLEMENTED)
+
+### Related Protocols
 - `docs/04_features/capability-router-protocol.md` - Sibling protocol
-- `docs/04_features/security-compliance-gates.md` - Related security gates
+- `docs/04_features/stage20-compliance-gate.md` - Security & compliance gate
 
 ---
 
