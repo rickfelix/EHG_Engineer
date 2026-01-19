@@ -27,9 +27,10 @@ const ENGINEER_DIR = '.';
 function detectCurrentSD() {
   try {
     // Try to get SD from git branch name
-    const branch = execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', {
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
       encoding: 'utf8',
-      cwd: ENGINEER_DIR
+      cwd: ENGINEER_DIR,
+      stdio: ['pipe', 'pipe', 'pipe'] // Suppress stderr cross-platform
     }).trim();
 
     // Extract SD ID from branch name (e.g., feat/SD-XXX-001-description)
@@ -58,25 +59,20 @@ function detectCurrentPhase() {
  * Get git status for session context
  */
 function getGitContext() {
+  const execOpts = { encoding: 'utf8', cwd: ENGINEER_DIR, stdio: ['pipe', 'pipe', 'pipe'] };
+
   try {
-    const status = execSync('git status --porcelain 2>/dev/null | wc -l', {
-      encoding: 'utf8',
-      cwd: ENGINEER_DIR
-    }).trim();
+    // Get status and count lines in JS (cross-platform)
+    const statusOutput = execSync('git status --porcelain', execOpts).trim();
+    const uncommittedFiles = statusOutput ? statusOutput.split('\n').length : 0;
 
-    const branch = execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', {
-      encoding: 'utf8',
-      cwd: ENGINEER_DIR
-    }).trim();
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', execOpts).trim();
 
-    const lastCommit = execSync('git log -1 --format="%H %s" 2>/dev/null', {
-      encoding: 'utf8',
-      cwd: ENGINEER_DIR
-    }).trim();
+    const lastCommit = execSync('git log -1 --format="%H %s"', execOpts).trim();
 
     return {
       branch,
-      uncommitted_files: parseInt(status) || 0,
+      uncommitted_files: uncommittedFiles,
       last_commit: lastCommit
     };
   } catch (error) {
