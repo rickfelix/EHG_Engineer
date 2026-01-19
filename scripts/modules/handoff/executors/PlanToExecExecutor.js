@@ -1192,11 +1192,13 @@ export class PlanToExecExecutor extends BaseExecutor {
       }
 
       // Create retrospective record
+      // Note: retro_type must be a valid enum value (SD_COMPLETION, INCIDENT, etc.)
+      // The actual handoff type is stored in retrospective_type field
       const retrospective = {
         sd_id: sdId,
         project_name: sd.title,
-        retro_type: retrospectiveType,
-        retrospective_type: retrospectiveType, // New field for handoff type
+        retro_type: 'SD_COMPLETION', // Use valid enum value
+        retrospective_type: retrospectiveType, // Store actual handoff type here
         title: `${retrospectiveType} Handoff Retrospective: ${sd.title}`,
         description: `Retrospective for ${retrospectiveType} handoff of ${sd.sd_key}`,
         conducted_date: new Date().toISOString(),

@@ -240,7 +240,10 @@
     "sd:baseline:deactivate": "node scripts/sd-baseline-deactivate.js",
     "capability:analyze": "node scripts/capability-analyzer.js analyze",
     "capability:scan": "node scripts/capability-analyzer.js scan",
-    "capability:report": "node scripts/capability-analyzer.js report"
+    "capability:report": "node scripts/capability-analyzer.js report",
+    "validate:bypass": "node scripts/modules/bypass-detection-validator.js",
+    "validate:bypass:all": "node scripts/modules/bypass-detection-validator.js --all",
+    "validate:sd-type-sync": "node scripts/verify-sd-type-sync.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",
