@@ -59,9 +59,13 @@ This command provides:
 
 ## Common Commands
 
-- `bash scripts/leo-stack.sh restart` - Restart all LEO servers (Engineer on 3000, App on 8080, Agent Platform on 8000)
-- `bash scripts/leo-stack.sh status` - Check server status
-- `bash scripts/leo-stack.sh stop` - Stop all servers
+- `node scripts/cross-platform-run.js leo-stack restart` - Restart all LEO servers (Engineer on 3000, App on 8080, Agent Platform on 8000)
+- `node scripts/cross-platform-run.js leo-stack status` - Check server status
+- `node scripts/cross-platform-run.js leo-stack stop` - Stop all servers
+
+**Note**: The cross-platform runner automatically selects the appropriate script:
+- **Windows**: Uses `leo-stack.ps1` (PowerShell)
+- **Linux/macOS**: Uses `leo-stack.sh` (Bash)
 
 ## Slash Commands & Command Ecosystem
 
@@ -85,9 +89,8 @@ LEO Protocol includes intelligent slash commands that interconnect based on work
 LEAD-FINAL-APPROVAL → /restart → Visual Review → /ship → /document → /learn → /leo next
 ```
 
-
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-19 11:57:10 PM
+**Last Generated**: 2026-01-19 8:29:17 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
