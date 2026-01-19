@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-01-19 11:57:10 PM
+**Generated**: 2026-01-19 8:29:17 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -214,79 +214,6 @@ npm run handoff:compliance SD-ID  # Check specific SD
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
-## 🤖 Built-in Agent Integration
-
-## Built-in Agent Integration
-
-### Three-Layer Agent Architecture
-
-LEO Protocol uses three complementary agent layers:
-
-| Layer | Source | Agents | Purpose |
-|-------|--------|--------|---------|
-| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
-| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
-| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
-
-### Integration Principle
-
-> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
-
-Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
-
-### When to Use Each Layer
-
-| Task | Use | Example |
-|------|-----|---------|
-| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
-| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
-| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
-| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
-| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
-
-### Parallel Execution
-
-Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
-
-```
-Task(subagent_type="Explore", prompt="Search for existing implementations")
-Task(subagent_type="Explore", prompt="Find related patterns")
-Task(subagent_type="Explore", prompt="Identify affected areas")
-```
-
-This is faster than sequential exploration and provides comprehensive coverage.
-
-## Mandatory Agent Invocation Rules
-
-**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
-
-### Task Type -> Required Agent
-
-| Task Keywords | MUST Invoke | Purpose |
-|---------------|-------------|---------|
-| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
-| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
-| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
-| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
-| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
-| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
-| database, migration, schema | **database-agent** | Schema validation |
-| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
-
-### Why This Exists
-
-**Incident**: Human-like testing perspective interpreted as manual content inspection.
-**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
-**Root Cause**: Ad-hoc review instead of specialized agent invocation.
-**Prevention**: Explicit rules mandate agent use for specialized tasks.
-
-### How to Apply
-
-1. Detect task type from user request keywords
-2. Invoke required agent(s) BEFORE making changes
-3. Agent findings inform implementation
-4. Re-run agent AFTER changes to verify fixes
-
 ## Claude Code Plan Mode Integration
 
 **Status**: ✅ ACTIVE | **Version**: 1.0.0 | **Implemented**: 2026-01-18
@@ -498,32 +425,78 @@ await orchestrator.requestPlanModeExit({
 - **Retro Agent**: `.claude/agents/retro-agent.md` (Plan Mode Patterns section)
 
 
-## Sub-Agent Model Routing
+## Mandatory Agent Invocation Rules
 
-**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
+**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
 
-### Model Selection Rule
-- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
-- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
-- If you need to specify a model explicitly, use `model: 'sonnet'`
+### Task Type -> Required Agent
 
-### Why This Matters
-- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
-- Claude Code Max subscription does not include Haiku access
-- Sonnet provides the right balance of speed and quality for sub-agent work
+| Task Keywords | MUST Invoke | Purpose |
+|---------------|-------------|---------|
+| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
+| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
+| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
+| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
+| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
+| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
+| database, migration, schema | **database-agent** | Schema validation |
+| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
 
-### Examples
-```javascript
-// CORRECT - Use sonnet or omit model
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
-Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
+### Why This Exists
 
-// WRONG - Never use haiku
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
+**Incident**: Human-like testing perspective interpreted as manual content inspection.
+**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
+**Root Cause**: Ad-hoc review instead of specialized agent invocation.
+**Prevention**: Explicit rules mandate agent use for specialized tasks.
+
+### How to Apply
+
+1. Detect task type from user request keywords
+2. Invoke required agent(s) BEFORE making changes
+3. Agent findings inform implementation
+4. Re-run agent AFTER changes to verify fixes
+
+## 🤖 Built-in Agent Integration
+
+## Built-in Agent Integration
+
+### Three-Layer Agent Architecture
+
+LEO Protocol uses three complementary agent layers:
+
+| Layer | Source | Agents | Purpose |
+|-------|--------|--------|---------|
+| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
+| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
+| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
+
+### Integration Principle
+
+> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
+
+Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
+
+### When to Use Each Layer
+
+| Task | Use | Example |
+|------|-----|---------|
+| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
+| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
+| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
+| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
+| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
+
+### Parallel Execution
+
+Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
+
+```
+Task(subagent_type="Explore", prompt="Search for existing implementations")
+Task(subagent_type="Explore", prompt="Find related patterns")
+Task(subagent_type="Explore", prompt="Identify affected areas")
 ```
 
-*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
-
+This is faster than sequential exploration and provides comprehensive coverage.
 
 ## Work Tracking Policy
 
@@ -556,6 +529,33 @@ The pre-push hook automatically:
 1. Detects SD/QF from branch name
 2. Verifies completion status in database
 3. Blocks if not ready for merge
+
+## Sub-Agent Model Routing
+
+**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
+
+### Model Selection Rule
+- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
+- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
+- If you need to specify a model explicitly, use `model: 'sonnet'`
+
+### Why This Matters
+- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
+- Claude Code Max subscription does not include Haiku access
+- Sonnet provides the right balance of speed and quality for sub-agent work
+
+### Examples
+```javascript
+// CORRECT - Use sonnet or omit model
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
+Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
+
+// WRONG - Never use haiku
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
+```
+
+*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
+
 
 ## 🖥️ UI Parity Requirement (MANDATORY)
 
@@ -1419,6 +1419,96 @@ Before executing any handoff:
 2. The execute command will warn you if a handoff is optional
 3. Infrastructure/docs SDs can proceed directly from EXEC to PLAN-TO-LEAD
 4. Gate thresholds are automatically applied based on SD type
+
+## SD Type-Specific Validation Requirements
+
+### Overview
+
+Different SD types have different validation profiles. The `sd_type` field determines which sub-agents run, which gates apply, and what documentation is required.
+
+### Validation Matrix by SD Type
+
+| SD Type | Required Handoffs | Skip Validations | Required Sub-Agents |
+|---------|------------------|------------------|---------------------|
+| `feature` | All 4 + LEAD-FINAL | None | TESTING, DESIGN, DATABASE, STORIES |
+| `bugfix` | All 4 + LEAD-FINAL | None | TESTING, REGRESSION |
+| `refactor` | Varies by intensity | See intensity table | REGRESSION |
+| `infrastructure` | 3 (skip EXEC-TO-PLAN optional) | TESTING, GITHUB, E2E | DOCMON |
+| `documentation` | 3 (skip EXEC-TO-PLAN optional) | TESTING, GITHUB, Gates 3-4 | DOCMON |
+| `database` | All 4 + LEAD-FINAL | Some UI-dependent E2E | DATABASE |
+| `security` | All 4 + LEAD-FINAL | None | SECURITY, TESTING |
+| `performance` | All 4 + LEAD-FINAL | None | PERFORMANCE |
+| `orchestrator` | None (coordinates children) | All | None |
+
+### Refactor Intensity Levels
+
+| Intensity | Required Handoffs | E2E Testing | REGRESSION |
+|-----------|------------------|-------------|------------|
+| `cosmetic` | LEAD-TO-PLAN, PLAN-TO-LEAD only | Optional | Optional |
+| `structural` | All 4 handoffs | Required | Required |
+| `architectural` | All 4 + LEAD-FINAL | Required | Required |
+
+### Gate Pass Thresholds by SD Type
+
+| SD Type | Gate Threshold | Notes |
+|---------|---------------|-------|
+| `feature` | 85% | Full validation required |
+| `bugfix` | 85% | Regression testing critical |
+| `refactor` (cosmetic) | 60% | Lighter validation |
+| `refactor` (structural) | 75% | Medium validation |
+| `refactor` (architectural) | 90% | Strict validation |
+| `infrastructure` | 70% | Code validation skippable |
+| `documentation` | 60% | Minimal validation |
+| `database` | 85% | DATABASE sub-agent required |
+| `security` | 90% | Strictest validation |
+
+### UAT Requirements by SD Type
+
+| SD Type | UAT Required | LLM UX Validation | Notes |
+|---------|-------------|-------------------|-------|
+| `feature` | **YES** | Score 50+, 2 lenses | Human-verifiable outcome required |
+| `bugfix` | **YES** | Optional | Verify fix works |
+| `refactor` | **YES** | No | Regression testing |
+| `infrastructure` | **EXEMPT** | No | Internal tooling |
+| `documentation` | No | No | No runtime behavior |
+| `database` | **YES** | No | Data flow verification |
+| `security` | **YES** | No | Auth/authz verification |
+
+### Setting SD Type
+
+```javascript
+// During SD creation
+const sd = {
+  id: 'SD-XXX-001',
+  sd_key: 'SD-XXX-001',
+  sd_type: 'feature',  // or bugfix, refactor, infrastructure, etc.
+  // ... other fields
+};
+
+// Manual override (if auto-detection fails)
+await supabase
+  .from('strategic_directives_v2')
+  .update({ sd_type: 'documentation' })
+  .eq('id', 'SD-XXX-001');
+```
+
+### Auto-Detection Keywords
+
+| SD Type | Detection Keywords |
+|---------|-------------------|
+| `feature` | ui, component, page, user, dashboard |
+| `bugfix` | fix, bug, error, issue, broken |
+| `refactor` | refactor, cleanup, restructure, consolidate |
+| `infrastructure` | ci/cd, tooling, script, automation |
+| `documentation` | docs, readme, documentation, guide |
+| `database` | schema, migration, table, rls |
+| `security` | auth, permission, role, rls, security |
+
+### Reference
+
+- **Validation Logic**: `lib/utils/sd-type-validation.js`
+- **Handoff Workflows**: `scripts/handoff.js` lines 24-120
+
 
 ## Database-First Enforcement - Expanded
 

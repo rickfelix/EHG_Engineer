@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-01-19 11:57:10 PM
+**Generated**: 2026-01-19 8:29:17 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
@@ -343,6 +343,224 @@ Before approving parallel work on multiple SDs:
 1. Check `sd_conflict_matrix` for file/component overlap
 2. SDs touching same files should NOT run in parallel
 3. Use `npm run sd:next` to see track assignments
+
+
+## Strategic Directive Creation Process
+
+### Overview
+
+Strategic Directives (SDs) are the primary unit of work in the LEO Protocol. This section documents the complete SD creation and validation workflow.
+
+### Step 1: Create SD Record in Database
+
+**MANDATORY**: Use process scripts - never create SDs manually in the database.
+
+```bash
+# Create a new Strategic Directive
+node scripts/add-sd-to-database.js --sd-id SD-XXX-001 --title "Your SD Title"
+```
+
+### Required Fields (ALL SDs)
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | UUID | **YES** | Auto-generated or provided |
+| `sd_key` | text | **CRITICAL** | Business key, MUST match id format (e.g., SD-FIX-NAV-001) |
+| `title` | text | **YES** | Short descriptive title |
+| `description` | text | **YES** | Detailed description of requirements |
+| `rationale` | text | **YES** | Why this SD matters (business justification) |
+| `status` | text | **YES** | draft, in_progress, active, completed, etc. |
+| `sd_type` | text | **YES** | Determines validation profile (see SD Types) |
+| `category` | text | **YES** | Classification (feature, infrastructure, etc.) |
+| `priority` | text | **YES** | critical, high, medium, low |
+| `scope` | text | **YES** | What's included/excluded |
+| `success_criteria` | array | **YES** | Measurable success metrics |
+| `target_application` | text | **YES** | EHG (frontend) or EHG_Engineer (backend) |
+
+### SD Type-Specific Requirements
+
+| SD Type | Additional Required Fields | Notes |
+|---------|---------------------------|-------|
+| `bugfix` | `smoke_test_steps` | 30-second demo steps required |
+| `feature` | `smoke_test_steps` | Full validation + LLM UX evaluation |
+| `refactor` | `intensity_level` | cosmetic, structural, or architectural |
+| `infrastructure` | None | Lighter validation, skip TESTING/GITHUB |
+| `orchestrator` | `parent_sd_id` for children | Coordinates children, no handoffs |
+| `database` | None | DATABASE sub-agent required |
+| `security` | None | SECURITY sub-agent required |
+| `documentation` | None | Minimal validation |
+| `performance` | None | PERFORMANCE sub-agent recommended |
+
+### Step 2: LEAD Strategic Validation (9-Question Gate)
+
+LEAD MUST answer these questions before approval:
+
+1. **Need Validation**: Is this solving a real user problem?
+2. **Solution Assessment**: Does it align with business objectives?
+3. **Existing Tools**: Can we leverage existing infrastructure?
+4. **Value Analysis**: Does expected value justify effort?
+5. **Feasibility Review**: Any technical/resource constraints?
+6. **Risk Assessment**: What are key risks and mitigations?
+7. **UI Inspectability**: Can users see and interpret the outputs?
+8. **Scope Reduction**: What was REMOVED? (Target >10% reduction)
+9. **Human-Verifiable Outcome**: What's the 30-second demo? (`smoke_test_steps`)
+
+### Step 3: Execute Handoff Chain
+
+```bash
+# LEAD → PLAN (Strategic approval)
+node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001
+
+# PLAN → EXEC (PRD complete, ready for implementation)
+node scripts/handoff.js execute PLAN-TO-EXEC SD-XXX-001
+
+# EXEC → PLAN (Implementation complete, ready for verification)
+node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
+
+# PLAN → LEAD (Verification complete, ready for final approval)
+node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
+```
+
+### Validation Gates per Handoff
+
+| Handoff | Key Gates | Threshold |
+|---------|-----------|-----------|
+| LEAD-TO-PLAN | SD_TRANSITION_READINESS, TARGET_APPLICATION, BASELINE_DEBT_CHECK | 85% |
+| PLAN-TO-EXEC | PREREQUISITE_CHECK, BMAD_VALIDATION, BRANCH_ENFORCEMENT | 85% |
+| EXEC-TO-PLAN | IMPLEMENTATION_FIDELITY, TESTING_REQUIRED, GIT_COMMIT | 85% |
+| PLAN-TO-LEAD | SUB_AGENT_ORCHESTRATION, RETROSPECTIVE_QUALITY | 85% |
+
+### Reference Documents
+
+- **Field Reference**: `docs/database/strategic_directives_v2_field_reference.md`
+- **Handoff System**: `docs/reference/handoff-system-guide.md`
+- **Schema Mapping**: `docs/reference/strategic-directives-v2-schema.md`
+- **Process Scripts**: `scripts/add-sd-to-database.js`, `scripts/handoff.js`
+
+
+## Common SD Creation Errors and Solutions
+
+### Database Constraint Errors
+
+#### Error: `null value in column "sd_key" violates not-null constraint`
+
+**Cause**: Missing `sd_key` field when creating SD
+**Solution**:
+```javascript
+const sd = {
+  id: 'SD-XXX-001',
+  sd_key: 'SD-XXX-001',  // MUST be present and match id format
+  // ... other fields
+};
+```
+**Reference**: `docs/database/strategic_directives_v2_field_reference.md` line 20
+
+#### Error: `duplicate key value violates unique constraint`
+
+**Cause**: SD with that id or sd_key already exists
+**Solution**: Use UPDATE instead of INSERT, or choose a different ID
+```javascript
+// Check if exists first
+const { data: existing } = await supabase
+  .from('strategic_directives_v2')
+  .select('id')
+  .eq('sd_key', 'SD-XXX-001')
+  .single();
+
+if (existing) {
+  // Update existing
+  await supabase.from('strategic_directives_v2').update(sd).eq('id', 'SD-XXX-001');
+} else {
+  // Insert new
+  await supabase.from('strategic_directives_v2').insert(sd);
+}
+```
+
+#### Error: `invalid input syntax for type json`
+
+**Cause**: Invalid JSON in `metadata`, `success_criteria`, or other JSONB fields
+**Solution**: Ensure JSONB fields are valid JSON objects/arrays, not strings
+
+### Handoff Validation Errors
+
+#### Error: `ERR_NO_PRD` during PLAN-TO-EXEC
+
+**Cause**: No PRD found for SD
+**Solution**: Create PRD before executing handoff
+```bash
+node scripts/add-prd-to-database.js --sd-id SD-XXX-001 --title "PRD Title"
+```
+**Reference**: CLAUDE_EXEC.md line 84
+
+#### Error: `ERR_CHAIN_INCOMPLETE` during handoff
+
+**Cause**: Missing prerequisite handoff in chain
+**Solution**: Complete the missing prerequisite handoff first
+
+| Handoff | Requires First |
+|---------|---------------|
+| PLAN-TO-EXEC | LEAD-TO-PLAN |
+| EXEC-TO-PLAN | PLAN-TO-EXEC |
+| PLAN-TO-LEAD | EXEC-TO-PLAN |
+| LEAD-FINAL | PLAN-TO-LEAD |
+
+#### Error: `ERR_TESTING_REQUIRED` during EXEC-TO-PLAN
+
+**Cause**: TESTING sub-agent must run before EXEC-TO-PLAN for feature/bugfix SDs
+**Solution**: Run TESTING sub-agent first
+```
+Task(subagent_type="testing-agent", prompt="Execute TESTING validation for SD-XXX-001")
+```
+
+### SD Type Errors
+
+#### Error: SD blocked by TESTING validation but no code changes
+
+**Cause**: `sd_type` not set correctly for documentation-only SD
+**Solution**: Set `sd_type = 'documentation'` to skip code validation
+```sql
+UPDATE strategic_directives_v2 SET sd_type = 'documentation' WHERE sd_key = 'SD-XXX-001';
+```
+**Evidence**: SD-TECH-DEBT-DOCS-001 was blocked until sd_type was set correctly
+
+#### Error: Refactor SD missing intensity level
+
+**Cause**: Refactor SDs require `intensity_level` field
+**Solution**: Set intensity level before LEAD approval
+```sql
+UPDATE strategic_directives_v2
+SET intensity_level = 'structural'  -- cosmetic, structural, or architectural
+WHERE sd_key = 'SD-REFACTOR-001';
+```
+
+### Branch and Git Errors
+
+#### Error: `Branch is stale (>7 days)`
+
+**Cause**: Feature branch has diverged from main for too long
+**Solution**: Sync with main before handoff
+```bash
+git fetch origin main
+git merge origin/main --no-edit
+```
+
+#### Error: Multiple SDs detected on branch
+
+**Cause**: Branch contains commits from multiple SDs
+**Solution**: Create separate branches for each SD
+
+### Quick Diagnostic Commands
+
+```bash
+# Check SD exists and get status
+node -e "require('dotenv').config(); const {createClient}=require('@supabase/supabase-js'); createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY).from('strategic_directives_v2').select('id,sd_key,status,sd_type').eq('sd_key','SD-XXX-001').single().then(r=>console.log(r.data||r.error));"
+
+# Check handoff chain
+node scripts/handoff.js list SD-XXX-001
+
+# Validate before handoff (find all issues)
+node scripts/handoff.js precheck PLAN-TO-EXEC SD-XXX-001
+```
 
 
 ## 📋 Directive Submission Review Process

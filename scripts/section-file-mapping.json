@@ -40,6 +40,7 @@
       "child_sd_preflight_validation",
       "negative_constraints_global",
       "sd_type_workflow_paths",
+      "sd_type_validation_requirements",
       "work_tracking_policy",
       "genesis_codebase"
     ]
@@ -48,6 +49,8 @@
     "description": "LEAD phase operations (~25-30k chars)",
     "sections": [
       "mandatory_phase_transitions_lead",
+      "sd_creation_process",
+      "sd_creation_errors",
       "lead_operations",
       "lead_explore_integration",
       "directive_submission_review",
