@@ -1,0 +1,179 @@
+name: LEO Bypass Detection
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'scripts/**'
+      - 'lib/**'
+      - 'database/**'
+      - '.github/workflows/**'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/**'
+      - 'lib/**'
+      - 'database/**'
+  workflow_dispatch:
+    inputs:
+      sd_id:
+        description: 'Specific SD ID to validate (leave empty for all recent)'
+        required: false
+        type: string
+      validate_all:
+        description: 'Validate all SDs (not just recent)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  leo-bypass-validation:
+    name: LEO Protocol Bypass Detection
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Bypass Detection
+        id: bypass-detection
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "============================================================"
+          echo "  LEO Protocol Bypass Detection Validator"
+          echo "============================================================"
+          echo ""
+
+          # Determine arguments
+          ARGS=""
+          if [ -n "${{ github.event.inputs.sd_id }}" ]; then
+            ARGS="--sd=${{ github.event.inputs.sd_id }}"
+          fi
+          if [ "${{ github.event.inputs.validate_all }}" == "true" ]; then
+            ARGS="$ARGS --all"
+          fi
+
+          # Run the validator
+          node --experimental-vm-modules scripts/modules/bypass-detection-validator.js $ARGS
+
+          # Capture exit code
+          EXIT_CODE=$?
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+          exit $EXIT_CODE
+
+      - name: Upload JSON Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bypass-detection-report
+          path: .leo-validation/bypass-detection-report.json
+          retention-days: 30
+
+      - name: Upload Markdown Summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bypass-detection-summary
+          path: .leo-validation/bypass-detection-summary.md
+          retention-days: 30
+
+      - name: Add Summary to Job
+        if: always()
+        run: |
+          if [ -f ".leo-validation/bypass-detection-summary.md" ]; then
+            cat .leo-validation/bypass-detection-summary.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## LEO Bypass Detection" >> $GITHUB_STEP_SUMMARY
+            echo "No summary file generated" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Comment on PR (if findings)
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            let reportSummary = 'Bypass detection found workflow order violations.';
+
+            try {
+              if (fs.existsSync('.leo-validation/bypass-detection-report.json')) {
+                const report = JSON.parse(fs.readFileSync('.leo-validation/bypass-detection-report.json', 'utf8'));
+                reportSummary = `
+            **Bypass Detection Found ${report.findings_count} violation(s)**
+
+            | SD ID | Artifact | Prerequisite | Time Delta |
+            |-------|----------|--------------|------------|
+            ${report.findings.map(f => `| ${f.sd_id} | ${f.artifact_type} | ${f.prerequisite_type} | ${f.time_delta_seconds}s |`).join('\n')}
+
+            > Artifacts were created before their prerequisite steps completed. This may indicate workflow bypass.
+            `;
+              }
+            } catch (e) {
+              console.log('Could not read report:', e);
+            }
+
+            const comment = `
+            ## :warning: LEO Protocol Bypass Detected
+
+            ${reportSummary}
+
+            ### What This Means
+            The LEO Protocol requires artifacts to be created in chronological order:
+            1. LEAD-TO-PLAN handoff accepted
+            2. PRD created
+            3. PLAN-TO-EXEC handoff accepted
+            4. Implementation
+            5. EXEC-TO-PLAN handoff accepted
+            6. Retrospective created
+            7. PLAN-TO-LEAD handoff accepted
+            8. LEAD-FINAL-APPROVAL accepted
+
+            ### How to Fix
+            - Ensure workflow steps are executed in the correct order
+            - Do not create artifacts retroactively
+            - Use proper handoff commands: \`node scripts/handoff.js execute <TYPE> <SD-KEY>\`
+
+            View the [workflow run](${context.payload.repository.html_url}/actions/runs/${context.runId}) for details.
+            `;
+
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+
+  # Summary job for status check
+  bypass-validation-result:
+    name: Bypass Validation Result
+    needs: leo-bypass-validation
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Check Result
+        run: |
+          if [ "${{ needs.leo-bypass-validation.result }}" == "success" ]; then
+            echo "✅ LEO Protocol bypass detection passed"
+            echo "All artifacts are in correct chronological order"
+            exit 0
+          else
+            echo "❌ LEO Protocol bypass detection failed"
+            echo "Some artifacts may have been created out of order"
+            echo ""
+            echo "Review the workflow run for details on which artifacts"
+            echo "were created before their prerequisite steps completed."
+            exit 1
+          fi
