@@ -14,7 +14,7 @@ This directory contains user guides, setup instructions, and operational procedu
 | [LEO Protocol](#leo-protocol--sub-agents) | 9 | Protocol usage, sub-agents, enforcement |
 | [Database](#database) | 5 | Migrations, architecture, connectivity |
 | [Testing](#testing--qa) | 8 | UAT, E2E, debugging |
-| [Project Setup](#project-setup) | 4 | Getting started guides |
+| [Project Setup](#project-setup) | 6 | Getting started guides |
 | [SD/PRD Creation](#sdprd-creation) | 7 | Strategic directives and PRDs |
 | [UI & Design](#ui--design) | 3 | Design workflow, validation |
 | [AI & Semantic Search](#ai--semantic-search) | 5 | AI tools, semantic search |
@@ -22,7 +22,7 @@ This directory contains user guides, setup instructions, and operational procedu
 | [Integration](#integration) | 4 | Multi-app, Supabase |
 | [Other](#other-guides) | 3 | Miscellaneous guides |
 
-**Total Guides**: 54
+**Total Guides**: 56
 
 ---
 
@@ -77,6 +77,8 @@ This directory contains user guides, setup instructions, and operational procedu
 | [EHG_ENGINEER_README.md](EHG_ENGINEER_README.md) | EHG Engineer application overview |
 | [PROJECT_REGISTRATION_GUIDE.md](PROJECT_REGISTRATION_GUIDE.md) | Project registration process |
 | [team-migration-guide.md](team-migration-guide.md) | Team migration procedures |
+| [leo-stack-management.md](leo-stack-management.md) | **LEO Stack** - Server management (cross-platform) |
+| [windows-setup-guide.md](windows-setup-guide.md) | Windows native environment setup |
 
 ---
 

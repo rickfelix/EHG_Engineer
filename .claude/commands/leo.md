@@ -14,25 +14,25 @@ Based on the argument provided, execute the appropriate action:
 ### If argument is "start" or "s":
 Run the LEO stack start command:
 ```bash
-bash scripts/leo-stack.sh start
+node scripts/cross-platform-run.js leo-stack start
 ```
 
 ### If argument is "restart" or "r":
 Run the LEO stack restart command:
 ```bash
-bash scripts/leo-stack.sh restart
+node scripts/cross-platform-run.js leo-stack restart
 ```
 
 ### If argument is "stop" or "x":
 Run the LEO stack stop command:
 ```bash
-bash scripts/leo-stack.sh stop
+node scripts/cross-platform-run.js leo-stack stop
 ```
 
 ### If argument is "status" or "st":
 Run the LEO stack status command:
 ```bash
-bash scripts/leo-stack.sh status
+node scripts/cross-platform-run.js leo-stack status
 ```
 
 ### If argument is "next" or "n":
@@ -44,7 +44,7 @@ npm run sd:next
 ### If argument is "fast" or "f":
 Run fast restart (reduced delays):
 ```bash
-bash scripts/leo-stack.sh restart --fast
+node scripts/cross-platform-run.js leo-stack restart -Fast
 ```
 
 ### If no argument provided:
@@ -76,7 +76,9 @@ Then ask the user which action they'd like to take.
 - Engineer runs on port 3000
 - App runs on port 8080
 - Agent Platform runs on port 8000
-- Stack script: scripts/leo-stack.sh
+- Cross-platform runner: `node scripts/cross-platform-run.js leo-stack [command]`
+- Windows: Uses `scripts/leo-stack.ps1` (PowerShell)
+- Linux/macOS: Uses `scripts/leo-stack.sh` (Bash)
 
 ## Command Ecosystem Integration
 

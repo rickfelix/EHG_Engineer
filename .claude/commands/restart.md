@@ -4,11 +4,15 @@ Restart all LEO Stack servers.
 
 ## Instructions
 
-Run the LEO stack restart script:
+Run the LEO stack restart script using the cross-platform runner:
 
 ```bash
-bash scripts/leo-stack.sh restart
+node scripts/cross-platform-run.js leo-stack restart
 ```
+
+This uses the appropriate script for the current platform:
+- **Windows**: Uses `leo-stack.ps1` (PowerShell)
+- **Linux/macOS/WSL**: Uses `leo-stack.sh` (Bash)
 
 This restarts all three servers:
 - EHG_Engineer (port 3000)

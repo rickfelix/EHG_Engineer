@@ -1,0 +1,71 @@
+Traceback (most recent call last):
+  File [35m"<frozen runpy>"[0m, line [35m198[0m, in [35m_run_module_as_main[0m
+  File [35m"<frozen runpy>"[0m, line [35m88[0m, in [35m_run_code[0m
+  File [35m"C:\Users\rickf\Projects\_EHG\ehg\agent-platform\venv_win\Lib\site-packages\uvicorn\__main__.py"[0m, line [35m4[0m, in [35m<module>[0m
+    [31muvicorn.main[0m[1;31m()[0m
+    [31m~~~~~~~~~~~~[0m[1;31m^^[0m
+  File [35m"C:\Users\rickf\Projects\_EHG\ehg\agent-platform\venv_win\Lib\site-packages\click\core.py"[0m, line [35m1485[0m, in [35m__call__[0m
+    return [31mself.main[0m[1;31m(*args, **kwargs)[0m
+           [31m~~~~~~~~~[0m[1;31m^^^^^^^^^^^^^^^^^[0m
+  File [35m"C:\Users\rickf\Projects\_EHG\ehg\agent-platform\venv_win\Lib\site-packages\click\core.py"[0m, line [35m1406[0m, in [35mmain[0m
+    rv = self.invoke(ctx)
+  File [35m"C:\Users\rickf\Projects\_EHG\ehg\agent-platform\venv_win\Lib\site-packages\click\core.py"[0m, line [35m1269[0m, in [35minvoke[0m
+    return [31mctx.invoke[0m[1;31m(self.callback, **ctx.params)[0m
+           [31m~~~~~~~~~~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"C:\Users\rickf\Projects\_EHG\ehg\agent-platform\venv_win\Lib\site-packages\click\core.py"[0m, line [35m824[0m, in [35minvoke[0m
+    return callback(*args, **kwargs)
+  File [35m"C:\Users\rickf\Projects\_EHG\ehg\agent-platform\venv_win\Lib\site-packages\uvicorn\main.py"[0m, line [35m416[0m, in [35mmain[0m
+    [31mrun[0m[1;31m([0m
+    [31m~~~[0m[1;31m^[0m
+        [1;31mapp,[0m
+        [1;31m^^^^[0m
+    ...<45 lines>...
+        [1;31mh11_max_incomplete_event_size=h11_max_incomplete_event_size,[0m
+        [1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+    [1;31m)[0m
+    [1;31m^[0m
+  File [35m"C:\Users\rickf\Projects\_EHG\ehg\agent-platform\venv_win\Lib\site-packages\uvicorn\main.py"[0m, line [35m587[0m, in [35mrun[0m
+    [31mserver.run[0m[1;31m()[0m
+    [31m~~~~~~~~~~[0m[1;31m^^[0m
+  File [35m"C:\Users\rickf\Projects\_EHG\ehg\agent-platform\venv_win\Lib\site-packages\uvicorn\server.py"[0m, line [35m61[0m, in [35mrun[0m
+    return [31masyncio.run[0m[1;31m(self.serve(sockets=sockets))[0m
+           [31m~~~~~~~~~~~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"C:\Users\rickf\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py"[0m, line [35m195[0m, in [35mrun[0m
+    return [31mrunner.run[0m[1;31m(main)[0m
+           [31m~~~~~~~~~~[0m[1;31m^^^^^^[0m
+  File [35m"C:\Users\rickf\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py"[0m, line [35m118[0m, in [35mrun[0m
+    return [31mself._loop.run_until_complete[0m[1;31m(task)[0m
+           [31m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m[1;31m^^^^^^[0m
+  File [35m"C:\Users\rickf\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py"[0m, line [35m725[0m, in [35mrun_until_complete[0m
+    return [31mfuture.result[0m[1;31m()[0m
+           [31m~~~~~~~~~~~~~[0m[1;31m^^[0m
+  File [35m"C:\Users\rickf\Projects\_EHG\ehg\agent-platform\venv_win\Lib\site-packages\uvicorn\server.py"[0m, line [35m68[0m, in [35mserve[0m
+    [31mconfig.load[0m[1;31m()[0m
+    [31m~~~~~~~~~~~[0m[1;31m^^[0m
+  File [35m"C:\Users\rickf\Projects\_EHG\ehg\agent-platform\venv_win\Lib\site-packages\uvicorn\config.py"[0m, line [35m467[0m, in [35mload[0m
+    self.loaded_app = [31mimport_from_string[0m[1;31m(self.app)[0m
+                      [31m~~~~~~~~~~~~~~~~~~[0m[1;31m^^^^^^^^^^[0m
+  File [35m"C:\Users\rickf\Projects\_EHG\ehg\agent-platform\venv_win\Lib\site-packages\uvicorn\importer.py"[0m, line [35m24[0m, in [35mimport_from_string[0m
+    raise exc from None
+  File [35m"C:\Users\rickf\Projects\_EHG\ehg\agent-platform\venv_win\Lib\site-packages\uvicorn\importer.py"[0m, line [35m21[0m, in [35mimport_from_string[0m
+    module = importlib.import_module(module_str)
+  File [35m"C:\Users\rickf\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py"[0m, line [35m88[0m, in [35mimport_module[0m
+    return [31m_bootstrap._gcd_import[0m[1;31m(name[level:], package, level)[0m
+           [31m~~~~~~~~~~~~~~~~~~~~~~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  File [35m"<frozen importlib._bootstrap>"[0m, line [35m1387[0m, in [35m_gcd_import[0m
+  File [35m"<frozen importlib._bootstrap>"[0m, line [35m1360[0m, in [35m_find_and_load[0m
+  File [35m"<frozen importlib._bootstrap>"[0m, line [35m1331[0m, in [35m_find_and_load_unlocked[0m
+  File [35m"<frozen importlib._bootstrap>"[0m, line [35m935[0m, in [35m_load_unlocked[0m
+  File [35m"<frozen importlib._bootstrap_external>"[0m, line [35m1023[0m, in [35mexec_module[0m
+  File [35m"<frozen importlib._bootstrap>"[0m, line [35m488[0m, in [35m_call_with_frames_removed[0m
+  File [35m"C:\Users\rickf\Projects\_EHG\ehg\agent-platform\main.py"[0m, line [35m18[0m, in [35m<module>[0m
+    from app.api import research, agents, crews, knowledge, ventures, complexity, tools, memory, code_generation, stages
+  File [35m"C:\Users\rickf\Projects\_EHG\ehg\agent-platform\app\api\research.py"[0m, line [35m14[0m, in [35m<module>[0m
+    from app.services.research_orchestrator import execute_research_task, _research_service
+  File [35m"C:\Users\rickf\Projects\_EHG\ehg\agent-platform\app\services\research_orchestrator.py"[0m, line [35m12[0m, in [35m<module>[0m
+    from app.agents.market_sizing import MarketSizingAgent
+  File [35m"C:\Users\rickf\Projects\_EHG\ehg\agent-platform\app\agents\__init__.py"[0m, line [35m3[0m, in [35m<module>[0m
+    from .base_agent import BaseResearchAgent
+  File [35m"C:\Users\rickf\Projects\_EHG\ehg\agent-platform\app\agents\base_agent.py"[0m, line [35m16[0m, in [35m<module>[0m
+    from langchain_openai import ChatOpenAI
+[1;35mModuleNotFoundError[0m: [35mNo module named 'langchain_openai'[0m

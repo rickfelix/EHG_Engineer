@@ -94,7 +94,7 @@ function Clear-Port {
     )
 
     if (Test-PortInUse -Port $Port) {
-        Write-Log "INFO" "🧹 Cleaning up processes on port $Port ($Name)..." "Yellow"
+        Write-Log "INFO" "[CLEAN] Cleaning up processes on port $Port ($Name)..." "Yellow"
 
         $connections = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
         $pids = $connections | Select-Object -ExpandProperty OwningProcess -Unique
@@ -102,7 +102,7 @@ function Clear-Port {
         foreach ($processId in $pids) {
             $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
             if ($proc) {
-                Write-Log "INFO" "   - Stopping PID $processId`: $($proc.ProcessName)" "Yellow"
+                Write-Log "INFO" "   - Stopping PID $processId : $($proc.ProcessName)" "Yellow"
                 Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
             }
         }
@@ -110,11 +110,11 @@ function Clear-Port {
         Start-Sleep -Seconds 2
 
         if (Test-PortInUse -Port $Port) {
-            Write-Log "ERROR" "   ⚠️  Port $Port still in use after cleanup" "Red"
+            Write-Log "ERROR" "   [WARN] Port $Port still in use after cleanup" "Red"
             return $false
         }
 
-        Write-Log "INFO" "   ✅ Port $Port is now free" "Green"
+        Write-Log "INFO" "   [OK] Port $Port is now free" "Green"
     }
 
     return $true
@@ -122,10 +122,10 @@ function Clear-Port {
 
 # Function to start EHG_Engineer server (port 3000)
 function Start-Engineer {
-    Write-Log "INFO" "🔧 Starting EHG_Engineer server (port 3000)..." "Blue"
+    Write-Log "INFO" "[TOOL] Starting EHG_Engineer server (port 3000)..." "Blue"
 
     if (Test-PortInUse -Port 3000) {
-        Write-Log "WARN" "⚠️  Port 3000 already in use - cleaning up..." "Yellow"
+        Write-Log "WARN" "[WARN] Port 3000 already in use - cleaning up..." "Yellow"
         if (-not (Clear-Port -Port 3000 -Name "EHG_Engineer")) {
             return $false
         }
@@ -145,13 +145,13 @@ function Start-Engineer {
     Start-Sleep -Seconds 2
 
     if (-not $process.HasExited) {
-        Write-Log "INFO" "✅ EHG_Engineer server started (PID: $($process.Id))" "Green"
-        Write-Log "INFO" "   📍 http://localhost:3000" "White"
-        Write-Log "INFO" "   📋 Log: $serverLog" "White"
+        Write-Log "INFO" "[OK] EHG_Engineer server started (PID: $($process.Id))" "Green"
+        Write-Log "INFO" "   * http://localhost:3000" "White"
+        Write-Log "INFO" "   * Log: $serverLog" "White"
         Pop-Location
         return $true
     } else {
-        Write-Log "ERROR" "❌ EHG_Engineer failed to start! Check log: $serverLog" "Red"
+        Write-Log "ERROR" "[ERROR] EHG_Engineer failed to start! Check log: $serverLog" "Red"
         Pop-Location
         return $false
     }
@@ -159,10 +159,10 @@ function Start-Engineer {
 
 # Function to start EHG App frontend (port 8080)
 function Start-App {
-    Write-Log "INFO" "🎨 Starting EHG App frontend (port 8080)..." "Blue"
+    Write-Log "INFO" "[UI] Starting EHG App frontend (port 8080)..." "Blue"
 
     if (Test-PortInUse -Port 8080) {
-        Write-Log "WARN" "⚠️  Port 8080 already in use - cleaning up..." "Yellow"
+        Write-Log "WARN" "[WARN] Port 8080 already in use - cleaning up..." "Yellow"
         if (-not (Clear-Port -Port 8080 -Name "EHG App")) {
             return $false
         }
@@ -181,13 +181,13 @@ function Start-App {
     Start-Sleep -Seconds 3
 
     if (-not $process.HasExited) {
-        Write-Log "INFO" "✅ EHG App frontend started (PID: $($process.Id))" "Green"
-        Write-Log "INFO" "   📍 http://localhost:8080" "White"
-        Write-Log "INFO" "   📋 Log: $appLog" "White"
+        Write-Log "INFO" "[OK] EHG App frontend started (PID: $($process.Id))" "Green"
+        Write-Log "INFO" "   * http://localhost:8080" "White"
+        Write-Log "INFO" "   * Log: $appLog" "White"
         Pop-Location
         return $true
     } else {
-        Write-Log "ERROR" "❌ EHG App failed to start! Check log: $appLog" "Red"
+        Write-Log "ERROR" "[ERROR] EHG App failed to start! Check log: $appLog" "Red"
         Pop-Location
         return $false
     }
@@ -195,10 +195,10 @@ function Start-App {
 
 # Function to start Agent Platform backend (port 8000)
 function Start-Agent {
-    Write-Log "INFO" "🤖 Starting Agent Platform backend (port 8000)..." "Blue"
+    Write-Log "INFO" "[AGENT] Starting Agent Platform backend (port 8000)..." "Blue"
 
     if (Test-PortInUse -Port 8000) {
-        Write-Log "WARN" "⚠️  Port 8000 already in use - cleaning up..." "Yellow"
+        Write-Log "WARN" "[WARN] Port 8000 already in use - cleaning up..." "Yellow"
         if (-not (Clear-Port -Port 8000 -Name "Agent Platform")) {
             return $false
         }
@@ -218,7 +218,7 @@ function Start-Agent {
     }
 
     if (-not $venvPath) {
-        Write-Log "ERROR" "⚠️  Virtual environment not found. Run: .\agent-platform\INSTALL.ps1" "Yellow"
+        Write-Log "ERROR" "[WARN] Virtual environment not found. Run: .\agent-platform\INSTALL.ps1" "Yellow"
         Pop-Location
         return $false
     }
@@ -236,14 +236,14 @@ function Start-Agent {
     Start-Sleep -Seconds 5
 
     if (-not $process.HasExited) {
-        Write-Log "INFO" "✅ Agent Platform backend started (PID: $($process.Id))" "Green"
-        Write-Log "INFO" "   📍 http://localhost:8000" "White"
-        Write-Log "INFO" "   📚 API Docs: http://localhost:8000/api/docs" "White"
-        Write-Log "INFO" "   📋 Log: $agentLog" "White"
+        Write-Log "INFO" "[OK] Agent Platform backend started (PID: $($process.Id))" "Green"
+        Write-Log "INFO" "   * http://localhost:8000" "White"
+        Write-Log "INFO" "   * API Docs: http://localhost:8000/api/docs" "White"
+        Write-Log "INFO" "   * Log: $agentLog" "White"
         Pop-Location
         return $true
     } else {
-        Write-Log "ERROR" "❌ Agent Platform failed to start! Check log: $agentLog" "Red"
+        Write-Log "ERROR" "[ERROR] Agent Platform failed to start! Check log: $agentLog" "Red"
         Pop-Location
         return $false
     }
@@ -257,39 +257,39 @@ function Stop-Server {
     )
 
     if (Test-Path $PidFile) {
-        $pid = Get-Content $PidFile -ErrorAction SilentlyContinue
-        if ($pid) {
-            $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+        $pidValue = Get-Content $PidFile -ErrorAction SilentlyContinue
+        if ($pidValue) {
+            $process = Get-Process -Id $pidValue -ErrorAction SilentlyContinue
             if ($process) {
-                Write-Log "INFO" "Stopping $Name (PID: $pid)..." "Yellow"
-                Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                Write-Log "INFO" "Stopping $Name (PID: $pidValue)..." "Yellow"
+                Stop-Process -Id $pidValue -Force -ErrorAction SilentlyContinue
 
                 # Wait for process to exit
                 $waited = 0
-                while ((Get-Process -Id $pid -ErrorAction SilentlyContinue) -and ($waited -lt $ShutdownGracePeriod)) {
+                while ((Get-Process -Id $pidValue -ErrorAction SilentlyContinue) -and ($waited -lt $ShutdownGracePeriod)) {
                     Start-Sleep -Seconds 1
                     $waited++
                 }
 
-                if (Get-Process -Id $pid -ErrorAction SilentlyContinue) {
-                    Write-Log "WARN" "⚠️  $Name still running, force killing..." "Yellow"
-                    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                if (Get-Process -Id $pidValue -ErrorAction SilentlyContinue) {
+                    Write-Log "WARN" "[WARN] $Name still running, force killing..." "Yellow"
+                    Stop-Process -Id $pidValue -Force -ErrorAction SilentlyContinue
                 }
 
-                Write-Log "INFO" "✅ Stopped $Name" "Green"
+                Write-Log "INFO" "[OK] Stopped $Name" "Green"
             } else {
-                Write-Log "WARN" "⚠️  $Name not running (stale PID file)" "Yellow"
+                Write-Log "WARN" "[WARN] $Name not running (stale PID file)" "Yellow"
             }
         }
         Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
     } else {
-        Write-Log "WARN" "⚠️  $Name PID file not found" "Yellow"
+        Write-Log "WARN" "[WARN] $Name PID file not found" "Yellow"
     }
 }
 
 # Function to stop all servers
 function Stop-AllServers {
-    Write-Log "INFO" "🛑 Stopping all servers..." "Red"
+    Write-Log "INFO" "[STOP] Stopping all servers..." "Red"
     Write-Host "=================================="
 
     Stop-Server -PidFile $AgentPidFile -Name "Agent Platform"
@@ -306,17 +306,17 @@ function Stop-AllServers {
     # Clean any remaining processes on ports
     foreach ($port in @(3000, 8080, 8000)) {
         if (Test-PortInUse -Port $port) {
-            Write-Log "WARN" "⚠️  Port $port still in use, cleaning up..." "Yellow"
+            Write-Log "WARN" "[WARN] Port $port still in use, cleaning up..." "Yellow"
             Clear-Port -Port $port -Name "Port $port"
         }
     }
 
-    Write-Log "INFO" "✅ All servers stopped" "Green"
+    Write-Log "INFO" "[OK] All servers stopped" "Green"
 }
 
 # Function to show server status
 function Show-Status {
-    Write-Log "INFO" "📊 Server Status:" "Blue"
+    Write-Log "INFO" "[STATUS] Server Status:" "Blue"
     Write-Host "=================================="
 
     function Check-ServerStatus {
@@ -327,19 +327,19 @@ function Show-Status {
         )
 
         if (Test-Path $PidFile) {
-            $pid = Get-Content $PidFile -ErrorAction SilentlyContinue
-            $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+            $pidValue = Get-Content $PidFile -ErrorAction SilentlyContinue
+            $process = Get-Process -Id $pidValue -ErrorAction SilentlyContinue
             if ($process) {
-                Write-Log "INFO" "✅ $Name`: Running (PID: $pid, Port: $Port)" "Green"
+                Write-Log "INFO" "[OK] $Name : Running (PID: $pidValue, Port: $Port)" "Green"
                 return
             }
         }
 
         if (Test-PortInUse -Port $Port) {
             $proc = Get-ProcessOnPort -Port $Port
-            Write-Log "INFO" "⚠️  $Name`: Running (no PID file, Port: $Port, PID: $($proc.Id))" "Yellow"
+            Write-Log "INFO" "[WARN] $Name : Running (no PID file, Port: $Port, PID: $($proc.Id))" "Yellow"
         } else {
-            Write-Log "INFO" "❌ $Name`: Not running" "Red"
+            Write-Log "INFO" "[--] $Name : Not running" "Red"
         }
     }
 
@@ -353,13 +353,13 @@ function Show-Status {
     $os = Get-CimInstance Win32_OperatingSystem
     $freeMemMB = [math]::Round($os.FreePhysicalMemory / 1024)
     $totalMemMB = [math]::Round($os.TotalVisibleMemorySize / 1024)
-    Write-Log "INFO" "📊 Memory: ${freeMemMB}MB free / ${totalMemMB}MB total" "White"
+    Write-Log "INFO" "[MEM] Memory: ${freeMemMB}MB free / ${totalMemMB}MB total" "White"
 }
 
 # Function to start all servers
 function Start-AllServers {
     $modeText = if ($Fast) { "(FAST MODE)" } else { "" }
-    Write-Log "INFO" "🚀 Starting LEO Stack $modeText..." "Blue"
+    Write-Log "INFO" "[START] Starting LEO Stack $modeText..." "Blue"
     Write-Host "=================================="
 
     # Clean up any existing processes
@@ -392,8 +392,8 @@ function Start-AllServers {
     }
 
     Write-Host "=================================="
-    Write-Log "INFO" "✨ LEO Stack startup complete!" "Green"
-    Write-Log "INFO" "📋 Log file: $LogFile" "Magenta"
+    Write-Log "INFO" "[DONE] LEO Stack startup complete!" "Green"
+    Write-Log "INFO" "[LOG] Log file: $LogFile" "Magenta"
     Write-Host ""
 
     Start-Sleep -Seconds 2
@@ -403,29 +403,29 @@ function Start-AllServers {
 # Function to restart all servers
 function Restart-AllServers {
     $modeText = if ($Fast) { "(FAST MODE)" } else { "" }
-    Write-Log "INFO" "🔄 Restarting LEO Stack $modeText..." "Blue"
+    Write-Log "INFO" "[RESTART] Restarting LEO Stack $modeText..." "Blue"
     Write-Host "=================================="
 
     Stop-AllServers
 
-    Write-Log "INFO" "⚠️  COOLDOWN: Waiting ${RestartCooldown}s..." "Yellow"
+    Write-Log "INFO" "[WAIT] COOLDOWN: Waiting ${RestartCooldown}s..." "Yellow"
     Start-Sleep -Seconds $RestartCooldown
 
     # Verify ports are free
     $portsClear = $true
     foreach ($port in @(3000, 8080, 8000)) {
         if (Test-PortInUse -Port $port) {
-            Write-Log "ERROR" "⚠️  Port $port still in use!" "Red"
+            Write-Log "ERROR" "[WARN] Port $port still in use!" "Red"
             $portsClear = $false
         }
     }
 
     if (-not $portsClear) {
-        Write-Log "ERROR" "⚠️  Not all ports cleared. Run 'clean' command first." "Red"
+        Write-Log "ERROR" "[WARN] Not all ports cleared. Run 'clean' command first." "Red"
         return
     }
 
-    Write-Log "INFO" "✅ All ports clear, starting servers..." "Green"
+    Write-Log "INFO" "[OK] All ports clear, starting servers..." "Green"
     Write-Host "=================================="
 
     Start-AllServers
@@ -433,7 +433,7 @@ function Restart-AllServers {
 
 # Function for emergency cleanup
 function Invoke-EmergencyCleanup {
-    Write-Log "WARN" "🚨 EMERGENCY CLEANUP MODE" "Red"
+    Write-Log "WARN" "[EMERGENCY] EMERGENCY CLEANUP MODE" "Red"
     Write-Host "This will force-kill all node, npm, and python processes!" -ForegroundColor Yellow
     $reply = Read-Host "Are you sure? (yes/NO)"
 
@@ -462,9 +462,9 @@ function Invoke-EmergencyCleanup {
     # Verify ports are clear
     foreach ($port in @(3000, 8080, 8000)) {
         if (Test-PortInUse -Port $port) {
-            Write-Log "ERROR" "⚠️  Port $port still in use" "Red"
+            Write-Log "ERROR" "[WARN] Port $port still in use" "Red"
         } else {
-            Write-Log "INFO" "✅ Port $port cleared" "Green"
+            Write-Log "INFO" "[OK] Port $port cleared" "Green"
         }
     }
 
@@ -477,7 +477,7 @@ function Show-Help {
     Write-Host "LEO Stack Management Script - Windows PowerShell" -ForegroundColor Cyan
     Write-Host "================================================" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "Usage: .\scripts\leo-stack.ps1 <command> [-Fast]" -ForegroundColor White
+    Write-Host "Usage: .\scripts\leo-stack.ps1 [command] [-Fast]" -ForegroundColor White
     Write-Host ""
     Write-Host "Primary Commands:" -ForegroundColor Yellow
     Write-Host "  start            - Start all LEO Stack servers" -ForegroundColor White
@@ -497,7 +497,7 @@ function Show-Help {
     Write-Host "  start-agent      - Start only Agent Platform (8000)" -ForegroundColor White
     Write-Host ""
     Write-Host "Servers:" -ForegroundColor Yellow
-    Write-Host "  Port 3000 - EHG_Engineer (LEO Protocol Framework & Backend API)" -ForegroundColor White
+    Write-Host "  Port 3000 - EHG_Engineer (LEO Protocol Framework, Backend API)" -ForegroundColor White
     Write-Host "  Port 8080 - EHG App (Frontend UI with Vite)" -ForegroundColor White
     Write-Host "  Port 8000 - Agent Platform (AI Research Backend)" -ForegroundColor White
     Write-Host ""

@@ -1,0 +1,11 @@
+❌ Database query error: {
+  message: [32m'Invalid API key'[39m,
+  hint: [32m'Double check your Supabase `anon` or `service_role` API key.'[39m
+}
+❌ Database version detection failed: Database query failed: Invalid API key
+Error loading state: Error: Database query failed: Invalid API key
+    at LEOVersionDetector.detectLatestVersion [90m(file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/[39msrc/services/version-detector.js:50:15[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+    at async LEOVersionDetector.getVersion [90m(file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/[39msrc/services/version-detector.js:71:12[90m)[39m
+    at async loadState [90m(file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/[39mserver.js:155:18[90m)[39m
+    at async startServer [90m(file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/[39mserver.js:2648:3[90m)[39m
