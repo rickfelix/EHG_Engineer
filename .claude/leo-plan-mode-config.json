@@ -1,0 +1,9 @@
+{
+  "leo_plan_mode": {
+    "enabled": true,
+    "auto_enter_on_sd_detection": true,
+    "auto_exit_on_exec_phase": true,
+    "permission_pre_approval": true
+  },
+  "_comment": "LEO Protocol Plan Mode Integration Configuration (SD-PLAN-MODE-001)"
+}
