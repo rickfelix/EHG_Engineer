@@ -948,7 +948,8 @@ export class ValidatorRegistry {
         issues.push('SD is blocked');
       }
 
-      const validStatuses = ['approved', 'planning', 'in_progress'];
+      // SD-LIFECYCLE-GAP-005: Include 'draft' as valid starting status for LEAD-TO-PLAN
+      const validStatuses = ['approved', 'planning', 'in_progress', 'draft'];
       if (!validStatuses.includes(sd.status)) {
         issues.push(`SD status ${sd.status} not valid for transition`);
       }
