@@ -1,20 +1,25 @@
 /**
  * LEOPlanModeOrchestrator - Claude Code Plan Mode Integration
  * Orchestrates automatic Plan Mode activation at LEO Protocol phase boundaries.
+ *
+ * SD-PLAN-MODE-002: Now writes LEO protocol action plans to Claude Code's plan file
  */
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getPermissionsForPhase, getCombinedPermissions } from './phase-permissions.js';
+import { getPlanTemplate, getPlanFilename } from './plan-templates.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PLAN_MODE_STATE_FILE = path.join(
-  process.env.HOME || process.env.USERPROFILE || '/tmp',
-  '.claude-plan-mode-state.json'
-);
+const HOME_DIR = process.env.HOME || process.env.USERPROFILE || '/tmp';
+
+const PLAN_MODE_STATE_FILE = path.join(HOME_DIR, '.claude-plan-mode-state.json');
+
+// Claude Code stores plans in ~/.claude/plans/
+const CLAUDE_PLANS_DIR = path.join(HOME_DIR, '.claude', 'plans');
 
 const LEO_CONFIG_FILE = path.join(__dirname, '../../../.claude/leo-plan-mode-config.json');
 
@@ -54,28 +59,88 @@ export class LEOPlanModeOrchestrator {
     }
   }
 
+  /**
+   * Write LEO protocol plan to Claude Code's plan file
+   * SD-PLAN-MODE-002
+   */
+  writePlanFile(sdId, phase, sdTitle = null) {
+    try {
+      // Ensure plans directory exists
+      if (!fs.existsSync(CLAUDE_PLANS_DIR)) {
+        fs.mkdirSync(CLAUDE_PLANS_DIR, { recursive: true });
+        this._log('info', `Created plans directory: ${CLAUDE_PLANS_DIR}`);
+      }
+
+      const filename = getPlanFilename(sdId, phase);
+      const planPath = path.join(CLAUDE_PLANS_DIR, filename);
+      const planContent = getPlanTemplate(phase, sdId, sdTitle);
+
+      fs.writeFileSync(planPath, planContent, 'utf8');
+      this._log('info', `Plan file written: ${filename}`);
+
+      return { success: true, path: planPath, filename };
+    } catch (error) {
+      this._log('error', `Could not write plan file: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get the current plan file path for an SD
+   */
+  getPlanFilePath(sdId, phase) {
+    const filename = getPlanFilename(sdId, phase);
+    return path.join(CLAUDE_PLANS_DIR, filename);
+  }
+
+  /**
+   * Read the current plan file content
+   */
+  readPlanFile(sdId, phase) {
+    try {
+      const planPath = this.getPlanFilePath(sdId, phase);
+      if (fs.existsSync(planPath)) {
+        return fs.readFileSync(planPath, 'utf8');
+      }
+    } catch (error) {
+      this._log('warn', `Could not read plan file: ${error.message}`);
+    }
+    return null;
+  }
+
   async requestPlanModeEntry(options) {
-    const { sdId, phase, reason = 'phase_transition' } = options;
+    const { sdId, phase, reason = 'phase_transition', sdTitle = null } = options;
 
     if (!this.isEnabled()) {
       return { success: false, skipped: true, reason: 'Plan Mode integration disabled' };
     }
 
+    const normalizedPhase = (phase || 'LEAD').toUpperCase();
+
+    // SD-PLAN-MODE-002: Write LEO protocol plan to Claude Code's plan file
+    const planResult = this.writePlanFile(sdId, normalizedPhase, sdTitle);
+
     const state = {
       requested: true,
       sdId,
-      phase: (phase || 'LEAD').toUpperCase(),
+      phase: normalizedPhase,
       reason,
       requestedAt: new Date().toISOString(),
-      permissions: getPermissionsForPhase(phase)
+      permissions: getPermissionsForPhase(phase),
+      planFile: planResult.success ? planResult.path : null
     };
 
     this._saveState(state);
     this._log('info', `Plan Mode entry requested for ${state.phase} phase`);
 
+    if (planResult.success) {
+      this._log('info', `LEO plan loaded: ${planResult.filename}`);
+    }
+
     return {
       success: true,
       state,
+      planFile: planResult,
       message: this._formatPlanModeMessage(state)
     };
   }
@@ -118,14 +183,19 @@ export class LEOPlanModeOrchestrator {
   }
 
   _formatPlanModeMessage(state) {
+    const planInfo = state.planFile
+      ? `Plan: LEO ${state.phase} actions loaded`
+      : 'Plan: (no plan file)';
+
     const lines = [
       '',
-      '+---------------------------------------------------------+',
-      `|  Plan Mode ACTIVE for ${state.phase} phase`.padEnd(58) + '|',
-      '+---------------------------------------------------------+',
-      `|  SD: ${(state.sdId || 'Unknown').substring(0, 50)}`.padEnd(58) + '|',
-      `|  Permissions: ${state.permissions.length} pre-approved`.padEnd(58) + '|',
-      '+---------------------------------------------------------+',
+      '╔═════════════════════════════════════════════════════════╗',
+      `║  LEO Plan Mode ACTIVE - ${state.phase} Phase`.padEnd(58) + '║',
+      '╠═════════════════════════════════════════════════════════╣',
+      `║  SD: ${(state.sdId || 'Unknown').substring(0, 50)}`.padEnd(58) + '║',
+      `║  ${planInfo}`.padEnd(58) + '║',
+      `║  Permissions: ${state.permissions.length} pre-approved`.padEnd(58) + '║',
+      '╚═════════════════════════════════════════════════════════╝',
       ''
     ];
     return lines.join('\n');
