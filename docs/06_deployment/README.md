@@ -198,6 +198,24 @@ printenv | grep SUPABASE
 # Update in Vercel dashboard > Settings > Environment Variables
 ```
 
+**4. Agent Platform (Python) Dependency Issues**
+```bash
+# Missing Python packages (langchain_openai, anthropic, etc.)
+cd C:\Users\rickf\Projects\_EHG\ehg\agent-platform
+.\venv_win\Scripts\pip.exe install langchain_openai anthropic
+
+# Outdated Supabase stack (proxy errors)
+.\venv_win\Scripts\pip.exe install --upgrade supabase gotrue
+
+# Full dependency reinstall
+.\venv_win\Scripts\pip.exe install -r requirements.txt --upgrade
+
+# Restart stack after installing dependencies
+node scripts/cross-platform-run.js leo-stack restart
+```
+
+See `/docs/guides/leo-stack-management.md` for detailed Agent Platform troubleshooting.
+
 ---
 
 ## Emergency Procedures
