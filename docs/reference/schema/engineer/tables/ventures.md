@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-19T03:32:49.878Z
+**Generated**: 2026-01-19T11:57:52.417Z
 **Rows**: 9
 **RLS**: Enabled (5 policies)
 
@@ -14,14 +14,13 @@
 
 ---
 
-## Columns (71 total)
+## Columns (68 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
 | name | `character varying(255)` | **NO** | - | - |
 | description | `text` | YES | - | - |
-| deprecated_stage | `USER-DEFINED` | **NO** | `'draft_idea'::venture_stage_enum` | DEPRECATED: Use current_lifecycle_stage instead. Preserved for data recovery only. |
 | status | `USER-DEFINED` | **NO** | `'active'::venture_status_enum` | - |
 | portfolio_id | `uuid` | YES | - | - |
 | company_id | `uuid` | YES | - | - |
@@ -32,7 +31,6 @@
 | projected_revenue | `numeric(15,2)` | YES | - | - |
 | projected_roi | `numeric(5,2)` | YES | - | - |
 | funding_required | `numeric(15,2)` | YES | - | - |
-| deprecated_current_workflow_stage | `integer(32)` | YES | `1` | DEPRECATED: Use current_lifecycle_stage instead. Preserved for data recovery only. |
 | workflow_status | `USER-DEFINED` | YES | `'pending'::workflow_status_enum` | - |
 | ai_score | `numeric(3,2)` | YES | - | - |
 | validation_score | `numeric(3,2)` | YES | - | - |
@@ -41,7 +39,6 @@
 | created_by | `uuid` | YES | - | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | milestone | `character varying(100)` | YES | - | - |
-| deprecated_current_stage | `integer(32)` | YES | - | DEPRECATED: Use current_lifecycle_stage instead. Preserved for data recovery only. |
 | attention_score | `numeric(3,2)` | YES | - | - |
 | dwell_days | `integer(32)` | YES | `0` | - |
 | gate_retries_7d | `integer(32)` | YES | `0` | - |
@@ -152,10 +149,6 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 - `idx_ventures_portfolio`
   ```sql
   CREATE INDEX idx_ventures_portfolio ON public.ventures USING btree (portfolio_id)
-  ```
-- `idx_ventures_stage`
-  ```sql
-  CREATE INDEX idx_ventures_stage ON public.ventures USING btree (deprecated_stage)
   ```
 - `idx_ventures_stage_status`
   ```sql
