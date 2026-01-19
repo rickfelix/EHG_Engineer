@@ -2,7 +2,8 @@
  * LEOPlanModeOrchestrator - Claude Code Plan Mode Integration
  * Orchestrates automatic Plan Mode activation at LEO Protocol phase boundaries.
  *
- * SD-PLAN-MODE-002: Now writes LEO protocol action plans to Claude Code's plan file
+ * SD-PLAN-MODE-002: Writes LEO protocol action plans to Claude Code's plan file
+ * SD-PLAN-MODE-003: Intelligent SD-type aware plan generation
  */
 
 import fs from 'fs';
@@ -10,6 +11,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getPermissionsForPhase, getCombinedPermissions } from './phase-permissions.js';
 import { getPlanTemplate, getPlanFilename } from './plan-templates.js';
+import { loadSDContext, getRecommendedSubAgents, SD_TYPE_PROFILES } from './sd-context-loader.js';
+import { generateIntelligentPlan, getPlanFilename as getIntelligentFilename } from './intelligent-plan-templates.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -61,9 +64,10 @@ export class LEOPlanModeOrchestrator {
 
   /**
    * Write LEO protocol plan to Claude Code's plan file
-   * SD-PLAN-MODE-002
+   * SD-PLAN-MODE-002: Basic plan file writing
+   * SD-PLAN-MODE-003: Intelligent SD-type aware plan generation
    */
-  writePlanFile(sdId, phase, sdTitle = null) {
+  async writePlanFile(sdId, phase, sdTitle = null) {
     try {
       // Ensure plans directory exists
       if (!fs.existsSync(CLAUDE_PLANS_DIR)) {
@@ -71,16 +75,59 @@ export class LEOPlanModeOrchestrator {
         this._log('info', `Created plans directory: ${CLAUDE_PLANS_DIR}`);
       }
 
+      // SD-PLAN-MODE-003: Load SD context from database for intelligent plan generation
+      const contextResult = await loadSDContext(sdId);
+      let planContent;
+      let sdContext;
+
+      if (contextResult.success && contextResult.sd) {
+        sdContext = contextResult.sd;
+        this._log('info', `SD context loaded: ${sdContext.type} (${sdContext.complexity})`);
+
+        // Generate intelligent plan based on SD type and context
+        planContent = generateIntelligentPlan(phase, sdContext);
+      } else {
+        // Fallback to basic template
+        this._log('info', `Using fallback context: ${contextResult.error || 'unknown'}`);
+        sdContext = contextResult.sd || { id: sdId, title: sdTitle };
+        planContent = getPlanTemplate(phase, sdId, sdTitle);
+      }
+
+      const filename = getIntelligentFilename(sdId, phase);
+      const planPath = path.join(CLAUDE_PLANS_DIR, filename);
+
+      fs.writeFileSync(planPath, planContent, 'utf8');
+      this._log('info', `Plan file written: ${filename}`);
+
+      return {
+        success: true,
+        path: planPath,
+        filename,
+        sdContext,
+        intelligent: contextResult.success
+      };
+    } catch (error) {
+      this._log('error', `Could not write plan file: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Write plan file synchronously (fallback for non-async contexts)
+   */
+  writePlanFileSync(sdId, phase, sdTitle = null) {
+    try {
+      if (!fs.existsSync(CLAUDE_PLANS_DIR)) {
+        fs.mkdirSync(CLAUDE_PLANS_DIR, { recursive: true });
+      }
+
       const filename = getPlanFilename(sdId, phase);
       const planPath = path.join(CLAUDE_PLANS_DIR, filename);
       const planContent = getPlanTemplate(phase, sdId, sdTitle);
 
       fs.writeFileSync(planPath, planContent, 'utf8');
-      this._log('info', `Plan file written: ${filename}`);
-
-      return { success: true, path: planPath, filename };
+      return { success: true, path: planPath, filename, intelligent: false };
     } catch (error) {
-      this._log('error', `Could not write plan file: ${error.message}`);
       return { success: false, error: error.message };
     }
   }
@@ -117,8 +164,8 @@ export class LEOPlanModeOrchestrator {
 
     const normalizedPhase = (phase || 'LEAD').toUpperCase();
 
-    // SD-PLAN-MODE-002: Write LEO protocol plan to Claude Code's plan file
-    const planResult = this.writePlanFile(sdId, normalizedPhase, sdTitle);
+    // SD-PLAN-MODE-003: Write intelligent LEO protocol plan
+    const planResult = await this.writePlanFile(sdId, normalizedPhase, sdTitle);
 
     const state = {
       requested: true,
@@ -127,7 +174,9 @@ export class LEOPlanModeOrchestrator {
       reason,
       requestedAt: new Date().toISOString(),
       permissions: getPermissionsForPhase(phase),
-      planFile: planResult.success ? planResult.path : null
+      planFile: planResult.success ? planResult.path : null,
+      intelligent: planResult.intelligent || false,
+      sdType: planResult.sdContext?.type || null
     };
 
     this._saveState(state);
@@ -135,13 +184,17 @@ export class LEOPlanModeOrchestrator {
 
     if (planResult.success) {
       this._log('info', `LEO plan loaded: ${planResult.filename}`);
+      if (planResult.intelligent) {
+        this._log('info', `Intelligent plan: ${planResult.sdContext?.typeProfile?.name || 'unknown'} type`);
+      }
     }
 
     return {
       success: true,
       state,
       planFile: planResult,
-      message: this._formatPlanModeMessage(state)
+      sdContext: planResult.sdContext,
+      message: this._formatPlanModeMessage(state, planResult.sdContext)
     };
   }
 
@@ -182,10 +235,19 @@ export class LEOPlanModeOrchestrator {
     return getCombinedPermissions(phases);
   }
 
-  _formatPlanModeMessage(state) {
+  _formatPlanModeMessage(state, sdContext = null) {
     const planInfo = state.planFile
       ? `Plan: LEO ${state.phase} actions loaded`
       : 'Plan: (no plan file)';
+
+    // SD-PLAN-MODE-003: Show SD type info when available
+    const typeInfo = sdContext?.typeProfile
+      ? `Type: ${sdContext.typeProfile.name} | Complexity: ${sdContext.complexity}`
+      : null;
+
+    const intelligentInfo = state.intelligent
+      ? 'Mode: Intelligent (DB context)'
+      : 'Mode: Basic (fallback)';
 
     const lines = [
       '',
@@ -193,11 +255,20 @@ export class LEOPlanModeOrchestrator {
       `║  LEO Plan Mode ACTIVE - ${state.phase} Phase`.padEnd(58) + '║',
       '╠═════════════════════════════════════════════════════════╣',
       `║  SD: ${(state.sdId || 'Unknown').substring(0, 50)}`.padEnd(58) + '║',
+    ];
+
+    if (typeInfo) {
+      lines.push(`║  ${typeInfo}`.padEnd(58) + '║');
+    }
+
+    lines.push(
       `║  ${planInfo}`.padEnd(58) + '║',
+      `║  ${intelligentInfo}`.padEnd(58) + '║',
       `║  Permissions: ${state.permissions.length} pre-approved`.padEnd(58) + '║',
       '╚═════════════════════════════════════════════════════════╝',
       ''
-    ];
+    );
+
     return lines.join('\n');
   }
 

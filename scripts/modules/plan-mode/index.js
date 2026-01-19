@@ -2,10 +2,12 @@
  * LEO Protocol Plan Mode Integration - Public API
  * SD-PLAN-MODE-001: Permission bundling
  * SD-PLAN-MODE-002: LEO action plan templates
+ * SD-PLAN-MODE-003: Intelligent SD-type aware plan generation
  */
 
 export { LEOPlanModeOrchestrator } from './LEOPlanModeOrchestrator.js';
 
+// Phase permissions
 export {
   getPermissionsForPhase,
   getCombinedPermissions,
@@ -17,6 +19,7 @@ export {
   PHASE_PERMISSIONS
 } from './phase-permissions.js';
 
+// Basic plan templates (fallback)
 export {
   getPlanTemplate,
   getPlanFilename,
@@ -26,6 +29,25 @@ export {
   VERIFY_PLAN_TEMPLATE,
   FINAL_PLAN_TEMPLATE
 } from './plan-templates.js';
+
+// SD-PLAN-MODE-003: SD context loading
+export {
+  loadSDContext,
+  getRecommendedSubAgents,
+  getWorkflowIntensity,
+  SD_TYPE_PROFILES,
+  COMPLEXITY_PROFILES
+} from './sd-context-loader.js';
+
+// SD-PLAN-MODE-003: Intelligent plan templates
+export {
+  generateIntelligentPlan,
+  generateLeadPlan,
+  generatePlanPlan,
+  generateExecPlan,
+  generateVerifyPlan,
+  generateFinalPlan
+} from './intelligent-plan-templates.js';
 
 import { LEOPlanModeOrchestrator } from './LEOPlanModeOrchestrator.js';
 export default LEOPlanModeOrchestrator;
