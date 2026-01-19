@@ -107,8 +107,9 @@ export class PlanToExecExecutor extends BaseExecutor {
           };
         }
 
+        // SD-LEARN-010:US-002: ERR_CHAIN_INCOMPLETE error code for missing predecessor handoffs
         if (!leadToPlanHandoff || leadToPlanHandoff.length === 0) {
-          console.log('   ❌ No accepted LEAD-TO-PLAN handoff found');
+          console.log('   ❌ ERR_CHAIN_INCOMPLETE: Missing LEAD-TO-PLAN handoff');
           console.log('   ⚠️  LEO Protocol requires LEAD-TO-PLAN before PLAN-TO-EXEC');
           console.log('');
           console.log('   LEO Protocol handoff sequence:');
@@ -121,9 +122,9 @@ export class PlanToExecExecutor extends BaseExecutor {
             passed: false,
             score: 0,
             max_score: 100,
-            issues: ['BLOCKING: No accepted LEAD-TO-PLAN handoff found - LEO Protocol violation'],
+            issues: ['ERR_CHAIN_INCOMPLETE: Missing LEAD-TO-PLAN handoff - complete prerequisite before PLAN-TO-EXEC'],
             warnings: [],
-            remediation: 'Complete LEAD-TO-PLAN handoff before attempting PLAN-TO-EXEC. Run: node scripts/handoff.js lead-to-plan --sd-id <SD-ID>'
+            remediation: 'Complete LEAD-TO-PLAN handoff before attempting PLAN-TO-EXEC. Run: node scripts/handoff.js execute LEAD-TO-PLAN <SD-ID>'
           };
         }
 
@@ -172,8 +173,9 @@ export class PlanToExecExecutor extends BaseExecutor {
           const sdUuid = ctx.sd?.id || ctx.sdId;
           const prd = await this.prdRepo?.getBySdId(sdUuid);
 
+          // SD-LEARN-010:US-003: ERR_NO_PRD error code when PRD missing
           if (!prd) {
-            console.log('   ❌ No PRD found for this SD');
+            console.log('   ❌ ERR_NO_PRD: No PRD found for this SD');
             console.log('');
             console.log('   PLAN-TO-EXEC requires a PRD to ensure:');
             console.log('   • Requirements are documented');
@@ -185,13 +187,13 @@ export class PlanToExecExecutor extends BaseExecutor {
               score: 0,
               max_score: 100,
               issues: [
-                'BLOCKING: No PRD found for this SD',
+                'ERR_NO_PRD: No PRD found for this SD - create PRD before proceeding to EXEC',
                 'PRD is mandatory before EXEC phase can begin'
               ],
               warnings: [],
               remediation: [
                 'Create a PRD for this SD using:',
-                '  node scripts/create-prd-template.js <SD-ID>',
+                '  node scripts/add-prd-to-database.js --sd-id <SD-ID>',
                 'Or use the PRD creation wizard in the UI',
                 'Ensure PRD status is set to "approved" before retrying'
               ].join('\n')
