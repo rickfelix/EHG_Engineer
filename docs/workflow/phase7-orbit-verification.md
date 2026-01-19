@@ -66,6 +66,12 @@ Phase 7 "The Orbit" represents the continuous post-Stage-25 lifecycle for ventur
 - [x] Market feedback pipeline integrated
 - [x] All components cross-referenced
 
+## Related Documentation
+
+- **Parent Initiative**: [Venture Lifecycle Gap Remediation Overview](../04_features/venture-lifecycle-gap-remediation-overview.md)
+- **Post-MVP Expansion**: [33 Post-MVP Expansion](../04_features/33_post_mvp_expansion.md)
+- **Customer Success**: [32a Customer Success](../04_features/32a_customer_success.md)
+
 ## Related SDs
 
 - SD-LIFECYCLE-GAP-000 (Parent): Venture Lifecycle Gap Remediation

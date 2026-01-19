@@ -1,5 +1,9 @@
 # Stage 39 – Multi-Venture Coordination Enhanced PRD
 
+> **Legacy Documentation**: This document represents the 40-stage model concept. For the current 25-stage model implementation, see:
+> - [Capability Router Protocol](./capability-router-protocol.md) (SD-LIFECYCLE-GAP-004)
+> - [Venture Lifecycle Gap Remediation Overview](./venture-lifecycle-gap-remediation-overview.md)
+
 ## 1. Executive Summary
 
 ### Implementation Readiness: PRODUCTION READY
