@@ -111,6 +111,9 @@ src/client/dist/
 .token-log.json
 .claude/logs/
 
+# LEO stack server logs (regenerated on restart)
+.logs/
+
 # Generated query outputs (regenerable from scripts)
 /output/
 
