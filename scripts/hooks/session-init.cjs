@@ -16,7 +16,9 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const SESSION_STATE_FILE = path.join(process.env.HOME || '/tmp', '.claude-session-state.json');
+const SESSION_STATE_FILE = path.join(process.env.HOME || process.env.USERPROFILE || '/tmp', '.claude-session-state.json');
+const PLAN_MODE_STATE_FILE = path.join(process.env.HOME || process.env.USERPROFILE || '/tmp', '.claude-plan-mode-state.json');
+const LEO_CONFIG_FILE = path.join(__dirname, '../../.claude/leo-plan-mode-config.json');
 const ENGINEER_DIR = '.';
 
 /**
@@ -122,6 +124,51 @@ function initializeSessionState() {
 }
 
 /**
+ * Check if Plan Mode integration is enabled
+ * SD-PLAN-MODE-001
+ */
+function isPlanModeEnabled() {
+  try {
+    if (fs.existsSync(LEO_CONFIG_FILE)) {
+      const config = JSON.parse(fs.readFileSync(LEO_CONFIG_FILE, 'utf8'));
+      return config.leo_plan_mode?.enabled === true &&
+             config.leo_plan_mode?.auto_enter_on_sd_detection === true;
+    }
+  } catch (error) {
+    // Config read error, disable Plan Mode
+  }
+  return false;
+}
+
+/**
+ * Request Plan Mode entry for a detected SD
+ * SD-PLAN-MODE-001
+ */
+function requestPlanModeEntry(sdId, phase) {
+  try {
+    const state = {
+      requested: true,
+      sdId,
+      phase: (phase || 'LEAD').toUpperCase(),
+      reason: 'session_start_sd_detected',
+      requestedAt: new Date().toISOString(),
+      // Basic permissions for LEAD phase (full permissions loaded by orchestrator)
+      permissions: [
+        { tool: 'Bash', prompt: 'run SD queue commands' },
+        { tool: 'Bash', prompt: 'run handoff scripts' },
+        { tool: 'Bash', prompt: 'check git status' }
+      ]
+    };
+
+    fs.writeFileSync(PLAN_MODE_STATE_FILE, JSON.stringify(state, null, 2));
+    return true;
+  } catch (error) {
+    console.log(`[session-init] Plan Mode state error: ${error.message}`);
+    return false;
+  }
+}
+
+/**
  * Main hook execution
  */
 function main() {
@@ -152,6 +199,14 @@ function main() {
   console.log(`[session-init] Session ID: ${state.session_id}`);
   console.log(`[session-init] SD: ${state.current_sd || 'none'} | Phase: ${state.current_phase || 'unknown'}`);
   console.log(`[session-init] Git branch: ${state.git.branch || 'unknown'}`);
+
+  // SD-PLAN-MODE-001: Trigger Plan Mode if SD detected and enabled
+  if (state.current_sd && isPlanModeEnabled()) {
+    const phase = state.current_phase || 'LEAD';
+    if (requestPlanModeEntry(state.current_sd, phase)) {
+      console.log(`[session-init] Plan Mode requested for ${state.current_sd} (${phase} phase)`);
+    }
+  }
 }
 
 // Execute if run directly
@@ -159,4 +214,10 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { initializeSessionState, detectCurrentSD, detectCurrentPhase };
+module.exports = {
+  initializeSessionState,
+  detectCurrentSD,
+  detectCurrentPhase,
+  isPlanModeEnabled,
+  requestPlanModeEntry
+};

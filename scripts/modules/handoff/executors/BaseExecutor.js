@@ -126,6 +126,9 @@ export class BaseExecutor {
         return executionResult;
       }
 
+      // Step 4.5: Handle Plan Mode transition (SD-PLAN-MODE-001)
+      await this._handlePlanModeTransition(sdId, sd, options);
+
       // Step 5: Build success result
       console.log(`\n✅ ${this.handoffType} HANDOFF APPROVED`);
 
@@ -407,6 +410,57 @@ export class BaseExecutor {
     }
 
     return getRepoPath('EHG');
+  }
+
+  // ============ Plan Mode Integration (SD-PLAN-MODE-001) ============
+
+  async _handlePlanModeTransition(sdId, sd, _options) {
+    try {
+      const { LEOPlanModeOrchestrator } = await import('../../plan-mode/index.js');
+      const orchestrator = new LEOPlanModeOrchestrator({ verbose: true });
+
+      const targetPhase = this._getTargetPhaseFromHandoff();
+      const fromPhase = this._getSourcePhaseFromHandoff();
+
+      const result = await orchestrator.handlePhaseTransition({
+        sdId: sd.legacy_id || sdId,
+        fromPhase,
+        toPhase: targetPhase,
+        handoffType: this.handoffType
+      });
+
+      if (result.skipped) {
+        console.log(`   [Plan Mode] ${result.reason}`);
+      } else if (result.success && result.message) {
+        console.log(result.message);
+      }
+    } catch (error) {
+      console.log(`   [Plan Mode] Transition error (non-blocking): ${error.message}`);
+    }
+  }
+
+  _getTargetPhaseFromHandoff() {
+    const handoffToPhase = {
+      'LEAD-TO-PLAN': 'PLAN',
+      'PLAN-TO-EXEC': 'EXEC',
+      'EXEC-TO-PLAN': 'PLAN',
+      'EXEC-TO-VERIFY': 'VERIFY',
+      'LEAD-FINAL-APPROVAL': 'FINAL',
+      'LEAD-APPROVAL': 'LEAD'
+    };
+    return handoffToPhase[this.handoffType] || 'EXEC';
+  }
+
+  _getSourcePhaseFromHandoff() {
+    const handoffFromPhase = {
+      'LEAD-TO-PLAN': 'LEAD',
+      'PLAN-TO-EXEC': 'PLAN',
+      'EXEC-TO-PLAN': 'EXEC',
+      'EXEC-TO-VERIFY': 'EXEC',
+      'LEAD-FINAL-APPROVAL': 'VERIFY',
+      'LEAD-APPROVAL': 'START'
+    };
+    return handoffFromPhase[this.handoffType] || 'LEAD';
   }
 }
 
