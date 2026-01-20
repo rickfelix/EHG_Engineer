@@ -1,6 +1,6 @@
 ---
 description: LEO stack management and session control
-argument-hint: [start|restart|stop|status|next]
+argument-hint: [start|restart|stop|status|next|create]
 ---
 
 # LEO Stack Control
@@ -47,6 +47,77 @@ Run fast restart (reduced delays):
 node scripts/cross-platform-run.js leo-stack restart -Fast
 ```
 
+### If argument starts with "create" or "c":
+Launch the SD creation wizard. Parse additional flags:
+
+**Interactive mode (no flags):**
+Use AskUserQuestion to collect SD details:
+
+```javascript
+{
+  "questions": [
+    {
+      "question": "What type of SD is this?",
+      "header": "SD Type",
+      "multiSelect": false,
+      "options": [
+        {"label": "Fix", "description": "Bug fix or error correction"},
+        {"label": "Feature", "description": "New functionality"},
+        {"label": "Infrastructure", "description": "Tooling, scripts, CI/CD"},
+        {"label": "Refactor", "description": "Code restructuring"}
+      ]
+    }
+  ]
+}
+```
+
+After getting type, ask for title:
+- "What's a brief title for this SD?"
+
+Then generate the SD key using SDKeyGenerator:
+```bash
+node scripts/modules/sd-key-generator.js LEO <type> "<title>"
+```
+
+**Flag-based creation:**
+
+- `create --from-uat <test-id>`: Create from UAT finding
+  ```bash
+  node scripts/leo-create-sd.js --from-uat <test-id>
+  ```
+
+- `create --from-learn <pattern-id>`: Create from /learn pattern
+  ```bash
+  node scripts/leo-create-sd.js --from-learn <pattern-id>
+  ```
+
+- `create --from-feedback <id>`: Create from /inbox feedback item
+  ```bash
+  node scripts/leo-create-sd.js --from-feedback <id>
+  ```
+
+- `create --child <parent-key>`: Create child SD
+  ```bash
+  node scripts/modules/sd-key-generator.js --child <parent-key> <index>
+  ```
+
+After generating the key, create the SD in database with initial fields:
+- status: 'draft'
+- current_phase: 'LEAD'
+- priority: 'medium' (can be adjusted)
+
+Then display:
+```
+✅ SD Created: <generated-key>
+   Title: <title>
+   Type: <type>
+   Status: draft
+   Phase: LEAD
+
+📋 Next: Run LEAD-TO-PLAN handoff when ready
+   node scripts/handoff.js execute LEAD-TO-PLAN <generated-key>
+```
+
 ### If no argument provided:
 Run the LEO protocol workflow:
 ```bash
@@ -65,7 +136,15 @@ LEO Commands:
   /leo status   (st) - Check server status
   /leo next     (n)  - Show SD queue (what to work on)
   /leo fast     (f)  - Fast restart (reduced delays)
+  /leo create   (c)  - Create new SD (interactive wizard)
   /leo help     (h)  - Show this menu
+
+SD Creation Flags:
+  /leo create                    - Interactive wizard
+  /leo create --from-uat <id>    - Create from UAT finding
+  /leo create --from-learn <id>  - Create from /learn pattern
+  /leo create --from-feedback <id> - Create from /inbox item
+  /leo create --child <parent>   - Create child SD
 
 Shortcuts: /restart = restart servers, /leo n = next
 ```

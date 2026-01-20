@@ -20,6 +20,8 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { randomUUID } from 'crypto';
 import readline from 'readline';
+// SD-LEO-SDKEY-001: Centralized SD key generation
+import { generateSDKey as generateCentralizedSDKey } from './modules/sd-key-generator.js';
 
 dotenv.config();
 
@@ -265,30 +267,15 @@ async function promptIntensityLevel(rl) {
 
 /**
  * Generate SD key from title
+ * SD-LEO-SDKEY-001: Uses centralized SDKeyGenerator for consistent naming
  */
-function generateSdKey(title, type) {
-  const prefix = type === 'bugfix' ? 'FIX' :
-    type === 'feature' ? 'FEAT' :
-      type === 'refactor' ? 'REF' :
-        type === 'infrastructure' ? 'INFRA' :
-          type === 'documentation' ? 'DOC' :
-            type === 'orchestrator' ? 'ORCH' :
-              type === 'security' ? 'SEC' :
-                type.toUpperCase().slice(0, 4);
-
-  // Extract meaningful words from title
-  const words = title
-    .replace(/[^a-zA-Z0-9\s]/g, '')
-    .split(/\s+/)
-    .filter(w => w.length > 2)
-    .slice(0, 3)
-    .map(w => w.toUpperCase())
-    .join('-');
-
-  // Add random suffix to ensure uniqueness
-  const suffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-
-  return `SD-${prefix}-${words || 'GEN'}-${suffix}`;
+async function generateSdKey(title, type) {
+  // Use centralized SDKeyGenerator for consistent naming across all SD sources
+  return generateCentralizedSDKey({
+    source: 'MANUAL',
+    type: type,
+    title: title || 'Manual SD'
+  });
 }
 
 /**
@@ -402,7 +389,8 @@ async function main() {
   const typeConfig = SD_TYPES[sdType];
 
   // Initialize SD data
-  const sdKey = generateSdKey(title, sdType);
+  // SD-LEO-SDKEY-001: Use centralized async key generator
+  const sdKey = await generateSdKey(title, sdType);
   const sdData = {
     id: randomUUID(),
     sd_key: sdKey,

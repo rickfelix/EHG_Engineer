@@ -49,11 +49,11 @@ async function createPRD() {
 
   console.log('\n1️⃣  Fetching Strategic Directive...');
 
-  // SD ID Schema Cleanup: Use SD.id directly (uuid_id is deprecated)
+  // Query by sd_key OR id to handle both formats (sd_key like SD-XXX-001, id is UUID)
   const { data: sdData, error: sdError } = await supabase
     .from('strategic_directives_v2')
-    .select('id, title, category, priority')
-    .eq('id', SD_ID)
+    .select('id, sd_key, title, category, priority')
+    .or(`sd_key.eq.${SD_ID},id.eq.${SD_ID}`)
     .single();
 
   if (sdError || !sdData) {
@@ -63,8 +63,12 @@ async function createPRD() {
     process.exit(1);
   }
 
+  // Use UUID for FK references
+  const sdUuid = sdData.id;
+
   console.log(`✅ Found SD: ${sdData.title}`);
-  console.log(`   ID: ${sdData.id}`);
+  console.log(`   UUID: ${sdData.id}`);
+  console.log(`   SD Key: ${sdData.sd_key}`);
   console.log(`   Category: ${sdData.category}`);
   console.log(`   Priority: ${sdData.priority}`);
 
@@ -74,15 +78,15 @@ async function createPRD() {
 
   console.log('\n2️⃣  Building PRD data...');
 
-  const prdId = `PRD-${SD_ID}`;
+  const prdId = `PRD-${sdData.sd_key || SD_ID}`;
 
   const prdData = {
     // Primary Keys & Foreign Keys (REQUIRED)
     // SD ID Schema Cleanup: sd_uuid column was DROPPED (2025-12-12)
-    // sd_id is now the canonical FK to strategic_directives_v2.id
+    // sd_id is now the canonical FK to strategic_directives_v2.id (UUID)
     id: prdId,
-    sd_id: SD_ID,                   // FK to strategic_directives_v2.id (canonical)
-    directive_id: SD_ID,            // Backward compatibility
+    sd_id: sdUuid,                  // FK to strategic_directives_v2.id (UUID)
+    directive_id: sdUuid,           // Backward compatibility (UUID)
 
     // Core Metadata (REQUIRED)
     title: PRD_TITLE,
