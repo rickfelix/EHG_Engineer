@@ -1,0 +1,195 @@
+/**
+ * PRD Content Formatter
+ * Part of SD-LEO-REFACTOR-PRD-DB-001
+ *
+ * Formats LLM-generated PRD content into markdown
+ */
+
+/**
+ * Format LLM-generated PRD content into markdown
+ *
+ * @param {string} sdId - Strategic Directive ID
+ * @param {Object} sdData - Strategic Directive data
+ * @param {Object} llmContent - LLM-generated content
+ * @returns {string} Formatted markdown PRD
+ */
+export function formatPRDContent(sdId, sdData, llmContent) {
+  const sections = [];
+
+  sections.push(`# Product Requirements Document
+
+## Strategic Directive
+${sdId}
+
+## Title
+${sdData.title || 'Untitled'}
+
+## Status
+Planning
+
+## Executive Summary
+${llmContent.executive_summary || 'See functional requirements below.'}`);
+
+  // Functional Requirements
+  if (llmContent.functional_requirements && llmContent.functional_requirements.length > 0) {
+    sections.push(`## Functional Requirements
+
+${llmContent.functional_requirements.map(req => {
+  const lines = [`### ${req.id}: ${req.requirement}`];
+  if (req.description) lines.push(`\n${req.description}`);
+  if (req.priority) lines.push(`\n**Priority**: ${req.priority}`);
+  if (req.acceptance_criteria && req.acceptance_criteria.length > 0) {
+    lines.push('\n**Acceptance Criteria**:');
+    req.acceptance_criteria.forEach(ac => lines.push(`- ${ac}`));
+  }
+  return lines.join('');
+}).join('\n\n')}`);
+  }
+
+  // Technical Requirements
+  if (llmContent.technical_requirements && llmContent.technical_requirements.length > 0) {
+    sections.push(`## Technical Requirements
+
+${llmContent.technical_requirements.map(req => {
+  const lines = [`### ${req.id}: ${req.requirement}`];
+  if (req.rationale) lines.push(`\n**Rationale**: ${req.rationale}`);
+  return lines.join('');
+}).join('\n\n')}`);
+  }
+
+  // System Architecture
+  if (llmContent.system_architecture) {
+    const arch = llmContent.system_architecture;
+    const archLines = ['## System Architecture'];
+    if (arch.overview) archLines.push(`\n### Overview\n${arch.overview}`);
+    if (arch.components && arch.components.length > 0) {
+      archLines.push('\n### Components');
+      arch.components.forEach(comp => {
+        archLines.push(`\n#### ${comp.name}`);
+        if (comp.responsibility) archLines.push(`- **Responsibility**: ${comp.responsibility}`);
+        if (comp.technology) archLines.push(`- **Technology**: ${comp.technology}`);
+      });
+    }
+    if (arch.data_flow) archLines.push(`\n### Data Flow\n${arch.data_flow}`);
+    if (arch.integration_points && arch.integration_points.length > 0) {
+      archLines.push('\n### Integration Points');
+      arch.integration_points.forEach(point => archLines.push(`- ${point}`));
+    }
+    sections.push(archLines.join(''));
+  }
+
+  // Implementation Approach
+  if (llmContent.implementation_approach) {
+    const impl = llmContent.implementation_approach;
+    const implLines = ['## Implementation Approach'];
+    if (impl.phases && impl.phases.length > 0) {
+      implLines.push('\n### Phases');
+      impl.phases.forEach(phase => {
+        implLines.push(`\n#### ${phase.phase}`);
+        if (phase.description) implLines.push(phase.description);
+        if (phase.deliverables && phase.deliverables.length > 0) {
+          implLines.push('\n**Deliverables**:');
+          phase.deliverables.forEach(d => implLines.push(`- ${d}`));
+        }
+      });
+    }
+    if (impl.technical_decisions && impl.technical_decisions.length > 0) {
+      implLines.push('\n### Key Technical Decisions');
+      impl.technical_decisions.forEach(dec => implLines.push(`- ${dec}`));
+    }
+    sections.push(implLines.join(''));
+  }
+
+  // Test Scenarios
+  if (llmContent.test_scenarios && llmContent.test_scenarios.length > 0) {
+    sections.push(`## Test Scenarios
+
+${llmContent.test_scenarios.map(ts => {
+  const lines = [`### ${ts.id}: ${ts.scenario}`];
+  if (ts.test_type) lines.push(`\n**Type**: ${ts.test_type}`);
+  if (ts.given) lines.push(`\n**Given**: ${ts.given}`);
+  if (ts.when) lines.push(`\n**When**: ${ts.when}`);
+  if (ts.then) lines.push(`\n**Then**: ${ts.then}`);
+  return lines.join('');
+}).join('\n\n')}`);
+  }
+
+  // Acceptance Criteria
+  if (llmContent.acceptance_criteria && llmContent.acceptance_criteria.length > 0) {
+    sections.push(`## Acceptance Criteria
+
+${llmContent.acceptance_criteria.map((ac, i) => `${i + 1}. ${ac}`).join('\n')}`);
+  }
+
+  // Risks
+  if (llmContent.risks && llmContent.risks.length > 0) {
+    sections.push(`## Risks & Mitigations
+
+${llmContent.risks.map(risk => {
+  const lines = [`### ${risk.risk}`];
+  if (risk.probability) lines.push(`\n**Probability**: ${risk.probability}`);
+  if (risk.impact) lines.push(`\n**Impact**: ${risk.impact}`);
+  if (risk.mitigation) lines.push(`\n**Mitigation**: ${risk.mitigation}`);
+  if (risk.rollback_plan) lines.push(`\n**Rollback Plan**: ${risk.rollback_plan}`);
+  return lines.join('');
+}).join('\n\n')}`);
+  }
+
+  sections.push(`
+---
+*Generated by LLM PRD Content Generation (GPT 5.2)*
+*Date: ${new Date().toISOString()}*`);
+
+  return sections.join('\n\n');
+}
+
+/**
+ * Create default PRD checklists
+ *
+ * @param {Object|null} llmContent - LLM-generated content (optional)
+ * @returns {Object} Object with plan, exec, and validation checklists
+ */
+export function createDefaultChecklists(llmContent = null) {
+  const planChecklist = [
+    { text: 'PRD created and saved', checked: true },
+    { text: 'SD requirements mapped to technical specs', checked: !!llmContent },
+    { text: 'Technical architecture defined', checked: !!llmContent?.system_architecture },
+    { text: 'Implementation approach documented', checked: !!llmContent?.implementation_approach },
+    { text: 'Test scenarios defined', checked: llmContent?.test_scenarios?.length > 0 },
+    { text: 'Acceptance criteria established', checked: llmContent?.acceptance_criteria?.length > 0 },
+    { text: 'Resource requirements estimated', checked: false },
+    { text: 'Timeline and milestones set', checked: false },
+    { text: 'Risk assessment completed', checked: llmContent?.risks?.length > 0 }
+  ];
+
+  const execChecklist = [
+    { text: 'Development environment setup', checked: false },
+    { text: 'Core functionality implemented', checked: false },
+    { text: 'Unit tests written', checked: false },
+    { text: 'Integration tests completed', checked: false },
+    { text: 'Code review completed', checked: false },
+    { text: 'Documentation updated', checked: false }
+  ];
+
+  const validationChecklist = [
+    { text: 'All acceptance criteria met', checked: false },
+    { text: 'Performance requirements validated', checked: false },
+    { text: 'Security review completed', checked: false },
+    { text: 'User acceptance testing passed', checked: false },
+    { text: 'Deployment readiness confirmed', checked: false }
+  ];
+
+  return { planChecklist, execChecklist, validationChecklist };
+}
+
+/**
+ * Calculate PRD progress from checklist
+ *
+ * @param {Array} checklist - Checklist items
+ * @returns {number} Progress percentage (0-100)
+ */
+export function calculateProgress(checklist) {
+  if (!checklist || checklist.length === 0) return 0;
+  const checkedCount = checklist.filter(item => item.checked).length;
+  return Math.round((checkedCount / checklist.length) * 100);
+}
