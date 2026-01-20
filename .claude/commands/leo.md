@@ -246,3 +246,41 @@ node scripts/child-sd-preflight.js SD-XXX-001
 #### Integration with sd:next
 The `npm run sd:next` command shows dependency status in the queue display.
 Child SDs with incomplete dependencies show as BLOCKED.
+
+### Strategic Directive Creation (MANDATORY REFERENCES)
+
+**CRITICAL**: When creating new strategic directives, you MUST read these reference documents BEFORE creating the SD:
+
+#### Required Reading
+1. **CLAUDE_CORE.md** - Core protocol guidance, SD types, workflow requirements
+   - Contains SD type definitions and their mandatory requirements
+   - Specifies PRD requirements, handoff counts, and gate thresholds per SD type
+   - Defines the LEAD→PLAN→EXEC workflow phases
+
+2. **docs/database/strategic_directives_v2_field_reference.md** - Complete field reference
+   - Defines all required and optional fields
+   - Explains `id` vs `uuid_id` usage
+   - Documents JSONB array structures (key_changes, success_criteria, dependencies, etc.)
+   - Shows status workflow and priority levels
+   - Provides LEO Protocol phase definitions
+
+#### SD Creation Checklist
+Before creating any SD, ensure you:
+- [ ] Read CLAUDE_CORE.md for SD type requirements
+- [ ] Read field reference for required fields and formats
+- [ ] Use proper ID format: `SD-{CATEGORY}-{NUMBER}` (e.g., SD-FEATURE-001)
+- [ ] Set appropriate `sd_type` based on scope and requirements
+- [ ] Populate JSONB fields with correct structure
+- [ ] Set `current_phase` to 'LEAD_APPROVAL' for new SDs
+- [ ] Specify `parent_sd_id` if this is a child of an orchestrator
+
+#### SD Type Quick Reference (from CLAUDE_CORE.md)
+| SD Type | PRD Required | Min Handoffs | Gate Threshold |
+|---------|--------------|--------------|----------------|
+| `feature` | YES | 4 | 85% |
+| `infrastructure` | YES | 3 | 80% |
+| `enhancement` | Optional | 2 | 75% |
+| `fix` | NO | 1 | 70% |
+| `documentation` | NO | 1 | 60% |
+
+**Note**: Always verify current requirements from CLAUDE_CORE.md as they may be updated.
