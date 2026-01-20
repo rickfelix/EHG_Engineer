@@ -14,8 +14,9 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import fs from 'fs';
-import path from 'path';
+// fs and path available if needed for future file operations
+// import fs from 'fs';
+// import path from 'path';
 
 dotenv.config();
 

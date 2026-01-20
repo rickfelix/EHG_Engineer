@@ -34,7 +34,7 @@ import fs from 'fs';
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
+const _EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
 const EHG_ROOT = path.resolve(__dirname, '../../ehg');
 
 const execAsync = promisify(exec);

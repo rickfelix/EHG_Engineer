@@ -491,7 +491,7 @@ async function updateBranchAsMerged(supabase, sdUuid, mergedBranch, fallbackResu
  * Validate a branch exists in git
  */
 function validateBranchExists(repoPath, branchName, verbose = false) {
-  const log = verbose ? console.log.bind(console) : () => {};
+  const _log = verbose ? console.log.bind(console) : () => {};
 
   try {
     // Try local branch first
@@ -513,7 +513,7 @@ function validateBranchExists(repoPath, branchName, verbose = false) {
         isLocal: true
       };
     }
-  } catch (e) {
+  } catch (_e) {
     // Local branch doesn't exist, try remote
   }
 
@@ -538,7 +538,7 @@ function validateBranchExists(repoPath, branchName, verbose = false) {
         isRemote: true
       };
     }
-  } catch (e) {
+  } catch (_e) {
     // Remote branch doesn't exist either
   }
 

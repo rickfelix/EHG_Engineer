@@ -232,7 +232,7 @@ function detectPatterns(error, explorer) {
 /**
  * Get SD-specific context
  */
-async function getSDContext(sdId, explorer) {
+async function getSDContext(sdId, _explorer) {
   const findings = [];
 
   try {
@@ -279,7 +279,7 @@ async function getSDContext(sdId, explorer) {
         details: logs.map(l => l.error_message).filter(Boolean)
       });
     }
-  } catch (err) {
+  } catch (_err) {
     // Ignore errors in context gathering
   }
 

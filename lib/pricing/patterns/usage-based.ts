@@ -93,8 +93,8 @@ export class UsageBasedPricing {
    * Report usage to Stripe
    */
   async reportUsage(
-    subscriptionItemId: string,
-    report: UsageReport
+    _subscriptionItemId: string,
+    _report: UsageReport
   ): Promise<{ success: boolean; usageRecordId?: string }> {
     // In production, this would call:
     // stripe.subscriptionItems.createUsageRecord(subscriptionItemId, {...})

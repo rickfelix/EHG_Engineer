@@ -9,14 +9,14 @@ import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
-const EHG_ROOT = path.resolve(__dirname, '../../ehg');
+const _EHG_ROOT = path.resolve(__dirname, '../../ehg');
 
 async function verifyDatabaseState() {
   console.log('🔍 LEO Protocol v4.1.2 - Database Verification');
@@ -37,7 +37,7 @@ async function verifyDatabaseState() {
   try {
     // 1. Check Strategic Directive
     console.log('Checking Strategic Directive...');
-    const { data: sdData, error: sdError } = await supabase
+    const { data: sdData, error: _sdError } = await supabase
       .from('strategic_directives_v2')
       .select('id, title, status')
       .eq('id', 'SD-2025-001')
@@ -54,7 +54,7 @@ async function verifyDatabaseState() {
     
     // 2. Check PRD
     console.log('\nChecking Product Requirements Document...');
-    const { data: prdData, error: prdError } = await supabase
+    const { data: prdData, error: _prdError } = await supabase
       .from('product_requirements_v2')
       .select('id, title, status, directive_id')
       .eq('id', 'PRD-PRD-2025-001')
@@ -71,7 +71,7 @@ async function verifyDatabaseState() {
     
     // 3. Check EES Items
     console.log('\nChecking Execution Sequences...');
-    const { data: eesData, error: eesError } = await supabase
+    const { data: eesData, error: _eesError } = await supabase
       .from('execution_sequences_v2')
       .select('id, title, status')
       .eq('directive_id', 'SD-2025-001');

@@ -24,7 +24,7 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const EHG_ENGINEER_ROOT = path.resolve(__dirname, '..');
-const EHG_ROOT = path.resolve(__dirname, '../../ehg');
+const _EHG_ROOT = path.resolve(__dirname, '../../ehg');
 
 class PlanToExecVerifier {
   constructor() {
