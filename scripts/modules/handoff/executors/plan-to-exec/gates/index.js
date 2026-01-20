@@ -1,0 +1,14 @@
+/**
+ * Gate Exports Index
+ * Part of SD-LEO-REFACTOR-PLANTOEXEC-001
+ *
+ * Re-exports all gate creators for PLAN-TO-EXEC handoff
+ */
+
+export { createPrerequisiteCheckGate } from './prerequisite-check.js';
+export { createPrdExistsGate, createArchitectureVerificationGate } from './prd-gates.js';
+export { createContractComplianceGate } from './contract-gates.js';
+export { createDesignDatabaseGate, shouldValidateDesignDatabase } from './design-database-gates.js';
+export { createExplorationAuditGate, validateExplorationAudit, MINIMUM_FILES, ADEQUATE_FILES, COMPREHENSIVE_FILES } from './exploration-audit.js';
+export { createDeliverablesPlanningGate, validateDeliverablesPlanning } from './deliverables-planning.js';
+export { createBranchEnforcementGate } from './branch-enforcement.js';
