@@ -52,6 +52,34 @@ function generatePatternDA(pattern, intelligence = {}) {
     suggestions.push('Consider resolving this pattern.');
   }
 
+  // Refactoring-specific challenges (PAT-REF-* patterns)
+  if (pattern.category === 'refactoring' || pattern.pattern_id?.startsWith('PAT-REF')) {
+    // Challenge timing
+    challenges.push('Refactoring is advisory - consider if current feature velocity justifies pausing for cleanup.');
+
+    // Challenge scope
+    if (pattern.pattern_id === 'PAT-REF-001') {
+      // Large file detection
+      challenges.push('Large files may be intentional (e.g., generated code, comprehensive test suites) - validate file purpose.');
+      suggestions.push('Check if file is generated, a test fixture, or has unique justification.');
+    } else if (pattern.pattern_id === 'PAT-REF-002') {
+      // High cyclomatic complexity
+      challenges.push('High complexity may be inherent to domain logic (state machines, parsers) - ensure refactoring preserves correctness.');
+      suggestions.push('Run REGRESSION sub-agent before and after any complexity reduction.');
+    } else if (pattern.pattern_id === 'PAT-REF-003') {
+      // RISK technical_complexity > 7
+      challenges.push('RISK score is one signal - correlate with actual maintenance burden before prioritizing.');
+      suggestions.push('Review recent bug/PR history in affected files.');
+    } else if (pattern.pattern_id === 'PAT-REF-004') {
+      // DRY violation
+      challenges.push('Some duplication is acceptable - premature abstraction can reduce clarity. "Rule of three" applies.');
+    } else if (pattern.pattern_id === 'PAT-REF-005') {
+      // Long function
+      challenges.push('Function length alone may not indicate problems - cohesion and single responsibility matter more.');
+      suggestions.push('Check if function has clear single purpose despite length.');
+    }
+  }
+
   // Check for similar patterns (duplicate detection)
   const similarTo = intelligence.similar_patterns?.[pattern.id];
   if (similarTo && similarTo.length > 0) {
