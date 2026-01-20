@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-01-20
+
+### Bugfixes
+- **SD-FIX-NAV-001: Chairman Sidebar Navigation Architecture Fix** - Orchestrator SD with 4 children completed
+  - **SD-FIX-NAV-001-A**: Fixed navigation route database configuration for chairman persona
+  - **SD-FIX-NAV-001-B**: Cleaned up legacy routes and standardized analytics path
+  - **SD-FIX-NAV-001-C**: Updated documentation references from `/chairman-analytics` to `/chairman/analytics`
+  - **SD-FIX-NAV-001-D**: Removed 4 test ventures from database (Critical Attention, Launch Checklist Test, UI/UX Assessment Test, P0 RLS Fix Test) to clean up sidebar display
+  - Root cause: Test data pollution in ventures table causing confusing sidebar entries
+  - Impact: Cleaner chairman persona navigation, proper route separation
+
+### Known Issues
+- **LEAD-FINAL-APPROVAL Validator Bug**: `workflow-roi-validation.js` line 137 checks for `LEAD-FINAL` handoff type which doesn't exist in `sd_phase_handoffs` schema. Schema only allows: LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN, PLAN-TO-LEAD. Workaround: Manual SD completion via database update after PLAN-TO-LEAD passes.
+
 ## 2026-01-18
 
 ### Multi-Repository Architecture
