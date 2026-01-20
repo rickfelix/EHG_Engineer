@@ -46,3 +46,63 @@ export { LeadFinalApprovalExecutor } from './executors/LeadFinalApprovalExecutor
 export { autoCompleteDeliverables, checkDeliverablesNeedCompletion } from './auto-complete-deliverables.js';
 export { extractAndPopulateDeliverables } from './extract-deliverables-from-prd.js';
 export { mapE2ETestsToUserStories, validateE2ECoverage } from './map-e2e-tests-to-stories.js';
+
+// ============================================================================
+// SD-LEO-REFACTOR-HANDOFF-001: Extracted CLI utilities
+// ============================================================================
+
+// CLI workflow definitions and utilities
+export {
+  WORKFLOW_BY_SD_TYPE,
+  getWorkflowForType,
+  isHandoffRequired,
+  isHandoffOptional,
+  getSDWorkflow,
+  displayWorkflowRecommendation,
+  verifySDCompletion,
+  getPendingApprovalSDs,
+  displayPendingSDs,
+  displayCompletionVerification,
+  checkMultiRepoStatus,
+  displayMultiRepoStatus
+} from './cli/index.js';
+
+// ============================================================================
+// SD-LEO-REFACTOR-HANDOFF-001: Verifier helper modules
+// ============================================================================
+
+// LEAD-TO-PLAN verifier helpers
+export {
+  SD_REQUIREMENTS,
+  validateStrategicDirective,
+  validateTargetApplicationAlignment,
+  validateSmartObjectives,
+  validatePRDReadiness,
+  validateVisionDocumentReferences,
+  validateScopeStructure,
+  validateSuccessCriteriaActionability,
+  validateImplementationContext,
+  validateDependencyStructure,
+  validateDependenciesExist,
+  validateFeasibility,
+  checkEnvironmentReadiness,
+  TYPE_PATTERNS,
+  autoDetectSdType,
+  validateSdTypeClassification
+} from './verifiers/lead-to-plan/index.js';
+
+// Re-export with alias to avoid collision
+export { generateImprovementGuidance as generateLeadToPlanGuidance } from './verifiers/lead-to-plan/improvement-guidance.js';
+
+// PLAN-TO-EXEC verifier helpers
+export {
+  PRD_REQUIREMENTS,
+  basicPRDValidation,
+  validateParentOrchestratorPRD,
+  validatePlanPresentation,
+  CATEGORY_THRESHOLDS,
+  getStoryMinimumScoreByCategory
+} from './verifiers/plan-to-exec/index.js';
+
+// Re-export with alias to avoid collision
+export { generateImprovementGuidance as generatePlanToExecGuidance } from './verifiers/plan-to-exec/improvement-guidance.js';
