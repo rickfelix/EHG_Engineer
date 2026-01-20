@@ -306,9 +306,10 @@ Return JSON with:
 
     const nextSequenceRank = (maxRankData?.sequence_rank || 0) + 1;
 
+    // SD-LEO-FIX-CREATION-COLUMN-MAPPING-001: id=human-readable key per schema
     const strategicDirective = {
-      id: crypto.randomUUID(),
-      sd_key: sdKey,
+      id: sdKey,  // Human-readable key (per schema: id=VARCHAR for main identifier)
+      sd_key: sdKey,  // Same for backward compatibility
       title: sdComponents.title,
       description: sdComponents.problem_definition,
       rationale: sdComponents.rationale,

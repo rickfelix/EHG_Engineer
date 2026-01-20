@@ -343,8 +343,8 @@ export async function createSDFromLearning(items, type) {
   const keyPrinciples = buildKeyPrinciples(items);
 
   const sdData = {
-    id: randomUUID(),  // Generate UUID for primary key
-    sd_key: sdKey,  // Human-readable ID like SD-LEARN-001
+    id: sdKey,  // Human-readable key (per schema: id=VARCHAR for main identifier)
+    sd_key: sdKey,  // Same for backward compatibility
     title: title,
     description: description,
     rationale: `Accumulated ${items.length} item(s) from retrospectives and pattern analysis via /learn command.`,

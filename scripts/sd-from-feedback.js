@@ -239,11 +239,12 @@ async function createSdFromFeedback(feedback, parentId = null) {
   const sdType = FEEDBACK_TYPE_MAP[feedback.type] || 'bugfix';
   const priority = PRIORITY_MAP[feedback.priority] || 'medium';
   // SD-LEO-SDKEY-001: Use centralized async key generator
+  // SD-LEO-FIX-CREATION-COLUMN-MAPPING-001: id=human-readable key per schema
   const sdKey = await generateSdKey(feedback);
 
   const sdData = {
-    id: randomUUID(),
-    sd_key: sdKey,
+    id: sdKey,  // Human-readable key (per schema: id=VARCHAR for main identifier)
+    sd_key: sdKey,  // Same for backward compatibility
     title: feedback.title,
     description: feedback.description || feedback.title,
     rationale: `Created from feedback item. Source: ${feedback.source_type || 'manual'}. Original ID: ${feedback.id}`,

@@ -390,10 +390,11 @@ async function main() {
 
   // Initialize SD data
   // SD-LEO-SDKEY-001: Use centralized async key generator
+  // SD-LEO-FIX-CREATION-COLUMN-MAPPING-001: id=human-readable key per schema
   const sdKey = await generateSdKey(title, sdType);
   const sdData = {
-    id: randomUUID(),
-    sd_key: sdKey,
+    id: sdKey,  // Human-readable key (per schema: id=VARCHAR for main identifier)
+    sd_key: sdKey,  // Same for backward compatibility
     title: title,
     description: description || title,
     rationale: `Created via create-sd.js helper script. Type: ${sdType}.`,
