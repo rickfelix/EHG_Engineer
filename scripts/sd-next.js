@@ -438,10 +438,12 @@ class SDNextSelector {
   /**
    * Load multi-repo status (Phase 2 multi-repo intelligence)
    * Checks for uncommitted changes across all EHG repositories
+   * Only warns about files older than 5 days (WIP files are ignored)
    */
   loadMultiRepoStatus() {
     try {
-      this.multiRepoStatus = checkUncommittedChanges(true); // primary repos only
+      // Only warn about files older than 5 days - recent WIP is expected
+      this.multiRepoStatus = checkUncommittedChanges(true, { minAgeDays: 5 });
     } catch {
       // Non-fatal - continue without multi-repo status
       this.multiRepoStatus = null;
@@ -467,12 +469,16 @@ class SDNextSelector {
 
   /**
    * Display multi-repo status warning if uncommitted changes exist
+   * Only shows files older than the configured threshold (default 5 days)
    */
   displayMultiRepoWarning() {
     if (!this.multiRepoStatus || !this.multiRepoStatus.hasChanges) return;
 
+    const minAgeDays = this.multiRepoStatus.minAgeDays || 5;
+
     console.log(`\n${colors.bold}───────────────────────────────────────────────────────────────────${colors.reset}`);
-    console.log(`${colors.bgYellow}${colors.bold} MULTI-REPO WARNING ${colors.reset}\n`);
+    console.log(`${colors.bgYellow}${colors.bold} MULTI-REPO WARNING ${colors.reset}`);
+    console.log(`${colors.dim}(Showing files ≥${minAgeDays} days old)${colors.reset}\n`);
 
     for (const repo of this.multiRepoStatus.summary) {
       const icon = repo.uncommittedCount > 0 ? '📝' : '📤';
