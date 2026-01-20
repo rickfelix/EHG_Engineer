@@ -46,7 +46,7 @@ claude mcp list  # Verify "playwright" is connected
 **1. Basic Navigation & Screenshot**
 ```
 Use Playwright MCP to:
-- Navigate to http://localhost:3000/chairman-analytics
+- Navigate to http://localhost:3000/chairman/analytics
 - Wait for the page to load completely
 - Take a screenshot and save as "chairman-analytics-before.png"
 ```
@@ -123,7 +123,7 @@ Use Puppeteer MCP to:
 **2. Performance Measurement**
 ```
 Use Puppeteer MCP to:
-- Navigate to http://localhost:3000/chairman-analytics
+- Navigate to http://localhost:3000/chairman/analytics
 - Measure page load time
 - Report metrics
 ```
