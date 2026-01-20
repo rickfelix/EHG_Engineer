@@ -251,7 +251,7 @@ Escalation views, and legacy dashboard fallback. Evaluate each route for design 
 accessibility compliance, performance metrics, security posture, and UX quality.`,
 
   scope: `Routes: /chairman, /chairman/decisions, /chairman/portfolio, /chairman/settings,
-/chairman/escalations/:id, /chairman-legacy, /chairman-analytics. Components: BriefingDashboard,
+/chairman/escalations/:id, /chairman/analytics. Components: BriefingDashboard,
 DecisionsInbox, VenturesPage, ChairmanSettingsPage, ChairmanEscalationPage, DecisionAnalyticsDashboard.`,
 
   rationale: `The Command Center is the strategic executive dashboard. Any issues here directly
@@ -266,7 +266,7 @@ high quality.`,
   sequence_rank: 1,
 
   strategic_objectives: [
-    "Audit all 7 Command Center routes for completeness",
+    "Audit all 6 Command Center routes for completeness",
     "Verify Glass Cockpit design consistency",
     "Check executive-level accessibility compliance",
     "Measure performance metrics (LCP, FID, CLS)",
@@ -274,7 +274,7 @@ high quality.`,
   ],
 
   success_criteria: [
-    "All 7 routes accessed and evaluated",
+    "All 6 routes accessed and evaluated",
     "Design inconsistencies documented",
     "Accessibility issues cataloged with WCAG references",
     "Performance baselines recorded",
@@ -296,8 +296,7 @@ high quality.`,
       { path: "/chairman/portfolio", component: "VenturesPage", purpose: "Portfolio overview" },
       { path: "/chairman/settings", component: "ChairmanSettingsPage", purpose: "Settings" },
       { path: "/chairman/escalations/:id", component: "ChairmanEscalationPage", purpose: "Escalation detail" },
-      { path: "/chairman-legacy", component: "ChairmanDashboard", purpose: "Legacy fallback" },
-      { path: "/chairman-analytics", component: "DecisionAnalyticsDashboard", purpose: "Analytics" }
+      { path: "/chairman/analytics", component: "DecisionAnalyticsDashboard", purpose: "Analytics" }
     ]
   },
 
