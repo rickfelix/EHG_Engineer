@@ -11,6 +11,7 @@ This guide documents all 140+ npm scripts available in EHG_Engineer.
 | [PRD Management](#prd-management) | 15+ | `prd:validate`, `prd:health`, `prd:new` |
 | [Database](#database-operations) | 10+ | `db:create`, `schema:docs`, `check-db` |
 | [Testing](#testing) | 15+ | `test`, `test:e2e`, `test:uat` |
+| [Validation](#validation) | 6+ | `validate:bypass`, `validate:sd-type-sync` |
 | [Context Management](#context-management) | 8+ | `context:usage`, `context:compact` |
 | [Pattern Management](#pattern-management) | 12+ | `pattern:resolve`, `pattern:sync` |
 | [Handoffs](#handoffs) | 5+ | `handoff`, `handoff:list`, `handoff:compliance` |
@@ -117,10 +118,41 @@ npm run sd:release       # Release SD claim
 
 ### Creating SDs
 
+#### Recommended: /leo create Command
+
+The `/leo create` command provides a unified interface for SD creation (SD-LEO-SDKEY-001):
+
 ```bash
-npm run new-sd           # Interactive new SD wizard
-npm run add-sd           # Add SD to database
-npm run create-app-sd    # Create app-specific SD
+# Interactive mode - Prompts for type, title, etc.
+/leo create
+
+# From UAT finding
+/leo create --from-uat <test-id>
+
+# From /learn pattern
+/leo create --from-learn <pattern-id>
+
+# From /inbox feedback
+/leo create --from-feedback <feedback-id>
+
+# Create child SD
+/leo create --child <parent-key> [index]
+```
+
+**Features**:
+- Unified SDKeyGenerator with source traceability (UAT, LEARN, FEEDBACK, PATTERN, LEO)
+- Consistent key format: `SD-{SOURCE}-{TYPE}-{SEMANTIC}-{NUM}`
+- Automatic collision detection across `sd_key` and `id` columns
+- Hierarchy support (parent/child/grandchild/great-grandchild)
+
+See: `docs/reference/sd-key-generator-guide.md` for API documentation.
+
+#### Legacy Commands
+
+```bash
+npm run new-sd           # Interactive new SD wizard (legacy)
+npm run add-sd           # Add SD to database (legacy)
+npm run create-app-sd    # Create app-specific SD (legacy)
 ```
 
 ---
@@ -232,10 +264,20 @@ npm run rca:test:integration # Run RCA integration tests
 
 ### Validation
 
+### Story Mapping
+
 ```bash
 npm run validate:story-mapping          # Validate story-test mapping
 npm run validate:story-mapping:verbose  # Verbose output
 npm run validate:story-mapping:fix      # Auto-fix mapping
+```
+
+### LEO Protocol Validation
+
+```bash
+npm run validate:bypass                 # Run bypass detection on recent SDs (last 7 days)
+npm run validate:bypass:all             # Run bypass detection on all SDs
+npm run validate:sd-type-sync           # Verify SD type synchronization across constraint/profiles/code
 ```
 
 ---
@@ -572,6 +614,14 @@ npm run prd:health           # Check PRD health
 npm run gate:health          # Check gates
 ```
 
+### Validating Protocol Integrity
+
+```bash
+npm run validate:bypass      # Check for artifact chronology violations
+npm run validate:sd-type-sync # Verify SD type consistency
+npm run handoff:compliance   # Check handoff compliance
+```
+
 ---
 
 ## Environment Variables
@@ -596,4 +646,4 @@ Many scripts respect these environment variables:
 
 ---
 
-*Last Updated: 2026-01-03*
+*Last Updated: 2026-01-19*
