@@ -1,0 +1,181 @@
+/**
+ * SD Transition Readiness Gate for LEAD-TO-PLAN
+ * Part of SD-LEO-REFACTOR-LEADTOPLAN-001
+ *
+ * TIER 1 Implementation: Entry validation gate
+ * Prevents handoff attempts when SD is not ready or has unresolved issues.
+ */
+
+import { quickPreflightCheck } from '../../../../../lib/handoff-preflight.js';
+
+/**
+ * Validate SD Transition Readiness for LEAD→PLAN
+ *
+ * Checks:
+ * 1. SD has required fields (title, scope, acceptance_criteria)
+ * 2. SD status allows for LEAD→PLAN transition
+ * 3. No previous failed/rejected LEAD-TO-PLAN handoffs (must resolve first)
+ * 4. Quick preflight check for handoff state consistency
+ * 5. success_metrics must be populated (QF-20251220-426)
+ *
+ * @param {Object} sd - Strategic Directive
+ * @param {Object} supabase - Supabase client
+ * @returns {Object} Validation result
+ */
+export async function validateTransitionReadiness(sd, supabase) {
+  const issues = [];
+  const warnings = [];
+  let score = 100;
+
+  console.log(`   SD: ${sd.sd_key} - ${sd.title}`);
+  console.log(`   Current Status: ${sd.status || 'NOT SET'}`);
+
+  // Check 1: Required fields for planning
+  const requiredFields = ['title', 'description'];
+  const missingFields = requiredFields.filter(f => !sd[f] || sd[f].trim() === '');
+
+  if (missingFields.length > 0) {
+    issues.push(`Missing required fields: ${missingFields.join(', ')}`);
+    console.log(`   ❌ Missing required fields: ${missingFields.join(', ')}`);
+  } else {
+    console.log('   ✅ All required fields present');
+  }
+
+  // Check 2: SD status allows LEAD→PLAN transition
+  const validStatuses = ['ACTIVE', 'APPROVED', 'PLANNING', 'READY', 'LEAD_APPROVED', null, undefined];
+  const blockingStatuses = ['COMPLETED', 'CANCELLED', 'ARCHIVED', 'ON_HOLD'];
+
+  if (blockingStatuses.includes(sd.status?.toUpperCase())) {
+    issues.push(`SD status '${sd.status}' does not allow handoff - must be active/approved`);
+    console.log(`   ❌ Blocking status: ${sd.status}`);
+  } else if (!validStatuses.some(s => s === sd.status || (s && sd.status?.toUpperCase() === s))) {
+    warnings.push(`Unusual SD status: ${sd.status} - verify this is intentional`);
+    console.log(`   ⚠️  Unusual status: ${sd.status}`);
+    score -= 10;
+  } else {
+    console.log('   ✅ Status allows transition');
+  }
+
+  // Check 3: Look for previous failed/rejected LEAD-TO-PLAN handoffs
+  try {
+    const { data: previousHandoffs } = await supabase
+      .from('sd_handoffs')
+      .select('id, status, created_at, rejection_reason')
+      .eq('sd_id', sd.id)
+      .eq('handoff_type', 'LEAD-TO-PLAN')
+      .in('status', ['REJECTED', 'FAILED', 'BLOCKED'])
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (previousHandoffs && previousHandoffs.length > 0) {
+      const latestFailed = previousHandoffs[0];
+      const failedCount = previousHandoffs.length;
+
+      console.log(`   ⚠️  Found ${failedCount} previous failed/rejected handoff attempt(s)`);
+
+      // If the most recent attempt was rejected, require acknowledgment
+      if (latestFailed.status === 'REJECTED') {
+        issues.push(`Previous LEAD-TO-PLAN handoff was REJECTED: ${latestFailed.rejection_reason || 'No reason provided'}`);
+        issues.push('Action: Address rejection reason before retrying handoff');
+        console.log(`   ❌ Last rejection: ${latestFailed.rejection_reason || 'No reason provided'}`);
+      } else {
+        warnings.push(`Previous handoff attempt failed (${failedCount}x) - verify issues resolved`);
+        score -= 15;
+      }
+    } else {
+      console.log('   ✅ No previous failed handoff attempts');
+    }
+  } catch (error) {
+    // Table may not exist yet - warn but don't block
+    warnings.push(`Could not check previous handoffs: ${error.message}`);
+    console.log(`   ⚠️  Handoff history check skipped: ${error.message}`);
+  }
+
+  // Check 4: Quick preflight check using shared utility
+  try {
+    const preflightResult = await quickPreflightCheck(sd.id, 'PLAN');
+    if (!preflightResult.ready) {
+      // This is informational for LEAD→PLAN (first handoff)
+      // The preflight utility expects LEAD-TO-PLAN to exist for PLAN phase
+      // But we're CREATING it now, so this is expected
+      console.log('   ℹ️  Preflight: No prior handoffs (expected for LEAD→PLAN)');
+    } else {
+      console.log('   ✅ Preflight check passed');
+    }
+  } catch (error) {
+    // Preflight utility error - continue anyway
+    console.log(`   ⚠️  Preflight check skipped: ${error.message}`);
+  }
+
+  // QF-20251220-426: Check 5: success_metrics must be populated
+  // Root cause: Empty success_metrics caused RETROSPECTIVE_QUALITY_GATE failures
+  // at PLAN-TO-LEAD. Catching this at LEAD-TO-PLAN prevents downstream issues.
+  // ROOT CAUSE FIX: Also check success_criteria as fallback (SD creation scripts use this field)
+  let successMetrics = sd.success_metrics;
+  let metricsSource = 'success_metrics';
+
+  // Fallback to success_criteria if success_metrics is empty (common in SD creation scripts)
+  if ((!successMetrics || (Array.isArray(successMetrics) && successMetrics.length === 0))
+      && sd.success_criteria && Array.isArray(sd.success_criteria) && sd.success_criteria.length > 0) {
+    successMetrics = sd.success_criteria;
+    metricsSource = 'success_criteria (fallback)';
+    console.log('   ℹ️  Using success_criteria as fallback for success_metrics');
+  }
+
+  if (!successMetrics || (Array.isArray(successMetrics) && successMetrics.length === 0)) {
+    issues.push('success_metrics AND success_criteria are both empty - must define at least one measurable success metric');
+    console.log('   ❌ success_metrics and success_criteria are both empty or missing');
+  } else if (Array.isArray(successMetrics)) {
+    // Validate structure: accept both object format (metric/target) AND string format (success_criteria)
+    // Object format: { metric: "...", target: "..." }
+    // String format: "Schema allows all status values..." (from success_criteria)
+    const validMetrics = successMetrics.filter(m =>
+      (m && typeof m === 'object' && m.metric && m.target) || // Object format
+      (m && typeof m === 'string' && m.trim().length > 0)     // String format (success_criteria)
+    );
+    if (validMetrics.length === 0) {
+      issues.push('success_metrics/success_criteria has no valid entries');
+      console.log('   ❌ No valid metric entries found');
+    } else if (validMetrics.length < successMetrics.length) {
+      warnings.push(`${successMetrics.length - validMetrics.length} metric entries are invalid`);
+      console.log(`   ⚠️  ${validMetrics.length}/${successMetrics.length} metrics are valid`);
+      score -= 10;
+    } else {
+      console.log(`   ✅ ${metricsSource} validated (${validMetrics.length} entries)`);
+    }
+  } else {
+    warnings.push('success_metrics is not an array - may cause downstream issues');
+    console.log('   ⚠️  success_metrics is not an array');
+    score -= 10;
+  }
+
+  const passed = issues.length === 0;
+  console.log(`\n   Result: ${passed ? '✅ READY for LEAD→PLAN transition' : '❌ NOT READY - resolve issues above'}`);
+
+  return {
+    pass: passed,
+    score: passed ? Math.max(score, 70) : 0,
+    max_score: 100,
+    issues,
+    warnings
+  };
+}
+
+/**
+ * Create the transition readiness gate
+ *
+ * @param {Object} supabase - Supabase client
+ * @returns {Object} Gate configuration
+ */
+export function createTransitionReadinessGate(supabase) {
+  return {
+    name: 'GATE_SD_TRANSITION_READINESS',
+    validator: async (ctx) => {
+      console.log('\n🔄 GATE: SD Transition Readiness');
+      console.log('-'.repeat(50));
+      return validateTransitionReadiness(ctx.sd, supabase);
+    },
+    required: true,
+    remediation: 'Ensure SD has valid status and no unresolved handoff failures. Address previous handoff rejections before retrying.'
+  };
+}
