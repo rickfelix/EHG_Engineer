@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-20T14:22:16.453Z
-**Rows**: 61
+**Generated**: 2026-01-20T20:21:23.286Z
+**Rows**: 62
 **RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -36,6 +36,9 @@
 ### Primary Key
 - `leo_validation_rules_pkey`: PRIMARY KEY (id)
 
+### Unique Constraints
+- `leo_validation_rules_gate_rule_unique`: UNIQUE (gate, rule_name)
+
 ### Check Constraints
 - `leo_validation_rules_gate_check`: CHECK ((gate = ANY (ARRAY['L'::text, '0'::text, '1'::text, 'Q'::text, '2A'::text, '2B'::text, '2C'::text, '2D'::text, '3'::text, '4'::text])))
 - `leo_validation_rules_weight_check`: CHECK (((weight >= (0)::numeric) AND (weight <= (1)::numeric)))
@@ -45,6 +48,10 @@
 - `idx_leo_validation_rules_handoff`
   ```sql
   CREATE INDEX idx_leo_validation_rules_handoff ON public.leo_validation_rules USING btree (handoff_type, active)
+  ```
+- `leo_validation_rules_gate_rule_unique`
+  ```sql
+  CREATE UNIQUE INDEX leo_validation_rules_gate_rule_unique ON public.leo_validation_rules USING btree (gate, rule_name)
   ```
 - `leo_validation_rules_pkey`
   ```sql

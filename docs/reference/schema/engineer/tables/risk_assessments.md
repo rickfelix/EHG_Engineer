@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-20T14:22:16.453Z
+**Generated**: 2026-01-20T20:21:23.286Z
 **Rows**: 1
 **RLS**: Enabled (2 policies)
 
@@ -99,6 +99,16 @@
 - **With Check**: `true`
 
 ## Triggers
+
+### trg_risk_to_refactoring_pattern
+
+- **Timing**: AFTER INSERT
+- **Action**: `EXECUTE FUNCTION create_refactoring_pattern_from_risk()`
+
+### trg_risk_to_refactoring_pattern
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION create_refactoring_pattern_from_risk()`
 
 ### trigger_risk_assessments_updated_at
 
