@@ -507,7 +507,7 @@ node scripts/analyze-retrospectives-for-protocol-improvements.mjs
 
 ## Reference Documentation
 
-**Full System Documentation**: `docs/reference/protocol-self-improvement.md`
+**Full System Documentation**: `docs/leo/operational/self-improvement.md`
 
 **Topics Covered**:
 - Architecture flow diagram

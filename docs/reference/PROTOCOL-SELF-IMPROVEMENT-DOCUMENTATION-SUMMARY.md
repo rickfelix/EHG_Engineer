@@ -8,7 +8,7 @@
 ## Files Created
 
 ### 1. Main Reference Documentation
-**File**: `docs/reference/protocol-self-improvement.md` (33KB)
+**File**: `docs/leo/operational/self-improvement.md` (33KB)
 
 **Contents**:
 - Overview and purpose

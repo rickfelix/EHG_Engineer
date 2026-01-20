@@ -544,7 +544,7 @@ Add to each tier:
 
 - `CLAUDE.md` - Router implementation using progressive loading
 - `docs/reference/context-monitoring.md` - Context budget management
-- `docs/reference/sub-agent-compression.md` - Complementary compression techniques
+- `docs/leo/sub-agents/compression.md` - Complementary compression techniques
 
 ---
 

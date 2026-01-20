@@ -155,7 +155,7 @@ node scripts/handoff.js execute EXEC-TO-PLAN <SD-ID>  # Retry handoff
 - `/CLAUDE_EXEC.md` - EXEC phase operations
 
 ### Reference Documentation
-- `/docs/reference/handoff-system-guide.md` - **UPDATED**: Handoff gate architecture (v4.4.2)
+- `/docs/leo/handoffs/handoff-system-guide.md` - **UPDATED**: Handoff gate architecture (v4.4.2)
 - `/docs/leo/gates.md` - Gate 2A-3 validation
 - `/docs/DOCUMENTATION_STANDARDS.md` - Documentation standards
 

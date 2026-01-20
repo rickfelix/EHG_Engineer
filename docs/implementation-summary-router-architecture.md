@@ -65,7 +65,7 @@ Categorized 83 database sections into 5 files:
 ```
 
 ### 4. Created Documentation
-- **Architecture Guide**: `docs/reference/claude-md-router-architecture.md` (comprehensive)
+- **Architecture Guide**: `docs/leo/operational/router-architecture.md` (comprehensive)
 - **Quick Reference**: `scripts/README-CLAUDE-GENERATION.md` (quick start)
 
 ## Results
@@ -148,7 +148,7 @@ Categorized 83 database sections into 5 files:
 
 ### Documentation Created
 
-1. **docs/reference/claude-md-router-architecture.md**
+1. **docs/leo/operational/router-architecture.md**
    - Comprehensive architecture guide
    - Loading strategy explained
    - Maintenance procedures
