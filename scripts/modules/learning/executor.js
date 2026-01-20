@@ -6,7 +6,6 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
 import { execSync } from 'child_process';
 import path from 'path';

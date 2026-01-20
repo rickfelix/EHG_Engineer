@@ -19,7 +19,6 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import { randomUUID } from 'crypto';
 import readline from 'readline';
 // SD-LEO-SDKEY-001: Centralized SD key generation
 import { generateSDKey } from './modules/sd-key-generator.js';
