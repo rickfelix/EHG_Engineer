@@ -81,10 +81,11 @@ async function generatePRDScript() {
 
     console.log('   Fetching SD details from database...');
 
+    // Query by sd_key OR id to handle both formats
     const { data: sdData, error: sdError } = await supabase
       .from('strategic_directives_v2')
-      .select('id, title, category, priority, description')
-      .eq('id', sdId)
+      .select('id, sd_key, title, category, priority, description')
+      .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
       .single();
 
     if (!sdError && sdData) {

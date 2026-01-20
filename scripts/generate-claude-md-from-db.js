@@ -68,6 +68,9 @@ class CLAUDEMDGeneratorV3 {
       // LEO Protocol v4.4 Enhancement: Proactive SD proposals
       const pendingProposals = await this.getPendingProposals();
 
+      // SD-LEO-CONTINUITY-001: Autonomous continuation directives
+      const autonomousDirectives = await this.getAutonomousDirectives();
+
       const data = {
         protocol,
         agents,
@@ -79,7 +82,8 @@ class CLAUDEMDGeneratorV3 {
         hotPatterns,
         recentRetrospectives,
         gateHealth,
-        pendingProposals
+        pendingProposals,
+        autonomousDirectives
       };
 
       // Generate each file
@@ -99,6 +103,7 @@ class CLAUDEMDGeneratorV3 {
       console.log(`🔥 Hot patterns: ${hotPatterns.length}`);
       console.log(`📝 Recent retrospectives: ${recentRetrospectives.length}`);
       console.log(`📋 Pending proposals: ${pendingProposals.length}`);
+      console.log(`🤖 Autonomous directives: ${autonomousDirectives.length}`);
       console.log('\n🎯 Router architecture implemented!');
       console.log('   → Initial context load: ~18k chars (9% of 200k budget)');
       console.log('   → Down from: 173k chars (87% of budget)');
@@ -335,6 +340,30 @@ class CLAUDEMDGeneratorV3 {
     }
   }
 
+  /**
+   * Fetch autonomous continuation directives
+   * Part of SD-LEO-CONTINUITY-001 - Autonomous Continuation Directives
+   */
+  async getAutonomousDirectives() {
+    try {
+      const { data, error } = await supabase
+        .from('leo_autonomous_directives')
+        .select('*')
+        .eq('active', true)
+        .order('display_order');
+
+      if (error) {
+        console.warn('⚠️  Could not load autonomous directives (table may not exist yet)');
+        return [];
+      }
+
+      return data || [];
+    } catch (err) {
+      console.warn('⚠️  Could not load autonomous directives:', err.message);
+      return [];
+    }
+  }
+
   getSectionsByMapping(sections, fileKey) {
     const mappedTypes = this.fileMapping[fileKey]?.sections || [];
     return sections.filter(s => mappedTypes.includes(s.section_type));
@@ -465,13 +494,16 @@ ${subAgentSection}
   }
 
   generateLead(data) {
-    const { protocol } = data;
+    const { protocol, autonomousDirectives } = data;
     const sections = protocol.sections;
     const { today, time } = this.getMetadata(protocol);
 
     // Get LEAD sections
     const leadSections = this.getSectionsByMapping(sections, 'CLAUDE_LEAD.md');
     const leadContent = leadSections.map(s => this.formatSection(s)).join('\n\n');
+
+    // SD-LEO-CONTINUITY-001: Generate autonomous directives section for LEAD phase
+    const directivesSection = this.generateAutonomousDirectivesSection(autonomousDirectives, 'LEAD');
 
     return `# CLAUDE_LEAD.md - LEAD Phase Operations
 
@@ -480,6 +512,8 @@ ${subAgentSection}
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
 ---
+
+${directivesSection}
 
 ${leadContent}
 
@@ -492,13 +526,16 @@ ${leadContent}
   }
 
   generatePlan(data) {
-    const { protocol, handoffTemplates, validationRules } = data;
+    const { protocol, handoffTemplates, validationRules, autonomousDirectives } = data;
     const sections = protocol.sections;
     const { today, time } = this.getMetadata(protocol);
 
     // Get PLAN sections
     const planSections = this.getSectionsByMapping(sections, 'CLAUDE_PLAN.md');
     const planContent = planSections.map(s => this.formatSection(s)).join('\n\n');
+
+    // SD-LEO-CONTINUITY-001: Generate autonomous directives section for PLAN phase
+    const directivesSection = this.generateAutonomousDirectivesSection(autonomousDirectives, 'PLAN');
 
     return `# CLAUDE_PLAN.md - PLAN Phase Operations
 
@@ -507,6 +544,8 @@ ${leadContent}
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
 ---
+
+${directivesSection}
 
 ${planContent}
 
@@ -527,7 +566,7 @@ ${this.generateValidationRules(validationRules)}
   }
 
   generateExec(data) {
-    const { protocol, schemaConstraints, processScripts } = data;
+    const { protocol, schemaConstraints, processScripts, autonomousDirectives } = data;
     const sections = protocol.sections;
     const { today, time } = this.getMetadata(protocol);
 
@@ -541,6 +580,9 @@ ${this.generateValidationRules(validationRules)}
     // Generate process scripts section
     const scriptsSection = this.generateProcessScriptsSection(processScripts);
 
+    // SD-LEO-CONTINUITY-001: Generate autonomous directives section for EXEC phase
+    const directivesSection = this.generateAutonomousDirectivesSection(autonomousDirectives, 'EXEC');
+
     return `# CLAUDE_EXEC.md - EXEC Phase Operations
 
 **Generated**: ${today} ${time}
@@ -548,6 +590,8 @@ ${this.generateValidationRules(validationRules)}
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
 ---
+
+${directivesSection}
 
 ${execContent}
 
@@ -883,6 +927,91 @@ npm run proposal:list
 \`\`\`
 
 *Proposals auto-generated by observer agents. Run \`npm run proposal:list\` for full details.*
+`;
+
+    return section;
+  }
+
+  /**
+   * Generate Autonomous Continuation Directives section for phase files
+   * Part of SD-LEO-CONTINUITY-001 - Provides guidance for autonomous agent behavior
+   *
+   * @param {Array} directives - All active directives
+   * @param {string} phase - The phase to filter for (LEAD, PLAN, EXEC)
+   * @returns {string} Markdown section
+   */
+  generateAutonomousDirectivesSection(directives, phase) {
+    if (!directives || directives.length === 0) {
+      return '';
+    }
+
+    // Filter directives for this phase
+    const phaseDirectives = directives.filter(d =>
+      d.applies_to_phases && d.applies_to_phases.includes(phase)
+    );
+
+    if (phaseDirectives.length === 0) {
+      return '';
+    }
+
+    // Separate by enforcement point
+    const alwaysDirectives = phaseDirectives.filter(d => d.enforcement_point === 'ALWAYS');
+    const onFailureDirectives = phaseDirectives.filter(d => d.enforcement_point === 'ON_FAILURE');
+    const handoffDirectives = phaseDirectives.filter(d => d.enforcement_point === 'HANDOFF_START');
+
+    let section = `## Autonomous Continuation Directives
+
+**CRITICAL**: These directives guide autonomous agent behavior during ${phase} phase execution.
+
+`;
+
+    // ALWAYS directives - shown prominently
+    if (alwaysDirectives.length > 0) {
+      section += `### Core Directives (Always Apply)
+
+`;
+      alwaysDirectives.forEach((d, idx) => {
+        const blockingBadge = d.is_blocking ? ' **[BLOCKING]**' : '';
+        section += `**${idx + 1}. ${d.title}**${blockingBadge}
+${d.content}
+
+`;
+      });
+    }
+
+    // HANDOFF_START directives - shown at phase transitions
+    if (handoffDirectives.length > 0) {
+      section += `### Handoff Directives (Apply at Phase Start)
+
+`;
+      handoffDirectives.forEach((d, idx) => {
+        const blockingBadge = d.is_blocking ? ' **[BLOCKING]**' : '';
+        section += `**${idx + 1}. ${d.title}**${blockingBadge}
+${d.content}
+
+`;
+      });
+    }
+
+    // ON_FAILURE directives - conditional reminders
+    if (onFailureDirectives.length > 0) {
+      section += `### Conditional Directives (Apply When Issues Occur)
+
+**Trigger**: When encountering errors, blockers, or failures during execution.
+
+`;
+      onFailureDirectives.forEach((d, idx) => {
+        const blockingBadge = d.is_blocking ? ' **[BLOCKING]**' : '';
+        section += `**${idx + 1}. ${d.title}**${blockingBadge}
+${d.content}
+
+`;
+      });
+    }
+
+    section += `---
+
+*Directives from \`leo_autonomous_directives\` table (SD-LEO-CONTINUITY-001)*
 `;
 
     return section;

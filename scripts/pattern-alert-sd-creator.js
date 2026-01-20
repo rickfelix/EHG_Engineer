@@ -22,6 +22,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
+// SD-LEO-SDKEY-001: Centralized SD key generation
+import { generateSDKey as generateCentralizedSDKey } from './modules/sd-key-generator.js';
 
 dotenv.config();
 
@@ -142,27 +144,15 @@ async function getAlertablePatterns() {
 
 /**
  * Generate SD key
+ * SD-LEO-SDKEY-001: Uses centralized SDKeyGenerator for consistent naming
  */
-async function generateSDKey(category) {
-  const prefix = `${CONFIG.SD_PREFIX}-${category.toUpperCase()}`;
-
-  // Get highest existing SD with this prefix
-  const { data } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key')
-    .like('sd_key', `${prefix}-%`)
-    .order('sd_key', { ascending: false })
-    .limit(1);
-
-  let nextNum = 1;
-  if (data && data.length > 0) {
-    const match = data[0].sd_key.match(/-(\d+)$/);
-    if (match) {
-      nextNum = parseInt(match[1]) + 1;
-    }
-  }
-
-  return `${prefix}-${String(nextNum).padStart(3, '0')}`;
+async function generateSDKey(pattern) {
+  // Use centralized SDKeyGenerator for consistent naming across all SD sources
+  return generateCentralizedSDKey({
+    source: 'PATTERN',
+    type: 'bugfix', // Patterns are always bugfix type
+    title: pattern.issue_summary || `Pattern ${pattern.pattern_id}`
+  });
 }
 
 /**
@@ -176,7 +166,8 @@ async function createSDForPattern(pattern) {
     return { skipped: true, existing: existingSD };
   }
 
-  const sdKey = await generateSDKey(pattern.category);
+  // SD-LEO-SDKEY-001: Pass full pattern for semantic key generation
+  const sdKey = await generateSDKey(pattern);
   const suggestedTeam = CONFIG.CATEGORY_TEAMS[pattern.category] || 'engineering';
   const sdCategory = CONFIG.PATTERN_TO_SD_CATEGORY[pattern.category] || 'Technical Debt';
 

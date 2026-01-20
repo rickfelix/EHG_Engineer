@@ -21,6 +21,8 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { randomUUID } from 'crypto';
 import readline from 'readline';
+// SD-LEO-SDKEY-001: Centralized SD key generation
+import { generateSDKey } from './modules/sd-key-generator.js';
 
 dotenv.config();
 
@@ -178,23 +180,17 @@ function displayFeedbackTable(items) {
 
 /**
  * Generate SD key from feedback
+ * SD-LEO-SDKEY-001: Uses centralized SDKeyGenerator for consistent naming
  */
-function generateSdKey(feedback) {
-  const prefix = feedback.type === 'issue' ? 'FIX' : 'FEAT';
+async function generateSdKey(feedback) {
+  const type = feedback.type === 'issue' ? 'bugfix' : 'feature';
 
-  // Extract meaningful words from title
-  const words = (feedback.title || 'untitled')
-    .replace(/[^a-zA-Z0-9\s]/g, '')
-    .split(/\s+/)
-    .filter(w => w.length > 2)
-    .slice(0, 3)
-    .map(w => w.toUpperCase())
-    .join('-');
-
-  // Add random suffix
-  const suffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-
-  return `SD-${prefix}-${words || 'GEN'}-${suffix}`;
+  // Use centralized SDKeyGenerator for consistent naming across all SD sources
+  return generateSDKey({
+    source: 'FEEDBACK',
+    type,
+    title: feedback.title || 'Untitled Feedback'
+  });
 }
 
 /**
@@ -242,7 +238,8 @@ async function resolveParentSd(parentKey) {
 async function createSdFromFeedback(feedback, parentId = null) {
   const sdType = FEEDBACK_TYPE_MAP[feedback.type] || 'bugfix';
   const priority = PRIORITY_MAP[feedback.priority] || 'medium';
-  const sdKey = generateSdKey(feedback);
+  // SD-LEO-SDKEY-001: Use centralized async key generator
+  const sdKey = await generateSdKey(feedback);
 
   const sdData = {
     id: randomUUID(),

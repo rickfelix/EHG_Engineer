@@ -10,6 +10,8 @@ import { randomUUID } from 'crypto';
 import dotenv from 'dotenv';
 import { execSync } from 'child_process';
 import path from 'path';
+// SD-LEO-SDKEY-001: Centralized SD key generation
+import { generateSDKey as generateCentralizedSDKey } from '../sd-key-generator.js';
 
 dotenv.config();
 
@@ -84,13 +86,15 @@ export function classifyComplexity(selectedItems) {
 }
 
 /**
- * Generate the next available SD-LEARN-NNN or QF-YYYYMMDD-NNN ID
+ * Generate the next available SD key or QF ID
+ * SD-LEO-SDKEY-001: Uses centralized SDKeyGenerator for consistent naming
  * @param {'quick-fix' | 'full-sd'} type
+ * @param {string} title - Title for semantic content extraction
  * @returns {Promise<string>}
  */
-export async function generateSDId(type) {
+export async function generateSDId(type, title = 'Learning Improvement') {
   if (type === 'quick-fix') {
-    // Use QF-YYYYMMDD-NNN format
+    // Use QF-YYYYMMDD-NNN format (quick fixes don't use the full SD key pattern)
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -99,28 +103,12 @@ export async function generateSDId(type) {
     return `QF-${year}${month}${day}-${random}`;
   }
 
-  // For full SD, find next SD-LEARN-NNN
-  const { data, error } = await supabase
-    .from('strategic_directives_v2')
-    .select('sd_key')
-    .like('sd_key', 'SD-LEARN-%')
-    .order('sd_key', { ascending: false })
-    .limit(1);
-
-  if (error) {
-    console.error('Error querying existing SD-LEARN IDs:', error.message);
-    // Fallback to timestamp-based ID
-    return `SD-LEARN-${Date.now().toString().slice(-6)}`;
-  }
-
-  if (!data || data.length === 0) {
-    return 'SD-LEARN-001';
-  }
-
-  // Extract number and increment
-  const match = data[0].sd_key.match(/SD-LEARN-(\d+)/);
-  const nextNum = match ? parseInt(match[1]) + 1 : 1;
-  return `SD-LEARN-${String(nextNum).padStart(3, '0')}`;
+  // For full SD, use centralized SDKeyGenerator
+  return generateCentralizedSDKey({
+    source: 'LEARN',
+    type: 'bugfix', // Learning items are typically bugfix type
+    title
+  });
 }
 
 /**
@@ -344,8 +332,10 @@ export function buildKeyPrinciples(items) {
  * @returns {Promise<{id: string, success: boolean, error?: string}>}
  */
 export async function createSDFromLearning(items, type) {
-  const sdKey = await generateSDId(type);
+  // Build title first so we can pass it to generateSDId for semantic key generation
   const title = buildSDTitle(items);
+  // SD-LEO-SDKEY-001: Pass title for semantic key generation
+  const sdKey = await generateSDId(type, title);
   const description = buildSDDescription(items);
   const successMetrics = buildSuccessMetrics(items);
   const smokeTestSteps = buildSmokeTestSteps(items);

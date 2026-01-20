@@ -1,10 +1,42 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-01-19 8:29:17 AM
+**Generated**: 2026-01-20 9:06:09 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
 ---
+
+## Autonomous Continuation Directives
+
+**CRITICAL**: These directives guide autonomous agent behavior during EXEC phase execution.
+
+### Core Directives (Always Apply)
+
+**1. Autonomous Continuation**
+Continue through the strategic directive and its children SDs autonomously until completion or blocker. Do not stop to ask for permission at each step.
+
+**2. Quality Over Speed**
+Prioritize quality over speed. Do not cut corners. Ensure tests pass, code is clean, and documentation is updated.
+
+### Handoff Directives (Apply at Phase Start)
+
+**1. Protocol Familiarization**
+At each handoff point, familiarize yourself with and read the LEO protocol documentation for the relevant phase.
+
+### Conditional Directives (Apply When Issues Occur)
+
+**Trigger**: When encountering errors, blockers, or failures during execution.
+
+**1. 5-Whys Root Cause Analysis**
+When encountering issues or blockers, determine the root cause by asking five whys before attempting fixes. Use /escalate to invoke the formal 5-Whys analysis process.
+
+**2. Sustainable Resolution**
+Resolve root causes so they do not happen again in the future. Update processes, documentation, or automation to prevent recurrence.
+
+---
+
+*Directives from `leo_autonomous_directives` table (SD-LEO-CONTINUITY-001)*
+
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -1637,6 +1669,6 @@ Verifies LEAD to PLAN handoff requirements are met before allowing transition.
 
 ---
 
-*Generated from database: 2026-01-19*
+*Generated from database: 2026-01-20*
 *Protocol Version: 4.3.3*
 *Load when: User mentions EXEC, implementation, coding, or testing*

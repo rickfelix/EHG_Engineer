@@ -15,6 +15,8 @@ import dotenv from 'dotenv';
 
 // SD-LLM-CONFIG-CENTRAL-001: Centralized model configuration
 import { getOpenAIModel } from '../lib/config/model-config.js';
+// SD-LEO-SDKEY-001: Centralized SD key generation
+import { generateSDKey } from './modules/sd-key-generator.js';
 
 dotenv.config();
 
@@ -290,8 +292,9 @@ Return JSON with:
    * Create Strategic Directive entry in strategic_directives_v2
    */
   async createStrategicDirective(sdComponents, testResult, submission) {
-    // Generate SD key
-    const sdKey = await this.generateUATSDKey();
+    // Generate SD key using centralized generator with semantic content
+    // SD-LEO-SDKEY-001: Unified SD key generation
+    const sdKey = await this.generateUATSDKey(sdComponents.title, 'bugfix');
 
     // Get the highest sequence_rank to assign next value
     const { data: maxRankData } = await supabase
@@ -363,47 +366,22 @@ Return JSON with:
 
   /**
    * Generate unique SD key for UAT-generated directives
-   * Checks BOTH sd_key and id fields to avoid conflicts
+   * SD-LEO-SDKEY-001: Uses centralized SDKeyGenerator for consistent naming
+   * @param {string} title - Title of the SD for semantic content extraction
+   * @param {string} type - Type of SD (bugfix, feature, etc.)
    */
-  async generateUATSDKey() {
-    // Get all records with UAT pattern in EITHER sd_key OR id field
-    // This prevents collision with legacy records that used "SD-UAT-001" as their ID
-    const { data: conflicts, error } = await supabase
-      .from('strategic_directives_v2')
-      .select('sd_key, id')
-      .or('sd_key.ilike.SD-UAT-%,id.ilike.SD-UAT-%')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Error checking for UAT SD conflicts:', error);
-    }
-
-    // Extract all used numbers from BOTH sd_key and id fields
-    const usedNumbers = new Set();
-    conflicts?.forEach(record => {
-      // Check both fields for SD-UAT pattern
-      [record.sd_key, record.id].forEach(value => {
-        if (value) {
-          const match = value.match(/SD-UAT-(\d+)/);
-          if (match) {
-            usedNumbers.add(parseInt(match[1]));
-          }
-        }
-      });
+  async generateUATSDKey(title = 'UAT Finding', type = 'bugfix') {
+    // Use centralized SDKeyGenerator for consistent naming across all SD sources
+    const sdKey = await generateSDKey({
+      source: 'UAT',
+      type,
+      title
     });
 
-    // Find the first available number
-    let nextNum = 1;
-    while (usedNumbers.has(nextNum)) {
-      nextNum++;
-    }
-
-    const proposedKey = `SD-UAT-${String(nextNum).padStart(3, '0')}`;
-
     // Final validation: ensure this key doesn't exist anywhere
-    await this.validateSDKeyAvailability(proposedKey);
+    await this.validateSDKeyAvailability(sdKey);
 
-    return proposedKey;
+    return sdKey;
   }
 
   /**
@@ -566,7 +544,7 @@ Return JSON with:
    */
   async createLinkingTable() {
     const _sql = `
-      CREATE TABLE IF NOT EXISTS uat_finding_actions (`
+      CREATE TABLE IF NOT EXISTS uat_finding_actions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         uat_result_id UUID,
         uat_case_id TEXT,
