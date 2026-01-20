@@ -73,7 +73,7 @@ export class ExperimentConfigService {
       status: 'draft',
       startDate: now,
       endDate,
-      variants: params.variants.map((v, i) => ({
+      variants: params.variants.map((v, _i) => ({
         ...v,
         id: `var_${generateId()}`,
       })),

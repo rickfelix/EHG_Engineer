@@ -63,7 +63,7 @@ function checkProactiveReminders(prompt) {
     }
 
     return results.length > 0 ? results : null;
-  } catch (error) {
+  } catch (_error) {
     // Fail silently - don't block prompts if config loading fails
     return null;
   }

@@ -121,7 +121,7 @@ export class TieredPricing {
   /**
    * Report usage to Stripe for metered billing
    */
-  async reportUsage(record: UsageRecord): Promise<{ success: boolean; usageRecordId?: string }> {
+  async reportUsage(_record: UsageRecord): Promise<{ success: boolean; usageRecordId?: string }> {
     // In production, this would call Stripe usage_records API
     return {
       success: true,
