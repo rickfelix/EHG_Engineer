@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-19T16:40:59.907Z
-**Rows**: 431
+**Generated**: 2026-01-20T12:00:18.243Z
+**Rows**: 435
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (75 total)
+## Columns (79 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -94,6 +94,10 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 | stories_with_tests | `integer(32)` | YES | `0` | - |
 | stories_total | `integer(32)` | YES | `0` | - |
 | test_verdict | `character varying(20)` | YES | - | Test verdict from test_runs (PASS, FAIL, PARTIAL, ERROR) |
+| coverage_tool | `character varying(50)` | YES | - | Coverage measurement tool used (jest, istanbul, c8, nyc, etc.) |
+| coverage_pre_percent | `numeric(5,2)` | YES | - | Test coverage percentage before SD implementation |
+| coverage_post_percent | `numeric(5,2)` | YES | - | Test coverage percentage after SD implementation |
+| coverage_delta_percent | `numeric(5,2)` | YES | - | Coverage change (post - pre), can be negative |
 
 ## Constraints
 
@@ -242,6 +246,16 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION extract_protocol_improvements_from_retro()`
+
+### trg_validate_retrospective_coverage
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION validate_retrospective_coverage()`
+
+### trg_validate_retrospective_coverage
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION validate_retrospective_coverage()`
 
 ### trigger_auto_populate_retrospective_fields
 
