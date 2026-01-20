@@ -1,0 +1,300 @@
+/**
+ * Implementation Fidelity Validation Module
+ * Part of SD-LEO-REFACTOR-IMPL-FIDELITY-001
+ *
+ * DESIGN→DATABASE Validation Gates - Gate 2 (EXEC→PLAN)
+ * Validates that EXEC actually implemented the DESIGN and DATABASE recommendations
+ * before PLAN verification begins.
+ *
+ * Refactored from 1,559 LOC monolithic file into focused modules.
+ */
+
+import { calculateAdaptiveThreshold } from '../adaptive-threshold-calculator.js';
+import { getPatternStats } from '../pattern-tracking.js';
+import {
+  shouldSkipCodeValidation,
+  getValidationRequirements
+} from '../../../lib/utils/sd-type-validation.js';
+
+import { runPreflightChecks } from './preflight/index.js';
+import {
+  validateDesignFidelity,
+  validateDatabaseFidelity,
+  validateDataFlowAlignment,
+  validateEnhancedTesting
+} from './sections/index.js';
+
+/**
+ * Validate implementation fidelity for EXEC→PLAN handoff
+ * Phase-Aware Weighting System (Correctness Focus)
+ *
+ * Checks:
+ * A. Design Implementation Fidelity (20 points) - MAJOR
+ * B. Database Implementation Fidelity (35 points) - CRITICAL
+ * C. Data Flow Alignment (20 points) - MAJOR
+ * D. Enhanced Testing (25 points) - CRITICAL
+ *
+ * Total: 100 points
+ *
+ * @param {string} sd_id - Strategic Directive ID
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<Object>} Validation result
+ */
+export async function validateGate2ExecToPlan(sd_id, supabase) {
+  console.log('\n🚪 GATE 2: Implementation Fidelity Validation (EXEC→PLAN)');
+  console.log('='.repeat(60));
+
+  const validation = {
+    passed: true,
+    score: 0,
+    max_score: 100,
+    issues: [],
+    warnings: [],
+    details: {},
+    failed_gates: [],
+    gate_scores: {}
+  };
+
+  // Check if this is a documentation-only SD
+  try {
+    const { data: sd } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, title, sd_type, scope, category')
+      .eq('id', sd_id)
+      .single();
+
+    if (sd && shouldSkipCodeValidation(sd)) {
+      const validationReqs = getValidationRequirements(sd);
+      console.log(`\n   ✅ DOCUMENTATION-ONLY SD DETECTED (sd_type=${sd.sd_type || 'detected'})`);
+      console.log(`      Reason: ${validationReqs.reason}`);
+      console.log('      SKIPPING implementation fidelity validation\n');
+
+      validation.passed = true;
+      validation.score = 100;
+      validation.details.sd_type_bypass = {
+        sd_type: sd.sd_type,
+        reason: 'Documentation-only SD - no code implementation to validate',
+        skipped_checks: ['testing', 'server_restart', 'code_quality', 'design_fidelity', 'database_fidelity']
+      };
+      validation.warnings.push('Gate 2 validation skipped for documentation-only SD');
+
+      const bypassSection = {
+        score: 100,
+        passed: true,
+        issues: [],
+        warnings: [`Skipped for ${sd.sd_type} SD`]
+      };
+      validation.sections = {
+        A: bypassSection,
+        B: bypassSection,
+        C: bypassSection,
+        D: bypassSection
+      };
+      validation.sectionScores = {
+        A: bypassSection,
+        B: bypassSection,
+        C: bypassSection,
+        D: bypassSection
+      };
+
+      return validation;
+    }
+  } catch (error) {
+    console.log(`   ⚠️  Could not check sd_type: ${error.message}`);
+  }
+
+  // Resolve SD ID and check for special modes
+  let resolvedSdUuid = sd_id;
+  try {
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sd_id);
+    let sd;
+
+    if (isUUID) {
+      resolvedSdUuid = sd_id;
+      const result = await supabase
+        .from('strategic_directives_v2')
+        .select('id, title, sd_type, scope, category, intensity_level')
+        .eq('id', sd_id)
+        .single();
+      sd = result.data;
+    } else {
+      const result = await supabase
+        .from('strategic_directives_v2')
+        .select('id, title, sd_type, scope, category, intensity_level')
+        .or(`legacy_id.eq.${sd_id},sd_key.eq.${sd_id}`)
+        .single();
+      sd = result.data;
+      if (sd?.id) {
+        resolvedSdUuid = sd.id;
+      }
+    }
+
+    const sdType = (sd?.sd_type || '').toLowerCase();
+    const intensityLevel = (sd?.intensity_level || '').toLowerCase();
+
+    console.log(`   🔍 SD Type check: sd_type=${sdType}, intensity_level=${intensityLevel}`);
+
+    // Fetch Gate 2 exempt sections
+    try {
+      const { data: typeProfile } = await supabase
+        .from('sd_type_validation_profiles')
+        .select('gate2_exempt_sections')
+        .eq('sd_type', sdType)
+        .single();
+
+      if (typeProfile?.gate2_exempt_sections?.length > 0) {
+        validation.details.gate2_exempt_sections = typeProfile.gate2_exempt_sections;
+        console.log(`   📋 Gate 2 exempt sections for ${sdType}: ${typeProfile.gate2_exempt_sections.join(', ')}`);
+      }
+    } catch (_e) {
+      // No exemptions configured
+    }
+
+    // Set special modes
+    if (sdType === 'frontend') {
+      console.log(`\n   ℹ️  FRONTEND SD DETECTED (sd_type=${sdType})`);
+      validation.details.frontend_mode = true;
+    }
+
+    if (sdType === 'bugfix' || sdType === 'bug_fix') {
+      console.log(`\n   ℹ️  BUGFIX SD DETECTED (sd_type=${sdType})`);
+      validation.details.bugfix_mode = true;
+      validation.details.testing_requirement = 'relaxed';
+    } else if (sdType === 'refactor' && intensityLevel === 'cosmetic') {
+      console.log(`\n   ℹ️  COSMETIC REFACTOR SD DETECTED (intensity=${intensityLevel})`);
+      validation.details.cosmetic_refactor_mode = true;
+      validation.details.testing_requirement = 'unit_tests_only';
+    }
+  } catch (_error) {
+    // Continue with standard validation
+  }
+
+  // Run preflight checks
+  const preflightPassed = await runPreflightChecks(sd_id, validation, supabase);
+  if (!preflightPassed) {
+    return validation;
+  }
+
+  // Phase 2: Weighted Scoring
+  console.log('\n[PHASE 2] Weighted Scoring...');
+  console.log('-'.repeat(60));
+
+  try {
+    // Fetch PRD metadata
+    const { data: prdData, error: prdError } = await supabase
+      .from('product_requirements_v2')
+      .select('metadata, directive_id, title')
+      .eq('directive_id', resolvedSdUuid)
+      .single();
+
+    if (prdError) {
+      console.log(`   ⚠️  PRD fetch error: ${prdError.message}`);
+      validation.issues.push(`Failed to fetch PRD: ${prdError.message}`);
+      validation.failed_gates.push('PRD_FETCH');
+      validation.passed = false;
+      return validation;
+    }
+
+    const designAnalysis = prdData?.metadata?.design_analysis;
+    const databaseAnalysis = prdData?.metadata?.database_analysis;
+
+    if (!designAnalysis && !databaseAnalysis) {
+      validation.warnings.push('No DESIGN or DATABASE analysis found - skipping Gate 2');
+      validation.score = 100;
+      validation.passed = true;
+      return validation;
+    }
+
+    // Section A: Design Implementation Fidelity
+    console.log('\n[A] Design Implementation Fidelity');
+    console.log('-'.repeat(60));
+    await validateDesignFidelity(sd_id, designAnalysis, validation, supabase);
+
+    // Section B: Database Implementation Fidelity
+    console.log('\n[B] Database Implementation Fidelity');
+    console.log('-'.repeat(60));
+    await validateDatabaseFidelity(sd_id, databaseAnalysis, validation, supabase);
+
+    // Section C: Data Flow Alignment
+    console.log('\n[C] Data Flow Alignment');
+    console.log('-'.repeat(60));
+    await validateDataFlowAlignment(sd_id, designAnalysis, databaseAnalysis, validation, supabase);
+
+    // Section D: Enhanced Testing
+    console.log('\n[D] Enhanced Testing');
+    console.log('-'.repeat(60));
+    await validateEnhancedTesting(sd_id, designAnalysis, databaseAnalysis, validation, supabase);
+
+    // Calculate adaptive threshold
+    console.log('\n' + '='.repeat(60));
+    console.log(`GATE 2 SCORE: ${validation.score}/${validation.max_score} points`);
+
+    const { data: gate1Handoff } = await supabase
+      .from('sd_phase_handoffs')
+      .select('metadata')
+      .eq('sd_id', sd_id)
+      .eq('handoff_type', 'PLAN-TO-EXEC')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    const priorGateScores = gate1Handoff?.metadata?.gate1_validation?.score
+      ? [gate1Handoff.metadata.gate1_validation.score]
+      : [];
+
+    const { data: sdData } = await supabase
+      .from('strategic_directives_v2')
+      .select('*')
+      .eq('id', sd_id)
+      .single();
+
+    const patternStats = await getPatternStats(sdData, supabase);
+
+    const thresholdResult = calculateAdaptiveThreshold({
+      sd: sdData,
+      priorGateScores,
+      patternStats,
+      gateNumber: 2
+    });
+
+    validation.details.adaptive_threshold = thresholdResult;
+    const requiredThreshold = thresholdResult.finalThreshold;
+
+    console.log(`\nAdaptive Threshold: ${requiredThreshold.toFixed(1)}%`);
+    console.log(`Reasoning: ${thresholdResult.reasoning}`);
+
+    if (validation.score >= requiredThreshold) {
+      validation.passed = true;
+      console.log(`✅ GATE 2: PASSED (${validation.score} ≥ ${requiredThreshold.toFixed(1)} points)`);
+    } else {
+      validation.passed = false;
+      console.log(`❌ GATE 2: FAILED (${validation.score} < ${requiredThreshold.toFixed(1)} points)`);
+    }
+
+    if (validation.issues.length > 0) {
+      console.log(`\nBlocking Issues (${validation.issues.length}):`);
+      validation.issues.forEach(issue => console.log(`  ❌ ${issue}`));
+    }
+
+    if (validation.warnings.length > 0) {
+      console.log(`\nWarnings (${validation.warnings.length}):`);
+      validation.warnings.forEach(warning => console.log(`  ⚠️  ${warning}`));
+    }
+
+    console.log('='.repeat(60));
+
+    return validation;
+
+  } catch (error) {
+    console.error('\n❌ GATE 2 Validation Error:', error.message);
+    validation.passed = false;
+    validation.issues.push(`Validation error: ${error.message}`);
+    validation.details.error = error.message;
+    return validation;
+  }
+}
+
+// Re-export all modules for direct access
+export * from './utils/index.js';
+export * from './preflight/index.js';
+export * from './sections/index.js';
