@@ -1,10 +1,32 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-01-19 8:29:17 AM
+**Generated**: 2026-01-20 9:06:09 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
 ---
+
+## Autonomous Continuation Directives
+
+**CRITICAL**: These directives guide autonomous agent behavior during LEAD phase execution.
+
+### Core Directives (Always Apply)
+
+**1. Autonomous Continuation**
+Continue through the strategic directive and its children SDs autonomously until completion or blocker. Do not stop to ask for permission at each step.
+
+**2. Quality Over Speed**
+Prioritize quality over speed. Do not cut corners. Ensure tests pass, code is clean, and documentation is updated.
+
+### Handoff Directives (Apply at Phase Start)
+
+**1. Protocol Familiarization**
+At each handoff point, familiarize yourself with and read the LEO protocol documentation for the relevant phase.
+
+---
+
+*Directives from `leo_autonomous_directives` table (SD-LEO-CONTINUITY-001)*
+
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -1184,6 +1206,6 @@ npm run sd:status    # Overall progress by track
 
 ---
 
-*Generated from database: 2026-01-19*
+*Generated from database: 2026-01-20*
 *Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

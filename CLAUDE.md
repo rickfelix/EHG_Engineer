@@ -90,7 +90,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /ship → /document → /
 ```
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-19 8:29:17 AM
+**Last Generated**: 2026-01-20 9:06:09 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -165,6 +165,6 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /ship → /document → /
 
 ---
 
-*Router generated from database: 2026-01-19*
+*Router generated from database: 2026-01-20*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*

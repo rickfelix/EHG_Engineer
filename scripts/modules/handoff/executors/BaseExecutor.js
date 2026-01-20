@@ -68,6 +68,10 @@ export class BaseExecutor {
       // Step 2.6: SD-LEARN-010:US-004 - Auto-trigger DATABASE sub-agent for schema SDs
       await this._autoTriggerDatabaseSubAgent(sd);
 
+      // Step 2.7: SD-LEO-CONTINUITY-001 - Display HANDOFF_START directives (protocol familiarization)
+      const targetPhase = this._getTargetPhaseFromHandoff();
+      await this._displayHandoffStartDirectives(targetPhase);
+
       // Step 3: Run required gates (with database rule integration - SD-VALIDATION-REGISTRY-001)
       const hardcodedGates = await this.getRequiredGates(sd, options);
 
@@ -109,6 +113,10 @@ export class BaseExecutor {
           console.log('');
           // Continue execution despite gate failure
         } else {
+          // SD-LEO-CONTINUITY-001: Display ON_FAILURE directives (5-Whys, Sustainable Resolution)
+          const failurePhase = this._getSourcePhaseFromHandoff();
+          await this._displayOnFailureDirectives(failurePhase);
+
           const remediation = this.getRemediation(gateResults.failedGate);
           return ResultBuilder.gateFailure(gateResults.failedGate, {
             issues: gateResults.issues,
@@ -146,6 +154,11 @@ export class BaseExecutor {
 
     } catch (error) {
       console.error(`❌ ${this.handoffType} execution error:`, error.message);
+
+      // SD-LEO-CONTINUITY-001: Display ON_FAILURE directives (5-Whys, Sustainable Resolution)
+      const failurePhase = this._getSourcePhaseFromHandoff();
+      await this._displayOnFailureDirectives(failurePhase);
+
       return ResultBuilder.systemError(error);
     }
   }
@@ -461,6 +474,85 @@ export class BaseExecutor {
       'LEAD-APPROVAL': 'START'
     };
     return handoffFromPhase[this.handoffType] || 'LEAD';
+  }
+
+  // ============ Autonomous Continuation Directives (SD-LEO-CONTINUITY-001) ============
+
+  /**
+   * Fetch autonomous directives from database
+   * @param {string} enforcementPoint - 'ALWAYS', 'ON_FAILURE', or 'HANDOFF_START'
+   * @param {string} phase - 'LEAD', 'PLAN', or 'EXEC'
+   * @returns {Promise<array>} Array of directive objects
+   */
+  async _fetchAutonomousDirectives(enforcementPoint, phase) {
+    try {
+      const { data, error } = await this.supabase
+        .from('leo_autonomous_directives')
+        .select('directive_code, title, content, is_blocking')
+        .eq('active', true)
+        .eq('enforcement_point', enforcementPoint)
+        .contains('applies_to_phases', [phase])
+        .order('display_order');
+
+      if (error) {
+        console.log(`   [Directives] ⚠️ Could not fetch directives: ${error.message}`);
+        return [];
+      }
+
+      return data || [];
+    } catch (err) {
+      console.log(`   [Directives] ⚠️ Error fetching directives: ${err.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Display HANDOFF_START directives (protocol familiarization)
+   * Called at the start of each handoff execution
+   * @param {string} phase - Target phase (LEAD, PLAN, EXEC)
+   */
+  async _displayHandoffStartDirectives(phase) {
+    const directives = await this._fetchAutonomousDirectives('HANDOFF_START', phase);
+
+    if (directives.length === 0) return;
+
+    console.log('\n   📋 AUTONOMOUS DIRECTIVES (SD-LEO-CONTINUITY-001)');
+    console.log('   ─'.repeat(25));
+
+    for (const d of directives) {
+      const blockingBadge = d.is_blocking ? ' [BLOCKING]' : '';
+      console.log(`\n   🎯 ${d.title}${blockingBadge}`);
+      // Wrap content at ~60 chars for readability
+      const lines = d.content.match(/.{1,60}(\s|$)/g) || [d.content];
+      lines.forEach(line => console.log(`      ${line.trim()}`));
+    }
+
+    console.log('\n   ─'.repeat(25));
+  }
+
+  /**
+   * Display ON_FAILURE directives (5-Whys, Sustainable Resolution)
+   * Called when errors or blockers are encountered
+   * @param {string} phase - Current phase (LEAD, PLAN, EXEC)
+   */
+  async _displayOnFailureDirectives(phase) {
+    const directives = await this._fetchAutonomousDirectives('ON_FAILURE', phase);
+
+    if (directives.length === 0) return;
+
+    console.log('\n   ⚠️  AUTONOMOUS FAILURE RESPONSE DIRECTIVES');
+    console.log('   ─'.repeat(30));
+
+    for (const d of directives) {
+      const blockingBadge = d.is_blocking ? ' [BLOCKING]' : '';
+      console.log(`\n   🔍 ${d.title}${blockingBadge}`);
+      // Wrap content at ~60 chars for readability
+      const lines = d.content.match(/.{1,60}(\s|$)/g) || [d.content];
+      lines.forEach(line => console.log(`      ${line.trim()}`));
+    }
+
+    console.log('\n   💡 Use /escalate to invoke the formal 5-Whys analysis process');
+    console.log('   ─'.repeat(30));
   }
 }
 
