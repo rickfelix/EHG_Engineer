@@ -232,14 +232,44 @@ fi
 # Branch Naming Convention Check (Warning only - main already blocked above)
 # ============================================================================
 # Note: Direct commits to main are blocked in STAGE 0 above.
-# This section only warns about non-standard branch naming conventions.
+# This section validates branch naming conventions AND SD identifier presence.
+# SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-001: Added SD identifier validation
 
-# Valid patterns: feat/, fix/, docs/, test/, quick-fix/, reports/
+# Valid prefixes: feat/, fix/, docs/, test/, quick-fix/, reports/
 if ! echo "$BRANCH" | grep -qE '^(feat|fix|docs|test|quick-fix|reports)/'; then
   echo ""
   echo "⚠️  WARNING: Branch name '$BRANCH' does not follow convention."
   echo "   Expected prefixes: feat/, fix/, docs/, test/, quick-fix/, or reports/"
   echo ""
+fi
+
+# SD Identifier Validation for feat/ and fix/ branches
+# Ensures work is properly tracked against a Strategic Directive
+if echo "$BRANCH" | grep -qE '^(feat|fix)/'; then
+  # Check for SD identifier pattern: SD-XXX-NNN or SD-XXX-CATEGORY-NNN
+  if ! echo "$BRANCH" | grep -qiE 'SD-[A-Z]+-[A-Z0-9]+-[0-9]+|SD-[A-Z]+-[0-9]+'; then
+    # Also accept quick-fix pattern for fix/ branches: QF-YYYYMMDD-NNN
+    if echo "$BRANCH" | grep -qE '^fix/' && echo "$BRANCH" | grep -qE 'QF-[0-9]{8}-[0-9]+'; then
+      echo "   ℹ️  Quick-fix pattern detected (QF-YYYYMMDD-NNN)"
+    else
+      echo ""
+      echo "⚠️  WARNING: Branch '$BRANCH' missing SD identifier!"
+      echo ""
+      echo "   LEO Protocol requires branches to reference a Strategic Directive:"
+      echo "   - feat/SD-FEATURE-001-description"
+      echo "   - fix/SD-BUGFIX-002-description"
+      echo "   - fix/QF-20260120-001-quick-fix-description"
+      echo ""
+      echo "   Without SD tracking, work may not be:"
+      echo "   - Properly validated through LEO handoffs"
+      echo "   - Captured in retrospectives"
+      echo "   - Linked to requirements/PRDs"
+      echo ""
+      echo "   Create an SD first: npm run sd:create"
+      echo "   Or use quick-fix: /quick-fix [description]"
+      echo ""
+    fi
+  fi
 fi
 
 echo "✅ Work accumulation check complete"
