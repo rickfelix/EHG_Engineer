@@ -8,7 +8,18 @@
 - **Last Updated**: 2026-01-11
 - **Tags**: commands, workflow, ecosystem, slash-commands
 
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Overview](#overview)
+- [Command Flow Diagram](#command-flow-diagram)
+- [Command Reference](#command-reference)
+- [Workflow Integration](#workflow-integration)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
+
 ## Purpose
+
 Defines how slash commands intelligently reference each other based on workflow context.
 
 ## Overview

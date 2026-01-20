@@ -1,10 +1,25 @@
 # LEO Protocol Self-Improvement System
 
-**Updated**: 2026-01-10
-**Status**: Active
-**Context Tier**: REFERENCE
+## Metadata
+- **Category**: Protocol
+- **Status**: Approved
+- **Version**: 2.0.0
+- **Author**: LEO Protocol Team
+- **Last Updated**: 2026-01-20
+- **Tags**: leo, self-improvement, retrospectives, learning, continuous-improvement
 
 ---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Architecture Flow (v2)](#architecture-flow-v2)
+- [Database Schema](#database-schema)
+- [Commands Reference](#commands-reference)
+- [Retrospective Patterns](#retrospective-patterns)
+- [Effectiveness Tracking](#effectiveness-tracking)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Overview
 
@@ -958,7 +973,20 @@ A: Prioritize by impact and evidence count. Test in isolation before combining. 
 
 ---
 
-**Last Updated**: 2026-01-10
+**Last Updated**: 2026-01-20
 **Related SD**: SD-LEO-LEARN-001 (Proactive Learning Integration)
 **Evidence Base**: 74+ retrospectives analyzed
 **System Status**: Active - v2 SD Creation Workflow (January 2026)
+
+## Related Documentation
+
+- [Retrospective Patterns Skill](../../reference/retrospective-patterns-skill-content.md) - Retrospective creation patterns
+- [Handoff System Guide](../handoffs/handoff-system-guide.md) - Handoff integration
+- [Command Ecosystem](../commands/command-ecosystem.md) - /learn command integration
+
+## Version History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 2.0.0 | 2026-01-20 | Added metadata, TOC, version history; moved to LEO hub |
+| 1.0.0 | 2026-01-10 | v2 SD creation workflow |
