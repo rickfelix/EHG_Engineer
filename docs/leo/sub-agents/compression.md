@@ -16,7 +16,7 @@
 **Phase Relevance**: Different sub-agents matter more in different phases
 **Automatic Retrieval**: Full reports fetched when needed (PLAN supervisor, retrospectives, debugging)
 
-**Full Guide**: See `docs/reference/sub-agent-compression.md`
+**Full Guide**: This file is the full guide (moved from docs/reference/sub-agent-compression.md)
 
 ---
 

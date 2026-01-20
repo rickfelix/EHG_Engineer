@@ -252,7 +252,7 @@ model: inherit
 ### Complete Documentation
 
 **Detailed Guides**:
-- `docs/reference/native-sub-agent-invocation.md` - Discovery, invocation, troubleshooting (420 lines)
+- `docs/leo/sub-agents/native-invocation.md` - Discovery, invocation, troubleshooting (420 lines)
 - `docs/guides/hybrid-sub-agent-workflow.md` - Decision matrix, patterns, integration (450 lines)
 
 **Test Results**: Patterns 1-2 comprehensively tested (2025-10-12), Pattern 3 in deployment

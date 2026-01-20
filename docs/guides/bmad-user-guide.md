@@ -1114,7 +1114,7 @@ SELECT * FROM test_plans WHERE sd_id = 'SD-XXX' ORDER BY created_at DESC LIMIT 1
 - **BMAD Principles**: See retrospectives from SD-UAT-002, SD-UAT-020, SD-EXPORT-001
 - **Implementation Guide**: docs/bmad-implementation-guide.md (if exists)
 - **Validation Gates**: docs/reference/handoff-validation.md (if exists)
-- **Sub-Agent System**: docs/reference/sub-agent-system.md
+- **Sub-Agent System**: docs/leo/sub-agents/sub-agent-system.md
 - **LEO Protocol**: CLAUDE.md (main protocol document)
 
 ---

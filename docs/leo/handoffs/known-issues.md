@@ -168,7 +168,7 @@ if (!gateResults.gate1 && handoff.metadata?.gate1_validation) {
 
 ### 3. Missing LEAD-FINAL-APPROVAL Documentation
 
-The handoff system guide (`docs/reference/handoff-system-guide.md`) documents LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN, and PLAN-TO-LEAD, but doesn't document LEAD-FINAL-APPROVAL workflow.
+The handoff system guide (`docs/leo/handoffs/handoff-system-guide.md`) documents LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN, and PLAN-TO-LEAD, but doesn't document LEAD-FINAL-APPROVAL workflow.
 
 **Needs**:
 - Workflow diagram including LEAD-FINAL-APPROVAL step

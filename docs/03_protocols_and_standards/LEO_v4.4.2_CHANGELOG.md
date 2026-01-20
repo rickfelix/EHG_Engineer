@@ -178,7 +178,7 @@ ORDER BY week DESC;
 
 ### Updated Documentation
 
-1. **`docs/reference/handoff-system-guide.md`**
+1. **`docs/leo/handoffs/handoff-system-guide.md`**
    - Added EXEC-TO-PLAN v4.4.2 gate sequence
    - Documented TEST_EVIDENCE_AUTO_CAPTURE gate
    - Documented MANDATORY_TESTING_VALIDATION gate

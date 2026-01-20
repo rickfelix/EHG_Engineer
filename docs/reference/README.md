@@ -7,6 +7,22 @@ This directory contains quick reference guides, patterns, and technical specific
 
 ---
 
+## LEO Documentation Hub
+
+**Many LEO Protocol-specific documents have been moved to the centralized LEO hub.**
+
+See **[/docs/leo/README.md](/docs/leo/README.md)** for:
+- Handoff documentation → `/docs/leo/handoffs/`
+- Sub-agent documentation → `/docs/leo/sub-agents/`
+- Command documentation → `/docs/leo/commands/`
+- Operational documentation → `/docs/leo/operational/`
+- Phase documentation → `/docs/leo/phases/`
+- Gate documentation → `/docs/leo/gates/`
+
+---
+
+---
+
 ## Quick Navigation
 
 | Category | Files | Description |
