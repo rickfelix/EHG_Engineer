@@ -1,8 +1,16 @@
 # LEO Protocol Documentation Hub
 
-Central documentation for the LEO (LEAD-EXEC-OPS) Protocol system.
+## Metadata
+- **Category**: Protocol
+- **Status**: Approved
+- **Version**: 1.0.0
+- **Author**: LEO Protocol Team
+- **Last Updated**: 2026-01-20
+- **Tags**: leo, protocol, documentation, hub
 
 ## Overview
+
+Central documentation for the LEO (LEAD-EXEC-OPS) Protocol system.
 
 The LEO Protocol is a structured software development governance framework that enforces quality through:
 - **LEAD Phase**: Strategic directive approval and scoping
@@ -130,3 +138,9 @@ node scripts/generate-claude-md-from-db.js  # Regenerate CLAUDE.md
 
 *LEO Protocol Version: 4.3.3*
 *Last Updated: 2026-01-20*
+
+## Version History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.0.0 | 2026-01-20 | Initial documentation hub creation |

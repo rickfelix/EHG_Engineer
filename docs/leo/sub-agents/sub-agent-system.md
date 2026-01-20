@@ -1,10 +1,39 @@
 # Sub-Agent System Reference
 
+## Metadata
+- **Category**: Protocol
+- **Status**: Approved
+- **Version**: 1.0.0
+- **Author**: LEO Protocol Team
+- **Last Updated**: 2026-01-20
+- **Tags**: leo, sub-agents, triggers, automation, validation
+
+## Overview
+
 **Database-Driven Sub-Agent Architecture**
 
 This document provides comprehensive details about all active sub-agents, their triggers, and activation patterns.
 
 > **Note**: This is extracted from the database. For the latest information, query the `leo_sub_agents` and `leo_sub_agent_triggers` tables directly.
+
+## Table of Contents
+
+- [Active Sub-Agents](#active-sub-agents)
+- [Sub-Agent Details](#sub-agent-details)
+  - [Information Architecture Lead (DOCMON)](#information-architecture-lead-docmon)
+  - [DevOps Platform Architect (GITHUB)](#devops-platform-architect-github)
+  - [UAT Test Executor (UAT)](#uat-test-executor-uat)
+  - [Continuous Improvement Coach (RETRO)](#continuous-improvement-coach-retro)
+  - [Senior Design Sub-Agent (DESIGN)](#senior-design-sub-agent-design)
+  - [Chief Security Architect (SECURITY)](#chief-security-architect-security)
+  - [Principal Database Architect (DATABASE)](#principal-database-architect-database)
+  - [QA Engineering Director (TESTING)](#qa-engineering-director-testing)
+  - [Performance Engineering Lead (PERFORMANCE)](#performance-engineering-lead-performance)
+  - [Principal Systems Analyst (VALIDATION)](#principal-systems-analyst-validation)
+- [Trigger Types](#trigger-types)
+- [Execution Patterns](#execution-patterns)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Active Sub-Agents
 
@@ -745,3 +774,15 @@ INSERT INTO leo_sub_agent_triggers (
   true
 );
 ```
+
+## Related Documentation
+
+- [Patterns Guide](./patterns-guide.md) - Sub-agent integration patterns
+- [Handoff System Guide](../handoffs/handoff-system-guide.md) - Handoff integration
+- [Command Ecosystem](../commands/command-ecosystem.md) - Command workflow
+
+## Version History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.0.0 | 2026-01-20 | Initial documentation, moved to LEO hub |

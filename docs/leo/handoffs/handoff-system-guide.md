@@ -1,8 +1,31 @@
 # Handoff System Guide
 
+## Metadata
+- **Category**: Protocol
+- **Status**: Approved
+- **Version**: 1.0.0
+- **Author**: LEO Protocol Team
+- **Last Updated**: 2026-01-20
+- **Tags**: leo, handoff, gates, validation, executor
+
+## Overview
+
 **SD-REFACTOR-HANDOFF-001: Handoff System Modularization**
 
 This guide documents the LEO Protocol handoff system architecture, gate validation patterns, and executor framework.
+
+## Table of Contents
+
+- [Quick Reference](#quick-reference)
+- [1. Prerequisite Validator Behavior](#1-prerequisite-validator-behavior)
+- [2. Executor Framework Architecture](#2-executor-framework-architecture)
+- [3. Gate Validation System](#3-gate-validation-system)
+- [4. Template Engine](#4-template-engine)
+- [5. Error Handling Patterns](#5-error-handling-patterns)
+- [6. Executor Reference](#6-executor-reference)
+- [7. Best Practices](#7-best-practices)
+- [Related Documentation](#related-documentation)
+- [Version History](#version-history)
 
 ## Quick Reference
 
@@ -482,10 +505,16 @@ const result = await executor.execute();
 
 ## Related Documentation
 
-- [Sub-Agent Patterns Guide](./sub-agent-patterns-guide.md) - Sub-agent integration
-- [Governance Library Guide](./governance-library-guide.md) - Exception handling
-- [Agent Patterns Guide](./agent-patterns-guide.md) - Agent architecture
+- [Sub-Agent Patterns Guide](../sub-agents/patterns-guide.md) - Sub-agent integration patterns
+- [Sub-Agent System](../sub-agents/sub-agent-system.md) - Complete sub-agent reference
+- [Command Ecosystem](../commands/command-ecosystem.md) - Command workflow integration
 
 ---
 
 *Generated for SD-REFACTOR-HANDOFF-001 | LEO Protocol v4.3.3*
+
+## Version History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 1.0.0 | 2026-01-20 | Initial documentation, moved to LEO hub |

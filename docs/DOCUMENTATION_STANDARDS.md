@@ -141,6 +141,7 @@ Every markdown file MUST start with:
 | Feature Docs | `/docs/04_features/` | `mvp_engine.md`, `01b_idea_generation.md` |
 | Test Docs | `/docs/05_testing/` | `testing_qa.md` |
 | Deploy Docs | `/docs/06_deployment/` | `deployment_ops.md` |
+| **LEO Protocol Hub** | `/docs/leo/` | `handoffs/`, `sub-agents/`, `commands/` |
 | How-to Guides | `/docs/guides/` | `[guide-name].md` |
 | Quick Reference | `/docs/reference/` | `database-agent-patterns.md` |
 | Database Docs | `/docs/database/` | `schema/`, `migrations/` |
