@@ -8,7 +8,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import HandoffValidator from '../../../handoff-validator.js';
+import HandoffValidator from '../../../../handoff-validator.js';
 import { validateUserStoriesForHandoff, getUserStoryImprovementGuidance } from '../../../user-story-quality-validation.js';
 import { validatePRDForHandoff, getPRDImprovementGuidance } from '../../../prd-quality-validation.js';
 import path from 'path';
@@ -257,7 +257,7 @@ export class PlanToExecVerifier {
 
       if (!isParentOrchestrator) {
         const prdMinimumScore = isRefactorBrief ? 50 : getStoryMinimumScoreByCategory(sd.category, sd.sd_type);
-        console.log(`\n🔍 Validating PRD content quality...`);
+        console.log('\n🔍 Validating PRD content quality...');
 
         prdBoilerplateResult = await validatePRDForHandoff(prd, {
           minimumScore: prdMinimumScore,

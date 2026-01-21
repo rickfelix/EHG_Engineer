@@ -3,9 +3,9 @@
  * Main entry point for modular phase sub-agent orchestration
  */
 
-import { getValidationRequirements } from '../../lib/utils/sd-type-validation.js';
-import { getImpactBasedSubAgents } from '../../lib/intelligent-impact-analyzer.js';
-import { getPatternBasedSubAgents } from '../../lib/learning/pattern-to-subagent-mapper.js';
+import { getValidationRequirements } from '../../../lib/utils/sd-type-validation.js';
+import { getImpactBasedSubAgents } from '../../../lib/intelligent-impact-analyzer.js';
+import { getPatternBasedSubAgents } from '../../../lib/learning/pattern-to-subagent-mapper.js';
 
 import {
   MANDATORY_SUBAGENTS_BY_PHASE,

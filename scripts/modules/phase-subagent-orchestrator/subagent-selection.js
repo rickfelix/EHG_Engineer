@@ -3,8 +3,8 @@
  * Determines which sub-agents are required based on SD scope and phase
  */
 
-import { selectSubAgentsHybrid } from '../../lib/context-aware-sub-agent-selector.js';
-import { shouldSkipCodeValidation } from '../../lib/utils/sd-type-validation.js';
+import { selectSubAgentsHybrid } from '../../../lib/context-aware-sub-agent-selector.js';
+import { shouldSkipCodeValidation } from '../../../lib/utils/sd-type-validation.js';
 
 /**
  * Check if sub-agent is required based on SD scope
