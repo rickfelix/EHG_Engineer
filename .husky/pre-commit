@@ -317,9 +317,64 @@ fi
 echo "✅ Gate 0 validation complete"
 
 # ============================================================================
-# STAGE 8: Root Temp File Warning (NON-BLOCKING)
+# STAGE 7.5: LOC Threshold Trigger (BLOCKING for large changes)
 # ============================================================================
-# (Renumbered from Stage 6 after Gate 0 addition in SD-LEO-GATE0-PRECOMMIT-001)
+# SD-LEO-GATE0-LOCTHRESHOLD-001: Large changes (>500 LOC) require SD in EXEC phase
+# This prevents refactoring/infrastructure work from bypassing LEO Protocol
+# ============================================================================
+echo ""
+echo "🔍 Running LOC Threshold Check..."
+
+# Calculate lines of code being added/modified in this commit
+# Uses git diff --cached to get staged changes
+LOC_ADDED=$(git diff --cached --numstat 2>/dev/null | awk '{ added += $1 } END { print added+0 }')
+LOC_DELETED=$(git diff --cached --numstat 2>/dev/null | awk '{ deleted += $2 } END { print deleted+0 }')
+LOC_TOTAL=$((LOC_ADDED + LOC_DELETED))
+
+LOC_THRESHOLD=500
+
+echo "   Lines changed: +$LOC_ADDED -$LOC_DELETED (total: $LOC_TOTAL)"
+
+if [ "$LOC_TOTAL" -gt "$LOC_THRESHOLD" ]; then
+  echo ""
+  echo "⚠️  LARGE CHANGE DETECTED: $LOC_TOTAL lines (threshold: $LOC_THRESHOLD)"
+  echo ""
+
+  # If we have an SD, verify it's in EXEC phase
+  if [ ! -z "$SD_ID" ]; then
+    echo "   SD detected: $SD_ID"
+    echo "   ✅ Large change permitted - SD reference found"
+  else
+    echo ""
+    echo "❌ BLOCKED: Large change without SD reference!"
+    echo "═══════════════════════════════════════════════════════════"
+    echo "   Changes: $LOC_TOTAL lines ($LOC_ADDED added, $LOC_DELETED deleted)"
+    echo "   Threshold: $LOC_THRESHOLD lines"
+    echo ""
+    echo "   REASON: Changes exceeding $LOC_THRESHOLD lines require tracking"
+    echo "   via a Strategic Directive in EXEC phase."
+    echo ""
+    echo "   REMEDIATION:"
+    echo "   1. Create an SD for this work: npm run sd:create"
+    echo "   2. Run LEAD-TO-PLAN then PLAN-TO-EXEC handoffs"
+    echo "   3. Retry commit with SD reference in branch name"
+    echo ""
+    echo "   Or split changes into smaller commits (<$LOC_THRESHOLD lines)"
+    echo ""
+    echo "   Emergency bypass (logged): git commit --no-verify"
+    echo ""
+    exit 1
+  fi
+else
+  echo "   ✅ Below threshold - no SD required for size"
+fi
+
+echo "✅ LOC threshold check complete"
+
+# ============================================================================
+# STAGE 9: Root Temp File Warning (NON-BLOCKING)
+# ============================================================================
+# (Renumbered from Stage 6 after Gate 0 additions)
 echo ""
 echo "🧹 Checking for root temp files..."
 
