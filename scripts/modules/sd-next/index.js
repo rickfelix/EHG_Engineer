@@ -6,6 +6,9 @@
  * broken down into focused modules for maintainability.
  */
 
+// Main orchestrator class
+export { SDNextSelector, runSDNext } from './SDNextSelector.js';
+
 // Colors and display utilities
 export { colors, trackColors } from './colors.js';
 
