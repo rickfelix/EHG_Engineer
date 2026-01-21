@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-01-20 9:06:09 AM
+**Generated**: 2026-01-21 7:53:07 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -70,27 +70,6 @@ bash scripts/leo-stack.sh restart   # Starts all 3 servers
 # Port 8000: Agent Platform AI backend
 ```
 
-## 🚀 Session Verification & Quick Start (MANDATORY)
-
-## Session Start Checklist
-
-### Required Verification
-1. **Check Priority**: `npm run prio:top3`
-2. **Git Status**: Clean working directory?
-3. **Context Load**: CLAUDE_CORE.md + phase file
-
-### Before Starting Work
-- Verify SD is in correct phase
-- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
-- Review recent handoffs if continuing
-
-### Key Commands
-| Command | Purpose |
-|---------|---------|
-| `npm run prio:top3` | Top priority SDs |
-| `git status` | Working tree status |
-| `npm run handoff:latest` | Latest handoff |
-
 ## 🔍 Session Start Verification (MANDATORY)
 
 **Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
@@ -125,6 +104,27 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 - If records don't exist, CREATE them before proceeding
 
 **Pattern Reference**: PAT-SESS-VER-001
+
+## 🚀 Session Verification & Quick Start (MANDATORY)
+
+## Session Start Checklist
+
+### Required Verification
+1. **Check Priority**: `npm run prio:top3`
+2. **Git Status**: Clean working directory?
+3. **Context Load**: CLAUDE_CORE.md + phase file
+
+### Before Starting Work
+- Verify SD is in correct phase
+- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
+- Review recent handoffs if continuing
+
+### Key Commands
+| Command | Purpose |
+|---------|---------|
+| `npm run prio:top3` | Top priority SDs |
+| `git status` | Working tree status |
+| `npm run handoff:latest` | Latest handoff |
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -425,37 +425,6 @@ await orchestrator.requestPlanModeExit({
 - **Retro Agent**: `.claude/agents/retro-agent.md` (Plan Mode Patterns section)
 
 
-## Mandatory Agent Invocation Rules
-
-**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
-
-### Task Type -> Required Agent
-
-| Task Keywords | MUST Invoke | Purpose |
-|---------------|-------------|---------|
-| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
-| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
-| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
-| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
-| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
-| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
-| database, migration, schema | **database-agent** | Schema validation |
-| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
-
-### Why This Exists
-
-**Incident**: Human-like testing perspective interpreted as manual content inspection.
-**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
-**Root Cause**: Ad-hoc review instead of specialized agent invocation.
-**Prevention**: Explicit rules mandate agent use for specialized tasks.
-
-### How to Apply
-
-1. Detect task type from user request keywords
-2. Invoke required agent(s) BEFORE making changes
-3. Agent findings inform implementation
-4. Re-run agent AFTER changes to verify fixes
-
 ## 🤖 Built-in Agent Integration
 
 ## Built-in Agent Integration
@@ -498,6 +467,64 @@ Task(subagent_type="Explore", prompt="Identify affected areas")
 
 This is faster than sequential exploration and provides comprehensive coverage.
 
+## Mandatory Agent Invocation Rules
+
+**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
+
+### Task Type -> Required Agent
+
+| Task Keywords | MUST Invoke | Purpose |
+|---------------|-------------|---------|
+| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
+| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
+| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
+| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
+| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
+| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
+| database, migration, schema | **database-agent** | Schema validation |
+| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
+
+### Why This Exists
+
+**Incident**: Human-like testing perspective interpreted as manual content inspection.
+**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
+**Root Cause**: Ad-hoc review instead of specialized agent invocation.
+**Prevention**: Explicit rules mandate agent use for specialized tasks.
+
+### How to Apply
+
+1. Detect task type from user request keywords
+2. Invoke required agent(s) BEFORE making changes
+3. Agent findings inform implementation
+4. Re-run agent AFTER changes to verify fixes
+
+## Sub-Agent Model Routing
+
+**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
+
+### Model Selection Rule
+- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
+- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
+- If you need to specify a model explicitly, use `model: 'sonnet'`
+
+### Why This Matters
+- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
+- Claude Code Max subscription does not include Haiku access
+- Sonnet provides the right balance of speed and quality for sub-agent work
+
+### Examples
+```javascript
+// CORRECT - Use sonnet or omit model
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
+Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
+
+// WRONG - Never use haiku
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
+```
+
+*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
+
+
 ## Work Tracking Policy
 
 **ALL changes to main must be tracked** as either:
@@ -529,66 +556,6 @@ The pre-push hook automatically:
 1. Detects SD/QF from branch name
 2. Verifies completion status in database
 3. Blocks if not ready for merge
-
-## Sub-Agent Model Routing
-
-**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
-
-### Model Selection Rule
-- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
-- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
-- If you need to specify a model explicitly, use `model: 'sonnet'`
-
-### Why This Matters
-- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
-- Claude Code Max subscription does not include Haiku access
-- Sonnet provides the right balance of speed and quality for sub-agent work
-
-### Examples
-```javascript
-// CORRECT - Use sonnet or omit model
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
-Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
-
-// WRONG - Never use haiku
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
-```
-
-*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
-
-
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Execution Philosophy
 
@@ -667,6 +634,80 @@ Claude has documented cognitive biases. These rules OVERRIDE those biases:
 - Mark parent complete before all children complete in database
 
 **REMEMBER**: The goal is NOT to complete SDs quickly. The goal is to complete SDs CORRECTLY. A properly implemented SD that takes 8 hours is infinitely better than a rushed implementation that takes 4 hours but requires 6 hours of fixes.
+
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
+
+## Sustainable Issue Resolution Philosophy
+
+**CHAIRMAN PREFERENCE**: When encountering issues, bugs, or blockers during implementation:
+
+### Core Principles
+
+1. **Handle Issues Immediately**
+   - Do NOT defer problems to "fix later" or create tech debt
+   - Address issues as they arise, before moving forward
+   - Blocking issues must be resolved before continuing
+
+2. **Resolve Systemically**
+   - Fix the root cause, not just the symptom
+   - Consider why the issue occurred and prevent recurrence
+   - Update patterns, validation rules, or documentation as needed
+
+3. **Prefer Sustainable Solutions**
+   - Choose fixes that will last, not quick patches
+   - Avoid workarounds that need to be revisited
+   - Ensure the solution integrates properly with existing architecture
+
+### Implementation Guidelines
+
+| Scenario | Wrong Approach | Right Approach |
+|----------|----------------|----------------|
+| Test failing | Skip test, add TODO | Fix underlying issue, ensure test passes |
+| Type error | Cast to `any` | Fix types properly, update interfaces |
+| Migration issue | Comment out problematic code | Fix schema, add proper handling |
+| Build warning | Suppress warning | Address root cause of warning |
+| Performance issue | Defer to "optimization SD" | Fix if simple; create SD only if complex |
+
+### Exception Handling
+
+If immediate resolution is truly impossible:
+1. Document the issue thoroughly
+2. Create a high-priority SD for resolution
+3. Add a failing test that captures the issue
+4. Note the workaround as TEMPORARY with removal timeline
+
+**Default behavior**: Resolve now, resolve properly, resolve sustainably.
 
 ## 🎯 Skill Integration (Claude Code Skills)
 
@@ -759,47 +800,6 @@ Skills now include:
 **Total Skills**: 54 skills covering all 14 sub-agents + 1 master chain skill
 
 **Reference**: Skills were created from issue_patterns and retrospectives to encode proven solutions.
-
-## Sustainable Issue Resolution Philosophy
-
-**CHAIRMAN PREFERENCE**: When encountering issues, bugs, or blockers during implementation:
-
-### Core Principles
-
-1. **Handle Issues Immediately**
-   - Do NOT defer problems to "fix later" or create tech debt
-   - Address issues as they arise, before moving forward
-   - Blocking issues must be resolved before continuing
-
-2. **Resolve Systemically**
-   - Fix the root cause, not just the symptom
-   - Consider why the issue occurred and prevent recurrence
-   - Update patterns, validation rules, or documentation as needed
-
-3. **Prefer Sustainable Solutions**
-   - Choose fixes that will last, not quick patches
-   - Avoid workarounds that need to be revisited
-   - Ensure the solution integrates properly with existing architecture
-
-### Implementation Guidelines
-
-| Scenario | Wrong Approach | Right Approach |
-|----------|----------------|----------------|
-| Test failing | Skip test, add TODO | Fix underlying issue, ensure test passes |
-| Type error | Cast to `any` | Fix types properly, update interfaces |
-| Migration issue | Comment out problematic code | Fix schema, add proper handling |
-| Build warning | Suppress warning | Address root cause of warning |
-| Performance issue | Defer to "optimization SD" | Fix if simple; create SD only if complex |
-
-### Exception Handling
-
-If immediate resolution is truly impossible:
-1. Document the issue thoroughly
-2. Create a high-priority SD for resolution
-3. Add a failing test that captures the issue
-4. Note the workaround as TEMPORARY with removal timeline
-
-**Default behavior**: Resolve now, resolve properly, resolve sustainably.
 
 ## 🚫 Stage 7 Hard Block: UI Coverage Prerequisite
 
@@ -1942,7 +1942,7 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 |------------|----------|----------|-------|-------|--------------|
 | PAT-003 | security | 🟠 high | 3 | 📉 | Add auth.uid() check to RLS policy USING |
 | PAT-008 | deployment | 🟠 high | 2 | ➡️ | Check GitHub Actions secrets and package |
-| PAT-EXEC-IMPL-001 | workflow | 🟠 high | 1 | ➡️ | Query database for existing tables/funct |
+| PAT-DB-SD-E2E-001 | testing | 🟠 high | 1 | ➡️ | Update TESTING sub-agent to check SD cat |
 | PAT-PARENT-DET | workflow | 🟠 high | 1 | ➡️ | Add parent/child detection check in phas |
 | PAT-PW-NETIDLE-001 | testing | 🟠 high | 1 | ➡️ | Change waitUntil from 'networkidle' to ' |
 
@@ -1958,15 +1958,15 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 - [ ] Test locally with same Node version as CI
 - [ ] Check package-lock.json is committed
 
-**workflow**:
-- [ ] Query DB for existing tables FIRST
-- [ ] Check migration files in repo
-- [ ] Check git log for SD commits
-
 **testing**:
-- [ ] Never use waitUntil: 'networkidle' with Vite dev server
-- [ ] Use 'commit' or 'domcontentloaded' for navigation waits
-- [ ] Explicitly wait for specific elements instead of network idle
+- [ ] Check SD category before requiring E2E tests
+- [ ] For database SDs: validate tables exist via SQL
+- [ ] For infrastructure SDs: validate config/setup
+
+**workflow**:
+- [ ] Check metadata.is_parent at session start
+- [ ] Check parent_sd_id field for child SDs
+- [ ] Verify parent status before allowing child work
 
 
 *Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
@@ -1978,40 +1978,7 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. Integrate Risk Re-calibration UI Components into EHG Application - Retrospective ⭐
-**Category**: TESTING_STRATEGY | **Date**: 1/18/2026 | **Score**: 100
-
-**Key Improvements**:
-- E2E test runs should be automated in CI before EXEC-TO-PLAN handoffs - currently manual evidence onl...
-- Documentation should include visual Mermaid flow diagrams from initial US-005 implementation
-
-**Action Items**:
-- [ ] Create reusable SD lookup utility
-- [ ] Add E2E test CI job for risk-recalibration
-
-### 2. Mock Infrastructure: Config, Registry, and Utilities - Retrospective ⭐
-**Category**: PROCESS_IMPROVEMENT | **Date**: 12/28/2025 | **Score**: 100
-
-**Key Improvements**:
-- Root Cause: jsdom test environment does not properly mock localStorage between test cases, causing 2...
-- Root Cause: Handoff validation system requires multiple sub-agent validations that may not be applic...
-
-**Action Items**:
-- [ ] Document mock system usage in docs/mock-data-system.md (in SD-MOCK-POLISH)
-- [ ] Complete missing handoff documentation
-
-### 3. Settings Tab Clarity + Feature Catalog Copy (NAV-48 + NAV-49) - Retrospective ⭐
-**Category**: APPLICATION_ISSUE | **Date**: 12/26/2025 | **Score**: 100
-
-**Key Improvements**:
-- PLAN-TO-EXEC handoff timed out on OpenAI API calls
-- Had to manually advance phase due to API timeouts
-
-**Action Items**:
-- [ ] Add timeout fallback for AI quality assessment in handoffs
-- [ ] Complete missing handoff documentation
-
-### 4. Sovereign Industrial Expansion - Stages 7-25 Materialization (Orchestrator) ⭐
+### 1. Sovereign Industrial Expansion - Stages 7-25 Materialization (Orchestrator) ⭐
 **Category**: PROCESS_IMPROVEMENT | **Date**: 12/27/2025 | **Score**: 100
 
 **Key Improvements**:
@@ -2022,16 +1989,49 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 - [ ] Create orchestrator SD template with built-in child tracking
 - [ ] Enforce LEO Protocol compliance for all SDs from LEAD phase
 
-### 5. Mock Polish: UI Indicator, Developer Toggle, Documentation - Retrospective ⭐
+### 2. Integrate Risk Re-calibration UI Components into EHG Application - Retrospective ⭐
+**Category**: TESTING_STRATEGY | **Date**: 1/18/2026 | **Score**: 100
+
+**Key Improvements**:
+- E2E test runs should be automated in CI before EXEC-TO-PLAN handoffs - currently manual evidence onl...
+- Documentation should include visual Mermaid flow diagrams from initial US-005 implementation
+
+**Action Items**:
+- [ ] Create reusable SD lookup utility
+- [ ] Add E2E test CI job for risk-recalibration
+
+### 3. PLAN_TO_EXEC Handoff Retrospective: Refactor design.js (sub-agent) ⭐
+**Category**: PROCESS_IMPROVEMENT | **Date**: 1/20/2026 | **Score**: 100
+
+**Key Improvements**:
+- Continue monitoring PLAN→EXEC handoff for improvement opportunities
+- Continue monitoring PLAN→EXEC handoff for improvement opportunities
+
+**Action Items**:
+- [ ] Owner: Eng Lead | By 2026-02-01: Add eslint rule to flag files >500 LOC with war...
+- [ ] Owner: DevOps | Next SD: Add CI check for import cycle detection using madge or ...
+
+### 4. Settings Tab Clarity + Feature Catalog Copy (NAV-48 + NAV-49) - Retrospective ⭐
+**Category**: APPLICATION_ISSUE | **Date**: 12/26/2025 | **Score**: 100
+
+**Key Improvements**:
+- PLAN-TO-EXEC handoff timed out on OpenAI API calls
+- Had to manually advance phase due to API timeouts
+
+**Action Items**:
+- [ ] Add timeout fallback for AI quality assessment in handoffs
+- [ ] Complete missing handoff documentation
+
+### 5. Mock Infrastructure: Config, Registry, and Utilities - Retrospective ⭐
 **Category**: PROCESS_IMPROVEMENT | **Date**: 12/28/2025 | **Score**: 100
 
 **Key Improvements**:
-- Initial PLAN-TO-EXEC handoff blocked due to missing exploration_summary
-- Documentation commit was on wrong branch causing false positive in stub detection
+- Root Cause: jsdom test environment does not properly mock localStorage between test cases, causing 2...
+- Root Cause: Handoff validation system requires multiple sub-agent validations that may not be applic...
 
 **Action Items**:
-- [ ] Owner: LEO Protocol Maintainer | Deadline: 2025-01-15 | Action: Auto-populate ex...
-- [ ] Owner: CI/CD Team | Deadline: 2025-01-10 | Action: Modify stubbed code detection...
+- [ ] Document mock system usage in docs/mock-data-system.md (in SD-MOCK-POLISH)
+- [ ] Complete missing handoff documentation
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -2222,7 +2222,7 @@ Handles customer relationship management, lead tracking, customer success metric
 
 ---
 
-*Generated from database: 2026-01-20*
+*Generated from database: 2026-01-21*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*
