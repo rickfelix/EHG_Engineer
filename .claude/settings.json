@@ -4,6 +4,18 @@
     "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.claude\\statusline-context-tracker.ps1"
   },
   "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -Command \"if ($env:CLAUDE_TOOL_INPUT -match 'handoff') { Write-Output '[REMINDER] Quality over speed. Follow the LEO protocol diligently.' }\"",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
@@ -33,6 +45,16 @@
             "type": "command",
             "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.claude\\set-activity-state.ps1 -State running",
             "timeout": 2
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo [REMINDER] Quality over speed. Follow the LEO protocol diligently.",
+            "timeout": 1
           }
         ]
       }
