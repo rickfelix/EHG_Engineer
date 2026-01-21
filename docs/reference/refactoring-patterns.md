@@ -465,6 +465,222 @@ mathFiles.forEach(f => {
 // Step 5: Refactor dependents to use new consolidated module
 ```
 
+### Pattern 6: Domain Extraction with Re-Export Wrapper
+
+**Purpose**: Break down large monolithic files (>1000 LOC) into domain-focused modules while maintaining 100% backward compatibility.
+
+**Use Case**: When a single file has grown too large and contains multiple distinct responsibilities, extract each domain into its own module and create a re-export wrapper.
+
+**Applied In**: SD-LEO-REFACTOR-LARGE-FILES-003 (10 child SDs, 18,669 LOC refactored)
+
+**Pattern Structure**:
+
+```
+original-file.js (1500 LOC monolith)
+  ↓ Refactor
+original-file/
+  ├── domain-a.js (200 LOC)
+  ├── domain-b.js (300 LOC)
+  ├── domain-c.js (250 LOC)
+  ├── shared-utilities.js (100 LOC)
+  └── index.js (80 LOC - orchestrator)
+
+original-file.js (60 LOC - re-export wrapper)
+```
+
+**Implementation Steps**:
+
+```javascript
+// Step 1: Identify domains in monolithic file
+// Example from scripts/generate-workflow-docs.js (1393 LOC)
+const domains = [
+  'YAML loading and path constants',      // → data-loader.js
+  'Stage diagram generation',             // → stage-cards.js
+  'Phase diagram generation',             // → phase-diagrams.js
+  'SOP generation',                       // → sops.js
+  'Critique generation',                  // → critiques.js
+  'PRD crosswalk generation',             // → prd-crosswalk.js
+  'Backlog generation',                   // → backlog.js
+  'Research pack generation',             // → research-packs.js
+  'Validation script generation',         // → validation-script.js
+  'README generation'                     // → readmes.js
+];
+
+// Step 2: Extract shared utilities first (shared kernel pattern)
+// Create: original-file/shared-utilities.js
+export function loadConfig() { /* ... */ }
+export function ensureDir(path) { /* ... */ }
+export function formatOutput(data) { /* ... */ }
+
+// Step 3: Extract each domain into focused module
+// Create: original-file/domain-a.js
+import { loadConfig, ensureDir } from './shared-utilities.js';
+
+export function generateDomainA() {
+  // Domain-specific logic here
+  // Max 500 LOC per module
+}
+
+// Step 4: Create orchestrator index
+// Create: original-file/index.js
+export { loadConfig, ensureDir, formatOutput } from './shared-utilities.js';
+export { generateDomainA } from './domain-a.js';
+export { generateDomainB } from './domain-b.js';
+export { generateDomainC } from './domain-c.js';
+
+// Main entry point
+export async function generateAll() {
+  generateDomainA();
+  generateDomainB();
+  generateDomainC();
+}
+
+// Step 5: Create re-export wrapper for backward compatibility
+// Overwrite: original-file.js
+export {
+  loadConfig, ensureDir, formatOutput,
+  generateDomainA, generateDomainB, generateDomainC,
+  generateAll
+} from './original-file/index.js';
+
+// CLI execution (if applicable)
+import { generateAll } from './original-file/index.js';
+if (import.meta.url === `file://${process.argv[1]}`) {
+  generateAll().catch(err => {
+    console.error('Generation failed:', err.message);
+    process.exit(1);
+  });
+}
+```
+
+**Success Criteria**:
+
+```javascript
+// ✅ All modules under 500 LOC
+const modules = [
+  { name: 'domain-a.js', loc: 200 },
+  { name: 'domain-b.js', loc: 300 },
+  { name: 'domain-c.js', loc: 250 }
+];
+console.assert(modules.every(m => m.loc < 500), 'All modules under 500 LOC');
+
+// ✅ Zero breaking changes
+import { generateDomainA } from './original-file.js'; // Still works
+generateDomainA(); // Identical behavior
+
+// ✅ No circular dependencies
+const analysis = await analyzer.analyzeDirectory('./original-file/');
+const cycles = analyzer.detectCircularDependencies();
+console.assert(cycles.length === 0, 'No circular dependencies');
+
+// ✅ Shared utilities centralized
+// All modules import from shared-utilities.js, not from each other
+```
+
+**Real-World Example** (SD-LEO-REFACTOR-WORKFLOW-DOCS-001):
+
+```javascript
+// Before: scripts/generate-workflow-docs.js (1393 LOC)
+function loadStages() { /* ... */ }
+function generateStageCards() { /* ... */ }
+function generatePhaseDiagrams() { /* ... */ }
+function generateSOPs() { /* ... */ }
+// ... 7 more generator functions
+
+// After: Modular structure
+scripts/
+  └── workflow-docs-generator/
+      ├── data-loader.js (75 LOC) - loadStages(), paths, helpers
+      ├── stage-cards.js (61 LOC) - generateStageCards()
+      ├── phase-diagrams.js (61 LOC) - generatePhaseDiagrams()
+      ├── sops.js (132 LOC) - generateSOPs()
+      ├── critiques.js (177 LOC) - generateCritiques()
+      ├── prd-crosswalk.js (127 LOC) - generatePRDCrosswalk()
+      ├── backlog.js (300 LOC) - generateBacklog()
+      ├── research-packs.js (243 LOC) - generateResearchPacks()
+      ├── validation-script.js (135 LOC) - generateValidationScript()
+      ├── readmes.js (150 LOC) - generateREADMEs()
+      └── index.js (64 LOC) - orchestrator + generateAll()
+
+// Wrapper: scripts/generate-workflow-docs.js (55 LOC)
+export * from './workflow-docs-generator/index.js';
+```
+
+**Performance Optimization** (YAML Caching):
+
+```javascript
+// data-loader.js - Shared kernel with caching
+let _stagesCache = null;
+
+export function loadStages() {
+  if (_stagesCache) return _stagesCache;
+
+  const stagesData = yaml.load(fs.readFileSync(stagesPath, 'utf8'));
+  _stagesCache = stagesData.stages;
+  return _stagesCache;
+}
+
+// Result: YAML parsed once, reused by all 10 generators (~10x speedup)
+```
+
+**Dependency Graph** (Flat Structure):
+
+```
+data-loader.js (shared kernel - no internal deps)
+    ↑
+    ├── stage-cards.js
+    ├── phase-diagrams.js
+    ├── sops.js
+    ├── critiques.js
+    ├── prd-crosswalk.js
+    ├── backlog.js
+    ├── research-packs.js
+    ├── validation-script.js
+    └── readmes.js
+    ↑
+    └── index.js (orchestrator)
+        ↑
+        └── generate-workflow-docs.js (wrapper)
+```
+
+**When to Use This Pattern**:
+
+| Scenario | Use Domain Extraction? |
+|----------|------------------------|
+| File > 1000 LOC with multiple domains | ✅ YES |
+| File has 3+ distinct responsibilities | ✅ YES |
+| File is imported by many dependents | ✅ YES (wrapper ensures no breaking changes) |
+| File is a script with generators | ✅ YES (extract each generator) |
+| File has shared utilities used across domains | ✅ YES (shared kernel pattern) |
+| File < 500 LOC and focused | ❌ NO (already optimal) |
+| File is a simple utility | ❌ NO (unnecessary complexity) |
+
+**Comparison with Pattern 5** (Module Consolidation):
+
+| Aspect | Pattern 5: Consolidation | Pattern 6: Domain Extraction |
+|--------|--------------------------|------------------------------|
+| Direction | Many files → One file | One file → Many files |
+| Use Case | Scattered functionality | Monolithic file |
+| Goal | Reduce duplication | Improve maintainability |
+| Breaking Changes | Likely (new import paths) | None (re-export wrapper) |
+
+**Applied Successfully In**:
+
+| SD | File Refactored | Original LOC | Modules Created | Largest Module |
+|----|-----------------|--------------|-----------------|----------------|
+| SD-LEO-REFACTOR-RETRO-001 | retro.js | 2836 | 13 | 452 LOC |
+| SD-LEO-REFACTOR-SERVER-001 | server.js | 2707 | 11 | 380 LOC |
+| SD-LEO-REFACTOR-DESIGN-SUB-001 | design.js | 2569 | 12 | 420 LOC |
+| SD-LEO-REFACTOR-PRD-DB-002 | add-prd-to-database.js | 1771 | 10 | 350 LOC |
+| SD-LEO-REFACTOR-VENTURE-CEO-001 | venture-ceo-runtime.js | 1602 | 9 | 380 LOC |
+| SD-LEO-REFACTOR-VERIFY-L2P-001 | verify-handoff-lead-to-plan.js | 1512 | 8 | 350 LOC |
+| SD-LEO-REFACTOR-DESIGN-AGENT-001 | design-sub-agent.js | 1442 | 9 | 370 LOC |
+| SD-LEO-REFACTOR-ORCH-002 | leo-protocol-orchestrator.js | 1419 | 10 | 380 LOC |
+| SD-LEO-REFACTOR-SUBAGENT-EXEC-001 | sub-agent-executor.js | 1417 | 11 | 370 LOC |
+| SD-LEO-REFACTOR-WORKFLOW-DOCS-001 | generate-workflow-docs.js | 1394 | 11 | 300 LOC |
+
+**Total Impact**: 18,669 LOC refactored across 10 files with 100% backward compatibility.
+
 ## Best Practices
 
 ### 1. Always Analyze First
