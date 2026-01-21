@@ -102,12 +102,35 @@ export const SD_FIELD_REQUIREMENTS = {
 };
 
 /**
+ * Check if a value is a JSON string that should be an array
+ * This catches the common mistake of using JSON.stringify() on JSONB fields
+ * @param {any} value - The value to check
+ * @returns {boolean} True if value is a stringified JSON array/object
+ */
+function isStringifiedJson(value) {
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  // Check if it looks like a JSON array or object
+  return (trimmed.startsWith('[') && trimmed.endsWith(']')) ||
+         (trimmed.startsWith('{') && trimmed.endsWith('}'));
+}
+
+/**
  * Validate an array field against schema requirements
  * @param {Array} value - The array to validate
  * @param {Object} rules - Validation rules
  * @returns {Object} { valid: boolean, message: string }
  */
 function validateArrayField(value, rules) {
+  // CRITICAL: Catch JSON.stringify() misuse on JSONB fields
+  // This is a common mistake that causes validation failures at handoff time
+  if (isStringifiedJson(value)) {
+    return {
+      valid: false,
+      message: 'is a JSON string instead of an array. Remove JSON.stringify() - Supabase handles JSONB natively'
+    };
+  }
+
   if (!Array.isArray(value)) {
     return { valid: false, message: 'must be an array' };
   }

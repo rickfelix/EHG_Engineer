@@ -134,6 +134,10 @@ async function createStrategicDirective() {
     /**
      * success_criteria: Array of criteria that define success
      * Should be testable/verifiable criteria
+     *
+     * ⚠️  IMPORTANT: Do NOT use JSON.stringify() on this field!
+     * Supabase handles JSONB natively. Using JSON.stringify() stores
+     * a string instead of an array, causing validation failures.
      */
     success_criteria: [
       '[Criterion 1 - How will we know this SD succeeded?]',
@@ -227,10 +231,16 @@ async function createStrategicDirective() {
 
     /**
      * success_metrics: Array of measurable metrics
+     * REQUIRED: At least 3 items with {metric, target} for handoff validation
+     *
+     * ⚠️  IMPORTANT: Do NOT use JSON.stringify() on this field!
+     * Supabase handles JSONB natively. Using JSON.stringify() stores
+     * a string instead of an array, causing validation failures.
      */
     success_metrics: [
-      '[Metric 1 - How will success be measured quantitatively?]',
-      '[Metric 2 - Another metric]'
+      { metric: '[Metric 1]', target: '[Target value]' },
+      { metric: '[Metric 2]', target: '[Target value]' },
+      { metric: '[Metric 3]', target: '[Target value]' }
     ],
 
     /**

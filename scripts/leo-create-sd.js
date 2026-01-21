@@ -274,6 +274,62 @@ function mapToDbType(userType) {
 }
 
 /**
+ * Build default success_metrics based on SD type and title
+ * Ensures validator requirements (3+ items with {metric, target}) are met
+ */
+function buildDefaultSuccessMetrics(type, title) {
+  const baseMetrics = [
+    {
+      metric: 'Implementation completeness',
+      target: '100% of scope items implemented'
+    },
+    {
+      metric: 'Test coverage',
+      target: '≥80% code coverage for new code'
+    },
+    {
+      metric: 'Zero regressions',
+      target: '0 existing tests broken'
+    }
+  ];
+
+  // Add type-specific metrics
+  if (type === 'fix' || type === 'bugfix') {
+    baseMetrics.push({
+      metric: 'Issue recurrence',
+      target: '0 recurrences after fix deployed'
+    });
+  } else if (type === 'feature' || type === 'feat') {
+    baseMetrics.push({
+      metric: 'User story completion',
+      target: '100% acceptance criteria met'
+    });
+  }
+
+  return baseMetrics;
+}
+
+/**
+ * Build default success_criteria based on SD type
+ * Returns array of strings (qualitative acceptance criteria)
+ */
+function buildDefaultSuccessCriteria(type, title) {
+  const baseCriteria = [
+    'All implementation items from scope are complete',
+    'Code passes lint and type checks',
+    'PR reviewed and approved'
+  ];
+
+  if (type === 'fix' || type === 'bugfix') {
+    baseCriteria.push('Root cause addressed, not just symptoms');
+  } else if (type === 'feature' || type === 'feat') {
+    baseCriteria.push('Feature accessible to target users');
+  }
+
+  return baseCriteria;
+}
+
+/**
  * Create SD in database
  */
 async function createSD(options) {
@@ -285,11 +341,19 @@ async function createSD(options) {
     priority = 'medium',
     rationale,
     parentId = null,
-    metadata = {}
+    metadata = {},
+    // Allow passing explicit success fields (for sources like UAT, learn)
+    success_metrics = null,
+    success_criteria = null
   } = options;
 
   // Map user-friendly type to valid database sd_type
   const dbType = mapToDbType(type);
+
+  // Build success fields - use provided values or generate defaults
+  // IMPORTANT: Do NOT use JSON.stringify() - Supabase handles JSONB natively
+  const finalSuccessMetrics = success_metrics || buildDefaultSuccessMetrics(type, title);
+  const finalSuccessCriteria = success_criteria || buildDefaultSuccessCriteria(type, title);
 
   const sdData = {
     id: randomUUID(),
@@ -306,9 +370,12 @@ async function createSD(options) {
     target_application: 'EHG_Engineer',
     created_by: 'Claude',
     parent_sd_id: parentId,
-    success_criteria: [],
-    success_metrics: [],
-    key_principles: [],
+    success_criteria: finalSuccessCriteria,  // Array, NOT JSON.stringify()
+    success_metrics: finalSuccessMetrics,    // Array with {metric, target}, NOT JSON.stringify()
+    key_principles: [
+      'Follow LEO Protocol for all changes',
+      'Ensure backward compatibility'
+    ],
     risks: [],
     metadata: {
       ...metadata,
