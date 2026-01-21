@@ -1,0 +1,171 @@
+{
+  "sd_id": "SD-LEO-REFACTOR-TESTING-002",
+  "title": "Refactor Testing & Playwright Files (Phase 2)",
+  "capture_date": "2026-01-21T00:00:00Z",
+  "phase": "PRE_REFACTOR_BASELINE",
+  "files_in_scope": [
+    {
+      "path": "lib/testing/prd-playwright-generator.js",
+      "loc": 1226,
+      "type": "re-export wrapper",
+      "exports": {
+        "default": "PRDPlaywrightGenerator class (from modules/prd-playwright/index.js)",
+        "named": [
+          "PRDPlaywrightGenerator"
+        ],
+        "wildcard": "All exports from ./modules/prd-playwright/index.js"
+      },
+      "public_api": [
+        "export { default, PRDPlaywrightGenerator } from './modules/prd-playwright/index.js'",
+        "export * from './modules/prd-playwright/index.js'"
+      ],
+      "notes": "Already modularized - acts as backward compatibility wrapper"
+    },
+    {
+      "path": "lib/testing/testing-sub-agent.js",
+      "loc": 1099,
+      "type": "class module",
+      "exports": {
+        "default": "AutomatedTestingSubAgent class"
+      },
+      "public_api": [
+        "class AutomatedTestingSubAgent",
+        "constructor(config = {})",
+        "async checkActivationCriteria()",
+        "async executeAutomatedTesting()",
+        "async setup()",
+        "async discoverTestTargets()",
+        "async executeTargetTests(target)",
+        "async testFullPage(target)",
+        "async testComponent(target)",
+        "async testComponentInteractivity(component, target)",
+        "async checkPagePerformance(target)",
+        "async checkBasicAccessibility(target)",
+        "async captureErrorState(context, _errorMessage)",
+        "async generateAutomatedReport()",
+        "generateRecommendations()",
+        "generateHTMLReport(report)",
+        "async checkCoverageRequirement()",
+        "async checkE2ERequirement()",
+        "async checkComplexScenarios()",
+        "async ensureDirectories()",
+        "async analyzeFailure(error, target)",
+        "classifyErrorType(error)",
+        "async generateFixRecommendation(analysis, target)",
+        "guessCodeLocation(target, analysis)",
+        "generateElementAdditionExample(selector)",
+        "generateInteractionFixExample()",
+        "async validateFix(targetName, attempt = 1)",
+        "async cleanup()"
+      ],
+      "notes": "Comprehensive E2E visual testing agent with failure analysis"
+    },
+    {
+      "path": "lib/sub-agents/testing.js",
+      "loc": 1098,
+      "type": "sub-agent executor",
+      "exports": {
+        "named": [
+          "execute"
+        ]
+      },
+      "public_api": [
+        "export async function execute(sdId, subAgent, options = {})"
+      ],
+      "internal_functions": [
+        "async preflightChecks(sdId, options)",
+        "async generateTestCases(sdId, _options)",
+        "async executeE2ETests(sdId, options)",
+        "function suggestTroubleshootingTactics(error)",
+        "async collectEvidence(sdId, phase3Results)",
+        "function generateVerdict(results, validationMode = 'prospective')"
+      ],
+      "notes": "QA Engineering Director v3.0 - Main testing validation workflow"
+    },
+    {
+      "path": "tests/unit/protocol-improvements.test.js",
+      "loc": 1084,
+      "type": "test file",
+      "exports": {
+        "none": "Test file - no public exports"
+      },
+      "public_api": [],
+      "test_classes": [
+        "ImprovementExtractor (mock)",
+        "ImprovementApplicator (mock)",
+        "EffectivenessTracker (mock)"
+      ],
+      "test_suites": [
+        "ImprovementExtractor",
+        "ImprovementApplicator",
+        "EffectivenessTracker"
+      ],
+      "notes": "Unit tests for protocol improvement system - includes mock implementations"
+    }
+  ],
+  "import_dependencies": {
+    "lib/testing/prd-playwright-generator.js": [
+      "./modules/prd-playwright/index.js"
+    ],
+    "lib/testing/testing-sub-agent.js": [
+      "playwright (chromium)",
+      "fs.promises",
+      "path",
+      "./playwright-bridge"
+    ],
+    "lib/sub-agents/testing.js": [
+      "path",
+      "url (fileURLToPath)",
+      "dotenv",
+      "../utils/adaptive-validation.js",
+      "../utils/test-intelligence.js",
+      "../../scripts/lib/supabase-connection.js",
+      "../../scripts/lib/test-evidence-ingest.js",
+      "../../scripts/lib/handoff-preflight.js",
+      "../../scripts/lib/branch-resolver.js"
+    ],
+    "tests/unit/protocol-improvements.test.js": [
+      "vitest",
+      "fs (readFileSync)",
+      "path"
+    ]
+  },
+  "test_status": {
+    "executed": true,
+    "framework": "jest",
+    "pre_existing_failures": [
+      "brand-variants.service.test.js (4 failures - unrelated to scope)",
+      "design-workflow-review.test.js (status unknown - output truncated)"
+    ],
+    "notes": "Pre-existing test failures are NOT related to files in scope for this refactoring"
+  },
+  "refactoring_plan": {
+    "intensity": "structural",
+    "approach": "domain-focused modules",
+    "expected_changes": [
+      "Extract domain logic from large files into focused modules",
+      "Maintain backward compatibility via re-exports",
+      "No public API signature changes",
+      "Import path updates only if necessary"
+    ]
+  },
+  "validation_criteria": {
+    "pass_conditions": [
+      "All public API signatures unchanged",
+      "All imports resolve correctly",
+      "No new test failures introduced",
+      "Pre-existing test failures remain unchanged",
+      "No new TypeScript/ESLint errors"
+    ],
+    "conditional_pass": [
+      "Minor API changes with migration path documented",
+      "Import path changes documented in Refactor Brief"
+    ],
+    "fail_conditions": [
+      "Tests fail that passed in baseline",
+      "Undocumented API signature changes",
+      "Broken import paths",
+      "New type errors introduced"
+    ]
+  }
+}

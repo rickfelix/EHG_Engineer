@@ -6,6 +6,7 @@
       "smart_router",
       "session_prologue",
       "session_init",
+      "skill_intent_detection",
       "common_commands"
     ]
   },

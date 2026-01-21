@@ -1,0 +1,93 @@
+{
+  "sd_id": "SD-LEO-REFACTOR-TESTING-002",
+  "validation_type": "BASELINE_CAPTURE",
+  "verdict": "PASS",
+  "confidence": 100,
+  "timestamp": "2026-01-21T00:00:00Z",
+  "validator": "REGRESSION-VALIDATOR Sub-Agent v1.0.0",
+  "database_record_id": "ae9fd112-58aa-4ae4-a007-1b57f7881dce",
+
+  "summary": {
+    "files_captured": 4,
+    "total_loc": 4507,
+    "pre_existing_failures": 4,
+    "baseline_complete": true
+  },
+
+  "files_in_scope": [
+    {
+      "path": "lib/testing/prd-playwright-generator.js",
+      "loc": 1226,
+      "status": "Already modularized - minimal refactoring needed"
+    },
+    {
+      "path": "lib/testing/testing-sub-agent.js",
+      "loc": 1099,
+      "status": "High complexity - good candidate for domain-focused refactoring"
+    },
+    {
+      "path": "lib/sub-agents/testing.js",
+      "loc": 1098,
+      "status": "High complexity - could benefit from phase-based module extraction"
+    },
+    {
+      "path": "tests/unit/protocol-improvements.test.js",
+      "loc": 1084,
+      "status": "Test structure sound - may need updates if mocked APIs change"
+    }
+  ],
+
+  "validation_criteria": {
+    "pass_conditions": [
+      "All public API signatures unchanged",
+      "All imports resolve correctly",
+      "No new test failures introduced",
+      "Pre-existing test failures remain unchanged (currently 4)",
+      "No new TypeScript/ESLint errors"
+    ],
+    "conditional_pass": [
+      "Minor API changes with migration path documented",
+      "Import path changes documented in Refactor Brief"
+    ],
+    "fail_conditions": [
+      "Tests fail that passed in baseline",
+      "Undocumented API signature changes",
+      "Broken import paths",
+      "Coverage decreased significantly (>5%)",
+      "New type errors introduced"
+    ]
+  },
+
+  "critical_issues": [],
+  "warnings": [],
+
+  "recommendations": [
+    "Baseline captured successfully - ready for refactoring work",
+    "Document import changes if module boundaries shift during refactoring",
+    "Test incrementally - refactor one file at a time, run tests after each change",
+    "Use IDE refactoring tools (not manual find/replace) for renames/moves",
+    "Keep all re-export wrappers in place for backward compatibility",
+    "Run full comparison after refactoring: node lib/sub-agents/regression.js SD-LEO-REFACTOR-TESTING-002 --compare"
+  ],
+
+  "next_steps": [
+    "Proceed with refactoring work (EXEC phase)",
+    "Run comparison validation after refactoring complete",
+    "Ensure all validation criteria are met before PLAN handoff"
+  ],
+
+  "artifacts": [
+    ".regression/SD-LEO-REFACTOR-TESTING-002/baseline.json",
+    ".regression/SD-LEO-REFACTOR-TESTING-002/baseline-report.md",
+    ".regression/SD-LEO-REFACTOR-TESTING-002/verdict.json",
+    ".regression/SD-LEO-REFACTOR-TESTING-002/record-validation.js"
+  ],
+
+  "notes": [
+    "This is a PRE-WORK validation - no refactoring has been done yet",
+    "Session was focused on adding Skill Intent Detection to CLAUDE.md (unrelated work)",
+    "Pre-existing test failures (brand-variants, design-workflow-review) are NOT related to files in scope",
+    "File prd-playwright-generator.js is already modularized and requires minimal work",
+    "Files testing-sub-agent.js and testing.js are prime candidates for domain extraction"
+  ]
+}
