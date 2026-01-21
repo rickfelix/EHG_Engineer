@@ -2,6 +2,14 @@
 
 ## 2026-01-20
 
+### Documentation
+- **SD-LEO-FIX-PROTOCOL-001: Priority Field Documentation Fix** - Root cause fix for SD creation failures
+  - Updated `docs/database/strategic_directives_v2_field_reference.md` with correct lowercase priority values
+  - Issue: Documentation showed `CRITICAL`, `HIGH`, `MEDIUM`, `LOW` but database constraint requires `critical`, `high`, `medium`, `low`
+  - Root cause (5 Whys): No single source of truth for enum values between docs and DB schema
+  - Added warning and explicit constraint values to prevent future mismatch
+  - PR: #453
+
 ### Infrastructure
 - **SD-LEO-REFACTOR-LARGE-FILES-002: LEO Protocol File Modularization** - Orchestrator SD refactoring large validation files
   - **SD-LEO-REFACTOR-IMPL-FIDELITY-001** (Child 8): Refactored `implementation-fidelity-validation.js` (1,559 LOC → 10 modules)
@@ -24,6 +32,13 @@
   - **Backward Compatibility**: All original file paths maintained as re-exports, no caller changes required
 
 ### Bugfixes
+- **QF-20260121-001: Fix [object Object] bug in retrospective action items** - Quick-fix for serialization issue
+  - Fixed `lib/sub-agents/retro/action-items.js` lines 61-65
+  - Issue: SmartAction objects pushed directly to array became `[object Object]` when serialized to database
+  - Fix: Extract `.action` string from SmartAction objects before returning
+  - Impact: Retrospective action items now display correctly instead of `[object Object]`
+  - Related: **SD-LEO-FIX-PROTOCOL-001** (Protocol Improvements from Refactoring Retrospective Analysis)
+  - PR: #454
 - **SD-FIX-NAV-001: Chairman Sidebar Navigation Architecture Fix** - Orchestrator SD with 4 children completed
   - **SD-FIX-NAV-001-A**: Fixed navigation route database configuration for chairman persona
   - **SD-FIX-NAV-001-B**: Cleaned up legacy routes and standardized analytics path
