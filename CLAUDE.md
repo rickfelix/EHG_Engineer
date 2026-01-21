@@ -57,6 +57,118 @@ This command provides:
 | `npm run sd:baseline view` | Current execution plan |
 
 
+## Skill Intent Detection (Proactive Invocation)
+
+**CRITICAL**: When user query or response matches these patterns, IMMEDIATELY invoke the corresponding skill using the Skill tool. Do not just acknowledge - execute.
+
+### SD Creation Triggers → `/leo create`
+When user agrees to create an SD during conversation:
+- "yes, create an SD", "let's create an SD", "make this an SD"
+- "turn this into a strategic directive", "add this to the queue"
+- "this should be tracked", "queue this up as work"
+- "create a directive for this", "track this as an SD"
+
+**Action**: Use Skill tool with `skill: "leo"` and `args: "create"`
+
+### Quick-Fix Triggers → `/quick-fix`
+- "quick fix", "small fix", "just fix this quickly"
+- "patch this", "minor bug", "simple fix"
+- "can you fix that real quick", "tiny change needed"
+- After `/triangulation-protocol` confirms small issue (<50 LOC)
+
+**Action**: Use Skill tool with `skill: "quick-fix"` and `args: "[issue description]"`
+
+### Documentation Triggers → `/document`
+- "document this", "update the docs", "add documentation"
+- "we should document this", "this needs documentation"
+- After completing feature/API SD work
+- When new commands or features are implemented
+
+**Action**: Use Skill tool with `skill: "document"`
+
+### Learning Triggers → `/learn`
+- "capture this pattern", "we should learn from this"
+- "add this as a learning", "this is a recurring issue"
+- "remember this for next time", "pattern detected"
+- After `/ship` completes successfully
+
+**Action**: Use Skill tool with `skill: "learn"`
+
+### Verification Triggers → `/triangulation-protocol`
+- "verify this with other AIs", "triangulate this"
+- "is this actually implemented?", "check if this works"
+- "get external AI opinion", "multi-AI verification"
+- When debugging conflicting claims about codebase state
+
+**Action**: Use Skill tool with `skill: "triangulation-protocol"`
+
+### UAT Triggers → `/uat`
+- "test this", "let's do acceptance testing"
+- "run UAT", "human testing needed", "manual test"
+- "verify this works", "acceptance test"
+- After `/restart` for feature/bugfix/security SDs
+
+**Action**: Use Skill tool with `skill: "uat"`
+
+### Shipping Triggers → `/ship`
+- "commit this", "create PR", "ship it", "let's ship"
+- "push this", "merge this", "ready to ship"
+- "create a pull request", "commit and push"
+- After UAT passes or for exempt SD types
+
+**Action**: Use Skill tool with `skill: "ship"`
+
+### Server Management Triggers → `/restart`
+- "restart servers", "fresh environment"
+- "restart the stack", "restart LEO", "reboot servers"
+- Before UAT, after long sessions, before visual review
+
+**Action**: Use Skill tool with `skill: "restart"`
+
+### Escalation Triggers → `/escalate`
+- "this keeps failing", "stuck on this", "blocked"
+- "need root cause", "escalate this issue"
+- "why does this keep happening", "5 whys"
+
+**Action**: Use Skill tool with `skill: "escalate"`
+
+### Feedback Triggers → `/inbox`
+- "check feedback", "see inbox", "any feedback?"
+- "review feedback items", "pending feedback"
+
+**Action**: Use Skill tool with `skill: "inbox"`
+
+### Simplify Triggers → `/simplify`
+- "simplify this code", "clean this up", "refactor for clarity"
+- "make this cleaner", "reduce complexity"
+- Before shipping if session had rapid iteration
+
+**Action**: Use Skill tool with `skill: "simplify"`
+
+### Context Compaction Triggers → `/context-compact`
+- "context is getting long", "summarize context"
+- "compact the conversation", "running out of context"
+
+**Action**: Use Skill tool with `skill: "context-compact"`
+
+---
+
+### Command Ecosystem Flow (Quick Reference)
+
+```
+Issue Found → /triangulation-protocol → /quick-fix (if <50 LOC) OR Create SD (if larger)
+SD Complete → /restart (if UI) → /uat → /ship → /document → /learn → /leo next
+```
+
+### Auto-Invoke Behavior
+
+**CRITICAL**: When user agrees to a suggested command (e.g., "yes, let's ship", "sure, create an SD"), IMMEDIATELY invoke the skill. Do not:
+- Just acknowledge the request
+- Wait for explicit `/command` syntax
+- Ask for confirmation again
+
+The user's agreement IS the confirmation. Execute immediately.
+
 ## Common Commands
 
 - `node scripts/cross-platform-run.js leo-stack restart` - Restart all LEO servers (Engineer on 3000, App on 8080, Agent Platform on 8000)
@@ -90,7 +202,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /ship → /document → /
 ```
 
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-20 9:06:09 AM
+**Last Generated**: 2026-01-21 7:53:07 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -165,6 +277,6 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /ship → /document → /
 
 ---
 
-*Router generated from database: 2026-01-20*
+*Router generated from database: 2026-01-21*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*
