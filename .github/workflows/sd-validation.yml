@@ -1,0 +1,130 @@
+# SD Validation GitHub Action
+# Part of SD-LEO-GATE0-GHACTION-001: GitHub Action: PR Merge SD Validation
+#
+# This workflow validates that PRs referencing Strategic Directives have
+# the SD in a valid phase (not draft/LEAD_APPROVAL) before allowing merge.
+#
+# Enforcement: Required check for merge to main
+#
+# NOTE: This action requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
+# to be configured as repository secrets.
+
+name: SD Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+jobs:
+  validate-sd:
+    name: Validate SD Phase
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Extract SD ID from PR
+        id: extract-sd
+        run: |
+          # Extract SD ID from PR title or branch name
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_BRANCH="${{ github.event.pull_request.head.ref }}"
+
+          # Try to extract SD-XXX-NNN pattern
+          SD_ID=$(echo "$PR_TITLE $PR_BRANCH" | grep -oE 'SD-[A-Z]+-[A-Z0-9]+-[0-9]+|SD-[A-Z]+-[0-9]+' | head -1 || true)
+
+          if [ -z "$SD_ID" ]; then
+            echo "No SD reference found in PR title or branch name"
+            echo "sd_found=false" >> $GITHUB_OUTPUT
+          else
+            echo "Found SD reference: $SD_ID"
+            echo "sd_id=$SD_ID" >> $GITHUB_OUTPUT
+            echo "sd_found=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Skip validation if no SD reference
+        if: steps.extract-sd.outputs.sd_found == 'false'
+        run: |
+          echo "::notice::No SD reference found - skipping validation"
+          echo "PRs without SD references are allowed (docs, reports, quick-fixes)"
+
+      - name: Validate SD Phase
+        if: steps.extract-sd.outputs.sd_found == 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SD_ID: ${{ steps.extract-sd.outputs.sd_id }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::warning::Supabase credentials not configured - skipping SD validation"
+            exit 0
+          fi
+
+          # Query Supabase for SD status
+          RESPONSE=$(curl -s -X GET \
+            "$SUPABASE_URL/rest/v1/strategic_directives_v2?or=(id.eq.$SD_ID,sd_key.eq.$SD_ID)" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json")
+
+          # Check if SD exists
+          if [ "$RESPONSE" = "[]" ]; then
+            echo "::error::SD $SD_ID not found in database"
+            exit 1
+          fi
+
+          # Extract status and phase
+          STATUS=$(echo "$RESPONSE" | jq -r '.[0].status')
+          PHASE=$(echo "$RESPONSE" | jq -r '.[0].current_phase')
+          TITLE=$(echo "$RESPONSE" | jq -r '.[0].title')
+
+          echo "SD: $SD_ID"
+          echo "Title: $TITLE"
+          echo "Status: $STATUS"
+          echo "Phase: $PHASE"
+
+          # Check for blocking conditions
+          if [ "$STATUS" = "draft" ]; then
+            echo ""
+            echo "::error::SD $SD_ID is in DRAFT status"
+            echo "::error::PRs cannot be merged until SD passes LEAD approval"
+            echo ""
+            echo "REMEDIATION:"
+            echo "1. Run LEAD-TO-PLAN handoff: node scripts/handoff.js execute LEAD-TO-PLAN $SD_ID"
+            echo "2. Run PLAN-TO-EXEC handoff: node scripts/handoff.js execute PLAN-TO-EXEC $SD_ID"
+            echo "3. Push changes and re-run this check"
+            exit 1
+          fi
+
+          if [ "$PHASE" = "LEAD_APPROVAL" ] || [ "$PHASE" = "LEAD" ]; then
+            echo ""
+            echo "::error::SD $SD_ID is in $PHASE phase"
+            echo "::error::PRs cannot be merged until SD passes LEAD approval"
+            echo ""
+            echo "REMEDIATION:"
+            echo "1. Complete LEAD-TO-PLAN handoff"
+            echo "2. Push changes and re-run this check"
+            exit 1
+          fi
+
+          echo ""
+          echo "::notice::SD $SD_ID validation passed ($STATUS / $PHASE)"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## SD Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.extract-sd.outputs.sd_found }}" = "true" ]; then
+            echo "- **SD ID**: ${{ steps.extract-sd.outputs.sd_id }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Status**: Validated" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Status**: Skipped (no SD reference)" >> $GITHUB_STEP_SUMMARY
+          fi
