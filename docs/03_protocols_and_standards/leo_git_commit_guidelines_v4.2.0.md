@@ -184,6 +184,47 @@ git commit -m "feat(SD-2025-001): Initialize WebRTC connection"
 
 ---
 
+## Gate 0: Pre-Commit Validation
+
+**CRITICAL**: Before any commit is created, the pre-commit hook validates SD status to prevent the anti-pattern where code is shipped while SDs remain in draft.
+
+### How It Works
+1. **Extraction**: Hook extracts SD ID from commit message or branch name
+2. **Validation**: Queries database for SD status and current phase
+3. **Enforcement**: BLOCKS commit if SD is in invalid phase
+
+### Blocked Phases
+- `draft` - SD not yet approved by LEAD
+- `LEAD_APPROVAL` - SD awaiting LEAD approval
+
+### Valid Phases
+- `PLANNING`, `PLAN_PRD`, `PLAN`, `PLAN_VERIFICATION` - PRD creation
+- `EXEC` - Implementation authorized
+
+### LOC Threshold Trigger
+Commits with >500 lines changed **MUST** reference an SD:
+```bash
+# BLOCKED: Large change without SD
+git add . # 650 LOC changed
+git commit -m "refactor: massive cleanup"
+❌ BLOCKED: Large change (650 LOC) requires SD reference
+
+# ALLOWED: SD referenced
+git commit -m "refactor(SD-REFACTOR-001): massive cleanup"
+✅ PASS
+```
+
+### Emergency Bypass
+Use only for urgent hotfixes:
+```bash
+git commit --no-verify -m "hotfix: critical production issue"
+# ⚠️ Bypass logged in .husky/bypass-log.txt
+```
+
+**See**: [Gate 0: Workflow Entry Enforcement](gate0-workflow-entry-enforcement.md) for complete documentation of all 6 enforcement layers.
+
+---
+
 ## Practical Examples
 
 ### Feature Implementation
