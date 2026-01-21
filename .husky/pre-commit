@@ -275,8 +275,51 @@ fi
 echo "✅ Work accumulation check complete"
 
 # ============================================================================
-# STAGE 6: Root Temp File Warning (NON-BLOCKING)
+# STAGE 7: SD Status Validation - Gate 0 (BLOCKING)
 # ============================================================================
+# SD-LEO-GATE0-PRECOMMIT-001: Prevents commits when referenced SD is in draft
+# status or LEAD_APPROVAL phase. Ensures LEO Protocol workflow is followed.
+# ============================================================================
+echo ""
+echo "🔍 Running Gate 0: SD Status Validation..."
+
+# Get commit message (try reading from staged commit or file)
+# During commit, the message is passed via stdin or COMMIT_EDITMSG
+COMMIT_MSG=""
+if [ -f ".git/COMMIT_EDITMSG" ]; then
+  COMMIT_MSG=$(cat .git/COMMIT_EDITMSG 2>/dev/null || true)
+fi
+
+# Also check branch name for SD reference
+if [ -z "$COMMIT_MSG" ]; then
+  COMMIT_MSG="$BRANCH"
+fi
+
+# Extract SD identifier pattern from commit message or branch name
+# Matches: SD-LEO-GATE0-001, SD-FEATURE-001, SD-LEO-REFACTOR-LARGE-FILES-002
+SD_ID=$(echo "$COMMIT_MSG $BRANCH" | grep -oE 'SD-[A-Z]+-[A-Z0-9]+-[0-9]+|SD-[A-Z]+-[0-9]+' | head -1)
+
+if [ ! -z "$SD_ID" ]; then
+  echo "   Found SD reference: $SD_ID"
+
+  # Run validation script
+  node scripts/validate-sd-commit.js "$SD_ID"
+  VALIDATION_EXIT=$?
+
+  if [ $VALIDATION_EXIT -ne 0 ]; then
+    exit 1
+  fi
+else
+  echo "   No SD reference found in branch/commit - skipping validation"
+  echo "   ℹ️  Non-SD branches (reports/, docs/) are allowed"
+fi
+
+echo "✅ Gate 0 validation complete"
+
+# ============================================================================
+# STAGE 8: Root Temp File Warning (NON-BLOCKING)
+# ============================================================================
+# (Renumbered from Stage 6 after Gate 0 addition in SD-LEO-GATE0-PRECOMMIT-001)
 echo ""
 echo "🧹 Checking for root temp files..."
 
