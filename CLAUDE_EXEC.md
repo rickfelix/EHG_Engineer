@@ -230,6 +230,40 @@ Before writing ANY code, EXEC MUST:
 - ❌ **CRITICAL**: Proceeding with implementation when requirements are ambiguous
 - ❌ **CRITICAL**: Putting admin UI code in EHG_Engineer (all UI goes to EHG)
 
+### Gate 0 Enforcement 🚨
+
+**CRITICAL**: Before ANY implementation work, verify SD has passed LEAD approval:
+
+```bash
+# Check SD phase status
+node scripts/verify-sd-phase.js SD-XXX-001
+
+# Or check via sd:status
+npm run sd:status SD-XXX-001
+```
+
+**Valid Phases for Implementation**:
+- PLANNING, PLAN_PRD, PLAN, PLAN_VERIFICATION (PRD creation)
+- EXEC (implementation authorized)
+
+**Blocked Phases**:
+- draft - SD not approved
+- LEAD_APPROVAL - Awaiting LEAD approval
+
+**Why This Matters**: Gate 0 prevents the anti-pattern where code is shipped while SDs remain in draft status. This is the "naming illusion" - using LEO terminology while bypassing LEO workflow.
+
+**Enforcement Layers**:
+1. Pre-commit hook (blocks commits for draft SDs)
+2. CLAUDE_EXEC.md (mandatory Phase 1 check)
+3. LOC threshold (>500 LOC requires SD)
+4. verify-sd-phase.js script
+5. GitHub Action (PR validation)
+6. Orchestrator progress calculation
+
+See: `docs/03_protocols_and_standards/gate0-workflow-entry-enforcement.md` for complete documentation.
+
+**If SD is in draft**: STOP. Do not implement. Run LEAD-TO-PLAN handoff first.
+
 ## Branch Creation (Automated at LEAD-TO-PLAN)
 
 ## 🌿 Branch Creation (Automated at LEAD-TO-PLAN)
