@@ -38,7 +38,7 @@
 | `version` | VARCHAR(20) | Semantic version (e.g., 1.0, 1.1, 2.0). Default: 1.0 |
 | `status` | VARCHAR(50) | Workflow state: draft, pending_approval, active, in_progress, completed, archived, deferred |
 | `category` | VARCHAR(50) | Classification: infrastructure, feature, enhancement, fix, documentation |
-| `priority` | VARCHAR(20) | CRITICAL (90+), HIGH (70-89), MEDIUM (50-69), LOW (30-49) |
+| `priority` | VARCHAR(20) | `critical`, `high`, `medium`, `low` (lowercase, see Priority Levels section) |
 
 ---
 
@@ -223,12 +223,16 @@ draft → pending_approval → active → in_progress → completed
 
 ## 🎯 Priority Levels
 
-| Priority | Range | Use Case |
-|----------|-------|----------|
-| CRITICAL | 90+ | Business-critical, immediate action |
-| HIGH | 70-89 | Important features, near-term priority |
-| MEDIUM | 50-69 | Standard enhancements, planned work |
-| LOW | 30-49 | Nice-to-have improvements |
+⚠️ **IMPORTANT**: Use lowercase values in database - check constraint enforces this.
+
+| Priority | DB Value | Range | Use Case |
+|----------|----------|-------|----------|
+| Critical | `critical` | 90+ | Business-critical, immediate action |
+| High | `high` | 70-89 | Important features, near-term priority |
+| Medium | `medium` | 50-69 | Standard enhancements, planned work |
+| Low | `low` | 30-49 | Nice-to-have improvements |
+
+**Valid constraint values**: `critical`, `high`, `medium`, `low` (lowercase only)
 
 ---
 
