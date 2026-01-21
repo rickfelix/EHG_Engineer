@@ -131,6 +131,22 @@ npm run handoff:compliance SD-ID  # Check specific SD
 ### MANDATORY Pre-Implementation Verification
 Before writing ANY code, EXEC MUST:
 
+**GATE 0: SD STATUS VERIFICATION** 🚫 BLOCKING FIRST STEP
+   - **ALWAYS** verify SD is in EXEC phase before implementation
+   - Run: `npm run sd:status <SD-ID>` to confirm SD status
+   - **BLOCK** if SD is in `draft` status or `LEAD_APPROVAL` phase
+   - This prevents the "naming illusion" anti-pattern where work proceeds
+     while SDs remain dormant in the database
+
+   **Anti-Pattern Warning (SD-LEO-GATE0-CLAUDEEXEC-001)**:
+   - ❌ BAD: "Working on Child 8 of the orchestrator" (naming in conversation only)
+   - ✅ GOOD: "Working on SD-XXX-008 (verified: status=in_progress, phase=EXEC)"
+
+   **If SD Not in EXEC Phase**:
+   1. Run LEAD-TO-PLAN handoff if SD is in draft
+   2. Run PLAN-TO-EXEC handoff if SD is in PLANNING phase
+   3. Only then proceed with implementation
+
 0. **AMBIGUITY RESOLUTION** 🔍 CRITICAL FIRST STEP
    - Review PRD for unclear requirements, missing details, or conflicting specifications
    - Do NOT proceed with implementation if ANY ambiguity exists
@@ -190,6 +206,7 @@ Before writing ANY code, EXEC MUST:
 ### Implementation Checklist Template
 ```markdown
 ## EXEC Pre-Implementation Checklist
+- [ ] **Gate 0: SD Status**: Verified via `npm run sd:status <SD-ID>` [status=X, phase=Y]
 - [ ] **Ambiguity Check**: All requirements clear and unambiguous
 - [ ] **Ambiguity Resolution**: [NONE FOUND | Resolved via Tier X: description]
 - [ ] **Application verified**: [EHG unified frontend confirmed]
