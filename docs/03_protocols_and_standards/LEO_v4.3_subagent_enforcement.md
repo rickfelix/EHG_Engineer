@@ -219,6 +219,77 @@ if (fromAgent === 'PLAN' && toAgent === 'LEAD') {
 
 ---
 
-*Amendment Date: 2025-09-01*  
-*Version: 4.3 (Proposed)*  
+*Amendment Date: 2025-09-01*
+*Version: 4.3 (Proposed)*
 *Status: For Review*
+
+---
+
+## IMPLEMENTATION STATUS
+
+**Status**: ✅ **IMPLEMENTED** (as of 2026-01-21)
+**SD**: SD-LEO-INFRA-STOP-HOOK-SUB-001
+**Implementation**: Claude Code Stop Hook with Auto-Remediation
+
+### Implementation Details
+
+The sub-agent enforcement concept has been implemented as a **Claude Code Stop Hook** that validates sub-agent execution when Claude sessions end.
+
+**Location**: `scripts/hooks/stop-subagent-enforcement.js`
+**Configuration**: `.claude/settings.json` (Stop hook, 120s timeout)
+
+**Key Features**:
+1. **SD Detection**: Extracts SD key from git branch using pattern `/SD-[A-Z]+-(?:[A-Z]+-)*[0-9]+/i`
+2. **Matrix-Based Validation**: Determines required + recommended sub-agents based on SD type and category
+3. **Phase Window Timing**: Validates sub-agents ran in correct phase windows (e.g., DESIGN before PLAN-TO-EXEC)
+4. **Auto-Remediation**: Returns blocking JSON with commands to run missing sub-agents
+5. **1-Hour Caching**: PASS verdicts cached to avoid redundant executions
+6. **Bypass Mechanism**: Requires 50+ char explanation AND retrospective entry
+
+**Sub-Agent Requirements Matrix**:
+
+| SD Type | Required Sub-Agents | Recommended Sub-Agents |
+|---------|---------------------|------------------------|
+| feature | TESTING, DESIGN, STORIES | UAT, API |
+| infrastructure | GITHUB, DOCMON | VALIDATION |
+| database | DATABASE, SECURITY | REGRESSION |
+| security | SECURITY, DATABASE | TESTING, RCA |
+| bugfix | RCA, REGRESSION, TESTING | UAT |
+| refactor | REGRESSION, VALIDATION | TESTING |
+| performance | PERFORMANCE, TESTING | REGRESSION |
+
+**Phase Window Timing Rules**:
+
+| Sub-Agent | After Handoff | Before Handoff | Phase |
+|-----------|---------------|----------------|-------|
+| DESIGN | LEAD-TO-PLAN | PLAN-TO-EXEC | PLAN |
+| TESTING | PLAN-TO-EXEC | LEAD-FINAL-APPROVAL | EXEC |
+| UAT | EXEC-TO-PLAN | LEAD-FINAL-APPROVAL | VERIFICATION |
+| RETRO | PLAN-TO-LEAD | (none) | COMPLETION |
+
+**Bypass Process**:
+1. Create `.stop-hook-bypass.json` with explanation (min 50 chars)
+2. Run: `node scripts/generate-retrospective.js --bypass-entry`
+3. Set `retrospective_committed: true` in bypass file
+4. Bypass is logged to audit and file is deleted after use
+
+**Auto-Remediation Output**:
+```json
+{
+  "decision": "block",
+  "reason": "SD SD-XXX-001 (feature) requires sub-agent validation",
+  "remediation": {
+    "auto_run": true,
+    "agents_to_run": ["DESIGN", "TESTING"],
+    "command": "node scripts/orchestrate-phase-subagents.js SD-XXX-001 --agents DESIGN,TESTING"
+  }
+}
+```
+
+**References**:
+- Design Document: `docs/drafts/STOP-HOOK-SUBAGENT-ENFORCEMENT-DRAFT.md`
+- Triangulation Synthesis: `docs/research/triangulation-stop-hook-synthesis.md`
+- Operational Runbook: `docs/06_deployment/stop-hook-operations.md` (NEW)
+- Hook Reference: `docs/reference/claude-code-hooks.md` (NEW)
+
+**Deployment**: PR #458 merged to main on 2026-01-21
