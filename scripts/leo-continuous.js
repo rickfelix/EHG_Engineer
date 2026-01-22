@@ -34,6 +34,13 @@ import hierarchyMapper from './lib/sd-hierarchy-mapper.js';
 import checkpointSystem from './lib/leo-checkpoint.js';
 import rootCauseResolver from './lib/root-cause-resolver.js';
 
+// Import post-completion requirements (SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-N)
+import {
+  getPostCompletionRequirements,
+  getPostCompletionSequence,
+  displayPostCompletionSummary
+} from '../lib/utils/post-completion-requirements.js';
+
 const { mapHierarchy, getDepthFirstOrder, getNextIncomplete, isHierarchyComplete, getHierarchyStats } = hierarchyMapper;
 const { checkpoint, reloadProtocol, validatePhase } = checkpointSystem;
 const { analyzeFailure, attemptFix, skipAndLog } = rootCauseResolver;
@@ -96,6 +103,66 @@ async function loadOrchestrationTemplate(sdId) {
     console.warn(`${colors.yellow}Warning: Could not load template: ${err.message}${colors.reset}`);
     return null;
   }
+}
+
+/**
+ * Trigger post-completion sequence based on SD type.
+ * SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-N
+ *
+ * @param {Object} sd - The completed Strategic Directive
+ * @returns {Promise<Object>} Post-completion result
+ */
+async function triggerPostCompletionSequence(sd) {
+  const sdType = sd.sd_type || 'feature';
+  const source = sd.source || '';
+
+  console.log(`\n${colors.cyan}POST-COMPLETION SEQUENCE${colors.reset}`);
+  console.log(`${colors.dim}SD Type: ${sdType}${colors.reset}`);
+
+  // Get post-completion requirements
+  const requirements = getPostCompletionRequirements(sdType, { source });
+  const sequence = getPostCompletionSequence(sdType, { source });
+
+  // Display summary
+  displayPostCompletionSummary(sdType, { source });
+
+  // Build result with commands to execute
+  const result = {
+    sdKey: sd.legacy_id || sd.sd_key,
+    sdType,
+    sequenceType: requirements.sequenceType,
+    commands: sequence,
+    requirements: {
+      restart: requirements.restart,
+      ship: requirements.ship,
+      document: requirements.document,
+      learn: requirements.learn
+    }
+  };
+
+  // Log the command sequence for autonomous execution
+  console.log(`\n${colors.yellow}Commands to execute:${colors.reset}`);
+  sequence.forEach((cmd, i) => {
+    console.log(`   ${i + 1}. /${cmd}`);
+  });
+
+  // Record post-completion trigger in database
+  try {
+    await supabase
+      .from('continuous_execution_log')
+      .insert({
+        session_id: sessionId,
+        parent_sd_id: sd.parent_sd_id,
+        child_sd_id: sd.id,
+        phase: 'POST-COMPLETION',
+        status: 'triggered',
+        metadata: result
+      });
+  } catch (_err) {
+    // Ignore logging errors
+  }
+
+  return result;
 }
 
 /**
@@ -241,7 +308,10 @@ async function executeSD(sd, parentSdId = null) {
     stats.sdsCompleted++;
     console.log(`\n${colors.green}${colors.bold}✓ Completed: ${sd.legacy_id} (${duration}s)${colors.reset}`);
 
-    return { success: true, duration };
+    // SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-N: Post-completion sequence
+    const postCompletion = await triggerPostCompletionSequence(sd);
+
+    return { success: true, duration, postCompletion };
 
   } catch (error) {
     console.log(`\n${colors.red}✗ Error: ${error.message}${colors.reset}`);
