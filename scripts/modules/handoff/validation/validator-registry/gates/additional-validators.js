@@ -132,8 +132,9 @@ export function registerAdditionalValidators(registry) {
     const { sd, sd_id, supabase } = context;
 
     // Check for retrospective
+    // NOTE: Table is 'retrospectives' not 'sd_retrospectives'
     const { data, error } = await supabase
-      .from('sd_retrospectives')
+      .from('retrospectives')
       .select('*')
       .eq('sd_id', sd_id || sd?.id)
       .order('created_at', { ascending: false })
