@@ -1119,6 +1119,31 @@ The `/document` command connects to other commands in the workflow:
 
 ### After Documentation Updates
 
+**AUTO-PROCEED Detection**: Before asking, check if AUTO-PROCEED mode is active:
+
+```bash
+# Check for AUTO-PROCEED context
+node -e "
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+supabase.from('auto_proceed_sessions')
+  .select('id, active_sd_key')
+  .eq('is_active', true)
+  .single()
+  .then(({data}) => {
+    if (data) console.log('AUTO-PROCEED ACTIVE: ' + data.active_sd_key);
+    else console.log('AUTO-PROCEED: INACTIVE');
+  });
+"
+```
+
+**If AUTO-PROCEED is ACTIVE:**
+- Skip AskUserQuestion
+- Output status: `🤖 AUTO-PROCEED: Documentation complete, continuing to next command...`
+- Auto-invoke the next command in post-completion sequence (typically `/learn` or `/leo next`)
+
+**If AUTO-PROCEED is INACTIVE:**
 **If documentation changes created uncommitted files - Use AskUserQuestion:**
 
 ```javascript
