@@ -6,6 +6,9 @@
  * Part of SD-LEO-REFACTOR-HANDOFF-001
  */
 
+// Main verifier class and CLI
+export { PlanToExecVerifier, main } from './PlanToExecVerifier.js';
+
 // PRD Validation
 export {
   PRD_REQUIREMENTS,

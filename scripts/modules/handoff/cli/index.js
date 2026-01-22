@@ -6,6 +6,19 @@
  * Part of SD-LEO-REFACTOR-HANDOFF-001
  */
 
+// Main CLI entry point
+export {
+  main,
+  displayHelp,
+  handleWorkflowCommand,
+  handleVerifyCommand,
+  handlePendingCommand,
+  handlePrecheckCommand,
+  handleExecuteCommand,
+  handleListCommand,
+  handleStatsCommand
+} from './cli-main.js';
+
 // Workflow definitions
 export {
   WORKFLOW_BY_SD_TYPE,
@@ -33,3 +46,9 @@ export {
   checkMultiRepoStatus,
   displayMultiRepoStatus
 } from './multi-repo-check.js';
+
+// Execution helpers
+export {
+  checkBypassRateLimits,
+  displayExecutionResult
+} from './execution-helpers.js';
