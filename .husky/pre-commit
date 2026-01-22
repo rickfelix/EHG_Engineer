@@ -340,8 +340,14 @@ if [ "$LOC_TOTAL" -gt "$LOC_THRESHOLD" ]; then
   echo "⚠️  LARGE CHANGE DETECTED: $LOC_TOTAL lines (threshold: $LOC_THRESHOLD)"
   echo ""
 
+  # SD-LEO-INFRA-PRE-COMMIT-HOOK-001: Exempt docs/, reports/, test/ branches from LOC threshold
+  # These branches typically contain documentation regeneration, reports, or test additions
+  # that don't need SD tracking (database-generated CLAUDE.md files often exceed 500 LOC)
+  if echo "$BRANCH" | grep -qE '^(docs|reports|test)/'; then
+    echo "   ✅ Large change permitted - documentation/reports/test branch"
+    echo "   ℹ️  Branch type '$(echo "$BRANCH" | cut -d'/' -f1)/' exempt from SD requirement"
   # If we have an SD, verify it's in EXEC phase
-  if [ ! -z "$SD_ID" ]; then
+  elif [ ! -z "$SD_ID" ]; then
     echo "   SD detected: $SD_ID"
     echo "   ✅ Large change permitted - SD reference found"
   else
@@ -361,6 +367,7 @@ if [ "$LOC_TOTAL" -gt "$LOC_THRESHOLD" ]; then
     echo ""
     echo "   Or split changes into smaller commits (<$LOC_THRESHOLD lines)"
     echo ""
+    echo "   For documentation regeneration: Use docs/ branch prefix"
     echo "   Emergency bypass (logged): git commit --no-verify"
     echo ""
     exit 1
