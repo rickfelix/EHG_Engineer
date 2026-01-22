@@ -13,3 +13,4 @@ export { createBMADValidationGate } from './bmad-validation.js';
 export { createGate2ImplementationFidelityGate } from './gate2-implementation-fidelity.js';
 export { createRCAGate } from './rca-gate.js';
 export { createHumanVerificationGate } from './human-verification-gate.js';
+export { createSubAgentEnforcementValidationGate } from './subagent-enforcement-validation.js';

@@ -4,6 +4,10 @@
  *
  * LEO v4.4.2: Enforce TESTING sub-agent execution
  * Evidence: 14.6% of SDs completed without TESTING validation
+ *
+ * SD-LEO-HARDEN-VALIDATION-001: Narrowed exemptions to documentation-only
+ * - Infrastructure, orchestrator, database now use ADVISORY mode
+ * - Only documentation types skip TESTING entirely
  */
 
 /**
@@ -20,21 +24,25 @@ export function createMandatoryTestingValidationGate(supabase) {
       console.log('-'.repeat(50));
 
       // 1. Check SD type exemptions
+      // SD-LEO-HARDEN-VALIDATION-001: Narrowed exemptions to documentation-only
       const sdType = (ctx.sd?.sd_type || 'feature').toLowerCase();
-      const EXEMPT_TYPES = ['documentation', 'docs', 'infrastructure', 'orchestrator', 'database'];
+      const EXEMPT_TYPES = ['documentation', 'docs'];
+      const ADVISORY_TYPES = ['infrastructure', 'orchestrator', 'database'];
 
       if (EXEMPT_TYPES.includes(sdType)) {
         console.log(`   ℹ️  ${sdType} type SD - TESTING validation SKIPPED`);
-        console.log('   → No code paths to validate');
+        console.log('   → Documentation-only SDs have no code paths');
         return {
           passed: true,
           score: 100,
           max_score: 100,
           issues: [],
-          warnings: [`TESTING skipped for ${sdType} type SD`],
+          warnings: [`TESTING skipped for ${sdType} type SD (documentation exemption)`],
           details: { skipped: true, reason: sdType }
         };
       }
+
+      const isAdvisoryMode = ADVISORY_TYPES.includes(sdType);
 
       // 2. Query for TESTING sub-agent execution
       const sdUuid = ctx.sd?.id || ctx.sdId;
@@ -59,6 +67,21 @@ export function createMandatoryTestingValidationGate(supabase) {
 
       // 3. Validate execution exists
       if (!testingResults?.length) {
+        // SD-LEO-HARDEN-VALIDATION-001: Advisory mode for infrastructure types
+        if (isAdvisoryMode) {
+          console.log(`   ⚠️  TESTING not executed for ${sdType} SD (ADVISORY MODE)`);
+          console.log('   → Infrastructure SDs should run TESTING for unit test coverage');
+          console.log('   → This is a warning, not a blocker');
+          return {
+            passed: true,
+            score: 70,
+            max_score: 100,
+            issues: [],
+            warnings: [`TESTING not executed for ${sdType} SD - consider running for unit test coverage`],
+            details: { advisory: true, reason: `${sdType} SD missing TESTING` }
+          };
+        }
+
         console.log('   ❌ ERR_TESTING_REQUIRED: TESTING sub-agent must complete before EXEC-TO-PLAN');
         console.log('\n   REMEDIATION:');
         console.log('   1. Run TESTING sub-agent before completing EXEC phase');

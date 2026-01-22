@@ -98,6 +98,81 @@ Look for "meta-lessons" about process, architecture, or methodology - not just p
   };
 
   /**
+   * SD-LEO-HARDEN-VALIDATION-001: Boilerplate detection patterns
+   * Evidence: 87.5% of retrospectives contained generic boilerplate content
+   * These patterns identify common non-specific filler text
+   */
+  static BOILERPLATE_PATTERNS = [
+    /continue monitoring.*for improvement/i,
+    /follow.*protocol/i,
+    /communicate.*better/i,
+    /improve.*communication/i,
+    /maintain.*quality/i,
+    /continue.*best practices/i,
+    /keep up.*good work/i,
+    /stay.*aligned/i,
+    /ensure.*proper.*process/i,
+    /adhere to.*guidelines/i,
+    /be more careful/i,
+    /pay.*attention/i,
+    /double.?check/i,
+    /review.*thoroughly/i
+  ];
+
+  /**
+   * Detect boilerplate content in retrospective fields
+   *
+   * @param {Object} retrospective - Retrospective from database
+   * @returns {Object} Detection result with matches and score penalty
+   */
+  static detectBoilerplate(retrospective) {
+    const matches = [];
+    const fieldsToCheck = [
+      'what_went_well',
+      'what_needs_improvement',
+      'key_learnings',
+      'action_items',
+      'improvement_areas'
+    ];
+
+    for (const field of fieldsToCheck) {
+      const content = retrospective[field];
+      if (!content) continue;
+
+      // Handle both string and array content
+      const textItems = Array.isArray(content)
+        ? content.map(item => typeof item === 'string' ? item : JSON.stringify(item))
+        : [String(content)];
+
+      for (const text of textItems) {
+        for (const pattern of this.BOILERPLATE_PATTERNS) {
+          if (pattern.test(text)) {
+            matches.push({
+              field,
+              pattern: pattern.source,
+              text: text.substring(0, 100)
+            });
+          }
+        }
+      }
+    }
+
+    const hasBoilerplate = matches.length > 0;
+    // Calculate penalty: -5 points per boilerplate match, max -25
+    const scorePenalty = Math.min(matches.length * 5, 25);
+
+    return {
+      hasBoilerplate,
+      matchCount: matches.length,
+      matches,
+      scorePenalty,
+      message: hasBoilerplate
+        ? `Found ${matches.length} boilerplate pattern(s) - consider more specific, SD-relevant content`
+        : null
+    };
+  }
+
+  /**
    * Validate that retrospective has all required fields with correct column names.
    * This prevents silent failures from schema/code mismatches.
    *
@@ -366,16 +441,29 @@ Duration: ${retrospective.duration_days || 'Unknown'} days`;
       // Pass sd object for dynamic threshold and type-specific guidance
       const assessment = await this.evaluate(formattedContent, retroId, sd);
 
+      // SD-LEO-HARDEN-VALIDATION-001: Detect boilerplate content
+      const boilerplateResult = RetrospectiveQualityRubric.detectBoilerplate(retrospective);
+      let adjustedScore = assessment.weightedScore;
+      const additionalWarnings = [...assessment.feedback.recommended];
+
+      if (boilerplateResult.hasBoilerplate) {
+        adjustedScore = Math.max(0, adjustedScore - boilerplateResult.scorePenalty);
+        additionalWarnings.push(boilerplateResult.message);
+        console.warn(`⚠️  Boilerplate detected: ${boilerplateResult.matchCount} pattern(s) found, -${boilerplateResult.scorePenalty} points`);
+      }
+
       // Convert to LEO Protocol format
       // NEW: Include improvements array from AI feedback
       return {
-        passed: assessment.passed,
-        score: assessment.weightedScore,
+        passed: assessment.passed && adjustedScore >= assessment.threshold,
+        score: adjustedScore,
         issues: assessment.feedback.required,
-        warnings: assessment.feedback.recommended,
+        warnings: additionalWarnings,
         details: {
           criterion_scores: assessment.scores,
           weighted_score: assessment.weightedScore,
+          boilerplate_penalty: boilerplateResult.scorePenalty,
+          adjusted_score: adjustedScore,
           threshold: assessment.threshold, // Dynamic threshold based on sd_type
           // v1.2.0: Scoring bands for stable decisions
           band: assessment.band,
