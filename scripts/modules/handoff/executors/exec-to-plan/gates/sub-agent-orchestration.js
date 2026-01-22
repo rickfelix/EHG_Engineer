@@ -23,7 +23,7 @@ export function createSubAgentOrchestrationGate(supabase) {
 
       // Load orchestrate function if not loaded
       if (!orchestrate) {
-        const orch = await import('../../../../orchestrate-phase-subagents.js');
+        const orch = await import('../../../../../orchestrate-phase-subagents.js');
         orchestrate = orch.orchestrate;
       }
 

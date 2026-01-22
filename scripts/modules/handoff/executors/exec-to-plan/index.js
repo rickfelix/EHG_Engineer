@@ -58,7 +58,7 @@ export class ExecToPlanExecutor extends BaseExecutor {
   async setup(sdId, sd, _options) {
     // Load validation requirements
     if (!getValidationRequirements) {
-      const sdType = await import('../../../../lib/utils/sd-type-validation.js');
+      const sdType = await import('../../../../../lib/utils/sd-type-validation.js');
       getValidationRequirements = sdType.getValidationRequirements;
     }
 
