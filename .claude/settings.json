@@ -37,6 +37,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/session-cleanup.js",
+            "timeout": 5
+          },
+          {
+            "type": "command",
             "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.claude\\set-activity-state.ps1 -State running",
             "timeout": 2
           },
