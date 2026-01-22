@@ -9,6 +9,27 @@ argument-hint: [start|restart|stop|status|next|create]
 
 ## Instructions
 
+### AUTO-PROCEED MODE (ALWAYS ENABLED)
+
+**CRITICAL DIRECTIVE**: When working on a Strategic Directive, proceed AUTOMATICALLY through the entire workflow without stopping to ask for user confirmation.
+
+- **Phase transitions**: Execute LEAD→PLAN→EXEC handoffs automatically
+- **Validation gates**: Run gates; only stop on blocking failures
+- **Post-completion**: Run full ship/document/learn sequence automatically
+- **Next SD**: After completing one SD, show the next SD in queue
+
+**DO NOT:**
+- Use AskUserQuestion to ask "what's next?" or "should I proceed?"
+- Wait for user confirmation between phases
+- Stop after completing an SD - continue to post-completion sequence
+
+**ONLY STOP AND ASK IF:**
+- A blocking error requires human decision
+- Tests fail after 2 retry attempts
+- Merge conflicts require human resolution
+
+---
+
 Based on the argument provided, execute the appropriate action:
 
 ### If argument is "start" or "s":
@@ -149,7 +170,7 @@ SD Creation Flags:
 Shortcuts: /restart = restart servers, /leo n = next
 ```
 
-Then ask the user which action they'd like to take.
+If no argument was given, auto-run `npm run leo` to start the LEO protocol workflow.
 
 ## Context
 - Engineer runs on port 3000
@@ -172,53 +193,53 @@ The `/leo` command connects to other commands at key workflow points:
 
 ### After LEAD-FINAL-APPROVAL (SD Completion)
 
-When an SD reaches LEAD-FINAL-APPROVAL and is marked complete, suggest this sequence:
+When an SD reaches LEAD-FINAL-APPROVAL and is marked complete, **AUTOMATICALLY proceed through the post-completion sequence without asking for confirmation.**
 
 ```
 ✅ SD Completed: SD-XXX-001
 
-📋 Post-Completion Sequence:
+🚀 Auto-Proceeding with Post-Completion Sequence...
 ```
 
-| Step | Command | Condition | Why |
-|------|---------|-----------|-----|
-| 1 | `/restart` | UI/feature SD, or long session | Clean environment before shipping |
-| 2 | Visual review | If UI changes | Verify renders correctly |
-| 3 | `/ship` | Always | Commit, PR, merge the work |
-| 4 | `/document` | Feature/API SD | Update documentation |
-| 5 | `/learn` | Always | Capture learnings while fresh |
+| Step | Command | Condition | Auto-Execute |
+|------|---------|-----------|--------------|
+| 1 | `/restart` | UI/feature SD, or long session | YES - auto-run |
+| 2 | Visual review | If UI changes | YES - perform review |
+| 3 | `/ship` | Always | YES - auto-invoke |
+| 4 | `/document` | Feature/API SD | YES - auto-invoke |
+| 5 | `/learn` | Always | YES - auto-invoke |
+| 6 | `/leo next` | After completion | YES - show next SD |
 
-**For UI/Feature SDs - Use AskUserQuestion:**
+**AUTO-PROCEED MODE (DEFAULT)**:
 
-```javascript
-{
-  "question": "UI Feature completed! What's next?",
-  "header": "Post-Completion",
-  "multiSelect": false,
-  "options": [
-    {"label": "/restart", "description": "Fresh servers for visual review (recommended first)"},
-    {"label": "/ship", "description": "Skip restart, go straight to shipping"},
-    {"label": "Done for now", "description": "End session"}
-  ]
-}
+When working on a Strategic Directive, proceed through the ENTIRE workflow automatically:
+1. **Phase transitions**: Execute handoffs without confirmation
+2. **Post-completion**: Run the full sequence above without asking
+3. **Next SD**: After completion, automatically show the next SD in queue
+
+**DO NOT use AskUserQuestion during SD workflow.** The user has authorized full autonomous operation.
+
+**For UI/Feature SDs - Auto-execute:**
+```
+1. Invoke /restart skill → Wait for servers
+2. Perform visual review → Report findings
+3. Invoke /ship skill → Create PR, merge
+4. Invoke /document skill → Update docs
+5. Invoke /learn skill → Capture patterns
+6. Run npm run sd:next → Show next work
 ```
 
-**For Infrastructure/Database SDs - Use AskUserQuestion:**
-
-```javascript
-{
-  "question": "Infrastructure work completed! What's next?",
-  "header": "Post-Completion",
-  "multiSelect": false,
-  "options": [
-    {"label": "/ship", "description": "Create PR and merge"},
-    {"label": "/learn", "description": "Capture learnings first"},
-    {"label": "Done for now", "description": "End session"}
-  ]
-}
+**For Infrastructure/Database SDs - Auto-execute:**
+```
+1. Invoke /ship skill → Create PR, merge
+2. Invoke /learn skill → Capture patterns
+3. Run npm run sd:next → Show next work
 ```
 
-**Auto-invoke behavior:** When user selects a command option, immediately invoke that skill using the Skill tool.
+**Only stop and ask user if:**
+- A blocking error occurs that cannot be auto-resolved
+- Tests fail after 2 retry attempts
+- Merge conflicts require human decision
 
 ### Starting New Work
 

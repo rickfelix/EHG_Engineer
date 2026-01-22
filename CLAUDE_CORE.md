@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-01-22 9:13:12 PM
+**Generated**: 2026-01-22 9:56:48 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -1115,9 +1115,13 @@ These definitions are BINDING. Misinterpretation is a protocol violation.
 **NOT complete**: Code shipped but database shows 'draft'/'in_progress'
 
 ### "Continue autonomously"
-**Definition**: Execute the current SD through its full LEO Protocol workflow.
+**Definition**: Execute the current SD through its full LEO Protocol workflow WITHOUT stopping to ask for user confirmation at each step.
 **NOT**: Skip workflow steps for efficiency.
-**STOP condition**: If instruction is ambiguous about workflow requirements, ASK.
+**AUTO-PROCEED**: Phase transitions, post-completion sequence, and next SD selection all happen automatically.
+**ONLY STOP IF**:
+- Blocking error requires human decision (e.g., merge conflicts)
+- Tests fail after 2 retry attempts
+- Critical security or data-loss scenario
 
 ### "Child SD"
 **Definition**: An INDEPENDENT Strategic Directive that requires its own full LEAD→PLAN→EXEC cycle.
@@ -1312,16 +1316,18 @@ LEAD is not redundant - it's essential validation per child.
 
 ### Orchestrator STOP Conditions (MANDATORY)
 
-When working on orchestrator SDs, STOP and verify if:
+**AUTO-PROCEED CLARIFICATION**: Each child SD goes through full LEAD→PLAN→EXEC automatically. This is resolved - no need to ask.
 
-1. **Instruction ambiguity**: "Continue autonomously" or similar without explicit workflow guidance
-   - STOP: Ask "Should each child go through full LEAD→PLAN→EXEC, or is there a streamlined path?"
+When working on orchestrator SDs, STOP and verify ONLY if:
 
-2. **Efficiency temptation**: Urge to ship children faster by skipping steps
-   - STOP: The existing workflow exists for a reason. Do not optimize.
+1. **Blocking dependency**: A child SD depends on another child that's incomplete
+   - STOP: Complete the blocking child first, then resume
+
+2. **Critical error**: Tests fail after 2 retries, merge conflicts, or data-loss risk
+   - STOP: These require human decision
 
 3. **Batch completion**: Desire to mark multiple children complete at once
-   - STOP: Each child completes independently through LEO validation
+   - STOP: Each child completes independently through LEO validation (but proceed through them sequentially without asking)
 
 4. **Database status mismatch**: Code shipped but database shows incomplete
    - STOP: Code shipped ≠ SD complete. Complete the protocol.
