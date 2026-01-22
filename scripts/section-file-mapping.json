@@ -40,6 +40,7 @@
       "parent_child_overview",
       "child_sd_preflight_validation",
       "negative_constraints_global",
+      "conditional_handoffs",
       "sd_type_workflow_paths",
       "sd_type_validation_requirements",
       "work_tracking_policy",

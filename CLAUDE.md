@@ -201,12 +201,12 @@ LEO Protocol includes intelligent slash commands that interconnect based on work
 LEAD-FINAL-APPROVAL → /restart → Visual Review → /ship → /document → /learn → /leo next
 ```
 
-## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-21 7:53:07 AM
+## DYNAMICALLY GENERATED FROM DATABASE
+**Last Generated**: 2026-01-22 8:13:34 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
-## 🟢 CURRENT LEO PROTOCOL VERSION: 4.3.3
+## CURRENT LEO PROTOCOL VERSION: 4.3.3
 
 **CRITICAL**: This is the ACTIVE version from database
 **ID**: leo-v4-3-3-ui-parity
@@ -277,6 +277,6 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /ship → /document → /
 
 ---
 
-*Router generated from database: 2026-01-21*
+*Router generated from database: 2026-01-22*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*
