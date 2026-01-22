@@ -3,11 +3,11 @@
 ## Metadata
 - **Category**: Reference
 - **Status**: Approved
-- **Version**: 1.0.0
+- **Version**: 1.1.0
 - **Author**: DOCMON Sub-Agent
-- **Last Updated**: 2026-01-17
-- **Tags**: uat, testing, command, platform, quality-gates, defect-routing
-- **Related SD**: SD-UAT-PLATFORM-001
+- **Last Updated**: 2026-01-22
+- **Tags**: uat, testing, command, platform, quality-gates, defect-routing, multi-model-triangulation, intelligent-feedback
+- **Related SD**: SD-UAT-PLATFORM-001, SD-LEO-FEAT-INTELLIGENT-UAT-FEEDBACK-001
 
 ## Purpose
 
