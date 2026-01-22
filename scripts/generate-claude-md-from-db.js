@@ -33,8 +33,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // Re-export the class for use in other scripts
 export { CLAUDEMDGeneratorV3 };
 
-// Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Run if called directly (normalize Windows backslashes for comparison)
+const normalizedArgv = process.argv[1]?.replace(/\\/g, '/');
+if (import.meta.url === `file:///${normalizedArgv}`) {
   async function main() {
     const baseDir = path.join(__dirname, '..');
     const mappingPath = path.join(__dirname, 'section-file-mapping.json');
