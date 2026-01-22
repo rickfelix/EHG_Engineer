@@ -83,11 +83,13 @@ function prompt(question) {
 async function createQuickFix(options = {}) {
   console.log('\n🎯 LEO Quick-Fix Workflow - Create Issue\n');
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const supabaseUrl = process.env.SUPABASE_URL;
+  // Use service role key for insert operations (anon key blocked by RLS)
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
     console.log('❌ Missing Supabase credentials in .env file');
+    console.log('   Required: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
     process.exit(1);
   }
 

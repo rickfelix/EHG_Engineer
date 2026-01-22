@@ -151,6 +151,195 @@ supabase.from('leo_protocol_sections')
 
 ## Workflow
 
+### Phase 0: File Location Validation (MANDATORY - Runs on EVERY File Touch)
+
+**CRITICAL**: Before creating, editing, or moving ANY file, this validation MUST pass. This ensures all documentation follows the Document Management Protocol.
+
+#### 0.1 Location Rules Reference
+
+Load and validate against `docs/DOCUMENTATION_STANDARDS.md` location rules:
+
+| Document Type | Correct Location | File Pattern |
+|--------------|------------------|--------------|
+| Project README | `/` | `README.md` only |
+| AI Instructions | `/` | `CLAUDE.md`, `CLAUDE_*.md` only |
+| Architecture | `/docs/01_architecture/` | `*.md` |
+| API Docs | `/docs/02_api/` | `*.md` |
+| Protocols | `/docs/03_protocols_and_standards/` | `*.md` |
+| Feature Docs | `/docs/04_features/` | `*.md` |
+| Test Docs | `/docs/05_testing/` | `*.md` |
+| Deploy Docs | `/docs/06_deployment/` | `*.md` |
+| LEO Protocol Hub | `/docs/leo/` | `handoffs/`, `sub-agents/`, `commands/` |
+| How-to Guides | `/docs/guides/` | `*.md` |
+| Quick Reference | `/docs/reference/` | `*.md` |
+| Database Docs | `/docs/database/` | `schema/`, `migrations/` |
+| Retrospectives | `/docs/retrospectives/` | `SD-*-retro.md` |
+| Summaries | `/docs/summaries/` | `implementations/`, `sd-sessions/` |
+| Archives | `/docs/archive/` | Old versions, deprecated docs |
+
+#### 0.2 Prohibited Locations Check
+
+**NEVER place documentation in these directories**:
+- `/src/` - Code only
+- `/lib/` - Libraries only
+- `/scripts/` - Executable scripts only
+- `/tests/` - Test files only
+- `/public/` - Public assets only
+- `/node_modules/` - Dependencies only
+- Root directory (except README.md, CLAUDE*.md files)
+
+```bash
+# Validate target path is not in prohibited location
+validate_doc_location() {
+  local target_path="$1"
+  local prohibited_patterns=(
+    "^src/"
+    "^lib/"
+    "^scripts/"
+    "^tests/"
+    "^public/"
+    "^node_modules/"
+  )
+
+  for pattern in "${prohibited_patterns[@]}"; do
+    if [[ "$target_path" =~ $pattern ]]; then
+      echo "❌ BLOCKED: Cannot place documentation in prohibited location: $target_path"
+      return 1
+    fi
+  done
+
+  # Check root directory (only README.md and CLAUDE*.md allowed)
+  if [[ "$target_path" =~ ^[^/]+\.md$ ]] && [[ ! "$target_path" =~ ^(README\.md|CLAUDE.*\.md)$ ]]; then
+    echo "❌ BLOCKED: Only README.md and CLAUDE*.md allowed in root. Move to docs/"
+    return 1
+  fi
+
+  return 0
+}
+```
+
+#### 0.3 Document Type Detection
+
+Determine document type from content and context:
+
+```javascript
+function detectDocumentType(filePath, content) {
+  const typePatterns = {
+    'architecture': ['system design', 'component diagram', 'architecture overview', 'data flow'],
+    'api': ['endpoint', 'REST', 'GraphQL', 'request/response', 'API reference'],
+    'protocol': ['protocol', 'standard', 'convention', 'guideline', 'LEO'],
+    'feature': ['feature', 'user story', 'implementation', 'functionality'],
+    'testing': ['test', 'coverage', 'E2E', 'unit test', 'QA'],
+    'deployment': ['deploy', 'CI/CD', 'pipeline', 'infrastructure', 'ops'],
+    'guide': ['how to', 'step-by-step', 'tutorial', 'getting started'],
+    'reference': ['reference', 'quick ref', 'cheatsheet', 'patterns'],
+    'database': ['schema', 'migration', 'table', 'RLS', 'SQL'],
+    'retrospective': ['retrospective', 'retro', 'lessons learned', 'SD-.*-retro'],
+  };
+
+  // Check content for type indicators
+  for (const [type, keywords] of Object.entries(typePatterns)) {
+    if (keywords.some(kw => content.toLowerCase().includes(kw.toLowerCase()))) {
+      return type;
+    }
+  }
+
+  return 'general';
+}
+```
+
+#### 0.4 Location Correction
+
+If file is in wrong location, MUST take corrective action:
+
+```bash
+# Check and correct file location
+correct_doc_location() {
+  local current_path="$1"
+  local doc_type="$2"
+  local correct_dir=""
+
+  case "$doc_type" in
+    architecture) correct_dir="docs/01_architecture/" ;;
+    api) correct_dir="docs/02_api/" ;;
+    protocol) correct_dir="docs/03_protocols_and_standards/" ;;
+    feature) correct_dir="docs/04_features/" ;;
+    testing) correct_dir="docs/05_testing/" ;;
+    deployment) correct_dir="docs/06_deployment/" ;;
+    guide) correct_dir="docs/guides/" ;;
+    reference) correct_dir="docs/reference/" ;;
+    database) correct_dir="docs/database/" ;;
+    retrospective) correct_dir="docs/retrospectives/" ;;
+    *) correct_dir="docs/" ;;
+  esac
+
+  local filename=$(basename "$current_path")
+  local correct_path="${correct_dir}${filename}"
+
+  if [[ "$current_path" != "$correct_path" ]]; then
+    echo "⚠️ LOCATION MISMATCH:"
+    echo "  Current: $current_path"
+    echo "  Correct: $correct_path"
+    echo "  Action: Moving file to correct location"
+
+    mkdir -p "$correct_dir"
+    mv "$current_path" "$correct_path"
+    echo "✅ Moved to: $correct_path"
+  fi
+}
+```
+
+#### 0.5 File Naming Validation
+
+Validate file names follow conventions:
+
+```bash
+# Validate file naming convention
+validate_file_name() {
+  local filename="$1"
+
+  # Must be kebab-case or use underscores for versions
+  if [[ "$filename" =~ [A-Z] ]] && [[ ! "$filename" =~ ^(README|CLAUDE|API_REFERENCE|CHANGELOG)\.md$ ]]; then
+    echo "⚠️ WARNING: File name should be kebab-case: $filename"
+    echo "  Suggestion: $(echo $filename | sed 's/\([A-Z]\)/-\L\1/g' | sed 's/^-//')"
+  fi
+
+  # Check for spaces
+  if [[ "$filename" =~ " " ]]; then
+    echo "❌ BLOCKED: File names cannot contain spaces: $filename"
+    return 1
+  fi
+
+  return 0
+}
+```
+
+#### 0.6 Validation Report (MANDATORY before file operations)
+
+Before ANY file create/edit, output this validation:
+
+```markdown
+## File Location Validation ✓
+
+### Target File
+- **Path**: `docs/04_features/new-feature.md`
+- **Document Type**: feature
+- **Expected Location**: `docs/04_features/`
+
+### Validation Results
+- [x] Not in prohibited location
+- [x] Correct directory for document type
+- [x] File naming convention valid (kebab-case)
+- [x] Parent directory exists
+
+### Action
+- [x] PROCEED - Location is correct
+- [ ] MOVE - File needs relocation (from: X, to: Y)
+- [ ] BLOCKED - Cannot proceed (reason: X)
+```
+
+---
+
 ### Phase 1: Context Analysis
 
 **Analyze the current conversation for**:
@@ -370,6 +559,35 @@ gh pr create --title "docs(<scope>): <description>" --body "..."
 ```
 /document invoked
 │
+├── Phase 0: FILE LOCATION VALIDATION (MANDATORY - EVERY FILE TOUCH)
+│   │
+│   ├── For EACH target file path:
+│   │   │
+│   │   ├── Check prohibited locations:
+│   │   │   ├── Is in /src/? → BLOCK
+│   │   │   ├── Is in /lib/? → BLOCK
+│   │   │   ├── Is in /scripts/? → BLOCK
+│   │   │   ├── Is in /tests/? → BLOCK
+│   │   │   ├── Is in /public/? → BLOCK
+│   │   │   └── Is root .md (not README/CLAUDE)? → BLOCK
+│   │   │
+│   │   ├── Validate naming convention:
+│   │   │   ├── Contains spaces? → BLOCK
+│   │   │   ├── Not kebab-case? → WARN + suggest correction
+│   │   │   └── Valid? → PROCEED
+│   │   │
+│   │   ├── Detect document type from content:
+│   │   │   └── architecture|api|protocol|feature|testing|deployment|guide|reference|database|retrospective
+│   │   │
+│   │   ├── Validate location matches type:
+│   │   │   ├── In correct directory? → PROCEED
+│   │   │   └── In wrong directory? → AUTO-MOVE to correct location
+│   │   │
+│   │   └── Output validation report:
+│   │       └── Path, type, expected location, validation results, action
+│   │
+│   └── All validations passed? → Continue to Phase 1
+│
 ├── Phase 1-2: Detect SD Type & Analyze Context
 │   ├── Query strategic_directives_v2 for sd_type
 │   └── Identify: commands, features, protocols, configs
@@ -391,14 +609,14 @@ gh pr create --title "docs(<scope>): <description>" --body "..."
 │   ├── Apply Decision Matrix:
 │   │   ├── Existing doc covers topic? → EDIT existing (DO NOT CREATE)
 │   │   ├── Partial coverage? → EDIT to add content
-│   │   ├── Doc in wrong location? → MOVE or MERGE
-│   │   ├── No existing docs? → CREATE new
+│   │   ├── Doc in wrong location? → MOVE to correct location (Phase 0 rules)
+│   │   ├── No existing docs? → CREATE new (in correct location per Phase 0)
 │   │   └── Multiple partials? → CONSOLIDATE
 │   │
 │   └── Report findings BEFORE proceeding
 │       └── Document: search terms, files found, decision, justification
 │
-├── Phase 5: Apply SD Type-Specific Workflow:
+├── Phase 5: Apply SD Type-Specific Workflow (WITH LOCATION VALIDATION):
 │   │
 │   ├── feature → Full feature docs + API + architecture
 │   ├── database → Schema docs + migration notes + RLS
@@ -410,7 +628,13 @@ gh pr create --title "docs(<scope>): <description>" --body "..."
 │   ├── documentation → Meta-docs + cross-refs
 │   └── other → Standard documentation
 │
-├── For each change (respecting Phase 4 decisions):
+├── For each change (respecting Phase 0 + Phase 4 decisions):
+│   │
+│   ├── BEFORE ANY FILE OPERATION:
+│   │   ├── Re-validate target path (Phase 0 rules)
+│   │   ├── Ensure correct directory for document type
+│   │   ├── Validate naming convention
+│   │   └── Check/add metadata header
 │   │
 │   ├── LEO Protocol change?
 │   │   ├── Query leo_protocol_sections for related sections
@@ -422,6 +646,12 @@ gh pr create --title "docs(<scope>): <description>" --body "..."
 │   │   └── Regenerate CLAUDE.md files
 │   │
 │   ├── API change?
+│   │   └── EDIT existing docs/02_api/ (or create if none found)
+│   │
+│   ├── Feature change?
+│   │   └── EDIT existing docs/04_features/ (or create if none found)
+│   │
+│   ├── Reference/Pattern change?
 │   │   └── EDIT existing docs/reference/ (or create if none found)
 │   │
 │   ├── Skill change?
@@ -431,10 +661,15 @@ gh pr create --title "docs(<scope>): <description>" --body "..."
 │       └── EDIT relevant existing documentation
 │
 ├── Phase 6: Run DOCMON validation
+│   ├── Database-first compliance check
+│   └── Location compliance check
 │
 └── Report summary with:
+    ├── Location validations performed
+    ├── Files moved (if any)
     ├── Existing docs discovered
     ├── Decision rationale (edit vs create)
+    ├── Protocol compliance status
     └── SD type acknowledgment
 ```
 
@@ -485,6 +720,26 @@ supabase.from('leo_protocol_sections')
 - Detected: [what changes were found in conversation]
 - SD Type: [feature/api/database/etc.]
 
+### File Location Validation (Phase 0)
+
+#### Validation Results
+| Target Path | Document Type | Expected Location | Status |
+|-------------|---------------|-------------------|--------|
+| docs/04_features/new-feature.md | feature | docs/04_features/ | ✅ VALID |
+| docs/reference/patterns.md | reference | docs/reference/ | ✅ VALID |
+
+#### Location Corrections Made
+| Original Path | Corrected Path | Reason |
+|---------------|----------------|--------|
+| src/README.md | docs/README.md | Prohibited location |
+| feature-doc.md | docs/04_features/feature-doc.md | Root not allowed |
+
+#### Protocol Compliance
+- [x] No files in prohibited locations
+- [x] All files in correct category directories
+- [x] Naming conventions followed (kebab-case)
+- [x] Metadata headers present
+
 ### Existing Documentation Discovery (Phase 4)
 
 #### Search Terms Used
@@ -521,10 +776,13 @@ supabase.from('leo_protocol_sections')
 - CLAUDE_LEAD.md (regenerated)
 
 ### Validation
-- Existing doc search: ✅ Completed before changes
-- DOCMON compliance: ✅ Database-first verified
-- Content accuracy: ✅ New content appears in output
-- No duplicates created: ✅ Verified
+- **Location Validation**: ✅ All files in correct locations (Phase 0)
+- **Protocol Compliance**: ✅ Document Management Protocol followed
+- **Existing doc search**: ✅ Completed before changes
+- **DOCMON compliance**: ✅ Database-first verified
+- **Content accuracy**: ✅ New content appears in output
+- **No duplicates created**: ✅ Verified
+- **Cross-references valid**: ✅ No broken links
 
 ### PR (if created)
 - URL: https://github.com/rickfelix/EHG_Engineer/pull/XXX
@@ -541,6 +799,156 @@ supabase.from('leo_protocol_sections')
 7. **Skill Integration**: Use documentation skills for patterns
 8. **DOCMON Validation**: Verify database-first compliance
 9. **Report Findings**: Always report existing doc discovery results before making changes
+10. **Location Validation**: ALWAYS validate file location before create/edit (Phase 0)
+11. **Protocol Compliance**: Every file operation must follow Document Management Protocol
+
+## Document Management Protocol Enforcement
+
+**CRITICAL**: This protocol MUST be followed for EVERY file operation (create, edit, move, delete).
+
+### Protocol Checklist (Run Before EVERY File Operation)
+
+```markdown
+## Document Management Protocol Checklist ✓
+
+### Pre-Operation Validation
+- [ ] **Phase 0 Complete**: File location validation passed
+- [ ] **Naming Convention**: File follows kebab-case (or allowed exceptions)
+- [ ] **No Prohibited Location**: Target not in /src/, /lib/, /scripts/, /tests/, /public/
+- [ ] **Correct Category Directory**: Matches document type → location mapping
+- [ ] **Existing Doc Search**: Phase 4 discovery completed
+
+### Document Structure Requirements
+- [ ] **Metadata Header**: Document has required metadata block
+- [ ] **Category Tag**: Metadata includes Category field
+- [ ] **Status Tag**: Metadata includes Status field (Draft/Review/Approved/Deprecated)
+- [ ] **Version Tag**: Metadata includes Version field (semver)
+- [ ] **Last Updated**: Metadata includes Last Updated date
+
+### Cross-Reference Compliance
+- [ ] **Relative Paths**: Internal links use relative paths (../01_architecture/)
+- [ ] **No Absolute Paths**: No /docs/... style links
+- [ ] **No Broken Links**: All referenced files exist
+- [ ] **Index Updated**: Parent directory README.md updated if needed
+
+### Post-Operation Validation
+- [ ] **DOCMON Check**: Database-first compliance verified
+- [ ] **Link Integrity**: No broken cross-references introduced
+- [ ] **Index Entry**: Document added to relevant index/README
+```
+
+### Automatic Enforcement Rules
+
+When the /document command modifies ANY file, these rules are AUTOMATICALLY enforced:
+
+#### Rule 1: Location Auto-Correction
+```
+IF file_path NOT IN correct_location_for_type THEN
+  1. Calculate correct location from document type
+  2. Create target directory if needed
+  3. Move file to correct location
+  4. Update any references to old path
+  5. Log location correction in output
+END
+```
+
+#### Rule 2: Metadata Injection
+```
+IF file lacks required metadata header THEN
+  1. Detect document type from content
+  2. Generate metadata block with defaults
+  3. Inject at top of file
+  4. Set Status: Draft, Version: 1.0.0
+END
+```
+
+#### Rule 3: Cross-Reference Validation
+```
+FOR EACH internal link in document
+  IF link uses absolute path THEN
+    Convert to relative path
+  END
+  IF link target does not exist THEN
+    Log warning in validation report
+  END
+END
+```
+
+#### Rule 4: Index Maintenance
+```
+IF new document created OR document moved THEN
+  1. Find parent directory README.md
+  2. Add entry for new document
+  3. Alphabetize or categorize entries
+END
+```
+
+### Protocol Violation Handling
+
+When a protocol violation is detected:
+
+| Severity | Violation | Action |
+|----------|-----------|--------|
+| **BLOCK** | File in prohibited location | Refuse operation, suggest correct path |
+| **BLOCK** | File name contains spaces | Refuse operation, suggest kebab-case |
+| **AUTO-FIX** | File in wrong category directory | Move to correct location automatically |
+| **AUTO-FIX** | Missing metadata header | Inject default metadata block |
+| **AUTO-FIX** | Absolute internal links | Convert to relative paths |
+| **WARN** | Broken cross-reference | Log warning, continue operation |
+| **WARN** | Missing index entry | Log reminder to update index |
+
+### Location Mapping Quick Reference
+
+```javascript
+const LOCATION_MAP = {
+  // Document type → Correct location
+  'architecture': 'docs/01_architecture/',
+  'api': 'docs/02_api/',
+  'protocol': 'docs/03_protocols_and_standards/',
+  'feature': 'docs/04_features/',
+  'testing': 'docs/05_testing/',
+  'deployment': 'docs/06_deployment/',
+  'guide': 'docs/guides/',
+  'reference': 'docs/reference/',
+  'database': 'docs/database/',
+  'retrospective': 'docs/retrospectives/',
+  'summary': 'docs/summaries/',
+  'archive': 'docs/archive/',
+  'leo-hub': 'docs/leo/',
+
+  // Special root-level exceptions
+  'root-readme': '/',      // README.md only
+  'ai-instructions': '/',  // CLAUDE*.md only
+};
+
+const PROHIBITED_LOCATIONS = [
+  'src/',
+  'lib/',
+  'scripts/',
+  'tests/',
+  'test/',
+  'public/',
+  'node_modules/',
+  '.git/',
+  'dist/',
+  'build/',
+];
+```
+
+### Integration with DOCMON
+
+The Document Management Protocol works alongside DOCMON enforcement:
+
+```bash
+# After any file operation, trigger DOCMON validation
+node scripts/execute-subagent.js --code DOCMON --sd-id <SD-ID> --validate-location
+```
+
+DOCMON provides:
+- Database-first compliance checking
+- File-based violation detection
+- Location audit capabilities
+- Documentation health scoring
 
 ## Command Ecosystem Integration
 

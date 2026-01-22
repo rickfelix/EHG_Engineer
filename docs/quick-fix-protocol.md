@@ -1,10 +1,16 @@
 # Quick-Fix Protocol Documentation
 
-**Version:** 2.1
+**Version:** 2.1.1
 **Status:** ACTIVE
-**Last Updated:** 2025-12-08
+**Last Updated:** 2026-01-21
 
 ---
+
+## Version 2.1.1 Fixes (2026-01-21)
+
+| Fix | Description | Commit |
+|-----|-------------|--------|
+| **Database Permission Fix** | `create-quick-fix.js` now uses `SUPABASE_SERVICE_ROLE_KEY` instead of anon key (RLS blocked inserts) | `46cd2f8d5` |
 
 ## Version 2.1 Enhancements (2025-12-08)
 
