@@ -39,17 +39,25 @@ const maxAgeHours = parseInt(process.env.LEO_TESTING_MAX_AGE_HOURS || '24');
 
 #### SD Type Exemptions
 
-| SD Type | Testing Required | Rationale |
-|---------|------------------|-----------|
-| `feature` | ✅ YES | Produces user-facing code |
-| `bugfix` | ✅ YES | Modifies existing code |
-| `refactor` | ✅ YES | Changes implementation |
-| `performance` | ✅ YES | Requires performance tests |
-| `security` | ✅ YES | Critical for security validation |
-| `documentation` | ❌ NO | No code changes |
-| `docs` | ❌ NO | Alias for documentation |
-| `infrastructure` | ❌ NO | Non-code infrastructure |
-| `orchestrator` | ❌ NO | Delegates to child SDs |
+**Updated**: v4.4.3 (SD-LEO-HARDEN-VALIDATION-001) - Narrowed exemptions to documentation-only
+
+| SD Type | Testing Mode | Rationale |
+|---------|--------------|-----------|
+| `feature` | ✅ **REQUIRED** | Produces user-facing code |
+| `bugfix` | ✅ **REQUIRED** | Modifies existing code |
+| `refactor` | ✅ **REQUIRED** | Changes implementation |
+| `performance` | ✅ **REQUIRED** | Requires performance tests |
+| `security` | ✅ **REQUIRED** | Critical for security validation |
+| `infrastructure` | ⚠️ **ADVISORY** | Unit tests recommended, warns if missing |
+| `orchestrator` | ⚠️ **ADVISORY** | Child SDs handle testing, warns if missing |
+| `database` | ⚠️ **ADVISORY** | Unit tests for functions/triggers recommended |
+| `documentation` | ⏭️ **SKIPPED** | No code changes |
+| `docs` | ⏭️ **SKIPPED** | Alias for documentation |
+
+**Legend**:
+- ✅ **REQUIRED**: Gate blocks handoff if TESTING missing or failed
+- ⚠️ **ADVISORY**: Gate warns but passes with reduced score (70/100)
+- ⏭️ **SKIPPED**: Gate passes with full score (100/100), no warnings
 
 #### Gate Behavior
 
@@ -65,8 +73,10 @@ const maxAgeHours = parseInt(process.env.LEO_TESTING_MAX_AGE_HOURS || '24');
 - Code-producing SD type without test evidence
 
 **Example Output**:
+
+*REQUIRED Mode (feature/bugfix/refactor SDs):*
 ```
-🧪 MANDATORY TESTING VALIDATION (BLOCKING)
+🧪 MANDATORY TESTING VALIDATION (LEO v4.4.2)
 --------------------------------------------------
    ℹ️  SD Type: feature (testing REQUIRED)
    ✅ TESTING sub-agent executed
@@ -74,6 +84,27 @@ const maxAgeHours = parseInt(process.env.LEO_TESTING_MAX_AGE_HOURS || '24');
    ✅ Freshness: 2.3h old (max 24h)
 
 ✅ GATE PASSED (100/100)
+```
+
+*ADVISORY Mode (infrastructure/orchestrator/database SDs):*
+```
+🧪 MANDATORY TESTING VALIDATION (LEO v4.4.2)
+--------------------------------------------------
+   ⚠️  TESTING not executed for infrastructure SD (ADVISORY MODE)
+   → Infrastructure SDs should run TESTING for unit test coverage
+   → This is a warning, not a blocker
+
+⚠️ GATE PASSED (70/100) - Advisory warning issued
+```
+
+*SKIPPED Mode (documentation SDs):*
+```
+🧪 MANDATORY TESTING VALIDATION (LEO v4.4.2)
+--------------------------------------------------
+   ℹ️  documentation type SD - TESTING validation SKIPPED
+   → Documentation-only SDs have no code paths
+
+✅ GATE PASSED (100/100) - Skipped
 ```
 
 #### Configuration

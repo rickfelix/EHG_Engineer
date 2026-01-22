@@ -286,10 +286,97 @@ The sub-agent enforcement concept has been implemented as a **Claude Code Stop H
 }
 ```
 
+---
+
+## 5. Per-Handoff Sub-Agent Enforcement (v4.4.3)
+
+**Added**: SD-LEO-HARDEN-VALIDATION-001
+**Date**: 2026-01-21
+
+### Problem
+
+Stop hook enforcement only runs at **session END** (when user exits Claude Code):
+- Missing sub-agents not detected until hours after handoff
+- No early warning for EXEC-phase sub-agents before EXEC-TO-PLAN
+- Developers discover missing sub-agents at end of session (friction)
+
+**Evidence**: 14.6% of SDs completed EXEC-TO-PLAN without TESTING validation.
+
+### Solution: Advisory Gate at EXEC-TO-PLAN Handoff
+
+**New Gate**: `SUBAGENT_ENFORCEMENT_VALIDATION`
+
+**Location**: `scripts/modules/handoff/executors/exec-to-plan/gates/subagent-enforcement-validation.js`
+
+**Behavior**: Advisory (non-blocking) warnings for missing EXEC-phase sub-agents
+
+#### Implementation
+
+```javascript
+// EXEC-phase sub-agents checked at EXEC-TO-PLAN handoff
+const EXEC_PHASE_AGENTS = ['TESTING', 'REGRESSION', 'PERFORMANCE', 'GITHUB', 'API'];
+
+// Requirements mirror stop-hook structure
+const REQUIREMENTS = {
+  byType: {
+    feature: { required: ['TESTING', 'DESIGN', 'STORIES'], recommended: ['UAT', 'API'] },
+    infrastructure: { required: ['GITHUB', 'DOCMON'], recommended: ['VALIDATION'] },
+    database: { required: ['DATABASE', 'SECURITY'], recommended: ['REGRESSION'] },
+    // ... (mirrors scripts/hooks/stop-subagent-enforcement.js)
+  }
+};
+```
+
+#### Gate Output Example
+
+**ADVISORY Mode (warns but passes)**:
+
+```
+🔍 SUB-AGENT ENFORCEMENT VALIDATION (LEO v4.4.3)
+--------------------------------------------------
+   📋 SD Type: feature
+   📋 Required for EXEC: TESTING
+   📋 Recommended for EXEC: UAT, API
+   ✅ Executed: TESTING
+   ⚠️  Missing recommended: UAT, API
+
+⚠️ GATE PASSED (90/100) - Advisory warnings issued
+```
+
+#### Differences from Stop Hook
+
+| Feature | Stop Hook | Per-Handoff Gate |
+|---------|-----------|------------------|
+| **Timing** | Session END | EXEC-TO-PLAN handoff |
+| **Scope** | All sub-agents | EXEC-phase only |
+| **Blocking** | ❌ Blocks exit | ⚠️ Advisory warning |
+| **Auto-remediation** | ✅ Yes | ❌ No (manual) |
+| **Purpose** | Final validation | Early warning |
+
+**Complementary Systems**: Stop hook remains authoritative. Per-handoff gate provides early warning.
+
+#### Integration
+
+Gate registered in `scripts/modules/handoff/executors/exec-to-plan/index.js`:
+
+```javascript
+gates.push(createSubAgentEnforcementValidationGate(this.supabase));
+```
+
+**Score Impact**:
+- Missing required sub-agent: -10 points each
+- Missing recommended sub-agent: -5 points each
+- Minimum score: 50/100 (always passes)
+
+---
+
 **References**:
 - Design Document: `docs/drafts/STOP-HOOK-SUBAGENT-ENFORCEMENT-DRAFT.md`
 - Triangulation Synthesis: `docs/research/triangulation-stop-hook-synthesis.md`
-- Operational Runbook: `docs/06_deployment/stop-hook-operations.md` (NEW)
-- Hook Reference: `docs/reference/claude-code-hooks.md` (NEW)
+- Operational Runbook: `docs/06_deployment/stop-hook-operations.md`
+- Hook Reference: `docs/reference/claude-code-hooks.md`
+- Per-Handoff Gate: `scripts/modules/handoff/executors/exec-to-plan/gates/subagent-enforcement-validation.js` (NEW)
 
-**Deployment**: PR #458 merged to main on 2026-01-21
+**Deployment**:
+- Stop hook: PR #458 merged to main on 2026-01-21
+- Per-handoff gate: PR #462 merged to main on 2026-01-21 (SD-LEO-HARDEN-VALIDATION-001)
