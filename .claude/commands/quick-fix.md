@@ -12,7 +12,7 @@ argument-hint: [describe the issue]
 **Before proceeding, you MUST read the Quick-Fix Protocol Documentation:**
 
 ```
-Read file: docs/quick-fix-protocol.md
+Read file: docs/03_protocols_and_standards/quick-fix-protocol.md
 ```
 
 **This is non-negotiable. The protocol document contains:**

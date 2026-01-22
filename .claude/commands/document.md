@@ -20,7 +20,7 @@ model: sonnet
 
 Before any documentation work, consult these authoritative sources:
 
-1. **Documentation Standards**: `docs/DOCUMENTATION_STANDARDS.md`
+1. **Documentation Standards**: `docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md`
    - File naming conventions (kebab-case, version underscores)
    - Folder hierarchy (01_architecture through 06_deployment)
    - Documentation rules and organization
@@ -157,7 +157,7 @@ supabase.from('leo_protocol_sections')
 
 #### 0.1 Location Rules Reference
 
-Load and validate against `docs/DOCUMENTATION_STANDARDS.md` location rules:
+Load and validate against `docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md` location rules:
 
 | Document Type | Correct Location | File Pattern |
 |--------------|------------------|--------------|
