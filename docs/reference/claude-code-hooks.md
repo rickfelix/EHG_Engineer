@@ -2,7 +2,7 @@
 
 **Document Type**: Technical Reference
 **System**: Claude Code Hook System
-**Last Updated**: 2026-01-21
+**Last Updated**: 2026-01-22
 
 ## Overview
 
@@ -336,6 +336,48 @@ process.exit(result ? 0 : 2);
 **Purpose**: Reminds Claude to follow LEO protocol diligently
 **Timeout**: 2 seconds
 
+### UserPromptSubmit Hook: Session Cleanup
+
+**Location**: `scripts/hooks/session-cleanup.js`
+**Purpose**: Cleans up stale files from previous sessions on first prompt of new session
+**Exit Behavior**: Exit 0 always (non-blocking, advisory only)
+**Timeout**: 5 seconds
+
+**Key Features**:
+- Detects new sessions using session marker file
+- Cleans up stale checkpoint counter files (>6 hours old)
+- Removes old session state files
+- Cleans up Claude temp task output files from previous sessions
+- Prevents "background task completed" notifications for old tasks
+
+**Problem Solved**: Background tasks write output to temp files that become unreadable in new sessions, causing "Error reading file" notifications for completed/stale work.
+
+**Implementation Details**:
+```javascript
+// Session marker location
+const SESSION_MARKER_FILE = path.join(os.tmpdir(), 'leo-checkpoints', `marker-${SESSION_ID}.txt`);
+
+// Cleanup targets
+- Stale checkpoint files: /tmp/leo-checkpoints/session-*.json (>6 hours)
+- Old session state: ~/.claude-session-state.json (>6 hours)
+- Temp task outputs: %LOCALAPPDATA%\Temp\claude\...\tasks\*.output (>6 hours)
+```
+
+**When It Runs**: First UserPromptSubmit of a new session (detected via missing/stale session marker)
+
+### UserPromptSubmit Hook: Autonomous Checkpoint
+
+**Location**: `scripts/hooks/autonomous-checkpoint.js`
+**Purpose**: Tracks turn count and displays checkpoint warnings when threshold exceeded
+**Exit Behavior**: Exit 0 always (advisory mode)
+**Timeout**: 3 seconds
+
+**Key Features**:
+- Uses file-based counter to persist across hook invocations
+- Displays checkpoint warning every 20 turns (configurable via `LEO_CHECKPOINT_THRESHOLD`)
+- Shows session duration and active SD
+- Can be disabled via `LEO_CHECKPOINT_ENABLED=false`
+
 ### UserPromptSubmit Hook: Activity State Tracking
 
 **Location**: `.claude/set-activity-state.ps1`
@@ -463,6 +505,36 @@ node path/to/hook.js
 2. Output is well-formed JSON (for Stop hooks)
 3. Timeout is sufficient for script to complete
 
+### Stale Background Task Notifications
+
+**Symptoms**: Getting "background task completed" notifications for old tasks that no longer exist, with "Error reading file" when trying to access output.
+
+**Example**:
+```
+● Background command "node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001" completed (exit code 0)
+● Read(~\AppData\Local\Temp\claude\...\tasks\abc123.output)
+  ⎿  Error reading file
+```
+
+**Root Cause**: Background tasks write output to temp files. When a session ends and a new one starts:
+1. Old notifications persist
+2. Temp files are cleaned up or become stale
+3. Attempting to read output fails
+
+**Solution**: The `session-cleanup.js` hook automatically cleans up stale files on session start:
+- Runs on first UserPromptSubmit of new session
+- Removes checkpoint counter files >6 hours old
+- Cleans up old session state files
+- Deletes Claude temp task output files from previous sessions
+
+**Manual Fix**:
+```bash
+# Clean up manually if needed
+node scripts/hooks/session-cleanup.js
+```
+
+**Prevention**: Avoid using `run_in_background: true` for critical workflow commands (like handoff.js) that need their output visible. Run them in foreground instead.
+
 ## Security Considerations
 
 ### 1. Validate Bypass Inputs
@@ -574,10 +646,11 @@ const validationNeeded = changedFiles.some(needsValidation);
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1 | 2026-01-22 | Added session-cleanup hook documentation, stale background task troubleshooting |
 | 1.0 | 2026-01-21 | Initial hook reference documentation |
 
 ---
 
 **Document Status**: ✅ Active
 **Review Cycle**: Quarterly
-**Next Review**: 2026-04-21
+**Next Review**: 2026-04-22
