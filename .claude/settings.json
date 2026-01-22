@@ -39,6 +39,11 @@
             "type": "command",
             "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.claude\\set-activity-state.ps1 -State running",
             "timeout": 2
+          },
+          {
+            "type": "command",
+            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/autonomous-checkpoint.js",
+            "timeout": 3
           }
         ]
       }
@@ -60,6 +65,16 @@
             "type": "command",
             "command": "echo [REMINDER] Quality over speed. Follow the LEO protocol diligently.",
             "timeout": 1
+          }
+        ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/task-recorder.js",
+            "timeout": 5
           }
         ]
       }
