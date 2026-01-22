@@ -193,8 +193,8 @@ async function main() {
     REQUIREMENTS.universal.forEach(s => required.add(s));
   }
 
-  // Merge recommended into execution list (auto-run)
-  const allToRun = new Set([...required, ...recommended]);
+  // Note: recommended sub-agents are tracked separately - they warn but don't block
+  // Only required sub-agents will cause exit 2 (block)
 
   // 7. Get handoff timestamps
   const { data: handoffs } = await supabase
@@ -217,12 +217,14 @@ async function main() {
     .select('sub_agent_code, verdict, created_at')
     .eq('sd_id', sd.id);
 
-  // 9. Validate each sub-agent
-  const missing = [];
+  // 9. Validate each sub-agent (required blocks, recommended warns)
+  const missingRequired = [];
+  const missingRecommended = [];
   const wrongTiming = [];
   const cached = [];
 
-  for (const agent of allToRun) {
+  // Check required sub-agents (these block if missing)
+  for (const agent of required) {
     const agentExecs = (executions || []).filter(e => e.sub_agent_code === agent);
     const passingExecs = agentExecs.filter(e =>
       ['PASS', 'CONDITIONAL_PASS'].includes(e.verdict)
@@ -239,7 +241,7 @@ async function main() {
     }
 
     if (passingExecs.length === 0) {
-      missing.push(agent);
+      missingRequired.push(agent);
       continue;
     }
 
@@ -266,21 +268,47 @@ async function main() {
     }
   }
 
-  // 10. If issues found, provide feedback for auto-remediation
-  if (missing.length > 0 || wrongTiming.length > 0) {
+  // 9b. Check recommended sub-agents (these warn but don't block)
+  for (const agent of recommended) {
+    if (required.has(agent)) continue; // Already checked in required
+
+    const agentExecs = (executions || []).filter(e => e.sub_agent_code === agent);
+    const passingExecs = agentExecs.filter(e =>
+      ['PASS', 'CONDITIONAL_PASS'].includes(e.verdict)
+    );
+
+    const recentPass = passingExecs.find(e =>
+      (Date.now() - new Date(e.created_at).getTime()) < CACHE_DURATION_MS
+    );
+
+    if (recentPass) {
+      cached.push(agent);
+    } else if (passingExecs.length === 0) {
+      missingRecommended.push(agent);
+    }
+  }
+
+  // 10. Handle missing sub-agents
+  // Required missing = BLOCK (exit 2)
+  // Recommended missing = WARN only (exit 0 with message)
+
+  if (missingRequired.length > 0 || wrongTiming.length > 0) {
     console.error(`\n🔍 Sub-Agent Enforcement for ${sdKey} (${sdType})`);
     console.error(`   Phase: ${sd.current_phase}`);
     console.error(`   Cached: ${cached.length} sub-agents`);
 
-    if (missing.length > 0) {
-      console.error(`   Missing: ${missing.join(', ')}`);
+    if (missingRequired.length > 0) {
+      console.error(`   ❌ Missing REQUIRED: ${missingRequired.join(', ')}`);
+    }
+    if (missingRecommended.length > 0) {
+      console.error(`   ⚠️  Missing recommended: ${missingRecommended.join(', ')} (non-blocking)`);
     }
     if (wrongTiming.length > 0) {
       console.error(`   Wrong timing: ${wrongTiming.map(w => w.agent).join(', ')}`);
     }
 
-    // Sort missing by remediation order
-    const toRemediate = [...missing, ...wrongTiming.map(w => w.agent)];
+    // Sort missing required by remediation order
+    const toRemediate = [...missingRequired, ...wrongTiming.map(w => w.agent)];
     const sorted = toRemediate.sort((a, b) =>
       REMEDIATION_ORDER.indexOf(a) - REMEDIATION_ORDER.indexOf(b)
     );
@@ -294,7 +322,8 @@ async function main() {
         sd_type: sdType,
         category: category,
         current_phase: sd.current_phase,
-        missing: missing,
+        missing_required: missingRequired,
+        missing_recommended: missingRecommended,
         wrong_timing: wrongTiming,
         cached: cached.length
       },
@@ -314,8 +343,17 @@ async function main() {
     process.exit(2);
   }
 
-  // 11. All validations passed
-  console.error(`✅ Sub-Agent Enforcement: ${sdKey} passed (${cached.length} cached, ${allToRun.size - cached.length} validated)`);
+  // 10b. Warn about missing recommended (but don't block)
+  if (missingRecommended.length > 0) {
+    console.error(`\n⚠️  Sub-Agent Advisory for ${sdKey} (${sdType})`);
+    console.error(`   Missing recommended: ${missingRecommended.join(', ')}`);
+    console.error(`   💡 Consider running: node scripts/orchestrate-phase-subagents.js ${sdKey} --agents ${missingRecommended.join(',')}`);
+    console.error('   (Not blocking - these are optional but improve quality)');
+  }
+
+  // 11. All required validations passed
+  const totalChecked = required.size + recommended.size;
+  console.error(`✅ Sub-Agent Enforcement: ${sdKey} passed (${cached.length} cached, ${totalChecked - cached.length} validated)`);
   process.exit(0);
 }
 
