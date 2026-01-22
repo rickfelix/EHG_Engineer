@@ -151,13 +151,147 @@ supabase.from('leo_protocol_sections')
 
 ## Workflow
 
+### Phase 0.0: Load Documentation Standards (MANDATORY - First Step)
+
+**Purpose**: Load validation rules from the canonical source instead of hardcoded values.
+
+#### 0.0.1 Read Canonical Standards
+
+Use the Read tool to load: `docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md`
+
+#### 0.0.2 Parse Location Rules Table
+
+Find the markdown table under "### 3. Location Rules" (lines ~134-150).
+Extract each row into a `LOCATION_RULES` mapping:
+
+```javascript
+// Expected parsed output:
+const LOCATION_RULES = {
+  'Project README': { location: '/', example: '/README.md' },
+  'AI Instructions': { location: '/', example: '/CLAUDE.md, /CLAUDE_CORE.md' },
+  'Architecture': { location: '/docs/01_architecture/', example: 'system-overview.md' },
+  'API Docs': { location: '/docs/02_api/', example: '01a_draft_idea.md' },
+  'Protocols': { location: '/docs/03_protocols_and_standards/', example: 'LEO_v4.2_HYBRID_SUB_AGENTS.md' },
+  'Feature Docs': { location: '/docs/04_features/', example: 'mvp_engine.md' },
+  'Test Docs': { location: '/docs/05_testing/', example: 'testing_qa.md' },
+  'Deploy Docs': { location: '/docs/06_deployment/', example: 'deployment_ops.md' },
+  'LEO Protocol Hub': { location: '/docs/leo/', example: 'handoffs/, sub-agents/, commands/' },
+  'How-to Guides': { location: '/docs/guides/', example: '[guide-name].md' },
+  'Quick Reference': { location: '/docs/reference/', example: 'database-agent-patterns.md' },
+  'Database Docs': { location: '/docs/database/', example: 'schema/, migrations/' },
+  'Retrospectives': { location: '/docs/retrospectives/', example: 'SD-XXX-retro.md' },
+  'Summaries': { location: '/docs/summaries/', example: 'implementations/, sd-sessions/' },
+  'Archives': { location: '/docs/archive/', example: 'protocols/leo_protocol_v3.1.5.md' }
+};
+```
+
+#### 0.0.3 Parse Prohibited Locations
+
+Find "## 🚨 Prohibited Locations" section (lines ~272-280).
+Extract the bulleted list into a `PROHIBITED_LOCATIONS` array:
+
+```javascript
+// Expected parsed output:
+const PROHIBITED_LOCATIONS = [
+  '/src/',      // Code only
+  '/lib/',      // Libraries only
+  '/scripts/',  // Executable scripts only
+  '/tests/',    // Test files only
+  '/public/',   // Public assets only
+  // Root directory (except README, CLAUDE files) - handled separately
+];
+```
+
+#### 0.0.4 Parse Naming Conventions
+
+Find "### 1. File Naming Conventions" (lines ~93-106).
+Extract naming rules:
+
+```javascript
+// Expected parsed output:
+const NAMING_RULES = {
+  correct: [
+    { pattern: 'kebab-case', example: 'getting-started.md' },
+    { pattern: 'underscores for versions', example: 'leo_protocol_v4.1.md' },
+    { pattern: 'UPPERCASE for major references', example: 'API_REFERENCE.md' },
+    { pattern: 'dated files', example: '2025-09-04-retrospective.md' }
+  ],
+  incorrect: [
+    { pattern: 'PascalCase', example: 'GettingStarted.md' },
+    { pattern: 'mixed conventions', example: 'getting_started.md' },
+    { pattern: 'no separation', example: 'gettingstarted.md' }
+  ]
+};
+```
+
+#### 0.0.5 Parse Required Metadata Fields
+
+Find "### 2. Document Headers" (lines ~108-128).
+Extract required metadata fields:
+
+```javascript
+// Expected parsed output:
+const REQUIRED_METADATA = [
+  'Category',      // [Architecture|API|Guide|Protocol|Report]
+  'Status',        // [Draft|Review|Approved|Deprecated]
+  'Version',       // [1.0.0]
+  'Author',        // [Name or Sub-Agent]
+  'Last Updated',  // [YYYY-MM-DD]
+  'Tags'           // [tag1, tag2, tag3]
+];
+```
+
+#### 0.0.6 Report Loaded Standards
+
+Output a summary confirming standards were loaded:
+
+```markdown
+## Documentation Standards Loaded ✓
+
+### Source
+- **File**: docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md
+- **Version**: [extracted from footer, e.g., "1.1.0"]
+- **Last Updated**: [extracted from footer, e.g., "2025-10-24"]
+
+### Rules Extracted
+| Category | Count | Status |
+|----------|-------|--------|
+| Location Rules | 15 | ✅ Loaded |
+| Prohibited Locations | 5 | ✅ Loaded |
+| Naming Conventions | 4 correct, 3 incorrect | ✅ Loaded |
+| Required Metadata | 6 fields | ✅ Loaded |
+
+### Load Status: SUCCESS
+```
+
+#### 0.0.7 Fallback Behavior
+
+If the standards file cannot be read or parsed:
+
+1. **Log warning**:
+   ```markdown
+   ⚠️ WARNING: Could not load documentation standards from canonical source.
+   - File: docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md
+   - Error: [file not found / parse error description]
+   - Action: Using FALLBACK hardcoded rules
+   ```
+
+2. **Use hardcoded fallback rules** defined in Phase 0.1, 0.2, and Location Mapping sections below
+
+3. **Note in final report**: Include `Standards source: FALLBACK (hardcoded)` in output
+
+---
+
 ### Phase 0: File Location Validation (MANDATORY - Runs on EVERY File Touch)
 
 **CRITICAL**: Before creating, editing, or moving ANY file, this validation MUST pass. This ensures all documentation follows the Document Management Protocol.
 
 #### 0.1 Location Rules Reference
 
-Load and validate against `docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md` location rules:
+**Source**: Use the `LOCATION_RULES` extracted from `docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md` in Phase 0.0.
+
+If Phase 0.0 extraction succeeded, use the dynamically loaded rules.
+If Phase 0.0 extraction failed, use these **FALLBACK** rules:
 
 | Document Type | Correct Location | File Pattern |
 |--------------|------------------|--------------|
@@ -177,7 +311,14 @@ Load and validate against `docs/03_protocols_and_standards/DOCUMENTATION_STANDAR
 | Summaries | `/docs/summaries/` | `implementations/`, `sd-sessions/` |
 | Archives | `/docs/archive/` | Old versions, deprecated docs |
 
+*⚠️ FALLBACK: These rules are only used if canonical source cannot be loaded.*
+
 #### 0.2 Prohibited Locations Check
+
+**Source**: Use the `PROHIBITED_LOCATIONS` extracted from `docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md` in Phase 0.0.
+
+If Phase 0.0 extraction succeeded, use the dynamically loaded prohibited list.
+If Phase 0.0 extraction failed, use these **FALLBACK** prohibited locations:
 
 **NEVER place documentation in these directories**:
 - `/src/` - Code only
@@ -187,6 +328,8 @@ Load and validate against `docs/03_protocols_and_standards/DOCUMENTATION_STANDAR
 - `/public/` - Public assets only
 - `/node_modules/` - Dependencies only
 - Root directory (except README.md, CLAUDE*.md files)
+
+*⚠️ FALLBACK: These rules are only used if canonical source cannot be loaded.*
 
 ```bash
 # Validate target path is not in prohibited location
@@ -716,6 +859,12 @@ supabase.from('leo_protocol_sections')
 ```markdown
 ## Documentation Update Summary
 
+### Standards Source (Phase 0.0)
+- **File**: docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md
+- **Version**: [extracted from footer, e.g., "1.1.0"]
+- **Last Updated**: [extracted from footer, e.g., "2025-10-24"]
+- **Load Status**: SUCCESS | FALLBACK (hardcoded)
+
 ### Context Analysis
 - Detected: [what changes were found in conversation]
 - SD Type: [feature/api/database/etc.]
@@ -776,6 +925,7 @@ supabase.from('leo_protocol_sections')
 - CLAUDE_LEAD.md (regenerated)
 
 ### Validation
+- **Standards Source**: ✅ Loaded from canonical file (Phase 0.0) | ⚠️ FALLBACK used
 - **Location Validation**: ✅ All files in correct locations (Phase 0)
 - **Protocol Compliance**: ✅ Document Management Protocol followed
 - **Existing doc search**: ✅ Completed before changes
@@ -790,17 +940,18 @@ supabase.from('leo_protocol_sections')
 
 ## Important Principles
 
-1. **Search Before Create**: ALWAYS search for existing documentation before creating new files
-2. **Edit Over Create**: Prefer editing existing docs over creating new ones to prevent duplication
-3. **Database-First**: LEO Protocol docs live in database, not files
-4. **Regeneration**: After DB updates, always regenerate CLAUDE.md files
-5. **Context-Aware**: Use full conversation to understand what changed
-6. **Idempotent**: Running twice should not duplicate content
-7. **Skill Integration**: Use documentation skills for patterns
-8. **DOCMON Validation**: Verify database-first compliance
-9. **Report Findings**: Always report existing doc discovery results before making changes
-10. **Location Validation**: ALWAYS validate file location before create/edit (Phase 0)
-11. **Protocol Compliance**: Every file operation must follow Document Management Protocol
+1. **Load Standards First**: ALWAYS load documentation standards from canonical source (Phase 0.0)
+2. **Search Before Create**: ALWAYS search for existing documentation before creating new files
+3. **Edit Over Create**: Prefer editing existing docs over creating new ones to prevent duplication
+4. **Database-First**: LEO Protocol docs live in database, not files
+5. **Regeneration**: After DB updates, always regenerate CLAUDE.md files
+6. **Context-Aware**: Use full conversation to understand what changed
+7. **Idempotent**: Running twice should not duplicate content
+8. **Skill Integration**: Use documentation skills for patterns
+9. **DOCMON Validation**: Verify database-first compliance
+10. **Report Findings**: Always report existing doc discovery results before making changes
+11. **Location Validation**: ALWAYS validate file location before create/edit (Phase 0)
+12. **Protocol Compliance**: Every file operation must follow Document Management Protocol
 
 ## Document Management Protocol Enforcement
 
@@ -899,7 +1050,11 @@ When a protocol violation is detected:
 
 ### Location Mapping Quick Reference
 
+**⚠️ FALLBACK ONLY**: Prefer using values extracted in Phase 0.0 from the canonical source.
+These hardcoded values are only used when `docs/03_protocols_and_standards/DOCUMENTATION_STANDARDS.md` cannot be loaded.
+
 ```javascript
+// FALLBACK: Used only when Phase 0.0 extraction fails
 const LOCATION_MAP = {
   // Document type → Correct location
   'architecture': 'docs/01_architecture/',
@@ -921,6 +1076,7 @@ const LOCATION_MAP = {
   'ai-instructions': '/',  // CLAUDE*.md only
 };
 
+// FALLBACK: Used only when Phase 0.0 extraction fails
 const PROHIBITED_LOCATIONS = [
   'src/',
   'lib/',
