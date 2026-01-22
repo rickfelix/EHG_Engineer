@@ -49,12 +49,33 @@ Key activities:
 
 ## Phase Transitions
 
-| From | To | Trigger |
-|------|-----|---------|
-| - | LEAD | User initiates SD |
-| LEAD | PLAN | SD approved |
-| PLAN | EXEC | Gate 3 passes |
-| EXEC | Complete | PR merged |
+| From | To | Trigger | Mode |
+|------|-----|---------|------|
+| - | LEAD | User initiates SD | Manual |
+| LEAD | PLAN | SD approved | **Auto-proceed** |
+| PLAN | EXEC | Gate 3 passes | **Auto-proceed** |
+| EXEC | Complete | PR merged | **Auto-proceed** |
+
+### Auto-Proceed Mode (v4.3.3+)
+
+**Default Behavior**: LEO Protocol now operates in autonomous mode by default.
+
+**What Auto-Proceeds**:
+- Phase transitions (LEAD→PLAN→EXEC)
+- Post-completion sequence (`/restart` → `/ship` → `/document` → `/learn`)
+- Next SD selection after completion
+
+**Only Stops For**:
+- Blocking errors requiring human decision (e.g., merge conflicts)
+- Test failures after 2 retry attempts
+- Critical security or data-loss scenarios
+
+**Configuration**: Auto-proceed is defined in:
+- `.claude/commands/leo.md` (skill definition)
+- Database section 377 (`critical_term_definitions`)
+- Database section 317 (`parent_child_overview`)
+
+**User Override**: Users can still manually control transitions by explicitly asking questions or requesting stops.
 
 ## Auto-Generated Context Files
 

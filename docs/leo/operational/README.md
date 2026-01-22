@@ -5,9 +5,19 @@ Documentation for LEO Protocol operations and self-improvement.
 ## Operational Overview
 
 LEO Protocol includes systems for:
+- **Autonomous workflow execution** - Auto-proceed through phases (v4.3.3+)
 - Continuous self-improvement via `/learn`
 - Dynamic context routing via CLAUDE.md
 - Session continuity via handoffs
+
+### Autonomous Workflow (v4.3.3+)
+
+LEO Protocol now operates in **auto-proceed mode** by default:
+- Phase transitions execute automatically without user confirmation
+- Post-completion sequences run automatically (`/restart` → `/ship` → `/document` → `/learn`)
+- Next SD is automatically shown after completion
+
+**Stop Conditions**: Only stops for blocking errors, test failures (after 2 retries), or critical scenarios requiring human judgment.
 
 ## CLAUDE.md Router
 
