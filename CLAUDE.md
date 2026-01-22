@@ -222,7 +222,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /ship → /document → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-22 9:56:48 PM
+**Last Generated**: 2026-01-22 7:28:11 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -266,12 +266,12 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /ship → /document → /
 
 | Sub-Agent | Trigger Keywords |
 |-----------|------------------|
-| `ANALYTICS` | analytics, metrics, dashboard, aarrr, funnel, conversion rate, user behavior, tracking, kpi, retention rate (+1 more) |
-| `API` | api, rest, restful, graphql, endpoint, route, controller, middleware, request, response (+7 more) |
+| `ANALYTICS` | analytics, metrics, aarrr, funnel, conversion rate, user behavior, tracking, kpi, retention rate, churn rate |
+| `API` | rest, restful, graphql, endpoint, route, controller, middleware, request, response, payload (+6 more) |
 | `CRM` | crm, customer relationship, contact management, lead tracking, customer success, salesforce, hubspot, customer data |
-| `DATABASE` | query, select from, insert into, supabase, fetch from database, database query |
+| `DATABASE` | schema, database, query, select from, insert into, supabase, table, rls, postgres, sql (+2 more) |
 | `DEPENDENCY` | dependency, dependencies, npm, yarn, pnpm, package, package.json, vulnerability, cve, security advisory (+12 more) |
-| `DESIGN` | component, visual, design system, styling, css, tailwind, interface, ui, button, form (+32 more) |
+| `DESIGN` | visual, design system, styling, css, tailwind, button, form, modal, theme, dark mode (+25 more) |
 | `DOCMON` | lead_sd_creation, lead_handoff_creation, lead_approval, plan_prd_generation, plan_verification, exec_implementation, exec_completion, handoff_created, handoff_accepted, phase_transition (+4 more) |
 | `FINANCIAL` | financial, p&l, profit and loss, cash flow, burn rate, runway, revenue projection, margin, gross margin, ebitda (+2 more) |
 | `GITHUB` | exec_implementation_complete, create pull request, gh pr create, lead_approval_complete, create release, plan_verification_pass, github deploy, github status, deployment ci pattern |
@@ -283,16 +283,49 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /ship → /document → /
 | `RCA` | sub_agent_blocked, ci_pipeline_failure, quality_gate_critical, test_regression, handoff_rejection, sub_agent_fail, quality_degradation, pattern_recurrence, performance_regression, diagnose defect (+2 more) |
 | `REGRESSION` | refactor, refactoring, backward compatibility, backwards compatible, breaking change, regression, restructure, no behavior change, no functional change, api signature (+17 more) |
 | `RETRO` | lead_rejection, plan_verification_complete, plan_complexity_high, exec_sprint_complete, exec_quality_issue, handoff_rejected, handoff_delay, phase_complete, sd_status_completed, sd_status_blocked (+18 more) |
-| `RISK` | high risk, complex, architecture, sophisticated, advanced, overhaul, redesign, authorization, rls, permission (+35 more) |
+| `RISK` | high risk, complex, architecture, sophisticated, advanced, overhaul, redesign, authorization, permission, access control (+39 more) |
 | `SALES` | sales, sales playbook, sales process, pipeline, deal flow, quota, sales cycle, objection handling, sales enablement, closing |
 | `SECURITY` | authentication, security, security auth pattern |
-| `STORIES` | user story, user stories, acceptance criteria, implementation, context, guidance, plan_prd |
+| `STORIES` | user story, user stories, acceptance criteria, implementation, context, guidance |
 | `TESTING` | coverage, protected route, build error, dev server, test infrastructure, testing evidence, redirect to login, playwright build, unit tests, vitest (+3 more) |
 | `UAT` | uat test, execute test, run uat, test execution, manual test, uat testing, start testing, test-auth, test-dash, test-vent |
 | `VALIDATION` | existing implementation, duplicate, conflict, already implemented, codebase check |
 | `VALUATION` | valuation, exit, exit strategy, acquisition, ipo, series a, fundraising, multiple, dcf, comparable (+1 more) |
 
 *Full trigger list in CLAUDE_CORE.md. Use Task tool with `subagent_type="<agent-code>"`*
+
+## Sub-Agent Database Recording
+
+**CRITICAL**: All sub-agent executions must be recorded to the database for tracking and validation.
+
+### Using execute-subagent.js (Recommended)
+
+When executing sub-agents, use the CLI wrapper which auto-records results:
+
+```bash
+# Execute a sub-agent with database recording
+node scripts/execute-subagent.js --code VALIDATION --sd-id SD-XXX-001
+node scripts/execute-subagent.js --code TESTING --sd-id SD-XXX-001 --full-e2e
+node scripts/execute-subagent.js --code REGRESSION --sd-id SD-XXX-001
+```
+
+### Benefits:
+- Results stored in `sub_agent_execution_results` table
+- Verdict (PASS/FAIL/BLOCKED) recorded
+- Timing and recommendations preserved
+- Stop hook enforcement can validate execution
+
+### After Task Tool Sub-Agent Execution
+
+If you use the Task tool with `subagent_type`, the result is NOT automatically recorded.
+After completion, run the execute-subagent.js script to ensure database recording:
+
+```bash
+# Record result after Task tool execution
+node scripts/execute-subagent.js --code <AGENT_CODE> --sd-id <SD_KEY>
+```
+
+This ensures the stop-subagent-enforcement hook can verify all required sub-agents ran.
 
 
 ---
