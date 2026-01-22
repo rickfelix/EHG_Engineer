@@ -785,7 +785,7 @@ OpenAI recommends recasting LEO as "Kernel + Pipelines" architecture with three 
 
 - **Simplicity Discipline**: The LEAD gate specifically interrogates SDs for over-engineering, which is the most common failure mode in AI-native development.
 
-- **Traceable Learning**: The retrospective system (sd_retrospectives) creates a feedback loop that informs future PRDs, moving from "one-off task execution" to "systemic improvement."
+- **Traceable Learning**: The retrospective system (`retrospectives` table) creates a feedback loop that informs future PRDs, moving from "one-off task execution" to "systemic improvement."
 
 **Limitations:**
 

@@ -38,10 +38,11 @@ async function checkCompletion() {
   }
 
   // Check retrospectives
+  // NOTE: Table is 'retrospectives' not 'sd_retrospectives'
   console.log('\n\nRetrospectives:');
   const { data: retro, error: retroError } = await supabase
-    .from('sd_retrospectives')
-    .select('id, sd_id, status')
+    .from('retrospectives')
+    .select('id, sd_id, retro_type')
     .eq('sd_id', 'SD-FOUNDATION-SECURITY-001');
 
   if (retroError) {

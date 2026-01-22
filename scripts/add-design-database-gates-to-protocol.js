@@ -284,7 +284,7 @@ This is the MOST CRITICAL gate - ensures recommendations weren't just generated 
   - Scoring: 3/3 = 10pts, 2/3 = 6pts, 1/3 = 3pts, 0/3 = 0pts
 
 - **D2: Quality Thresholds** (10 points)
-  - Queries: \`sd_retrospectives\` table
+  - Queries: \`retrospectives\` table
   - Checks: Retrospective exists
 
 - **D3: Pattern Recommendation** (5 points)

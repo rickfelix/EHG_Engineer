@@ -35,7 +35,7 @@ const TARGET_TABLES = [
   // SD Management tables
   'strategic_directives_v2',
   'sd_phase_handoffs',
-  'sd_retrospectives',
+  'retrospectives',
   // PRD & User Story tables
   'product_requirements_v2',
   'user_stories',
