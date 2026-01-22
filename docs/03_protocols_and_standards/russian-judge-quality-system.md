@@ -1,8 +1,9 @@
 # Russian Judge AI Quality Assessment System
 
-**Version:** 1.1.0-sd-type-aware
+**Version:** 1.2.0-boilerplate-detection
 **Status:** ACTIVE (Advisory Mode)
-**Last Updated:** 2025-12-05
+**Last Updated:** 2026-01-21
+**SD**: SD-LEO-HARDEN-VALIDATION-001
 **Purpose:** Continuous improvement and quality enforcement for LEO Protocol
 
 ---
@@ -330,6 +331,116 @@ getPassThreshold(contentType, sd) {
 - ✅ Security SDs held to 65% standard (stricter scrutiny)
 - ✅ AI receives context-specific guidance in system prompt
 - ✅ Pass rates improved from 45% → 85% for docs (reduced false positives)
+
+---
+
+### 2.4 Boilerplate Detection (NEW in v1.2.0)
+
+**Problem:** Retrospectives contained 87.5% boilerplate content:
+- Generic phrases like "continue monitoring", "follow protocol", "communicate better"
+- Non-specific action items without SMART criteria
+- Copy-paste lessons from previous retrospectives
+- No SD-specific insights or learnings
+
+**Evidence:** SD-LEO-HARDEN-VALIDATION-001 analysis of retrospective content revealed systematic use of generic filler text that passes AI evaluation but provides no value.
+
+**Solution:** Regex-based boilerplate detection with score penalties
+
+#### Implementation
+
+**Location**: `scripts/modules/rubrics/retrospective-quality-rubric.js`
+
+```javascript
+static BOILERPLATE_PATTERNS = [
+  /continue monitoring.*for improvement/i,
+  /follow.*protocol/i,
+  /communicate.*better/i,
+  /improve.*communication/i,
+  /maintain.*quality/i,
+  /continue.*best practices/i,
+  /keep up.*good work/i,
+  /stay.*aligned/i,
+  /ensure.*proper.*process/i,
+  /adhere to.*guidelines/i,
+  /be more careful/i,
+  /pay.*attention/i,
+  /double.?check/i,
+  /review.*thoroughly/i
+];
+
+static detectBoilerplate(retrospective) {
+  // Scans: what_went_well, what_needs_improvement,
+  //        key_learnings, action_items, improvement_areas
+  // Returns: { hasBoilerplate, matchCount, matches, scorePenalty, message }
+}
+```
+
+#### Penalty Structure
+
+| Boilerplate Matches | Score Penalty | Result |
+|---------------------|---------------|--------|
+| 0 matches | 0 points | No penalty |
+| 1-2 matches | -5 to -10 points | Minor warning |
+| 3-4 matches | -15 to -20 points | Moderate penalty |
+| 5+ matches | -25 points (max) | Significant penalty |
+
+**Example**:
+```javascript
+const retrospective = {
+  what_went_well: ['Continue monitoring for improvement'],
+  key_learnings: ['Follow the protocol', 'Communicate better'],
+  action_items: ['Be more careful', 'Review thoroughly']
+};
+
+const result = RetrospectiveQualityRubric.detectBoilerplate(retrospective);
+// { hasBoilerplate: true, matchCount: 5, scorePenalty: 25 }
+```
+
+#### Integration with AI Evaluation
+
+Boilerplate detection runs **after** AI evaluation:
+
+```javascript
+const assessment = await this.evaluate(formattedContent, retroId, sd);
+const boilerplateResult = RetrospectiveQualityRubric.detectBoilerplate(retrospective);
+
+let adjustedScore = assessment.weightedScore;
+if (boilerplateResult.hasBoilerplate) {
+  adjustedScore = Math.max(0, adjustedScore - boilerplateResult.scorePenalty);
+  warnings.push(boilerplateResult.message);
+}
+
+return {
+  passed: assessment.passed && adjustedScore >= assessment.threshold,
+  score: adjustedScore,
+  details: {
+    weighted_score: assessment.weightedScore,
+    boilerplate_penalty: boilerplateResult.scorePenalty,
+    adjusted_score: adjustedScore
+  }
+};
+```
+
+**Output Example**:
+```
+⚠️  Boilerplate detected: 5 pattern(s) found, -25 points
+
+   Original AI score: 75/100
+   Boilerplate penalty: -25
+   Adjusted score: 50/100
+   Threshold: 60
+
+❌ RETROSPECTIVE QUALITY FAILED (50 < 60)
+   Reason: Excessive boilerplate content detected
+```
+
+#### Impact
+
+- ✅ Forces SD-specific, actionable retrospective content
+- ✅ Prevents copy-paste retrospectives from passing validation
+- ✅ Encourages concrete examples, root cause analysis, SMART actions
+- ✅ Max penalty (25 points) ensures generic retrospectives fail
+- ✅ Complements AI evaluation (which may miss patterns)
 
 ---
 
