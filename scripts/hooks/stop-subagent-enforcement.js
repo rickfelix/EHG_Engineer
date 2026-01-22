@@ -116,6 +116,44 @@ const REMEDIATION_ORDER = [
 ];
 
 // ============================================================================
+// TIMEZONE NORMALIZATION (SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-M)
+// ============================================================================
+
+/**
+ * Normalize a timestamp to UTC Date object.
+ *
+ * Fixes: Timestamps without timezone suffix (from Supabase) were being
+ * interpreted as local time, causing timing validation mismatches.
+ *
+ * @param {string|Date} timestamp - The timestamp to normalize
+ * @returns {Date} A Date object in UTC
+ */
+function normalizeToUTC(timestamp) {
+  if (!timestamp) return null;
+
+  // Already a Date object
+  if (timestamp instanceof Date) {
+    return timestamp;
+  }
+
+  const str = String(timestamp);
+
+  // Check if timestamp already has timezone info
+  // Patterns: ends with Z, +HH:MM, -HH:MM
+  const hasTimezone = /Z$|[+-]\d{2}:\d{2}$/.test(str);
+
+  if (hasTimezone) {
+    // Already has timezone, parse directly
+    return new Date(str);
+  }
+
+  // No timezone suffix - assume UTC by appending Z
+  // This is the fix: Supabase timestamps without Z were being
+  // interpreted as local time, causing validation mismatches
+  return new Date(str + 'Z');
+}
+
+// ============================================================================
 // MAIN LOGIC
 // ============================================================================
 
@@ -207,7 +245,7 @@ async function main() {
   const handoffTimes = {};
   if (handoffs) {
     handoffs.forEach(h => {
-      handoffTimes[h.handoff_type] = new Date(h.created_at);
+      handoffTimes[h.handoff_type] = normalizeToUTC(h.created_at);
     });
   }
 
@@ -232,7 +270,7 @@ async function main() {
 
     // Check cache
     const recentPass = passingExecs.find(e =>
-      (Date.now() - new Date(e.created_at).getTime()) < CACHE_DURATION_MS
+      (Date.now() - normalizeToUTC(e.created_at).getTime()) < CACHE_DURATION_MS
     );
 
     if (recentPass) {
@@ -252,7 +290,7 @@ async function main() {
       const beforeTime = rule.before ? handoffTimes[rule.before] : null;
 
       const validExec = passingExecs.some(e => {
-        const execTime = new Date(e.created_at);
+        const execTime = normalizeToUTC(e.created_at);
         const afterOk = afterTime === null || afterTime === undefined || execTime >= afterTime;
         const beforeOk = beforeTime === null || beforeTime === undefined || execTime <= beforeTime;
         return afterOk && beforeOk;
@@ -278,7 +316,7 @@ async function main() {
     );
 
     const recentPass = passingExecs.find(e =>
-      (Date.now() - new Date(e.created_at).getTime()) < CACHE_DURATION_MS
+      (Date.now() - normalizeToUTC(e.created_at).getTime()) < CACHE_DURATION_MS
     );
 
     if (recentPass) {
