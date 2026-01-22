@@ -167,6 +167,17 @@ async function main() {
     process.exit(0);
   }
 
+  // 5b. Skip if no work has been committed on the branch (nothing to validate)
+  try {
+    const diffOutput = execSync('git diff main...HEAD --name-only', { encoding: 'utf-8' }).trim();
+    if (!diffOutput) {
+      console.error(`⏭️ Skipping validation for ${sdKey}: No commits on branch (nothing to validate)`);
+      process.exit(0);
+    }
+  } catch {
+    // If diff fails (e.g., main doesn't exist), continue with normal validation
+  }
+
   // 6. Determine required + recommended sub-agents
   const sdType = sd.sd_type || 'feature';
   const category = sd.category || '';
