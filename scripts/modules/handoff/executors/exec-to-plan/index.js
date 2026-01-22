@@ -17,7 +17,8 @@ import {
   createBMADValidationGate,
   createGate2ImplementationFidelityGate,
   createRCAGate,
-  createHumanVerificationGate
+  createHumanVerificationGate,
+  createSubAgentEnforcementValidationGate
 } from './gates/index.js';
 
 // Helper modules
@@ -99,6 +100,9 @@ export class ExecToPlanExecutor extends BaseExecutor {
 
     // Human verification gate (LEO v4.4.0)
     gates.push(createHumanVerificationGate());
+
+    // Sub-agent enforcement validation (LEO v4.4.3 - advisory)
+    gates.push(createSubAgentEnforcementValidationGate(this.supabase));
 
     return gates;
   }
