@@ -5,7 +5,8 @@
 **Component**: `scripts/hooks/stop-subagent-enforcement.js`
 **Owner**: LEO Infrastructure Team
 **Last Updated**: 2026-01-21
-**SD**: SD-LEO-INFRA-STOP-HOOK-SUB-001
+**Version**: 2.1
+**SD**: SD-LEO-INFRA-STOP-HOOK-SUB-001, SD-LEO-REFAC-TESTING-INFRA-001
 
 ## Overview
 
@@ -80,10 +81,27 @@ Required in `.env`:
 
 ## Sub-Agent Requirements Matrix
 
+### Required vs Recommended Behavior (v2.1)
+
+**As of commit `78a590fbe` (2026-01-21)**:
+
+| Classification | Behavior | Exit Code | User Impact |
+|----------------|----------|-----------|-------------|
+| **Required** | BLOCKS session end if missing | Exit 2 | Must run before ending session |
+| **Recommended** | WARNS but allows session end | Exit 0 | Advisory message with suggestion |
+
+**Example Warning Output** (Recommended missing):
+```
+⚠️  Sub-Agent Advisory for SD-XXX-001 (refactor)
+   Missing recommended: TESTING
+   💡 Consider running: node scripts/orchestrate-phase-subagents.js SD-XXX-001 --agents TESTING
+   (Not blocking - these are optional but improve quality)
+```
+
 ### By SD Type
 
-| SD Type | Required Sub-Agents | Recommended Sub-Agents |
-|---------|---------------------|------------------------|
+| SD Type | Required Sub-Agents (BLOCK) | Recommended Sub-Agents (WARN) |
+|---------|----------------------------|-------------------------------|
 | `feature` | TESTING, DESIGN, STORIES | UAT, API |
 | `implementation` | TESTING, API | DATABASE |
 | `infrastructure` | GITHUB, DOCMON | VALIDATION |
