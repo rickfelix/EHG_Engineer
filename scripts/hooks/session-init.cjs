@@ -16,10 +16,158 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
+// Load environment variables
+require('dotenv').config();
+
 const SESSION_STATE_FILE = path.join(process.env.HOME || process.env.USERPROFILE || '/tmp', '.claude-session-state.json');
+
+/**
+ * PRD requirements by SD type (for verification)
+ * SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-K
+ */
+const PRD_REQUIREMENTS = {
+  feature: { required: true, minSections: 5 },
+  bugfix: { required: false, minSections: 2 },
+  security: { required: true, minSections: 4 },
+  enhancement: { required: true, minSections: 3 },
+  refactor: { required: false, minSections: 2 },
+  documentation: { required: false, minSections: 1 },
+  orchestrator: { required: true, minSections: 2 },
+  infrastructure: { required: false, minSections: 2 }
+};
 const PLAN_MODE_STATE_FILE = path.join(process.env.HOME || process.env.USERPROFILE || '/tmp', '.claude-plan-mode-state.json');
 const LEO_CONFIG_FILE = path.join(__dirname, '../../.claude/leo-plan-mode-config.json');
 const ENGINEER_DIR = '.';
+
+/**
+ * Get Supabase client (lazy initialization)
+ * SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-K
+ */
+function getSupabase() {
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) return null;
+    return createClient(url, key);
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * Verify SD state in database
+ * SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-K
+ *
+ * Queries strategic_directives_v2 for SD details, checks PRD if phase > LEAD,
+ * counts handoffs, and outputs verification summary.
+ *
+ * @param {string} sdKey - The SD key to verify
+ * @returns {Promise<Object>} Verification result
+ */
+async function verifySDStateInDatabase(sdKey) {
+  if (!sdKey) {
+    return { verified: false, reason: 'no_sd_key' };
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    return { verified: false, reason: 'no_database_connection' };
+  }
+
+  try {
+    // Query SD from database
+    const { data: sd, error: sdError } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, sd_type, status, current_phase, progress')
+      .eq('sd_key', sdKey)
+      .single();
+
+    if (sdError || !sd) {
+      return {
+        verified: false,
+        reason: 'sd_not_found',
+        sdKey
+      };
+    }
+
+    const result = {
+      verified: true,
+      sd: {
+        key: sd.sd_key,
+        title: sd.title,
+        type: sd.sd_type,
+        status: sd.status,
+        phase: sd.current_phase,
+        progress: sd.progress
+      },
+      prd: null,
+      handoffs: { count: 0, types: [] }
+    };
+
+    // Check PRD if phase > LEAD
+    const phaseOrder = ['LEAD', 'PLAN', 'EXEC', 'VERIFY', 'FINAL'];
+    const currentPhaseIndex = phaseOrder.indexOf(sd.current_phase?.toUpperCase() || 'LEAD');
+
+    if (currentPhaseIndex > 0) {
+      // Phase is beyond LEAD, check PRD
+      const prdReqs = PRD_REQUIREMENTS[sd.sd_type] || PRD_REQUIREMENTS.feature;
+
+      const { data: prd, error: prdError } = await supabase
+        .from('product_requirements_v2')
+        .select('id, title, status, metadata')
+        .eq('sd_id', sd.id)
+        .single();
+
+      if (prd) {
+        const sectionCount = prd.metadata?.sections?.length || 0;
+        result.prd = {
+          exists: true,
+          status: prd.status,
+          meetsRequirements: !prdReqs.required || sectionCount >= prdReqs.minSections,
+          sectionCount
+        };
+      } else {
+        result.prd = {
+          exists: false,
+          required: prdReqs.required,
+          meetsRequirements: !prdReqs.required
+        };
+      }
+    }
+
+    // Count handoffs
+    const { data: handoffs, error: handoffError } = await supabase
+      .from('sd_phase_handoffs')
+      .select('handoff_type, status')
+      .eq('sd_id', sd.id);
+
+    if (handoffs && handoffs.length > 0) {
+      result.handoffs = {
+        count: handoffs.length,
+        types: [...new Set(handoffs.map(h => h.handoff_type))],
+        accepted: handoffs.filter(h => h.status === 'accepted').length
+      };
+    }
+
+    // Output verification summary
+    console.log('[session-init] SD Verification Summary:');
+    console.log(`   SD: ${sd.sd_key} (${sd.sd_type})`);
+    console.log(`   Status: ${sd.status} | Phase: ${sd.current_phase} | Progress: ${sd.progress}%`);
+    if (result.prd) {
+      console.log(`   PRD: ${result.prd.exists ? result.prd.status : 'missing'} (${result.prd.meetsRequirements ? 'OK' : 'INCOMPLETE'})`);
+    }
+    console.log(`   Handoffs: ${result.handoffs.count} (${result.handoffs.accepted || 0} accepted)`);
+
+    return result;
+  } catch (error) {
+    return {
+      verified: false,
+      reason: 'query_error',
+      error: error.message
+    };
+  }
+}
 
 /**
  * Detect current SD from git branch or working_on flag
@@ -83,7 +231,7 @@ function getGitContext() {
 /**
  * Initialize fresh session state
  */
-function initializeSessionState() {
+async function initializeSessionState() {
   const currentSD = detectCurrentSD();
   const currentPhase = detectCurrentPhase();
   const gitContext = getGitContext();
@@ -113,8 +261,22 @@ function initializeSessionState() {
 
     // Error tracking
     errors: [],
-    warnings: []
+    warnings: [],
+
+    // Database verification (SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-K)
+    db_verification: null
   };
+
+  // Verify SD state in database if SD detected
+  if (currentSD) {
+    state.db_verification = await verifySDStateInDatabase(currentSD);
+    if (state.db_verification.verified && state.db_verification.sd) {
+      // Update phase from database if available
+      if (!state.current_phase && state.db_verification.sd.phase) {
+        state.current_phase = state.db_verification.sd.phase;
+      }
+    }
+  }
 
   return state;
 }
@@ -167,7 +329,7 @@ function requestPlanModeEntry(sdId, phase) {
 /**
  * Main hook execution
  */
-function main() {
+async function main() {
   console.log('[session-init] Initializing Claude Code session...');
 
   // Check if session already exists (shouldn't with once: true, but be safe)
@@ -186,7 +348,7 @@ function main() {
     }
   }
 
-  const state = initializeSessionState();
+  const state = await initializeSessionState();
 
   // Save session state
   fs.writeFileSync(SESSION_STATE_FILE, JSON.stringify(state, null, 2));
@@ -215,5 +377,7 @@ module.exports = {
   detectCurrentSD,
   detectCurrentPhase,
   isPlanModeEnabled,
-  requestPlanModeEntry
+  requestPlanModeEntry,
+  verifySDStateInDatabase,
+  PRD_REQUIREMENTS
 };
