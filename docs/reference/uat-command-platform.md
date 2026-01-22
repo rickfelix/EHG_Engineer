@@ -770,10 +770,139 @@ This platform was delivered through a coordinated set of SDs:
 - Database schema: Full column documentation
 - Integration guide: Command ecosystem updated
 
+## Intelligent Feedback System (SD-LEO-FEAT-INTELLIGENT-UAT-FEEDBACK-001)
+
+### Overview
+
+The Intelligent UAT Feedback System extends the /uat command with multi-model AI triangulation for processing raw, unstructured feedback. Instead of manually categorizing each issue, the system automatically:
+
+1. **Parses** batch text feedback into individual issues
+2. **Detects** feedback mode (Strategic/Product/Technical/Polish)
+3. **Triangulates** using GPT 5.2 and Gemini for higher confidence
+4. **Generates** follow-up questions only when models disagree
+5. **Routes** issues to quick-fix, SD creation, or backlog with transparent reasoning
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                 Raw Batch Feedback (text)                       │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│           FeedbackAnalyzer (lib/uat/feedback-analyzer.js)       │
+│  • Split batch → individual issues                              │
+│  • Initial mode detection via keyword matching                  │
+│  • Parallel analysis with GPT 5.2 + Gemini                      │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│           ConsensusEngine (lib/uat/consensus-engine.js)         │
+│  • Compare GPT vs Gemini analyses                               │
+│  • Calculate weighted confidence score                          │
+│  • Flag disagreements for follow-up                             │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│        FollowUpGenerator (lib/uat/follow-up-generator.js)       │
+│  • Generate mode-aware clarification questions                  │
+│  • Only when confidence < 70% or models disagree                │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│            ActionRouter (lib/uat/action-router.js)              │
+│  • Route to quick-fix / create-sd / backlog                     │
+│  • Upgrade to SD for high-risk areas (auth, payment, data)      │
+│  • Provide transparent reasoning for all decisions              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Feedback Modes
+
+| Mode | Trigger Keywords | Follow-up Focus |
+|------|------------------|-----------------|
+| **Strategic** | vision, direction, priority, alignment | Business impact, planning cycle |
+| **Product** | confusing, experience, flow, intuitive, UX | User impact, design review |
+| **Technical** | error, bug, crash, null, fails, exception | Reproduction, component isolation |
+| **Polish** | spacing, color, font, minor, tweak, pixel | Shipping priority, batch fixes |
+
+### Multi-Model Triangulation
+
+Both GPT 5.2 and Gemini analyze each issue for:
+- **Mode**: strategic/product/technical/polish
+- **Severity**: critical/major/minor/enhancement
+- **Estimated LOC**: Scope estimate for routing
+- **Suggested Action**: quick-fix/create-sd/backlog
+- **Risk Areas**: auth/data/payment/ui/performance
+
+**Consensus Calculation**:
+- Full agreement (all dimensions) → 100% confidence
+- Action disagrees → Requires follow-up
+- Severity adjacent (major vs minor) → Partial credit
+- Scope within 50% variance → Agrees
+
+### Follow-up Questions
+
+Follow-ups are generated only when:
+- Confidence score < 70%
+- Action routing disagrees between models
+- Severity differs significantly (not adjacent)
+
+**Example**:
+```
+GPT suggests "quick-fix" (~40 LOC), Gemini suggests "create-sd" (~150 LOC).
+Which feels right?
+  [ ] Quick Fix (small, do now)
+  [ ] Create SD (needs tracking)
+```
+
+### Action Routing Rules
+
+| Condition | Action |
+|-----------|--------|
+| Estimated LOC < 50 AND no high-risk areas | Quick-fix |
+| Estimated LOC < 50 BUT auth/payment/data risk | Create SD (risk upgrade) |
+| Estimated LOC > 50 | Create SD |
+| Severity = enhancement OR low priority | Backlog |
+| No consensus data | Backlog (fallback) |
+
+### Usage
+
+```javascript
+import { processIntelligentFeedback } from './lib/uat/index.js';
+
+const result = await processIntelligentFeedback(rawFeedback, {
+  sdId: 'SD-FEATURE-001'
+});
+
+console.log(result.summary);
+// {
+//   totalIssues: 5,
+//   highConfidence: 3,
+//   needsFollowUp: 2,
+//   quickFixes: 2,
+//   newSDs: 1,
+//   backlog: 2
+// }
+```
+
+### Database Storage
+
+Routing decisions are stored in the `feedback` table with:
+- `ai_routing_decision`: quick-fix/create-sd/backlog
+- `ai_routing_reasoning`: Full explanation of routing decision
+- `ai_routing_confidence`: Confidence score (0-1)
+- `metadata.model_comparison`: GPT vs Gemini assessments
+
 ## Version History
 
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
+| 1.1.0 | 2026-01-22 | Added Intelligent Feedback System (multi-model triangulation) | Claude Opus 4.5 |
 | 1.0.0 | 2026-01-17 | Initial platform release | DOCMON Sub-Agent |
 
 ## Appendix
