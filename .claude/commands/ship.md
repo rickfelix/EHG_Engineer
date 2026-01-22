@@ -307,6 +307,32 @@ See `/simplify` command for full details.
 
 ### Step 6: Ask About Merging (MANDATORY)
 
+**AUTO-PROCEED Detection**: Before asking, check if AUTO-PROCEED mode is active:
+
+```bash
+# Check for AUTO-PROCEED context
+node -e "
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+supabase.from('auto_proceed_sessions')
+  .select('id, active_sd_key')
+  .eq('is_active', true)
+  .single()
+  .then(({data}) => {
+    if (data) console.log('AUTO-PROCEED ACTIVE: ' + data.active_sd_key);
+    else console.log('AUTO-PROCEED: INACTIVE');
+  });
+"
+```
+
+**If AUTO-PROCEED is ACTIVE:**
+- Skip AskUserQuestion
+- Output status: `🤖 AUTO-PROCEED: Auto-merging PR #X...`
+- Auto-execute: `gh pr merge <PR#> --merge --delete-branch`
+- Continue to Step 7 automatically
+
+**If AUTO-PROCEED is INACTIVE:**
 **After presenting the PR URL, use AskUserQuestion to prompt:**
 
 ```
@@ -329,6 +355,22 @@ Options:
 ✅ PR #X merged and branch deleted.
 ```
 
+**AUTO-PROCEED Detection**: Check if AUTO-PROCEED mode is active (same check as Step 6).
+
+**If AUTO-PROCEED is ACTIVE:**
+- Skip AskUserQuestion
+- Get post-completion sequence from SD type:
+  ```bash
+  node -e "
+  const { getPostCompletionSequence } = require('./lib/utils/post-completion-requirements.js');
+  const sequence = getPostCompletionSequence('SD_TYPE_HERE', { source: 'SOURCE_HERE' });
+  console.log('POST-COMPLETION SEQUENCE:', sequence.join(' -> '));
+  "
+  ```
+- Output status: `🤖 AUTO-PROCEED: Continuing to next command in sequence...`
+- Auto-invoke the next command in sequence (e.g., `/document`, `/learn`, or `/leo next`)
+
+**If AUTO-PROCEED is INACTIVE:**
 **Use AskUserQuestion with these options (adapt based on context):**
 
 ```javascript
