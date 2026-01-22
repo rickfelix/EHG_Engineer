@@ -18,7 +18,8 @@ import {
   createGate2ImplementationFidelityGate,
   createRCAGate,
   createHumanVerificationGate,
-  createSubAgentEnforcementValidationGate
+  createSubAgentEnforcementValidationGate,
+  createLOCThresholdValidationGate
 } from './gates/index.js';
 
 // Helper modules
@@ -103,6 +104,9 @@ export class ExecToPlanExecutor extends BaseExecutor {
 
     // Sub-agent enforcement validation (LEO v4.4.3 - advisory)
     gates.push(createSubAgentEnforcementValidationGate(this.supabase));
+
+    // LOC threshold validation (LEO v4.4.3 - advisory for infrastructure/refactor)
+    gates.push(createLOCThresholdValidationGate(this.supabase));
 
     return gates;
   }
