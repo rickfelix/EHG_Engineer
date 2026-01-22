@@ -62,11 +62,31 @@ This command provides:
 **CRITICAL**: When user query or response matches these patterns, IMMEDIATELY invoke the corresponding skill using the Skill tool. Do not just acknowledge - execute.
 
 ### SD Creation Triggers → `/leo create`
-When user agrees to create an SD during conversation:
-- "yes, create an SD", "let's create an SD", "make this an SD"
-- "turn this into a strategic directive", "add this to the queue"
-- "this should be tracked", "queue this up as work"
-- "create a directive for this", "track this as an SD"
+**Semantic Intent**: User wants to create a new trackable work item in the LEO system.
+
+**Explicit triggers** (user directly mentions SD/directive):
+- "create an SD", "create a strategic directive", "new SD", "new directive"
+- "I want to create an SD", "I want to create a strategic directive"
+- "let's create an SD", "make this an SD", "turn this into an SD"
+- "create another SD", "another strategic directive"
+- "add this to the queue", "queue this up", "track this as an SD"
+
+**Contextual triggers** (user describes work that should become an SD):
+- "this should be tracked", "we should track this", "this needs tracking"
+- "turn this into a directive", "make this a directive"
+- "I want to [refactor/fix/add/build/implement] ..." (when scope is non-trivial)
+
+**After agreement triggers** (when Claude suggests an SD and user agrees):
+- "yes", "yes, create", "sure", "ok, create it", "go ahead"
+- "yes, let's do that", "sounds good, create it"
+
+**Intelligence hint**: If the user describes a task that would typically require:
+- Multiple files to modify
+- More than ~50 lines of code
+- Planning before implementation
+- Tracking in the database
+
+...then SUGGEST creating an SD if one doesn't exist for this work.
 
 **Action**: Use Skill tool with `skill: "leo"` and `args: "create"`
 
@@ -202,7 +222,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /ship → /document → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-22 8:13:34 PM
+**Last Generated**: 2026-01-22 9:13:12 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
