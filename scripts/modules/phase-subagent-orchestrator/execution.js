@@ -3,7 +3,7 @@
  * Handles executing sub-agents and storing results in the database
  */
 
-import { executeSubAgent as realExecuteSubAgent } from '../../lib/sub-agent-executor.js';
+import { executeSubAgent as realExecuteSubAgent } from '../../../lib/sub-agent-executor.js';
 import { safeInsert, generateUUID } from '../safe-insert.js';
 
 /**

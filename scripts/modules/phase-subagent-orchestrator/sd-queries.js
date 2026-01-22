@@ -10,7 +10,7 @@ import {
   REFACTOR_INTENSITY_SUBAGENTS,
   SCHEMA_KEYWORDS
 } from './phase-config.js';
-import { shouldSkipCodeValidation } from '../../lib/utils/sd-type-validation.js';
+import { shouldSkipCodeValidation } from '../../../lib/utils/sd-type-validation.js';
 
 /**
  * Query SD details from database
