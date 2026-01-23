@@ -483,6 +483,117 @@ const result = await executor.execute();
 
 ---
 
+## 7. Gate Spotlight: GATE6_BRANCH_ENFORCEMENT (v2 - Proactive)
+
+### Overview
+
+**Enhanced**: SD-LEO-INFRA-PROACTIVE-BRANCH-ENFORCEMENT-001 (2026-01-23)
+
+GATE6 validates git branch for EXEC work. Version 2 adds **proactive cross-SD branch detection** to prevent work contamination when multiple Strategic Directives are active in the same session.
+
+### Location
+`scripts/modules/handoff/executors/plan-to-exec/gates/branch-enforcement.js`
+
+### Execution Flow (v2)
+
+```
+GATE6 → Pre-check (analyzeCurrentBranch)
+      ├─ Correct branch → GitBranchVerifier → Pass
+      ├─ Protected branch (main/master) → GitBranchVerifier handles
+      └─ Cross-SD branch detected → WARNING + Remediation → GitBranchVerifier
+```
+
+### Key Functions
+
+#### extractSDFromBranch(branchName)
+Extracts SD-ID from branch name if present.
+
+**Pattern**: `SD-CATEGORY-SUBCATEGORY-NUMBER`
+
+**Examples**:
+- `feat/SD-LEO-5-failure-handling` → `SD-LEO-5`
+- `fix/SD-AUTH-001-login` → `SD-AUTH-001`
+- `main` → `null`
+
+#### analyzeCurrentBranch(currentBranch, targetSdId)
+Compares current branch SD vs target SD.
+
+**Returns**:
+```javascript
+{
+  isProtectedBranch: boolean,  // main/master
+  isOtherSDBranch: boolean,    // Different SD's branch
+  otherSDId: string | null,    // Which SD owns branch
+  isCorrectBranch: boolean     // Correct branch for target
+}
+```
+
+### Cross-SD Detection Warning
+
+When working on wrong SD's branch:
+
+```
+⚠️  CROSS-SD BRANCH DETECTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Current branch: feat/SD-LEO-5-failure-handling
+   Branch belongs to: SD-LEO-5
+   Target SD: SD-LEO-ENH-INTELLIGENT-RETROSPECTIVE-TRIGGERS-001
+
+   🚨 WARNING: You are on a branch for a DIFFERENT SD!
+   This typically happens when:
+   1. Multiple SDs created in same session
+   2. Work started before running proper handoffs
+
+   📋 RESOLUTION OPTIONS:
+   a) Let this gate auto-switch to correct branch (recommended)
+   b) Manually commit work on current branch first
+   c) Stash changes: git stash push -m "WIP for SD-LEO-5"
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+### Root Cause (Why This Enhancement Was Needed)
+
+**Problem**: Work on SD-A contaminating branch for SD-B
+
+**5-Whys Analysis**:
+1. Work done on another SD's branch
+2. SD_BRANCH_PREPARATION gate was DISABLED at LEAD-TO-PLAN (LEO v4.4.1)
+3. PLAN-TO-EXEC gate was reactive (validate IF exists) not proactive
+4. Session context allowed work on existing branch
+5. **Root cause**: No automated enforcement detecting cross-SD work
+
+**Solution**: Pre-check before GitBranchVerifier to detect cross-SD branches early.
+
+### Enhanced Success Output
+
+```javascript
+return {
+  passed: true,
+  score: 100,
+  max_score: 100,
+  issues: [],
+  warnings: branchResults.warnings || [],
+  details: {
+    ...branchResults,
+    proactiveEnforcement: true,
+    autoCreated: branchResults.branchCreated,
+    autoSwitched: branchResults.branchSwitched
+  }
+};
+```
+
+### Integration
+
+**Handoff**: PLAN-TO-EXEC
+**Position**: 6th gate (after BMAD, CONTRACT)
+**Blocking**: Yes (via GitBranchVerifier)
+
+**Related**:
+- `scripts/verify-git-branch-status.js` (GitBranchVerifier)
+- Branch naming convention enforcement
+
+---
+
 ## Best Practices
 
 ### DO
@@ -492,6 +603,7 @@ const result = await executor.execute();
 - Store all handoffs in sd_phase_handoffs
 - Release claims after handoff completion
 - Log gate results for debugging
+- **NEW**: Add pre-checks for expensive validations (GATE6 pattern)
 
 ### DON'T
 
@@ -500,6 +612,7 @@ const result = await executor.execute();
 - Don't skip claim checking
 - Don't create handoffs without gates
 - Don't ignore blocking gate failures
+- **NEW**: Don't skip proactive warnings when issues can be caught early
 
 ---
 
@@ -517,4 +630,5 @@ const result = await executor.execute();
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1.0 | 2026-01-23 | Added GATE6 v2 documentation (proactive cross-SD detection) |
 | 1.0.0 | 2026-01-20 | Initial documentation, moved to LEO hub |
