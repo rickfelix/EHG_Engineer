@@ -30,9 +30,9 @@ LEAD-FINAL-APPROVAL
         ↓
    Visual Review
         ↓
-      /ship
-        ↓
     /document
+        ↓
+      /ship
         ↓
       /learn
         ↓

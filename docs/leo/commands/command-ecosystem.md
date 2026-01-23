@@ -68,7 +68,7 @@ The LEO Protocol commands form an interconnected ecosystem where each command su
 
 ### /uat Position in Workflow
 ```
-LEAD-FINAL-APPROVAL → /restart → /uat → /ship → /document → /learn → /leo next
+LEAD-FINAL-APPROVAL → /restart → /uat → /document → /ship → /learn → /leo next
                                    │
                                    └── defect found → /quick-fix (auto-merge)
                                                   or → Create SD (full workflow)
@@ -83,11 +83,11 @@ LEAD-FINAL-APPROVAL → /restart → /uat → /ship → /document → /learn →
 | 1 | LEAD-FINAL-APPROVAL | UI/feature SD | `/restart` | Clean environment for UAT |
 | 2 | `/restart` | Feature/bugfix/security/refactor/enhancement | `/uat` | Human acceptance testing |
 | 2a | `/restart` | Infrastructure/database/docs | `/ship` | UAT not required |
-| 3 | `/uat` | GREEN or YELLOW gate | `/ship` | Proceed to shipping |
+| 3 | `/uat` | GREEN or YELLOW gate | `/document` | Update documentation first |
 | 3a | `/uat` | Defect found, <=50 LOC | `/quick-fix` | Auto-merge fix |
 | 3b | `/uat` | Defect found, >50 LOC | Create SD | Full workflow for fix |
-| 4 | `/ship` (merge) | Always | `/learn` | Capture learnings while fresh |
-| 5 | `/ship` (merge) | Feature/API SD | `/document` | Update documentation |
+| 4 | `/document` | Feature/API SD | `/ship` | Docs included in PR |
+| 5 | `/ship` (merge) | Always | `/learn` | Capture learnings while fresh |
 | 6 | `/ship` (merge) | More SDs queued | `/leo next` | Continue work |
 
 ### Secondary Flows
@@ -193,10 +193,10 @@ LEAD-FINAL-APPROVAL
 Visual Review ─── "Verify UI renders correctly"
        │
        ▼
-    /ship ─── "Commit and create PR"
+  /document ─── "Update feature documentation"
        │
        ▼
-  /document ─── "Update feature documentation"
+    /ship ─── "Commit and create PR (includes docs)"
        │
        ▼
    /learn ─── "Capture session learnings"
