@@ -25,6 +25,7 @@ The Self-Improvement System enables LEO Protocol to learn from retrospectives an
 
 The AI Quality Judge automates the evaluation of protocol improvement proposals using:
 - **Constitution Validation**: 9 immutable rules (CONST-001 to CONST-009) that auto-reject critical violations
+  - See [Protocol Constitution Guide](../governance/protocol-constitution-guide.md) for complete rule documentation
 - **Russian Judge Scoring**: Multi-criterion weighted scoring (safety, specificity, necessity, evidence, atomicity)
 - **Model Diversity**: Triangulation protocol ensures different model families for proposer vs evaluator
 - **GOVERNED Pipeline**: All improvements require human approval in Phase 1
@@ -669,6 +670,23 @@ SELECT * FROM get_pre_handoff_warnings('LEAD_TO_PLAN');
 
 ---
 
-**Last Updated**: 2026-01-10
-**Status**: Active (v2 - SD Creation Workflow)
+## Changelog
+
+### 2026-01-23: SD-LEO-PROCESS-IMPROVEMENTS-001 - Post Self-Improvement Loop Fixes
+
+Six process improvements implemented based on learnings from the Self-Improvement Loop implementation:
+
+1. **PRD Derivation**: PRDs now derive initial values from SD fields (strategic_objectives → functional_requirements) instead of using placeholders
+2. **DESIGN Sub-Agent**: Expanded to trigger for all code-producing SD types, not just UI/UX work
+3. **Branch Enforcement**: Enhanced AUTO-SWITCH messaging for clearer git branch management feedback
+4. **Retrospective Validation**: Added enum error messages with valid values for easier debugging
+5. **API Compliance**: Fixed deprecated `max_tokens` → `max_completion_tokens` across LLM service files
+6. **Deterministic Classification**: Added `temperature: 0` and `seed: 42` to SD type classifier for reproducible results
+
+**Impact**: Improved PRD quality, better validation coverage, clearer UX, faster debugging, API compliance, and reproducible classification.
+
+---
+
+**Last Updated**: 2026-01-23
+**Status**: Active (v3 - AI Quality Judge + Process Improvements)
 **Next Review**: After 10 retrospectives processed
