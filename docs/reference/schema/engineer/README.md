@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-20T20:21:23.286Z
-**Tables**: 360
+**Generated**: 2026-01-23T02:02:13.651Z
+**Tables**: 363
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (360)
+## All Tables (363)
 
 ### LEO Protocol
 
@@ -251,6 +251,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [governance_proposals](tables/governance_proposals.md)
 - [hap_blocks_v2](tables/hap_blocks_v2.md)
 - [import_audit](tables/import_audit.md)
+- [improvement_quality_assessments](tables/improvement_quality_assessments.md)
 - [intake_submissions](tables/intake_submissions.md)
 - [integrity_metrics](tables/integrity_metrics.md)
 - [intelligence_analysis](tables/intelligence_analysis.md)
@@ -281,6 +282,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [opportunity_sources](tables/opportunity_sources.md)
 - [orchestration_metrics](tables/orchestration_metrics.md)
 - [pattern_occurrences](tables/pattern_occurrences.md)
+- [pattern_resolution_signals](tables/pattern_resolution_signals.md)
 - [pattern_subagent_mapping](tables/pattern_subagent_mapping.md)
 - [plan_conflict_rules](tables/plan_conflict_rules.md)
 - [plan_quality_gates](tables/plan_quality_gates.md)
@@ -299,6 +301,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [proposal_approvals](tables/proposal_approvals.md)
 - [proposal_notifications](tables/proposal_notifications.md)
 - [proposal_state_transitions](tables/proposal_state_transitions.md)
+- [protocol_constitution](tables/protocol_constitution.md)
 - [protocol_improvement_audit_log](tables/protocol_improvement_audit_log.md)
 - [protocol_improvement_queue](tables/protocol_improvement_queue.md)
 - [public_portfolio](tables/public_portfolio.md)

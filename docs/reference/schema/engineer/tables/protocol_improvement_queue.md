@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-20T20:21:23.286Z
-**Rows**: 40
+**Generated**: 2026-01-23T02:02:13.651Z
+**Rows**: 49
 **RLS**: Enabled (5 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (20 total)
+## Columns (25 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -38,6 +38,11 @@
 | effectiveness_score | `integer(32)` | YES | - | Post-application effectiveness score (0-100). Measured by reduction in related issue patterns after application. |
 | assigned_sd_id | `character varying(50)` | YES | - | SD that will implement this improvement. Set by /learn command when user approves. |
 | assignment_date | `timestamp with time zone` | YES | - | When improvement was assigned to an SD via /learn. |
+| risk_tier | `character varying(20)` | YES | `'GOVERNED'::character varying` | Risk classification: IMMUTABLE (never changes), GOVERNED (human approval), AUTO (can auto-apply if criteria met) |
+| effectiveness_measured_at | `timestamp with time zone` | YES | - | When effectiveness was measured after applying improvement |
+| baseline_metric | `jsonb` | YES | - | Metric values before improvement was applied |
+| post_metric | `jsonb` | YES | - | Metric values after improvement was applied |
+| rollback_reason | `text` | YES | - | If improvement was rolled back, the reason why |
 
 ## Constraints
 
@@ -52,6 +57,7 @@
 - `must_have_db_target`: CHECK (((target_table IS NOT NULL) AND (payload IS NOT NULL)))
 - `protocol_improvement_queue_effectiveness_score_check`: CHECK (((effectiveness_score >= 0) AND (effectiveness_score <= 100)))
 - `protocol_improvement_queue_improvement_type_check`: CHECK ((improvement_type = ANY (ARRAY['VALIDATION_RULE'::text, 'CHECKLIST_ITEM'::text, 'SKILL_UPDATE'::text, 'PROTOCOL_SECTION'::text, 'SUB_AGENT_CONFIG'::text])))
+- `protocol_improvement_queue_risk_tier_check`: CHECK (((risk_tier)::text = ANY ((ARRAY['IMMUTABLE'::character varying, 'GOVERNED'::character varying, 'AUTO'::character varying])::text[])))
 - `protocol_improvement_queue_source_type_check`: CHECK ((source_type = ANY (ARRAY['LEAD_TO_PLAN'::text, 'PLAN_TO_EXEC'::text, 'SD_COMPLETION'::text])))
 - `protocol_improvement_queue_status_check`: CHECK ((status = ANY (ARRAY['PENDING'::text, 'APPROVED'::text, 'SD_CREATED'::text, 'APPLIED'::text, 'REJECTED'::text, 'SUPERSEDED'::text])))
 - `protocol_improvement_queue_target_operation_check`: CHECK ((target_operation = ANY (ARRAY['INSERT'::text, 'UPDATE'::text, 'UPSERT'::text])))
