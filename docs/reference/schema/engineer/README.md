@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-23T15:02:05.180Z
-**Tables**: 366
+**Generated**: 2026-01-23T15:19:57.449Z
+**Tables**: 372
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (366)
+## All Tables (372)
 
 ### LEO Protocol
 
@@ -71,16 +71,19 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sd_conflict_matrix](tables/sd_conflict_matrix.md)
 - [sd_contract_exceptions](tables/sd_contract_exceptions.md)
 - [sd_contract_violations](tables/sd_contract_violations.md)
+- [sd_corrections](tables/sd_corrections.md)
 - [sd_data_contracts](tables/sd_data_contracts.md)
 - [sd_dependency_graph](tables/sd_dependency_graph.md)
 - [sd_exec_file_operations](tables/sd_exec_file_operations.md)
 - [sd_execution_actuals](tables/sd_execution_actuals.md)
 - [sd_execution_baselines](tables/sd_execution_baselines.md)
 - [sd_execution_timeline](tables/sd_execution_timeline.md)
+- [sd_gate_results](tables/sd_gate_results.md)
 - [sd_governance_bypass_audit](tables/sd_governance_bypass_audit.md)
 - [sd_intensity_adjustments](tables/sd_intensity_adjustments.md)
 - [sd_intensity_gate_exemptions](tables/sd_intensity_gate_exemptions.md)
 - [sd_key_result_alignment](tables/sd_key_result_alignment.md)
+- [sd_kickbacks](tables/sd_kickbacks.md)
 - [sd_overlap_analysis](tables/sd_overlap_analysis.md)
 - [sd_phase_handoffs](tables/sd_phase_handoffs.md)
 - [sd_phase_tracking](tables/sd_phase_tracking.md)
@@ -96,6 +99,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sd_type_gate_exemptions](tables/sd_type_gate_exemptions.md)
 - [sd_type_validation_profiles](tables/sd_type_validation_profiles.md)
 - [sd_ux_contracts](tables/sd_ux_contracts.md)
+- [sd_wall_states](tables/sd_wall_states.md)
 - [strategic_directives_v2](tables/strategic_directives_v2.md)
 - [working_sd_sessions](tables/working_sd_sessions.md)
 
@@ -342,6 +346,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [sub_agent_execution_results_archive](tables/sub_agent_execution_results_archive.md)
 - [sub_agent_executions](tables/sub_agent_executions.md)
 - [sub_agent_gate_requirements](tables/sub_agent_gate_requirements.md)
+- [sub_agent_spawn_events](tables/sub_agent_spawn_events.md)
 - [subagent_activations](tables/subagent_activations.md)
 - [subagent_requirements](tables/subagent_requirements.md)
 - [subagent_validation_results](tables/subagent_validation_results.md)
@@ -352,6 +357,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [system_alerts](tables/system_alerts.md)
 - [system_events](tables/system_events.md)
 - [system_health](tables/system_health.md)
+- [task_hydration_log](tables/task_hydration_log.md)
 - [tech_stack_references](tables/tech_stack_references.md)
 - [test_coverage_policies](tables/test_coverage_policies.md)
 - [test_plans](tables/test_plans.md)
