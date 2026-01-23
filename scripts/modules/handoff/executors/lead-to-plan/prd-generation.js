@@ -1,92 +1,79 @@
 /**
- * PRD Script Auto-Generation for LEAD-TO-PLAN
- * Part of SD-LEO-REFACTOR-LEADTOPLAN-001
+ * PRD Auto-Generation for LEAD-TO-PLAN
+ * Part of SD-LEO-INFRA-PRD-CREATION-CONSOLIDATION-001
  *
- * Automatically generates a PRD creation script when LEAD approves an SD.
- * This integration ensures PRD scripts are created immediately after approval.
+ * Directly invokes the canonical PRD creation method (add-prd-to-database.js)
+ * when LEAD approves an SD. This ensures PRDs are created with:
+ * - LLM-based content generation (no TODO placeholders)
+ * - Sub-agent orchestration (DESIGN, DATABASE, SECURITY, RISK)
+ * - Persona ingestion and component recommendations
+ *
+ * CONSOLIDATION NOTE (2026-01-23):
+ * Previously this called generate-prd-script.js which created template-based
+ * scripts with TODO placeholders. Now calls the canonical method directly.
  */
 
 import { execSync } from 'child_process';
 import path from 'path';
 
 /**
- * Auto-generate and execute PRD script on LEAD→PLAN handoff
+ * Auto-create PRD directly using canonical method on LEAD→PLAN handoff
  *
- * @param {string} sdId - SD ID
- * @param {Object} sd - Strategic Directive
+ * @param {string} sdId - SD ID (can be legacy_id like SD-XXX-001 or UUID)
+ * @param {Object} sd - Strategic Directive object
  */
 export async function autoGeneratePRDScript(sdId, sd) {
   try {
-    console.log('\n🤖 AUTO-GENERATING PRD SCRIPT');
+    console.log('\n🤖 AUTO-CREATING PRD (Canonical Method)');
     console.log('='.repeat(70));
 
     console.log(`   SD: ${sd.title || sdId}`);
+    console.log('   Method: add-prd-to-database.js (LLM-based, no TODOs)');
 
-    const scriptPath = path.join(process.cwd(), 'scripts', 'generate-prd-script.js');
+    // Use the canonical PRD creation script directly
+    // This is the modular version that delegates to scripts/prd/index.js
+    const scriptPath = path.join(process.cwd(), 'scripts', 'add-prd-to-database.js');
     const title = sd.title || 'Technical Implementation';
 
-    console.log(`   Running: node scripts/generate-prd-script.js ${sdId} "${title}"`);
+    // Determine the correct ID to pass (prefer UUID if available)
+    const idToUse = sd.id || sdId;
+    console.log(`   Running: node scripts/add-prd-to-database.js ${idToUse} "${title}"`);
+    console.log('');
 
     try {
       const output = execSync(
-        `node "${scriptPath}" ${sdId} "${title}"`,
-        { encoding: 'utf-8', cwd: process.cwd() }
+        `node "${scriptPath}" ${idToUse} "${title}"`,
+        { encoding: 'utf-8', cwd: process.cwd(), timeout: 180000 } // 3 min timeout for LLM generation
       );
 
-      console.log('\n' + output);
-      console.log('✅ PRD script auto-generated successfully!');
-
-      // Gap #3 Fix (2026-01-01): Auto-execute the generated PRD script
-      const prdScriptPath = path.join(process.cwd(), 'scripts', `create-prd-${sdId.toLowerCase()}.js`);
-
-      console.log('');
-      console.log('📄 AUTO-EXECUTING PRD SCRIPT...');
-      console.log(`   Running: node ${prdScriptPath}`);
-      console.log('');
-
-      try {
-        const prdOutput = execSync(
-          `node "${prdScriptPath}"`,
-          { encoding: 'utf-8', cwd: process.cwd(), timeout: 120000 }
-        );
-        console.log(prdOutput);
-        console.log('✅ PRD created and sub-agents invoked successfully!');
-      } catch (prdExecError) {
-        console.log(`   ⚠️  PRD script execution failed: ${prdExecError.message}`);
-        console.log('');
-        console.log('📝 MANUAL STEPS (if needed):');
-        console.log(`   1. Edit: scripts/create-prd-${sdId.toLowerCase()}.js`);
-        console.log('      - Update TODO sections');
-        console.log('      - Add requirements, architecture, test scenarios');
-        console.log('');
-        console.log(`   2. Run: node scripts/create-prd-${sdId.toLowerCase()}.js`);
-        console.log('      - Creates PRD in database');
-        console.log('      - Validates schema automatically');
-        console.log('      - Triggers sub-agents');
-      }
-      console.log('');
+      console.log(output);
+      console.log('✅ PRD created successfully with LLM-generated content!');
 
     } catch (execError) {
+      // Check for specific error conditions
       if (execError.message.includes('already exists')) {
-        console.log('   ℹ️  PRD script already exists - skipping generation');
-        // Gap #3 Fix: Even if script exists, try to execute it
-        const prdScriptPath = path.join(process.cwd(), 'scripts', `create-prd-${sdId.toLowerCase()}.js`);
-        console.log('   📄 Attempting to execute existing PRD script...');
-        try {
-          execSync(`node "${prdScriptPath}"`, { encoding: 'utf-8', cwd: process.cwd(), timeout: 120000 });
-          console.log('   ✅ Existing PRD script executed successfully');
-        } catch (existingError) {
-          console.log(`   ⚠️  Existing script execution failed: ${existingError.message}`);
-        }
+        console.log('   ℹ️  PRD already exists for this SD');
+        console.log('   Skipping PRD creation (existing PRD will be used)');
+      } else if (execError.message.includes('not found')) {
+        console.log(`   ❌ SD not found in database: ${idToUse}`);
+        console.log('   Ensure SD exists before running LEAD-TO-PLAN handoff');
       } else {
-        console.log(`   ⚠️  Generation failed: ${execError.message}`);
-        console.log('   You can manually run: npm run prd:new ' + sdId);
+        console.log(`   ⚠️  PRD creation failed: ${execError.message}`);
+        console.log('');
+        console.log('📝 TROUBLESHOOTING:');
+        console.log('   1. Check Supabase connection (NEXT_PUBLIC_SUPABASE_URL)');
+        console.log('   2. Check service role key (SUPABASE_SERVICE_ROLE_KEY)');
+        console.log('   3. Check OpenAI key for LLM generation (OPENAI_API_KEY)');
+        console.log('');
+        console.log('📝 MANUAL FALLBACK:');
+        console.log(`   node scripts/add-prd-to-database.js ${idToUse} "${title}"`);
       }
     }
+    console.log('');
 
   } catch (error) {
-    console.log('\n⚠️  Auto-generation error:', error.message);
-    console.log('   PRD script can be generated manually:');
-    console.log(`   npm run prd:new ${sdId}`);
+    console.log('\n⚠️  Auto-creation error:', error.message);
+    console.log('   PRD can be created manually:');
+    console.log(`   node scripts/add-prd-to-database.js ${sdId}`);
   }
 }
