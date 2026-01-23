@@ -52,6 +52,7 @@ scripts/delete-orphan-*.mjs
 
 # One-off database/migration scripts (use process scripts instead)
 scripts/apply-*.mjs
+scripts/apply-*.js
 scripts/check-*.mjs
 scripts/complete-*.mjs
 scripts/diagnose-*.mjs
@@ -69,12 +70,14 @@ scripts/smart-*.mjs
 scripts/stories-*.mjs
 scripts/test-auth-*.mjs
 scripts/update-*.mjs
+scripts/update-*.js
 scripts/verify-*.mjs
 scripts/comprehensive-*.mjs
 scripts/infrastructure-*.mjs
 scripts/full-data-*.mjs
 scripts/create-*-handoff.mjs
 scripts/create-*-via-*.mjs
+scripts/create-*-children.js
 scripts/audit-*.js
 
 # Database results/exports (temporary artifacts)
@@ -82,6 +85,7 @@ database/*.json
 
 # One-off root level scripts
 audit_rls.js
+repro_*.js
 
 # Root-level session artifacts (never commit)
 /*_APPLIED.md
@@ -93,6 +97,10 @@ audit_rls.js
 # Root-level temp directories
 /sub-agents/
 /validation/
+/.regression/
+/.signals/
+/.temp/
+/plans/
 
 # Build artifacts (rebuild when needed)
 src/client/dist/
