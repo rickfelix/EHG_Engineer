@@ -1,5 +1,15 @@
 # Protocol Improvements CLI Guide
 
+## Metadata
+- **Category**: Guide
+- **Status**: Approved
+- **Version**: 2.1.0
+- **Author**: LEO Protocol / DOCMON
+- **Last Updated**: 2026-01-23
+- **Tags**: protocol-improvements, cli, self-improvement, retrospectives, automation
+
+## Overview
+
 This guide covers the CLI tools for managing the protocol improvement system that automatically extracts, reviews, and applies improvements from retrospectives.
 
 ## Overview
