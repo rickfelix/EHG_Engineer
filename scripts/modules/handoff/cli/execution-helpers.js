@@ -9,6 +9,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { normalizeSDId } from '../../sd-id-normalizer.js';
+import { createTaskHydrator, selectTrack } from '../../../../lib/tasks/index.js';
 
 /**
  * Check bypass rate limits and log to audit
@@ -98,6 +99,78 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
 }
 
 /**
+ * Hydrate and output tasks for the next phase
+ * This outputs tasks in a format that Claude will read and create via TaskCreate
+ *
+ * @param {string} sdId - Strategic Directive ID
+ * @param {string} currentHandoff - Current handoff type (e.g., 'LEAD-TO-PLAN')
+ * @param {Object} supabase - Supabase client
+ */
+async function hydrateAndOutputTasks(sdId, currentHandoff, supabase) {
+  // Map handoff types to their target phases
+  const handoffToPhase = {
+    'LEAD-TO-PLAN': 'PLAN',
+    'PLAN-TO-EXEC': 'EXEC',
+    'EXEC-TO-PLAN': 'VERIFY',  // Or FINAL depending on track
+    'PLAN-TO-LEAD': 'FINAL'
+  };
+
+  const targetPhase = handoffToPhase[currentHandoff.toUpperCase()];
+  if (!targetPhase) {
+    return; // No task hydration for LEAD-FINAL-APPROVAL
+  }
+
+  try {
+    const hydrator = createTaskHydrator(supabase);
+    const result = await hydrator.hydratePhase(sdId, targetPhase);
+
+    if (!result.tasks || result.tasks.length === 0) {
+      console.log('');
+      console.log('   ℹ️  No tasks to hydrate for this phase');
+      return;
+    }
+
+    // Output tasks in a format Claude can process
+    console.log('');
+    console.log('═'.repeat(60));
+    console.log('🎯 CLAUDE_TASK_HYDRATION: Tasks for next phase');
+    console.log('═'.repeat(60));
+    console.log(`   Track: ${result.track}`);
+    console.log(`   Phase: ${targetPhase}`);
+    console.log(`   Tasks: ${result.tasks.length}`);
+    console.log('');
+    console.log('   INSTRUCTION: Claude MUST call TaskCreate for each task below.');
+    console.log('   Use TaskUpdate to set blockedBy dependencies after creation.');
+    console.log('');
+    console.log('───────────────────────────────────────────────────────────');
+
+    for (const task of result.tasks) {
+      console.log(`   📋 TASK: ${task.id}`);
+      console.log(`      Subject: ${task.subject}`);
+      console.log(`      ActiveForm: ${task.activeForm}`);
+      console.log(`      Description: ${task.description}`);
+      if (task.blockedBy && task.blockedBy.length > 0) {
+        console.log(`      BlockedBy: ${task.blockedBy.join(', ')}`);
+      }
+      console.log('');
+    }
+
+    console.log('═'.repeat(60));
+    console.log('END_CLAUDE_TASK_HYDRATION');
+    console.log('═'.repeat(60));
+
+    // Record hydration event
+    console.log('');
+    console.log(`   ✅ Task hydration recorded (${result.tasks.length} tasks for ${targetPhase})`);
+
+  } catch (err) {
+    console.log('');
+    console.log(`   ⚠️  Task hydration skipped: ${err.message}`);
+    // Non-blocking - handoff continues even if hydration fails
+  }
+}
+
+/**
  * Display execution result
  *
  * @param {Object} result - Execution result
@@ -171,6 +244,9 @@ export async function displayExecutionResult(result, handoffType, sdId) {
       } else {
         console.log(`   ${nextStep.message}`);
       }
+
+      // LEO 5.0: Hydrate tasks for next phase
+      await hydrateAndOutputTasks(sdId, handoffType, supabase);
     }
   } else {
     console.log('');
