@@ -28,7 +28,7 @@ async function validateSDCommit(sdId) {
 
   if (!supabaseUrl || !supabaseKey) {
     console.warn('⚠️  Warning: Supabase credentials not configured. Skipping Gate 0 validation.');
-    process.exit(0); // Fail-open
+    return 0; // Fail-open
   }
 
   const supabase = createClient(supabaseUrl, supabaseKey);
@@ -44,7 +44,7 @@ async function validateSDCommit(sdId) {
     if (error) {
       console.warn(`⚠️  Warning: Database query failed: ${error.message}`);
       console.warn('   Skipping Gate 0 validation (fail-open).');
-      process.exit(0); // Fail-open on DB errors
+      return 0; // Fail-open on DB errors
     }
 
     if (!data) {
@@ -61,7 +61,7 @@ async function validateSDCommit(sdId) {
       console.error('');
       console.error('   Emergency bypass (logged): git commit --no-verify');
       console.error('');
-      process.exit(1);
+      return 1;
     }
 
     const { sd_key, title, status, current_phase } = data;
@@ -89,7 +89,7 @@ async function validateSDCommit(sdId) {
       console.error('');
       console.error('   Emergency bypass (not recommended): git commit --no-verify');
       console.error('');
-      process.exit(1);
+      return 1;
     }
 
     // Check for blocking phase
@@ -111,17 +111,17 @@ async function validateSDCommit(sdId) {
       console.error('');
       console.error('   Emergency bypass (logged): git commit --no-verify');
       console.error('');
-      process.exit(1);
+      return 1;
     }
 
     // Validation passed
     console.log(`✅ Gate 0 validation passed (${displayId}: ${status}, ${current_phase})`);
-    process.exit(0);
+    return 0;
 
   } catch (err) {
     console.warn(`⚠️  Warning: Unexpected error: ${err.message}`);
     console.warn('   Skipping Gate 0 validation (fail-open).');
-    process.exit(0); // Fail-open
+    return 0; // Fail-open
   }
 }
 
@@ -133,4 +133,14 @@ if (!sdId) {
   process.exit(1);
 }
 
-validateSDCommit(sdId);
+// Properly await the async function and use returned exit code
+// This avoids libuv assertion errors on Windows by allowing proper cleanup
+validateSDCommit(sdId)
+  .then((exitCode) => {
+    // Small delay to allow Supabase client cleanup before exiting
+    setTimeout(() => process.exit(exitCode), 50);
+  })
+  .catch((err) => {
+    console.error('Unexpected error:', err.message);
+    setTimeout(() => process.exit(1), 50);
+  });

@@ -246,8 +246,9 @@ fi
 # SD Identifier Validation for feat/ and fix/ branches
 # Ensures work is properly tracked against a Strategic Directive
 if echo "$BRANCH" | grep -qE '^(feat|fix)/'; then
-  # Check for SD identifier pattern: SD-XXX-NNN or SD-XXX-CATEGORY-NNN
-  if ! echo "$BRANCH" | grep -qiE 'SD-[A-Z]+-[A-Z0-9]+-[0-9]+|SD-[A-Z]+-[0-9]+'; then
+  # Check for SD identifier pattern: SD-XXX-NNN, SD-XXX-CATEGORY-NNN, or SD-XXX-MULTI-SEGMENT-NNN
+  # Updated to support variable-length SD identifiers like SD-LEO-SELF-IMPROVE-AIJUDGE-001
+  if ! echo "$BRANCH" | grep -qiE 'SD-[A-Z]+(-[A-Z0-9]+)*-[0-9]+'; then
     # Also accept quick-fix pattern for fix/ branches: QF-YYYYMMDD-NNN
     if echo "$BRANCH" | grep -qE '^fix/' && echo "$BRANCH" | grep -qE 'QF-[0-9]{8}-[0-9]+'; then
       echo "   ℹ️  Quick-fix pattern detected (QF-YYYYMMDD-NNN)"
@@ -297,7 +298,8 @@ fi
 
 # Extract SD identifier pattern from commit message or branch name
 # Matches: SD-LEO-GATE0-001, SD-FEATURE-001, SD-LEO-REFACTOR-LARGE-FILES-002
-SD_ID=$(echo "$COMMIT_MSG $BRANCH" | grep -oE 'SD-[A-Z]+-[A-Z0-9]+-[0-9]+|SD-[A-Z]+-[0-9]+' | head -1)
+# Also matches multi-segment: SD-LEO-SELF-IMPROVE-AIJUDGE-001
+SD_ID=$(echo "$COMMIT_MSG $BRANCH" | grep -oE 'SD-[A-Z]+(-[A-Z0-9]+)*-[0-9]+' | head -1)
 
 if [ ! -z "$SD_ID" ]; then
   echo "   Found SD reference: $SD_ID"

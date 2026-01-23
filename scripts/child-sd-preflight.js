@@ -124,20 +124,37 @@ class ChildSDPreflightValidator {
 
   /**
    * Load handoffs for an SD
+   * Checks both sd_phase_handoffs AND leo_handoff_executions tables
+   * (LEAD-FINAL-APPROVAL is stored in leo_handoff_executions, not sd_phase_handoffs)
    */
   async loadHandoffs(sdId) {
-    const { data, error } = await supabase
+    // Check sd_phase_handoffs for LEAD-TO-PLAN, PLAN-TO-EXEC, etc.
+    const { data: phaseHandoffs, error: phaseError } = await supabase
       .from('sd_phase_handoffs')
       .select('*')
       .eq('sd_id', sdId)
       .eq('status', 'accepted')
       .order('created_at');
 
-    if (error) {
-      return [];
+    // Also check leo_handoff_executions for LEAD-FINAL-APPROVAL
+    const { data: leoHandoffs, error: leoError } = await supabase
+      .from('leo_handoff_executions')
+      .select('*')
+      .eq('sd_id', sdId)
+      .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
+      .eq('status', 'accepted');
+
+    const handoffs = [];
+
+    if (!phaseError && phaseHandoffs) {
+      handoffs.push(...phaseHandoffs);
     }
 
-    return data || [];
+    if (!leoError && leoHandoffs) {
+      handoffs.push(...leoHandoffs);
+    }
+
+    return handoffs;
   }
 
   /**
