@@ -1,8 +1,16 @@
 # LEO Protocol Self-Improvement System
 
+## Metadata
+- **Category**: Guide
+- **Status**: Approved
+- **Version**: 3.1.0
+- **Author**: LEO Protocol / RETRO Sub-Agent
+- **Last Updated**: 2026-01-23
+- **Tags**: self-improvement, retrospectives, protocol-evolution, ai-quality-judge, learning
+
+---
+
 **Migration**: `20251210_retrospective_self_improvement_system.sql`
-**Updated**: 2026-01-22
-**Status**: Active (v3 - AI Quality Judge)
 **Purpose**: Database-first protocol evolution through retrospective analysis
 
 ---
