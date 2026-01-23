@@ -1,10 +1,12 @@
 # Database Agent Patterns: Comprehensive Reference
 
 **Status**: ACTIVE
-**Last Updated**: 2025-10-26
+**Last Updated**: 2026-01-23
 **Purpose**: Complete guide for database agent invocation, anti-patterns, and best practices
 **Evidence**: 74+ retrospectives analyzed, 13+ SDs with database agent lessons, 11 issue patterns
-**Recent Improvements**: SD-LEO-LEARN-001 proactive learning integration
+**Recent Improvements**:
+- SD-LEO-LEARN-001: Proactive learning integration
+- 2026-01-23: Intelligent migration execution with action trigger detection
 
 ---
 
@@ -106,6 +108,34 @@ Migration Errors:
 - "migration failed"
 - "schema mismatch"
 
+### Action Trigger Keywords (NEW - 2026-01-23)
+
+**These keywords indicate intent to EXECUTE migrations** (not just validate):
+- "apply migration"
+- "run migration"
+- "execute migration"
+- "apply supabase migration"
+- "push migration"
+- "migrate database"
+- "db push"
+- "supabase db push"
+- "apply schema"
+- "run schema migration"
+
+**Behavior**: When detected, the DATABASE sub-agent switches to execution mode:
+1. Finds pending migration files
+2. Displays what will be applied (filename, types, preview)
+3. Requires `--confirm-apply` flag to execute
+4. Runs `supabase db push` via CLI
+
+**Example Usage**:
+```
+User: "apply the migration in Supabase"
+→ DATABASE sub-agent detects action intent
+→ Shows migration preview with confirmation prompt
+→ Executes with user confirmation
+```
+
 ---
 
 ## How to Invoke Database Agent
@@ -118,6 +148,14 @@ node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 
 # For phase-based orchestration
 node scripts/orchestrate-phase-subagents.js <PHASE> <SD-ID>
+
+# With migration execution (action triggers)
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID> --context "apply migration"
+# → Detects action intent, finds migrations, shows confirmation
+
+# With auto-execution (requires confirmation flag)
+node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID> --context "apply migration" --confirm-apply
+# → Executes migrations without prompting (use with caution)
 ```
 
 ### Advisory Mode (No SD Context)
@@ -971,6 +1009,22 @@ node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 - Created validation script for JSONB structure checks
 - Applied defensive coding pattern
 - **Prevention**: Future format mismatches caught early
+
+### Pattern 7: Intelligent Migration Execution (NEW - 2026-01-23)
+
+**Feature**: Action trigger detection for migration execution
+- User says "apply migration" or similar phrases
+- DATABASE sub-agent automatically:
+  1. Detects action intent from keywords
+  2. Finds pending migration files
+  3. Shows confirmation display with:
+     - File names and paths
+     - Migration types (CREATE TABLE, ALTER TABLE, RLS, INSERT)
+     - Content preview
+  4. Requires explicit `--confirm-apply` to execute
+- **Safety**: No migrations execute without confirmation
+- **Transparency**: Full visibility into what will run
+- **Automation**: Reduces manual "run supabase db push" reminders
 
 ---
 

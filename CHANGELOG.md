@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-01-23
+
+### Features
+- **DATABASE Sub-Agent: Intelligent Migration Execution with Action Trigger Detection** - PR #520
+  - Added action intent detection to DATABASE sub-agent for automatic migration execution
+  - New `action_triggers` array in `config/domain-keywords.json` with phrases like "apply migration", "run migration", "db push"
+  - When users say action phrases, the sub-agent now:
+    - Detects action intent from keywords
+    - Finds pending migration files in standard locations
+    - Displays confirmation preview showing:
+      - File names and paths
+      - Migration types (CREATE TABLE, ALTER TABLE, RLS, INSERT)
+      - Content preview
+    - Requires `--confirm-apply` flag to execute (safe by default)
+    - Executes `supabase db push` via CLI
+  - Implementation files:
+    - `lib/sub-agents/database.js`: Added `detectActionIntent()`, `findPendingMigrations()`, `executeMigrations()`
+    - `lib/modules/context-aware-selector/domain-keywords.js`: Added `detectActionTrigger()` and `getActionTriggers()` helpers
+    - `database/migrations/20260123_add_database_action_triggers.sql`: Migration to persist triggers in `leo_sub_agent_triggers` table
+  - Documentation updates:
+    - `docs/reference/database-agent-patterns.md`: Added Pattern 7 (Intelligent Migration Execution), updated action trigger keywords section
+  - Impact: Reduces manual "run supabase db push" reminders, provides full transparency before execution
+  - Safety: No migrations execute without explicit confirmation flag
+
 ## 2026-01-20
 
 ### Documentation
