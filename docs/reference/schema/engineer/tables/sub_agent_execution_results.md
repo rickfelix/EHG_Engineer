@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-23T15:02:05.180Z
-**Rows**: 11,156
+**Generated**: 2026-01-23T15:19:57.449Z
+**Rows**: 11,181
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -92,6 +92,10 @@
 - `idx_sub_agent_validation_mode`
   ```sql
   CREATE INDEX idx_sub_agent_validation_mode ON public.sub_agent_execution_results USING btree (sd_id, validation_mode)
+  ```
+- `idx_subagent_results_sd_id`
+  ```sql
+  CREATE INDEX idx_subagent_results_sd_id ON public.sub_agent_execution_results USING btree (sd_id)
   ```
 - `idx_verdict_validation_mode`
   ```sql
