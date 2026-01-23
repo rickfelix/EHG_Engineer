@@ -222,7 +222,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /ship → /document → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-22 7:28:11 AM
+**Last Generated**: 2026-01-23 8:29:37 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -294,42 +294,9 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /ship → /document → /
 
 *Full trigger list in CLAUDE_CORE.md. Use Task tool with `subagent_type="<agent-code>"`*
 
-## Sub-Agent Database Recording
-
-**CRITICAL**: All sub-agent executions must be recorded to the database for tracking and validation.
-
-### Using execute-subagent.js (Recommended)
-
-When executing sub-agents, use the CLI wrapper which auto-records results:
-
-```bash
-# Execute a sub-agent with database recording
-node scripts/execute-subagent.js --code VALIDATION --sd-id SD-XXX-001
-node scripts/execute-subagent.js --code TESTING --sd-id SD-XXX-001 --full-e2e
-node scripts/execute-subagent.js --code REGRESSION --sd-id SD-XXX-001
-```
-
-### Benefits:
-- Results stored in `sub_agent_execution_results` table
-- Verdict (PASS/FAIL/BLOCKED) recorded
-- Timing and recommendations preserved
-- Stop hook enforcement can validate execution
-
-### After Task Tool Sub-Agent Execution
-
-If you use the Task tool with `subagent_type`, the result is NOT automatically recorded.
-After completion, run the execute-subagent.js script to ensure database recording:
-
-```bash
-# Record result after Task tool execution
-node scripts/execute-subagent.js --code <AGENT_CODE> --sd-id <SD_KEY>
-```
-
-This ensures the stop-subagent-enforcement hook can verify all required sub-agents ran.
-
 
 ---
 
-*Router generated from database: 2026-01-22*
+*Router generated from database: 2026-01-23*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*

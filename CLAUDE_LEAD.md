@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-01-22 9:56:48 PM
+**Generated**: 2026-01-23 8:29:37 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
@@ -1226,6 +1226,33 @@ All Vision V2 SDs contain this metadata:
 }
 ```
 
+## SD Creation Anti-Pattern (PROHIBITED)
+
+**NEVER create one-off SD creation scripts like:**
+- `create-*-sd.js`
+- `create-sd*.js`
+
+**ALWAYS use the standard CLI:**
+```bash
+node scripts/leo-create-sd.js
+```
+
+### Why This Matters
+- One-off scripts bypass validation and governance
+- They create maintenance burden (100+ orphaned scripts)
+- They fragment the codebase and confuse future developers
+
+### Archived Scripts Location
+~100 legacy one-off scripts have been moved to:
+- `scripts/archived-sd-scripts/`
+
+These are kept for reference but should NEVER be used as templates.
+
+### Correct Workflow
+1. Run `node scripts/leo-create-sd.js`
+2. Follow interactive prompts
+3. SD is properly validated and tracked in database
+
 ## Parent-Child SD Phase Governance
 
 ## Parent-Child SD Phase Governance (PAT-PARENT-CHILD-001)
@@ -1354,6 +1381,6 @@ npm run sd:status    # Overall progress by track
 
 ---
 
-*Generated from database: 2026-01-22*
+*Generated from database: 2026-01-23*
 *Protocol Version: 4.3.3*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

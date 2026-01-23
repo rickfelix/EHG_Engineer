@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-01-22 9:56:48 PM
+**Generated**: 2026-01-23 8:29:37 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -214,37 +214,6 @@ npm run handoff:compliance SD-ID  # Check specific SD
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
-## Mandatory Agent Invocation Rules
-
-**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
-
-### Task Type -> Required Agent
-
-| Task Keywords | MUST Invoke | Purpose |
-|---------------|-------------|---------|
-| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
-| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
-| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
-| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
-| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
-| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
-| database, migration, schema | **database-agent** | Schema validation |
-| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
-
-### Why This Exists
-
-**Incident**: Human-like testing perspective interpreted as manual content inspection.
-**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
-**Root Cause**: Ad-hoc review instead of specialized agent invocation.
-**Prevention**: Explicit rules mandate agent use for specialized tasks.
-
-### How to Apply
-
-1. Detect task type from user request keywords
-2. Invoke required agent(s) BEFORE making changes
-3. Agent findings inform implementation
-4. Re-run agent AFTER changes to verify fixes
-
 ## 🤖 Built-in Agent Integration
 
 ## Built-in Agent Integration
@@ -286,6 +255,37 @@ Task(subagent_type="Explore", prompt="Identify affected areas")
 ```
 
 This is faster than sequential exploration and provides comprehensive coverage.
+
+## Mandatory Agent Invocation Rules
+
+**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
+
+### Task Type -> Required Agent
+
+| Task Keywords | MUST Invoke | Purpose |
+|---------------|-------------|---------|
+| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
+| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
+| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
+| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
+| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
+| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
+| database, migration, schema | **database-agent** | Schema validation |
+| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
+
+### Why This Exists
+
+**Incident**: Human-like testing perspective interpreted as manual content inspection.
+**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
+**Root Cause**: Ad-hoc review instead of specialized agent invocation.
+**Prevention**: Explicit rules mandate agent use for specialized tasks.
+
+### How to Apply
+
+1. Detect task type from user request keywords
+2. Invoke required agent(s) BEFORE making changes
+3. Agent findings inform implementation
+4. Re-run agent AFTER changes to verify fixes
 
 ## Claude Code Plan Mode Integration
 
@@ -498,6 +498,33 @@ await orchestrator.requestPlanModeExit({
 - **Retro Agent**: `.claude/agents/retro-agent.md` (Plan Mode Patterns section)
 
 
+## Sub-Agent Model Routing
+
+**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
+
+### Model Selection Rule
+- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
+- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
+- If you need to specify a model explicitly, use `model: 'sonnet'`
+
+### Why This Matters
+- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
+- Claude Code Max subscription does not include Haiku access
+- Sonnet provides the right balance of speed and quality for sub-agent work
+
+### Examples
+```javascript
+// CORRECT - Use sonnet or omit model
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
+Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
+
+// WRONG - Never use haiku
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
+```
+
+*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
+
+
 ## Work Tracking Policy
 
 **ALL changes to main must be tracked** as either:
@@ -530,32 +557,38 @@ The pre-push hook automatically:
 2. Verifies completion status in database
 3. Blocks if not ready for merge
 
-## Sub-Agent Model Routing
+## 🖥️ UI Parity Requirement (MANDATORY)
 
-**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
+**Every backend data contract field MUST have a corresponding UI representation.**
 
-### Model Selection Rule
-- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
-- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
-- If you need to specify a model explicitly, use `model: 'sonnet'`
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
 
-### Why This Matters
-- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
-- Claude Code Max subscription does not include Haiku access
-- Sonnet provides the right balance of speed and quality for sub-agent work
+### Requirements
 
-### Examples
-```javascript
-// CORRECT - Use sonnet or omit model
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
-Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
 
-// WRONG - Never use haiku
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
-```
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
 
-*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
 
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Execution Philosophy
 
@@ -634,39 +667,6 @@ Claude has documented cognitive biases. These rules OVERRIDE those biases:
 - Mark parent complete before all children complete in database
 
 **REMEMBER**: The goal is NOT to complete SDs quickly. The goal is to complete SDs CORRECTLY. A properly implemented SD that takes 8 hours is infinitely better than a rushed implementation that takes 4 hours but requires 6 hours of fixes.
-
-## 🖥️ UI Parity Requirement (MANDATORY)
-
-**Every backend data contract field MUST have a corresponding UI representation.**
-
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
-
-### Requirements
-
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
-
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
-
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
-
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
-
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Sustainable Issue Resolution Philosophy
 
@@ -846,54 +846,6 @@ To request an exception to this block:
 
 **No exceptions without explicit LEAD approval.**
 
-## Global Negative Constraints
-
-## 🚫 Global Negative Constraints
-
-<negative_constraints phase="GLOBAL">
-These anti-patterns apply across ALL phases. Violating them leads to failed handoffs, rework, and wasted effort.
-
-### NC-001: No Markdown Files as Source of Truth
-**Anti-Pattern**: Creating or updating markdown files (*.md) to store requirements, PRDs, or status
-**Why Wrong**: Data becomes stale, conflicts with database, no validation
-**Correct Approach**: Use database tables (strategic_directives_v2, product_requirements_v2) via scripts
-
-### NC-002: No Bypassing Process Scripts
-**Anti-Pattern**: Directly inserting into database tables instead of using handoff.js, add-prd-to-database.js
-**Why Wrong**: Skips validation gates, breaks audit trail, causes inconsistent state
-**Correct Approach**: Always use the designated scripts for phase transitions
-
-### NC-003: No Guessing File Locations
-**Anti-Pattern**: Assuming file paths based on naming conventions without verification
-**Why Wrong**: Leads to wrong file edits, missing imports, broken builds
-**Correct Approach**: Use Glob/Grep to find exact paths, read files before editing
-
-### NC-004: No Implementation Without Reading
-**Anti-Pattern**: Starting to code before reading existing implementation
-**Why Wrong**: Duplicates existing functionality, conflicts with patterns, wastes time
-**Correct Approach**: Read ≥5 relevant files before writing any code
-
-### NC-005: No Workarounds Before Root Cause Analysis
-**Anti-Pattern**: Implementing quick fixes without understanding why something fails
-**Why Wrong**: 2-3x time multiplier, masks real issues, accumulates technical debt
-**Correct Approach**: Identify root cause first, then fix. Document if workaround needed.
-
-
-### NC-006: No Background Execution or TaskOutput
-**Anti-Pattern**: Using `run_in_background: true` or TaskOutput tool for validation/handoff commands
-**Why Wrong**: Slows down workflow, requires extra round-trips, breaks conversational flow
-**Correct Approach**:
-- Run all commands inline with appropriate timeouts (up to 180000ms for long validations)
-- NEVER use `run_in_background` parameter for handoff.js, validation scripts, or any LEO process scripts
-- If command output is long, use direct execution and let it complete
-- Avoid piping (`| grep`, `| tail`) on long-running commands as it can trigger background execution
-**Affected Commands** (MUST run inline):
-- `node scripts/handoff.js execute ...`
-- `node scripts/add-prd-to-database.js ...`
-- `node scripts/phase-preflight.js ...`
-- Any validation or quality gate scripts
-</negative_constraints>
-
 ## Child SD Pre-Work Validation (MANDATORY)
 
 ### Child SD Pre-Work Validation
@@ -960,6 +912,54 @@ node scripts/child-sd-preflight.js SD-XXX-001
 - `npm run sd:next` shows dependency status in the queue
 - Child SDs with incomplete dependencies show as BLOCKED
 - Complete dependencies in sequence before proceeding
+
+## Global Negative Constraints
+
+## 🚫 Global Negative Constraints
+
+<negative_constraints phase="GLOBAL">
+These anti-patterns apply across ALL phases. Violating them leads to failed handoffs, rework, and wasted effort.
+
+### NC-001: No Markdown Files as Source of Truth
+**Anti-Pattern**: Creating or updating markdown files (*.md) to store requirements, PRDs, or status
+**Why Wrong**: Data becomes stale, conflicts with database, no validation
+**Correct Approach**: Use database tables (strategic_directives_v2, product_requirements_v2) via scripts
+
+### NC-002: No Bypassing Process Scripts
+**Anti-Pattern**: Directly inserting into database tables instead of using handoff.js, add-prd-to-database.js
+**Why Wrong**: Skips validation gates, breaks audit trail, causes inconsistent state
+**Correct Approach**: Always use the designated scripts for phase transitions
+
+### NC-003: No Guessing File Locations
+**Anti-Pattern**: Assuming file paths based on naming conventions without verification
+**Why Wrong**: Leads to wrong file edits, missing imports, broken builds
+**Correct Approach**: Use Glob/Grep to find exact paths, read files before editing
+
+### NC-004: No Implementation Without Reading
+**Anti-Pattern**: Starting to code before reading existing implementation
+**Why Wrong**: Duplicates existing functionality, conflicts with patterns, wastes time
+**Correct Approach**: Read ≥5 relevant files before writing any code
+
+### NC-005: No Workarounds Before Root Cause Analysis
+**Anti-Pattern**: Implementing quick fixes without understanding why something fails
+**Why Wrong**: 2-3x time multiplier, masks real issues, accumulates technical debt
+**Correct Approach**: Identify root cause first, then fix. Document if workaround needed.
+
+
+### NC-006: No Background Execution or TaskOutput
+**Anti-Pattern**: Using `run_in_background: true` or TaskOutput tool for validation/handoff commands
+**Why Wrong**: Slows down workflow, requires extra round-trips, breaks conversational flow
+**Correct Approach**:
+- Run all commands inline with appropriate timeouts (up to 180000ms for long validations)
+- NEVER use `run_in_background` parameter for handoff.js, validation scripts, or any LEO process scripts
+- If command output is long, use direct execution and let it complete
+- Avoid piping (`| grep`, `| tail`) on long-running commands as it can trigger background execution
+**Affected Commands** (MUST run inline):
+- `node scripts/handoff.js execute ...`
+- `node scripts/add-prd-to-database.js ...`
+- `node scripts/phase-preflight.js ...`
+- Any validation or quality gate scripts
+</negative_constraints>
 
 ## 🔄 Git Commit Guidelines
 
@@ -1252,6 +1252,75 @@ Patterns exceeding these thresholds auto-create CRITICAL SDs:
 - Implementation guide: `docs/architecture/GENESIS_IMPLEMENTATION_GUIDE.md`
 - Quick reference: `docs/reference/genesis-codebase-guide.md`
 
+## ⚠️ Conditional Handoffs by SD Type (CRITICAL)
+
+**NOT ALL HANDOFFS ARE REQUIRED FOR ALL SD TYPES.**
+
+This is a common source of confusion. The EXEC-TO-PLAN handoff is **conditional** based on SD type.
+
+### Quick Decision: Is EXEC-TO-PLAN Required?
+
+| SD Type | EXEC-TO-PLAN | Why |
+|---------|--------------|-----|
+| `feature` | **REQUIRED** | Full code validation, E2E tests, quality gates |
+| `bugfix` | **REQUIRED** | Verify fix, regression testing |
+| `database` | **REQUIRED** | Schema validation, data integrity |
+| `security` | **REQUIRED** | Security verification critical |
+| `refactor` | **REQUIRED** | Behavior preservation validation |
+| `infrastructure` | **OPTIONAL** | No production code to test |
+| `documentation` | **SKIP** | No code changes at all |
+| `orchestrator` | **SKIP** | Children handle their own validation |
+
+### Workflow Paths
+
+**Full Workflow (5 handoffs)** - feature, bugfix, database, security, refactor:
+```
+LEAD-TO-PLAN → PLAN-TO-EXEC → [EXEC] → EXEC-TO-PLAN → PLAN-TO-LEAD → LEAD-FINAL-APPROVAL
+```
+
+**Reduced Workflow (4 handoffs)** - infrastructure, documentation:
+```
+LEAD-TO-PLAN → PLAN-TO-EXEC → [EXEC] → PLAN-TO-LEAD → LEAD-FINAL-APPROVAL
+                                    ↑
+                            (skip EXEC-TO-PLAN)
+```
+
+**Orchestrator Workflow** (coordinates children):
+```
+LEAD-TO-PLAN → PLAN-TO-EXEC → [Children execute independently] → LEAD-FINAL-APPROVAL
+```
+
+### What EXEC-TO-PLAN Validates
+
+When **required**, EXEC-TO-PLAN validates:
+- All tests passing (unit + E2E)
+- Code committed to feature branch
+- Quality gates passed (implementation fidelity, BMAD)
+- Sub-agent orchestration complete
+- Test evidence captured
+
+When **optional/skipped**, these validations don't apply because:
+- Infrastructure SDs: No production code, no E2E tests
+- Documentation SDs: No code changes at all
+- Orchestrator SDs: Children have their own validation
+
+### How to Check
+
+The handoff system tells you when a handoff is optional:
+```bash
+node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
+
+# Output for infrastructure SD:
+# ⚠️  NOTE: This handoff is OPTIONAL for this SD type.
+#    You may skip it and proceed directly to the next required handoff.
+```
+
+### Reference
+
+- Full validation profiles: `docs/reference/sd-validation-profiles.md`
+- SD type detection: `lib/utils/sd-type-validation.js`
+
+
 ## Parent-Child SD Hierarchy
 
 ### Overview
@@ -1375,75 +1444,6 @@ SELECT COUNT(*) > 0 as is_orchestrator
 FROM strategic_directives_v2
 WHERE parent_sd_id = 'SD-XXX';
 ```
-
-## ⚠️ Conditional Handoffs by SD Type (CRITICAL)
-
-**NOT ALL HANDOFFS ARE REQUIRED FOR ALL SD TYPES.**
-
-This is a common source of confusion. The EXEC-TO-PLAN handoff is **conditional** based on SD type.
-
-### Quick Decision: Is EXEC-TO-PLAN Required?
-
-| SD Type | EXEC-TO-PLAN | Why |
-|---------|--------------|-----|
-| `feature` | **REQUIRED** | Full code validation, E2E tests, quality gates |
-| `bugfix` | **REQUIRED** | Verify fix, regression testing |
-| `database` | **REQUIRED** | Schema validation, data integrity |
-| `security` | **REQUIRED** | Security verification critical |
-| `refactor` | **REQUIRED** | Behavior preservation validation |
-| `infrastructure` | **OPTIONAL** | No production code to test |
-| `documentation` | **SKIP** | No code changes at all |
-| `orchestrator` | **SKIP** | Children handle their own validation |
-
-### Workflow Paths
-
-**Full Workflow (5 handoffs)** - feature, bugfix, database, security, refactor:
-```
-LEAD-TO-PLAN → PLAN-TO-EXEC → [EXEC] → EXEC-TO-PLAN → PLAN-TO-LEAD → LEAD-FINAL-APPROVAL
-```
-
-**Reduced Workflow (4 handoffs)** - infrastructure, documentation:
-```
-LEAD-TO-PLAN → PLAN-TO-EXEC → [EXEC] → PLAN-TO-LEAD → LEAD-FINAL-APPROVAL
-                                    ↑
-                            (skip EXEC-TO-PLAN)
-```
-
-**Orchestrator Workflow** (coordinates children):
-```
-LEAD-TO-PLAN → PLAN-TO-EXEC → [Children execute independently] → LEAD-FINAL-APPROVAL
-```
-
-### What EXEC-TO-PLAN Validates
-
-When **required**, EXEC-TO-PLAN validates:
-- All tests passing (unit + E2E)
-- Code committed to feature branch
-- Quality gates passed (implementation fidelity, BMAD)
-- Sub-agent orchestration complete
-- Test evidence captured
-
-When **optional/skipped**, these validations don't apply because:
-- Infrastructure SDs: No production code, no E2E tests
-- Documentation SDs: No code changes at all
-- Orchestrator SDs: Children have their own validation
-
-### How to Check
-
-The handoff system tells you when a handoff is optional:
-```bash
-node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
-
-# Output for infrastructure SD:
-# ⚠️  NOTE: This handoff is OPTIONAL for this SD type.
-#    You may skip it and proceed directly to the next required handoff.
-```
-
-### Reference
-
-- Full validation profiles: `docs/reference/sd-validation-profiles.md`
-- SD type detection: `lib/utils/sd-type-validation.js`
-
 
 ## SD Type-Aware Workflow Paths
 
@@ -1666,6 +1666,32 @@ For SQL migrations, use the Supabase CLI or dashboard SQL editor:
 
 **Frontend Changes**: Make changes in EHG repository (/mnt/c/_EHG/EHG/)
 **Complete Guide**: See `docs/01_architecture/UNIFIED-FRONTEND-ARCHITECTURE.md`
+
+## Script Creation Anti-Patterns
+
+### PROHIBITED Patterns
+
+**One-Off Creation Scripts**
+Never create single-use scripts for SD or PRD creation:
+- ❌ `create-prd-sd-*.js` → Use `node scripts/add-prd-to-database.js`
+- ❌ `create-*-sd.js` → Use `node scripts/leo-create-sd.js`
+- ❌ `insert-prd-*.js` → Use the modular PRD system
+
+**Why This is Critical**
+1. **Maintenance Debt**: We archived 200+ one-off scripts in LEO 5.0 cleanup
+2. **Validation Bypass**: One-off scripts skip quality gates
+3. **Pattern Fragmentation**: Each script implements creation differently
+
+### Archived Script Locations
+- `scripts/archived-prd-scripts/` - Legacy PRD creation scripts
+- `scripts/archived-sd-scripts/` - Legacy SD creation scripts
+
+### Required CLI Tools
+| Purpose | Command |
+|---------|---------|
+| Create SD | `node scripts/leo-create-sd.js` |
+| Create PRD | `node scripts/add-prd-to-database.js` |
+| PRD Validation | `node scripts/validate-new-prd.js` |
 
 ## Background Task Output Retrieval
 
@@ -2053,40 +2079,29 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. Sovereign Industrial Expansion - Stages 7-25 Materialization (Orchestrator) [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 12/27/2025 | **Score**: 100
+### 1. Mock Infrastructure: Config, Registry, and Utilities - Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 12/28/2025 | **Score**: 100
 
 **Key Improvements**:
-- LEO Protocol artifacts should be created BEFORE implementation, not retroactively
-- Handoff chain documentation should accompany development from the start
+- Root Cause: jsdom test environment does not properly mock localStorage between test cases, causing 2...
+- Root Cause: Handoff validation system requires multiple sub-agent validations that may not be applic...
 
 **Action Items**:
-- [ ] Create orchestrator SD template with built-in child tracking
-- [ ] Enforce LEO Protocol compliance for all SDs from LEAD phase
+- [ ] Document mock system usage in docs/mock-data-system.md (in SD-MOCK-POLISH)
+- [ ] Complete missing handoff documentation
 
-### 2. Integrate Risk Re-calibration UI Components into EHG Application - Retrospective [QUALITY]
-**Category**: TESTING_STRATEGY | **Date**: 1/18/2026 | **Score**: 100
+### 2. Mock Polish: UI Indicator, Developer Toggle, Documentation - Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 12/28/2025 | **Score**: 100
 
 **Key Improvements**:
-- E2E test runs should be automated in CI before EXEC-TO-PLAN handoffs - currently manual evidence onl...
-- Documentation should include visual Mermaid flow diagrams from initial US-005 implementation
+- Initial PLAN-TO-EXEC handoff blocked due to missing exploration_summary
+- Documentation commit was on wrong branch causing false positive in stub detection
 
 **Action Items**:
-- [ ] Create reusable SD lookup utility
-- [ ] Add E2E test CI job for risk-recalibration
+- [ ] Owner: LEO Protocol Maintainer | Deadline: 2025-01-15 | Action: Auto-populate ex...
+- [ ] Owner: CI/CD Team | Deadline: 2025-01-10 | Action: Modify stubbed code detection...
 
-### 3. PLAN_TO_EXEC Handoff Retrospective: Refactor design.js (sub-agent) [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 1/20/2026 | **Score**: 100
-
-**Key Improvements**:
-- Continue monitoring PLAN→EXEC handoff for improvement opportunities
-- Continue monitoring PLAN→EXEC handoff for improvement opportunities
-
-**Action Items**:
-- [ ] Owner: Eng Lead | By 2026-02-01: Add eslint rule to flag files >500 LOC with war...
-- [ ] Owner: DevOps | Next SD: Add CI check for import cycle detection using madge or ...
-
-### 4. Settings Tab Clarity + Feature Catalog Copy (NAV-48 + NAV-49) - Retrospective [QUALITY]
+### 3. Settings Tab Clarity + Feature Catalog Copy (NAV-48 + NAV-49) - Retrospective [QUALITY]
 **Category**: APPLICATION_ISSUE | **Date**: 12/26/2025 | **Score**: 100
 
 **Key Improvements**:
@@ -2097,16 +2112,27 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 - [ ] Add timeout fallback for AI quality assessment in handoffs
 - [ ] Complete missing handoff documentation
 
-### 5. Mock Infrastructure: Config, Registry, and Utilities - Retrospective [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 12/28/2025 | **Score**: 100
+### 4. Sovereign Industrial Expansion - Stages 7-25 Materialization (Orchestrator) [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 12/27/2025 | **Score**: 100
 
 **Key Improvements**:
-- Root Cause: jsdom test environment does not properly mock localStorage between test cases, causing 2...
-- Root Cause: Handoff validation system requires multiple sub-agent validations that may not be applic...
+- LEO Protocol artifacts should be created BEFORE implementation, not retroactively
+- Handoff chain documentation should accompany development from the start
 
 **Action Items**:
-- [ ] Document mock system usage in docs/mock-data-system.md (in SD-MOCK-POLISH)
-- [ ] Complete missing handoff documentation
+- [ ] Create orchestrator SD template with built-in child tracking
+- [ ] Enforce LEO Protocol compliance for all SDs from LEAD phase
+
+### 5. Implement Adaptive Design & Architecture Streams for PLAN Phase - Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 1/10/2026 | **Score**: 100
+
+**Key Improvements**:
+- Schema field documentation: validation_details vs metadata.gate2_validation caused 2 failures
+- Column naming inconsistency: category vs deliverable_type, title vs deliverable_name
+
+**Action Items**:
+- [ ] Create schema field reference document mapping validation field names to actual ...
+- [ ] Add pre-handoff checklist to PLAN phase that validates exploration_summary, PRD ...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -2140,11 +2166,6 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ### Keyword-Triggered Sub-Agents
 
-#### Regression Validator Sub-Agent (`REGRESSION`)
-Validates that refactoring changes maintain backward compatibility. Captures baseline test results, 
-
-**Trigger Keywords**: `refactor`, `refactoring`, `backward compatibility`, `backwards compatible`, `breaking change`, `regression`, `restructure`, `no behavior change`, `no functional change`, `api signature`, `extract method`, `extract function`, `extract component`, `reorganize`, `regression test`, `public api`, `deprecate`, `consolidate`, `move file`, `rename`, `cleanup`, `split file`, `interface change`, `migration`, `code smell`, `technical debt`, `DRY violation`
-
 #### Information Architecture Lead (`DOCMON`)
 ## Information Architecture Lead v3.0.0 - Database-First Enforcement Edition
 
@@ -2157,17 +2178,15 @@ Forensic intelligence agent for defect triage, root cause determination, and CAP
 
 **Trigger Keywords**: `sub_agent_blocked`, `ci_pipeline_failure`, `quality_gate_critical`, `test_regression`, `handoff_rejection`, `sub_agent_fail`, `quality_degradation`, `pattern_recurrence`, `performance_regression`, `diagnose defect`, `rca`, `root cause`
 
+#### Regression Validator Sub-Agent (`REGRESSION`)
+Validates that refactoring changes maintain backward compatibility. Captures baseline test results, 
+
+**Trigger Keywords**: `refactor`, `refactoring`, `backward compatibility`, `backwards compatible`, `breaking change`, `regression`, `restructure`, `no behavior change`, `no functional change`, `api signature`, `extract method`, `extract function`, `extract component`, `reorganize`, `regression test`, `public api`, `deprecate`, `consolidate`, `move file`, `rename`, `cleanup`, `split file`, `interface change`, `migration`, `code smell`, `technical debt`, `DRY violation`
+
 #### Chief Security Architect (`SECURITY`)
 Former NSA security architect with 25 years experience securing systems from startup to enterprise s
 
 **Trigger Keywords**: `authentication`, `security`, `security auth pattern`
-
-#### UAT Test Executor (`UAT`)
-Interactive UAT test execution guide for manual testing workflows.
-
-**Mission**: Guide human testers
-
-**Trigger Keywords**: `uat test`, `execute test`, `run uat`, `test execution`, `manual test`, `uat testing`, `start testing`, `TEST-AUTH`, `TEST-DASH`, `TEST-VENT`
 
 #### DevOps Platform Architect (`GITHUB`)
 # DevOps Platform Architect Sub-Agent
@@ -2176,10 +2195,26 @@ Interactive UAT test execution guide for manual testing workflows.
 
 **Trigger Keywords**: `EXEC_IMPLEMENTATION_COMPLETE`, `create pull request`, `gh pr create`, `LEAD_APPROVAL_COMPLETE`, `create release`, `PLAN_VERIFICATION_PASS`, `github deploy`, `github status`, `deployment ci pattern`
 
-#### Launch Orchestration Sub-Agent (`LAUNCH`)
-Handles production launch orchestration, go-live checklists, launch readiness, and rollback procedur
+#### UAT Test Executor (`UAT`)
+Interactive UAT test execution guide for manual testing workflows.
 
-**Trigger Keywords**: `launch`, `go-live`, `production launch`, `deployment`, `release`, `rollout`, `cutover`, `launch checklist`, `beta release`, `GA release`
+**Mission**: Guide human testers
+
+**Trigger Keywords**: `uat test`, `execute test`, `run uat`, `test execution`, `manual test`, `uat testing`, `start testing`, `TEST-AUTH`, `TEST-DASH`, `TEST-VENT`
+
+#### QA Engineering Director (`TESTING`)
+## Enhanced QA Engineering Director v2.4.0 - Retrospective-Informed Edition
+
+**🆕 NEW in v2.4.0**: 7
+
+**Trigger Keywords**: `coverage`, `protected route`, `build error`, `dev server`, `test infrastructure`, `testing evidence`, `redirect to login`, `playwright build`, `EXEC_IMPLEMENTATION_COMPLETE`, `unit tests`, `vitest`, `npm run test:unit`, `test results`, `testing test pattern`
+
+#### Continuous Improvement Coach (`RETRO`)
+## Continuous Improvement Coach v4.0.0 - Quality-First Edition
+
+**🆕 NEW in v4.0.0**: Proactive lear
+
+**Trigger Keywords**: `LEAD_APPROVAL_COMPLETE`, `LEAD_REJECTION`, `PLAN_VERIFICATION_COMPLETE`, `PLAN_COMPLEXITY_HIGH`, `EXEC_SPRINT_COMPLETE`, `EXEC_QUALITY_ISSUE`, `HANDOFF_REJECTED`, `HANDOFF_DELAY`, `PHASE_COMPLETE`, `SD_STATUS_COMPLETED`, `SD_STATUS_BLOCKED`, `PATTERN_DETECTED`, `SUBAGENT_MULTIPLE_FAILURES`, `WEEKLY_LEO_REVIEW`, `LEAD_PRE_APPROVAL_REVIEW`, `capture this lesson`, `capture this insight`, `remember this`, `learning`, `lesson learned`, `insight`, `plan mode`, `plan mode integration`, `permission bundling`, `plan file generation`, `intelligent plan`, `sd type profile`, `workflow intensity`, `phase transition`
 
 #### Performance Engineering Lead (`PERFORMANCE`)
 Performance engineering lead with 20+ years optimizing high-scale systems.
@@ -2188,12 +2223,17 @@ Performance engineering lead with 20+ years optimizing high-scale systems.
 
 **Trigger Keywords**: `optimization`
 
-#### Continuous Improvement Coach (`RETRO`)
-## Continuous Improvement Coach v4.0.0 - Quality-First Edition
+#### Launch Orchestration Sub-Agent (`LAUNCH`)
+Handles production launch orchestration, go-live checklists, launch readiness, and rollback procedur
 
-**🆕 NEW in v4.0.0**: Proactive lear
+**Trigger Keywords**: `launch`, `go-live`, `production launch`, `deployment`, `release`, `rollout`, `cutover`, `launch checklist`, `beta release`, `GA release`
 
-**Trigger Keywords**: `LEAD_APPROVAL_COMPLETE`, `LEAD_REJECTION`, `PLAN_VERIFICATION_COMPLETE`, `PLAN_COMPLEXITY_HIGH`, `EXEC_SPRINT_COMPLETE`, `EXEC_QUALITY_ISSUE`, `HANDOFF_REJECTED`, `HANDOFF_DELAY`, `PHASE_COMPLETE`, `SD_STATUS_COMPLETED`, `SD_STATUS_BLOCKED`, `PATTERN_DETECTED`, `SUBAGENT_MULTIPLE_FAILURES`, `WEEKLY_LEO_REVIEW`, `LEAD_PRE_APPROVAL_REVIEW`, `capture this lesson`, `capture this insight`, `remember this`, `learning`, `lesson learned`, `insight`, `plan mode`, `plan mode integration`, `permission bundling`, `plan file generation`, `intelligent plan`, `sd type profile`, `workflow intensity`, `phase transition`
+#### Principal Database Architect (`DATABASE`)
+## Principal Database Architect v2.0.0 - Lessons Learned Edition
+
+**🆕 NEW in v2.0.0**: Proactive le
+
+**Trigger Keywords**: `schema`, `migration`, `EXEC_IMPLEMENTATION_COMPLETE`, `database`, `query`, `select from`, `insert into`, `supabase`, `table`, `rls`, `postgres`, `sql`, `fetch from database`, `database query`
 
 #### Financial Modeling Sub-Agent (`FINANCIAL`)
 Handles financial projections, P&L modeling, cash flow analysis, business model canvas financial sec
@@ -2210,10 +2250,12 @@ Handles pricing model development, unit economics, pricing tiers, sensitivity an
 
 **Trigger Keywords**: `pricing`, `price point`, `pricing strategy`, `unit economics`, `subscription`, `freemium`, `tiered pricing`, `CAC`, `LTV`, `revenue model`
 
-#### Analytics Sub-Agent (`ANALYTICS`)
-Handles analytics setup, metrics definition, dashboard creation, and data-driven insights.
+#### Risk Assessment Sub-Agent (`RISK`)
+## Risk Assessment Sub-Agent v1.0.0
 
-**Trigger Keywords**: `analytics`, `metrics`, `dashboard`, `AARRR`, `funnel`, `conversion rate`, `user behavior`, `tracking`, `KPI`, `retention rate`, `churn rate`
+**BMAD Enhancement**: Multi-domain risk assessment for Strategi
+
+**Trigger Keywords**: `high risk`, `complex`, `refactor`, `migration`, `architecture`, `sophisticated`, `advanced`, `overhaul`, `redesign`, `restructure`, `authentication`, `authorization`, `security`, `rls`, `permission`, `access control`, `credential`, `encrypt`, `decrypt`, `sensitive`, `performance`, `optimization`, `slow`, `latency`, `cache`, `real-time`, `websocket`, `large dataset`, `bulk`, `scalability`, `third-party`, `external`, `api`, `integration`, `webhook`, `microservice`, `openai`, `stripe`, `twilio`, `aws`, `database`, `migration`, `schema`, `table`, `alter`, `postgres`, `sql`, `create table`, `foreign key`, `constraint`, `ui`, `ux`, `design`, `component`, `interface`, `dashboard`, `responsive`, `accessibility`, `a11y`, `mobile`, `LEAD_PRE_APPROVAL`, `PLAN_PRD`
 
 #### API Architecture Sub-Agent (`API`)
 ## API Sub-Agent v1.0.0
@@ -2222,12 +2264,17 @@ Handles analytics setup, metrics definition, dashboard creation, and data-driven
 
 **Trigger Keywords**: `API`, `REST`, `RESTful`, `GraphQL`, `endpoint`, `route`, `controller`, `middleware`, `request`, `response`, `payload`, `status code`, `HTTP method`, `OpenAPI`, `Swagger`, `versioning`, `pagination`
 
-#### Dependency Management Sub-Agent (`DEPENDENCY`)
-# Dependency Management Specialist Sub-Agent
+#### Analytics Sub-Agent (`ANALYTICS`)
+Handles analytics setup, metrics definition, dashboard creation, and data-driven insights.
 
-**Identity**: You are a Dependency Management Speciali
+**Trigger Keywords**: `analytics`, `metrics`, `dashboard`, `AARRR`, `funnel`, `conversion rate`, `user behavior`, `tracking`, `KPI`, `retention rate`, `churn rate`
 
-**Trigger Keywords**: `dependency`, `dependencies`, `npm`, `yarn`, `pnpm`, `package`, `package.json`, `vulnerability`, `CVE`, `security advisory`, `outdated`, `install`, `update`, `upgrade`, `version`, `semver`, `node_modules`, `patch`, `CVSS`, `exploit`, `Snyk`, `Dependabot`
+#### Principal Systems Analyst (`VALIDATION`)
+## Principal Systems Analyst v3.0.0 - Retrospective-Informed Edition
+
+**🆕 NEW in v3.0.0**: 6 critic
+
+**Trigger Keywords**: `existing implementation`, `duplicate`, `conflict`, `already implemented`, `codebase check`
 
 #### Exit Valuation Sub-Agent (`VALUATION`)
 Handles exit valuation modeling, comparable analysis, acquisition scenario planning, and investor re
@@ -2238,6 +2285,13 @@ Handles exit valuation modeling, comparable analysis, acquisition scenario plann
 Handles go-to-market strategy, marketing campaigns, channel selection, messaging, and brand position
 
 **Trigger Keywords**: `marketing`, `go-to-market`, `GTM`, `campaign`, `positioning`, `messaging`, `channel strategy`, `content marketing`, `SEO`, `brand awareness`, `lead generation`
+
+#### Dependency Management Sub-Agent (`DEPENDENCY`)
+# Dependency Management Specialist Sub-Agent
+
+**Identity**: You are a Dependency Management Speciali
+
+**Trigger Keywords**: `dependency`, `dependencies`, `npm`, `yarn`, `pnpm`, `package`, `package.json`, `vulnerability`, `CVE`, `security advisory`, `outdated`, `install`, `update`, `upgrade`, `version`, `semver`, `node_modules`, `patch`, `CVSS`, `exploit`, `Snyk`, `Dependabot`
 
 #### Sales Process Sub-Agent (`SALES`)
 Handles sales playbook development, pipeline management, objection handling, and sales enablement.
@@ -2263,41 +2317,13 @@ Handles customer relationship management, lead tracking, customer success metric
 
 **Trigger Keywords**: `user story`, `user stories`, `acceptance criteria`, `implementation`, `context`, `guidance`, `PLAN_PRD`
 
-#### Risk Assessment Sub-Agent (`RISK`)
-## Risk Assessment Sub-Agent v1.0.0
-
-**BMAD Enhancement**: Multi-domain risk assessment for Strategi
-
-**Trigger Keywords**: `high risk`, `complex`, `refactor`, `migration`, `architecture`, `sophisticated`, `advanced`, `overhaul`, `redesign`, `restructure`, `authentication`, `authorization`, `security`, `rls`, `permission`, `access control`, `credential`, `encrypt`, `decrypt`, `sensitive`, `performance`, `optimization`, `slow`, `latency`, `cache`, `real-time`, `websocket`, `large dataset`, `bulk`, `scalability`, `third-party`, `external`, `api`, `integration`, `webhook`, `microservice`, `openai`, `stripe`, `twilio`, `aws`, `database`, `migration`, `schema`, `table`, `alter`, `postgres`, `sql`, `create table`, `foreign key`, `constraint`, `ui`, `ux`, `design`, `component`, `interface`, `dashboard`, `responsive`, `accessibility`, `a11y`, `mobile`, `LEAD_PRE_APPROVAL`, `PLAN_PRD`
-
-#### Principal Database Architect (`DATABASE`)
-## Principal Database Architect v2.0.0 - Lessons Learned Edition
-
-**🆕 NEW in v2.0.0**: Proactive le
-
-**Trigger Keywords**: `schema`, `migration`, `EXEC_IMPLEMENTATION_COMPLETE`, `database`, `query`, `select from`, `insert into`, `supabase`, `table`, `rls`, `postgres`, `sql`, `fetch from database`, `database query`
-
-#### QA Engineering Director (`TESTING`)
-## Enhanced QA Engineering Director v2.4.0 - Retrospective-Informed Edition
-
-**🆕 NEW in v2.4.0**: 7
-
-**Trigger Keywords**: `coverage`, `protected route`, `build error`, `dev server`, `test infrastructure`, `testing evidence`, `redirect to login`, `playwright build`, `EXEC_IMPLEMENTATION_COMPLETE`, `unit tests`, `vitest`, `npm run test:unit`, `test results`, `testing test pattern`
-
-#### Principal Systems Analyst (`VALIDATION`)
-## Principal Systems Analyst v3.0.0 - Retrospective-Informed Edition
-
-**🆕 NEW in v3.0.0**: 6 critic
-
-**Trigger Keywords**: `existing implementation`, `duplicate`, `conflict`, `already implemented`, `codebase check`
-
 
 **Note**: Sub-agent results MUST be persisted to `sub_agent_execution_results` table.
 
 
 ---
 
-*Generated from database: 2026-01-22*
+*Generated from database: 2026-01-23*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*
