@@ -1,6 +1,6 @@
 ---
 description: LEO stack management and session control
-argument-hint: [restart|next|create|continue|complete]
+argument-hint: [init|restart|next|create|continue|complete]
 ---
 
 # LEO Stack Control
@@ -9,21 +9,91 @@ argument-hint: [restart|next|create|continue|complete]
 
 ## Instructions
 
-### AUTO-PROCEED MODE (ALWAYS ENABLED)
+### SESSION INITIALIZATION (FIRST RUN)
 
-**CRITICAL DIRECTIVE**: When working on a Strategic Directive, proceed AUTOMATICALLY through the entire workflow without stopping to ask for user confirmation.
+**CRITICAL**: At the START of each new Claude Code session, BEFORE processing any `/leo` command:
 
+1. **Check for existing session preference:**
+   ```bash
+   node -e "
+   require('dotenv').config();
+   const { createClient } = require('@supabase/supabase-js');
+   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+   supabase.from('claude_sessions')
+     .select('metadata')
+     .eq('status', 'active')
+     .order('heartbeat_at', { ascending: false })
+     .limit(1)
+     .single()
+     .then(({data, error}) => {
+       if (data?.metadata?.auto_proceed !== undefined) {
+         console.log('SESSION_AUTO_PROCEED=' + data.metadata.auto_proceed);
+       } else {
+         console.log('SESSION_NEW=true');
+       }
+     });
+   "
+   ```
+
+2. **If SESSION_NEW=true (new session)**:
+   Use AskUserQuestion with the following:
+   ```javascript
+   {
+     "questions": [
+       {
+         "question": "Auto-proceed mode is ON by default. Would you like to disable it for this session?",
+         "header": "Auto-Proceed",
+         "multiSelect": false,
+         "options": [
+           {"label": "Keep ON (Recommended)", "description": "Proceed automatically through SD workflow without confirmation prompts"},
+           {"label": "Turn OFF", "description": "Pause at each phase transition and ask for confirmation"}
+         ]
+       }
+     ]
+   }
+   ```
+
+3. **Store the preference** in session metadata:
+   ```bash
+   # After user responds, update or create session with auto_proceed preference
+   node -e "
+   require('dotenv').config();
+   const { createClient } = require('@supabase/supabase-js');
+   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+   const autoProceed = process.argv[2] === 'true';
+   supabase.from('claude_sessions')
+     .upsert({
+       session_id: 'session_' + Date.now(),
+       status: 'active',
+       heartbeat_at: new Date().toISOString(),
+       metadata: { auto_proceed: autoProceed }
+     }, { onConflict: 'session_id' })
+     .then(({error}) => {
+       if (error) console.error('Error:', error.message);
+       else console.log('Session preference saved: auto_proceed=' + autoProceed);
+     });
+   " <true|false>
+   ```
+
+---
+
+### AUTO-PROCEED MODE (DEFAULT: ON)
+
+**The auto_proceed setting controls workflow behavior**:
+
+**When AUTO-PROCEED is ON (default):**
 - **Phase transitions**: Execute LEAD→PLAN→EXEC handoffs automatically
 - **Validation gates**: Run gates; only stop on blocking failures
 - **Post-completion**: Run full ship/document/learn sequence automatically
 - **Next SD**: After completing one SD, show the next SD in queue
+- **DO NOT** use AskUserQuestion for "what's next?" or "should I proceed?"
 
-**DO NOT:**
-- Use AskUserQuestion to ask "what's next?" or "should I proceed?"
-- Wait for user confirmation between phases
-- Stop after completing an SD - continue to post-completion sequence
+**When AUTO-PROCEED is OFF:**
+- **Pause at phase transitions**: Ask before executing handoffs
+- **Confirm post-completion**: Ask before running ship/document/learn
+- **User controls pace**: Wait for explicit "proceed" before continuing
 
-**ONLY STOP AND ASK IF:**
+**ALWAYS STOP AND ASK (regardless of setting):**
 - A blocking error requires human decision
 - Tests fail after 2 retry attempts
 - Merge conflicts require human resolution
@@ -31,6 +101,19 @@ argument-hint: [restart|next|create|continue|complete]
 ---
 
 Based on the argument provided, execute the appropriate action:
+
+### If argument is "init" or "i":
+Run session initialization explicitly:
+1. Check for existing session preference (query above)
+2. Ask user about auto-proceed preference
+3. Store preference in session metadata
+4. Display confirmation:
+   ```
+   ✅ Session Initialized
+      Auto-Proceed: ON/OFF
+
+   💡 Ready for LEO workflow. Run `/leo next` to see SD queue.
+   ```
 
 ### If argument is "restart" or "r":
 Run the LEO stack restart command:
@@ -202,6 +285,7 @@ Display the available commands:
 ```
 LEO Commands:
   /leo           - Run LEO protocol workflow (npm run leo)
+  /leo init      (i)    - Initialize session (set auto-proceed preference)
   /leo restart   (r)    - Restart all LEO servers
   /leo next      (n)    - Show SD queue (what to work on)
   /leo create    (c)    - Create new SD (interactive wizard)
@@ -214,6 +298,9 @@ SD Creation Flags:
   /leo create --from-learn <id>  - Create from /learn pattern
   /leo create --from-feedback <id> - Create from /inbox item
   /leo create --child <parent>   - Create child SD
+
+Session Settings:
+  Auto-proceed is ON by default. Run /leo init to change.
 ```
 
 ## Context
@@ -237,33 +324,62 @@ The `/leo` command connects to other commands at key workflow points:
 
 ### After LEAD-FINAL-APPROVAL (SD Completion)
 
-When an SD reaches LEAD-FINAL-APPROVAL and is marked complete, **AUTOMATICALLY proceed through the post-completion sequence without asking for confirmation.**
+When an SD reaches LEAD-FINAL-APPROVAL and is marked complete, **check session auto_proceed preference** to determine workflow:
 
 ```
 ✅ SD Completed: SD-XXX-001
 
+[If auto_proceed=true]
 🚀 Auto-Proceeding with Post-Completion Sequence...
+
+[If auto_proceed=false]
+📋 SD Complete. Ready for post-completion sequence.
+   Run /leo complete or confirm to proceed.
 ```
 
-| Step | Command | Condition | Auto-Execute |
-|------|---------|-----------|--------------|
-| 1 | `/restart` | UI/feature SD, or long session | YES - auto-run |
-| 2 | Visual review | If UI changes | YES - perform review |
-| 3 | `/ship` | Always | YES - auto-invoke |
-| 4 | `/document` | Feature/API SD | YES - auto-invoke |
-| 5 | `/learn` | Always | YES - auto-invoke |
-| 6 | `/leo next` | After completion | YES - show next SD |
+| Step | Command | Condition | If auto_proceed=true | If auto_proceed=false |
+|------|---------|-----------|---------------------|----------------------|
+| 1 | `/restart` | UI/feature SD, or long session | Auto-run | Ask first |
+| 2 | Visual review | If UI changes | Auto-review | Auto-review |
+| 3 | `/ship` | Always | Auto-invoke | Ask first |
+| 4 | `/document` | Feature/API SD | Auto-invoke | Ask first |
+| 5 | `/learn` | Always | Auto-invoke | Ask first |
+| 6 | `/leo next` | After completion | Auto-show | Ask first |
 
-**AUTO-PROCEED MODE (DEFAULT)**:
+**AUTO-PROCEED MODE (check session preference)**:
 
-When working on a Strategic Directive, proceed through the ENTIRE workflow automatically:
+Check session auto_proceed setting before deciding workflow behavior:
+```bash
+node -e "
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+supabase.from('claude_sessions')
+  .select('metadata')
+  .eq('status', 'active')
+  .order('heartbeat_at', { ascending: false })
+  .limit(1)
+  .single()
+  .then(({data}) => {
+    const autoProceed = data?.metadata?.auto_proceed ?? true; // Default ON
+    console.log('AUTO_PROCEED=' + autoProceed);
+  });
+"
+```
+
+**If AUTO_PROCEED=true (default):**
 1. **Phase transitions**: Execute handoffs without confirmation
 2. **Post-completion**: Run the full sequence above without asking
 3. **Next SD**: After completion, automatically show the next SD in queue
+- DO NOT use AskUserQuestion for workflow progression
 
-**DO NOT use AskUserQuestion during SD workflow.** The user has authorized full autonomous operation.
+**If AUTO_PROCEED=false:**
+1. **Phase transitions**: Ask user before executing handoffs
+2. **Post-completion**: Confirm before running each step
+3. **Next SD**: Ask before showing queue
+- Use AskUserQuestion at each decision point
 
-**For UI/Feature SDs - Auto-execute:**
+**For UI/Feature SDs (when auto_proceed=true):**
 ```
 1. Invoke /restart skill → Wait for servers
 2. Perform visual review → Report findings
@@ -273,14 +389,14 @@ When working on a Strategic Directive, proceed through the ENTIRE workflow autom
 6. Run npm run sd:next → Show next work
 ```
 
-**For Infrastructure/Database SDs - Auto-execute:**
+**For Infrastructure/Database SDs (when auto_proceed=true):**
 ```
 1. Invoke /ship skill → Create PR, merge
 2. Invoke /learn skill → Capture patterns
 3. Run npm run sd:next → Show next work
 ```
 
-**Only stop and ask user if:**
+**Always stop and ask user if (regardless of auto_proceed):**
 - A blocking error occurs that cannot be auto-resolved
 - Tests fail after 2 retry attempts
 - Merge conflicts require human decision
