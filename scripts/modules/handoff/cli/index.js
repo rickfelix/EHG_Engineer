@@ -52,3 +52,15 @@ export {
   checkBypassRateLimits,
   displayExecutionResult
 } from './execution-helpers.js';
+
+// LEO 5.0 commands
+export {
+  handleWallsCommand,
+  handleRetryGateCommand,
+  handleKickbackCommand,
+  handleInvalidateCommand,
+  handleResumeCommand,
+  handleFailuresCommand,
+  handleSubagentsCommand,
+  displayLeo5Help
+} from './leo5-commands.js';
