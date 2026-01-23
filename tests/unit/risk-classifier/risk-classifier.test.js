@@ -5,7 +5,7 @@
  * Tests all 9 classification rules plus edge cases
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { jest } from '@jest/globals';
 import {
   RiskClassifier,
   createRiskClassifier,
@@ -15,22 +15,8 @@ import {
   AUTO_ELIGIBLE_TABLES
 } from '../../../scripts/modules/risk-classifier/index.js';
 
-// Mock the config import
-vi.mock('../../../scripts/modules/ai-quality-judge/config.js', () => ({
-  RISK_TIERS: {
-    AUTO: {
-      min_score: 85,
-      min_safety: 8,
-      allowed_operations: ['INSERT', 'UPSERT']
-    },
-    GOVERNED: {
-      min_score: 70
-    },
-    IMMUTABLE: {
-      min_score: 0
-    }
-  }
-}));
+// Note: Using real config values - tests work with actual config
+// The config exports AUTO.min_score=85, AUTO.min_safety=9, AUTO.allowed_operations=['INSERT']
 
 describe('RiskClassifier', () => {
   let classifier;
