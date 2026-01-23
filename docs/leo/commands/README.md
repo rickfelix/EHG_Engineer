@@ -11,6 +11,8 @@ LEO Protocol includes intelligent slash commands that interconnect based on work
 | Command | Purpose | When to Use |
 |---------|---------|-------------|
 | `/leo` | Protocol orchestrator | Start work, SD management |
+| `/leo continue` | Resume working SD | Return to in-progress work |
+| `/leo complete` | Post-completion sequence | After SD completion |
 | `/restart` | Restart LEO stack | Before UI testing |
 | `/ship` | Commit and PR workflow | After implementation |
 | `/learn` | Self-improvement | After shipping |
