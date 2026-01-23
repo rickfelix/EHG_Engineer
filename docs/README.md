@@ -5,6 +5,8 @@
 
 > **ARCHITECTURE UPDATE (SD-ARCH-EHG-007)**: EHG_Engineer is now **backend API only**. All UI (including admin dashboard) has moved to EHG unified frontend at `/admin/*` routes.
 
+> **LEO 5.0 UPDATE (January 2026)**: One-off SD/PRD creation scripts are now **PROHIBITED**. Use standard CLI tools only. See [Script Creation Guidelines](reference/script-creation-guidelines.md).
+
 Centralized documentation for the EHG_Engineer application (LEO Protocol backend API and execution engine).
 
 ---
@@ -17,9 +19,10 @@ Centralized documentation for the EHG_Engineer application (LEO Protocol backend
 3. [Sub-Agent System](guides/INVISIBLE_SUBAGENT_SYSTEM_GUIDE.md) - How sub-agents work
 
 ### Working on SDs/PRDs?
-1. [PRD Creation Process](guides/prd-creation-process.md) - PRD workflow
-2. [LEAD Checklist](guides/LEAD_MANDATORY_CHECKLIST.md) - LEAD phase requirements
-3. [SD Schema Reference](reference/strategic-directives-v2-schema.md) - Database schema
+1. **[Script Creation Guidelines](reference/script-creation-guidelines.md)** - **CRITICAL**: Standard CLI policy
+2. [PRD Creation Process](guides/prd-creation-process.md) - PRD workflow
+3. [LEAD Checklist](guides/LEAD_MANDATORY_CHECKLIST.md) - LEAD phase requirements
+4. [SD Schema Reference](reference/strategic-directives-v2-schema.md) - Database schema
 
 ### Database Work?
 1. [Database Migration Guide](guides/DATABASE_MIGRATION_GUIDE.md) - Migration procedures
@@ -39,9 +42,12 @@ Centralized documentation for the EHG_Engineer application (LEO Protocol backend
 User guides, setup instructions, and operational procedures.
 See [guides/README.md](guides/README.md) for comprehensive index.
 
-### 📚 [Reference](./reference/) (71 references)
+### 📚 [Reference](./reference/) (75 references)
 Quick reference, patterns, and technical specifications.
 See [reference/README.md](reference/README.md) for comprehensive index.
+
+**CRITICAL NEW REFERENCE**:
+- **[Script Creation Guidelines](reference/script-creation-guidelines.md)** - SD/PRD script creation policy (LEO 5.0)
 
 ### 📋 [Summaries](./summaries/)
 Implementation summaries and completion reports.
@@ -86,6 +92,7 @@ Deprecated or superseded documentation retained for reference.
 | `06_deployment/` | Deployment procedures | CI/CD, infrastructure |
 | `analysis/` | Issue investigations | Audits, assessments |
 | `database/` | Database schema | RLS policies, patterns |
+| `governance/` | Governance rules | Protocol Constitution, policies |
 | `handoffs/` | Handoff documentation | Templates, guides |
 | `issues/` | Tracked issues | Bugs, blockers |
 | `migrations/` | Migration docs | Database migrations |
@@ -108,15 +115,34 @@ Deprecated or superseded documentation retained for reference.
 
 ---
 
+## LEO 5.0 Script Creation Policy
+
+**PROHIBITED**: One-off SD/PRD creation scripts
+
+**REQUIRED**: Standard CLI tools only
+- **SD Creation**: `node scripts/leo-create-sd.js`
+- **PRD Creation**: `node scripts/add-prd-to-database.js`
+
+**Why**:
+- 200+ one-off scripts archived (maintenance burden eliminated)
+- Enforces validation and governance
+- Consistent data quality
+- Database-first compliance
+
+**Details**: See [Script Creation Guidelines](reference/script-creation-guidelines.md)
+
+---
+
 ## Quick Links
 
 - **LEO Protocol**: See `../CLAUDE.md` (auto-generated from database)
 - **Getting Started**: See [guides/SIMPLE_PROJECT_SETUP.md](guides/SIMPLE_PROJECT_SETUP.md)
 - **Database Architecture**: See [operations/IMPORTANT_DATABASE_DISTINCTION.md](operations/IMPORTANT_DATABASE_DISTINCTION.md)
 - **Sub-Agents**: See [guides/INVISIBLE_SUBAGENT_SYSTEM_GUIDE.md](guides/INVISIBLE_SUBAGENT_SYSTEM_GUIDE.md)
+- **Script Creation Policy**: See [reference/script-creation-guidelines.md](reference/script-creation-guidelines.md)
 
 ---
 
 *Part of LEO Protocol v4.3.3 - Documentation Index*
-*Updated: 2025-12-29*
+*Updated: 2026-01-23*
 *Auto-organized by DOCMON (Information Architecture Lead Sub-Agent)*

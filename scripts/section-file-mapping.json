@@ -14,6 +14,7 @@
     "description": "Essential context for ALL sessions (~15-20k chars)",
     "sections": [
       "infrastructure",
+      "script_anti_patterns",
       "mandatory_agent_invocation",
       "application_architecture",
       "session_verification",
@@ -52,6 +53,7 @@
     "sections": [
       "mandatory_phase_transitions_lead",
       "sd_creation_process",
+      "sd_creation_anti_pattern",
       "sd_creation_errors",
       "lead_operations",
       "lead_explore_integration",
@@ -76,6 +78,7 @@
       "mandatory_phase_transitions_plan",
       "workflow",
       "PHASE_2_PLANNING",
+      "prd_creation_anti_pattern",
       "plan_multi_perspective",
       "prd_research_lookup",
       "plan_pre_exec_checklist",

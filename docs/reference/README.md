@@ -32,10 +32,10 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 | [Validation & Testing](#validation--testing) | 8 | Validation patterns, testing reference |
 | [LEO Protocol](#leo-protocol) | 10 | Protocol reference, context management |
 | [Patterns & Best Practices](#patterns--best-practices) | 12 | Development patterns |
-| [Quick References](#quick-references) | 8 | Cheat sheets and quick guides |
+| [Quick References](#quick-references) | 12 | Cheat sheets and quick guides |
 | [Other](#other-references) | 7 | Miscellaneous references |
 
-**Total References**: 71
+**Total References**: 75
 
 ---
 
@@ -136,8 +136,12 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 |-----------|-------------|
 | [quick-reference.md](quick-reference.md) | General quick reference |
 | [guide.md](guide.md) | Quick start guide |
+| [script-creation-guidelines.md](script-creation-guidelines.md) | **NEW**: SD/PRD script creation policy |
 | [sd-completion-critical-fields.md](sd-completion-critical-fields.md) | SD completion fields |
 | [sd-evaluation-checklist.md](sd-evaluation-checklist.md) | SD evaluation checklist |
+| [sd-type-classification.md](sd-type-classification.md) | SD type classification module reference |
+| [sd-key-generator-guide.md](sd-key-generator-guide.md) | SD key generation patterns |
+| [sd-validation-profiles.md](sd-validation-profiles.md) | Validation rules per SD type |
 | [exec-component-recommendations-guide.md](exec-component-recommendations-guide.md) | EXEC component recommendations |
 | [component-registry.md](component-registry.md) | Component registry |
 | [file-warning.md](file-warning.md) | File warning reference |
@@ -173,6 +177,10 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 1. [sub-agent-system.md](sub-agent-system.md) - Complete reference
 2. [sub-agent-patterns-guide.md](sub-agent-patterns-guide.md) - Patterns
 
+**Creating SDs or PRDs?**
+1. [script-creation-guidelines.md](script-creation-guidelines.md) - **CRITICAL**: Script creation policy
+2. [../guides/prd-creation-process.md](../guides/prd-creation-process.md) - PRD creation workflow
+
 ---
 
 ## Subdirectories
@@ -192,5 +200,5 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 ---
 
 *Part of LEO Protocol v4.3.3 - Reference Index*
-*Updated: 2025-12-29*
-*Comprehensive index of 71 reference documents*
+*Updated: 2026-01-23*
+*Comprehensive index of 75 reference documents*
