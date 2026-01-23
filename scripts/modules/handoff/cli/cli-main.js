@@ -22,6 +22,18 @@ import {
 } from './index.js';
 import { checkBypassRateLimits, displayExecutionResult } from './execution-helpers.js';
 
+// LEO 5.0 commands
+import {
+  handleWallsCommand,
+  handleRetryGateCommand,
+  handleKickbackCommand,
+  handleInvalidateCommand,
+  handleResumeCommand,
+  handleFailuresCommand,
+  handleSubagentsCommand,
+  displayLeo5Help
+} from './leo5-commands.js';
+
 dotenv.config();
 
 /**
@@ -61,7 +73,9 @@ export function displayHelp() {
   console.log('  node scripts/handoff.js execute PLAN-TO-EXEC SD-FEATURE-001');
   console.log('  node scripts/handoff.js list SD-FEATURE-001');
   console.log('  node scripts/handoff.js stats');
-  console.log('');
+
+  // Display LEO 5.0 commands
+  displayLeo5Help();
 }
 
 /**
@@ -384,6 +398,35 @@ export async function main() {
 
     case 'stats':
       result = await handleStatsCommand();
+      break;
+
+    // LEO 5.0 Commands
+    case 'walls':
+      result = await handleWallsCommand(args[1]);
+      break;
+
+    case 'retry-gate':
+      result = await handleRetryGateCommand(args[1], args[2]);
+      break;
+
+    case 'kickback':
+      result = await handleKickbackCommand(args[1], args);
+      break;
+
+    case 'invalidate':
+      result = await handleInvalidateCommand(args[1], args[2], args);
+      break;
+
+    case 'resume':
+      result = await handleResumeCommand(args[1], args);
+      break;
+
+    case 'failures':
+      result = await handleFailuresCommand(args[1]);
+      break;
+
+    case 'subagents':
+      result = await handleSubagentsCommand(args[1], args[2]);
       break;
 
     case 'help':
