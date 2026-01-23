@@ -6,6 +6,7 @@
 **Evidence**: 74+ retrospectives analyzed, 13+ SDs with database agent lessons, 11 issue patterns
 **Recent Improvements**:
 - SD-LEO-LEARN-001: Proactive learning integration
+- SD-LEO-HARDEN-VALIDATION-001 (2026-01-23): PostToolUse hook for automatic migration detection
 - 2026-01-23: Intelligent migration execution with action trigger detection
 
 ---
@@ -167,6 +168,73 @@ Database Agent: [Provides expert guidance]
 ```
 
 **Note**: For ANY actual implementation work, use script invocation with SD context
+
+### PostToolUse Hook: Automatic Migration Detection (NEW - 2026-01-23)
+
+**Purpose**: Automatically remind Claude to execute migrations when migration files are created.
+
+**How It Works**:
+1. Claude uses Write tool to create a migration file (e.g., `database/migrations/20260123_*.sql`)
+2. PostToolUse hook `migration-execution-reminder.cjs` detects the Write operation
+3. Hook analyzes file path against migration patterns:
+   - `database/migrations/*.sql`
+   - `supabase/migrations/*.sql`
+   - `supabase/ehg_engineer/migrations/*.sql`
+   - `migrations/[timestamp]_*.sql`
+4. If match found, hook outputs execution reminder with multiple options
+5. Claude sees reminder and can choose execution method
+
+**Migration File Patterns Detected**:
+```regex
+/database[\/\\]migrations[\/\\].*\.sql$/i
+/supabase[\/\\]migrations[\/\\].*\.sql$/i
+/supabase[\/\\]ehg_engineer[\/\\]migrations[\/\\].*\.sql$/i
+/migrations[\/\\]\d{8,14}_.*\.sql$/i
+```
+
+**Execution Options Provided**:
+```
+1. Supabase SQL Editor (RECOMMENDED for hosted):
+   → Open: https://supabase.com/dashboard/project/[PROJECT_ID]/sql
+   → Paste and run the migration SQL
+
+2. DATABASE Sub-Agent (if CLI is linked):
+   → node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID> --execute-migration --confirm-apply
+
+3. Supabase CLI (if linked locally):
+   → supabase db push
+
+4. Direct psql (if available):
+   → psql $DATABASE_URL -f "[file_path]"
+```
+
+**Hook Configuration**:
+- **File**: `scripts/hooks/migration-execution-reminder.cjs`
+- **Registered**: `.claude/settings.json` → PostToolUse → Write tool matcher
+- **Timeout**: 5000ms
+- **Exit Mode**: Advisory (exit code 0, non-blocking)
+
+**Why This Was Added** (SD-LEO-HARDEN-VALIDATION-001):
+- **Root Cause**: DATABASE sub-agent has ACTION_TRIGGERS for "apply migration" keywords, but only runs when explicitly invoked
+- **Gap**: Creating migration files did NOT automatically trigger execution reminders
+- **Fix**: PostToolUse hook bridges the gap between file creation and execution awareness
+- **Impact**: No more missed migration executions; Claude is always reminded after creating migration files
+
+**Example Output**:
+```
+════════════════════════════════════════════════════════════
+  MIGRATION FILE CREATED - ACTION REQUIRED
+════════════════════════════════════════════════════════════
+   File: 20260123_retrospective_auto_archive_trigger.sql
+   Path: database/migrations/20260123_retrospective_auto_archive_trigger.sql
+   SD: SD-LEO-HARDEN-VALIDATION-001
+
+   This migration needs to be EXECUTED against the database.
+
+   OPTIONS TO EXECUTE:
+   [4 execution methods listed above]
+════════════════════════════════════════════════════════════
+```
 
 ---
 

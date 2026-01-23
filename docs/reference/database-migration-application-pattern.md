@@ -1,8 +1,67 @@
 # Database Migration Application Pattern
 
-**Last Updated**: 2025-10-23
-**Lesson Source**: SD-VWC-PHASE4-001 Checkpoint 1
+**Last Updated**: 2026-01-23
+**Lesson Source**: SD-VWC-PHASE4-001 Checkpoint 1, SD-LEO-HARDEN-VALIDATION-001
 **Root Cause**: Database sub-agent incorrectly stated manual application required
+**Recent Update**: Added automatic migration detection via PostToolUse hook
+
+---
+
+## 🔔 Automatic Migration Detection (NEW - SD-LEO-HARDEN-VALIDATION-001)
+
+**Problem Solved**: Migrations were created but not executed because DATABASE sub-agent wasn't triggered.
+
+**Solution**: PostToolUse hook `migration-execution-reminder.cjs` automatically detects when migration files are created.
+
+### How It Works
+
+1. **Claude creates migration file** (e.g., `database/migrations/20260123_*.sql`)
+2. **Write tool completes**
+3. **PostToolUse hook fires** (`migration-execution-reminder.cjs`)
+4. **Hook detects migration file pattern**:
+   - `database/migrations/*.sql`
+   - `supabase/migrations/*.sql`
+   - `supabase/ehg_engineer/migrations/*.sql`
+5. **Hook outputs execution reminder** with 4 options:
+   - Supabase SQL Editor (manual)
+   - DATABASE sub-agent (programmatic)
+   - Supabase CLI (`supabase db push`)
+   - Direct psql
+6. **Claude sees reminder** and chooses execution method
+
+### Benefits
+
+- ✅ No more forgotten migrations
+- ✅ Immediate awareness after file creation
+- ✅ Multiple execution options provided
+- ✅ Non-blocking advisory (doesn't interrupt workflow)
+- ✅ Automatic SD ID extraction from migration content
+
+### Configuration
+
+- **Hook file**: `scripts/hooks/migration-execution-reminder.cjs`
+- **Settings**: `.claude/settings.json` → PostToolUse → Write matcher
+- **Timeout**: 5000ms
+- **Exit code**: 0 (advisory, non-blocking)
+
+### Example Output
+
+```
+════════════════════════════════════════════════════════════
+  MIGRATION FILE CREATED - ACTION REQUIRED
+════════════════════════════════════════════════════════════
+   File: 20260123_retrospective_auto_archive_trigger.sql
+   Path: database/migrations/20260123_retrospective_auto_archive_trigger.sql
+   SD: SD-LEO-HARDEN-VALIDATION-001
+
+   This migration needs to be EXECUTED against the database.
+
+   OPTIONS TO EXECUTE:
+   [Lists 4 execution methods]
+════════════════════════════════════════════════════════════
+```
+
+**See Also**: `docs/reference/database-agent-patterns.md` → "PostToolUse Hook" section
 
 ---
 
