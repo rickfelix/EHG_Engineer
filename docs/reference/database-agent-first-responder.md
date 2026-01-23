@@ -1,8 +1,9 @@
 # Database Agent First-Responder Quick Reference
 
 **Status**: ACTIVE
-**Last Updated**: 2025-10-12
+**Last Updated**: 2026-01-23
 **Purpose**: Quick reference for proactive database agent invocation
+**Recent Changes**: Added PostToolUse hook for automatic migration detection (SD-LEO-HARDEN-VALIDATION-001)
 
 ---
 
@@ -88,6 +89,23 @@ Database Agent: [Provides expert guidance]
 ```
 
 **Note**: For ANY actual implementation work, use script invocation with SD context
+
+### Automatic Migration Detection (NEW - 2026-01-23)
+
+**PostToolUse Hook**: When Claude creates a migration file, a hook automatically outputs execution reminders.
+
+**How It Works**:
+1. Write tool creates file matching pattern: `database/migrations/*.sql`
+2. Hook `migration-execution-reminder.cjs` detects migration file
+3. Outputs 4 execution options (Supabase SQL Editor, DATABASE sub-agent, Supabase CLI, psql)
+4. Claude sees reminder and chooses execution method
+
+**Why This Matters**:
+- Prevents forgot-to-execute-migration errors
+- Bridges gap between file creation and execution
+- No more "I created the migration but didn't run it" issues
+
+**See**: `docs/reference/database-agent-patterns.md` → "PostToolUse Hook" section for full details
 
 ---
 
