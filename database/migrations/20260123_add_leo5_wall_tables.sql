@@ -160,3 +160,107 @@ CREATE POLICY IF NOT EXISTS "Service role full access to sd_corrections"
     WITH CHECK (true);
 
 COMMENT ON TABLE sd_corrections IS 'LEO 5.0 Corrections - tracks wall invalidation and correction workflows';
+
+-- ============================================================
+-- Phase 4: Sub-Agent Orchestration Tables
+-- ============================================================
+
+-- Sub-agent execution results: tracks individual sub-agent runs
+CREATE TABLE IF NOT EXISTS sub_agent_execution_results (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sd_id UUID NOT NULL REFERENCES strategic_directives_v2(uuid_id) ON DELETE CASCADE,
+    agent_code TEXT NOT NULL,
+    phase TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'completed', 'failed', 'skipped', 'timeout')),
+    verdict TEXT CHECK (verdict IN ('PASS', 'FAIL', 'BLOCKED', 'SKIP')),
+    output_summary TEXT,
+    recommendations JSONB DEFAULT '[]',
+    error_message TEXT,
+    execution_time_ms INTEGER,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ,
+    metadata JSONB DEFAULT '{}',
+    UNIQUE(sd_id, agent_code, phase)
+);
+
+-- Sub-agent spawn events: tracks batch spawns
+CREATE TABLE IF NOT EXISTS sub_agent_spawn_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sd_id UUID NOT NULL REFERENCES strategic_directives_v2(uuid_id) ON DELETE CASCADE,
+    phase TEXT NOT NULL,
+    agents_spawned TEXT[] NOT NULL DEFAULT '{}',
+    execution_ids UUID[] DEFAULT '{}',
+    spawned_at TIMESTAMPTZ DEFAULT NOW(),
+    metadata JSONB DEFAULT '{}'
+);
+
+-- Task hydration log: tracks phase hydration events
+CREATE TABLE IF NOT EXISTS task_hydration_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sd_id UUID NOT NULL REFERENCES strategic_directives_v2(uuid_id) ON DELETE CASCADE,
+    phase TEXT NOT NULL,
+    track TEXT NOT NULL,
+    tasks_created INTEGER NOT NULL DEFAULT 0,
+    task_ids TEXT[] DEFAULT '{}',
+    template_version TEXT DEFAULT '1.0',
+    variables_used JSONB DEFAULT '{}',
+    escalated BOOLEAN DEFAULT false,
+    escalation_reason TEXT,
+    hydrated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for sub-agent tables
+CREATE INDEX IF NOT EXISTS idx_subagent_results_sd_id ON sub_agent_execution_results(sd_id);
+CREATE INDEX IF NOT EXISTS idx_subagent_results_status ON sub_agent_execution_results(status);
+CREATE INDEX IF NOT EXISTS idx_subagent_results_phase ON sub_agent_execution_results(phase);
+CREATE INDEX IF NOT EXISTS idx_subagent_spawns_sd_id ON sub_agent_spawn_events(sd_id);
+CREATE INDEX IF NOT EXISTS idx_hydration_log_sd_id ON task_hydration_log(sd_id);
+CREATE INDEX IF NOT EXISTS idx_hydration_log_phase ON task_hydration_log(phase);
+
+-- RLS policies for sub-agent tables
+ALTER TABLE sub_agent_execution_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sub_agent_spawn_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE task_hydration_log ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY IF NOT EXISTS "Service role full access to sub_agent_execution_results"
+    ON sub_agent_execution_results FOR ALL
+    TO service_role
+    USING (true)
+    WITH CHECK (true);
+
+CREATE POLICY IF NOT EXISTS "Service role full access to sub_agent_spawn_events"
+    ON sub_agent_spawn_events FOR ALL
+    TO service_role
+    USING (true)
+    WITH CHECK (true);
+
+CREATE POLICY IF NOT EXISTS "Service role full access to task_hydration_log"
+    ON task_hydration_log FOR ALL
+    TO service_role
+    USING (true)
+    WITH CHECK (true);
+
+-- View for sub-agent execution overview
+CREATE OR REPLACE VIEW v_sd_subagent_overview AS
+SELECT
+    sar.sd_id,
+    sd.id AS sd_key,
+    sd.title AS sd_title,
+    sar.phase,
+    COUNT(*) AS total_agents,
+    COUNT(*) FILTER (WHERE sar.status = 'completed') AS completed,
+    COUNT(*) FILTER (WHERE sar.status = 'failed' OR sar.status = 'timeout') AS failed,
+    COUNT(*) FILTER (WHERE sar.status = 'pending' OR sar.status = 'running') AS pending,
+    COUNT(*) FILTER (WHERE sar.status = 'skipped') AS skipped,
+    BOOL_AND(sar.status IN ('completed', 'skipped')) AS synthesis_ready,
+    array_agg(DISTINCT sar.agent_code) AS agents,
+    MAX(sar.completed_at) AS last_completion
+FROM sub_agent_execution_results sar
+JOIN strategic_directives_v2 sd ON sd.uuid_id = sar.sd_id
+GROUP BY sar.sd_id, sd.id, sd.title, sar.phase
+ORDER BY sar.sd_id, sar.phase;
+
+COMMENT ON TABLE sub_agent_execution_results IS 'LEO 5.0 Sub-agent execution results - tracks individual sub-agent runs and outputs';
+COMMENT ON TABLE sub_agent_spawn_events IS 'LEO 5.0 Sub-agent spawn events - tracks batch spawning of sub-agents';
+COMMENT ON TABLE task_hydration_log IS 'LEO 5.0 Task hydration log - tracks phase task generation events';
+COMMENT ON VIEW v_sd_subagent_overview IS 'LEO 5.0 Sub-agent overview - aggregated view of sub-agent execution status by SD and phase';
