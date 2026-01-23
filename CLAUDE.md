@@ -177,7 +177,7 @@ This command provides:
 
 ```
 Issue Found → /triangulation-protocol → /quick-fix (if <50 LOC) OR Create SD (if larger)
-SD Complete → /restart (if UI) → /uat → /ship → /document → /learn → /leo next
+SD Complete → /restart (if UI) → /uat → /document → /ship → /learn → /leo next
 ```
 
 ### Auto-Invoke Behavior
@@ -218,11 +218,11 @@ LEO Protocol includes intelligent slash commands that interconnect based on work
 
 **Example Flow (UI Feature Completion)**:
 ```
-LEAD-FINAL-APPROVAL → /restart → Visual Review → /ship → /document → /learn → /leo next
+LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /learn → /leo next
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-23 8:29:37 AM
+**Last Generated**: 2026-01-23 10:31:12 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 

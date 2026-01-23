@@ -172,7 +172,7 @@ describe('Post-Completion Requirements', () => {
     it('should return correct sequence for feature SD', () => {
       const sequence = getPostCompletionSequence('feature');
 
-      expect(sequence).toEqual(['restart', 'ship', 'document', 'learn']);
+      expect(sequence).toEqual(['restart', 'document', 'ship', 'learn']);
     });
 
     it('should return minimal sequence for infrastructure SD', () => {
@@ -188,17 +188,17 @@ describe('Post-Completion Requirements', () => {
       expect(sequence).not.toContain('learn');
     });
 
-    it('should return correct order: restart -> ship -> document -> learn', () => {
+    it('should return correct order: restart -> document -> ship -> learn', () => {
       const sequence = getPostCompletionSequence('feature');
 
       const restartIndex = sequence.indexOf('restart');
-      const shipIndex = sequence.indexOf('ship');
       const documentIndex = sequence.indexOf('document');
+      const shipIndex = sequence.indexOf('ship');
       const learnIndex = sequence.indexOf('learn');
 
-      expect(restartIndex).toBeLessThan(shipIndex);
-      expect(shipIndex).toBeLessThan(documentIndex);
-      expect(documentIndex).toBeLessThan(learnIndex);
+      expect(restartIndex).toBeLessThan(documentIndex);
+      expect(documentIndex).toBeLessThan(shipIndex);
+      expect(shipIndex).toBeLessThan(learnIndex);
     });
   });
 
