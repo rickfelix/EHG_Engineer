@@ -5,6 +5,17 @@
  * LEO v4.3.4: Unified Test Evidence Validation
  */
 
+import { fileURLToPath, pathToFileURL } from 'url';
+import { dirname, resolve } from 'path';
+
+// Get project root from current file location dynamically
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+// Walk up until we find package.json or use a known anchor
+// From: scripts/modules/handoff/executors/exec-to-plan/test-evidence.js
+// To project root: exec-to-plan(1) → executors(2) → handoff(3) → modules(4) → scripts(5) → PROJECT_ROOT
+const PROJECT_ROOT = resolve(__dirname, '..', '..', '..', '..', '..');
+
 // External functions (will be lazy loaded)
 let getStoryTestCoverage;
 let mapE2ETestsToUserStories;
@@ -46,7 +57,9 @@ export async function validateTestEvidence(supabase, sdId, sd, prd) {
 
   // Load test evidence functions
   if (!getStoryTestCoverage) {
-    const testEvidence = await import('../../../lib/test-evidence-ingest.js');
+    const testEvidencePath = resolve(PROJECT_ROOT, 'lib', 'test-evidence-ingest.js');
+    const testEvidenceUrl = pathToFileURL(testEvidencePath).href;
+    const testEvidence = await import(testEvidenceUrl);
     getStoryTestCoverage = testEvidence.getStoryTestCoverage;
   }
 
