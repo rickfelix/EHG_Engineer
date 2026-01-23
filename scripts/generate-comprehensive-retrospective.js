@@ -14,6 +14,10 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 
+// Import retrospective signals module for intelligent signal aggregation
+// SD-LEO-ENH-INTELLIGENT-RETROSPECTIVE-TRIGGERS-001
+import * as retrospectiveSignals from '../lib/retrospective-signals/index.js';
+
 dotenv.config();
 
 // Support both NEXT_PUBLIC_ and standard environment variable names
@@ -311,6 +315,20 @@ async function generateComprehensiveRetrospective(sdId) {
   const subAgentAnalysis = await analyzeSubAgents(sdId);
   console.log('   ✅ Analyzed sub-agent executions');
 
+  // Aggregate captured learning signals (SD-LEO-ENH-INTELLIGENT-RETROSPECTIVE-TRIGGERS-001)
+  let signalAggregation = { hasSignals: false, content: {}, metadata: {} };
+  try {
+    signalAggregation = await retrospectiveSignals.getAggregatedSignals(sdId);
+    if (signalAggregation.hasSignals) {
+      console.log(`   ✅ Aggregated ${signalAggregation.signalCount} captured learning signals`);
+      console.log(`      Categories: ${signalAggregation.metadata.categories.join(', ')}`);
+    } else {
+      console.log('   ℹ️  No captured learning signals found');
+    }
+  } catch (signalError) {
+    console.warn(`   ⚠️  Signal aggregation skipped: ${signalError.message}`);
+  }
+
   // Calculate metrics
   const qualityScore = calculateQualityScore(handoffInsights, prdAnalysis, subAgentAnalysis, sd);
   const satisfactionScore = Math.min(Math.round(qualityScore / 10), 10);
@@ -546,9 +564,44 @@ async function generateComprehensiveRetrospective(sdId) {
     tags: [] // Can be inferred from SD category/priority
   };
 
+  // Enhance retrospective with captured learning signals (SD-LEO-ENH-INTELLIGENT-RETROSPECTIVE-TRIGGERS-001)
+  let enhancedRetrospective = retrospective;
+  if (signalAggregation.hasSignals) {
+    console.log('\n🔗 Merging captured learning signals into retrospective...');
+    enhancedRetrospective = retrospectiveSignals.aggregator.mergeIntoRetrospective(
+      retrospective,
+      signalAggregation
+    );
+
+    // Log what was enhanced
+    const signalContent = signalAggregation.content;
+    if (signalContent.key_learnings?.length) {
+      console.log(`   + ${signalContent.key_learnings.length} signal-derived learnings added`);
+    }
+    if (signalContent.what_went_well?.length) {
+      console.log(`   + ${signalContent.what_went_well.length} signal-derived achievements added`);
+    }
+    if (signalContent.protocol_improvements?.length) {
+      console.log(`   + ${signalContent.protocol_improvements.length} signal-derived improvements added`);
+    }
+    if (signalContent.action_items?.length) {
+      console.log(`   + ${signalContent.action_items.length} signal-derived actions added`);
+    }
+
+    // Boost quality score if we have authentic signals
+    if (enhancedRetrospective.signal_authenticity_score > 50) {
+      const bonus = Math.min(enhancedRetrospective.signal_authenticity_score / 10, 5);
+      enhancedRetrospective.quality_score = Math.min(
+        Math.round(enhancedRetrospective.quality_score + bonus),
+        100
+      );
+      console.log(`   ✨ Quality score boosted by ${Math.round(bonus)} (authenticity: ${enhancedRetrospective.signal_authenticity_score})`);
+    }
+  }
+
   // Validate retrospective before insert (SD-KNOWLEDGE-001 Issue #4 prevention)
   console.log('\n🔍 Validating retrospective data...');
-  const validation = validateRetrospective(retrospective);
+  const validation = validateRetrospective(enhancedRetrospective);
 
   if (!validation.valid) {
     console.error('\n❌ Retrospective validation failed:');
@@ -558,12 +611,12 @@ async function generateComprehensiveRetrospective(sdId) {
     throw new Error(`Retrospective validation failed: ${validation.errors.join(', ')}`);
   }
 
-  console.log(`   ✅ Validation passed (quality_score: ${retrospective.quality_score}/100)`);
+  console.log(`   ✅ Validation passed (quality_score: ${enhancedRetrospective.quality_score}/100)`);
 
   // Insert retrospective
   const { data: inserted, error: insertError } = await supabase
     .from('retrospectives')
-    .insert(retrospective)
+    .insert(enhancedRetrospective)
     .select();
 
   if (insertError) {
@@ -588,13 +641,16 @@ async function generateComprehensiveRetrospective(sdId) {
 
   console.log('\n✅ Comprehensive retrospective generated!');
   console.log(`   ID: ${inserted[0].id}`);
-  console.log(`   Quality Score: ${qualityScore}/100`);
+  console.log(`   Quality Score: ${enhancedRetrospective.quality_score}/100`);
   console.log(`   Team Satisfaction: ${satisfactionScore}/10`);
-  console.log(`   Achievements: ${whatWentWell.length}`);
-  console.log(`   Challenges: ${whatNeedsImprovement.length}`);
-  console.log(`   Learnings: ${keyLearnings.length}`);
-  console.log(`   Action Items: ${actionItems.length}`);
-  console.log(`   Status: ${retrospective.status}`);
+  console.log(`   Achievements: ${enhancedRetrospective.what_went_well.length}`);
+  console.log(`   Challenges: ${enhancedRetrospective.what_needs_improvement.length}`);
+  console.log(`   Learnings: ${enhancedRetrospective.key_learnings.length}`);
+  console.log(`   Action Items: ${enhancedRetrospective.action_items.length}`);
+  console.log(`   Status: ${enhancedRetrospective.status}`);
+  if (signalAggregation.hasSignals) {
+    console.log(`   Signals: ${signalAggregation.signalCount} captured (authenticity: ${enhancedRetrospective.signal_authenticity_score})`);
+  }
 
   // Auto-extract patterns to learning history
   console.log('\n🔄 AUTO-EXTRACTING PATTERNS TO LEARNING HISTORY...');
@@ -644,13 +700,18 @@ async function generateComprehensiveRetrospective(sdId) {
   return {
     success: true,
     retrospective_id: inserted[0].id,
-    quality_score: qualityScore,
+    quality_score: enhancedRetrospective.quality_score,
     metrics: {
-      achievements: whatWentWell.length,
-      challenges: whatNeedsImprovement.length,
-      learnings: keyLearnings.length,
-      actions: actionItems.length
-    }
+      achievements: enhancedRetrospective.what_went_well.length,
+      challenges: enhancedRetrospective.what_needs_improvement.length,
+      learnings: enhancedRetrospective.key_learnings.length,
+      actions: enhancedRetrospective.action_items.length
+    },
+    signals: signalAggregation.hasSignals ? {
+      count: signalAggregation.signalCount,
+      categories: signalAggregation.metadata.categories,
+      authenticity_score: enhancedRetrospective.signal_authenticity_score
+    } : null
   };
 }
 
