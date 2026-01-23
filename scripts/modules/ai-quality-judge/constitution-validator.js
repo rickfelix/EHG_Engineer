@@ -3,9 +3,31 @@
  * Phase 1: SD-LEO-SELF-IMPROVE-AIJUDGE-001
  *
  * Validates improvement proposals against the 9 immutable constitution rules
+ *
+ * AEGIS Integration (Phase 2):
+ * This validator now supports routing through the AEGIS unified governance system.
+ * Set USE_AEGIS=true in environment or call setAegisMode(true) to enable.
  */
 
 import { TABLES, VIOLATION_SEVERITY } from './config.js';
+
+// AEGIS Integration - lazy loaded to avoid circular dependencies
+let ConstitutionAdapter = null;
+let aegisAdapter = null;
+
+async function getAegisAdapter(supabase) {
+  if (aegisAdapter) return aegisAdapter;
+
+  try {
+    const module = await import('../../../lib/governance/aegis/adapters/ConstitutionAdapter.js');
+    ConstitutionAdapter = module.ConstitutionAdapter;
+    aegisAdapter = new ConstitutionAdapter(supabase);
+    return aegisAdapter;
+  } catch (err) {
+    console.warn('[ConstitutionValidator] AEGIS adapter not available:', err.message);
+    return null;
+  }
+}
 
 /**
  * ConstitutionValidator class
@@ -15,6 +37,16 @@ export class ConstitutionValidator {
   constructor(supabase) {
     this.supabase = supabase;
     this.constitutionRules = null;
+    // AEGIS feature flag - defaults to env var or false
+    this.useAegis = process.env.USE_AEGIS === 'true' || false;
+  }
+
+  /**
+   * Enable or disable AEGIS mode
+   * @param {boolean} enabled - Whether to use AEGIS
+   */
+  setAegisMode(enabled) {
+    this.useAegis = enabled;
   }
 
   /**
@@ -343,6 +375,21 @@ export class ConstitutionValidator {
    * @returns {Object} Validation result
    */
   async validate(improvement, context = {}) {
+    // AEGIS Integration: Route through unified governance system if enabled
+    if (this.useAegis) {
+      try {
+        const adapter = await getAegisAdapter(this.supabase);
+        if (adapter) {
+          console.log('[ConstitutionValidator] Using AEGIS for validation');
+          return await adapter.validate(improvement, context);
+        }
+        console.warn('[ConstitutionValidator] AEGIS adapter unavailable, falling back to legacy');
+      } catch (err) {
+        console.warn('[ConstitutionValidator] AEGIS validation failed, falling back:', err.message);
+      }
+    }
+
+    // Legacy validation path
     await this.loadRules();
 
     const allViolations = [];
@@ -379,7 +426,8 @@ export class ConstitutionValidator {
       high_count: highViolations.length,
       medium_count: mediumViolations.length,
       rules_checked: this.constitutionRules.length,
-      evaluated_at: new Date().toISOString()
+      evaluated_at: new Date().toISOString(),
+      aegis_enabled: false
     };
   }
 }

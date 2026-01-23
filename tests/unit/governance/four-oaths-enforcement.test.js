@@ -376,7 +376,7 @@ describe('FourOathsEnforcement', () => {
       expect(threshold).toBe(0.75);
     });
 
-    test('isOathCompliant should return boolean', () => {
+    test('isOathCompliant should return boolean (async)', async () => {
       const validAction = {
         decision: {
           input: 'test input',
@@ -391,9 +391,78 @@ describe('FourOathsEnforcement', () => {
       };
 
       // Note: isOathCompliant uses singleton, may have state from other tests
-      // Just verify it returns a boolean
-      const result = isOathCompliant(validAction);
+      // Now async to support AEGIS mode
+      const result = await isOathCompliant(validAction);
       expect(typeof result).toBe('boolean');
+    });
+  });
+
+  // ===========================================================================
+  // AEGIS INTEGRATION
+  // ===========================================================================
+
+  describe('AEGIS Integration', () => {
+    test('should support setAegisMode toggle', () => {
+      expect(typeof enforcement.setAegisMode).toBe('function');
+
+      // Default should be false (unless USE_AEGIS env is set)
+      enforcement.setAegisMode(false);
+      expect(enforcement.useAegis).toBe(false);
+
+      // Enable AEGIS
+      enforcement.setAegisMode(true);
+      expect(enforcement.useAegis).toBe(true);
+
+      // Disable for remaining tests
+      enforcement.setAegisMode(false);
+    });
+
+    test('validateAllOaths should include aegis_enabled in result', () => {
+      enforcement.setAegisMode(false);
+
+      const agentAction = {
+        decision: {
+          input: 'test',
+          reasoning: 'adequate reasoning here',
+          output: 'result',
+          confidence: 0.85
+        },
+        action: { agentLevel: 'L3_VP' },
+        output: { confidence: 0.85, unknowns: ['gap'] }
+      };
+
+      const result = enforcement.validateAllOaths(agentAction);
+
+      expect(result).toHaveProperty('aegis_enabled');
+      expect(result.aegis_enabled).toBe(false);
+    });
+
+    test('AEGIS mode should return promise', async () => {
+      enforcement.setAegisMode(true);
+
+      const agentAction = {
+        decision: {
+          input: 'test',
+          reasoning: 'adequate reasoning here',
+          output: 'result',
+          confidence: 0.85
+        },
+        action: { agentLevel: 'L3_VP' },
+        output: { confidence: 0.85, unknowns: ['gap'] }
+      };
+
+      const resultPromise = enforcement.validateAllOaths(agentAction);
+
+      // Should be a promise when AEGIS is enabled
+      expect(resultPromise).toBeInstanceOf(Promise);
+
+      // Result should have aegis_enabled: true (if adapter is available)
+      // or fall back to legacy with aegis_enabled: false
+      const result = await resultPromise;
+      expect(result).toHaveProperty('valid');
+
+      // Reset for other tests
+      enforcement.setAegisMode(false);
     });
   });
 });
