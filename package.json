@@ -243,7 +243,13 @@
     "capability:report": "node scripts/capability-analyzer.js report",
     "validate:bypass": "node scripts/modules/bypass-detection-validator.js",
     "validate:bypass:all": "node scripts/modules/bypass-detection-validator.js --all",
-    "validate:sd-type-sync": "node scripts/verify-sd-type-sync.js"
+    "validate:sd-type-sync": "node scripts/verify-sd-type-sync.js",
+    "governance": "node scripts/governance.js",
+    "governance:list": "node scripts/governance.js list",
+    "governance:validate": "node scripts/governance.js validate",
+    "governance:violations": "node scripts/governance.js violations",
+    "governance:stats": "node scripts/governance.js stats",
+    "governance:constitutions": "node scripts/governance.js constitutions"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.0",
