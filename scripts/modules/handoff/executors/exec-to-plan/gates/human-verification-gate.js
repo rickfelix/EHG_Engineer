@@ -18,7 +18,7 @@ export function createHumanVerificationGate() {
       console.log('-'.repeat(50));
 
       // Load the human verification validator dynamically
-      const { validateHumanVerification } = await import('../../../human-verification-validator.js');
+      const { validateHumanVerification } = await import('../../../../human-verification-validator.js');
 
       const result = await validateHumanVerification(ctx.sd?.id || ctx.sdId);
 

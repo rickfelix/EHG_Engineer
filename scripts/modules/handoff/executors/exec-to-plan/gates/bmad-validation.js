@@ -20,7 +20,7 @@ export function createBMADValidationGate(supabase) {
     validator: async (ctx) => {
       // Load validator if not loaded
       if (!validateBMADForExecToPlan) {
-        const bmad = await import('../../../bmad-validation.js');
+        const bmad = await import('../../../../bmad-validation.js');
         validateBMADForExecToPlan = bmad.validateBMADForExecToPlan;
       }
 

@@ -23,7 +23,7 @@ export function createGate2ImplementationFidelityGate(supabase) {
 
       // Load validator if not loaded
       if (!validateGate2ExecToPlan) {
-        const gate2 = await import('../../../implementation-fidelity-validation.js');
+        const gate2 = await import('../../../../implementation-fidelity-validation.js');
         validateGate2ExecToPlan = gate2.validateGate2ExecToPlan;
       }
 
