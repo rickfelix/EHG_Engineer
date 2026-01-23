@@ -67,6 +67,54 @@ node scripts/protocol-improvements.js approve <queue-id>
 node scripts/protocol-improvements.js reject <queue-id> --reason="Not applicable to current workflow"
 ```
 
+#### AI Quality Judge Evaluation (Phase 1)
+
+**Added**: January 2026 - SD-LEO-SELF-IMPROVE-AIJUDGE-001
+
+Automated evaluation of improvement proposals using:
+- Constitution validation (9 immutable rules)
+- Russian Judge multi-criterion scoring (0-100)
+- Model diversity via triangulation protocol
+- GOVERNED pipeline (human approval required)
+
+```bash
+# Single improvement evaluation
+node scripts/protocol-improvements.js evaluate <queue-id>
+
+# Batch evaluate pending improvements
+node scripts/protocol-improvements.js evaluate --all
+node scripts/protocol-improvements.js evaluate --all --limit=10 --threshold=70
+
+# Detailed evaluation report
+node scripts/protocol-improvements.js evaluation-report <queue-id>
+
+# AI judge statistics
+node scripts/protocol-improvements.js judge-stats
+```
+
+**Evaluation Output**:
+- Constitution check results (PASS/FAIL with violations)
+- Multi-criterion scores (safety, specificity, necessity, evidence, atomicity)
+- Aggregate score (0-100)
+- Recommendation (APPROVE/NEEDS_REVISION/REJECT)
+- Confidence level (HIGH/MEDIUM/LOW)
+- Human review flag (if required)
+
+**Scoring Criteria**:
+| Criterion | Weight | Description |
+|-----------|--------|-------------|
+| Safety | 25% | Risk assessment and backwards compatibility |
+| Specificity | 20% | Concrete, actionable implementation details |
+| Necessity | 20% | Clear problem statement and justification |
+| Evidence | 20% | Empirical data supporting the improvement |
+| Atomicity | 15% | Single, focused change (not multiple unrelated changes) |
+
+**Constitution Rules (Auto-Reject on Violation)**:
+- CONST-001: Database-first enforcement
+- CONST-002: No markdown source of truth
+- CONST-007: Backward compatibility
+- CONST-009: Phase workflow preservation
+
 #### Apply Improvements
 
 ```bash
@@ -86,6 +134,7 @@ node scripts/protocol-improvements.js apply-auto --dry-run
 
 **Auto-Apply Criteria**:
 - Status: APPROVED
+- AI Quality Judge score >= threshold (default 70%)
 - Auto-apply score >= threshold (default 0.85)
 - Safe categories: DOCUMENTATION, TEMPLATE, CHECKLIST
 - Evidence quality: Well-documented with examples
