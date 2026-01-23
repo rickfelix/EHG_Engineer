@@ -3,9 +3,9 @@
 ## Metadata
 - **Category**: Reference
 - **Status**: Approved
-- **Version**: 1.0.0
+- **Version**: 1.2.0
 - **Author**: DOCMON Sub-Agent
-- **Last Updated**: 2026-01-11
+- **Last Updated**: 2026-01-23
 - **Tags**: commands, workflow, ecosystem, slash-commands
 
 ## Table of Contents
@@ -117,6 +117,12 @@ LEAD-FINAL-APPROVAL → /restart → /uat → /ship → /document → /learn →
 - **Primary**: Run LEO protocol workflow, manage SD queue
 - **Suggests**: Full post-completion sequence based on SD type
 - **Receives from**: `/learn` (after SD created), `/ship` (after merge)
+- **Subcommands**:
+  - `/leo restart` (r) - Restart LEO servers
+  - `/leo next` (n) - Show SD queue
+  - `/leo create` (c) - Create new SD
+  - `/leo continue` (cont) - Resume current working SD
+  - `/leo complete` (comp) - Run full post-completion sequence
 
 ### `/restart` - Environment Reset
 - **Primary**: Restart all LEO stack servers
@@ -153,6 +159,26 @@ LEAD-FINAL-APPROVAL → /restart → /uat → /ship → /document → /learn →
 - **Primary**: Multi-AI verification of implementation claims
 - **Suggests**: `/quick-fix` (small bugs), SD creation (large issues)
 - **Receives from**: Manual invocation when verification needed
+
+### `/leo continue` - Resume Working SD
+- **Primary**: Resume work on the current working SD (is_working_on = true)
+- **Behavior**:
+  - Queries database for SD with `is_working_on = true` and `progress < 100`
+  - Loads phase-appropriate context file (CLAUDE_LEAD.md, CLAUDE_PLAN.md, or CLAUDE_EXEC.md)
+  - Shows recommended next action based on current phase
+- **Suggests**: `/leo next` (if no working SD found)
+- **Receives from**: Manual invocation when resuming work
+
+### `/leo complete` - Post-Completion Sequence
+- **Primary**: Run full post-completion sequence automatically
+- **Workflow**: Executes in order:
+  1. `/document` - Update documentation
+  2. `/ship` - Commit and create PR
+  3. `/learn` - Capture learnings
+  4. `npm run sd:next` - Show next work
+- **Pre-condition**: Requires an active working SD
+- **Suggests**: Next SD from queue (via sd:next output)
+- **Receives from**: Manual invocation after SD completion
 
 ## SD Type-Specific Flows
 
@@ -211,6 +237,34 @@ Issue Reported
            Create SD ─── "Full LEO Protocol"
 ```
 
+## LEO Command Menu Streamlining (v1.2.0)
+
+As of v1.2.0, the `/leo` command menu has been streamlined for clarity:
+
+### Removed Commands
+The following unused commands were removed:
+- `start` / `s` - Unused (servers auto-start)
+- `stop` / `x` - Unused (rarely needed)
+- `status` / `st` - Unused (status visible in terminal)
+- `fast` / `f` - Unused (normal restart sufficient)
+- `help` / `h` - Replaced with "argument not recognized" fallback
+
+### Streamlined Menu
+```
+/leo           - Run LEO protocol workflow (npm run leo)
+/leo restart   (r)    - Restart all LEO servers
+/leo next      (n)    - Show SD queue (what to work on)
+/leo create    (c)    - Create new SD (interactive wizard)
+/leo continue  (cont) - Resume current working SD
+/leo complete  (comp) - Run full sequence: document → ship → learn → next
+```
+
+### Rationale
+- **Focus on workflow**: Kept commands that directly support LEO Protocol workflow
+- **Remove clutter**: Eliminated rarely-used server management commands
+- **Add continuity**: New `continue` command for session resumption
+- **Add automation**: New `complete` command for post-completion sequence
+
 ## Implementation Notes
 
 Each command file (`.claude/commands/*.md`) includes a "Command Ecosystem Integration" section that:
@@ -266,5 +320,6 @@ Every suggestion set includes a "Done for now" option allowing users to:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.0 | 2026-01-23 | Added /leo continue and /leo complete subcommands |
 | 1.1.0 | 2026-01-11 | Added AskUserQuestion pattern with auto-invoke behavior |
 | 1.0.0 | 2026-01-11 | Initial command ecosystem implementation |

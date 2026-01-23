@@ -1,6 +1,6 @@
 ---
 description: LEO stack management and session control
-argument-hint: [start|restart|stop|status|next|create]
+argument-hint: [restart|next|create|continue|complete]
 ---
 
 # LEO Stack Control
@@ -32,40 +32,16 @@ argument-hint: [start|restart|stop|status|next|create]
 
 Based on the argument provided, execute the appropriate action:
 
-### If argument is "start" or "s":
-Run the LEO stack start command:
-```bash
-node scripts/cross-platform-run.js leo-stack start
-```
-
 ### If argument is "restart" or "r":
 Run the LEO stack restart command:
 ```bash
 node scripts/cross-platform-run.js leo-stack restart
 ```
 
-### If argument is "stop" or "x":
-Run the LEO stack stop command:
-```bash
-node scripts/cross-platform-run.js leo-stack stop
-```
-
-### If argument is "status" or "st":
-Run the LEO stack status command:
-```bash
-node scripts/cross-platform-run.js leo-stack status
-```
-
 ### If argument is "next" or "n":
 Show the SD queue to determine what to work on next:
 ```bash
 npm run sd:next
-```
-
-### If argument is "fast" or "f":
-Run fast restart (reduced delays):
-```bash
-node scripts/cross-platform-run.js leo-stack restart -Fast
 ```
 
 ### If argument starts with "create" or "c":
@@ -139,26 +115,98 @@ Then display:
    node scripts/handoff.js execute LEAD-TO-PLAN <generated-key>
 ```
 
+### If argument is "continue" or "cont":
+Resume work on the current working SD.
+
+1. **Query for active SD:**
+   ```bash
+   node scripts/get-working-on-sd.js
+   ```
+
+2. **If SD found (is_working_on = true and progress < 100):**
+   - Display the SD info from the script output
+   - Determine the appropriate context file based on `current_phase`:
+     - LEAD phases (LEAD_APPROVAL, LEAD_FINAL_APPROVAL) → Read `CLAUDE_LEAD.md`
+     - PLAN phases (PLAN_*, PRD_*) → Read `CLAUDE_PLAN.md`
+     - EXEC phases (EXEC_*, IMPLEMENTATION_*) → Read `CLAUDE_EXEC.md`
+   - Load that context file using the Read tool
+   - Show recommended next action based on phase:
+     - LEAD phases: "Continue LEAD approval workflow"
+     - PLAN phases: "Continue PRD/planning work"
+     - EXEC phases: "Continue implementation"
+
+3. **If no SD found:**
+   ```
+   ❌ No SD is currently marked as "Working On"
+
+   💡 Run `/leo next` to see the SD queue and pick your next task.
+   ```
+
+### If argument is "complete" or "comp":
+Run the post-completion sequence for the current working SD.
+
+1. **Pre-condition check:**
+   ```bash
+   node scripts/get-working-on-sd.js --id-only
+   ```
+   If no working SD exists, show error and suggest `/leo next`.
+
+2. **If working SD exists, execute sequence in order:**
+
+   **Step 1: Document**
+   ```
+   📄 Running /document...
+   ```
+   Invoke the `document` skill using Skill tool.
+
+   **Step 2: Ship**
+   ```
+   🚀 Running /ship...
+   ```
+   Invoke the `ship` skill using Skill tool.
+
+   **Step 3: Learn**
+   ```
+   📚 Running /learn...
+   ```
+   Invoke the `learn` skill using Skill tool.
+
+   **Step 4: Next**
+   ```
+   📋 Showing next SD in queue...
+   ```
+   ```bash
+   npm run sd:next
+   ```
+
+3. **Summary on completion:**
+   ```
+   ✅ Post-Completion Sequence Complete
+
+   Executed:
+   - /document - Documentation updated
+   - /ship - Changes committed and PR created
+   - /learn - Patterns captured
+   - sd:next - Queue displayed
+   ```
+
 ### If no argument provided:
 Run the LEO protocol workflow:
 ```bash
 npm run leo
 ```
 
-### If argument is "help" or "h":
-Display this menu to the user:
+### If argument not recognized:
+Display the available commands:
 
 ```
 LEO Commands:
-  /leo          - Run LEO protocol workflow (npm run leo)
-  /leo start    (s)  - Start all LEO servers
-  /leo restart  (r)  - Restart all LEO servers
-  /leo stop     (x)  - Stop all LEO servers
-  /leo status   (st) - Check server status
-  /leo next     (n)  - Show SD queue (what to work on)
-  /leo fast     (f)  - Fast restart (reduced delays)
-  /leo create   (c)  - Create new SD (interactive wizard)
-  /leo help     (h)  - Show this menu
+  /leo           - Run LEO protocol workflow (npm run leo)
+  /leo restart   (r)    - Restart all LEO servers
+  /leo next      (n)    - Show SD queue (what to work on)
+  /leo create    (c)    - Create new SD (interactive wizard)
+  /leo continue  (cont) - Resume current working SD
+  /leo complete  (comp) - Run full sequence: document → ship → learn → next
 
 SD Creation Flags:
   /leo create                    - Interactive wizard
@@ -166,11 +214,7 @@ SD Creation Flags:
   /leo create --from-learn <id>  - Create from /learn pattern
   /leo create --from-feedback <id> - Create from /inbox item
   /leo create --child <parent>   - Create child SD
-
-Shortcuts: /restart = restart servers, /leo n = next
 ```
-
-If no argument was given, auto-run `npm run leo` to start the LEO protocol workflow.
 
 ## Context
 - Engineer runs on port 3000
