@@ -2,6 +2,29 @@
 
 ## 2026-01-23
 
+### Infrastructure
+- **SD-LEO-REFAC-TESTING-INFRA-001: TESTING & RETRO Sub-Agent Modularization** - PRs #543, #544
+  - **TESTING Sub-Agent** refactored from 1,097 LOC monolithic file to modular architecture:
+    - Created `lib/sub-agents/testing/phases/` directory with 5 phase modules:
+      - `phase1-preflight.js` - Intelligent test analysis, selector validation, navigation flow checks
+      - `phase2-generation.js` - Test case generation from user stories
+      - `phase3-execution.js` - E2E test execution with caching support
+      - `phase4-evidence.js` - Test evidence collection and user story verification
+      - `phase5-verdict.js` - Verdict generation with adaptive validation (prospective vs retrospective)
+    - Created `lib/sub-agents/testing/utils/troubleshooting.js` - Troubleshooting tactics arsenal (13 patterns)
+    - Main file reduced to 550 LOC orchestrator
+    - All phase logic preserved, no breaking changes
+  - **RETRO Sub-Agent** quality improvements:
+    - Fixed `lib/sub-agents/retro/action-items.js` - Preserved SMART action item metadata (was stripping to plain strings)
+    - Rewrote `lib/sub-agents/retro/generators.js` - Extract actual SD-specific insights instead of template-based boilerplate
+    - New extractors: `extractSubAgentInsights()`, `extractPRDInsights()`, `extractHandoffInsights()`, `extractTestEvidence()`
+    - Result: Retrospective quality score improved from 42-46/100 to 90/100 with 16 key learnings
+  - **Windows ESM Import Fix**:
+    - Fixed `scripts/modules/handoff/executors/exec-to-plan/test-evidence.js` - Proper path resolution using `fileURLToPath()`, `pathToFileURL()`, and `resolve()`
+    - Windows ESM requires file:// URLs for dynamic imports with absolute paths
+  - Impact: Improved maintainability (<550 LOC per file), enhanced retrospective specificity, eliminated RETROSPECTIVE_QUALITY_GATE failures
+  - Documentation: Updated `lib/sub-agents/testing/index.js` header with v3.1 refactoring notes
+
 ### Features
 - **DATABASE Sub-Agent: Intelligent Migration Execution with Action Trigger Detection** - PR #520
   - Added action intent detection to DATABASE sub-agent for automatic migration execution
