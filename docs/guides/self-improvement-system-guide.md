@@ -1,8 +1,8 @@
 # LEO Protocol Self-Improvement System
 
 **Migration**: `20251210_retrospective_self_improvement_system.sql`
-**Updated**: 2026-01-10
-**Status**: Active (v2 - SD Creation Workflow)
+**Updated**: 2026-01-22
+**Status**: Active (v3 - AI Quality Judge)
 **Purpose**: Database-first protocol evolution through retrospective analysis
 
 ---
@@ -15,8 +15,41 @@ The Self-Improvement System enables LEO Protocol to learn from retrospectives an
 2. Improvements are extracted and queued automatically
 3. Evidence accumulates as patterns repeat
 4. High-evidence improvements are prioritized
-5. **Approved improvements create Strategic Directives** (v2 - January 2026)
-6. SD completion auto-resolves linked patterns
+5. **AI Quality Judge evaluates improvements** (v3 - January 2026)
+6. **Approved improvements create Strategic Directives** (v2 - January 2026)
+7. SD completion auto-resolves linked patterns
+
+### Evolution: Phase 1 - AI Quality Judge (January 2026)
+
+**SD**: `SD-LEO-SELF-IMPROVE-AIJUDGE-001`
+
+The AI Quality Judge automates the evaluation of protocol improvement proposals using:
+- **Constitution Validation**: 9 immutable rules (CONST-001 to CONST-009) that auto-reject critical violations
+- **Russian Judge Scoring**: Multi-criterion weighted scoring (safety, specificity, necessity, evidence, atomicity)
+- **Model Diversity**: Triangulation protocol ensures different model families for proposer vs evaluator
+- **GOVERNED Pipeline**: All improvements require human approval in Phase 1
+
+**Key Components**:
+- `scripts/modules/ai-quality-judge/constitution-validator.js` - Validates against protocol constitution
+- `scripts/modules/ai-quality-judge/scoring.js` - Weighted multi-criterion scoring (0-100)
+- `scripts/modules/ai-quality-judge/storage.js` - Database persistence for assessments
+- `scripts/modules/ai-quality-judge/prompts.js` - Constitution-aware evaluation prompts
+- `scripts/modules/ai-quality-judge/index.js` - Main AIQualityJudge class
+
+**CLI Integration**:
+```bash
+# Single improvement evaluation
+node scripts/protocol-improvements.js evaluate <improvement-id>
+
+# Batch evaluate pending improvements
+node scripts/protocol-improvements.js evaluate --all [--limit=N]
+
+# Detailed assessment report
+node scripts/protocol-improvements.js evaluation-report <improvement-id>
+
+# AI judge statistics
+node scripts/protocol-improvements.js judge-stats
+```
 
 ### Key Change (v2 - January 2026)
 
