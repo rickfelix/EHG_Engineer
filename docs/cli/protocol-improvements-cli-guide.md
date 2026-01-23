@@ -109,11 +109,19 @@ node scripts/protocol-improvements.js judge-stats
 | Evidence | 20% | Empirical data supporting the improvement |
 | Atomicity | 15% | Single, focused change (not multiple unrelated changes) |
 
-**Constitution Rules (Auto-Reject on Violation)**:
-- CONST-001: Database-first enforcement
-- CONST-002: No markdown source of truth
-- CONST-007: Backward compatibility
-- CONST-009: Phase workflow preservation
+**Constitution Rules**:
+The Protocol Constitution contains 9 immutable rules that govern self-improvement:
+- CONST-001: Human approval for GOVERNED tier
+- CONST-002: Separation of proposer and evaluator
+- CONST-003: Audit logging requirement
+- CONST-004: Reversibility requirement
+- CONST-005: Database-first architecture
+- CONST-006: Zero-sum complexity
+- CONST-007: Rate limiting (max 3 AUTO/24h)
+- CONST-008: Chesterton's Fence (review before removal)
+- CONST-009: Human FREEZE command
+
+**For complete details**: See [Protocol Constitution Guide](../governance/protocol-constitution-guide.md)
 
 #### Apply Improvements
 
@@ -460,6 +468,74 @@ The protocol improvement system integrates with:
 - **LEO Protocol Versions**: Applied improvements update active protocol
 - **CLAUDE.md Generation**: Auto-regenerates after application
 - **Sub-Agents**: Updates sub-agent instructions and triggers
+
+## Recent Improvements (January 2026)
+
+### SD-LEO-PROCESS-IMPROVEMENTS-001: Post Self-Improvement Loop Enhancements
+
+**Status**: Completed (January 23, 2026)
+**PR**: #503
+
+Six process improvements discovered during the Self-Improvement Loop implementation:
+
+#### 1. PRD Derivation from SD Fields
+
+**Issue**: PRD creation used placeholder text like "To be defined" instead of deriving values from existing SD fields.
+
+**Fix**: Added three new functions in `scripts/add-prd-to-database-refactored.js`:
+- `deriveFunctionalRequirements()` - Extracts from `strategic_objectives` and `key_changes`
+- `deriveTestScenarios()` - Extracts from `success_criteria` and `success_metrics`
+- `deriveAcceptanceCriteria()` - Derives from `success_criteria`
+
+**Impact**: PRDs now start with meaningful initial values, reducing LLM processing time and improving PRD quality.
+
+#### 2. DESIGN Sub-Agent Expansion
+
+**Issue**: DESIGN sub-agent only triggered for UI/UX keywords, missing backend code-producing work.
+
+**Fix**: Expanded `.claude/agents/design-agent.md` description to include all code-producing SD types (feature, enhancement, bugfix, refactor, performance) and added backend keywords (API endpoint, service layer, controller, database table).
+
+**Impact**: Better validation coverage for all code changes, not just UI work.
+
+#### 3. GATE6_BRANCH_ENFORCEMENT Messaging
+
+**Issue**: Branch auto-switching provided minimal feedback, causing confusion about when branches were created vs switched.
+
+**Fix**: Enhanced `scripts/verify-git-branch-status.js` with clear AUTO-SWITCH and AUTO-CREATED messaging in both verification and summary phases.
+
+**Impact**: Improved UX for automatic git branch management, clearer feedback on branch state changes.
+
+#### 4. Retrospective Enum Error Messages
+
+**Issue**: Database constraint violations for retrospective enums (retro_type, outcome_type) didn't include valid values in error messages.
+
+**Fix**: Added validation in `scripts/validate-retrospective-schema.js`:
+- `retro_type` validation with valid values (SPRINT, SD_COMPLETION, INCIDENT, AUDIT)
+- `outcome_type` validation with valid values (SUCCESS, PARTIAL, FAILED, BLOCKED)
+- New `enhanceConstraintError()` function for database constraint violations
+
+**Impact**: Faster debugging when retrospective creation fails due to enum violations.
+
+#### 5. Deprecated max_tokens Parameter
+
+**Issue**: OpenAI API deprecated `max_tokens` in favor of `max_completion_tokens`.
+
+**Fix**: Updated parameter across 3 files:
+- `scripts/modules/prd-llm-service.mjs`
+- `scripts/modules/ai-quality-judge/index.js`
+- `scripts/modules/shipping/ShippingDecisionEvaluator.js`
+
+**Impact**: API compliance, prevents future deprecation warnings.
+
+#### 6. Deterministic LLM Calls
+
+**Issue**: SD type classification was non-deterministic, causing different results for the same input.
+
+**Fix**: Added `temperature: 0` and `seed: 42` to `scripts/modules/sd-type-classifier.js`.
+
+**Impact**: Reproducible SD type classification results, easier debugging and testing.
+
+---
 
 ## Future Enhancements
 
