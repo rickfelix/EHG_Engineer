@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-23T18:15:08.433Z
-**Tables**: 372
+**Generated**: 2026-01-23T20:53:11.137Z
+**Tables**: 374
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
 
@@ -20,7 +20,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 ---
 
-## All Tables (372)
+## All Tables (374)
 
 ### LEO Protocol
 
@@ -213,6 +213,8 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 - [crewai_flows](tables/crewai_flows.md)
 - [cross_agent_correlations](tables/cross_agent_correlations.md)
 - [cultural_design_styles](tables/cultural_design_styles.md)
+- [db_agent_config](tables/db_agent_config.md)
+- [db_agent_invocations](tables/db_agent_invocations.md)
 - [defect_taxonomy](tables/defect_taxonomy.md)
 - [directive_submissions](tables/directive_submissions.md)
 - [distribution_channels](tables/distribution_channels.md)

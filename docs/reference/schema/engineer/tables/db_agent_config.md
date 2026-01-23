@@ -1,12 +1,12 @@
-# content_types Table
+# db_agent_config Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-01-23T20:53:11.137Z
-**Rows**: 3
-**RLS**: Enabled (2 policies)
+**Rows**: 4
+**RLS**: Disabled
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,48 +14,35 @@
 
 ---
 
-## Columns (13 total)
+## Columns (6 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| name | `character varying(100)` | **NO** | - | - |
-| display_name | `character varying(255)` | YES | - | - |
+| key | `character varying(100)` | **NO** | - | - |
+| value | `jsonb` | **NO** | - | - |
 | description | `text` | YES | - | - |
-| creation_method | `jsonb` | YES | `'{}'::jsonb` | - |
-| display_rules | `jsonb` | YES | `'{}'::jsonb` | - |
-| validation_schema | `jsonb` | YES | `'{}'::jsonb` | - |
-| transformation_logic | `jsonb` | YES | `'{}'::jsonb` | - |
-| icon | `character varying(100)` | YES | - | - |
-| color | `character varying(20)` | YES | - | - |
-| is_active | `boolean` | YES | `true` | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
 
 ## Constraints
 
 ### Primary Key
-- `content_types_pkey`: PRIMARY KEY (id)
+- `db_agent_config_pkey`: PRIMARY KEY (id)
+
+### Unique Constraints
+- `db_agent_config_key_key`: UNIQUE (key)
 
 ## Indexes
 
-- `content_types_pkey`
+- `db_agent_config_key_key`
   ```sql
-  CREATE UNIQUE INDEX content_types_pkey ON public.content_types USING btree (id)
+  CREATE UNIQUE INDEX db_agent_config_key_key ON public.db_agent_config USING btree (key)
   ```
-
-## RLS Policies
-
-### 1. Allow service_role to manage content_types (ALL)
-
-- **Roles**: {service_role}
-- **Using**: `true`
-- **With Check**: `true`
-
-### 2. Anon read content_types (SELECT)
-
-- **Roles**: {anon}
-- **Using**: `true`
+- `db_agent_config_pkey`
+  ```sql
+  CREATE UNIQUE INDEX db_agent_config_pkey ON public.db_agent_config USING btree (id)
+  ```
 
 ---
 
