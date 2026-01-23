@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-01-23 8:29:37 AM
+**Generated**: 2026-01-23 3:50:39 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -1585,6 +1585,69 @@ await supabase
 - **Handoff Workflows**: `scripts/handoff.js` lines 24-120
 
 
+## Database Sub-Agent Auto-Invocation
+
+## Database Sub-Agent Semantic Triggering
+
+When SQL execution intent is detected, the database sub-agent should be auto-invoked instead of outputting manual execution instructions.
+
+### Intent Detection Triggers
+
+The following phrases trigger automatic database sub-agent invocation:
+
+| Category | Example Phrases | Priority |
+|----------|-----------------|----------|
+| **Direct Command** | "run this sql", "execute the query" | 9 |
+| **Delegation** | "use database sub-agent", "have the database agent" | 8 |
+| **Imperative** | "please run", "can you execute" | 8 |
+| **Operational** | "update the table", "create the table" | 7 |
+| **Result-Oriented** | "make this change in the database" | 6 |
+| **Contextual** | "run it", "execute it" (requires SQL context) | 5 |
+
+### Denylist Phrases (Block Execution Intent)
+
+These phrases force NO_EXECUTION intent:
+- "do not execute"
+- "for reference only"
+- "example query"
+- "sample sql"
+- "here is an example"
+
+### Integration
+
+When Claude generates SQL with execution instructions:
+1. Check for SQL execution intent using `shouldAutoInvokeAndExecute()`
+2. If intent detected with confidence >= 80%, use Task tool with database-agent
+3. Never output "run this manually" when auto-invocation is permitted
+
+```javascript
+// Import
+import { shouldAutoInvokeAndExecute } from 'lib/utils/db-agent-auto-invoker.js';
+
+// Check before outputting SQL
+const result = await shouldAutoInvokeAndExecute(sqlMessage);
+if (result.shouldInvoke) {
+  // Use Task tool instead of manual instructions
+  Task({ subagent_type: 'database-agent', prompt: result.taskParams.prompt });
+}
+```
+
+### Configuration
+
+Runtime configuration in `db_agent_config` table:
+- `MIN_CONFIDENCE_TO_INVOKE`: 0.80 (default)
+- `DB_AGENT_ENABLED`: true (default)
+- `DENYLIST_PHRASES`: Array of blocking phrases
+
+### Audit Trail
+
+All invocation decisions logged to `db_agent_invocations` table with:
+- correlation_id for tracing
+- intent and confidence scores
+- matched trigger IDs
+- decision outcome
+
+
 ## Database-First Enforcement - Expanded
 
 **Database-First Enforcement (MANDATORY)**:
@@ -2233,7 +2296,7 @@ Handles production launch orchestration, go-live checklists, launch readiness, a
 
 **🆕 NEW in v2.0.0**: Proactive le
 
-**Trigger Keywords**: `schema`, `migration`, `EXEC_IMPLEMENTATION_COMPLETE`, `database`, `query`, `select from`, `insert into`, `supabase`, `table`, `rls`, `postgres`, `sql`, `fetch from database`, `database query`
+**Trigger Keywords**: `schema`, `migration`, `EXEC_IMPLEMENTATION_COMPLETE`, `database`, `query`, `select from`, `insert into`, `supabase`, `table`, `rls`, `postgres`, `sql`, `fetch from database`, `database query`, `run this sql`, `execute this sql`, `run the query`, `execute the query`, `run this migration`, `execute the migration`, `run that migration`, `execute the following`, `run the following`, `please run`, `please execute`, `can you run`, `can you execute`, `apply this migration`, `apply the migration`, `insert this into`, `update the database`, `update the table`, `delete from the table`, `create the table`, `alter the table`, `drop the table`, `add this column`, `make this change in the database`, `update this in supabase`, `fix this in the database`, `modify the schema`, `add this to the database`, `use the database sub-agent`, `use database sub-agent`, `database agent should run`, `have the database agent`, `run it`, `execute it`, `go ahead and run`, `yes, run it`, `yes, execute`
 
 #### Financial Modeling Sub-Agent (`FINANCIAL`)
 Handles financial projections, P&L modeling, cash flow analysis, business model canvas financial sec

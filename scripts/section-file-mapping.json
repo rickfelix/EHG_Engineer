@@ -14,6 +14,7 @@
     "description": "Essential context for ALL sessions (~15-20k chars)",
     "sections": [
       "infrastructure",
+      "sub_agent_config",
       "script_anti_patterns",
       "mandatory_agent_invocation",
       "application_architecture",
