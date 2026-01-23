@@ -5,7 +5,7 @@
  * Tests AUTO tier eligibility checking with AI Quality Judge integration
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { jest } from '@jest/globals';
 import {
   AutoEligibilityChecker,
   createAutoEligibilityChecker,
@@ -13,35 +13,8 @@ import {
   ELIGIBILITY_DECISION
 } from '../../../scripts/modules/risk-classifier/auto-eligibility.js';
 
-// Mock the config import
-vi.mock('../../../scripts/modules/ai-quality-judge/config.js', () => ({
-  SCORING_CRITERIA: {
-    safety: { weight: 25 },
-    specificity: { weight: 20 },
-    necessity: { weight: 20 },
-    evidence: { weight: 20 },
-    atomicity: { weight: 15 }
-  },
-  RECOMMENDATION_THRESHOLDS: {
-    approve_high: 85,
-    approve_medium: 70,
-    needs_revision: 50,
-    reject: 0
-  },
-  RISK_TIERS: {
-    AUTO: {
-      min_score: 85,
-      min_safety: 9,
-      allowed_operations: ['INSERT']
-    },
-    GOVERNED: {
-      min_score: 70
-    },
-    IMMUTABLE: {
-      min_score: 0
-    }
-  }
-}));
+// Note: Using inline mocks since jest.unstable_mockModule doesn't work well with dynamic imports
+// The config is mocked by the module itself falling back to defaults
 
 describe('AutoEligibilityChecker', () => {
   let checker;
