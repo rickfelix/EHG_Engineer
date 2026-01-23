@@ -15,6 +15,12 @@
         "schema", "SQL", "query", "index", "foreign key", "primary key",
         "constraint", "trigger", "stored procedure", "transaction"
       ],
+      "action_triggers": [
+        "apply migration", "run migration", "execute migration",
+        "apply supabase migration", "push migration", "migrate database",
+        "apply the migration", "run the migration", "db push",
+        "supabase db push", "apply schema", "run schema migration"
+      ],
       "secondary": [
         "table", "column", "row", "RLS", "policy", "data model",
         "relationship", "junction", "insert", "update", "delete", "select"
