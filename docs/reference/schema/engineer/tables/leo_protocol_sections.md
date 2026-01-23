@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-20T20:21:23.286Z
-**Rows**: 147
+**Generated**: 2026-01-23T02:02:13.651Z
+**Rows**: 159
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (9 total)
+## Columns (10 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -27,6 +27,7 @@
 | metadata | `jsonb` | YES | `'{}'::jsonb` | - |
 | context_tier | `text` | YES | - | - |
 | target_file | `text` | YES | - | - |
+| priority | `character varying(20)` | YES | `'STANDARD'::character varying` | Section priority: CORE (always loaded, never removed), STANDARD (normal rules), SITUATIONAL (context-dependent) |
 
 ## Constraints
 
@@ -41,6 +42,7 @@
 
 ### Check Constraints
 - `leo_protocol_sections_context_tier_check`: CHECK ((context_tier = ANY (ARRAY['ROUTER'::text, 'CORE'::text, 'PHASE_LEAD'::text, 'PHASE_PLAN'::text, 'PHASE_EXEC'::text, 'REFERENCE'::text])))
+- `leo_protocol_sections_priority_check`: CHECK (((priority)::text = ANY ((ARRAY['CORE'::character varying, 'STANDARD'::character varying, 'SITUATIONAL'::character varying])::text[])))
 
 ## Indexes
 
