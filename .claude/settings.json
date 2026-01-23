@@ -14,6 +14,16 @@
             "timeout": 2
           }
         ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/migration-execution-reminder.cjs",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "Stop": [

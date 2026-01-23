@@ -1,6 +1,6 @@
 ---
 name: database-agent
-description: "MUST BE USED PROACTIVELY for all database tasks. Handles schema design, Supabase migrations, RLS policies, SQL validation, and architecture. Trigger on keywords: database, migration, schema, table, RLS, SQL, Postgres."
+description: "MUST BE USED PROACTIVELY for all database tasks. Handles schema design, Supabase migrations, RLS policies, SQL validation, and architecture. Trigger on keywords: database, migration, schema, table, RLS, SQL, Postgres, created migration, wrote migration, execute migration, apply migration, run migration, pending migration."
 tools: Bash, Read, Write
 model: sonnet
 ---
