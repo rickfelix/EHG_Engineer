@@ -1,0 +1,598 @@
+{
+  "_comment": "AEGIS Local Fallback Rules - Auto-generated from database. Do not edit manually unless necessary.",
+  "_version": "1.0.0",
+  "_generated": "2026-01-24",
+  "constitutions": [
+    {
+      "id": "const-protocol",
+      "code": "PROTOCOL",
+      "name": "Protocol Constitution",
+      "description": "9 immutable rules governing the self-improvement system",
+      "domain": "self_improvement",
+      "enforcement_mode": "enforced",
+      "is_active": true
+    },
+    {
+      "id": "const-four-oaths",
+      "code": "FOUR_OATHS",
+      "name": "Four Oaths",
+      "description": "Agent behavior governance framework",
+      "domain": "agent_behavior",
+      "enforcement_mode": "enforced",
+      "is_active": true
+    },
+    {
+      "id": "const-doctrine",
+      "code": "DOCTRINE",
+      "name": "Doctrine of Constraint",
+      "description": "Law 1 - EXEC role restrictions",
+      "domain": "execution",
+      "enforcement_mode": "enforced",
+      "is_active": true
+    },
+    {
+      "id": "const-hard-halt",
+      "code": "HARD_HALT",
+      "name": "Hard Halt Protocol",
+      "description": "Chairman absence dead-man switch",
+      "domain": "system_state",
+      "enforcement_mode": "enforced",
+      "is_active": true
+    },
+    {
+      "id": "const-manifesto",
+      "code": "MANIFESTO_MODE",
+      "name": "Manifesto Mode",
+      "description": "EVA Manifesto activation system",
+      "domain": "system_state",
+      "enforcement_mode": "enforced",
+      "is_active": true
+    },
+    {
+      "id": "const-crew",
+      "code": "CREW_GOVERNANCE",
+      "name": "Crew Governance",
+      "description": "Budget and semantic guardrails for crew agents",
+      "domain": "execution",
+      "enforcement_mode": "enforced",
+      "is_active": true
+    },
+    {
+      "id": "const-compliance",
+      "code": "COMPLIANCE",
+      "name": "Compliance Policies",
+      "description": "External compliance requirements",
+      "domain": "compliance",
+      "enforcement_mode": "enforced",
+      "is_active": true
+    }
+  ],
+  "rules": [
+    {
+      "id": "rule-const-001",
+      "constitution_id": "const-protocol",
+      "constitution_code": "PROTOCOL",
+      "rule_code": "CONST-001",
+      "rule_name": "Human Approval Required",
+      "rule_text": "GOVERNED tier improvements require human approval before application",
+      "category": "safety",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "custom",
+      "validation_config": {
+        "check": "governed_tier_auto_apply",
+        "block_if": "risk_tier === 'GOVERNED' && auto_applicable === true"
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-const-002",
+      "constitution_id": "const-protocol",
+      "constitution_code": "PROTOCOL",
+      "rule_code": "CONST-002",
+      "rule_name": "Independent Evaluation",
+      "rule_text": "System cannot approve its own proposals - evaluator must be from different model family than proposer",
+      "category": "governance",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "custom",
+      "validation_config": {
+        "check": "model_family_independence"
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-const-003",
+      "constitution_id": "const-protocol",
+      "constitution_code": "PROTOCOL",
+      "rule_code": "CONST-003",
+      "rule_name": "Audit Trail",
+      "rule_text": "All changes must be audit-logged with actor, timestamp, and payload",
+      "category": "audit",
+      "severity": "HIGH",
+      "enforcement_action": "BLOCK",
+      "validation_type": "field_check",
+      "validation_config": {
+        "required_fields": ["actor", "timestamp", "payload"]
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-oath-1",
+      "constitution_id": "const-four-oaths",
+      "constitution_code": "FOUR_OATHS",
+      "rule_code": "OATH-1",
+      "rule_name": "Transparency",
+      "rule_text": "Complete logging of all decision-relevant inputs, reasoning, and outputs",
+      "category": "transparency",
+      "severity": "HIGH",
+      "enforcement_action": "BLOCK",
+      "validation_type": "field_check",
+      "validation_config": {
+        "required_fields": ["input", "reasoning", "output", "confidence"],
+        "min_reasoning_length": 10
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-oath-2",
+      "constitution_id": "const-four-oaths",
+      "constitution_code": "FOUR_OATHS",
+      "rule_code": "OATH-2",
+      "rule_name": "Boundaries",
+      "rule_text": "Authority limits by role - L4 Crew: $0, L3 VP: $50, L2 CEO: $500",
+      "category": "authority",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "threshold",
+      "validation_config": {
+        "limits": {
+          "L4_CREW": { "spendLimit": 0, "canKillVenture": false },
+          "L3_VP": { "spendLimit": 50, "canKillVenture": false },
+          "L2_CEO": { "spendLimit": 500, "canKillVenture": false },
+          "L1_CHAIRMAN": { "spendLimit": null, "canKillVenture": true }
+        }
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-oath-3",
+      "constitution_id": "const-four-oaths",
+      "constitution_code": "FOUR_OATHS",
+      "rule_code": "OATH-3",
+      "rule_name": "Escalation Integrity",
+      "rule_text": "Low confidence decisions must be escalated - threshold varies by role",
+      "category": "integrity",
+      "severity": "HIGH",
+      "enforcement_action": "BLOCK",
+      "validation_type": "threshold",
+      "validation_config": {
+        "thresholds": {
+          "L4_CREW": 0.90,
+          "L3_VP": 0.85,
+          "L2_CEO": 0.75
+        },
+        "mandatory_escalation_categories": ["security_concern", "human_safety", "legal_compliance"]
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-oath-4",
+      "constitution_id": "const-four-oaths",
+      "constitution_code": "FOUR_OATHS",
+      "rule_code": "OATH-4",
+      "rule_name": "Non-Deception",
+      "rule_text": "Confidence must be 0.0-1.0, outputs bucketed as facts/assumptions/unknowns",
+      "category": "integrity",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "custom",
+      "validation_config": {
+        "confidence_bounds": [0.0, 1.0],
+        "valid_buckets": ["facts", "assumptions", "unknowns"],
+        "high_confidence_requires_unknowns": 0.95
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-doc-001",
+      "constitution_id": "const-doctrine",
+      "constitution_code": "DOCTRINE",
+      "rule_code": "DOC-001",
+      "rule_name": "EXEC Cannot Create Strategic Directives",
+      "rule_text": "EXEC agents are DATABASE-FORBIDDEN from creating Strategic Directives",
+      "category": "governance",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "role_forbidden",
+      "validation_config": {
+        "forbidden_roles": ["EXEC"],
+        "target_tables": ["strategic_directives_v2"],
+        "operations": ["INSERT"]
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-doc-002",
+      "constitution_id": "const-doctrine",
+      "constitution_code": "DOCTRINE",
+      "rule_code": "DOC-002",
+      "rule_name": "EXEC Cannot Modify PRD Scope",
+      "rule_text": "EXEC agents are DATABASE-FORBIDDEN from modifying PRD scope",
+      "category": "governance",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "role_forbidden",
+      "validation_config": {
+        "forbidden_roles": ["EXEC"],
+        "target_tables": ["product_requirements_v2"],
+        "operations": ["INSERT", "UPDATE"]
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-doc-003",
+      "constitution_id": "const-doctrine",
+      "constitution_code": "DOCTRINE",
+      "rule_code": "DOC-003",
+      "rule_name": "EXEC Cannot Log Governance Events",
+      "rule_text": "EXEC agents may only log implementation events, not governance events",
+      "category": "governance",
+      "severity": "HIGH",
+      "enforcement_action": "BLOCK",
+      "validation_type": "role_forbidden",
+      "validation_config": {
+        "forbidden_roles": ["EXEC"],
+        "forbidden_events": ["SD_CREATED", "SD_MODIFIED", "SD_SCOPE_EXPANDED", "PRD_CREATED", "PRD_MODIFIED", "PRD_SCOPE_EXPANDED", "STRATEGIC_PIVOT", "DIRECTIVE_ISSUED", "CHAIRMAN_DECISION_CREATED", "PROTOCOL_MODIFIED"]
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-doc-004",
+      "constitution_id": "const-doctrine",
+      "constitution_code": "DOCTRINE",
+      "rule_code": "DOC-004",
+      "rule_name": "EXEC Cannot Modify Protocols",
+      "rule_text": "EXEC agents are DATABASE-FORBIDDEN from modifying LEO protocols",
+      "category": "governance",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "role_forbidden",
+      "validation_config": {
+        "forbidden_roles": ["EXEC"],
+        "target_tables": ["leo_protocols", "leo_protocol_sections", "chairman_decisions"],
+        "operations": ["INSERT", "UPDATE", "DELETE"]
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-halt-001",
+      "constitution_id": "const-hard-halt",
+      "constitution_code": "HARD_HALT",
+      "rule_code": "HALT-001",
+      "rule_name": "Dead-Man Switch Timeout",
+      "rule_text": "When Chairman activity exceeds timeout threshold, system must auto-halt",
+      "category": "safety",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "threshold",
+      "validation_config": {
+        "field": "hours_since_activity",
+        "operator": "lt",
+        "value": 72,
+        "warning_threshold": 48
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-halt-002",
+      "constitution_id": "const-hard-halt",
+      "constitution_code": "HARD_HALT",
+      "rule_code": "HALT-002",
+      "rule_name": "L2+ Operations Blocked During Halt",
+      "rule_text": "When system is in Hard Halt, all L2+ autonomous operations must cease",
+      "category": "safety",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "custom",
+      "validation_config": {
+        "check": "l2_plus_blocked_when_halted",
+        "exempt_levels": ["L4", "L4_CREW"]
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-halt-003",
+      "constitution_id": "const-hard-halt",
+      "constitution_code": "HARD_HALT",
+      "rule_code": "HALT-003",
+      "rule_name": "Halt Trigger Authority",
+      "rule_text": "Only Chairman authority or dead-man switch can trigger Hard Halt",
+      "category": "authority",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "role_forbidden",
+      "validation_config": {
+        "allowed_roles": ["L0_CHAIRMAN", "L1_CHAIRMAN", "L0", "L1", "SYSTEM_DEAD_MAN_SWITCH"],
+        "action": "trigger_halt"
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-halt-004",
+      "constitution_id": "const-hard-halt",
+      "constitution_code": "HARD_HALT",
+      "rule_code": "HALT-004",
+      "rule_name": "Halt Restore Authority",
+      "rule_text": "Only Chairman authority can restore operations after Hard Halt",
+      "category": "authority",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "role_forbidden",
+      "validation_config": {
+        "allowed_roles": ["L0_CHAIRMAN", "L1_CHAIRMAN", "L0", "L1"],
+        "action": "restore_halt"
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-manif-001",
+      "constitution_id": "const-manifesto",
+      "constitution_code": "MANIFESTO_MODE",
+      "rule_code": "MANIF-001",
+      "rule_name": "Manifesto Activation Authority",
+      "rule_text": "Only L0_CHAIRMAN can activate manifesto mode (Constitution Signing)",
+      "category": "authority",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "role_forbidden",
+      "validation_config": {
+        "allowed_roles": ["L0_CHAIRMAN"],
+        "action": "activate_manifesto"
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-manif-002",
+      "constitution_id": "const-manifesto",
+      "constitution_code": "MANIFESTO_MODE",
+      "rule_code": "MANIF-002",
+      "rule_name": "L2+ Operation Verification",
+      "rule_text": "When manifesto is active, L2+ operations must be logged for audit",
+      "category": "audit",
+      "severity": "HIGH",
+      "enforcement_action": "WARN_AND_LOG",
+      "validation_type": "custom",
+      "validation_config": {
+        "check": "l2_plus_operation_logging",
+        "l2_plus_operations": ["venture_creation", "venture_pivot", "venture_termination", "budget_allocation", "agent_deployment", "strategic_directive", "crew_kickoff", "eva_decision"]
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-manif-003",
+      "constitution_id": "const-manifesto",
+      "constitution_code": "MANIFESTO_MODE",
+      "rule_code": "MANIF-003",
+      "rule_name": "Manifesto Version Update Authority",
+      "rule_text": "Only L0_CHAIRMAN can update manifesto version (amendments)",
+      "category": "authority",
+      "severity": "HIGH",
+      "enforcement_action": "BLOCK",
+      "validation_type": "role_forbidden",
+      "validation_config": {
+        "allowed_roles": ["L0_CHAIRMAN"],
+        "action": "update_manifesto_version",
+        "required_fields": ["changelog"]
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-manif-004",
+      "constitution_id": "const-manifesto",
+      "constitution_code": "MANIFESTO_MODE",
+      "rule_code": "MANIF-004",
+      "rule_name": "Manifesto Deactivation Requirements",
+      "rule_text": "Manifesto deactivation requires L0_CHAIRMAN authority and a MANDATORY reason",
+      "category": "authority",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "field_check",
+      "validation_config": {
+        "required_fields": ["reason"],
+        "allowed_roles": ["L0_CHAIRMAN"],
+        "action": "deactivate_manifesto"
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-crew-001",
+      "constitution_id": "const-crew",
+      "constitution_code": "CREW_GOVERNANCE",
+      "rule_code": "CREW-001",
+      "rule_name": "Venture ID Required",
+      "rule_text": "venture_id is MANDATORY for crew execution",
+      "category": "governance",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "field_check",
+      "validation_config": {
+        "required_fields": ["venture_id"]
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-crew-002",
+      "constitution_id": "const-crew",
+      "constitution_code": "CREW_GOVERNANCE",
+      "rule_code": "CREW-002",
+      "rule_name": "PRD ID Required",
+      "rule_text": "prd_id is REQUIRED for crew execution (except meta-operations)",
+      "category": "governance",
+      "severity": "HIGH",
+      "enforcement_action": "BLOCK",
+      "validation_type": "custom",
+      "validation_config": {
+        "check": "prd_required_unless_meta",
+        "meta_operations": ["health_check", "status_report", "eva_scan", "system_diagnostic"]
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-crew-003",
+      "constitution_id": "const-crew",
+      "constitution_code": "CREW_GOVERNANCE",
+      "rule_code": "CREW-003",
+      "rule_name": "Budget Validation",
+      "rule_text": "Budget must be validated before crew execution starts",
+      "category": "governance",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "threshold",
+      "validation_config": {
+        "field": "budget_remaining",
+        "operator": "gt",
+        "value": 0
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-crew-004",
+      "constitution_id": "const-crew",
+      "constitution_code": "CREW_GOVERNANCE",
+      "rule_code": "CREW-004",
+      "rule_name": "Budget Monitoring",
+      "rule_text": "Budget must be monitored during crew execution with kill switch",
+      "category": "safety",
+      "severity": "HIGH",
+      "enforcement_action": "WARN_AND_LOG",
+      "validation_type": "threshold",
+      "validation_config": {
+        "field": "budget_percentage",
+        "operator": "gt",
+        "value": 0.2,
+        "warning_threshold": 0.2
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-crew-005",
+      "constitution_id": "const-crew",
+      "constitution_code": "CREW_GOVERNANCE",
+      "rule_code": "CREW-005",
+      "rule_name": "Semantic Validation",
+      "rule_text": "Crew outputs must pass semantic validation (60/40 Truth Law)",
+      "category": "integrity",
+      "severity": "HIGH",
+      "enforcement_action": "WARN_AND_LOG",
+      "validation_type": "custom",
+      "validation_config": {
+        "check": "semantic_validation"
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-comp-001",
+      "constitution_id": "const-compliance",
+      "constitution_code": "COMPLIANCE",
+      "rule_code": "COMP-001",
+      "rule_name": "Data Retention Policy",
+      "rule_text": "Data must be retained for minimum required periods by type",
+      "category": "compliance",
+      "severity": "HIGH",
+      "enforcement_action": "WARN_AND_LOG",
+      "validation_type": "threshold",
+      "validation_config": {
+        "retention_days": {
+          "audit_logs": 365,
+          "execution_logs": 90,
+          "pii_data": 30,
+          "session_data": 7
+        }
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-comp-002",
+      "constitution_id": "const-compliance",
+      "constitution_code": "COMPLIANCE",
+      "rule_code": "COMP-002",
+      "rule_name": "PII Handling Requirements",
+      "rule_text": "PII must be encrypted for storage/transmission and masked for logging",
+      "category": "compliance",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "custom",
+      "validation_config": {
+        "check": "pii_handling",
+        "pii_patterns": ["email", "phone", "ssn", "credit_card", "password", "api_key"]
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-comp-003",
+      "constitution_id": "const-compliance",
+      "constitution_code": "COMPLIANCE",
+      "rule_code": "COMP-003",
+      "rule_name": "Audit Logging Requirements",
+      "rule_text": "Audit entries must include actor, action, timestamp, resource_type, resource_id",
+      "category": "audit",
+      "severity": "HIGH",
+      "enforcement_action": "BLOCK",
+      "validation_type": "field_check",
+      "validation_config": {
+        "required_fields": ["actor", "action", "timestamp", "resource_type", "resource_id"]
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-comp-004",
+      "constitution_id": "const-compliance",
+      "constitution_code": "COMPLIANCE",
+      "rule_code": "COMP-004",
+      "rule_name": "Access Control Enforcement",
+      "rule_text": "Access levels must be validated: public, internal, confidential, restricted",
+      "category": "compliance",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "custom",
+      "validation_config": {
+        "valid_levels": ["public", "internal", "confidential", "restricted"]
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-comp-005",
+      "constitution_id": "const-compliance",
+      "constitution_code": "COMPLIANCE",
+      "rule_code": "COMP-005",
+      "rule_name": "Secret Management Policy",
+      "rule_text": "Secrets must never be logged, stored in code, or transmitted in plaintext",
+      "category": "compliance",
+      "severity": "CRITICAL",
+      "enforcement_action": "BLOCK",
+      "validation_type": "custom",
+      "validation_config": {
+        "check": "secret_handling",
+        "secret_patterns": ["password", "secret", "api_key", "token", "private_key"]
+      },
+      "is_active": true
+    },
+    {
+      "id": "rule-comp-006",
+      "constitution_id": "const-compliance",
+      "constitution_code": "COMPLIANCE",
+      "rule_code": "COMP-006",
+      "rule_name": "Change Management Policy",
+      "rule_text": "Schema, RLS, trigger, and function changes require approval",
+      "category": "governance",
+      "severity": "HIGH",
+      "enforcement_action": "BLOCK",
+      "validation_type": "custom",
+      "validation_config": {
+        "approval_required": ["schema_change", "rls_policy_change", "trigger_modification", "function_modification"]
+      },
+      "is_active": true
+    }
+  ]
+}
