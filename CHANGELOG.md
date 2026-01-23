@@ -23,6 +23,23 @@
   - Impact: Runtime rule updates without code deployment, centralized audit trail, backward compatibility via adapters
   - Documentation: Complete system overview, API docs, database schema, and CLI guide in `docs/01_architecture/`, `docs/02_api/`, `docs/database/`, `docs/reference/`
 
+- **SD-LEO-GATE0-001: Gate 0 Workflow Entry Enforcement** (Orchestrator with 6 children)
+  - **Purpose**: Prevent code shipping when SDs have not properly entered the LEO Protocol workflow
+  - **Root Cause Addressed**: Protocol had excellent gates ONCE in workflow, but no gate preventing work OUTSIDE the workflow
+  - **6 Child SDs Completed**:
+    - `SD-LEO-GATE0-PRECOMMIT-001`: Pre-commit hook for SD phase validation
+    - `SD-LEO-GATE0-CLAUDEEXEC-001`: CLAUDE_EXEC.md mandatory sd:status check
+    - `SD-LEO-GATE0-LOCTHRESHOLD-001`: LOC threshold trigger (>500 LOC)
+    - `SD-LEO-GATE0-VERIFYSCRIPT-001`: verify-sd-phase.js script (Gate 0)
+    - `SD-LEO-GATE0-GHACTION-001`: GitHub Action for PR merge SD validation
+    - `SD-LEO-GATE0-ORCHPROGRESS-001`: Orchestrator progress calculation fix
+  - **Enforcement Points**:
+    - Pre-commit: Validates SD is in active workflow phase before allowing commits
+    - PR Merge: GitHub Action checks SD phase status before merge
+    - LOC Threshold: Triggers workflow entry when changes exceed 500 LOC
+  - **Impact**: Prevents protocol bypass, ensures SD workflow activation before implementation
+  - **Capabilities Registered**: `gate0-workflow-enforcement`, `pre-commit-validation`, `pr-merge-validation`
+
 - **SD-LEO-REFAC-TESTING-INFRA-001: TESTING & RETRO Sub-Agent Modularization** - PRs #543, #544
   - **TESTING Sub-Agent** refactored from 1,097 LOC monolithic file to modular architecture:
     - Created `lib/sub-agents/testing/phases/` directory with 5 phase modules:
