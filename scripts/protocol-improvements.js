@@ -17,6 +17,7 @@
  */
 
 import { createProtocolImprovementSystem } from './modules/protocol-improvements/index.js';
+import { createAIQualityJudge } from './modules/ai-quality-judge/index.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -222,6 +223,134 @@ async function main() {
       break;
     }
 
+    case 'evaluate': {
+      const improvementId = args[1];
+      const judge = createAIQualityJudge();
+
+      if (!improvementId) {
+        console.log('Usage: node scripts/protocol-improvements.js evaluate <queue-id>');
+        console.log('       node scripts/protocol-improvements.js evaluate --all [--limit=N] [--threshold=70]');
+        process.exit(1);
+      }
+
+      if (improvementId === '--all' || flags.all) {
+        // Batch evaluation
+        const result = await judge.evaluatePending({
+          limit: parseInt(flags.limit || '10'),
+          threshold: parseInt(flags.threshold || '70'),
+          risk_tier: flags.tier
+        });
+
+        console.log('');
+        console.log('✅ Batch Evaluation Complete');
+        console.log(`   Evaluated: ${result.evaluated}`);
+        console.log(`   Approved: ${result.approved}`);
+        console.log(`   Needs Revision: ${result.needs_revision}`);
+        console.log(`   Rejected: ${result.rejected}`);
+        console.log('');
+      } else {
+        // Single evaluation
+        const result = await judge.evaluate(improvementId);
+
+        console.log('');
+        if (result.recommendation === 'APPROVE') {
+          console.log('✅ AI QUALITY JUDGE: APPROVE');
+        } else if (result.recommendation === 'NEEDS_REVISION') {
+          console.log('⚠️  AI QUALITY JUDGE: NEEDS REVISION');
+        } else {
+          console.log('❌ AI QUALITY JUDGE: REJECT');
+        }
+
+        console.log(`   Score: ${result.score}%`);
+        console.log(`   Confidence: ${result.confidence}`);
+
+        if (result.requires_human_review) {
+          console.log('   👤 Human review required');
+        }
+
+        console.log('');
+      }
+
+      break;
+    }
+
+    case 'evaluation-report': {
+      const improvementId = args[1];
+
+      if (!improvementId) {
+        console.log('Usage: node scripts/protocol-improvements.js evaluation-report <queue-id>');
+        process.exit(1);
+      }
+
+      const judge = createAIQualityJudge();
+      const report = await judge.getReport(improvementId);
+
+      console.log('');
+      console.log('📊 AI Quality Judge Evaluation Report');
+      console.log('='.repeat(60));
+      console.log('');
+      console.log('IMPROVEMENT:');
+      console.log(`   ID: ${report.improvement.id}`);
+      console.log(`   Type: ${report.improvement.type}`);
+      console.log(`   Target: ${report.improvement.target_table}`);
+      console.log(`   Risk Tier: ${report.improvement.risk_tier}`);
+      console.log(`   Status: ${report.improvement.status}`);
+      console.log('');
+
+      if (report.assessment) {
+        console.log('ASSESSMENT:');
+        console.log(`   Score: ${report.assessment.score}%`);
+        console.log(`   Recommendation: ${report.assessment.recommendation}`);
+        console.log(`   Evaluator: ${report.assessment.evaluator_model}`);
+        console.log(`   Evaluated: ${report.assessment.evaluated_at}`);
+        console.log('');
+        console.log('   Criteria Scores:');
+        for (const [criterion, score] of Object.entries(report.assessment.criteria_scores || {})) {
+          console.log(`      ${criterion}: ${score}/10`);
+        }
+      } else {
+        console.log('   No assessment found. Run: evaluate <id>');
+      }
+
+      if (report.constitution_violations) {
+        console.log('');
+        console.log('CONSTITUTION VIOLATIONS:');
+        console.log(`   Count: ${report.constitution_violations.violation_count}`);
+        for (const v of report.constitution_violations.violations || []) {
+          console.log(`   - ${v.rule_code}: ${v.message}`);
+        }
+      }
+
+      console.log('');
+      break;
+    }
+
+    case 'judge-stats': {
+      const judge = createAIQualityJudge();
+      const stats = await judge.getStatistics();
+
+      console.log('');
+      console.log('📊 AI Quality Judge Statistics');
+      console.log('='.repeat(50));
+      console.log('');
+      console.log(`   Total Assessments: ${stats.total_assessments}`);
+      console.log(`   Average Score: ${stats.average_score}%`);
+      console.log('');
+      console.log('   By Recommendation:');
+      console.log(`      APPROVE: ${stats.by_recommendation.APPROVE}`);
+      console.log(`      NEEDS_REVISION: ${stats.by_recommendation.NEEDS_REVISION}`);
+      console.log(`      REJECT: ${stats.by_recommendation.REJECT}`);
+      console.log('');
+      console.log('   Score Distribution:');
+      console.log(`      Excellent (85-100): ${stats.score_distribution.excellent}`);
+      console.log(`      Good (70-84): ${stats.score_distribution.good}`);
+      console.log(`      Fair (50-69): ${stats.score_distribution.fair}`);
+      console.log(`      Poor (0-49): ${stats.score_distribution.poor}`);
+      console.log('');
+
+      break;
+    }
+
     case 'stats': {
       const stats = await system.getStats();
 
@@ -278,6 +407,10 @@ async function main() {
       console.log('COMMANDS:');
       console.log('  list [--status] [--phase]       - List improvements in queue');
       console.log('  review <id>                     - Review improvement details');
+      console.log('  evaluate <id>                   - AI Quality Judge evaluation (Phase 1)');
+      console.log('  evaluate --all [--limit=N]      - Batch evaluate pending improvements');
+      console.log('  evaluation-report <id>          - Show detailed evaluation report');
+      console.log('  judge-stats                     - AI Quality Judge statistics');
       console.log('  approve <id>                    - Approve improvement');
       console.log('  reject <id> --reason="..."      - Reject improvement');
       console.log('  apply <id> [--dry-run]          - Apply improvement');
