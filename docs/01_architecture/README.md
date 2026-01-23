@@ -23,12 +23,12 @@ This directory contains system architecture documentation for EHG_Engineer, incl
 
 | Document | Description |
 |----------|-------------|
+| `leo-5-task-system.md` | **LEO 5.0 Task System Architecture** - Hybrid Identity + Execution model |
+| `aegis-system-overview.md` | AEGIS governance system overview |
 | `system-overview.md` | High-level system architecture |
-| `component-diagrams.md` | System component relationships |
-| `data-flow.md` | Data flow and processing patterns |
-| `leo-protocol-architecture.md` | LEO Protocol system design |
-| `database-design.md` | Database schema and architecture |
-| `sub-agent-architecture.md` | Sub-agent system design |
+| `database_schema.md` | Database schema documentation |
+| `multi-repo-architecture.md` | Multi-repository architecture |
+| `UNIFIED-FRONTEND-ARCHITECTURE.md` | Frontend architecture patterns |
 
 ## Related Documentation
 
