@@ -11,13 +11,13 @@
 
 ## Overview
 
-The **Protocol Constitution** is a set of 9 immutable rules that govern the LEO Protocol's self-improvement system. These rules enforce safety, governance, and audit controls to prevent the autonomous system from making dangerous or unchecked modifications to itself.
+The **Protocol Constitution** is a set of 11 immutable rules that govern the LEO Protocol's self-improvement system. These rules enforce safety, governance, and audit controls to prevent the autonomous system from making dangerous or unchecked modifications to itself.
 
 **Key Principle**: The constitution ensures that while the system can *propose* improvements autonomously, critical safeguards remain in place to preserve human oversight, system stability, and architectural integrity.
 
 ## Table of Contents
 
-1. [The Nine Constitutional Rules](#the-nine-constitutional-rules)
+1. [The Eleven Constitutional Rules](#the-eleven-constitutional-rules)
 2. [Enforcement Mechanisms](#enforcement-mechanisms)
 3. [Integration with AI Quality Judge](#integration-with-ai-quality-judge)
 4. [Violation Severity Levels](#violation-severity-levels)
@@ -29,7 +29,7 @@ The **Protocol Constitution** is a set of 9 immutable rules that govern the LEO 
 
 ---
 
-## The Nine Constitutional Rules
+## The Eleven Constitutional Rules
 
 ### CONST-001: Human Approval for GOVERNED Tier
 
@@ -459,6 +459,107 @@ supabase.from('system_flags')
 
 ---
 
+### CONST-010: Non-Manipulation Principle
+
+**Rule**: AI-generated improvement proposals must not use manipulative framing, urgent language, certainty claims, or emotional appeals to influence human reviewers.
+
+**Category**: Safety
+**Rationale**: Implements Anthropic's Claude Constitution principle of non-manipulative persuasion. Ensures AI recommendations are factual and neutral, preserving human agency.
+**Source SD**: SD-LEO-INFRA-CONST-AMEND-001
+
+**What This Means**:
+- AI proposals must use factual evidence and reasoning only
+- Urgent/pressure language is flagged (e.g., "URGENT", "CRITICAL", "MUST")
+- Certainty claims are flagged (e.g., "ALWAYS", "NEVER", "DEFINITELY")
+- Emotional appeals are flagged (e.g., "disaster", "catastrophic", "crisis")
+- False scarcity framing is flagged (e.g., "only option", "no alternative")
+
+**Enforcement**:
+```javascript
+validateConst010(improvement) {
+  const text = improvement.description + JSON.stringify(improvement.payload);
+
+  const manipulativePatterns = [
+    /\b(URGENT|CRITICAL|IMMEDIATE|ASAP)\b/i,
+    /\b(MUST|ALWAYS|NEVER|DEFINITELY)\b/i,
+    /\b(disaster|catastrophic|crisis|emergency)\b/i,
+    /\b(only option|no alternative|no choice)\b/i
+  ];
+
+  const matchCount = manipulativePatterns.filter(p => p.test(text)).length;
+
+  // Require 2+ patterns to avoid false positives
+  if (matchCount >= 2) {
+    return {
+      rule_code: 'CONST-010',
+      message: 'Improvement contains potentially manipulative language patterns',
+      severity: 'MEDIUM'
+    };
+  }
+}
+```
+
+**Severity**: MEDIUM (advisory - flags for human review but does not block)
+
+**Example Violations**:
+- ⚠️ "URGENT: This MUST be approved immediately or we face DISASTER"
+- ⚠️ "This is CRITICAL - there is NO ALTERNATIVE to this change"
+- ✅ "This improvement adds validation based on retrospective evidence from SD-XXX"
+- ✅ "Consider adding precheck command to reduce handoff iterations"
+
+---
+
+### CONST-011: Value Priority Hierarchy
+
+**Rule**: When constitutional rules conflict, prioritize in this order: (1) Human Safety, (2) System Integrity, (3) Audit Compliance, (4) Operational Efficiency.
+
+**Category**: Governance
+**Rationale**: Provides explicit value hierarchy for conflict resolution, based on Anthropic's Claude Constitution value ordering (Safe > Ethical > Compliant > Helpful).
+**Source SD**: SD-LEO-INFRA-CONST-AMEND-001
+
+**Value Hierarchy**:
+
+| Priority | Value | Rules |
+|----------|-------|-------|
+| 1 (Highest) | **Human Safety** | CONST-001, CONST-002, CONST-009 |
+| 2 | **System Integrity** | CONST-004, CONST-007 |
+| 3 | **Audit Compliance** | CONST-003, CONST-008 |
+| 4 (Lowest) | **Operational Efficiency** | CONST-005, CONST-006, CONST-010 |
+
+**What This Means**:
+- When two rules conflict, the higher-priority rule wins
+- Human Safety always takes precedence over efficiency concerns
+- This is advisory guidance for human reviewers, not automated enforcement
+- Helps resolve edge cases where multiple rules apply
+
+**Enforcement**:
+```javascript
+validateConst011(improvement, context) {
+  // Advisory only - provides hierarchy context when multiple violations exist
+  if (context.existing_violations && context.existing_violations.length >= 2) {
+    const categories = categorizeViolations(context.existing_violations);
+
+    if (categories.size >= 2) {
+      return {
+        rule_code: 'CONST-011',
+        message: 'Multiple rule categories violated. Prioritize: Human Safety > System Integrity > Audit Compliance > Operational Efficiency.',
+        severity: 'ADVISORY',
+        details: { value_hierarchy: valueHierarchy }
+      };
+    }
+  }
+}
+```
+
+**Severity**: ADVISORY (informational only - no automatic violations)
+
+**Example Application**:
+- If CONST-001 (Human Safety) conflicts with CONST-006 (Complexity), human safety wins
+- If CONST-004 (System Integrity) conflicts with CONST-005 (Database-first), system integrity wins
+- Human reviewer uses hierarchy to make decision when both rules apply
+
+---
+
 ## Enforcement Mechanisms
 
 ### Layer 1: Constitution Validator
@@ -541,7 +642,7 @@ CREATE POLICY no_delete_constitution ON protocol_constitution
 
 ✅ PASSED
 
-Rules Checked: 9/9
+Rules Checked: 11/11
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 MULTI-CRITERION SCORING
@@ -599,7 +700,7 @@ Requires Human Review: No
 
 ### MEDIUM (Advisory)
 
-**Rules**: CONST-006, CONST-008
+**Rules**: CONST-006, CONST-008, CONST-010
 
 **Impact**: Warning flag, no auto-rejection, human review recommended
 
@@ -610,6 +711,20 @@ Requires Human Review: No
 - Removal without reviewing original retrospective
 
 **Resolution**: Review justification, may proceed if valid reason exists
+
+### ADVISORY (Informational)
+
+**Rules**: CONST-011
+
+**Impact**: Informational guidance only, no violation generated automatically
+
+**Rationale**: Provides context for human decision-making when rules conflict
+
+**Examples**:
+- Multiple categories of violations detected - hierarchy guidance provided
+- Edge case where rules seem to contradict
+
+**Resolution**: Human reviewer uses guidance to make informed decision
 
 ---
 
@@ -1156,6 +1271,7 @@ VALUES (
 | Amendment | Date | Rule Added | Reason |
 |-----------|------|------------|--------|
 | Initial | 2026-01-22 | CONST-001 through CONST-009 | Foundation for AI Quality Judge Phase 1 |
+| Anthropic Alignment | 2026-01-23 | CONST-010, CONST-011 | Aligned with Anthropic Claude Constitution (SD-LEO-INFRA-CONST-AMEND-001) |
 
 ---
 
