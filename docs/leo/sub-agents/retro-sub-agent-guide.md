@@ -1,8 +1,37 @@
 # Retrospective Sub-Agent Guide
 
 **SD-REFACTOR-RETRO-001: Retrospective Sub-Agent Modularization**
+**Updated: SD-LEO-REFAC-TESTING-INFRA-001 (2026-01-23): Quality improvements**
 
 This guide documents the RETRO sub-agent architecture, quality scoring algorithms, and pattern learning integration.
+
+## Recent Improvements (2026-01-23)
+
+**SD-LEO-REFAC-TESTING-INFRA-001** delivered critical quality enhancements to eliminate generic/boilerplate retrospectives:
+
+### Problem
+- Retrospectives scored 42-46/100 (below 70/100 quality gate threshold)
+- Action items were stripped to plain strings, losing SMART metadata
+- Content generation used templates instead of extracting actual SD insights
+- All SDs of same type received identical boilerplate learnings
+
+### Solution
+1. **Preserved SMART Action Items** (`lib/sub-agents/retro/action-items.js`)
+   - Removed string stripping at end of `generateSmartActionItems()`
+   - Action items now retain full SMART metadata (owner, deadline, success_criteria, verification_query)
+   - Added specific verification queries and real deadlines instead of generic placeholders
+
+2. **SD-Specific Insight Extraction** (`lib/sub-agents/retro/generators.js`)
+   - Replaced template-based generators with data extractors
+   - New functions: `extractSubAgentInsights()`, `extractPRDInsights()`, `extractHandoffInsights()`, `extractTestEvidence()`
+   - Learnings now reference actual SD work: "TESTING initially blocked (2x) then passed (1x) for SD-XXX-001. Resolution required 3 iterations."
+   - "What Went Well" and "What Could Improve" pull from actual handoff scores, sub-agent results, and PRD deliverables
+
+### Results
+- Quality score: 90/100 (46/100 improvement)
+- 16 key learnings with specific SD references
+- Zero boilerplate detection patterns
+- RETROSPECTIVE_QUALITY_GATE now consistently passes
 
 ## Quick Reference
 
