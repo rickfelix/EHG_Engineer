@@ -347,6 +347,131 @@ export class ConstitutionValidator {
   }
 
   /**
+   * Validate improvement against CONST-010: Non-Manipulation Principle
+   * SD-LEO-INFRA-CONST-AMEND-001
+   *
+   * Detects potentially manipulative framing in AI-generated improvement proposals.
+   * Based on Anthropic's Claude Constitution principle of non-manipulative persuasion.
+   *
+   * Severity: MEDIUM (advisory - flags for human review but does not block)
+   */
+  validateConst010(improvement) {
+    const violations = [];
+
+    // Combine description and payload text for analysis
+    const description = improvement.description || '';
+    const payloadText = JSON.stringify(improvement.payload || {});
+    const combinedText = `${description} ${payloadText}`;
+
+    // Define manipulative language patterns
+    const manipulativePatterns = [
+      // Urgent/pressure language
+      /\b(URGENT|CRITICAL|IMMEDIATE|ASAP|RIGHT NOW|MUST ACT|TIME-SENSITIVE)\b/i,
+      // Certainty claims that bypass nuance
+      /\b(MUST|ALWAYS|NEVER|DEFINITELY|CERTAINLY|OBVIOUSLY|CLEARLY MUST)\b/i,
+      // Emotional appeals / fear tactics
+      /\b(DISASTER|CATASTROPHIC|CRISIS|EMERGENCY|DEVASTATING|DANGEROUS|FATAL)\b/i,
+      // False scarcity / no-alternative framing
+      /\b(ONLY OPTION|NO ALTERNATIVE|NO CHOICE|ONLY WAY|MUST IMMEDIATELY)\b/i
+    ];
+
+    // Count how many patterns match
+    const matchedPatterns = manipulativePatterns.filter(pattern => pattern.test(combinedText));
+    const matchCount = matchedPatterns.length;
+
+    // Require 2+ pattern matches to flag (reduces false positives)
+    if (matchCount >= 2) {
+      violations.push({
+        rule_code: 'CONST-010',
+        message: 'Improvement description contains potentially manipulative language patterns. Rewrite with neutral, factual language.',
+        severity: 'MEDIUM',
+        details: {
+          pattern_matches: matchCount,
+          threshold: 2,
+          recommendation: 'Use factual evidence and reasoning instead of urgency or emotional framing'
+        }
+      });
+    }
+
+    return violations;
+  }
+
+  /**
+   * Validate improvement against CONST-011: Value Priority Hierarchy
+   * SD-LEO-INFRA-CONST-AMEND-001
+   *
+   * Provides advisory guidance when multiple constitutional rules may conflict.
+   * Based on Anthropic's Claude Constitution value ordering (Safe > Ethical > Compliant > Helpful).
+   *
+   * Priority Order:
+   *   1. Human Safety (CONST-001, CONST-002, CONST-009)
+   *   2. System Integrity (CONST-004, CONST-007)
+   *   3. Audit Compliance (CONST-003, CONST-008)
+   *   4. Operational Efficiency (CONST-005, CONST-006, CONST-010)
+   *
+   * Severity: ADVISORY (informational only - helps human reviewers)
+   */
+  validateConst011(improvement, context = {}) {
+    const violations = [];
+
+    // CONST-011 is advisory only - does not generate violations by itself
+    // It provides guidance when multiple violations exist from different categories
+
+    // Define value hierarchy categories
+    const valueHierarchy = {
+      humanSafety: {
+        priority: 1,
+        rules: ['CONST-001', 'CONST-002', 'CONST-009'],
+        description: 'Human Safety - highest priority'
+      },
+      systemIntegrity: {
+        priority: 2,
+        rules: ['CONST-004', 'CONST-007'],
+        description: 'System Integrity'
+      },
+      auditCompliance: {
+        priority: 3,
+        rules: ['CONST-003', 'CONST-008'],
+        description: 'Audit Compliance'
+      },
+      operationalEfficiency: {
+        priority: 4,
+        rules: ['CONST-005', 'CONST-006', 'CONST-010'],
+        description: 'Operational Efficiency - lowest priority'
+      }
+    };
+
+    // If context includes existing violations from multiple categories,
+    // provide advisory guidance on priority order
+    if (context.existing_violations && context.existing_violations.length >= 2) {
+      const violatedRules = context.existing_violations.map(v => v.rule_code);
+      const categoriesViolated = new Set();
+
+      for (const [category, config] of Object.entries(valueHierarchy)) {
+        if (config.rules.some(rule => violatedRules.includes(rule))) {
+          categoriesViolated.add(category);
+        }
+      }
+
+      if (categoriesViolated.size >= 2) {
+        // Multiple categories violated - provide hierarchy guidance
+        violations.push({
+          rule_code: 'CONST-011',
+          message: 'Multiple rule categories violated. When resolving conflicts, prioritize: Human Safety > System Integrity > Audit Compliance > Operational Efficiency.',
+          severity: 'ADVISORY',
+          details: {
+            categories_violated: Array.from(categoriesViolated),
+            hierarchy_guidance: true,
+            value_hierarchy: valueHierarchy
+          }
+        });
+      }
+    }
+
+    return violations;
+  }
+
+  /**
    * Get model family from model name
    */
   getModelFamily(modelName) {
@@ -408,11 +533,19 @@ export class ConstitutionValidator {
     allViolations.push(...await this.validateConst007(improvement));
     allViolations.push(...this.validateConst008(improvement));
     allViolations.push(...await this.validateConst009(improvement));
+    allViolations.push(...this.validateConst010(improvement));
+
+    // Run CONST-011 with existing violations as context for hierarchy guidance
+    allViolations.push(...this.validateConst011(improvement, {
+      ...context,
+      existing_violations: allViolations
+    }));
 
     // Categorize violations
     const criticalViolations = allViolations.filter(v => v.severity === 'CRITICAL');
     const highViolations = allViolations.filter(v => v.severity === 'HIGH');
     const mediumViolations = allViolations.filter(v => v.severity === 'MEDIUM');
+    const advisoryViolations = allViolations.filter(v => v.severity === 'ADVISORY');
 
     // Determine overall result
     const passed = criticalViolations.length === 0;
@@ -425,6 +558,7 @@ export class ConstitutionValidator {
       critical_count: criticalViolations.length,
       high_count: highViolations.length,
       medium_count: mediumViolations.length,
+      advisory_count: advisoryViolations.length,
       rules_checked: this.constitutionRules.length,
       evaluated_at: new Date().toISOString(),
       aegis_enabled: false

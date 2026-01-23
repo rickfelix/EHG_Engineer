@@ -83,7 +83,9 @@ export const CONSTITUTION_RULE_CODES = [
   'CONST-006', // Complexity conservation
   'CONST-007', // Max 3 AUTO changes per 24h
   'CONST-008', // Chesterton's Fence
-  'CONST-009'  // Human FREEZE command
+  'CONST-009', // Human FREEZE command
+  'CONST-010', // Non-Manipulation Principle (SD-LEO-INFRA-CONST-AMEND-001)
+  'CONST-011'  // Value Priority Hierarchy (SD-LEO-INFRA-CONST-AMEND-001)
 ];
 
 /**
@@ -100,7 +102,11 @@ export const VIOLATION_SEVERITY = {
   },
   MEDIUM: {
     description: 'Warning, human review recommended',
-    rules: ['CONST-006', 'CONST-008']
+    rules: ['CONST-006', 'CONST-008', 'CONST-010']
+  },
+  ADVISORY: {
+    description: 'Informational guidance, no violation generated',
+    rules: ['CONST-011']
   }
 };
 
