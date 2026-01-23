@@ -3,6 +3,26 @@
 ## 2026-01-23
 
 ### Infrastructure
+- **SD-AEGIS-GOVERNANCE-001: AEGIS Unified Governance System** - PRs #506, #508
+  - **Complete Implementation** consolidating 7 fragmented governance frameworks into unified database-first system:
+    - Database schema: `aegis_constitutions`, `aegis_rules`, `aegis_violations` tables with RLS policies
+    - Core enforcement engine: `AegisEnforcer`, `AegisRuleLoader`, `AegisViolationRecorder`
+    - 6 validator types: FieldCheck, Threshold, RoleForbidden, CountLimit, Custom, Base
+    - 7 governance framework adapters:
+      - `ConstitutionAdapter` - Protocol Constitution (9 rules)
+      - `FourOathsAdapter` - Agent behavior governance
+      - `DoctrineAdapter` - EXEC phase restrictions (Law 1)
+      - `HardHaltAdapter` - Dead-man switch protocol
+      - `ManifestoModeAdapter` - EVA manifesto enforcement
+      - `CrewGovernanceAdapter` - Budget and PRD validation
+      - `ComplianceAdapter` - PII, retention, audit logging
+    - CLI commands: `node scripts/governance.js list|validate|violations|stats|constitutions`
+    - REST API endpoints: `/api/aegis/rules`, `/api/aegis/violations`, `/api/aegis/stats`, `/api/aegis/constitutions`
+    - Performance: Multi-layer caching (in-memory + 5min TTL) minimizes database queries
+    - 62 passing tests across all phases
+  - Impact: Runtime rule updates without code deployment, centralized audit trail, backward compatibility via adapters
+  - Documentation: Complete system overview, API docs, database schema, and CLI guide in `docs/01_architecture/`, `docs/02_api/`, `docs/database/`, `docs/reference/`
+
 - **SD-LEO-REFAC-TESTING-INFRA-001: TESTING & RETRO Sub-Agent Modularization** - PRs #543, #544
   - **TESTING Sub-Agent** refactored from 1,097 LOC monolithic file to modular architecture:
     - Created `lib/sub-agents/testing/phases/` directory with 5 phase modules:
