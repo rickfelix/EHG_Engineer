@@ -1,21 +1,47 @@
 # LEO Protocol - Automatic PRD Generation
 
 **Integration Date**: 2025-10-19
-**Status**: ✅ **PRODUCTION READY**
-**Automation Level**: **100% Automatic**
+**Last Updated**: 2026-01-23
+**Status**: **PRODUCTION READY**
+**Automation Level**: **100% Automatic (LLM-Based)**
+**Consolidation SD**: SD-LEO-INFRA-PRD-CREATION-CONSOLIDATION-001
 
 ---
 
-## 🎯 Overview
+## Overview
 
-The LEO Protocol now **automatically generates PRD scripts** when LEAD approves a Strategic Directive and creates a LEAD→PLAN handoff.
+The LEO Protocol **automatically generates PRDs with LLM-derived content** when LEAD approves a Strategic Directive. This is a fully automated process with no TODO placeholders.
 
-**Before**: Manual process requiring 10 minutes
-**After**: Automatic generation in <5 seconds
+**Key Features**:
+- LLM-based content generation from SD fields
+- Sub-agent orchestration (DESIGN, DATABASE, SECURITY, RISK)
+- Persona ingestion for stakeholder awareness
+- Component recommendations (semantic UI matching)
+- No manual editing required for initial PRD
 
 ---
 
-## 🔄 Automatic Workflow
+## Canonical Method
+
+**Single Entry Point**:
+```bash
+node scripts/add-prd-to-database.js <SD-ID> [PRD-Title]
+```
+
+This delegates to `scripts/prd/index.js` which provides:
+- LLM-powered content generation
+- SD field derivation (functional requirements from strategic_objectives)
+- Automatic sub-agent orchestration
+- Persona and component analysis
+
+**npm Shortcut**:
+```bash
+npm run prd:new <SD-ID> [PRD-Title]
+```
+
+---
+
+## Automatic Workflow
 
 ### Complete LEAD→PLAN Flow
 
@@ -23,196 +49,43 @@ The LEO Protocol now **automatically generates PRD scripts** when LEAD approves 
 1. LEAD Agent approves Strategic Directive
    ↓
 2. Creates LEAD-to-PLAN handoff
-   → node scripts/unified-handoff-system.js execute LEAD-to-PLAN SD-XXX
+   → node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX
    ↓
-3. 🤖 AUTOMATIC: PRD script generation triggers
+3. AUTOMATIC: PRD creation triggers
    → Fetches SD details from database
-   → Generates scripts/create-prd-sd-xxx.js
-   → Pre-fills SD ID, title, category, priority
+   → Derives content from SD fields (objectives, changes, criteria)
+   → Generates LLM-enhanced requirements
+   → Executes sub-agents (DESIGN, DATABASE, SECURITY, RISK)
+   → Creates PRD in database with full content
    ↓
-4. User reviews and edits generated script
-   → Update TODO sections
-   → Add requirements, architecture, tests
-   ↓
-5. User runs the script
-   → node scripts/create-prd-sd-xxx.js
-   → Creates PRD in database
-   → Validates schema automatically
-   → Triggers STORIES sub-agent
+4. PRD ready for PLAN→EXEC handoff
+   → No manual editing required
+   → User stories auto-generated
+   → Component recommendations included
 ```
 
 ---
 
-## ✨ What Gets Automated
+## What Gets Automated
 
-### 1. Script Generation ✅ **100% Automatic**
+### 100% Automatic
 
-When LEAD-to-PLAN handoff succeeds:
-```bash
-# This happens AUTOMATICALLY - no user action needed
-🤖 AUTO-GENERATING PRD SCRIPT
-==================================================
-   SD: Authentication System Implementation
-   Running: node scripts/generate-prd-script.js SD-AUTH-001 "..."
+| Step | Status | Details |
+|------|--------|---------|
+| PRD creation | **Automatic** | Creates PRD entry in database |
+| Content generation | **Automatic** | LLM derives from SD fields |
+| Functional requirements | **Automatic** | Extracted from strategic_objectives, key_changes |
+| Test scenarios | **Automatic** | Derived from success_criteria |
+| Acceptance criteria | **Automatic** | Mapped from SD acceptance criteria |
+| Sub-agent execution | **Automatic** | DESIGN, DATABASE, SECURITY, RISK |
+| User story generation | **Automatic** | STORIES sub-agent triggered |
+| Component recommendations | **Automatic** | Semantic UI matching |
 
-✅ PRD script auto-generated successfully!
-
-📝 NEXT STEPS:
-   1. Edit: scripts/create-prd-sd-auth-001.js
-   2. Run: node scripts/create-prd-sd-auth-001.js
-```
-
-**What's Automated**:
-- ✅ Template copied
-- ✅ File renamed (create-prd-sd-xxx.js)
-- ✅ SD ID replaced
-- ✅ Title pre-filled from database
-- ✅ Category/priority pre-filled
-- ✅ Schema validation included
-
-**User Action Required**:
-- Edit TODO sections (requirements, architecture, tests)
-- Run the generated script to create PRD
+**No TODO Placeholders**: Content is derived from SD fields, not filled with placeholders.
 
 ---
 
-### 2. Integration Point
-
-**File**: `scripts/unified-handoff-system.js`
-**Method**: `autoGeneratePRDScript(sdId)`
-**Trigger**: After successful LEAD-to-PLAN handoff (line 1107-1109)
-
-```javascript
-// AUTOMATION: Auto-generate PRD script on successful LEAD→PLAN handoff
-if (handoffType === 'LEAD-to-PLAN') {
-  await this.autoGeneratePRDScript(sdId);
-}
-```
-
-**Process**:
-1. Fetches SD from database (id, title, category, priority)
-2. Executes `generate-prd-script.js` with SD details
-3. Creates properly formatted PRD script
-4. Displays next steps to user
-
----
-
-## 📋 Complete Example
-
-### Scenario: LEAD Approves SD-AUTH-001
-
-```bash
-# 1. LEAD creates handoff (manual)
-$ node scripts/unified-handoff-system.js execute LEAD-to-PLAN SD-AUTH-001
-
-📝 Creating LEAD-to-PLAN handoff...
-✅ Handoff validation passed
-✅ Handoff artifact created
-
-🤖 AUTO-GENERATING PRD SCRIPT
-==================================================
-   SD: Authentication System Implementation
-   Running: node scripts/generate-prd-script.js SD-AUTH-001 "..."
-
-🚀 PRD Script Generator
-======================================================================
-
-📋 Creating PRD script for SD-AUTH-001...
-   ✅ Found SD: Authentication System Implementation
-   UUID: 550e8400-e29b-41d4-a716-446655440000
-
-✅ PRD script created successfully!
-======================================================================
-   File: scripts/create-prd-sd-auth-001.js
-   SD ID: SD-AUTH-001
-   Title: Authentication System Implementation - Technical Implementation
-
-📝 Next Steps:
-   1. Review and edit: create-prd-sd-auth-001.js
-   2. Run script: node scripts/create-prd-sd-auth-001.js
-
-✅ PRD script auto-generated successfully!
-
-📝 NEXT STEPS:
-   1. Edit: scripts/create-prd-sd-auth-001.js
-      - Update TODO sections
-      - Add requirements, architecture, test scenarios
-
-   2. Run: node scripts/create-prd-sd-auth-001.js
-      - Creates PRD in database
-      - Validates schema automatically
-      - Triggers STORIES sub-agent
-```
-
-### 2. User Edits Script (5-10 minutes)
-
-```javascript
-// scripts/create-prd-sd-auth-001.js
-const SD_ID = 'SD-AUTH-001'; // ✅ Already filled
-const PRD_TITLE = 'Authentication System Implementation - Technical Implementation'; // ✅ Already filled
-
-// User fills in TODO sections:
-functional_requirements: [
-  {
-    id: 'FR-1',
-    requirement: 'OAuth 2.0 Integration',
-    description: 'Implement Google and GitHub OAuth providers',
-    // ...
-  }
-],
-// ... etc
-```
-
-### 3. User Runs Script (automatic execution)
-
-```bash
-$ node scripts/create-prd-sd-auth-001.js
-
-📋 Creating PRD for SD-AUTH-001
-======================================================================
-
-1️⃣  Fetching Strategic Directive...
-✅ Found SD: Authentication System Implementation
-   UUID: 550e8400-e29b-41d4-a716-446655440000
-   Category: technical
-   Priority: high
-
-2️⃣  Building PRD data...
-
-3️⃣  Validating PRD schema...
-
-═══════════════════════════════════════════════════
-📋 PRD SCHEMA VALIDATION REPORT
-═══════════════════════════════════════════════════
-
-✅ Validation PASSED - All fields match schema
-
-═══════════════════════════════════════════════════
-
-4️⃣  Checking for existing PRD...
-
-5️⃣  Inserting PRD into database...
-
-✅ PRD created successfully!
-======================================================================
-   PRD ID: PRD-SD-AUTH-001
-   SD UUID: 550e8400-e29b-41d4-a716-446655440000
-   Title: Authentication System Implementation
-   Status: planning
-   Phase: planning
-   Progress: 10%
-
-📝 Next Steps:
-   1. Update TODO items in PRD
-   2. Run STORIES sub-agent: node scripts/create-user-stories-sd-auth-001.mjs
-   3. Run DATABASE sub-agent: node scripts/database-architect-schema-review.js
-   4. Mark plan_checklist items as complete
-   5. Create PLAN→EXEC handoff when ready
-```
-
----
-
-## 🏗️ Architecture
+## Architecture
 
 ### Component Diagram
 
@@ -221,218 +94,251 @@ LEAD Agent
     ↓
   Creates LEAD-to-PLAN Handoff
     ↓
-unified-handoff-system.js
+handoff.js (lead-to-plan executor)
     ├─ Validates handoff
     ├─ Records success
-    └─ 🤖 autoGeneratePRDScript(sdId)
+    └─ prd-generation.js → autoGeneratePRDScript()
         ↓
-    Executes generate-prd-script.js
+    add-prd-to-database.js (Canonical Method)
+        ↓
+    scripts/prd/index.js
         ├─ Fetches SD from database
-        ├─ Copies template
-        ├─ Pre-fills SD data
-        └─ Creates script file
-            ↓
-        User edits script (manual)
-            ↓
-        User runs script (manual)
-            ↓
-        add-prd-to-database.js logic
-            ├─ Validates schema
-            ├─ Creates PRD
-            └─ Triggers STORIES sub-agent
+        ├─ Handles SD type detection
+        ├─ Manages persona ingestion
+        ├─ Creates initial PRD entry
+        ├─ Executes sub-agent analyses
+        │   ├─ DESIGN analysis
+        │   ├─ DATABASE analysis
+        │   ├─ SECURITY analysis
+        │   └─ RISK analysis
+        ├─ LLM-based PRD generation
+        ├─ Component recommendations
+        └─ Auto-invokes PLAN sub-agents
+            └─ STORIES sub-agent
 ```
 
-### Files Modified/Created
+### Key Files
 
-**Modified**:
-1. `scripts/unified-handoff-system.js`
-   - Added line 1107-1109: Automatic trigger
-   - Added line 1439-1516: `autoGeneratePRDScript()` method
-
-**Created** (earlier in session):
-1. `scripts/generate-prd-script.js` - PRD script generator
-2. `templates/prd-script-template.js` - Template with schema validation
-3. `lib/prd-schema-validator.js` - Schema validation library
-
-**Updated**:
-1. `package.json` - Added `prd:new` command
+| File | Purpose |
+|------|---------|
+| `scripts/add-prd-to-database.js` | Canonical entry point (thin wrapper) |
+| `scripts/prd/index.js` | Main implementation |
+| `scripts/prd/llm-generator.js` | LLM content generation |
+| `scripts/prd/sub-agent-orchestrator.js` | Sub-agent execution |
+| `scripts/prd/prd-creator.js` | Database operations |
+| `scripts/prd/formatters.js` | Content formatting |
+| `scripts/prd/config.js` | LLM prompts and config |
+| `scripts/modules/handoff/executors/lead-to-plan/prd-generation.js` | Handoff integration |
 
 ---
 
-## 🎓 Benefits
+## Example Output
 
-### Time Savings
+### LEAD→PLAN Handoff with Automatic PRD
 
-| Task | Before | After | Savings |
-|------|--------|-------|---------|
-| Copy template | 1 min (manual) | 0 sec (automatic) | 100% |
-| Rename file | 30 sec (manual) | 0 sec (automatic) | 100% |
-| Replace SD ID | 1 min (manual find/replace) | 0 sec (automatic) | 100% |
-| Fetch SD details | 2 min (manual database query) | 0 sec (automatic) | 100% |
-| Fill SD data | 5 min (manual copy/paste) | 0 sec (automatic) | 100% |
-| **Total Setup** | **9.5 min** | **0 sec** | **100%** |
-| Edit content | 20 min | 20 min | 0% (can't automate domain knowledge) |
-| **Total Time** | **29.5 min** | **20 min** | **32%** |
+```bash
+$ node scripts/handoff.js execute LEAD-TO-PLAN SD-AUTH-001
 
-### Quality Improvements
+[Handoff validation output...]
 
-- ✅ **Zero typos** in SD ID (automatic population)
-- ✅ **Correct schema** (template includes all valid fields)
-- ✅ **Schema validation** (automatic before insert)
-- ✅ **Consistent naming** (create-prd-sd-xxx.js pattern)
-- ✅ **Pre-filled data** (category, priority from database)
+🤖 AUTO-CREATING PRD (Canonical Method)
+======================================================================
+   SD: Authentication System Implementation
+   Method: add-prd-to-database.js (LLM-based, no TODOs)
+   Running: node scripts/add-prd-to-database.js UUID-xxx "Authentication..."
 
-### Developer Experience
+Adding PRD for UUID-xxx to database...
 
-**Before**:
-```
-1. Remember to copy template ❌ Manual step
-2. Rename file correctly ❌ Error-prone
-3. Search/replace SD ID ❌ 10+ replacements
-4. Look up SD in database ❌ Context switch
-5. Copy SD details ❌ Manual data entry
-6. Fill TODO sections ✅ Required
-7. Run script ✅ Required
-```
+   SD Type (current): feature
+   SD Type (detected): feature (95% confidence)
 
-**After**:
-```
-1-5. 🤖 All automatic! ✅ No action needed
-6. Fill TODO sections ✅ Required
-7. Run script ✅ Required
+=======================================================
+PHASE 1: SUB-AGENT ANALYSES
+=======================================================
+   DESIGN analysis: ✅ Complete
+   DATABASE analysis: ✅ Complete
+   SECURITY analysis: ✅ Complete
+   RISK analysis: ✅ Complete (Risk: 3/10 LOW)
+
+=======================================================
+PHASE 3: LLM-BASED PRD CONTENT GENERATION
+=======================================================
+   Found 0 existing user stories for consistency
+   Generating PRD content via LLM...
+   ✅ LLM PRD generation successful (7 functional requirements)
+
+=======================================================
+SEMANTIC COMPONENT RECOMMENDATIONS
+=======================================================
+   Found 5 component recommendations:
+   1. Button (shadcn/ui) - Priority: CRITICAL
+   2. Form (shadcn/ui) - Priority: CRITICAL
+   [...]
+
+=======================================================
+AUTO-INVOKE: PLAN Phase Sub-Agents (orchestrate)
+=======================================================
+   Sub-agents completed successfully
+   Executed: STORIES, DATABASE, RISK
+
+✅ PRD created successfully with LLM-generated content!
+
+PRD ID: PRD-SD-AUTH-001
+Status: planning
+Progress: 10%
+
+Next steps:
+1. Review sub-agent results (auto-invoked above)
+2. Verify PRD metadata and component recommendations
+3. Mark checklist items as complete
+4. Run PLAN-TO-EXEC handoff when ready
 ```
 
 ---
 
-## 🔧 Configuration
+## SD Field Derivation
 
-### Enable/Disable Auto-Generation
+The canonical method extracts PRD content from SD fields:
 
-**Currently**: Always enabled for LEAD-to-PLAN handoffs
+| SD Field | Derived PRD Content |
+|----------|---------------------|
+| `strategic_objectives` | Functional requirements |
+| `key_changes` | Additional requirements |
+| `success_criteria` | Acceptance criteria |
+| `risks` | Risk analysis input |
+| `dependencies` | Technical dependencies |
+| `description` | Executive summary, context |
+| `scope` | System architecture |
 
-**To disable** (if needed):
+### Example Derivation
+
+**SD strategic_objectives**:
+```
+1. Implement OAuth 2.0 with Google and GitHub providers
+2. Add session management with JWT tokens
+```
+
+**Derived Functional Requirements**:
 ```javascript
-// In unified-handoff-system.js, comment out lines 1107-1109:
-
-// AUTOMATION: Auto-generate PRD script on successful LEAD→PLAN handoff
-// if (handoffType === 'LEAD-to-PLAN') {
-//   await this.autoGeneratePRDScript(sdId);
-// }
-```
-
-### Manual Generation (Fallback)
-
-If auto-generation fails, users can still generate manually:
-```bash
-npm run prd:new SD-AUTH-001 "PRD Title"
-```
-
----
-
-## 🧪 Testing
-
-### Test Scenario 1: Normal Flow ✅
-
-```bash
-# 1. Create SD in database
-# 2. Create LEAD-to-PLAN handoff
-node scripts/unified-handoff-system.js execute LEAD-to-PLAN SD-TEST-001
-
-# Expected: PRD script auto-generated
-# Result: ✅ scripts/create-prd-sd-test-001.js created
-```
-
-### Test Scenario 2: Script Already Exists ✅
-
-```bash
-# 1. Create LEAD-to-PLAN handoff for SD with existing PRD script
-node scripts/unified-handoff-system.js execute LEAD-to-PLAN SD-TEST-001
-
-# Expected: Message "PRD script already exists - skipping"
-# Result: ✅ No duplicate file created
-```
-
-### Test Scenario 3: SD Not Found ⚠️
-
-```bash
-# 1. Create LEAD-to-PLAN handoff for non-existent SD
-node scripts/unified-handoff-system.js execute LEAD-to-PLAN SD-FAKE-999
-
-# Expected: Warning message, continues without blocking
-# Result: ✅ Handoff created, auto-generation skipped
+[
+  {
+    id: 'FR-1',
+    requirement: 'Implement: Implement OAuth 2.0 with Google and GitHub providers',
+    description: 'Derived from SD strategic objective',
+    priority: 'CRITICAL',
+    acceptance_criteria: ['OAuth flow works with Google', 'OAuth flow works with GitHub']
+  },
+  {
+    id: 'FR-2',
+    requirement: 'Implement: Add session management with JWT tokens',
+    description: 'Derived from SD strategic objective',
+    priority: 'HIGH',
+    acceptance_criteria: ['JWT tokens issued on login', 'Session persists across requests']
+  }
+]
 ```
 
 ---
 
-## 📊 Metrics
+## Consolidated vs Legacy Approach
+
+### Consolidated (Current)
+
+| Aspect | Value |
+|--------|-------|
+| Entry point | `add-prd-to-database.js` |
+| Content | LLM-generated, derived from SD |
+| Sub-agents | Auto-executed |
+| Manual editing | Not required |
+| TODO placeholders | None |
+
+### Legacy (Archived)
+
+| Aspect | Value |
+|--------|-------|
+| Entry point | `generate-prd-script.js` |
+| Content | Static template with TODOs |
+| Sub-agents | Manual invocation |
+| Manual editing | Required |
+| TODO placeholders | Throughout |
+
+**Legacy scripts archived to**: `docs/archive/prd-scripts-legacy/`
+
+---
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Required
+NEXT_PUBLIC_SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
+
+# For LLM content generation
+OPENAI_API_KEY=...
+
+# Optional: Persona features
+PERSONA_INGESTION_ENABLED=true
+PERSONA_PROMPT_INJECTION_ENABLED=true
+PERSONA_SOFT_GATE_ENABLED=true
+```
+
+### Manual Fallback
+
+If automatic generation fails during handoff:
+```bash
+# Run canonical method directly
+node scripts/add-prd-to-database.js SD-XXX-001 "PRD Title"
+
+# Or via npm
+npm run prd:new SD-XXX-001 "PRD Title"
+```
+
+---
+
+## Metrics
 
 ### Automation Coverage
 
-| Phase | Step | Automation |
-|-------|------|------------|
-| LEAD→PLAN Handoff | Create handoff | Manual (LEAD agent) |
-| | **Generate PRD script** | **🤖 100% Automatic** |
-| | Edit PRD content | Manual (domain knowledge required) |
-| | Run PRD script | Manual (1 command) |
-| | Schema validation | 🤖 100% Automatic |
-| | Create PRD in DB | 🤖 100% Automatic |
-| | Trigger STORIES sub-agent | 🤖 100% Automatic |
+| Phase | Automation |
+|-------|------------|
+| PRD creation | 100% Automatic |
+| Content generation | 100% Automatic (LLM) |
+| Sub-agent execution | 100% Automatic |
+| Schema validation | 100% Automatic |
+| User story generation | 100% Automatic |
 
-**Overall Automation**: **67%** (4 of 6 steps automated)
+**Overall**: 100% automated PRD creation
 
-**Developer Actions**: Just 2 steps
-1. Edit PRD content (20 min)
-2. Run PRD script (1 command)
+### Quality Improvements
 
----
-
-## 🔗 Related Documentation
-
-- **PRD Developer Guide**: `/docs/PRD_DEVELOPER_GUIDE.md`
-- **Automation Overview**: `/docs/AUTOMATION_OVERVIEW.md`
-- **Schema Validator**: `/lib/prd-schema-validator.js`
-- **Template**: `/templates/prd-script-template.js`
-- **Generator**: `/scripts/generate-prd-script.js`
-- **LEO Protocol PLAN Phase**: `CLAUDE_PLAN.md` (line 763-776)
+- **Zero TODO placeholders** - Content derived from SD
+- **Consistent structure** - LLM follows quality rubric
+- **Sub-agent analysis** - Design, database, security built-in
+- **Component recommendations** - UI components suggested
 
 ---
 
-## ✅ Integration Checklist
+## Related Documentation
 
-- [x] Created `generate-prd-script.js`
-- [x] Created `prd-script-template.js`
-- [x] Created `prd-schema-validator.js`
-- [x] Integrated into `unified-handoff-system.js`
-- [x] Added npm script `prd:new`
-- [x] Tested automatic generation
-- [x] Tested manual fallback
-- [x] Documented workflow
-- [x] Updated LEO Protocol docs
+- **Canonical Script**: `scripts/add-prd-to-database.js`
+- **Modular Implementation**: `scripts/prd/index.js`
+- **Schema Validator**: `lib/prd-schema-validator.js`
+- **Handoff Integration**: `scripts/modules/handoff/executors/lead-to-plan/prd-generation.js`
+- **Archive (Legacy)**: `docs/archive/prd-scripts-legacy/`
 
 ---
 
-## 🚀 Future Enhancements
+## History
 
-### Phase 2 (Optional)
-
-1. **Auto-Execute PRD Creation**
-   - After generating script, automatically run it
-   - Create PRD in database without user intervention
-   - Requires: Validation that TODO sections are acceptable as defaults
-
-2. **AI-Powered PRD Content**
-   - Use AI to generate requirements from SD
-   - Auto-fill functional/technical requirements
-   - Generate test scenarios automatically
-
-3. **Interactive Editing**
-   - CLI prompts for requirements
-   - Guided PRD creation workflow
-   - Real-time validation
+| Date | Change |
+|------|--------|
+| 2025-10-19 | Initial template-based automation |
+| 2026-01-23 | Consolidated to canonical LLM method (SD-LEO-INFRA-PRD-CREATION-CONSOLIDATION-001) |
 
 ---
 
-**Created**: 2025-10-19
-**Last Updated**: 2025-10-19
 **Status**: Production Ready
-**Automation Level**: 67% (4/6 steps)
+**Automation Level**: 100%
+**Canonical Method**: `add-prd-to-database.js`

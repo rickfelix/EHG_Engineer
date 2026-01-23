@@ -128,7 +128,7 @@
     "agent:metrics:agent": "node lib/agents/metrics-dashboard.cjs agent",
     "agent:metrics:top": "node lib/agents/metrics-dashboard.cjs top",
     "prepare": "husky",
-    "prd:new": "node scripts/generate-prd-script.js",
+    "prd:new": "node scripts/add-prd-to-database.js",
     "lint": "eslint scripts/ lib/ tools/ --ext .js,.ts",
     "lint:fix": "eslint scripts/ lib/ tools/ --ext .js,.ts --fix",
     "lint:e2e": "eslint tests/e2e/ --ext .js,.ts",
