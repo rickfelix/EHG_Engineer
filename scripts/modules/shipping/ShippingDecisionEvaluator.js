@@ -450,7 +450,7 @@ Remember: Return ONLY valid JSON with scores for each criterion and _meta confid
           model: this.model,
           messages,
           temperature: this.temperature,
-          max_tokens: 1000,
+          max_completion_tokens: 1000,  // Updated from deprecated max_tokens
           response_format: { type: 'json_object' }
         });
         return response;

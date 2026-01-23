@@ -70,6 +70,189 @@ import {
 dotenv.config();
 
 // =============================================================================
+// ISSUE 1 FIX: Derive Initial PRD Values from SD Fields
+// =============================================================================
+
+/**
+ * Derive functional requirements from SD strategic_objectives
+ * Instead of placeholder values, extract real requirements from the SD
+ * @param {object} sdData - Strategic Directive data
+ * @returns {Array} Functional requirements array
+ */
+function deriveFunctionalRequirements(sdData) {
+  const requirements = [];
+  let idCounter = 1;
+
+  // Extract from strategic_objectives
+  if (sdData.strategic_objectives) {
+    const objectives = Array.isArray(sdData.strategic_objectives)
+      ? sdData.strategic_objectives
+      : (typeof sdData.strategic_objectives === 'string'
+        ? sdData.strategic_objectives.split('\n').filter(o => o.trim())
+        : []);
+
+    objectives.forEach(obj => {
+      const text = typeof obj === 'object' ? (obj.objective || obj.description || obj.text) : obj;
+      if (text && text.trim()) {
+        requirements.push({
+          id: `FR-${idCounter++}`,
+          requirement: `Implement: ${text.trim()}`,
+          description: `Derived from SD strategic objective: "${text.trim()}"`,
+          priority: 'HIGH'
+        });
+      }
+    });
+  }
+
+  // Extract from key_changes
+  if (sdData.key_changes && Array.isArray(sdData.key_changes)) {
+    sdData.key_changes.forEach(change => {
+      const text = typeof change === 'object' ? (change.change || change.description || change.text) : change;
+      if (text && text.trim()) {
+        requirements.push({
+          id: `FR-${idCounter++}`,
+          requirement: text.trim(),
+          description: 'Derived from SD key change',
+          priority: 'MEDIUM'
+        });
+      }
+    });
+  }
+
+  // Fallback: derive from title and description if no objectives
+  if (requirements.length === 0) {
+    if (sdData.title) {
+      requirements.push({
+        id: 'FR-1',
+        requirement: `Implement: ${sdData.title}`,
+        description: 'Primary requirement derived from SD title',
+        priority: 'HIGH'
+      });
+    }
+    if (sdData.scope) {
+      requirements.push({
+        id: `FR-${requirements.length + 1}`,
+        requirement: `Scope: ${sdData.scope}`,
+        description: 'Scope-derived requirement from SD',
+        priority: 'HIGH'
+      });
+    }
+  }
+
+  return requirements.length > 0 ? requirements : [{
+    id: 'FR-1',
+    requirement: `Implement ${sdData.id || 'strategic directive'}`,
+    description: 'Primary requirement - details to be elaborated by LLM',
+    priority: 'HIGH'
+  }];
+}
+
+/**
+ * Derive test scenarios from SD success_criteria
+ * Instead of placeholder values, extract real test scenarios from the SD
+ * @param {object} sdData - Strategic Directive data
+ * @returns {Array} Test scenarios array
+ */
+function deriveTestScenarios(sdData) {
+  const scenarios = [];
+  let idCounter = 1;
+
+  // Extract from success_criteria
+  if (sdData.success_criteria) {
+    const criteria = Array.isArray(sdData.success_criteria)
+      ? sdData.success_criteria
+      : (typeof sdData.success_criteria === 'string'
+        ? sdData.success_criteria.split('\n').filter(c => c.trim())
+        : []);
+
+    criteria.forEach(criterion => {
+      const text = typeof criterion === 'object'
+        ? (criterion.criterion || criterion.description || criterion.text)
+        : criterion;
+      if (text && text.trim()) {
+        scenarios.push({
+          id: `TS-${idCounter++}`,
+          scenario: `Verify: ${text.trim()}`,
+          description: `Test that success criterion is met: "${text.trim()}"`,
+          expected_result: 'Success criterion satisfied',
+          test_type: 'integration'
+        });
+      }
+    });
+  }
+
+  // Extract from success_metrics
+  if (sdData.success_metrics && Array.isArray(sdData.success_metrics)) {
+    sdData.success_metrics.forEach(metric => {
+      const text = typeof metric === 'object' ? (metric.metric || metric.description || metric.text) : metric;
+      if (text && text.trim()) {
+        scenarios.push({
+          id: `TS-${idCounter++}`,
+          scenario: `Measure: ${text.trim()}`,
+          description: 'Verify success metric is achievable',
+          expected_result: 'Metric target met',
+          test_type: 'e2e'
+        });
+      }
+    });
+  }
+
+  // Fallback: derive basic scenarios from title
+  if (scenarios.length === 0 && sdData.title) {
+    scenarios.push({
+      id: 'TS-1',
+      scenario: `Basic functionality test: ${sdData.title}`,
+      description: 'Verify core functionality works as expected',
+      expected_result: 'Feature operates correctly',
+      test_type: 'integration'
+    });
+  }
+
+  return scenarios.length > 0 ? scenarios : [{
+    id: 'TS-1',
+    scenario: `Verify ${sdData.id || 'implementation'} works correctly`,
+    description: 'Basic test scenario - details to be elaborated by LLM',
+    expected_result: 'Implementation functions as expected',
+    test_type: 'integration'
+  }];
+}
+
+/**
+ * Derive acceptance criteria from SD success_criteria and strategic_objectives
+ * @param {object} sdData - Strategic Directive data
+ * @returns {Array} Acceptance criteria strings
+ */
+function deriveAcceptanceCriteria(sdData) {
+  const criteria = [];
+
+  // From success_criteria
+  if (sdData.success_criteria) {
+    const successCriteria = Array.isArray(sdData.success_criteria)
+      ? sdData.success_criteria
+      : (typeof sdData.success_criteria === 'string'
+        ? sdData.success_criteria.split('\n').filter(c => c.trim())
+        : []);
+
+    successCriteria.forEach(criterion => {
+      const text = typeof criterion === 'object'
+        ? (criterion.criterion || criterion.description || criterion.text)
+        : criterion;
+      if (text && text.trim()) {
+        criteria.push(text.trim());
+      }
+    });
+  }
+
+  // Default criteria if none found
+  if (criteria.length === 0) {
+    criteria.push('All functional requirements implemented');
+    criteria.push('All tests passing');
+  }
+
+  return criteria;
+}
+
+// =============================================================================
 // SUB-AGENT EXECUTION
 // =============================================================================
 
@@ -296,8 +479,18 @@ async function addPRDToDatabase(sdId, prdTitle) {
       process.exit(1);
     }
 
-    // Step 6: Create Initial PRD
+    // Step 6: Create Initial PRD (Issue 1 Fix: Derive values from SD fields)
     console.log('\n3️⃣  Creating PRD...');
+
+    // Derive initial values from SD fields instead of placeholders
+    const derivedFunctionalRequirements = deriveFunctionalRequirements(sdData);
+    const derivedTestScenarios = deriveTestScenarios(sdData);
+    const derivedAcceptanceCriteria = deriveAcceptanceCriteria(sdData);
+
+    console.log(`   📋 Derived ${derivedFunctionalRequirements.length} functional requirement(s) from SD`);
+    console.log(`   🧪 Derived ${derivedTestScenarios.length} test scenario(s) from SD`);
+    console.log(`   ✓  Derived ${derivedAcceptanceCriteria.length} acceptance criteria from SD`);
+
     const prdData = {
       id: prdId,
       directive_id: sdId,
@@ -306,18 +499,20 @@ async function addPRDToDatabase(sdId, prdTitle) {
       status: 'planning',
       category: 'technical',
       priority: 'high',
-      executive_summary: `Product requirements for ${sdId}`,
+      executive_summary: sdData.description
+        ? `Product requirements for ${sdId}: ${sdData.description.substring(0, 500)}`
+        : `Product requirements for ${sdId}`,
       phase: 'planning',
       created_by: 'PLAN',
       plan_checklist: DEFAULT_PLAN_CHECKLIST,
       exec_checklist: DEFAULT_EXEC_CHECKLIST,
       validation_checklist: DEFAULT_VALIDATION_CHECKLIST,
-      acceptance_criteria: ['All functional requirements implemented', 'All tests passing'],
-      functional_requirements: [{ id: 'FR-1', requirement: 'To be defined', priority: 'HIGH' }],
-      test_scenarios: [{ id: 'TS-1', scenario: 'To be defined', test_type: 'unit' }],
+      acceptance_criteria: derivedAcceptanceCriteria,
+      functional_requirements: derivedFunctionalRequirements,
+      test_scenarios: derivedTestScenarios,
       progress: 10,
       stakeholders: stakeholderPersonas,
-      content: `# PRD for ${sdId}\n\nInitial template - will be enhanced with LLM content.`
+      content: `# PRD for ${sdId}\n\n## SD Title\n${sdData.title || 'Untitled'}\n\n## Description\n${sdData.description || 'No description'}\n\n## Scope\n${sdData.scope || 'No scope defined'}\n\nInitial template - will be enhanced with LLM content.`
     };
 
     const createdPRD = await createPRD(prdData);
