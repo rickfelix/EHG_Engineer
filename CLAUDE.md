@@ -222,7 +222,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-23 10:31:12 AM
+**Last Generated**: 2026-01-23 3:50:39 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -269,7 +269,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 | `ANALYTICS` | analytics, metrics, aarrr, funnel, conversion rate, user behavior, tracking, kpi, retention rate, churn rate |
 | `API` | rest, restful, graphql, endpoint, route, controller, middleware, request, response, payload (+6 more) |
 | `CRM` | crm, customer relationship, contact management, lead tracking, customer success, salesforce, hubspot, customer data |
-| `DATABASE` | schema, database, query, select from, insert into, supabase, table, rls, postgres, sql (+2 more) |
+| `DATABASE` | schema, database, query, select from, insert into, supabase, table, rls, postgres, sql (+39 more) |
 | `DEPENDENCY` | dependency, dependencies, npm, yarn, pnpm, package, package.json, vulnerability, cve, security advisory (+12 more) |
 | `DESIGN` | visual, design system, styling, css, tailwind, button, form, modal, theme, dark mode (+25 more) |
 | `DOCMON` | lead_sd_creation, lead_handoff_creation, lead_approval, plan_prd_generation, plan_verification, exec_implementation, exec_completion, handoff_created, handoff_accepted, phase_transition (+4 more) |
@@ -294,43 +294,6 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 
 *Full trigger list in CLAUDE_CORE.md. Use Task tool with `subagent_type="<agent-code>"`*
 
-## Task Hydration (LEO 5.0)
-
-**CRITICAL**: When handoff output contains `CLAUDE_TASK_HYDRATION`, you MUST create the tasks using TaskCreate.
-
-### Detection Pattern
-Look for this block in handoff output:
-```
-🎯 CLAUDE_TASK_HYDRATION: Tasks for next phase
-```
-
-### Required Action
-For each task listed in the hydration block:
-1. Call **TaskCreate** with the task's subject, description, and activeForm
-2. After all tasks are created, use **TaskUpdate** to set up blockedBy dependencies
-3. The task IDs in the hydration output (e.g., `SD-XXX-001-EXEC-IMPL`) are reference IDs - map them to actual Claude Code task IDs after creation
-
-### Example Processing
-When you see:
-```
-📋 TASK: SD-FEATURE-001-EXEC-IMPL
-   Subject: Implement Feature X
-   ActiveForm: Implementing Feature X
-   Description: Execute implementation according to PRD.
-   BlockedBy: SD-FEATURE-001-EXEC-READY
-```
-
-You should:
-```
-TaskCreate(subject="Implement Feature X", description="Execute implementation according to PRD.", activeForm="Implementing Feature X")
-```
-
-Then after all tasks are created, set up the blockedBy chain using TaskUpdate.
-
-### Why This Matters
-- Tasks provide visibility into SD progress
-- BlockedBy chains enforce phase boundaries (walls)
-- The TaskList shows what can be worked on next
 
 ---
 
