@@ -1,10 +1,12 @@
 # Database Agent Patterns: Comprehensive Reference
 
 **Status**: ACTIVE
-**Last Updated**: 2026-01-23
+**Last Updated**: 2026-01-24
+**Version**: 1.2.0
 **Purpose**: Complete guide for database agent invocation, anti-patterns, and best practices
 **Evidence**: 74+ retrospectives analyzed, 13+ SDs with database agent lessons, 11 issue patterns
 **Recent Improvements**:
+- SD-LEO-INFRA-DATABASE-SUB-AGENT-001 (2026-01-24): SQL execution intent semantic triggering with auto-invocation
 - SD-LEO-LEARN-001: Proactive learning integration
 - SD-LEO-HARDEN-VALIDATION-001 (2026-01-23): PostToolUse hook for automatic migration detection
 - 2026-01-23: Intelligent migration execution with action trigger detection
@@ -20,10 +22,11 @@
 5. [Proactive Learning Integration (NEW)](#proactive-learning-integration-new)
 6. [RLS Policy Handling (NEW)](#rls-policy-handling-new)
 7. [Schema Validation Enhancements (NEW)](#schema-validation-enhancements-new)
-8. [Anti-Patterns to Avoid](#anti-patterns-to-avoid)
-9. [Success Patterns](#success-patterns)
-10. [Database Query Best Practices](#database-query-best-practices)
-11. [Quick Reference](#quick-reference)
+8. [SQL Execution Intent Semantic Triggering (NEW)](#sql-execution-intent-semantic-triggering-new---2026-01-24)
+9. [Anti-Patterns to Avoid](#anti-patterns-to-avoid)
+10. [Success Patterns](#success-patterns)
+11. [Database Query Best Practices](#database-query-best-practices)
+12. [Quick Reference](#quick-reference)
 
 ---
 
@@ -1411,6 +1414,340 @@ Database task or error? → node scripts/execute-subagent.js --code DATABASE --s
 
 ---
 
+## SQL Execution Intent Semantic Triggering (NEW - 2026-01-24)
+
+**SD**: SD-LEO-INFRA-DATABASE-SUB-AGENT-001
+**Status**: ACTIVE
+**Impact**: Eliminates manual SQL execution instructions, enables automatic database agent invocation
+
+### Overview
+
+The database agent now includes **automatic invocation when SQL execution intent is detected** in conversation. Instead of outputting "run this SQL manually in Supabase Studio", the system automatically engages the database sub-agent when intent classification reaches the confidence threshold.
+
+**Key Improvement**:
+```
+BEFORE: "Here's the SQL. Run it in Supabase Studio manually."
+AFTER:  "Executing via database sub-agent..." [Auto-invokes Task tool]
+```
+
+### Intent Classification System
+
+The system uses a **deterministic pattern-based classifier** with 37+ trigger patterns organized into 6 priority categories:
+
+#### Trigger Categories (Priority-Weighted)
+
+| Category | Priority | Example Triggers | Confidence Boost |
+|----------|----------|------------------|------------------|
+| **Direct Command** | 9 | "run this sql", "execute the query", "execute this migration" | +0.20 |
+| **Delegation** | 8 | "use database sub-agent", "have the database agent run this" | +0.15 |
+| **Imperative** | 8 | "please run", "can you execute", "go ahead and run" | +0.15 |
+| **Operational** | 7 | "update the table", "create the table", "insert into" | +0.10 |
+| **Result-Oriented** | 6 | "make this change in the database", "apply this to production" | +0.08 |
+| **Contextual** | 5 | "run it", "execute it", "apply it" (requires SQL context) | +0.05 |
+
+**Note**: Contextual triggers only match when SQL statements (SELECT, INSERT, UPDATE, etc.) are detected in the message.
+
+### Denylist Filtering (False Positive Prevention)
+
+The following phrases **force NO_EXECUTION intent** regardless of other triggers:
+
+- "do not execute"
+- "for reference only"
+- "example query"
+- "sample sql"
+- "here is an example"
+- "you could run"
+- "would look like"
+
+**Example**:
+```
+❌ "Here is an example query for reference only: SELECT * FROM users"
+   → Intent: NO_EXECUTION (denylist match)
+
+✅ "Please run this SQL: SELECT * FROM users"
+   → Intent: SQL_EXECUTION (direct command + SQL context)
+```
+
+### Intent Classifier Usage
+
+#### Basic Usage
+
+```javascript
+import { classifySQLExecutionIntent } from './lib/utils/sql-execution-intent-classifier.js';
+
+const message = "Can you run this migration for me? INSERT INTO users...";
+const result = await classifySQLExecutionIntent(message);
+
+console.log(result);
+// {
+//   intent: 'SQL_EXECUTION',
+//   confidence: 0.92,
+//   decision: 'invoke_db_agent',
+//   matchedTriggerIds: ['trigger-uuid-1', 'trigger-uuid-2'],
+//   metadata: {
+//     hasSQLContext: true,
+//     hasDenylistPhrase: false,
+//     matchCount: 2,
+//     latencyMs: 45
+//   }
+// }
+```
+
+#### Auto-Invocation Helper
+
+```javascript
+import { shouldAutoInvokeAndExecute } from './lib/utils/db-agent-auto-invoker.js';
+
+const message = "Execute this query: UPDATE users SET active = true";
+const result = await shouldAutoInvokeAndExecute(message, {
+  conversationId: 'conv-123',
+  sdKey: 'SD-FEATURE-001'
+});
+
+if (result.shouldInvoke) {
+  // Use Task tool with result.taskParams
+  Task({
+    description: result.taskParams.description,
+    prompt: result.taskParams.prompt,
+    subagent_type: 'database-agent',
+    model: 'sonnet'
+  });
+}
+```
+
+### Confidence Scoring Algorithm
+
+**Base Confidence**:
+```
+baseConfidence = 0.5 + (maxPriority / 20)
+// Example: priority 9 → 0.5 + 0.45 = 0.95
+```
+
+**Confidence Boosts**:
+- Each matched trigger adds its `confidence_boost` value (0.05-0.20)
+- SQL context detected: +0.10
+- Denylist phrase: forces confidence to ≤0.30
+
+**Final Decision**:
+```
+if (confidence >= MIN_CONFIDENCE_TO_INVOKE && DB_AGENT_ENABLED) {
+  decision = 'invoke_db_agent'
+} else if (confidence < MIN_CONFIDENCE_TO_INVOKE) {
+  decision = 'blocked_confidence'
+} else {
+  decision = 'no_execution'
+}
+```
+
+### Configuration Parameters
+
+Runtime configuration stored in `db_agent_config` table:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `MIN_CONFIDENCE_TO_INVOKE` | 0.80 | Minimum confidence score to auto-invoke (0-1) |
+| `MAX_TRIGGERS_EVALUATED` | 200 | Maximum triggers to evaluate per classification |
+| `DB_AGENT_ENABLED` | true | Global enable/disable for auto-invocation |
+| `DENYLIST_PHRASES` | Array | Phrases that force NO_EXECUTION intent |
+
+**Update Configuration**:
+```sql
+-- Adjust confidence threshold
+UPDATE db_agent_config
+SET value = '0.85'
+WHERE key = 'MIN_CONFIDENCE_TO_INVOKE';
+
+-- Add custom denylist phrase
+UPDATE db_agent_config
+SET value = value || '["do not apply"]'::jsonb
+WHERE key = 'DENYLIST_PHRASES';
+```
+
+### Audit Trail
+
+All classification decisions are logged to `db_agent_invocations` table with:
+
+- `correlation_id` - Unique ID for tracing (UUID v4)
+- `conversation_id` - Optional conversation tracking
+- `intent` - SQL_EXECUTION or NO_EXECUTION
+- `confidence` - Score from 0-1
+- `matched_trigger_ids` - Array of trigger UUIDs
+- `decision` - invoke_db_agent | blocked_policy | blocked_confidence | no_execution
+- `block_reason` - Why invocation was blocked (if applicable)
+- `latency_ms` - Classification performance metric
+- `environment` - development | staging | production
+
+**Query Example**:
+```sql
+-- Recent high-confidence invocations
+SELECT correlation_id, intent, confidence, decision, created_at
+FROM db_agent_invocations
+WHERE confidence >= 0.90
+  AND created_at > NOW() - INTERVAL '7 days'
+ORDER BY created_at DESC
+LIMIT 20;
+```
+
+### Environment Safety
+
+Production database execution requires explicit approval:
+
+```bash
+# .env file
+DB_PROD_EXECUTION_APPROVED=true
+```
+
+**Without approval**:
+```
+❌ Decision: blocked_environment
+   Reason: "Production database execution requires DB_PROD_EXECUTION_APPROVED=true"
+```
+
+### SQL Context Detection
+
+The classifier recognizes SQL statements via regex patterns:
+
+- `SELECT ... FROM`
+- `INSERT INTO`
+- `UPDATE ... SET`
+- `DELETE FROM`
+- `CREATE TABLE|INDEX|FUNCTION|VIEW`
+- `ALTER TABLE`
+- `DROP TABLE|INDEX|FUNCTION|VIEW`
+- `TRUNCATE TABLE`
+- `GRANT ... ON`
+- `REVOKE ... ON`
+
+**Why This Matters**: Contextual triggers like "run it" only match when SQL is present, preventing false positives on non-database commands.
+
+### Integration Examples
+
+#### Example 1: Migration Execution
+```
+User: "Can you execute this migration?"
+
+[SQL detected in context]
+
+Classifier:
+  - Matched: "execute" (Imperative, priority 8, +0.15)
+  - Matched: "migration" (Operational, priority 7, +0.10)
+  - SQL context detected: +0.10
+  - Confidence: 0.92
+  - Decision: invoke_db_agent
+
+Action: Task tool invoked with database-agent subagent_type
+```
+
+#### Example 2: Reference Query (Blocked)
+```
+User: "Here's an example query you could use for reference: SELECT * FROM users"
+
+Classifier:
+  - Denylist match: "for reference"
+  - Intent: NO_EXECUTION
+  - Confidence: 0.95 (high confidence it's NOT an execution request)
+  - Decision: no_execution
+
+Action: No invocation, continue conversation
+```
+
+#### Example 3: Contextual Command
+```
+User: "Here's the SQL: UPDATE users SET role = 'admin'. Just run it."
+
+Classifier:
+  - Matched: "run it" (Contextual, priority 5, +0.05)
+  - SQL context detected (UPDATE statement): +0.10
+  - Confidence: 0.78
+  - Decision: blocked_confidence (below 0.80 threshold)
+
+Action: "SQL execution detected but confidence too low. Please clarify your intent."
+```
+
+### Testing
+
+**Unit Tests**: `test/unit/sql-execution-intent-classifier.test.js`
+- 36 tests covering all scenarios
+- 100% passing
+- Coverage: SQL detection, denylist, trigger matching, confidence calculation
+
+**Run Tests**:
+```bash
+npm test -- sql-execution-intent-classifier
+```
+
+### Files Added
+
+| File | Purpose | Lines |
+|------|---------|-------|
+| `lib/utils/sql-execution-intent-classifier.js` | Core classification engine | 397 |
+| `lib/utils/db-agent-auto-invoker.js` | Orchestration-level integration | 267 |
+| `test/unit/sql-execution-intent-classifier.test.js` | Comprehensive unit tests | 368 |
+| `database/migrations/20260124_add_sql_execution_intent_triggers.sql` | Trigger patterns + config tables | 207 |
+
+### Metrics & Observability
+
+**Structured Logging**:
+```javascript
+import { logMetric } from './lib/utils/db-agent-auto-invoker.js';
+
+logMetric('db_trigger.intent_detected_total', 1, { intent: 'SQL_EXECUTION' });
+logMetric('db_trigger.invoked_total', 1);
+logMetric('db_trigger.classification_latency_ms', 42);
+```
+
+**Key Metrics**:
+- `db_trigger.intent_detected_total` - Intent classification count by type
+- `db_trigger.invoked_total` - Successful auto-invocations
+- `db_trigger.blocked_total` - Blocked invocations by reason
+- `db_trigger.classification_latency_ms` - Performance tracking
+
+### When to Use Directly
+
+**Automatic** (no manual invocation needed):
+- Claude detects SQL execution intent in conversation
+- Confidence >= 0.80
+- DB_AGENT_ENABLED = true
+- Environment permissions granted
+
+**Manual Override** (when classifier fails):
+```javascript
+// Force invocation bypass
+const result = await shouldAutoInvokeAndExecute(message, {
+  skipLogging: false,
+  environment: 'staging'
+});
+```
+
+### Success Criteria
+
+✅ **Working correctly when**:
+- SQL execution requests auto-invoke database agent
+- Reference queries (examples, samples) do NOT trigger invocation
+- High-confidence matches (>0.90) consistently invoke
+- Audit trail captures all decisions with correlation IDs
+- Production execution blocked without explicit approval
+
+❌ **Needs adjustment when**:
+- False positives: Non-SQL commands trigger invocation
+- False negatives: Clear execution requests don't trigger
+- Confidence consistently too high/low for a category
+- Denylist misses common reference phrases
+
+### Related Documentation
+
+**Implementation Details**:
+- CLAUDE_CORE.md Section 318: Database Sub-Agent Auto-Invocation
+- `database/migrations/20260124_add_sql_execution_intent_triggers.sql` - Trigger definitions
+- `.claude/agents/database-agent.md` - Database agent configuration
+
+**API Reference**:
+- `classifySQLExecutionIntent(message, options)` - Returns full classification result
+- `shouldAutoInvokeDBAgent(message, options)` - Returns boolean + result
+- `shouldAutoInvokeAndExecute(message, options)` - Returns Task tool params if should invoke
+
+---
+
 ## Related Documentation
 
 **Supporting Files**:
@@ -1440,6 +1777,9 @@ Database task or error? → node scripts/execute-subagent.js --code DATABASE --s
 | 1.1.0 | 2025-10-26 | Added schema format validation (object vs array) |
 | 1.1.0 | 2025-10-26 | Updated success patterns with 3 new patterns |
 | 1.1.0 | 2025-10-26 | Evidence updated: 74+ retrospectives, 11 issue patterns analyzed |
+| 1.2.0 | 2026-01-24 | Added SQL Execution Intent Semantic Triggering (SD-LEO-INFRA-DATABASE-SUB-AGENT-001) |
+| 1.2.0 | 2026-01-24 | Documented intent classifier with 37 trigger patterns across 6 categories |
+| 1.2.0 | 2026-01-24 | Added auto-invocation integration, configuration, and audit trail |
 
 ---
 
