@@ -188,7 +188,9 @@ Analyze the SD carefully and classify it based on what is actually being BUILT o
         { role: 'user', content: userPrompt }
       ],
       response_format: { type: 'json_object' },
-      max_completion_tokens: 500
+      max_completion_tokens: 500,
+      temperature: 0,  // Issue 6 fix: Deterministic output for classification
+      seed: 42         // Issue 6 fix: Reproducible results with fixed seed
     });
 
     // Parse JSON response

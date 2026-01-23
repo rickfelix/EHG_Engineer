@@ -176,7 +176,7 @@ Generate a JSON object with these fields:
         { role: 'user', content: userPrompt }
       ],
       temperature: LLM_PRD_CONFIG.temperature,
-      max_tokens: LLM_PRD_CONFIG.maxTokens,
+      max_completion_tokens: LLM_PRD_CONFIG.maxTokens,  // Updated from deprecated max_tokens
       response_format: { type: 'json_object' }
     });
 

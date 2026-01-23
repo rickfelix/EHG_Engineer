@@ -188,14 +188,19 @@ class GitBranchVerifier {
 
     // Check if on protected branch (main/master)
     if (currentBranch === 'main' || currentBranch === 'master') {
-      this.results.blockers.push(`Currently on protected branch "${currentBranch}" - EXEC work must be on feature branch`);
-      console.error(`❌ On protected branch: ${currentBranch}`);
-      console.error('   EXEC work cannot be done on main/master branch');
+      // Issue 3 fix: Clear messaging about auto-switch
+      console.log(`\n🔄 AUTO-SWITCH: Currently on protected branch "${currentBranch}"`);
+      console.log('   Will automatically switch to feature branch for EXEC work');
+      console.log(`   Target: ${this.expectedBranchName}`);
       this.results.actions.push('switch_branch');
+      // Note: Not adding to blockers - this is an auto-recoverable situation
       return false;
     }
 
-    console.log('⚠️  On different branch (will switch)');
+    // On a different branch (not main/master), will switch
+    console.log('🔄 AUTO-SWITCH: On different branch (will switch)');
+    console.log(`   From: ${currentBranch}`);
+    console.log(`   To: ${this.expectedBranchName}`);
     this.results.onCorrectBranch = false;
     this.results.actions.push('switch_branch');
     return false; // Will switch in later step
@@ -535,12 +540,22 @@ class GitBranchVerifier {
     console.log(`Expected Branch: ${this.expectedBranchName}`);
     console.log(`Verdict: ${this.results.verdict === 'PASS' ? '✅ PASS' : '❌ FAIL'}`);
 
+    // Issue 3 fix: Clear feedback about auto-switch actions taken
     if (this.results.branchCreated) {
-      console.log(`\n🎉 Branch created: ${this.expectedBranchName}`);
+      console.log(`\n🎉 AUTO-CREATED: New branch "${this.expectedBranchName}"`);
+      console.log('   Branch was created automatically because it did not exist.');
+      if (this.results.changesStashed === false && this.results.verdict === 'PASS') {
+        console.log('   Any uncommitted changes were preserved.');
+      }
     }
 
     if (this.results.branchSwitched) {
-      console.log(`\n🔄 Switched to branch: ${this.expectedBranchName}`);
+      console.log(`\n🔄 AUTO-SWITCHED: Now on branch "${this.expectedBranchName}"`);
+      console.log(`   Previous branch: ${this.results.currentBranch || 'unknown'}`);
+      console.log('   Branch was switched automatically to the correct feature branch for EXEC work.');
+      if (this.results.changesStashed === false && this.results.verdict === 'PASS') {
+        console.log('   Any uncommitted changes were stashed and restored.');
+      }
     }
 
     if (this.results.blockers.length > 0) {

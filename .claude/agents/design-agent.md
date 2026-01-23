@@ -1,6 +1,6 @@
 ---
 name: design-agent
-description: "MUST BE USED PROACTIVELY for all UI/UX and design tasks. Handles component sizing, design validation, accessibility, and user experience assessment. Trigger on keywords: UI, UX, design, component, interface, accessibility, a11y, layout, responsive."
+description: "MUST BE USED PROACTIVELY for all code-producing SD types (feature, enhancement, bugfix, refactor, performance) AND for UI/UX tasks. Handles component sizing, design validation, accessibility, and user experience assessment. Trigger on: (1) SD types: feature, enhancement, refactor, performance; (2) Keywords: UI, UX, design, component, interface, accessibility, a11y, layout, responsive, frontend, dashboard, API endpoint, new feature, new endpoint, backend feature, service layer, controller, database table."
 tools: Bash, Read, Write
 model: sonnet
 ---

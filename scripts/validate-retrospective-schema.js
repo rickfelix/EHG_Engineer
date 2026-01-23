@@ -119,23 +119,50 @@ export async function validateRetrospective(retro) {
 
   // ============================================================================
   // Check Constraint Validation
+  // Issue 4 fix: Include valid values in all enum error messages
   // ============================================================================
+
+  // retro_type constraint (Issue 4: Added with valid values)
+  // Valid values from database: retrospectives_retro_type_check constraint
+  const VALID_RETRO_TYPES = ['SPRINT', 'SD_COMPLETION', 'INCIDENT', 'AUDIT'];
+  if (retro.retro_type && !VALID_RETRO_TYPES.includes(retro.retro_type)) {
+    errors.push({
+      field: 'retro_type',
+      error: `Invalid retro_type: '${retro.retro_type}'`,
+      fix: `Use one of: ${VALID_RETRO_TYPES.join(', ')}`,
+      constraint: 'retrospectives_retro_type_check'
+    });
+  }
 
   // generated_by constraint
   if (retro.generated_by && !constraints.allowed_generated_by.includes(retro.generated_by)) {
     errors.push({
       field: 'generated_by',
       error: `Invalid value: '${retro.generated_by}'`,
-      fix: `Use one of: ${constraints.allowed_generated_by.join(', ')}`
+      fix: `Use one of: ${constraints.allowed_generated_by.join(', ')}`,
+      constraint: 'retrospectives_generated_by_check'
     });
   }
 
   // status constraint
-  if (retro.status && !constraints.allowed_status.includes(retro.status)) {
+  const VALID_STATUSES = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
+  if (retro.status && !VALID_STATUSES.includes(retro.status)) {
     errors.push({
       field: 'status',
       error: `Invalid value: '${retro.status}'`,
-      fix: `Use one of: ${constraints.allowed_status.join(', ')}`
+      fix: `Use one of: ${VALID_STATUSES.join(', ')}`,
+      constraint: 'retrospectives_status_check'
+    });
+  }
+
+  // outcome_type constraint (if present - handoff retrospectives)
+  const VALID_OUTCOME_TYPES = ['SUCCESS', 'PARTIAL', 'FAILED', 'BLOCKED'];
+  if (retro.outcome_type && !VALID_OUTCOME_TYPES.includes(retro.outcome_type)) {
+    errors.push({
+      field: 'outcome_type',
+      error: `Invalid outcome_type: '${retro.outcome_type}'`,
+      fix: `Use one of: ${VALID_OUTCOME_TYPES.join(', ')}`,
+      constraint: 'retrospectives_outcome_type_check'
     });
   }
 
@@ -225,6 +252,51 @@ export async function validateRetrospective(retro) {
       can_insert: errors.length === 0
     }
   };
+}
+
+/**
+ * Issue 4 fix: Enhanced error message formatter for database constraint violations
+ * Parses Supabase/PostgreSQL error messages and adds valid values
+ *
+ * @param {Error|object} error - Database error from Supabase
+ * @returns {string} Enhanced error message with valid values
+ */
+export function enhanceConstraintError(error) {
+  const message = error?.message || String(error);
+
+  // Map constraint names to valid values (Issue 4: Include valid values in error messages)
+  const CONSTRAINT_VALUES = {
+    'retrospectives_retro_type_check': {
+      field: 'retro_type',
+      values: ['SPRINT', 'SD_COMPLETION', 'INCIDENT', 'AUDIT']
+    },
+    'retrospectives_status_check': {
+      field: 'status',
+      values: ['DRAFT', 'PUBLISHED', 'ARCHIVED']
+    },
+    'retrospectives_generated_by_check': {
+      field: 'generated_by',
+      values: ['MANUAL', 'LEO_PROTOCOL', 'RETRO_AGENT', 'HANDOFF']
+    },
+    'retrospectives_outcome_type_check': {
+      field: 'outcome_type',
+      values: ['SUCCESS', 'PARTIAL', 'FAILED', 'BLOCKED']
+    }
+  };
+
+  // Check if error mentions a constraint we know about
+  for (const [constraint, info] of Object.entries(CONSTRAINT_VALUES)) {
+    if (message.includes(constraint)) {
+      return `${message}\n\n💡 FIX: Field '${info.field}' must be one of: ${info.values.join(', ')}`;
+    }
+  }
+
+  // Generic check constraint error enhancement
+  if (message.includes('check constraint') || message.includes('violates check')) {
+    return `${message}\n\n💡 TIP: Run 'node scripts/validate-retrospective-schema.js --file <json>' to validate before insert`;
+  }
+
+  return message;
 }
 
 /**

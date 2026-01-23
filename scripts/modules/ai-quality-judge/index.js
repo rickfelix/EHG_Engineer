@@ -218,7 +218,7 @@ export class AIQualityJudge {
           content: prompt
         }
       ],
-      max_tokens: 2000
+      max_completion_tokens: 2000  // Updated from deprecated max_tokens
     });
 
     return response.choices[0].message.content;
