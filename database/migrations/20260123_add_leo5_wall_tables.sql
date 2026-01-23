@@ -130,3 +130,33 @@ COMMENT ON TABLE sd_wall_states IS 'LEO 5.0 Wall states - tracks phase boundary 
 COMMENT ON TABLE sd_gate_results IS 'LEO 5.0 Gate results - tracks individual gate validation outcomes';
 COMMENT ON TABLE sd_kickbacks IS 'LEO 5.0 Kickback tracking - manages phase kickbacks for failure recovery';
 COMMENT ON VIEW v_sd_wall_overview IS 'LEO 5.0 Wall overview - aggregated view of SD wall status with gate progress';
+
+-- Corrections table for wall invalidation scenarios
+CREATE TABLE IF NOT EXISTS sd_corrections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sd_id UUID NOT NULL REFERENCES strategic_directives_v2(uuid_id) ON DELETE CASCADE,
+    wall_name TEXT NOT NULL,
+    new_wall_name TEXT NOT NULL,
+    correction_type TEXT NOT NULL CHECK (correction_type IN ('prd_scope_change', 'implementation_rework', 'design_revision', 'requirements_change', 'architecture_update')),
+    reason TEXT NOT NULL,
+    from_phase TEXT NOT NULL,
+    to_phase TEXT NOT NULL,
+    paused_tasks TEXT[] DEFAULT '{}',
+    status TEXT DEFAULT 'in_progress' CHECK (status IN ('in_progress', 'completed', 'cancelled')),
+    completed_at TIMESTAMPTZ,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_corrections_sd_id ON sd_corrections(sd_id);
+CREATE INDEX IF NOT EXISTS idx_corrections_status ON sd_corrections(status);
+
+ALTER TABLE sd_corrections ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY IF NOT EXISTS "Service role full access to sd_corrections"
+    ON sd_corrections FOR ALL
+    TO service_role
+    USING (true)
+    WITH CHECK (true);
+
+COMMENT ON TABLE sd_corrections IS 'LEO 5.0 Corrections - tracks wall invalidation and correction workflows';
