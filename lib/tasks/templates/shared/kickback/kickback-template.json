@@ -1,0 +1,39 @@
+{
+  "type": "kickback",
+  "description": "Template for kickback tasks created when gates fail after max retries",
+  "tasks": [
+    {
+      "id_template": "{{SD_ID}}-KICKBACK-{{FROM_PHASE}}",
+      "subject": "Kickback: {{FAILURE_REASON}}",
+      "activeForm": "Processing kickback",
+      "description": "Gate {{FAILED_GATE}} failed after {{RETRY_COUNT}} attempts. Fix and re-attempt.",
+      "blockedBy": [],
+      "metadata": {
+        "category": "kickback",
+        "from_phase": "{{FROM_PHASE}}",
+        "to_phase": "{{TO_PHASE}}",
+        "invalidates_wall": "{{CURRENT_WALL}}",
+        "failure_reason": "{{FAILURE_REASON}}",
+        "failed_gate": "{{FAILED_GATE}}",
+        "retry_count": "{{RETRY_COUNT}}",
+        "max_retries": "{{MAX_RETRIES}}"
+      }
+    }
+  ],
+  "status_extensions": {
+    "failed": {
+      "description": "Task failed after max retries",
+      "fields": {
+        "retry_count": "Number of retry attempts",
+        "max_retries": "Maximum allowed retries (default: 3)",
+        "failure_reason": "Description of the failure",
+        "kickback_created": "ID of the kickback task created",
+        "last_attempt": "Timestamp of last retry attempt"
+      }
+    }
+  },
+  "defaults": {
+    "max_retries": 3,
+    "retry_delay_ms": 5000
+  }
+}

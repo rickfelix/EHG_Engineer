@@ -1,0 +1,54 @@
+{
+  "track": "FAST",
+  "phase": "FINAL",
+  "description": "FAST track FINAL phase with quick approval",
+  "tasks": [
+    {
+      "id_template": "{{SD_ID}}-FINAL-READY",
+      "subject": "FINAL Phase Initialized",
+      "activeForm": "Initializing FINAL phase",
+      "description": "Load FINAL context.",
+      "blockedBy": ["{{SD_ID}}-EXEC-WALL"],
+      "metadata": {
+        "category": "init",
+        "phase": "FINAL"
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-FINAL-PR",
+      "subject": "PR Creation",
+      "activeForm": "Creating PR",
+      "description": "Create pull request.",
+      "blockedBy": ["{{SD_ID}}-FINAL-READY"],
+      "metadata": {
+        "category": "core",
+        "phase": "FINAL",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-GATE-PR-MERGED",
+      "subject": "Gate: PR Merged",
+      "activeForm": "Verifying PR merge",
+      "description": "Verify PR is merged.",
+      "blockedBy": ["{{SD_ID}}-FINAL-PR"],
+      "metadata": {
+        "category": "gate",
+        "phase": "FINAL",
+        "gate_type": "PR_MERGED"
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-FINAL-APPROVE",
+      "subject": "SD APPROVED AND COMPLETED",
+      "activeForm": "Completing SD",
+      "description": "SD complete.",
+      "blockedBy": ["{{SD_ID}}-GATE-PR-MERGED"],
+      "metadata": {
+        "category": "completion",
+        "phase": "FINAL",
+        "sets_sd_status": "completed"
+      }
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "track": "FULL",
+  "phase": "FINAL",
+  "description": "Full FINAL phase with user stories validation, PR merge, and completion",
+  "tasks": [
+    {
+      "id_template": "{{SD_ID}}-FINAL-READY",
+      "subject": "FINAL Phase Initialized",
+      "activeForm": "Initializing FINAL phase",
+      "description": "Load FINAL context and VERIFY handoff results.",
+      "blockedBy": ["{{SD_ID}}-VERIFY-WALL"],
+      "metadata": {
+        "category": "init",
+        "phase": "FINAL",
+        "loads_context": ["VERIFY_HANDOFF", "RETRO_RESULTS"]
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-FINAL-STORIES",
+      "subject": "User Stories Validation",
+      "activeForm": "Validating user stories",
+      "description": "Verify all user stories are implemented and validated.",
+      "blockedBy": ["{{SD_ID}}-FINAL-READY"],
+      "metadata": {
+        "category": "validation",
+        "phase": "FINAL",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-FINAL-PR",
+      "subject": "PR Creation and Review",
+      "activeForm": "Creating PR",
+      "description": "Create pull request with proper formatting. Enable auto-merge if appropriate.",
+      "blockedBy": ["{{SD_ID}}-FINAL-STORIES"],
+      "metadata": {
+        "category": "core",
+        "phase": "FINAL",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-GATE-PR-MERGED",
+      "subject": "Gate: PR Merged",
+      "activeForm": "Verifying PR merge",
+      "description": "Verify PR is merged to main branch.",
+      "blockedBy": ["{{SD_ID}}-FINAL-PR"],
+      "metadata": {
+        "category": "gate",
+        "phase": "FINAL",
+        "gate_type": "PR_MERGED"
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-FINAL-DOCUMENT",
+      "subject": "Documentation Update",
+      "activeForm": "Updating documentation",
+      "description": "Run /document command to update relevant documentation.",
+      "blockedBy": ["{{SD_ID}}-GATE-PR-MERGED"],
+      "metadata": {
+        "category": "sub_agent",
+        "phase": "FINAL",
+        "agent": "DOCMON",
+        "conditional": "sd.sd_type in ['feature', 'infrastructure', 'api']"
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-FINAL-LEARN",
+      "subject": "Capture Learnings",
+      "activeForm": "Capturing learnings",
+      "description": "Run /learn command to capture patterns from this SD.",
+      "blockedBy": ["{{SD_ID}}-GATE-PR-MERGED"],
+      "metadata": {
+        "category": "core",
+        "phase": "FINAL",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-FINAL-APPROVE",
+      "subject": "SD APPROVED AND COMPLETED",
+      "activeForm": "Completing SD",
+      "description": "SD complete. Status updated to 'completed'.",
+      "blockedBy": ["{{SD_ID}}-FINAL-DOCUMENT", "{{SD_ID}}-FINAL-LEARN"],
+      "metadata": {
+        "category": "completion",
+        "phase": "FINAL",
+        "sets_sd_status": "completed"
+      }
+    }
+  ]
+}

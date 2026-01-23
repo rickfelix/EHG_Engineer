@@ -1,0 +1,54 @@
+{
+  "track": "HOTFIX",
+  "phase": "FINAL",
+  "description": "HOTFIX track FINAL phase - quick approval after safety checks",
+  "tasks": [
+    {
+      "id_template": "{{SD_ID}}-FINAL-READY",
+      "subject": "Final Approval Ready",
+      "activeForm": "Preparing final approval",
+      "description": "Safety gates passed. Ready for merge.",
+      "blockedBy": ["{{SD_ID}}-SAFETY-WALL"],
+      "metadata": {
+        "category": "init",
+        "phase": "FINAL"
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-FINAL-PR",
+      "subject": "PR Merge",
+      "activeForm": "Merging PR",
+      "description": "Create and merge PR for hotfix.",
+      "blockedBy": ["{{SD_ID}}-FINAL-READY"],
+      "metadata": {
+        "category": "core",
+        "phase": "FINAL",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-GATE-PR-MERGED",
+      "subject": "Gate: PR Merged",
+      "activeForm": "Verifying PR merge",
+      "description": "Verify PR is merged.",
+      "blockedBy": ["{{SD_ID}}-FINAL-PR"],
+      "metadata": {
+        "category": "gate",
+        "phase": "FINAL",
+        "gate_type": "PR_MERGED"
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-FINAL-APPROVE",
+      "subject": "HOTFIX APPROVED",
+      "activeForm": "Completing hotfix",
+      "description": "Hotfix complete. SD status updated to 'completed'.",
+      "blockedBy": ["{{SD_ID}}-GATE-PR-MERGED"],
+      "metadata": {
+        "category": "completion",
+        "phase": "FINAL",
+        "sets_sd_status": "completed"
+      }
+    }
+  ]
+}

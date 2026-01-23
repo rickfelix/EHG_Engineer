@@ -1,0 +1,84 @@
+{
+  "track": "FULL",
+  "phase": "LEAD",
+  "description": "FULL track LEAD phase with 9-question gate and full strategic validation",
+  "tasks": [
+    {
+      "id_template": "{{SD_ID}}-LEAD-INIT",
+      "subject": "LEAD Phase Initialized: {{SD_TITLE}}",
+      "activeForm": "Initializing LEAD phase",
+      "description": "Load CLAUDE_LEAD.md identity and SD context for strategic review.",
+      "blockedBy": [],
+      "metadata": {
+        "category": "init",
+        "phase": "LEAD",
+        "loads_context": ["CLAUDE_LEAD.md", "SD_METADATA"]
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-LEAD-SCOPE",
+      "subject": "Validate SD Scope and Strategic Fit",
+      "activeForm": "Validating scope",
+      "description": "Review SD scope, ensure alignment with strategic objectives, verify no overlap with existing SDs.",
+      "blockedBy": ["{{SD_ID}}-LEAD-INIT"],
+      "metadata": {
+        "category": "validation",
+        "phase": "LEAD",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-LEAD-RISK",
+      "subject": "Risk Assessment",
+      "activeForm": "Assessing risks",
+      "description": "Identify risks, dependencies, and potential blockers. Flag security-relevant work.",
+      "blockedBy": ["{{SD_ID}}-LEAD-SCOPE"],
+      "metadata": {
+        "category": "sub_agent",
+        "phase": "LEAD",
+        "agent": "RISK",
+        "conditional": "sd.risk_level !== 'low'"
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-GATE-9Q",
+      "subject": "Gate: 9-Question Strategic Assessment",
+      "activeForm": "Running 9-question gate",
+      "description": "Complete 9-question LEAD gate: alignment, scope, risks, dependencies, resources, timeline, success criteria, blockers, alternatives.",
+      "blockedBy": ["{{SD_ID}}-LEAD-RISK"],
+      "metadata": {
+        "category": "gate",
+        "phase": "LEAD",
+        "gate_type": "NINE_QUESTION",
+        "threshold": 85,
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-GATE-BRANCH",
+      "subject": "Gate: Branch Preparation",
+      "activeForm": "Preparing branch",
+      "description": "Create feature branch for SD work. Branch naming: <type>/<SD-ID>-<slug>",
+      "blockedBy": ["{{SD_ID}}-GATE-9Q"],
+      "metadata": {
+        "category": "gate",
+        "phase": "LEAD",
+        "gate_type": "SD_BRANCH_PREPARATION",
+        "auto_run": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-LEAD-WALL",
+      "subject": "LEAD VALIDATION COMPLETE",
+      "activeForm": "Finalizing LEAD phase",
+      "description": "All LEAD gates passed. PLAN phase unblocked.",
+      "blockedBy": ["{{SD_ID}}-GATE-9Q", "{{SD_ID}}-GATE-BRANCH"],
+      "metadata": {
+        "category": "wall",
+        "phase": "LEAD",
+        "is_phase_boundary": true,
+        "next_phase": "PLAN"
+      }
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "track": "FAST",
+  "phase": "EXEC",
+  "description": "FAST track EXEC phase with standard implementation (no sub-agents)",
+  "tasks": [
+    {
+      "id_template": "{{SD_ID}}-EXEC-READY",
+      "subject": "EXEC Phase Initialized",
+      "activeForm": "Initializing EXEC phase",
+      "description": "Load CLAUDE_EXEC.md identity and mini-spec.",
+      "blockedBy": ["{{SD_ID}}-LEAD-WALL"],
+      "metadata": {
+        "category": "init",
+        "phase": "EXEC",
+        "loads_context": ["CLAUDE_EXEC.md", "MINI_SPEC"]
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-EXEC-IMPL",
+      "subject": "Implement {{SD_TITLE}}",
+      "activeForm": "Implementing changes",
+      "description": "Execute implementation according to mini-spec.",
+      "blockedBy": ["{{SD_ID}}-EXEC-READY"],
+      "metadata": {
+        "category": "core",
+        "phase": "EXEC",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-EXEC-TESTS",
+      "subject": "Run Tests",
+      "activeForm": "Running tests",
+      "description": "Run relevant tests to verify implementation.",
+      "blockedBy": ["{{SD_ID}}-EXEC-IMPL"],
+      "metadata": {
+        "category": "testing",
+        "phase": "EXEC",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-GATE-TESTS",
+      "subject": "Gate: Tests Passing",
+      "activeForm": "Validating test results",
+      "description": "Tests must pass before proceeding.",
+      "blockedBy": ["{{SD_ID}}-EXEC-TESTS"],
+      "metadata": {
+        "category": "gate",
+        "phase": "EXEC",
+        "gate_type": "TESTS_PASS"
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-EXEC-WALL",
+      "subject": "EXEC VALIDATION COMPLETE",
+      "activeForm": "Finalizing EXEC phase",
+      "description": "Tests passed. FINAL phase unblocked.",
+      "blockedBy": ["{{SD_ID}}-GATE-TESTS"],
+      "metadata": {
+        "category": "wall",
+        "phase": "EXEC",
+        "is_phase_boundary": true,
+        "next_phase": "FINAL"
+      }
+    }
+  ]
+}

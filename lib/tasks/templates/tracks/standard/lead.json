@@ -1,0 +1,70 @@
+{
+  "track": "STANDARD",
+  "phase": "LEAD",
+  "description": "STANDARD track LEAD phase with scope validation",
+  "tasks": [
+    {
+      "id_template": "{{SD_ID}}-LEAD-INIT",
+      "subject": "LEAD Phase Initialized: {{SD_TITLE}}",
+      "activeForm": "Initializing LEAD phase",
+      "description": "Load CLAUDE_LEAD.md identity and SD context.",
+      "blockedBy": [],
+      "metadata": {
+        "category": "init",
+        "phase": "LEAD",
+        "loads_context": ["CLAUDE_LEAD.md", "SD_METADATA"]
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-LEAD-SCOPE",
+      "subject": "Validate SD Scope",
+      "activeForm": "Validating scope",
+      "description": "Review SD scope and ensure strategic alignment.",
+      "blockedBy": ["{{SD_ID}}-LEAD-INIT"],
+      "metadata": {
+        "category": "validation",
+        "phase": "LEAD",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-GATE-SCOPE",
+      "subject": "Gate: Scope Assessment",
+      "activeForm": "Running scope gate",
+      "description": "Verify SD scope is appropriate for STANDARD track.",
+      "blockedBy": ["{{SD_ID}}-LEAD-SCOPE"],
+      "metadata": {
+        "category": "gate",
+        "phase": "LEAD",
+        "gate_type": "SCOPE_ASSESSMENT",
+        "threshold": 75
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-GATE-BRANCH",
+      "subject": "Gate: Branch Preparation",
+      "activeForm": "Preparing branch",
+      "description": "Create feature branch for SD work.",
+      "blockedBy": ["{{SD_ID}}-GATE-SCOPE"],
+      "metadata": {
+        "category": "gate",
+        "phase": "LEAD",
+        "gate_type": "SD_BRANCH_PREPARATION",
+        "auto_run": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-LEAD-WALL",
+      "subject": "LEAD VALIDATION COMPLETE",
+      "activeForm": "Finalizing LEAD phase",
+      "description": "All LEAD gates passed. PLAN phase unblocked.",
+      "blockedBy": ["{{SD_ID}}-GATE-SCOPE", "{{SD_ID}}-GATE-BRANCH"],
+      "metadata": {
+        "category": "wall",
+        "phase": "LEAD",
+        "is_phase_boundary": true,
+        "next_phase": "PLAN"
+      }
+    }
+  ]
+}
