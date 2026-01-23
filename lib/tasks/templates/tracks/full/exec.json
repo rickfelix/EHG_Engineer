@@ -1,0 +1,107 @@
+{
+  "track": "FULL",
+  "phase": "EXEC",
+  "description": "Full EXEC phase with complete implementation and testing",
+  "tasks": [
+    {
+      "id_template": "{{SD_ID}}-EXEC-READY",
+      "subject": "EXEC Phase Initialized",
+      "activeForm": "Initializing EXEC phase",
+      "description": "Load CLAUDE_EXEC.md identity and PLAN handoff context.",
+      "blockedBy": ["{{SD_ID}}-PLAN-WALL"],
+      "metadata": {
+        "category": "init",
+        "phase": "EXEC",
+        "loads_context": ["CLAUDE_EXEC.md", "PLAN_HANDOFF", "PRD"]
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-EXEC-PREFLIGHT",
+      "subject": "Pre-Implementation Verification",
+      "activeForm": "Running pre-flight checks",
+      "description": "Verify application directory, component locations, URLs, and ambiguity resolution.",
+      "blockedBy": ["{{SD_ID}}-EXEC-READY"],
+      "metadata": {
+        "category": "validation",
+        "phase": "EXEC",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-EXEC-IMPL",
+      "subject": "Implement {{SD_TITLE}}",
+      "activeForm": "Implementing changes",
+      "description": "Execute implementation according to PRD. Follow component sizing (300-600 LOC), use Skills for guidance.",
+      "blockedBy": ["{{SD_ID}}-EXEC-PREFLIGHT"],
+      "metadata": {
+        "category": "core",
+        "phase": "EXEC",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-EXEC-UNIT",
+      "subject": "Unit Tests",
+      "activeForm": "Running unit tests",
+      "description": "Create and run unit tests for implementation. npm run test:unit",
+      "blockedBy": ["{{SD_ID}}-EXEC-IMPL"],
+      "metadata": {
+        "category": "testing",
+        "phase": "EXEC",
+        "test_type": "unit",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-EXEC-E2E",
+      "subject": "E2E Tests",
+      "activeForm": "Running E2E tests",
+      "description": "Create and run E2E tests for implementation. npm run test:e2e",
+      "blockedBy": ["{{SD_ID}}-EXEC-IMPL"],
+      "metadata": {
+        "category": "testing",
+        "phase": "EXEC",
+        "test_type": "e2e",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-GATE-TESTS",
+      "subject": "Gate: Dual Test Requirement",
+      "activeForm": "Validating test results",
+      "description": "Both unit and E2E tests must pass before proceeding.",
+      "blockedBy": ["{{SD_ID}}-EXEC-UNIT", "{{SD_ID}}-EXEC-E2E"],
+      "metadata": {
+        "category": "gate",
+        "phase": "EXEC",
+        "gate_type": "DUAL_TEST_REQUIREMENT"
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-EXEC-TESTING-AGENT",
+      "subject": "TESTING Sub-Agent Verification",
+      "activeForm": "Running TESTING sub-agent",
+      "description": "Sub-agent: Validate test coverage and quality.",
+      "blockedBy": ["{{SD_ID}}-GATE-TESTS"],
+      "metadata": {
+        "category": "sub_agent",
+        "phase": "EXEC",
+        "agent": "TESTING",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-EXEC-WALL",
+      "subject": "EXEC VALIDATION COMPLETE",
+      "activeForm": "Finalizing EXEC phase",
+      "description": "All EXEC gates passed. VERIFY phase unblocked.",
+      "blockedBy": ["{{SD_ID}}-EXEC-TESTING-AGENT"],
+      "metadata": {
+        "category": "wall",
+        "phase": "EXEC",
+        "is_phase_boundary": true,
+        "next_phase": "VERIFY"
+      }
+    }
+  ]
+}

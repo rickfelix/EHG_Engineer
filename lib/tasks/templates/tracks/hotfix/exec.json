@@ -1,0 +1,45 @@
+{
+  "track": "HOTFIX",
+  "phase": "EXEC",
+  "description": "HOTFIX track EXEC phase - emergency implementation (skips LEAD and PLAN)",
+  "tasks": [
+    {
+      "id_template": "{{SD_ID}}-HOTFIX-INIT",
+      "subject": "Hotfix Initialized: {{SD_TITLE}}",
+      "activeForm": "Initializing hotfix",
+      "description": "Emergency fix initiated. LEAD and PLAN phases skipped.",
+      "blockedBy": [],
+      "metadata": {
+        "category": "init",
+        "phase": "EXEC",
+        "emergency": true,
+        "skipped_phases": ["LEAD", "PLAN"]
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-HOTFIX-IMPL",
+      "subject": "Implement Hotfix",
+      "activeForm": "Implementing hotfix",
+      "description": "Make the emergency code change. Minimal footprint, focused fix.",
+      "blockedBy": ["{{SD_ID}}-HOTFIX-INIT"],
+      "metadata": {
+        "category": "core",
+        "phase": "EXEC",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-EXEC-WALL",
+      "subject": "EXEC COMPLETE - SAFETY CHECK REQUIRED",
+      "activeForm": "Moving to safety check",
+      "description": "Implementation complete. SAFETY-WALL provides compensating control.",
+      "blockedBy": ["{{SD_ID}}-HOTFIX-IMPL"],
+      "metadata": {
+        "category": "wall",
+        "phase": "EXEC",
+        "is_phase_boundary": true,
+        "next_phase": "SAFETY"
+      }
+    }
+  ]
+}

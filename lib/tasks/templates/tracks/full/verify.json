@@ -1,0 +1,108 @@
+{
+  "track": "FULL",
+  "phase": "VERIFY",
+  "description": "Full VERIFY phase with fidelity check, sub-agent orchestration, and retrospective",
+  "tasks": [
+    {
+      "id_template": "{{SD_ID}}-VERIFY-READY",
+      "subject": "VERIFY Phase Initialized",
+      "activeForm": "Initializing VERIFY phase",
+      "description": "Load verification context and EXEC handoff results.",
+      "blockedBy": ["{{SD_ID}}-EXEC-WALL"],
+      "metadata": {
+        "category": "init",
+        "phase": "VERIFY",
+        "loads_context": ["EXEC_HANDOFF", "TEST_RESULTS"]
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-VERIFY-FIDELITY",
+      "subject": "PRD Fidelity Check",
+      "activeForm": "Checking PRD fidelity",
+      "description": "Verify implementation matches PRD requirements. Check all functional requirements implemented.",
+      "blockedBy": ["{{SD_ID}}-VERIFY-READY"],
+      "metadata": {
+        "category": "validation",
+        "phase": "VERIFY",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-VERIFY-VALIDATION",
+      "subject": "VALIDATION Sub-Agent",
+      "activeForm": "Running VALIDATION sub-agent",
+      "description": "Sub-agent: Validate implementation against PRD and existing codebase.",
+      "blockedBy": ["{{SD_ID}}-VERIFY-FIDELITY"],
+      "metadata": {
+        "category": "sub_agent",
+        "phase": "VERIFY",
+        "agent": "VALIDATION",
+        "parallel": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-VERIFY-REGRESSION",
+      "subject": "REGRESSION Sub-Agent",
+      "activeForm": "Running REGRESSION sub-agent",
+      "description": "Sub-agent: Check for backward compatibility and regression risks.",
+      "blockedBy": ["{{SD_ID}}-VERIFY-FIDELITY"],
+      "metadata": {
+        "category": "sub_agent",
+        "phase": "VERIFY",
+        "agent": "REGRESSION",
+        "parallel": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-VERIFY-SYNTHESIS",
+      "subject": "Verification Synthesis",
+      "activeForm": "Synthesizing verification results",
+      "description": "Combine VALIDATION and REGRESSION results. Document any gaps.",
+      "blockedBy": ["{{SD_ID}}-VERIFY-VALIDATION", "{{SD_ID}}-VERIFY-REGRESSION"],
+      "metadata": {
+        "category": "core",
+        "phase": "VERIFY",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-VERIFY-RETRO",
+      "subject": "Generate Retrospective",
+      "activeForm": "Generating retrospective",
+      "description": "Create retrospective capturing lessons learned, patterns, and improvements.",
+      "blockedBy": ["{{SD_ID}}-VERIFY-SYNTHESIS"],
+      "metadata": {
+        "category": "sub_agent",
+        "phase": "VERIFY",
+        "agent": "RETRO",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-GATE-VERIFY",
+      "subject": "Gate: Verification Complete",
+      "activeForm": "Validating verification",
+      "description": "All verification checks passed. Quality threshold met.",
+      "blockedBy": ["{{SD_ID}}-VERIFY-RETRO"],
+      "metadata": {
+        "category": "gate",
+        "phase": "VERIFY",
+        "gate_type": "VERIFICATION_COMPLETE",
+        "threshold": 85
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-VERIFY-WALL",
+      "subject": "VERIFY VALIDATION COMPLETE",
+      "activeForm": "Finalizing VERIFY phase",
+      "description": "All VERIFY gates passed. FINAL phase unblocked.",
+      "blockedBy": ["{{SD_ID}}-GATE-VERIFY"],
+      "metadata": {
+        "category": "wall",
+        "phase": "VERIFY",
+        "is_phase_boundary": true,
+        "next_phase": "FINAL"
+      }
+    }
+  ]
+}

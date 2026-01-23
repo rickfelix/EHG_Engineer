@@ -1,0 +1,64 @@
+{
+  "track": "HOTFIX",
+  "phase": "SAFETY",
+  "description": "HOTFIX track SAFETY phase - compensating controls for skipped LEAD and PLAN",
+  "tasks": [
+    {
+      "id_template": "{{SD_ID}}-SAFETY-BUILD",
+      "subject": "Verify Build Passes",
+      "activeForm": "Checking build",
+      "description": "CI/CD build must succeed.",
+      "blockedBy": ["{{SD_ID}}-EXEC-WALL"],
+      "metadata": {
+        "category": "gate",
+        "phase": "SAFETY",
+        "gate_type": "BUILD_PASS",
+        "auto_run": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-SAFETY-TESTS",
+      "subject": "Verify No Regressions",
+      "activeForm": "Running tests",
+      "description": "All existing tests must pass (no regressions introduced).",
+      "blockedBy": ["{{SD_ID}}-EXEC-WALL"],
+      "metadata": {
+        "category": "gate",
+        "phase": "SAFETY",
+        "gate_type": "TESTS_PASS",
+        "auto_run": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-SAFETY-LINT",
+      "subject": "Verify Lint Clean",
+      "activeForm": "Running lint",
+      "description": "No new lint errors introduced.",
+      "blockedBy": ["{{SD_ID}}-EXEC-WALL"],
+      "metadata": {
+        "category": "gate",
+        "phase": "SAFETY",
+        "gate_type": "LINT_PASS",
+        "auto_run": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-SAFETY-WALL",
+      "subject": "SAFETY WALL - Hotfix Cleared",
+      "activeForm": "Validating safety gates",
+      "description": "Build, Tests, Lint all passed. Compensates for skipped LEAD-WALL and PLAN-WALL.",
+      "blockedBy": [
+        "{{SD_ID}}-SAFETY-BUILD",
+        "{{SD_ID}}-SAFETY-TESTS",
+        "{{SD_ID}}-SAFETY-LINT"
+      ],
+      "metadata": {
+        "category": "wall",
+        "phase": "SAFETY",
+        "is_phase_boundary": true,
+        "compensates_for": ["LEAD-WALL", "PLAN-WALL"],
+        "next_phase": "FINAL"
+      }
+    }
+  ]
+}

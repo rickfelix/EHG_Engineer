@@ -1,0 +1,68 @@
+{
+  "type": "correction",
+  "description": "Template for correction tasks created during wall invalidation",
+  "tasks": [
+    {
+      "id_template": "{{SD_ID}}-CORRECTION-{{TARGET}}",
+      "subject": "Correction: {{CORRECTION_TARGET}}",
+      "activeForm": "Applying correction",
+      "description": "{{INVALIDATION_REASON}}. Apply fix and validate.",
+      "blockedBy": [],
+      "metadata": {
+        "category": "correction",
+        "target": "{{TARGET}}",
+        "invalidation_reason": "{{INVALIDATION_REASON}}",
+        "original_wall": "{{ORIGINAL_WALL}}"
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-CORRECTION-SYNTHESIS",
+      "subject": "Correction Synthesis",
+      "activeForm": "Synthesizing corrections",
+      "description": "Combine correction results and validate fix.",
+      "blockedBy": ["{{SD_ID}}-CORRECTION-{{TARGET}}"],
+      "metadata": {
+        "category": "core",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-{{PHASE}}-WALL-V{{VERSION}}",
+      "subject": "{{PHASE}} WALL (Corrected)",
+      "activeForm": "Validating corrected wall",
+      "description": "Re-validation of {{PHASE}} wall after correction.",
+      "blockedBy": ["{{SD_ID}}-CORRECTION-SYNTHESIS"],
+      "metadata": {
+        "category": "wall",
+        "is_phase_boundary": true,
+        "version": "{{VERSION}}",
+        "supersedes": "{{ORIGINAL_WALL}}"
+      }
+    }
+  ],
+  "status_extensions": {
+    "paused": {
+      "description": "Task paused due to wall invalidation",
+      "fields": {
+        "paused_reason": "Reason for pause",
+        "resume_after": "Task ID that must complete before resume",
+        "paused_at": "Timestamp when paused"
+      }
+    },
+    "invalidated": {
+      "description": "Wall was invalidated for correction",
+      "fields": {
+        "invalidation_reason": "Reason for invalidation",
+        "superseded_by": "New wall task ID",
+        "invalidated_at": "Timestamp when invalidated"
+      }
+    },
+    "superseded": {
+      "description": "Task replaced by newer version",
+      "fields": {
+        "superseded_by": "Replacement task ID",
+        "superseded_reason": "Reason for replacement"
+      }
+    }
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "track": "STANDARD",
+  "phase": "PLAN",
+  "description": "STANDARD track PLAN phase with lighter PRD and optional sub-agents",
+  "tasks": [
+    {
+      "id_template": "{{SD_ID}}-PLAN-READY",
+      "subject": "PLAN Phase Initialized",
+      "activeForm": "Initializing PLAN phase",
+      "description": "Load CLAUDE_PLAN.md identity and LEAD handoff context.",
+      "blockedBy": ["{{SD_ID}}-LEAD-WALL"],
+      "metadata": {
+        "category": "init",
+        "phase": "PLAN",
+        "loads_context": ["CLAUDE_PLAN.md", "LEAD_HANDOFF"]
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-PLAN-PRD",
+      "subject": "Generate PRD for {{SD_TITLE}}",
+      "activeForm": "Generating PRD",
+      "description": "Create standard PRD based on SD scope.",
+      "blockedBy": ["{{SD_ID}}-PLAN-READY"],
+      "metadata": {
+        "category": "core",
+        "phase": "PLAN",
+        "output": "prd",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-PLAN-STORIES",
+      "subject": "Generate User Stories",
+      "activeForm": "Generating User Stories",
+      "description": "Sub-agent: Create user stories with acceptance criteria.",
+      "blockedBy": ["{{SD_ID}}-PLAN-PRD"],
+      "metadata": {
+        "category": "sub_agent",
+        "phase": "PLAN",
+        "agent": "STORIES",
+        "optional": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-GATE-PRD",
+      "subject": "Gate: PRD Completeness",
+      "activeForm": "Validating PRD",
+      "description": "Verify PRD has required sections.",
+      "blockedBy": ["{{SD_ID}}-PLAN-PRD"],
+      "metadata": {
+        "category": "gate",
+        "phase": "PLAN",
+        "gate_type": "PRD_COMPLETE",
+        "threshold": 75
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-GATE-BMAD",
+      "subject": "Gate: BMAD Validation (Light)",
+      "activeForm": "Running BMAD Validation",
+      "description": "Run BMAD validation with reduced threshold.",
+      "blockedBy": ["{{SD_ID}}-PLAN-PRD"],
+      "metadata": {
+        "category": "gate",
+        "phase": "PLAN",
+        "gate_type": "BMAD_VALIDATION",
+        "threshold": 75
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-PLAN-WALL",
+      "subject": "PLAN VALIDATION COMPLETE",
+      "activeForm": "Finalizing PLAN phase",
+      "description": "All PLAN gates passed. EXEC phase unblocked.",
+      "blockedBy": ["{{SD_ID}}-GATE-PRD", "{{SD_ID}}-GATE-BMAD"],
+      "metadata": {
+        "category": "wall",
+        "phase": "PLAN",
+        "is_phase_boundary": true,
+        "next_phase": "EXEC"
+      }
+    }
+  ]
+}

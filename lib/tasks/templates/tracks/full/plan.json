@@ -1,0 +1,158 @@
+{
+  "track": "FULL",
+  "phase": "PLAN",
+  "description": "Full PLAN phase with PRD, sub-agents, and BMAD validation",
+  "tasks": [
+    {
+      "id_template": "{{SD_ID}}-PLAN-READY",
+      "subject": "PLAN Phase Initialized",
+      "activeForm": "Initializing PLAN phase",
+      "description": "Load CLAUDE_PLAN.md identity and LEAD handoff context.",
+      "blockedBy": ["{{SD_ID}}-LEAD-WALL"],
+      "metadata": {
+        "category": "init",
+        "phase": "PLAN",
+        "loads_context": ["CLAUDE_PLAN.md", "LEAD_HANDOFF"]
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-PLAN-PRD",
+      "subject": "Generate PRD for {{SD_TITLE}}",
+      "activeForm": "Generating PRD",
+      "description": "Create comprehensive PRD based on SD scope using add-prd-to-database.js.",
+      "blockedBy": ["{{SD_ID}}-PLAN-READY"],
+      "metadata": {
+        "category": "core",
+        "phase": "PLAN",
+        "output": "prd",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-PLAN-DESIGN",
+      "subject": "Design Review",
+      "activeForm": "Running Design Review",
+      "description": "Sub-agent: Evaluate PRD from UI/UX perspective.",
+      "blockedBy": ["{{SD_ID}}-PLAN-PRD"],
+      "metadata": {
+        "category": "sub_agent",
+        "phase": "PLAN",
+        "agent": "DESIGN",
+        "parallel": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-PLAN-DB",
+      "subject": "Database Schema Design",
+      "activeForm": "Designing Database Schema",
+      "description": "Sub-agent: Design schema changes required for PRD.",
+      "blockedBy": ["{{SD_ID}}-PLAN-PRD"],
+      "metadata": {
+        "category": "sub_agent",
+        "phase": "PLAN",
+        "agent": "DATABASE",
+        "parallel": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-PLAN-SECURITY",
+      "subject": "Security Review",
+      "activeForm": "Running Security Review",
+      "description": "Sub-agent: Identify security considerations.",
+      "blockedBy": ["{{SD_ID}}-PLAN-PRD"],
+      "metadata": {
+        "category": "sub_agent",
+        "phase": "PLAN",
+        "agent": "SECURITY",
+        "parallel": true,
+        "conditional": "sd.security_relevant"
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-PLAN-STORIES",
+      "subject": "Generate User Stories",
+      "activeForm": "Generating User Stories",
+      "description": "Sub-agent: Create user stories with implementation context.",
+      "blockedBy": ["{{SD_ID}}-PLAN-PRD"],
+      "metadata": {
+        "category": "sub_agent",
+        "phase": "PLAN",
+        "agent": "STORIES",
+        "parallel": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-PLAN-SYNTHESIS",
+      "subject": "Synthesize Sub-Agent Outputs",
+      "activeForm": "Synthesizing Plan",
+      "description": "Combine Design, DB, Security, and Stories outputs into unified plan.",
+      "blockedBy": [
+        "{{SD_ID}}-PLAN-DESIGN",
+        "{{SD_ID}}-PLAN-DB",
+        "{{SD_ID}}-PLAN-SECURITY",
+        "{{SD_ID}}-PLAN-STORIES"
+      ],
+      "metadata": {
+        "category": "core",
+        "phase": "PLAN",
+        "required": true
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-GATE-PRD",
+      "subject": "Gate: PRD Completeness",
+      "activeForm": "Validating PRD",
+      "description": "Verify PRD has all required sections.",
+      "blockedBy": ["{{SD_ID}}-PLAN-SYNTHESIS"],
+      "metadata": {
+        "category": "gate",
+        "phase": "PLAN",
+        "gate_type": "PRD_COMPLETE",
+        "threshold": 85
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-GATE-BMAD",
+      "subject": "Gate: BMAD Validation",
+      "activeForm": "Running BMAD Validation",
+      "description": "Run BMAD multi-perspective validation.",
+      "blockedBy": ["{{SD_ID}}-PLAN-SYNTHESIS"],
+      "metadata": {
+        "category": "gate",
+        "phase": "PLAN",
+        "gate_type": "BMAD_VALIDATION",
+        "threshold": 85
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-GATE-SCORE",
+      "subject": "Gate: Score Threshold",
+      "activeForm": "Checking Score Threshold",
+      "description": "Verify weighted gate score meets threshold.",
+      "blockedBy": ["{{SD_ID}}-GATE-PRD", "{{SD_ID}}-GATE-BMAD"],
+      "metadata": {
+        "category": "gate",
+        "phase": "PLAN",
+        "gate_type": "SCORE_THRESHOLD",
+        "threshold_by_type": {
+          "feature": 85,
+          "infrastructure": 85,
+          "security": 90
+        }
+      }
+    },
+    {
+      "id_template": "{{SD_ID}}-PLAN-WALL",
+      "subject": "PLAN VALIDATION COMPLETE",
+      "activeForm": "Finalizing PLAN phase",
+      "description": "All PLAN gates passed. EXEC phase unblocked.",
+      "blockedBy": ["{{SD_ID}}-GATE-SCORE"],
+      "metadata": {
+        "category": "wall",
+        "phase": "PLAN",
+        "is_phase_boundary": true,
+        "next_phase": "EXEC"
+      }
+    }
+  ]
+}
