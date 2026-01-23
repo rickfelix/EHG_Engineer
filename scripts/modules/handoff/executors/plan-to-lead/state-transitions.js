@@ -3,9 +3,19 @@
  * Part of SD-LEO-REFACTOR-PLANTOLEAD-001
  *
  * User story finalization, parent SD completion
+ *
+ * Enhanced with orchestrator child completion flow
+ * Part of SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-E
  */
 
 import { normalizeSDId } from '../../../sd-id-normalizer.js';
+
+// Import orchestrator child completion for per-child post-completion handling
+// SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-E
+import {
+  handleChildCompletion,
+  getParentFinalizationCommands
+} from '../../../../../lib/utils/orchestrator-child-completion.js';
 
 /**
  * Finalize user stories to completed status
@@ -83,31 +93,60 @@ export async function finalizeUserStories(supabase, prdId, sdId) {
  * Root cause fix: Parent SDs weren't being automatically marked complete when
  * all children finished.
  *
+ * Enhanced: SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-E
+ * Now returns orchestrator completion flow commands when applicable.
+ *
  * @param {Object} supabase - Supabase client
  * @param {Object} sd - The child SD that just completed
+ * @returns {Promise<Object>} { parentCompleted, commandsToRun }
  */
 export async function checkAndCompleteParentSD(supabase, sd) {
+  const result = {
+    parentCompleted: false,
+    commandsToRun: [],
+    childCommands: [],
+    parentCommands: []
+  };
+
   if (!sd.parent_sd_id) {
-    return;
+    return result;
   }
 
   console.log('\n   Checking parent SD completion...');
 
   try {
+    // Get child SD's post-completion commands (ship, learn)
+    // SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-E
+    const childSdKey = sd.sd_key || sd.legacy_id || sd.id;
+    try {
+      const childCompletionResult = await handleChildCompletion(childSdKey);
+      if (childCompletionResult.success) {
+        result.childCommands = childCompletionResult.commandsToRun.filter(
+          cmd => cmd === 'ship' || cmd === 'learn'
+        );
+      }
+    } catch (childErr) {
+      console.log(`   ⚠️  Child completion handler warning: ${childErr.message}`);
+      // Fall back to default commands
+      result.childCommands = ['ship', 'learn'];
+    }
+
     const { data: parentSD, error: parentError } = await supabase
       .from('strategic_directives_v2')
-      .select('id, title, status, parent_sd_id')
+      .select('id, title, status, parent_sd_id, sd_key')
       .eq('id', sd.parent_sd_id)
       .single();
 
     if (parentError || !parentSD) {
       console.log(`   ⚠️  Could not fetch parent SD: ${parentError?.message || 'Not found'}`);
-      return;
+      result.commandsToRun = result.childCommands;
+      return result;
     }
 
     if (parentSD.status === 'completed') {
       console.log('   ℹ️  Parent SD already completed');
-      return;
+      result.commandsToRun = result.childCommands;
+      return result;
     }
 
     const { data: siblings, error: siblingsError } = await supabase
@@ -117,7 +156,8 @@ export async function checkAndCompleteParentSD(supabase, sd) {
 
     if (siblingsError) {
       console.log(`   ⚠️  Could not fetch sibling SDs: ${siblingsError.message}`);
-      return;
+      result.commandsToRun = result.childCommands;
+      return result;
     }
 
     const allSiblingsComplete = siblings.every(sibling =>
@@ -129,7 +169,8 @@ export async function checkAndCompleteParentSD(supabase, sd) {
         s.status !== 'completed' && s.status !== 'pending_approval'
       ).length;
       console.log(`   ℹ️  Parent has ${incompleteCount} incomplete children - not completing parent yet`);
-      return;
+      result.commandsToRun = result.childCommands;
+      return result;
     }
 
     console.log(`   🎉 All ${siblings.length} children completed - auto-completing parent SD`);
@@ -146,18 +187,43 @@ export async function checkAndCompleteParentSD(supabase, sd) {
 
     if (updateError) {
       console.log(`   ⚠️  Could not complete parent SD: ${updateError.message}`);
+      result.commandsToRun = result.childCommands;
     } else {
       console.log(`   ✅ Parent SD "${parentSD.title}" auto-completed!`);
+      result.parentCompleted = true;
+
+      // Get parent finalization commands (document, leo next)
+      // SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-E
+      result.parentCommands = getParentFinalizationCommands(parentSD);
+      console.log(`   📋 Parent finalization commands: ${result.parentCommands.join(', ')}`);
+
+      // Child commands first, then parent commands
+      result.commandsToRun = [...result.childCommands, ...result.parentCommands];
 
       // Recursively check grandparent
       if (parentSD.parent_sd_id) {
         console.log('   📊 Checking grandparent SD...');
-        await checkAndCompleteParentSD(supabase, parentSD);
+        const grandparentResult = await checkAndCompleteParentSD(supabase, parentSD);
+        if (grandparentResult.parentCommands.length > 0) {
+          result.commandsToRun.push(...grandparentResult.parentCommands);
+        }
       }
     }
   } catch (error) {
     console.log(`   ⚠️  Parent completion check error: ${error.message}`);
+    // Fall back to child commands only
+    result.commandsToRun = result.childCommands;
   }
+
+  // Display completion summary
+  if (result.commandsToRun.length > 0) {
+    console.log('\n   📋 ORCHESTRATOR COMPLETION FLOW - Commands to Execute:');
+    result.commandsToRun.forEach((cmd, i) => {
+      console.log(`      ${i + 1}. /${cmd}`);
+    });
+  }
+
+  return result;
 }
 
 /**

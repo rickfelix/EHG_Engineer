@@ -128,6 +128,11 @@ export class PlanToLeadExecutor extends BaseExecutor {
         return ResultBuilder.rejected('ID_NORMALIZATION_FAILED', result.error);
       }
 
+      // SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-E: Parent orchestrator completion
+      // When all children complete, parent gets finalization commands
+      const { getParentFinalizationCommands } = await import('./state-transitions.js');
+      const parentCommands = getParentFinalizationCommands({ sd_key: sd.sd_key || sd.legacy_id });
+
       return {
         success: true,
         sdId: sdId,
@@ -141,7 +146,15 @@ export class PlanToLeadExecutor extends BaseExecutor {
           warnings: [],
           orchestrator_completion: true
         },
-        qualityScore: 100
+        qualityScore: 100,
+        // SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-E: Orchestrator finalization flow
+        orchestratorFlow: {
+          isOrchestrator: true,
+          allChildrenComplete: true,
+          commandsToRun: parentCommands,
+          childCommands: [],
+          parentCommands: parentCommands
+        }
       };
     }
 
@@ -187,7 +200,8 @@ export class PlanToLeadExecutor extends BaseExecutor {
     const stateResult = await completeStandardSD(this.supabase, sdId, prd, planValidation, gateResults);
 
     // Check if parent SD should be auto-completed
-    await checkAndCompleteParentSD(this.supabase, sd);
+    // SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-E: Now returns orchestrator completion flow commands
+    const orchestratorResult = await checkAndCompleteParentSD(this.supabase, sd);
 
     return {
       success: true,
@@ -195,7 +209,15 @@ export class PlanToLeadExecutor extends BaseExecutor {
       prdId: prd.id,
       handoffId: stateResult.handoffId,
       validation: planValidation,
-      qualityScore: planValidation.score
+      qualityScore: planValidation.score,
+      // SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-E: Orchestrator child completion flow
+      orchestratorFlow: {
+        isChild: !!sd.parent_sd_id,
+        parentCompleted: orchestratorResult.parentCompleted,
+        commandsToRun: orchestratorResult.commandsToRun,
+        childCommands: orchestratorResult.childCommands,
+        parentCommands: orchestratorResult.parentCommands
+      }
     };
   }
 
