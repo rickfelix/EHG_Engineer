@@ -13,7 +13,10 @@ This directory contains deployment strategies, operational procedures, and infra
 
 | File | Description |
 |------|-------------|
+| `leo-5-operations.md` | **LEO 5.0 Task System Operations** - Runbook for LEO 5.0 |
 | `deployment_ops.md` | Deployment and operations documentation |
+| `validation-tools.md` | Validation tools and procedures |
+| `stop-hook-operations.md` | Git stop hook operations guide |
 
 ---
 
