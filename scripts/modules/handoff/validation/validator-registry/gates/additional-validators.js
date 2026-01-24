@@ -5,6 +5,8 @@
 
 import { validateRetrospectiveQuality } from '../../../../sd-quality-validation.js';
 import { shouldSkipCodeValidation } from '../../../../../../lib/utils/sd-type-validation.js';
+// SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy for intelligent sub-agent requirements
+import { isLightweightSDType } from '../../sd-type-applicability-policy.js';
 
 /**
  * Register additional validators
@@ -93,17 +95,48 @@ export function registerAdditionalValidators(registry) {
       .eq('id', sd_id)
       .single();
 
+    // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Skip for documentation-only SDs
     if (sdData && shouldSkipCodeValidation(sdData)) {
       return {
         passed: true,
         score: 100,
         max_score: 100,
         issues: [],
-        warnings: [`Sub-agent orchestration skipped for ${sdData.sd_type} SD`]
+        warnings: [`Sub-agent orchestration skipped for ${sdData.sd_type} SD (documentation-only)`]
       };
     }
 
-    const requiredAgents = ['DESIGN', 'DATABASE'];
+    const sdType = (sdData?.sd_type || '').toLowerCase();
+
+    // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
+    // Lightweight SDs (bugfix, documentation, discovery_spike) don't require DESIGN/DATABASE
+    if (isLightweightSDType(sdType)) {
+      return {
+        passed: true,
+        score: 100,
+        max_score: 100,
+        issues: [],
+        warnings: [`Sub-agent orchestration skipped for ${sdType} SD (lightweight SD type)`]
+      };
+    }
+
+    // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Only require DESIGN/DATABASE for feature and database SDs
+    // This aligns with gate-1-plan-to-exec.js designSubAgentExecution validator
+    const requiresDesignDatabase = ['feature', 'database'];
+    const requiredAgents = requiresDesignDatabase.includes(sdType)
+      ? ['DESIGN', 'DATABASE']
+      : [];
+
+    if (requiredAgents.length === 0) {
+      return {
+        passed: true,
+        score: 100,
+        max_score: 100,
+        issues: [],
+        warnings: [`DESIGN/DATABASE sub-agents not required for ${sdType} SD type`]
+      };
+    }
+
     const issues = [];
 
     for (const agentCode of requiredAgents) {
@@ -197,7 +230,29 @@ export function registerAdditionalValidators(registry) {
   }, 'PLAN-TO-LEAD handoff exists');
 
   registry.register('userStoriesComplete', async (context) => {
-    const { sd_id, supabase } = context;
+    const { sd_id, sd, supabase } = context;
+
+    // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Get SD type for lightweight check
+    let sdType = (sd?.sd_type || '').toLowerCase();
+    if (!sdType && sd_id) {
+      const { data: sdData } = await supabase
+        .from('strategic_directives_v2')
+        .select('sd_type')
+        .eq('id', sd_id)
+        .single();
+      sdType = (sdData?.sd_type || '').toLowerCase();
+    }
+
+    // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Lightweight SDs don't require user stories
+    if (isLightweightSDType(sdType)) {
+      return {
+        passed: true,
+        score: 100,
+        max_score: 100,
+        issues: [],
+        warnings: [`User stories not required for ${sdType} SD type`]
+      };
+    }
 
     const { data: stories, error } = await supabase
       .from('user_stories')
