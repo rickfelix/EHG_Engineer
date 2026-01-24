@@ -322,17 +322,199 @@ if (data?.peak_usage > 70) {
 
 ---
 
+---
+
+## Context Preservation System (PreCompact + SessionStart Hooks)
+
+**Status**: ✅ Implemented (2026-01-24)
+
+### Problem Statement
+
+When Claude Code auto-compacts context (typically when approaching 95%+ usage), critical details can be lost:
+- Current SD key and phase
+- List of modified files
+- Active error messages being debugged
+- Uncommitted changes status
+
+This causes disorientation after compaction: "What was I working on?"
+
+### Solution Architecture
+
+Two lifecycle hooks work together to preserve and restore context:
+
+```
+Context High (>90%) → PreCompact Hook → Save snapshot
+                              ↓
+                    Auto-compaction occurs
+                              ↓
+         SessionStart Hook → Alert to restore files
+                              ↓
+                  Claude reads restoration files
+                              ↓
+                      Context restored
+```
+
+### Hook 1: PreCompact (Save State)
+
+**Location**: `scripts/hooks/precompact-snapshot.ps1`
+**Trigger**: Before context compaction
+**Purpose**: Save git state and work status before compaction
+
+**What It Saves**:
+- Git status (`git status --porcelain`)
+- Git diff stat (`git diff --stat`)
+- Staged changes (`git diff --cached --stat`)
+- Current branch name
+- Recent commits (last 5)
+- Modified files from last hour
+
+**Output File**: `.claude/compaction-snapshot.md`
+
+**Example Output**:
+```markdown
+# Pre-Compaction Snapshot
+**Created**: 2026-01-24 15:30:00
+**Trigger**: Auto-compaction imminent
+
+## Git Status
+M  docs/reference/claude-code-hooks.md
+?? scripts/hooks/precompact-snapshot.ps1
+
+## Current Branch
+feat/SD-XXX-001-context-preservation
+```
+
+**Configuration** (already in `.claude/settings.json`):
+```json
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\scripts\\hooks\\precompact-snapshot.ps1",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Hook 2: SessionStart (Restore Reminder)
+
+**Location**: `scripts/hooks/session-start-loader.ps1`
+**Trigger**: When a Claude Code session starts or resumes
+**Purpose**: Alert user to available restoration files
+
+**What It Does**:
+- Checks for recent compaction snapshot (< 30 minutes old)
+- Displays reminder to read state files
+- Shows current SD queue hint
+
+**Output** (when recent compaction detected):
+```
+🔄 CONTEXT RESTORATION AVAILABLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Recent compaction detected. State files:
+  📁 .claude/compaction-snapshot.md (git state)
+  📁 .claude/session-state.md (work state)
+
+⚡ READ THESE FILES to restore context before continuing.
+```
+
+**Configuration** (already in `.claude/settings.json`):
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\scripts\\hooks\\session-start-loader.ps1",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Integration with CLAUDE_CORE.md
+
+The "Compaction Instructions (CRITICAL)" section in CLAUDE_CORE.md instructs Claude on:
+- What to preserve during compaction (SD key, phase, modified files, PRD requirements)
+- What is safe to discard (verbose logs, historical handoff details)
+- **Post-compaction protocol**: Immediately read `.claude/compaction-snapshot.md` and `.claude/session-state.md`
+
+### Manual State Management
+
+Two state files work together:
+
+| File | Updated By | Contains |
+|------|-----------|----------|
+| `.claude/session-state.md` | Manual (during handoffs, `/context-compact`) | Current SD, progress, known issues, recent work |
+| `.claude/compaction-snapshot.md` | Auto (PreCompact hook) | Git state, modified files, recent commits |
+
+Both files persist across sessions and survive compaction.
+
+### Usage Workflow
+
+**Normal Operation**:
+1. Work on SD → modify files → session reaches 90%+ context
+2. PreCompact hook fires → `.claude/compaction-snapshot.md` created
+3. Auto-compaction occurs → context summarized
+4. User starts new session → SessionStart hook alerts to restoration files
+5. Claude reads both state files → work continues seamlessly
+
+**Manual Intervention**:
+```bash
+# Force a compaction snapshot
+powershell.exe -File scripts/hooks/precompact-snapshot.ps1
+
+# View saved state
+cat .claude/compaction-snapshot.md
+cat .claude/session-state.md
+```
+
+### Verification
+
+After implementing hooks, verify:
+
+```bash
+# Check hooks are configured
+cat .claude/settings.json | jq '.hooks | keys'
+
+# Manually trigger PreCompact hook
+powershell.exe -ExecutionPolicy Bypass -File scripts/hooks/precompact-snapshot.ps1
+
+# Verify snapshot file created
+ls -la .claude/compaction-snapshot.md
+
+# Manually trigger SessionStart hook
+powershell.exe -ExecutionPolicy Bypass -File scripts/hooks/session-start-loader.ps1
+```
+
+---
+
 ## Future Enhancements
 
 1. **Pre-flight estimation**: Use `/v1/messages/count_tokens` endpoint before expensive operations
 2. **Real-time dashboard**: WebSocket-based context monitoring in admin UI
 3. **Automatic compaction**: Trigger `/compact` when approaching threshold
 4. **Cost correlation**: Link token usage to API costs
+5. **Enhanced state preservation**: Capture active user stories, test results, error stacks in structured format
 
 ---
 
 ## References
 
+- [Claude Code Hooks Reference](claude-code-hooks.md) - Complete hook documentation including PreCompact/SessionStart
 - [Token Accounting Research (Dec 2025)](../../research/token-accounting-research.md)
 - [Claude Code Hooks Documentation](https://docs.anthropic.com/en/docs/claude-code/hooks)
-- [Context Engineering Best Practices](../agentic-context-engineering-v3.md)
+- [Context Engineering Best Practices](agentic-context-engineering-v3.md)
+- [CLAUDE_CORE.md Compaction Instructions](../../CLAUDE_CORE.md#compaction-instructions-critical) - What Claude preserves during compaction

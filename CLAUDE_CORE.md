@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-01-24 7:42:07 PM
+**Generated**: 2026-01-24 5:38:20 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -214,6 +214,37 @@ npm run handoff:compliance SD-ID  # Check specific SD
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
 
+## Mandatory Agent Invocation Rules
+
+**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
+
+### Task Type -> Required Agent
+
+| Task Keywords | MUST Invoke | Purpose |
+|---------------|-------------|---------|
+| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
+| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
+| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
+| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
+| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
+| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
+| database, migration, schema | **database-agent** | Schema validation |
+| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
+
+### Why This Exists
+
+**Incident**: Human-like testing perspective interpreted as manual content inspection.
+**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
+**Root Cause**: Ad-hoc review instead of specialized agent invocation.
+**Prevention**: Explicit rules mandate agent use for specialized tasks.
+
+### How to Apply
+
+1. Detect task type from user request keywords
+2. Invoke required agent(s) BEFORE making changes
+3. Agent findings inform implementation
+4. Re-run agent AFTER changes to verify fixes
+
 ## 🤖 Built-in Agent Integration
 
 ## Built-in Agent Integration
@@ -255,37 +286,6 @@ Task(subagent_type="Explore", prompt="Identify affected areas")
 ```
 
 This is faster than sequential exploration and provides comprehensive coverage.
-
-## Mandatory Agent Invocation Rules
-
-**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
-
-### Task Type -> Required Agent
-
-| Task Keywords | MUST Invoke | Purpose |
-|---------------|-------------|---------|
-| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
-| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
-| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
-| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
-| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
-| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
-| database, migration, schema | **database-agent** | Schema validation |
-| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
-
-### Why This Exists
-
-**Incident**: Human-like testing perspective interpreted as manual content inspection.
-**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
-**Root Cause**: Ad-hoc review instead of specialized agent invocation.
-**Prevention**: Explicit rules mandate agent use for specialized tasks.
-
-### How to Apply
-
-1. Detect task type from user request keywords
-2. Invoke required agent(s) BEFORE making changes
-3. Agent findings inform implementation
-4. Re-run agent AFTER changes to verify fixes
 
 ## Claude Code Plan Mode Integration
 
@@ -668,47 +668,6 @@ Claude has documented cognitive biases. These rules OVERRIDE those biases:
 
 **REMEMBER**: The goal is NOT to complete SDs quickly. The goal is to complete SDs CORRECTLY. A properly implemented SD that takes 8 hours is infinitely better than a rushed implementation that takes 4 hours but requires 6 hours of fixes.
 
-## Sustainable Issue Resolution Philosophy
-
-**CHAIRMAN PREFERENCE**: When encountering issues, bugs, or blockers during implementation:
-
-### Core Principles
-
-1. **Handle Issues Immediately**
-   - Do NOT defer problems to "fix later" or create tech debt
-   - Address issues as they arise, before moving forward
-   - Blocking issues must be resolved before continuing
-
-2. **Resolve Systemically**
-   - Fix the root cause, not just the symptom
-   - Consider why the issue occurred and prevent recurrence
-   - Update patterns, validation rules, or documentation as needed
-
-3. **Prefer Sustainable Solutions**
-   - Choose fixes that will last, not quick patches
-   - Avoid workarounds that need to be revisited
-   - Ensure the solution integrates properly with existing architecture
-
-### Implementation Guidelines
-
-| Scenario | Wrong Approach | Right Approach |
-|----------|----------------|----------------|
-| Test failing | Skip test, add TODO | Fix underlying issue, ensure test passes |
-| Type error | Cast to `any` | Fix types properly, update interfaces |
-| Migration issue | Comment out problematic code | Fix schema, add proper handling |
-| Build warning | Suppress warning | Address root cause of warning |
-| Performance issue | Defer to "optimization SD" | Fix if simple; create SD only if complex |
-
-### Exception Handling
-
-If immediate resolution is truly impossible:
-1. Document the issue thoroughly
-2. Create a high-priority SD for resolution
-3. Add a failing test that captures the issue
-4. Note the workaround as TEMPORARY with removal timeline
-
-**Default behavior**: Resolve now, resolve properly, resolve sustainably.
-
 ## 🎯 Skill Integration (Claude Code Skills)
 
 **Skills complement the LEO Protocol by providing pattern guidance BEFORE implementation.**
@@ -800,6 +759,47 @@ Skills now include:
 **Total Skills**: 54 skills covering all 14 sub-agents + 1 master chain skill
 
 **Reference**: Skills were created from issue_patterns and retrospectives to encode proven solutions.
+
+## Sustainable Issue Resolution Philosophy
+
+**CHAIRMAN PREFERENCE**: When encountering issues, bugs, or blockers during implementation:
+
+### Core Principles
+
+1. **Handle Issues Immediately**
+   - Do NOT defer problems to "fix later" or create tech debt
+   - Address issues as they arise, before moving forward
+   - Blocking issues must be resolved before continuing
+
+2. **Resolve Systemically**
+   - Fix the root cause, not just the symptom
+   - Consider why the issue occurred and prevent recurrence
+   - Update patterns, validation rules, or documentation as needed
+
+3. **Prefer Sustainable Solutions**
+   - Choose fixes that will last, not quick patches
+   - Avoid workarounds that need to be revisited
+   - Ensure the solution integrates properly with existing architecture
+
+### Implementation Guidelines
+
+| Scenario | Wrong Approach | Right Approach |
+|----------|----------------|----------------|
+| Test failing | Skip test, add TODO | Fix underlying issue, ensure test passes |
+| Type error | Cast to `any` | Fix types properly, update interfaces |
+| Migration issue | Comment out problematic code | Fix schema, add proper handling |
+| Build warning | Suppress warning | Address root cause of warning |
+| Performance issue | Defer to "optimization SD" | Fix if simple; create SD only if complex |
+
+### Exception Handling
+
+If immediate resolution is truly impossible:
+1. Document the issue thoroughly
+2. Create a high-priority SD for resolution
+3. Add a failing test that captures the issue
+4. Note the workaround as TEMPORARY with removal timeline
+
+**Default behavior**: Resolve now, resolve properly, resolve sustainably.
 
 ## 🚫 Stage 7 Hard Block: UI Coverage Prerequisite
 
@@ -1252,75 +1252,6 @@ Patterns exceeding these thresholds auto-create CRITICAL SDs:
 - Implementation guide: `docs/architecture/GENESIS_IMPLEMENTATION_GUIDE.md`
 - Quick reference: `docs/reference/genesis-codebase-guide.md`
 
-## ⚠️ Conditional Handoffs by SD Type (CRITICAL)
-
-**NOT ALL HANDOFFS ARE REQUIRED FOR ALL SD TYPES.**
-
-This is a common source of confusion. The EXEC-TO-PLAN handoff is **conditional** based on SD type.
-
-### Quick Decision: Is EXEC-TO-PLAN Required?
-
-| SD Type | EXEC-TO-PLAN | Why |
-|---------|--------------|-----|
-| `feature` | **REQUIRED** | Full code validation, E2E tests, quality gates |
-| `bugfix` | **REQUIRED** | Verify fix, regression testing |
-| `database` | **REQUIRED** | Schema validation, data integrity |
-| `security` | **REQUIRED** | Security verification critical |
-| `refactor` | **REQUIRED** | Behavior preservation validation |
-| `infrastructure` | **OPTIONAL** | No production code to test |
-| `documentation` | **SKIP** | No code changes at all |
-| `orchestrator` | **SKIP** | Children handle their own validation |
-
-### Workflow Paths
-
-**Full Workflow (5 handoffs)** - feature, bugfix, database, security, refactor:
-```
-LEAD-TO-PLAN → PLAN-TO-EXEC → [EXEC] → EXEC-TO-PLAN → PLAN-TO-LEAD → LEAD-FINAL-APPROVAL
-```
-
-**Reduced Workflow (4 handoffs)** - infrastructure, documentation:
-```
-LEAD-TO-PLAN → PLAN-TO-EXEC → [EXEC] → PLAN-TO-LEAD → LEAD-FINAL-APPROVAL
-                                    ↑
-                            (skip EXEC-TO-PLAN)
-```
-
-**Orchestrator Workflow** (coordinates children):
-```
-LEAD-TO-PLAN → PLAN-TO-EXEC → [Children execute independently] → LEAD-FINAL-APPROVAL
-```
-
-### What EXEC-TO-PLAN Validates
-
-When **required**, EXEC-TO-PLAN validates:
-- All tests passing (unit + E2E)
-- Code committed to feature branch
-- Quality gates passed (implementation fidelity, BMAD)
-- Sub-agent orchestration complete
-- Test evidence captured
-
-When **optional/skipped**, these validations don't apply because:
-- Infrastructure SDs: No production code, no E2E tests
-- Documentation SDs: No code changes at all
-- Orchestrator SDs: Children have their own validation
-
-### How to Check
-
-The handoff system tells you when a handoff is optional:
-```bash
-node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
-
-# Output for infrastructure SD:
-# ⚠️  NOTE: This handoff is OPTIONAL for this SD type.
-#    You may skip it and proceed directly to the next required handoff.
-```
-
-### Reference
-
-- Full validation profiles: `docs/reference/sd-validation-profiles.md`
-- SD type detection: `lib/utils/sd-type-validation.js`
-
-
 ## Parent-Child SD Hierarchy
 
 ### Overview
@@ -1444,6 +1375,75 @@ SELECT COUNT(*) > 0 as is_orchestrator
 FROM strategic_directives_v2
 WHERE parent_sd_id = 'SD-XXX';
 ```
+
+## ⚠️ Conditional Handoffs by SD Type (CRITICAL)
+
+**NOT ALL HANDOFFS ARE REQUIRED FOR ALL SD TYPES.**
+
+This is a common source of confusion. The EXEC-TO-PLAN handoff is **conditional** based on SD type.
+
+### Quick Decision: Is EXEC-TO-PLAN Required?
+
+| SD Type | EXEC-TO-PLAN | Why |
+|---------|--------------|-----|
+| `feature` | **REQUIRED** | Full code validation, E2E tests, quality gates |
+| `bugfix` | **REQUIRED** | Verify fix, regression testing |
+| `database` | **REQUIRED** | Schema validation, data integrity |
+| `security` | **REQUIRED** | Security verification critical |
+| `refactor` | **REQUIRED** | Behavior preservation validation |
+| `infrastructure` | **OPTIONAL** | No production code to test |
+| `documentation` | **SKIP** | No code changes at all |
+| `orchestrator` | **SKIP** | Children handle their own validation |
+
+### Workflow Paths
+
+**Full Workflow (5 handoffs)** - feature, bugfix, database, security, refactor:
+```
+LEAD-TO-PLAN → PLAN-TO-EXEC → [EXEC] → EXEC-TO-PLAN → PLAN-TO-LEAD → LEAD-FINAL-APPROVAL
+```
+
+**Reduced Workflow (4 handoffs)** - infrastructure, documentation:
+```
+LEAD-TO-PLAN → PLAN-TO-EXEC → [EXEC] → PLAN-TO-LEAD → LEAD-FINAL-APPROVAL
+                                    ↑
+                            (skip EXEC-TO-PLAN)
+```
+
+**Orchestrator Workflow** (coordinates children):
+```
+LEAD-TO-PLAN → PLAN-TO-EXEC → [Children execute independently] → LEAD-FINAL-APPROVAL
+```
+
+### What EXEC-TO-PLAN Validates
+
+When **required**, EXEC-TO-PLAN validates:
+- All tests passing (unit + E2E)
+- Code committed to feature branch
+- Quality gates passed (implementation fidelity, BMAD)
+- Sub-agent orchestration complete
+- Test evidence captured
+
+When **optional/skipped**, these validations don't apply because:
+- Infrastructure SDs: No production code, no E2E tests
+- Documentation SDs: No code changes at all
+- Orchestrator SDs: Children have their own validation
+
+### How to Check
+
+The handoff system tells you when a handoff is optional:
+```bash
+node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
+
+# Output for infrastructure SD:
+# ⚠️  NOTE: This handoff is OPTIONAL for this SD type.
+#    You may skip it and proceed directly to the next required handoff.
+```
+
+### Reference
+
+- Full validation profiles: `docs/reference/sd-validation-profiles.md`
+- SD type detection: `lib/utils/sd-type-validation.js`
+
 
 ## SD Type-Aware Workflow Paths
 
@@ -1716,6 +1716,45 @@ For SQL migrations, use the Supabase CLI or dashboard SQL editor:
 - **Dashboard**: Project > SQL Editor > paste and run
 - **CLI**: `npx supabase db push` (if set up)
 - **Script**: Create a .mjs script using `createDatabaseClient()`
+
+## Compaction Instructions (CRITICAL)
+
+**When context is compacted (manually or automatically), ALWAYS preserve:**
+
+1. **Current SD State** (NEVER LOSE):
+   - Current SD key (e.g., `SD-FIX-ANALYTICS-001`)
+   - Current phase (LEAD/PLAN/EXEC)
+   - Gate pass/fail status
+   - Active branch name
+
+2. **Modified Files** (PRESERVE LIST):
+   - All files changed in current session
+   - Pending uncommitted changes
+   - Recent commit hashes (last 3)
+
+3. **Critical Context** (SUMMARIZE, DON'T DROP):
+   - Active user stories being implemented
+   - Specific error messages being debugged
+   - Database query results that drive decisions
+   - Test commands and their outcomes
+
+4. **NEVER Compress Away**:
+   - The `.claude/session-state.md` reference
+   - The `.claude/compaction-snapshot.md` reference
+   - Active PRD requirements
+   - User's explicit instructions from this session
+
+5. **Safe to Discard**:
+   - Verbose sub-agent exploration logs
+   - Full file contents (keep file paths only)
+   - Repetitive status checks
+   - Historical handoff details (older than current phase)
+
+**After compaction, IMMEDIATELY read:**
+- `.claude/compaction-snapshot.md` (git state)
+- `.claude/session-state.md` (work state)
+
+**Session Restoration Protocol**: If you notice context seems sparse or you're missing critical details, proactively ask: "I may have lost context during compaction. Let me check .claude/session-state.md for current work state."
 
 ## 🔧 CRITICAL DEVELOPMENT WORKFLOW
 

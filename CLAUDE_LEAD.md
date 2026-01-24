@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-01-24 7:42:07 PM
+**Generated**: 2026-01-24 5:38:20 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
@@ -27,52 +27,6 @@ At each handoff point, familiarize yourself with and read the LEO protocol docum
 
 *Directives from `leo_autonomous_directives` table (SD-LEO-CONTINUITY-001)*
 
-
-## Baseline Issues Management
-
-## Baseline Issues System
-
-Pre-existing codebase issues are tracked in `sd_baseline_issues` table to prevent blocking unrelated SDs.
-
-### LEAD Gate: BASELINE_DEBT_CHECK
-- **BLOCKS** if: Stale critical issues (>30 days) exist without owner
-- **WARNS** if: Total open issues > 10 or stale non-critical > 5
-
-### Lifecycle
-| Status | Meaning |
-|--------|---------|
-| open | Issue identified, no owner assigned |
-| acknowledged | Issue reviewed, owner assigned |
-| in_progress | Remediation SD actively working |
-| resolved | Fixed and verified |
-| wont_fix | Accepted risk (requires LEAD approval + justification) |
-
-### Commands
-```bash
-npm run baseline:list          # Show all open issues
-npm run baseline:assign <key> <SD-ID>  # Assign ownership
-npm run baseline:resolve <key> # Mark resolved
-npm run baseline:summary       # Category summary
-```
-
-### Categories
-security, testing, performance, database, documentation, accessibility, code_quality, dependency, infrastructure
-
-### Issue Key Format
-`BL-{CATEGORY}-{NNN}` where:
-- BL-SEC-001: Security baseline issue #1
-- BL-TST-001: Testing baseline issue #1
-- BL-PRF-001: Performance baseline issue #1
-- BL-DB-001: Database baseline issue #1
-- BL-DOC-001: Documentation baseline issue #1
-- BL-A11Y-001: Accessibility baseline issue #1
-- BL-CQ-001: Code quality baseline issue #1
-- BL-DEP-001: Dependency baseline issue #1
-- BL-INF-001: Infrastructure baseline issue #1
-
-### Functions
-- `check_baseline_gate(p_sd_id)`: Returns PASS/BLOCKED verdict for LEAD gate
-- `generate_baseline_issue_key(p_category)`: Generates unique issue key
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -161,6 +115,52 @@ npm run handoff:compliance SD-ID  # Check specific SD
 ```
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
+
+## Baseline Issues Management
+
+## Baseline Issues System
+
+Pre-existing codebase issues are tracked in `sd_baseline_issues` table to prevent blocking unrelated SDs.
+
+### LEAD Gate: BASELINE_DEBT_CHECK
+- **BLOCKS** if: Stale critical issues (>30 days) exist without owner
+- **WARNS** if: Total open issues > 10 or stale non-critical > 5
+
+### Lifecycle
+| Status | Meaning |
+|--------|---------|
+| open | Issue identified, no owner assigned |
+| acknowledged | Issue reviewed, owner assigned |
+| in_progress | Remediation SD actively working |
+| resolved | Fixed and verified |
+| wont_fix | Accepted risk (requires LEAD approval + justification) |
+
+### Commands
+```bash
+npm run baseline:list          # Show all open issues
+npm run baseline:assign <key> <SD-ID>  # Assign ownership
+npm run baseline:resolve <key> # Mark resolved
+npm run baseline:summary       # Category summary
+```
+
+### Categories
+security, testing, performance, database, documentation, accessibility, code_quality, dependency, infrastructure
+
+### Issue Key Format
+`BL-{CATEGORY}-{NNN}` where:
+- BL-SEC-001: Security baseline issue #1
+- BL-TST-001: Testing baseline issue #1
+- BL-PRF-001: Performance baseline issue #1
+- BL-DB-001: Database baseline issue #1
+- BL-DOC-001: Documentation baseline issue #1
+- BL-A11Y-001: Accessibility baseline issue #1
+- BL-CQ-001: Code quality baseline issue #1
+- BL-DEP-001: Dependency baseline issue #1
+- BL-INF-001: Infrastructure baseline issue #1
+
+### Functions
+- `check_baseline_gate(p_sd_id)`: Returns PASS/BLOCKED verdict for LEAD gate
+- `generate_baseline_issue_key(p_category)`: Generates unique issue key
 
 ## 🔍 Explore Before Validation (LEAD Phase)
 
