@@ -84,11 +84,22 @@ class EvidenceCapture {
    */
   captureVisionQA(sessionId) {
     console.log(`👁️ Capturing Vision QA session: ${sessionId}`);
-    
+
+    // SD-SEC-DATA-VALIDATION-001: Validate and sanitize sessionId to prevent SQL injection
+    // Session IDs must be alphanumeric with dashes/underscores only
+    const sanitizedSessionId = this.sanitizeSessionId(sessionId);
+    if (!sanitizedSessionId) {
+      console.log('   ⚠️ Invalid session ID format');
+      return;
+    }
+
     // Check for Vision QA database records
     try {
-      const query = `SELECT * FROM vision_qa_session_summaries WHERE session_id = '${sessionId}'`;
-      const result = execSync(`psql "$DATABASE_URL" -t -c "${query}"`, { encoding: 'utf8' });
+      // Use parameterized query via psql's -v flag for safe interpolation
+      const result = execSync(
+        `psql "$DATABASE_URL" -t -c "SELECT * FROM vision_qa_session_summaries WHERE session_id = $1" -v "1=${sanitizedSessionId}"`,
+        { encoding: 'utf8' }
+      );
       
       if (result.trim()) {
         this.evidence.visionQA = {
@@ -273,11 +284,31 @@ ${JSON.stringify(this.evidence, null, 2)}
   getOverallStatus() {
     const allTestsPassed = this.evidence.testResults.every(t => t.passed);
     const hasArtifacts = this.evidence.artifacts.length > 0;
-    
+
     if (allTestsPassed && hasArtifacts) return '✅ Complete';
     if (!allTestsPassed) return '⚠️ Tests Failed';
     if (!hasArtifacts) return '⚠️ No Artifacts';
     return '✓ Partial';
+  }
+
+  /**
+   * Sanitize session ID to prevent SQL/command injection
+   * SD-SEC-DATA-VALIDATION-001: Input validation for database identifiers
+   * @param {string} sessionId - Raw session ID input
+   * @returns {string|null} Sanitized session ID or null if invalid
+   */
+  sanitizeSessionId(sessionId) {
+    if (!sessionId || typeof sessionId !== 'string') {
+      return null;
+    }
+    // Allow only alphanumeric, dashes, and underscores
+    // Session IDs follow pattern: TEST-APP-001-20250830 or similar
+    const sanitized = sessionId.trim();
+    const validPattern = /^[a-zA-Z0-9_-]+$/;
+    if (!validPattern.test(sanitized) || sanitized.length > 100) {
+      return null;
+    }
+    return sanitized;
   }
 }
 
