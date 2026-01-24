@@ -25,6 +25,9 @@ interface TokenBucket {
 // In-memory store (should use Redis in production)
 const buckets = new Map<string, TokenBucket>();
 
+// SD-SEC-ERROR-HANDLING-001: Store interval reference for proper cleanup
+let cleanupIntervalId: NodeJS.Timeout | null = null;
+
 // Default configurations per endpoint type
 export const RATE_LIMITS = {
   READ: {
@@ -83,7 +86,29 @@ function cleanupBuckets(): void {
 }
 
 // Run cleanup every 5 minutes
-setInterval(cleanupBuckets, 5 * 60 * 1000);
+// SD-SEC-ERROR-HANDLING-001: Store interval reference for proper cleanup
+cleanupIntervalId = setInterval(cleanupBuckets, 5 * 60 * 1000);
+
+/**
+ * Stop the cleanup interval (for graceful shutdown)
+ * SD-SEC-ERROR-HANDLING-001: Prevent memory leaks on shutdown
+ */
+export function stopCleanupInterval(): void {
+  if (cleanupIntervalId) {
+    clearInterval(cleanupIntervalId);
+    cleanupIntervalId = null;
+    console.log('Rate limiter cleanup interval stopped');
+  }
+}
+
+// Graceful shutdown handlers
+process.on('SIGTERM', () => {
+  stopCleanupInterval();
+});
+
+process.on('SIGINT', () => {
+  stopCleanupInterval();
+});
 
 /**
  * Rate limiting middleware factory

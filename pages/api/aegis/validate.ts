@@ -208,6 +208,10 @@ async function handler(
           })
           .then(({ error }) => {
             if (error) console.error('Failed to record violation:', error.message);
+          })
+          // SD-SEC-ERROR-HANDLING-001: Handle promise rejection to prevent unhandled rejections
+          .catch((err: Error) => {
+            console.error('Unexpected error recording violation:', err.message);
           });
       }
     }
