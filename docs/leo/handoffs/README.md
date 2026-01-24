@@ -35,6 +35,21 @@ node scripts/handoff.js execute LEAD-TO-PLAN SD-XXX-001
 | `sd_phase_handoffs` | Handoff records |
 | `leo_handoff_executions` | Execution logs |
 
+## Documentation Files
+
+| File | Description |
+|------|-------------|
+| [handoff-system-guide.md](handoff-system-guide.md) | Complete handoff system reference with gate patterns |
+| [field-reference.md](field-reference.md) | Handoff field reference |
+| [known-issues.md](known-issues.md) | Known issues and troubleshooting |
+
+## Key Concepts
+
+- **Gates**: Validation checkpoints executed during handoffs
+- **Executors**: Phase-specific handoff handlers (LeadToPlanExecutor, etc.)
+- **SD-Type-Aware Validation**: Different SD types have different validator requirements (Section 9 of guide)
+- **SKIPPED Status**: Non-applicable validators are automatically skipped with traceability
+
 ---
 
 *Back to [LEO Hub](../README.md)*

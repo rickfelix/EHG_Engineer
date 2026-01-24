@@ -610,6 +610,377 @@ return {
 
 GATE_PROTOCOL_FILE_READ enforces the "Protocol Familiarization" directive that was previously just text guidance in CLAUDE_*.md files. It validates that the agent has read the phase-specific protocol file before a handoff can proceed.
 
+---
+
+## 9. Gate Spotlight: SD-Type-Aware Validation Policy
+
+### Overview
+
+**Added**: SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001 (2026-01-24)
+
+The SD-Type-Aware Validation Policy fixes the 75% handoff rejection rate for refactor and infrastructure SDs by allowing validators to skip non-applicable checks based on SD type. Different Strategic Directive types have different validation requirements.
+
+### Problem Statement
+
+**Root Cause**: All SD types were required to pass the same validators (TESTING, DESIGN, etc.), even when those validators were not applicable to the SD type. For example:
+- Refactor SDs were blocked for missing TESTING/DESIGN validators
+- Infrastructure SDs were blocked for missing E2E tests
+- Progress calculation required 3 handoffs for all SD types, blocking refactor SDs at 75% completion
+
+**Impact**: 75% handoff rejection rate for refactor/infrastructure SDs
+
+### Solution Architecture
+
+**Centralized Policy Module**: `scripts/modules/handoff/validation/sd-type-applicability-policy.js`
+
+The policy module defines which validators are REQUIRED, NON_APPLICABLE, or OPTIONAL for each SD type.
+
+#### Policy Structure
+
+```javascript
+export const SD_TYPE_POLICY = {
+  refactor: {
+    TESTING: RequirementLevel.NON_APPLICABLE,   // Behavior preservation focus
+    DESIGN: RequirementLevel.NON_APPLICABLE,    // No UI changes
+    GITHUB: RequirementLevel.REQUIRED,          // CI/CD validation
+    DATABASE: RequirementLevel.NON_APPLICABLE,  // No schema changes
+    REGRESSION: RequirementLevel.REQUIRED,      // CRITICAL: Verify no breakage
+    DOCMON: RequirementLevel.OPTIONAL,
+    STORIES: RequirementLevel.NON_APPLICABLE
+  },
+  infrastructure: {
+    TESTING: RequirementLevel.NON_APPLICABLE,   // No user-facing tests
+    DESIGN: RequirementLevel.NON_APPLICABLE,    // No UI components
+    GITHUB: RequirementLevel.NON_APPLICABLE,    // May not involve CI/CD
+    DATABASE: RequirementLevel.OPTIONAL,
+    REGRESSION: RequirementLevel.OPTIONAL,
+    DOCMON: RequirementLevel.REQUIRED,          // Documentation critical
+    STORIES: RequirementLevel.OPTIONAL
+  },
+  feature: {
+    TESTING: RequirementLevel.REQUIRED,         // Full E2E validation
+    DESIGN: RequirementLevel.REQUIRED,          // UI/UX required
+    GITHUB: RequirementLevel.REQUIRED,
+    DATABASE: RequirementLevel.OPTIONAL,
+    REGRESSION: RequirementLevel.OPTIONAL,
+    DOCMON: RequirementLevel.REQUIRED,
+    STORIES: RequirementLevel.REQUIRED
+  }
+  // ... 10 more SD types defined
+};
+```
+
+#### Requirement Levels
+
+| Level | Meaning | Impact on Validation |
+|-------|---------|---------------------|
+| `REQUIRED` | Validator MUST pass | Failure blocks handoff |
+| `NON_APPLICABLE` | Validator does not apply | Automatically skipped with SKIPPED status |
+| `OPTIONAL` | Validator can pass/fail | Contributes to score but doesn't block |
+
+### Location
+
+**Policy Module**: `scripts/modules/handoff/validation/sd-type-applicability-policy.js`
+
+**Integration**: `scripts/modules/handoff/validation/ValidationOrchestrator.js`
+
+### Key Functions
+
+#### getValidatorRequirement(sdType, validatorName)
+Returns the requirement level for a specific validator given an SD type.
+
+**Allowlist Approach**: Unknown SD types default to REQUIRED (safe fallback).
+
+```javascript
+// Example usage
+getValidatorRequirement('refactor', 'TESTING');  // Returns: NON_APPLICABLE
+getValidatorRequirement('feature', 'TESTING');   // Returns: REQUIRED
+getValidatorRequirement('unknown', 'TESTING');   // Returns: REQUIRED (safe default)
+```
+
+#### createSkippedResult(validatorName, sdType, skipReason)
+Creates a properly structured SKIPPED validation result.
+
+**SKIPPED Result Structure**:
+```javascript
+{
+  passed: true,           // SKIPPED counts as passing
+  status: 'SKIPPED',
+  score: 100,
+  max_score: 100,
+  skipped: true,
+  skipReason: 'NON_APPLICABLE_SD_TYPE',
+  issues: [],
+  warnings: [],
+  skipDetails: {          // Traceability
+    validator_name: 'TESTING',
+    sd_type: 'refactor',
+    reason_code: 'NON_APPLICABLE_SD_TYPE',
+    policy_version: '1.0.0',
+    timestamp: '2026-01-24T...'
+  }
+}
+```
+
+#### isSkippedResult(result)
+Detects if a validation result is SKIPPED.
+
+**Detection Logic**:
+```javascript
+return result.status === 'SKIPPED' ||
+       result.skipped === true ||
+       result.skipReason !== undefined;
+```
+
+### ValidationOrchestrator Integration
+
+The ValidationOrchestrator integrates the policy module to track SKIPPED validators:
+
+```javascript
+// scripts/modules/handoff/validation/ValidationOrchestrator.js
+
+import {
+  getValidatorRequirement,
+  isValidatorNonApplicable,
+  createSkippedResult,
+  isSkippedResult,
+  RequirementLevel
+} from './sd-type-applicability-policy.js';
+
+async validateGates(gates, context) {
+  const results = {
+    passed: false,
+    totalScore: 0,
+    maxScore: 0,
+    skippedCount: 0,        // NEW: Track skipped validators
+    gateStatuses: {},       // NEW: Status per gate
+    skippedGates: [],       // NEW: List of skipped gate names
+    // ... other fields
+  };
+
+  for (const gate of gates) {
+    // Check if gate is non-applicable for this SD type
+    const isNonApplicable = isValidatorNonApplicable(context.sd.sd_type, gate.name);
+
+    if (isNonApplicable) {
+      // Auto-skip non-applicable validators
+      const skippedResult = createSkippedResult(gate.name, context.sd.sd_type);
+      results.skippedCount++;
+      results.skippedGates.push(gate.name);
+      results.gateStatuses[gate.name] = {
+        status: 'SKIPPED',
+        required: false,
+        skipReason: 'NON_APPLICABLE_SD_TYPE'
+      };
+      continue;
+    }
+
+    // Execute validator normally
+    const gateResult = await gate.validate(context);
+
+    // Check if validator returned SKIPPED status
+    if (isSkippedResult(gateResult)) {
+      results.skippedCount++;
+      results.skippedGates.push(gate.name);
+      results.gateStatuses[gate.name] = {
+        status: 'SKIPPED',
+        required: gate.required !== false,
+        skipReason: gateResult.skipReason
+      };
+    }
+
+    // ... rest of validation logic
+  }
+}
+```
+
+### Database Integration
+
+**Migration**: `database/migrations/20260124_sd_type_aware_progress_calculation.sql`
+
+**Function**: `get_min_required_handoffs(sd_type VARCHAR) RETURNS INTEGER`
+
+Maps SD types to minimum required handoff counts:
+
+```sql
+CREATE OR REPLACE FUNCTION get_min_required_handoffs(sd_type_param VARCHAR)
+RETURNS INTEGER AS $$
+BEGIN
+  RETURN CASE
+    -- Infrastructure/Documentation SDs - minimal handoffs
+    WHEN sd_type_param IN ('infrastructure', 'documentation', 'docs', 'process', 'qa', 'orchestrator')
+    THEN 2
+
+    -- Refactor SDs - need REGRESSION but skip TESTING/DESIGN
+    WHEN sd_type_param = 'refactor'
+    THEN 2
+
+    -- Bugfix/Performance - lighter than feature
+    WHEN sd_type_param IN ('bugfix', 'performance', 'enhancement')
+    THEN 3
+
+    -- Feature/Database/Security - full validation
+    WHEN sd_type_param IN ('feature', 'database', 'security')
+    THEN 3
+
+    -- Default (unknown type) - require full validation (safe default)
+    ELSE 3
+  END;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+```
+
+**Progress Calculation**: `calculate_sd_progress(sd_id VARCHAR) RETURNS INTEGER`
+
+Now uses SD-type-aware handoff count requirements:
+
+```sql
+-- Get SD-type-aware minimum handoff requirement
+min_handoffs := get_min_required_handoffs(sd_type_val);
+
+-- Count accepted handoffs
+SELECT COUNT(DISTINCT handoff_type) INTO actual_handoffs
+FROM sd_phase_handoffs
+WHERE sd_id = sd_id_param
+AND status = 'accepted';
+
+-- Check if SD reaches 100% with SD-type-aware handoff count
+IF actual_handoffs >= min_handoffs THEN
+  progress := progress + 15;  -- Phase 5: Final approval
+END IF;
+```
+
+### Skip Reason Codes
+
+```javascript
+export const SkipReasonCode = {
+  NON_APPLICABLE_SD_TYPE: 'NON_APPLICABLE_SD_TYPE',
+  DISABLED_BY_CONFIG: 'DISABLED_BY_CONFIG',
+  CONDITIONAL_SKIP: 'CONDITIONAL_SKIP',
+  EMERGENCY_BYPASS: 'EMERGENCY_BYPASS'
+};
+```
+
+### Example: Refactor SD Workflow
+
+**Before Fix** (BLOCKED at 75%):
+```
+LEAD-TO-PLAN → PASS (20%)
+PLAN-TO-EXEC → PASS (40%)
+EXEC-TO-PLAN → BLOCKED (TESTING validator failed)
+  ❌ TESTING: FAIL (0/100) - No E2E tests executed
+  ❌ DESIGN: FAIL (0/100) - No design validation
+  ❌ Handoff rejected: Score 60% below 85% threshold
+```
+
+**After Fix** (PASS at 100%):
+```
+LEAD-TO-PLAN → PASS (20%)
+PLAN-TO-EXEC → PASS (40%)
+EXEC-TO-PLAN → PASS (60%)
+  ⏭️  TESTING: SKIPPED (100/100) - Non-applicable for refactor SD
+  ⏭️  DESIGN: SKIPPED (100/100) - Non-applicable for refactor SD
+  ✅ REGRESSION: PASS (95/100) - No behavioral changes detected
+  ✅ GITHUB: PASS (100/100) - CI/CD checks passed
+  ✅ Score 97% meets 85% threshold
+PLAN-TO-LEAD → PASS (75%)
+LEAD-FINAL-APPROVAL → PASS (100%)
+  ✅ Progress: 100% (2 handoffs >= 2 minimum for refactor SD)
+```
+
+### Integration with Validation Framework
+
+The SD-type-aware policy integrates with the existing validation framework documented in `docs/reference/validation-enforcement.md`.
+
+**Key Integration Points**:
+1. **Adaptive Thresholds**: SD type influences base threshold (60-90%)
+2. **Gate Composition**: Validators are filtered by SD type before gate execution
+3. **Score Calculation**: SKIPPED validators contribute 100% to weighted score
+4. **Handoff Storage**: `skipReason` and `skipDetails` stored in handoff metadata
+
+### Test Coverage
+
+**Unit Tests**: `tests/unit/sd-type-applicability-policy.test.js` (40 tests)
+
+Coverage includes:
+- ✅ Policy version tracking
+- ✅ Enum definitions (RequirementLevel, ValidatorStatus, SkipReasonCode)
+- ✅ Policy lookup for all SD types
+- ✅ Required validator detection
+- ✅ Non-applicable validator detection
+- ✅ Skipped result creation and detection
+- ✅ Policy summary generation
+- ✅ Integration workflow test (refactor SD completing with REGRESSION only)
+
+### Validator Catalog by SD Type
+
+| SD Type | Required Validators | Non-Applicable Validators |
+|---------|-------------------|---------------------------|
+| **refactor** | REGRESSION, GITHUB | TESTING, DESIGN, DATABASE, STORIES |
+| **infrastructure** | DOCMON | TESTING, DESIGN, GITHUB |
+| **feature** | TESTING, DESIGN, DOCMON, STORIES, GITHUB | - |
+| **database** | DATABASE, TESTING, GITHUB | DESIGN |
+| **security** | SECURITY, TESTING, GITHUB | - |
+| **documentation** | DOCMON | TESTING, DESIGN, GITHUB, DATABASE, REGRESSION, STORIES |
+| **bugfix** | TESTING, REGRESSION | DESIGN, STORIES |
+| **performance** | TESTING, REGRESSION, GITHUB | DESIGN, STORIES |
+
+### Best Practices
+
+#### DO
+- Use `getValidatorRequirement()` to check if validator applies to SD type
+- Use `createSkippedResult()` for non-applicable validators
+- Track `skippedCount` and `skippedGates` in validation results
+- Store `skipDetails` for traceability
+- Default to REQUIRED for unknown SD types (safe fallback)
+
+#### DON'T
+- Don't bypass REQUIRED validators for an SD type
+- Don't manually set `passed: true` without checking requirement level
+- Don't skip traceability fields (`skipReason`, `skipDetails`)
+- Don't hardcode SD type checks in validators (use policy module)
+
+### Related Documentation
+
+- [Validation Enforcement Framework](../../reference/validation-enforcement.md) - Adaptive thresholds and gate architecture
+- [Database Schema: sd_type_validation_profiles](../../reference/schema/engineer/tables/sd_type_validation_profiles.md) - Database view of SD type policies
+- [Progress Calculation Migration](../../../database/migrations/20260124_sd_type_aware_progress_calculation.sql) - Database migration script
+
+### Monitoring
+
+**Query to check skipped validators**:
+```sql
+SELECT
+  sd.sd_key,
+  sd.sd_type,
+  h.handoff_type,
+  h.metadata->'gateStatuses' as gate_statuses,
+  h.metadata->'skippedGates' as skipped_gates,
+  h.metadata->'skippedCount' as skipped_count
+FROM sd_phase_handoffs h
+JOIN strategic_directives_v2 sd ON h.sd_id = sd.id
+WHERE h.metadata ? 'skippedCount'
+  AND (h.metadata->>'skippedCount')::int > 0
+ORDER BY h.created_at DESC
+LIMIT 10;
+```
+
+**Query to verify progress calculation**:
+```sql
+SELECT
+  sd.sd_key,
+  sd.sd_type,
+  get_min_required_handoffs(sd.sd_type) as min_handoffs,
+  COUNT(DISTINCT h.handoff_type) FILTER (WHERE h.status = 'accepted') as actual_handoffs,
+  calculate_sd_progress(sd.id) as progress
+FROM strategic_directives_v2 sd
+LEFT JOIN sd_phase_handoffs h ON h.sd_id = sd.id
+WHERE sd.sd_type IN ('refactor', 'infrastructure', 'documentation')
+GROUP BY sd.id, sd.sd_key, sd.sd_type
+ORDER BY sd.created_at DESC
+LIMIT 10;
+```
+
 ### Location
 `scripts/modules/handoff/gates/protocol-file-read-gate.js`
 
@@ -868,6 +1239,7 @@ Coverage includes:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3.0 | 2026-01-24 | Added SD-Type-Aware Validation Policy documentation (Section 9) |
 | 1.2.0 | 2026-01-24 | Added GATE_PROTOCOL_FILE_READ documentation (protocol familiarization enforcement) |
 | 1.1.0 | 2026-01-23 | Added GATE6 v2 documentation (proactive cross-SD detection) |
 | 1.0.0 | 2026-01-20 | Initial documentation, moved to LEO hub |

@@ -29,13 +29,13 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 |----------|-------|-------------|
 | [Database & Schema](#database--schema) | 12 | Database patterns, schemas, migrations |
 | [Sub-Agents](#sub-agents) | 14 | Sub-agent patterns and guides |
-| [Validation & Testing](#validation--testing) | 8 | Validation patterns, testing reference |
+| [Validation & Testing](#validation--testing) | 9 | Validation patterns, testing reference |
 | [LEO Protocol](#leo-protocol) | 11 | Protocol reference, context management, hooks |
 | [Patterns & Best Practices](#patterns--best-practices) | 12 | Development patterns |
 | [Quick References](#quick-references) | 12 | Cheat sheets and quick guides |
 | [Other](#other-references) | 7 | Miscellaneous references |
 
-**Total References**: 76
+**Total References**: 77
 
 ---
 
@@ -83,9 +83,10 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 
 | Reference | Description |
 |-----------|-------------|
-| [validation-enforcement.md](validation-enforcement.md) | Validation enforcement |
+| [validation-enforcement.md](validation-enforcement.md) | Validation enforcement framework |
 | [validation-enforcement-patterns.md](validation-enforcement-patterns.md) | Enforcement patterns |
 | [validation-agent-proactive-gates.md](validation-agent-proactive-gates.md) | Proactive validation gates |
+| [sd-type-applicability-policy-api.md](sd-type-applicability-policy-api.md) | SD-type-aware validation policy API |
 | [e2e-testing-mode-configuration.md](e2e-testing-mode-configuration.md) | E2E test configuration |
 | [user-story-e2e-mapping.md](user-story-e2e-mapping.md) | User story to E2E mapping |
 | [test-timeout-handling.md](test-timeout-handling.md) | Test timeout handling |
