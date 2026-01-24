@@ -5,9 +5,11 @@
  * LESSONS LEARNED (2025-01-09):
  * 1. Connection format: postgresql://postgres.PROJECT_ID:PASSWORD@aws-1-us-east-1.pooler.supabase.com:5432/postgres
  * 2. DO NOT use ?sslmode=require parameter
- * 3. SSL config: { rejectUnauthorized: false }
+ * 3. SSL verification: Enabled by default, disable via DISABLE_SSL_VERIFY=true in dev only
  * 4. Region: aws-1 (Transaction Mode, port 5432)
  * 5. Password can be reset in Supabase Dashboard > Project Settings > Database
+ *
+ * SD-SEC-CONFIG-SECURITY-001: Environment-aware SSL verification
  */
 
 import pg from 'pg';
@@ -22,6 +24,26 @@ const __dirname = dirname(__filename);
 dotenv.config({ path: join(__dirname, '../..', '.env') });
 
 const { Client } = pg;
+
+/**
+ * Get SSL configuration based on environment
+ * SD-SEC-CONFIG-SECURITY-001: Environment-aware SSL verification
+ */
+function getSSLConfig() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const disableSSLVerify = process.env.DISABLE_SSL_VERIFY === 'true';
+
+  if (isProduction) {
+    return { rejectUnauthorized: true };
+  }
+
+  if (disableSSLVerify) {
+    return { rejectUnauthorized: false };
+  }
+
+  // Default: enable SSL verification
+  return { rejectUnauthorized: true };
+}
 
 /**
  * Database configuration for different projects
@@ -103,7 +125,7 @@ export async function createDatabaseClient(projectKey = 'ehg', options = {}) {
 
   const client = new Client({
     connectionString: connStr,
-    ssl: { rejectUnauthorized: false }, // Required for Supabase
+    ssl: getSSLConfig(),
     connectionTimeoutMillis: options.timeout || 10000,
   });
 
