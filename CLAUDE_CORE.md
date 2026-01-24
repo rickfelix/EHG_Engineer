@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-01-24 7:42:43 AM
+**Generated**: 2026-01-24 8:28:09 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -1105,6 +1105,8 @@ After ANY code changes:
 ### Overview
 Sub-agents are triggered using a weighted keyword scoring system that evaluates user queries against categorized keyword lists.
 
+**Architecture**: Code-only (2026-01-24) - Keywords stored in `lib/keyword-intent-scorer.js`, not database.
+
 ### Scoring Formula
 ```
 score = sum(matched_keyword_weights)
@@ -1129,26 +1131,46 @@ score = sum(matched_keyword_weights)
 - "create database migration" → DATABASE (4pts primary + 2pts secondary = 6pts = HIGH)
 - "this is slow" → PERFORMANCE (2pts secondary = MEDIUM)
 
-### Keyword Storage
-Keywords are stored in `leo_sub_agents.metadata.trigger_keywords` with structure:
-```json
-{
-  "primary": ["unique phrase 1", "unique phrase 2"],
-  "secondary": ["strong signal 1", "strong signal 2"],
-  "tertiary": ["common term 1", "common term 2"]
-}
+### Keyword Storage (Code-Only Architecture)
+
+**Source of Truth**: `lib/keyword-intent-scorer.js`
+
+Keywords are stored in code with structure:
+```javascript
+const AGENT_KEYWORDS = {
+  RCA: {
+    primary: ['root cause', 'root-cause', '5 whys', ...],
+    secondary: ['debug', 'investigate', ...],
+    tertiary: ['not working', 'broken', ...]
+  },
+  // ... 25 more agents
+};
 ```
 
+**Benefits**:
+- Single source of truth (no database sync needed)
+- Zero latency at runtime (no database queries)
+- Simple to update (edit code, regenerate CLAUDE.md)
+
+**How to Update**:
+1. Edit `lib/keyword-intent-scorer.js` (AGENT_KEYWORDS object)
+2. Run `node scripts/generate-claude-md-from-db.js`
+3. Done
+
+**CLAUDE.md Generation**: Keywords extracted from code via `scripts/modules/claude-md-generator/keyword-extractor.js`
+
 ### Implementation
-- Scorer: `lib/keyword-intent-scorer.js`
-- Phrase matching: Multi-word phrases matched as units
-- Word boundary: Single words use word boundary matching
+- **Scorer**: `lib/keyword-intent-scorer.js` (source of truth)
+- **Extractor**: `scripts/modules/claude-md-generator/keyword-extractor.js` (for CLAUDE.md)
+- **Phrase matching**: Multi-word phrases matched as units
+- **Word boundary**: Single words use word boundary matching
 
 ### Design Principles
-1. **Overfit rather than underfit** - Comprehensive keywords preferred
-2. **Primary uniqueness** - Primary keywords should be unique to each agent
-3. **No external dependencies** - Pure keyword matching, no API calls
-4. **Deterministic** - Same query always produces same result
+1. **Code-only storage** - Single source of truth, no sync problems
+2. **Overfit rather than underfit** - Comprehensive keywords preferred
+3. **Primary uniqueness** - Primary keywords should be unique to each agent
+4. **No external dependencies** - Pure keyword matching, no API calls
+5. **Deterministic** - Same query always produces same result
 
 ## Critical Term Definitions
 
@@ -2320,11 +2342,6 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ### Keyword-Triggered Sub-Agents
 
-#### Root Cause Analysis Agent (`RCA`)
-Forensic intelligence agent for defect triage, root cause determination, and CAPA generation. Invest
-
-**Trigger Keywords**: `sub_agent_blocked`, `ci_pipeline_failure`, `quality_gate_critical`, `test_regression`, `handoff_rejection`, `sub_agent_fail`, `quality_degradation`, `pattern_recurrence`, `performance_regression`, `diagnose defect`, `rca`, `root cause`
-
 #### Regression Validator Sub-Agent (`REGRESSION`)
 Validates that refactoring changes maintain backward compatibility. Captures baseline test results, 
 
@@ -2336,6 +2353,11 @@ Validates that refactoring changes maintain backward compatibility. Captures bas
 **🆕 NEW in v3.0.0**: 
 
 **Trigger Keywords**: `LEAD_SD_CREATION`, `LEAD_HANDOFF_CREATION`, `LEAD_APPROVAL`, `PLAN_PRD_GENERATION`, `PLAN_VERIFICATION`, `EXEC_IMPLEMENTATION`, `EXEC_COMPLETION`, `HANDOFF_CREATED`, `HANDOFF_ACCEPTED`, `PHASE_TRANSITION`, `RETRO_GENERATED`, `FILE_CREATED`, `VIOLATION_DETECTED`, `DAILY_DOCMON_CHECK`
+
+#### Root Cause Analysis Agent (`RCA`)
+Forensic intelligence agent for defect triage, root cause determination, and CAPA generation. Invest
+
+**Trigger Keywords**: `sub_agent_blocked`, `ci_pipeline_failure`, `quality_gate_critical`, `test_regression`, `handoff_rejection`, `sub_agent_fail`, `quality_degradation`, `pattern_recurrence`, `performance_regression`, `diagnose defect`, `rca`, `root cause`
 
 #### Chief Security Architect (`SECURITY`)
 Former NSA security architect with 25 years experience securing systems from startup to enterprise s
@@ -2356,12 +2378,10 @@ Interactive UAT test execution guide for manual testing workflows.
 
 **Trigger Keywords**: `uat test`, `execute test`, `run uat`, `test execution`, `manual test`, `uat testing`, `start testing`, `TEST-AUTH`, `TEST-DASH`, `TEST-VENT`
 
-#### Performance Engineering Lead (`PERFORMANCE`)
-Performance engineering lead with 20+ years optimizing high-scale systems.
+#### Launch Orchestration Sub-Agent (`LAUNCH`)
+Handles production launch orchestration, go-live checklists, launch readiness, and rollback procedur
 
-**Mission**: Identify pe
-
-**Trigger Keywords**: `optimization`
+**Trigger Keywords**: `launch`, `go-live`, `production launch`, `deployment`, `release`, `rollout`, `cutover`, `launch checklist`, `beta release`, `GA release`
 
 #### QA Engineering Director (`TESTING`)
 ## Enhanced QA Engineering Director v2.4.0 - Retrospective-Informed Edition
@@ -2370,13 +2390,6 @@ Performance engineering lead with 20+ years optimizing high-scale systems.
 
 **Trigger Keywords**: `coverage`, `protected route`, `build error`, `dev server`, `test infrastructure`, `testing evidence`, `redirect to login`, `playwright build`, `EXEC_IMPLEMENTATION_COMPLETE`, `unit tests`, `vitest`, `npm run test:unit`, `test results`, `testing test pattern`
 
-#### Principal Database Architect (`DATABASE`)
-## Principal Database Architect v2.0.0 - Lessons Learned Edition
-
-**🆕 NEW in v2.0.0**: Proactive le
-
-**Trigger Keywords**: `schema`, `migration`, `EXEC_IMPLEMENTATION_COMPLETE`, `database`, `query`, `select from`, `insert into`, `supabase`, `table`, `rls`, `postgres`, `sql`, `fetch from database`, `database query`, `run this sql`, `execute this sql`, `run the query`, `execute the query`, `run this migration`, `execute the migration`, `run that migration`, `execute the following`, `run the following`, `please run`, `please execute`, `can you run`, `can you execute`, `apply this migration`, `apply the migration`, `insert this into`, `update the database`, `update the table`, `delete from the table`, `create the table`, `alter the table`, `drop the table`, `add this column`, `make this change in the database`, `update this in supabase`, `fix this in the database`, `modify the schema`, `add this to the database`, `use the database sub-agent`, `use database sub-agent`, `database agent should run`, `have the database agent`, `run it`, `execute it`, `go ahead and run`, `yes, run it`, `yes, execute`
-
 #### Continuous Improvement Coach (`RETRO`)
 ## Continuous Improvement Coach v4.0.0 - Quality-First Edition
 
@@ -2384,10 +2397,19 @@ Performance engineering lead with 20+ years optimizing high-scale systems.
 
 **Trigger Keywords**: `LEAD_APPROVAL_COMPLETE`, `LEAD_REJECTION`, `PLAN_VERIFICATION_COMPLETE`, `PLAN_COMPLEXITY_HIGH`, `EXEC_SPRINT_COMPLETE`, `EXEC_QUALITY_ISSUE`, `HANDOFF_REJECTED`, `HANDOFF_DELAY`, `PHASE_COMPLETE`, `SD_STATUS_COMPLETED`, `SD_STATUS_BLOCKED`, `PATTERN_DETECTED`, `SUBAGENT_MULTIPLE_FAILURES`, `WEEKLY_LEO_REVIEW`, `LEAD_PRE_APPROVAL_REVIEW`, `capture this lesson`, `capture this insight`, `remember this`, `learning`, `lesson learned`, `insight`, `plan mode`, `plan mode integration`, `permission bundling`, `plan file generation`, `intelligent plan`, `sd type profile`, `workflow intensity`, `phase transition`
 
-#### Launch Orchestration Sub-Agent (`LAUNCH`)
-Handles production launch orchestration, go-live checklists, launch readiness, and rollback procedur
+#### Principal Database Architect (`DATABASE`)
+## Principal Database Architect v2.0.0 - Lessons Learned Edition
 
-**Trigger Keywords**: `launch`, `go-live`, `production launch`, `deployment`, `release`, `rollout`, `cutover`, `launch checklist`, `beta release`, `GA release`
+**🆕 NEW in v2.0.0**: Proactive le
+
+**Trigger Keywords**: `schema`, `migration`, `EXEC_IMPLEMENTATION_COMPLETE`, `database`, `query`, `select from`, `insert into`, `supabase`, `table`, `rls`, `postgres`, `sql`, `fetch from database`, `database query`, `run this sql`, `execute this sql`, `run the query`, `execute the query`, `run this migration`, `execute the migration`, `run that migration`, `execute the following`, `run the following`, `please run`, `please execute`, `can you run`, `can you execute`, `apply this migration`, `apply the migration`, `insert this into`, `update the database`, `update the table`, `delete from the table`, `create the table`, `alter the table`, `drop the table`, `add this column`, `make this change in the database`, `update this in supabase`, `fix this in the database`, `modify the schema`, `add this to the database`, `use the database sub-agent`, `use database sub-agent`, `database agent should run`, `have the database agent`, `run it`, `execute it`, `go ahead and run`, `yes, run it`, `yes, execute`
+
+#### Performance Engineering Lead (`PERFORMANCE`)
+Performance engineering lead with 20+ years optimizing high-scale systems.
+
+**Mission**: Identify pe
+
+**Trigger Keywords**: `optimization`
 
 #### Monitoring Sub-Agent (`MONITORING`)
 Handles monitoring setup, alerting, SLA definition, health checks, and incident response.
@@ -2398,23 +2420,6 @@ Handles monitoring setup, alerting, SLA definition, health checks, and incident 
 Handles financial projections, P&L modeling, cash flow analysis, business model canvas financial sec
 
 **Trigger Keywords**: `financial`, `P&L`, `profit and loss`, `cash flow`, `burn rate`, `runway`, `revenue projection`, `margin`, `gross margin`, `EBITDA`, `break even`, `financial model`
-
-#### Pricing Strategy Sub-Agent (`PRICING`)
-Handles pricing model development, unit economics, pricing tiers, sensitivity analysis, and competit
-
-**Trigger Keywords**: `pricing`, `price point`, `pricing strategy`, `unit economics`, `subscription`, `freemium`, `tiered pricing`, `CAC`, `LTV`, `revenue model`
-
-#### Analytics Sub-Agent (`ANALYTICS`)
-Handles analytics setup, metrics definition, dashboard creation, and data-driven insights.
-
-**Trigger Keywords**: `analytics`, `metrics`, `dashboard`, `AARRR`, `funnel`, `conversion rate`, `user behavior`, `tracking`, `KPI`, `retention rate`, `churn rate`
-
-#### API Architecture Sub-Agent (`API`)
-## API Sub-Agent v1.0.0
-
-**Mission**: REST/GraphQL endpoint design, API architecture, versioning, an
-
-**Trigger Keywords**: `API`, `REST`, `RESTful`, `GraphQL`, `endpoint`, `route`, `controller`, `middleware`, `request`, `response`, `payload`, `status code`, `HTTP method`, `OpenAPI`, `Swagger`, `versioning`, `pagination`
 
 #### Risk Assessment Sub-Agent (`RISK`)
 ## Risk Assessment Sub-Agent v1.0.0
@@ -2430,6 +2435,28 @@ Handles analytics setup, metrics definition, dashboard creation, and data-driven
 
 **Trigger Keywords**: `existing implementation`, `duplicate`, `conflict`, `already implemented`, `codebase check`
 
+#### API Architecture Sub-Agent (`API`)
+## API Sub-Agent v1.0.0
+
+**Mission**: REST/GraphQL endpoint design, API architecture, versioning, an
+
+**Trigger Keywords**: `API`, `REST`, `RESTful`, `GraphQL`, `endpoint`, `route`, `controller`, `middleware`, `request`, `response`, `payload`, `status code`, `HTTP method`, `OpenAPI`, `Swagger`, `versioning`, `pagination`
+
+#### Pricing Strategy Sub-Agent (`PRICING`)
+Handles pricing model development, unit economics, pricing tiers, sensitivity analysis, and competit
+
+**Trigger Keywords**: `pricing`, `price point`, `pricing strategy`, `unit economics`, `subscription`, `freemium`, `tiered pricing`, `CAC`, `LTV`, `revenue model`
+
+#### Analytics Sub-Agent (`ANALYTICS`)
+Handles analytics setup, metrics definition, dashboard creation, and data-driven insights.
+
+**Trigger Keywords**: `analytics`, `metrics`, `dashboard`, `AARRR`, `funnel`, `conversion rate`, `user behavior`, `tracking`, `KPI`, `retention rate`, `churn rate`
+
+#### Sales Process Sub-Agent (`SALES`)
+Handles sales playbook development, pipeline management, objection handling, and sales enablement.
+
+**Trigger Keywords**: `sales`, `sales playbook`, `sales process`, `pipeline`, `deal flow`, `quota`, `sales cycle`, `objection handling`, `sales enablement`, `closing`
+
 #### Exit Valuation Sub-Agent (`VALUATION`)
 Handles exit valuation modeling, comparable analysis, acquisition scenario planning, and investor re
 
@@ -2441,11 +2468,6 @@ Handles exit valuation modeling, comparable analysis, acquisition scenario plann
 **Identity**: You are a Dependency Management Speciali
 
 **Trigger Keywords**: `dependency`, `dependencies`, `npm`, `yarn`, `pnpm`, `package`, `package.json`, `vulnerability`, `CVE`, `security advisory`, `outdated`, `install`, `update`, `upgrade`, `version`, `semver`, `node_modules`, `patch`, `CVSS`, `exploit`, `Snyk`, `Dependabot`
-
-#### Sales Process Sub-Agent (`SALES`)
-Handles sales playbook development, pipeline management, objection handling, and sales enablement.
-
-**Trigger Keywords**: `sales`, `sales playbook`, `sales process`, `pipeline`, `deal flow`, `quota`, `sales cycle`, `objection handling`, `sales enablement`, `closing`
 
 #### Senior Design Sub-Agent (`DESIGN`)
 ## Senior Design Sub-Agent v6.0.0 - Lessons Learned Edition

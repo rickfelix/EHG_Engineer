@@ -1,8 +1,21 @@
 /**
  * Update leo_sub_agents with weighted trigger keywords
  *
- * This script stores the keyword structure in the database
- * so CLAUDE.md can be generated from database sources.
+ * @deprecated 2026-01-24 - ARCHITECTURE DECISION: Code-Only Keywords
+ *
+ * This script is NO LONGER the source of truth for keywords.
+ * Keywords are now stored ONLY in: lib/keyword-intent-scorer.js
+ *
+ * The CLAUDE.md generator reads keywords directly from that file
+ * using scripts/modules/claude-md-generator/keyword-extractor.js
+ *
+ * Benefits of code-only approach:
+ * - Single source of truth (no database sync needed)
+ * - Zero latency at runtime (no database queries)
+ * - Simplest possible architecture
+ *
+ * This script is kept for reference but should NOT be used.
+ * To update keywords, edit lib/keyword-intent-scorer.js directly.
  */
 
 require('dotenv').config();
@@ -389,6 +402,20 @@ const AGENT_KEYWORDS = {
     ],
     tertiary: [
       'customer', 'track', 'manage', 'follow up', 'note', 'activity'
+    ]
+  },
+
+  QUICKFIX: {
+    primary: [
+      'quick fix', 'quickfix', 'hotfix', 'small fix', 'minor fix', 'one liner',
+      'simple fix', 'easy fix', 'trivial fix'
+    ],
+    secondary: [
+      'fix', 'patch', 'tweak', 'adjust', 'small change', 'minor change',
+      'quick change', 'fast fix'
+    ],
+    tertiary: [
+      'just', 'quickly', 'real quick', 'super quick', 'tiny', 'small'
     ]
   }
 };

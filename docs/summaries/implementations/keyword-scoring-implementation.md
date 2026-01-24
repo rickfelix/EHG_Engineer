@@ -3,10 +3,10 @@
 ## Metadata
 - **Category**: Implementation
 - **Status**: Complete
-- **Version**: 1.0.0
+- **Version**: 1.1.0
 - **Author**: Claude Code (Sonnet 4.5)
 - **Last Updated**: 2026-01-24
-- **Tags**: keyword-scoring, sub-agents, routing, infrastructure, performance
+- **Tags**: keyword-scoring, sub-agents, routing, infrastructure, performance, code-only-architecture
 
 ## Overview
 
@@ -258,6 +258,177 @@ Errors: 0
 
 ---
 
+## Architecture Evolution: Code-Only Keywords (2026-01-24)
+
+### The Sync Problem
+
+After initial implementation, a question arose:
+
+**"Do keywords need to be in the database, or should they be code-only?"**
+
+The initial implementation had keywords stored in BOTH places:
+- `lib/keyword-intent-scorer.js` (hardcoded, used at runtime)
+- Database `leo_sub_agents.metadata.trigger_keywords` (via `scripts/update-agent-keywords.cjs`)
+
+This created a **sync problem**: two sources of truth that could drift apart.
+
+### Three Options Considered
+
+| Option | Architecture | Pros | Cons |
+|--------|--------------|------|------|
+| **A: Code-Only** | `lib/keyword-intent-scorer.js` = SOURCE OF TRUTH | Single source, zero latency, no sync | No UI for keyword editing |
+| **B: Database-First** | Database = SOURCE OF TRUTH, generate scorer | Editable via UI | Requires generation step, adds complexity |
+| **C: Code + DB Mirror** | Code = SOURCE OF TRUTH, push to DB | Fast runtime + DB visibility | Two places to maintain |
+
+### Decision: Option A (Code-Only) ✅
+
+**Rationale**:
+1. **Keywords rarely change** - Stable after initial definition
+2. **No UI needed** - Keyword editing happens in code, not dashboards
+3. **Eliminates sync problem entirely** - One file is truth
+4. **Fastest possible** - Zero latency, no network calls
+5. **KISS principle** - Simplest architecture wins
+
+**Architecture**:
+```
+lib/keyword-intent-scorer.js (SOURCE OF TRUTH)
+         │
+         ├──► Runtime scoring (direct use, <1ms)
+         │
+         └──► CLAUDE.md generation
+                  │
+                  ├─► scripts/modules/claude-md-generator/keyword-extractor.js
+                  │   (extracts keywords from scorer file)
+                  │
+                  └──► CLAUDE.md
+                       (local file Claude reads, zero latency)
+```
+
+**Benefits**:
+- ✅ Single source of truth (one file to edit)
+- ✅ Zero latency at runtime (no database queries)
+- ✅ No sync process needed (nothing to get out of sync)
+- ✅ CLAUDE.md always reflects current keywords after regeneration
+
+**Trade-offs Accepted**:
+- ❌ No UI for keyword editing (acceptable - keywords are stable)
+- ❌ Database doesn't have keyword copy (acceptable - not needed for runtime)
+
+### Implementation
+
+#### 1. Created Keyword Extractor
+
+**File**: `scripts/modules/claude-md-generator/keyword-extractor.js` (NEW - 136 lines)
+
+**Purpose**: Extract keywords from scorer file for CLAUDE.md generation.
+
+**Key Functions**:
+```javascript
+// Extract AGENT_KEYWORDS object from scorer file
+export function extractKeywordsFromScorer() {
+  const content = fs.readFileSync(SCORER_PATH, 'utf-8');
+  const match = content.match(/const AGENT_KEYWORDS = \{[\s\S]*?\n\};/);
+  const keywords = eval(`(${match[0].replace('const AGENT_KEYWORDS = ', '').replace(/;$/, '')})`);
+  return keywords;
+}
+
+// Generate trigger quick reference table
+export function generateKeywordQuickReference() {
+  const keywords = extractKeywordsFromScorer();
+  // ... format as markdown table
+}
+
+// Get keyword statistics
+export function getKeywordStats() {
+  // Returns: { agentCount, totalKeywords, primary, secondary, tertiary }
+}
+```
+
+**Architecture Note**: This is a **read-only** extractor. The scorer file is never modified by the generator.
+
+#### 2. Updated CLAUDE.md Generator
+
+**File**: `scripts/modules/claude-md-generator/file-generators.js` (MODIFIED)
+
+**Changes**:
+```javascript
+// Before (database-based):
+import { generateTriggerQuickReference } from './section-formatters.js';
+const triggerReference = generateTriggerQuickReference(subAgents);
+
+// After (code-based):
+import { generateKeywordQuickReference } from './keyword-extractor.js';
+const triggerReference = generateKeywordQuickReference();
+// No subAgents parameter - reads from scorer file directly
+```
+
+**Impact**: CLAUDE.md generation no longer depends on database trigger data. Keywords come from code.
+
+#### 3. Deprecated Database Sync Script
+
+**File**: `scripts/update-agent-keywords.cjs` (DEPRECATED)
+
+**Added deprecation notice**:
+```javascript
+/**
+ * @deprecated 2026-01-24 - ARCHITECTURE DECISION: Code-Only Keywords
+ *
+ * This script is NO LONGER the source of truth for keywords.
+ * Keywords are now stored ONLY in: lib/keyword-intent-scorer.js
+ *
+ * The CLAUDE.md generator reads keywords directly from that file
+ * using scripts/modules/claude-md-generator/keyword-extractor.js
+ *
+ * This script is kept for reference but should NOT be used.
+ * To update keywords, edit lib/keyword-intent-scorer.js directly.
+ */
+```
+
+**Status**: Kept for historical reference, not used in workflow.
+
+### Workflow: Updating Keywords
+
+**Before (Database Sync)**:
+1. Edit `scripts/update-agent-keywords.cjs`
+2. Run `node scripts/update-agent-keywords.cjs` (push to database)
+3. Run `node scripts/generate-claude-md-from-db.js` (pull from database)
+4. Hope the two stay in sync
+
+**After (Code-Only)**:
+1. Edit `lib/keyword-intent-scorer.js`
+2. Run `node scripts/generate-claude-md-from-db.js` (reads from code)
+3. Done
+
+**Simplicity gain**: 1 fewer step, 1 fewer file to maintain, zero sync risk.
+
+### Verification
+
+Regenerated CLAUDE.md and verified all 26 agents with keywords appear:
+
+```bash
+$ node scripts/generate-claude-md-from-db.js
+
+Generating modular CLAUDE files from database...
+   CLAUDE.md              14.9 KB (15249 chars)
+   CLAUDE_CORE.md        101.4 KB (103797 chars)
+   ...
+
+$ grep "^\| \`" CLAUDE.md | wc -l
+26  # All agents present
+```
+
+**Keyword count verification**:
+- ANALYTICS: 10 shown + 18 more = 28 total
+- API: 10 shown + 27 more = 37 total
+- DATABASE: 10 shown + 37 more = 47 total
+- RCA: 10 shown + 32 more = 42 total
+- QUICKFIX: 10 shown + 13 more = 23 total
+- ... (26 agents total)
+
+**Source confirmed**: Keywords extracted from `lib/keyword-intent-scorer.js` successfully.
+
+---
+
 ## Technical Details
 
 ### Scoring Algorithm
@@ -497,12 +668,12 @@ Claude proactively invokes RCA
 
 ## Known Limitations
 
-1. **Keyword Maintenance**: Requires periodic keyword updates (but stored in database for easy changes)
+1. **Keyword Maintenance**: Requires periodic keyword updates (stored in code: `lib/keyword-intent-scorer.js`)
 2. **Synonym Coverage**: May miss synonyms not in keyword list (but can be added incrementally)
 3. **Ambiguous Queries**: Very short queries (<3 words) may match multiple agents (handled by MEDIUM confidence → SUGGEST)
 4. **Language Support**: English-only (not a current requirement)
 
-**Mitigation**: All limitations are addressable by adding keywords to database.
+**Mitigation**: All limitations are addressable by editing `lib/keyword-intent-scorer.js` and regenerating CLAUDE.md.
 
 ---
 
@@ -516,45 +687,33 @@ Claude proactively invokes RCA
 
 ---
 
-## Database Schema Reference
+## Keyword Storage Reference
 
-### leo_sub_agents.metadata.trigger_keywords
+### Code-Only Architecture (2026-01-24)
+
+**⚠️ DEPRECATED**: Database storage (`leo_sub_agents.metadata.trigger_keywords`)
+
+**✅ CURRENT**: Code-only storage in `lib/keyword-intent-scorer.js`
 
 **Structure**:
-```typescript
-interface TriggerKeywords {
-  primary: string[];    // Unique to agent (weight 4)
-  secondary: string[];  // Strong signal (weight 2)
-  tertiary: string[];   // Common terms (weight 1)
-}
-```
-
-**Example Query**:
-```sql
-SELECT code, metadata->'trigger_keywords' as keywords
-FROM leo_sub_agents
-WHERE code = 'RCA';
-```
-
-**Update Example**:
 ```javascript
-const { createClient } = require('@supabase/supabase-js');
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-
-await supabase
-  .from('leo_sub_agents')
-  .update({
-    metadata: {
-      ...existingMetadata,
-      trigger_keywords: {
-        primary: ["new keyword"],
-        secondary: ["another keyword"],
-        tertiary: ["common term"]
-      }
-    }
-  })
-  .eq('code', 'RCA');
+const AGENT_KEYWORDS = {
+  RCA: {
+    primary: ['root cause', 'root-cause', '5 whys', ...],    // Unique (weight 4)
+    secondary: ['debug', 'debugging', 'investigate', ...],   // Strong (weight 2)
+    tertiary: ['not working', 'broken', 'failing', ...]      // Common (weight 1)
+  },
+  // ... 25 more agents
+};
 ```
+
+**How to Update Keywords**:
+1. Edit `lib/keyword-intent-scorer.js` (AGENT_KEYWORDS object)
+2. Run `node scripts/generate-claude-md-from-db.js` (regenerates CLAUDE.md)
+3. Done - no database involved
+
+**Database sync script (DEPRECATED)**:
+- `scripts/update-agent-keywords.cjs` - No longer used, kept for reference only
 
 ---
 
@@ -616,7 +775,7 @@ This implementation did not follow the full LEAD→PLAN→EXEC workflow because:
 
 1. **User-Driven Pivot**: User questioned approach, we analyzed and pivoted quickly
 2. **Comprehensive Testing**: Built-in test suite caught edge cases early
-3. **Database-First**: Keywords in database = easy to update without code changes
+3. **Code-Only Architecture**: Single source of truth, zero sync problems (2026-01-24)
 4. **Phrase Matching**: Multi-word phrase handling critical for accuracy
 5. **Performance**: 300x speed improvement over semantic approach
 
@@ -657,8 +816,29 @@ The system is **production-ready** and provides superior routing accuracy with d
 
 **Status**: ✅ Complete
 **Date**: 2026-01-24
-**Lines of Code**: 714 (scorer) + 437 (updater) + 77 (section inserter) = 1,228 total
+**Lines of Code**: 714 (scorer) + 136 (extractor) + 437 (updater-deprecated) = 1,287 total
 **Tests**: 16/16 passing (100%)
-**Agents Updated**: 25
+**Agents Updated**: 26
 **Keywords Added**: 800+
+
+---
+
+## Version History
+
+### v1.1.0 (2026-01-24)
+- **Code-Only Architecture**: Removed database dependency for keywords
+- Created `keyword-extractor.js` to read from scorer file
+- Deprecated `update-agent-keywords.cjs` (no longer needed)
+- Updated CLAUDE.md generator to use code-based keywords
+- Eliminated sync problem between code and database
+- Added QUICKFIX agent keywords (was missing)
+- **Lines Added**: +136 (keyword-extractor.js)
+
+### v1.0.0 (2026-01-24)
+- Initial weighted keyword scoring implementation
+- Replaced semantic routing with keyword-based approach
+- 100% test accuracy, <1ms latency
+- 26 agents with weighted keywords (primary/secondary/tertiary)
+- Database integration via `leo_sub_agents.metadata.trigger_keywords`
+- **Lines Added**: +714 (keyword-intent-scorer.js), +437 (update-agent-keywords.cjs)
 

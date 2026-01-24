@@ -8,12 +8,14 @@ import {
   getMetadata,
   generateAgentSection,
   generateSubAgentSection,
-  generateTriggerQuickReference,
   generateHandoffTemplates,
   generateValidationRules,
   generateSchemaConstraintsSection,
   generateProcessScriptsSection
 } from './section-formatters.js';
+
+// ARCHITECTURE DECISION (2026-01-24): Keywords come from code, not database
+import { generateKeywordQuickReference } from './keyword-extractor.js';
 
 import {
   generateHotPatternsSection,
@@ -41,8 +43,8 @@ function getSectionsByMapping(sections, fileKey, fileMapping) {
  * @param {Object} fileMapping - Section to file mapping
  * @returns {string} Generated markdown content
  */
-function generateRouter(data, fileMapping) {
-  const { protocol, subAgents } = data;
+function generateRouter(data, _fileMapping) {
+  const { protocol } = data;
   const sections = protocol.sections;
   const { today, time } = getMetadata(protocol);
 
@@ -53,7 +55,8 @@ function generateRouter(data, fileMapping) {
   const skillIntentDetection = sections.find(s => s.section_type === 'skill_intent_detection');
   const commonCommands = sections.find(s => s.section_type === 'common_commands');
 
-  const triggerReference = generateTriggerQuickReference(subAgents);
+  // ARCHITECTURE DECISION (2026-01-24): Keywords from code file, not database
+  const triggerReference = generateKeywordQuickReference();
 
   return `# CLAUDE.md - LEO Protocol Context Router
 
