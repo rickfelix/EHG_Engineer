@@ -3,10 +3,10 @@
 ## Metadata
 - **Category**: Reference
 - **Status**: Approved
-- **Version**: 1.0.0
+- **Version**: 1.1.0
 - **Author**: Claude Opus 4.5 (SD-LEO-FEAT-LLM-ASSISTED-TYPE-001)
-- **Last Updated**: 2026-01-23
-- **Tags**: sd-classification, llm, infrastructure, leo-protocol
+- **Last Updated**: 2026-01-24
+- **Tags**: sd-classification, llm, infrastructure, leo-protocol, type-locking, governance
 
 ## Overview
 
@@ -452,12 +452,206 @@ export const getOpenAIModel = (purpose) => {
 };
 ```
 
+## Type Locking Governance
+
+**Added in**: SD-LEO-INFRA-RENAME-COLUMNS-SELF-001 (2026-01-24)
+
+The `type_locked` governance feature prevents auto-correction of explicitly-set SD types, addressing the issue where the system would override user-chosen types based on automatic classification.
+
+### Purpose
+
+When a user or process explicitly sets an SD type, the `type_locked` flag ensures that:
+- Auto-correction is disabled for that SD
+- GPT classifier recommendations are logged but not applied
+- Keyword fallback classifications are ignored
+- The explicitly-set type is preserved through all workflows
+
+### How It Works
+
+The `type_locked` flag is stored in the `governance_metadata` field:
+
+```javascript
+// Example SD with locked type
+{
+  id: 'SD-XXX-001',
+  sd_type: 'infrastructure',
+  governance_metadata: {
+    type_locked: true,  // Prevents auto-correction
+    automation_context: {
+      bypass_governance: false
+    }
+  }
+}
+```
+
+### Integration Points
+
+#### 1. Handoff Validation Gates
+
+The `sd-type-validation.js` gate checks the lock before auto-correcting:
+
+```javascript
+// scripts/modules/handoff/executors/lead-to-plan/gates/sd-type-validation.js
+
+function isTypeLocked(sd) {
+  const govMeta = sd.governance_metadata;
+  if (!govMeta) return false;
+
+  // Check type_locked flag
+  if (govMeta.type_locked === true) return true;
+
+  // Also respect automation_context bypass flags
+  if (govMeta.automation_context?.bypass_governance === true) return true;
+
+  return false;
+}
+
+// Before auto-correcting SD type
+if (typeLocked) {
+  console.log('   🔒 Type is LOCKED - auto-correction disabled');
+  // Skip auto-correction logic
+}
+```
+
+#### 2. Type Classification During Creation
+
+When creating SDs with explicit types:
+
+```javascript
+import { sdTypeClassifier } from './lib/sd/index.js';
+
+// User explicitly chose 'infrastructure'
+const userChosenType = 'infrastructure';
+
+// Get classification for information only
+const classification = await sdTypeClassifier.classify(title, description);
+
+// Create SD with locked type
+await supabase
+  .from('strategic_directives_v2')
+  .insert({
+    sd_key: generatedKey,
+    sd_type: userChosenType,  // Use user's choice
+    governance_metadata: {
+      type_locked: true,  // Lock to prevent auto-correction
+      classification_info: {
+        gpt_recommendation: classification.recommendedType,
+        confidence: classification.confidence,
+        reasoning: classification.reasoning,
+        user_override: userChosenType !== classification.recommendedType
+      }
+    }
+  });
+```
+
+#### 3. PRD Generation
+
+The PRD auto-creation script respects type locking:
+
+```javascript
+// scripts/prd/index.js
+
+// Fetch governance metadata to check lock
+const { data: sd } = await supabase
+  .from('strategic_directives_v2')
+  .select('id, sd_type, governance_metadata')
+  .eq('id', sdId)
+  .single();
+
+const typeLocked = sd.governance_metadata?.type_locked === true;
+
+if (!typeLocked) {
+  // Attempt classification/correction
+  const classification = await sdTypeClassifier.classify(title, description);
+  if (classification.confidence >= 0.85) {
+    // Auto-correct type
+  }
+} else {
+  console.log('Type locked - using declared type:', sd.sd_type);
+}
+```
+
+### When to Use Type Locking
+
+| Scenario | Use type_locked |
+|----------|-----------------|
+| User explicitly selected type during creation | ✅ Yes |
+| SD imported from external system with type | ✅ Yes |
+| SD type was manually corrected after classification error | ✅ Yes |
+| SD created programmatically with known type | ✅ Yes |
+| SD created with GPT classifier (auto) | ❌ No - allow future corrections |
+| SD created with keyword fallback | ❌ No - low confidence |
+
+### Checking Lock Status
+
+Query lock status from database:
+
+```javascript
+const { data } = await supabase
+  .from('strategic_directives_v2')
+  .select('id, sd_type, governance_metadata')
+  .eq('id', 'SD-XXX-001')
+  .single();
+
+const isLocked = data.governance_metadata?.type_locked === true;
+console.log(`SD type '${data.sd_type}' is ${isLocked ? 'LOCKED' : 'unlocked'}`);
+```
+
+### Unlocking Types
+
+To enable auto-correction again:
+
+```javascript
+await supabase
+  .from('strategic_directives_v2')
+  .update({
+    governance_metadata: {
+      ...existingMetadata,
+      type_locked: false  // Remove lock
+    }
+  })
+  .eq('id', 'SD-XXX-001');
+```
+
+### Benefits
+
+- **Prevents unwanted changes**: User decisions are respected
+- **Reduces validation friction**: No mid-workflow type changes
+- **Improves trust**: System won't override explicit choices
+- **Enables governance**: Critical SDs can have locked types
+- **Audit trail**: Lock status visible in governance_metadata
+
+### Implementation Details
+
+**Files Modified**:
+- `scripts/modules/handoff/executors/lead-to-plan/gates/sd-type-validation.js` - Lock check in validation gate
+- `scripts/prd/index.js` - Respects lock during PRD generation
+- `docs/database/strategic_directives_v2_field_reference.md` - Documented in field reference
+
+**Database Schema**:
+```sql
+-- governance_metadata structure (JSONB)
+{
+  "type_locked": boolean,
+  "automation_context": {
+    "bypass_governance": boolean
+  },
+  "classification_info": {
+    "gpt_recommendation": text,
+    "confidence": float,
+    "reasoning": text,
+    "user_override": boolean
+  }
+}
+```
+
 ## Related Documentation
 
 - [SD Type Detection Integration Guide](../guides/SD_TYPE_DETECTION_INTEGRATION_GUIDE.md) - SD type detection vs classification
 - [SD Key Generator Guide](./sd-key-generator-guide.md) - SD key generation patterns
 - [SD Validation Profiles](./sd-validation-profiles.md) - Validation rules per SD type
 - [LEO Protocol Standards](../03_protocols_and_standards/LEO_v4.3_subagent_enforcement.md) - Full LEO Protocol workflow
+- [Strategic Directives v2 Field Reference](../database/strategic_directives_v2_field_reference.md) - Database field documentation including governance_metadata
 
 ## Troubleshooting
 
@@ -486,6 +680,12 @@ If GPT classification consistently fails:
 4. No user action required (transparent fallback)
 
 ## Version History
+
+### v1.1.0 (2026-01-24)
+- **Added**: Type Locking Governance section (SD-LEO-INFRA-RENAME-COLUMNS-SELF-001)
+- **Feature**: `type_locked` flag in `governance_metadata` prevents auto-correction
+- **Integration**: Documented lock checks in handoff gates and PRD generation
+- **Benefits**: Respects user-chosen types, improves governance, reduces friction
 
 ### v1.0.0 (2026-01-23)
 - Initial implementation (SD-LEO-FEAT-LLM-ASSISTED-TYPE-001)
