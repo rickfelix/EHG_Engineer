@@ -592,8 +592,8 @@ This implementation did not follow the full LEAD→PLAN→EXEC workflow because:
 
 1. ✅ **leo_protocol_sections** (Database) - Added weighted scoring section (ID 415)
 2. ✅ **CLAUDE_CORE.md** - Regenerated with keyword scoring documentation
-3. ✅ **docs/01_architecture/semantic-routing-architecture.md** - Added migration section
-4. ✅ **docs/summaries/implementations/keyword-scoring-implementation.md** - This file (NEW)
+3. ✅ **docs/summaries/implementations/keyword-scoring-implementation.md** - This file (NEW)
+4. ✅ **Semantic routing docs deleted** - Removed all semantic routing documentation and code to avoid confusion
 
 ---
 
