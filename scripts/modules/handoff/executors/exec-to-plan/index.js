@@ -22,6 +22,9 @@ import {
   createLOCThresholdValidationGate
 } from './gates/index.js';
 
+// Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
+import { createProtocolFileReadGate } from '../../gates/protocol-file-read-gate.js';
+
 // Helper modules
 import {
   transitionUserStoriesToValidated,
@@ -77,6 +80,10 @@ export class ExecToPlanExecutor extends BaseExecutor {
 
   getRequiredGates(_sd, _options) {
     const gates = [];
+
+    // Protocol File Read Gate - FIRST (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
+    // Ensures agent has read CLAUDE_EXEC.md before proceeding
+    gates.push(createProtocolFileReadGate('EXEC-TO-PLAN'));
 
     // Prerequisite handoff check
     gates.push(createPrerequisiteCheckGate(this.supabase));

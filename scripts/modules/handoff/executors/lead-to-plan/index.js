@@ -17,6 +17,9 @@ import {
   createSmokeTestSpecificationGate
 } from './gates/index.js';
 
+// Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
+import { createProtocolFileReadGate } from '../../gates/protocol-file-read-gate.js';
+
 // Helper modules
 import { transitionSdToPlan } from './state-transitions.js';
 import { displayPreHandoffWarnings } from './pre-handoff-warnings.js';
@@ -51,6 +54,10 @@ export class LeadToPlanExecutor extends BaseExecutor {
 
   getRequiredGates(_sd, _options) {
     const gates = [];
+
+    // Protocol File Read Gate - FIRST (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
+    // Ensures agent has read CLAUDE_LEAD.md before proceeding
+    gates.push(createProtocolFileReadGate('LEAD-TO-PLAN'));
 
     // SD Transition Readiness Gate
     gates.push(createTransitionReadinessGate(this.supabase));
