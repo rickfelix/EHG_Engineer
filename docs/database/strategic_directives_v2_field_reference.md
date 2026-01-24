@@ -361,3 +361,14 @@ ORDER BY
 - Use Supabase Studio or pgAdmin to view descriptions in database explorer
 - Descriptions will appear in IDEs with database plugins (DataGrip, DBeaver, etc.)
 - This reference document is generated from the actual database schema
+
+## Deprecated Fields
+
+### `category` (DEPRECATED)
+- **Status**: DEPRECATED - Use `sd_type` instead
+- **Reason**: `sd_type` is now the authoritative field for SD classification
+- **Migration**: All new code should use `sd_type`. The `category` field will be removed in a future migration.
+
+### `metadata.sd_type` (REMOVED)  
+- **Status**: REMOVED
+- **Reason**: Was a temporary workaround. Now use root `sd_type` field.
