@@ -14,6 +14,16 @@
 import ResultBuilder from '../ResultBuilder.js';
 import { validatorRegistry } from './ValidatorRegistry.js';
 import { shouldSkipCodeValidation } from '../../../../lib/utils/sd-type-validation.js';
+import {
+  getValidatorRequirement,
+  isValidatorNonApplicable,
+  createSkippedResult,
+  isSkippedResult,
+  ValidatorStatus,
+  RequirementLevel,
+  SkipReasonCode,
+  POLICY_VERSION
+} from './sd-type-applicability-policy.js';
 
 export class ValidationOrchestrator {
   constructor(supabase, options = {}) {
@@ -99,9 +109,12 @@ export class ValidationOrchestrator {
       totalScore: 0,           // Sum of raw scores (backward compat)
       totalMaxScore: 0,        // Sum of max scores (backward compat)
       normalizedScore: 0,      // NEW: Weighted average percentage (0-100)
-      gateCount: 0,            // NEW: Number of gates evaluated
+      gateCount: 0,            // Number of gates evaluated
+      skippedCount: 0,         // NEW: Number of gates skipped due to SD type (SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001)
       gateResults: {},
+      gateStatuses: {},        // NEW: Per-gate status tracking {gateName: {status, required, skipReason}}
       failedGate: null,
+      skippedGates: [],        // NEW: List of skipped gate names
       issues: [],
       warnings: []
     };
@@ -120,12 +133,30 @@ export class ValidationOrchestrator {
       const gateResult = await this.validateGate(gate.name, gate.validator, context);
       results.gateResults[gate.name] = gateResult;
 
+      // SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001: Track SKIPPED status
+      const isSkipped = isSkippedResult(gateResult);
+      if (isSkipped) {
+        results.skippedCount++;
+        results.skippedGates.push(gate.name);
+        results.gateStatuses[gate.name] = {
+          status: ValidatorStatus.SKIPPED,
+          required: gate.required !== false,
+          skipReason: gateResult.skipReason || SkipReasonCode.NON_APPLICABLE_SD_TYPE,
+          skipDetails: gateResult.skipDetails
+        };
+      } else {
+        results.gateStatuses[gate.name] = {
+          status: gateResult.passed ? ValidatorStatus.PASS : ValidatorStatus.FAIL,
+          required: gate.required !== false
+        };
+      }
+
       // Backward compat: sum raw scores
       results.totalScore += gateResult.score;
       results.totalMaxScore += gateResult.maxScore;
       results.gateCount++;
 
-      // NEW: Calculate weighted contribution
+      // Calculate weighted contribution
       // Gate weight defaults to 1.0, can be customized per gate
       const gateWeight = gate.weight || 1.0;
       const gatePercentage = gateResult.maxScore > 0
@@ -136,7 +167,9 @@ export class ValidationOrchestrator {
 
       results.warnings.push(...gateResult.warnings);
 
-      if (!gateResult.passed && gate.required !== false) {
+      // SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001: SKIPPED counts as satisfied (not a failure)
+      // Only FAIL (not SKIPPED) should block handoff for required gates
+      if (!gateResult.passed && gate.required !== false && !isSkipped) {
         results.passed = false;
         results.failedGate = gate.name;
         results.issues.push(...gateResult.issues);
@@ -385,8 +418,8 @@ export class ValidationOrchestrator {
           validator: async (ctx) => {
             const mergedContext = { ...context, ...ctx };
 
-            // FIX: Check SD type and skip code validation for infrastructure/documentation SDs
-            // This provides a centralized bypass for database-driven validation rules
+            // SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001: Check SD type and skip code validation
+            // Uses centralized SD-type applicability policy for proper SKIPPED status
             if (mergedContext.sd_id || mergedContext.sdId) {
               const sdId = mergedContext.sd_id || mergedContext.sdId;
               const { data: sdData } = await this.supabase
@@ -396,13 +429,13 @@ export class ValidationOrchestrator {
                 .single();
 
               if (sdData && shouldSkipCodeValidation(sdData)) {
-                return {
-                  passed: true,
-                  score: 100,
-                  max_score: 100,
-                  issues: [],
-                  warnings: [`Validation skipped for ${sdData.sd_type} SD`]
-                };
+                // Extract validator name from rule for proper policy lookup
+                const validatorName = rule.rule_name?.toUpperCase() ||
+                                     gate.split(':').pop()?.toUpperCase() ||
+                                     'UNKNOWN';
+
+                // Use policy to get proper skip result with SKIPPED status
+                return createSkippedResult(validatorName, sdData.sd_type, SkipReasonCode.NON_APPLICABLE_SD_TYPE);
               }
             }
 
