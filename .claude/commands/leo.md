@@ -130,7 +130,32 @@ npm run sd:next
 ### If argument starts with "create" or "c":
 Launch the SD creation wizard. Parse additional flags:
 
-**Interactive mode (no flags):**
+**Context-Based Type Inference (MANDATORY FIRST STEP):**
+
+Before asking the user anything, analyze the recent conversation context to infer the SD type:
+
+| Context Signals | Inferred Type |
+|-----------------|---------------|
+| security, vulnerability, CVE, exposed, credentials, hardcoded secrets, authentication bypass, RLS, injection | `security` (maps to `fix`) |
+| bug, error, broken, failing, crash, exception, issue, not working, regression | `fix` |
+| feature, add, new functionality, implement, create, build | `feature` |
+| refactor, cleanup, simplify, restructure, reorganize, tech debt | `refactor` |
+| tooling, script, CI/CD, infrastructure, deployment, automation, pipeline | `infrastructure` |
+| documentation, docs, README, guide | `documentation` |
+
+**Inference Rules:**
+1. If conversation discussed specific issues (bugs, security, errors) → type is `fix` or `security`
+2. If user said "yes" after Claude suggested creating an SD for discussed issues → use the type matching those issues
+3. If user provided explicit context (e.g., "create an SD to fix the security issues") → extract type from their words
+4. **Only ask if context is truly ambiguous** (no clear signals in recent messages)
+
+**When type IS inferred from context:**
+- Skip the type question entirely
+- Proceed directly to generating a title based on the context
+- Auto-generate title from conversation summary if possible (e.g., "Remediate Critical Security Vulnerabilities")
+- Only ask for title confirmation if auto-generated title is unclear
+
+**When type CANNOT be inferred (ambiguous context only):**
 Use AskUserQuestion to collect SD details:
 
 ```javascript
@@ -151,8 +176,9 @@ Use AskUserQuestion to collect SD details:
 }
 ```
 
-After getting type, ask for title:
-- "What's a brief title for this SD?"
+After getting/inferring type, generate or ask for title:
+- If context provides clear scope → auto-generate title (e.g., "Remediate Critical Security and Code Quality Issues")
+- If scope is unclear → ask "What's a brief title for this SD?"
 
 Then generate the SD key using SDKeyGenerator:
 ```bash
