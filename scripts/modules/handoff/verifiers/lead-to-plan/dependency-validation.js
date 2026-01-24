@@ -74,11 +74,12 @@ export async function validateDependenciesExist(sd, supabase) {
   }
 
   try {
-    // Query all referenced dependencies (support id, legacy_id, and sd_key)
+    // Query all referenced dependencies (support id and sd_key)
+    // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
     const { data: existingDeps, error } = await supabase
       .from('strategic_directives_v2')
-      .select('id, legacy_id, sd_key, status, title')
-      .or(deps.map(d => `id.eq.${d},legacy_id.eq.${d},sd_key.eq.${d}`).join(','));
+      .select('id, sd_key, status, title')
+      .or(deps.map(d => `id.eq.${d},sd_key.eq.${d}`).join(','));
 
     if (error) {
       result.warnings.push(
@@ -90,7 +91,7 @@ export async function validateDependenciesExist(sd, supabase) {
     // Find which dependencies don't exist
     const existingIds = new Set([
       ...(existingDeps || []).map(d => d.id),
-      ...(existingDeps || []).map(d => d.legacy_id)
+      ...(existingDeps || []).map(d => d.sd_key)
     ]);
 
     const missingDeps = deps.filter(d => !existingIds.has(d));

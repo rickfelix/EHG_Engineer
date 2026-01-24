@@ -69,11 +69,12 @@ export class PlanToExecVerifier {
     console.log(`Strategic Directive: ${sdId}`);
 
     try {
-      // 1. Load Strategic Directive (support UUID, legacy_id, and sd_key)
+      // 1. Load Strategic Directive (support UUID and sd_key)
+      // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
       const { data: sd, error: sdError } = await this.supabase
         .from('strategic_directives_v2')
         .select('*')
-        .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+        .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
         .single();
 
       if (sdError || !sd) {

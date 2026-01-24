@@ -10,8 +10,9 @@
  * either UUID format (e.g., "e1c8cc23-...") or string format (e.g., "SD-STAGE-ARCH-001").
  * Different parts of the codebase pass identifiers in different formats:
  * - sd_key: "SD-STAGE-ARCH-001"
- * - legacy_id: "SD-STAGE-ARCH-001"
  * - id: Could be UUID or string depending on when the SD was created
+ *
+ * SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id references (column dropped 2026-01-24)
  *
  * When an update uses .eq('id', sdId) with a mismatched format, the query
  * silently matches zero rows and returns success, causing data loss.
@@ -38,7 +39,7 @@ const SD_KEY_REGEX = /^SD-[A-Z0-9-]+$/i;
 /**
  * Detect the format of an SD identifier
  * @param {string} sdId - The identifier to analyze
- * @returns {string} Format type: 'uuid', 'sd_key', 'legacy_id', or 'unknown'
+ * @returns {string} Format type: 'uuid', 'sd_key', or 'unknown'
  */
 export function detectIdFormat(sdId) {
   if (!sdId || typeof sdId !== 'string') {
@@ -50,7 +51,6 @@ export function detectIdFormat(sdId) {
   }
 
   if (SD_KEY_REGEX.test(sdId)) {
-    // Could be sd_key or legacy_id - both use same format
     return 'sd_key';
   }
 
@@ -69,20 +69,19 @@ export function isUUID(sdId) {
 /**
  * Normalize an SD identifier to the canonical database ID
  *
- * This function resolves any form of SD identifier (uuid, legacy_id, sd_key)
+ * This function resolves any form of SD identifier (uuid or sd_key)
  * to the canonical `id` value from the strategic_directives_v2 table.
  *
  * CRITICAL: Always use this before any update operation to prevent silent failures.
  *
  * @param {Object} supabase - Supabase client instance
- * @param {string} sdId - SD identifier in any format (uuid, legacy_id, sd_key)
+ * @param {string} sdId - SD identifier in any format (uuid or sd_key)
  * @returns {Promise<string|null>} Canonical SD.id or null if not found
  *
  * @example
  * // All these will return the same canonical ID
  * await normalizeSDId(supabase, 'SD-STAGE-ARCH-001');     // sd_key format
  * await normalizeSDId(supabase, 'e1c8cc23-...');          // uuid format
- * await normalizeSDId(supabase, 'SD-STAGE-ARCH-001');     // legacy_id format
  */
 export async function normalizeSDId(supabase, sdId) {
   if (!sdId || typeof sdId !== 'string') {
@@ -98,7 +97,7 @@ export async function normalizeSDId(supabase, sdId) {
   const { data: sd, error } = await supabase
     .from('strategic_directives_v2')
     .select('id')
-    .or(`id.eq.${trimmedId},legacy_id.eq.${trimmedId},sd_key.eq.${trimmedId}`)
+    .or(`id.eq.${trimmedId},sd_key.eq.${trimmedId}`)
     .maybeSingle();
 
   if (error) {
@@ -160,8 +159,8 @@ export async function normalizeSDIdWithDetails(supabase, sdId) {
   // Query with essential fields for context
   const { data: sd, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, sd_key, title, status, current_phase')
-    .or(`id.eq.${trimmedId},legacy_id.eq.${trimmedId},sd_key.eq.${trimmedId}`)
+    .select('id, sd_key, title, status, current_phase')
+    .or(`id.eq.${trimmedId},sd_key.eq.${trimmedId}`)
     .maybeSingle();
 
   if (error) {
@@ -281,7 +280,7 @@ export async function normalizeSDIdBatch(supabase, sdIds) {
   // Query all at once for efficiency
   const { data: sds, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, sd_key');
+    .select('id, sd_key');
 
   if (error || !sds) {
     console.error('[SD-ID-NORMALIZER] Batch query failed:', error?.message);
@@ -290,13 +289,12 @@ export async function normalizeSDIdBatch(supabase, sdIds) {
 
   // Build lookup maps
   const byId = new Map(sds.map(sd => [sd.id, sd.id]));
-  const byLegacyId = new Map(sds.filter(sd => sd.legacy_id).map(sd => [sd.legacy_id, sd.id]));
   const bySdKey = new Map(sds.filter(sd => sd.sd_key).map(sd => [sd.sd_key, sd.id]));
 
   // Resolve each input
   for (const inputId of uniqueIds) {
     const trimmed = inputId.trim();
-    const canonical = byId.get(trimmed) || byLegacyId.get(trimmed) || bySdKey.get(trimmed);
+    const canonical = byId.get(trimmed) || bySdKey.get(trimmed);
 
     if (canonical) {
       results.set(inputId, canonical);

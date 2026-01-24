@@ -352,8 +352,8 @@ export async function validateDependenciesExist(supabase, sd) {
   try {
     const { data: existingDeps, error } = await supabase
       .from('strategic_directives_v2')
-      .select('id, legacy_id, sd_key, status, title')
-      .or(deps.map(d => `id.eq.${d},legacy_id.eq.${d},sd_key.eq.${d}`).join(','));
+      .select('id, sd_key, status, title')
+      .or(deps.map(d => `id.eq.${d},sd_key.eq.${d}`).join(','));
 
     if (error) {
       result.warnings.push(
@@ -364,7 +364,7 @@ export async function validateDependenciesExist(supabase, sd) {
 
     const existingIds = new Set([
       ...(existingDeps || []).map(d => d.id),
-      ...(existingDeps || []).map(d => d.legacy_id)
+      ...(existingDeps || []).map(d => d.sd_key)
     ]);
 
     const missingDeps = deps.filter(d => !existingIds.has(d));

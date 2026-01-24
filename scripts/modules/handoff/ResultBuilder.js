@@ -173,7 +173,7 @@ export class ResultBuilder {
         'Create SD in database using LEO Protocol dashboard or create-strategic-directive.js script.',
         '',
         'Table: strategic_directives_v2',
-        'Lookup fields: id (UUID), legacy_id, sd_key'
+        'Lookup fields: id (VARCHAR), sd_key'
       ].join('\n'),
       'PRD_NOT_FOUND': [
         'Create PRD using add-prd-to-database.js script.',
