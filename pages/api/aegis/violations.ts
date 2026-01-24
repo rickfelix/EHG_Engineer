@@ -49,6 +49,10 @@ async function handleGet(req: AuthenticatedRequest, res: NextApiResponse) {
     since
   } = req.query;
 
+  // SD-SEC-DATA-VALIDATION-001: Safe integer parsing with bounds checking
+  const parsedLimit = Math.min(Math.max(parseInt(limit as string, 10) || 50, 1), 100);
+  const parsedOffset = Math.max(parseInt(offset as string, 10) || 0, 0);
+
   try {
     let query = supabase
       .from('aegis_violations')
@@ -71,7 +75,7 @@ async function handleGet(req: AuthenticatedRequest, res: NextApiResponse) {
         constitution:aegis_constitutions(code, name, domain)
       `)
       .order('created_at', { ascending: false })
-      .range(parseInt(offset as string), parseInt(offset as string) + parseInt(limit as string) - 1);
+      .range(parsedOffset, parsedOffset + parsedLimit - 1);
 
     // Filter by constitution
     if (constitution && typeof constitution === 'string') {
@@ -100,7 +104,8 @@ async function handleGet(req: AuthenticatedRequest, res: NextApiResponse) {
 
     if (since && typeof since === 'string') {
       // Parse "7d" format
-      const days = parseInt(since.replace('d', '')) || 7;
+      // SD-SEC-DATA-VALIDATION-001: Safe parsing with radix and bounds
+      const days = Math.min(Math.max(parseInt(since.replace('d', ''), 10) || 7, 1), 365);
       const sinceDate = new Date();
       sinceDate.setDate(sinceDate.getDate() - days);
       query = query.gte('created_at', sinceDate.toISOString());
@@ -130,8 +135,8 @@ async function handleGet(req: AuthenticatedRequest, res: NextApiResponse) {
       byStatus,
       bySeverity,
       total: count || data?.length || 0,
-      limit: parseInt(limit as string),
-      offset: parseInt(offset as string)
+      limit: parsedLimit,
+      offset: parsedOffset
     });
 
   } catch (error) {
