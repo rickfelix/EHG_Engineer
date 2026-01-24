@@ -99,10 +99,12 @@ Look for "meta-lessons" about process, architecture, or methodology - not just p
 
   /**
    * SD-LEO-HARDEN-VALIDATION-001: Boilerplate detection patterns
+   * SD-LEO-INFRA-ENHANCE-RETRO-SUB-001: Expanded with domain-specific patterns
    * Evidence: 87.5% of retrospectives contained generic boilerplate content
    * These patterns identify common non-specific filler text
    */
   static BOILERPLATE_PATTERNS = [
+    // Original generic patterns (14)
     /continue monitoring.*for improvement/i,
     /follow.*protocol/i,
     /communicate.*better/i,
@@ -116,7 +118,40 @@ Look for "meta-lessons" about process, architecture, or methodology - not just p
     /be more careful/i,
     /pay.*attention/i,
     /double.?check/i,
-    /review.*thoroughly/i
+    /review.*thoroughly/i,
+
+    // Infrastructure-specific boilerplate (SD-LEO-INFRA-ENHANCE-RETRO-SUB-001)
+    /improve.*infrastructure/i,
+    /enhance.*tooling/i,
+    /better.*automation/i,
+    /streamline.*processes/i,
+    /optimize.*pipelines?/i,
+
+    // Security-specific boilerplate
+    /strengthen.*security/i,
+    /improve.*authentication/i,
+    /enhance.*authorization/i,
+    /better.*access control/i,
+    /review.*permissions/i,
+
+    // Database-specific boilerplate
+    /improve.*data.*integrity/i,
+    /enhance.*queries/i,
+    /optimize.*database/i,
+    /better.*schema.*design/i,
+    /review.*migrations/i,
+
+    // Testing-specific boilerplate
+    /increase.*test.*coverage/i,
+    /add.*more.*tests/i,
+    /improve.*test.*quality/i,
+    /write.*better.*tests/i,
+
+    // Generic process boilerplate
+    /continue.*current.*approach/i,
+    /maintain.*momentum/i,
+    /stay.*course/i,
+    /keep.*doing.*what/i
   ];
 
   /**
