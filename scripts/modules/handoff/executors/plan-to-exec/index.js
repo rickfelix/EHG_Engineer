@@ -21,6 +21,9 @@ import {
   createBranchEnforcementGate
 } from './gates/index.js';
 
+// Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
+import { createProtocolFileReadGate } from '../../gates/protocol-file-read-gate.js';
+
 // Helper modules
 import { transitionPrdToExec, transitionSdToExec } from './state-transitions.js';
 import { createHandoffRetrospective } from './retrospective.js';
@@ -84,7 +87,11 @@ export class PlanToExecExecutor extends BaseExecutor {
     const appPath = options._appPath;
     const parentOrchestrator = options._isParentOrchestrator;
 
-    // Prerequisite handoff check (always first)
+    // Protocol File Read Gate - FIRST (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
+    // Ensures agent has read CLAUDE_PLAN.md before proceeding
+    gates.push(createProtocolFileReadGate('PLAN-TO-EXEC'));
+
+    // Prerequisite handoff check (always first after protocol read)
     gates.push(createPrerequisiteCheckGate(this.supabase));
 
     // PRD existence check
