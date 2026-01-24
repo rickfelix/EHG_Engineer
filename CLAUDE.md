@@ -222,7 +222,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-24 5:38:20 AM
+**Last Generated**: 2026-01-24 7:42:43 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -267,7 +267,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 | Sub-Agent | Trigger Keywords |
 |-----------|------------------|
 | `ANALYTICS` | analytics, metrics, dashboard, aarrr, funnel, conversion rate, user behavior, tracking, kpi, retention rate (+1 more) |
-| `API` | rest, restful, graphql, endpoint, route, controller, middleware, request, response, payload (+6 more) |
+| `API` | api, rest, restful, graphql, endpoint, route, controller, middleware, request, response (+7 more) |
 | `CRM` | crm, customer relationship, contact management, lead tracking, customer success, salesforce, hubspot, customer data |
 | `DATABASE` | schema, database, query, select from, insert into, supabase, table, rls, postgres, sql (+39 more) |
 | `DEPENDENCY` | dependency, dependencies, npm, yarn, pnpm, package, package.json, vulnerability, cve, security advisory (+12 more) |
@@ -283,7 +283,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 | `RCA` | sub_agent_blocked, ci_pipeline_failure, quality_gate_critical, test_regression, handoff_rejection, sub_agent_fail, quality_degradation, pattern_recurrence, performance_regression, diagnose defect (+2 more) |
 | `REGRESSION` | refactor, refactoring, backward compatibility, backwards compatible, breaking change, regression, restructure, no behavior change, no functional change, api signature (+17 more) |
 | `RETRO` | lead_rejection, plan_verification_complete, plan_complexity_high, exec_sprint_complete, exec_quality_issue, handoff_rejected, handoff_delay, phase_complete, sd_status_completed, sd_status_blocked (+18 more) |
-| `RISK` | high risk, complex, architecture, sophisticated, advanced, overhaul, redesign, authorization, permission, access control (+38 more) |
+| `RISK` | high risk, complex, architecture, sophisticated, advanced, overhaul, redesign, authorization, permission, access control (+37 more) |
 | `SALES` | sales, sales playbook, sales process, pipeline, deal flow, quota, sales cycle, objection handling, sales enablement, closing |
 | `SECURITY` | authentication, security, security auth pattern |
 | `STORIES` | user story, user stories, acceptance criteria, implementation, context, guidance |
