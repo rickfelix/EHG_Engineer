@@ -1,12 +1,17 @@
 /**
  * POST /api/leo/sub-agent-reports
+ * SD-LEO-GEN-REMEDIATE-CRITICAL-SECURITY-001: Added authentication
  *
  * Submit sub-agent execution results
  * Validates status transitions and recomputes affected gates
+ *
+ * SECURITY: Requires authenticated user. Uses user-scoped Supabase client
+ * that respects RLS policies.
  */
 
-import { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@supabase/supabase-js';
+import { NextApiResponse } from 'next';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { withAuth, AuthenticatedRequest } from '../../../lib/middleware/api-auth';
 import {
   SubAgentReportBody,
   SubAgentReportResponse,
@@ -16,17 +21,10 @@ import {
   getAllowedTransitions,
   isTerminalStatus,
   getAffectedGates,
-  Agent,
   Status,
   Gate
 } from '../../../lib/validation/leo-schemas';
 import { emitSubAgentStatus, emitGateUpdated } from '../../../lib/websocket/leo-events';
-
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 // Rate limiting map
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -57,6 +55,7 @@ function checkRateLimit(clientId: string): boolean {
  * Recompute gate scores based on sub-agent evidence
  */
 async function recomputeGate(
+  supabase: SupabaseClient,
   prdId: string,
   gate: Gate
 ): Promise<number> {
@@ -96,10 +95,12 @@ async function recomputeGate(
   return Math.round(totalScore * 100) / 100; // Round to 2 decimals
 }
 
-export default async function handler(
-  req: NextApiRequest,
+async function handler(
+  req: AuthenticatedRequest,
   res: NextApiResponse
 ) {
+  const { supabase } = req;
+
   // Only allow POST
   if (req.method !== 'POST') {
     return res.status(405).json({
@@ -108,10 +109,8 @@ export default async function handler(
     });
   }
 
-  // Rate limiting
-  const clientId = req.headers['x-api-key'] as string ||
-                   req.headers['x-forwarded-for'] as string ||
-                   req.socket.remoteAddress || 'unknown';
+  // Rate limiting by user ID (authenticated)
+  const clientId = req.user.id;
 
   if (!checkRateLimit(clientId)) {
     return res.status(429).json({
@@ -230,10 +229,10 @@ export default async function handler(
 
     // 5) Recompute affected gates if terminal status
     const affectedGates = getAffectedGates(agent, isTerminalStatus(status));
-    const newScores: Record<Gate, number> = {} as any;
+    const newScores: Partial<Record<Gate, number>> = {};
 
     for (const gate of affectedGates) {
-      const score = await recomputeGate(prd_id, gate);
+      const score = await recomputeGate(supabase, prd_id, gate);
       newScores[gate] = score;
 
       // Store new gate review
@@ -291,3 +290,6 @@ export default async function handler(
     });
   }
 }
+
+// SECURITY: Wrap handler with authentication middleware
+export default withAuth(handler);

@@ -52,7 +52,8 @@ async function main() {
       const { Client } = await import('pg');
 
       // Decode password from environment or use hardcoded
-      const password = 'Fl!M32DaM00n!1';
+      const password = process.env.SUPABASE_DB_PASSWORD;
+if (!password) throw new Error('SUPABASE_DB_PASSWORD required');
       const connectionString = `postgresql://postgres.dedlbzhpgkmetvhbkyzq:${encodeURIComponent(password)}@aws-1-us-east-1.pooler.supabase.com:6543/postgres`;
 
       const client = new Client({

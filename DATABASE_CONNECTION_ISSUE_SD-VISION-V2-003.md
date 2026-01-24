@@ -34,7 +34,7 @@ curl -I "https://dedlbzhpgkmetvhbkyzq.supabase.co"
 
 ### 3. PostgreSQL Pooler Connection
 ```bash
-PGPASSWORD="Fl!M32DaM00n!1" psql "postgresql://postgres.dedlbzhpgkmetvhbkyzq@aws-1-us-east-1.pooler.supabase.com:5432/postgres"
+PGPASSWORD="$SUPABASE_DB_PASSWORD" psql "postgresql://postgres.dedlbzhpgkmetvhbkyzq@aws-1-us-east-1.pooler.supabase.com:5432/postgres"
 ```
 **Result**: ❌ `MaxClientsInSessionMode: max clients reached - in Session mode max clients are limited to pool_size`
 
@@ -174,10 +174,10 @@ export async function closeAllConnections() {
 
 ```bash
 # Current (Session mode - max 3 clients)
-SUPABASE_POOLER_URL=postgresql://postgres.dedlbzhpgkmetvhbkyzq:Fl%21M32DaM00n%211@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+SUPABASE_POOLER_URL=postgresql://postgres.dedlbzhpgkmetvhbkyzq:${SUPABASE_DB_PASSWORD}@aws-1-us-east-1.pooler.supabase.com:5432/postgres
 
 # Recommended (Transaction mode - max 200 clients)
-SUPABASE_POOLER_URL=postgresql://postgres.dedlbzhpgkmetvhbkyzq:Fl%21M32DaM00n%211@aws-1-us-east-1.pooler.supabase.com:6543/postgres
+SUPABASE_POOLER_URL=postgresql://postgres.dedlbzhpgkmetvhbkyzq:${SUPABASE_DB_PASSWORD}@aws-1-us-east-1.pooler.supabase.com:6543/postgres
 ```
 
 **Note**: Transaction mode uses port **6543** instead of 5432

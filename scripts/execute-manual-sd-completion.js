@@ -12,7 +12,8 @@ console.log('');
 async function executeManualCompletion() {
   // Parse connection string and build config manually
   const _poolerUrl = process.env.SUPABASE_POOLER_URL;
-  const dbPassword = process.env.SUPABASE_DB_PASSWORD || 'Fl!M32DaM00n!1';
+  const dbPassword = process.env.SUPABASE_DB_PASSWORD;
+if (!dbPassword) throw new Error('SUPABASE_DB_PASSWORD required');
 
   const client = new Client({
     host: 'aws-1-us-east-1.pooler.supabase.com',

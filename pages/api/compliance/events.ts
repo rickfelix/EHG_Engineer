@@ -1,25 +1,24 @@
 /**
  * GET /api/compliance/events
  * SD-AUTO-COMPLIANCE-ENGINE-001: CCE Compliance Events API
+ * SD-LEO-GEN-REMEDIATE-CRITICAL-SECURITY-001: Added authentication
  *
  * Retrieve compliance events for UI consumption
+ *
+ * SECURITY: Requires authenticated user. Uses user-scoped Supabase client
+ * that respects RLS policies.
  */
 
-import { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@supabase/supabase-js';
+import { NextApiResponse } from 'next';
 import {
   ComplianceEventsQuery,
   ComplianceEventPatchBody,
   validateWithDetails
 } from '../../../lib/validation/leo-schemas';
+import { withAuth, AuthenticatedRequest } from '../../../lib/middleware/api-auth';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-export default async function handler(
-  req: NextApiRequest,
+async function handler(
+  req: AuthenticatedRequest,
   res: NextApiResponse
 ) {
   if (req.method === 'GET') {
@@ -34,7 +33,9 @@ export default async function handler(
   }
 }
 
-async function handleGet(req: NextApiRequest, res: NextApiResponse) {
+async function handleGet(req: AuthenticatedRequest, res: NextApiResponse) {
+  const { supabase } = req;
+
   const validation = validateWithDetails(ComplianceEventsQuery, req.query);
 
   if (!validation.success) {
@@ -101,7 +102,8 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse) {
   }
 }
 
-async function handlePatch(req: NextApiRequest, res: NextApiResponse) {
+async function handlePatch(req: AuthenticatedRequest, res: NextApiResponse) {
+  const { supabase } = req;
   const { id } = req.query;
 
   if (!id || typeof id !== 'string') {
@@ -153,3 +155,6 @@ async function handlePatch(req: NextApiRequest, res: NextApiResponse) {
     });
   }
 }
+
+// SECURITY: Wrap handler with authentication middleware
+export default withAuth(handler);

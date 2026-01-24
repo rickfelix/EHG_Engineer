@@ -93,7 +93,7 @@ OPENAI_API_KEY=sk-...your_openai_key_here
 
 ```bash
 # If you have network access to Supabase
-export PGPASSWORD='Fl!M32DaM00n!1'
+export PGPASSWORD="$SUPABASE_DB_PASSWORD"
 psql -h db.dedlbzhpgkmetvhbkyzq.supabase.co -U postgres -d postgres -p 5432 \
   -f database/migrations/20251018_component_registry_embeddings.sql
 ```
