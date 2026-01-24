@@ -1,78 +1,46 @@
-﻿{
-    "trigger":  "precompact",
-    "version":  "1.0.0",
-    "sd":  {
-               "phase":  null,
-               "title":  null,
-               "id":  null,
-               "progress":  null
-           },
-    "timestamp":  "2026-01-24T07:10:18.974Z",
-    "summaries":  {
-                      "contextHighlights":  [
-                                                "Pre-compaction state captured automatically"
-                                            ],
-                      "keyDecisions":  [
-
-                                       ],
-                      "pendingActions":  [
-                                             "Restore context after session start"
-                                         ]
-                  },
-    "git":  {
-                "branch":  "main",
-                "status":  [
-                               "M .claude/settings.json",
-                               "M docs/reference/README.md",
-                               "M docs/reference/claude-code-hooks.md",
-                               "M docs/reference/context-tracking-system.md",
-                               "M scripts/hooks/precompact-snapshot.ps1",
-                               "M scripts/hooks/session-start-loader.ps1",
-                               "M supabase/.temp/cli-latest",
-                               "?? .claude/unified-session-state.json",
-                               "?? database/manual-updates/20260124_EXECUTION_SUMMARY.md",
-                               "?? database/manual-updates/20260124_apply_column_migrations_MANUAL.md",
-                               "?? database/manual-updates/20260124_consolidated_column_migrations.sql",
-                               "?? database/manual-updates/20260124_setup_security_orchestrator.sql",
-                               "?? lib/context/unified-state-manager.js",
-                               "?? scripts/hooks/precompact-unified.js",
-                               "?? scripts/hooks/semantic-router-hook.js",
-                               "?? scripts/test-context-hooks.ps1"
-                           ],
-                "stagedChanges":  "",
-                "recentCommits":  [
-                                      "e48654f93 Merge pull request #574 from rickfelix/feat/SD-LEO-GEN-RENAME-COLUMNS-SELF-001-C-rename-uuidid-column-to-uuidinternalpk",
-                                      "8c451bb3b feat(database): add migrations for children C, D, E (SD-LEO-GEN-RENAME-COLUMNS-SELF-001)",
-                                      "b624b2bab docs(schema): Auto-update schema documentation (#573)",
-                                      "411ada168 Merge pull request #572 from rickfelix/feat/SD-LEO-GEN-RENAME-COLUMNS-SELF-001-B-rename-id-column-to-sdcodeuserfacing",
-                                      "d97760998 feat(database): add sd_code_user_facing column migration (SD-LEO-GEN-RENAME-COLUMNS-SELF-001-B)"
-                                  ],
-                "modifiedFiles":  [
-                                      ".claude/settings.json",
-                                      "database/migrations/20260124_relax_child_creation_timing.sql",
-                                      "database/migrations/20260124_remove_legacy_id.sql",
-                                      "database/migrations/20260124_rename_id_to_sd_code_user_facing.sql",
-                                      "database/migrations/20260124_rename_uuid_id_to_uuid_internal_pk.sql",
-                                      "docs/database/strategic_directives_v2_field_reference.md",
-                                      "docs/reference/README.md",
-                                      "docs/reference/claude-code-hooks.md",
-                                      "docs/reference/context-tracking-system.md",
-                                      "docs/reference/schema/engineer/README.md",
-                                      "docs/reference/schema/engineer/database-schema-overview.md",
-                                      "docs/reference/schema/engineer/tables/activity_logs.md",
-                                      "docs/reference/schema/engineer/tables/advisory_checkpoints.md",
-                                      "docs/reference/schema/engineer/tables/aegis_constitutions.md",
-                                      "docs/reference/schema/engineer/tables/aegis_rules.md",
-                                      "docs/reference/schema/engineer/tables/aegis_violations.md",
-                                      "docs/reference/schema/engineer/tables/agent_artifacts.md",
-                                      "docs/reference/schema/engineer/tables/agent_avatars.md",
-                                      "docs/reference/schema/engineer/tables/agent_coordination_state.md",
-                                      "docs/reference/schema/engineer/tables/agent_departments.md"
-                                  ]
-            },
-    "workflow":  {
-                     "lastHandoff":  null,
-                     "currentPhase":  "unknown",
-                     "toolExecutions":  0
-                 }
+{
+  "version": "2.0.0",
+  "timestamp": "2026-01-24T14:09:42.111Z",
+  "trigger": "manual",
+  "decisions": [
+    {
+      "id": "D1",
+      "decision": "Use structured sections for context preservation",
+      "rationale": "Research shows structured > prose for LLM context",
+      "reversible": true,
+      "timestamp": "2026-01-24T14:09:42.111Z"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "C1",
+      "constraint": "Token budget must be 300-1200",
+      "source": "RECOMP research recommendation",
+      "blocking": false,
+      "timestamp": "2026-01-24T14:09:42.113Z"
+    }
+  ],
+  "openQuestions": [
+    {
+      "id": "Q1",
+      "question": "Should we add vector retrieval later?",
+      "context": "Out of scope for this SD but may be valuable",
+      "priority": "low",
+      "timestamp": "2026-01-24T14:09:42.114Z"
+    }
+  ],
+  "evidenceLedger": [
+    {
+      "id": "E1",
+      "type": "observation",
+      "content": "Schema upgrade implemented with backward compatibility",
+      "source": "unified-state-manager.js",
+      "timestamp": "2026-01-24T14:09:42.115Z"
+    }
+  ],
+  "tokenMetrics": {
+    "estimatedTokens": 233,
+    "budgetStatus": "healthy",
+    "lastTruncation": null
+  }
 }
