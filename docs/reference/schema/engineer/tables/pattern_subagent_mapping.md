@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-24T02:31:56.951Z
+**Generated**: 2026-01-24T03:07:02.107Z
 **Rows**: 59
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -69,9 +69,14 @@
 - **Roles**: {anon}
 - **Using**: `true`
 
-### 2. Authenticated users can manage pattern_subagent_mapping (ALL)
+### 2. authenticated_select_pattern_subagent_mapping (SELECT)
 
 - **Roles**: {authenticated}
+- **Using**: `true`
+
+### 3. service_role_all_pattern_subagent_mapping (ALL)
+
+- **Roles**: {service_role}
 - **Using**: `true`
 - **With Check**: `true`
 
