@@ -100,6 +100,18 @@ Database schema changes are managed via migrations in `/database/migrations/`.
 
 See `/database/migrations/README.md` for migration guidelines.
 
+### Manual Migrations
+
+Critical hotfixes and function updates that bypass the normal migration system are documented in `/database/manual-updates/`.
+
+**When to use manual migrations**:
+- Updating existing PL/pgSQL functions (CREATE OR REPLACE FUNCTION)
+- Fixing triggers that require immediate application
+- Critical production hotfixes
+- Complex data transformations requiring human verification
+
+See [Manual Migrations README](../../database/manual-updates/README.md) for execution guidelines and migration index.
+
 ## Related Documentation
 
 - `/database/migrations/` - Schema migration files
