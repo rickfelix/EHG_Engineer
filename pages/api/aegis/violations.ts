@@ -4,15 +4,19 @@
  *
  * SD-AEGIS-GOVERNANCE-001: AEGIS Violations API
  * SD-LEO-GEN-REMEDIATE-CRITICAL-SECURITY-001: Added authentication
+ * SD-SEC-AUTHORIZATION-RBAC-001: Added RBAC for violation overrides
  *
  * Retrieve and manage governance violations
  *
- * SECURITY: Requires authenticated user. Uses user-scoped Supabase client
- * that respects RLS policies.
+ * SECURITY:
+ * - Authentication: Requires valid JWT token
+ * - Authorization: PUT (override) requires 'violations:override' permission
+ * - Uses user-scoped Supabase client that respects RLS policies
  */
 
 import { NextApiResponse } from 'next';
 import { withAuth, AuthenticatedRequest } from '../../../lib/middleware/api-auth';
+import { getUserRole, hasPermission } from '../../../lib/middleware/rbac';
 
 async function handler(
   req: AuthenticatedRequest,
@@ -146,6 +150,20 @@ async function handlePut(req: AuthenticatedRequest, res: NextApiResponse) {
   if (!id || typeof id !== 'string') {
     return res.status(400).json({
       error: 'Missing violation ID'
+    });
+  }
+
+  // SECURITY: Check RBAC permission for violation override
+  // SD-SEC-AUTHORIZATION-RBAC-001
+  const role = await getUserRole(req);
+  if (!hasPermission(role, 'violations:override')) {
+    console.warn(
+      `AUTHZ DENIED: User ${user.id} (role: ${role}) attempted violations:override`
+    );
+    return res.status(403).json({
+      error: 'Forbidden',
+      message: 'You do not have permission to override violations. Required role: editor or admin.',
+      code: 'PERMISSION_DENIED'
     });
   }
 
