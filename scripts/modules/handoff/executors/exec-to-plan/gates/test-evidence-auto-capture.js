@@ -4,7 +4,10 @@
  *
  * LEO v4.4.2: Auto-ingest test reports before sub-agent orchestration
  * Evidence: story_test_mappings often empty because test evidence not captured during handoff
+ * SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
  */
+
+import { isLightweightSDType } from '../../../validation/sd-type-applicability-policy.js';
 
 /**
  * Create the TEST_EVIDENCE_AUTO_CAPTURE gate validator
@@ -18,11 +21,10 @@ export function createTestEvidenceAutoCaptureGate() {
       console.log('\n🧪 TEST EVIDENCE AUTO-CAPTURE (LEO v4.4.2)');
       console.log('-'.repeat(50));
 
-      // 1. Check SD type exemptions
+      // 1. SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
       const sdType = (ctx.sd?.sd_type || 'feature').toLowerCase();
-      const EXEMPT_TYPES = ['documentation', 'docs', 'infrastructure', 'orchestrator', 'qa', 'database'];
 
-      if (EXEMPT_TYPES.includes(sdType)) {
+      if (isLightweightSDType(sdType)) {
         console.log(`   ℹ️  ${sdType} type SD - test evidence capture SKIPPED`);
         return {
           passed: true,

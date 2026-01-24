@@ -15,6 +15,8 @@ import {
   shouldSkipCodeValidation,
   getValidationRequirements
 } from '../../../lib/utils/sd-type-validation.js';
+// SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
+import { isLightweightSDType } from '../handoff/validation/sd-type-applicability-policy.js';
 
 import { runPreflightChecks } from './preflight/index.js';
 import {
@@ -104,29 +106,21 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
   }
 
   // Resolve SD ID and check for special modes
+  // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Fixed SD lookup to not use deprecated legacy_id
   let resolvedSdUuid = sd_id;
   try {
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sd_id);
     let sd;
 
-    if (isUUID) {
-      resolvedSdUuid = sd_id;
-      const result = await supabase
-        .from('strategic_directives_v2')
-        .select('id, title, sd_type, scope, category, intensity_level')
-        .eq('id', sd_id)
-        .single();
-      sd = result.data;
-    } else {
-      const result = await supabase
-        .from('strategic_directives_v2')
-        .select('id, title, sd_type, scope, category, intensity_level')
-        .or(`legacy_id.eq.${sd_id},sd_key.eq.${sd_id}`)
-        .single();
-      sd = result.data;
-      if (sd?.id) {
-        resolvedSdUuid = sd.id;
-      }
+    // Try direct ID lookup first (works for both UUID and SD-KEY format IDs)
+    const result = await supabase
+      .from('strategic_directives_v2')
+      .select('id, title, sd_type, scope, category, intensity_level')
+      .eq('id', sd_id)
+      .single();
+
+    sd = result.data;
+    if (sd?.id) {
+      resolvedSdUuid = sd.id;
     }
 
     const sdType = (sd?.sd_type || '').toLowerCase();
@@ -156,9 +150,11 @@ export async function validateGate2ExecToPlan(sd_id, supabase) {
       validation.details.frontend_mode = true;
     }
 
-    if (sdType === 'bugfix' || sdType === 'bug_fix') {
-      console.log(`\n   ℹ️  BUGFIX SD DETECTED (sd_type=${sdType})`);
-      validation.details.bugfix_mode = true;
+    // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy for lightweight SDs
+    if (isLightweightSDType(sdType)) {
+      console.log(`\n   ℹ️  LIGHTWEIGHT SD DETECTED (sd_type=${sdType})`);
+      validation.details.bugfix_mode = true;  // Reuse bugfix_mode to skip server validation
+      validation.details.lightweight_sd = true;
       validation.details.testing_requirement = 'relaxed';
     } else if (sdType === 'refactor' && intensityLevel === 'cosmetic') {
       console.log(`\n   ℹ️  COSMETIC REFACTOR SD DETECTED (intensity=${intensityLevel})`);

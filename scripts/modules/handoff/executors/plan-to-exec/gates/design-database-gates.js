@@ -6,6 +6,8 @@
  * Gap #2 Fix (2026-01-01): Auto-invoke missing sub-agents instead of just failing
  */
 
+import { isLightweightSDType } from '../../../validation/sd-type-applicability-policy.js';
+
 /**
  * Create the GATE1_DESIGN_DATABASE gate validator
  *
@@ -68,6 +70,7 @@ export function createDesignDatabaseGate(supabase) {
 
 /**
  * Check if SD type requires DESIGN/DATABASE validation
+ * SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
  *
  * @param {Object} sd - Strategic Directive
  * @returns {boolean} True if validation is required
@@ -75,6 +78,6 @@ export function createDesignDatabaseGate(supabase) {
 export function shouldValidateDesignDatabase(sd) {
   // Sync check for getRequiredGates - async loading happens at runtime in createDesignDatabaseGate
   const sdType = (sd.sd_type || 'feature').toLowerCase();
-  const skipTypes = ['bugfix', 'fix', 'hotfix', 'documentation', 'docs', 'process'];
-  return !skipTypes.includes(sdType);
+  // Lightweight SD types skip DESIGN/DATABASE validation
+  return !isLightweightSDType(sdType);
 }

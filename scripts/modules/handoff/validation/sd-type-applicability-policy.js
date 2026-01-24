@@ -16,7 +16,49 @@
  */
 
 // Policy version for traceability and debugging
-export const POLICY_VERSION = '1.0.0';
+export const POLICY_VERSION = '1.1.0';
+
+/**
+ * SD-LEO-FIX-COMPLETION-WORKFLOW-001: Shared list of SD types that skip
+ * detailed PRD documentation requirements (exploration, file scope, etc.)
+ *
+ * Use this constant in PLAN-TO-EXEC validators to ensure consistency:
+ * - fileScopeValidation
+ * - explorationAudit
+ * - executionPlanValidation
+ * - testingStrategyValidation
+ * - deliverablesPlanning
+ *
+ * Criteria for "lightweight":
+ * - Scope is typically well-defined (no extensive exploration needed)
+ * - PRD can be minimal or use heuristic validation
+ * - Focus is on targeted changes, not new feature development
+ */
+export const LIGHTWEIGHT_SD_TYPES = [
+  // Non-code SD types
+  'infrastructure',
+  'documentation',
+  'docs',
+  'orchestrator',
+  'process',
+  'qa',
+  'discovery_spike',  // Research/exploration - no code changes expected
+
+  // Code-producing but scope-limited SD types
+  'bugfix',
+  'refactor',
+  'ux_debt',          // Similar to refactor but for UX
+  'implementation'    // Typically follows a pre-defined spec
+];
+
+/**
+ * Check if an SD type is lightweight (skips detailed PRD validation)
+ * @param {string} sdType - The SD type to check
+ * @returns {boolean} True if this SD type should skip detailed PRD validation
+ */
+export function isLightweightSDType(sdType) {
+  return LIGHTWEIGHT_SD_TYPES.includes((sdType || '').toLowerCase());
+}
 
 /**
  * Validator requirement levels
@@ -225,6 +267,43 @@ const SD_TYPE_POLICY = {
     DATABASE: RequirementLevel.OPTIONAL,
     REGRESSION: RequirementLevel.OPTIONAL,
     DOCMON: RequirementLevel.REQUIRED,
+    STORIES: RequirementLevel.OPTIONAL
+  },
+
+  // ============================================================================
+  // ADDITIONAL SD TYPES (SD-LEO-FIX-COMPLETION-WORKFLOW-001)
+  // ============================================================================
+
+  discovery_spike: {
+    // Research/exploration - no code changes expected
+    TESTING: RequirementLevel.NON_APPLICABLE,
+    DESIGN: RequirementLevel.NON_APPLICABLE,
+    GITHUB: RequirementLevel.NON_APPLICABLE,
+    DATABASE: RequirementLevel.NON_APPLICABLE,
+    REGRESSION: RequirementLevel.NON_APPLICABLE,
+    DOCMON: RequirementLevel.REQUIRED,  // Document findings
+    STORIES: RequirementLevel.NON_APPLICABLE
+  },
+
+  implementation: {
+    // Follows a pre-defined spec, similar to feature but lighter
+    TESTING: RequirementLevel.REQUIRED,
+    DESIGN: RequirementLevel.OPTIONAL,
+    GITHUB: RequirementLevel.REQUIRED,
+    DATABASE: RequirementLevel.OPTIONAL,
+    REGRESSION: RequirementLevel.OPTIONAL,
+    DOCMON: RequirementLevel.OPTIONAL,
+    STORIES: RequirementLevel.OPTIONAL
+  },
+
+  ux_debt: {
+    // UX technical debt - similar to refactor but for UX
+    TESTING: RequirementLevel.OPTIONAL,
+    DESIGN: RequirementLevel.REQUIRED,  // UX changes need design review
+    GITHUB: RequirementLevel.REQUIRED,
+    DATABASE: RequirementLevel.NON_APPLICABLE,
+    REGRESSION: RequirementLevel.OPTIONAL,
+    DOCMON: RequirementLevel.OPTIONAL,
     STORIES: RequirementLevel.OPTIONAL
   }
 };

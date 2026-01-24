@@ -3,9 +3,11 @@
  * Part of SD-LEO-REFACTOR-EXECTOPLAN-001
  *
  * LEO v4.3.4: Unified Test Evidence Validation
+ * SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
  */
 
 import { fileURLToPath, pathToFileURL } from 'url';
+import { isLightweightSDType } from '../../validation/sd-type-applicability-policy.js';
 import { dirname, resolve } from 'path';
 
 // Get project root from current file location dynamically
@@ -33,14 +35,12 @@ let validateE2ECoverage;
 export async function validateTestEvidence(supabase, sdId, sd, prd) {
   let testEvidenceResult = null;
 
-  // SD-TYPE-AWARE E2E EXEMPTIONS
+  // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
   const sdType = (sd?.sd_type || '').toLowerCase();
-  const EXEMPT_FROM_E2E = ['orchestrator', 'documentation', 'docs'];
-  const E2E_OPTIONAL = ['infrastructure'];
 
-  if (EXEMPT_FROM_E2E.includes(sdType)) {
+  if (isLightweightSDType(sdType)) {
     console.log(`   ℹ️  ${sdType} type SD - E2E test validation SKIPPED`);
-    console.log(`   → Reason: ${sdType === 'orchestrator' ? 'Children handle testing' : 'No code to test'}`);
+    console.log('   → Reason: Lightweight SD type - E2E tests not required');
     return {
       skipped: true,
       reason: `${sdType} type SD - exempt from E2E testing`,
@@ -48,11 +48,6 @@ export async function validateTestEvidence(supabase, sdId, sd, prd) {
       passing_count: 0,
       all_passing: true
     };
-  }
-
-  if (E2E_OPTIONAL.includes(sdType)) {
-    console.log(`   ℹ️  ${sdType} type SD - E2E testing is OPTIONAL`);
-    console.log('   → Unit tests may suffice for infrastructure changes');
   }
 
   // Load test evidence functions

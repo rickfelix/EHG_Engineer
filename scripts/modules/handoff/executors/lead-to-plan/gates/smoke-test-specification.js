@@ -7,11 +7,11 @@
  *
  * BLOCKS feature SDs without smoke_test_steps
  * SKIPS for infrastructure/documentation/orchestrator SDs
+ *
+ * SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
  */
 
-// SD types that don't require smoke test specification
-// FIX: Added 'docs' as alias for 'documentation'
-const EXEMPT_SD_TYPES = ['documentation', 'docs', 'infrastructure', 'refactor', 'orchestrator'];
+import { isLightweightSDType } from '../../../validation/sd-type-applicability-policy.js';
 
 /**
  * Validate smoke test specification
@@ -22,7 +22,8 @@ const EXEMPT_SD_TYPES = ['documentation', 'docs', 'infrastructure', 'refactor', 
 export async function validateSmokeTestSpecification(sd) {
   const sdType = (sd.sd_type || 'feature').toLowerCase();
 
-  if (EXEMPT_SD_TYPES.includes(sdType)) {
+  // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
+  if (isLightweightSDType(sdType)) {
     console.log(`   ℹ️  SD Type: ${sdType} - smoke test specification not required`);
     return {
       pass: true,

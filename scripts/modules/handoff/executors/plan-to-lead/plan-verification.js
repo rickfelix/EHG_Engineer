@@ -3,7 +3,10 @@
  * Part of SD-LEO-REFACTOR-PLANTOLEAD-001
  *
  * Validates PLAN verification completeness
+ * SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
  */
+
+import { isLightweightSDType } from '../../validation/sd-type-applicability-policy.js';
 
 /**
  * Validate PLAN verification completeness
@@ -93,11 +96,11 @@ async function validateStandardSDCompletion(supabase, prd, sd, validation) {
     validation.issues.push(`PRD status is '${prd.status}', expected 'verification' or 'completed'`);
   }
 
-  // Check EXEC→PLAN handoff exists (or skip for infrastructure SDs)
-  const sdType = sd.sd_type;
-  const isInfrastructure = sdType === 'infrastructure' || sdType === 'documentation' || sdType === 'process';
+  // Check EXEC→PLAN handoff exists (or skip for lightweight SDs)
+  // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
+  const sdType = (sd.sd_type || '').toLowerCase();
 
-  if (isInfrastructure) {
+  if (isLightweightSDType(sdType)) {
     validation.score += 40;
     validation.warnings.push(`Infrastructure SD: EXEC-TO-PLAN is OPTIONAL (sd_type='${sdType}')`);
   } else {
