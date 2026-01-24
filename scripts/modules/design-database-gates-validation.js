@@ -55,6 +55,36 @@ export async function validateGate1PlanToExec(sd_id, supabase) {
   };
 
   // ===================================================================
+  // SD-LEO-INFRA-RENAME-COLUMNS-SELF-001: TYPE-BASED GATE SKIP
+  // Check if this SD type requires DESIGN/DATABASE validation
+  // ===================================================================
+  const { data: sdTypeCheck } = await supabase
+    .from('strategic_directives_v2')
+    .select('sd_type, category')
+    .eq('id', sd_id)
+    .single();
+
+  if (sdTypeCheck) {
+    const requiresGates = requiresDesignDatabaseGatesSync(sdTypeCheck);
+    if (!requiresGates) {
+      const sdType = sdTypeCheck.sd_type || sdTypeCheck.category || 'unknown';
+      console.log(`\n   ℹ️  SD type '${sdType}' does not require DESIGN/DATABASE gates`);
+      console.log('   ✅ GATE 1: SKIPPED (not applicable for this SD type)');
+      console.log('='.repeat(60));
+      return {
+        passed: true,
+        score: 100,
+        max_score: 100,
+        issues: [],
+        warnings: [`DESIGN/DATABASE gates skipped for ${sdType} SD type`],
+        details: { skipped_reason: `SD type '${sdType}' is not in DESIGN_DATABASE_GATES category` },
+        failed_gates: [],
+        gate_scores: {}
+      };
+    }
+  }
+
+  // ===================================================================
   // PHASE 1: NON-NEGOTIABLE BLOCKERS (Preflight Checks)
   // ===================================================================
   console.log('\n[PHASE 1] Non-Negotiable Blockers...');
