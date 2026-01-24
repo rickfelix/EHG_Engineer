@@ -2,13 +2,17 @@
  * POST /api/competitor-analysis
  * SD-STAGE1-ENTRY-UX-001: Analyze competitor URL
  * SD-IDEATION-GENESIS-AUDIT: Real market intelligence (not hallucinated)
+ * SD-LEO-GEN-REMEDIATE-CRITICAL-SECURITY-001: Added authentication
  *
  * Analyzes a competitor URL using REAL web fetching and AI analysis.
  * Classifies all outputs using Four Buckets (Facts/Assumptions/Simulations/Unknowns).
+ *
+ * SECURITY: Requires authenticated user.
  */
 
-import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiResponse } from 'next';
 import { z } from 'zod';
+import { withAuth, AuthenticatedRequest } from '../../lib/middleware/api-auth';
 
 // Request body validation schema
 const AnalyzeCompetitorSchema = z.object({
@@ -46,8 +50,8 @@ function generateFallbackAnalysis(url: string, error: string) {
   };
 }
 
-export default async function handler(
-  req: NextApiRequest,
+async function handler(
+  req: AuthenticatedRequest,
   res: NextApiResponse
 ) {
   if (req.method !== 'POST') {
@@ -141,3 +145,6 @@ export default async function handler(
     });
   }
 }
+
+// SECURITY: Wrap handler with authentication middleware
+export default withAuth(handler);

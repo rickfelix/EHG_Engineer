@@ -87,11 +87,17 @@ export function buildConnectionString(projectKey, password) {
 export async function createDatabaseClient(projectKey = 'ehg', options = {}) {
   const _config = DB_CONFIGS[projectKey];
 
-  // Get password from environment or options
+  // Get password from environment or options - SECURITY: No hardcoded fallback
   const password = options.password ||
                    process.env.SUPABASE_DB_PASSWORD ||
-                   process.env.EHG_DB_PASSWORD ||
-                   'Fl!M32DaM00n!1'; // Fallback
+                   process.env.EHG_DB_PASSWORD;
+
+  if (!password) {
+    throw new Error(
+      'Database password not found. Set SUPABASE_DB_PASSWORD or EHG_DB_PASSWORD in .env file. ' +
+      'SECURITY: Hardcoded password fallbacks are not allowed.'
+    );
+  }
 
   const connStr = options.connectionString || buildConnectionString(projectKey, password);
 

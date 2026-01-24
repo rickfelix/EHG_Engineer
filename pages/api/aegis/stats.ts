@@ -1,22 +1,23 @@
 /**
  * GET /api/aegis/stats
  * SD-AEGIS-GOVERNANCE-001: AEGIS Statistics API
+ * SD-LEO-GEN-REMEDIATE-CRITICAL-SECURITY-001: Added authentication
  *
  * Retrieve compliance statistics
+ *
+ * SECURITY: Requires authenticated user. Uses user-scoped Supabase client
+ * that respects RLS policies.
  */
 
-import { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@supabase/supabase-js';
+import { NextApiResponse } from 'next';
+import { withAuth, AuthenticatedRequest } from '../../../lib/middleware/api-auth';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-export default async function handler(
-  req: NextApiRequest,
+async function handler(
+  req: AuthenticatedRequest,
   res: NextApiResponse
 ) {
+  const { supabase } = req;
+
   if (req.method !== 'GET') {
     return res.status(405).json({
       error: 'Method not allowed',
@@ -169,3 +170,6 @@ export default async function handler(
     });
   }
 }
+
+// SECURITY: Wrap handler with authentication middleware
+export default withAuth(handler);

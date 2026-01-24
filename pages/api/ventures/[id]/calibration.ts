@@ -1,18 +1,22 @@
 /**
  * GET /api/ventures/[id]/calibration
  * Operation 'Final Weld' v6.0.0: Truth Aggregator - Live δ scores
+ * SD-LEO-GEN-REMEDIATE-CRITICAL-SECURITY-001: Added authentication
  *
  * Returns calibration data for a specific venture including:
  * - normalized_delta: Calibration delta normalized by vertical complexity
  * - health_status: 'green' | 'yellow' | 'red'
  * - thresholds: Vertical-specific health thresholds
+ *
+ * SECURITY: Requires authenticated user.
  */
 
-import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiResponse } from 'next';
 import { CalibrationService } from '../../../../src/services/CalibrationService.js';
+import { withAuth, AuthenticatedRequest } from '../../../../lib/middleware/api-auth';
 
-export default async function handler(
-  req: NextApiRequest,
+async function handler(
+  req: AuthenticatedRequest,
   res: NextApiResponse
 ) {
   // Only allow GET requests
@@ -63,3 +67,6 @@ export default async function handler(
     });
   }
 }
+
+// SECURITY: Wrap handler with authentication middleware
+export default withAuth(handler);

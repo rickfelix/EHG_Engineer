@@ -22,7 +22,7 @@ EHG_POOLER_URL=postgresql://postgres.liapbndqlqxdcgpwntbv:[password]@aws-0-us-ea
 SUPABASE_URL=https://dedlbzhpgkmetvhbkyzq.supabase.co
 SUPABASE_ANON_KEY=[anon-key]
 SUPABASE_POOLER_URL=postgresql://postgres.dedlbzhpgkmetvhbkyzq:[password]@aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
-SUPABASE_DB_PASSWORD=Fl!M32DaM00n!1
+SUPABASE_DB_PASSWORD=[REDACTED - set in .env]
 ```
 
 ---

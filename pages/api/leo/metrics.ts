@@ -1,18 +1,17 @@
 /**
  * GET /api/leo/metrics
+ * SD-LEO-GEN-REMEDIATE-CRITICAL-SECURITY-001: Added authentication
  *
  * Dashboard metrics for LEO Protocol monitoring
  * Provides aggregated statistics for portfolio-level view
+ *
+ * SECURITY: Requires authenticated user. Uses user-scoped Supabase client
+ * that respects RLS policies.
  */
 
-import { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { NextApiResponse } from 'next';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { withAuth, AuthenticatedRequest } from '../../../lib/middleware/api-auth';
 
 interface DashboardMetrics {
   overview: {
@@ -54,10 +53,12 @@ interface DashboardMetrics {
   };
 }
 
-export default async function handler(
-  req: NextApiRequest,
+async function handler(
+  req: AuthenticatedRequest,
   res: NextApiResponse
 ) {
+  const { supabase } = req;
+
   // Only allow GET
   if (req.method !== 'GET') {
     return res.status(405).json({
@@ -68,12 +69,12 @@ export default async function handler(
 
   try {
     const metrics: DashboardMetrics = {
-      overview: await getOverviewMetrics(),
-      gates: await getGateMetrics(),
-      subagents: await getSubAgentMetrics(),
-      trends: await getTrendMetrics(),
-      alerts: await getAlertMetrics(),
-      performance: await getPerformanceMetrics()
+      overview: await getOverviewMetrics(supabase),
+      gates: await getGateMetrics(supabase),
+      subagents: await getSubAgentMetrics(supabase),
+      trends: await getTrendMetrics(supabase),
+      alerts: await getAlertMetrics(supabase),
+      performance: await getPerformanceMetrics(supabase)
     };
 
     // Success
@@ -88,10 +89,13 @@ export default async function handler(
   }
 }
 
+// SECURITY: Wrap handler with authentication middleware
+export default withAuth(handler);
+
 /**
  * Get overview metrics
  */
-async function getOverviewMetrics() {
+async function getOverviewMetrics(supabase: SupabaseClient) {
   // Total PRDs
   const { count: totalPrds } = await supabase
     .from('product_requirements_v2')
@@ -125,7 +129,7 @@ async function getOverviewMetrics() {
 /**
  * Get per-gate metrics
  */
-async function getGateMetrics() {
+async function getGateMetrics(supabase: SupabaseClient) {
   const gates = ['2A', '2B', '2C', '2D', '3'];
   const metrics = [];
 
@@ -164,7 +168,7 @@ async function getGateMetrics() {
 /**
  * Get sub-agent metrics
  */
-async function getSubAgentMetrics() {
+async function getSubAgentMetrics(supabase: SupabaseClient) {
   const { data: agents } = await supabase
     .from('leo_sub_agents')
     .select('id, code, name');
@@ -221,7 +225,7 @@ async function getSubAgentMetrics() {
 /**
  * Get trend metrics (last 7 days)
  */
-async function getTrendMetrics() {
+async function getTrendMetrics(supabase: SupabaseClient) {
   const trends = [];
   const now = new Date();
 
@@ -268,7 +272,7 @@ async function getTrendMetrics() {
 /**
  * Get alert metrics
  */
-async function getAlertMetrics() {
+async function getAlertMetrics(supabase: SupabaseClient) {
   const { count: unresolvedCount } = await supabase
     .from('compliance_alerts')
     .select('*', { count: 'exact', head: true })
@@ -296,7 +300,7 @@ async function getAlertMetrics() {
 /**
  * Get performance metrics
  */
-async function getPerformanceMetrics() {
+async function getPerformanceMetrics(supabase: SupabaseClient) {
   // Average time to gate completion
   const { data: completionTimes } = await supabase
     .from('leo_gate_reviews')
@@ -344,12 +348,12 @@ async function getPerformanceMetrics() {
   }
 
   // Bottleneck identification
-  const gateMetrics = await getGateMetrics();
+  const gateMetrics = await getGateMetrics(supabase);
   const bottleneckGate = gateMetrics.reduce((min, gate) =>
     gate.pass_rate < min.pass_rate ? gate : min
   );
 
-  const agentMetrics = await getSubAgentMetrics();
+  const agentMetrics = await getSubAgentMetrics(supabase);
   const bottleneckAgent = agentMetrics.reduce((min, agent) =>
     agent.success_rate < min.success_rate ? agent : min
   );

@@ -6,7 +6,8 @@ dotenv.config();
 
 const { Client } = pg;
 const projectId = 'dedlbzhpgkmetvhbkyzq'; // EHG_Engineer database
-const password = process.env.SUPABASE_DB_PASSWORD || 'Fl!M32DaM00n!1';
+const password = process.env.SUPABASE_DB_PASSWORD;
+if (!password) throw new Error('SUPABASE_DB_PASSWORD required');
 
 // Pooler connection (IPv4 compatible) - use aws-1 for EHG_Engineer
 const client = new Client({

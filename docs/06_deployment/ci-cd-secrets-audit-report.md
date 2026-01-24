@@ -61,8 +61,8 @@ NEXT_PUBLIC_SUPABASE_URL=https://dedlbzhpgkmetvhbkyzq.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci...[truncated]
 SUPABASE_URL=https://dedlbzhpgkmetvhbkyzq.supabase.co
 SUPABASE_ANON_KEY=eyJhbGci...[truncated]
-SUPABASE_DB_PASSWORD=Fl!M32DaM00n!1
-SUPABASE_POOLER_URL=postgresql://postgres.dedlbzhpgkmetvhbkyzq:Fl%21M32DaM00n%211@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+SUPABASE_DB_PASSWORD=[REDACTED - see .env]
+SUPABASE_POOLER_URL=postgresql://postgres.dedlbzhpgkmetvhbkyzq:[REDACTED]@aws-1-us-east-1.pooler.supabase.com:5432/postgres
 ```
 
 **Missing from .env**:

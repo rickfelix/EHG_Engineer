@@ -12,7 +12,8 @@ dotenv.config();
 
 // EHG_Engineer database
 const projectId = 'dedlbzhpgkmetvhbkyzq';
-const password = process.env.SUPABASE_DB_PASSWORD || 'Fl!M32DaM00n!1';
+const password = process.env.SUPABASE_DB_PASSWORD;
+if (!password) throw new Error('SUPABASE_DB_PASSWORD required');
 
 // Build connection URL and parse to config
 const connectionString = `postgresql://postgres.${projectId}:${encodeURIComponent(password)}@aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require`;

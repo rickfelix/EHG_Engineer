@@ -18,7 +18,8 @@ async function main() {
   // Use pg client for DDL operations
   const { Client } = await import('pg');
 
-  const password = 'Fl!M32DaM00n!1';
+  const password = process.env.SUPABASE_DB_PASSWORD;
+if (!password) throw new Error('SUPABASE_DB_PASSWORD required');
   // Using port 6543 (transaction pooler)
   const connectionString = `postgresql://postgres.dedlbzhpgkmetvhbkyzq:${encodeURIComponent(password)}@aws-1-us-east-1.pooler.supabase.com:6543/postgres`;
 

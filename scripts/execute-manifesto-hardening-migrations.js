@@ -16,7 +16,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Database connection - Supabase pooler
-const CONNECTION_STRING = 'postgresql://postgres.dedlbzhpgkmetvhbkyzq:Fl!M32DaM00n!1@aws-1-us-east-1.pooler.supabase.com:6543/postgres';
+const CONNECTION_STRING = 'postgresql://postgres.dedlbzhpgkmetvhbkyzq:${process.env.SUPABASE_DB_PASSWORD}@aws-1-us-east-1.pooler.supabase.com:6543/postgres';
 
 const MIGRATIONS = [
   {

@@ -17,7 +17,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const projectId = 'dedlbzhpgkmetvhbkyzq'; // EHG_Engineer database
-const password = process.env.SUPABASE_DB_PASSWORD || 'Fl!M32DaM00n!1';
+const password = process.env.SUPABASE_DB_PASSWORD;
+if (!password) throw new Error('SUPABASE_DB_PASSWORD required');
 
 async function migrateHandoffFiles() {
   const pool = new Pool({

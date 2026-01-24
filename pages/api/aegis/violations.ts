@@ -3,20 +3,19 @@
  * PUT /api/aegis/violations/:id/override (via query param)
  *
  * SD-AEGIS-GOVERNANCE-001: AEGIS Violations API
+ * SD-LEO-GEN-REMEDIATE-CRITICAL-SECURITY-001: Added authentication
  *
  * Retrieve and manage governance violations
+ *
+ * SECURITY: Requires authenticated user. Uses user-scoped Supabase client
+ * that respects RLS policies.
  */
 
-import { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@supabase/supabase-js';
+import { NextApiResponse } from 'next';
+import { withAuth, AuthenticatedRequest } from '../../../lib/middleware/api-auth';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-export default async function handler(
-  req: NextApiRequest,
+async function handler(
+  req: AuthenticatedRequest,
   res: NextApiResponse
 ) {
   if (req.method === 'GET') {
@@ -33,7 +32,9 @@ export default async function handler(
   });
 }
 
-async function handleGet(req: NextApiRequest, res: NextApiResponse) {
+async function handleGet(req: AuthenticatedRequest, res: NextApiResponse) {
+  const { supabase } = req;
+
   const {
     constitution,
     severity,
@@ -138,7 +139,8 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse) {
   }
 }
 
-async function handlePut(req: NextApiRequest, res: NextApiResponse) {
+async function handlePut(req: AuthenticatedRequest, res: NextApiResponse) {
+  const { supabase, user } = req;
   const { id } = req.query;
 
   if (!id || typeof id !== 'string') {
@@ -172,7 +174,8 @@ async function handlePut(req: NextApiRequest, res: NextApiResponse) {
 
     if (status) updateData.status = status;
     if (override_justification) updateData.override_justification = override_justification;
-    if (overridden_by) updateData.overridden_by = overridden_by;
+    // Use authenticated user ID if not provided
+    updateData.overridden_by = overridden_by || user.id;
 
     const { data, error } = await supabase
       .from('aegis_violations')
@@ -202,3 +205,6 @@ async function handlePut(req: NextApiRequest, res: NextApiResponse) {
     });
   }
 }
+
+// SECURITY: Wrap handler with authentication middleware
+export default withAuth(handler);

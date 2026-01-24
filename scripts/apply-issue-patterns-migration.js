@@ -18,7 +18,8 @@ async function applyMigration() {
 
   // Connect using pooler URL for compatibility (EHG_Engineer uses aws-1 region per CLAUDE.md)
   const projectId = 'dedlbzhpgkmetvhbkyzq'; // EHG_Engineer database
-  const password = process.env.SUPABASE_DB_PASSWORD || 'Fl!M32DaM00n!1';
+  const password = process.env.SUPABASE_DB_PASSWORD;
+if (!password) throw new Error('SUPABASE_DB_PASSWORD required');
 
   // Use environment variable first, fallback to constructed URL
   const connStr = process.env.SUPABASE_POOLER_URL ||

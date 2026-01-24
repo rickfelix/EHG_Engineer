@@ -15,7 +15,7 @@
 
 ### Option 2: Using psql (if you have IPv4 connectivity)
 ```bash
-export PGPASSWORD='Fl!M32DaM00n!1'
+export PGPASSWORD="$SUPABASE_DB_PASSWORD"
 psql "postgresql://postgres@db.dedlbzhpgkmetvhbkyzq.supabase.co:5432/postgres" -f database/migrations/008_ui_validation_schema.sql
 ```
 

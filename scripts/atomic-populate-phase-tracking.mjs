@@ -10,7 +10,7 @@ const client = new Client({
   port: 5432,
   database: 'postgres',
   user: 'postgres.dedlbzhpgkmetvhbkyzq',
-  password: process.env.SUPABASE_DB_PASSWORD || 'Fl!M32DaM00n!1',
+  password: process.env.SUPABASE_DB_PASSWORD // SECURITY: env var required,
   ssl: { rejectUnauthorized: false }
 });
 

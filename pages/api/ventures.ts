@@ -2,21 +2,20 @@
  * POST /api/ventures
  * SD-STAGE1-ENTRY-UX-001: Create venture with origin tracking
  * SD-IDEATION-GENESIS-AUDIT: Capture raw_chairman_intent at creation
+ * SD-LEO-GEN-REMEDIATE-CRITICAL-SECURITY-001: Added authentication
  *
  * Creates a new venture in Stage 1 with origin_type tracking
  * (manual, competitor_clone, or blueprint)
  *
  * Captures Chairman's original vision in raw_chairman_intent (immutable)
+ *
+ * SECURITY: Requires authenticated user. Uses user-scoped Supabase client
+ * that respects RLS policies.
  */
 
-import { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@supabase/supabase-js';
+import { NextApiResponse } from 'next';
 import { z } from 'zod';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { withAuth, AuthenticatedRequest } from '../../lib/middleware/api-auth';
 
 // Request body validation schema
 const CreateVentureSchema = z.object({
@@ -29,11 +28,13 @@ const CreateVentureSchema = z.object({
   blueprint_id: z.string().nullable().optional()
 });
 
-export default async function handler(
-  req: NextApiRequest,
+async function handler(
+  req: AuthenticatedRequest,
   res: NextApiResponse
 ) {
-  // GET: Fetch all ventures
+  const { user, supabase } = req;
+
+  // GET: Fetch all ventures (user's ventures via RLS)
   if (req.method === 'GET') {
     try {
       const { data: ventures, error } = await supabase
@@ -87,7 +88,9 @@ export default async function handler(
           stage: 1,
           origin_type,
           competitor_ref: competitor_ref || null,
-          blueprint_id: blueprint_id || null
+          blueprint_id: blueprint_id || null,
+          // SECURITY: Associate venture with authenticated user
+          user_id: user.id
         })
         .select()
         .single();
@@ -117,3 +120,6 @@ export default async function handler(
     allowed: ['GET', 'POST']
   });
 }
+
+// SECURITY: Wrap handler with authentication middleware
+export default withAuth(handler);
