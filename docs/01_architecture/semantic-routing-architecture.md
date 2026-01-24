@@ -706,6 +706,279 @@ OPENAI_API_KEY=sk-...
 
 ---
 
+## Integration with Claude Code Hooks
+
+**Status**: ✅ Integrated (2026-01-24)
+**Related SD**: SD-LEO-INFRA-INTEGRATE-SEMANTIC-ROUTER-001
+
+### Hook Implementation
+
+The semantic router is now integrated into Claude Code's execution lifecycle via **UserPromptSubmit hook**.
+
+**File**: `scripts/hooks/semantic-router-hook.js` (271 lines)
+
+**Integration Point**: `.claude/settings.json`
+
+```json
+"UserPromptSubmit": [
+  {
+    "hooks": [
+      {
+        "type": "command",
+        "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/semantic-router-hook.js",
+        "timeout": 1
+      },
+      // ... other hooks
+    ]
+  }
+]
+```
+
+### How It Works
+
+1. **User submits prompt** → Claude Code triggers UserPromptSubmit hooks
+2. **Hook receives stdin** → JSON payload: `{"prompt": "identify the root cause", "session_id": "..."}`
+3. **Hook reads prompt** → Asynchronous stdin reading with 'readable' event pattern
+4. **Generate embedding** → OpenAI API call (~100-200ms)
+5. **Query database** → Load 26 sub-agent embeddings (cached)
+6. **Calculate similarities** → Cosine similarity for all agents
+7. **Filter and rank** → Top 3 matches above 35% threshold
+8. **Output to stdout** → Format: `[SEMANTIC-ROUTE] Recommended sub-agents: RCA (41%), TESTING (38%)`
+9. **Claude receives context** → Hook output appears as system-reminder
+10. **Claude invokes agents** → Uses Task tool with recommended sub-agents
+
+### Hook Architecture
+
+```javascript
+// scripts/hooks/semantic-router-hook.js
+
+async function main() {
+  // 1. Read user prompt from stdin
+  const input = await readStdin();
+  if (!input?.prompt) return gracefulExit();
+
+  // 2. Route the prompt
+  const { matches, latencyMs } = await routePrompt(input.prompt);
+
+  // 3. Output recommendations
+  if (matches.length > 0) {
+    const formatted = matches.map(m => `${m.code} (${m.score}%)`).join(', ');
+    console.log(`[SEMANTIC-ROUTE] Recommended sub-agents: ${formatted}`);
+    console.error(`[DEBUG] Latency: ${latencyMs}ms`);
+  }
+
+  process.exit(0);
+}
+```
+
+### Stdin Reading Pattern (Critical)
+
+**Challenge**: Claude Code hooks receive buffered JSON via stdin, requiring synchronous-style read.
+
+**Solution**: Use 'readable' event with `process.stdin.read()` loop:
+
+```javascript
+async function readStdin() {
+  return new Promise((resolve) => {
+    let data = '';
+    let hasData = false;
+
+    process.stdin.setEncoding('utf8');
+
+    // CRITICAL: Use 'readable' event, not 'data'
+    process.stdin.on('readable', () => {
+      let chunk;
+      while ((chunk = process.stdin.read()) !== null) {
+        data += chunk;
+        hasData = true;
+      }
+    });
+
+    process.stdin.on('end', () => {
+      if (hasData && data.trim()) {
+        try {
+          resolve(JSON.parse(data));
+        } catch {
+          resolve(null);
+        }
+      } else {
+        resolve(null);
+      }
+    });
+
+    // Handle TTY mode (no stdin)
+    if (process.stdin.isTTY) {
+      resolve(null);
+    }
+  });
+}
+```
+
+**Why This Pattern?**:
+- Simple `data`/`end` events returned `null` (buffered JSON not captured)
+- `readable` event with `read()` loop handles buffered input correctly
+- Gracefully handles TTY mode (direct terminal execution)
+
+### Configuration
+
+**Environment Variables**:
+
+```bash
+# .env
+OPENAI_API_KEY=sk-...                      # Required
+SUPABASE_URL=https://...                    # Required
+SUPABASE_SERVICE_ROLE_KEY=...              # Required
+
+# Optional Configuration
+SEMANTIC_ROUTER_ENABLED=true               # Enable/disable hook
+SEMANTIC_ROUTER_TIMEOUT_MS=500             # Max execution time
+SEMANTIC_ROUTER_THRESHOLD=0.35             # Minimum similarity (35%)
+SEMANTIC_ROUTER_TOP_K=3                    # Max recommendations
+SEMANTIC_ROUTER_DEBUG=false                # Enable debug logging
+```
+
+**Defaults** (if env vars not set):
+- Enabled: `true`
+- Timeout: 500ms
+- Threshold: 35%
+- Top K: 3
+- Debug: false
+
+### Performance
+
+| Metric | Target | Actual |
+|--------|--------|--------|
+| Latency (cold) | <500ms | ~300ms ✅ |
+| Latency (warm) | <200ms | ~150ms ✅ |
+| Hook timeout | 1000ms | No timeouts ✅ |
+| OpenAI API call | ~200ms | ~150ms ✅ |
+| Database query | <50ms | ~20ms ✅ |
+| Similarity calc | <10ms | ~5ms ✅ |
+
+**Bottleneck**: OpenAI API call (~150ms)
+**Optimization**: Agent embeddings cached (saves ~20ms on DB query)
+
+### Error Handling
+
+**Graceful Fallback** (no user disruption):
+
+```javascript
+try {
+  const matches = await routePrompt(prompt);
+  outputRecommendations(matches);
+} catch (error) {
+  // Log error but don't block Claude Code
+  console.error(`[ERROR] Semantic routing failed: ${error.message}`);
+  process.exit(0);  // Exit cleanly (fallback to keyword matching)
+}
+```
+
+**Error Scenarios**:
+1. **OpenAI API down** → Hook exits cleanly, keyword matching continues
+2. **Database connection fails** → Hook exits cleanly
+3. **Invalid stdin JSON** → Hook exits cleanly
+4. **Timeout (>500ms)** → Circuit breaker kills hook, keyword matching continues
+
+**User Impact**: None (transparent fallback to keyword-based triggers)
+
+### Testing
+
+**Test Command**:
+```bash
+# Manual test with simulated stdin
+echo '{"prompt":"identify the root cause","session_id":"test"}' | \
+  node scripts/hooks/semantic-router-hook.js
+
+# Expected output:
+# [SEMANTIC-ROUTE] Recommended sub-agents: RCA (41%)
+```
+
+**Debug Mode**:
+```bash
+SEMANTIC_ROUTER_DEBUG=true node scripts/hooks/semantic-router-hook.js
+```
+
+**Test Results** (2026-01-24):
+```
+Query: "identify the root cause"
+Output: [SEMANTIC-ROUTE] Recommended sub-agents: RCA (41%)
+Latency: 287ms
+Status: ✅ PASS
+```
+
+### Example User Interaction
+
+**Before Integration** (keyword-only):
+```
+User: "identify the root cause of this bug"
+Claude: [No sub-agent triggered - keywords 'root cause' not exact match]
+Claude: Let me investigate manually...
+```
+
+**After Integration** (semantic routing):
+```
+User: "identify the root cause of this bug"
+[Hook executes in background]
+[SEMANTIC-ROUTE] Recommended sub-agents: RCA (41%)
+Claude: [Sees recommendation in context]
+Claude: I'll invoke the RCA sub-agent to systematically investigate...
+[Invokes Task tool with subagent_type="RCA"]
+```
+
+### Integration Benefits
+
+1. **Natural Language Understanding**: Conversational queries now route correctly
+2. **Reduced Missed Matches**: 77% routing accuracy (vs ~50% keyword-only)
+3. **Transparent**: Fallback to keywords if semantic fails
+4. **Fast**: <300ms latency (imperceptible to users)
+5. **Safe**: Graceful error handling, no session disruption
+6. **Configurable**: Environment variables for tuning
+
+### Maintenance
+
+**Update Sub-Agent Domains**:
+```bash
+# 1. Edit domains in scripts/generate-subagent-embeddings.js
+# 2. Regenerate embeddings
+node scripts/generate-subagent-embeddings.js
+
+# 3. Test routing with new domains
+node lib/semantic-agent-router.js "test query here"
+```
+
+**Adjust Thresholds**:
+```bash
+# .env
+SEMANTIC_ROUTER_THRESHOLD=0.40  # Raise for stricter matching
+SEMANTIC_ROUTER_TOP_K=5         # Show more recommendations
+```
+
+**Monitor Performance**:
+```bash
+# Enable debug logging
+SEMANTIC_ROUTER_DEBUG=true
+
+# Check latency in stderr output
+# [DEBUG] Latency: XXXms
+```
+
+### Known Limitations
+
+1. **OpenAI Dependency**: Requires API access (fails gracefully if unavailable)
+2. **Cold Start Latency**: First query ~300ms (acceptable, under 500ms target)
+3. **Ambiguous Queries**: Very short queries (<3 words) may not match
+4. **Cost**: ~$0.000002 per query (negligible: ~$0.06/month for 1000 queries/day)
+
+### Future Enhancements
+
+1. **Local Embeddings**: Use open-source models (Sentence Transformers) to eliminate OpenAI dependency
+2. **Query Caching**: Cache query embeddings for repeated queries
+3. **Feedback Loop**: Track which recommendations Claude actually uses, improve matching
+4. **Hybrid Refinement**: Combine semantic + keyword scores (not just fallback)
+
+---
+
 **Status**: ✅ Active (Deployed 2026-01-23)
+**Integration**: ✅ Complete (Deployed 2026-01-24)
 **Maintainer**: LEO Protocol Infrastructure Team
 **Next Review**: 2026-02-23 (1 month)
