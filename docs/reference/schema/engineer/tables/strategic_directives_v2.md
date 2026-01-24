@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-24T11:12:37.094Z
-**Rows**: 606
+**Generated**: 2026-01-24T11:45:47.586Z
+**Rows**: 609
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (78 total)
+## Columns (79 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -100,6 +100,7 @@ Use the id column instead - it is the canonical identifier. |
 | human_verification_status | `text` | YES | `'not_required'::text` | Status of human-verifiable outcome validation: not_required, pending, in_progress, passed, failed |
 | llm_ux_score | `integer(32)` | YES | - | LLM UX Oracle average score for this SD (0-100). NULL if not evaluated. |
 | target_release_id | `uuid` | YES | - | - |
+| sd_code_user_facing | `character varying(100)` | **NO** | - | - |
 
 ## Constraints
 
@@ -112,6 +113,7 @@ Use the id column instead - it is the canonical identifier. |
 
 ### Unique Constraints
 - `strategic_directives_v2_legacy_id_unique`: UNIQUE (legacy_id)
+- `strategic_directives_v2_sd_code_user_facing_key`: UNIQUE (sd_code_user_facing)
 - `strategic_directives_v2_sd_key_key`: UNIQUE (sd_key)
 - `strategic_directives_v2_sd_key_unique`: UNIQUE (sd_key)
 
@@ -140,6 +142,10 @@ Use the id column instead - it is the canonical identifier. |
 - `idx_sd_archived_at`
   ```sql
   CREATE INDEX idx_sd_archived_at ON public.strategic_directives_v2 USING btree (archived_at)
+  ```
+- `idx_sd_code_user_facing`
+  ```sql
+  CREATE INDEX idx_sd_code_user_facing ON public.strategic_directives_v2 USING btree (sd_code_user_facing)
   ```
 - `idx_sd_is_active`
   ```sql
@@ -252,6 +258,10 @@ Use the id column instead - it is the canonical identifier. |
 - `strategic_directives_v2_pkey`
   ```sql
   CREATE UNIQUE INDEX strategic_directives_v2_pkey ON public.strategic_directives_v2 USING btree (id)
+  ```
+- `strategic_directives_v2_sd_code_user_facing_key`
+  ```sql
+  CREATE UNIQUE INDEX strategic_directives_v2_sd_code_user_facing_key ON public.strategic_directives_v2 USING btree (sd_code_user_facing)
   ```
 - `strategic_directives_v2_sd_key_key`
   ```sql
@@ -492,6 +502,16 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION prevent_child_exec_before_parent_approval()`
+
+### trg_sync_sd_code_user_facing
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION sync_sd_code_user_facing()`
+
+### trg_sync_sd_code_user_facing
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION sync_sd_code_user_facing()`
 
 ### trigger_warn_sd_kr_alignment
 
