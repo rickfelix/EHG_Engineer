@@ -93,7 +93,7 @@ async function main() {
   }
 
   console.log(`   ✅ Found: ${sd.title}`);
-  console.log(`   Type: ${sd.sd_type || sd.category || 'feature'}\n`);
+  console.log(`   Type: ${sd.sd_type || 'feature'}\n`);
 
   // Step 2: Find PRD
   console.log('📄 Step 2: Finding PRD...');
@@ -193,7 +193,7 @@ async function main() {
   }
 
   // SECURITY Analysis (conditional)
-  const sdType = sd.sd_type || sd.category || 'feature';
+  const sdType = sd.sd_type || 'feature';
   const needsSecurity = sdType === 'security' ||
                        sd.scope?.toLowerCase().includes('auth') ||
                        sd.description?.toLowerCase().includes('permission');
@@ -408,7 +408,7 @@ function buildUserPrompt(sd, context) {
   sections.push(`## STRATEGIC DIRECTIVE
 **ID**: ${sd.id}
 **Title**: ${sd.title}
-**Type**: ${sd.sd_type || sd.category || 'feature'}
+**Type**: ${sd.sd_type || 'feature'}
 **Scope**: ${sd.scope || 'N/A'}
 **Description**: ${sd.description || 'N/A'}
 

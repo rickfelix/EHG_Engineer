@@ -74,7 +74,7 @@ export function createDesignDatabaseGate(supabase) {
  */
 export function shouldValidateDesignDatabase(sd) {
   // Sync check for getRequiredGates - async loading happens at runtime in createDesignDatabaseGate
-  const sdType = (sd.sd_type || sd.category || 'feature').toLowerCase();
+  const sdType = (sd.sd_type || 'feature').toLowerCase();
   const skipTypes = ['bugfix', 'fix', 'hotfix', 'documentation', 'docs', 'process'];
   return !skipTypes.includes(sdType);
 }

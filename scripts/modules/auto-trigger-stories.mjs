@@ -209,7 +209,7 @@ Each story in the array must have:
 5. Implementation context must include enough detail for a developer to start work
 `;
 
-  const sdType = sd.sd_type || sd.category || 'feature';
+  const sdType = sd.sd_type || 'feature';
 
   const userPrompt = `Generate user stories for the following Strategic Directive and PRD:
 
@@ -320,7 +320,7 @@ async function buildGenerationContext(supabase, sd, prd) {
   sections.push(`## STRATEGIC DIRECTIVE
 - **ID:** ${sd.id}
 - **Title:** ${sd.title}
-- **Type:** ${sd.sd_type || sd.category || 'feature'}
+- **Type:** ${sd.sd_type || 'feature'}
 - **Description:** ${sd.description || 'Not provided'}
 - **Success Criteria:** ${sd.success_criteria || 'Not provided'}
 - **Risk Level:** ${sd.risk_level || 'medium'}`);
@@ -372,7 +372,7 @@ ${exploration}`);
   }
 
   // 6. Schema Context (for database SDs)
-  if ((sd.sd_type || sd.category) === 'database' && prd.metadata?.schema) {
+  if (sd.sd_type === 'database' && prd.metadata?.schema) {
     sections.push(`## DATABASE SCHEMA
 ${typeof prd.metadata.schema === 'string' ? prd.metadata.schema : JSON.stringify(prd.metadata.schema, null, 2)}`);
   }
@@ -411,8 +411,8 @@ async function getSDType(supabase, sdId) {
   try {
     const { data: sd, error } = await supabase
       .from('strategic_directives_v2')
-      .select('sd_type, category')
-      .eq('legacy_id', sdId)
+      .select('sd_type')
+      .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
       .single();
 
     if (error || !sd) {
@@ -421,7 +421,7 @@ async function getSDType(supabase, sdId) {
     }
 
     // sd_type takes precedence over category
-    return sd.sd_type || sd.category || 'feature';
+    return sd.sd_type || 'feature';
   } catch (err) {
     console.log(`   ⚠️  SD type lookup error: ${err.message}, defaulting to 'feature'`);
     return 'feature';

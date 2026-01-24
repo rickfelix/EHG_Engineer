@@ -118,7 +118,7 @@ export class PlanToExecExecutor extends BaseExecutor {
       gates.push(createDesignDatabaseGate(this.supabase));
     } else {
       console.log('\n   ℹ️  GATE1_DESIGN_DATABASE skipped: SD type does not require DESIGN/DATABASE sub-agents');
-      console.log(`      SD Type: ${sd.sd_type || sd.category || 'unknown'}`);
+      console.log(`      SD Type: ${sd.sd_type || 'unknown'}`);
     }
 
     // Exploration Audit (non-blocking)

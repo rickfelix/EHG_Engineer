@@ -24,11 +24,11 @@ export async function verifySDCompletion(sdId) {
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
 
-  // Get SD details (supports UUID, legacy_id, and sd_key)
+  // Get SD details (supports UUID and sd_key)
   const { data: sd, error: sdError } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, sd_key, title, status, current_phase, sd_type, intensity_level, category')
-    .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+    .select('id, sd_key, title, status, current_phase, sd_type, intensity_level, category')
+    .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
     .single();
 
   if (sdError || !sd) {
@@ -36,7 +36,7 @@ export async function verifySDCompletion(sdId) {
   }
 
   // Get workflow requirements for this SD type
-  const workflowInfo = await getSDWorkflow(sd.sd_key || sd.legacy_id || sd.id);
+  const workflowInfo = await getSDWorkflow(sd.sd_key || sd.id);
   const requiredHandoffs = workflowInfo.workflow?.required || [];
 
   // Get existing handoffs for this SD
@@ -85,7 +85,7 @@ export async function getPendingApprovalSDs() {
 
   const { data: sds, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, title, status, current_phase, sd_type, updated_at')
+    .select('id, sd_key, title, status, current_phase, sd_type, updated_at')
     .eq('status', 'pending_approval')
     .eq('is_active', true)
     .order('updated_at', { ascending: true });
@@ -124,11 +124,11 @@ export function displayPendingSDs(result) {
 
   for (const sd of result.sds) {
     const hoursPending = Math.round((Date.now() - new Date(sd.updated_at).getTime()) / (1000 * 60 * 60));
-    console.log(`   ${sd.legacy_id || sd.id}`);
+    console.log(`   ${sd.sd_key || sd.id}`);
     console.log(`      Title: ${sd.title}`);
     console.log(`      Type: ${sd.sd_type || 'unknown'}`);
     console.log(`      Pending: ${hoursPending} hours`);
-    console.log(`      Action: node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${sd.legacy_id || sd.id}`);
+    console.log(`      Action: node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${sd.sd_key || sd.id}`);
     console.log('');
   }
 
@@ -156,7 +156,7 @@ export function displayCompletionVerification(result) {
 
   const { sd, isComplete, status, requiredHandoffs, existingHandoffs, missingHandoffs, hasFinalApproval } = result;
 
-  console.log(`   SD: ${sd.legacy_id || sd.id}`);
+  console.log(`   SD: ${sd.sd_key || sd.id}`);
   console.log(`   Title: ${sd.title}`);
   console.log(`   Status: ${status.toUpperCase()}`);
   console.log('');
@@ -204,11 +204,11 @@ export function displayCompletionVerification(result) {
     if (!hasFinalApproval) {
       console.log('');
       console.log('   -> NEXT ACTION: Run LEAD-FINAL-APPROVAL');
-      console.log(`      node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${sd.legacy_id || sd.id}`);
+      console.log(`      node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${sd.sd_key || sd.id}`);
     } else if (missingHandoffs.length > 0) {
       console.log('');
       console.log(`   -> NEXT ACTION: Run ${missingHandoffs[0]}`);
-      console.log(`      node scripts/handoff.js execute ${missingHandoffs[0]} ${sd.legacy_id || sd.id}`);
+      console.log(`      node scripts/handoff.js execute ${missingHandoffs[0]} ${sd.sd_key || sd.id}`);
     }
   }
   console.log('='.repeat(60));

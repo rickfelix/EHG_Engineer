@@ -131,7 +131,7 @@ export class PlanToLeadExecutor extends BaseExecutor {
       // SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-E: Parent orchestrator completion
       // When all children complete, parent gets finalization commands
       const { getParentFinalizationCommands } = await import('./state-transitions.js');
-      const parentCommands = getParentFinalizationCommands({ sd_key: sd.sd_key || sd.legacy_id });
+      const parentCommands = getParentFinalizationCommands({ sd_key: sd.sd_key || sd.id });
 
       return {
         success: true,

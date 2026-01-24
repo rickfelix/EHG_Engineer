@@ -174,7 +174,7 @@ export async function generatePRDContentWithLLM(sd, context = {}) {
   }
 
   const openai = new OpenAI({ apiKey: openaiKey });
-  const sdType = sd.sd_type || sd.category || 'feature';
+  const sdType = sd.sd_type || 'feature';
 
   console.log('   🤖 Generating PRD content with GPT...');
   console.log(`   📋 SD Type: ${sdType}`);
