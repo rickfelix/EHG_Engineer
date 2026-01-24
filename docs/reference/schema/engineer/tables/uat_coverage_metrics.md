@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-23T20:53:11.137Z
+**Generated**: 2026-01-24T02:31:56.951Z
 **Rows**: 0
-**RLS**: Disabled
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -64,6 +64,14 @@
   ```sql
   CREATE UNIQUE INDEX uat_coverage_metrics_pkey ON public.uat_coverage_metrics USING btree (id)
   ```
+
+## RLS Policies
+
+### 1. service_role_all_uat_coverage_metrics (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 

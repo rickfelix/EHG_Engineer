@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-23T20:53:11.137Z
+**Generated**: 2026-01-24T02:31:56.951Z
 **Rows**: 0
-**RLS**: Disabled
+**RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -60,6 +60,14 @@
   ```sql
   CREATE INDEX idx_db_agent_invocations_intent ON public.db_agent_invocations USING btree (intent)
   ```
+
+## RLS Policies
+
+### 1. service_role_all_db_agent_invocations (ALL)
+
+- **Roles**: {service_role}
+- **Using**: `true`
+- **With Check**: `true`
 
 ---
 
