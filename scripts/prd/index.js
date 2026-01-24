@@ -161,7 +161,7 @@ async function fetchSDData(supabase, sdId) {
 
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, scope, description, strategic_objectives, title, sd_type, category, metadata, target_application, priority, status, rationale, success_criteria, key_changes, dependencies, risks, strategic_intent, success_metrics')
+    .select('id, legacy_id, scope, description, strategic_objectives, title, sd_type, category, metadata, target_application, priority, status, rationale, success_criteria, key_changes, dependencies, risks, strategic_intent, success_metrics, governance_metadata')
     .eq(queryField, sdId)
     .single();
 
@@ -172,14 +172,37 @@ async function fetchSDData(supabase, sdId) {
 }
 
 /**
+ * Check if SD type is locked (should not be auto-corrected)
+ * SD-LEO-INFRA-RENAME-COLUMNS-SELF-001
+ */
+function isTypeLocked(sdData) {
+  const govMeta = sdData.governance_metadata;
+  if (!govMeta) return false;
+  if (govMeta.type_locked === true) return true;
+  if (govMeta.automation_context?.bypass_governance === true) return true;
+  return false;
+}
+
+/**
  * Handle SD type detection and auto-update
+ * SD-LEO-INFRA-RENAME-COLUMNS-SELF-001: Respect type_locked flag
  */
 async function handleSDTypeDetection(supabase, sdId, sdData) {
   const typeDetection = autoDetectSdType(sdData);
   const currentSdType = sdData.sd_type || 'feature';
+  const typeLocked = isTypeLocked(sdData);
 
   console.log(`   SD Type (current): ${currentSdType}`);
   console.log(`   SD Type (detected): ${typeDetection.sd_type} (${typeDetection.confidence}% confidence)`);
+
+  // If type is locked, skip auto-correction entirely
+  if (typeLocked) {
+    console.log('   🔒 Type is LOCKED - auto-correction disabled');
+    if (typeDetection.detected && typeDetection.sd_type !== currentSdType) {
+      console.log(`   ℹ️  Mismatch detected but respecting locked type: ${currentSdType}`);
+    }
+    return; // Skip all auto-correction logic
+  }
 
   if (typeDetection.detected && typeDetection.sd_type !== currentSdType && typeDetection.confidence >= 70) {
     console.log('\n   SD TYPE MISMATCH DETECTED');
