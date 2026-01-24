@@ -227,36 +227,82 @@ export class SDNextSelector {
   async displayTracks() {
     const tracks = { A: [], B: [], C: [], STANDALONE: [] };
 
+    // SINGLE SOURCE OF TRUTH: Query all active SDs directly from strategic_directives_v2
+    // This ensures SDs appear even if baseline sync trigger failed (SD-LEO-INFRA-QUEUE-SIMPLIFY-001)
+    const { data: allSDs, error: sdError } = await this.supabase
+      .from('strategic_directives_v2')
+      .select('id, legacy_id, title, status, current_phase, progress_percentage, is_working_on, dependencies, is_active, parent_sd_id, category, metadata')
+      .eq('is_active', true)
+      .in('status', ['draft', 'active', 'in_progress', 'planning'])
+      .order('created_at', { ascending: true });
+
+    if (sdError || !allSDs) {
+      console.log(`${colors.red}Error loading SDs: ${sdError?.message}${colors.reset}`);
+      return;
+    }
+
+    // Create baseline lookup map for ordering and track assignment
+    const baselineMap = new Map();
     for (const item of this.baselineItems) {
-      const trackKey = item.track || 'STANDALONE';
-      if (tracks[trackKey]) {
-        const { data: sd } = await this.supabase
-          .from('strategic_directives_v2')
-          .select('id, legacy_id, title, status, current_phase, progress_percentage, is_working_on, dependencies, is_active, parent_sd_id')
-          .eq('legacy_id', item.sd_id)
-          .single();
+      baselineMap.set(item.sd_id, item);
+    }
 
-        if (sd && sd.is_active && sd.status !== 'completed' && sd.status !== 'cancelled') {
-          const depsResolved = await checkDependenciesResolved(this.supabase, sd.dependencies);
+    // Process each SD
+    for (const sd of allSDs) {
+      if (sd.status === 'completed' || sd.status === 'cancelled') continue;
 
-          let childDepStatus = null;
-          if (sd.parent_sd_id) {
-            try {
-              childDepStatus = await checkDependencyStatus(sd.legacy_id || sd.id);
-            } catch {
-              // Silently ignore errors
-            }
-          }
+      // Look up baseline item by legacy_id or id
+      const baselineItem = baselineMap.get(sd.legacy_id) || baselineMap.get(sd.id);
 
-          tracks[trackKey].push({
-            ...item,
-            ...sd,
-            deps_resolved: depsResolved,
-            childDepStatus,
-            actual: this.actuals[item.sd_id]
-          });
+      // Derive track: baseline > metadata > category > STANDALONE
+      let trackKey;
+      if (baselineItem?.track) {
+        trackKey = baselineItem.track;
+      } else if (sd.metadata?.execution_track) {
+        const track = sd.metadata.execution_track;
+        trackKey = track === 'Infrastructure' || track === 'Safety' ? 'A' :
+                   track === 'Feature' ? 'B' :
+                   track === 'Quality' ? 'C' : 'STANDALONE';
+      } else if (sd.category) {
+        const cat = sd.category.toLowerCase();
+        trackKey = cat === 'infrastructure' || cat === 'platform' ? 'A' :
+                   cat === 'quality' || cat === 'testing' || cat === 'qa' ? 'C' : 'B';
+      } else {
+        trackKey = 'STANDALONE';
+      }
+
+      // Log warning if SD not in baseline (helps detect sync failures)
+      if (!baselineItem && sd.status !== 'draft') {
+        console.log(`${colors.yellow}⚠️  SD ${sd.legacy_id || sd.id} not in baseline - using category-based track${colors.reset}`);
+      }
+
+      if (!tracks[trackKey]) trackKey = 'STANDALONE';
+
+      const depsResolved = await checkDependenciesResolved(this.supabase, sd.dependencies);
+
+      let childDepStatus = null;
+      if (sd.parent_sd_id) {
+        try {
+          childDepStatus = await checkDependencyStatus(sd.legacy_id || sd.id);
+        } catch {
+          // Silently ignore errors
         }
       }
+
+      tracks[trackKey].push({
+        ...(baselineItem || {}),
+        ...sd,
+        sd_id: sd.legacy_id || sd.id,
+        sequence_rank: baselineItem?.sequence_rank || 9999,
+        deps_resolved: depsResolved,
+        childDepStatus,
+        actual: this.actuals[sd.legacy_id] || this.actuals[sd.id]
+      });
+    }
+
+    // Sort each track by sequence_rank
+    for (const trackKey of Object.keys(tracks)) {
+      tracks[trackKey].sort((a, b) => (a.sequence_rank || 9999) - (b.sequence_rank || 9999));
     }
 
     const sessionContext = this.getSessionContext();
