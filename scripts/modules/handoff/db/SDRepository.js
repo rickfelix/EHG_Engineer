@@ -6,7 +6,9 @@
  * Eliminates 10+ duplicate query patterns from unified-handoff-system.js
  *
  * SD-LEO-ID-NORMALIZE-001: Uses SD ID normalizer to prevent silent update failures
- * caused by ID format mismatches (UUID vs sd_key vs legacy_id).
+ * caused by ID format mismatches (UUID vs sd_key).
+ *
+ * SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id references (column dropped 2026-01-24)
  */
 
 import { normalizeSDId, normalizeSDIdWithDetails } from '../../sd-id-normalizer.js';
@@ -23,9 +25,9 @@ export class SDRepository {
 
   /**
    * Get Strategic Directive by ID
-   * SD-VENTURE-STAGE0-UI-001: Support UUID, legacy_id, and sd_key lookups
+   * SD-VENTURE-STAGE0-UI-001: Support UUID and sd_key lookups
    *
-   * @param {string} sdId - Strategic Directive ID (UUID, legacy_id, or sd_key)
+   * @param {string} sdId - Strategic Directive ID (UUID or sd_key)
    * @param {string} columns - Columns to select (default: '*')
    * @returns {Promise<object>} SD record
    * @throws {Error} If SD not found
@@ -35,7 +37,7 @@ export class SDRepository {
     const cached = this._getFromCache(cacheKey);
     if (cached) return cached;
 
-    // SD-VENTURE-STAGE0-UI-001: Check if sdId is UUID or legacy_id/sd_key
+    // SD-VENTURE-STAGE0-UI-001: Check if sdId is UUID or sd_key
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
 
     let sd, error;
@@ -48,11 +50,11 @@ export class SDRepository {
       sd = result.data;
       error = result.error;
     } else {
-      // Try id, legacy_id, or sd_key (SD-LEO-ID-NORMALIZE-001: support all ID formats)
+      // Try id or sd_key (SD-LEO-ID-NORMALIZE-001: support all ID formats)
       const result = await this.supabase
         .from('strategic_directives_v2')
         .select(columns)
-        .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+        .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
         .single();
       sd = result.data;
       error = result.error;
@@ -70,16 +72,16 @@ export class SDRepository {
    * Verify SD exists in database (blocking gate)
    * Used to prevent work on non-existent SDs (SD-TEST-MOCK-001 prevention)
    *
-   * SD-VENTURE-STAGE0-UI-001: Support UUID, legacy_id, and sd_key lookups
+   * SD-VENTURE-STAGE0-UI-001: Support UUID and sd_key lookups
    *
-   * @param {string} sdId - Strategic Directive ID (UUID, legacy_id, or sd_key)
+   * @param {string} sdId - Strategic Directive ID (UUID or sd_key)
    * @returns {Promise<object>} SD record with basic info
    * @throws {Error} With detailed remediation if SD not found
    */
   async verifyExists(sdId) {
     console.log(`🔍 Verifying SD exists in database: ${sdId}`);
 
-    // SD-VENTURE-STAGE0-UI-001: Try UUID first, then legacy_id/sd_key
+    // SD-VENTURE-STAGE0-UI-001: Try UUID first, then sd_key
     let sd = null;
     let error = null;
 
@@ -90,17 +92,17 @@ export class SDRepository {
       // Query by UUID id field
       const result = await this.supabase
         .from('strategic_directives_v2')
-        .select('id, legacy_id, sd_key, title, status, category, sd_type, intensity_level')
+        .select('id, sd_key, title, status, category, sd_type, intensity_level')
         .eq('id', sdId)
         .single();
       sd = result.data;
       error = result.error;
     } else {
-      // Query by id, legacy_id, or sd_key (SD-LEO-ID-NORMALIZE-001: support all ID formats)
+      // Query by id or sd_key (SD-LEO-ID-NORMALIZE-001: support all ID formats)
       const result = await this.supabase
         .from('strategic_directives_v2')
-        .select('id, legacy_id, sd_key, title, status, category, sd_type, intensity_level')
-        .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+        .select('id, sd_key, title, status, category, sd_type, intensity_level')
+        .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
         .single();
       sd = result.data;
       error = result.error;
@@ -147,7 +149,7 @@ export class SDRepository {
    * SD-LEO-ID-NORMALIZE-001: This method now normalizes the SD ID before update
    * to prevent silent failures when the input format doesn't match the DB id column.
    *
-   * @param {string} sdId - Strategic Directive ID (any format: uuid, legacy_id, sd_key)
+   * @param {string} sdId - Strategic Directive ID (any format: uuid or sd_key)
    * @param {string} status - New status
    * @param {string} phase - New phase (optional)
    * @param {object} metadata - Additional fields to update

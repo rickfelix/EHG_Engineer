@@ -52,7 +52,8 @@ export async function validateBMADForPlanToExec(sd_id, supabase) {
     // ================================================
     // 1. FETCH SD AND USER STORIES
     // ================================================
-    // SD ID Schema Fix: Handle UUID, legacy_id, and sd_key
+    // SD ID Schema Fix: Handle UUID and sd_key
+    // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sd_id);
 
     let sd, sdError;
@@ -65,11 +66,11 @@ export async function validateBMADForPlanToExec(sd_id, supabase) {
       sd = result.data;
       sdError = result.error;
     } else {
-      // SD-LEO-ID-NORMALIZE-001: Support id, legacy_id, and sd_key lookup
+      // SD-LEO-ID-NORMALIZE-001: Support id and sd_key lookup
       const result = await supabase
         .from('strategic_directives_v2')
         .select('id, title, checkpoint_plan')
-        .or(`id.eq.${sd_id},legacy_id.eq.${sd_id},sd_key.eq.${sd_id}`)
+        .or(`id.eq.${sd_id},sd_key.eq.${sd_id}`)
         .single();
       sd = result.data;
       sdError = result.error;

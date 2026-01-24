@@ -75,7 +75,7 @@ export class LeadToPlanVerifier {
       const { data: sd, error: sdError } = await this.supabase
         .from('strategic_directives_v2')
         .select('*')
-        .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+        .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
         .single();
 
       if (sdError || !sd) {

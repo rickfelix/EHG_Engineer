@@ -303,8 +303,8 @@ export class BaseExecutor {
       if (!session) {
         console.log('   [Claim] No session available - skipping auto-claim');
       } else {
-        // Determine which ID to use for claiming (legacy_id or id)
-        const claimId = sd.legacy_id || sdId;
+        // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Use sd_key or id for claiming (legacy_id removed 2026-01-24)
+        const claimId = sd.sd_key || sdId;
 
         // Check if already claimed by this session
         const claimStatus = await conflictChecker.isSDClaimed(claimId, session.session_id);
@@ -436,7 +436,7 @@ export class BaseExecutor {
       const fromPhase = this._getSourcePhaseFromHandoff();
 
       const result = await orchestrator.handlePhaseTransition({
-        sdId: sd.legacy_id || sdId,
+        sdId: sd.sd_key || sdId,
         fromPhase,
         toPhase: targetPhase,
         handoffType: this.handoffType

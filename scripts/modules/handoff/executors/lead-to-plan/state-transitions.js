@@ -18,9 +18,9 @@ export async function transitionSdToPlan(sdId, sd, supabase) {
   console.log('-'.repeat(50));
 
   try {
-    // Determine the correct SD ID field (UUID vs legacy_id)
+    // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Query by id or sd_key (legacy_id removed 2026-01-24)
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
-    const queryField = isUUID ? 'id' : 'legacy_id';
+    const queryField = isUUID ? 'id' : 'sd_key';
 
     const { error } = await supabase
       .from('strategic_directives_v2')

@@ -302,7 +302,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         console.log('\n🔒 GATE 4: PR Merge Verification');
         console.log('-'.repeat(50));
 
-        const sdId = ctx.sd.legacy_id || ctx.sd.id;
+        const sdId = ctx.sd.sd_key || ctx.sd.id;
 
         // Build expected branch name pattern for this SD
         // Branches follow pattern: feat/SD-XXX-*, fix/SD-XXX-*, etc.
@@ -526,7 +526,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     const handoffId = `LEAD-FINAL-${sdId}-${Date.now()}`;
 
     console.log('\n🎉 SD COMPLETION: Final approval granted');
-    console.log(`   SD ID: ${sd.legacy_id || sdId}`);
+    console.log(`   SD ID: ${sd.sd_key || sdId}`);
     console.log(`   Title: ${sd.title}`);
     console.log(`   Handoff ID: ${handoffId}`);
 
@@ -542,7 +542,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       const repoPath = this.determineTargetRepository(sd);
 
       shippingResults = await runFinalApprovalShipping(
-        sd.legacy_id || sdId,
+        sd.sd_key || sdId,
         repoPath
       );
 
@@ -775,7 +775,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
 
       console.log('\n   📚 Resolving /learn items...');
 
-      const sdId = sd.legacy_id || sd.id;
+      const sdId = sd.sd_key || sd.id;
       const now = new Date().toISOString();
 
       // Resolve assigned patterns
@@ -852,7 +852,7 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         return;
       }
 
-      const claimId = sd.legacy_id || sd.id;
+      const claimId = sd.sd_key || sd.id;
 
       // Check if this session has the claim
       if (session.sd_id === claimId) {
