@@ -1,6 +1,6 @@
 # Strategic Directives v2 - Field Reference Guide
 
-**Last Updated**: 2025-10-13
+**Last Updated**: 2026-01-24
 **Database**: EHG_Engineer (dedlbzhpgkmetvhbkyzq)
 **Table**: `strategic_directives_v2`
 
@@ -37,8 +37,50 @@
 | `title` | VARCHAR(500) | Brief descriptive title (max 500 chars) |
 | `version` | VARCHAR(20) | Semantic version (e.g., 1.0, 1.1, 2.0). Default: 1.0 |
 | `status` | VARCHAR(50) | Workflow state: draft, pending_approval, active, in_progress, completed, archived, deferred |
-| `category` | VARCHAR(50) | Classification: infrastructure, feature, enhancement, fix, documentation |
+| `sd_type` | VARCHAR(50) | **CANONICAL** - SD type for validation gates: feature, infrastructure, enhancement, bugfix, documentation, refactor, database, security, orchestrator, performance, library, fix |
+| `category` | VARCHAR(50) | **DISPLAY ONLY** - Legacy classification for UI display. Use `sd_type` for logic |
 | `priority` | VARCHAR(20) | `critical`, `high`, `medium`, `low` (lowercase, see Priority Levels section) |
+
+---
+
+## 🎯 SD Type Classification (CANONICAL)
+
+The `sd_type` field is the **canonical source of truth** for SD type classification, used by:
+- Handoff validation gates (determines which gates apply)
+- Sub-agent routing (e.g., DESIGN/DATABASE gates only for feature/database types)
+- Workflow selection (infrastructure SDs skip E2E tests)
+
+### Valid SD Types
+
+| Type | PRD Required | Min Handoffs | Gate Threshold | Use Case |
+|------|--------------|--------------|----------------|----------|
+| `feature` | YES | 4 | 85% | New user-facing functionality |
+| `infrastructure` | YES | 3 | 80% | Tooling, scripts, CI/CD, internal systems |
+| `enhancement` | Optional | 2 | 75% | Improvements to existing features |
+| `bugfix` / `fix` | NO | 1 | 70% | Bug fixes and error corrections |
+| `documentation` | NO | 1 | 60% | Docs-only changes |
+| `refactor` | YES | 3 | 80% | Code restructuring without behavior change |
+| `database` | YES | 4 | 85% | Schema changes, migrations, RLS |
+| `security` | YES | 4 | 90% | Security fixes, auth, vulnerability patches |
+| `orchestrator` | YES | 4 | 85% | Parent SD coordinating child SDs |
+| `performance` | Optional | 2 | 75% | Performance optimizations |
+| `library` | Optional | 2 | 75% | Library/dependency updates |
+
+### Type Locking (governance_metadata.type_locked)
+
+When `governance_metadata.type_locked = true`:
+- Auto-correction of SD type is disabled
+- GPT classifier recommendations are ignored for this SD
+- Use for SDs where type was explicitly chosen by user
+
+### sd_type vs category
+
+| Aspect | `sd_type` | `category` |
+|--------|-----------|------------|
+| Purpose | **Validation logic** | Display/fallback |
+| Used by | Handoff gates, sub-agents | UI, legacy queries |
+| Canonical | **YES** | NO |
+| Auto-corrected | YES (unless locked) | NO |
 
 ---
 
@@ -182,6 +224,28 @@
 |-------|------|---------|
 | `metadata` | JSONB | Flexible JSONB for custom fields not in schema. Use sparingly |
 | `governance_metadata` | JSONB | Governance-related data (compliance, approvals, audit trails) |
+
+### governance_metadata Structure
+
+```jsonc
+{
+  // Type locking (SD-LEO-INFRA-RENAME-COLUMNS-SELF-001)
+  "type_locked": true,  // Prevents auto-correction of sd_type
+
+  // Automation context
+  "automation_context": {
+    "bypass_governance": false,  // When true, skips certain validations
+    "source": "manual" | "imported" | "generated"
+  },
+
+  // Compliance tracking
+  "compliance": {
+    "reviewed_by": "agent_id or user_id",
+    "reviewed_at": "ISO timestamp",
+    "compliance_score": 85
+  }
+}
+```
 
 ---
 
