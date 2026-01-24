@@ -64,6 +64,55 @@ Each gate uses 2-phase validation:
 | **bugfix** | 80% | Targeted fix validation |
 | **performance** | 85% | Measurable impact verification |
 
+### SD Type-Aware Validator Applicability (v1.2.0)
+
+**Added**: SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001 (2026-01-24)
+
+Different SD types have different validation requirements. The SD-Type-Aware Validation Policy defines which validators are REQUIRED, NON_APPLICABLE, or OPTIONAL for each SD type.
+
+**Policy Module**: `scripts/modules/handoff/validation/sd-type-applicability-policy.js`
+
+**Key Concept**: Validators that are NON_APPLICABLE for an SD type are automatically skipped with SKIPPED status, counting as passed (100/100) without execution.
+
+#### Validator Applicability Matrix
+
+| Validator | Feature | Refactor | Infrastructure | Database | Documentation |
+|-----------|---------|----------|----------------|----------|---------------|
+| TESTING | REQUIRED | NON_APPLICABLE | NON_APPLICABLE | REQUIRED | NON_APPLICABLE |
+| DESIGN | REQUIRED | NON_APPLICABLE | NON_APPLICABLE | NON_APPLICABLE | NON_APPLICABLE |
+| REGRESSION | OPTIONAL | **REQUIRED** | OPTIONAL | OPTIONAL | NON_APPLICABLE |
+| GITHUB | REQUIRED | REQUIRED | NON_APPLICABLE | REQUIRED | NON_APPLICABLE |
+| DATABASE | OPTIONAL | NON_APPLICABLE | OPTIONAL | REQUIRED | NON_APPLICABLE |
+| DOCMON | REQUIRED | OPTIONAL | **REQUIRED** | OPTIONAL | REQUIRED |
+| STORIES | REQUIRED | NON_APPLICABLE | OPTIONAL | OPTIONAL | NON_APPLICABLE |
+
+**Note**: See full SD type policy in [Handoff System Guide - Section 9](../leo/handoffs/handoff-system-guide.md#9-gate-spotlight-sd-type-aware-validation-policy)
+
+#### Integration with Adaptive Thresholds
+
+SD-type-aware validation works alongside adaptive thresholds:
+
+1. **Gate Composition**: Validators are filtered by SD type BEFORE gate execution
+2. **Score Calculation**: SKIPPED validators contribute 100% to weighted score
+3. **Threshold Comparison**: Final score compared against SD-type-specific threshold
+4. **Pass Criteria**: `(score >= sdTypeThreshold) AND (all_required_validators_passed)`
+
+**Example**:
+```javascript
+// Refactor SD at Gate 2 (EXEC-TO-PLAN)
+const sdType = 'refactor';
+const threshold = 80%;  // Base threshold for refactor
+
+// Validators executed:
+TESTING: SKIPPED (100/100) - Non-applicable
+DESIGN: SKIPPED (100/100) - Non-applicable
+REGRESSION: PASS (95/100) - REQUIRED, must pass
+GITHUB: PASS (100/100) - REQUIRED, must pass
+
+// Final score: 98.75/100 (97.5% weighted)
+// Result: PASS (97.5% >= 80% threshold)
+```
+
 ### Orchestrator SD Handling
 
 Parent orchestrator SDs (those with child SDs) have special validation logic:
@@ -543,6 +592,17 @@ return score >= adaptiveThreshold;
 ---
 
 ## Changelog
+
+### v1.2.0 (2026-01-24)
+- ✅ SD-type-aware validator applicability (SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001)
+- ✅ SKIPPED status for non-applicable validators
+- ✅ Validator applicability matrix
+- ✅ Integration with adaptive thresholds
+- ✅ Cross-reference to handoff system guide
+
+### v1.1.0 (2025-11-15)
+- ✅ SD type-specific base thresholds
+- ✅ Orchestrator SD handling
 
 ### v1.0.0 (2025-10-28)
 - ✅ Initial release
