@@ -1,12 +1,12 @@
-# crew_members Table
+# view_definitions_backup_20260124 Table
 
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
 **Generated**: 2026-01-24T19:11:47.073Z
-**Rows**: 15
-**RLS**: Enabled (2 policies)
+**Rows**: 10
+**RLS**: Disabled
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -14,41 +14,26 @@
 
 ---
 
-## Columns (6 total)
+## Columns (4 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
-| id | `uuid` | **NO** | - | - |
-| crew_id | `uuid` | YES | - | - |
-| agent_id | `uuid` | YES | - | - |
-| role_in_crew | `text` | YES | - | - |
-| sequence_order | `integer(32)` | YES | - | - |
-| created_at | `timestamp with time zone` | YES | - | - |
+| view_name | `text` | **NO** | - | - |
+| view_type | `text` | YES | - | - |
+| view_definition | `text` | YES | - | - |
+| backed_up_at | `timestamp with time zone` | YES | `now()` | - |
 
 ## Constraints
 
 ### Primary Key
-- `crew_members_pkey`: PRIMARY KEY (id)
+- `view_definitions_backup_20260124_pkey`: PRIMARY KEY (view_name)
 
 ## Indexes
 
-- `crew_members_pkey`
+- `view_definitions_backup_20260124_pkey`
   ```sql
-  CREATE UNIQUE INDEX crew_members_pkey ON public.crew_members USING btree (id)
+  CREATE UNIQUE INDEX view_definitions_backup_20260124_pkey ON public.view_definitions_backup_20260124 USING btree (view_name)
   ```
-
-## RLS Policies
-
-### 1. authenticated_read_crew_members (SELECT)
-
-- **Roles**: {authenticated}
-- **Using**: `true`
-
-### 2. service_role_all_crew_members (ALL)
-
-- **Roles**: {service_role}
-- **Using**: `true`
-- **With Check**: `true`
 
 ---
 

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-24T12:05:04.572Z
-**Rows**: 609
+**Generated**: 2026-01-24T19:11:47.073Z
+**Rows**: 626
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -19,7 +19,6 @@
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `character varying(50)` | **NO** | - | PRIMARY UNIQUE IDENTIFIER: Human-readable Strategic Directive ID (e.g., SD-UAT-001, SD-EXPORT-001). This is the main identifier used throughout the application, in handoffs, PRDs, and documentation. Format: SD-{CATEGORY}-{NUMBER} |
-| legacy_id | `character varying(50)` | YES | - | LEGACY IDENTIFIER: Old ID format from previous system versions. Deprecated - use id field instead. Kept for historical data migration purposes. |
 | title | `character varying(500)` | **NO** | - | TITLE: Brief descriptive title of the strategic directive (max 500 chars). Should be concise and summarize the directive's purpose. |
 | version | `character varying(20)` | **NO** | `'1.0'::character varying` | VERSION: Semantic version number (e.g., 1.0, 1.1, 2.0). Increments when significant changes are made to the SD. Default: 1.0 |
 | status | `character varying(50)` | **NO** | - | STATUS: Current workflow state. Valid values: draft, pending_approval, active, in_progress, completed, archived, deferred. Status "deferred" indicates postponed due to business stage or priority mismatch. |
@@ -101,6 +100,7 @@ Use the id column instead - it is the canonical identifier. |
 | llm_ux_score | `integer(32)` | YES | - | LLM UX Oracle average score for this SD (0-100). NULL if not evaluated. |
 | target_release_id | `uuid` | YES | - | - |
 | sd_code_user_facing | `character varying(100)` | **NO** | - | - |
+| uuid_internal_pk | `uuid` | **NO** | - | - |
 
 ## Constraints
 
@@ -112,7 +112,6 @@ Use the id column instead - it is the canonical identifier. |
 - `strategic_directives_v2_target_release_id_fkey`: target_release_id → releases(id)
 
 ### Unique Constraints
-- `strategic_directives_v2_legacy_id_unique`: UNIQUE (legacy_id)
 - `strategic_directives_v2_sd_code_user_facing_key`: UNIQUE (sd_code_user_facing)
 - `strategic_directives_v2_sd_key_key`: UNIQUE (sd_key)
 - `strategic_directives_v2_sd_key_unique`: UNIQUE (sd_key)
@@ -231,10 +230,6 @@ Use the id column instead - it is the canonical identifier. |
   ```sql
   CREATE INDEX idx_strategic_directives_v2_embedding ON public.strategic_directives_v2 USING ivfflat (scope_embedding vector_cosine_ops) WITH (lists='50')
   ```
-- `idx_strategic_directives_v2_legacy_id`
-  ```sql
-  CREATE INDEX idx_strategic_directives_v2_legacy_id ON public.strategic_directives_v2 USING btree (legacy_id) WHERE (legacy_id IS NOT NULL)
-  ```
 - `idx_strategic_directives_v2_priority`
   ```sql
   CREATE INDEX idx_strategic_directives_v2_priority ON public.strategic_directives_v2 USING btree (priority)
@@ -250,10 +245,6 @@ Use the id column instead - it is the canonical identifier. |
 - `idx_strategic_directives_v2_status`
   ```sql
   CREATE INDEX idx_strategic_directives_v2_status ON public.strategic_directives_v2 USING btree (status)
-  ```
-- `strategic_directives_v2_legacy_id_unique`
-  ```sql
-  CREATE UNIQUE INDEX strategic_directives_v2_legacy_id_unique ON public.strategic_directives_v2 USING btree (legacy_id)
   ```
 - `strategic_directives_v2_pkey`
   ```sql
@@ -322,11 +313,6 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION auto_calculate_progress()`
-
-### auto_populate_legacy_id
-
-- **Timing**: BEFORE INSERT
-- **Action**: `EXECUTE FUNCTION populate_legacy_id_from_id()`
 
 ### check_sd_hierarchy
 
@@ -397,16 +383,6 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: AFTER UPDATE
 - **Action**: `EXECUTE FUNCTION auto_set_is_parent()`
-
-### trg_auto_set_legacy_id
-
-- **Timing**: BEFORE INSERT
-- **Action**: `EXECUTE FUNCTION auto_set_legacy_id_from_sd_key()`
-
-### trg_auto_set_legacy_id
-
-- **Timing**: BEFORE UPDATE
-- **Action**: `EXECUTE FUNCTION auto_set_legacy_id_from_sd_key()`
 
 ### trg_capability_lifecycle
 
@@ -512,6 +488,16 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION sync_sd_code_user_facing()`
+
+### trg_sync_uuid_internal_pk
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION sync_uuid_internal_pk()`
+
+### trg_sync_uuid_internal_pk
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION sync_uuid_internal_pk()`
 
 ### trigger_warn_sd_kr_alignment
 
