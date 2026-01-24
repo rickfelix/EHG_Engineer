@@ -338,6 +338,67 @@ process.exit(result ? 0 : 2);
 **Purpose**: Reminds Claude to follow LEO protocol diligently
 **Timeout**: 2 seconds
 
+### UserPromptSubmit Hook: Semantic Router
+
+**Location**: `scripts/hooks/semantic-router-hook.js`
+**Purpose**: Provides semantic sub-agent recommendations based on user prompt analysis
+**Exit Behavior**: Exit 0 always (non-blocking, advisory only)
+**Timeout**: 1 second (fast semantic routing)
+
+**Key Features**:
+- Intercepts user prompts via stdin JSON
+- Generates OpenAI embeddings for semantic analysis
+- Compares against 26 sub-agent domain embeddings in database
+- Outputs top 3 recommendations above 35% similarity threshold
+- Graceful fallback to keyword matching on errors
+- ~300ms latency (well under 500ms target)
+
+**Problem Solved**: Keyword-based sub-agent triggering misses conversational queries like "identify the root cause" → Now semantically routes to RCA agent with 77% accuracy.
+
+**Implementation Details**:
+```javascript
+// Input: stdin JSON
+{"prompt": "identify the root cause", "session_id": "..."}
+
+// Process:
+1. Generate query embedding via OpenAI
+2. Load 26 sub-agent embeddings from database (cached)
+3. Calculate cosine similarity for all agents
+4. Filter by 35% threshold, rank by score
+5. Return top 3 matches
+
+// Output: stdout
+[SEMANTIC-ROUTE] Recommended sub-agents: RCA (41%), TESTING (38%)
+```
+
+**Configuration**:
+```bash
+# .env
+SEMANTIC_ROUTER_ENABLED=true          # Enable/disable
+SEMANTIC_ROUTER_THRESHOLD=0.35        # Min similarity (35%)
+SEMANTIC_ROUTER_TOP_K=3               # Max recommendations
+SEMANTIC_ROUTER_TIMEOUT_MS=500        # Max execution time
+SEMANTIC_ROUTER_DEBUG=false           # Debug logging
+```
+
+**Stdin Reading Pattern** (critical for Claude Code hooks):
+```javascript
+// Uses 'readable' event with read() loop (not simple 'data' event)
+process.stdin.on('readable', () => {
+  let chunk;
+  while ((chunk = process.stdin.read()) !== null) {
+    data += chunk;
+    hasData = true;
+  }
+});
+```
+
+**When It Runs**: Every UserPromptSubmit (before session-cleanup.js)
+
+**Documentation**: `docs/01_architecture/semantic-routing-architecture.md`
+
+**Related SD**: SD-LEO-INFRA-INTEGRATE-SEMANTIC-ROUTER-001
+
 ### UserPromptSubmit Hook: Session Cleanup
 
 **Location**: `scripts/hooks/session-cleanup.js`
