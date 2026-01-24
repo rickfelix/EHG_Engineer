@@ -88,6 +88,66 @@ Different SD types have different validation requirements. The SD-Type-Aware Val
 
 **Note**: See full SD type policy in [Handoff System Guide - Section 9](../leo/handoffs/handoff-system-guide.md#9-gate-spotlight-sd-type-aware-validation-policy)
 
+#### Additional Validator Registry Validators (v1.3.0)
+
+**Added**: SD-LEO-FIX-COMPLETION-WORKFLOW-001 (2026-01-24)
+
+Two critical validators in the validator registry were found to be **NOT SD-type-aware**, causing PLAN-TO-LEAD and LEAD-FINAL-APPROVAL handoffs to fail for bugfix SDs:
+
+**1. `subAgentOrchestration` Validator**
+
+**Location**: `scripts/modules/handoff/validation/validator-registry/gates/additional-validators.js`
+
+**Problem**: Hardcoded `requiredAgents = ['DESIGN', 'DATABASE']` for ALL SDs
+
+**Fix Applied**:
+```javascript
+// Before (v1.2.0) - HARDCODED
+const requiredAgents = ['DESIGN', 'DATABASE'];
+
+// After (v1.3.0) - SD-TYPE-AWARE
+const sdType = (sdData?.sd_type || '').toLowerCase();
+
+// Use centralized policy
+if (isLightweightSDType(sdType)) {
+  return { passed: true, warnings: [`Sub-agent orchestration skipped for ${sdType} SD`] };
+}
+
+// Only require DESIGN/DATABASE for feature and database SDs
+const requiresDesignDatabase = ['feature', 'database'];
+const requiredAgents = requiresDesignDatabase.includes(sdType)
+  ? ['DESIGN', 'DATABASE']
+  : [];
+```
+
+**Impact**: Bugfix SDs now correctly skip DESIGN/DATABASE requirements in PLAN-TO-LEAD handoff
+
+**2. `userStoriesComplete` Validator**
+
+**Location**: `scripts/modules/handoff/validation/validator-registry/gates/additional-validators.js`
+
+**Problem**: Required user stories for ALL SDs, even lightweight types
+
+**Fix Applied**:
+```javascript
+// Check SD type before requiring user stories
+const sdType = (sd?.sd_type || '').toLowerCase();
+
+if (isLightweightSDType(sdType)) {
+  return {
+    passed: true,
+    warnings: [`User stories not required for ${sdType} SD type`]
+  };
+}
+```
+
+**Impact**: Bugfix/documentation/discovery_spike SDs now correctly skip user stories requirement in LEAD-FINAL-APPROVAL handoff
+
+**Validator Consistency**:
+- Both validators now align with `gate-1-plan-to-exec.js` patterns
+- Both use centralized `isLightweightSDType()` from `sd-type-applicability-policy.js`
+- Consistent with existing SD-type-aware logic throughout the codebase
+
 #### Integration with Adaptive Thresholds
 
 SD-type-aware validation works alongside adaptive thresholds:
@@ -592,6 +652,13 @@ return score >= adaptiveThreshold;
 ---
 
 ## Changelog
+
+### v1.3.0 (2026-01-24)
+- ✅ Fixed `subAgentOrchestration` validator to be SD-type-aware (SD-LEO-FIX-COMPLETION-WORKFLOW-001)
+- ✅ Fixed `userStoriesComplete` validator to skip for lightweight SD types
+- ✅ Both validators now use centralized `isLightweightSDType()` policy
+- ✅ Bugfix SDs no longer require DESIGN/DATABASE sub-agents
+- ✅ User stories validation properly skipped for bugfix/documentation/discovery_spike SDs
 
 ### v1.2.0 (2026-01-24)
 - ✅ SD-type-aware validator applicability (SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001)
