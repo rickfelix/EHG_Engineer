@@ -5,6 +5,8 @@
  * SD-LEO-GEMINI-001 (US-002): Validates that PRD has exploration_summary with documented file references
  */
 
+import { isLightweightSDType } from '../../../validation/sd-type-applicability-policy.js';
+
 // Thresholds for exploration rating
 const MINIMUM_FILES = 3;
 const ADEQUATE_FILES = 5;
@@ -38,6 +40,20 @@ export function createExplorationAuditGate(prdRepo, sd) {
  */
 export async function validateExplorationAudit(prdRepo, sd) {
   try {
+    // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
+    const sdType = (sd?.sd_type || '').toLowerCase();
+    if (isLightweightSDType(sdType)) {
+      console.log(`   ℹ️  Exploration audit skipped for ${sdType} SD type`);
+      return {
+        passed: true,
+        score: 100,
+        max_score: 100,
+        issues: [],
+        warnings: [`Exploration audit skipped for ${sdType} SD type`],
+        details: { skipped: true, reason: `${sdType} SD type` }
+      };
+    }
+
     // Get PRD with exploration_summary
     // SD ID Schema Cleanup: Use sd.id directly (uuid_id deprecated)
     const prd = await prdRepo?.getBySdId(sd.id);

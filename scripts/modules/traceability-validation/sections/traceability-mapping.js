@@ -4,9 +4,11 @@
  *
  * Phase-aware: Traceability important but not critical
  * SD-type aware: Security SDs use security terms, not generic design/database terms
+ * SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
  */
 
 import { execAsync } from '../utils.js';
+import { isLightweightSDType } from '../../handoff/validation/sd-type-applicability-policy.js';
 
 /**
  * Validate Traceability Mapping
@@ -25,19 +27,20 @@ export async function validateTraceabilityMapping(sd_id, sdUuid, designAnalysis,
   const sectionDetails = {};
 
   // Determine SD type flags
+  // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
   const isSecuritySD = sdCategory === 'security' ||
                         sdCategory === 'authentication' ||
                         sdCategory === 'authorization';
   const isDatabaseSD = sdCategory === 'database';
-  const isDocsSD = sdType === 'docs' || sdType === 'infrastructure' || sdCategory === 'infrastructure';
+  const isLightweightSD = isLightweightSDType(sdType) || sdCategory === 'infrastructure';
   const isRefactorSD = sdCategory === 'refactor';
 
   console.log('\n   [C] Traceability Mapping...');
   if (isSecuritySD) {
     console.log('   INFO Security SD detected - using security-specific terms');
   }
-  if (isDocsSD) {
-    console.log('   INFO Docs/Infrastructure SD detected - simplified traceability');
+  if (isLightweightSD) {
+    console.log('   INFO Lightweight SD detected - simplified traceability');
   }
 
   // Check for UI work in designAnalysis

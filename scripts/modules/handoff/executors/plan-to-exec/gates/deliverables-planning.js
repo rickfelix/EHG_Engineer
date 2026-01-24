@@ -5,6 +5,8 @@
  * SD-LEO-PROTOCOL-V435-001 US-003: Validates that deliverables are defined before EXEC phase
  */
 
+import { isLightweightSDType } from '../../../validation/sd-type-applicability-policy.js';
+
 /**
  * Create the GATE_DELIVERABLES_PLANNING gate validator
  *
@@ -43,11 +45,11 @@ export async function validateDeliverablesPlanning(supabase, sd) {
       .single();
 
     // Determine if deliverables are required
-    // Priority: requires_deliverables_gate > requires_deliverables > default (true)
-    const skipTypes = ['infrastructure', 'documentation', 'docs', 'orchestrator', 'process'];
+    // Priority: requires_deliverables_gate > requires_deliverables > centralized policy
+    // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
     const requiresDeliverables = profile?.requires_deliverables_gate ??
                                  profile?.requires_deliverables ??
-                                 !skipTypes.includes(sdType);
+                                 !isLightweightSDType(sdType);
 
     console.log(`   SD Type: ${sdType}`);
     console.log(`   Requires Deliverables: ${requiresDeliverables ? 'Yes' : 'No'}`);

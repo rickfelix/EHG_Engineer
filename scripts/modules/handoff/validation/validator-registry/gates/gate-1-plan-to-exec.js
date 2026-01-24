@@ -6,6 +6,7 @@
 import { validatePRDQuality } from '../../../../prd-quality-validation.js';
 import { validateUserStoriesForHandoff } from '../../../../user-story-quality-validation.js';
 import { validateBMADForPlanToExec } from '../../../../bmad-validation.js';
+import { isLightweightSDType } from '../../sd-type-applicability-policy.js';
 
 /**
  * Register Gate 1 validators
@@ -154,10 +155,9 @@ export function registerGate1Validators(registry) {
   registry.register('fileScopeValidation', async (context) => {
     const { sd, prd } = context;
 
-    // SD-LEO-001: Skip file_scope validation for infrastructure/documentation SDs
-    const skipTypes = ['infrastructure', 'documentation', 'orchestrator'];
+    // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
     const sdType = (sd?.sd_type || '').toLowerCase();
-    if (skipTypes.includes(sdType)) {
+    if (isLightweightSDType(sdType)) {
       return {
         passed: true,
         score: 100,
@@ -194,10 +194,9 @@ export function registerGate1Validators(registry) {
   registry.register('executionPlanValidation', async (context) => {
     const { sd, prd } = context;
 
-    // SD-LEO-001: Skip for infrastructure/documentation SDs
-    const skipTypes = ['infrastructure', 'documentation', 'orchestrator'];
+    // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
     const sdType = (sd?.sd_type || '').toLowerCase();
-    if (skipTypes.includes(sdType)) {
+    if (isLightweightSDType(sdType)) {
       return {
         passed: true,
         score: 100,
@@ -226,12 +225,11 @@ export function registerGate1Validators(registry) {
   registry.register('testingStrategyValidation', async (context) => {
     const { sd, prd } = context;
 
-    // SD-LEO-001: Skip for infrastructure/documentation SDs
-    const skipTypes = ['infrastructure', 'documentation', 'orchestrator'];
+    // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
     const sdType = (sd?.sd_type || '').toLowerCase();
     const sdCategory = (sd?.category || '').toLowerCase();
-    if (skipTypes.includes(sdType) || skipTypes.includes(sdCategory)) {
-      const skipReason = skipTypes.includes(sdType) ? sdType : sdCategory;
+    if (isLightweightSDType(sdType) || isLightweightSDType(sdCategory)) {
+      const skipReason = isLightweightSDType(sdType) ? sdType : sdCategory;
       return {
         passed: true,
         score: 100,

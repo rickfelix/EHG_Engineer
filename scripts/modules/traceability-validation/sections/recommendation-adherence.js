@@ -1,7 +1,10 @@
 /**
  * Section A: Recommendation Adherence (30 points - CRITICAL)
  * Part of SD-LEO-REFACTOR-TRACEABILITY-001
+ * SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
  */
+
+import { isLightweightSDType } from '../../handoff/validation/sd-type-applicability-policy.js';
 
 /**
  * Validate Recommendation Adherence
@@ -47,9 +50,10 @@ export async function validateRecommendationAdherence(sd_id, designAnalysis, dat
     return;
   }
 
-  // Docs/Infrastructure SDs that passed EXEC-TO-PLAN (Gate 2) get full credit
-  const isDocsSD = sdType === 'docs' || sdType === 'infrastructure' || sdCategory === 'infrastructure';
-  if (isDocsSD && gate2Data && gate2Data.score >= 80) {
+  // Lightweight SDs that passed EXEC-TO-PLAN (Gate 2) get full credit
+  // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Use centralized SD type policy
+  const isLightweightSD = isLightweightSDType(sdType) || sdCategory === 'infrastructure';
+  if (isLightweightSD && gate2Data && gate2Data.score >= 80) {
     console.log('   OK Docs/Infrastructure SD passed EXEC-TO-PLAN - Section A full credit (30/30)');
     console.log('   INFO Docs SDs validated via implementation quality, not design/database fidelity');
     validation.score += 30;

@@ -175,12 +175,14 @@ export async function checkAndCompleteParentSD(supabase, sd) {
 
     console.log(`   🎉 All ${siblings.length} children completed - auto-completing parent SD`);
 
+    // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Also reset is_working_on when auto-completing
     const { error: updateError } = await supabase
       .from('strategic_directives_v2')
       .update({
         status: 'completed',
         progress: 100,
         current_phase: 'COMPLETED',
+        is_working_on: false,  // Critical: prevent stale "working on" status
         updated_at: new Date().toISOString()
       })
       .eq('id', parentSD.id);
@@ -252,12 +254,14 @@ export async function completeOrchestratorSD(supabase, sdId, childrenCount) {
     console.log(`   ℹ️  ID normalized: "${sdId}" -> "${canonicalId}"`);
   }
 
+  // SD-LEO-FIX-COMPLETION-WORKFLOW-001: Also reset is_working_on when completing orchestrator
   const { data: updateResult, error: sdError } = await supabase
     .from('strategic_directives_v2')
     .update({
       status: 'completed',
       current_phase: 'LEAD',
       progress_percentage: 100,
+      is_working_on: false,  // Critical: prevent stale "working on" status
       updated_at: new Date().toISOString()
     })
     .eq('id', canonicalId)
