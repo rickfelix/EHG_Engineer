@@ -90,7 +90,7 @@ export async function addPRDToDatabase(sdId, prdTitle) {
 
     const sdIdValue = sdData.id;
     console.log(`   SD ID: ${sdIdValue}`);
-    console.log(`   SD legacy_id: ${sdData.legacy_id}`);
+    console.log(`   SD UUID: ${sdData.uuid_id}`);
 
     // SD type detection and validation
     await handleSDTypeDetection(supabase, sdId, sdData);
@@ -157,11 +157,12 @@ export async function addPRDToDatabase(sdId, prdTitle) {
  */
 async function fetchSDData(supabase, sdId) {
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
-  const queryField = isUUID ? 'id' : 'legacy_id';
+  // Query by uuid_id for UUIDs, otherwise by sd_key or id (text SD keys)
+  const queryField = isUUID ? 'uuid_id' : 'id';
 
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, scope, description, strategic_objectives, title, sd_type, category, metadata, target_application, priority, status, rationale, success_criteria, key_changes, dependencies, risks, strategic_intent, success_metrics, governance_metadata')
+    .select('id, uuid_id, scope, description, strategic_objectives, title, sd_type, category, metadata, target_application, priority, status, rationale, success_criteria, key_changes, dependencies, risks, strategic_intent, success_metrics, governance_metadata')
     .eq(queryField, sdId)
     .single();
 
