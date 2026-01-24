@@ -14,9 +14,14 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// SD-SEC-CONFIG-SECURITY-001: Environment-aware SSL verification
+const sslConfig = process.env.NODE_ENV === 'production'
+  ? { rejectUnauthorized: true }
+  : { rejectUnauthorized: process.env.DISABLE_SSL_VERIFY !== 'true' };
+
 const client = new pg.Client({
   connectionString: process.env.SUPABASE_POOLER_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: sslConfig
 });
 
 async function audit() {
