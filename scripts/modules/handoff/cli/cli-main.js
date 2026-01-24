@@ -37,6 +37,75 @@ import {
 dotenv.config();
 
 /**
+ * Sanitize string by removing invalid Unicode surrogates.
+ * Prevents JSON serialization errors when output is captured by Claude Code.
+ *
+ * Invalid surrogates occur when:
+ * - High surrogate (0xD800-0xDBFF) not followed by low surrogate (0xDC00-0xDFFF)
+ * - Lone low surrogate without preceding high surrogate
+ *
+ * @param {any} value - Value to sanitize
+ * @returns {any} Sanitized value with invalid surrogates replaced by U+FFFD
+ */
+function sanitizeUnicode(value) {
+  if (typeof value !== 'string') return value;
+
+  let result = '';
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+
+    // High surrogate
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      const nextCode = value.charCodeAt(i + 1);
+      // Valid pair - keep both
+      if (nextCode >= 0xDC00 && nextCode <= 0xDFFF) {
+        result += value[i] + value[i + 1];
+        i++; // Skip next char (already added)
+      } else {
+        // Invalid - replace with replacement character
+        result += '\uFFFD';
+      }
+    }
+    // Lone low surrogate
+    else if (code >= 0xDC00 && code <= 0xDFFF) {
+      result += '\uFFFD';
+    }
+    // Normal character
+    else {
+      result += value[i];
+    }
+  }
+  return result;
+}
+
+/**
+ * Install Unicode sanitization on console output.
+ * This prevents invalid surrogates from corrupting Claude Code's API calls.
+ */
+function installOutputSanitizer() {
+  const originalLog = console.log;
+  const originalError = console.error;
+  const originalWarn = console.warn;
+
+  const sanitizeArgs = (args) => args.map(arg => {
+    if (typeof arg === 'string') return sanitizeUnicode(arg);
+    if (typeof arg === 'object' && arg !== null) {
+      try {
+        // Sanitize JSON stringified objects
+        return JSON.parse(sanitizeUnicode(JSON.stringify(arg)));
+      } catch {
+        return arg;
+      }
+    }
+    return arg;
+  });
+
+  console.log = (...args) => originalLog(...sanitizeArgs(args));
+  console.error = (...args) => originalError(...sanitizeArgs(args));
+  console.warn = (...args) => originalWarn(...sanitizeArgs(args));
+}
+
+/**
  * Display usage help
  */
 export function displayHelp() {
@@ -366,6 +435,9 @@ export async function handleStatsCommand() {
  * Main CLI entry point
  */
 export async function main() {
+  // Install Unicode sanitizer to prevent invalid surrogates from corrupting Claude Code's context
+  installOutputSanitizer();
+
   const args = process.argv.slice(2);
   const command = args[0];
 
