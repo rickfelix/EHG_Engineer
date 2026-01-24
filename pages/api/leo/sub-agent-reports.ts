@@ -21,7 +21,6 @@ import {
   getAllowedTransitions,
   isTerminalStatus,
   getAffectedGates,
-  Agent,
   Status,
   Gate
 } from '../../../lib/validation/leo-schemas';
@@ -230,7 +229,7 @@ async function handler(
 
     // 5) Recompute affected gates if terminal status
     const affectedGates = getAffectedGates(agent, isTerminalStatus(status));
-    const newScores: Record<Gate, number> = {} as any;
+    const newScores: Partial<Record<Gate, number>> = {};
 
     for (const gate of affectedGates) {
       const score = await recomputeGate(supabase, prd_id, gate);

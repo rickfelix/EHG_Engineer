@@ -97,7 +97,7 @@ async function handler(
 
     // 2) Get latest gate scores
     const gates: Gate[] = ['2A', '2B', '2C', '2D', '3'];
-    const gateScores: Record<Gate, { score: number; passed: boolean; last_updated: string }> = {} as any;
+    const gateScores: Partial<Record<Gate, { score: number; passed: boolean; last_updated: string }>> = {};
 
     for (const gate of gates) {
       // Get most recent review for each gate

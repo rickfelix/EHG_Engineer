@@ -312,7 +312,7 @@ async function getPerformanceMetrics(supabase: SupabaseClient) {
 
   if (completionTimes && completionTimes.length > 0) {
     // Group by PRD and calculate time from first to last gate
-    const prdGroups: Record<string, any[]> = {};
+    const prdGroups: Record<string, { prd_id: string; gate: string; created_at: string }[]> = {};
 
     for (const review of completionTimes) {
       if (!prdGroups[review.prd_id]) {
