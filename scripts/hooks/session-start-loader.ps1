@@ -24,18 +24,15 @@ if (Test-Path $SnapshotFile) {
 # Output context restoration message
 if ($hasRecentSnapshot) {
     Write-Host ""
-    Write-Host "🔄 CONTEXT RESTORATION AVAILABLE"
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    Write-Host "[RESTORE] CONTEXT RESTORATION AVAILABLE"
+    Write-Host "=================================="
     Write-Host "Recent compaction detected. State files:"
-    Write-Host "  📁 .claude/compaction-snapshot.md (git state)"
-    Write-Host "  📁 .claude/session-state.md (work state)"
+    Write-Host "  > .claude/compaction-snapshot.md (git state)"
+    Write-Host "  > .claude/session-state.md (work state)"
     Write-Host ""
-    Write-Host "⚡ READ THESE FILES to restore context before continuing."
+    Write-Host ">>> READ THESE FILES to restore context before continuing."
     Write-Host ""
 }
 
-# Always show current SD status hint
-$sdNext = & npm run sd:next --silent 2>$null | Select-Object -First 10
-if ($sdNext) {
-    Write-Host "📋 Current SD Queue (run 'npm run sd:next' for full view)"
-}
+# Show SD hint (without running slow npm command)
+Write-Host "[TIP] Run 'npm run sd:next' to see the SD queue"
