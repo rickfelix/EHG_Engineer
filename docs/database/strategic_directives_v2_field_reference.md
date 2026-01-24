@@ -47,7 +47,7 @@
 | `version` | VARCHAR(20) | Semantic version (e.g., 1.0, 1.1, 2.0). Default: 1.0 |
 | `status` | VARCHAR(50) | Workflow state: draft, pending_approval, active, in_progress, completed, archived, deferred |
 | `sd_type` | VARCHAR(50) | **CANONICAL** - SD type for validation gates: feature, infrastructure, enhancement, bugfix, documentation, refactor, database, security, orchestrator, performance, library, fix |
-| `category` | VARCHAR(50) | **DISPLAY ONLY** - Legacy classification for UI display. Use `sd_type` for logic |
+| `category` | VARCHAR(50) | **⚠️ DEPRECATED (2026-01-24)** - Legacy classification. DO NOT use in code logic. Use `sd_type` instead. |
 | `priority` | VARCHAR(20) | `critical`, `high`, `medium`, `low` (lowercase, see Priority Levels section) |
 
 ---
@@ -90,6 +90,23 @@ When `governance_metadata.type_locked = true`:
 | Used by | Handoff gates, sub-agents | UI, legacy queries |
 | Canonical | **YES** | NO |
 | Auto-corrected | YES (unless locked) | NO |
+| **Status** | **ACTIVE** | **DEPRECATED** (as of 2026-01-24) |
+
+**⚠️ DEPRECATION NOTICE (2026-01-24)**:
+- The `category` field is **DEPRECATED** for use in application logic
+- **DO NOT** use fallback patterns like `sd.sd_type || sd.category`
+- All code must use `sd.sd_type` directly (with `|| 'feature'` fallback if needed)
+- The `category` field remains in the database schema for legacy UI display only
+- **Migration**: SD-LEO-GEN-RENAME-COLUMNS-SELF-001-E removed all `|| sd.category` fallback patterns from codebase
+
+**Correct Usage**:
+```javascript
+// ✅ CORRECT: Use sd_type with explicit fallback
+const sdType = sd.sd_type || 'feature';
+
+// ❌ INCORRECT: Do not use category fallback
+const sdType = sd.sd_type || sd.category || 'feature';
+```
 
 ---
 

@@ -78,7 +78,7 @@ export async function autoApprovePRD(sdId, options = {}) {
     return { approved: false, reason: `SD not found: ${sdId}` };
   }
 
-  const sdType = sd.sd_type || sd.category || 'feature';
+  const sdType = sd.sd_type || 'feature';
   console.log(`   SD Type: ${sdType}`);
 
   // 2. Check if SD type allows auto-approval

@@ -37,7 +37,7 @@ export async function generatePRDContentWithLLM(sd, context = {}) {
   }
 
   const openai = new OpenAI({ apiKey: openaiKey });
-  const sdType = sd.sd_type || sd.category || 'feature';
+  const sdType = sd.sd_type || 'feature';
 
   console.log('   🤖 Generating PRD content with GPT 5.2...');
   console.log(`   📋 SD Type: ${sdType}`);
@@ -111,10 +111,10 @@ export function buildPRDGenerationContext(sd, context = {}) {
   // 1. Strategic Directive Context - COMPREHENSIVE
   sections.push(`## STRATEGIC DIRECTIVE - COMPLETE CONTEXT
 
-**ID**: ${sd.id || sd.legacy_id}
-**Legacy ID**: ${sd.legacy_id || 'N/A'}
+**ID**: ${sd.id || sd.sd_key}
+**SD Key**: ${sd.sd_key || 'N/A'}
 **Title**: ${sd.title || 'Untitled'}
-**Type**: ${sd.sd_type || sd.category || 'feature'}
+**Type**: ${sd.sd_type || 'feature'}
 **Category**: ${sd.category || 'Not specified'}
 **Priority**: ${sd.priority || 'Not specified'}
 **Status**: ${sd.status || 'draft'}

@@ -78,7 +78,7 @@ export function getParentOrchestratorGates(supabase, prdRepo, sd, _options) {
 
       const { data: children } = await supabase
         .from('strategic_directives_v2')
-        .select('id, legacy_id, title, status, parent_sd_id')
+        .select('id, sd_key, title, status, parent_sd_id')
         .eq('parent_sd_id', sd.id);
 
       if (!children || children.length === 0) {
@@ -95,7 +95,7 @@ export function getParentOrchestratorGates(supabase, prdRepo, sd, _options) {
       console.log(`   ✅ Found ${children.length} child SDs:`);
       children.forEach(c => {
         const icon = c.status === 'completed' ? '✅' : '📋';
-        console.log(`      ${icon} ${c.legacy_id || c.id} [${c.status}]`);
+        console.log(`      ${icon} ${c.sd_key || c.id} [${c.status}]`);
       });
 
       return {
@@ -104,7 +104,7 @@ export function getParentOrchestratorGates(supabase, prdRepo, sd, _options) {
         max_score: 100,
         issues: [],
         warnings: [],
-        details: { childrenCount: children.length, children: children.map(c => c.legacy_id || c.id) }
+        details: { childrenCount: children.length, children: children.map(c => c.sd_key || c.id) }
       };
     },
     required: true

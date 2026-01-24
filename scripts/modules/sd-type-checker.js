@@ -214,7 +214,7 @@ export async function isNonCodeSD(sd, options = {}) {
  */
 export function isInfrastructureSDSync(sd) {
   if (!sd) return false;
-  const declaredType = (sd.sd_type || sd.category || '').toLowerCase();
+  const declaredType = (sd.sd_type || '').toLowerCase();
   return SD_TYPE_CATEGORIES.NON_CODE.includes(declaredType);
 }
 
@@ -239,7 +239,7 @@ export function isInfrastructureSDSync(sd) {
 export function requiresDesignDatabaseGatesSync(sd) {
   if (!sd) return true; // Default to requiring gates if no SD (safe default)
 
-  const declaredType = (sd.sd_type || sd.category || '').toLowerCase();
+  const declaredType = (sd.sd_type || '').toLowerCase();
 
   // Non-code SDs never need design/database gates
   if (SD_TYPE_CATEGORIES.NON_CODE.includes(declaredType)) {
@@ -303,7 +303,7 @@ export async function getThresholdProfile(sd, options = {}) {
  */
 export function getPRDQualityThresholdSync(sd) {
   if (!sd) return THRESHOLD_PROFILES.default.prdQuality;
-  const declaredType = (sd.sd_type || sd.category || '').toLowerCase();
+  const declaredType = (sd.sd_type || '').toLowerCase();
   const profile = THRESHOLD_PROFILES[declaredType] || THRESHOLD_PROFILES.default;
   return profile.prdQuality || THRESHOLD_PROFILES.default.prdQuality;
 }

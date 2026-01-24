@@ -24,7 +24,7 @@ export async function validatePlanVerification(supabase, prd, sd) {
   // PARENT SD DETECTION
   const { data: childSDs } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, status')
+    .select('id, sd_key, status')
     .eq('parent_sd_id', sd.id);
 
   const isParentSD = childSDs && childSDs.length > 0;
@@ -94,7 +94,7 @@ async function validateStandardSDCompletion(supabase, prd, sd, validation) {
   }
 
   // Check EXEC→PLAN handoff exists (or skip for infrastructure SDs)
-  const sdType = sd.sd_type || sd.category;
+  const sdType = sd.sd_type;
   const isInfrastructure = sdType === 'infrastructure' || sdType === 'documentation' || sdType === 'process';
 
   if (isInfrastructure) {

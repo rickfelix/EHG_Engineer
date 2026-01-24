@@ -60,7 +60,7 @@ export function createGitCommitEnforcementGate(supabase, sd, appPath) {
       const sdUuid = ctx.sd?.id || ctx.sdId;
       const { data: childSDs } = await supabase
         .from('strategic_directives_v2')
-        .select('id, legacy_id, status')
+        .select('id, sd_key, status')
         .eq('parent_sd_id', sdUuid);
 
       if (childSDs && childSDs.length > 0) {
@@ -89,7 +89,7 @@ export function createGitCommitEnforcementGate(supabase, sd, appPath) {
       // Lazy load verifier
       const { default: GitCommitVerifier } = await import('../../../../../verify-git-commit-status.js');
 
-      const verifier = new GitCommitVerifier(ctx.sdId, appPath, { legacyId: ctx.sd?.legacy_id });
+      const verifier = new GitCommitVerifier(ctx.sdId, appPath, { sdKey: ctx.sd?.sd_key });
       const result = await verifier.verify();
       ctx._gitResults = result;
 

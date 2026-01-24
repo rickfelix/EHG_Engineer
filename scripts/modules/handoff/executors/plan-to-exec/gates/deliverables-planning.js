@@ -33,7 +33,7 @@ export function createDeliverablesPlanningGate(supabase, sd) {
  */
 export async function validateDeliverablesPlanning(supabase, sd) {
   try {
-    const sdType = (sd.sd_type || sd.category || 'feature').toLowerCase();
+    const sdType = (sd.sd_type || 'feature').toLowerCase();
 
     // Check if this SD type requires deliverables from sd_type_validation_profiles
     const { data: profile } = await supabase

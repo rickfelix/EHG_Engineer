@@ -143,7 +143,7 @@ async function main() {
   }
 
   console.log('📋 SD:', sd.title);
-  console.log('   Type:', sd.sd_type || sd.category || 'feature');
+  console.log('   Type:', sd.sd_type || 'feature');
 
   // Get PRD
   let { data: prd } = await supabase
@@ -182,7 +182,7 @@ async function main() {
 ## STRATEGIC DIRECTIVE
 **ID**: ${SD_ID}
 **Title**: ${sd.title}
-**Type**: ${sd.sd_type || sd.category || 'database'}
+**Type**: ${sd.sd_type || 'database'}
 **Description**: ${sd.description || 'Database schema foundation'}
 **Scope**: ${sd.scope || 'Create database tables and RLS policies'}
 

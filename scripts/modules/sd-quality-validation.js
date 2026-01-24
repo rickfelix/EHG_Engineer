@@ -324,7 +324,7 @@ export async function validateSDCompletionReadiness(sd, retrospective = null) {
     const retroWeight = weights.retroWeight;
 
     const isInfrastructure = isInfrastructureSDSync(sd);
-    const sdType = sd.sd_type || sd.category || 'feature';
+    const sdType = sd.sd_type || 'feature';
     console.log(`   📊 SD Type '${sdType}' (infrastructure=${isInfrastructure}): weights SD=${sdWeight}, Retro=${retroWeight}`);
 
     result.score = Math.round(sdQuality.score * sdWeight + retroQuality.score * retroWeight);

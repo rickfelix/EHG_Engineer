@@ -263,7 +263,7 @@ export class PlanToExecVerifier {
         prdBoilerplateResult = await validatePRDForHandoff(prd, {
           minimumScore: prdMinimumScore,
           blockOnWarnings: false,
-          sdType: sd.sd_type || sd.category,
+          sdType: sd.sd_type,
           sdCategory: sd.category
         });
 

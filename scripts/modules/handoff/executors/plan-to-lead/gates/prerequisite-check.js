@@ -125,7 +125,7 @@ export function createPrerequisiteCheckGate(supabase) {
 async function checkParentOrchestrator(supabase, sdUuid, _ctx) {
   const { data: childSDs, error: childError } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, status')
+    .select('id, sd_key, status')
     .eq('parent_sd_id', sdUuid);
 
   if (!childError && childSDs && childSDs.length > 0) {
@@ -139,7 +139,7 @@ async function checkParentOrchestrator(supabase, sdUuid, _ctx) {
     if (incompleteChildren.length > 0) {
       console.log('   ❌ Incomplete children:');
       incompleteChildren.forEach(c => {
-        console.log(`      - ${c.legacy_id || c.id}: ${c.status}`);
+        console.log(`      - ${c.sd_key || c.id}: ${c.status}`);
       });
       return {
         passed: false,
@@ -147,7 +147,7 @@ async function checkParentOrchestrator(supabase, sdUuid, _ctx) {
         max_score: 100,
         issues: [`Parent SD has ${incompleteChildren.length} incomplete children`],
         warnings: [],
-        remediation: `Complete all child SDs before finalizing parent: ${incompleteChildren.map(c => c.legacy_id || c.id).join(', ')}`
+        remediation: `Complete all child SDs before finalizing parent: ${incompleteChildren.map(c => c.sd_key || c.id).join(', ')}`
       };
     }
 

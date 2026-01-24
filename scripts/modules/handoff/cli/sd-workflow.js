@@ -23,11 +23,11 @@ export async function getSDWorkflow(sdId) {
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
 
-  // Support UUID, legacy_id, and sd_key lookups
+  // Support UUID and sd_key lookups
   const { data: sd, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, sd_key, title, sd_type, intensity_level, category, current_phase, status')
-    .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+    .select('id, sd_key, title, sd_type, intensity_level, category, current_phase, status')
+    .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
     .single();
 
   if (error || !sd) {

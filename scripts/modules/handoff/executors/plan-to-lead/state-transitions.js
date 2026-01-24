@@ -117,7 +117,7 @@ export async function checkAndCompleteParentSD(supabase, sd) {
   try {
     // Get child SD's post-completion commands (ship, learn)
     // SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-E
-    const childSdKey = sd.sd_key || sd.legacy_id || sd.id;
+    const childSdKey = sd.sd_key || sd.id;
     try {
       const childCompletionResult = await handleChildCompletion(childSdKey);
       if (childCompletionResult.success) {

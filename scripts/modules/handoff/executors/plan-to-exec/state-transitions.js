@@ -71,9 +71,9 @@ export async function transitionSdToExec(supabase, sdId, sd) {
   console.log('-'.repeat(50));
 
   try {
-    // Determine the correct SD ID field (UUID vs legacy_id)
+    // Determine the correct SD ID field (UUID vs sd_key)
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sdId);
-    const queryField = isUUID ? 'id' : 'legacy_id';
+    const queryField = isUUID ? 'id' : 'sd_key';
 
     const { error } = await supabase
       .from('strategic_directives_v2')
