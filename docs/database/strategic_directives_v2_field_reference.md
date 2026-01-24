@@ -21,6 +21,15 @@
 - **Format**: Auto-generated UUID (e.g., `550e8400-e29b-41d4-a716-446655440000`)
 - **Purpose**: Internal database relationships. Use this for new FK constraints.
 - **Required**: YES (NOT NULL, auto-generated)
+- **Sync**: Bidirectionally synced with `uuid_internal_pk` via trigger
+
+### Internal UUID (Alias): `uuid_internal_pk`
+- **Type**: `UUID`
+- **Usage**: **Self-documenting alias for uuid_id**
+- **Format**: Same as `uuid_id`
+- **Purpose**: Provides a more descriptive column name indicating this is the internal primary key UUID. Synced bidirectionally with `uuid_id` - updating either column updates the other.
+- **Required**: YES (NOT NULL)
+- **Added**: 2026-01-24 (SD-LEO-GEN-RENAME-COLUMNS-SELF-001-C)
 
 ### Legacy Identifier: `legacy_id`
 - **Type**: `VARCHAR(50)`
