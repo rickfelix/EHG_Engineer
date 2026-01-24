@@ -2,15 +2,19 @@
  * GET /api/aegis/rules
  * SD-AEGIS-GOVERNANCE-001: AEGIS Rules API
  * SD-LEO-GEN-REMEDIATE-CRITICAL-SECURITY-001: Added authentication
+ * SD-SEC-AUTHORIZATION-RBAC-001: Added RBAC authorization
  *
  * Retrieve governance rules with filters
  *
- * SECURITY: Requires authenticated user. Uses user-scoped Supabase client
- * that respects RLS policies.
+ * SECURITY:
+ * - Authentication: Requires valid JWT token
+ * - Authorization: Requires 'rules:read' permission (viewer+)
+ * - Uses user-scoped Supabase client that respects RLS policies
  */
 
 import { NextApiResponse } from 'next';
 import { withAuth, AuthenticatedRequest } from '../../../lib/middleware/api-auth';
+import { withPermission } from '../../../lib/middleware/rbac';
 
 async function handler(
   req: AuthenticatedRequest,
@@ -123,5 +127,6 @@ async function handler(
   }
 }
 
-// SECURITY: Wrap handler with authentication middleware
-export default withAuth(handler);
+// SECURITY: Wrap handler with authentication and authorization middleware
+// SD-SEC-AUTHORIZATION-RBAC-001: Requires rules:read permission
+export default withAuth(withPermission('rules:read')(handler));
