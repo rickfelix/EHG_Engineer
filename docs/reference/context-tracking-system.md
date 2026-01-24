@@ -531,6 +531,202 @@ The Context Tracking System (token measurement) works alongside the **Unified Co
 
 ---
 
+## Unified State Manager v2.0 Upgrade
+
+**Status**: ✅ Implemented (2026-01-24)
+**SD**: SD-LEO-INFRA-UPGRADE-CONTEXT-PRESERVATION-001
+**Research Basis**: ReSum (2025), RECOMP (ICLR 2024), MemGPT (2023)
+
+### Problem Statement
+
+The original UnifiedStateManager v1.0 had critical gaps identified through academic research on LLM context compression and memory management:
+
+1. **Missing Decisions Tracking**: No structured section for recording key decisions made during session
+2. **Missing Constraints**: No tracking of technical/business constraints affecting implementation
+3. **Paraphrasing Errors**: Context highlights were paraphrased summaries, losing verbatim evidence
+4. **No Open Questions**: Missing mechanism to track unresolved questions across sessions
+5. **No Token Budget**: No enforcement of token limits for state preservation
+
+### v2.0 Enhancements
+
+#### Schema Version: 1.0.0 → 2.0.0
+
+**New Structured Sections** (ReSum 2025 research):
+- `decisions[]`: Key decisions with reasoning and timestamp
+- `constraints[]`: Technical/business/timeline constraints
+- `openQuestions[]`: Unresolved questions to track across sessions
+
+**Verbatim Evidence Ledger** (RECOMP ICLR 2024):
+- `evidenceLedger[]`: Verbatim excerpts from code, logs, errors
+- Prevents paraphrasing errors that lose critical detail
+- Each entry includes source location and context
+
+**Token Budget Enforcement** (MemGPT 2023):
+- Target: 300-1200 tokens for optimal context preservation
+- Automatic truncation when exceeding budget
+- Oldest entries evicted first within each section
+
+#### Implementation Details
+
+**Location**: `lib/context/unified-state-manager.js`
+
+**Token Budget Configuration**:
+```javascript
+const TOKEN_BUDGET = {
+  min: 300,      // Minimum tokens for meaningful context
+  target: 800,   // Optimal token count
+  max: 1200,     // Maximum tokens before truncation
+  charsPerToken: 4  // Approximate characters per token
+};
+```
+
+**Maximum Entries Per Section**:
+```javascript
+const MAX_ENTRIES = {
+  decisions: 10,
+  constraints: 10,
+  openQuestions: 5,
+  evidenceLedger: 15,
+  contextHighlights: 5,
+  pendingActions: 10
+};
+```
+
+**New Methods**:
+- `addDecision(decision, reasoning)`: Record key decisions
+- `addConstraint(constraint, type)`: Track constraints (technical/business/timeline)
+- `addOpenQuestion(question, context)`: Log unresolved questions
+- `resolveQuestion(questionId, resolution)`: Close questions with resolution
+- `addEvidence(source, excerpt, context)`: Store verbatim evidence
+- `estimateTokens()`: Calculate current token usage
+- `truncateForBudget()`: Enforce token budget limits
+
+**Example Usage**:
+```javascript
+const stateManager = new UnifiedStateManager('.claude/unified-session-state.json');
+
+// Record a decision
+stateManager.addDecision(
+  'Use PostgreSQL jsonb over separate table',
+  'Better performance for flexible schema, aligns with Supabase strengths'
+);
+
+// Track a constraint
+stateManager.addConstraint(
+  'Must maintain backward compatibility with v1 state files',
+  'technical'
+);
+
+// Log an open question
+const qid = stateManager.addOpenQuestion(
+  'Should we use Redis for session caching?',
+  'Performance optimization discussion, PLAN phase'
+);
+
+// Later: resolve the question
+stateManager.resolveQuestion(qid, 'Deferred - premature optimization');
+
+// Store verbatim evidence
+stateManager.addEvidence(
+  'lib/context/unified-state-manager.js:42',
+  'TypeError: Cannot read property \'length\' of undefined',
+  'Error when loading corrupted state file'
+);
+```
+
+#### Schema Migration
+
+**v1.0.0 State**:
+```json
+{
+  "version": "1.0.0",
+  "summaries": {
+    "contextHighlights": ["..."],
+    "pendingActions": ["..."]
+  }
+}
+```
+
+**v2.0.0 State**:
+```json
+{
+  "version": "2.0.0",
+  "summaries": {
+    "contextHighlights": ["..."],
+    "pendingActions": ["..."],
+    "keyDecisions": [
+      {
+        "id": "dec_1737730800000",
+        "decision": "Use PostgreSQL jsonb over separate table",
+        "reasoning": "Better performance...",
+        "timestamp": "2026-01-24T14:00:00.000Z"
+      }
+    ]
+  },
+  "constraints": [
+    {
+      "id": "con_1737730900000",
+      "constraint": "Must maintain backward compatibility",
+      "type": "technical",
+      "timestamp": "2026-01-24T14:01:40.000Z"
+    }
+  ],
+  "openQuestions": [
+    {
+      "id": "q_1737731000000",
+      "question": "Should we use Redis for session caching?",
+      "context": "Performance optimization discussion",
+      "status": "open",
+      "timestamp": "2026-01-24T14:03:20.000Z"
+    }
+  ],
+  "evidenceLedger": [
+    {
+      "id": "ev_1737731100000",
+      "source": "lib/context/unified-state-manager.js:42",
+      "excerpt": "TypeError: Cannot read property 'length' of undefined",
+      "context": "Error when loading corrupted state file",
+      "timestamp": "2026-01-24T14:05:00.000Z"
+    }
+  ]
+}
+```
+
+**Migration Behavior**:
+- v1.0.0 files are automatically upgraded to v2.0.0 on first load
+- Missing fields are initialized with empty arrays
+- Existing fields are preserved
+- BOM character handling prevents JSON parse errors
+
+#### Testing
+
+All 10 unit tests pass:
+- Schema version validation (v2.0.0)
+- Token budget enforcement (300-1200 range)
+- Add methods (decision, constraint, question, evidence)
+- Resolve question method
+- State field initialization
+- Token estimation accuracy
+
+#### Benefits
+
+1. **Structured Decision Tracking**: Decisions persist across sessions with full reasoning
+2. **Constraint Awareness**: Technical/business constraints visible to all agents
+3. **Question Continuity**: Unresolved questions don't get lost in compaction
+4. **Verbatim Evidence**: Critical error messages, logs, code excerpts preserved exactly
+5. **Token Efficiency**: Automatic budget enforcement prevents state bloat
+6. **Research-Backed**: Based on peer-reviewed LLM memory research
+
+#### Research References
+
+- **ReSum (2025)**: Structured memory sections for reasoning state checkpoints
+- **RECOMP (ICLR 2024)**: Utility-optimized compression with verbatim evidence preservation
+- **MemGPT (2023)**: OS-like memory hierarchy with token budget management
+
+---
+
+---
+
 ## Future Enhancements
 
 1. **Pre-flight estimation**: Use `/v1/messages/count_tokens` endpoint before expensive operations
