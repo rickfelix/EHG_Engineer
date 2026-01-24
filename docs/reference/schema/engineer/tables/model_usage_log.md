@@ -4,9 +4,9 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-24T02:31:56.951Z
+**Generated**: 2026-01-24T03:07:02.107Z
 **Rows**: 693
-**RLS**: Enabled (2 policies)
+**RLS**: Enabled (3 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
 
@@ -65,11 +65,15 @@
 - **Using**: `true`
 - **With Check**: `true`
 
-### 2. Allow all for authenticated (ALL)
+### 2. authenticated_insert_model_usage_log (INSERT)
+
+- **Roles**: {authenticated}
+- **With Check**: `true`
+
+### 3. authenticated_select_model_usage_log (SELECT)
 
 - **Roles**: {authenticated}
 - **Using**: `true`
-- **With Check**: `true`
 
 ---
 
