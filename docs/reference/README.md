@@ -30,12 +30,12 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 | [Database & Schema](#database--schema) | 12 | Database patterns, schemas, migrations |
 | [Sub-Agents](#sub-agents) | 14 | Sub-agent patterns and guides |
 | [Validation & Testing](#validation--testing) | 8 | Validation patterns, testing reference |
-| [LEO Protocol](#leo-protocol) | 10 | Protocol reference, context management |
+| [LEO Protocol](#leo-protocol) | 11 | Protocol reference, context management, hooks |
 | [Patterns & Best Practices](#patterns--best-practices) | 12 | Development patterns |
 | [Quick References](#quick-references) | 12 | Cheat sheets and quick guides |
 | [Other](#other-references) | 7 | Miscellaneous references |
 
-**Total References**: 75
+**Total References**: 76
 
 ---
 
@@ -98,9 +98,10 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 
 | Reference | Description |
 |-----------|-------------|
+| [claude-code-hooks.md](claude-code-hooks.md) | **⭐ NEW v2.0** Claude Code hooks reference + unified context preservation system |
 | [claude-md-router-architecture.md](claude-md-router-architecture.md) | CLAUDE.md router architecture |
 | [context-monitoring.md](context-monitoring.md) | Context monitoring reference |
-| [context-tracking-system.md](context-tracking-system.md) | Context tracking |
+| [context-tracking-system.md](context-tracking-system.md) | Context tracking (token measurement) + unified state integration |
 | [overflow-prevention-patterns.md](overflow-prevention-patterns.md) | Context overflow prevention |
 | [agentic-context-engineering-v3.md](agentic-context-engineering-v3.md) | Context engineering |
 | [claude-code-session-continuation.md](claude-code-session-continuation.md) | Session continuation |
