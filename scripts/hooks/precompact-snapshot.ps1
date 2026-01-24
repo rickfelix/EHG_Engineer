@@ -1,5 +1,6 @@
 # precompact-snapshot.ps1
 # Fires before Claude auto-compacts - saves critical state to file
+# SD-LEO-INFRA-UNIFY-CONTEXT-PRESERVATION-001: Now uses unified state manager
 
 param()
 
@@ -10,53 +11,89 @@ if (-not $ProjectDir) {
 }
 
 $OutDir = Join-Path $ProjectDir ".claude"
-$SnapshotFile = Join-Path $OutDir "compaction-snapshot.md"
-$StateFile = Join-Path $OutDir "session-state.md"
+$UnifiedStateFile = Join-Path $OutDir "unified-session-state.json"
 
 # Ensure directory exists
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
-# Build snapshot content
-$timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-$content = @"
-# Pre-Compaction Snapshot
-**Created**: $timestamp
-**Trigger**: Auto-compaction imminent
+# Get git info
+$branch = git -C $ProjectDir branch --show-current 2>$null
+$status = git -C $ProjectDir status --porcelain 2>$null
+$recentCommits = git -C $ProjectDir log -5 --oneline 2>$null
+$stagedChanges = git -C $ProjectDir diff --cached --stat 2>$null
+$modifiedFiles = git -C $ProjectDir diff --name-only HEAD~5 2>$null | Select-Object -First 20
 
-## Git Status
-``````
-$(git -C $ProjectDir status --porcelain 2>$null)
-``````
+# Try to get current SD from existing state
+$sdId = $null
+$sdPhase = $null
+$sessionState = Join-Path $OutDir "session-state.md"
+if (Test-Path $sessionState) {
+    $stateContent = Get-Content $sessionState -Raw
+    if ($stateContent -match "SD[- ]?ID[:\s]*([A-Z0-9-]+)") {
+        $sdId = $Matches[1]
+    }
+    if ($stateContent -match "Phase[:\s]*([A-Z_]+)") {
+        $sdPhase = $Matches[1]
+    }
+}
 
-## Recent Changes (diff stat)
-``````
-$(git -C $ProjectDir diff --stat 2>$null)
-``````
+# Build unified state JSON
+$timestamp = Get-Date -Format "yyyy-MM-ddTHH:mm:ss.fffZ"
+$state = @{
+    version = "1.0.0"
+    timestamp = $timestamp
+    trigger = "precompact"
+    git = @{
+        branch = if ($branch) { $branch.Trim() } else { "unknown" }
+        status = if ($status) { $status.Trim() } else { "" }
+        recentCommits = if ($recentCommits) { @($recentCommits -split "`n" | Where-Object { $_ }) } else { @() }
+        stagedChanges = if ($stagedChanges) { $stagedChanges.Trim() } else { "" }
+        modifiedFiles = if ($modifiedFiles) { @($modifiedFiles -split "`n" | Where-Object { $_ }) } else { @() }
+    }
+    sd = @{
+        id = $sdId
+        title = $null
+        phase = $sdPhase
+        progress = $null
+    }
+    workflow = @{
+        currentPhase = if ($sdPhase) { $sdPhase } else { "unknown" }
+        lastHandoff = $null
+        toolExecutions = 0
+    }
+    summaries = @{
+        contextHighlights = @("Pre-compaction state captured automatically")
+        keyDecisions = @()
+        pendingActions = @("Restore context after session start")
+    }
+}
 
-## Staged Changes
-``````
-$(git -C $ProjectDir diff --cached --stat 2>$null)
-``````
+# Write unified state (atomic write via temp file)
+$tempFile = "$UnifiedStateFile.tmp"
+$state | ConvertTo-Json -Depth 10 | Out-File -FilePath $tempFile -Encoding UTF8 -Force
+Move-Item -Path $tempFile -Destination $UnifiedStateFile -Force
 
-## Current Branch
-$(git -C $ProjectDir branch --show-current 2>$null)
-
-## Recent Commits (last 5)
-$(git -C $ProjectDir log -5 --oneline 2>$null)
-
-## Modified Files (last hour)
-$(git -C $ProjectDir diff --name-only HEAD~5 2>$null | Select-Object -First 20)
-
-## Active SD (from working directory)
-
----
-
-**IMPORTANT**: Reload this file after compaction to restore context.
-"@
-
-# Write snapshot
-$content | Out-File -FilePath $SnapshotFile -Encoding UTF8 -Force
-
-# Output message for Claude to see
-Write-Host "[SNAPSHOT] Pre-compaction snapshot saved to .claude/compaction-snapshot.md"
-Write-Host "[WARNING] COMPACTION ABOUT TO OCCUR - State preserved"
+# Output comprehensive state summary for Claude to see immediately
+Write-Host ""
+Write-Host "============================================================"
+Write-Host "[PRECOMPACT] Comprehensive state saved"
+Write-Host "============================================================"
+Write-Host "[GIT] Branch: $($state.git.branch)"
+$changeCount = ($status -split "`n" | Where-Object { $_ }).Count
+if ($changeCount -gt 0) {
+    Write-Host "[GIT] Uncommitted changes: $changeCount"
+}
+if ($recentCommits) {
+    $latestCommit = ($recentCommits -split "`n")[0]
+    Write-Host "[GIT] Latest: $latestCommit"
+}
+if ($sdId) {
+    Write-Host "[SD] Working on: $sdId"
+    if ($sdPhase) {
+        Write-Host "[SD] Phase: $sdPhase"
+    }
+}
+Write-Host "============================================================"
+Write-Host "[WARNING] COMPACTION ABOUT TO OCCUR - Full state preserved"
+Write-Host "[FILE] .claude/unified-session-state.json"
+Write-Host ""

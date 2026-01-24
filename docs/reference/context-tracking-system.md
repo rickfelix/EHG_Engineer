@@ -501,13 +501,43 @@ powershell.exe -ExecutionPolicy Bypass -File scripts/hooks/session-start-loader.
 
 ---
 
+## Related: Unified Context Preservation System
+
+**Version**: 2.0 (Implemented 2026-01-24)
+**SD**: SD-LEO-INFRA-UNIFY-CONTEXT-PRESERVATION-001
+
+The Context Tracking System (token measurement) works alongside the **Unified Context Preservation System** (state preservation across compaction).
+
+### Integration Points
+
+| System | Purpose | Data Format |
+|--------|---------|-------------|
+| **Context Tracking** | Monitors token usage, detects compaction events | JSONL logs → database |
+| **Unified State Preservation** | Preserves work state before/after compaction | JSON state file |
+
+**When compaction occurs**:
+1. Context Tracking detects non-monotonic usage drop
+2. Unified State Preservation (PreCompact hook) saves state BEFORE compaction
+3. Compaction happens
+4. Unified State Preservation (SessionStart hook) restores state AFTER
+
+**State Preserved**:
+- Git: branch, status, commits, staged changes, modified files
+- SD: current SD ID, title, phase, progress
+- Workflow: phase, last handoff, tool executions
+- Summaries: context highlights, key decisions, pending actions
+
+**See**: [Claude Code Hooks Reference](claude-code-hooks.md#context-preservation-system-unified-state-sd-leo-infra-unify-context-preservation-001) for complete unified state documentation.
+
+---
+
 ## Future Enhancements
 
 1. **Pre-flight estimation**: Use `/v1/messages/count_tokens` endpoint before expensive operations
 2. **Real-time dashboard**: WebSocket-based context monitoring in admin UI
 3. **Automatic compaction**: Trigger `/compact` when approaching threshold
 4. **Cost correlation**: Link token usage to API costs
-5. **Enhanced state preservation**: Capture active user stories, test results, error stacks in structured format
+5. **~~Enhanced state preservation~~**: ✅ **COMPLETED** (v2.0 Unified State - SD-LEO-INFRA-UNIFY-CONTEXT-PRESERVATION-001)
 
 ---
 
