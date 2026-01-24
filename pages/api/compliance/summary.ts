@@ -2,15 +2,19 @@
  * GET /api/compliance/summary
  * SD-AUTO-COMPLIANCE-ENGINE-001: CCE Compliance Summary API
  * SD-LEO-GEN-REMEDIATE-CRITICAL-SECURITY-001: Added authentication
+ * SD-SEC-AUTHORIZATION-RBAC-001: Added RBAC authorization
  *
  * Get overall compliance summary for dashboard
  *
- * SECURITY: Requires authenticated user. Uses user-scoped Supabase client
- * that respects RLS policies.
+ * SECURITY:
+ * - Authentication: Requires valid JWT token
+ * - Authorization: Requires 'compliance:read' permission (viewer+)
+ * - Uses user-scoped Supabase client that respects RLS policies
  */
 
 import { NextApiResponse } from 'next';
 import { withAuth, AuthenticatedRequest } from '../../../lib/middleware/api-auth';
+import { withPermission } from '../../../lib/middleware/rbac';
 
 async function handler(
   req: AuthenticatedRequest,
@@ -127,5 +131,6 @@ async function handler(
   }
 }
 
-// SECURITY: Wrap handler with authentication middleware
-export default withAuth(handler);
+// SECURITY: Wrap handler with authentication and authorization middleware
+// SD-SEC-AUTHORIZATION-RBAC-001: Requires compliance:read permission
+export default withAuth(withPermission('compliance:read')(handler));

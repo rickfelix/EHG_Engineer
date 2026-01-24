@@ -1,12 +1,15 @@
 /**
- * GET /api/compliance/events
+ * GET/PATCH /api/compliance/events
  * SD-AUTO-COMPLIANCE-ENGINE-001: CCE Compliance Events API
  * SD-LEO-GEN-REMEDIATE-CRITICAL-SECURITY-001: Added authentication
+ * SD-SEC-AUTHORIZATION-RBAC-001: Added RBAC authorization
  *
- * Retrieve compliance events for UI consumption
+ * Retrieve and update compliance events for UI consumption
  *
- * SECURITY: Requires authenticated user. Uses user-scoped Supabase client
- * that respects RLS policies.
+ * SECURITY:
+ * - Authentication: Requires valid JWT token
+ * - Authorization: GET requires 'compliance:read', PATCH requires 'compliance:write'
+ * - Uses user-scoped Supabase client that respects RLS policies
  */
 
 import { NextApiResponse } from 'next';
@@ -16,14 +19,35 @@ import {
   validateWithDetails
 } from '../../../lib/validation/leo-schemas';
 import { withAuth, AuthenticatedRequest } from '../../../lib/middleware/api-auth';
+import { getUserRole, hasPermission } from '../../../lib/middleware/rbac';
 
 async function handler(
   req: AuthenticatedRequest,
   res: NextApiResponse
 ) {
+  // SECURITY: Check RBAC permissions based on method
+  // SD-SEC-AUTHORIZATION-RBAC-001
+  const role = await getUserRole(req);
+
   if (req.method === 'GET') {
+    if (!hasPermission(role, 'compliance:read')) {
+      console.warn(`AUTHZ DENIED: User ${req.user.id} (role: ${role}) attempted compliance:read`);
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have permission to view compliance events.',
+        code: 'PERMISSION_DENIED'
+      });
+    }
     return handleGet(req, res);
   } else if (req.method === 'PATCH') {
+    if (!hasPermission(role, 'compliance:write')) {
+      console.warn(`AUTHZ DENIED: User ${req.user.id} (role: ${role}) attempted compliance:write`);
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have permission to update compliance events. Required role: editor or admin.',
+        code: 'PERMISSION_DENIED'
+      });
+    }
     return handlePatch(req, res);
   } else {
     return res.status(405).json({
@@ -157,4 +181,5 @@ async function handlePatch(req: AuthenticatedRequest, res: NextApiResponse) {
 }
 
 // SECURITY: Wrap handler with authentication middleware
+// SD-SEC-AUTHORIZATION-RBAC-001: RBAC checks inside handler (method-specific)
 export default withAuth(handler);

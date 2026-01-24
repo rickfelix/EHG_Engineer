@@ -2,18 +2,23 @@
  * GET /api/ventures/[id]/calibration
  * Operation 'Final Weld' v6.0.0: Truth Aggregator - Live δ scores
  * SD-LEO-GEN-REMEDIATE-CRITICAL-SECURITY-001: Added authentication
+ * SD-SEC-AUTHORIZATION-RBAC-001: Added RBAC authorization
  *
  * Returns calibration data for a specific venture including:
  * - normalized_delta: Calibration delta normalized by vertical complexity
  * - health_status: 'green' | 'yellow' | 'red'
  * - thresholds: Vertical-specific health thresholds
  *
- * SECURITY: Requires authenticated user.
+ * SECURITY:
+ * - Authentication: Requires valid JWT token
+ * - Authorization: Requires 'ventures:read' permission (viewer+)
+ * - Uses user-scoped Supabase client
  */
 
 import { NextApiResponse } from 'next';
 import { CalibrationService } from '../../../../src/services/CalibrationService.js';
 import { withAuth, AuthenticatedRequest } from '../../../../lib/middleware/api-auth';
+import { withPermission } from '../../../../lib/middleware/rbac';
 
 async function handler(
   req: AuthenticatedRequest,
@@ -68,5 +73,6 @@ async function handler(
   }
 }
 
-// SECURITY: Wrap handler with authentication middleware
-export default withAuth(handler);
+// SECURITY: Wrap handler with authentication and authorization middleware
+// SD-SEC-AUTHORIZATION-RBAC-001: Requires ventures:read permission
+export default withAuth(withPermission('ventures:read')(handler));

@@ -1,21 +1,25 @@
 /**
- * POST /api/ventures
+ * GET/POST /api/ventures
  * SD-STAGE1-ENTRY-UX-001: Create venture with origin tracking
  * SD-IDEATION-GENESIS-AUDIT: Capture raw_chairman_intent at creation
  * SD-LEO-GEN-REMEDIATE-CRITICAL-SECURITY-001: Added authentication
+ * SD-SEC-AUTHORIZATION-RBAC-001: Added RBAC authorization
  *
  * Creates a new venture in Stage 1 with origin_type tracking
  * (manual, competitor_clone, or blueprint)
  *
  * Captures Chairman's original vision in raw_chairman_intent (immutable)
  *
- * SECURITY: Requires authenticated user. Uses user-scoped Supabase client
- * that respects RLS policies.
+ * SECURITY:
+ * - Authentication: Requires valid JWT token
+ * - Authorization: GET requires 'ventures:read', POST requires 'ventures:create'
+ * - Uses user-scoped Supabase client that respects RLS policies
  */
 
 import { NextApiResponse } from 'next';
 import { z } from 'zod';
 import { withAuth, AuthenticatedRequest } from '../../lib/middleware/api-auth';
+import { getUserRole, hasPermission } from '../../lib/middleware/rbac';
 
 // Request body validation schema
 const CreateVentureSchema = z.object({
@@ -34,8 +38,21 @@ async function handler(
 ) {
   const { user, supabase } = req;
 
+  // SECURITY: Check RBAC permissions based on method
+  // SD-SEC-AUTHORIZATION-RBAC-001
+  const role = await getUserRole(req);
+
   // GET: Fetch all ventures (user's ventures via RLS)
   if (req.method === 'GET') {
+    if (!hasPermission(role, 'ventures:read')) {
+      console.warn(`AUTHZ DENIED: User ${user.id} (role: ${role}) attempted ventures:read`);
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have permission to view ventures.',
+        code: 'PERMISSION_DENIED'
+      });
+    }
+
     try {
       const { data: ventures, error } = await supabase
         .from('ventures')
@@ -62,6 +79,15 @@ async function handler(
 
   // POST: Create new venture
   if (req.method === 'POST') {
+    if (!hasPermission(role, 'ventures:create')) {
+      console.warn(`AUTHZ DENIED: User ${user.id} (role: ${role}) attempted ventures:create`);
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have permission to create ventures. Required role: editor or admin.',
+        code: 'PERMISSION_DENIED'
+      });
+    }
+
     // Validate request body
     const parsed = CreateVentureSchema.safeParse(req.body);
 

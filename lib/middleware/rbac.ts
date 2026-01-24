@@ -32,6 +32,8 @@ export type Permission =
   | 'ventures:read'
   | 'compliance:read'
   | 'compliance:write'
+  | 'leo:read'
+  | 'leo:write'
   | 'admin:*';
 
 // Role-to-permission mapping
@@ -48,14 +50,17 @@ const rolePermissions: Record<Role, Permission[]> = {
     'ventures:update',
     'ventures:read',
     'compliance:read',
-    'compliance:write'
+    'compliance:write',
+    'leo:read',
+    'leo:write'
   ],
   viewer: [
     'violations:read',
     'rules:read',
     'constitutions:read',
     'ventures:read',
-    'compliance:read'
+    'compliance:read',
+    'leo:read'
   ],
   owner: [] // Owner permissions are checked dynamically based on resource ownership
 };

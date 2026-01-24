@@ -3,16 +3,21 @@
  * SD-STAGE1-ENTRY-UX-001: Analyze competitor URL
  * SD-IDEATION-GENESIS-AUDIT: Real market intelligence (not hallucinated)
  * SD-LEO-GEN-REMEDIATE-CRITICAL-SECURITY-001: Added authentication
+ * SD-SEC-AUTHORIZATION-RBAC-001: Added RBAC authorization
  *
  * Analyzes a competitor URL using REAL web fetching and AI analysis.
  * Classifies all outputs using Four Buckets (Facts/Assumptions/Simulations/Unknowns).
  *
- * SECURITY: Requires authenticated user.
+ * SECURITY:
+ * - Authentication: Requires valid JWT token
+ * - Authorization: Requires 'ventures:create' permission (editor+) since used in venture creation
+ * - Uses user-scoped Supabase client
  */
 
 import { NextApiResponse } from 'next';
 import { z } from 'zod';
 import { withAuth, AuthenticatedRequest } from '../../lib/middleware/api-auth';
+import { withPermission } from '../../lib/middleware/rbac';
 
 // Request body validation schema
 const AnalyzeCompetitorSchema = z.object({
@@ -146,5 +151,6 @@ async function handler(
   }
 }
 
-// SECURITY: Wrap handler with authentication middleware
-export default withAuth(handler);
+// SECURITY: Wrap handler with authentication and authorization middleware
+// SD-SEC-AUTHORIZATION-RBAC-001: Requires ventures:create permission
+export default withAuth(withPermission('ventures:create')(handler));
