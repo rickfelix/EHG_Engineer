@@ -5,7 +5,7 @@
 - **Status**: Approved
 - **Version**: 1.0.0
 - **Author**: LEO Protocol Team
-- **Last Updated**: 2026-01-20
+- **Last Updated**: 2026-01-24
 - **Tags**: leo, handoff, gates, validation, executor
 
 ## Overview
@@ -18,12 +18,14 @@ This guide documents the LEO Protocol handoff system architecture, gate validati
 
 - [Quick Reference](#quick-reference)
 - [1. Prerequisite Validator Behavior](#1-prerequisite-validator-behavior)
-- [2. Executor Framework Architecture](#2-executor-framework-architecture)
-- [3. Gate Validation System](#3-gate-validation-system)
-- [4. Template Engine](#4-template-engine)
-- [5. Error Handling Patterns](#5-error-handling-patterns)
-- [6. Executor Reference](#6-executor-reference)
-- [7. Best Practices](#7-best-practices)
+- [2. GateComposer and Gate Order](#2-gatecomposer-and-gate-order)
+- [3. Repository Detection Strategies](#3-repository-detection-strategies)
+- [4. Session Claim Semantics & TTL](#4-session-claim-semantics--ttl)
+- [5. BaseExecutor Gate Engine & Errors](#5-baseexecutor-gate-engine--errors)
+- [6. Executor Catalog & New Executor Guide](#6-executor-catalog--new-executor-guide)
+- [7. Gate Spotlight: GATE6_BRANCH_ENFORCEMENT](#7-gate-spotlight-gate6_branch_enforcement-v2---proactive)
+- [8. Gate Spotlight: GATE_PROTOCOL_FILE_READ](#8-gate-spotlight-gate_protocol_file_read-protocol-familiarization-enforcement)
+- [Best Practices](#best-practices)
 - [Related Documentation](#related-documentation)
 - [Version History](#version-history)
 
@@ -112,17 +114,23 @@ class GateComposer {
   getGatesForType(type) {
     const GATE_REGISTRY = {
       'LEAD-TO-PLAN': [
+        'GATE_PROTOCOL_FILE_READ',  // NEW: Requires CLAUDE_LEAD.md read
         'GATE_SD_TRANSITION_READINESS',
         'TARGET_APPLICATION_VALIDATION',
         'BASELINE_DEBT_CHECK'
       ],
       'PLAN-TO-EXEC': [
+        'GATE_PROTOCOL_FILE_READ',  // NEW: Requires CLAUDE_PLAN.md read
         'PREREQUISITE_HANDOFF_CHECK',
         'GATE_ARCHITECTURE_VERIFICATION',
         'BMAD_PLAN_TO_EXEC',
         'GATE_CONTRACT_COMPLIANCE',
         'GATE_EXPLORATION_AUDIT',
         'GATE6_BRANCH_ENFORCEMENT'
+      ],
+      'EXEC-TO-PLAN': [
+        'GATE_PROTOCOL_FILE_READ',  // NEW: Requires CLAUDE_EXEC.md read
+        // ... other gates
       ],
       'PLAN-TO-LEAD': [
         'PREREQUISITE_HANDOFF_CHECK',
@@ -594,6 +602,236 @@ return {
 
 ---
 
+## 8. Gate Spotlight: GATE_PROTOCOL_FILE_READ (Protocol Familiarization Enforcement)
+
+### Overview
+
+**Added**: SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001 (2026-01-24)
+
+GATE_PROTOCOL_FILE_READ enforces the "Protocol Familiarization" directive that was previously just text guidance in CLAUDE_*.md files. It validates that the agent has read the phase-specific protocol file before a handoff can proceed.
+
+### Location
+`scripts/modules/handoff/gates/protocol-file-read-gate.js`
+
+### Protocol File Requirements
+
+| Handoff Type | Required File | Purpose |
+|--------------|---------------|---------|
+| LEAD-TO-PLAN | CLAUDE_LEAD.md | LEAD phase operations, SD approval workflow |
+| PLAN-TO-EXEC | CLAUDE_PLAN.md | PLAN phase operations, PRD guidelines |
+| EXEC-TO-PLAN | CLAUDE_EXEC.md | EXEC phase operations, implementation patterns |
+
+### How It Works
+
+#### 1. Automatic Tracking (PostToolUse Hook)
+
+A PostToolUse hook automatically tracks when protocol files are read:
+
+**Hook**: `.claude/settings.json`
+```json
+{
+  "matcher": "Read",
+  "hooks": [{
+    "type": "command",
+    "command": "node scripts/hooks/protocol-file-tracker.js",
+    "timeout": 3
+  }]
+}
+```
+
+**Tracker**: `scripts/hooks/protocol-file-tracker.js`
+- Intercepts Read tool calls
+- Detects when CLAUDE_*.md files are read
+- Updates `.claude/unified-session-state.json` with read timestamp
+- Persists across session compaction
+
+#### 2. Validation at Handoff
+
+When a handoff executes, the gate checks session state:
+
+```javascript
+// scripts/modules/handoff/gates/protocol-file-read-gate.js
+
+const HANDOFF_FILE_REQUIREMENTS = {
+  'LEAD-TO-PLAN': 'CLAUDE_LEAD.md',
+  'PLAN-TO-EXEC': 'CLAUDE_PLAN.md',
+  'EXEC-TO-PLAN': 'CLAUDE_EXEC.md'
+};
+
+export async function validateProtocolFileRead(handoffType, _ctx) {
+  const requiredFile = HANDOFF_FILE_REQUIREMENTS[handoffType];
+  const isRead = isProtocolFileRead(requiredFile);
+
+  if (isRead) {
+    return {
+      pass: true,
+      score: 100,
+      max_score: 100,
+      issues: [],
+      warnings: []
+    };
+  }
+
+  // BLOCK handoff if file not read
+  return {
+    pass: false,
+    score: 0,
+    max_score: 100,
+    issues: [
+      `Protocol file not read: ${requiredFile}`,
+      `LEO Protocol requires reading ${requiredFile} before ${handoffType} handoff`
+    ],
+    warnings: []
+  };
+}
+```
+
+#### 3. Session State Structure
+
+**File**: `.claude/unified-session-state.json`
+```json
+{
+  "protocolFilesRead": [
+    "CLAUDE_LEAD.md",
+    "CLAUDE_PLAN.md",
+    "CLAUDE_EXEC.md"
+  ],
+  "protocolFilesReadAt": {
+    "CLAUDE_LEAD.md": "2026-01-24T10:30:00.000Z",
+    "CLAUDE_PLAN.md": "2026-01-24T11:15:00.000Z",
+    "CLAUDE_EXEC.md": "2026-01-24T12:45:00.000Z"
+  }
+}
+```
+
+### Gate Execution Flow
+
+```
+Handoff Start → GATE_PROTOCOL_FILE_READ (first gate)
+              ↓
+        Check session state
+              ↓
+        ┌─────────────────┐
+        │ File read?      │
+        └─────────────────┘
+           ↓         ↓
+          Yes       No
+           ↓         ↓
+        PASS      BLOCK
+         ↓         ↓
+   Continue    Show Remediation
+```
+
+### Blocking Behavior
+
+When the gate blocks, it provides clear remediation:
+
+```
+❌ Protocol file NOT read: CLAUDE_LEAD.md
+
+📚 REMEDIATION:
+   The LEO Protocol requires reading the phase-specific protocol file
+   before proceeding with this handoff.
+
+   ACTION REQUIRED:
+   1. Read the file: CLAUDE_LEAD.md
+   2. Re-run the handoff after reading
+
+   HINT: Use the Read tool to read CLAUDE_LEAD.md
+```
+
+### Bypass Mechanism
+
+Emergency bypass is available with explicit reason:
+
+```javascript
+// Bypass requires 20+ character justification
+bypassProtocolFileReadGate('LEAD-TO-PLAN',
+  'Production emergency fix - JIRA-12345 - time-sensitive outage'
+);
+```
+
+**Rate-limited per SD-LEARN-010**: Bypass events are logged and tracked for pattern analysis.
+
+### Structured Logging
+
+All gate outcomes emit structured logs for machine parsing:
+
+```javascript
+// PASS event
+{
+  event: 'PROTOCOL_FILE_READ_GATE',
+  status: 'PASS',
+  handoff_type: 'LEAD-TO-PLAN',
+  required_file: 'CLAUDE_LEAD.md',
+  session_id: 'session_abc123',
+  timestamp: '2026-01-24T10:30:00.000Z'
+}
+
+// BLOCK event
+{
+  event: 'PROTOCOL_FILE_READ_GATE',
+  status: 'BLOCK',
+  handoff_type: 'PLAN-TO-EXEC',
+  required_file: 'CLAUDE_PLAN.md',
+  session_id: 'session_abc123',
+  timestamp: '2026-01-24T11:00:00.000Z'
+}
+
+// BYPASS event
+{
+  event: 'PROTOCOL_FILE_READ_GATE',
+  status: 'BYPASS',
+  handoff_type: 'LEAD-TO-PLAN',
+  required_file: 'CLAUDE_LEAD.md',
+  bypass_reason: 'Production emergency fix...',
+  session_id: 'session_abc123',
+  timestamp: '2026-01-24T11:30:00.000Z'
+}
+```
+
+### Integration
+
+**Handoffs**: LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN
+**Position**: First gate (runs before all other gates)
+**Blocking**: Yes (handoff cannot proceed if file not read)
+
+**Files Modified**:
+- `scripts/modules/handoff/executors/lead-to-plan/index.js`
+- `scripts/modules/handoff/executors/plan-to-exec/index.js`
+- `scripts/modules/handoff/executors/exec-to-plan/index.js`
+
+### Why This Enhancement Was Needed
+
+**Problem**: Protocol Familiarization directive was text-only guidance in CLAUDE_*.md files (lines 23-24). Agents could proceed with handoffs without reading phase-specific instructions.
+
+**Root Cause**: No enforcement mechanism to validate protocol file reading.
+
+**Solution**: Convert text directive into enforced validation gate with automatic tracking.
+
+### Test Coverage
+
+**Unit Tests**: `tests/unit/protocol-file-read-gate.test.js` (19 tests)
+
+Coverage includes:
+- ✅ Handoff file requirements mapping
+- ✅ Blocking behavior when file not read
+- ✅ Passing behavior when file is read
+- ✅ Session state persistence
+- ✅ Duplicate prevention
+- ✅ Multiple file tracking
+- ✅ Bypass validation
+- ✅ Timestamp recording
+- ✅ Gate composition and integration
+
+### Related
+
+- **Hook**: `scripts/hooks/protocol-file-tracker.js` - Automatic read detection
+- **Session State**: `.claude/unified-session-state.json` - Persistent tracking
+- **Protocol Files**: `CLAUDE_LEAD.md`, `CLAUDE_PLAN.md`, `CLAUDE_EXEC.md`
+
+---
+
 ## Best Practices
 
 ### DO
@@ -630,5 +868,6 @@ return {
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.0 | 2026-01-24 | Added GATE_PROTOCOL_FILE_READ documentation (protocol familiarization enforcement) |
 | 1.1.0 | 2026-01-23 | Added GATE6 v2 documentation (proactive cross-SD detection) |
 | 1.0.0 | 2026-01-20 | Initial documentation, moved to LEO hub |
