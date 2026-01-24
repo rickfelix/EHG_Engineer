@@ -69,11 +69,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/semantic-router-hook.js",
-            "timeout": 1
-          },
-          {
-            "type": "command",
             "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/session-cleanup.js",
             "timeout": 5
           },
