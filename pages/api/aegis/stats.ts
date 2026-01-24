@@ -32,7 +32,8 @@ async function handler(
   const { period = '7d' } = req.query;
 
   // Parse period (e.g., "7d", "30d")
-  const days = parseInt((period as string).replace('d', '')) || 7;
+  // SD-SEC-DATA-VALIDATION-001: Safe parsing with radix and bounds (1-365 days)
+  const days = Math.min(Math.max(parseInt((period as string).replace('d', ''), 10) || 7, 1), 365);
   const sinceDate = new Date();
   sinceDate.setDate(sinceDate.getDate() - days);
 

@@ -44,13 +44,27 @@ export const GateScoresQuery = z.object({
 });
 
 /**
+ * Evidence value schema - allows structured data but requires type narrowing
+ * SD-SEC-DATA-VALIDATION-001: Replaced z.any() with z.unknown() for type safety
+ */
+const EvidenceValue = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+  z.array(z.unknown()),
+  z.record(z.string(), z.unknown())
+]);
+
+/**
  * POST /api/leo/sub-agent-reports request body
  */
 export const SubAgentReportBody = z.object({
   prd_id: z.string().min(1, 'PRD ID is required'),
   agent: AgentEnum,
   status: StatusEnum,
-  evidence: z.record(z.any()).default({}),
+  // SD-SEC-DATA-VALIDATION-001: Replaced z.any() with structured evidence schema
+  evidence: z.record(z.string(), EvidenceValue).default({}),
   message: z.string().optional(),
   error_details: z.string().optional()
 });
@@ -88,7 +102,8 @@ export const GateScoresResponse = z.object({
   history: z.array(z.object({
     gate: GateEnum,
     score: z.number(),
-    evidence: z.record(z.any()),
+    // SD-SEC-DATA-VALIDATION-001: Replaced z.any() with structured evidence schema
+    evidence: z.record(z.string(), EvidenceValue),
     created_at: z.string().datetime()
   })),
   last_updated: z.string().datetime().nullable(),
