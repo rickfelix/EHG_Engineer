@@ -126,15 +126,17 @@ export async function validateTransitionReadiness(sd, supabase) {
     issues.push('success_metrics AND success_criteria are both empty - must define at least one measurable success metric');
     console.log('   ❌ success_metrics and success_criteria are both empty or missing');
   } else if (Array.isArray(successMetrics)) {
-    // Validate structure: accept both object format (metric/target) AND string format (success_criteria)
-    // Object format: { metric: "...", target: "..." }
-    // String format: "Schema allows all status values..." (from success_criteria)
+    // Validate structure: accept multiple valid formats
+    // Format 1 (success_metrics): { metric: "...", target: "..." }
+    // Format 2 (success_criteria per field reference): { criterion: "...", measure: "..." }
+    // Format 3 (string): "Schema allows all status values..." (legacy success_criteria)
     const validMetrics = successMetrics.filter(m =>
-      (m && typeof m === 'object' && m.metric && m.target) || // Object format
-      (m && typeof m === 'string' && m.trim().length > 0)     // String format (success_criteria)
+      (m && typeof m === 'object' && m.metric && m.target) ||      // Format 1: success_metrics
+      (m && typeof m === 'object' && m.criterion && m.measure) ||  // Format 2: success_criteria (field reference doc format)
+      (m && typeof m === 'string' && m.trim().length > 0)          // Format 3: String format (legacy)
     );
     if (validMetrics.length === 0) {
-      issues.push('success_metrics/success_criteria has no valid entries');
+      issues.push('success_metrics/success_criteria has no valid entries (expected: {metric,target}, {criterion,measure}, or string)');
       console.log('   ❌ No valid metric entries found');
     } else if (validMetrics.length < successMetrics.length) {
       warnings.push(`${successMetrics.length - validMetrics.length} metric entries are invalid`);
