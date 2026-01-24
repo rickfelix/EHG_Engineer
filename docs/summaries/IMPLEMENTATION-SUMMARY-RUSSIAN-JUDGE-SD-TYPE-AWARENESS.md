@@ -594,6 +594,49 @@ The Russian Judge AI quality assessment system is now **intelligent, fair, and c
 4. Tune thresholds based on evidence
 5. Consider transition to soft enforcement
 
+## Update 2026-01-24: Retrospective Quality Gate Refinements
+
+### Retrospective Scoring Improvements
+
+Building on the sd_type awareness foundation, retrospective quality assessment was refined to provide more actionable feedback:
+
+**Key Improvements:**
+1. **Specific Feedback Categories**: Retrospective AI now provides scoring on 4 specific dimensions:
+   - `learning_specificity` (40% weight) - Concrete technical takeaways vs generic patterns
+   - `action_item_actionability` (30% weight) - Explicit done-conditions vs vague tasks
+   - `improvement_area_depth` (20% weight) - Root cause analysis depth (3-5 whys)
+   - `lesson_applicability` (10% weight) - Explicit patterns/standards vs observations
+
+2. **Infrastructure SD Threshold**: Applied 55% pass threshold for infrastructure SDs in PLAN-TO-LEAD handoff
+   - Previous: Used standard 70% threshold
+   - Current: 55% for infrastructure/documentation SDs
+   - Rationale: Infrastructure work often has fewer user-facing learnings
+
+3. **Actionable AI Guidance**: Russian Judge now tells you HOW to improve, not just WHAT is wrong:
+   - Example: "Replace meta 'PASS pattern' learnings with concrete technical takeaways tied to evidence"
+   - Example: "Add explicit done-conditions per item with deadlines"
+   - Example: "Perform deeper causal analysis (3-5 whys) for missing phase handoffs"
+
+**Real-World Validation:**
+- SD-LEO-INFRA-IMPLEMENT-BYPASS-DETECTION-001 initially failed at 52% (threshold 55%)
+- After applying specific AI feedback, score increased to 72%
+- Changes included:
+  - Concrete metrics (query times: 3.2s → 180ms)
+  - Specific index strategies (B-tree on created_at, blocked)
+  - Done-conditions with verification queries
+  - 5-whys root cause analysis
+  - Enforceable patterns (WebhookClient standard, job_heartbeats meta-monitoring)
+
+**Implementation Location:**
+- `scripts/modules/handoff/executors/plan-to-lead/index.js` - Retrospective quality gate
+- `scripts/modules/ai-quality-evaluator.js` - Base Russian Judge scoring
+- Database: `retrospectives` table with quality_score column
+
+**Outcome:**
+- More useful retrospectives with actionable patterns
+- Infrastructure SDs pass at appropriate threshold
+- Feedback loop: failing score → specific guidance → improved content → passing score
+
 **Documentation References:**
 - System Overview: `docs/russian-judge-quality-system.md`
 - Threshold Config: `config/russian-judge-thresholds.json`
