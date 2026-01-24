@@ -58,5 +58,5 @@ $(git -C $ProjectDir diff --name-only HEAD~5 2>$null | Select-Object -First 20)
 $content | Out-File -FilePath $SnapshotFile -Encoding UTF8 -Force
 
 # Output message for Claude to see
-Write-Host "📸 Pre-compaction snapshot saved to .claude/compaction-snapshot.md"
-Write-Host "⚠️  COMPACTION ABOUT TO OCCUR - State preserved"
+Write-Host "[SNAPSHOT] Pre-compaction snapshot saved to .claude/compaction-snapshot.md"
+Write-Host "[WARNING] COMPACTION ABOUT TO OCCUR - State preserved"
