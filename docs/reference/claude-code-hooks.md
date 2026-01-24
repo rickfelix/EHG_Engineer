@@ -767,6 +767,20 @@ if (restored) {
 - **Fix**: SessionStart now OUTPUTS state directly to console
 - **Status**: ✅ Fixed
 
+**Issue 5: Invalid Unicode Surrogates in Script Output**
+- **Problem**: Script output containing corrupted Unicode characters (invalid surrogates) caused Anthropic API errors when Claude Code sent tool results
+- **Error**: `API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"The request body is not valid JSON: no low surrogate in string: line 1 column 136338"}}`
+- **Root Cause**:
+  - Corrupted Unicode in conversation context (from previous session or file reads)
+  - Invalid high surrogates (0xD800-0xDBFF) without matching low surrogate (0xDC00-0xDFFF)
+  - Claude Code's JSON serialization fails when sending tool results to Anthropic API
+- **Fix**: Added Unicode sanitization to handoff CLI (`scripts/modules/handoff/cli/cli-main.js`)
+  - `sanitizeUnicode()` scans strings and replaces invalid surrogates with U+FFFD (replacement character)
+  - `installOutputSanitizer()` patches `console.log/error/warn` to sanitize all output
+  - Auto-installed at CLI startup before any output
+- **Status**: ✅ Fixed (2026-01-24)
+- **Pattern**: Apply same sanitization to any script that outputs large amounts of text to Claude Code
+
 #### Performance
 
 | Operation | Time | Threshold | Status |
@@ -885,6 +899,61 @@ CLAUDE_PROJECT_DIR=$(pwd) node scripts/hooks/my-hook.js
 # Test blocking behavior
 node scripts/hooks/my-hook.js && echo "Allowed" || echo "Blocked (exit $?)"
 ```
+
+### 8. Sanitize Unicode in Script Output
+
+Prevent invalid Unicode surrogates from corrupting Claude Code's API calls:
+
+```javascript
+/**
+ * Sanitize string by removing invalid Unicode surrogates.
+ * Replaces invalid surrogates with U+FFFD (replacement character).
+ */
+function sanitizeUnicode(value) {
+  if (typeof value !== 'string') return value;
+
+  let result = '';
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+
+    // High surrogate (0xD800-0xDBFF)
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      const nextCode = value.charCodeAt(i + 1);
+      if (nextCode >= 0xDC00 && nextCode <= 0xDFFF) {
+        // Valid pair - keep both
+        result += value[i] + value[i + 1];
+        i++; // Skip next char
+      } else {
+        // Invalid - replace with replacement character
+        result += '\uFFFD';
+      }
+    }
+    // Lone low surrogate (0xDC00-0xDFFF)
+    else if (code >= 0xDC00 && code <= 0xDFFF) {
+      result += '\uFFFD';
+    }
+    // Normal character
+    else {
+      result += value[i];
+    }
+  }
+  return result;
+}
+
+// Install at CLI startup
+const originalLog = console.log;
+console.log = (...args) => originalLog(...args.map(arg =>
+  typeof arg === 'string' ? sanitizeUnicode(arg) : arg
+));
+```
+
+**When to use**:
+- Scripts that output large amounts of text (>50k chars)
+- Scripts that read files with unknown encoding
+- Scripts that process user-generated content
+- Any script that outputs JSON for Claude Code to parse
+
+**Example**: See `scripts/modules/handoff/cli/cli-main.js` for full implementation
 
 ## Troubleshooting
 
