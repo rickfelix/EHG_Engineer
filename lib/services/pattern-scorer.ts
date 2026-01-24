@@ -5,6 +5,8 @@
  * Part of SD-FAILURE-PATTERNS-001 - Anti-Pattern Library
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 export interface FailurePattern {
   id: string;
   pattern_id: string;
@@ -58,8 +60,9 @@ export class PatternScorer {
 
   /**
    * Load patterns from database
+   * SD-SEC-DATA-VALIDATION-001: Replace unsafe 'any' with proper type
    */
-  async loadPatterns(supabase: any): Promise<void> {
+  async loadPatterns(supabase: SupabaseClient): Promise<void> {
     const { data, error } = await supabase
       .from('failure_patterns')
       .select('*')

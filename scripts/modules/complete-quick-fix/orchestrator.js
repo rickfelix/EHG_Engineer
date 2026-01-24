@@ -272,6 +272,43 @@ export async function completeQuickFix(qfId, options = {}) {
 }
 
 /**
+ * Sanitize string for safe shell argument usage
+ * SD-SEC-DATA-VALIDATION-001: Escape shell metacharacters
+ * @param {string} str - String to sanitize
+ * @returns {string} Sanitized string
+ */
+function sanitizeForShell(str) {
+  if (!str || typeof str !== 'string') return '';
+  // Replace shell metacharacters with escaped versions
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/`/g, '\\`')
+    .replace(/\$/g, '\\$')
+    .replace(/!/g, '\\!')
+    .replace(/\n/g, ' ');
+}
+
+/**
+ * Validate quick-fix ID format
+ * SD-SEC-DATA-VALIDATION-001: Input validation
+ * @param {string} qfId - Quick-fix ID
+ * @returns {string} Validated ID
+ * @throws {Error} If invalid
+ */
+function validateQfId(qfId) {
+  if (!qfId || typeof qfId !== 'string') {
+    throw new Error('Quick-fix ID is required');
+  }
+  const sanitized = qfId.trim();
+  // QF IDs: QF-YYYYMMDD-NNN or alphanumeric with dashes
+  if (!/^[a-zA-Z0-9_-]+$/.test(sanitized) || sanitized.length > 50) {
+    throw new Error(`Invalid quick-fix ID: ${qfId}`);
+  }
+  return sanitized;
+}
+
+/**
  * Create automatic PR if configured
  */
 async function createAutoPR(qfId, qf, filesChanged, actualLoc, testsPass, uatVerified, verificationNotes) {
@@ -280,15 +317,19 @@ async function createAutoPR(qfId, qf, filesChanged, actualLoc, testsPass, uatVer
   try {
     const { execSync } = await import('child_process');
 
+    // SD-SEC-DATA-VALIDATION-001: Validate qfId
+    const validatedQfId = validateQfId(qfId);
+
     // Check if gh CLI is installed
     execSync('which gh', { stdio: 'pipe' });
 
-    // Generate PR title and body
-    const prTitle = `fix(${qfId}): ${qf.title}`;
-    const prBody = generatePRBody(qfId, qf, filesChanged, actualLoc, testsPass, uatVerified, verificationNotes);
+    // Generate PR title and body - sanitize for shell usage
+    const prTitle = sanitizeForShell(`fix(${validatedQfId}): ${qf.title || 'Quick fix'}`);
+    const prBody = sanitizeForShell(generatePRBody(validatedQfId, qf, filesChanged, actualLoc, testsPass, uatVerified, verificationNotes));
 
-    console.log(`   Creating PR: ${prTitle}\n`);
+    console.log(`   Creating PR: fix(${validatedQfId}): ${qf.title}\n`);
 
+    // SD-SEC-DATA-VALIDATION-001: Use sanitized inputs
     const prOutput = execSync(`gh pr create --title "${prTitle}" --body "${prBody}"`, {
       encoding: 'utf-8',
       stdio: 'pipe'
@@ -302,7 +343,7 @@ async function createAutoPR(qfId, qf, filesChanged, actualLoc, testsPass, uatVer
     }
   } catch (err) {
     console.log(`   ⚠️  Auto-PR creation failed: ${err.message}`);
-    console.log(`   Please create PR manually: gh pr create --title "fix(${qfId}): ${qf.title}"\n`);
+    console.log('   Please create PR manually: gh pr create\n');
   }
 
   return null;

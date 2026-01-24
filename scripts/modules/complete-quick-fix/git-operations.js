@@ -6,6 +6,46 @@
 import { execSync } from 'child_process';
 
 /**
+ * Sanitize branch name for safe shell usage
+ * SD-SEC-DATA-VALIDATION-001: Validate git branch names
+ * @param {string} branchName - Branch name to validate
+ * @returns {string} Validated branch name
+ * @throws {Error} If invalid
+ */
+function validateBranchName(branchName) {
+  if (!branchName || typeof branchName !== 'string') {
+    throw new Error('Branch name is required');
+  }
+  const sanitized = branchName.trim();
+  // Git branch names: alphanumeric, dashes, underscores, slashes, dots
+  // Reject shell metacharacters and spaces
+  if (!/^[a-zA-Z0-9/_.-]+$/.test(sanitized) || sanitized.length > 255) {
+    throw new Error(`Invalid branch name: ${branchName}`);
+  }
+  // Reject dangerous patterns
+  if (sanitized.includes('..') || sanitized.startsWith('-') || sanitized.includes('\\')) {
+    throw new Error(`Branch name contains invalid patterns: ${branchName}`);
+  }
+  return sanitized;
+}
+
+/**
+ * Sanitize commit message for safe shell usage
+ * SD-SEC-DATA-VALIDATION-001: Escape shell metacharacters
+ * @param {string} message - Commit message
+ * @returns {string} Sanitized message
+ */
+function sanitizeCommitMessage(message) {
+  if (!message || typeof message !== 'string') return 'Update';
+  return message
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/`/g, '\\`')
+    .replace(/\$/g, '\\$')
+    .replace(/!/g, '\\!');
+}
+
+/**
  * Auto-detect git information from repository
  * @param {string} testDir - Directory to run git commands in
  * @param {object} options - Existing options that may override detection
@@ -152,7 +192,9 @@ export async function commitAndPushChanges(testDir, qf, gitInfo, actualLoc, file
         execSync('git add .', { stdio: 'inherit', cwd: testDir });
 
         console.log('   📝 Creating commit...');
-        execSync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, { stdio: 'inherit', cwd: testDir });
+        // SD-SEC-DATA-VALIDATION-001: Sanitize commit message
+        const sanitizedMessage = sanitizeCommitMessage(commitMessage);
+        execSync(`git commit -m "${sanitizedMessage}"`, { stdio: 'inherit', cwd: testDir });
 
         const newCommitSha = execSync('git rev-parse HEAD', { encoding: 'utf-8', cwd: testDir }).trim();
         commitSha = newCommitSha;
@@ -161,13 +203,15 @@ export async function commitAndPushChanges(testDir, qf, gitInfo, actualLoc, file
         const shouldPush = await prompt('   Push to remote? (yes/no): ');
 
         if (shouldPush.toLowerCase().startsWith('y')) {
-          console.log(`\n   🚀 Pushing to ${currentBranch}...`);
+          // SD-SEC-DATA-VALIDATION-001: Validate branch name before shell use
+          const validatedBranch = validateBranchName(currentBranch);
+          console.log(`\n   🚀 Pushing to ${validatedBranch}...`);
           try {
-            execSync(`git push -u origin ${currentBranch}`, { stdio: 'inherit', cwd: testDir });
+            execSync(`git push -u origin ${validatedBranch}`, { stdio: 'inherit', cwd: testDir });
             console.log('   ✅ Pushed successfully\n');
           } catch (pushErr) {
             console.log(`   ⚠️  Push failed: ${pushErr.message}`);
-            console.log(`   You can push manually later: git push -u origin ${currentBranch}\n`);
+            console.log(`   You can push manually later: git push -u origin ${validatedBranch}\n`);
           }
         } else {
           console.log('\n   ⚠️  Not pushed. Push manually when ready:');
@@ -245,7 +289,8 @@ export async function mergeToMain(testDir, qf, prUrl, prompt) {
       if (prUrl) {
         try {
           const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
-          if (prNumber) {
+          // SD-SEC-DATA-VALIDATION-001: Validate PR number is numeric
+          if (prNumber && /^\d+$/.test(prNumber)) {
             execSync(`gh pr merge ${prNumber} --merge --delete-branch`, { stdio: 'inherit', cwd: testDir });
             console.log('   ✅ PR merged and branch deleted via GitHub\n');
             return;
@@ -256,16 +301,22 @@ export async function mergeToMain(testDir, qf, prUrl, prompt) {
         }
       }
 
+      // SD-SEC-DATA-VALIDATION-001: Validate branch and qf.id before shell use
+      const validatedBranch = validateBranchName(currentBranch);
+      const sanitizedQfId = qf.id ? qf.id.replace(/[^a-zA-Z0-9_-]/g, '') : 'unknown';
+      const sanitizedTitle = sanitizeCommitMessage(qf.title || 'Quick fix');
+
       // Local merge fallback
       execSync('git checkout main', { stdio: 'inherit', cwd: testDir });
       execSync('git pull origin main', { stdio: 'inherit', cwd: testDir });
-      execSync(`git merge --no-ff ${currentBranch} -m "Merge quick-fix/${qf.id}: ${qf.title}"`, { stdio: 'inherit', cwd: testDir });
+      execSync(`git merge --no-ff ${validatedBranch} -m "Merge quick-fix/${sanitizedQfId}: ${sanitizedTitle}"`, { stdio: 'inherit', cwd: testDir });
       execSync('git push origin main', { stdio: 'inherit', cwd: testDir });
       console.log('   ✅ Merged to main locally\n');
 
-      execSync(`git branch -d ${currentBranch}`, { stdio: 'pipe', cwd: testDir });
-      execSync(`git push origin --delete ${currentBranch}`, { stdio: 'pipe', cwd: testDir });
-      console.log(`   ✅ Deleted branch: ${currentBranch}\n`);
+      // SD-SEC-DATA-VALIDATION-001: Use validated branch for deletion
+      execSync(`git branch -d ${validatedBranch}`, { stdio: 'pipe', cwd: testDir });
+      execSync(`git push origin --delete ${validatedBranch}`, { stdio: 'pipe', cwd: testDir });
+      console.log(`   ✅ Deleted branch: ${validatedBranch}\n`);
     } else {
       displayManualMergeInstructions(prUrl);
     }
@@ -282,7 +333,8 @@ async function checkPRStatus(testDir, prUrl) {
   console.log('   Checking PR status...');
   try {
     const prNumber = prUrl.match(/\/pull\/(\d+)/)?.[1];
-    if (prNumber) {
+    // SD-SEC-DATA-VALIDATION-001: Validate PR number is numeric
+    if (prNumber && /^\d+$/.test(prNumber)) {
       const prStatus = execSync(`gh pr view ${prNumber} --json mergeable,statusCheckRollup`, { encoding: 'utf-8', cwd: testDir });
       const prData = JSON.parse(prStatus);
 

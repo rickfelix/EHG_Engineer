@@ -5,6 +5,7 @@
  * Part of SD-FAILURE-FEEDBACK-001 - Feedback Loop
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { FailurePattern } from './pattern-scorer';
 
 export interface PatternMatch {
@@ -44,6 +45,25 @@ export interface ImprovementProposal {
   proposedChanges?: Record<string, unknown>;
 }
 
+// SD-SEC-DATA-VALIDATION-001: Type-safe database row interfaces
+interface PostmortemPatternLinkRow {
+  postmortem_id: string;
+  pattern_id: string;
+  confidence_score: number;
+  match_type: 'manual' | 'auto_suggested' | 'confirmed';
+  mapper_notes?: string;
+  matched_whys?: number[];
+}
+
+interface PatternImprovementRow {
+  source_postmortem_id: string;
+  target_pattern_id: string;
+  improvement_type: 'update_signals' | 'add_prevention' | 'update_mitigation' | 'new_pattern' | 'deprecate';
+  title: string;
+  description: string;
+  proposed_changes?: Record<string, unknown>;
+}
+
 /**
  * PatternMapper - Suggest and link patterns from post-mortem content
  */
@@ -57,8 +77,9 @@ export class PatternMapper {
 
   /**
    * Load patterns from database
+   * SD-SEC-DATA-VALIDATION-001: Replace unsafe 'any' with proper type
    */
-  async loadPatterns(supabase: any): Promise<void> {
+  async loadPatterns(supabase: SupabaseClient): Promise<void> {
     const { data, error } = await supabase
       .from('failure_patterns')
       .select('*')
@@ -147,7 +168,7 @@ export class PatternMapper {
   /**
    * Create pattern link in database
    */
-  async createLink(supabase: any, link: PatternLink): Promise<string> {
+  async createLink(supabase: SupabaseClient, link: PatternLink): Promise<string> {
     const { data, error } = await supabase
       .from('postmortem_pattern_links')
       .insert({
@@ -171,7 +192,7 @@ export class PatternMapper {
   /**
    * Create improvement proposal in database
    */
-  async proposeImprovement(supabase: any, proposal: ImprovementProposal): Promise<string> {
+  async proposeImprovement(supabase: SupabaseClient, proposal: ImprovementProposal): Promise<string> {
     const { data, error } = await supabase
       .from('pattern_improvements')
       .insert({
@@ -196,7 +217,7 @@ export class PatternMapper {
   /**
    * Get existing links for a post-mortem
    */
-  async getLinksForPostmortem(supabase: any, postmortemId: string): Promise<PatternLink[]> {
+  async getLinksForPostmortem(supabase: SupabaseClient, postmortemId: string): Promise<PatternLink[]> {
     const { data, error } = await supabase
       .from('postmortem_pattern_links')
       .select('*')
@@ -206,7 +227,8 @@ export class PatternMapper {
       throw new Error(`Failed to get links: ${error.message}`);
     }
 
-    return (data || []).map((row: any) => ({
+    // SD-SEC-DATA-VALIDATION-001: Use typed row interface
+    return (data || []).map((row: PostmortemPatternLinkRow) => ({
       postmortemId: row.postmortem_id,
       patternId: row.pattern_id,
       confidenceScore: row.confidence_score,
@@ -219,7 +241,7 @@ export class PatternMapper {
   /**
    * Get pending improvements for a pattern
    */
-  async getPendingImprovements(supabase: any, patternId: string): Promise<ImprovementProposal[]> {
+  async getPendingImprovements(supabase: SupabaseClient, patternId: string): Promise<ImprovementProposal[]> {
     const { data, error } = await supabase
       .from('pattern_improvements')
       .select('*')
@@ -230,7 +252,8 @@ export class PatternMapper {
       throw new Error(`Failed to get improvements: ${error.message}`);
     }
 
-    return (data || []).map((row: any) => ({
+    // SD-SEC-DATA-VALIDATION-001: Use typed row interface
+    return (data || []).map((row: PatternImprovementRow) => ({
       sourcePostmortemId: row.source_postmortem_id,
       targetPatternId: row.target_pattern_id,
       improvementType: row.improvement_type,
