@@ -28,6 +28,82 @@ if [ "$BRANCH" = "main" ]; then
 fi
 
 # ============================================================================
+# STAGE 1: Secret Detection (BLOCKING)
+# ============================================================================
+# SD-SEC-CREDENTIAL-ROTATION-001: Prevent accidental commit of secrets
+# Checks staged files for common API key and credential patterns
+# ============================================================================
+echo ""
+echo "🔐 Running secret detection scan..."
+
+# Get all staged file contents (excluding pre-commit hook itself to avoid false positives)
+# The hook contains regex patterns that would otherwise trigger detection
+STAGED_CONTENT=$(git diff --cached --diff-filter=ACM -U0 -- ':!.husky/pre-commit' ':!.githooks/*' 2>/dev/null || true)
+
+# Define secret patterns (regex)
+# These patterns match common API key and credential formats
+SECRET_PATTERNS=(
+  # Supabase/JWT tokens (eyJ prefix)
+  'eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}'
+  # OpenAI API keys
+  'sk-[A-Za-z0-9]{20,}'
+  # Anthropic API keys
+  'sk-ant-[A-Za-z0-9_-]{20,}'
+  # Resend API keys
+  're_[A-Za-z0-9_]{20,}'
+  # Generic API key patterns
+  'api[_-]?key["\s:=]+["\047][A-Za-z0-9_-]{20,}["\047]'
+  # AWS Access Keys
+  'AKIA[0-9A-Z]{16}'
+  # AWS Secret Keys
+  'aws[_-]?secret[_-]?access[_-]?key["\s:=]+["\047][A-Za-z0-9/+=]{40}["\047]'
+  # Generic secret patterns
+  'secret[_-]?key["\s:=]+["\047][A-Za-z0-9_-]{16,}["\047]'
+  # Private keys
+  '-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----'
+  # Database connection strings with passwords
+  'postgresql://[^:]+:[^@]+@'
+)
+
+SECRETS_FOUND=0
+SECRET_DETAILS=""
+
+for pattern in "${SECRET_PATTERNS[@]}"; do
+  MATCHES=$(echo "$STAGED_CONTENT" | grep -oiE "$pattern" 2>/dev/null | head -5 || true)
+  if [ ! -z "$MATCHES" ]; then
+    SECRETS_FOUND=1
+    # Redact the actual secret for display
+    REDACTED=$(echo "$MATCHES" | sed 's/\(.\{8\}\).*/\1...REDACTED/')
+    SECRET_DETAILS="${SECRET_DETAILS}   Pattern: ${pattern:0:30}...\n   Found: ${REDACTED}\n\n"
+  fi
+done
+
+if [ "$SECRETS_FOUND" -eq 1 ]; then
+  echo ""
+  echo "❌ BLOCKED: Potential secrets detected in staged files!"
+  echo "═══════════════════════════════════════════════════════════"
+  echo ""
+  echo "The following patterns were detected:"
+  echo ""
+  echo -e "$SECRET_DETAILS"
+  echo "SECURITY: Committing secrets to git history is a critical security risk."
+  echo "          Even if deleted later, secrets remain in git history forever."
+  echo ""
+  echo "💡 REMEDIATION:"
+  echo "   1. Remove secrets from staged files"
+  echo "   2. Store secrets in .env files (which are gitignored)"
+  echo "   3. Use environment variables or secret managers"
+  echo ""
+  echo "   If this is a false positive (e.g., test/mock data):"
+  echo "   - Use clearly fake values: 'sk-test-fake-key-12345'"
+  echo "   - Or bypass with: git commit --no-verify (logged, use sparingly)"
+  echo ""
+  exit 1
+fi
+
+echo "✅ No secrets detected in staged files"
+
+# ============================================================================
 # Auto-fix Linting Issues
 # ============================================================================
 echo "🔍 Running ESLint auto-fix on staged files..."
