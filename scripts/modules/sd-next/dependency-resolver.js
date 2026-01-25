@@ -59,10 +59,11 @@ export async function checkDependenciesResolved(supabase, dependencies) {
   if (deps.length === 0) return true;
 
   for (const dep of deps) {
+    // Use sd_key with fallback to id (for UUID lookups)
     const { data: sd } = await supabase
       .from('strategic_directives_v2')
       .select('status')
-      .eq('legacy_id', dep.sd_id)
+      .or(`sd_key.eq.${dep.sd_id},id.eq.${dep.sd_id}`)
       .single();
 
     if (!sd || sd.status !== 'completed') {
@@ -88,10 +89,11 @@ export async function getUnresolvedDependencies(supabase, dependencies) {
 
   const unresolvedDeps = [];
   for (const dep of deps) {
+    // Use sd_key with fallback to id (for UUID lookups)
     const { data: sd } = await supabase
       .from('strategic_directives_v2')
       .select('status, title')
-      .eq('legacy_id', dep.sd_id)
+      .or(`sd_key.eq.${dep.sd_id},id.eq.${dep.sd_id}`)
       .single();
 
     if (!sd || sd.status !== 'completed') {
