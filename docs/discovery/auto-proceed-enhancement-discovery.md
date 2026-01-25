@@ -128,9 +128,21 @@ Current state of AUTO-PROCEED documentation:
 
 ## Round 4: Gaps & Edge Cases
 
-### 22. Validation Gate Failures
+### 22. Validation Gate Failures (D16 - IMPLEMENTED)
 - **Q**: What if a child SD fails validation gates repeatedly (not transient)?
 - **A**: **Skip and continue** - Mark child as 'blocked', log it, continue to next sibling
+- **Implementation**: SD-LEO-ENH-AUTO-PROCEED-001-07 (Completed: 2026-01-25)
+  - Module: `scripts/modules/handoff/skip-and-continue.js`
+  - Features:
+    - `shouldSkipAndContinue()` - Evaluates if skip should trigger (requires AUTO-PROCEED + non-transient error + max retries exceeded)
+    - `markAsBlocked()` - Updates SD status to 'blocked' with metadata (reason, gate details, retry count, correlation_id)
+    - `recordSkipEvent()` - Logs SKIP_AND_CONTINUE event to system_events table
+    - `recordAllBlockedEvent()` - Logs ALL_CHILDREN_BLOCKED when all siblings blocked
+    - `executeSkipAndContinue()` - Main orchestration: block current SD, find next sibling, record events
+    - `isTransientError()` - Distinguishes recoverable errors (ETIMEDOUT, rate limits) from permanent failures
+  - Integration: BaseExecutor.js invokes skip-and-continue on gate failures
+  - Constants: DEFAULT_MAX_RETRIES = 2
+  - PR: #629 (merged to main)
 
 ### 23. Session Summary
 - **Q**: Should AUTO-PROCEED generate a session summary at the end?
