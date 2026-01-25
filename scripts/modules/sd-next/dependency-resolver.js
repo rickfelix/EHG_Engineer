@@ -15,13 +15,18 @@ export function parseDependencies(dependencies) {
   let deps = [];
   if (typeof dependencies === 'string') {
     try {
-      deps = JSON.parse(dependencies);
+      const parsed = JSON.parse(dependencies);
+      // Handle both array and object formats from JSON parsing
+      deps = Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
   } else if (Array.isArray(dependencies)) {
     deps = dependencies;
   }
+
+  // Ensure deps is an array before mapping
+  if (!Array.isArray(deps)) return [];
 
   // Only return entries that are actual SD references (SD-XXX format)
   // Ignore text descriptions of prerequisites
