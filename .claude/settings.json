@@ -52,7 +52,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/protocol-file-tracker.js",
+            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/protocol-file-tracker.cjs",
             "timeout": 3
           }
         ]
