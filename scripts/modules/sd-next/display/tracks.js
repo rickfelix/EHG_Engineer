@@ -39,7 +39,7 @@ export function displayTrackSection(trackKey, trackName, items, sessionContext =
   for (const item of items) {
     if (item.parent_sd_id) {
       const parentInTrack = items.find(i =>
-        (i.legacy_id || i.sd_id) === item.parent_sd_id || i.id === item.parent_sd_id
+        (i.sd_key || i.sd_id) === item.parent_sd_id || i.id === item.parent_sd_id
       );
       if (!parentInTrack && !rootItems.includes(item)) {
         rootItems.push(item);
@@ -65,7 +65,7 @@ export function displayTrackSection(trackKey, trackName, items, sessionContext =
 function displaySDItem(item, indent, childItems, allItems, sessionContext) {
   const { claimedSDs = new Map(), currentSession = null, activeSessions = [] } = sessionContext;
 
-  const sdId = item.legacy_id || item.sd_id;
+  const sdId = item.sd_key || item.sd_id;
   const rankStr = item.sequence_rank ? `[${item.sequence_rank}]`.padEnd(5) : '     ';
 
   // Check if claimed by another session
@@ -141,7 +141,7 @@ function displaySDItem(item, indent, childItems, allItems, sessionContext) {
  * @param {Array} allItems - All items in the track
  */
 function displaySDItemSimple(item, prefix, nextIndent, childItems, allItems) {
-  const sdId = item.legacy_id || item.sd_id;
+  const sdId = item.sd_key || item.sd_id;
 
   // Status icon - now phase-aware (Control Gap Fix)
   const statusIcon = getPhaseAwareStatus(item);

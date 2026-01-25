@@ -59,7 +59,7 @@ export async function displayRecommendations(supabase, baselineItems, conflicts 
 async function getWorkingOnSD(supabase) {
   const { data: workingOn } = await supabase
     .from('strategic_directives_v2')
-    .select('legacy_id, title, progress_percentage')
+    .select('sd_key, title, progress_percentage')
     .eq('is_active', true)
     .eq('is_working_on', true)
     .lt('progress_percentage', 100)
@@ -72,7 +72,7 @@ async function getWorkingOnSD(supabase) {
  * Display "working on" SD with duration estimate
  */
 async function displayWorkingOnSD(supabase, workingOn) {
-  console.log(`${colors.bgYellow}${colors.bold} CONTINUE ${colors.reset} ${workingOn.legacy_id}`);
+  console.log(`${colors.bgYellow}${colors.bold} CONTINUE ${colors.reset} ${workingOn.sd_key}`);
   console.log(`  ${workingOn.title}`);
   console.log(`  ${colors.dim}Progress: ${workingOn.progress_percentage || 0}% | Marked as "Working On"${colors.reset}`);
 
@@ -81,7 +81,7 @@ async function displayWorkingOnSD(supabase, workingOn) {
     const { data: sdFull } = await supabase
       .from('strategic_directives_v2')
       .select('id, sd_type, category, priority')
-      .eq('legacy_id', workingOn.legacy_id)
+      .eq('sd_key', workingOn.sd_key)
       .single();
 
     if (sdFull) {
@@ -105,8 +105,8 @@ async function categorizeBaselineSDs(supabase, baselineItems) {
   for (const item of baselineItems) {
     const { data: sd } = await supabase
       .from('strategic_directives_v2')
-      .select('legacy_id, title, status, current_phase, progress_percentage, dependencies, is_active')
-      .eq('legacy_id', item.sd_id)
+      .select('sd_key, title, status, current_phase, progress_percentage, dependencies, is_active')
+      .eq('sd_key', item.sd_id)
       .single();
 
     if (sd && sd.is_active && sd.status !== 'completed' && sd.status !== 'cancelled') {
@@ -131,8 +131,8 @@ async function categorizeBaselineSDs(supabase, baselineItems) {
 function displayVerificationNeeded(needsVerificationSDs) {
   console.log(`${colors.bgMagenta}${colors.bold} NEEDS VERIFICATION ${colors.reset}`);
   needsVerificationSDs.forEach(sd => {
-    console.log(`  ${sd.legacy_id} - ${sd.title.substring(0, 45)}...`);
-    console.log(`  ${colors.dim}Phase: ${sd.current_phase} | Status: ${sd.status} | Run: npm run sd:verify ${sd.legacy_id}${colors.reset}\n`);
+    console.log(`  ${sd.sd_key} - ${sd.title.substring(0, 45)}...`);
+    console.log(`  ${colors.dim}Phase: ${sd.current_phase} | Status: ${sd.status} | Run: npm run sd:verify ${sd.sd_key}${colors.reset}\n`);
   });
 }
 
@@ -140,7 +140,7 @@ function displayVerificationNeeded(needsVerificationSDs) {
  * Display start recommendation with duration estimate
  */
 async function displayStartRecommendation(supabase, topSD) {
-  console.log(`${colors.bgGreen}${colors.bold} START ${colors.reset} ${topSD.legacy_id}`);
+  console.log(`${colors.bgGreen}${colors.bold} START ${colors.reset} ${topSD.sd_key}`);
   console.log(`  ${topSD.title}`);
   console.log(`  ${colors.dim}Track: ${topSD.track || 'N/A'} | Rank: ${topSD.sequence_rank} | All dependencies satisfied${colors.reset}`);
 
@@ -149,7 +149,7 @@ async function displayStartRecommendation(supabase, topSD) {
     const { data: sdFull } = await supabase
       .from('strategic_directives_v2')
       .select('id, sd_type, category, priority')
-      .eq('legacy_id', topSD.legacy_id)
+      .eq('sd_key', topSD.sd_key)
       .single();
 
     if (sdFull) {
@@ -169,7 +169,7 @@ async function displayStartRecommendation(supabase, topSD) {
 function displayParallelOpportunities(parallelReady) {
   console.log(`${colors.cyan}PARALLEL OPPORTUNITIES:${colors.reset}`);
   parallelReady.forEach(sd => {
-    console.log(`  Track ${sd.track}: ${sd.legacy_id} - ${sd.title.substring(0, 40)}...`);
+    console.log(`  Track ${sd.track}: ${sd.sd_key} - ${sd.title.substring(0, 40)}...`);
   });
 }
 

@@ -231,7 +231,7 @@ export class SDNextSelector {
     // This ensures SDs appear even if baseline sync trigger failed (SD-LEO-INFRA-QUEUE-SIMPLIFY-001)
     const { data: allSDs, error: sdError } = await this.supabase
       .from('strategic_directives_v2')
-      .select('id, legacy_id, title, status, current_phase, progress_percentage, is_working_on, dependencies, is_active, parent_sd_id, category, metadata')
+      .select('id, sd_key, title, status, current_phase, progress_percentage, is_working_on, dependencies, is_active, parent_sd_id, category, metadata')
       .eq('is_active', true)
       .in('status', ['draft', 'active', 'in_progress', 'planning'])
       .order('created_at', { ascending: true });
@@ -251,8 +251,8 @@ export class SDNextSelector {
     for (const sd of allSDs) {
       if (sd.status === 'completed' || sd.status === 'cancelled') continue;
 
-      // Look up baseline item by legacy_id or id
-      const baselineItem = baselineMap.get(sd.legacy_id) || baselineMap.get(sd.id);
+      // Look up baseline item by sd_key or id
+      const baselineItem = baselineMap.get(sd.sd_key) || baselineMap.get(sd.id);
 
       // Derive track: baseline > metadata > category > STANDALONE
       let trackKey;
@@ -273,7 +273,7 @@ export class SDNextSelector {
 
       // Log warning if SD not in baseline (helps detect sync failures)
       if (!baselineItem && sd.status !== 'draft') {
-        console.log(`${colors.yellow}⚠️  SD ${sd.legacy_id || sd.id} not in baseline - using category-based track${colors.reset}`);
+        console.log(`${colors.yellow}⚠️  SD ${sd.sd_key || sd.id} not in baseline - using category-based track${colors.reset}`);
       }
 
       if (!tracks[trackKey]) trackKey = 'STANDALONE';
@@ -283,7 +283,7 @@ export class SDNextSelector {
       let childDepStatus = null;
       if (sd.parent_sd_id) {
         try {
-          childDepStatus = await checkDependencyStatus(sd.legacy_id || sd.id);
+          childDepStatus = await checkDependencyStatus(sd.sd_key || sd.id);
         } catch {
           // Silently ignore errors
         }
@@ -292,11 +292,11 @@ export class SDNextSelector {
       tracks[trackKey].push({
         ...(baselineItem || {}),
         ...sd,
-        sd_id: sd.legacy_id || sd.id,
+        sd_id: sd.sd_key || sd.id,
         sequence_rank: baselineItem?.sequence_rank || 9999,
         deps_resolved: depsResolved,
         childDepStatus,
-        actual: this.actuals[sd.legacy_id] || this.actuals[sd.id]
+        actual: this.actuals[sd.sd_key] || this.actuals[sd.id]
       });
     }
 
