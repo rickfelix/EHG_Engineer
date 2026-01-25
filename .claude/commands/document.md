@@ -1122,17 +1122,20 @@ The `/document` command connects to other commands in the workflow:
 **AUTO-PROCEED Detection**: Before asking, check if AUTO-PROCEED mode is active:
 
 ```bash
-# Check for AUTO-PROCEED context
+# Check for AUTO-PROCEED context (uses claude_sessions.metadata.auto_proceed)
 node -e "
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-supabase.from('auto_proceed_sessions')
-  .select('id, active_sd_key')
-  .eq('is_active', true)
+supabase.from('claude_sessions')
+  .select('metadata')
+  .eq('status', 'active')
+  .order('heartbeat_at', { ascending: false })
+  .limit(1)
   .single()
   .then(({data}) => {
-    if (data) console.log('AUTO-PROCEED ACTIVE: ' + data.active_sd_key);
+    const autoProceed = data?.metadata?.auto_proceed ?? true;
+    if (autoProceed) console.log('AUTO-PROCEED: ACTIVE');
     else console.log('AUTO-PROCEED: INACTIVE');
   });
 "
