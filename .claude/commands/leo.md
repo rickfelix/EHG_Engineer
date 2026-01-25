@@ -1,6 +1,6 @@
 ---
 description: LEO stack management and session control
-argument-hint: [init|restart|next|create|continue|complete]
+argument-hint: [init|restart|next|create|continue|complete|resume]
 ---
 
 # LEO Stack Control
@@ -311,6 +311,156 @@ Run the post-completion sequence for the current working SD.
    - sd:next - Queue displayed
    ```
 
+### If argument is "resume" or "res":
+Restore session state after a crash, compaction, or interruption using the UnifiedStateManager.
+
+1. **Check for saved state:**
+   ```bash
+   node -e "
+   const fs = require('fs');
+   const path = require('path');
+   const stateFile = path.join(process.cwd(), '.claude', 'unified-session-state.json');
+
+   if (!fs.existsSync(stateFile)) {
+     console.log('STATE_EXISTS=false');
+     process.exit(0);
+   }
+
+   const stat = fs.statSync(stateFile);
+   const ageMinutes = Math.round((Date.now() - stat.mtime.getTime()) / 60000);
+   console.log('STATE_EXISTS=true');
+   console.log('STATE_AGE_MINUTES=' + ageMinutes);
+   "
+   ```
+
+2. **If STATE_EXISTS=false:**
+   ```
+   ❌ No saved session state found
+
+   💡 State is preserved automatically during:
+      - Context compaction (PreCompact hook)
+      - Manual checkpoints (/context-compact)
+      - Session interruptions
+
+   Run `/leo next` to start fresh from the SD queue.
+   ```
+
+3. **If STATE_EXISTS=true, load and display state:**
+   ```bash
+   node -e "
+   const fs = require('fs');
+   const path = require('path');
+   const stateFile = path.join(process.cwd(), '.claude', 'unified-session-state.json');
+
+   try {
+     let content = fs.readFileSync(stateFile, 'utf8');
+     // Remove BOM if present
+     if (content.charCodeAt(0) === 0xFEFF) content = content.slice(1);
+     const state = JSON.parse(content);
+
+     console.log('');
+     console.log('============================================================');
+     console.log('[CONTEXT RESTORED] Session state from ' + state.timestamp);
+     console.log('============================================================');
+
+     // Git info
+     if (state.git) {
+       console.log('[GIT] Branch: ' + state.git.branch);
+       if (state.git.recentCommits && state.git.recentCommits[0]) {
+         console.log('[GIT] Latest: ' + state.git.recentCommits[0]);
+       }
+     }
+
+     // SD info
+     if (state.sd && state.sd.id) {
+       console.log('[SD] Working on: ' + state.sd.id);
+       if (state.sd.phase) console.log('[SD] Phase: ' + state.sd.phase);
+       if (state.sd.progress !== null) console.log('[SD] Progress: ' + state.sd.progress + '%');
+     }
+
+     // Workflow
+     if (state.workflow && state.workflow.currentPhase !== 'unknown') {
+       console.log('[WORKFLOW] Phase: ' + state.workflow.currentPhase);
+     }
+
+     // Decisions
+     if (state.decisions && state.decisions.length > 0) {
+       console.log('[DECISIONS] ' + state.decisions.length + ' recorded');
+     }
+
+     // Constraints
+     if (state.constraints) {
+       const blocking = state.constraints.filter(c => c.blocking);
+       if (blocking.length > 0) {
+         console.log('[CONSTRAINTS] ' + blocking.length + ' BLOCKING');
+       }
+     }
+
+     // Open Questions
+     if (state.openQuestions) {
+       const unresolved = state.openQuestions.filter(q => !q.resolved);
+       if (unresolved.length > 0) {
+         console.log('[QUESTIONS] ' + unresolved.length + ' open');
+       }
+     }
+
+     // Pending actions
+     if (state.summaries && state.summaries.pendingActions && state.summaries.pendingActions.length > 0) {
+       console.log('[TODO] Pending actions: ' + state.summaries.pendingActions.length);
+       state.summaries.pendingActions.slice(0, 3).forEach(action => {
+         console.log('       - ' + action);
+       });
+     }
+
+     console.log('============================================================');
+     console.log('[RESTORED] Context automatically loaded - ready to continue');
+     console.log('');
+
+     // Output resume data for Claude to use
+     if (state.sd && state.sd.id) {
+       console.log('RESUME_SD_ID=' + state.sd.id);
+       console.log('RESUME_SD_PHASE=' + (state.sd.phase || 'unknown'));
+     }
+   } catch (error) {
+     console.error('Error loading state: ' + error.message);
+     process.exit(1);
+   }
+   "
+   ```
+
+4. **After displaying state, determine next action:**
+
+   **If RESUME_SD_ID is set:**
+   - Load the appropriate CLAUDE context file based on RESUME_SD_PHASE:
+     - LEAD phases (LEAD_APPROVAL, LEAD_FINAL_APPROVAL) → Read `CLAUDE_LEAD.md`
+     - PLAN phases (PLAN_*, PRD_*) → Read `CLAUDE_PLAN.md`
+     - EXEC phases (EXEC_*, IMPLEMENTATION_*) → Read `CLAUDE_EXEC.md`
+   - Display:
+     ```
+     ✅ Session Restored
+        SD: <RESUME_SD_ID>
+        Phase: <RESUME_SD_PHASE>
+
+     📋 Ready to continue. Context file loaded for current phase.
+     ```
+
+   **If no SD in saved state:**
+   - Run `npm run sd:next` to show the SD queue
+   - Display:
+     ```
+     ✅ Session State Restored (no active SD)
+
+     📋 Showing SD queue to pick next work...
+     ```
+
+5. **Resume behavior summary:**
+   - Restores git context (branch, recent commits)
+   - Restores SD context (ID, phase, progress)
+   - Restores decisions, constraints, open questions
+   - Restores pending actions
+   - Automatically loads appropriate CLAUDE_*.md context
+   - Target: <100ms state load, 95% restoration success
+
 ### If no argument provided:
 Run the LEO protocol workflow:
 ```bash
@@ -329,6 +479,7 @@ LEO Commands:
   /leo create    (c)    - Create new SD (interactive wizard)
   /leo continue  (cont) - Resume current working SD
   /leo complete  (comp) - Run full sequence: document → ship → learn → next
+  /leo resume    (res)  - Restore session from saved state (crash recovery)
 
 SD Creation Flags:
   /leo create                    - Interactive wizard
@@ -339,6 +490,7 @@ SD Creation Flags:
 
 Session Settings:
   Auto-proceed is ON by default. Run /leo init to change.
+  State is preserved automatically during compaction for /leo resume.
 ```
 
 ## Context
