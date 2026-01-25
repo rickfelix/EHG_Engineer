@@ -51,8 +51,9 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     return null;
   }
 
-  getRequiredGates(_sd, _options) {
-    return getRequiredGates(this.supabase, this.prdRepo);
+  getRequiredGates(sd, _options) {
+    // Pass SD for SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
+    return getRequiredGates(this.supabase, this.prdRepo, sd);
   }
 
   async executeSpecific(sdId, sd, options, gateResults) {

@@ -24,6 +24,9 @@ import {
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
 import { createProtocolFileReadGate } from '../../gates/protocol-file-read-gate.js';
 
+// Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
+import { createSdStartGate } from '../../gates/core-protocol-gate.js';
+
 // Helper modules
 import { transitionPrdToExec, transitionSdToExec } from './state-transitions.js';
 import { createHandoffRetrospective } from './retrospective.js';
@@ -87,7 +90,11 @@ export class PlanToExecExecutor extends BaseExecutor {
     const appPath = options._appPath;
     const parentOrchestrator = options._isParentOrchestrator;
 
-    // Protocol File Read Gate - FIRST (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
+    // SD Start Gate - FIRST (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
+    // Ensures CLAUDE_CORE.md is read before any SD work
+    gates.push(createSdStartGate(sd?.sd_key || sd?.id || 'unknown'));
+
+    // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
     // Ensures agent has read CLAUDE_PLAN.md before proceeding
     gates.push(createProtocolFileReadGate('PLAN-TO-EXEC'));
 

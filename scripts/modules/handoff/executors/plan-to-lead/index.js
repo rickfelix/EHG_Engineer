@@ -10,6 +10,9 @@ import BaseExecutor from '../BaseExecutor.js';
 import ResultBuilder from '../../ResultBuilder.js';
 import { isInfrastructureSDSync } from '../../../sd-type-checker.js';
 
+// Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
+import { createSdStartGate } from '../../gates/core-protocol-gate.js';
+
 // Gate creators
 import {
   createPrerequisiteCheckGate,
@@ -58,7 +61,11 @@ export class PlanToLeadExecutor extends BaseExecutor {
     const gates = [];
     const appPath = options._appPath;
 
-    // Prerequisite handoff check (always first)
+    // SD Start Gate - FIRST (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
+    // Ensures CLAUDE_CORE.md is read before any SD work
+    gates.push(createSdStartGate(sd?.sd_key || sd?.id || 'unknown'));
+
+    // Prerequisite handoff check
     gates.push(createPrerequisiteCheckGate(this.supabase));
 
     // Sub-agent orchestration
