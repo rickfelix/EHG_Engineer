@@ -5,11 +5,13 @@
  * Used by AUTO-PROCEED to continue through child SDs automatically.
  *
  * Part of AUTO-PROCEED continuation implementation (D26, D01)
+ * Enhanced with learning-based queue re-prioritization (SD-LEO-ENH-AUTO-PROCEED-001-11)
  *
  * @module child-sd-selector
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { sortByUrgency, scoreToBand } from '../auto-proceed/urgency-scorer.js';
 
 /**
  * Check if an SD is a child (has a parent)
@@ -37,9 +39,10 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
     // Query for children that are ready to work on
     // Status must be one that indicates work can start
     // SD-LEO-ENH-AUTO-PROCEED-001-10: Also fetch metadata to check for blockers
+    // SD-LEO-ENH-AUTO-PROCEED-001-11: Fetch all candidates for urgency-based sorting
     let query = supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, priority, current_phase, sequence_rank, created_at, metadata, dependencies')
+      .select('id, sd_key, title, status, priority, current_phase, sequence_rank, created_at, metadata, dependencies, updated_at, progress_percentage')
       .eq('parent_sd_id', parentSdId)
       .in('status', ['draft', 'in_progress', 'planning', 'active', 'pending_approval', 'review']);
 
@@ -48,13 +51,7 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
       query = query.neq('id', excludeCompletedId);
     }
 
-    // Order by sequence first (if defined), then priority, then creation date
-    query = query
-      .order('sequence_rank', { ascending: true, nullsFirst: false })
-      .order('priority', { ascending: false })
-      .order('created_at', { ascending: true })
-      .limit(1);
-
+    // SD-LEO-ENH-AUTO-PROCEED-001-11: Fetch all candidates, sort client-side by urgency
     const { data: candidates, error } = await query;
 
     if (error) {
@@ -63,19 +60,35 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
     }
 
     // SD-LEO-ENH-AUTO-PROCEED-001-10: Filter out SDs with unresolved blockers
-    const nextChild = candidates ? candidates.filter(child => {
+    const unblocked = candidates ? candidates.filter(child => {
       // Check for explicit blocked_by in metadata
       const blockedBy = child.metadata?.blocked_by;
       if (blockedBy && Array.isArray(blockedBy) && blockedBy.length > 0) {
-        console.log(`   [child-sd-selector] Skipping ${child.id} - has ${blockedBy.length} unresolved blocker(s)`);
+        console.log(`   [child-sd-selector] Skipping ${child.sd_key || child.id} - has ${blockedBy.length} unresolved blocker(s)`);
         return false;
       }
       return true;
     }) : [];
 
-    // If we found a ready child (without blockers), return it
-    if (nextChild && nextChild.length > 0) {
-      return { sd: nextChild[0], allComplete: false, reason: 'Next child found' };
+    // SD-LEO-ENH-AUTO-PROCEED-001-11: Sort by urgency (band > score > enqueue_time)
+    // Map candidates to include urgency data for sorting
+    const withUrgency = unblocked.map(child => ({
+      ...child,
+      urgency_score: child.metadata?.urgency_score ?? 0.5,
+      urgency_band: child.metadata?.urgency_band ?? scoreToBand(child.metadata?.urgency_score ?? 0.5),
+      enqueue_time: child.created_at
+    }));
+
+    // Sort by urgency (highest priority first)
+    const sorted = sortByUrgency(withUrgency);
+
+    // If we found a ready child (without blockers), return the highest urgency one
+    if (sorted && sorted.length > 0) {
+      const selected = sorted[0];
+      const reason = selected.urgency_band
+        ? `Next child found (${selected.urgency_band}, score: ${selected.urgency_score})`
+        : 'Next child found';
+      return { sd: selected, allComplete: false, reason };
     }
 
     // No ready children - check if all children are complete
