@@ -25,7 +25,7 @@ async function insertHandoffRecords() {
     // Get the SD UUID first
     const sdResult = await client.query(`
       SELECT id, sd_key, title FROM strategic_directives_v2
-      WHERE legacy_id = 'SD-VISION-V2-010'
+      WHERE sd_key = 'SD-VISION-V2-010'
     `);
 
     if (sdResult.rows.length === 0) {
