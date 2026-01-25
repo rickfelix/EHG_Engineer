@@ -10,7 +10,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { resolveAutoProceed } from './auto-proceed-resolver.js';
+import { resolveAutoProceed, getChainOrchestrators } from './auto-proceed-resolver.js';
 import { clearState as clearAutoProceedState } from './auto-proceed-state.js';
 
 /**
@@ -126,6 +126,47 @@ export async function invokeLearnSkill(supabase, orchestratorId, correlationId) 
   } catch (err) {
     console.warn(`   ⚠️  Learn invocation error: ${err.message}`);
     return { success: false, message: err.message };
+  }
+}
+
+/**
+ * Find next available orchestrator in queue for chaining
+ * Part of SD-LEO-ENH-AUTO-PROCEED-001-05 (Configurable Orchestrator Chaining)
+ *
+ * @param {object} supabase - Supabase client
+ * @param {string} excludeOrchestratorId - Current orchestrator to exclude
+ * @returns {Promise<{ orchestrator: object | null, reason: string }>}
+ */
+export async function findNextAvailableOrchestrator(supabase, excludeOrchestratorId = null) {
+  try {
+    let query = supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, status, priority, parent_sd_id')
+      .in('status', ['draft', 'in_progress', 'planning', 'active'])
+      .is('parent_sd_id', null) // Only top-level SDs (orchestrators)
+      .order('priority', { ascending: false })
+      .order('created_at', { ascending: true })
+      .limit(5);
+
+    if (excludeOrchestratorId) {
+      query = query.neq('id', excludeOrchestratorId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.warn(`   ⚠️  findNextOrchestrator error: ${error.message}`);
+      return { orchestrator: null, reason: `Query error: ${error.message}` };
+    }
+
+    if (!data || data.length === 0) {
+      return { orchestrator: null, reason: 'No orchestrators in queue' };
+    }
+
+    return { orchestrator: data[0], reason: 'Next orchestrator found' };
+  } catch (err) {
+    console.warn(`   ⚠️  findNextOrchestrator exception: ${err.message}`);
+    return { orchestrator: null, reason: `Exception: ${err.message}` };
   }
 }
 
@@ -257,7 +298,51 @@ export async function executeOrchestratorCompletionHook(
     await displayQueue(supabase);
     hookDetails.queueDisplayed = true;
 
-    // Clear AUTO-PROCEED state now that orchestrator is complete
+    // Check for orchestrator chaining (SD-LEO-ENH-AUTO-PROCEED-001-05)
+    const chainingResult = await getChainOrchestrators(supabase);
+    hookDetails.chainOrchestratorsEnabled = chainingResult.chainOrchestrators;
+
+    if (chainingResult.chainOrchestrators) {
+      // Find next available orchestrator
+      const { orchestrator: nextOrchestrator, reason } = await findNextAvailableOrchestrator(supabase, orchestratorId);
+
+      if (nextOrchestrator) {
+        console.log(`\n   🔗 ORCHESTRATOR CHAINING: Auto-continuing to ${nextOrchestrator.sd_key}`);
+        console.log(`   📍 Next: ${nextOrchestrator.title}`);
+
+        // Record the chaining decision
+        hookDetails.chainedToOrchestrator = nextOrchestrator.id;
+        hookDetails.chainedToSdKey = nextOrchestrator.sd_key;
+
+        // Record hook event before returning
+        await recordHookEvent(supabase, orchestratorId, correlationId, hookDetails);
+
+        // Emit telemetry event for chaining
+        await emitChainingTelemetry(supabase, orchestratorId, nextOrchestrator.id, 'chain', correlationId);
+
+        console.log('═'.repeat(60));
+
+        return {
+          fired: true,
+          autoProceed: true,
+          chainContinue: true,
+          nextOrchestrator: nextOrchestrator.id,
+          nextOrchestratorSdKey: nextOrchestrator.sd_key,
+          correlationId
+        };
+      } else {
+        console.log('\n   🔗 ORCHESTRATOR CHAINING: No next orchestrator available');
+        console.log(`   📍 Reason: ${reason}`);
+
+        // Emit telemetry for no-chain decision
+        await emitChainingTelemetry(supabase, orchestratorId, null, 'pause_no_orchestrator', correlationId);
+      }
+    } else {
+      // Emit telemetry for pause decision (chaining disabled)
+      await emitChainingTelemetry(supabase, orchestratorId, null, 'pause_disabled', correlationId);
+    }
+
+    // Clear AUTO-PROCEED state now that orchestrator is complete (and not chaining)
     try {
       clearAutoProceedState(true); // Keep resume count history
       console.log('   ✅ AUTO-PROCEED state cleared (orchestrator complete)');
@@ -285,11 +370,55 @@ export async function executeOrchestratorCompletionHook(
   };
 }
 
+/**
+ * Emit structured telemetry event for chaining decisions
+ * Part of SD-LEO-ENH-AUTO-PROCEED-001-05 (US-005)
+ *
+ * @param {object} supabase - Supabase client
+ * @param {string} orchestratorId - Current orchestrator ID
+ * @param {string|null} nextOrchestratorId - Next orchestrator ID (null if not chaining)
+ * @param {string} decision - Decision type: 'chain', 'pause_disabled', 'pause_no_orchestrator', 'stop_on_error'
+ * @param {string} correlationId - Correlation ID for tracing
+ * @returns {Promise<boolean>} Success status
+ */
+export async function emitChainingTelemetry(supabase, orchestratorId, nextOrchestratorId, decision, correlationId) {
+  try {
+    const { error } = await supabase
+      .from('system_events')
+      .insert({
+        event_type: 'ORCHESTRATOR_CHAINING_DECISION',
+        entity_type: 'strategic_directive',
+        entity_id: orchestratorId,
+        details: {
+          correlation_id: correlationId,
+          decision,
+          next_orchestrator_id: nextOrchestratorId,
+          timestamp: new Date().toISOString(),
+          telemetry_version: '1.0.0'
+        },
+        severity: decision === 'stop_on_error' ? 'warning' : 'info',
+        created_by: 'ORCHESTRATOR_COMPLETION_HOOK'
+      });
+
+    if (error) {
+      console.warn(`   ⚠️  Chaining telemetry error: ${error.message}`);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.warn(`   ⚠️  Chaining telemetry exception: ${err.message}`);
+    return false;
+  }
+}
+
 export default {
   executeOrchestratorCompletionHook,
   generateIdempotencyKey,
   hasHookFired,
   recordHookEvent,
   invokeLearnSkill,
-  displayQueue
+  displayQueue,
+  findNextAvailableOrchestrator,
+  emitChainingTelemetry
 };

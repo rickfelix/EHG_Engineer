@@ -273,6 +273,92 @@ export function createHandoffMetadata(autoProceed, source) {
   };
 }
 
+/**
+ * Get chain_orchestrators setting from active session
+ * Part of SD-LEO-ENH-AUTO-PROCEED-001-05 (Configurable Orchestrator Chaining)
+ *
+ * @param {object} supabase - Supabase client
+ * @returns {Promise<{ chainOrchestrators: boolean, sessionId: string | null }>}
+ */
+export async function getChainOrchestrators(supabase) {
+  try {
+    const { data, error } = await supabase
+      .from('claude_sessions')
+      .select('session_id, metadata')
+      .eq('status', 'active')
+      .order('heartbeat_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No active session found - default to false (pause at boundary)
+        return { chainOrchestrators: false, sessionId: null };
+      }
+      console.warn(`⚠️  CHAIN_ORCHESTRATORS: Session read error: ${error.message}`);
+      return { chainOrchestrators: false, sessionId: null };
+    }
+
+    // Default to false if not set (conservative - pause at orchestrator boundary)
+    const chainOrchestrators = Boolean(data?.metadata?.chain_orchestrators ?? false);
+
+    return {
+      chainOrchestrators,
+      sessionId: data?.session_id || null
+    };
+  } catch (err) {
+    console.warn(`⚠️  CHAIN_ORCHESTRATORS: Exception: ${err.message}`);
+    return { chainOrchestrators: false, sessionId: null };
+  }
+}
+
+/**
+ * Set chain_orchestrators preference in session
+ * Part of SD-LEO-ENH-AUTO-PROCEED-001-05 (Configurable Orchestrator Chaining)
+ *
+ * @param {object} supabase - Supabase client
+ * @param {boolean} chainOrchestrators - Whether to enable chaining
+ * @param {string} sessionId - Optional session ID to update
+ * @returns {Promise<{ success: boolean, sessionId: string | null }>}
+ */
+export async function setChainOrchestrators(supabase, chainOrchestrators, sessionId = null) {
+  try {
+    // First get existing session to preserve other metadata
+    const { data: existingSession } = await supabase
+      .from('claude_sessions')
+      .select('session_id, metadata')
+      .eq('status', 'active')
+      .order('heartbeat_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    const targetSessionId = sessionId || existingSession?.session_id || `session_${Date.now()}`;
+    const existingMetadata = existingSession?.metadata || {};
+
+    const { error } = await supabase
+      .from('claude_sessions')
+      .upsert({
+        session_id: targetSessionId,
+        status: 'active',
+        heartbeat_at: new Date().toISOString(),
+        metadata: {
+          ...existingMetadata,
+          chain_orchestrators: chainOrchestrators
+        }
+      }, { onConflict: 'session_id' });
+
+    if (error) {
+      console.warn(`⚠️  CHAIN_ORCHESTRATORS: Write error: ${error.message}`);
+      return { success: false, sessionId: null };
+    }
+
+    return { success: true, sessionId: targetSessionId };
+  } catch (err) {
+    console.warn(`⚠️  CHAIN_ORCHESTRATORS: Write exception: ${err.message}`);
+    return { success: false, sessionId: null };
+  }
+}
+
 export default {
   resolveAutoProceed,
   parseCliFlags,
@@ -280,6 +366,8 @@ export default {
   readFromSession,
   writeToSession,
   createHandoffMetadata,
+  getChainOrchestrators,
+  setChainOrchestrators,
   RESOLUTION_SOURCES,
   DEFAULT_AUTO_PROCEED
 };
