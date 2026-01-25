@@ -57,6 +57,7 @@
       "sd_creation_process",
       "sd_creation_anti_pattern",
       "sd_creation_errors",
+      "child_sd_context_loading",
       "lead_operations",
       "lead_explore_integration",
       "directive_submission_review",

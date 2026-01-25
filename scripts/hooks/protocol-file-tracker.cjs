@@ -9,6 +9,7 @@
  * Hook Type: PostToolUse (matcher: Read)
  *
  * Created: 2026-01-24
+ * Fixed: 2026-01-25 - Corrected to read from stdin instead of env vars
  */
 
 const fs = require('fs');
@@ -73,31 +74,25 @@ function isProtocolFile(filePath) {
 }
 
 /**
- * Main hook execution
+ * Process hook input and track protocol file reads
  */
-function main() {
-  const toolInput = process.env.CLAUDE_TOOL_INPUT || '';
-  const toolName = process.env.CLAUDE_TOOL_NAME || '';
+function processHookInput(hookInput) {
+  const toolName = hookInput.tool_name || '';
+  const toolInputData = hookInput.tool_input || {};
 
   // Only track Read tool calls
   if (toolName !== 'Read') {
-    process.exit(0);
+    return;
   }
 
-  // Parse file path from tool input
-  let filePath = '';
-  try {
-    const input = JSON.parse(toolInput);
-    filePath = input.file_path || '';
-  } catch (_e) {
-    filePath = toolInput;
-  }
+  // Get file path from tool input
+  const filePath = toolInputData.file_path || '';
 
   // Check if this is a protocol file
   const protocolFile = isProtocolFile(filePath);
 
   if (!protocolFile) {
-    process.exit(0);
+    return;
   }
 
   // Mark protocol file as read in session state
@@ -116,8 +111,50 @@ function main() {
       console.log(`[protocol-file-tracker] Marked ${protocolFile} as read`);
     }
   }
+}
 
-  process.exit(0);
+/**
+ * Main hook execution - reads from stdin
+ */
+function main() {
+  let input = '';
+
+  process.stdin.setEncoding('utf8');
+
+  process.stdin.on('data', chunk => {
+    input += chunk;
+  });
+
+  process.stdin.on('end', () => {
+    try {
+      if (input.trim()) {
+        const hookInput = JSON.parse(input);
+        processHookInput(hookInput);
+      }
+    } catch (e) {
+      // Silently fail - don't break the user's workflow
+      console.error(`[protocol-file-tracker] Error: ${e.message}`);
+    }
+    process.exit(0);
+  });
+
+  // Handle case where stdin is closed immediately (no data)
+  process.stdin.on('error', () => {
+    process.exit(0);
+  });
+
+  // Timeout after 2 seconds if stdin doesn't close
+  setTimeout(() => {
+    if (input.trim()) {
+      try {
+        const hookInput = JSON.parse(input);
+        processHookInput(hookInput);
+      } catch (_e) {
+        // Silently fail
+      }
+    }
+    process.exit(0);
+  }, 2000);
 }
 
 main();
