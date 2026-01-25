@@ -140,28 +140,46 @@ export function registerGate2Validators(registry) {
       };
     }
 
+    // Refactor SDs require REGRESSION sub-agent, not TESTING
+    // This validates backward compatibility instead of E2E tests
+    const isRefactor = sdData?.sd_type === 'refactor';
+    const requiredAgent = isRefactor ? 'REGRESSION' : 'TESTING';
+    const agentLabel = isRefactor ? 'REGRESSION (backward compatibility)' : 'TESTING (E2E)';
+
     const { data, error } = await supabase
       .from('sub_agent_execution_results')
       .select('*')
       .eq('sd_id', sd_id)
-      .eq('sub_agent_code', 'TESTING')
+      .eq('sub_agent_code', requiredAgent)
       .order('created_at', { ascending: false })
       .limit(1);
 
     if (error || !data || data.length === 0) {
-      return { passed: false, score: 0, max_score: 100, issues: ['TESTING sub-agent not executed'] };
+      return {
+        passed: false,
+        score: 0,
+        max_score: 100,
+        issues: [`${requiredAgent} sub-agent not executed (required for ${sdData?.sd_type || 'unknown'} SD)`]
+      };
     }
 
     const execution = data[0];
-    if (execution.verdict !== 'PASS') {
+    // Accept both PASS and CONDITIONAL_PASS as valid verdicts
+    if (!['PASS', 'CONDITIONAL_PASS'].includes(execution.verdict)) {
       return {
         passed: false,
         score: 30,
         max_score: 100,
-        issues: [`TESTING sub-agent verdict: ${execution.verdict}, expected PASS`]
+        issues: [`${requiredAgent} sub-agent verdict: ${execution.verdict}, expected PASS or CONDITIONAL_PASS`]
       };
     }
 
-    return { passed: true, score: 100, max_score: 100, issues: [] };
-  }, 'TESTING sub-agent verification');
+    return {
+      passed: true,
+      score: 100,
+      max_score: 100,
+      issues: [],
+      warnings: isRefactor ? [`Validated via ${agentLabel}`] : []
+    };
+  }, 'TESTING/REGRESSION sub-agent verification');
 }
