@@ -14,11 +14,18 @@ import { executeOrchestratorCompletionHook } from '../../orchestrator-completion
  * Uses OrchestratorCompletionGuardian to ensure all artifacts exist
  * before attempting completion (prevents silent failures)
  *
+ * Returns chaining information if orchestrator chaining is enabled
+ * Part of SD-LEO-ENH-AUTO-PROCEED-001-05 (Configurable Orchestrator Chaining)
+ *
  * @param {Object} sd - SD record
  * @param {Object} supabase - Supabase client
+ * @returns {Promise<{ orchestratorCompleted: boolean, chainContinue?: boolean, nextOrchestrator?: string }>}
  */
 export async function checkAndCompleteParentSD(sd, supabase) {
   console.log('\n   Checking parent SD completion...');
+
+  // Default return for non-completion cases
+  const noCompletionResult = { orchestratorCompleted: false };
 
   try {
     const { data: parentSD } = await supabase
@@ -28,7 +35,7 @@ export async function checkAndCompleteParentSD(sd, supabase) {
       .single();
 
     if (!parentSD || parentSD.status === 'completed') {
-      return;
+      return noCompletionResult;
     }
 
     // Get all siblings
@@ -55,12 +62,20 @@ export async function checkAndCompleteParentSD(sd, supabase) {
             console.log(`   ✅ Parent SD "${parentSD.title}" completed via Guardian`);
 
             // SD-LEO-ENH-AUTO-PROCEED-001-03: Trigger orchestrator completion hook
-            await executeOrchestratorCompletionHook(
+            // SD-LEO-ENH-AUTO-PROCEED-001-05: Returns chaining info if enabled
+            const hookResult = await executeOrchestratorCompletionHook(
               parentSD.id,
               parentSD.title,
               siblings.length,
               { supabase }
             );
+
+            return {
+              orchestratorCompleted: true,
+              chainContinue: hookResult?.chainContinue || false,
+              nextOrchestrator: hookResult?.nextOrchestrator || null,
+              nextOrchestratorSdKey: hookResult?.nextOrchestratorSdKey || null
+            };
           } else {
             console.log(`   ⚠️  Guardian completion failed: ${result.error}`);
             await recordFailedCompletion(parentSD, result.error, null, supabase);
@@ -74,12 +89,20 @@ export async function checkAndCompleteParentSD(sd, supabase) {
             console.log(`   ✅ Parent SD "${parentSD.title}" completed (with auto-created artifacts)`);
 
             // SD-LEO-ENH-AUTO-PROCEED-001-03: Trigger orchestrator completion hook
-            await executeOrchestratorCompletionHook(
+            // SD-LEO-ENH-AUTO-PROCEED-001-05: Returns chaining info if enabled
+            const hookResult = await executeOrchestratorCompletionHook(
               parentSD.id,
               parentSD.title,
               siblings.length,
               { supabase }
             );
+
+            return {
+              orchestratorCompleted: true,
+              chainContinue: hookResult?.chainContinue || false,
+              nextOrchestrator: hookResult?.nextOrchestrator || null,
+              nextOrchestratorSdKey: hookResult?.nextOrchestratorSdKey || null
+            };
           } else {
             console.log(`   ⚠️  Completion failed after auto-fix: ${result.error}`);
             await recordFailedCompletion(parentSD, result.error, null, supabase);
@@ -114,18 +137,28 @@ export async function checkAndCompleteParentSD(sd, supabase) {
           console.log(`   ✅ Parent SD "${parentSD.title}" auto-completed (legacy path)`);
 
           // SD-LEO-ENH-AUTO-PROCEED-001-03: Trigger orchestrator completion hook
-          await executeOrchestratorCompletionHook(
+          // SD-LEO-ENH-AUTO-PROCEED-001-05: Returns chaining info if enabled
+          const hookResult = await executeOrchestratorCompletionHook(
             parentSD.id,
             parentSD.title,
             siblings.length,
             { supabase }
           );
+
+          return {
+            orchestratorCompleted: true,
+            chainContinue: hookResult?.chainContinue || false,
+            nextOrchestrator: hookResult?.nextOrchestrator || null,
+            nextOrchestratorSdKey: hookResult?.nextOrchestratorSdKey || null
+          };
         }
       }
     }
   } catch (error) {
     console.log(`   ⚠️  Parent check error: ${error.message}`);
   }
+
+  return noCompletionResult;
 }
 
 /**

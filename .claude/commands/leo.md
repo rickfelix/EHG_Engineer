@@ -36,7 +36,7 @@ argument-hint: [init|restart|next|create|continue|complete]
    ```
 
 2. **If SESSION_NEW=true (new session)**:
-   Use AskUserQuestion with the following:
+   Use AskUserQuestion with the following (two questions):
    ```javascript
    {
      "questions": [
@@ -48,31 +48,42 @@ argument-hint: [init|restart|next|create|continue|complete]
            {"label": "Keep ON (Recommended)", "description": "Proceed automatically through SD workflow without confirmation prompts"},
            {"label": "Turn OFF", "description": "Pause at each phase transition and ask for confirmation"}
          ]
+       },
+       {
+         "question": "Orchestrator chaining (power user mode). When enabled, system auto-continues to next orchestrator after one completes.",
+         "header": "Chaining",
+         "multiSelect": false,
+         "options": [
+           {"label": "Keep OFF (Recommended)", "description": "Pause at orchestrator completion boundary for review"},
+           {"label": "Enable Chaining", "description": "Auto-continue to next orchestrator without pausing"}
+         ]
        }
      ]
    }
    ```
 
-3. **Store the preference** in session metadata:
+3. **Store the preferences** in session metadata:
    ```bash
-   # After user responds, update or create session with auto_proceed preference
+   # After user responds, update or create session with both preferences
+   # Usage: node -e "..." <auto_proceed:true|false> <chain_orchestrators:true|false>
    node -e "
    require('dotenv').config();
    const { createClient } = require('@supabase/supabase-js');
    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
    const autoProceed = process.argv[2] === 'true';
+   const chainOrchestrators = process.argv[3] === 'true';
    supabase.from('claude_sessions')
      .upsert({
        session_id: 'session_' + Date.now(),
        status: 'active',
        heartbeat_at: new Date().toISOString(),
-       metadata: { auto_proceed: autoProceed }
+       metadata: { auto_proceed: autoProceed, chain_orchestrators: chainOrchestrators }
      }, { onConflict: 'session_id' })
      .then(({error}) => {
        if (error) console.error('Error:', error.message);
-       else console.log('Session preference saved: auto_proceed=' + autoProceed);
+       else console.log('Session preferences saved: auto_proceed=' + autoProceed + ', chain_orchestrators=' + chainOrchestrators);
      });
-   " <true|false>
+   " <true|false> <true|false>
    ```
 
 ---
@@ -105,12 +116,13 @@ Based on the argument provided, execute the appropriate action:
 ### If argument is "init" or "i":
 Run session initialization explicitly:
 1. Check for existing session preference (query above)
-2. Ask user about auto-proceed preference
-3. Store preference in session metadata
+2. Ask user about both preferences (auto-proceed AND orchestrator chaining)
+3. Store preferences in session metadata
 4. Display confirmation:
    ```
    ✅ Session Initialized
       Auto-Proceed: ON/OFF
+      Orchestrator Chaining: ON/OFF
 
    💡 Ready for LEO workflow. Run `/leo next` to see SD queue.
    ```

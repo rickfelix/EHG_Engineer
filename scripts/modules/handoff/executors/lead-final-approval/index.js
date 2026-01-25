@@ -117,8 +117,10 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     }
 
     // Check if this SD has a parent that should be auto-completed
+    // SD-LEO-ENH-AUTO-PROCEED-001-05: Capture chaining info for orchestrator continuation
+    let orchestratorChainingInfo = { orchestratorCompleted: false };
     if (sd.parent_sd_id) {
-      await checkAndCompleteParentSD(sd, this.supabase);
+      orchestratorChainingInfo = await checkAndCompleteParentSD(sd, this.supabase);
     }
 
     const handoffId = `LEAD-FINAL-${sdId}-${Date.now()}`;
@@ -178,7 +180,14 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
           escalated: shippingResults.cleanup.shouldEscalate
         } : null
       },
-      qualityScore: gateResults.normalizedScore ?? Math.round((gateResults.totalScore / gateResults.totalMaxScore) * 100)
+      qualityScore: gateResults.normalizedScore ?? Math.round((gateResults.totalScore / gateResults.totalMaxScore) * 100),
+      // SD-LEO-ENH-AUTO-PROCEED-001-05: Orchestrator chaining info
+      orchestratorChaining: orchestratorChainingInfo.orchestratorCompleted ? {
+        orchestratorCompleted: true,
+        chainContinue: orchestratorChainingInfo.chainContinue || false,
+        nextOrchestrator: orchestratorChainingInfo.nextOrchestrator || null,
+        nextOrchestratorSdKey: orchestratorChainingInfo.nextOrchestratorSdKey || null
+      } : null
     };
   }
 

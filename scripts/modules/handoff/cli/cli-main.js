@@ -11,7 +11,7 @@ import { createHandoffSystem } from '../index.js';
 import dotenv from 'dotenv';
 
 // AUTO-PROCEED continuation imports
-import { getNextReadyChild, isChildSD, getOrchestratorContext } from '../child-sd-selector.js';
+import { getNextReadyChild, getOrchestratorContext } from '../child-sd-selector.js';
 import { resolveAutoProceed } from '../auto-proceed-resolver.js';
 
 import {
@@ -424,8 +424,23 @@ export async function handleExecuteWithContinuation(handoffType, sdId, args) {
       break;
     }
 
-    // Only continue for child SDs (ones with a parent)
+    // SD-LEO-ENH-AUTO-PROCEED-001-05: Handle orchestrator chaining for top-level SDs
     if (!completedSD.parent_sd_id) {
+      // Check if this was an orchestrator that completed with chaining enabled
+      const chainingInfo = currentResult.result?.orchestratorChaining;
+      if (chainingInfo?.chainContinue && chainingInfo?.nextOrchestrator) {
+        console.log('\n🔗 ORCHESTRATOR CHAINING: Auto-continuing to next orchestrator');
+        console.log(`   Next: ${chainingInfo.nextOrchestratorSdKey || chainingInfo.nextOrchestrator}`);
+        console.log('   ➡️  Starting LEAD-TO-PLAN...');
+        console.log('');
+
+        // Update for next iteration - start the next orchestrator
+        currentSdId = chainingInfo.nextOrchestrator;
+        currentHandoffType = 'LEAD-TO-PLAN';
+        currentResult = await handleExecuteCommand('LEAD-TO-PLAN', chainingInfo.nextOrchestrator, args);
+        continue; // Continue the loop for the new orchestrator's children
+      }
+
       console.log('   ℹ️  Top-level SD completed - no continuation needed');
       break;
     }

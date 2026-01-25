@@ -14,6 +14,8 @@ import {
   writeToSession,
   resolveAutoProceed,
   createHandoffMetadata,
+  getChainOrchestrators,
+  setChainOrchestrators,
   RESOLUTION_SOURCES,
   DEFAULT_AUTO_PROCEED
 } from '../../../scripts/modules/handoff/auto-proceed-resolver.js';
@@ -364,6 +366,232 @@ describe('AUTO-PROCEED Resolver', () => {
 
     it('should have default as false (conservative)', () => {
       expect(DEFAULT_AUTO_PROCEED).toBe(false);
+    });
+  });
+
+  // SD-LEO-ENH-AUTO-PROCEED-001-05: Orchestrator Chaining Tests
+  describe('getChainOrchestrators', () => {
+    it('should return chain_orchestrators value when present in session', async () => {
+      const mockSupabase = {
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => ({
+                  single: () => Promise.resolve({
+                    data: {
+                      session_id: 'test-session-123',
+                      metadata: { auto_proceed: true, chain_orchestrators: true }
+                    },
+                    error: null
+                  })
+                })
+              })
+            })
+          })
+        })
+      };
+
+      const result = await getChainOrchestrators(mockSupabase);
+      expect(result.chainOrchestrators).toBe(true);
+      expect(result.sessionId).toBe('test-session-123');
+    });
+
+    it('should default to false when chain_orchestrators not set', async () => {
+      const mockSupabase = {
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => ({
+                  single: () => Promise.resolve({
+                    data: {
+                      session_id: 'test-session-456',
+                      metadata: { auto_proceed: true }
+                    },
+                    error: null
+                  })
+                })
+              })
+            })
+          })
+        })
+      };
+
+      const result = await getChainOrchestrators(mockSupabase);
+      expect(result.chainOrchestrators).toBe(false);
+      expect(result.sessionId).toBe('test-session-456');
+    });
+
+    it('should default to false when no active session exists', async () => {
+      const mockSupabase = {
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => ({
+                  single: () => Promise.resolve({
+                    data: null,
+                    error: { code: 'PGRST116', message: 'no rows' }
+                  })
+                })
+              })
+            })
+          })
+        })
+      };
+
+      const result = await getChainOrchestrators(mockSupabase);
+      expect(result.chainOrchestrators).toBe(false);
+      expect(result.sessionId).toBe(null);
+    });
+
+    it('should default to false on database error', async () => {
+      const mockSupabase = {
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => ({
+                  single: () => Promise.resolve({
+                    data: null,
+                    error: { code: 'SOME_ERROR', message: 'Database error' }
+                  })
+                })
+              })
+            })
+          })
+        })
+      };
+
+      const result = await getChainOrchestrators(mockSupabase);
+      expect(result.chainOrchestrators).toBe(false);
+      expect(result.sessionId).toBe(null);
+    });
+  });
+
+  describe('setChainOrchestrators', () => {
+    it('should successfully set chain_orchestrators in session', async () => {
+      const mockSupabase = {
+        from: (table) => {
+          if (table === 'claude_sessions') {
+            return {
+              select: () => ({
+                eq: () => ({
+                  order: () => ({
+                    limit: () => ({
+                      single: () => Promise.resolve({
+                        data: {
+                          session_id: 'existing-session',
+                          metadata: { auto_proceed: true }
+                        },
+                        error: null
+                      })
+                    })
+                  })
+                })
+              }),
+              upsert: () => Promise.resolve({ error: null })
+            };
+          }
+        }
+      };
+
+      const result = await setChainOrchestrators(mockSupabase, true);
+      expect(result.success).toBe(true);
+      expect(result.sessionId).toBe('existing-session');
+    });
+
+    it('should preserve existing metadata when setting chain_orchestrators', async () => {
+      let upsertedData = null;
+      const mockSupabase = {
+        from: (table) => {
+          if (table === 'claude_sessions') {
+            return {
+              select: () => ({
+                eq: () => ({
+                  order: () => ({
+                    limit: () => ({
+                      single: () => Promise.resolve({
+                        data: {
+                          session_id: 'test-session',
+                          metadata: { auto_proceed: true, other_setting: 'value' }
+                        },
+                        error: null
+                      })
+                    })
+                  })
+                })
+              }),
+              upsert: (data) => {
+                upsertedData = data;
+                return Promise.resolve({ error: null });
+              }
+            };
+          }
+        }
+      };
+
+      await setChainOrchestrators(mockSupabase, true);
+      expect(upsertedData.metadata.auto_proceed).toBe(true);
+      expect(upsertedData.metadata.other_setting).toBe('value');
+      expect(upsertedData.metadata.chain_orchestrators).toBe(true);
+    });
+
+    it('should handle write errors gracefully', async () => {
+      const mockSupabase = {
+        from: (table) => {
+          if (table === 'claude_sessions') {
+            return {
+              select: () => ({
+                eq: () => ({
+                  order: () => ({
+                    limit: () => ({
+                      single: () => Promise.resolve({
+                        data: { session_id: 's1', metadata: {} },
+                        error: null
+                      })
+                    })
+                  })
+                })
+              }),
+              upsert: () => Promise.resolve({ error: { message: 'Database error' } })
+            };
+          }
+        }
+      };
+
+      const result = await setChainOrchestrators(mockSupabase, true);
+      expect(result.success).toBe(false);
+      expect(result.sessionId).toBe(null);
+    });
+
+    it('should create new session if none exists', async () => {
+      const mockSupabase = {
+        from: (table) => {
+          if (table === 'claude_sessions') {
+            return {
+              select: () => ({
+                eq: () => ({
+                  order: () => ({
+                    limit: () => ({
+                      single: () => Promise.resolve({
+                        data: null,
+                        error: { code: 'PGRST116', message: 'no rows' }
+                      })
+                    })
+                  })
+                })
+              }),
+              upsert: () => Promise.resolve({ error: null })
+            };
+          }
+        }
+      };
+
+      const result = await setChainOrchestrators(mockSupabase, true);
+      expect(result.success).toBe(true);
+      expect(result.sessionId).toMatch(/^session_\d+$/);
     });
   });
 });
