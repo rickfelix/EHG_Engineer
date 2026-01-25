@@ -30,12 +30,12 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 | [Database & Schema](#database--schema) | 12 | Database patterns, schemas, migrations |
 | [Sub-Agents](#sub-agents) | 14 | Sub-agent patterns and guides |
 | [Validation & Testing](#validation--testing) | 9 | Validation patterns, testing reference |
-| [LEO Protocol](#leo-protocol) | 11 | Protocol reference, context management, hooks |
+| [LEO Protocol](#leo-protocol) | 12 | Protocol reference, context management, hooks |
 | [Patterns & Best Practices](#patterns--best-practices) | 12 | Development patterns |
 | [Quick References](#quick-references) | 12 | Cheat sheets and quick guides |
 | [Other](#other-references) | 7 | Miscellaneous references |
 
-**Total References**: 77
+**Total References**: 78
 
 ---
 
@@ -110,6 +110,7 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 | [handoff-system-guide.md](handoff-system-guide.md) | Handoff system reference |
 | [leo-hook-feedback-system.md](leo-hook-feedback-system.md) | Hook feedback system |
 | [protocol-self-improvement.md](protocol-self-improvement.md) | Protocol self-improvement |
+| [skip-and-continue-pattern.md](skip-and-continue-pattern.md) | **⭐ NEW** Skip-and-continue for validation gate failures (AUTO-PROCEED D16) |
 
 ---
 
