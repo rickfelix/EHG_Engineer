@@ -343,9 +343,27 @@ export function validateImplementationContext(sd) {
  */
 export async function validateDependenciesExist(supabase, sd) {
   const result = { warnings: [] };
-  const deps = sd.dependencies;
+  let deps = sd.dependencies;
+
+  // Parse dependencies if it's a string
+  if (typeof deps === 'string') {
+    try {
+      deps = JSON.parse(deps);
+    } catch {
+      return result; // Invalid JSON, skip validation
+    }
+  }
 
   if (!Array.isArray(deps) || deps.length === 0) {
+    return result;
+  }
+
+  // Extract SD IDs from dependencies (handle both string and object formats)
+  const depIds = deps
+    .map(d => typeof d === 'string' ? d.match(/^(SD-[A-Z0-9-]+)/)?.[1] : d?.sd_id)
+    .filter(Boolean);
+
+  if (depIds.length === 0) {
     return result;
   }
 
@@ -353,7 +371,7 @@ export async function validateDependenciesExist(supabase, sd) {
     const { data: existingDeps, error } = await supabase
       .from('strategic_directives_v2')
       .select('id, sd_key, status, title')
-      .or(deps.map(d => `id.eq.${d},sd_key.eq.${d}`).join(','));
+      .or(depIds.map(d => `id.eq.${d},sd_key.eq.${d}`).join(','));
 
     if (error) {
       result.warnings.push(
@@ -367,7 +385,7 @@ export async function validateDependenciesExist(supabase, sd) {
       ...(existingDeps || []).map(d => d.sd_key)
     ]);
 
-    const missingDeps = deps.filter(d => !existingIds.has(d));
+    const missingDeps = depIds.filter(d => !existingIds.has(d));
 
     if (missingDeps.length > 0) {
       result.warnings.push(
@@ -380,7 +398,7 @@ export async function validateDependenciesExist(supabase, sd) {
       d.status !== 'completed' && d.status !== 'done'
     );
 
-    if (incompleteDeps.length > 0 && incompleteDeps.length === deps.length) {
+    if (incompleteDeps.length > 0 && incompleteDeps.length === depIds.length) {
       result.warnings.push(
         `PRD-Readiness: All ${incompleteDeps.length} dependencies are not yet completed. ` +
         'PLAN should verify dependency work is sufficiently complete before starting.'
