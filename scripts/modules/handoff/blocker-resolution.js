@@ -19,13 +19,13 @@
 import { createClient } from '@supabase/supabase-js';
 // Note: getNextReadyChild and getOrchestratorContext imported in cli-main.js for integration
 
-// Configuration constants
-const DEFAULT_MAX_RETRIES = 3;
-const DEFAULT_MAX_CHAIN_DEPTH = 2;
-const DETECTION_TIMEOUT_MS = 2000;
+// Configuration constants (exported for use in other modules)
+export const DEFAULT_MAX_RETRIES = 3;
+export const DEFAULT_MAX_CHAIN_DEPTH = 2;
+export const DETECTION_TIMEOUT_MS = 2000;
 
 // Blocker detection patterns from error messages
-const BLOCKER_PATTERNS = [
+export const BLOCKER_PATTERNS = [
   { pattern: /dependency[:\s]+(\S+)/i, type: 'dependency' },
   { pattern: /blocked[:\s]+by[:\s]+(\S+)/i, type: 'blocked_by' },
   { pattern: /requires[:\s]+(\S+)/i, type: 'requires' },
