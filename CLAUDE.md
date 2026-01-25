@@ -22,6 +22,93 @@ See documentation for table structure: `database/schema/007_leo_protocol_schema_
 
 *For copy-paste version: see `templates/session-prologue.md` (generate via `npm run session:prologue`)*
 
+## AUTO-PROCEED Mode
+
+**AUTO-PROCEED** enables fully autonomous LEO Protocol execution, allowing Claude to work through SD workflows without manual confirmation at each phase transition.
+
+### Activation
+
+AUTO-PROCEED is **ON by default** for new sessions. To change:
+- Run `/leo init` to set session preference
+- Preference stored in `claude_sessions.metadata.auto_proceed`
+
+Check status:
+```bash
+node -e "require('dotenv').config(); const {createClient}=require('@supabase/supabase-js'); createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY).from('claude_sessions').select('metadata').eq('status','active').order('heartbeat_at',{ascending:false}).limit(1).single().then(({data})=>console.log('AUTO_PROCEED='+(data?.metadata?.auto_proceed??true)))"
+```
+
+### Behavior Summary
+
+| When AUTO-PROCEED is ON | When OFF |
+|-------------------------|----------|
+| Phase transitions execute automatically | Pause and ask before each transition |
+| Post-completion runs /document → /ship → /learn | Ask before each step |
+| Shows next SD after completion | Ask before showing queue |
+| No confirmation prompts | AskUserQuestion at each decision |
+
+### Pause Points (When ON)
+
+AUTO-PROCEED runs continuously EXCEPT at these boundaries:
+1. **Orchestrator completion** - After all children complete, pauses for /learn review
+2. **Blocking errors** - Errors that cannot be auto-resolved
+3. **Test failures** - After 2 retry attempts
+4. **Merge conflicts** - Require human resolution
+5. **All children blocked** - Shows blockers and waits for decision
+
+### How to Stop
+
+- **User interrupt**: Type in terminal at any time (auto-resumes after handling)
+- **Explicit stop**: Say "stop AUTO-PROCEED" or "disable AUTO-PROCEED"
+- **Session preference**: Run `/leo init` and select "Turn OFF"
+
+### Quick Start
+
+```
+1. Start session → AUTO-PROCEED ON by default
+2. Run /leo next → See SD queue
+3. Pick SD → Work begins automatically
+4. Phase transitions → No confirmation needed
+5. Completion → /document → /ship → /learn → next SD
+6. Orchestrator done → /learn runs, queue displayed, PAUSE
+```
+
+### Discovery Decisions Summary (D01-D29)
+
+| # | Area | Decision |
+|---|------|----------|
+| D01 | Pause points | Never within session, only at orchestrator completion |
+| D02 | Error handling | Auto-retry with exponential backoff |
+| D03 | Visibility | Full streaming (show all activity) |
+| D04 | Limits | None - run until complete or interrupted |
+| D05 | UAT | Auto-pass with flag for later human review |
+| D06 | Notifications | Terminal + Claude Code sound notification |
+| D07 | Learning trigger | Auto-invoke /learn at orchestrator end |
+| D08 | Post-learn | Show queue, pause for user selection |
+| D09 | Context | Existing compaction process handles it |
+| D10 | Restart | Auto-restart with logging for visibility |
+| D11 | Handoff | Propagate AUTO-PROCEED flag through handoff.js |
+| D12 | Activation | Uses auto_proceed_sessions table with is_active flag |
+| D13 | Interruption | Built-in, auto-resume after handling user input |
+| D14 | Multi-orchestrator | Show full queue of available orchestrators/SDs |
+| D15 | Chaining | Configurable (default: pause at orchestrator boundary) |
+| D16 | Validation failures | Skip failed children, mark as blocked, continue |
+| D17 | Session summary | Detailed - all SDs processed, status, time, issues |
+| D18 | Crash recovery | Both auto-load AND explicit /leo resume |
+| D19 | Metrics | Use existing retrospectives and issue patterns |
+| D20 | Sensitive SDs | No exceptions - all SD types treated the same |
+| D21 | Mid-exec blockers | Attempt to identify and resolve dependency first |
+| D22 | Re-prioritization | Auto-adjust queue based on learnings |
+| D23 | All blocked | Show blockers, pause for human decision |
+| D24 | Mode reminder | Display AUTO-PROCEED status when /leo starts SD |
+| D25 | Status line | Add mode + phase + progress (keep existing content) |
+| D26 | Completion cue | No acknowledgment between SDs - smooth continuation |
+| D27 | Compaction notice | Brief inline notice when context compacted |
+| D28 | Error retries | Log inline with "Retrying... (attempt X/Y)" |
+| D29 | Resume reminder | Show what was happening before resuming |
+
+*Full discovery details: docs/discovery/auto-proceed-enhancement-discovery.md*
+
+
 ## Session Initialization - SD Selection
 
 ### Intent Detection Keywords
@@ -222,7 +309,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-24 8:28:09 AM
+**Last Generated**: 2026-01-25 8:48:08 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -298,6 +385,6 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 
 ---
 
-*Router generated from database: 2026-01-24*
+*Router generated from database: 2026-01-25*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*
