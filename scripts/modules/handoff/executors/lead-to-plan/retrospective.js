@@ -6,12 +6,64 @@
  * Uses handoff metrics for quality scoring. Interactive prompts are optional
  * and have a timeout to prevent blocking in non-interactive contexts.
  *
- * ROOT CAUSE FIX: Previous version used blocking readline prompts that would
- * hang indefinitely in non-interactive mode (piped output, Claude Code, etc.).
- * Now uses non-blocking defaults with optional interactive enhancement.
+ * ROOT CAUSE FIX (PAT-RETRO-BOILERPLATE-001): Now queries issue_patterns table
+ * for actual issues discovered during execution instead of generating boilerplate.
+ *
+ * Previous problem: Used padding with "Continue monitoring..." boilerplate when
+ * actual issues existed in issue_patterns but weren't being referenced.
  */
 
 import readline from 'readline';
+
+/**
+ * Query issue_patterns table for issues related to this SD
+ * @param {Object} supabase - Supabase client
+ * @param {string} sdId - Strategic Directive ID
+ * @returns {Promise<Array>} Array of issue patterns
+ */
+async function getIssuesForSD(supabase, sdId) {
+  try {
+    const { data, error } = await supabase
+      .from('issue_patterns')
+      .select('pattern_id, issue_summary, category, severity, proven_solutions, prevention_checklist')
+      .or(`first_seen_sd_id.eq.${sdId},last_seen_sd_id.eq.${sdId}`)
+      .eq('status', 'active');
+
+    if (error) {
+      console.log(`   ⚠️  Could not query issue_patterns: ${error.message}`);
+      return [];
+    }
+
+    return data || [];
+  } catch (err) {
+    console.log(`   ⚠️  Issue pattern query error: ${err.message}`);
+    return [];
+  }
+}
+
+/**
+ * Query recent active issues (not SD-specific but recent/high-priority)
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<Array>} Array of recent issue patterns
+ */
+async function getRecentActiveIssues(supabase) {
+  try {
+    const { data, error } = await supabase
+      .from('issue_patterns')
+      .select('pattern_id, issue_summary, category, severity, proven_solutions')
+      .eq('status', 'active')
+      .order('updated_at', { ascending: false })
+      .limit(5);
+
+    if (error) {
+      return [];
+    }
+
+    return data || [];
+  } catch (err) {
+    return [];
+  }
+}
 
 /**
  * Create handoff retrospective
@@ -26,6 +78,15 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
   try {
     console.log('\n📝 HANDOFF RETROSPECTIVE: Auto-capturing learnings');
     console.log('='.repeat(70));
+
+    // Query actual issues from issue_patterns table (PAT-RETRO-BOILERPLATE-001 fix)
+    const sdIssues = await getIssuesForSD(supabase, sdId);
+    const recentIssues = sdIssues.length === 0 ? await getRecentActiveIssues(supabase) : [];
+    const allIssues = [...sdIssues, ...recentIssues];
+
+    if (sdIssues.length > 0) {
+      console.log(`   📋 Found ${sdIssues.length} issue(s) linked to this SD`);
+    }
 
     // Determine if running interactively (TTY connected to stdin)
     const isInteractive = process.stdin.isTTY && process.stdout.isTTY;
@@ -98,14 +159,12 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
     if (parseInt(simplicityRating) >= 4) whatWentWell.push({ achievement: 'Simplicity assessment was accurate and helpful', is_boilerplate: false });
     if (handoffResult.success) whatWentWell.push({ achievement: 'Handoff validation passed all gates successfully', is_boilerplate: false });
 
-    // Ensure minimum 5 achievements
-    const boilerplateAchievements = [
-      'LEAD phase completed systematically',
-      'SD approval workflow followed correctly',
-      'Handoff documentation generated automatically'
-    ];
-    while (whatWentWell.length < 5) {
-      whatWentWell.push({ achievement: boilerplateAchievements[whatWentWell.length - 2] || 'Standard LEAD process followed', is_boilerplate: true });
+    // Only add contextual achievements if we have few (avoid boilerplate padding)
+    if (whatWentWell.length === 0) {
+      whatWentWell.push({ achievement: 'LEAD phase completed - handoff executed', is_boilerplate: false });
+    }
+    if (whatWentWell.length === 1 && handoffResult.success) {
+      whatWentWell.push({ achievement: 'All validation gates passed', is_boilerplate: false });
     }
 
     const whatNeedsImprovement = [];
@@ -117,9 +176,15 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
       whatNeedsImprovement.push(frictionPoints);
     }
 
-    // Ensure minimum 3 improvements
-    while (whatNeedsImprovement.length < 3) {
-      whatNeedsImprovement.push('Continue monitoring handoff process for improvement opportunities');
+    // Add actual issues from issue_patterns (PAT-RETRO-BOILERPLATE-001 fix)
+    for (const issue of allIssues) {
+      if (whatNeedsImprovement.length >= 5) break;
+      whatNeedsImprovement.push(`[${issue.pattern_id}] ${issue.issue_summary}`);
+    }
+
+    // Only add generic item if we have NO actual content
+    if (whatNeedsImprovement.length === 0) {
+      whatNeedsImprovement.push('No specific issues identified - handoff executed smoothly');
     }
 
     const keyLearnings = [
@@ -131,14 +196,33 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
       keyLearnings.push({ learning: `Friction identified: ${frictionPoints}`, is_boilerplate: false });
     }
 
-    // Ensure minimum 5 learnings
-    const boilerplateLearnings = [
-      'LEAD→PLAN handoff process provides valuable quality gates',
-      'Pre-handoff warnings help identify recurring issues',
-      'Retrospective capture improves continuous learning'
-    ];
-    while (keyLearnings.length < 5) {
-      keyLearnings.push({ learning: boilerplateLearnings[keyLearnings.length - 3] || 'Standard handoff learning captured', is_boilerplate: true });
+    // Add learnings from issue patterns (PAT-RETRO-BOILERPLATE-001 fix)
+    for (const issue of allIssues) {
+      if (keyLearnings.length >= 7) break;
+
+      // Add issue category insight
+      keyLearnings.push({
+        learning: `[${issue.pattern_id}] ${issue.category} issue: ${issue.issue_summary.substring(0, 80)}${issue.issue_summary.length > 80 ? '...' : ''}`,
+        is_boilerplate: false,
+        pattern_id: issue.pattern_id
+      });
+
+      // Add prevention insight if available
+      if (issue.prevention_checklist && Array.isArray(issue.prevention_checklist) && issue.prevention_checklist.length > 0) {
+        keyLearnings.push({
+          learning: `Prevention for ${issue.pattern_id}: ${issue.prevention_checklist[0]}`,
+          is_boilerplate: false,
+          pattern_id: issue.pattern_id
+        });
+      }
+    }
+
+    // Add summary if we found SD-specific issues
+    if (sdIssues.length > 0) {
+      keyLearnings.push({
+        learning: `${sdIssues.length} issue pattern(s) linked to this SD for future reference`,
+        is_boilerplate: false
+      });
     }
 
     const actionItems = [];
@@ -152,10 +236,34 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
       actionItems.push({ action: `Address friction point: ${frictionPoints}`, is_boilerplate: false });
     }
 
-    // Ensure minimum 3 action items
-    while (actionItems.length < 3) {
-      actionItems.push({ action: 'Continue following LEO Protocol handoff best practices', is_boilerplate: true });
+    // Add action items from issue pattern proven_solutions (PAT-RETRO-BOILERPLATE-001 fix)
+    for (const issue of allIssues) {
+      if (actionItems.length >= 5) break;
+      if (issue.proven_solutions && Array.isArray(issue.proven_solutions) && issue.proven_solutions.length > 0) {
+        const topSolution = issue.proven_solutions[0];
+        if (topSolution.solution) {
+          actionItems.push({
+            action: `[${issue.pattern_id}] ${topSolution.solution}`,
+            is_boilerplate: false,
+            pattern_id: issue.pattern_id,
+            success_rate: topSolution.success_rate
+          });
+        }
+      }
     }
+
+    // Only add generic item if we have NO actual content
+    if (actionItems.length === 0) {
+      actionItems.push({ action: 'No immediate actions required - continue standard workflow', is_boilerplate: false });
+    }
+
+    // Build discovered_issues metadata (PAT-RETRO-BOILERPLATE-001 fix)
+    const discoveredIssues = allIssues.map(issue => ({
+      pattern_id: issue.pattern_id,
+      category: issue.category,
+      severity: issue.severity,
+      summary: issue.issue_summary.substring(0, 200)
+    }));
 
     // Create retrospective record
     // Note: retro_type must be a valid enum value (SD_COMPLETION, INCIDENT, etc.)
@@ -190,6 +298,10 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
       success_patterns: [`Quality rating: ${avgRating.toFixed(1)}/5`],
       failure_patterns: whatNeedsImprovement.slice(0, 3),
       improvement_areas: whatNeedsImprovement.slice(0, 3),
+      // PAT-RETRO-BOILERPLATE-001 fix: Include actual issues in protocol_improvements
+      protocol_improvements: discoveredIssues.length > 0
+        ? discoveredIssues.map(i => `[${i.pattern_id}] ${i.summary}`)
+        : null,
       generated_by: 'MANUAL',
       trigger_event: 'HANDOFF_COMPLETION',
       status: 'PUBLISHED',
@@ -200,7 +312,12 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
       related_commits: [],
       related_prs: [],
       affected_components: ['LEO Protocol', 'Handoff System'],
-      tags: ['handoff', 'lead-to-plan', 'process-improvement']
+      tags: ['handoff', 'lead-to-plan', 'process-improvement'],
+      // PAT-RETRO-BOILERPLATE-001 fix: Store issue pattern IDs in metadata
+      metadata: discoveredIssues.length > 0 ? {
+        discovered_issues: discoveredIssues,
+        issue_pattern_ids: discoveredIssues.map(i => i.pattern_id)
+      } : null
     };
 
     // Insert retrospective

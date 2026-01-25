@@ -1081,7 +1081,85 @@ node scripts/execute-subagent.js --code DATABASE --sd-id <SD-ID>
 - Applied defensive coding pattern
 - **Prevention**: Future format mismatches caught early
 
-### Pattern 7: Intelligent Migration Execution (NEW - 2026-01-23)
+### Pattern 7: Supabase API Key Resilience (NEW - 2026-01-25)
+
+**Issue Pattern**: PAT-SUPABASE-KEY-001
+**Root Cause**: API keys rotated in Supabase Dashboard but `.env` not updated
+**Impact**: "Invalid API key" errors blocking all database operations
+
+**Symptoms**:
+- Error: "Invalid API key"
+- Hint: "Double check your Supabase `anon` or `service_role` API key"
+- Service role key works, anon key fails
+- Keys in `.env` have valid JWT format
+
+**Root Cause Analysis**:
+1. JWT structure is valid (not a format issue)
+2. Service role key works (project connection is fine)
+3. Anon key was REVOKED/REGENERATED in Supabase Dashboard
+4. Old key still in `.env` file
+
+**Prevention Pattern** (implemented in `tests/helpers/database-helpers.js`):
+
+```javascript
+// PAT-SUPABASE-KEY-001: Resilient Supabase client creation
+export function getSupabaseClient() {
+  // Support both env var naming conventions
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+
+  // Prefer service role key for integration tests (needed for insert/delete)
+  // Falls back to anon key if service role not available
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ||
+                      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+                      process.env.SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      'Supabase credentials not found. Set one of:\n' +
+      '  - NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (recommended)\n' +
+      '  - NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY\n' +
+      '  - SUPABASE_URL + SUPABASE_ANON_KEY'
+    );
+  }
+
+  return createClient(supabaseUrl, supabaseKey);
+}
+
+// Connection validation for fail-fast behavior
+export async function getValidatedSupabaseClient() {
+  const client = getSupabaseClient();
+  const { error } = await client.from('strategic_directives_v2').select('id').limit(1);
+  if (error) {
+    throw new Error(
+      `Database connection failed: ${error.message}\n` +
+      `Hint: ${error.hint || 'Check API keys - they may have been rotated'}`
+    );
+  }
+  return client;
+}
+```
+
+**Why Service Role Key for Tests**:
+- Integration tests need INSERT/DELETE permissions
+- Service role bypasses RLS (required for test data setup/cleanup)
+- Provides resilience if anon key is rotated
+- Clear separation: anon key for app, service role for tests/admin
+
+**Fix Procedure** (when anon key fails):
+1. Access Supabase Dashboard: `https://supabase.com/dashboard/project/[PROJECT_ID]/settings/api`
+2. Copy new "anon public" key
+3. Update `.env`:
+   ```
+   SUPABASE_ANON_KEY=[new key]
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=[new key]
+   ```
+4. Restart application/tests
+
+**Files Implementing This Pattern**:
+- `tests/helpers/database-helpers.js` - Shared test utility
+- `tests/integration/handoff-retrospective.test.js` - Example usage
+
+### Pattern 8: Intelligent Migration Execution (NEW - 2026-01-23)
 
 **Feature**: Action trigger detection for migration execution
 - User says "apply migration" or similar phrases
@@ -1780,6 +1858,8 @@ const result = await shouldAutoInvokeAndExecute(message, {
 | 1.2.0 | 2026-01-24 | Added SQL Execution Intent Semantic Triggering (SD-LEO-INFRA-DATABASE-SUB-AGENT-001) |
 | 1.2.0 | 2026-01-24 | Documented intent classifier with 37 trigger patterns across 6 categories |
 | 1.2.0 | 2026-01-24 | Added auto-invocation integration, configuration, and audit trail |
+| 1.2.1 | 2026-01-25 | Added Supabase API Key Resilience pattern (PAT-SUPABASE-KEY-001) |
+| 1.2.1 | 2026-01-25 | Updated tests/helpers/database-helpers.js with resilient client creation |
 
 ---
 

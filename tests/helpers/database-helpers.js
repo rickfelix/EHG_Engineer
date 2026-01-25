@@ -9,24 +9,76 @@ import { createClient } from '@supabase/supabase-js';
 
 // Lazy-loaded Supabase client
 let supabaseClient = null;
+let connectionValidated = false;
 
 /**
- * Get or create Supabase client
+ * Get or create Supabase client for integration tests
+ *
+ * PAT-SUPABASE-KEY-001: Uses service role key with fallback to anon key
+ * - Service role is preferred for integration tests (needs insert/delete)
+ * - Handles both NEXT_PUBLIC_ and non-prefixed env vars
+ * - Validates connection on first use
+ *
  * @returns {SupabaseClient}
  */
 export function getSupabaseClient() {
   if (!supabaseClient) {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+    // Support both env var naming conventions
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+
+    // Prefer service role key for integration tests (needed for insert/delete operations)
+    // Falls back to anon key if service role not available
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ||
+                        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+                        process.env.SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      throw new Error('SUPABASE_URL and SUPABASE_ANON_KEY must be set');
+      throw new Error(
+        'Supabase credentials not found. Set one of:\n' +
+        '  - NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (recommended for tests)\n' +
+        '  - NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY\n' +
+        '  - SUPABASE_URL + SUPABASE_ANON_KEY'
+      );
     }
 
     supabaseClient = createClient(supabaseUrl, supabaseKey);
   }
 
   return supabaseClient;
+}
+
+/**
+ * Get Supabase client with connection validation
+ * Use this in test setup to fail fast if database is unreachable
+ *
+ * @returns {Promise<SupabaseClient>}
+ * @throws {Error} If connection fails
+ */
+export async function getValidatedSupabaseClient() {
+  const client = getSupabaseClient();
+
+  if (!connectionValidated) {
+    const { error } = await client.from('strategic_directives_v2').select('id').limit(1);
+    if (error) {
+      // Reset client so next attempt can try fresh
+      supabaseClient = null;
+      throw new Error(
+        `Database connection failed: ${error.message}\n` +
+        `Hint: ${error.hint || 'Check API keys in .env file - they may have been rotated'}`
+      );
+    }
+    connectionValidated = true;
+  }
+
+  return client;
+}
+
+/**
+ * Reset the cached Supabase client (useful for tests that need fresh connection)
+ */
+export function resetSupabaseClient() {
+  supabaseClient = null;
+  connectionValidated = false;
 }
 
 /**
