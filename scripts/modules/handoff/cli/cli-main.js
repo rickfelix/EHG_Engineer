@@ -137,9 +137,15 @@ export function displayHelp() {
   console.log('  database        Modified (DATABASE sub-agent required)');
   console.log('  security        Full (SECURITY sub-agent required)');
   console.log('');
+  console.log('AUTO-PROCEED FLAGS:');
+  console.log('  --auto-proceed      Enable AUTO-PROCEED mode for this handoff');
+  console.log('  --no-auto-proceed   Disable AUTO-PROCEED mode for this handoff');
+  console.log('  (Precedence: CLI > ENV > Session > Database > Default)');
+  console.log('');
   console.log('EXAMPLES:');
   console.log('  node scripts/handoff.js workflow SD-LEO-GEMINI-001');
   console.log('  node scripts/handoff.js execute PLAN-TO-EXEC SD-FEATURE-001');
+  console.log('  node scripts/handoff.js execute PLAN-TO-EXEC SD-FEATURE-001 --auto-proceed');
   console.log('  node scripts/handoff.js list SD-FEATURE-001');
   console.log('  node scripts/handoff.js stats');
 

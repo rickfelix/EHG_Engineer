@@ -16,6 +16,11 @@ import { ValidationOrchestrator } from './validation/ValidationOrchestrator.js';
 import { HandoffRecorder } from './recording/HandoffRecorder.js';
 import { ContentBuilder } from './content/ContentBuilder.js';
 import ResultBuilder from './ResultBuilder.js';
+import {
+  resolveAutoProceed,
+  createHandoffMetadata,
+  RESOLUTION_SOURCES
+} from './auto-proceed-resolver.js';
 
 export class HandoffOrchestrator {
   constructor(options = {}) {
@@ -64,10 +69,30 @@ export class HandoffOrchestrator {
     console.log('='.repeat(50));
     console.log(`Type: ${normalizedType}${handoffType !== normalizedType ? ` (normalized from: ${handoffType})` : ''}`);
     console.log(`Strategic Directive: ${sdId}`);
-    console.log('Options:', options);
     console.log('');
 
     try {
+      // SD-LEO-ENH-AUTO-PROCEED-001-02: Resolve AUTO-PROCEED mode
+      const autoProceedResult = await resolveAutoProceed({
+        supabase: this.supabase,
+        verbose: true
+      });
+
+      // Inject AUTO-PROCEED into options for downstream use
+      const enhancedOptions = {
+        ...options,
+        autoProceed: autoProceedResult.autoProceed,
+        autoProceedSource: autoProceedResult.source,
+        autoProceedSessionId: autoProceedResult.sessionId,
+        _autoProceedMetadata: createHandoffMetadata(
+          autoProceedResult.autoProceed,
+          autoProceedResult.source
+        )
+      };
+
+      console.log('');
+      console.log('Options:', { ...options, autoProceed: autoProceedResult.autoProceed });
+      console.log('');
       // MANDATORY: Verify SD exists in database
       await this.sdRepo.verifyExists(sdId);
 
@@ -78,7 +103,7 @@ export class HandoffOrchestrator {
 
       // SD-LEO-GEMINI-001 (US-006): Self-Critique Pre-Flight
       // Validate agent confidence scoring before handoff
-      const selfCritiqueResult = this._validateSelfCritique(normalizedType, options);
+      const selfCritiqueResult = this._validateSelfCritique(normalizedType, enhancedOptions);
       if (selfCritiqueResult.blocked) {
         return ResultBuilder.rejected(
           'LOW_CONFIDENCE',
@@ -101,8 +126,12 @@ export class HandoffOrchestrator {
         );
       }
 
-      // Execute the handoff
-      const result = await executor.execute(sdId, options);
+      // Execute the handoff with AUTO-PROCEED metadata
+      const result = await executor.execute(sdId, enhancedOptions);
+
+      // SD-LEO-ENH-AUTO-PROCEED-001-02: Include AUTO-PROCEED in result
+      result.autoProceed = autoProceedResult.autoProceed;
+      result.autoProceedSource = autoProceedResult.source;
 
       // Record result
       if (result.success) {

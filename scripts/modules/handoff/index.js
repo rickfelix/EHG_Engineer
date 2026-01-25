@@ -48,6 +48,20 @@ export { extractAndPopulateDeliverables } from './extract-deliverables-from-prd.
 export { mapE2ETestsToUserStories, validateE2ECoverage } from './map-e2e-tests-to-stories.js';
 
 // ============================================================================
+// SD-LEO-ENH-AUTO-PROCEED-001-02: AUTO-PROCEED Resolver
+// ============================================================================
+export {
+  resolveAutoProceed,
+  parseCliFlags,
+  parseEnvVar,
+  readFromSession,
+  writeToSession,
+  createHandoffMetadata,
+  RESOLUTION_SOURCES,
+  DEFAULT_AUTO_PROCEED
+} from './auto-proceed-resolver.js';
+
+// ============================================================================
 // SD-LEO-REFACTOR-HANDOFF-001: Extracted CLI utilities
 // ============================================================================
 
