@@ -29,7 +29,7 @@ async function createPRD() {
   const { data: sdData, error: sdError } = await supabase
     .from('strategic_directives_v2')
     .select('id, sd_key, title, category, priority, exploration_summary')
-    .or(`sd_key.eq.${SD_KEY},legacy_id.eq.${SD_KEY}`)
+    .or(`sd_key.eq.${SD_KEY},sd_key.eq.${SD_KEY}`)
     .single();
 
   if (sdError || !sdData) {

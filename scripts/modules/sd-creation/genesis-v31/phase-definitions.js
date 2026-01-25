@@ -7,7 +7,7 @@
 export const masonP1 = {
   id: 'SD-GENESIS-V31-MASON-P1',
   sd_key: 'genesis-v31-mason-p1',
-  legacy_id: 'SD-GENESIS-V31-MASON-P1',
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
   title: 'Mason Phase 1: Ephemeral Foundation',
   description: 'Establish the foundational infrastructure for the Simulation Chamber. Create the ehg-simulations GitHub organization with proper isolation, configure *.possible.ehg.dev wildcard DNS, implement schema_sim_* database namespace convention in Supabase, build the epistemic_status tagging system, create simulation_artifacts table with full tracking, implement TTL auto-archive triggers, and set up GitHub API integration for the simulation org.',
   scope: 'GitHub org creation, DNS configuration, database namespace setup, epistemic tagging schema, TTL system implementation, simulation metadata table, GitHub API auth.',
@@ -37,7 +37,7 @@ export const masonP1 = {
 export const masonP2 = {
   id: 'SD-GENESIS-V31-MASON-P2',
   sd_key: 'genesis-v31-mason-p2',
-  legacy_id: 'SD-GENESIS-V31-MASON-P2',
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
   title: 'Mason Phase 2: Simulation Scaffolder',
   description: 'Build the repository and schema scaffolding systems. Create venture scaffold templates (Next.js SaaS starter, API service), implement automated repo creation in ehg-simulations org, set up git init and initial commit automation, build schema template library with pre-validated patterns, and create migration generator that converts JSON schema definitions to SQL migrations.',
   scope: 'Repo template system, gh repo create automation, git init automation, schema template library, JSON-to-SQL migration generator.',
@@ -67,7 +67,7 @@ export const masonP2 = {
 export const masonP3 = {
   id: 'SD-GENESIS-V31-MASON-P3',
   sd_key: 'genesis-v31-mason-p3',
-  legacy_id: 'SD-GENESIS-V31-MASON-P3',
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
   title: 'Mason Phase 3: Ephemeral Deploy',
   description: 'Build the ephemeral deployment pipeline. Set up Vercel simulation project with separate team account, implement deploy automation from repo push to live URL, create SIMULATION watermark overlay middleware, add health check endpoint with simulation metadata, implement cost cap enforcement to prevent runaway spending, and build garbage collection for Stage 3 rejection cleanup.',
   scope: 'Vercel project setup, deploy automation, watermark middleware, health endpoints, cost caps, garbage collection.',
@@ -98,7 +98,7 @@ export const masonP3 = {
 export const dreamP1 = {
   id: 'SD-GENESIS-V31-DREAM-P1',
   sd_key: 'genesis-v31-dream-p1',
-  legacy_id: 'SD-GENESIS-V31-DREAM-P1',
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
   title: 'Dreamcatcher Phase 1: PRD Generation',
   description: 'Build the text-to-PRD intelligence layer. Create venture seed parser that extracts structure from raw text, implement PRD template engine for Stage 1-2 artifact generation, build problem/solution extraction using NLP, generate functional requirements from seed analysis, and implement PRD quality validator with pass/fail gates.',
   scope: 'Seed parser, PRD template engine, NLP extraction, requirements generation, PRD validation gates.',
@@ -128,7 +128,7 @@ export const dreamP1 = {
 export const dreamP2 = {
   id: 'SD-GENESIS-V31-DREAM-P2',
   sd_key: 'genesis-v31-dream-p2',
-  legacy_id: 'SD-GENESIS-V31-DREAM-P2',
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
   title: 'Dreamcatcher Phase 2: Schema/Repo Simulation',
   description: 'Build PRD-to-artifact intelligence. Create PRD-to-schema extraction that infers data model from requirements, implement schema generator producing SQL tables with relationships, build RLS policy generator for automatic security rules, implement PRD-to-repo extraction for tech requirements, and create repo customizer that applies PRD context to scaffold templates.',
   scope: 'PRD-to-schema intelligence, schema generator, RLS generator, PRD-to-repo intelligence, repo customizer.',
@@ -158,7 +158,7 @@ export const dreamP2 = {
 export const dreamP3 = {
   id: 'SD-GENESIS-V31-DREAM-P3',
   sd_key: 'genesis-v31-dream-p3',
-  legacy_id: 'SD-GENESIS-V31-DREAM-P3',
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
   title: 'Dreamcatcher Phase 3: EVA + Approval Gate',
   description: 'Build the approval ceremony and venture creation. Implement /ratify CLI command for the Contract of Pain, create approval prompt UI showing 25-stage commitment, build venture creation flow for post-ratify instantiation, implement stage scheduler to auto-schedule Stage 3 kill gate, integrate with EVA orchestration, and create simulation summary generator for the "Possible Future" display.',
   scope: '/ratify command, Contract of Pain UI, venture creation, stage scheduling, EVA integration, simulation summary.',
@@ -189,7 +189,7 @@ export const dreamP3 = {
 export const mirrorInt = {
   id: 'SD-GENESIS-V31-MIRROR-INT',
   sd_key: 'genesis-v31-mirror-int',
-  legacy_id: 'SD-GENESIS-V31-MIRROR-INT',
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
   title: 'Mirror: Integration',
   description: 'Connect Dreamcatcher intelligence with Mason infrastructure. Build end-to-end pipeline that flows from seed text through all artifact generation, implement error recovery for graceful failure handling, add retry logic with idempotent re-execution, and create CLI status command for simulation display.',
   scope: 'End-to-end pipeline integration, error recovery, retry logic, CLI status command.',
@@ -219,7 +219,7 @@ export const mirrorInt = {
 export const mirrorElev = {
   id: 'SD-GENESIS-V31-MIRROR-ELEV',
   sd_key: 'genesis-v31-mirror-elev',
-  legacy_id: 'SD-GENESIS-V31-MIRROR-ELEV',
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
   title: 'Mirror: Elevation Logic',
   description: 'Implement the elevation mechanics that transform simulation to production. Build Stage 16 schema elevation (copy simulation schema to production namespace), Stage 17 repo elevation (fork simulation repo to production org), and elevation audit trail with Chairman signature requirement. CONSTRAINT: Complete by Feb 10 - no new logic after.',
   scope: 'Stage 16 schema elevation, Stage 17 repo elevation, elevation audit trail with Chairman signature.',
@@ -249,7 +249,7 @@ export const mirrorElev = {
 export const mirrorTest = {
   id: 'SD-GENESIS-V31-MIRROR-TEST',
   sd_key: 'genesis-v31-mirror-test',
-  legacy_id: 'SD-GENESIS-V31-MIRROR-TEST',
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
   title: 'Mirror: Reflex Testing',
   description: 'Comprehensive testing of the complete Genesis system. Execute happy path testing with full flow success scenarios, failure mode testing for error handling validation, and edge case testing for unusual inputs, timeouts, and boundary conditions. NOTE: Testing only - no new features during this phase.',
   scope: 'Happy path testing, failure mode testing, edge case testing. NO NEW FEATURES.',

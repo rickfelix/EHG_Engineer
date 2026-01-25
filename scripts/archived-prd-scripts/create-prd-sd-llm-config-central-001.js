@@ -52,8 +52,8 @@ async function createPRD() {
   // SD ID Schema Cleanup: Use legacy_id for lookup, get UUID for FK
   const { data: sdData, error: sdError } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, title, category, priority, description, strategic_objectives, success_criteria, scope, key_changes, metadata')
-    .eq('legacy_id', SD_ID)
+    .select('id, sd_key, title, category, priority, description, strategic_objectives, success_criteria, scope, key_changes, metadata')
+    .eq('sd_key', SD_ID)
     .single();
 
   if (sdError || !sdData) {

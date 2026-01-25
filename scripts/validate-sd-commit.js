@@ -35,10 +35,11 @@ async function validateSDCommit(sdId) {
 
   try {
     // Query SD by various ID formats
+    // Note: legacy_id column was deprecated and removed - using sd_key instead
     const { data, error } = await supabase
       .from('strategic_directives_v2')
       .select('id, sd_key, title, status, current_phase')
-      .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+      .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
       .maybeSingle();
 
     if (error) {

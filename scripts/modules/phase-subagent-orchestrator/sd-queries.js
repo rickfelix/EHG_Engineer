@@ -14,7 +14,8 @@ import { shouldSkipCodeValidation } from '../../../lib/utils/sd-type-validation.
 
 /**
  * Query SD details from database
- * Supports UUID, legacy_id, and sd_key lookups
+ * SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+ * Supports UUID and sd_key lookups
  * @param {Object} supabase - Supabase client
  * @param {string} sdId - SD identifier
  * @returns {Promise<Object>} SD details
@@ -43,24 +44,14 @@ async function getSDDetails(supabase, sdId) {
       data = idResult.data;
       error = idResult.error;
     } else {
-      const legacyResult = await supabase
+      // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id, use only sd_key (column dropped 2026-01-24)
+      const keyResult = await supabase
         .from('strategic_directives_v2')
         .select('*')
-        .eq('legacy_id', sdId)
+        .eq('sd_key', sdId)
         .maybeSingle();
-
-      if (legacyResult.data) {
-        data = legacyResult.data;
-        error = legacyResult.error;
-      } else {
-        const keyResult = await supabase
-          .from('strategic_directives_v2')
-          .select('*')
-          .eq('sd_key', sdId)
-          .maybeSingle();
-        data = keyResult.data;
-        error = keyResult.error;
-      }
+      data = keyResult.data;
+      error = keyResult.error;
     }
   }
 

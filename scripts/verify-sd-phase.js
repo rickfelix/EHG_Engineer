@@ -58,7 +58,7 @@ async function verifySDPhase(sdId) {
     const { data, error } = await supabase
       .from('strategic_directives_v2')
       .select('id, sd_key, title, status, current_phase, progress_percentage, parent_sd_id')
-      .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+      .or(`id.eq.${sdId},sd_key.eq.${sdId},sd_key.eq.${sdId}`)
       .maybeSingle();
 
     if (error) {

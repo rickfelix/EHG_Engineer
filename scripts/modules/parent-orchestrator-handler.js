@@ -42,7 +42,8 @@ export class ParentOrchestratorHandler {
       const { data } = await this.supabase
         .from('strategic_directives_v2')
         .select('*')
-        .or(`id.eq.${sdOrId},legacy_id.eq.${sdOrId}`)
+        // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+        .or(`id.eq.${sdOrId},sd_key.eq.${sdOrId}`)
         .single();
       sd = data;
     }
@@ -61,9 +62,11 @@ export class ParentOrchestratorHandler {
     // Get children
     const { data: children } = await this.supabase
       .from('strategic_directives_v2')
-      .select('id, legacy_id, title, status, current_phase, progress_percentage, priority')
+      // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+    .select('id, sd_key, title, status, current_phase, progress_percentage, priority')
       .eq('parent_sd_id', sd.id)
-      .order('legacy_id', { ascending: true });
+      // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+    .order('sd_key', { ascending: true });
 
     return {
       isParent: true,
@@ -95,7 +98,8 @@ export class ParentOrchestratorHandler {
       throw new Error(`SD ${sdId} is not a parent orchestrator. Use standard PRD generation.`);
     }
 
-    console.log(`   Parent SD: ${sd.legacy_id || sd.id}`);
+    // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+    console.log(`   Parent SD: ${sd.sd_key || sd.id}`);
     console.log(`   Title: ${sd.title}`);
     console.log(`   Children: ${children.length}`);
 
@@ -103,7 +107,7 @@ export class ParentOrchestratorHandler {
     const { data: existingPRD } = await this.supabase
       .from('product_requirements_v2')
       .select('id')
-      .or(`sd_id.eq.${sd.id},directive_id.eq.${sd.legacy_id || sd.id}`)
+      .or(`sd_id.eq.${sd.id},directive_id.eq.${sd.sd_key || sd.id}`)
       .maybeSingle();
 
     if (existingPRD) {
@@ -112,22 +116,25 @@ export class ParentOrchestratorHandler {
     }
 
     // Build decomposition structure from children
+    // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
     const decompositionStructure = children.map((child, idx) => ({
       sequence: idx + 1,
-      sd_id: child.legacy_id || child.id,
+      sd_id: child.sd_key || child.id,
       title: child.title,
       status: child.status,
       priority: child.priority,
-      dependencies: idx > 0 ? [children[idx - 1].legacy_id || children[idx - 1].id] : []
+      dependencies: idx > 0 ? [children[idx - 1].sd_key || children[idx - 1].id] : []
     }));
 
     // Build PRD for parent orchestrator
-    const prdId = `PRD-${sd.legacy_id || sd.id.substring(0, 8)}`;
+    // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+    const prdId = `PRD-${sd.sd_key || sd.id.substring(0, 8)}`;
 
     const prdData = {
       id: prdId,
       sd_id: sd.id,
-      directive_id: sd.legacy_id || sd.id,
+      // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+      directive_id: sd.sd_key || sd.id,
       title: `${sd.title} - Orchestrator PRD`,
       version: '1.0',
       status: 'planning',
@@ -247,7 +254,8 @@ export class ParentOrchestratorHandler {
       // Dependencies - list child SDs
       dependencies: children.map(c => ({
         type: 'child_sd',
-        id: c.legacy_id || c.id,
+        // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+        id: c.sd_key || c.id,
         title: c.title,
         status: c.status
       })),
@@ -294,7 +302,7 @@ export class ParentOrchestratorHandler {
 **Current Progress**: ${completedCount}/${children.length} children completed
 
 ### Child SD Breakdown:
-${children.map((c, i) => `${i + 1}. **${c.legacy_id || c.id}**: ${c.title} [${c.status}]`).join('\n')}
+${children.map((c, i) => `${i + 1}. **${c.sd_key || c.id}**: ${c.title} [${c.status}]`).join('\n')}
 
 ### Orchestration Model:
 This parent SD does NOT contain implementation code. All implementation is delegated to child SDs. The parent:
@@ -351,7 +359,8 @@ ${(sd.strategic_objectives || []).map(obj => `- ${obj.objective}`).join('\n') ||
     // Validate each child
     for (const child of children) {
       // Check parent_sd_id is set correctly
-      if (!child.legacy_id && !child.id) {
+      // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+      if (!child.sd_key && !child.id) {
         issues.push('Child missing ID');
       }
 
@@ -363,11 +372,13 @@ ${(sd.strategic_objectives || []).map(obj => `- ${obj.objective}`).join('\n') ||
         .single();
 
       if (!fullChild?.description || fullChild.description.length < 50) {
-        warnings.push(`${child.legacy_id || child.id}: Description too short or missing`);
+        // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+        warnings.push(`${child.sd_key || child.id}: Description too short or missing`);
       }
 
       if (!fullChild?.strategic_objectives || fullChild.strategic_objectives.length === 0) {
-        warnings.push(`${child.legacy_id || child.id}: Missing strategic objectives`);
+        // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+        warnings.push(`${child.sd_key || child.id}: Missing strategic objectives`);
       }
     }
 
@@ -381,7 +392,8 @@ ${(sd.strategic_objectives || []).map(obj => `- ${obj.objective}`).join('\n') ||
 
     const valid = issues.length === 0;
 
-    console.log(`   Parent: ${sd.legacy_id || sd.id}`);
+    // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+    console.log(`   Parent: ${sd.sd_key || sd.id}`);
     console.log(`   Children: ${children.length}`);
     console.log(`   Completed: ${completedChildren.length}`);
     console.log(`   Valid: ${valid ? '✅' : '❌'}`);
@@ -422,7 +434,7 @@ ${(sd.strategic_objectives || []).map(obj => `- ${obj.objective}`).join('\n') ||
     const { data: prd } = await this.supabase
       .from('product_requirements_v2')
       .select('id')
-      .or(`sd_id.eq.${sd.id},directive_id.eq.${sd.legacy_id || sd.id}`)
+      .or(`sd_id.eq.${sd.id},directive_id.eq.${sd.sd_key || sd.id}`)
       .maybeSingle();
 
     // Check handoffs
@@ -439,7 +451,8 @@ ${(sd.strategic_objectives || []).map(obj => `- ${obj.objective}`).join('\n') ||
       return {
         action: 'LEAD_TO_PLAN',
         message: 'Run LEAD-TO-PLAN handoff for parent',
-        command: `node scripts/handoff.js execute LEAD-TO-PLAN ${sd.legacy_id || sd.id}`
+        // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+        command: `node scripts/handoff.js execute LEAD-TO-PLAN ${sd.sd_key || sd.id}`
       };
     }
 
@@ -447,7 +460,8 @@ ${(sd.strategic_objectives || []).map(obj => `- ${obj.objective}`).join('\n') ||
       return {
         action: 'CREATE_PRD',
         message: 'Create parent orchestrator PRD',
-        command: `node -e "import('./scripts/modules/parent-orchestrator-handler.js').then(m => new m.ParentOrchestratorHandler(supabase).generateParentPRD('${sd.legacy_id || sd.id}'))"`
+        // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+        command: `node -e "import('./scripts/modules/parent-orchestrator-handler.js').then(m => new m.ParentOrchestratorHandler(supabase).generateParentPRD('${sd.sd_key || sd.id}'))"`
       };
     }
 
@@ -455,7 +469,8 @@ ${(sd.strategic_objectives || []).map(obj => `- ${obj.objective}`).join('\n') ||
       return {
         action: 'PLAN_TO_EXEC',
         message: 'Run PLAN-TO-EXEC to enter ORCHESTRATOR/WAITING state',
-        command: `node scripts/handoff.js execute PLAN-TO-EXEC ${sd.legacy_id || sd.id}`
+        // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+        command: `node scripts/handoff.js execute PLAN-TO-EXEC ${sd.sd_key || sd.id}`
       };
     }
 
@@ -464,9 +479,10 @@ ${(sd.strategic_objectives || []).map(obj => `- ${obj.objective}`).join('\n') ||
       if (nextChild) {
         return {
           action: 'WORK_ON_CHILD',
-          message: `Work on next child SD: ${nextChild.legacy_id || nextChild.id}`,
-          command: `node scripts/phase-preflight.js --phase LEAD --sd-id ${nextChild.legacy_id || nextChild.id}`,
-          childId: nextChild.legacy_id || nextChild.id,
+          // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+          message: `Work on next child SD: ${nextChild.sd_key || nextChild.id}`,
+          command: `node scripts/phase-preflight.js --phase LEAD --sd-id ${nextChild.sd_key || nextChild.id}`,
+          childId: nextChild.sd_key || nextChild.id,
           childTitle: nextChild.title
         };
       }
@@ -476,7 +492,8 @@ ${(sd.strategic_objectives || []).map(obj => `- ${obj.objective}`).join('\n') ||
       return {
         action: 'FINALIZE_PARENT',
         message: 'All children complete - finalize parent',
-        command: `node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${sd.legacy_id || sd.id}`
+        // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+        command: `node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${sd.sd_key || sd.id}`
       };
     }
 

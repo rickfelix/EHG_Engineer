@@ -31,8 +31,8 @@ async function createPRD() {
 
   const { data: sdData, error: sdError } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, title, category, priority')
-    .or(`id.eq.${SD_ID},legacy_id.eq.${SD_ID}`)
+    .select('id, sd_key, title, category, priority')
+    .or(`id.eq.${SD_ID},sd_key.eq.${SD_ID}`)
     .single();
 
   if (sdError || !sdData) {
@@ -42,7 +42,7 @@ async function createPRD() {
   }
 
   console.log(`✅ Found SD: ${sdData.title}`);
-  console.log(`   ID: ${sdData.legacy_id || sdData.id}`);
+  console.log(`   ID: ${sdData.sd_key || sdData.id}`);
   console.log(`   Category: ${sdData.category}`);
 
   // Build PRD Data
@@ -53,7 +53,7 @@ async function createPRD() {
   const prdData = {
     id: prdId,
     sd_id: sdData.id,
-    directive_id: sdData.legacy_id || sdData.id,
+    directive_id: sdData.sd_key || sdData.id,
 
     title: PRD_TITLE,
     version: '1.0',

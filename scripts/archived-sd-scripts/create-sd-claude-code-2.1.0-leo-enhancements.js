@@ -26,7 +26,7 @@ async function createSD() {
 
   const sdData = {
     id: 'SD-CLAUDE-CODE-2.1.0-LEO-001',
-    legacy_id: 'SD-CLAUDE-CODE-2.1.0-LEO-001',
+    sd_key: 'SD-CLAUDE-CODE-2.1.0-LEO-001',
     sd_key: 'SD-CLAUDE-CODE-2.1.0-LEO-001',
     title: 'Claude Code 2.1.0 Integration - Baseline-Aware Continuous Execution System',
     description: `Integrate Claude Code 2.1.0 features into LEO Protocol to enable:

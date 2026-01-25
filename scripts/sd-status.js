@@ -101,14 +101,15 @@ class SDStatusReporter {
     }
 
     // Load SD details
+    // Note: legacy_id column was deprecated and removed - using sd_key instead
     const sdIds = this.items.map(i => i.sd_id);
     const { data: sds } = await supabase
       .from('strategic_directives_v2')
-      .select('legacy_id, title, status, progress_percentage, updated_at')
-      .in('legacy_id', sdIds);
+      .select('id, sd_key, title, status, progress_percentage, updated_at')
+      .in('sd_key', sdIds);
 
     if (sds) {
-      sds.forEach(sd => this.sdDetails[sd.legacy_id] = sd);
+      sds.forEach(sd => this.sdDetails[sd.sd_key || sd.id] = sd);
     }
   }
 
@@ -254,7 +255,8 @@ class SDStatusReporter {
                          sd.progress_percentage > 0 ? `${colors.yellow}◐${colors.reset}` :
                          `${colors.dim}○${colors.reset}`;
       const date = new Date(sd.updated_at).toLocaleDateString();
-      console.log(`  ${statusIcon} ${sd.legacy_id} - ${sd.title?.substring(0, 40)}... (${date})`);
+      // Note: legacy_id was deprecated - using sd_key instead
+      console.log(`  ${statusIcon} ${sd.sd_key || sd.id} - ${sd.title?.substring(0, 40)}... (${date})`);
     });
   }
 

@@ -52,8 +52,8 @@ async function createPRD() {
   // SD ID Schema Cleanup: Support both UUID id and legacy_id lookup
   const { data: sdData, error: sdError } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, title, category, priority')
-    .or(`id.eq.${SD_ID},legacy_id.eq.${SD_ID}`)
+    .select('id, sd_key, title, category, priority')
+    .or(`id.eq.${SD_ID},sd_key.eq.${SD_ID}`)
     .limit(1)
     .single();
 
@@ -66,7 +66,7 @@ async function createPRD() {
 
   console.log(`✅ Found SD: ${sdData.title}`);
   console.log(`   UUID: ${sdData.id}`);
-  console.log(`   Legacy ID: ${sdData.legacy_id || 'N/A'}`);
+  console.log(`   Legacy ID: ${sdData.sd_key || 'N/A'}`);
   console.log(`   Category: ${sdData.category}`);
   console.log(`   Priority: ${sdData.priority}`);
 
@@ -77,7 +77,7 @@ async function createPRD() {
   console.log('\n2️⃣  Building PRD data...');
 
   // Use legacy_id for PRD naming if available, otherwise use SD_ID
-  const sdIdentifier = sdData.legacy_id || SD_ID;
+  const sdIdentifier = sdData.sd_key || SD_ID;
   const prdId = `PRD-${sdIdentifier}`;
 
   const prdData = {

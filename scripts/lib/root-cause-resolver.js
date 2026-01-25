@@ -240,7 +240,7 @@ async function getSDContext(sdId, _explorer) {
     const { data: sd } = await supabase
       .from('strategic_directives_v2')
       .select('*')
-      .or(`legacy_id.eq.${sdId},id.eq.${sdId}`)
+      .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
       .single();
 
     if (sd) {
@@ -506,7 +506,7 @@ export async function skipAndLog(sdId, reason, sessionId) {
       status: 'blocked',
       notes: `Auto-skipped: ${reason}`
     })
-    .or(`legacy_id.eq.${sdId},id.eq.${sdId}`);
+    .or(`sd_key.eq.${sdId},id.eq.${sdId}`);
 
   return { skipped: true, reason };
 }

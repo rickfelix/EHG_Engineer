@@ -309,7 +309,7 @@ async function main() {
   const { data: sd, error: sdError } = await supabase
     .from('strategic_directives_v2')
     .select('id, sd_key, sd_type, title, current_phase, status')
-    .or(`sd_key.eq.${sdKey},legacy_id.eq.${sdKey}`)
+    .or(`sd_key.eq.${sdKey},sd_key.eq.${sdKey}`)
     .single();
 
   if (sdError || !sd) {

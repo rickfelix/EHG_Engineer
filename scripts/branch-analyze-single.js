@@ -240,8 +240,8 @@ class BranchAnalyzer {
       try {
         const { data: sd } = await this.supabase
           .from('strategic_directives_v2')
-          .select('id, legacy_id, status, title')
-          .or(`legacy_id.ilike.${sdId},id.ilike.${sdId}`)
+          .select('id, sd_key, status, title')
+          .or(`sd_key.ilike.${sdId},id.ilike.${sdId}`)
           .single();
 
         if (sd) {

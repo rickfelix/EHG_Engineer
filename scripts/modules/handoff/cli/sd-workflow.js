@@ -14,7 +14,7 @@ import { WORKFLOW_BY_SD_TYPE } from './workflow-definitions.js';
 /**
  * Get SD details and determine workflow
  *
- * @param {string} sdId - SD identifier (UUID, legacy_id, or sd_key)
+ * @param {string} sdId - SD identifier (UUID, sd_key, or sd_key)
  * @returns {Promise<Object>} - Workflow info or error
  */
 export async function getSDWorkflow(sdId) {

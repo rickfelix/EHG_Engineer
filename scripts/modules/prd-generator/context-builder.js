@@ -214,7 +214,7 @@ export function buildDesignAgentPrompt(sdId, sdData, personaContextBlock = '') {
 ## STRATEGIC DIRECTIVE - COMPLETE CONTEXT
 
 **ID**: ${sdData.id || sdId}
-**Legacy ID**: ${sdData.legacy_id || 'N/A'}
+**SD Key**: ${sdData.sd_key || 'N/A'}
 **Title**: ${sdData.title || 'N/A'}
 **Type**: ${sdData.sd_type || sdData.category || 'feature'}
 **Category**: ${sdData.category || 'Not specified'}
@@ -291,7 +291,7 @@ export function buildDatabaseAgentPrompt(sdId, sdData, designAnalysis = null, pe
 ## STRATEGIC DIRECTIVE - COMPLETE CONTEXT
 
 **ID**: ${sdData.id || sdId}
-**Legacy ID**: ${sdData.legacy_id || 'N/A'}
+**SD Key**: ${sdData.sd_key || 'N/A'}
 **Title**: ${sdData.title || 'N/A'}
 **Type**: ${sdData.sd_type || sdData.category || 'feature'}
 **Category**: ${sdData.category || 'Not specified'}

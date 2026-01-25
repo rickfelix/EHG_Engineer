@@ -52,8 +52,8 @@ async function createPRD() {
   // SD lookup: Use legacy_id for string IDs like 'SD-REFACTOR-SCRIPTS-001'
   const { data: sdData, error: sdError } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, title, category, priority')
-    .eq('legacy_id', SD_ID)
+    .select('id, sd_key, title, category, priority')
+    .eq('sd_key', SD_ID)
     .single();
 
   if (sdError || !sdData) {
@@ -257,7 +257,7 @@ async function createPRD() {
       tables: [
         {
           name: 'strategic_directives_v2',
-          columns: ['id', 'legacy_id', 'title', 'description', 'scope', 'success_metrics'],
+          columns: ['id', 'sd_key', 'title', 'description', 'scope', 'success_metrics'],
           relationships: ['Source for PRD generation']
         },
         {

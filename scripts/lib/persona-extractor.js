@@ -227,7 +227,7 @@ function generateDefaultPersonas(sdData) {
     console.warn('');
     console.warn('   ════════════════════════════════════════════════════════════');
     console.warn('   ⚠️  WARNING: target_application NOT SET');
-    console.warn(`   SD: ${sdData.id || sdData.legacy_id || 'unknown'}`);
+    console.warn(`   SD: ${sdData.id || sdData.sd_key || 'unknown'}`);
     console.warn('   Using fallback persona defaults (chairman-only).');
     console.warn('   To fix: Run LEAD-TO-PLAN phase or set target_application in DB.');
     console.warn('   ════════════════════════════════════════════════════════════');

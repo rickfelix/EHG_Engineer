@@ -121,7 +121,7 @@ export async function validatePhase(sdId, phase) {
   const { data: sd, error } = await supabase
     .from('strategic_directives_v2')
     .select('*')
-    .or(`legacy_id.eq.${sdId},id.eq.${sdId}`)
+    .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
     .single();
 
   if (error || !sd) {
@@ -302,7 +302,7 @@ export async function checkpoint(sdId, transition, options = {}) {
   const { data: sd } = await supabase
     .from('strategic_directives_v2')
     .select('id')
-    .or(`legacy_id.eq.${sdId},id.eq.${sdId}`)
+    .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
     .single();
 
   // Record checkpoint
@@ -349,7 +349,7 @@ export async function getCheckpointHistory(sdId) {
   const { data: sd } = await supabase
     .from('strategic_directives_v2')
     .select('id')
-    .or(`legacy_id.eq.${sdId},id.eq.${sdId}`)
+    .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
     .single();
 
   if (!sd) return [];

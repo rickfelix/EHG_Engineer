@@ -60,9 +60,10 @@ async function listPendingVerification() {
   console.log(`${colors.bold} SDs PENDING VERIFICATION${colors.reset}`);
   console.log(`${colors.cyan}═══════════════════════════════════════════════════════════════════${colors.reset}\n`);
 
+  // Note: legacy_id column was deprecated and removed - using sd_key instead
   const { data: sds, error } = await supabase
     .from('strategic_directives_v2')
-    .select('legacy_id, sd_key, title, current_phase, status, progress_percentage, updated_at')
+    .select('id, sd_key, title, current_phase, status, progress_percentage, updated_at')
     .eq('is_active', true)
     .or('current_phase.eq.EXEC_COMPLETE,status.eq.review')
     .neq('status', 'completed')
@@ -82,7 +83,7 @@ async function listPendingVerification() {
   console.log(`Found ${sds.length} SD(s) needing verification:\n`);
 
   for (const sd of sds) {
-    const sdId = sd.legacy_id || sd.sd_key;
+    const sdId = sd.sd_key || sd.id;
     console.log(`${colors.magenta}${colors.bold}${sdId}${colors.reset}`);
     console.log(`  Title: ${sd.title}`);
     console.log(`  Phase: ${sd.current_phase} | Status: ${sd.status}`);
@@ -101,10 +102,11 @@ async function verifySD(sdId) {
   console.log(`${colors.cyan}═══════════════════════════════════════════════════════════════════${colors.reset}\n`);
 
   // Get SD details
+  // Note: legacy_id column was deprecated and removed - using sd_key instead
   const { data: sd, error } = await supabase
     .from('strategic_directives_v2')
     .select('*')
-    .or(`legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+    .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
     .single();
 
   if (error || !sd) {
@@ -112,7 +114,7 @@ async function verifySD(sdId) {
     return;
   }
 
-  const actualSdId = sd.legacy_id || sd.sd_key;
+  const actualSdId = sd.sd_key || sd.id;
   console.log(`${colors.bold}SD: ${actualSdId}${colors.reset}`);
   console.log(`Title: ${sd.title}`);
   console.log(`Phase: ${sd.current_phase} | Status: ${sd.status}`);
@@ -279,10 +281,11 @@ async function completeSD(sdId) {
   console.log(`${colors.cyan}═══════════════════════════════════════════════════════════════════${colors.reset}\n`);
 
   // Get SD
+  // Note: legacy_id column was deprecated and removed - using sd_key instead
   const { data: sd, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, sd_key, title, current_phase, status, sd_type, description')
-    .or(`legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+    .select('id, sd_key, title, current_phase, status, sd_type, description')
+    .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
     .single();
 
   if (error || !sd) {
@@ -290,7 +293,7 @@ async function completeSD(sdId) {
     return;
   }
 
-  const actualSdId = sd.legacy_id || sd.sd_key;
+  const actualSdId = sd.sd_key || sd.id;
   console.log(`SD: ${actualSdId}`);
   console.log(`Title: ${sd.title}\n`);
 

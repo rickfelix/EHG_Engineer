@@ -3,15 +3,17 @@
  *
  * Triggers when an orchestrator SD completes (all children done).
  * Auto-invokes /learn when AUTO-PROCEED is enabled, then displays queue.
+ * Generates detailed session summary on completion.
  *
- * Part of SD-LEO-ENH-AUTO-PROCEED-001-03
+ * Part of SD-LEO-ENH-AUTO-PROCEED-001-03, SD-LEO-ENH-AUTO-PROCEED-001-08
  *
- * @see docs/discovery/auto-proceed-enhancement-discovery.md D07, D08
+ * @see docs/discovery/auto-proceed-enhancement-discovery.md D07, D08, D17
  */
 
 import { createClient } from '@supabase/supabase-js';
 import { resolveAutoProceed, getChainOrchestrators } from './auto-proceed-resolver.js';
 import { clearState as clearAutoProceedState } from './auto-proceed-state.js';
+import { generateAndEmitSummary, createCollector } from '../session-summary/index.js';
 
 /**
  * Generate a unique idempotency key for orchestrator completion
@@ -167,6 +169,133 @@ export async function findNextAvailableOrchestrator(supabase, excludeOrchestrato
   } catch (err) {
     console.warn(`   ⚠️  findNextOrchestrator exception: ${err.message}`);
     return { orchestrator: null, reason: `Exception: ${err.message}` };
+  }
+}
+
+/**
+ * Generate session summary for orchestrator completion
+ * Part of SD-LEO-ENH-AUTO-PROCEED-001-08
+ *
+ * @param {object} supabase - Supabase client
+ * @param {string} orchestratorId - Orchestrator SD ID
+ * @param {string} correlationId - Correlation ID for tracing
+ * @param {string} sessionStatus - Overall session status (SUCCESS, FAILED, CANCELLED)
+ * @returns {Promise<{ json: object, digest: string, generation_time_ms: number } | null>}
+ */
+export async function generateSessionSummary(supabase, orchestratorId, correlationId, sessionStatus = 'SUCCESS') {
+  console.log('\n   📊 Generating session summary...');
+
+  try {
+    // Create collector with session ID from correlation
+    const sessionId = correlationId || `session-${orchestratorId}-${Date.now()}`;
+    const collector = createCollector(sessionId, {
+      orchestratorVersion: process.env.LEO_VERSION || '4.3.3'
+    });
+
+    // Fetch all children SDs for this orchestrator
+    const { data: children, error: childError } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, status, priority, category, created_at, updated_at, current_phase')
+      .eq('parent_sd_id', orchestratorId)
+      .order('created_at', { ascending: true });
+
+    if (childError) {
+      console.warn(`   ⚠️  Could not fetch children: ${childError.message}`);
+      collector.recordIssue('WARN', 'CHILDREN_FETCH_FAILED', `Could not fetch orchestrator children: ${childError.message}`);
+    } else if (children && children.length > 0) {
+      // Populate collector with SD data
+      for (const child of children) {
+        // Record as queued
+        collector.recordSdQueued(child.id, {
+          title: child.title,
+          category: child.category,
+          priority: child.priority
+        });
+
+        // If it has start timestamp, mark as started
+        if (child.created_at) {
+          collector.recordSdStarted(child.id);
+        }
+
+        // Map status to terminal status
+        const statusMap = {
+          completed: 'SUCCESS',
+          done: 'SUCCESS',
+          active: 'IN_PROGRESS',
+          in_progress: 'IN_PROGRESS',
+          failed: 'FAILED',
+          blocked: 'FAILED',
+          skipped: 'SKIPPED',
+          cancelled: 'CANCELLED',
+          draft: 'NOT_STARTED',
+          planning: 'IN_PROGRESS'
+        };
+
+        const terminalStatus = statusMap[child.status?.toLowerCase()] || 'IN_PROGRESS';
+
+        // If terminal, record it
+        if (['SUCCESS', 'FAILED', 'SKIPPED', 'CANCELLED'].includes(terminalStatus)) {
+          collector.recordSdTerminal(child.id, terminalStatus);
+        }
+      }
+    }
+
+    // Fetch any issues/failures for this orchestrator's session
+    const { data: issues, error: issueError } = await supabase
+      .from('system_events')
+      .select('*')
+      .eq('entity_id', orchestratorId)
+      .in('severity', ['error', 'warning'])
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (!issueError && issues) {
+      for (const issue of issues) {
+        collector.recordIssue(
+          issue.severity?.toUpperCase() === 'ERROR' ? 'ERROR' : 'WARN',
+          issue.event_type || 'SYSTEM_EVENT',
+          issue.details?.message || issue.event_type,
+          {
+            correlation_ids: issue.details?.correlation_id ? [issue.details.correlation_id] : []
+          }
+        );
+      }
+    }
+
+    // Generate and emit summary
+    const result = await generateAndEmitSummary(collector, {
+      emitLog: true,
+      emitDigest: true,
+      persistArtifact: false
+    });
+
+    // Record summary generation event
+    await supabase
+      .from('system_events')
+      .insert({
+        event_type: 'SESSION_SUMMARY_GENERATED',
+        entity_type: 'strategic_directive',
+        entity_id: orchestratorId,
+        details: {
+          correlation_id: correlationId,
+          session_id: sessionId,
+          overall_status: result.json.overall_status,
+          total_sds: result.json.total_sds,
+          issues_count: result.json.issues.length,
+          generation_time_ms: result.generation_time_ms,
+          degraded: result.degraded,
+          schema_version: result.json.schema_version,
+          timestamp: new Date().toISOString()
+        },
+        severity: 'info',
+        created_by: 'ORCHESTRATOR_COMPLETION_HOOK'
+      })
+      .catch(err => console.warn(`   ⚠️  Could not record summary event: ${err.message}`));
+
+    return result;
+  } catch (err) {
+    console.warn(`   ⚠️  Session summary generation failed: ${err.message}`);
+    return null;
   }
 }
 

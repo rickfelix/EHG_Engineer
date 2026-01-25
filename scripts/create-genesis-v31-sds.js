@@ -82,7 +82,7 @@ async function createGenesisSDs() {
     const record = {
       id: sd.id,
       sd_key: sd.sd_key,
-      legacy_id: sd.legacy_id,
+      sd_key: sd.sd_key,
       title: sd.title,
       description: sd.description,
       scope: sd.scope,

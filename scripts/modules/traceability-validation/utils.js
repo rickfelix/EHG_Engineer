@@ -18,7 +18,8 @@ export const EHG_ROOT = path.resolve(__dirname, '../../../../ehg');
 
 /**
  * Resolve SD UUID and get SD metadata
- * @param {string} sd_id - SD ID (may be legacy_id or UUID)
+ * SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+ * @param {string} sd_id - SD ID (may be sd_key or UUID)
  * @param {Object} supabase - Supabase client
  * @returns {Promise<{sdUuid: string, sdCategory: string|null, sdType: string|null, gitRepoPath: string}>}
  */
@@ -30,8 +31,8 @@ export async function resolveSDContext(sd_id, supabase) {
 
   const { data: sdData } = await supabase
     .from('strategic_directives_v2')
-    .select('id, category, metadata, target_application, sd_type')
-    .or(`legacy_id.eq.${sd_id},id.eq.${sd_id}`)
+    .select('id, sd_key, category, metadata, target_application, sd_type')
+    .or(`sd_key.eq.${sd_id},id.eq.${sd_id}`)
     .single();
 
   if (sdData) {

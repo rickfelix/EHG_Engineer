@@ -113,42 +113,42 @@ async function verifyPostMigration() {
       FROM (
         SELECT 'sub_agent_execution_results' as table_name, COUNT(*) as cnt
         FROM sub_agent_execution_results saer
-        INNER JOIN strategic_directives_v2 sd ON saer.sd_id = sd.legacy_id
+        INNER JOIN strategic_directives_v2 sd ON saer.sd_id = sd.sd_key
         WHERE saer.sd_id != sd.id
 
         UNION ALL
 
         SELECT 'handoff_audit_log', COUNT(*)
         FROM handoff_audit_log hal
-        INNER JOIN strategic_directives_v2 sd ON hal.sd_id = sd.legacy_id
+        INNER JOIN strategic_directives_v2 sd ON hal.sd_id = sd.sd_key
         WHERE hal.sd_id != sd.id
 
         UNION ALL
 
         SELECT 'retro_notifications', COUNT(*)
         FROM retro_notifications rn
-        INNER JOIN strategic_directives_v2 sd ON rn.sd_id = sd.legacy_id
+        INNER JOIN strategic_directives_v2 sd ON rn.sd_id = sd.sd_key
         WHERE rn.sd_id != sd.id
 
         UNION ALL
 
         SELECT 'model_usage_log', COUNT(*)
         FROM model_usage_log mul
-        INNER JOIN strategic_directives_v2 sd ON mul.sd_id = sd.legacy_id
+        INNER JOIN strategic_directives_v2 sd ON mul.sd_id = sd.sd_key
         WHERE mul.sd_id != sd.id
 
         UNION ALL
 
         SELECT 'sd_baseline_items', COUNT(*)
         FROM sd_baseline_items sbi
-        INNER JOIN strategic_directives_v2 sd ON sbi.sd_id = sd.legacy_id
+        INNER JOIN strategic_directives_v2 sd ON sbi.sd_id = sd.sd_key
         WHERE sbi.sd_id != sd.id
 
         UNION ALL
 
         SELECT 'sd_execution_actuals', COUNT(*)
         FROM sd_execution_actuals sea
-        INNER JOIN strategic_directives_v2 sd ON sea.sd_id = sd.legacy_id
+        INNER JOIN strategic_directives_v2 sd ON sea.sd_id = sd.sd_key
         WHERE sea.sd_id != sd.id
       ) subquery
       WHERE cnt > 0

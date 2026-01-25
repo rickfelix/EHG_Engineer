@@ -96,8 +96,8 @@ export async function resolveBranch(supabase, sdId, options = {}) {
 
     const { data: sd, error: sdError } = await supabase
       .from('strategic_directives_v2')
-      .select('id, legacy_id, title, target_application, metadata')
-      .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
+      .select('id, sd_key, title, target_application, metadata')
+      .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
       .single();
 
     if (sdError) {

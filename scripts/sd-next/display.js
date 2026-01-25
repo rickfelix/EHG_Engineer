@@ -187,7 +187,7 @@ export function displayTrackSection(trackKey, trackName, items, context = {}) {
   for (const item of items) {
     if (item.parent_sd_id) {
       const parentInTrack = items.find(i =>
-        (i.legacy_id || i.sd_id) === item.parent_sd_id || i.id === item.parent_sd_id
+        (i.sd_key || i.sd_id) === item.parent_sd_id || i.id === item.parent_sd_id
       );
       if (!parentInTrack && !rootItems.includes(item)) {
         rootItems.push(item);
@@ -206,7 +206,7 @@ export function displayTrackSection(trackKey, trackName, items, context = {}) {
  */
 export function displaySDItem(item, indent, childItems, allItems, context = {}) {
   const { claimedSDs = new Map(), currentSession, activeSessions = [] } = context;
-  const sdId = item.legacy_id || item.sd_id;
+  const sdId = item.sd_key || item.sd_id;
   const rankStr = item.sequence_rank ? `[${item.sequence_rank}]`.padEnd(5) : '     ';
 
   const claimedBySession = claimedSDs.get(sdId);
@@ -269,7 +269,7 @@ export function displaySDItem(item, indent, childItems, allItems, context = {}) 
  * Display child SD item (simpler format)
  */
 export function displaySDItemSimple(item, prefix, nextIndent, childItems, allItems) {
-  const sdId = item.legacy_id || item.sd_id;
+  const sdId = item.sd_key || item.sd_id;
   const statusIcon = getPhaseAwareStatus(item);
   const workingIcon = item.is_working_on ? `${colors.bgYellow}◆${colors.reset}` : '';
   const title = (item.title || '').substring(0, 30);
@@ -299,14 +299,14 @@ export async function displayRecommendations(baselineItems, actuals, conflicts =
   // Check for "working on" SD first
   const { data: workingOn } = await supabase
     .from('strategic_directives_v2')
-    .select('legacy_id, title, progress_percentage')
+    .select('sd_key, title, progress_percentage')
     .eq('is_active', true)
     .eq('is_working_on', true)
     .lt('progress_percentage', 100)
     .single();
 
   if (workingOn) {
-    console.log(`${colors.bgYellow}${colors.bold} CONTINUE ${colors.reset} ${workingOn.legacy_id}`);
+    console.log(`${colors.bgYellow}${colors.bold} CONTINUE ${colors.reset} ${workingOn.sd_key}`);
     console.log(`  ${workingOn.title}`);
     console.log(`  ${colors.dim}Progress: ${workingOn.progress_percentage || 0}% | Marked as "Working On"${colors.reset}`);
 
@@ -314,7 +314,7 @@ export async function displayRecommendations(baselineItems, actuals, conflicts =
       const { data: sdFull } = await supabase
         .from('strategic_directives_v2')
         .select('id, sd_type, category, priority')
-        .eq('legacy_id', workingOn.legacy_id)
+        .eq('sd_key', workingOn.sd_key)
         .single();
       if (sdFull) {
         const estimate = await getEstimatedDuration(supabase, sdFull);
@@ -334,8 +334,8 @@ export async function displayRecommendations(baselineItems, actuals, conflicts =
   for (const item of baselineItems) {
     const { data: sd } = await supabase
       .from('strategic_directives_v2')
-      .select('legacy_id, title, status, current_phase, progress_percentage, dependencies, is_active')
-      .eq('legacy_id', item.sd_id)
+      .select('sd_key, title, status, current_phase, progress_percentage, dependencies, is_active')
+      .eq('sd_key', item.sd_id)
       .single();
 
     if (sd && sd.is_active && sd.status !== 'completed' && sd.status !== 'cancelled') {
@@ -354,14 +354,14 @@ export async function displayRecommendations(baselineItems, actuals, conflicts =
   if (needsVerificationSDs.length > 0) {
     console.log(`${colors.bgMagenta}${colors.bold} NEEDS VERIFICATION ${colors.reset}`);
     needsVerificationSDs.forEach(sd => {
-      console.log(`  ${sd.legacy_id} - ${sd.title.substring(0, 45)}...`);
-      console.log(`  ${colors.dim}Phase: ${sd.current_phase} | Status: ${sd.status} | Run: npm run sd:verify ${sd.legacy_id}${colors.reset}\n`);
+      console.log(`  ${sd.sd_key} - ${sd.title.substring(0, 45)}...`);
+      console.log(`  ${colors.dim}Phase: ${sd.current_phase} | Status: ${sd.status} | Run: npm run sd:verify ${sd.sd_key}${colors.reset}\n`);
     });
   }
 
   if (readySDs.length > 0 && !workingOn) {
     const top = readySDs[0];
-    console.log(`${colors.bgGreen}${colors.bold} START ${colors.reset} ${top.legacy_id}`);
+    console.log(`${colors.bgGreen}${colors.bold} START ${colors.reset} ${top.sd_key}`);
     console.log(`  ${top.title}`);
     console.log(`  ${colors.dim}Track: ${top.track || 'N/A'} | Rank: ${top.sequence_rank} | All dependencies satisfied${colors.reset}`);
 
@@ -369,7 +369,7 @@ export async function displayRecommendations(baselineItems, actuals, conflicts =
       const { data: sdFull } = await supabase
         .from('strategic_directives_v2')
         .select('id, sd_type, category, priority')
-        .eq('legacy_id', top.legacy_id)
+        .eq('sd_key', top.sd_key)
         .single();
       if (sdFull) {
         const estimate = await getEstimatedDuration(supabase, sdFull);
@@ -387,7 +387,7 @@ export async function displayRecommendations(baselineItems, actuals, conflicts =
   if (parallelReady.length > 0) {
     console.log(`${colors.cyan}PARALLEL OPPORTUNITIES:${colors.reset}`);
     parallelReady.forEach(sd => {
-      console.log(`  Track ${sd.track}: ${sd.legacy_id} - ${sd.title.substring(0, 40)}...`);
+      console.log(`  Track ${sd.track}: ${sd.sd_key} - ${sd.title.substring(0, 40)}...`);
     });
   }
 

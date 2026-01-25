@@ -60,7 +60,7 @@ const ROUTE_AUDIT_SDS = {
   parent: {
     id: 'SD-ROUTE-AUDIT-PARENT',
     sd_key: 'route-audit-parent',
-    legacy_id: 'SD-ROUTE-AUDIT-PARENT',
+    sd_key: 'SD-ROUTE-AUDIT-PARENT',
     title: 'EHG Route Assessment - Comprehensive Platform Audit',
 
     description: 'Orchestrate a comprehensive assessment of all routes within the EHG application. This parent SD coordinates child assessments across 7 navigation sections (127+ routes) and deep analysis of the 25-stage venture workflow. Each child SD assesses routes from the perspective of specialized sub-agents (design, accessibility, performance, security, UX). The final deliverable is a detailed report cataloging findings, severity levels, and recommended corrective Strategic Directives.',
@@ -365,7 +365,7 @@ function buildSectionSD(section) {
   return {
     id: section.id,
     sd_key: section.sd_key,
-    legacy_id: section.id,
+    sd_key: section.id,
     title: section.title,
     description: section.description,
     scope: section.scope,
@@ -414,7 +414,7 @@ function buildStageSD(stage, index) {
   return {
     id: `SD-ROUTE-AUDIT-STAGE-${stageNum}`,
     sd_key: `route-audit-stage-${stageNum}`,
-    legacy_id: `SD-ROUTE-AUDIT-STAGE-${stageNum}`,
+    sd_key: `SD-ROUTE-AUDIT-STAGE-${stageNum}`,
     title: `Stage ${stage.number} Assessment: ${stage.name}${killGateLabel}${elevationLabel}`,
     description: `Deep assessment of Stage ${stage.number} (${stage.name}) implementation in Phase ${stage.phase}: ${stage.phaseName}. Evaluate UI components, data flow, ${stage.isKillGate ? 'kill decision workflow, ' : ''}${stage.isElevation ? 'elevation mechanics, ' : ''}progression logic, and integration with venture lifecycle.`,
     scope: `Stage ${stage.number} components: UI implementation, data capture, validation logic, ${stage.isKillGate ? 'kill gate enforcement, ' : ''}${stage.isElevation ? `${stage.elevationTarget} elevation, ` : ''}progression to next stage.`,
@@ -467,7 +467,7 @@ function buildWorkflowParentSD() {
   return {
     id: wp.id,
     sd_key: wp.sd_key,
-    legacy_id: wp.id,
+    sd_key: wp.id,
     title: wp.title,
     description: wp.description,
     scope: wp.scope,
@@ -523,7 +523,7 @@ function buildReportSD() {
   return {
     id: r.id,
     sd_key: r.sd_key,
-    legacy_id: r.id,
+    sd_key: r.id,
     title: r.title,
     description: r.description,
     scope: r.scope,

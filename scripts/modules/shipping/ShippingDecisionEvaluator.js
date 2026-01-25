@@ -572,7 +572,8 @@ Remember: Return ONLY valid JSON with scores for each criterion and _meta confid
       await this.supabase
         .from('shipping_decisions')
         .insert({
-          sd_id: context.sd?.legacy_id || context.sd?.id || context.sdId,
+          // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+          sd_id: context.sd?.sd_key || context.sd?.id || context.sdId,
           handoff_type: context.handoffType,
           decision_type: this.decisionType,
           decision: decision.action,

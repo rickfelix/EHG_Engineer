@@ -12,12 +12,13 @@ const execAsync = promisify(exec);
 const searchTermsCache = new Map();
 
 /**
- * Get search terms for an SD (UUID + legacy_id)
- * SD-VENTURE-STAGE0-UI-001: Commits use legacy_id, not UUID
+ * Get search terms for an SD (UUID + sd_key)
+ * SD-VENTURE-STAGE0-UI-001: Commits use sd_key (formerly legacy_id), not UUID
+ * SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id, use sd_key (column dropped 2026-01-24)
  *
  * @param {string} sd_id - Strategic Directive UUID
  * @param {Object} supabase - Supabase client
- * @returns {Promise<string[]>} - Array of search terms [uuid, legacy_id]
+ * @returns {Promise<string[]>} - Array of search terms [uuid, sd_key]
  */
 export async function getSDSearchTerms(sd_id, supabase) {
   // Check cache first
@@ -29,17 +30,18 @@ export async function getSDSearchTerms(sd_id, supabase) {
 
   try {
     if (supabase) {
+      // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id, use sd_key (column dropped 2026-01-24)
       const { data: sd } = await supabase
         .from('strategic_directives_v2')
-        .select('legacy_id')
+        .select('sd_key')
         .eq('id', sd_id)
         .single();
-      if (sd?.legacy_id) {
-        searchTerms.push(sd.legacy_id);
+      if (sd?.sd_key) {
+        searchTerms.push(sd.sd_key);
       }
     }
   } catch (_e) {
-    // Continue with UUID only if can't get legacy_id
+    // Continue with UUID only if can't get sd_key
   }
 
   // Cache the result
@@ -49,7 +51,8 @@ export async function getSDSearchTerms(sd_id, supabase) {
 
 /**
  * Execute git log search for any of the SD search terms
- * Returns the combined results for UUID and legacy_id
+ * Returns the combined results for UUID and sd_key
+ * SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id references (column dropped 2026-01-24)
  *
  * @param {string} cmdTemplate - Git command template with ${TERM} placeholder
  * @param {string[]} searchTerms - Array of search terms

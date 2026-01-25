@@ -72,7 +72,7 @@ async function main() {
     const { data: sd } = await supabase
       .from('strategic_directives_v2')
       .select('status')
-      .eq('legacy_id', item.sd_id)
+      .eq('sd_key', item.sd_id)
       .single();
 
     if (sd?.status === 'completed') {

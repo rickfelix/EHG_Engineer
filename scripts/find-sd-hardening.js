@@ -19,8 +19,8 @@ async function findSD() {
   // Try strategic_directives_v2 first
   const { data: sdV2, error: sdV2Error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, sd_key, title, description, status')
-    .or('legacy_id.eq.SD-HARDENING-V1-001,sd_key.eq.SD-HARDENING-V1-001')
+    .select('id, sd_key, sd_key, title, description, status')
+    .or('sd_key.eq.SD-HARDENING-V1-001,sd_key.eq.SD-HARDENING-V1-001')
     .maybeSingle();
 
   if (sdV2) {
@@ -37,7 +37,7 @@ async function findSD() {
   const { data: sdOld, error: sdOldError } = await supabase
     .from('strategic_directives')
     .select('*')
-    .or('legacy_id.eq.SD-HARDENING-V1-001,directive_id.eq.SD-HARDENING-V1-001')
+    .or('sd_key.eq.SD-HARDENING-V1-001,directive_id.eq.SD-HARDENING-V1-001')
     .maybeSingle();
 
   if (sdOld) {

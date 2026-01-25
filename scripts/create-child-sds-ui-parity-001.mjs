@@ -144,7 +144,7 @@ async function createChildSDs() {
 
     const childData = {
       id: child.id,
-      legacy_id: child.id,
+      sd_key: child.id,
       sd_key: child.id,
       title: child.title,
       description: child.description,

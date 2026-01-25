@@ -79,10 +79,11 @@ async function validateDiscoveryGate(sdId) {
     .single();
 
   // Also check SD metadata for exploration evidence
+  // Note: legacy_id column was deprecated and removed - using sd_key instead
   const { data: sd } = await supabase
     .from('strategic_directives_v2')
     .select('exploration_summary, metadata')
-    .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
+    .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
     .single();
 
   // Count files from exploration_summary (check multiple locations for backward compatibility)
@@ -192,21 +193,13 @@ async function getSDMetadata(sdId) {
     sd = result.data;
     error = result.error;
   } else {
+    // Note: legacy_id column was deprecated and removed - using sd_key instead
     // Try id column first (handles SD-PARENT-4.0 format)
     let result = await supabase
       .from('strategic_directives_v2')
       .select('*')
       .eq('id', sdId)
       .maybeSingle();
-
-    if (!result.data) {
-      // Try legacy_id column
-      result = await supabase
-        .from('strategic_directives_v2')
-        .select('*')
-        .eq('legacy_id', sdId)
-        .maybeSingle();
-    }
 
     if (!result.data) {
       // Try sd_key column (handles SD-PARENT-4-0 format with hyphens)
@@ -261,9 +254,10 @@ async function detectParentChildHierarchy(sd) {
   const hasParent = !!sd.parent_sd_id;
 
   // Display detection reasoning
+  // Note: legacy_id was deprecated - using sd_key instead
   if (isLikelyParent && !hasParent) {
     console.log('   🎯 SD Type: PARENT ORCHESTRATOR (detected from metadata)');
-    console.log(`   📋 SD: ${sd.legacy_id || sd.sd_key || sd.id}`);
+    console.log(`   📋 SD: ${sd.sd_key || sd.id}`);
     console.log(`   📄 Title: ${sd.title}`);
     console.log('\n   📊 DETECTION SIGNALS:');
 
@@ -293,11 +287,12 @@ async function detectParentChildHierarchy(sd) {
     }
 
     // Check if children exist in database yet
+    // Note: legacy_id was deprecated - using sd_key instead
     const { data: existingChildren } = await supabase
       .from('strategic_directives_v2')
-      .select('legacy_id, sd_key, title, status, current_phase, progress_percentage')
+      .select('id, sd_key, title, status, current_phase, progress_percentage')
       .eq('parent_sd_id', sd.id)
-      .order('legacy_id', { ascending: true });
+      .order('sd_key', { ascending: true });
 
     const childrenInDb = existingChildren?.length || 0;
     const childrenDefined = sd.metadata?.child_sds?.length || sd.metadata?.child_count || 0;
@@ -318,7 +313,7 @@ async function detectParentChildHierarchy(sd) {
         const icon = c.status === 'completed' ? '✅' :
                      c.status === 'in_progress' ? '🔄' : '📋';
         if (c.status === 'completed') completedCount++;
-        console.log(`      ${icon} ${c.legacy_id || c.sd_key} [${c.status}] ${c.progress_percentage || 0}%`);
+        console.log(`      ${icon} ${c.sd_key || c.id} [${c.status}] ${c.progress_percentage || 0}%`);
       });
       console.log(`\n   📊 Progress: ${completedCount}/${childrenInDb} children completed`);
     }
@@ -343,19 +338,20 @@ async function detectParentChildHierarchy(sd) {
   // Child SD detection (has a parent)
   if (hasParent) {
     console.log('   🔗 SD Type: CHILD SD');
-    console.log(`   📋 SD: ${sd.legacy_id || sd.id}`);
+    console.log(`   📋 SD: ${sd.sd_key || sd.id}`);
     console.log(`   📄 Title: ${sd.title}`);
 
     // Get parent info
+    // Note: legacy_id was deprecated - using sd_key instead
     const { data: parent } = await supabase
       .from('strategic_directives_v2')
-      .select('id, legacy_id, title, status, current_phase')
+      .select('id, sd_key, title, status, current_phase')
       .eq('id', sd.parent_sd_id)
       .single();
 
     if (parent) {
       console.log('\n   👆 PARENT SD:');
-      console.log(`      📋 ${parent.legacy_id || parent.id}`);
+      console.log(`      📋 ${parent.sd_key || parent.id}`);
       console.log(`      📄 ${parent.title}`);
       console.log(`      📊 Status: ${parent.status} | Phase: ${parent.current_phase}`);
 
@@ -366,7 +362,7 @@ async function detectParentChildHierarchy(sd) {
         console.log('      LEO Protocol requires parent to be in EXEC phase');
         console.log('      before child SDs can be activated.');
         console.log(`      Current parent status: ${parent.status} / ${parent.current_phase}`);
-        console.log('      Consider: node scripts/handoff.js execute PLAN-TO-EXEC ' + (parent.legacy_id || parent.id));
+        console.log('      Consider: node scripts/handoff.js execute PLAN-TO-EXEC ' + (parent.sd_key || parent.id));
       }
     }
 
@@ -398,10 +394,10 @@ function displayParentWorkflowGuidance(sd, children, _currentPhase) {
 
   if (sd.status === 'draft' && sd.current_phase === 'LEAD_APPROVAL') {
     console.log('  📍 NEXT ACTION: Run LEAD-TO-PLAN handoff for parent');
-    console.log(`     node scripts/handoff.js execute LEAD-TO-PLAN ${sd.legacy_id || sd.id}`);
+    console.log(`     node scripts/handoff.js execute LEAD-TO-PLAN ${sd.sd_key || sd.id}`);
   } else if (sd.status === 'planning' || sd.current_phase === 'PLAN') {
     console.log('  📍 NEXT ACTION: Complete PRD, then run PLAN-TO-EXEC');
-    console.log(`     node scripts/handoff.js execute PLAN-TO-EXEC ${sd.legacy_id || sd.id}`);
+    console.log(`     node scripts/handoff.js execute PLAN-TO-EXEC ${sd.sd_key || sd.id}`);
     console.log('     This puts parent in ORCHESTRATOR/WAITING state');
   } else if (sd.status === 'in_progress' || sd.current_phase === 'EXEC') {
     console.log('  📍 PARENT IS IN ORCHESTRATOR/WAITING STATE');
@@ -409,12 +405,12 @@ function displayParentWorkflowGuidance(sd, children, _currentPhase) {
     if (completedChildren < totalChildren) {
       const nextChild = (children || []).find(c => c.status === 'draft' || c.status === 'planning');
       if (nextChild) {
-        console.log(`\n     Next child to work on: ${nextChild.legacy_id}`);
-        console.log(`     node scripts/phase-preflight.js --phase LEAD --sd-id ${nextChild.legacy_id}`);
+        console.log(`\n     Next child to work on: ${nextChild.sd_key}`);
+        console.log(`     node scripts/phase-preflight.js --phase LEAD --sd-id ${nextChild.sd_key}`);
       }
     } else {
       console.log('\n     All children completed! Parent can be finalized.');
-      console.log(`     node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${sd.legacy_id || sd.id}`);
+      console.log(`     node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${sd.sd_key || sd.id}`);
     }
   }
 
@@ -445,20 +441,20 @@ function displayChildWorkflowGuidance(sd, parent, _currentPhase) {
     console.log('  ⛔ BLOCKED: Parent is NOT in EXEC phase');
     console.log('     Child SDs cannot be activated until parent is in orchestrator state.');
     console.log('\n     TO UNBLOCK: Progress parent SD first:');
-    console.log(`     node scripts/handoff.js execute PLAN-TO-EXEC ${parent.legacy_id || parent.id}`);
+    console.log(`     node scripts/handoff.js execute PLAN-TO-EXEC ${parent.sd_key || parent.id}`);
   } else {
     console.log('  ✅ Parent is in EXEC (orchestrator) state - child can proceed');
 
     // Determine next action
     if (sd.status === 'draft') {
       console.log('\n  📍 NEXT ACTION: Run LEAD-TO-PLAN for this child');
-      console.log(`     node scripts/handoff.js execute LEAD-TO-PLAN ${sd.legacy_id || sd.id}`);
+      console.log(`     node scripts/handoff.js execute LEAD-TO-PLAN ${sd.sd_key || sd.id}`);
     } else if (sd.status === 'planning') {
       console.log('\n  📍 NEXT ACTION: Complete PRD, then run PLAN-TO-EXEC');
-      console.log(`     node scripts/handoff.js execute PLAN-TO-EXEC ${sd.legacy_id || sd.id}`);
+      console.log(`     node scripts/handoff.js execute PLAN-TO-EXEC ${sd.sd_key || sd.id}`);
     } else if (sd.status === 'in_progress') {
       console.log('\n  📍 NEXT ACTION: Implement, then run EXEC-TO-PLAN');
-      console.log(`     node scripts/handoff.js execute EXEC-TO-PLAN ${sd.legacy_id || sd.id}`);
+      console.log(`     node scripts/handoff.js execute EXEC-TO-PLAN ${sd.sd_key || sd.id}`);
     }
   }
 
@@ -706,7 +702,7 @@ async function main() {
       if (!progressionResult.canProceed) {
         console.log('\n❌ CHILD PROGRESSION GATE BLOCKED');
         console.log('   Cannot start LEAD phase until predecessor is fully complete.');
-        console.log(`   Blocked by: ${progressionResult.blockedBy?.sd_key || progressionResult.blockedBy?.legacy_id || 'unknown'}`);
+        console.log(`   Blocked by: ${progressionResult.blockedBy?.sd_key || progressionResult.blockedBy?.sd_key || 'unknown'}`);
         console.log('\n   Required action:');
         console.log(`   ${progressionResult.requiredAction}`);
         console.log('\n   Then re-run: node scripts/phase-preflight.js --phase LEAD --sd-id ' + sdId);

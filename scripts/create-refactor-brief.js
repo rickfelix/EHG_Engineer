@@ -139,13 +139,13 @@ Examples:
 }
 
 /**
- * Fetch SD details from database (supports id, legacy_id, and sd_key)
+ * Fetch SD details from database (supports id, sd_key, and sd_key)
  */
 async function fetchSDDetails(sdId) {
   const { data, error } = await supabase
     .from('strategic_directives_v2')
     .select('id, sd_key, title, description, sd_type, intensity_level, status, key_changes, scope')
-    .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+    .or(`id.eq.${sdId},sd_key.eq.${sdId},sd_key.eq.${sdId}`)
     .single();
 
   if (error) {

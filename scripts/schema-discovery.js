@@ -37,13 +37,13 @@ async function discoverSchema() {
 
     console.log('### Key Fields:');
     console.log(`- Primary Key: id (${typeof sdSample.id})`);
-    console.log(`- Legacy ID: ${sdSample.legacy_id || 'null'}`);
+    console.log(`- Legacy ID: ${sdSample.sd_key || 'null'}`);
     console.log(`- Has 'key' column: ${sdSample.key !== undefined ? 'Yes' : 'No'}`);
     console.log('\n### Sample Row:');
     console.log('```json');
     console.log(JSON.stringify({
       id: sdSample.id,
-      legacy_id: sdSample.legacy_id,
+      sd_key: sdSample.sd_key,
       title: sdSample.title,
       category: sdSample.category,
       status: sdSample.status,

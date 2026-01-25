@@ -61,7 +61,7 @@ export async function countActionableBaselineItems(baselineItems) {
     const { data: sd } = await supabase
       .from('strategic_directives_v2')
       .select('status, is_active')
-      .eq('legacy_id', item.sd_id)
+      .eq('sd_key', item.sd_id)
       .single();
 
     if (sd && sd.is_active && sd.status !== 'completed' && sd.status !== 'cancelled') {
@@ -103,7 +103,7 @@ export async function loadRecentActivity() {
 
   const { data: recentSDs } = await supabase
     .from('strategic_directives_v2')
-    .select('legacy_id, title, updated_at')
+    .select('sd_key, title, updated_at')
     .eq('is_active', true)
     .in('status', ['draft', 'active', 'in_progress'])
     .order('updated_at', { ascending: false })
@@ -111,9 +111,9 @@ export async function loadRecentActivity() {
 
   if (recentSDs) {
     recentSDs.forEach(sd => {
-      if (!recentActivity.find(a => a.sd_id === sd.legacy_id)) {
+      if (!recentActivity.find(a => a.sd_id === sd.sd_key)) {
         recentActivity.push({
-          sd_id: sd.legacy_id,
+          sd_id: sd.sd_key,
           commits: 0,
           updated_at: sd.updated_at
         });
@@ -193,14 +193,14 @@ export async function loadSDHierarchy() {
   try {
     const { data: sds } = await supabase
       .from('strategic_directives_v2')
-      .select('id, legacy_id, title, parent_sd_id, status, current_phase, progress_percentage, dependencies, is_working_on, metadata, priority')
+      .select('id, sd_key, title, parent_sd_id, status, current_phase, progress_percentage, dependencies, is_working_on, metadata, priority')
       .eq('is_active', true)
       .order('created_at');
 
     if (!sds) return { hierarchy, allSDs };
 
     for (const sd of sds) {
-      const sdId = sd.legacy_id || sd.id;
+      const sdId = sd.sd_key || sd.id;
       allSDs.set(sdId, sd);
       allSDs.set(sd.id, sd);
 

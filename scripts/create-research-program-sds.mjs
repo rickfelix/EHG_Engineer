@@ -26,7 +26,7 @@ const supabase = createClient(
 
 const parentSD = {
   id: 'SD-RESEARCH-000',
-  legacy_id: 'SD-RESEARCH-000',
+  sd_key: 'SD-RESEARCH-000',
   sd_key: 'RESEARCH-000',
   title: 'EHG 2026 Deep Research & Architectural Futures',
   version: '1.0',
@@ -145,7 +145,7 @@ const childSDs = [
   // SD-RESEARCH-101: Cross-Schema Governance Architecture
   {
     id: 'SD-RESEARCH-101',
-    legacy_id: 'SD-RESEARCH-101',
+    sd_key: 'SD-RESEARCH-101',
     sd_key: 'RESEARCH-101',
     title: 'Cross-Schema Governance Architecture',
     version: '1.0',
@@ -243,7 +243,7 @@ Governance must remain long-lived, auditable, and append-only.`,
   // SD-RESEARCH-102: EVA Autonomy Engine (L0–L4, Per-Venture)
   {
     id: 'SD-RESEARCH-102',
-    legacy_id: 'SD-RESEARCH-102',
+    sd_key: 'SD-RESEARCH-102',
     sd_key: 'RESEARCH-102',
     title: 'EVA Autonomy Engine (L0–L4, Per-Venture)',
     version: '1.0',
@@ -343,7 +343,7 @@ Current autonomy level definitions:
   // SD-RESEARCH-103: Stage Data Contracts (JSON Schema + TypeScript)
   {
     id: 'SD-RESEARCH-103',
-    legacy_id: 'SD-RESEARCH-103',
+    sd_key: 'SD-RESEARCH-103',
     sd_key: 'RESEARCH-103',
     title: 'Stage Data Contracts (JSON Schema + TypeScript)',
     version: '1.0',
@@ -442,7 +442,7 @@ Contracts will live in governance.stage_data_contracts and be immutable once pub
   // SD-RESEARCH-104: Unified EHG Interface (Governance + Runtime + EVA)
   {
     id: 'SD-RESEARCH-104',
-    legacy_id: 'SD-RESEARCH-104',
+    sd_key: 'SD-RESEARCH-104',
     sd_key: 'RESEARCH-104',
     title: 'Unified EHG Interface (Governance + Runtime + EVA)',
     version: '1.0',
@@ -543,7 +543,7 @@ Interface must support multiple roles: Chairman, Governance mode, Venture mode, 
   // SD-RESEARCH-105: Multi-Venture Orchestration Strategy
   {
     id: 'SD-RESEARCH-105',
-    legacy_id: 'SD-RESEARCH-105',
+    sd_key: 'SD-RESEARCH-105',
     sd_key: 'RESEARCH-105',
     title: 'Multi-Venture Orchestration Strategy',
     version: '1.0',
@@ -641,7 +641,7 @@ System must support future scaling to 10–50 ventures with full isolation.`,
   // SD-RESEARCH-106: LEO Protocol Evolution to v5.x
   {
     id: 'SD-RESEARCH-106',
-    legacy_id: 'SD-RESEARCH-106',
+    sd_key: 'SD-RESEARCH-106',
     sd_key: 'RESEARCH-106',
     title: 'LEO Protocol Evolution to v5.x',
     version: '1.0',
@@ -744,7 +744,7 @@ Future LEO v5.x must handle:
   // SD-RESEARCH-107: EVA Intent-vs-Reality Model
   {
     id: 'SD-RESEARCH-107',
-    legacy_id: 'SD-RESEARCH-107',
+    sd_key: 'SD-RESEARCH-107',
     sd_key: 'RESEARCH-107',
     title: 'EVA Intent-vs-Reality Analysis Model',
     version: '1.0',
@@ -847,7 +847,7 @@ EVA uses this view to determine:
   // SD-RESEARCH-108: Security, Compliance & AI Auditability
   {
     id: 'SD-RESEARCH-108',
-    legacy_id: 'SD-RESEARCH-108',
+    sd_key: 'SD-RESEARCH-108',
     sd_key: 'RESEARCH-108',
     title: 'Security, Compliance & AI Auditability',
     version: '1.0',

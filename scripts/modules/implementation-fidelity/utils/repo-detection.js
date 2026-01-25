@@ -36,11 +36,12 @@ export async function detectImplementationRepo(sd_id, supabase) {
     EHG_ENGINEER_ROOT   // Governance repo (fallback)
   ];
 
-  // SD-VENTURE-STAGE0-UI-001: Also search by legacy_id (SD-XXX-001 format)
-  // since commits often use legacy_id instead of UUID
+  // SD-VENTURE-STAGE0-UI-001: Also search by sd_key (SD-XXX-001 format)
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Renamed legacy_id to sd_key (column dropped 2026-01-24)
+  // since commits often use sd_key instead of UUID
   const searchTerms = await getSDSearchTerms(sd_id, supabase);
   if (searchTerms.length > 1) {
-    console.log(`   📋 Also searching for legacy_id: ${searchTerms[1]}`);
+    console.log(`   📋 Also searching for sd_key: ${searchTerms[1]}`);
   }
 
   for (const repo of repos) {

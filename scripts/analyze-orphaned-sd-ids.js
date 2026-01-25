@@ -97,7 +97,7 @@ async function analyzeOrphanedRecords() {
       }
     }
 
-    // Check if any orphaned sd_id values exist in strategic_directives_v2.legacy_id
+    // Check if any orphaned sd_id values exist in strategic_directives_v2.sd_key
     console.log('\n' + '='.repeat(80));
     console.log('\n🔗 Checking for Legacy ID Matches\n');
 
@@ -105,7 +105,7 @@ async function analyzeOrphanedRecords() {
       SELECT DISTINCT
         t.sd_id,
         sd.id as uuid_id,
-        sd.legacy_id
+        sd.sd_key
       FROM (
         SELECT DISTINCT sd_id FROM sub_agent_execution_results
         UNION
@@ -119,7 +119,7 @@ async function analyzeOrphanedRecords() {
         UNION
         SELECT DISTINCT sd_id FROM sd_execution_actuals
       ) t
-      INNER JOIN strategic_directives_v2 sd ON t.sd_id = sd.legacy_id
+      INNER JOIN strategic_directives_v2 sd ON t.sd_id = sd.sd_key
       WHERE t.sd_id IS NOT NULL
       ORDER BY t.sd_id;
     `;
@@ -127,7 +127,7 @@ async function analyzeOrphanedRecords() {
     const legacyResult = await client.query(legacyCheckQuery);
 
     if (legacyResult.rows.length > 0) {
-      console.log(`Found ${legacyResult.rows.length} orphaned sd_id values that match legacy_id:\n`);
+      console.log(`Found ${legacyResult.rows.length} orphaned sd_id values that match sd_key:\n`);
       legacyResult.rows.forEach(row => {
         console.log(`  ${row.sd_id} -> UUID: ${row.uuid_id}`);
       });
@@ -146,7 +146,7 @@ async function analyzeOrphanedRecords() {
     console.log('   - These are development/testing artifacts\n');
 
     console.log('2. LEGACY ID MIGRATION:');
-    console.log('   - Update records where sd_id matches strategic_directives_v2.legacy_id');
+    console.log('   - Update records where sd_id matches strategic_directives_v2.sd_key');
     console.log('   - Change sd_id from legacy_id to corresponding UUID\n');
 
     console.log('3. DELETED SD RECORDS:');

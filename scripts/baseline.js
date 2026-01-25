@@ -161,10 +161,11 @@ class BaselineManager {
     console.log(`\n${colors.cyan}Assigning ${colors.bold}${issueKey}${colors.reset}${colors.cyan} to ${colors.bold}${sdId}${colors.reset}\n`);
 
     // Verify SD exists
+    // Note: legacy_id column was deprecated and removed - using sd_key instead
     const { data: sd, error: sdError } = await this.supabase
       .from('strategic_directives_v2')
-      .select('id, legacy_id, title')
-      .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
+      .select('id, sd_key, title')
+      .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
       .single();
 
     if (sdError || !sd) {
@@ -190,7 +191,7 @@ class BaselineManager {
 
     console.log(`${colors.green}✓ Issue assigned successfully${colors.reset}`);
     console.log(`  Issue: ${updated.issue_key}`);
-    console.log(`  Owner: ${sd.legacy_id || sd.id} - ${sd.title}`);
+    console.log(`  Owner: ${sd.sd_key || sd.id} - ${sd.title}`);
     console.log(`  Status: ${updated.status}`);
     console.log();
   }
