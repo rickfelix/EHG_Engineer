@@ -64,35 +64,36 @@ export function createSubAgentOrchestrationGate(supabase) {
       // Get security baseline for retrospective mode
       const securityBaseline = await getSecurityBaseline(supabase);
 
-      // Check for existing PASS TESTING result before orchestration
+      // Check for existing PASS or CONDITIONAL_PASS TESTING result before orchestration
       const { data: existingTestingPass } = await supabase
         .from('sub_agent_execution_results')
         .select('verdict, created_at, detailed_analysis')
         .eq('sd_id', ctx.sdId)
         .eq('sub_agent_code', 'TESTING')
-        .eq('verdict', 'PASS')
+        .in('verdict', ['PASS', 'CONDITIONAL_PASS'])
         .order('created_at', { ascending: false })
         .limit(1);
 
-      // If we have a recent PASS result, skip orchestration for TESTING
+      // If we have a recent PASS/CONDITIONAL_PASS result, skip orchestration for TESTING
       if (existingTestingPass && existingTestingPass.length > 0) {
         const passAge = (Date.now() - new Date(existingTestingPass[0].created_at)) / 3600000;
+        const cachedVerdict = existingTestingPass[0].verdict;
         if (passAge < 24) {
-          console.log(`   ✅ Found existing TESTING PASS result (${passAge.toFixed(1)}h old) - using cached result`);
+          console.log(`   ✅ Found existing TESTING ${cachedVerdict} result (${passAge.toFixed(1)}h old) - using cached result`);
           ctx._orchestrationResult = {
             can_proceed: true,
-            verdict: 'PASS',
+            verdict: cachedVerdict,
             passed: 1,
             total_agents: 1,
-            message: 'TESTING already passed - using cached result',
-            results: [{ sub_agent_code: 'TESTING', verdict: 'PASS' }]
+            message: `TESTING already ${cachedVerdict.toLowerCase()} - using cached result`,
+            results: [{ sub_agent_code: 'TESTING', verdict: cachedVerdict }]
           };
           return {
             passed: true,
             score: 100,
             max_score: 100,
             issues: [],
-            warnings: ['Using cached TESTING PASS result'],
+            warnings: [`Using cached TESTING ${cachedVerdict} result`],
             details: ctx._orchestrationResult
           };
         }
