@@ -30,12 +30,12 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 | [Database & Schema](#database--schema) | 12 | Database patterns, schemas, migrations |
 | [Sub-Agents](#sub-agents) | 14 | Sub-agent patterns and guides |
 | [Validation & Testing](#validation--testing) | 9 | Validation patterns, testing reference |
-| [LEO Protocol](#leo-protocol) | 13 | Protocol reference, context management, hooks |
+| [LEO Protocol](#leo-protocol) | 14 | Protocol reference, context management, hooks |
 | [Patterns & Best Practices](#patterns--best-practices) | 12 | Development patterns |
 | [Quick References](#quick-references) | 12 | Cheat sheets and quick guides |
 | [Other](#other-references) | 7 | Miscellaneous references |
 
-**Total References**: 79
+**Total References**: 80
 
 ---
 
@@ -111,6 +111,7 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 | [leo-hook-feedback-system.md](leo-hook-feedback-system.md) | Hook feedback system |
 | [protocol-self-improvement.md](protocol-self-improvement.md) | Protocol self-improvement |
 | [session-start-gate-implementation.md](session-start-gate-implementation.md) | SESSION_START gate implementation + state structure mismatch fix |
+| [session-summary-feature.md](session-summary-feature.md) | **⭐ NEW** Session summary at orchestrator completion (AUTO-PROCEED SD-08) |
 | [skip-and-continue-pattern.md](skip-and-continue-pattern.md) | **⭐ NEW** Skip-and-continue for validation gate failures (AUTO-PROCEED D16) |
 
 ---
@@ -204,5 +205,5 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 ---
 
 *Part of LEO Protocol v4.3.3 - Reference Index*
-*Updated: 2026-01-23*
-*Comprehensive index of 75 reference documents*
+*Updated: 2026-01-25*
+*Comprehensive index of 80 reference documents*
