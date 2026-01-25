@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-01-24 8:28:09 AM
+**Generated**: 2026-01-25 10:34:52 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -70,6 +70,27 @@ bash scripts/leo-stack.sh restart   # Starts all 3 servers
 # Port 8000: Agent Platform AI backend
 ```
 
+## 🚀 Session Verification & Quick Start (MANDATORY)
+
+## Session Start Checklist
+
+### Required Verification
+1. **Check Priority**: `npm run prio:top3`
+2. **Git Status**: Clean working directory?
+3. **Context Load**: CLAUDE_CORE.md + phase file
+
+### Before Starting Work
+- Verify SD is in correct phase
+- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
+- Review recent handoffs if continuing
+
+### Key Commands
+| Command | Purpose |
+|---------|---------|
+| `npm run prio:top3` | Top priority SDs |
+| `git status` | Working tree status |
+| `npm run handoff:latest` | Latest handoff |
+
 ## 🔍 Session Start Verification (MANDATORY)
 
 **Anti-Hallucination Protocol**: Never trust session summaries for database state. ALWAYS verify.
@@ -104,27 +125,6 @@ SELECT from_phase, to_phase, status FROM sd_phase_handoffs WHERE sd_id = '[SD-ID
 - If records don't exist, CREATE them before proceeding
 
 **Pattern Reference**: PAT-SESS-VER-001
-
-## 🚀 Session Verification & Quick Start (MANDATORY)
-
-## Session Start Checklist
-
-### Required Verification
-1. **Check Priority**: `npm run prio:top3`
-2. **Git Status**: Clean working directory?
-3. **Context Load**: CLAUDE_CORE.md + phase file
-
-### Before Starting Work
-- Verify SD is in correct phase
-- Check for blockers: `SELECT * FROM v_sd_blockers WHERE sd_id = 'SD-XXX'`
-- Review recent handoffs if continuing
-
-### Key Commands
-| Command | Purpose |
-|---------|---------|
-| `npm run prio:top3` | Top priority SDs |
-| `git status` | Working tree status |
-| `npm run handoff:latest` | Latest handoff |
 
 ## 🚫 MANDATORY: Phase Transition Commands (BLOCKING)
 
@@ -213,6 +213,79 @@ npm run handoff:compliance SD-ID  # Check specific SD
 ```
 
 **FAILURE TO RUN THESE COMMANDS = LEO PROTOCOL VIOLATION**
+
+## 🤖 Built-in Agent Integration
+
+## Built-in Agent Integration
+
+### Three-Layer Agent Architecture
+
+LEO Protocol uses three complementary agent layers:
+
+| Layer | Source | Agents | Purpose |
+|-------|--------|--------|---------|
+| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
+| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
+| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
+
+### Integration Principle
+
+> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
+
+Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
+
+### When to Use Each Layer
+
+| Task | Use | Example |
+|------|-----|---------|
+| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
+| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
+| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
+| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
+| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
+
+### Parallel Execution
+
+Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
+
+```
+Task(subagent_type="Explore", prompt="Search for existing implementations")
+Task(subagent_type="Explore", prompt="Find related patterns")
+Task(subagent_type="Explore", prompt="Identify affected areas")
+```
+
+This is faster than sequential exploration and provides comprehensive coverage.
+
+## Mandatory Agent Invocation Rules
+
+**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
+
+### Task Type -> Required Agent
+
+| Task Keywords | MUST Invoke | Purpose |
+|---------------|-------------|---------|
+| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
+| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
+| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
+| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
+| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
+| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
+| database, migration, schema | **database-agent** | Schema validation |
+| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
+
+### Why This Exists
+
+**Incident**: Human-like testing perspective interpreted as manual content inspection.
+**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
+**Root Cause**: Ad-hoc review instead of specialized agent invocation.
+**Prevention**: Explicit rules mandate agent use for specialized tasks.
+
+### How to Apply
+
+1. Detect task type from user request keywords
+2. Invoke required agent(s) BEFORE making changes
+3. Agent findings inform implementation
+4. Re-run agent AFTER changes to verify fixes
 
 ## Claude Code Plan Mode Integration
 
@@ -425,106 +498,6 @@ await orchestrator.requestPlanModeExit({
 - **Retro Agent**: `.claude/agents/retro-agent.md` (Plan Mode Patterns section)
 
 
-## Mandatory Agent Invocation Rules
-
-**CRITICAL**: Certain task types REQUIRE specialized agent invocation - NO ad-hoc manual inspection allowed.
-
-### Task Type -> Required Agent
-
-| Task Keywords | MUST Invoke | Purpose |
-|---------------|-------------|---------|
-| UI, UX, design, landing page, styling, CSS, colors, buttons | **design-agent** | Accessibility audit (axe-core), contrast checking |
-| accessibility, a11y, WCAG, screen reader, contrast | **design-agent** | WCAG 2.1 AA compliance validation |
-| form, input, validation, user flow | **design-agent** + **testing-agent** | UX + E2E verification |
-| performance, slow, loading, latency | **performance-agent** | Load testing, optimization |
-| security, auth, RLS, permissions | **security-agent** | Vulnerability assessment |
-| API, endpoint, REST, GraphQL | **api-agent** | API design patterns |
-| database, migration, schema | **database-agent** | Schema validation |
-| test, E2E, Playwright, coverage | **testing-agent** | Test execution |
-
-### Why This Exists
-
-**Incident**: Human-like testing perspective interpreted as manual content inspection.
-**Result**: 47 accessibility issues missed, including critical contrast failures (1.03:1 ratio).
-**Root Cause**: Ad-hoc review instead of specialized agent invocation.
-**Prevention**: Explicit rules mandate agent use for specialized tasks.
-
-### How to Apply
-
-1. Detect task type from user request keywords
-2. Invoke required agent(s) BEFORE making changes
-3. Agent findings inform implementation
-4. Re-run agent AFTER changes to verify fixes
-
-## 🤖 Built-in Agent Integration
-
-## Built-in Agent Integration
-
-### Three-Layer Agent Architecture
-
-LEO Protocol uses three complementary agent layers:
-
-| Layer | Source | Agents | Purpose |
-|-------|--------|--------|---------|
-| **Built-in** | Claude Code | `Explore`, `Plan` | Fast discovery & multi-perspective planning |
-| **Sub-Agents** | `.claude/agents/` | DATABASE, TESTING, VALIDATION, etc. | Formal validation & gate enforcement |
-| **Skills** | `~/.claude/skills/` | 54 skills | Creative guidance & patterns |
-
-### Integration Principle
-
-> **Explore** for discovery → **Sub-agents** for validation → **Skills** for implementation patterns
-
-Built-in agents run FIRST (fast, parallel exploration), then sub-agents run for formal validation (database-driven, deterministic).
-
-### When to Use Each Layer
-
-| Task | Use | Example |
-|------|-----|---------|
-| "Does this already exist?" | Explore agent | `Task(subagent_type="Explore", prompt="Search for existing auth implementations")` |
-| "What patterns do we use?" | Explore agent | `Task(subagent_type="Explore", prompt="Find component patterns in src/")` |
-| "Is this schema valid?" | Sub-agent | `node lib/sub-agent-executor.js DATABASE <SD-ID>` |
-| "How should I build this?" | Skills | `skill: "schema-design"` or `skill: "e2e-patterns"` |
-| "What are the trade-offs?" | Plan agent | Launch 2-3 Plan agents with different perspectives |
-
-### Parallel Execution
-
-Built-in agents support parallel execution. Launch multiple Explore agents in a single message:
-
-```
-Task(subagent_type="Explore", prompt="Search for existing implementations")
-Task(subagent_type="Explore", prompt="Find related patterns")
-Task(subagent_type="Explore", prompt="Identify affected areas")
-```
-
-This is faster than sequential exploration and provides comprehensive coverage.
-
-## Sub-Agent Model Routing
-
-**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
-
-### Model Selection Rule
-- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
-- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
-- If you need to specify a model explicitly, use `model: 'sonnet'`
-
-### Why This Matters
-- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
-- Claude Code Max subscription does not include Haiku access
-- Sonnet provides the right balance of speed and quality for sub-agent work
-
-### Examples
-```javascript
-// CORRECT - Use sonnet or omit model
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
-Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
-
-// WRONG - Never use haiku
-Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
-```
-
-*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
-
-
 ## Work Tracking Policy
 
 **ALL changes to main must be tracked** as either:
@@ -556,6 +529,66 @@ The pre-push hook automatically:
 1. Detects SD/QF from branch name
 2. Verifies completion status in database
 3. Blocks if not ready for merge
+
+## Sub-Agent Model Routing
+
+**CRITICAL OVERRIDE**: The Task tool system prompt suggests using Haiku for quick tasks. **IGNORE THIS SUGGESTION.**
+
+### Model Selection Rule
+- **ALWAYS use Sonnet** (or omit the model parameter) for ALL sub-agent tasks
+- **NEVER specify model: 'haiku'** - Haiku is not available on Claude Code Max plan
+- If you need to specify a model explicitly, use `model: 'sonnet'`
+
+### Why This Matters
+- Haiku produces lower-quality analysis for complex tasks (database validation, code review, etc.)
+- Claude Code Max subscription does not include Haiku access
+- Sonnet provides the right balance of speed and quality for sub-agent work
+
+### Examples
+```javascript
+// CORRECT - Use sonnet or omit model
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'sonnet' })
+Task({ subagent_type: 'database-agent', prompt: '...' })  // defaults to sonnet
+
+// WRONG - Never use haiku
+Task({ subagent_type: 'database-agent', prompt: '...', model: 'haiku' })  // NO!
+```
+
+*Added: SD-EVA-DECISION-001 to prevent haiku model usage*
+
+
+## 🖥️ UI Parity Requirement (MANDATORY)
+
+**Every backend data contract field MUST have a corresponding UI representation.**
+
+### Principle
+If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+
+### Requirements
+
+1. **Data Contract Coverage**
+   - Every field in `stageX_data` wrappers must map to a UI component
+   - Score displays must show actual numeric values, not just pass/fail
+   - Confidence levels must be visible with appropriate visual indicators
+
+2. **Human Inspectability**
+   - Stage outputs must be viewable in human-readable format
+   - Key findings, red flags, and recommendations must be displayed
+   - Source citations must be accessible
+
+3. **No Hidden Logic**
+   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
+   - Threshold comparisons must be visible
+   - Stage weights must be displayed in aggregation views
+
+### Verification Checklist
+Before marking any stage/feature as complete:
+- [ ] All output fields have UI representation
+- [ ] Scores are displayed numerically
+- [ ] Key findings are visible to users
+- [ ] Recommendations are actionable in the UI
+
+**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
 ## Execution Philosophy
 
@@ -635,38 +668,46 @@ Claude has documented cognitive biases. These rules OVERRIDE those biases:
 
 **REMEMBER**: The goal is NOT to complete SDs quickly. The goal is to complete SDs CORRECTLY. A properly implemented SD that takes 8 hours is infinitely better than a rushed implementation that takes 4 hours but requires 6 hours of fixes.
 
-## 🖥️ UI Parity Requirement (MANDATORY)
+## Sustainable Issue Resolution Philosophy
 
-**Every backend data contract field MUST have a corresponding UI representation.**
+**CHAIRMAN PREFERENCE**: When encountering issues, bugs, or blockers during implementation:
 
-### Principle
-If the backend produces data that humans need to act on, that data MUST be visible in the UI. "Working" is not the same as "visible."
+### Core Principles
 
-### Requirements
+1. **Handle Issues Immediately**
+   - Do NOT defer problems to "fix later" or create tech debt
+   - Address issues as they arise, before moving forward
+   - Blocking issues must be resolved before continuing
 
-1. **Data Contract Coverage**
-   - Every field in `stageX_data` wrappers must map to a UI component
-   - Score displays must show actual numeric values, not just pass/fail
-   - Confidence levels must be visible with appropriate visual indicators
+2. **Resolve Systemically**
+   - Fix the root cause, not just the symptom
+   - Consider why the issue occurred and prevent recurrence
+   - Update patterns, validation rules, or documentation as needed
 
-2. **Human Inspectability**
-   - Stage outputs must be viewable in human-readable format
-   - Key findings, red flags, and recommendations must be displayed
-   - Source citations must be accessible
+3. **Prefer Sustainable Solutions**
+   - Choose fixes that will last, not quick patches
+   - Avoid workarounds that need to be revisited
+   - Ensure the solution integrates properly with existing architecture
 
-3. **No Hidden Logic**
-   - Decision factors (GO/NO_GO/REVISE) must show contributing scores
-   - Threshold comparisons must be visible
-   - Stage weights must be displayed in aggregation views
+### Implementation Guidelines
 
-### Verification Checklist
-Before marking any stage/feature as complete:
-- [ ] All output fields have UI representation
-- [ ] Scores are displayed numerically
-- [ ] Key findings are visible to users
-- [ ] Recommendations are actionable in the UI
+| Scenario | Wrong Approach | Right Approach |
+|----------|----------------|----------------|
+| Test failing | Skip test, add TODO | Fix underlying issue, ensure test passes |
+| Type error | Cast to `any` | Fix types properly, update interfaces |
+| Migration issue | Comment out problematic code | Fix schema, add proper handling |
+| Build warning | Suppress warning | Address root cause of warning |
+| Performance issue | Defer to "optimization SD" | Fix if simple; create SD only if complex |
 
-**BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
+### Exception Handling
+
+If immediate resolution is truly impossible:
+1. Document the issue thoroughly
+2. Create a high-priority SD for resolution
+3. Add a failing test that captures the issue
+4. Note the workaround as TEMPORARY with removal timeline
+
+**Default behavior**: Resolve now, resolve properly, resolve sustainably.
 
 ## 🎯 Skill Integration (Claude Code Skills)
 
@@ -760,47 +801,6 @@ Skills now include:
 
 **Reference**: Skills were created from issue_patterns and retrospectives to encode proven solutions.
 
-## Sustainable Issue Resolution Philosophy
-
-**CHAIRMAN PREFERENCE**: When encountering issues, bugs, or blockers during implementation:
-
-### Core Principles
-
-1. **Handle Issues Immediately**
-   - Do NOT defer problems to "fix later" or create tech debt
-   - Address issues as they arise, before moving forward
-   - Blocking issues must be resolved before continuing
-
-2. **Resolve Systemically**
-   - Fix the root cause, not just the symptom
-   - Consider why the issue occurred and prevent recurrence
-   - Update patterns, validation rules, or documentation as needed
-
-3. **Prefer Sustainable Solutions**
-   - Choose fixes that will last, not quick patches
-   - Avoid workarounds that need to be revisited
-   - Ensure the solution integrates properly with existing architecture
-
-### Implementation Guidelines
-
-| Scenario | Wrong Approach | Right Approach |
-|----------|----------------|----------------|
-| Test failing | Skip test, add TODO | Fix underlying issue, ensure test passes |
-| Type error | Cast to `any` | Fix types properly, update interfaces |
-| Migration issue | Comment out problematic code | Fix schema, add proper handling |
-| Build warning | Suppress warning | Address root cause of warning |
-| Performance issue | Defer to "optimization SD" | Fix if simple; create SD only if complex |
-
-### Exception Handling
-
-If immediate resolution is truly impossible:
-1. Document the issue thoroughly
-2. Create a high-priority SD for resolution
-3. Add a failing test that captures the issue
-4. Note the workaround as TEMPORARY with removal timeline
-
-**Default behavior**: Resolve now, resolve properly, resolve sustainably.
-
 ## 🚫 Stage 7 Hard Block: UI Coverage Prerequisite
 
 **Effective**: LEO v4.3.3
@@ -845,54 +845,6 @@ To request an exception to this block:
 4. Mark Stage 7 SD with `ui_debt_acknowledged: true`
 
 **No exceptions without explicit LEAD approval.**
-
-## Global Negative Constraints
-
-## 🚫 Global Negative Constraints
-
-<negative_constraints phase="GLOBAL">
-These anti-patterns apply across ALL phases. Violating them leads to failed handoffs, rework, and wasted effort.
-
-### NC-001: No Markdown Files as Source of Truth
-**Anti-Pattern**: Creating or updating markdown files (*.md) to store requirements, PRDs, or status
-**Why Wrong**: Data becomes stale, conflicts with database, no validation
-**Correct Approach**: Use database tables (strategic_directives_v2, product_requirements_v2) via scripts
-
-### NC-002: No Bypassing Process Scripts
-**Anti-Pattern**: Directly inserting into database tables instead of using handoff.js, add-prd-to-database.js
-**Why Wrong**: Skips validation gates, breaks audit trail, causes inconsistent state
-**Correct Approach**: Always use the designated scripts for phase transitions
-
-### NC-003: No Guessing File Locations
-**Anti-Pattern**: Assuming file paths based on naming conventions without verification
-**Why Wrong**: Leads to wrong file edits, missing imports, broken builds
-**Correct Approach**: Use Glob/Grep to find exact paths, read files before editing
-
-### NC-004: No Implementation Without Reading
-**Anti-Pattern**: Starting to code before reading existing implementation
-**Why Wrong**: Duplicates existing functionality, conflicts with patterns, wastes time
-**Correct Approach**: Read ≥5 relevant files before writing any code
-
-### NC-005: No Workarounds Before Root Cause Analysis
-**Anti-Pattern**: Implementing quick fixes without understanding why something fails
-**Why Wrong**: 2-3x time multiplier, masks real issues, accumulates technical debt
-**Correct Approach**: Identify root cause first, then fix. Document if workaround needed.
-
-
-### NC-006: No Background Execution or TaskOutput
-**Anti-Pattern**: Using `run_in_background: true` or TaskOutput tool for validation/handoff commands
-**Why Wrong**: Slows down workflow, requires extra round-trips, breaks conversational flow
-**Correct Approach**:
-- Run all commands inline with appropriate timeouts (up to 180000ms for long validations)
-- NEVER use `run_in_background` parameter for handoff.js, validation scripts, or any LEO process scripts
-- If command output is long, use direct execution and let it complete
-- Avoid piping (`| grep`, `| tail`) on long-running commands as it can trigger background execution
-**Affected Commands** (MUST run inline):
-- `node scripts/handoff.js execute ...`
-- `node scripts/add-prd-to-database.js ...`
-- `node scripts/phase-preflight.js ...`
-- Any validation or quality gate scripts
-</negative_constraints>
 
 ## Child SD Pre-Work Validation (MANDATORY)
 
@@ -960,6 +912,54 @@ node scripts/child-sd-preflight.js SD-XXX-001
 - `npm run sd:next` shows dependency status in the queue
 - Child SDs with incomplete dependencies show as BLOCKED
 - Complete dependencies in sequence before proceeding
+
+## Global Negative Constraints
+
+## 🚫 Global Negative Constraints
+
+<negative_constraints phase="GLOBAL">
+These anti-patterns apply across ALL phases. Violating them leads to failed handoffs, rework, and wasted effort.
+
+### NC-001: No Markdown Files as Source of Truth
+**Anti-Pattern**: Creating or updating markdown files (*.md) to store requirements, PRDs, or status
+**Why Wrong**: Data becomes stale, conflicts with database, no validation
+**Correct Approach**: Use database tables (strategic_directives_v2, product_requirements_v2) via scripts
+
+### NC-002: No Bypassing Process Scripts
+**Anti-Pattern**: Directly inserting into database tables instead of using handoff.js, add-prd-to-database.js
+**Why Wrong**: Skips validation gates, breaks audit trail, causes inconsistent state
+**Correct Approach**: Always use the designated scripts for phase transitions
+
+### NC-003: No Guessing File Locations
+**Anti-Pattern**: Assuming file paths based on naming conventions without verification
+**Why Wrong**: Leads to wrong file edits, missing imports, broken builds
+**Correct Approach**: Use Glob/Grep to find exact paths, read files before editing
+
+### NC-004: No Implementation Without Reading
+**Anti-Pattern**: Starting to code before reading existing implementation
+**Why Wrong**: Duplicates existing functionality, conflicts with patterns, wastes time
+**Correct Approach**: Read ≥5 relevant files before writing any code
+
+### NC-005: No Workarounds Before Root Cause Analysis
+**Anti-Pattern**: Implementing quick fixes without understanding why something fails
+**Why Wrong**: 2-3x time multiplier, masks real issues, accumulates technical debt
+**Correct Approach**: Identify root cause first, then fix. Document if workaround needed.
+
+
+### NC-006: No Background Execution or TaskOutput
+**Anti-Pattern**: Using `run_in_background: true` or TaskOutput tool for validation/handoff commands
+**Why Wrong**: Slows down workflow, requires extra round-trips, breaks conversational flow
+**Correct Approach**:
+- Run all commands inline with appropriate timeouts (up to 180000ms for long validations)
+- NEVER use `run_in_background` parameter for handoff.js, validation scripts, or any LEO process scripts
+- If command output is long, use direct execution and let it complete
+- Avoid piping (`| grep`, `| tail`) on long-running commands as it can trigger background execution
+**Affected Commands** (MUST run inline):
+- `node scripts/handoff.js execute ...`
+- `node scripts/add-prd-to-database.js ...`
+- `node scripts/phase-preflight.js ...`
+- Any validation or quality gate scripts
+</negative_constraints>
 
 ## 🔄 Git Commit Guidelines
 
@@ -1326,75 +1326,6 @@ Patterns exceeding these thresholds auto-create CRITICAL SDs:
 - Implementation guide: `docs/architecture/GENESIS_IMPLEMENTATION_GUIDE.md`
 - Quick reference: `docs/reference/genesis-codebase-guide.md`
 
-## ⚠️ Conditional Handoffs by SD Type (CRITICAL)
-
-**NOT ALL HANDOFFS ARE REQUIRED FOR ALL SD TYPES.**
-
-This is a common source of confusion. The EXEC-TO-PLAN handoff is **conditional** based on SD type.
-
-### Quick Decision: Is EXEC-TO-PLAN Required?
-
-| SD Type | EXEC-TO-PLAN | Why |
-|---------|--------------|-----|
-| `feature` | **REQUIRED** | Full code validation, E2E tests, quality gates |
-| `bugfix` | **REQUIRED** | Verify fix, regression testing |
-| `database` | **REQUIRED** | Schema validation, data integrity |
-| `security` | **REQUIRED** | Security verification critical |
-| `refactor` | **REQUIRED** | Behavior preservation validation |
-| `infrastructure` | **OPTIONAL** | No production code to test |
-| `documentation` | **SKIP** | No code changes at all |
-| `orchestrator` | **SKIP** | Children handle their own validation |
-
-### Workflow Paths
-
-**Full Workflow (5 handoffs)** - feature, bugfix, database, security, refactor:
-```
-LEAD-TO-PLAN → PLAN-TO-EXEC → [EXEC] → EXEC-TO-PLAN → PLAN-TO-LEAD → LEAD-FINAL-APPROVAL
-```
-
-**Reduced Workflow (4 handoffs)** - infrastructure, documentation:
-```
-LEAD-TO-PLAN → PLAN-TO-EXEC → [EXEC] → PLAN-TO-LEAD → LEAD-FINAL-APPROVAL
-                                    ↑
-                            (skip EXEC-TO-PLAN)
-```
-
-**Orchestrator Workflow** (coordinates children):
-```
-LEAD-TO-PLAN → PLAN-TO-EXEC → [Children execute independently] → LEAD-FINAL-APPROVAL
-```
-
-### What EXEC-TO-PLAN Validates
-
-When **required**, EXEC-TO-PLAN validates:
-- All tests passing (unit + E2E)
-- Code committed to feature branch
-- Quality gates passed (implementation fidelity, BMAD)
-- Sub-agent orchestration complete
-- Test evidence captured
-
-When **optional/skipped**, these validations don't apply because:
-- Infrastructure SDs: No production code, no E2E tests
-- Documentation SDs: No code changes at all
-- Orchestrator SDs: Children have their own validation
-
-### How to Check
-
-The handoff system tells you when a handoff is optional:
-```bash
-node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
-
-# Output for infrastructure SD:
-# ⚠️  NOTE: This handoff is OPTIONAL for this SD type.
-#    You may skip it and proceed directly to the next required handoff.
-```
-
-### Reference
-
-- Full validation profiles: `docs/reference/sd-validation-profiles.md`
-- SD type detection: `lib/utils/sd-type-validation.js`
-
-
 ## Parent-Child SD Hierarchy
 
 ### Overview
@@ -1518,6 +1449,75 @@ SELECT COUNT(*) > 0 as is_orchestrator
 FROM strategic_directives_v2
 WHERE parent_sd_id = 'SD-XXX';
 ```
+
+## ⚠️ Conditional Handoffs by SD Type (CRITICAL)
+
+**NOT ALL HANDOFFS ARE REQUIRED FOR ALL SD TYPES.**
+
+This is a common source of confusion. The EXEC-TO-PLAN handoff is **conditional** based on SD type.
+
+### Quick Decision: Is EXEC-TO-PLAN Required?
+
+| SD Type | EXEC-TO-PLAN | Why |
+|---------|--------------|-----|
+| `feature` | **REQUIRED** | Full code validation, E2E tests, quality gates |
+| `bugfix` | **REQUIRED** | Verify fix, regression testing |
+| `database` | **REQUIRED** | Schema validation, data integrity |
+| `security` | **REQUIRED** | Security verification critical |
+| `refactor` | **REQUIRED** | Behavior preservation validation |
+| `infrastructure` | **OPTIONAL** | No production code to test |
+| `documentation` | **SKIP** | No code changes at all |
+| `orchestrator` | **SKIP** | Children handle their own validation |
+
+### Workflow Paths
+
+**Full Workflow (5 handoffs)** - feature, bugfix, database, security, refactor:
+```
+LEAD-TO-PLAN → PLAN-TO-EXEC → [EXEC] → EXEC-TO-PLAN → PLAN-TO-LEAD → LEAD-FINAL-APPROVAL
+```
+
+**Reduced Workflow (4 handoffs)** - infrastructure, documentation:
+```
+LEAD-TO-PLAN → PLAN-TO-EXEC → [EXEC] → PLAN-TO-LEAD → LEAD-FINAL-APPROVAL
+                                    ↑
+                            (skip EXEC-TO-PLAN)
+```
+
+**Orchestrator Workflow** (coordinates children):
+```
+LEAD-TO-PLAN → PLAN-TO-EXEC → [Children execute independently] → LEAD-FINAL-APPROVAL
+```
+
+### What EXEC-TO-PLAN Validates
+
+When **required**, EXEC-TO-PLAN validates:
+- All tests passing (unit + E2E)
+- Code committed to feature branch
+- Quality gates passed (implementation fidelity, BMAD)
+- Sub-agent orchestration complete
+- Test evidence captured
+
+When **optional/skipped**, these validations don't apply because:
+- Infrastructure SDs: No production code, no E2E tests
+- Documentation SDs: No code changes at all
+- Orchestrator SDs: Children have their own validation
+
+### How to Check
+
+The handoff system tells you when a handoff is optional:
+```bash
+node scripts/handoff.js execute EXEC-TO-PLAN SD-XXX-001
+
+# Output for infrastructure SD:
+# ⚠️  NOTE: This handoff is OPTIONAL for this SD type.
+#    You may skip it and proceed directly to the next required handoff.
+```
+
+### Reference
+
+- Full validation profiles: `docs/reference/sd-validation-profiles.md`
+- SD type detection: `lib/utils/sd-type-validation.js`
+
 
 ## SD Type-Aware Workflow Paths
 
@@ -2219,9 +2219,9 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 |------------|----------|----------|-------|-------|--------------|
 | PAT-003 | security | [HIGH] high | 3 | [DOWN] | Add auth.uid() check to RLS policy USING |
 | PAT-008 | deployment | [HIGH] high | 2 | [STABLE] | Check GitHub Actions secrets and package |
-| PAT-DB-SD-E2E-001 | testing | [HIGH] high | 1 | [STABLE] | Update TESTING sub-agent to check SD cat |
+| PAT-MD-001 | database | [CRIT] critical | 1 | [STABLE] | Key Insight: PostgreSQL direct connectio |
+| PAT-EXEC-IMPL-001 | workflow | [HIGH] high | 1 | [STABLE] | Query database for existing tables/funct |
 | PAT-PARENT-DET | workflow | [HIGH] high | 1 | [STABLE] | Add parent/child detection check in phas |
-| PAT-PW-NETIDLE-001 | testing | [HIGH] high | 1 | [STABLE] | Change waitUntil from 'networkidle' to ' |
 
 ### Prevention Checklists
 
@@ -2235,15 +2235,15 @@ const assessment = await prdRubric.validatePRDQuality(prd, sd);
 - [ ] Test locally with same Node version as CI
 - [ ] Check package-lock.json is committed
 
-**testing**:
-- [ ] Check SD category before requiring E2E tests
-- [ ] For database SDs: validate tables exist via SQL
-- [ ] For infrastructure SDs: validate config/setup
+**database**:
+- [ ] Check SUPABASE_POOLER_URL availability in .env
+- [ ] Verify migration file exists before execution
+- [ ] Use SSL with rejectUnauthorized: false
 
 **workflow**:
-- [ ] Check metadata.is_parent at session start
-- [ ] Check parent_sd_id field for child SDs
-- [ ] Verify parent status before allowing child work
+- [ ] Query DB for existing tables FIRST
+- [ ] Check migration files in repo
+- [ ] Check git log for SD commits
 
 
 *Patterns auto-updated from `issue_patterns` table. Use `npm run pattern:resolve PAT-XXX` to mark resolved.*
@@ -2499,7 +2499,7 @@ Handles customer relationship management, lead tracking, customer success metric
 
 ---
 
-*Generated from database: 2026-01-24*
+*Generated from database: 2026-01-25*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

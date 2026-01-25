@@ -87,7 +87,7 @@ AUTO-PROCEED runs continuously EXCEPT at these boundaries:
 | D09 | Context | Existing compaction process handles it |
 | D10 | Restart | Auto-restart with logging for visibility |
 | D11 | Handoff | Propagate AUTO-PROCEED flag through handoff.js |
-| D12 | Activation | Uses auto_proceed_sessions table with is_active flag |
+| D12 | Activation | Uses claude_sessions.metadata.auto_proceed (default: true) |
 | D13 | Interruption | Built-in, auto-resume after handling user input |
 | D14 | Multi-orchestrator | Show full queue of available orchestrators/SDs |
 | D15 | Chaining | Configurable (default: pause at orchestrator boundary) |
@@ -309,7 +309,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-25 8:48:08 AM
+**Last Generated**: 2026-01-25 10:34:52 AM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
