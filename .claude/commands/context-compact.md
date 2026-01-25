@@ -99,12 +99,24 @@ This command is part of the **Command Ecosystem**. For full workflow context, se
 
 ## After Compaction
 
+**CRITICAL (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)**: After compaction completes, run the protocol compaction hook to record the event and clear protocol file read state:
+
+```bash
+node scripts/hooks/protocol-compaction-hook.cjs record
+```
+
+This ensures:
+- Protocol files (CLAUDE_CORE.md, CLAUDE_LEAD.md, etc.) are re-read before continuing
+- SD Start Gate and Post-Compaction Gate will enforce re-reading
+- Context drift in long-running sessions is prevented
+
 You'll receive:
 - Token count before/after
 - Compression ratio
 - What was moved to memory
 - Estimated tokens remaining
 - Recommendation for next steps
+- Protocol files that need re-reading
 
 ## Automatic Triggers
 

@@ -8,6 +8,9 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+// Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
+import { createSdStartGate } from '../../gates/core-protocol-gate.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -441,18 +444,28 @@ export function createPRMergeVerificationGate() {
  * Get all required gates for LEAD-FINAL-APPROVAL
  * @param {Object} supabase - Supabase client
  * @param {Object} prdRepo - PRD repository
+ * @param {Object} sd - Strategic Directive (optional, for SD Start Gate)
  * @returns {Array} Array of gate definitions
  */
-export function getRequiredGates(supabase, prdRepo) {
-  return [
-    createPlanToLeadHandoffGate(supabase),
-    createUserStoriesCompleteGate(supabase, prdRepo),
-    createRetrospectiveExistsGate(supabase),
-    createPRMergeVerificationGate()
-  ];
+export function getRequiredGates(supabase, prdRepo, sd = null) {
+  const gates = [];
+
+  // SD Start Gate - FIRST (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
+  // Ensures CLAUDE_CORE.md is read before any SD work
+  if (sd) {
+    gates.push(createSdStartGate(sd.sd_key || sd.id || 'unknown'));
+  }
+
+  gates.push(createPlanToLeadHandoffGate(supabase));
+  gates.push(createUserStoriesCompleteGate(supabase, prdRepo));
+  gates.push(createRetrospectiveExistsGate(supabase));
+  gates.push(createPRMergeVerificationGate());
+
+  return gates;
 }
 
 export default {
+  createSdStartGate,
   createPlanToLeadHandoffGate,
   createUserStoriesCompleteGate,
   createRetrospectiveExistsGate,
