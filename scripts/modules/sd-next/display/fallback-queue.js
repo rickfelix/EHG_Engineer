@@ -19,7 +19,7 @@ export async function showFallbackQueue(supabase, options = {}) {
   // No baseline - fall back to sequence_rank on SDs directly
   const { data: sds, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, title, priority, status, sequence_rank, progress_percentage, dependencies, metadata, is_working_on, parent_sd_id')
+    .select('id, sd_key, title, priority, status, sequence_rank, progress_percentage, dependencies, metadata, is_working_on, parent_sd_id')
     .eq('is_active', true)
     .in('status', ['draft', 'lead_review', 'plan_active', 'exec_active', 'active', 'in_progress'])
     .in('priority', ['critical', 'high', 'medium'])
@@ -74,7 +74,7 @@ export async function showFallbackQueue(supabase, options = {}) {
 
   if (sds.find(s => s.is_working_on)) {
     const workingOn = sds.find(s => s.is_working_on);
-    console.log(`${colors.bgYellow}${colors.bold} CONTINUE ${colors.reset} ${workingOn.legacy_id} - ${workingOn.title}`);
+    console.log(`${colors.bgYellow}${colors.bold} CONTINUE ${colors.reset} ${workingOn.sd_key || workingOn.id} - ${workingOn.title}`);
     console.log(`${colors.dim}   (Marked as "Working On" in UI)${colors.reset}`);
   }
 
@@ -83,7 +83,7 @@ export async function showFallbackQueue(supabase, options = {}) {
     const ready = trackSDs.find(s => s.deps_resolved && !s.is_working_on);
     if (ready) {
       const trackLabel = trackKey === 'UNASSIGNED' ? 'Unassigned' : `Track ${trackKey}`;
-      console.log(`${colors.green}  ${trackLabel}:${colors.reset} ${ready.legacy_id} - ${ready.title.substring(0, 50)}...`);
+      console.log(`${colors.green}  ${trackLabel}:${colors.reset} ${ready.sd_key || ready.id} - ${ready.title.substring(0, 50)}...`);
     }
   }
 
