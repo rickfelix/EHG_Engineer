@@ -36,9 +36,10 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
   try {
     // Query for children that are ready to work on
     // Status must be one that indicates work can start
+    // SD-LEO-ENH-AUTO-PROCEED-001-10: Also fetch metadata to check for blockers
     let query = supabase
       .from('strategic_directives_v2')
-      .select('id, sd_key, title, status, priority, current_phase, sequence_rank, created_at')
+      .select('id, sd_key, title, status, priority, current_phase, sequence_rank, created_at, metadata, dependencies')
       .eq('parent_sd_id', parentSdId)
       .in('status', ['draft', 'in_progress', 'planning', 'active', 'pending_approval', 'review']);
 
@@ -54,14 +55,25 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
       .order('created_at', { ascending: true })
       .limit(1);
 
-    const { data: nextChild, error } = await query;
+    const { data: candidates, error } = await query;
 
     if (error) {
       console.warn(`   [child-sd-selector] Query error: ${error.message}`);
       return { sd: null, allComplete: false, reason: `Query error: ${error.message}` };
     }
 
-    // If we found a ready child, return it
+    // SD-LEO-ENH-AUTO-PROCEED-001-10: Filter out SDs with unresolved blockers
+    const nextChild = candidates ? candidates.filter(child => {
+      // Check for explicit blocked_by in metadata
+      const blockedBy = child.metadata?.blocked_by;
+      if (blockedBy && Array.isArray(blockedBy) && blockedBy.length > 0) {
+        console.log(`   [child-sd-selector] Skipping ${child.id} - has ${blockedBy.length} unresolved blocker(s)`);
+        return false;
+      }
+      return true;
+    }) : [];
+
+    // If we found a ready child (without blockers), return it
     if (nextChild && nextChild.length > 0) {
       return { sd: nextChild[0], allComplete: false, reason: 'Next child found' };
     }
