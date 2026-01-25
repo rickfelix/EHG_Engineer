@@ -91,6 +91,11 @@
             "type": "command",
             "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/autonomous-checkpoint.js",
             "timeout": 3
+          },
+          {
+            "type": "command",
+            "command": "node C:/Users/rickf/Projects/_EHG/EHG_Engineer/scripts/hooks/auto-proceed-resume.js",
+            "timeout": 3
           }
         ]
       }

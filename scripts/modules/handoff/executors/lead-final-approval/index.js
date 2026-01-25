@@ -19,6 +19,7 @@ import {
   releaseSessionClaim
 } from './helpers.js';
 import { getRemediation } from './remediations.js';
+import { clearState as clearAutoProceedState } from '../../auto-proceed-state.js';
 
 export class LeadFinalApprovalExecutor extends BaseExecutor {
   constructor(dependencies = {}) {
@@ -101,6 +102,14 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
 
     // Release the session claim
     await releaseSessionClaim(sd, this.supabase);
+
+    // SD-LEO-ENH-AUTO-PROCEED-001-04: Clear AUTO-PROCEED state on SD completion
+    try {
+      clearAutoProceedState(true); // Keep resume count history
+      console.log('   ✅ AUTO-PROCEED state cleared');
+    } catch (apError) {
+      console.warn(`   ⚠️  Could not clear AUTO-PROCEED state: ${apError.message}`);
+    }
 
     // Check if this SD has a parent that should be auto-completed
     if (sd.parent_sd_id) {
