@@ -119,6 +119,9 @@ src/client/dist/
 .token-log.json
 .claude/logs/
 
+# Claude session state (modified during protocol operations, local only)
+.claude/unified-session-state.json
+
 # LEO stack server logs (regenerated on restart)
 .logs/
 
