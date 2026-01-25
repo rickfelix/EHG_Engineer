@@ -25,6 +25,7 @@ import {
 } from './index.js';
 import { validateWorkflowReview, createHandoffExecution } from './workflow-validation.js';
 import { rejectHandoff } from './rejection.js';
+import { updateExecutionContext } from '../../auto-proceed-state.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -345,6 +346,18 @@ export class PlanToExecVerifier {
 
       console.log('\n🚀 EXEC PHASE AUTHORIZED');
       console.log('PRD handed off to EXEC agent for implementation');
+
+      // SD-LEO-ENH-AUTO-PROCEED-001-04: Update AUTO-PROCEED state for resume tracking
+      try {
+        updateExecutionContext({
+          sdKey: sdId,
+          phase: 'EXEC',
+          task: `Implementing ${prd.title || sdId}`,
+          isActive: true
+        });
+      } catch (apError) {
+        console.warn(`   ⚠️  Could not update AUTO-PROCEED state: ${apError.message}`);
+      }
 
       return {
         success: true,
