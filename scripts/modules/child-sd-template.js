@@ -3,21 +3,26 @@
  * LEO Protocol v4.4 - Shift-Left Validation
  *
  * PURPOSE: Auto-populates child SDs from parent SD template
- * Inherits strategic fields while allowing child-specific customization
+ * Uses AI inference to generate context-appropriate strategic fields.
  *
  * ROOT CAUSE FIX: SD-STAGE-ARCH-001-P4 discovered child SDs were created
- * without strategic fields. This module ensures children inherit from parent
- * and have their own context-specific values.
+ * without strategic fields. This module now uses LLM to generate
+ * appropriate fields based on the child's specific context.
  *
  * Usage:
- *   import { generateChildSD, inheritStrategicFields } from './modules/child-sd-template.js';
- *   const childData = generateChildSD(parentSD, childConfig);
+ *   import { generateChildSD, generateChildSDAsync } from './modules/child-sd-template.js';
+ *   const childData = await generateChildSDAsync(parentSD, childConfig); // With AI
+ *   const childData = generateChildSD(parentSD, childConfig); // Sync fallback
  *
  * @module child-sd-template
- * @version 1.0.0
+ * @version 2.0.0
  */
 
 import { validateSDCreation } from './sd-creation-validator.js';
+import {
+  isLLMAvailable,
+  generateStrategicFieldsWithLLM
+} from './child-sd-llm-service.mjs';
 
 /**
  * Default child SD template structure
@@ -333,6 +338,180 @@ export function generateChildSD(parentSD, config) {
 }
 
 /**
+ * Generate a complete child SD with AI-generated strategic fields
+ * This is the PREFERRED method - uses LLM for context-appropriate fields
+ *
+ * @param {Object} parentSD - Parent Strategic Directive from database
+ * @param {Object} config - Child configuration (same as generateChildSD)
+ * @returns {Promise<Object>} Complete child SD data with AI-generated strategic fields
+ */
+export async function generateChildSDAsync(parentSD, config) {
+  const {
+    phaseNumber,
+    phaseTitle,
+    phaseDescription,
+    phaseScope,
+    phaseObjective,
+    category = parentSD.category || 'feature',
+    priority = parentSD.priority || 'high',
+    sdType = null,
+    customMetrics = [],
+    customRisks = []
+  } = config;
+
+  // Infer SD type from title/scope if not explicitly provided
+  const inferredType = inferSDType(phaseTitle, phaseScope, phaseDescription);
+  const finalSDType = sdType || inferredType.sdType;
+
+  // Generate SD key pattern: PARENT-ID-P{N}
+  const parentKey = parentSD.sd_key || parentSD.legacy_id || parentSD.id;
+  const childKey = `${parentKey}-P${phaseNumber}`;
+
+  // Build child context for LLM
+  const childContext = {
+    title: `Phase ${phaseNumber}: ${phaseTitle}`,
+    description: phaseDescription,
+    scope: phaseScope,
+    sd_type: finalSDType,
+    phaseNumber
+  };
+
+  // Build parent context for LLM alignment
+  const parentContext = {
+    title: parentSD.title,
+    description: parentSD.description,
+    strategic_objectives: parentSD.strategic_objectives,
+    rationale: parentSD.rationale
+  };
+
+  // Try AI generation first
+  let strategicFields = null;
+  if (isLLMAvailable()) {
+    try {
+      strategicFields = await generateStrategicFieldsWithLLM(childContext, parentContext);
+    } catch (err) {
+      console.warn(`⚠️ LLM generation failed for ${childKey}, falling back to templates: ${err.message}`);
+    }
+  }
+
+  // Fallback to template-based inheritance if LLM fails
+  if (!strategicFields) {
+    console.log(`ℹ️ Using template-based inheritance for ${childKey}`);
+    strategicFields = inheritStrategicFields(parentSD, {
+      phaseNumber,
+      phaseTitle,
+      phaseObjective
+    });
+  }
+
+  // Merge custom metrics/risks with generated
+  const mergedMetrics = [...(strategicFields.success_metrics || []), ...customMetrics];
+  const mergedRisks = [...(strategicFields.risks || []), ...customRisks];
+
+  // Build complete child SD
+  const childSD = {
+    // Identity
+    id: childKey,
+    sd_key: childKey,
+    legacy_id: childKey,
+    parent_sd_id: parentSD.id,
+
+    // Core fields (required)
+    title: `Phase ${phaseNumber}: ${phaseTitle}`,
+    description: phaseDescription,
+    scope: phaseScope,
+    rationale: `Part of ${parentSD.title} - ${phaseObjective || phaseTitle}`,
+    category,
+    priority,
+    sd_type: finalSDType,
+
+    // Strategic fields (AI-generated or inherited)
+    success_metrics: mergedMetrics,
+    key_principles: strategicFields.key_principles || [],
+    strategic_objectives: strategicFields.strategic_objectives || [],
+    success_criteria: strategicFields.success_criteria || [],
+    risks: mergedRisks,
+
+    // Workflow fields
+    status: 'draft',
+    progress: 0,
+    phase: 'LEAD',
+
+    // Metadata
+    metadata: {
+      phase_number: phaseNumber,
+      parent_sd_key: parentKey,
+      inherited_from: parentSD.id,
+      generation_date: new Date().toISOString(),
+      // Generation source tracking
+      strategic_fields_source: strategicFields ? 'llm' : 'template',
+      // SD type inference audit trail
+      sd_type_inference: {
+        inferred_type: inferredType.sdType,
+        confidence: inferredType.confidence,
+        matched_keywords: inferredType.matchedKeywords,
+        explicit_override: sdType !== null
+      }
+    },
+
+    // Timestamps
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  return childSD;
+}
+
+/**
+ * Generate multiple child SDs for an orchestrator parent (async with AI)
+ *
+ * @param {Object} parentSD - Parent Strategic Directive
+ * @param {Array} phases - Array of phase configurations
+ * @returns {Promise<Object>} Result with children array and errors
+ */
+export async function generatePhaseChildrenAsync(parentSD, phases) {
+  const children = [];
+  const errors = [];
+
+  for (const phase of phases) {
+    try {
+      const childSD = await generateChildSDAsync(parentSD, phase);
+
+      // Validate the generated child
+      const validation = validateSDCreation(childSD, { isChildSD: true });
+
+      if (validation.valid) {
+        children.push({
+          sd: childSD,
+          validation,
+          source: childSD.metadata?.strategic_fields_source || 'unknown'
+        });
+      } else {
+        errors.push({
+          phaseNumber: phase.phaseNumber,
+          errors: validation.errors,
+          warnings: validation.warnings
+        });
+      }
+    } catch (err) {
+      errors.push({
+        phaseNumber: phase.phaseNumber,
+        errors: [`Generation failed: ${err.message}`],
+        warnings: []
+      });
+    }
+  }
+
+  return {
+    children,
+    errors,
+    allValid: errors.length === 0,
+    summary: `Generated ${children.length}/${phases.length} valid child SDs`,
+    llmUsed: children.filter(c => c.source === 'llm').length
+  };
+}
+
+/**
  * Generate multiple child SDs for an orchestrator parent
  *
  * @param {Object} parentSD - Parent Strategic Directive
@@ -465,13 +644,18 @@ export function getExamplePhaseConfigs(sdType, phaseCount = 3) {
 }
 
 export default {
+  // Async methods (preferred - use AI)
+  generateChildSDAsync,
+  generatePhaseChildrenAsync,
+  // Sync methods (fallback - template-based)
   generateChildSD,
   generatePhaseChildren,
+  // Utilities
   inheritStrategicFields,
   createMinimalPhaseConfig,
   validateChildBeforeCreation,
   getExamplePhaseConfigs,
-  inferSDType, // NEW: Auto-infer sd_type from title/scope
+  inferSDType,
   CHILD_SD_TEMPLATE,
-  SD_TYPE_KEYWORDS // NEW: Expose keywords for testing/extension
+  SD_TYPE_KEYWORDS
 };
