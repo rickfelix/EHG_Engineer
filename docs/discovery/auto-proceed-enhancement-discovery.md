@@ -316,5 +316,33 @@ Current state of AUTO-PROCEED documentation:
 
 ---
 
+## Implementation Status (SD-LEO-ENH-AUTO-PROCEED-001)
+
+**Orchestrator Created**: 2026-01-25
+**Status**: In Progress (4/15 children completed)
+
+| # | SD Key | Status | PR | Notes |
+|---|--------|--------|-----|-------|
+| 1 | SD-LEO-ENH-AUTO-PROCEED-001-01 | ✅ Completed | #616 | Added AUTO-PROCEED section to CLAUDE.md |
+| 2 | SD-LEO-ENH-AUTO-PROCEED-001-02 | ✅ Completed | #617 | Added AUTO-PROCEED flag to handoff.js |
+| 3 | SD-LEO-ENH-AUTO-PROCEED-001-03 | ✅ Completed | #618 | Orchestrator completion hook implementation |
+| 4 | SD-LEO-ENH-AUTO-PROCEED-001-04 | ✅ Completed | #621, #622 | Auto-resume + child SD continuation |
+| 5 | SD-LEO-ENH-AUTO-PROCEED-001-05 | 📋 Draft | - | Configurable orchestrator chaining |
+| 6 | SD-LEO-ENH-AUTO-PROCEED-001-06 | 📋 Draft | - | Verify/create auto_proceed_sessions table |
+| 7 | SD-LEO-ENH-AUTO-PROCEED-001-07 | 📋 Draft | - | Skip failed SDs and continue |
+| 8 | SD-LEO-ENH-AUTO-PROCEED-001-08 | 📋 Draft | - | Detailed session summary |
+| 9 | SD-LEO-ENH-AUTO-PROCEED-001-09 | 📋 Draft | - | Add `/leo resume` command |
+| 10 | SD-LEO-ENH-AUTO-PROCEED-001-10 | 📋 Draft | - | Blocker resolution attempts |
+| 11 | SD-LEO-ENH-AUTO-PROCEED-001-11 | 📋 Draft | - | Learning-based re-prioritization |
+| 12 | SD-LEO-ENH-AUTO-PROCEED-001-12 | 📋 Draft | - | All-blocked detection |
+| 13 | SD-LEO-ENH-AUTO-PROCEED-001-13 | 📋 Draft | - | Mode reminder at SD start |
+| 14 | SD-LEO-ENH-AUTO-PROCEED-001-14 | 📋 Draft | - | Status line enhancement |
+| 15 | SD-LEO-ENH-AUTO-PROCEED-001-15 | 📋 Draft | - | UX notices (compaction, retry, resume) |
+
+**Key Achievement (SD-04)**: Implemented child SD continuation logic - the missing piece that allows AUTO-PROCEED to smoothly transition between orchestrator children without user intervention. This addresses the root cause identified in the user's question: "Why didn't it proceed to the next child agent?"
+
+---
+
 *Discovery session complete. 29 decisions captured, 19 implementation items, 15 children SDs.*
-*Ready to create SD.*
+*Implementation: 4/15 complete (26.7%)*
+*Last Updated: 2026-01-25*
