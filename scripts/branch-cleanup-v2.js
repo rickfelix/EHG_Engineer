@@ -146,10 +146,10 @@ class BranchCleanupV2 {
     try {
       const { data: sds } = await this.supabase
         .from('strategic_directives_v2')
-        .select('id, legacy_id, status, title, metadata');
+        .select('id, sd_key, status, title, metadata');
 
       for (const sd of sds || []) {
-        if (sd.legacy_id) this.sdCache.set(sd.legacy_id.toLowerCase(), sd);
+        if (sd.sd_key) this.sdCache.set(sd.sd_key.toLowerCase(), sd);
         if (sd.id?.startsWith('SD-')) this.sdCache.set(sd.id.toLowerCase(), sd);
       }
       console.log(`✅ Loaded ${sds?.length || 0} SDs for cross-reference\n`);

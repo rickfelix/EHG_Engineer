@@ -38,10 +38,11 @@ const COMPLETION_REQUIREMENTS = {
 /**
  * Get all siblings in execution order
  */
+// SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
 async function getSiblingsInOrder(parentSd) {
   const { data: children, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, legacy_id, title, status, completion_date')
+    .select('id, sd_key, title, status, completion_date')
     .eq('parent_sd_id', parentSd.id)
     .order('created_at', { ascending: true });
 
@@ -54,9 +55,10 @@ async function getSiblingsInOrder(parentSd) {
 
   if (Array.isArray(dependencyChain) && dependencyChain.length > 0) {
     // Sort by dependency_chain order
+    // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
     return children.sort((a, b) => {
-      const posA = dependencyChain.findIndex(id => id === a.id || id === a.legacy_id || id === a.sd_key);
-      const posB = dependencyChain.findIndex(id => id === b.id || id === b.legacy_id || id === b.sd_key);
+      const posA = dependencyChain.findIndex(id => id === a.id || id === a.sd_key);
+      const posB = dependencyChain.findIndex(id => id === b.id || id === b.sd_key);
       return posA - posB;
     });
   }
@@ -69,12 +71,8 @@ async function getSiblingsInOrder(parentSd) {
       return parseInt(matchA[1], 10) - parseInt(matchB[1], 10);
     }
 
-    // Final fallback: legacy_id numeric suffix
-    const legacyMatchA = a.legacy_id?.match(/-[pP]?(\d+)$/);
-    const legacyMatchB = b.legacy_id?.match(/-[pP]?(\d+)$/);
-    if (legacyMatchA && legacyMatchB) {
-      return parseInt(legacyMatchA[1], 10) - parseInt(legacyMatchB[1], 10);
-    }
+    // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id fallback (column dropped 2026-01-24)
+    // If no sd_key match found, keep original order
 
     return 0;
   });
@@ -85,10 +83,11 @@ async function getSiblingsInOrder(parentSd) {
  */
 async function verifyChildCompletion(childId) {
   // Get SD status
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
   const { data: sd, error: sdError } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, legacy_id, title, status, completion_date, progress')
-    .or(`id.eq.${childId},sd_key.eq.${childId},legacy_id.eq.${childId}`)
+    .select('id, sd_key, title, status, completion_date, progress')
+    .or(`id.eq.${childId},sd_key.eq.${childId}`)
     .single();
 
   if (sdError || !sd) {
@@ -177,7 +176,8 @@ export async function enforceChildProgressionGate(childSdId, options = {}) {
   const { data: childSd, error: childError } = await supabase
     .from('strategic_directives_v2')
     .select('*')
-    .or(`id.eq.${childSdId},sd_key.eq.${childSdId},legacy_id.eq.${childSdId}`)
+    // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+    .or(`id.eq.${childSdId},sd_key.eq.${childSdId}`)
     .single();
 
   if (childError || !childSd) {
@@ -207,8 +207,8 @@ export async function enforceChildProgressionGate(childSdId, options = {}) {
   }
 
   if (verbose) {
-    console.log(`\n   Target SD: ${childSd.sd_key || childSd.legacy_id}`);
-    console.log(`   Parent:    ${parentSd.sd_key || parentSd.legacy_id}`);
+    console.log(`\n   Target SD: ${childSd.sd_key || childSd.id}`);
+    console.log(`   Parent:    ${parentSd.sd_key || parentSd.id}`);
     console.log(`   Title:     ${childSd.title}`);
   }
 
@@ -222,7 +222,7 @@ export async function enforceChildProgressionGate(childSdId, options = {}) {
       const marker = s.id === childSd.id ? '>>>' : '   ';
       const statusIcon = s.status === 'completed' && s.completion_date ? '✅' :
                          s.status === 'in_progress' ? '🔄' : '📋';
-      console.log(`   ${marker} ${i}. ${s.sd_key || s.legacy_id} [${statusIcon} ${s.status}]`);
+      console.log(`   ${marker} ${i}. ${s.sd_key || s.id} [${statusIcon} ${s.status}]`);
     });
   }
 
@@ -245,7 +245,7 @@ export async function enforceChildProgressionGate(childSdId, options = {}) {
 
   if (verbose) {
     console.log(`\n   Position: ${position} (P${position})`);
-    console.log(`   Predecessor: ${predecessor.sd_key || predecessor.legacy_id} (P${position - 1})`);
+    console.log(`   Predecessor: ${predecessor.sd_key || predecessor.id} (P${position - 1})`);
     console.log('\n   Verifying predecessor completion...');
   }
 
@@ -270,7 +270,7 @@ export async function enforceChildProgressionGate(childSdId, options = {}) {
   // GATE BLOCKED
   if (verbose) {
     console.log('\n   ❌ GATE BLOCKED - Predecessor NOT Complete');
-    console.log(`\n   Predecessor: ${predecessor.sd_key || predecessor.legacy_id}`);
+    console.log(`\n   Predecessor: ${predecessor.sd_key || predecessor.id}`);
     console.log(`   Current Status: ${verification.sd?.status || 'unknown'}`);
     console.log('\n   Missing Requirements:');
     verification.missing.forEach(m => console.log(`      • ${m}`));
@@ -281,7 +281,7 @@ export async function enforceChildProgressionGate(childSdId, options = {}) {
     console.log('   ║ Complete predecessor before starting this SD:              ║');
     console.log('   ║                                                            ║');
     console.log('   ║ node scripts/handoff.js execute LEAD-FINAL-APPROVAL \\      ║');
-    console.log(`   ║   ${(predecessor.sd_key || predecessor.legacy_id).padEnd(54)}║`);
+    console.log(`   ║   ${(predecessor.sd_key || predecessor.id).padEnd(54)}║`);
     console.log('   ║                                                            ║');
     console.log('   ║ Then re-run phase-preflight for this SD.                   ║');
     console.log('   ╚════════════════════════════════════════════════════════════╝\n');
@@ -292,7 +292,7 @@ export async function enforceChildProgressionGate(childSdId, options = {}) {
     reason: 'Predecessor not complete',
     blockedBy: predecessor,
     verification,
-    requiredAction: `node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${predecessor.sd_key || predecessor.legacy_id}`
+    requiredAction: `node scripts/handoff.js execute LEAD-FINAL-APPROVAL ${predecessor.sd_key || predecessor.id}`
   };
 }
 

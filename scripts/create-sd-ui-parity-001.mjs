@@ -48,7 +48,7 @@ async function createUIParitySD() {
   // Create the Strategic Directive (using only valid columns from schema)
   const sdData = {
     id: sdId,
-    legacy_id: sdId,
+    sd_key: sdId,
     sd_key: 'SD-UI-PARITY-001',
     title: 'IDEATION Stages 1-6 UI Component Backfill',
     status: 'draft',

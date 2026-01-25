@@ -95,7 +95,7 @@ async function main() {
   const { data: sd, error: sdError } = await supabase
     .from('strategic_directives_v2')
     .select('*')
-    .or(`legacy_id.eq.${sdId},sd_key.eq.${sdId},id.eq.${sdId}`)
+    .or(`sd_key.eq.${sdId},sd_key.eq.${sdId},id.eq.${sdId}`)
     .single();
 
   if (sdError || !sd) {

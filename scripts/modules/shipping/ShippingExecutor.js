@@ -289,7 +289,8 @@ PREOF
     console.log('   HUMAN ESCALATION REQUIRED');
     console.log(`${'='.repeat(60)}`);
     console.log(`   Decision Type: ${decisionType}`);
-    console.log(`   SD: ${this.context.sd?.legacy_id || this.context.sdId}`);
+    // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+    console.log(`   SD: ${this.context.sd?.sd_key || this.context.sdId}`);
     console.log(`   Branch: ${this.context.branch}`);
     console.log('   Reason: Low confidence - LLM cannot make this decision automatically');
     console.log('\n   Please run the interactive ship command manually:');
@@ -307,9 +308,10 @@ PREOF
   /**
    * Build PR title from SD context
    */
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
   buildPRTitle() {
     const sd = this.context.sd;
-    const sdId = sd?.legacy_id || this.context.sdId || 'UNKNOWN';
+    const sdId = sd?.sd_key || this.context.sdId || 'UNKNOWN';
     const title = sd?.title || 'Implementation';
 
     // Determine prefix based on SD type
@@ -333,9 +335,10 @@ PREOF
   /**
    * Build PR body with SD context
    */
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
   buildPRBody() {
     const sd = this.context.sd;
-    const sdId = sd?.legacy_id || this.context.sdId || 'UNKNOWN';
+    const sdId = sd?.sd_key || this.context.sdId || 'UNKNOWN';
 
     return `## Summary
 
@@ -380,7 +383,8 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>`;
           execution_duration_ms: result.duration,
           updated_at: new Date().toISOString()
         })
-        .eq('sd_id', this.context.sd?.legacy_id || this.context.sd?.id || this.context.sdId)
+        // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+        .eq('sd_id', this.context.sd?.sd_key || this.context.sd?.id || this.context.sdId)
         .eq('decision_type', decisionType)
         .order('created_at', { ascending: false })
         .limit(1);

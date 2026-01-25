@@ -101,14 +101,15 @@ export class SDGitStateReconciler {
 
   /**
    * Get SD state from database
+   * SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
    * @returns {Promise<Object|null>} SD state
    */
   async getSDState() {
-    // Try both id and legacy_id patterns
+    // Try both id and sd_key patterns
     const { data: sd, error } = await this.supabase
       .from('strategic_directives_v2')
-      .select('id, title, status, current_phase, progress_percentage, metadata, completion_date')
-      .or(`id.ilike.%${this.sdId}%,legacy_id.ilike.%${this.sdId}%`)
+      .select('id, sd_key, title, status, current_phase, progress_percentage, metadata, completion_date')
+      .or(`id.ilike.%${this.sdId}%,sd_key.ilike.%${this.sdId}%`)
       .limit(1)
       .single();
 

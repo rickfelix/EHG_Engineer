@@ -27,12 +27,13 @@ export async function validateDataFlowAlignment(sd_id, designAnalysis, databaseA
     if (sdById) {
       sd = sdById;
     } else {
-      const { data: sdByLegacy } = await supabase
+      // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id, use sd_key instead (column dropped 2026-01-24)
+      const { data: sdBySdKey } = await supabase
         .from('strategic_directives_v2')
         .select('sd_type, scope')
-        .eq('legacy_id', sd_id)
+        .eq('sd_key', sd_id)
         .single();
-      sd = sdByLegacy;
+      sd = sdBySdKey;
     }
 
     if (sd?.sd_type === 'database') {

@@ -13,7 +13,7 @@ async function getSDDetails() {
   const { data: sd, error: sdError } = await supabase
     .from('strategic_directives_v2')
     .select('*')
-    .eq('legacy_id', 'SD-FOUNDATION-V3-006')
+    .eq('sd_key', 'SD-FOUNDATION-V3-006')
     .single();
 
   if (sdError) {
@@ -32,7 +32,7 @@ async function getSDDetails() {
 
     console.log('=== SD DETAILS ===');
     console.log('ID:', sd2.id);
-    console.log('Legacy ID:', sd2.legacy_id);
+    console.log('Legacy ID:', sd2.sd_key);
     console.log('Title:', sd2.title);
     console.log('Status:', sd2.status);
     console.log('Phase:', sd2.current_phase);
@@ -78,7 +78,7 @@ async function getSDDetails() {
 
   console.log('=== SD DETAILS ===');
   console.log('ID:', sd.id);
-  console.log('Legacy ID:', sd.legacy_id);
+  console.log('Legacy ID:', sd.sd_key);
   console.log('Title:', sd.title);
   console.log('Status:', sd.status);
   console.log('Phase:', sd.current_phase);

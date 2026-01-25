@@ -227,7 +227,7 @@ function buildDesignPrompt(sdId, sdData, personaContextBlock) {
 ## STRATEGIC DIRECTIVE - COMPLETE CONTEXT
 
 **ID**: ${sdData.id || sdId}
-**Legacy ID**: ${sdData.legacy_id || 'N/A'}
+**Legacy ID**: ${sdData.sd_key || 'N/A'}
 **Title**: ${sdData.title || 'N/A'}
 **Type**: ${sdData.sd_type || sdData.category || 'feature'}
 **Category**: ${sdData.category || 'Not specified'}
@@ -298,7 +298,7 @@ function buildDatabasePrompt(sdId, sdData, designAnalysis, personaContextBlock) 
 ## STRATEGIC DIRECTIVE - COMPLETE CONTEXT
 
 **ID**: ${sdData.id || sdId}
-**Legacy ID**: ${sdData.legacy_id || 'N/A'}
+**Legacy ID**: ${sdData.sd_key || 'N/A'}
 **Title**: ${sdData.title || 'N/A'}
 **Type**: ${sdData.sd_type || sdData.category || 'feature'}
 **Category**: ${sdData.category || 'Not specified'}

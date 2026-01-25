@@ -36,7 +36,7 @@ const supabase = createClient(
     // Check fallback query
     const { data: sds, error: sdError } = await supabase
       .from('strategic_directives_v2')
-      .select('legacy_id, title, priority, status, sequence_rank, metadata')
+      .select('sd_key, title, priority, status, sequence_rank, metadata')
       .eq('is_active', true)
       .in('status', ['draft', 'active', 'in_progress'])
       .in('priority', ['critical', 'high'])
@@ -50,14 +50,14 @@ const supabase = createClient(
       console.log(`Found ${sds.length} SDs matching fallback query:\n`);
 
       // Check for HARDENING-V2 SDs
-      const hardeningV2 = sds.filter(sd => sd.legacy_id && sd.legacy_id.includes('HARDENING-V2'));
+      const hardeningV2 = sds.filter(sd => sd.sd_key && sd.sd_key.includes('HARDENING-V2'));
       console.log(`  - SD-HARDENING-V2-*: ${hardeningV2.length} found`);
 
       if (hardeningV2.length > 0) {
         console.log('\n✅ SD-HARDENING-V2 directives ARE in fallback query:');
         hardeningV2.forEach(sd => {
           const track = sd.metadata?.execution_track || 'UNASSIGNED';
-          console.log(`   ${sd.legacy_id} (Track: ${track}, Rank: ${sd.sequence_rank})`);
+          console.log(`   ${sd.sd_key} (Track: ${track}, Rank: ${sd.sequence_rank})`);
         });
       }
 
@@ -66,7 +66,7 @@ const supabase = createClient(
       sds.forEach(sd => {
         const track = sd.metadata?.execution_track || 'UNASSIGNED';
         if (!byTrack[track]) byTrack[track] = [];
-        byTrack[track].push(sd.legacy_id);
+        byTrack[track].push(sd.sd_key);
       });
 
       console.log('\n\nTrack Distribution:');

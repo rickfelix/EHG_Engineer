@@ -79,13 +79,14 @@ export class ShippingContextBuilder {
 
   /**
    * Get Strategic Directive context from database
+   * SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
    */
   async getSDContext() {
     try {
       const { data: sd } = await this.supabase
         .from('strategic_directives_v2')
-        .select('id, legacy_id, title, description, status, sd_type, current_phase, target_application, priority')
-        .or(`legacy_id.eq.${this.sdId},id.eq.${this.sdId}`)
+        .select('id, sd_key, title, description, status, sd_type, current_phase, target_application, priority')
+        .or(`sd_key.eq.${this.sdId},id.eq.${this.sdId}`)
         .single();
 
       return sd || { id: this.sdId, title: 'Unknown', sd_type: 'feature' };

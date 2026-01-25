@@ -15,7 +15,7 @@ import { getSDWorkflow } from './sd-workflow.js';
  * Verify SD completion
  * Checks all required handoffs exist and SD is truly completed
  *
- * @param {string} sdId - SD identifier (UUID, legacy_id, or sd_key)
+ * @param {string} sdId - SD identifier (UUID, sd_key, or sd_key)
  * @returns {Promise<Object>} - Completion verification result
  */
 export async function verifySDCompletion(sdId) {

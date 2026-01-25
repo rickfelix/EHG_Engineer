@@ -40,10 +40,11 @@ const colors = {
 };
 
 async function getSDDetails(sdId) {
+  // Note: legacy_id column was deprecated and removed - using sd_key instead
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type')
-    .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
+    .select('id, sd_key, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type')
+    .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
     .single();
 
   if (error) {
@@ -94,7 +95,7 @@ async function main() {
     process.exit(1);
   }
 
-  const effectiveId = sd.legacy_id || sd.id;
+  const effectiveId = sd.sd_key || sd.id;
 
   // 2. Get or create session
   const session = await getOrCreateSession();
@@ -147,10 +148,11 @@ async function main() {
 
   // 5.5. Show duration estimate
   try {
+    // Note: legacy_id was deprecated - using sd_key instead
     const { data: sdFull } = await supabase
       .from('strategic_directives_v2')
       .select('id, sd_type, category, priority')
-      .eq('legacy_id', effectiveId)
+      .eq('sd_key', effectiveId)
       .single();
 
     if (sdFull) {

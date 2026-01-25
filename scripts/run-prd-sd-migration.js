@@ -84,7 +84,7 @@ async function runMigration() {
     console.log('\nStep 3: Building SD uuid_id → id mapping...');
     const { data: sds, error: sdErr } = await supabase
       .from('strategic_directives_v2')
-      .select('id, uuid_id, legacy_id');
+      .select('id, uuid_id, sd_key');
 
     if (sdErr) {
       console.error('Error fetching SDs:', sdErr.message);
@@ -101,8 +101,8 @@ async function runMigration() {
         anyToId.set(sd.uuid_id, sd.id);
       }
       anyToId.set(sd.id, sd.id);
-      if (sd.legacy_id) {
-        anyToId.set(sd.legacy_id, sd.id);
+      if (sd.sd_key) {
+        anyToId.set(sd.sd_key, sd.id);
       }
     });
 

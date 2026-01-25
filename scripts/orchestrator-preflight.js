@@ -95,10 +95,11 @@ const SD_TYPE_PROFILES = {
 };
 
 async function getOrchestrator(sdId) {
+  // Note: legacy_id column was deprecated and removed - using sd_key instead
   const { data, error } = await supabase
     .from('strategic_directives_v2')
     .select('*')
-    .eq('legacy_id', sdId)
+    .eq('sd_key', sdId)
     .single();
 
   if (error) {
@@ -174,7 +175,8 @@ async function printPreflightReport(parent, children) {
   console.log('  ORCHESTRATOR PREFLIGHT CHECK');
   console.log('═'.repeat(60));
   console.log('');
-  console.log(`Parent: ${parent.legacy_id || parent.id}`);
+  // Note: legacy_id was deprecated - using sd_key instead
+  console.log(`Parent: ${parent.sd_key || parent.id}`);
   console.log(`Title:  ${parent.title}`);
   console.log(`Type:   ${parent.sd_type || 'orchestrator'}`);
   console.log(`Status: ${formatStatus(parent.status)}`);
@@ -185,11 +187,11 @@ async function printPreflightReport(parent, children) {
 
   for (const child of children) {
     const profile = getProfile(child.sd_type);
-    const handoffs = await getHandoffCount(child.legacy_id || child.id);
-    const prdExists = await hasPRD(child.legacy_id || child.id);
+    const handoffs = await getHandoffCount(child.sd_key || child.id);
+    const prdExists = await hasPRD(child.sd_key || child.id);
 
     console.log('');
-    console.log(`${child.legacy_id || child.id} (${child.sd_type || 'feature'})`);
+    console.log(`${child.sd_key || child.id} (${child.sd_type || 'feature'})`);
     console.log(`  Title: ${child.title.substring(0, 50)}${child.title.length > 50 ? '...' : ''}`);
     console.log(`  Status: ${formatStatus(child.status)}`);
     console.log(`  PRD: ${profile.prd_required ? (prdExists ? '✅ exists' : '❌ REQUIRED') : '⏭️ skip'}`);

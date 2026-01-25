@@ -99,7 +99,7 @@ async function loadKeyResults() {
 async function loadPendingSDs() {
   const { data: sds, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, title, description, strategic_intent, rationale, category, sd_type')
+    .select('id, sd_key, title, description, strategic_intent, rationale, category, sd_type')
     .eq('is_active', true)
     .not('status', 'in', '("completed","cancelled","deferred")')
     .order('sequence_rank', { nullsFirst: false });
@@ -129,7 +129,7 @@ IMPORTANT CONTEXT:
 ${KR_DEFINITIONS}
 
 STRATEGIC DIRECTIVE TO ANALYZE:
-- ID: ${sd.legacy_id}
+- ID: ${sd.sd_key}
 - Title: ${sd.title}
 - Description: ${sd.description || 'N/A'}
 - Strategic Intent: ${sd.strategic_intent || 'N/A'}
@@ -253,7 +253,7 @@ async function run() {
     const sd = sdsToAlign[i];
     const progress = `[${i + 1}/${sdsToAlign.length}]`;
 
-    process.stdout.write(`  ${progress} ${sd.legacy_id.padEnd(30)} `);
+    process.stdout.write(`  ${progress} ${sd.sd_key.padEnd(30)} `);
 
     const alignments = await alignSDToKRs(sd, krMap);
 

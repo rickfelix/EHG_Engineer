@@ -83,9 +83,10 @@ class SDBaselineManager {
     }
 
     // Get SDs with sequence_rank set
+    // Note: legacy_id column was deprecated and removed - using sd_key instead
     const { data: sds, error } = await supabase
       .from('strategic_directives_v2')
-      .select('legacy_id, title, sequence_rank, priority, status, dependencies, metadata, progress_percentage')
+      .select('id, sd_key, title, sequence_rank, priority, status, dependencies, metadata, progress_percentage')
       .not('sequence_rank', 'is', null)
       .in('status', ['draft', 'active', 'in_progress'])
       .order('sequence_rank')
@@ -140,7 +141,7 @@ class SDBaselineManager {
 
       items.push({
         baseline_id: baseline.id,
-        sd_id: sd.legacy_id,
+        sd_id: sd.sd_key || sd.id,
         sequence_rank: sd.sequence_rank,
         track: trackKey,
         track_name: trackName,
@@ -162,7 +163,7 @@ class SDBaselineManager {
 
     // Create initial actuals records
     const actuals = sds.map(sd => ({
-      sd_id: sd.legacy_id,
+      sd_id: sd.sd_key || sd.id,
       baseline_id: baseline.id,
       status: sd.progress_percentage > 0 ? 'in_progress' : 'not_started'
     }));
@@ -379,9 +380,10 @@ class SDBaselineManager {
       .eq('id', current.id);
 
     // Copy items from current to new, updating with current sequence_rank
+    // Note: legacy_id column was deprecated and removed - using sd_key instead
     const { data: sds } = await supabase
       .from('strategic_directives_v2')
-      .select('legacy_id, title, sequence_rank, priority, status, dependencies, metadata')
+      .select('id, sd_key, title, sequence_rank, priority, status, dependencies, metadata')
       .not('sequence_rank', 'is', null)
       .in('status', ['draft', 'active', 'in_progress'])
       .order('sequence_rank')
@@ -399,7 +401,7 @@ class SDBaselineManager {
 
         items.push({
           baseline_id: newBaseline.id,
-          sd_id: sd.legacy_id,
+          sd_id: sd.sd_key || sd.id,
           sequence_rank: sd.sequence_rank,
           track: trackKey,
           track_name: trackKey === 'A' ? 'Infrastructure/Safety' :
@@ -440,10 +442,11 @@ class SDBaselineManager {
         dep.match(/^(SD-[A-Z0-9-]+)/)?.[1] || dep :
         dep.sd_id || dep;
 
+      // Note: legacy_id was deprecated - using sd_key instead
       const { data: sd } = await supabase
         .from('strategic_directives_v2')
         .select('status')
-        .eq('legacy_id', depId)
+        .eq('sd_key', depId)
         .single();
 
       if (sd && sd.status === 'completed') {

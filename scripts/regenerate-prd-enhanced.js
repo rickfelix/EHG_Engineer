@@ -129,7 +129,7 @@ async function main() {
 
   // Get SD
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(SD_ID);
-  const queryField = isUUID ? 'id' : 'legacy_id';
+  const queryField = isUUID ? 'id' : 'sd_key';
 
   const { data: sd, error: sdError } = await supabase
     .from('strategic_directives_v2')

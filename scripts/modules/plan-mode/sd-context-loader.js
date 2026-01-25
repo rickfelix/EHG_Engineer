@@ -155,12 +155,12 @@ export async function loadSDContext(sdId) {
   }
 
   try {
-    // Try legacy_id first, then sd_key
+    // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+    // Try id first, then sd_key
     let { data, error } = await supabase
       .from('strategic_directives_v2')
       .select(`
         id,
-        legacy_id,
         sd_key,
         title,
         description,
@@ -179,7 +179,7 @@ export async function loadSDContext(sdId) {
         progress_percentage,
         parent_sd_id
       `)
-      .or(`legacy_id.ilike.%${sdId}%,sd_key.ilike.%${sdId}%`)
+      .or(`id.ilike.%${sdId}%,sd_key.ilike.%${sdId}%`)
       .limit(1)
       .single();
 
@@ -210,7 +210,8 @@ export async function loadSDContext(sdId) {
     return {
       success: true,
       sd: {
-        id: data.legacy_id || data.sd_key || sdId,
+        // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+        id: data.sd_key || data.id || sdId,
         title: data.title,
         description: data.description,
         rationale: data.rationale,

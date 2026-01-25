@@ -7,7 +7,7 @@
 export const parentSD = {
   id: 'SD-GENESIS-V31-PARENT',
   sd_key: 'genesis-v31-parent',
-  legacy_id: 'SD-GENESIS-V31-PARENT',
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
   title: 'Genesis Oath v3.1 - The Simulation Chamber',
   description: 'Implement the Genesis Oath v3.1 Simulation Chamber architecture - the infrastructure for generating "possible futures" as simulations that exist in parallel until elevated to production through the 25-stage validation workflow. This parent SD orchestrates three sprints (Mason, Dreamcatcher, Mirror) culminating in the Genesis Ritual on February 14, 2026 at 09:00 AM EST, aligned with Saturn\'s ingress into Aries. The Chamber enables autonomous venture creation while preserving validation discipline through hard technical isolation between Aries (simulation) and Saturn (production) namespaces.',
   scope: 'Full implementation of Simulation Chamber: ephemeral infrastructure (GitHub org, DNS, database namespace), text-to-simulation intelligence (PRD/schema/repo generation), elevation mechanics (Stage 16/17/22 transitions), and the /ratify command ceremony.',
@@ -58,7 +58,7 @@ export const parentSD = {
 export const masonSD = {
   id: 'SD-GENESIS-V31-MASON',
   sd_key: 'genesis-v31-mason',
-  legacy_id: 'SD-GENESIS-V31-MASON',
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
   title: 'Sprint 1: The Mason - Simulation Infrastructure',
   description: 'Build the Simulation Chamber infrastructure during the Capricorn sprint (Dec 29 - Jan 19). Establish ephemeral systems for generating simulation artifacts: GitHub organization (ehg-simulations), wildcard DNS (*.possible.ehg.dev), database namespace (schema_sim_*), epistemic tagging system, TTL lifecycle management, and deployment pipeline with watermark overlay. This sprint creates the "Aries Namespace" - the realm of possible futures that exists in hard technical isolation from the "Saturn Namespace" (production).',
   scope: 'Infrastructure for simulation environment: GitHub org creation, DNS configuration, Supabase namespace conventions, epistemic_status field implementation, TTL auto-archive triggers, Vercel deployment pipeline, SIMULATION watermark middleware.',
@@ -88,7 +88,7 @@ export const masonSD = {
 export const dreamcatcherSD = {
   id: 'SD-GENESIS-V31-DREAMCATCHER',
   sd_key: 'genesis-v31-dreamcatcher',
-  legacy_id: 'SD-GENESIS-V31-DREAMCATCHER',
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
   title: 'Sprint 2: The Dreamcatcher - Text-to-Simulation Intelligence',
   description: 'Build the intelligence layer for autonomous artifact generation during the Aquarius sprint (Jan 20 - Feb 8). Create text-to-simulation pipeline: venture seed parser, PRD template engine, problem/solution extraction, schema generator, repo customizer, and the /ratify approval gate. This sprint implements the "Quantum Leap" - the moment raw text transforms into a visible possible future. PRD is generated as OFFICIAL (Stage 1-2 artifact), while Schema, Repo, and Deployment are generated as SIMULATION (epistemic_status: simulation).',
   scope: 'Text-to-simulation intelligence: seed parsing, PRD generation, schema inference, repo scaffolding, deployment automation, /ratify command, Contract of Pain UI, venture creation at Stage 1, EVA integration.',
@@ -118,7 +118,7 @@ export const dreamcatcherSD = {
 export const mirrorSD = {
   id: 'SD-GENESIS-V31-MIRROR',
   sd_key: 'genesis-v31-mirror',
-  legacy_id: 'SD-GENESIS-V31-MIRROR',
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
   title: 'Sprint 3: The Mirror - Integration & Elevation',
   description: 'Connect all systems and implement elevation logic during the Pisces sprint (Feb 9 - Feb 13). Focus on end-to-end pipeline integration, error recovery, retry logic, and the elevation mechanics that transform simulation artifacts to production at Stages 16, 17, and 22. CRITICAL CONSTRAINT: No new logic after Feb 10 due to Mercury pre-retrograde shadow starting Feb 12. Final days are integration testing only.',
   scope: 'End-to-end pipeline integration, error recovery, retry logic, CLI status commands, Stage 16 schema elevation, Stage 17 repo elevation, Stage 22 deployment elevation, elevation audit trail with Chairman signature, reflex testing.',
@@ -148,7 +148,7 @@ export const mirrorSD = {
 export const ritualSD = {
   id: 'SD-GENESIS-V31-RITUAL',
   sd_key: 'genesis-v31-ritual',
-  legacy_id: 'SD-GENESIS-V31-RITUAL',
+  // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
   title: 'Genesis Ritual Preparation and Execution',
   description: 'Prepare for and execute the February 14, 2026 Genesis Oath ritual - the Collapse of the Wave Function. This SD covers pre-ritual verification (Feb 13), ritual execution (Feb 14 at 09:00 AM EST), and post-ritual validation. The ritual marks the first morning of Saturn\'s new reign in Aries, cosmically aligned with "structure meets initiation." On ritual completion, Genesis-001 will exist as an active venture at Stage 1 with its simulation visible as North Star.',
   scope: 'Pre-ritual checklist completion, seed text finalization, systems verification, ritual execution, post-ritual validation, documentation and celebration.',

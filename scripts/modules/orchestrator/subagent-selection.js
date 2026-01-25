@@ -23,9 +23,10 @@ import {
 
 /**
  * Query SD details from database
- * SD-VENTURE-STAGE0-UI-001: Support UUID, legacy_id, and sd_key lookups
+ * SD-VENTURE-STAGE0-UI-001: Support UUID and sd_key lookups
+ * SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
  *
- * @param {string} sdId - SD identifier (UUID, legacy_id, or sd_key)
+ * @param {string} sdId - SD identifier (UUID or sd_key)
  * @param {Object} supabase - Supabase client
  * @returns {Promise<Object>} - SD data
  */
@@ -56,26 +57,15 @@ export async function getSDDetails(sdId, supabase) {
       data = idResult.data;
       error = idResult.error;
     } else {
-      // Try legacy_id first, then sd_key
-      const legacyResult = await supabase
+      // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id, use only sd_key (column dropped 2026-01-24)
+      // Try sd_key
+      const keyResult = await supabase
         .from('strategic_directives_v2')
         .select('*')
-        .eq('legacy_id', sdId)
+        .eq('sd_key', sdId)
         .maybeSingle();
-
-      if (legacyResult.data) {
-        data = legacyResult.data;
-        error = legacyResult.error;
-      } else {
-        // Try sd_key if legacy_id not found
-        const keyResult = await supabase
-          .from('strategic_directives_v2')
-          .select('*')
-          .eq('sd_key', sdId)
-          .maybeSingle();
-        data = keyResult.data;
-        error = keyResult.error;
-      }
+      data = keyResult.data;
+      error = keyResult.error;
     }
   }
 

@@ -21,8 +21,8 @@ async function createTestPRD() {
   // First check if SD-2025-09-EMB exists
   const { data: sd, error: _sdError } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, title')
-    .eq('legacy_id', 'SD-2025-09-EMB')
+    .select('id, sd_key, title')
+    .eq('sd_key', 'SD-2025-09-EMB')
     .single();
 
   let sdId;
@@ -38,7 +38,7 @@ async function createTestPRD() {
       .from('strategic_directives_v2')
       .insert({
         id: sdUuid,
-        legacy_id: 'SD-2025-09-EMB',
+        sd_key: 'SD-2025-09-EMB',
         title: 'EHG Backlog Import System',
         description: 'Import and manage EHG backlog items with user story verification',
         category: 'engineering',
@@ -63,10 +63,10 @@ async function createTestPRD() {
       return;
     }
     sdId = newSD.id;
-    console.log('✅ Created SD:', newSD.legacy_id);
+    console.log('✅ Created SD:', newSD.sd_key);
   } else {
     sdId = sd.id;
-    console.log('Found existing SD:', sd.legacy_id);
+    console.log('Found existing SD:', sd.sd_key);
   }
 
   // Check if PRD already exists

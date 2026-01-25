@@ -128,7 +128,7 @@ async function triggerPostCompletionSequence(sd) {
 
   // Build result with commands to execute
   const result = {
-    sdKey: sd.legacy_id || sd.sd_key,
+    sdKey: sd.sd_key || sd.id,
     sdType,
     sequenceType: requirements.sequenceType,
     commands: sequence,
@@ -170,9 +170,10 @@ async function triggerPostCompletionSequence(sd) {
  */
 async function getNextParentSD(afterSdId = null) {
   // First, check for any SD marked as working_on
+  // Note: legacy_id column was deprecated and removed - using sd_key instead
   const { data: workingOn } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, title, status, current_phase, parent_sd_id')
+    .select('id, sd_key, title, status, current_phase, parent_sd_id')
     .eq('is_working_on', true)
     .eq('is_active', true)
     .single();
@@ -194,13 +195,14 @@ async function getNextParentSD(afterSdId = null) {
   }
 
   // Get next ready item from baseline
+  // Note: legacy_id was deprecated - using sd_key instead
   const { data: nextItem } = await supabase
     .from('sd_baseline_items')
     .select(`
       sd_id,
       sequence_rank,
       strategic_directives_v2 (
-        id, legacy_id, title, status, current_phase, parent_sd_id
+        id, sd_key, title, status, current_phase, parent_sd_id
       )
     `)
     .eq('baseline_id', baseline.id)
@@ -217,7 +219,7 @@ async function getNextParentSD(afterSdId = null) {
   // Fallback: get any active SD
   const { data: fallback } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, title, status, current_phase, parent_sd_id')
+    .select('id, sd_key, title, status, current_phase, parent_sd_id')
     .eq('is_active', true)
     .not('status', 'in', '("completed","cancelled","deferred")')
     .is('parent_sd_id', null) // Top-level only
@@ -236,7 +238,7 @@ async function executeSD(sd, parentSdId = null) {
   currentSD = sd;
 
   console.log(`\n${colors.cyan}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
-  console.log(`${colors.bold}Executing: ${sd.legacy_id}${colors.reset}`);
+  console.log(`${colors.bold}Executing: ${sd.sd_key || sd.id}${colors.reset}`);
   console.log(`${colors.dim}${sd.title}${colors.reset}`);
   console.log(`${colors.cyan}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
 
@@ -264,7 +266,7 @@ async function executeSD(sd, parentSdId = null) {
       console.log(`\n${colors.yellow}[${phase}]${colors.reset} Starting phase...`);
 
       // Record checkpoint
-      const cp = await checkpoint(sd.legacy_id, `${phase}-START`, {
+      const cp = await checkpoint(sd.sd_key || sd.id, `${phase}-START`, {
         notes: `Starting ${phase} phase in continuous mode`
       });
 
@@ -306,7 +308,7 @@ async function executeSD(sd, parentSdId = null) {
     await logExecution(parentSdId, sd.id, 'COMPLETE', 'completed', null, duration);
 
     stats.sdsCompleted++;
-    console.log(`\n${colors.green}${colors.bold}✓ Completed: ${sd.legacy_id} (${duration}s)${colors.reset}`);
+    console.log(`\n${colors.green}${colors.bold}✓ Completed: ${sd.sd_key || sd.id} (${duration}s)${colors.reset}`);
 
     // SD-LEO-ORCH-AUTO-PROCEED-INTELLIGENCE-001-N: Post-completion sequence
     const postCompletion = await triggerPostCompletionSequence(sd);
@@ -319,7 +321,7 @@ async function executeSD(sd, parentSdId = null) {
     // Analyze and attempt fix
     console.log(`${colors.yellow}  Analyzing failure...${colors.reset}`);
     const analysis = await analyzeFailure(error, {
-      sdId: sd.legacy_id,
+      sdId: sd.sd_key || sd.id,
       phase: sd.current_phase,
       operation: 'execute'
     });
@@ -342,7 +344,7 @@ async function executeSD(sd, parentSdId = null) {
 
     // Skip
     console.log(`${colors.yellow}  Skipping SD and continuing...${colors.reset}`);
-    await skipAndLog(sd.legacy_id, error.message, sessionId);
+    await skipAndLog(sd.sd_key || sd.id, error.message, sessionId);
     stats.sdsSkipped++;
 
     return { success: false, error: error.message };
@@ -354,17 +356,17 @@ async function executeSD(sd, parentSdId = null) {
  */
 async function executeHierarchy(parentSd) {
   console.log(`\n${colors.magenta}${'═'.repeat(60)}${colors.reset}`);
-  console.log(`${colors.bold}${colors.magenta} HIERARCHY: ${parentSd.legacy_id}${colors.reset}`);
+  console.log(`${colors.bold}${colors.magenta} HIERARCHY: ${parentSd.sd_key || parentSd.id}${colors.reset}`);
   console.log(`${colors.magenta}${'═'.repeat(60)}${colors.reset}`);
 
   // Load orchestration template
-  const template = await loadOrchestrationTemplate(parentSd.legacy_id);
+  const template = await loadOrchestrationTemplate(parentSd.sd_key || parentSd.id);
   if (template) {
     console.log(`${colors.dim}Template loaded for orchestration${colors.reset}`);
   }
 
   // Map the hierarchy
-  const hierarchy = await mapHierarchy(parentSd.legacy_id);
+  const hierarchy = await mapHierarchy(parentSd.sd_key || parentSd.id);
   const executionOrder = getDepthFirstOrder(hierarchy);
   const hierarchyStats = getHierarchyStats(hierarchy);
 
@@ -376,7 +378,7 @@ async function executeHierarchy(parentSd) {
   // Execute each SD in order
   for (const sd of executionOrder) {
     if (sd.isComplete) {
-      console.log(`\n${colors.dim}[SKIP] ${sd.legacy_id} - Already complete${colors.reset}`);
+      console.log(`\n${colors.dim}[SKIP] ${sd.sd_key || sd.id} - Already complete${colors.reset}`);
       continue;
     }
 
@@ -398,14 +400,14 @@ async function executeHierarchy(parentSd) {
   }
 
   // Check if hierarchy is complete
-  const updatedHierarchy = await mapHierarchy(parentSd.legacy_id);
+  const updatedHierarchy = await mapHierarchy(parentSd.sd_key || parentSd.id);
   const complete = isHierarchyComplete(updatedHierarchy);
 
   if (complete) {
-    console.log(`\n${colors.green}${colors.bold}✓ Hierarchy complete: ${parentSd.legacy_id}${colors.reset}`);
+    console.log(`\n${colors.green}${colors.bold}✓ Hierarchy complete: ${parentSd.sd_key || parentSd.id}${colors.reset}`);
   } else {
     const remaining = getNextIncomplete(updatedHierarchy);
-    console.log(`\n${colors.yellow}Hierarchy incomplete. Next: ${remaining?.legacy_id}${colors.reset}`);
+    console.log(`\n${colors.yellow}Hierarchy incomplete. Next: ${remaining?.sd_key || remaining?.id}${colors.reset}`);
   }
 
   return { complete };
@@ -440,7 +442,7 @@ async function showStatus() {
   console.log(`${'─'.repeat(50)}`);
   console.log(`  Session: ${sessionId}`);
   console.log(`  Started: ${stats.started.toLocaleString()}`);
-  console.log(`  Current SD: ${currentSD?.legacy_id || 'None'}`);
+  console.log(`  Current SD: ${currentSD?.sd_key || currentSD?.id || 'None'}`);
   console.log(`  Completed: ${stats.sdsCompleted}`);
   console.log(`  Skipped: ${stats.sdsSkipped}`);
   console.log(`  Retry attempts: ${stats.retryAttempts}`);
@@ -529,13 +531,13 @@ async function runContinuous(startSdId = null) {
 }
 
 /**
- * Get SD by legacy_id
+ * Get SD by sd_key (legacy_id column was deprecated and removed)
  */
-async function getSDByLegacyId(legacyId) {
+async function getSDByLegacyId(sdKey) {
   const { data } = await supabase
     .from('strategic_directives_v2')
     .select('*')
-    .eq('legacy_id', legacyId)
+    .eq('sd_key', sdKey)
     .single();
   return data;
 }

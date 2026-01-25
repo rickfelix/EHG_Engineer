@@ -18,8 +18,8 @@ async function addExplorationToSD() {
   // Get current SD
   const { data: sd, error: sdError } = await supabase
     .from('strategic_directives_v2')
-    .select('id, metadata, legacy_id')
-    .eq('legacy_id', SD_ID)
+    .select('id, metadata, sd_key')
+    .eq('sd_key', SD_ID)
     .single();
 
   if (sdError) {
@@ -27,7 +27,7 @@ async function addExplorationToSD() {
     return;
   }
 
-  console.log('Found SD:', sd.legacy_id, '(UUID:', sd.id, ')');
+  console.log('Found SD:', sd.sd_key, '(UUID:', sd.id, ')');
 
   // Exploration findings from Explore agent investigation
   const explorationFiles = [

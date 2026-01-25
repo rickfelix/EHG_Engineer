@@ -30,7 +30,7 @@ const GENESIS_V32_SDS = {
   alternator: {
     id: 'SD-GENESIS-V32-ALTERNATOR',
     sd_key: 'genesis-v32-alternator',
-    legacy_id: 'SD-GENESIS-V32-ALTERNATOR',
+    sd_key: 'SD-GENESIS-V32-ALTERNATOR',
     title: 'Genesis V32 - Virtual Bunker Consolidation',
 
     description: 'Consolidate and harden the Virtual Bunker architecture for Genesis. This parent SD orchestrates four child SDs that wire existing lib/genesis/* modules together and fix critical gaps discovered during triangulation. Key focus areas: P0 fix for missing leo_error_log table, retry/resilience infrastructure, pattern library consolidation, preview pipeline hardening, and Stage 16/17 soul extraction + regeneration mechanics. Virtual Bunker principle: simulations are ephemeral thought experiments; physical repos created ONLY at Stage 17 via regeneration.',
@@ -136,7 +136,7 @@ const GENESIS_V32_SDS = {
   pulse: {
     id: 'SD-GENESIS-V32-PULSE',
     sd_key: 'genesis-v32-pulse',
-    legacy_id: 'SD-GENESIS-V32-PULSE',
+    sd_key: 'SD-GENESIS-V32-PULSE',
     title: 'Self-Healing Heart - Retry & Recovery System',
 
     description: 'Build resilient retry/backoff infrastructure for all external API calls (OpenAI, Vercel, Supabase). Fix P0 critical gap: create leo_error_log table that code writes to but does not exist. Implement exponential backoff with jitter to prevent thundering herd. Refactor _logErrorSilently to _attemptRecovery with actionable guidance.',
@@ -212,7 +212,7 @@ const GENESIS_V32_SDS = {
   scaffold: {
     id: 'SD-GENESIS-V32-SCAFFOLD',
     sd_key: 'genesis-v32-scaffold',
-    legacy_id: 'SD-GENESIS-V32-SCAFFOLD',
+    sd_key: 'SD-GENESIS-V32-SCAFFOLD',
     title: 'Pattern Library - Code Generation Engine',
 
     description: 'Build the pattern library and code generation engine that creates simulation code from PRD requirements. REUSE existing lib/genesis/pattern-library.js, pattern-assembler.js, and quality-gates.js. ADD pattern selection logic (PRD features -> pattern IDs) and ScaffoldEngine orchestrator. Seed 20+ large patterns (full pages, not components). Enforce mock-mode in all generated code.',
@@ -297,7 +297,7 @@ const GENESIS_V32_SDS = {
   ephemeral: {
     id: 'SD-GENESIS-V32-EPHEMERAL',
     sd_key: 'genesis-v32-ephemeral',
-    legacy_id: 'SD-GENESIS-V32-EPHEMERAL',
+    sd_key: 'SD-GENESIS-V32-EPHEMERAL',
     title: 'Preview Pipeline - Ephemeral Deployment System',
 
     description: 'Build the pipeline that takes generated code -> deploys to Vercel preview -> manages lifecycle. HARDEN existing vercel-deploy.js, ttl-cleanup.js, branch-lifecycle.js. ADD genesis-pipeline.js orchestrator and genesis-gate.js for ratification. Use simulation_sessions as canonical state (fix schema drift).',
@@ -382,7 +382,7 @@ const GENESIS_V32_SDS = {
   regen: {
     id: 'SD-GENESIS-V32-REGEN',
     sd_key: 'genesis-v32-regen',
-    legacy_id: 'SD-GENESIS-V32-REGEN',
+    sd_key: 'SD-GENESIS-V32-REGEN',
     title: 'Soul Extraction - Stage 16/17 Regeneration',
 
     description: 'Build the regeneration mechanics that extract validated requirements from simulations (Stage 16) and generate fresh production-ready code (Stage 17). Soul = WHAT worked, not HOW it was coded. Physical repos created ONLY at Stage 17, not during simulation phases. Simulation code NEVER migrates to production.',
@@ -516,7 +516,7 @@ async function createGenesisV32SDs() {
     const record = {
       id: sd.id,
       sd_key: sd.sd_key,
-      legacy_id: sd.legacy_id,
+      sd_key: sd.sd_key,
       title: sd.title,
       description: sd.description,
       scope: sd.scope,

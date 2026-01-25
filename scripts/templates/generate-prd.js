@@ -30,7 +30,7 @@ async function main() {
   const supabase = await createSupabaseServiceClient('engineer', { verbose: false });
   console.log(`📋 Fetching SD: ${sdId}`);
 
-  let { data: sd, error } = await supabase.from('strategic_directives_v2').select('*').eq('legacy_id', sdId).single();
+  let { data: sd, error } = await supabase.from('strategic_directives_v2').select('*').eq('sd_key', sdId).single();
   if (error || !sd) {
     const result = await supabase.from('strategic_directives_v2').select('*').eq('id', sdId).single();
     sd = result.data;
@@ -51,7 +51,7 @@ async function main() {
   }
 
   let config = {};
-  const sdConfigPath = path.join(projectRoot, 'config', 'sd-prd-configs', `${sd.legacy_id}.json`);
+  const sdConfigPath = path.join(projectRoot, 'config', 'sd-prd-configs', `${sd.sd_key}.json`);
   try {
     if (fs.existsSync(sdConfigPath)) {
       config = JSON.parse(fs.readFileSync(sdConfigPath, 'utf-8'));
@@ -82,7 +82,7 @@ async function main() {
     console.log(`✅ PRD created: ${prd.id}`);
   }
 
-  console.log('\nNext: node scripts/generate-user-stories.js ' + sd.legacy_id);
+  console.log('\nNext: node scripts/generate-user-stories.js ' + sd.sd_key);
 }
 
 main().catch(err => { console.error('Fatal:', err.message); process.exit(1); });

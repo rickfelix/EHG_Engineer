@@ -186,9 +186,10 @@ async function checkWeekOverWeekDrops() {
  * Check if SD already exists for a gate issue
  */
 async function hasExistingSD(gate) {
+  // Note: legacy_id column was deprecated and removed - using sd_key instead
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, status')
+    .select('id, sd_key, status')
     .or(`title.ilike.%Gate ${gate}%,description.ilike.%Gate ${gate}%`)
     .in('status', ['draft', 'active', 'in_progress', 'approved'])
     .limit(1);
@@ -209,16 +210,17 @@ async function createRemediationSD(gateAlert) {
   const existingSD = await hasExistingSD(gate);
 
   if (existingSD) {
-    console.log(`  ℹ️  Gate ${gate}: Existing SD found (${existingSD.legacy_id || existingSD.id})`);
+    console.log(`  ℹ️  Gate ${gate}: Existing SD found (${existingSD.sd_key || existingSD.id})`);
     return null;
   }
 
   const sdId = `${CONFIG.SD_PREFIX}-${gate}-${Date.now().toString(36).toUpperCase()}`;
   const category = CONFIG.GATE_TO_CATEGORY[gate] || 'quality_assurance';
 
+  // Note: legacy_id was deprecated - using sd_key for the human-readable ID
   const sd = {
     id: sdId,
-    legacy_id: sdId,
+    sd_key: sdId,
     title: `Gate ${gate} Health Remediation`,
     description: `Auto-generated SD to address Gate ${gate} performance issues.\n\n` +
       '**Current State:**\n' +
@@ -411,7 +413,7 @@ function generateReport(alerts, drops, createdSDs) {
   if (createdSDs.length > 0) {
     console.log('\n🆕 Created SDs:');
     createdSDs.forEach(sd => {
-      console.log(`   • ${sd.id || sd.legacy_id}: ${sd.title}`);
+      console.log(`   • ${sd.sd_key || sd.id}: ${sd.title}`);
     });
   }
 

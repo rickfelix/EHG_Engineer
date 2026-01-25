@@ -28,7 +28,7 @@ async function createCheckpointPlan() {
   const { data: sd, error: sdError } = await supabase
     .from('strategic_directives_v2')
     .select('id, checkpoint_plan')
-    .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
+    .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
     .single();
 
   if (sdError || !sd) {

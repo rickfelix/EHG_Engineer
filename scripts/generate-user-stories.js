@@ -19,7 +19,7 @@ function generateGivenWhenThen(requirement, _sdType) {
 }
 
 function generateStoryFromRequirement(req, sd, index) {
-  const storyKey = `${sd.legacy_id}:US-${String(index).padStart(3, '0')}`;
+  const storyKey = `${sd.sd_key}:US-${String(index).padStart(3, '0')}`;
   const userRoles = { refactor: 'LEO Protocol developer maintaining the codebase', infrastructure: 'LEO Protocol operator managing system infrastructure', feature: 'product user who needs the functionality', documentation: 'developer who needs documentation', database: 'database administrator managing schema changes' };
   const userRole = userRoles[sd.sd_type] || userRoles.feature;
   const requirementText = typeof req === 'string' ? req : (req.requirement || req.description || String(req));
@@ -48,7 +48,7 @@ async function main() {
   const supabase = await createSupabaseServiceClient('engineer', { verbose: false });
   console.log(`📋 Fetching SD: ${sdId}`);
 
-  let { data: sd, error } = await supabase.from('strategic_directives_v2').select('*').eq('legacy_id', sdId).single();
+  let { data: sd, error } = await supabase.from('strategic_directives_v2').select('*').eq('sd_key', sdId).single();
   if (error || !sd) { const result = await supabase.from('strategic_directives_v2').select('*').eq('id', sdId).single(); sd = result.data; error = result.error; }
   if (error || !sd) { console.log(`❌ SD not found: ${sdId}`); process.exit(1); }
 
@@ -85,7 +85,7 @@ async function main() {
   if (insertError) { console.log(`❌ Insert failed: ${insertError.message}`); process.exit(1); }
 
   console.log(`✅ Created ${stories.length} user stories\n`);
-  console.log('Next: node scripts/handoff.js execute PLAN-TO-EXEC ' + sd.legacy_id);
+  console.log('Next: node scripts/handoff.js execute PLAN-TO-EXEC ' + sd.sd_key);
 }
 
 main().catch(err => { console.error('Fatal:', err.message); process.exit(1); });

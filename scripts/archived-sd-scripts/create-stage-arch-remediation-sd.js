@@ -35,7 +35,7 @@ const REMEDIATION_SDS = {
   parent: {
     id: 'SD-STAGE-ARCH-001',
     sd_key: 'stage-arch-remediation-001',
-    legacy_id: 'SD-STAGE-ARCH-001',
+    sd_key: 'SD-STAGE-ARCH-001',
     title: 'Stage Architecture Remediation - Vision V2 Alignment',
 
     description: 'Resolve the "Schrödinger\'s Stage" crisis where 12 stages exist as TWO completely different files with different purposes. This is the root cause of the "25 vs 40" stage count confusion and represents a fractured foundation that must be resolved before any feature work or Genesis Oath implementation. The remediation will align the codebase to Vision V2\'s 25-stage workflow as defined in GENESIS_RITUAL_SPECIFICATION.md, creating a Single Source of Truth (SSOT) and deleting all legacy/duplicate stage components.',
@@ -143,7 +143,7 @@ const REMEDIATION_SDS = {
   phase0: {
     id: 'SD-STAGE-ARCH-001-P0',
     sd_key: 'stage-arch-remediation-001-p0',
-    legacy_id: 'SD-STAGE-ARCH-001-P0',
+    sd_key: 'SD-STAGE-ARCH-001-P0',
     title: 'Phase 0: Audit & Clean Database',
 
     description: 'Understand current state and clear test data. Delete all test ventures from database, audit database triggers for hardcoded stage IDs, audit backend API for stage-specific logic, generate stage mapping report, and apply salvage rubric to existing stages.',
@@ -187,7 +187,7 @@ const REMEDIATION_SDS = {
   phase1: {
     id: 'SD-STAGE-ARCH-001-P1',
     sd_key: 'stage-arch-remediation-001-p1',
-    legacy_id: 'SD-STAGE-ARCH-001-P1',
+    sd_key: 'SD-STAGE-ARCH-001-P1',
     title: 'Phase 1: SSOT Foundation + Delete Legacy',
 
     description: 'Create Single Source of Truth and remove all legacy code. Create /src/config/venture-workflow.ts with full stage registry, create vision-v2-stages.json for CI verification, delete workflowStages.ts, create new workflow.types.ts derived from SSOT, eliminate all "40" and "15" references, and delete all 23 duplicate/legacy stage files.',
@@ -235,7 +235,7 @@ const REMEDIATION_SDS = {
   phase2: {
     id: 'SD-STAGE-ARCH-001-P2',
     sd_key: 'stage-arch-remediation-001-p2',
-    legacy_id: 'SD-STAGE-ARCH-001-P2',
+    sd_key: 'SD-STAGE-ARCH-001-P2',
     title: 'Phase 2: Create V2 Stage Shells + Router',
 
     description: 'Create shell components for all 25 stages with Vision V2 names and update router to load stages via SSOT registry. Application should compile and navigate all 25 stages (shells render with placeholder content).',
@@ -280,7 +280,7 @@ const REMEDIATION_SDS = {
   phase3: {
     id: 'SD-STAGE-ARCH-001-P3',
     sd_key: 'stage-arch-remediation-001-p3',
-    legacy_id: 'SD-STAGE-ARCH-001-P3',
+    sd_key: 'SD-STAGE-ARCH-001-P3',
     title: 'Phase 3: Implement Safe Stages (1-10, 24-25)',
 
     description: 'Implement fully functional stages for the "safe" stages that can be salvaged from existing code: stages 1-10 and 24-25. Copy logic from git history, adapt to V2 naming/types, verify loads/saves/validates correctly, add unit tests.',
@@ -326,7 +326,7 @@ const REMEDIATION_SDS = {
   phase4: {
     id: 'SD-STAGE-ARCH-001-P4',
     sd_key: 'stage-arch-remediation-001-p4',
-    legacy_id: 'SD-STAGE-ARCH-001-P4',
+    sd_key: 'SD-STAGE-ARCH-001-P4',
     title: 'Phase 4: Rebuild Crisis Zone (Stages 11-23)',
 
     description: 'Rebuild stages 11-23 to Vision V2 spec with correct gate logic. These stages have NO existing implementations that match V2 - they must be built from scratch based on Vision V2 purpose and requirements. Includes 2 kill gates (13, 23) and 3 promotion gates (16, 17, 22).',
@@ -380,7 +380,7 @@ const REMEDIATION_SDS = {
   phase5: {
     id: 'SD-STAGE-ARCH-001-P5',
     sd_key: 'stage-arch-remediation-001-p5',
-    legacy_id: 'SD-STAGE-ARCH-001-P5',
+    sd_key: 'SD-STAGE-ARCH-001-P5',
     title: 'Phase 5: Governance & Polish',
 
     description: 'Add permanent CI governance and complete documentation. Implement stage audit test, add no-hardcoded-counts lint rule, create Vision V2 compliance check, run E2E test for full venture lifecycle, document architecture in ADR, update CLAUDE.md.',
@@ -467,7 +467,7 @@ async function createRemediationSDs() {
         .upsert({
           id: sd.id,
           sd_key: sd.sd_key,
-          legacy_id: sd.legacy_id,
+          sd_key: sd.sd_key,
           title: sd.title,
           description: sd.description,
           scope: sd.scope,

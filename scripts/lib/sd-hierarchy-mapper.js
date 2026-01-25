@@ -46,8 +46,8 @@ export async function mapHierarchy(sdId) {
   // First, get the parent SD
   const { data: parent, error: parentError } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, title, status, current_phase, parent_sd_id, sequence_rank')
-    .or(`legacy_id.eq.${sdId},id.eq.${sdId}`)
+    .select('id, sd_key, title, status, current_phase, parent_sd_id, sequence_rank')
+    .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
     .eq('is_active', true)
     .single();
 
@@ -81,7 +81,7 @@ async function buildHierarchyManual(parent) {
   // Get immediate children
   const { data: children } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, title, status, current_phase, parent_sd_id, sequence_rank')
+    .select('id, sd_key, title, status, current_phase, parent_sd_id, sequence_rank')
     .eq('parent_sd_id', parent.id)
     .eq('is_active', true)
     .order('sequence_rank', { nullsFirst: false })
@@ -152,7 +152,7 @@ export function getDepthFirstOrder(hierarchy) {
     // Then add this node (children complete before parent)
     order.push({
       id: node.id,
-      legacy_id: node.legacy_id,
+      sd_key: node.sd_key,
       title: node.title,
       status: node.status,
       current_phase: node.current_phase,
@@ -233,7 +233,7 @@ function isComplete(status) {
 export function printHierarchy(hierarchy, indent = 0) {
   const prefix = '  '.repeat(indent);
   const status = hierarchy.isComplete ? '[x]' : '[ ]';
-  console.log(`${prefix}${status} ${hierarchy.legacy_id}: ${hierarchy.title}`);
+  console.log(`${prefix}${status} ${hierarchy.sd_key}: ${hierarchy.title}`);
 
   for (const child of hierarchy.children || []) {
     printHierarchy(child, indent + 1);
@@ -268,7 +268,7 @@ if (process.argv[1].endsWith('sd-hierarchy-mapper.js')) {
       console.log('─'.repeat(50));
       order.forEach((sd, i) => {
         const status = sd.isComplete ? '[x]' : '[ ]';
-        console.log(`  ${i + 1}. ${status} ${sd.legacy_id}`);
+        console.log(`  ${i + 1}. ${status} ${sd.sd_key}`);
       });
 
       console.log('\nSTATISTICS:');
@@ -281,7 +281,7 @@ if (process.argv[1].endsWith('sd-hierarchy-mapper.js')) {
       console.log('\nNEXT SD TO WORK ON:');
       console.log('─'.repeat(50));
       if (next) {
-        console.log(`  ${next.legacy_id}: ${next.title}`);
+        console.log(`  ${next.sd_key}: ${next.title}`);
         console.log(`  Status: ${next.status} | Phase: ${next.current_phase}`);
       } else {
         console.log('  All SDs in hierarchy are complete!');

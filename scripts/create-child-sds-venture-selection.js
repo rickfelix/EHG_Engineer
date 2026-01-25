@@ -302,7 +302,7 @@ async function createChildSDs() {
       .upsert({
         id: child.id,
         sd_key: child.id, // Required NOT NULL - explicitly set (trigger may not fire on upsert)
-        legacy_id: child.id,
+        sd_key: child.id,
         title: child.title,
         description: child.description,
         category: child.category,

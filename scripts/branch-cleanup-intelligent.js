@@ -115,7 +115,7 @@ class IntelligentBranchCleanup {
     try {
       const { data: sds, error } = await this.supabase
         .from('strategic_directives_v2')
-        .select('id, legacy_id, status, title, metadata')
+        .select('id, sd_key, status, title, metadata')
         .in('status', ['completed', 'cancelled', 'draft', 'pending_approval', 'in_progress']);
 
       if (error) {
@@ -126,8 +126,8 @@ class IntelligentBranchCleanup {
       // Index by various keys for fast lookup
       for (const sd of sds || []) {
         // Index by legacy_id (e.g., SD-EHG-WEBSITE-001)
-        if (sd.legacy_id) {
-          this.sdCache.set(sd.legacy_id.toLowerCase(), sd);
+        if (sd.sd_key) {
+          this.sdCache.set(sd.sd_key.toLowerCase(), sd);
         }
         // Also index by id field if it looks like an SD-ID
         if (sd.id && sd.id.startsWith('SD-')) {

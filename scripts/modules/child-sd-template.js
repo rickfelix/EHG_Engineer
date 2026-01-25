@@ -271,7 +271,7 @@ export function generateChildSD(parentSD, config) {
   const finalSDType = sdType || inferredType.sdType;
 
   // Generate SD key pattern: PARENT-ID-P{N}
-  const parentKey = parentSD.sd_key || parentSD.legacy_id || parentSD.id;
+  const parentKey = parentSD.sd_key || parentSD.id;
   const childKey = `${parentKey}-P${phaseNumber}`;
 
   // Inherit strategic fields from parent
@@ -290,7 +290,7 @@ export function generateChildSD(parentSD, config) {
     // Identity
     id: childKey,
     sd_key: childKey,
-    legacy_id: childKey,
+    // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
     parent_sd_id: parentSD.id,
 
     // Core fields (required)
@@ -364,7 +364,7 @@ export async function generateChildSDAsync(parentSD, config) {
   const finalSDType = sdType || inferredType.sdType;
 
   // Generate SD key pattern: PARENT-ID-P{N}
-  const parentKey = parentSD.sd_key || parentSD.legacy_id || parentSD.id;
+  const parentKey = parentSD.sd_key || parentSD.id;
   const childKey = `${parentKey}-P${phaseNumber}`;
 
   // Build child context for LLM
@@ -413,7 +413,7 @@ export async function generateChildSDAsync(parentSD, config) {
     // Identity
     id: childKey,
     sd_key: childKey,
-    legacy_id: childKey,
+    // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
     parent_sd_id: parentSD.id,
 
     // Core fields (required)

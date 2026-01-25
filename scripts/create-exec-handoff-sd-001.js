@@ -65,7 +65,7 @@ async function main() {
           completion_date = NOW(),
           progress_percentage = 100,
           updated_at = NOW()
-        WHERE legacy_id = 'SD-HARDENING-V1-001'
+        WHERE sd_key = 'SD-HARDENING-V1-001'
       `);
       console.log('\n✅ SD-HARDENING-V1-001 marked as COMPLETE');
     }

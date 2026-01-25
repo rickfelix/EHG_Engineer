@@ -33,8 +33,8 @@ async function createLLMConfigCentralizationSD() {
   // Check if SD already exists
   const { data: existing } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, status')
-    .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
+    .select('id, sd_key, status')
+    .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
     .maybeSingle();
 
   if (existing) {
@@ -50,7 +50,7 @@ async function createLLMConfigCentralizationSD() {
   const strategicDirective = {
     id: uuid,
     sd_key: uuid,
-    legacy_id: sdId,
+    sd_key: sdId,
     title: 'LLM Configuration Centralization: Single Source of Truth for Model Versions',
     version: '1.0',
     status: 'draft',
@@ -192,7 +192,7 @@ Then refactor all identified scripts to use this utility instead of hardcoded st
   console.log('✅ Strategic Directive created successfully!');
   console.log('');
   console.log('📊 Summary:');
-  console.log(`   ID: ${data.legacy_id}`);
+  console.log(`   ID: ${data.sd_key}`);
   console.log(`   UUID: ${data.id}`);
   console.log(`   Title: ${data.title}`);
   console.log(`   Status: ${data.status}`);
@@ -202,8 +202,8 @@ Then refactor all identified scripts to use this utility instead of hardcoded st
   console.log('');
   console.log('📋 Next Steps (LEAD Phase):');
   console.log('   1. Review SD scope and objectives');
-  console.log('   2. Run LEAD validation: node lib/sub-agent-executor.js VALIDATION ' + data.legacy_id);
-  console.log('   3. Approve and transition to PLAN: node scripts/handoff.js execute LEAD-TO-PLAN ' + data.legacy_id);
+  console.log('   2. Run LEAD validation: node lib/sub-agent-executor.js VALIDATION ' + data.sd_key);
+  console.log('   3. Approve and transition to PLAN: node scripts/handoff.js execute LEAD-TO-PLAN ' + data.sd_key);
   console.log('');
   console.log('🔍 Comprehensive Scan Patterns (for PLAN phase):');
   console.log('   grep -rn "this.model.*=.*gpt" --include="*.js" --include="*.mjs" --include="*.ts"');

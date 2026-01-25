@@ -149,7 +149,7 @@ class IntelligentBaselineGenerator {
     const { data: sds, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .select(`
-        id, legacy_id, title, status, priority, sd_type, category,
+        id, sd_key, title, status, priority, sd_type, category,
         dependencies, sequence_rank, rolled_triage, readiness,
         must_have_pct, complexity_level, delivers_capabilities,
         modifies_capabilities, parent_sd_id, relationship_type
@@ -230,12 +230,12 @@ class IntelligentBaselineGenerator {
 
   async calculateScores() {
     for (const sd of this.sds) {
-      const alignments = this.alignments[sd.legacy_id] || [];
+      const alignments = this.alignments[sd.sd_key] || [];
       const score = calculatePriorityScore(sd, alignments, this.keyResults);
-      this.scores[sd.legacy_id] = score.total;
+      this.scores[sd.sd_key] = score.total;
 
       if (this.options.verbose) {
-        console.log(`  ${sd.legacy_id}: ${score.total} pts`);
+        console.log(`  ${sd.sd_key}: ${score.total} pts`);
         console.log(`    ${colors.dim}${score.details.priority}, ${score.details.okrImpact}${colors.reset}`);
       }
     }
@@ -247,7 +247,7 @@ class IntelligentBaselineGenerator {
 
     console.log('  Top 5 by priority score:');
     for (const [sdId, score] of sorted) {
-      const sd = this.sds.find(s => s.legacy_id === sdId);
+      const sd = this.sds.find(s => s.sd_key === sdId);
       console.log(`    [${score}] ${sdId} (${sd?.sd_type || 'unknown'})`);
     }
   }
@@ -260,7 +260,7 @@ class IntelligentBaselineGenerator {
     // Show first 10
     console.log('  Execution order (first 10):');
     this.ordering.slice(0, 10).forEach((sdId, index) => {
-      const sd = this.sds.find(s => s.legacy_id === sdId);
+      const sd = this.sds.find(s => s.sd_key === sdId);
       const score = this.scores[sdId] || 0;
       const track = assignTrack(sd);
       console.log(`    ${index + 1}. ${sdId} [${score}pts] → Track ${track.track}`);
@@ -325,7 +325,7 @@ class IntelligentBaselineGenerator {
   buildGPTPrompt() {
     // Build SD list with context
     const sdList = this.ordering.map((sdId, index) => {
-      const sd = this.sds.find(s => s.legacy_id === sdId);
+      const sd = this.sds.find(s => s.sd_key === sdId);
       const score = this.scores[sdId] || 0;
       const alignments = this.alignments[sdId] || [];
       const depth = this.depths.get(sdId) || 0;
@@ -416,7 +416,7 @@ Important: Output ONLY valid JSON, no additional text.`;
     return {
       baseline_rationale: 'Baseline generated using algorithmic priority scoring and topological ordering. GPT analysis unavailable.',
       sequence: this.ordering.map((sdId, index) => {
-        const sd = this.sds.find(s => s.legacy_id === sdId);
+        const sd = this.sds.find(s => s.sd_key === sdId);
         const track = assignTrack(sd);
         const depth = this.depths.get(sdId) || 0;
         const score = this.scores[sdId] || 0;
@@ -475,7 +475,7 @@ Important: Output ONLY valid JSON, no additional text.`;
 
     for (let i = 0; i < this.ordering.length; i++) {
       const sdId = this.ordering[i];
-      const sd = this.sds.find(s => s.legacy_id === sdId);
+      const sd = this.sds.find(s => s.sd_key === sdId);
       const gptItem = gptSequence[sdId] || {};
       const track = gptItem.track || assignTrack(sd).track;
       const trackName = track === 'A' ? 'Infrastructure/Safety' :
@@ -544,7 +544,7 @@ Important: Output ONLY valid JSON, no additional text.`;
 
     // Create execution actuals
     const actuals = this.sds.map(sd => ({
-      sd_id: sd.legacy_id,
+      sd_id: sd.sd_key,
       baseline_id: baseline.id,
       status: sd.progress_percentage > 0 ? 'in_progress' : 'not_started',
     }));
@@ -563,7 +563,7 @@ Important: Output ONLY valid JSON, no additional text.`;
     const byTrack = { A: [], B: [], C: [], STANDALONE: [] };
     for (let i = 0; i < this.ordering.length; i++) {
       const sdId = this.ordering[i];
-      const sd = this.sds.find(s => s.legacy_id === sdId);
+      const sd = this.sds.find(s => s.sd_key === sdId);
       const gptItem = (gptResult.sequence || []).find(s => s.sd_id === sdId) || {};
       const track = gptItem.track || assignTrack(sd).track;
 

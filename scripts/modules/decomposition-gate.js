@@ -206,7 +206,8 @@ function assessDecompositionNeed(sd, userStories) {
     if (assessment.structuralSignals.hasMultiplePhases) {
       const phases = sd.metadata?.phases || [];
       assessment.suggestedChildren = phases.map((phase, idx) => ({
-        sd_id: `${sd.legacy_id || sd.sd_key}-PHASE-${idx + 1}`,
+        // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+        sd_id: `${sd.sd_key || sd.id}-PHASE-${idx + 1}`,
         title: `${sd.title} - ${phase}`,
         phase: phase,
         order: idx + 1
@@ -273,7 +274,8 @@ export async function validateDecompositionGate(sdId, transitionType) {
     const { data: sd, error: sdError } = await supabase
       .from('strategic_directives_v2')
       .select('*')
-      .or(`id.eq.${sdId},legacy_id.eq.${sdId},sd_key.eq.${sdId}`)
+      // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+      .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
       .single();
 
     if (sdError || !sd) {
@@ -282,14 +284,16 @@ export async function validateDecompositionGate(sdId, transitionType) {
       return result;
     }
 
-    console.log(`   📋 SD: ${sd.legacy_id || sd.sd_key || sd.id}`);
+    // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+    console.log(`   📋 SD: ${sd.sd_key || sd.id}`);
     console.log(`   📄 Title: ${sd.title}`);
     console.log(`   📊 Phase: ${sd.current_phase} | Status: ${sd.status}`);
 
     // Check for existing children IN DATABASE
     const { data: children } = await supabase
       .from('strategic_directives_v2')
-      .select('id, legacy_id, sd_key, title, status, current_phase')
+      // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+    .select('id, sd_key, title, status, current_phase')
       .eq('parent_sd_id', sd.id);
 
     result.childrenInDatabase = children?.length || 0;
@@ -411,8 +415,10 @@ export async function checkParentReadyForChildren(parentSdId) {
   try {
     const { data: parent } = await supabase
       .from('strategic_directives_v2')
-      .select('id, legacy_id, title, phase, status')
-      .or(`id.eq.${parentSdId},legacy_id.eq.${parentSdId},sd_key.eq.${parentSdId}`)
+      // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+    .select('id, sd_key, title, phase, status')
+      // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
+      .or(`id.eq.${parentSdId},sd_key.eq.${parentSdId}`)
       .single();
 
     if (!parent) {

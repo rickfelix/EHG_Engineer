@@ -31,8 +31,8 @@ async function createProactiveSDProposalDirective() {
   // Check if SD already exists
   const { data: existing } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, status')
-    .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
+    .select('id, sd_key, status')
+    .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
     .maybeSingle();
 
   if (existing) {
@@ -48,7 +48,7 @@ async function createProactiveSDProposalDirective() {
   const strategicDirective = {
     id: uuid,
     sd_key: uuid, // Required field, same as id
-    legacy_id: sdId,
+    sd_key: sdId,
     title: 'LEO Protocol v4.4: Proactive SD Proposal System',
     version: '1.0',
     status: 'draft', // Start in draft for proper LEAD validation
@@ -167,7 +167,7 @@ Solution: Observer agents monitor signals (retrospectives, code health, dependen
   console.log('✅ Strategic Directive created successfully!');
   console.log('');
   console.log('📋 SD Details:');
-  console.log(`   ID: ${data.legacy_id || data.id}`);
+  console.log(`   ID: ${data.sd_key || data.id}`);
   console.log(`   Title: ${data.title}`);
   console.log(`   Status: ${data.status}`);
   console.log(`   Phase: ${data.current_phase}`);

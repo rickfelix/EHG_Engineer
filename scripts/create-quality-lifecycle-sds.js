@@ -352,7 +352,7 @@ async function createQualityLifecycleSDs() {
     .upsert({
       id: orchestratorSD.id,
       sd_key: orchestratorSD.id,
-      legacy_id: orchestratorSD.id,
+      sd_key: orchestratorSD.id,
       title: orchestratorSD.title,
       description: orchestratorSD.description,
       category: orchestratorSD.category,
@@ -410,7 +410,7 @@ async function createQualityLifecycleSDs() {
       .upsert({
         id: child.id,
         sd_key: child.id,
-        legacy_id: child.id,
+        sd_key: child.id,
         title: child.title,
         description: child.description,
         category: child.category,

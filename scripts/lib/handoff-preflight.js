@@ -138,8 +138,8 @@ async function validateSDHandoffState(sdId, targetPhase, _options = {}) {
     // Get SD details
     const { data: sd, error: sdError } = await supabase
       .from('strategic_directives_v2')
-      .select('id, legacy_id, title, status, current_phase, sd_type, metadata')
-      .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
+      .select('id, sd_key, title, status, current_phase, sd_type, metadata')
+      .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
       .single();
 
     if (sdError || !sd) {
@@ -149,7 +149,7 @@ async function validateSDHandoffState(sdId, targetPhase, _options = {}) {
 
     result.details.sd = {
       id: sd.id,
-      legacy_id: sd.legacy_id,
+      sd_key: sd.sd_key,
       title: sd.title,
       status: sd.status,
       current_phase: sd.current_phase,
@@ -230,7 +230,7 @@ async function validateSDHandoffState(sdId, targetPhase, _options = {}) {
         requiredHandoffs.find(r => !result.handoffs.accepted.includes(r));
 
       if (firstMissing) {
-        result.command = `node scripts/handoff.js execute ${firstMissing} --sd-id ${sd.legacy_id || sd.id}`;
+        result.command = `node scripts/handoff.js execute ${firstMissing} --sd-id ${sd.sd_key || sd.id}`;
       }
     }
 
@@ -278,8 +278,8 @@ async function verifyCompleteHandoffChain(sdId) {
     // Get SD details
     const { data: sd, error: sdError } = await supabase
       .from('strategic_directives_v2')
-      .select('id, legacy_id, title, status, sd_type, metadata')
-      .or(`id.eq.${sdId},legacy_id.eq.${sdId}`)
+      .select('id, sd_key, title, status, sd_type, metadata')
+      .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
       .single();
 
     if (sdError || !sd) {
@@ -347,7 +347,7 @@ async function verifyCompleteHandoffChain(sdId) {
 
     if (!result.canComplete && result.chain.missing.length > 0) {
       result.blockers.push(
-        `Run: node scripts/handoff.js execute ${result.chain.missing[0]} --sd-id ${sd.legacy_id || sd.id}`
+        `Run: node scripts/handoff.js execute ${result.chain.missing[0]} --sd-id ${sd.sd_key || sd.id}`
       );
     }
 
@@ -384,7 +384,7 @@ function formatPreflightResult(result) {
   lines.push('═'.repeat(60));
   lines.push('📋 HANDOFF PREFLIGHT CHECK');
   lines.push('═'.repeat(60));
-  lines.push(`   SD: ${result.details?.sd?.legacy_id || result.sdId}`);
+  lines.push(`   SD: ${result.details?.sd?.sd_key || result.sdId}`);
   lines.push(`   Title: ${result.details?.sd?.title || 'Unknown'}`);
   lines.push(`   Target Phase: ${result.targetPhase}`);
   lines.push(`   Current Phase: ${result.details?.sd?.current_phase || 'Unknown'}`);

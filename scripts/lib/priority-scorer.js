@@ -225,7 +225,7 @@ export function calculateOKRImpact(okrAlignments, keyResults) {
  */
 export function rankSDs(sds, alignmentsBySd = {}, keyResults = {}) {
   const ranked = sds.map(sd => {
-    const alignments = alignmentsBySd[sd.legacy_id] || [];
+    const alignments = alignmentsBySd[sd.sd_key] || [];
     const score = calculatePriorityScore(sd, alignments, keyResults);
 
     return {
@@ -293,7 +293,7 @@ export function printScoreSummary(rankedSDs) {
   rankedSDs.slice(0, 20).forEach((item, index) => {
     const rank = String(index + 1).padStart(4);
     const score = String(item.score).padStart(5);
-    const sdId = item.sd.legacy_id.padEnd(30);
+    const sdId = item.sd.sd_key.padEnd(30);
     const sdType = (item.sd.sd_type || 'unknown').padEnd(13);
     const okr = item.okrImpact.atRiskKRs.length > 0
       ? `at-risk: ${item.okrImpact.atRiskKRs.join(',')}`

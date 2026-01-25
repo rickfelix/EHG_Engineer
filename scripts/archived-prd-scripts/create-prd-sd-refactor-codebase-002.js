@@ -30,8 +30,8 @@ async function createPRD() {
 
   const { data: sdData, error: sdError } = await supabase
     .from('strategic_directives_v2')
-    .select('id, legacy_id, title, category, priority')
-    .eq('legacy_id', SD_ID)
+    .select('id, sd_key, title, category, priority')
+    .eq('sd_key', SD_ID)
     .single();
 
   if (sdError || !sdData) {
@@ -42,14 +42,14 @@ async function createPRD() {
 
   console.log(`✅ Found SD: ${sdData.title}`);
   console.log(`   UUID: ${sdData.id}`);
-  console.log(`   Legacy ID: ${sdData.legacy_id}`);
+  console.log(`   Legacy ID: ${sdData.sd_key}`);
 
   // Fetch child SDs
   const { data: children } = await supabase
     .from('strategic_directives_v2')
-    .select('legacy_id, title')
+    .select('sd_key, title')
     .eq('parent_sd_id', sdData.id)
-    .order('legacy_id');
+    .order('sd_key');
 
   console.log(`   Child SDs: ${children?.length || 0}`);
 
