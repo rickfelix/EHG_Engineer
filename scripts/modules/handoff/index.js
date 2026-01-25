@@ -131,3 +131,41 @@ export {
 
 // Re-export with alias to avoid collision
 export { generateImprovementGuidance as generatePlanToExecGuidance } from './verifiers/plan-to-exec/improvement-guidance.js';
+
+// ============================================================================
+// SD-LEO-ENH-AUTO-PROCEED-001-07: Skip and Continue
+// ============================================================================
+export {
+  shouldSkipAndContinue,
+  markAsBlocked,
+  recordSkipEvent,
+  recordAllBlockedEvent,
+  executeSkipAndContinue,
+  isTransientError
+} from './skip-and-continue.js';
+
+// ============================================================================
+// SD-LEO-ENH-AUTO-PROCEED-001: Child SD Selector
+// ============================================================================
+export {
+  isChildSD,
+  getNextReadyChild,
+  getOrchestratorContext
+} from './child-sd-selector.js';
+
+// ============================================================================
+// SD-LEO-ENH-AUTO-PROCEED-001-10: Blocker Resolution
+// ============================================================================
+export {
+  detectBlockers,
+  identifyBlockerSD,
+  isBlockerReady,
+  resolveBlocker,
+  recordBlockerEvent,
+  updateBlockerMetadata,
+  executeBlockerResolution,
+  DEFAULT_MAX_RETRIES as BLOCKER_MAX_RETRIES,
+  DEFAULT_MAX_CHAIN_DEPTH as BLOCKER_MAX_CHAIN_DEPTH,
+  DETECTION_TIMEOUT_MS,
+  BLOCKER_PATTERNS
+} from './blocker-resolution.js';
