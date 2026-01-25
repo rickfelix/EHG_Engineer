@@ -104,11 +104,16 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     await releaseSessionClaim(sd, this.supabase);
 
     // SD-LEO-ENH-AUTO-PROCEED-001-04: Clear AUTO-PROCEED state on SD completion
-    try {
-      clearAutoProceedState(true); // Keep resume count history
-      console.log('   ✅ AUTO-PROCEED state cleared');
-    } catch (apError) {
-      console.warn(`   ⚠️  Could not clear AUTO-PROCEED state: ${apError.message}`);
+    // Only clear for top-level SDs; child SDs retain state for continuation
+    if (!sd.parent_sd_id) {
+      try {
+        clearAutoProceedState(true); // Keep resume count history
+        console.log('   ✅ AUTO-PROCEED state cleared (top-level SD)');
+      } catch (apError) {
+        console.warn(`   ⚠️  Could not clear AUTO-PROCEED state: ${apError.message}`);
+      }
+    } else {
+      console.log('   ℹ️  AUTO-PROCEED state retained (child SD - continuation possible)');
     }
 
     // Check if this SD has a parent that should be auto-completed

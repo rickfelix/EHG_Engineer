@@ -10,6 +10,10 @@
 import { createHandoffSystem } from '../index.js';
 import dotenv from 'dotenv';
 
+// AUTO-PROCEED continuation imports
+import { getNextReadyChild, isChildSD, getOrchestratorContext } from '../child-sd-selector.js';
+import { resolveAutoProceed } from '../auto-proceed-resolver.js';
+
 import {
   getSDWorkflow,
   displayWorkflowRecommendation,
@@ -371,7 +375,112 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
   // Display results
   await displayExecutionResult(result, handoffType, sdId);
 
-  return { success: result.success };
+  return { success: result.success, sdId, handoffType, result };
+}
+
+/**
+ * Handle execute command with AUTO-PROCEED child SD continuation
+ *
+ * When AUTO-PROCEED is enabled and a child SD completes LEAD-FINAL-APPROVAL,
+ * this function automatically picks the next ready child and continues.
+ *
+ * Part of AUTO-PROCEED continuation implementation (D26, D01)
+ */
+export async function handleExecuteWithContinuation(handoffType, sdId, args) {
+  const system = createHandoffSystem();
+
+  // Resolve AUTO-PROCEED mode
+  const autoProceedResult = await resolveAutoProceed({
+    supabase: system.supabase,
+    verbose: false
+  });
+  const autoProceedEnabled = autoProceedResult.autoProceed;
+
+  // Execute the initial handoff
+  let currentResult = await handleExecuteCommand(handoffType, sdId, args);
+  let currentSdId = sdId;
+  let currentHandoffType = handoffType;
+  let iterationCount = 0;
+  const maxIterations = 50; // Safety limit
+
+  // Continue loop only if AUTO-PROCEED is enabled
+  while (autoProceedEnabled && currentResult.success && iterationCount < maxIterations) {
+    iterationCount++;
+
+    // Only continue after LEAD-FINAL-APPROVAL
+    if (currentHandoffType.toUpperCase() !== 'LEAD-FINAL-APPROVAL') {
+      break;
+    }
+
+    // Get the completed SD to check if it's a child
+    const { data: completedSD, error: sdError } = await system.supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, parent_sd_id, status')
+      .eq('id', currentSdId)
+      .single();
+
+    if (sdError || !completedSD) {
+      console.log(`   ⚠️  Could not fetch completed SD: ${sdError?.message || 'Not found'}`);
+      break;
+    }
+
+    // Only continue for child SDs (ones with a parent)
+    if (!completedSD.parent_sd_id) {
+      console.log('   ℹ️  Top-level SD completed - no continuation needed');
+      break;
+    }
+
+    // Get orchestrator context for progress display
+    const context = await getOrchestratorContext(system.supabase, completedSD.parent_sd_id);
+    if (context.parent) {
+      console.log(`\n🔗 ORCHESTRATOR PROGRESS: ${context.parent.sd_key || context.parent.id}`);
+      console.log(`   ${context.stats.completed}/${context.stats.total} children completed`);
+    }
+
+    // Get next ready child
+    const { sd: nextChild, allComplete, reason } = await getNextReadyChild(
+      system.supabase,
+      completedSD.parent_sd_id,
+      currentSdId
+    );
+
+    // If all children complete, orchestrator-completion-hook already fired
+    if (allComplete) {
+      console.log('\n✅ All children complete - orchestrator completion hook triggered');
+      break;
+    }
+
+    // If no next child (blocked or other reason)
+    if (!nextChild) {
+      console.log(`\n⏸️  AUTO-PROCEED paused: ${reason}`);
+      break;
+    }
+
+    // Found next child - continue with LEAD-TO-PLAN
+    console.log('\n🔄 AUTO-PROCEED: Continuing to next child SD');
+    console.log(`   Next: ${nextChild.sd_key || nextChild.id}`);
+    console.log(`   Title: ${nextChild.title}`);
+    console.log('   ➡️  Starting LEAD-TO-PLAN...');
+    console.log('');
+
+    // Update for next iteration
+    currentSdId = nextChild.id;
+    currentHandoffType = 'LEAD-TO-PLAN';
+
+    // Execute LEAD-TO-PLAN for next child
+    currentResult = await handleExecuteCommand('LEAD-TO-PLAN', nextChild.id, args);
+
+    // If LEAD-TO-PLAN succeeded, we need to continue through the full workflow
+    // The next handleExecuteCommand calls will be for subsequent handoffs
+    // This is handled by the caller running multiple handoffs, or we could
+    // recursively call ourselves here
+  }
+
+  if (iterationCount >= maxIterations) {
+    console.log(`\n⚠️  AUTO-PROCEED: Safety limit reached (${maxIterations} iterations)`);
+  }
+
+  return currentResult;
 }
 
 /**
@@ -467,7 +576,8 @@ export async function main() {
       break;
 
     case 'execute':
-      result = await handleExecuteCommand(args[1], args[2], args);
+      // Use continuation wrapper for AUTO-PROCEED child SD continuation
+      result = await handleExecuteWithContinuation(args[1], args[2], args);
       break;
 
     case 'list':
