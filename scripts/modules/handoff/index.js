@@ -62,6 +62,17 @@ export {
 } from './auto-proceed-resolver.js';
 
 // ============================================================================
+// SD-LEO-ENH-AUTO-PROCEED-001-03: Orchestrator Completion Hook
+// ============================================================================
+export {
+  executeOrchestratorCompletionHook,
+  hasHookFired,
+  recordHookEvent,
+  invokeLearnSkill,
+  displayQueue
+} from './orchestrator-completion-hook.js';
+
+// ============================================================================
 // SD-LEO-REFACTOR-HANDOFF-001: Extracted CLI utilities
 // ============================================================================
 

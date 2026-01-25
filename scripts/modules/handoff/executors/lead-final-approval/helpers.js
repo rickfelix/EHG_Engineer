@@ -5,6 +5,8 @@
  * @module lead-final-approval/helpers
  */
 
+import { executeOrchestratorCompletionHook } from '../../orchestrator-completion-hook.js';
+
 /**
  * Check and complete parent SD when all children are done
  *
@@ -51,6 +53,14 @@ export async function checkAndCompleteParentSD(sd, supabase) {
           const result = await guardian.complete();
           if (result.success) {
             console.log(`   ✅ Parent SD "${parentSD.title}" completed via Guardian`);
+
+            // SD-LEO-ENH-AUTO-PROCEED-001-03: Trigger orchestrator completion hook
+            await executeOrchestratorCompletionHook(
+              parentSD.id,
+              parentSD.title,
+              siblings.length,
+              { supabase }
+            );
           } else {
             console.log(`   ⚠️  Guardian completion failed: ${result.error}`);
             await recordFailedCompletion(parentSD, result.error, null, supabase);
@@ -62,6 +72,14 @@ export async function checkAndCompleteParentSD(sd, supabase) {
           const result = await guardian.complete();
           if (result.success) {
             console.log(`   ✅ Parent SD "${parentSD.title}" completed (with auto-created artifacts)`);
+
+            // SD-LEO-ENH-AUTO-PROCEED-001-03: Trigger orchestrator completion hook
+            await executeOrchestratorCompletionHook(
+              parentSD.id,
+              parentSD.title,
+              siblings.length,
+              { supabase }
+            );
           } else {
             console.log(`   ⚠️  Completion failed after auto-fix: ${result.error}`);
             await recordFailedCompletion(parentSD, result.error, null, supabase);
@@ -94,6 +112,14 @@ export async function checkAndCompleteParentSD(sd, supabase) {
           await recordFailedCompletion(parentSD, error.message, null, supabase);
         } else {
           console.log(`   ✅ Parent SD "${parentSD.title}" auto-completed (legacy path)`);
+
+          // SD-LEO-ENH-AUTO-PROCEED-001-03: Trigger orchestrator completion hook
+          await executeOrchestratorCompletionHook(
+            parentSD.id,
+            parentSD.title,
+            siblings.length,
+            { supabase }
+          );
         }
       }
     }
