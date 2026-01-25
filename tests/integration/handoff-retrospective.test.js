@@ -386,7 +386,7 @@ describe('Handoff Retrospective Integration', () => {
   let extractionTrigger;
   const testSDId = 'SD-TEST-RETRO-' + Date.now();
 
-  beforeAll(() => {
+  beforeAll(async () => {
     // Skip if no database credentials
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL ||
         process.env.NEXT_PUBLIC_SUPABASE_URL === 'your_supabase_url_here') {
@@ -394,10 +394,29 @@ describe('Handoff Retrospective Integration', () => {
       return;
     }
 
+    // PAT-SUPABASE-KEY-001: Use service role key for integration tests
+    // Integration tests need insert/delete permissions which require service role
+    // Also provides resilience if anon key is rotated without updating .env
+    const apiKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!apiKey) {
+      console.warn('Skipping integration tests - no Supabase API key available');
+      return;
+    }
+
     supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      apiKey
     );
+
+    // Validate connection before running tests
+    const { error } = await supabase.from('strategic_directives_v2').select('id').limit(1);
+    if (error) {
+      console.error('Database connection failed:', error.message);
+      console.error('Hint:', error.hint || 'Check API keys in .env file');
+      supabase = null; // Mark as unavailable
+      return;
+    }
 
     handoffSystem = new HandoffSystemWithRetrospective(supabase);
     extractionTrigger = new RetrospectiveExtractionTrigger(supabase);

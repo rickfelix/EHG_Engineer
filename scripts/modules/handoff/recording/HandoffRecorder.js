@@ -391,6 +391,30 @@ export class HandoffRecorder {
         sub_agent_count: subAgentResults?.length || 0
       };
 
+      // PAT-RETRO-BOILERPLATE-001: Include discovered issues in handoff metadata
+      // Query issue_patterns for this SD to store in metadata
+      try {
+        const { data: sdIssues } = await this.supabase
+          .from('issue_patterns')
+          .select('pattern_id, issue_summary, category, severity')
+          .or(`first_seen_sd_id.eq.${sdUuid},last_seen_sd_id.eq.${sdUuid}`)
+          .eq('status', 'active');
+
+        if (sdIssues && sdIssues.length > 0) {
+          metadata.discovered_issues = sdIssues.map(i => ({
+            pattern_id: i.pattern_id,
+            category: i.category,
+            severity: i.severity,
+            summary: i.issue_summary.substring(0, 200)
+          }));
+          metadata.issue_pattern_ids = sdIssues.map(i => i.pattern_id);
+          console.log(`   📋 ${sdIssues.length} issue pattern(s) linked to handoff metadata`);
+        }
+      } catch (issueErr) {
+        // Non-blocking - don't fail handoff if issue query fails
+        console.log(`   ⚠️  Could not query issue patterns: ${issueErr.message}`);
+      }
+
       // Extract gate validation results for cross-handoff traceability
       // SD-LEO-STREAMS-001 Retrospective: Critical for downstream gate validation
       if (result.gateResults) {
