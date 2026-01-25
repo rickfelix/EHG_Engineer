@@ -247,7 +247,12 @@ export function recordCompactionEvent(sessionId) {
 export function checkFileNeedsRead(filename, trigger, sdRunId = null) {
   const state = readSessionState();
   const currentHash = calculateFileHash(filename);
+
+  // Check both the new protocolGate.fileReads structure AND the legacy protocolFilesRead array
+  // The PostToolUse hook writes to protocolFilesRead, while recordProtocolFileRead() writes to both
   const fileRead = state.protocolGate?.fileReads?.[filename];
+  const legacyFileRead = state.protocolFilesRead?.includes(filename);
+  const legacyTimestamp = state.protocolFilesReadAt?.[filename];
 
   // File doesn't exist
   if (!currentHash) {
@@ -258,14 +263,24 @@ export function checkFileNeedsRead(filename, trigger, sdRunId = null) {
     };
   }
 
-  // Never read in this session
-  if (!fileRead) {
+  // Check if file was read via either mechanism
+  const wasRead = fileRead || legacyFileRead;
+
+  // Never read in this session (not in either tracking mechanism)
+  if (!wasRead) {
     return {
       needsRead: true,
       reason: 'NEVER_READ',
       lastRead: null
     };
   }
+
+  // If only in legacy array (from PostToolUse hook), construct a compatible lastRead object
+  const effectiveFileRead = fileRead || (legacyFileRead ? {
+    timestamp: legacyTimestamp || new Date().toISOString(),
+    trigger: 'READ_TOOL',
+    fileHash: null  // Legacy tracking doesn't capture hash
+  } : null);
 
   // For SD_START, check if file was read in the current session
   // Note: We no longer require re-reading for each handoff run - session-based is sufficient
@@ -276,31 +291,32 @@ export function checkFileNeedsRead(filename, trigger, sdRunId = null) {
   // 3. Compaction occurred (caught below)
 
   // Check if file has changed since last read (idempotent check)
-  if (fileRead.fileHash !== currentHash) {
+  // Only enforce hash check if we have a recorded hash (legacy tracking doesn't capture hash)
+  if (effectiveFileRead.fileHash && effectiveFileRead.fileHash !== currentHash) {
     return {
       needsRead: true,
       reason: 'FILE_CHANGED',
-      lastRead: fileRead
+      lastRead: effectiveFileRead
     };
   }
 
   // Post-compaction check
   if (trigger === 'POST_COMPACTION') {
     const lastCompaction = state.protocolGate?.lastCompactionAt;
-    if (lastCompaction && fileRead.timestamp < lastCompaction) {
+    if (lastCompaction && effectiveFileRead.timestamp < lastCompaction) {
       return {
         needsRead: true,
         reason: 'POST_COMPACTION_REQUIRED',
-        lastRead: fileRead
+        lastRead: effectiveFileRead
       };
     }
   }
 
-  // File already read with same hash
+  // File already read with same hash (or via legacy tracking)
   return {
     needsRead: false,
     reason: 'ALREADY_READ',
-    lastRead: fileRead
+    lastRead: effectiveFileRead
   };
 }
 
@@ -528,6 +544,119 @@ export function createPostCompactionGate(currentPhase) {
 }
 
 /**
+ * Validate Session Start Gate - enforces CLAUDE_CORE.md at session initialization
+ * This gate runs BEFORE any SD work, at the earliest point of LEO session initialization.
+ *
+ * @param {string} sessionId - Session identifier
+ * @param {Object} ctx - Validation context
+ * @returns {Object} Validation result
+ */
+export async function validateSessionStartGate(sessionId, ctx = {}) {
+  console.log('\n📚 GATE: Session Start Protocol Enforcement');
+  console.log('-'.repeat(50));
+  console.log(`   Session: ${sessionId || 'unknown'}`);
+
+  const requiredFiles = CORE_PROTOCOL_REQUIREMENTS.SESSION_START;
+  const issues = [];
+  const warnings = [];
+
+  for (const filename of requiredFiles) {
+    const check = checkFileNeedsRead(filename, 'SESSION_START');
+
+    if (check.needsRead) {
+      console.log(`   ❌ ${filename} needs to be read (${check.reason})`);
+      issues.push(`Protocol file not read for session: ${filename} (${check.reason})`);
+    } else {
+      console.log(`   ✅ ${filename} already read`);
+      if (check.lastRead?.fileHash) {
+        console.log(`      Hash: ${check.lastRead.fileHash.substring(0, 8)}...`);
+      }
+    }
+  }
+
+  if (issues.length > 0) {
+    console.log('');
+    console.log('   📚 REMEDIATION:');
+    console.log('   The LEO Protocol requires reading CLAUDE_CORE.md at session start.');
+    console.log('');
+    console.log('   ACTION REQUIRED:');
+    requiredFiles.forEach(f => console.log(`   1. Read the file: ${f}`));
+    console.log('   2. Re-run the session initialization');
+
+    emitStructuredLog({
+      event: 'SESSION_START_GATE',
+      status: 'BLOCK',
+      sessionId,
+      requiredFiles,
+      issues,
+      timestamp: new Date().toISOString()
+    });
+
+    return {
+      pass: false,
+      score: 0,
+      max_score: 100,
+      issues,
+      warnings,
+      errorCode: 'PROTOCOL_GATE_BLOCKED',
+      gateName: 'SESSION_START',
+      requiredArtifacts: requiredFiles,
+      remediation: 'Read CLAUDE_CORE.md using the Read tool before proceeding with LEO session initialization.'
+    };
+  }
+
+  // Update session state
+  const state = readSessionState();
+  if (!state.protocolGate) {
+    state.protocolGate = {
+      sdRunId: null,
+      sessionId: null,
+      lastCompactionAt: null,
+      fileReads: {},
+      compactionCount: 0
+    };
+  }
+  state.protocolGate.sessionId = sessionId;
+  state.protocolGate.sessionStartValidatedAt = new Date().toISOString();
+  writeSessionState(state);
+
+  emitStructuredLog({
+    event: 'SESSION_START_GATE',
+    status: 'PASS',
+    sessionId,
+    requiredFiles,
+    timestamp: new Date().toISOString()
+  });
+
+  console.log('   ✅ Session Start Gate PASSED');
+
+  return {
+    pass: true,
+    score: 100,
+    max_score: 100,
+    issues: [],
+    warnings
+  };
+}
+
+/**
+ * Create Session Start Gate for LEO session initialization
+ * @param {string} sessionId - Session identifier
+ * @returns {Object} Gate configuration
+ */
+export function createSessionStartGate(sessionId) {
+  return {
+    name: 'GATE_SESSION_START_PROTOCOL',
+    validator: async (ctx) => {
+      return validateSessionStartGate(sessionId, ctx);
+    },
+    required: true,
+    blocking: true,
+    remediation: `Read CLAUDE_CORE.md at session start. Use: Read tool with file_path="CLAUDE_CORE.md"`
+  };
+}
+
+/**
  * Emit structured log for gate events
  * @param {Object} logEntry - Log entry
  */
@@ -541,9 +670,11 @@ export default {
   checkFileNeedsRead,
   validateSdStartGate,
   validatePostCompactionGate,
+  validateSessionStartGate,
   getProtocolGateState,
   createSdStartGate,
   createPostCompactionGate,
+  createSessionStartGate,
   CORE_PROTOCOL_REQUIREMENTS,
   PHASE_PROTOCOL_FILES
 };

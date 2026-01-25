@@ -416,6 +416,14 @@ export async function executeOrchestratorCompletionHook(
     queueDisplayed: false
   };
 
+  // Generate session summary (D17 - detailed summary on completion)
+  const summaryResult = await generateSessionSummary(supabase, orchestratorId, correlationId);
+  hookDetails.summaryGenerated = !!summaryResult;
+  hookDetails.summaryStatus = summaryResult?.json?.overall_status || null;
+  hookDetails.summaryTotalSds = summaryResult?.json?.total_sds || 0;
+  hookDetails.summaryIssuesCount = summaryResult?.json?.issues?.length || 0;
+  hookDetails.summaryGenerationTimeMs = summaryResult?.generation_time_ms || null;
+
   if (autoProceedResult.autoProceed) {
     console.log('   ✅ AUTO-PROCEED: ENABLED');
 
@@ -549,5 +557,6 @@ export default {
   invokeLearnSkill,
   displayQueue,
   findNextAvailableOrchestrator,
-  emitChainingTelemetry
+  emitChainingTelemetry,
+  generateSessionSummary
 };

@@ -12,13 +12,13 @@
 import { redactObject, redactSecrets } from './secret-redactor.js';
 
 // Schema version for the session summary
-const SCHEMA_VERSION = '1.0';
+export const SCHEMA_VERSION = '1.0';
 
 // Compilation timeout (500ms per TR-3)
-const COMPILATION_TIMEOUT_MS = 500;
+export const COMPILATION_TIMEOUT_MS = 500;
 
 // Maximum lines for human-readable digest
-const MAX_DIGEST_LINES = 60;
+export const MAX_DIGEST_LINES = 60;
 
 // Maximum issues to show in digest
 const MAX_DIGEST_ISSUES = 10;

@@ -7,8 +7,12 @@
  * @see docs/discovery/auto-proceed-enhancement-discovery.md
  */
 
-export { SessionEventCollector, createCollector, VALID_STATUSES, VALID_SEVERITIES } from './SessionEventCollector.js';
-export { SummaryGenerator, createGenerator, SCHEMA_VERSION, COMPILATION_TIMEOUT_MS, MAX_DIGEST_LINES } from './SummaryGenerator.js';
+// Import from default exports and re-export
+import SessionEventCollectorModule from './SessionEventCollector.js';
+import SummaryGeneratorModule from './SummaryGenerator.js';
+
+export const { SessionEventCollector, createCollector, VALID_STATUSES, VALID_SEVERITIES } = SessionEventCollectorModule;
+export const { SummaryGenerator, createGenerator, SCHEMA_VERSION, COMPILATION_TIMEOUT_MS, MAX_DIGEST_LINES } = SummaryGeneratorModule;
 export { redactSecrets, redactObject, containsSecrets } from './secret-redactor.js';
 
 /**

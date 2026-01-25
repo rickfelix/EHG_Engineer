@@ -12,10 +12,10 @@
 import { redactSecrets } from './secret-redactor.js';
 
 // Valid SD final statuses
-const VALID_STATUSES = ['NOT_STARTED', 'IN_PROGRESS', 'SUCCESS', 'FAILED', 'SKIPPED', 'CANCELLED'];
+export const VALID_STATUSES = ['NOT_STARTED', 'IN_PROGRESS', 'SUCCESS', 'FAILED', 'SKIPPED', 'CANCELLED'];
 
 // Issue severity levels
-const VALID_SEVERITIES = ['ERROR', 'WARN'];
+export const VALID_SEVERITIES = ['ERROR', 'WARN'];
 
 /**
  * Session Event Collector
