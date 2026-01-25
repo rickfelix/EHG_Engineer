@@ -73,15 +73,16 @@ export async function validateTraceabilityMapping(sd_id, sdUuid, designAnalysis,
     return;
   }
 
-  // Docs/Infrastructure SDs get full credit
-  if (isDocsSD) {
-    console.log('   OK Docs/Infrastructure SD - Section C simplified (25/25)');
-    console.log('   INFO Traceability via PRD requirements -> documentation/implementation');
+  // Docs/Infrastructure/Lightweight SDs get full credit
+  // SD-LEO-FIX-METADATA-001: Fixed undefined isDocsSD - use isLightweightSD instead
+  if (isLightweightSD) {
+    console.log('   OK Lightweight SD - Section C simplified (25/25)');
+    console.log('   INFO Traceability via PRD requirements -> implementation');
     validation.score += 25;
     validation.gate_scores.traceability_mapping = 25;
     validation.details.traceability_mapping = {
       skipped: true,
-      reason: 'Docs/Infrastructure SD - no design/database requirements to trace'
+      reason: 'Lightweight SD - simplified traceability requirements'
     };
     return;
   }

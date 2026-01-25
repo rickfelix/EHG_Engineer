@@ -205,7 +205,10 @@ async function createChild(parentKey, index = 0) {
   // Generate child key
   const sdKey = generateChildKey(parent.sd_key || parentKey, childIndex);
 
-  // Create child SD
+  // Inherit strategic fields from parent (SD-LEO-FIX-METADATA-001)
+  const inheritedFields = inheritStrategicFields(parent);
+
+  // Create child SD with inherited fields
   const sd = await createSD({
     sdKey,
     title: `Child of ${parent.title}`,
@@ -214,10 +217,15 @@ async function createChild(parentKey, index = 0) {
     priority: parent.priority || 'medium',
     rationale: `Child of ${parent.sd_key}`,
     parentId: parent.id,
+    // Pass inherited fields to createSD (SD-LEO-FIX-METADATA-001)
+    success_metrics: inheritedFields.success_metrics || null,
+    strategic_objectives: inheritedFields.strategic_objectives || null,
+    key_principles: inheritedFields.key_principles || null,
     metadata: {
       source: 'leo',
       parent_sd_key: parent.sd_key,
-      child_index: childIndex
+      child_index: childIndex,
+      inherited_from_parent: Object.keys(inheritedFields)
     }
   });
 
@@ -227,6 +235,34 @@ async function createChild(parentKey, index = 0) {
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+/**
+ * Inherit strategic fields from parent SD
+ * Part of SD-LEO-FIX-METADATA-001 fix
+ *
+ * @param {Object} parent - Parent SD data
+ * @returns {Object} Inherited fields object
+ */
+function inheritStrategicFields(parent) {
+  const inherited = {};
+
+  // Inherit strategic_objectives if parent has them
+  if (parent.strategic_objectives && Array.isArray(parent.strategic_objectives) && parent.strategic_objectives.length > 0) {
+    inherited.strategic_objectives = parent.strategic_objectives;
+  }
+
+  // Inherit success_metrics if parent has them
+  if (parent.success_metrics && Array.isArray(parent.success_metrics) && parent.success_metrics.length > 0) {
+    inherited.success_metrics = parent.success_metrics;
+  }
+
+  // Inherit key_principles if parent has them
+  if (parent.key_principles && Array.isArray(parent.key_principles) && parent.key_principles.length > 0) {
+    inherited.key_principles = parent.key_principles;
+  }
+
+  return inherited;
+}
 
 /**
  * Map feedback priority to SD priority
@@ -342,9 +378,11 @@ async function createSD(options) {
     rationale,
     parentId = null,
     metadata = {},
-    // Allow passing explicit success fields (for sources like UAT, learn)
+    // Allow passing explicit success fields (for sources like UAT, learn, or inherited from parent)
     success_metrics = null,
-    success_criteria = null
+    success_criteria = null,
+    strategic_objectives = null,
+    key_principles = null
   } = options;
 
   // Map user-friendly type to valid database sd_type
@@ -372,7 +410,8 @@ async function createSD(options) {
     parent_sd_id: parentId,
     success_criteria: finalSuccessCriteria,  // Array, NOT JSON.stringify()
     success_metrics: finalSuccessMetrics,    // Array with {metric, target}, NOT JSON.stringify()
-    key_principles: [
+    strategic_objectives: strategic_objectives || [],  // Use inherited or empty (SD-LEO-FIX-METADATA-001)
+    key_principles: key_principles || [
       'Follow LEO Protocol for all changes',
       'Ensure backward compatibility'
     ],
