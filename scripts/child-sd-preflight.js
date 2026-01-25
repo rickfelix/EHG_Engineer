@@ -75,7 +75,7 @@ class ChildSDPreflightValidator {
   }
 
   /**
-   * Load an SD by ID (supports both id and legacy_id)
+   * Load an SD by ID (supports both id and sd_key)
    */
   async loadSd(sdId) {
     // Try by id first
@@ -86,11 +86,11 @@ class ChildSDPreflightValidator {
       .single();
 
     if (error || !data) {
-      // Try by legacy_id
+      // Try by sd_key
       const result = await supabase
         .from('strategic_directives_v2')
         .select('*')
-        .eq('legacy_id', sdId)
+        .eq('sd_key', sdId)
         .single();
 
       data = result.data;
@@ -182,7 +182,7 @@ class ChildSDPreflightValidator {
     if (chain.children && Array.isArray(chain.children)) {
       // Find this SD in the children array and get its depends_on
       const thisChild = chain.children.find(c =>
-        c.sd_id === sd.id || c.sd_id === sd.legacy_id
+        c.sd_id === sd.id || c.sd_id === sd.sd_key
       );
 
       if (thisChild && thisChild.depends_on) {
@@ -197,7 +197,7 @@ class ChildSDPreflightValidator {
     // We need to find what this specific SD depends on
     if (this.parent?.dependency_chain?.children) {
       const thisChild = this.parent.dependency_chain.children.find(c =>
-        c.sd_id === sd.id || c.sd_id === sd.legacy_id
+        c.sd_id === sd.id || c.sd_id === sd.sd_key
       );
 
       if (thisChild && thisChild.depends_on) {
@@ -226,7 +226,7 @@ class ChildSDPreflightValidator {
       return { status: 'ERROR', reason: 'SD not found' };
     }
 
-    const displayId = this.sd.legacy_id || this.sd.id;
+    const displayId = this.sd.sd_key || this.sd.id;
     console.log(`${colors.bold}📋 SD:${colors.reset} ${displayId} (${this.sd.title?.substring(0, 50)}...)`);
 
     // 2. Check if it's a child SD
@@ -245,7 +245,7 @@ class ChildSDPreflightValidator {
       return { status: 'ERROR', reason: 'Parent SD not found' };
     }
 
-    const parentDisplayId = this.parent.legacy_id || this.parent.id;
+    const parentDisplayId = this.parent.sd_key || this.parent.id;
     console.log(`${colors.bold}   Parent:${colors.reset} ${parentDisplayId} (${this.parent.title?.substring(0, 40)}...)`);
 
     // 4. Load all siblings
@@ -277,7 +277,7 @@ class ChildSDPreflightValidator {
     for (const depId of this.dependencies) {
       // Find dependency in siblings
       const depSd = this.siblings.find(s =>
-        s.id === depId || s.legacy_id === depId
+        s.id === depId || s.sd_key === depId
       ) || await this.loadSd(depId);
 
       if (!depSd) {
@@ -292,12 +292,12 @@ class ChildSDPreflightValidator {
         continue;
       }
 
-      const depDisplayId = (depSd.legacy_id || depSd.id).substring(0, 23).padEnd(23);
+      const depDisplayId = (depSd.sd_key || depSd.id).substring(0, 23).padEnd(23);
       const statusStr = (depSd.status || 'unknown').substring(0, 8).padEnd(8);
       const progressStr = `${depSd.progress_percentage || 0}%`.padEnd(8);
 
       // Load handoffs for dependency
-      const handoffs = await this.loadHandoffs(depSd.id) || await this.loadHandoffs(depSd.legacy_id);
+      const handoffs = await this.loadHandoffs(depSd.id) || await this.loadHandoffs(depSd.sd_key);
       const requiredHandoffs = this.getRequiredHandoffs(depSd.sd_type);
       const handoffStr = `${handoffs.length}/${requiredHandoffs}`.padEnd(8);
 
@@ -311,7 +311,7 @@ class ChildSDPreflightValidator {
         console.log(`│ ${depDisplayId} │ ${colors.red}${statusStr}${colors.reset} │ ${colors.yellow}${progressStr}${colors.reset} │ ${colors.yellow}${handoffStr}${colors.reset} │`);
 
         this.failures.push({
-          sd_id: depSd.legacy_id || depSd.id,
+          sd_id: depSd.sd_key || depSd.id,
           issue: !isComplete ? 'Not completed' : 'Missing handoffs',
           current_status: depSd.status,
           current_progress: depSd.progress_percentage,
@@ -390,7 +390,7 @@ export async function checkDependencyStatus(sdId) {
   const statuses = [];
   for (const depId of dependencies) {
     const depSd = validator.siblings.find(s =>
-      s.id === depId || s.legacy_id === depId
+      s.id === depId || s.sd_key === depId
     ) || await validator.loadSd(depId);
 
     if (!depSd) {
@@ -400,7 +400,7 @@ export async function checkDependencyStatus(sdId) {
 
     const isComplete = depSd.status === 'completed' && depSd.progress_percentage === 100;
     statuses.push({
-      id: depSd.legacy_id || depSd.id,
+      id: depSd.sd_key || depSd.id,
       complete: isComplete
     });
   }

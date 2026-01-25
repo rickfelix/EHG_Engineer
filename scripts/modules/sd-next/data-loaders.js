@@ -87,7 +87,7 @@ export async function loadRecentActivity(supabase, cwd) {
   // Method 2: Check updated_at on SDs (fallback/supplement)
   const { data: recentSDs } = await supabase
     .from('strategic_directives_v2')
-    .select('legacy_id, title, updated_at')
+    .select('sd_key, title, updated_at')
     .eq('is_active', true)
     .in('status', ['draft', 'active', 'in_progress'])
     .order('updated_at', { ascending: false })
@@ -95,9 +95,9 @@ export async function loadRecentActivity(supabase, cwd) {
 
   if (recentSDs) {
     recentSDs.forEach(sd => {
-      if (!recentActivity.find(a => a.sd_id === sd.legacy_id)) {
+      if (!recentActivity.find(a => a.sd_id === sd.sd_key)) {
         recentActivity.push({
-          sd_id: sd.legacy_id,
+          sd_id: sd.sd_key,
           commits: 0,
           updated_at: sd.updated_at
         });
@@ -165,7 +165,7 @@ export async function loadSDHierarchy(supabase) {
   try {
     const { data: sds } = await supabase
       .from('strategic_directives_v2')
-      .select('id, legacy_id, title, parent_sd_id, status, current_phase, progress_percentage, dependencies, is_working_on, metadata, priority')
+      .select('id, sd_key, title, parent_sd_id, status, current_phase, progress_percentage, dependencies, is_working_on, metadata, priority')
       .eq('is_active', true)
       .order('created_at');
 
@@ -173,7 +173,7 @@ export async function loadSDHierarchy(supabase) {
 
     // Build lookup map and hierarchy
     for (const sd of sds) {
-      const sdId = sd.legacy_id || sd.id;
+      const sdId = sd.sd_key || sd.id;
       allSDs.set(sdId, sd);
       allSDs.set(sd.id, sd); // Also map by UUID
 
@@ -250,10 +250,11 @@ export async function countActionableBaselineItems(supabase, baselineItems) {
 
   let actionableCount = 0;
   for (const item of baselineItems) {
+    // Use sd_key with fallback to id (for UUID lookups)
     const { data: sd } = await supabase
       .from('strategic_directives_v2')
       .select('status, is_active')
-      .eq('legacy_id', item.sd_id)
+      .or(`sd_key.eq.${item.sd_id},id.eq.${item.sd_id}`)
       .single();
 
     if (sd && sd.is_active && sd.status !== 'completed' && sd.status !== 'cancelled') {

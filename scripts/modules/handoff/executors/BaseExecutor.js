@@ -8,6 +8,7 @@
 import ResultBuilder from '../ResultBuilder.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { shouldSkipAndContinue, executeSkipAndContinue } from '../skip-and-continue.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -113,6 +114,39 @@ export class BaseExecutor {
           console.log('');
           // Continue execution despite gate failure
         } else {
+          // SD-LEO-ENH-AUTO-PROCEED-001-07: Check for skip-and-continue conditions
+          const skipCheck = shouldSkipAndContinue({
+            sd,
+            gateResults,
+            retryCount: options._retryCount || 0,
+            autoProceed: options.autoProceed
+          });
+
+          if (skipCheck.shouldSkip) {
+            // Execute skip-and-continue flow
+            const correlationId = `skip-${sdId}-${Date.now()}`;
+            const skipResult = await executeSkipAndContinue({
+              supabase: this.supabase,
+              sd,
+              gateResults,
+              correlationId,
+              sessionId: options.autoProceedSessionId || 'unknown'
+            });
+
+            // Return special result for skip-and-continue
+            return {
+              success: false,
+              skippedAndContinued: true,
+              blockedSdId: sdId,
+              nextSibling: skipResult.nextSibling,
+              allBlocked: skipResult.allBlocked,
+              skipReason: skipResult.reason,
+              correlationId,
+              failedGate: gateResults.failedGate,
+              issues: gateResults.issues
+            };
+          }
+
           // SD-LEO-CONTINUITY-001: Display ON_FAILURE directives (5-Whys, Sustainable Resolution)
           const failurePhase = this._getSourcePhaseFromHandoff();
           await this._displayOnFailureDirectives(failurePhase);
