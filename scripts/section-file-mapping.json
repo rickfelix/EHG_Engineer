@@ -5,6 +5,7 @@
       "file_warning",
       "smart_router",
       "session_prologue",
+      "auto_proceed_mode",
       "session_init",
       "skill_intent_detection",
       "common_commands"
