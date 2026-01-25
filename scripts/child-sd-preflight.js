@@ -260,6 +260,10 @@ class ChildSDPreflightValidator {
       console.log(`${colors.dim}   No dependencies defined for this child SD.${colors.reset}\n`);
       console.log(`${colors.green}✅ RESULT: PASS${colors.reset}`);
       console.log(`${colors.dim}   Ready to work on ${displayId}.${colors.reset}`);
+      console.log(`\n${colors.yellow}${colors.bold}⚠️  CONTEXT LOADING REMINDER:${colors.reset}`);
+      console.log(`${colors.yellow}   Before starting work, you MUST read:${colors.reset}`);
+      console.log(`${colors.yellow}   1. CLAUDE_CORE.md (SD type requirements, gates, thresholds)${colors.reset}`);
+      console.log(`${colors.yellow}   2. Phase-specific file (CLAUDE_LEAD.md, CLAUDE_PLAN.md, or CLAUDE_EXEC.md)${colors.reset}`);
       console.log(`\n${colors.cyan}${'═'.repeat(59)}${colors.reset}\n`);
       return { status: 'PASS', reason: 'No dependencies', parent: this.parent, sd: this.sd };
     }
@@ -355,6 +359,10 @@ class ChildSDPreflightValidator {
 
     console.log(`${colors.bgGreen}${colors.bold} ✅ RESULT: PROCEED ${colors.reset}`);
     console.log(`${colors.green}   All dependencies satisfied. Ready to work on ${displayId}.${colors.reset}`);
+    console.log(`\n${colors.yellow}${colors.bold}⚠️  CONTEXT LOADING REMINDER:${colors.reset}`);
+    console.log(`${colors.yellow}   Before starting work, you MUST read:${colors.reset}`);
+    console.log(`${colors.yellow}   1. CLAUDE_CORE.md (SD type requirements, gates, thresholds)${colors.reset}`);
+    console.log(`${colors.yellow}   2. Phase-specific file (CLAUDE_LEAD.md, CLAUDE_PLAN.md, or CLAUDE_EXEC.md)${colors.reset}`);
     console.log(`\n${colors.cyan}${'═'.repeat(59)}${colors.reset}\n`);
 
     return {

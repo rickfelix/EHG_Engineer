@@ -309,7 +309,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-25 1:41:46 PM
+**Last Generated**: 2026-01-25 5:23:18 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -326,6 +326,13 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 1. **ALWAYS**: Read CLAUDE_CORE.md first (15k)
 2. **Phase Detection**: Load phase-specific file based on keywords
 3. **On-Demand**: Load reference docs only when issues arise
+
+**CRITICAL**: This loading strategy applies to ALL SD work:
+- New SDs being created
+- Existing SDs being resumed
+- **Child SDs of orchestrators** (each child requires fresh context loading)
+
+Skipping CLAUDE_CORE.md causes: unknown SD type requirements, missed gate thresholds, skipped sub-agents.
 
 ### Phase Keywords → File
 | Keywords | Load |

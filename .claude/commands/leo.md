@@ -662,6 +662,40 @@ When starting work on an SD that has a `parent_sd_id`:
 node scripts/child-sd-preflight.js SD-XXX-001
 ```
 
+### Context Loading Requirements (MANDATORY)
+
+**CRITICAL**: Before starting work on ANY SD (new, existing, or child), you MUST load the required context files in this order:
+
+#### Step 1: ALWAYS Read CLAUDE_CORE.md First
+```
+Read tool: CLAUDE_CORE.md
+```
+This provides:
+- SD type definitions and workflow requirements
+- PRD requirements, handoff counts, gate thresholds
+- Sub-agent invocation requirements
+- Validation gate definitions
+
+**This applies to ALL SDs including children of orchestrators.**
+
+#### Step 2: Load Phase-Specific Context
+Based on the SD's `current_phase`, load the appropriate file:
+
+| Phase | File to Load |
+|-------|--------------|
+| LEAD_APPROVAL, LEAD_FINAL_APPROVAL | CLAUDE_LEAD.md |
+| PLAN_*, PRD_* | CLAUDE_PLAN.md |
+| EXEC_*, IMPLEMENTATION_* | CLAUDE_EXEC.md |
+
+#### Why This Matters
+Without loading CLAUDE_CORE.md:
+- SD type requirements are unknown
+- Gate thresholds may be violated
+- Required sub-agents may be skipped
+- Handoff chain may be incomplete
+
+**Skipping context loading is a protocol violation.**
+
 #### What It Validates
 1. **Dependency Chain**: Each SD in `dependency_chain` must be:
    - Status: `completed`
