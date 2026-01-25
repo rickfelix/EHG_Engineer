@@ -6,7 +6,7 @@
  * Tests the precedence order: CLI > env > session > database > default
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+// Jest provides describe, it, expect, beforeEach, afterEach globally
 import {
   parseCliFlags,
   parseEnvVar,

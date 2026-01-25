@@ -4,7 +4,7 @@
  * Part of SD-LEO-ENH-AUTO-PROCEED-001-03
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+// Jest provides describe, it, expect, beforeEach globally
 import {
   generateIdempotencyKey,
   hasHookFired,
@@ -125,7 +125,7 @@ describe('Orchestrator Completion Hook', () => {
     beforeEach(() => {
       // Reset mock for each test
       mockSupabase = {
-        from: vi.fn((table) => {
+        from: (table) => {
           if (table === 'system_events') {
             return {
               select: () => ({
@@ -168,7 +168,7 @@ describe('Orchestrator Completion Hook', () => {
             };
           }
           return { select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) };
-        })
+        }
       };
     });
 
@@ -186,7 +186,7 @@ describe('Orchestrator Completion Hook', () => {
 
     it('should skip when hook already fired (idempotency)', async () => {
       // Override to simulate hook already fired
-      mockSupabase.from = vi.fn((table) => {
+      mockSupabase.from = (table) => {
         if (table === 'system_events') {
           return {
             select: () => ({
@@ -199,7 +199,7 @@ describe('Orchestrator Completion Hook', () => {
           };
         }
         return { select: () => Promise.resolve({ data: [], error: null }) };
-      });
+      };
 
       const result = await executeOrchestratorCompletionHook(
         'SD-ORCH-001',
@@ -213,7 +213,7 @@ describe('Orchestrator Completion Hook', () => {
 
     it('should respect AUTO-PROCEED setting', async () => {
       // Override to disable AUTO-PROCEED
-      mockSupabase.from = vi.fn((table) => {
+      mockSupabase.from = (table) => {
         if (table === 'system_events') {
           return {
             select: () => ({
@@ -253,7 +253,7 @@ describe('Orchestrator Completion Hook', () => {
             })
           })
         };
-      });
+      };
 
       const result = await executeOrchestratorCompletionHook(
         'SD-ORCH-001',

@@ -9,7 +9,7 @@
  * - Retrospective extraction trigger fires correctly
  */
 
-import { describe, test, expect, beforeAll, afterAll } from 'vitest';
+// Jest provides describe, test, expect, beforeAll, afterAll globally
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { readFileSync } from 'fs';

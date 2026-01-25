@@ -11,6 +11,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { resolveAutoProceed } from './auto-proceed-resolver.js';
+import { clearState as clearAutoProceedState } from './auto-proceed-state.js';
 
 /**
  * Generate a unique idempotency key for orchestrator completion
@@ -255,6 +256,14 @@ export async function executeOrchestratorCompletionHook(
     // Display queue
     await displayQueue(supabase);
     hookDetails.queueDisplayed = true;
+
+    // Clear AUTO-PROCEED state now that orchestrator is complete
+    try {
+      clearAutoProceedState(true); // Keep resume count history
+      console.log('   ✅ AUTO-PROCEED state cleared (orchestrator complete)');
+    } catch (apErr) {
+      console.warn(`   ⚠️  Could not clear AUTO-PROCEED state: ${apErr.message}`);
+    }
 
     console.log('\n   ⏸️  PAUSE POINT: Orchestrator complete');
     console.log('   💡 Review learnings and select next work from queue');
