@@ -49,8 +49,8 @@ export function parseDependencies(dependencies) {
         return match ? match[1] : null;
       }
       if (dep && typeof dep === 'object') {
-        // Object format: { sd_id: "SD-XXX" } or { id: "SD-XXX" }
-        const id = dep.sd_id || dep.id || dep.legacy_id;
+        // Object format: { sd_id: "SD-XXX" } or { sd_key: "SD-XXX" } or { id: "SD-XXX" }
+        const id = dep.sd_id || dep.sd_key || dep.id;
         if (id && id.match(/^SD-[A-Z0-9-]+/)) {
           return id;
         }
@@ -62,19 +62,19 @@ export function parseDependencies(dependencies) {
 
 /**
  * Build a directed graph from Strategic Directives
- * @param {Array} sds - Array of SD objects with legacy_id and dependencies
+ * @param {Array} sds - Array of SD objects with sd_key and dependencies
  * @returns {Object} Graph with adjacency list and metadata
  */
 export function buildGraph(sds) {
   const graph = {
     nodes: new Map(),      // SD ID -> { sd, inDegree, outEdges }
     edges: [],             // Array of { from, to }
-    sdMap: new Map(),      // Quick lookup by legacy_id
+    sdMap: new Map(),      // Quick lookup by sd_key
   };
 
   // Initialize nodes
   for (const sd of sds) {
-    const id = sd.legacy_id;
+    const id = sd.sd_key || sd.id;
     graph.nodes.set(id, {
       sd,
       inDegree: 0,
@@ -86,7 +86,7 @@ export function buildGraph(sds) {
 
   // Build edges from dependencies
   for (const sd of sds) {
-    const toId = sd.legacy_id;
+    const toId = sd.sd_key || sd.id;
     const deps = parseDependencies(sd.dependencies);
 
     for (const fromId of deps) {
