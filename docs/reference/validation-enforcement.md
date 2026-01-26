@@ -1,8 +1,13 @@
 # Intelligent Validation Framework
 
-**Version:** 1.0.0
-**Created:** 2025-10-28
-**Part of:** SD-INTELLIGENT-THRESHOLDS (001-006)
+## Metadata
+- **Category**: Reference
+- **Status**: Active
+- **Version**: 1.3.0
+- **Author**: DOCMON Sub-Agent
+- **Last Updated**: 2026-01-26
+- **Tags**: validation, gates, handoffs, adaptive-thresholds, sd-type-aware
+- **Related SD**: SD-INTELLIGENT-THRESHOLDS (001-006), SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001, SD-LEO-FIX-COMPLETION-WORKFLOW-001
 
 ## Overview
 
