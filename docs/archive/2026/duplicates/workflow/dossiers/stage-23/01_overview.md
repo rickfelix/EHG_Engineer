@@ -1,0 +1,111 @@
+<!-- ARCHIVED: 2026-01-26T16:26:33.820Z
+     Reason: Duplicate of canonical file
+     Original location: docs\workflow\dossiers\stage-23\01_overview.md
+     See: docs/fixes/duplicate-consolidation-manifest.json for details
+-->
+
+# Stage 23 Operating Dossier: Continuous Feedback Loops
+
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, sd
+
+## Executive Summary
+
+**Stage ID**: 20
+**Title**: Continuous Feedback Loops
+**Owner**: EXEC
+**Overall Critique Score**: 3.0/5
+**Status**: Documentation Complete
+
+### Purpose
+Load and optimize all context for AI agents and system components, ensuring context completeness ≥90%, loading performance <500ms, and memory efficiency <2GB RAM for production-ready AI operations.
+
+### Key Characteristics
+- **Dependencies**: Stage 19 (Tri-Party Integration Verification)
+- **Enables**: Stage 23 (Continuous Feedback Loops)
+- **Substages**: 3 (Context Preparation, Loading Optimization, Validation & Testing)
+- **Primary Metrics**: Feedback volume, Response time, Implementation rate
+- **Automation Level**: 5/5 (fully automatable, EVA-owned)
+- **Risk Level**: 2/5 (moderate)
+
+### Critical Gaps Identified
+1. Limited automation for manual processes (optimize existing automation)
+2. Unclear metrics thresholds (no target values: 90%? 95%? <500ms? <1000ms?)
+3. Missing specific tool integrations (embeddings providers, vector databases)
+4. No explicit error handling (context loading failures, OOM errors)
+5. No rollback procedures documented (context version rollback)
+
+### Strategic Context
+This stage represents the venture's context loading capability, preparing all historical data, knowledge bases, and system context for AI agent operations (from Stages 16-19). Success requires integration with CrewAI framework for automated context management and SD-RECURSION-ENGINE-001 for adaptive feedback loops when context loading fails.
+
+## Regeneration Instructions
+
+This dossier was generated from canonical sources in the EHG_Engineer repository at commit `6ef8cf4`. To reproduce:
+
+```bash
+# Navigate to repository root
+cd /mnt/c/_EHG/EHG_Engineer
+
+# Verify commit hash
+git log -1 --oneline
+
+# Read source materials
+cat docs/workflow/stages.yaml | sed -n '873,918p'  # Stage 23 definition
+cat docs/workflow/critique/stage-23.md              # Critique (71 lines)
+
+# Regenerate dossier (if automation exists)
+# node scripts/generate-stage-dossier.js --stage=20 --output=docs/workflow/dossiers/stage-23/
+```
+
+**Source Evidence**:
+- Stage Definition: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:1011-1056 "id: 20, title: Continuous Feedback Loops"
+- Critique Analysis: EHG_Engineer@6ef8cf4:docs/workflow/critique/stage-23.md:1-71 "Overall: 3.0, Functional but needs optimization"
+
+## Venture Selection Context
+
+**Applicable Ventures**: All ventures with AI agents (chatbots, recommendation engines, automated analysis)
+**Customization Required**: Context sources (database tables, API endpoints, document repositories), embeddings models (OpenAI, Anthropic, Cohere), vector database configuration (Pinecone, Weaviate, Chroma)
+**Shared Infrastructure**: ContextLoaderCrew (CrewAI-based), vector database cluster, embeddings API
+
+**Venture-Specific Inputs**:
+- System context (from Stage 18 documentation sync)
+- Historical data (user interactions, transaction logs)
+- Knowledge base (FAQs, documentation, training data)
+
+**Cross-Stage Integration**:
+- Receives integration-verified APIs from Stage 19 (integration verification)
+- Provides loaded context to Stage 23 (pre-flight check)
+- May recurse to Stage 16 (AI CEO Framework) or Stage 19 (integration verification) if context sources fail
+
+## Document Structure
+
+This dossier consists of 11 files:
+
+1. **01_overview.md** (this file) - Executive summary and regeneration instructions
+2. **02_stage-map.md** - Dependency graph and workflow positioning
+3. **03_canonical-definition.md** - Full YAML specification with evidence
+4. **04_current-assessment.md** - Critique rubric scores and analysis
+5. **05_professional-sop.md** - Step-by-step execution procedures
+6. **06_agent-orchestration.md** - ContextLoaderCrew architecture
+7. **07_recursion-blueprint.md** - Recursive triggers and feedback loops
+8. **08_configurability-matrix.md** - Tunable parameters and customization
+9. **09_metrics-monitoring.md** - KPIs with SQL queries and dashboards
+10. **10_gaps-backlog.md** - Improvement areas mapped to Strategic Directives
+11. **11_acceptance-checklist.md** - Quality scoring criteria (target: 90/100)
+
+---
+
+**Next Steps**:
+1. Review 04_current-assessment.md for critique details
+2. Use 05_professional-sop.md for execution guidance
+3. Reference 06_agent-orchestration.md for CrewAI integration
+4. Consult 07_recursion-blueprint.md for adaptive triggers
+5. Track improvements via 10_gaps-backlog.md
+
+<!-- Generated by Claude Code Phase 9 | EHG_Engineer@6ef8cf4 | 2025-11-05 -->
