@@ -775,6 +775,116 @@ INSERT INTO leo_sub_agent_triggers (
 );
 ```
 
+## Sub-Agent Result Schema
+
+**SD-LEO-FIX-COLUMN-NAMES-001**: Canonical schema for sub-agent execution results.
+
+### Result Object Structure
+
+Sub-agents MUST return results in the following format:
+
+```javascript
+{
+  // REQUIRED: Execution verdict
+  verdict: 'PASS' | 'FAIL' | 'BLOCKED' | 'CONDITIONAL_PASS' | 'WARNING',
+
+  // CANONICAL: Use confidence_score (NOT confidence)
+  confidence_score: 85,  // Number in range [0, 100]
+
+  // OPTIONAL: Arrays for findings
+  critical_issues: [],   // Array of strings - blocking issues
+  warnings: [],          // Array of strings - non-blocking concerns
+  recommendations: [],   // Array of strings - improvement suggestions
+
+  // OPTIONAL: Detailed output
+  detailed_analysis: {}, // Object or string with full analysis
+
+  // OPTIONAL: Timing
+  execution_time_ms: 1234,  // Execution duration in milliseconds
+
+  // OPTIONAL: Validation context (LEO v4.4)
+  validation_mode: 'prospective' | 'retrospective',
+  justification: null,  // String - required for CONDITIONAL_PASS
+  conditions: null,     // Array - required for CONDITIONAL_PASS
+
+  // OPTIONAL: Additional metadata
+  metadata: {},
+  findings: []
+}
+```
+
+### Confidence Field Contract
+
+**Canonical field name**: `confidence_score`
+
+**Why confidence_score**:
+- 47+ sub-agent files already use this convention
+- Aligns with established code patterns
+- Reduces schema/code drift
+
+**Validation rules**:
+- Type: Must be a finite number
+- Range: [0, 100] inclusive
+- Missing: Stored as NULL (no silent defaulting)
+
+**Backward compatibility**:
+- Storage layer accepts both `confidence_score` and `confidence`
+- Priority: `confidence_score` > `confidence` when both present
+- Warnings emitted when legacy `confidence` field is used
+
+**Environment variables**:
+- `EHG_CONFIDENCE_DEFAULT_ENABLED=true`: Missing confidence defaults to 50 (default: false/NULL)
+
+### Database Storage
+
+Results are persisted to `sub_agent_execution_results` table:
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID | Primary key |
+| `sd_id` | VARCHAR | Strategic Directive ID |
+| `sub_agent_code` | VARCHAR | Sub-agent code (e.g., 'TESTING') |
+| `sub_agent_name` | VARCHAR | Display name |
+| `verdict` | VARCHAR | Mapped to allowed values |
+| `confidence` | INTEGER | Normalized from `confidence_score` |
+| `critical_issues` | JSONB | Array of strings |
+| `warnings` | JSONB | Array of strings |
+| `recommendations` | JSONB | Array of strings |
+| `detailed_analysis` | JSONB | Full analysis (may be compressed) |
+| `execution_time` | INTEGER | Seconds (converted from ms) |
+| `validation_mode` | VARCHAR | prospective/retrospective |
+| `justification` | TEXT | For CONDITIONAL_PASS |
+| `conditions` | JSONB | For CONDITIONAL_PASS |
+| `metadata` | JSONB | Additional data |
+| `created_at` | TIMESTAMP | Insertion time |
+
+### Example: Correct Sub-Agent Return
+
+```javascript
+// ✅ CORRECT: Use confidence_score
+return {
+  verdict: 'PASS',
+  confidence_score: 87,  // Canonical field
+  critical_issues: [],
+  warnings: ['Minor optimization opportunity'],
+  recommendations: ['Consider caching'],
+  detailed_analysis: { /* ... */ },
+  execution_time_ms: 1500
+};
+```
+
+### Example: Legacy Pattern (Deprecated)
+
+```javascript
+// ⚠️ DEPRECATED: Using confidence instead of confidence_score
+// This still works but emits a warning
+return {
+  verdict: 'PASS',
+  confidence: 87,  // Legacy - will be mapped but logs warning
+  // ...
+};
+```
+
 ## Related Documentation
 
 - [Patterns Guide](./patterns-guide.md) - Sub-agent integration patterns
@@ -785,4 +895,5 @@ INSERT INTO leo_sub_agent_triggers (
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1.0 | 2026-01-26 | Added Sub-Agent Result Schema (SD-LEO-FIX-COLUMN-NAMES-001) |
 | 1.0.0 | 2026-01-20 | Initial documentation, moved to LEO hub |
