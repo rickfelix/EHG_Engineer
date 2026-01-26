@@ -4,7 +4,7 @@
  */
 
 import { getValidationRequirements } from '../../../lib/utils/sd-type-validation.js';
-import { getImpactBasedSubAgents } from '../../../lib/intelligent-impact-analyzer.js';
+// NOTE: intelligent-impact-analyzer.js is deprecated - Claude Code handles impact analysis natively
 import { getPatternBasedSubAgents } from '../../../lib/learning/pattern-to-subagent-mapper.js';
 
 import {
@@ -71,39 +71,13 @@ async function orchestrate(supabase, phase, sdId, options = {}) {
       }
     }
 
-    // Step 3B: LLM Impact Analysis Enhancement
-    console.log('\nStep 3B: Running LLM intelligent impact analysis...');
-    let llmRequiredAgents = [];
-    try {
-      llmRequiredAgents = await getImpactBasedSubAgents(sd);
-      if (llmRequiredAgents.length > 0) {
-        console.log(`   LLM identified ${llmRequiredAgents.length} additional concerns:`);
-        for (const agent of llmRequiredAgents) {
-          console.log(`   [LLM] ${agent.code}: ${agent.reason}`);
-          const alreadyRequired = requiredSubAgents.some(sa =>
-            (sa.sub_agent_code || sa.code) === agent.code
-          );
-          if (!alreadyRequired) {
-            const subAgent = phaseSubAgents.find(sa =>
-              (sa.sub_agent_code || sa.code) === agent.code
-            );
-            if (subAgent) {
-              requiredSubAgents.push({ ...subAgent, reason: agent.reason, source: 'llm_impact' });
-              const skippedIdx = skippedSubAgents.findIndex(sa =>
-                (sa.sub_agent_code || sa.code) === agent.code
-              );
-              if (skippedIdx >= 0) {
-                skippedSubAgents.splice(skippedIdx, 1);
-              }
-            }
-          }
-        }
-      } else {
-        console.log('   No additional concerns identified by LLM analysis');
-      }
-    } catch (llmError) {
-      console.warn(`   LLM impact analysis failed (non-blocking): ${llmError.message}`);
-    }
+    // Step 3B: LLM Impact Analysis - DISABLED
+    // This step previously called the Anthropic API directly, but this is architecturally
+    // incorrect since Claude Code itself is the LLM doing the analysis. Impact analysis
+    // should be done by Claude Code as part of its natural reasoning during LEO protocol
+    // execution, not via a separate API call.
+    // See: lib/intelligent-impact-analyzer.js (deprecated)
+    console.log('\nStep 3B: LLM impact analysis skipped (Claude Code handles this natively)');
 
     // Step 3C: Pattern-Based Learning Enhancement
     console.log('\nStep 3C: Checking learned patterns from retrospectives...');

@@ -31,11 +31,11 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
 
   // Check bypasses for this SD (max 3)
   const { data: sdBypasses, error: sdError } = await supabase
-    .from('audit_log')
+    .from('validation_audit_log')
     .select('id')
-    .eq('action_type', 'VALIDATION_BYPASS')
-    .eq('target_id', canonicalSdId || sdId)
-    .gte('timestamp', today.toISOString());
+    .eq('failure_category', 'bypass')
+    .eq('sd_id', canonicalSdId || sdId)
+    .gte('created_at', today.toISOString());
 
   if (!sdError && sdBypasses && sdBypasses.length >= 3) {
     console.error('');
@@ -49,10 +49,10 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
 
   // Check global bypasses today (max 10)
   const { data: globalBypasses, error: globalError } = await supabase
-    .from('audit_log')
+    .from('validation_audit_log')
     .select('id')
-    .eq('action_type', 'VALIDATION_BYPASS')
-    .gte('timestamp', today.toISOString());
+    .eq('failure_category', 'bypass')
+    .gte('created_at', today.toISOString());
 
   if (!globalError && globalBypasses && globalBypasses.length >= 10) {
     console.error('');
@@ -62,28 +62,29 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
     return { success: false };
   }
 
-  // Log bypass to audit_log
+  // Log bypass to validation_audit_log
+  const correlationId = `bypass-${Date.now()}`;
   const { error: logError } = await supabase
-    .from('audit_log')
+    .from('validation_audit_log')
     .insert({
-      action_type: 'VALIDATION_BYPASS',
-      target_type: 'handoff',
-      target_id: canonicalSdId || sdId,
-      severity: 'warning',
-      description: `Bypass validation for ${handoffType} handoff`,
+      correlation_id: correlationId,
+      sd_id: canonicalSdId || sdId,
+      validator_name: 'handoff_bypass',
+      failure_reason: `Bypass validation for ${handoffType} handoff: ${bypassReason}`,
+      failure_category: 'bypass',
       metadata: {
         handoff_type: handoffType,
-        sd_id: sdId,
+        original_sd_id: sdId,
         canonical_sd_id: canonicalSdId,
         bypass_reason: bypassReason,
         sd_bypasses_today: (sdBypasses?.length || 0) + 1,
         global_bypasses_today: (globalBypasses?.length || 0) + 1
       },
-      timestamp: new Date().toISOString()
+      execution_context: 'cli'
     });
 
   if (logError) {
-    console.warn(`   ⚠️  Could not log bypass to audit_log: ${logError.message}`);
+    console.warn(`   ⚠️  Could not log bypass to validation_audit_log: ${logError.message}`);
   } else {
     console.log('');
     console.log('⚠️  BYPASS MODE ENABLED (SD-LEARN-010:US-005)');
@@ -91,7 +92,7 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
     console.log(`   Reason: ${bypassReason}`);
     console.log(`   SD Bypasses Today: ${(sdBypasses?.length || 0) + 1}/3`);
     console.log(`   Global Bypasses Today: ${(globalBypasses?.length || 0) + 1}/10`);
-    console.log('   ⚠️  Bypass logged to audit_log for review');
+    console.log('   ⚠️  Bypass logged to validation_audit_log for review');
     console.log('─'.repeat(50));
   }
 
