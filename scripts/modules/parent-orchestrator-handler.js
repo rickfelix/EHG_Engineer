@@ -52,14 +52,15 @@ export class ParentOrchestratorHandler {
       return { isParent: false, sd: null, children: [] };
     }
 
-    // Check metadata.is_parent flag
-    const isParent = sd.metadata?.is_parent === true;
+    // SD-LEO-FIX-PARENT-BLOCK-001: Robust parent detection
+    // Check multiple indicators:
+    // 1. metadata.is_parent === true (explicit flag)
+    // 2. sd_type === 'orchestrator' (type-based)
+    // 3. Has children in database (dynamic check)
+    const hasIsParentFlag = sd.metadata?.is_parent === true;
+    const isOrchestratorType = sd.sd_type === 'orchestrator';
 
-    if (!isParent) {
-      return { isParent: false, sd, children: [] };
-    }
-
-    // Get children
+    // Get children (also used for dynamic parent detection)
     const { data: children } = await this.supabase
       .from('strategic_directives_v2')
       // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
@@ -68,12 +69,26 @@ export class ParentOrchestratorHandler {
       // SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D1: Removed legacy_id (column dropped 2026-01-24)
     .order('sd_key', { ascending: true });
 
+    // SD-LEO-FIX-PARENT-BLOCK-001: Accept as parent if any indicator is true
+    const hasChildren = children && children.length > 0;
+    const isParent = hasIsParentFlag || isOrchestratorType || hasChildren;
+
+    if (!isParent) {
+      return { isParent: false, sd, children: [] };
+    }
+
     return {
       isParent: true,
       sd,
       children: children || [],
       childrenCount: children?.length || 0,
-      completedCount: (children || []).filter(c => c.status === 'completed').length
+      completedCount: (children || []).filter(c => c.status === 'completed').length,
+      // Include detection details for debugging
+      detectionMethod: {
+        hasIsParentFlag,
+        isOrchestratorType,
+        hasChildren
+      }
     };
   }
 
