@@ -325,10 +325,10 @@ CREATE TABLE ventures (
 
 | File | Change | Status |
 |------|--------|--------|
-| `docs/workflow/dossiers/stage-01/01_overview.md` | Updated maturity from "✅ Implemented" to "🚧 Partially Implemented (~85% after descoping)" | ✅ Done |
-| `docs/workflow/dossiers/stage-01/01_overview.md` | Added Implementation Gaps section with breakdown | ✅ Done |
-| `docs/workflow/dossiers/stage-01/05_professional-sop.md` | Marked substages 1.1 ✅, 1.2 ❌, 1.3 ❌ | ✅ Done |
-| `docs/workflow/dossiers/stage-01/05_professional-sop.md` | Added implementation status notes | ✅ Done |
+| `../stage-25/01_overview.md` | Updated maturity from "✅ Implemented" to "🚧 Partially Implemented (~85% after descoping)" | ✅ Done |
+| `../stage-25/01_overview.md` | Added Implementation Gaps section with breakdown | ✅ Done |
+| `../stage-25/05_professional-sop.md` | Marked substages 1.1 ✅, 1.2 ❌, 1.3 ❌ | ✅ Done |
+| `../stage-25/05_professional-sop.md` | Added implementation status notes | ✅ Done |
 | `docs/workflow/sop/01-draft-idea.md` | Added Implementation Status section | ✅ Done |
 | `docs/workflow/dossiers/stage-01/implementation-gaps.md` | Created comprehensive gap analysis (this document) | ✅ Done |
 

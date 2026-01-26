@@ -1,5 +1,14 @@
 # LEO Protocol Compliance Score Rubric v2 (TYPE-AGNOSTIC)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-24
+- **Tags**: database, e2e, security, feature
+
 **Version**: 2.0
 **Date**: 2026-01-24
 

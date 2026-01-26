@@ -1,5 +1,14 @@
 # Lesson Learned: User Story Validation Gap
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, e2e, unit, sd
+
 **Date**: 2025-10-16
 **SD**: SD-TEST-MOCK-001
 **Phase**: PLAN Verification

@@ -1,5 +1,14 @@
 # Lesson Learned: Always Check Existing Code Patterns First
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, unit, migration, schema
+
 **Date**: 2025-10-16
 **Context**: SD-RETRO-ENHANCE-001 PRD creation
 **Issue**: Used wrong table name (`prds` instead of `product_requirements_v2`)

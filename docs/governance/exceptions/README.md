@@ -3,7 +3,7 @@
 **Purpose**: This directory stores Chairman-approved exceptions to governance policies, particularly CrewAI compliance exceptions for stages.
 
 **Authority**: Chairman (sole approver)
-**Policy Reference**: [CrewAI Compliance Policy](/docs/workflow/crewai_compliance_policy.md)
+**Policy Reference**: [CrewAI Compliance Policy](../../workflow/crewai_compliance_policy.md)
 
 ---
 
@@ -24,7 +24,7 @@ exceptions/
 ### 1. CrewAI Compliance Exceptions
 **Naming**: `stage-XX-crewai-exception.md` (where XX = stage number, zero-padded)
 **Purpose**: Document approved deviations from mandatory CrewAI implementation requirements
-**Template**: See [CrewAI Compliance Policy](/docs/workflow/crewai_compliance_policy.md) Section 5
+**Template**: See [CrewAI Compliance Policy](../../workflow/crewai_compliance_policy.md) Section 5
 
 **Example Filenames**:
 - `stage-04-crewai-exception.md` (Stage 4 exception)
@@ -158,9 +158,9 @@ ORDER BY days_overdue DESC;
 
 ## Related Documentation
 
-- [CrewAI Compliance Policy](/docs/workflow/crewai_compliance_policy.md) - Full policy and exception process
-- [Stage Review Process](/docs/workflow/review_process.md) - Step 2.5 (CrewAI Compliance Check)
-- [Stage Review Template](/docs/workflow/review_templates/stage_review_template.md) - Section 2.6 (Exception documentation)
+- [CrewAI Compliance Policy](../../workflow/crewai_compliance_policy.md) - Full policy and exception process
+- [Stage Review Process](../../workflow/review_process.md) - Step 2.5 (CrewAI Compliance Check)
+- [Stage Review Template](../../workflow/review_templates/stage_review_template.md) - Section 2.6 (Exception documentation)
 
 ---
 

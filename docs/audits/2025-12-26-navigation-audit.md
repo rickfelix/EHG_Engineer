@@ -1,5 +1,14 @@
 # Sidebar Navigation Audit - 2025-12-26
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-26
+- **Tags**: testing, unit, security, feature
+
 ## Summary
 
 | Category | Count |

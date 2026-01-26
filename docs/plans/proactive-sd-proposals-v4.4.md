@@ -1,5 +1,14 @@
 # LEO Protocol v4.4: Proactive SD Proposal System
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, migration, schema
+
 ## Review Prompt for OpenAI / Antigravity
 
 **Context**: We are evolving the LEO Protocol (a governance system for AI-assisted software development) based on insights from Kath Korevec's "Proactive Agents" talk. The LEO Protocol currently uses a LEAD→PLAN→EXEC workflow with database-first state management.

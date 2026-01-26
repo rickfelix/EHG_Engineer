@@ -1,5 +1,14 @@
 # Root Cause Analysis: Refactor SD Workflow Issues
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-24
+- **Tags**: database, testing, feature, leo
+
 **RCA ID**: RCA-REFACTOR-SD-WORKFLOW-001
 **Date**: 2026-01-24
 **Affected SDs**: SD-LEO-REFAC-DB-SUB-003, SD-LEO-REFAC-BASE-AGENT-003, SD-LEO-REFAC-UAT-ASSESS-003

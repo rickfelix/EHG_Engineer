@@ -1,5 +1,14 @@
 # SD-HARDENING-V1-001: User Stories Summary
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, testing, e2e, migration
+
 **SD Title**: RLS Security Hardening (ehg repo)
 **Priority**: CRITICAL
 **Security Impact**: Fixes unauthorized access to chairman-only data

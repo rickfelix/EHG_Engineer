@@ -1,3 +1,12 @@
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-18
+- **Tags**: database, protocol, leo, sd
+
 ﻿# EHG_Engineer - LEO Compliance Report (2026-01-18)
 
 Protocol Reference: docs\03_protocols_and_standards\leo_protocol_v3.1.5.md

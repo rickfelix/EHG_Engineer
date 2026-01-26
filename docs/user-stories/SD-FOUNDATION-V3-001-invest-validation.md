@@ -1,5 +1,14 @@
 # INVEST Criteria Validation: SD-FOUNDATION-V3-001
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, testing, e2e, unit
+
 **SD**: SD-FOUNDATION-V3-001 - Data Integrity & Schema Remediation
 **Total Stories**: 4
 **Total Story Points**: 16

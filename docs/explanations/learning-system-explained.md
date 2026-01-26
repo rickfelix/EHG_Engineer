@@ -1,5 +1,14 @@
 # LEO Learning System: How Sub-Agents Query Past Lessons
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, migration
+
 ## Overview
 
 When a sub-agent (like DATABASE) is called to solve an issue (like RLS), it queries a **lessons learned database** using **keyword-based similarity matching**, NOT semantic search.

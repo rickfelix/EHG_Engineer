@@ -1,5 +1,14 @@
 # Venture Entities (vh)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: migration, rls, sd, reference
+
 ## Core Tables
 
 ### `vh_companies`

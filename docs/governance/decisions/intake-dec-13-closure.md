@@ -1,5 +1,14 @@
 # Strategic Intake Dec-13 — Closure Statement
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: protocol, leo, sd, ci
+
 **Status:** CLOSED
 **Closed By:** Chairman (Rick Dronkers)
 **Closure Date:** 2025-12-13

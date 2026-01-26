@@ -1,5 +1,14 @@
 # Triangulation Research: Marketing Content Distribution Approach
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: api, sd, infrastructure, automation
+
 ## Unified Prompt for OpenAI and AntiGravity (Gemini)
 
 **Date**: 2026-01-04

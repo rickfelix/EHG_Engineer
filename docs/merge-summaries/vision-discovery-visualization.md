@@ -1,5 +1,14 @@
 # Merge Summary (Vision Discovery + Vision Visualization)
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, schema, feature
+
 ## What shipped (end-to-end)
 This merge adds a persona-driven "Vision Discovery" layer that feeds the PRD pipeline, plus an optional "Vision Visualization" generator that produces and stores a UI mockup image for an approved vision brief.
 

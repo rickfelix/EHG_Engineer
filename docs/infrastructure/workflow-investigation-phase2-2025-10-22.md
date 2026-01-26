@@ -1,4 +1,13 @@
 # GitHub Actions Workflow Investigation - Phase 2
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, schema, feature
+
 **SD**: SD-CICD-WORKFLOW-FIX
 **Date**: 2025-10-22
 **Status**: Investigation Complete, Fixes Pending

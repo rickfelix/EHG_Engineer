@@ -1,5 +1,14 @@
 # Triangulation Research: Trademark Guidance Without Liability
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: api, feature, sd, ci
+
 ## Unified Prompt for OpenAI and AntiGravity (Gemini)
 
 **Date**: 2026-01-04

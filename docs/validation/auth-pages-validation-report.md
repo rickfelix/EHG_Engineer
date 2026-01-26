@@ -1,4 +1,13 @@
 # Auth Pages Validation Report
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: api, security, authentication, sd
+
 **Date**: 2025-12-21
 **Validator**: Principal Systems Analyst (Validation Agent)
 **Scope**: LoginPage.tsx and ResetPasswordPage.tsx

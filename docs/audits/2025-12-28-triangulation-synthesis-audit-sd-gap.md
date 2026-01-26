@@ -1,5 +1,14 @@
 # Triangulation Synthesis: Audit-to-SD Gap Analysis
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, migration, schema, protocol
+
 **Date**: 2025-12-28
 **Models**: Claude Code (Opus 4.5), OpenAI ChatGPT, Google Antigravity (Gemini)
 **Issue**: 79 audit issues → only 6 became Strategic Directives (~92% loss)

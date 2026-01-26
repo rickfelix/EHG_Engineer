@@ -1,5 +1,14 @@
 # Pending LEO Protocol Section Updates: Child SD Governance
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, migration, protocol, leo
+
 **Date**: 2025-11-28
 **Status**: PENDING - Database migration applied, protocol sections need adding
 **Related**: SD-UI-PARITY-001, database/migrations/20251128_child_sd_governance.sql

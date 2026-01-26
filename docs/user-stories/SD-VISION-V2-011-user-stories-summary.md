@@ -1,5 +1,14 @@
 # User Stories Summary: SD-VISION-V2-011
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, testing, e2e
+
 **Strategic Directive**: Vision V2: EVA Backend Intelligence
 **Total Stories**: 7
 **Total Story Points**: 32

@@ -1,5 +1,14 @@
 # Index: SD-STAGE-12-001 User Stories
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 **Strategic Directive**: SD-STAGE-12-001 (Stage 12: Adaptive Naming - Brand Variants)
 **Generated**: 2025-12-05
 **Total Stories**: 8

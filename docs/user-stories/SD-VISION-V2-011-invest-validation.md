@@ -1,5 +1,14 @@
 # INVEST Criteria Validation: SD-VISION-V2-011
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, testing, e2e
+
 **Strategic Directive**: Vision V2: EVA Backend Intelligence
 **Validation Date**: 2025-12-16
 **Validation Agent**: STORIES Agent v2.0.0

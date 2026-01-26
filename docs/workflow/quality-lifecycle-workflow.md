@@ -936,7 +936,7 @@ ORDER BY date DESC;
 
 ### Related Documentation
 
-- User Guide: `docs/04_features/quality-lifecycle-system.md`
+- User Guide: `../vision/quality-lifecycle-system.md`
 - Vision: `docs/vision/quality-lifecycle-system.md`
 - Database Schema: `docs/reference/schema/engineer/tables/feedback.md`
 

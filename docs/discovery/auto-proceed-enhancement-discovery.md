@@ -1,5 +1,14 @@
 # AUTO-PROCEED Enhancement Discovery Session
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-26
+- **Tags**: database, api, schema, security
+
 **Date**: 2025-01-25
 **Purpose**: Capture user requirements for enhancing AUTO-PROCEED to support long, sustainable runs
 

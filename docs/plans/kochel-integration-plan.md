@@ -1,5 +1,14 @@
 # PLAN: EHG Venture Factory + Shared Services Implementation
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, testing, e2e
+
 **Mode**: PLAN MODE ONLY (No execution until approved)
 **Vision Source**: ADR-002: Venture Factory Architecture
 **Date**: 2025-12-09

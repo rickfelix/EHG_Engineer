@@ -1,5 +1,14 @@
 # Refined Action Plan: Audit-to-SD Pipeline Fix
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, migration, schema
+
 **Date**: 2025-12-28
 **Status**: VALIDATED by triangulation (Claude + OpenAI + Antigravity)
 **Confidence**: HIGH

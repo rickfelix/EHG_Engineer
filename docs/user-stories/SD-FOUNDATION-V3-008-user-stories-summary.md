@@ -1,5 +1,14 @@
 # User Stories Summary: SD-FOUNDATION-V3-008
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, testing, e2e
+
 **Strategic Directive**: Four Buckets Decision Evidence End-to-End
 **Generated**: 2025-12-17
 **Total Stories**: 6 (2 critical, 2 high, 2 medium)

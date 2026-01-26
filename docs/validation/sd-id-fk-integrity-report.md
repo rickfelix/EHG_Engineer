@@ -1,5 +1,14 @@
 # SD-ID Foreign Key Integrity Report
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, testing, e2e, unit
+
 **Generated**: 2025-12-17
 **Database**: EHG_Engineer (dedlbzhpgkmetvhbkyzq)
 **Scope**: All tables with sd_id column

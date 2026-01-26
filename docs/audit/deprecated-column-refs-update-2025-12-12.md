@@ -1,5 +1,14 @@
 # Deprecated Column References Update - 2025-12-12
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, schema, feature, protocol
+
 ## Summary
 
 Updated 3 out of 4 `leo_protocol_sections` table records to replace deprecated SD ID schema patterns with the new standardized approach.

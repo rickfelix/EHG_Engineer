@@ -1,5 +1,14 @@
 # Strategic Intake Contract v1 — Governance Agreement
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: schema, sd, documentation, reference
+
 **Version:** 1.1 (LOCKED)
 **Effective Date:** 2025-12-13
 **Parties:** Chairman (Rick Dronkers), Codex (Deterministic Agent), Claude (Judgment Agent)

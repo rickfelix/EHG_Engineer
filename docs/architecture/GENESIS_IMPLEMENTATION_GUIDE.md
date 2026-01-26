@@ -1,5 +1,14 @@
 # Genesis Implementation Guide
 
+
+## Metadata
+- **Category**: Architecture
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, feature, guide
+
 > **Purpose**: Definitive guide to Genesis codebase locations, file responsibilities, and integration patterns.
 > **Last Updated**: 2026-01-01
 > **Status**: Ground-truth validated via multi-AI triangulation

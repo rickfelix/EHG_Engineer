@@ -1,5 +1,14 @@
 # LEO Protocol Lesson Learned: Sub-Agent Engagement Gap
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 **Date**: 2025-10-23
 **Session**: SD-VWC-PRESETS-001 (EXEC Phase)
 **Severity**: HIGH

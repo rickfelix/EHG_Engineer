@@ -1,6 +1,6 @@
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-01-26 10:47:48 PM
+**Generated**: 2026-01-26 7:17:01 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: LEAD agent operations and strategic validation (25-30k chars)
 
@@ -396,8 +396,23 @@ node scripts/add-sd-to-database.js --sd-id SD-XXX-001 --title "Your SD Title"
 | `category` | text | **YES** | Classification (feature, infrastructure, etc.) |
 | `priority` | text | **YES** | critical, high, medium, low |
 | `scope` | text | **YES** | What's included/excluded |
-| `success_criteria` | array | **YES** | Measurable success metrics |
+| `success_criteria` | JSONB array | **YES** | `[{ criterion: "What", measure: "How" }]` - At least one entry required |
+| `success_metrics` | JSONB array | **ALT** | `[{ metric: "Name", target: "Goal", actual: "Current" }]` - Alternative to success_criteria |
 | `target_application` | text | **YES** | EHG (frontend) or EHG_Engineer (backend) |
+
+### Success Metrics Requirement (MANDATORY)
+
+**At least one of `success_criteria` OR `success_metrics` MUST be populated with valid structure for LEAD-TO-PLAN handoff to pass.**
+
+| Field | Structure | Example |
+|-------|-----------|---------|
+| `success_criteria` | `[{ criterion, measure }]` | `[{ criterion: "Feature works", measure: "E2E test passes" }]` |
+| `success_metrics` | `[{ metric, target, actual }]` | `[{ metric: "Performance", target: "<100ms", actual: "TBD" }]` |
+
+**If both are empty or invalid, LEAD-TO-PLAN handoff will FAIL with:**
+`success_metrics AND success_criteria are both empty or have invalid structure`
+
+**Gate Reference**: `GATE_SD_TRANSITION_READINESS` in `scripts/modules/handoff/executors/lead-to-plan/gates/transition-readiness.js`
 
 ### SD Type-Specific Requirements
 
@@ -419,9 +434,9 @@ LEAD MUST answer these questions before approval:
 
 1. **Need Validation**: Is this solving a real user problem?
 2. **Solution Assessment**: Does it align with business objectives?
-3. **Existing Tools**: Can we leverage existing infrastructure?
+3. **Feasibility Review**: Any technical/resource constraints?
 4. **Value Analysis**: Does expected value justify effort?
-5. **Feasibility Review**: Any technical/resource constraints?
+5. **Existing Tools**: Can we leverage existing infrastructure?
 6. **Risk Assessment**: What are key risks and mitigations?
 7. **UI Inspectability**: Can users see and interpret the outputs?
 8. **Scope Reduction**: What was REMOVED? (Target >10% reduction)
@@ -458,7 +473,6 @@ node scripts/handoff.js execute PLAN-TO-LEAD SD-XXX-001
 - **Handoff System**: `docs/reference/handoff-system-guide.md`
 - **Schema Mapping**: `docs/reference/strategic-directives-v2-schema.md`
 - **Process Scripts**: `scripts/add-sd-to-database.js`, `scripts/handoff.js`
-
 
 ## Common SD Creation Errors and Solutions
 

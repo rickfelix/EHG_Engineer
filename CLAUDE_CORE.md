@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-01-26 10:47:48 PM
+**Generated**: 2026-01-26 7:17:01 AM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -815,76 +815,10 @@ const solution = await kb.getSolution('PAT-003');
 - Implementation guide: `docs/architecture/GENESIS_IMPLEMENTATION_GUIDE.md`
 - Quick reference: `docs/reference/genesis-codebase-guide.md`
 
-## Orchestrator SD Workflow Pattern
+## Parent-Child SD Hierarchy
 
 ### Overview
-
-An **orchestrator SD** is a parent Strategic Directive that coordinates multiple child SDs. The orchestrator pattern is used when work requires:
-- 2+ independently executable workstreams
-- Sequencing constraints (e.g., database migrations)
-- Parallel agent execution across distinct phases
-
-**Core Principle**: Parent SDs coordinate children; **every child goes through full LEAD→PLAN→EXEC**.
-
-### Step-by-Step Procedure
-
-**Step 1: Draft Creation**
-1. Create parent SD as draft with `relationship_type: 'parent'`
-2. Create ALL child SDs together as drafts
-3. Set `parent_sd_id` on each child pointing to parent
-4. Define `dependency_chain` if children have ordering requirements
-
-**Step 2: LEAD Approval**
-1. LEAD reviews the FULL breakdown (parent + all children)
-2. Each child scope summarized in parent's description
-3. Verify decomposition makes strategic sense
-4. Approve parent SD (does NOT auto-approve children)
-
-**Step 3: Parent PRD Derivation**
-1. Parent PRD is derived FROM child scopes (not reverse)
-2. PRD contains consolidation of child functional requirements
-3. Traceability map links parent PRD sections to child SD IDs
-4. Parent PRD documents cross-cutting concerns and sequencing
-
-**Step 4: Child Lifecycle**
-1. Each child runs independent LEAD→PLAN→EXEC cycle
-2. Children execute in dependency_chain order (or parallel if no dependencies)
-3. Child A completes → Child B starts
-4. Each child has own PRD, handoffs, retrospective
-
-**Step 5: Orchestrator Completion**
-1. All children must have `status = 'completed'`
-2. Parent retrospective created (optional - learnings from orchestration)
-3. Parent auto-completes when last child finishes
-
-### LEAD Approval Checklist (Orchestrator)
-
-Before approving an orchestrator SD, LEAD must verify:
-- [ ] List of all child SD IDs and titles documented
-- [ ] Each child scope is clearly defined and bounded
-- [ ] Parent PRD derived mapping exists (shows which children map to which parent requirements)
-- [ ] Database/migration constraint rationale documented (if applicable)
-- [ ] Sequencing/ordering requirements are explicit
-
-### Migration/Database Constraint Rationale
-
-When orchestrator children involve schema changes:
-- **Why ordering matters**: Child A may create tables that Child B references
-- **Constraint handling**: Foreign keys, RLS policies require proper sequencing
-- **Mitigation**: Use `dependency_chain` to enforce execution order
-- **Verification**: `child-sd-preflight.js` validates dependency completion
-
-### Orchestrator Preflight Enforcement
-
-**Command**: `node scripts/orchestrator-preflight.js SD-XXX-001`
-
-**What it checks**:
-- Detects if SD has children (is orchestrator)
-- Displays workflow requirements per child SD type
-- Shows PRD/E2E/handoff requirements for each child
-- Validates dependency chain integrity
-
-**Reference**: `scripts/orchestrator-preflight.js`
+Parent SDs coordinate children; **every child goes through full LEAD→PLAN→EXEC**.
 
 ### Relationship Types
 | Type | Workflow | Use Case |
@@ -897,7 +831,7 @@ When orchestrator children involve schema changes:
 1. **Every child gets full LEAD→PLAN→EXEC** - no shortcuts
 2. **Parent PLAN creates children** - PLAN agent proposes decomposition
 3. **Parent SDs bypass user story gates** - stories exist in child SDs
-4. **Children execute sequentially** - Child B waits for Child A (unless parallel specified)
+4. **Children execute sequentially** - Child B waits for Child A
 5. **Parent completes last** - after all children finish
 
 ### Orchestrator STOP Conditions
@@ -920,31 +854,6 @@ SELECT * FROM sd_family_tree WHERE parent_id = 'SD-PARENT-001';
 SELECT calculate_parent_sd_progress('SD-PARENT-001');
 SELECT get_next_child_sd('SD-PARENT-001');
 ```
-
-### Parent PRD Derivation (From Children)
-
-When creating a parent PRD for an orchestrator, use this template:
-
-**Required Subsections**:
-1. **Child Inventory** - List all child SD IDs with titles and types
-2. **Consolidated Scope** - High-level summary of what all children accomplish together
-3. **Cross-cutting Requirements** - Requirements that span multiple children
-4. **Sequencing/Dependencies** - Execution order and rationale
-5. **Traceability Map** - Table mapping parent requirements to child SDs
-
-**Traceability Map Format**:
-```
-| Parent Req ID | Description | Child SD(s) |
-|---------------|-------------|-------------|
-| FR-001 | Database schema | SD-XXX-001A, SD-XXX-001B |
-| FR-002 | API endpoints | SD-XXX-001C |
-| FR-003 | UI components | SD-XXX-001D |
-```
-
-**Example** (from SD-LEO-GEN-RENAME-COLUMNS-SELF-001):
-- Child A: Schema migration → FR-001 (create new columns)
-- Child B: Code updates → FR-002, FR-003 (update references)
-- Child C: Cleanup → FR-004 (remove deprecated columns)
 
 ## SD Type-Aware Workflow Paths
 

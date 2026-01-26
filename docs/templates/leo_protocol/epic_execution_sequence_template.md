@@ -1,5 +1,14 @@
 # Epic Execution Sequence: [Title]
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: testing, unit, protocol, leo
+
 **To:** EXEC Agent  
 **From:** PLAN Agent  
 **Protocol:** LEO Protocol v3.1.5  

@@ -1,5 +1,14 @@
 # Genesis Troubleshooting Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-08
+- **Tags**: database, migration, schema, rls
+
 > **SD**: SD-GENESIS-FIX-001
 > **Created**: 2026-01-08
 > **Status**: Active

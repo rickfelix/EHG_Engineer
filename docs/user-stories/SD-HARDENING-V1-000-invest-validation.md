@@ -1,5 +1,14 @@
 # INVEST Validation: SD-HARDENING-V1-000
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, testing, e2e
+
 **Strategic Directive**: Hardening V1: Post-Assessment Security & Stability
 **Total Stories**: 18 (across 6 child SDs)
 **Total Story Points**: 73

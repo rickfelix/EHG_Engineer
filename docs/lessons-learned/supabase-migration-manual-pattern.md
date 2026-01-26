@@ -1,5 +1,14 @@
 # Lesson Learned: Supabase Migration Manual Application Pattern
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, migration, schema
+
 **Date**: 2025-12-05
 **Context**: SD-STAGE-12-001 (Stage 12: Adaptive Naming - Brand Variants)
 **Category**: Database / Migrations

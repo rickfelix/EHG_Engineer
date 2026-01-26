@@ -29,9 +29,9 @@ This delta log captures key changes and patterns between the Stage 1 pilot and t
 **Change**: Stage 3 has DETAILED recursion (58 lines), Stage 4 has MINIMAL (header only), vs. Stage 1 NO recursion
 
 **Evidence**:
-- Stage 1: `docs/workflow/dossiers/stage-01/07_recursion-blueprint.md` — 24 lines, "No recursion support"
-- Stage 3: `docs/workflow/dossiers/stage-03/07_recursion-blueprint.md` — 170 lines, 3 inbound triggers detailed
-- Stage 4: `docs/workflow/dossiers/stage-04/07_recursion-blueprint.md` — 105 lines, header present but no triggers
+- Stage 1: `stage-25/07_recursion-blueprint.md` — 24 lines, "No recursion support"
+- Stage 3: `stage-25/07_recursion-blueprint.md` — 170 lines, 3 inbound triggers detailed
+- Stage 4: `stage-25/07_recursion-blueprint.md` — 105 lines, header present but no triggers
 
 **Impact**: Stage 3 requires significantly more recursion documentation due to its role as critical validation gate receiving FIN-001, MKT-001, QUALITY-001 triggers from downstream stages.
 

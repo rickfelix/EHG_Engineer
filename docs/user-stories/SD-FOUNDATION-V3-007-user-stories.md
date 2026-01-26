@@ -1,5 +1,14 @@
 # User Stories: SD-FOUNDATION-V3-007 - Chairman Dashboard E2E Test Suite
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, testing, e2e
+
 **Strategic Directive**: SD-FOUNDATION-V3-007
 **PRD Reference**: PRD-SD-FOUNDATION-V3-007
 **Generated**: 2025-12-17

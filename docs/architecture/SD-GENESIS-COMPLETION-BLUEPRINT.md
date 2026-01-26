@@ -1,4 +1,13 @@
 # Genesis Completion Blueprint
+
+## Metadata
+- **Category**: Architecture
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, testing, e2e
+
 ## Strategic Directive: SD-GENESIS-COMPLETE-001
 
 **Status**: DRAFT - Pending LEAD Approval

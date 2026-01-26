@@ -1,5 +1,14 @@
 # SD-FOUNDATION-V3-001: uuid_id Column Usage Audit Report
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, e2e, migration, schema
+
 **Generated**: 2025-12-17
 **User Story**: US-001 - Audit uuid_id Column Usage Across Codebase
 **Auditor**: EXEC Phase Sub-Agent

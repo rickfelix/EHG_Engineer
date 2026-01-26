@@ -1,5 +1,14 @@
 # Strategic Directive: Documentation Overhaul Initiative (PARENT)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-23
+- **Tags**: database, api, migration, feature
+
 ## SD Metadata
 - **SD Key**: SD-DOCS-OVERHAUL-PARENT-001
 - **Title**: Documentation Overhaul - Master Orchestrator

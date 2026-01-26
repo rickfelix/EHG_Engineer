@@ -1,5 +1,14 @@
 # Plan: Parent-Child SD Protocol Clarity (v2 - Option D)
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, unit, migration
+
 **Status**: APPROVED
 **Date**: 2025-12-06
 **Author**: Claude (LEO Protocol Enhancement)

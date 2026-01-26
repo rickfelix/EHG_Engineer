@@ -1,5 +1,14 @@
 # Strategic Directive: [Title]
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, unit, protocol, leo
+
 **To:** PLAN Agent  
 **From:** LEAD Agent  
 **Protocol:** LEO Protocol v3.1.5 (Multi-Application Framework)  

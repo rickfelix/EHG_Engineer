@@ -1,5 +1,14 @@
 # Triangulation Research: Venture Selection Framework
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, unit, migration
+
 **Created**: 2026-01-01
 **Purpose**: Multi-AI research for configurable venture selection strategy
 **Method**: Ground-truth triangulation (OpenAI + Gemini + Claude Code)

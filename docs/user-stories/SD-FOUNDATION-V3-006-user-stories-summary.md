@@ -1,5 +1,14 @@
 # User Stories Summary: SD-FOUNDATION-V3-006
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, testing, e2e
+
 **Strategic Directive**: 25-Stage Crew Mapping Completion
 **PRD ID**: PRD-SD-FOUNDATION-V3-006
 **Date**: 2025-12-17

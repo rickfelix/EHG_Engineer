@@ -43,7 +43,7 @@ The EHG_Engineer codebase contains **557 markdown files** across multiple direct
 mv README.md SUPABASE_CLI_README.md
 
 # Use existing project README from docs
-cp docs/04_features/EHG_ENGINEER_README.md README.md
+cp ../../guides/EHG_ENGINEER_README.md README.md
 # OR create new comprehensive README
 ```
 

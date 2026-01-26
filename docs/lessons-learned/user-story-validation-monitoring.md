@@ -1,5 +1,14 @@
 # User Story Auto-Validation Monitoring Checklist
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, schema, rls, feature
+
 **Created**: 2025-10-16
 **Related SD**: SD-TEST-MOCK-001
 **Prevention Mechanism**: auto-validate-user-stories-on-exec-complete.js

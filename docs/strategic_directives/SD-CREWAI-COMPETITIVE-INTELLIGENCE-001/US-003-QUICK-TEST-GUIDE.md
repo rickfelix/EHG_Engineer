@@ -1,5 +1,14 @@
 # US-003 Quick Test Execution Guide
 
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, e2e
+
 **Quick Reference**: How to run SD-CREWAI-COMPETITIVE-INTELLIGENCE-001 tests
 
 ---

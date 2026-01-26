@@ -1,5 +1,14 @@
 # Testing Strategy: SD-CREWAI-COMPETITIVE-INTELLIGENCE-001
 
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, testing, e2e, unit
+
 **SD**: SD-CREWAI-COMPETITIVE-INTELLIGENCE-001
 **PRD**: PRD-SD-CREWAI-COMPETITIVE-INTELLIGENCE-001
 **Phase**: PLAN

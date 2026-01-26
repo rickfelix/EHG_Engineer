@@ -250,7 +250,7 @@ ORDER BY
 
 **Trigger**: If tier distribution variance > 30%, trigger recursion (PRICE-005)
 
-**Evidence**: `EHG_Engineer@6ef8cf4:docs/workflow/dossiers/stage-15/07_recursion-blueprint.md` "Trigger PRICE-005"
+**Evidence**: `EHG_Engineer@6ef8cf4:../stage-25/07_recursion-blueprint.md` "Trigger PRICE-005"
 
 ---
 
@@ -520,7 +520,7 @@ FROM
 
 **Action**: LEAD agent investigates and considers pricing strategy revision
 
-**Evidence**: `EHG_Engineer@6ef8cf4:docs/workflow/dossiers/stage-15/07_recursion-blueprint.md` "Trigger PRICE-001"
+**Evidence**: `EHG_Engineer@6ef8cf4:../stage-25/07_recursion-blueprint.md` "Trigger PRICE-001"
 
 ---
 
@@ -532,7 +532,7 @@ FROM
 
 **Action**: LEAD agent revises revenue projections or adjusts pricing
 
-**Evidence**: `EHG_Engineer@6ef8cf4:docs/workflow/dossiers/stage-15/07_recursion-blueprint.md` "Trigger PRICE-002"
+**Evidence**: `EHG_Engineer@6ef8cf4:../stage-25/07_recursion-blueprint.md` "Trigger PRICE-002"
 
 ---
 
@@ -544,7 +544,7 @@ FROM
 
 **Action**: LEAD agent evaluates competitive response (maintain or adjust pricing)
 
-**Evidence**: `EHG_Engineer@6ef8cf4:docs/workflow/dossiers/stage-15/07_recursion-blueprint.md` "Trigger PRICE-003"
+**Evidence**: `EHG_Engineer@6ef8cf4:../stage-25/07_recursion-blueprint.md` "Trigger PRICE-003"
 
 ---
 
@@ -566,7 +566,7 @@ FROM
 
 **Action**: LEAD agent re-structures tiers based on actual customer preferences
 
-**Evidence**: `EHG_Engineer@6ef8cf4:docs/workflow/dossiers/stage-15/07_recursion-blueprint.md` "Trigger PRICE-005"
+**Evidence**: `EHG_Engineer@6ef8cf4:../stage-25/07_recursion-blueprint.md` "Trigger PRICE-005"
 
 ---
 
@@ -578,7 +578,7 @@ FROM
 
 **Action**: LEAD agent recalculates pricing model with updated cost structure
 
-**Evidence**: `EHG_Engineer@6ef8cf4:docs/workflow/dossiers/stage-15/07_recursion-blueprint.md` "Trigger PRICE-004"
+**Evidence**: `EHG_Engineer@6ef8cf4:../stage-25/07_recursion-blueprint.md` "Trigger PRICE-004"
 
 ---
 

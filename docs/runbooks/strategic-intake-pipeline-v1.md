@@ -1,5 +1,14 @@
 # Strategic Intake Pipeline v1 — Operator Runbook
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, schema, authentication
+
 **Version:** 1.1 (LOCKED)
 **Effective Date:** 2025-12-13
 **Owner:** Chairman (Rick Dronkers)

@@ -1,5 +1,14 @@
 # Plan: Parent-Child SD Protocol Clarity
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, e2e, unit, migration
+
 **Status**: PROPOSED
 **Date**: 2025-12-06
 **Author**: Claude (LEO Protocol Enhancement)
