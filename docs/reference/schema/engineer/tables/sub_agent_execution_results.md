@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-26T03:37:05.951Z
-**Rows**: 12,133
+**Generated**: 2026-01-26T04:24:06.742Z
+**Rows**: 12,165
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -19,7 +19,7 @@
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | `uuid` | **NO** | `gen_random_uuid()` | - |
-| sd_id | `text` | **NO** | - | Strategic Directive ID |
+| sd_id | `text` | YES | - | Strategic Directive ID |
 | sub_agent_code | `text` | **NO** | - | Short code (QA, SECURITY, DATABASE, etc.) |
 | sub_agent_name | `text` | **NO** | - | Full sub-agent name |
 | verdict | `text` | **NO** | - | Overall verdict (PASS, FAIL, BLOCKED, CONDITIONAL_PASS, WARNING) |
@@ -45,6 +45,7 @@
 
 ### Foreign Keys
 - `sub_agent_execution_results_risk_assessment_id_fkey`: risk_assessment_id → risk_assessments(id)
+- `sub_agent_execution_results_sd_id_fkey`: sd_id → strategic_directives_v2(id)
 
 ### Check Constraints
 - `check_conditional_pass_retrospective`: CHECK (((verdict <> 'CONDITIONAL_PASS'::text) OR (validation_mode = 'retrospective'::text)))
@@ -139,6 +140,11 @@
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION strip_nested_findings_from_metadata()`
+
+### trg_complete_deliverables_on_github_pass
+
+- **Timing**: AFTER INSERT
+- **Action**: `EXECUTE FUNCTION complete_deliverables_on_github_pass()`
 
 ### trg_warn_testing_verdict
 
