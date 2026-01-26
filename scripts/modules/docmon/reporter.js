@@ -224,3 +224,82 @@ export function writeReport(report, outputPath) {
   fs.writeFileSync(outputPath, JSON.stringify(report, null, 2), 'utf8');
   return outputPath;
 }
+
+/**
+ * Format DOCMON_ERROR output for CI/automation
+ * Standardized error format with counts and elapsed time
+ *
+ * Format:
+ *   DOCMON_ERROR: <ERROR_CODE>
+ *     Files: N | Violations: M | Elapsed: Xms
+ *     - path/to/file.md: reason
+ *
+ * Part of SD-LEO-INFRA-DOCMON-SUB-AGENT-001-D
+ */
+export function formatDocmonError(report, options = {}) {
+  const { maxViolations = 5 } = options;
+  const lines = [];
+
+  if (report.summary.invalid === 0) {
+    return null; // No error to format
+  }
+
+  const errorCode = `${report.validator.toUpperCase()}_VALIDATION_FAILED`;
+  lines.push(`DOCMON_ERROR: ${errorCode}`);
+  lines.push(`  Files: ${report.summary.total} | Violations: ${report.summary.invalid} | Elapsed: ${report.execution_time_ms}ms`);
+
+  for (const inv of report.results.invalid.slice(0, maxViolations)) {
+    const reason = inv.reason || inv.rule_id || 'Invalid';
+    lines.push(`  - ${inv.path}: ${reason}`);
+  }
+
+  if (report.results.invalid.length > maxViolations) {
+    lines.push(`  ... and ${report.results.invalid.length - maxViolations} more`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Format combined DOCMON_ERROR summary for multiple validators
+ */
+export function formatDocmonErrorSummary(combinedReport) {
+  const lines = [];
+  const { summary, validators, all_invalid } = combinedReport;
+
+  if (summary.total_violations === 0) {
+    return null; // No errors
+  }
+
+  lines.push('');
+  lines.push('════════════════════════════════════════════════════════════');
+  lines.push('  DOCMON VALIDATION FAILED');
+  lines.push('════════════════════════════════════════════════════════════');
+  lines.push(`  Files: ${summary.total_files_checked} | Violations: ${summary.total_violations} | Elapsed: ${combinedReport.execution_time_ms}ms`);
+  lines.push('');
+
+  // Show per-validator status
+  for (const [name, data] of Object.entries(validators)) {
+    if (data.invalid > 0) {
+      lines.push(`  DOCMON_ERROR: ${name.toUpperCase()}_VALIDATION_FAILED (${data.invalid})`);
+    }
+  }
+
+  // Show top violations
+  lines.push('');
+  lines.push('  Top violations:');
+  for (const v of all_invalid.slice(0, 5)) {
+    lines.push(`    - ${v.path} [${v.validator}]`);
+  }
+  if (all_invalid.length > 5) {
+    lines.push(`    ... and ${all_invalid.length - 5} more`);
+  }
+
+  lines.push('');
+  lines.push('────────────────────────────────────────────────────────────');
+  lines.push('  Fix violations or use DOCMON_BYPASS=1 for emergencies');
+  lines.push('════════════════════════════════════════════════════════════');
+  lines.push('');
+
+  return lines.join('\n');
+}
