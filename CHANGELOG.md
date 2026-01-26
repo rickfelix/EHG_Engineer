@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-01-26
+
+### Bugfix
+- **SD-LEO-FIX-PARENT-BLOCK-001: Fix Parent SD Metadata Synchronization** - PR #669
+  - **Root Cause**: Database trigger only set `sd_type='orchestrator'` but NOT `metadata.is_parent=true`, causing OrchestratorCompletionGuardian to fail silently
+  - **Fix**: Updated trigger to set BOTH flags atomically when parent_sd_id is assigned
+  - **Backfill**: Migrated 6 existing parent SDs missing `is_parent` flag:
+    - SD-INDUSTRIAL-2025-001, SD-LEO-REFACTOR-LARGE-FILES-001/002, SD-NAV-CMD-001, SD-STAGE-ARCH-001, SD-UNIFIED-PATH-2.1
+  - **Guardian Logic**: Implemented triple-check parent detection (sd_type OR is_parent OR has_children) with improved error propagation
+  - **Files Modified**:
+    - `database/migrations/20260126_fix_parent_sd_metadata.sql` - Trigger fix and backfill
+    - `scripts/modules/orchestrator-completion-guardian.js` - Robust detection logic
+    - `scripts/modules/handoff/orchestrator-completion-guardian.js` - Same robust detection
+    - `scripts/modules/parent-orchestrator-handler.js` - Updated isParentOrchestrator()
+  - **Impact**: Parent SDs now correctly block child SD completion when orchestrator is incomplete
+  - **Testing**: TESTING sub-agent verified PASS (90% confidence), all handoffs passed (EXEC-TO-PLAN 96%, LEAD-FINAL-APPROVAL 92%)
+
 ## 2026-01-23
 
 ### Infrastructure
