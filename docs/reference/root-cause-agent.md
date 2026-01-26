@@ -1,20 +1,22 @@
 # Root Cause Agent (RCA) - Operator Guide
 
 **Strategic Directive**: SD-RCA-001
-**Version**: 2.0
-**Last Updated**: 2026-01-25
+**Version**: 2.1
+**Last Updated**: 2026-01-26
 
 ## Metadata
 - **Category**: Reference
 - **Status**: Approved
-- **Version**: 2.0.0
+- **Version**: 2.1.0
 - **Author**: LEO Protocol Team
-- **Last Updated**: 2026-01-25
-- **Tags**: rca, root-cause-analysis, quality-gates, forensics, sub-agent
+- **Last Updated**: 2026-01-26
+- **Tags**: rca, root-cause-analysis, quality-gates, forensics, sub-agent, slash-commands
 
 ## Overview
 
 The Root Cause Agent (RCA) is LEO Protocol's corrective intelligence system that automatically detects failures, performs forensic analysis, and ensures proper remediation before allowing work to proceed. RCA operates as a quality gate enforcer and learning capture mechanism.
+
+**🆕 NEW in v2.1**: Skill command renamed from `/escalate` to `/rca` for consistency with sub-agent naming
 
 **🆕 NEW in v2.0**: Proactive learning integration, error-triggered invocation patterns, workaround refusal protocols
 
@@ -37,6 +39,52 @@ The Root Cause Agent (RCA) is LEO Protocol's corrective intelligence system that
 - **Non-blocking on error**: RCA failures never block legitimate handoffs
 - **🆕 RCA is a FIRST RESPONDER, not a LAST RESORT**: Invoke on FIRST occurrence, not after multiple failures
 - **🆕 Refuse workarounds**: No quick fixes without root cause understanding
+
+---
+
+## 💬 Slash Command: `/rca` (NEW in v2.1)
+
+The RCA agent can be invoked via the `/rca` slash command for progressive failure analysis. This command implements a 5-level escalation pattern for systematic root cause diagnosis.
+
+### Command Definition
+
+**File**: `.claude/commands/rca.md`
+**Skill Name**: `rca`
+**Former Name**: `/escalate` (renamed in v2.1 for consistency)
+
+### Usage
+
+When failures occur during LEO Protocol execution (handoffs, validations, sub-agents), invoke:
+
+```
+/rca
+```
+
+Or trigger automatically on these patterns:
+- "this keeps failing"
+- "stuck on this", "blocked"
+- "need root cause", "why does this keep happening"
+- "5 whys", "five whys", "diagnose"
+
+### RCA Levels (Progressive Escalation)
+
+| Level | Action | Time Budget |
+|-------|--------|-------------|
+| 1 | Initial failure | - |
+| 2 | First 5-Whys diagnosis (explorer agent) | 3 min |
+| 3 | Targeted fix attempt (<10 min effort) | 10 min |
+| 4 | Deeper 5-Whys analysis | 3 min |
+| 5 | Intelligent skip (log findings, create backlog) | - |
+
+### Integration with Sub-Agent
+
+The `/rca` command works alongside the RCA sub-agent:
+- **Command**: User-initiated skill for interactive diagnosis
+- **Sub-Agent**: Automatic background agent for system-triggered analysis
+
+Both use the same forensic analysis patterns and database tables.
+
+**See also**: `.claude/commands/rca.md` for complete command documentation
 
 ---
 
@@ -1035,6 +1083,13 @@ PENDING → UNDER_REVIEW → APPROVED → IN_PROGRESS → IMPLEMENTED → VERIFI
 ---
 
 ## Changelog
+
+### v2.1.0 (2026-01-26)
+- Renamed skill command from `/escalate` to `/rca` for clarity and consistency
+- Updated all command references to use `/rca` throughout documentation
+- Added skill command invocation section linking to `.claude/commands/rca.md`
+- Updated "Error-Triggered Auto-Invocation" examples to reference `/rca`
+- Maintained backward compatibility in database (old 'escalation' source still recognized)
 
 ### v2.0.0 (2026-01-25)
 - Added "Proactive Learning Integration" section - query issue_patterns before investigation

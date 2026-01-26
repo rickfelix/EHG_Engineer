@@ -28,9 +28,9 @@ No confirmation needed. Follow LEO Protocol (LEAD→PLAN→EXEC).
 QUALITY OVER SPEED: Fix root causes, never work around issues.
 
 ON FAILURE - Progressive Escalation (max 20 min total):
-1. First failure → Run /escalate Level 2 (5-Whys diagnosis via explorer agent)
+1. First failure → Run /rca Level 2 (5-Whys diagnosis via explorer agent)
 2. If quick fix found (<10 min) → Attempt fix, retry
-3. If fix fails → Run /escalate Level 4 (deeper 5-Whys)
+3. If fix fails → Run /rca Level 4 (deeper 5-Whys)
 4. Still failing → Skip with intelligence (log findings, create backlog item)
 
 NEVER ask user what to do. Diagnose → Fix → Retry → Skip. Always log learnings.
@@ -65,7 +65,7 @@ You are now in **continuous execution mode**. Follow these rules:
 - If validation fails, fix the validation logic (not bypass it)
 - Quality is more important than speed - take time to do it right
 
-### On Failure - Progressive Escalation (/escalate pattern):
+### On Failure - Progressive Escalation (/rca pattern):
 **NEVER ask user what to do. Follow this escalation automatically:**
 
 | Level | Action | Time Budget |
@@ -102,7 +102,7 @@ You are now in **continuous execution mode**. Follow these rules:
 ### Current Session Commands:
 - \`npm run sd:next\` - Get next SD
 - \`npm run sd:status\` - View progress
-- \`/escalate\` - Manual escalation skill (auto-triggered on failure)
+- \`/rca\` - Root cause analysis skill (auto-triggered on failure)
 
 Start now by checking the current SD status or proceeding to the next phase.
 --------------------------------------------------------------------------------
