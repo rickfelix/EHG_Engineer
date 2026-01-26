@@ -192,8 +192,24 @@ jobs:
       - name: Fail on critical issues (PRs only)
         if: github.event_name == 'pull_request' && (steps.results.outputs.location_failed == 'true' || steps.results.outputs.naming_failed == 'true')
         run: |
-          echo "Critical documentation validation issues found in PR"
-          echo "See docmon-report.json artifact for details"
+          echo ""
+          echo "════════════════════════════════════════════════════════════"
+          echo "  DOCMON VALIDATION FAILED"
+          echo "════════════════════════════════════════════════════════════"
+          echo "  Files: ${{ steps.results.outputs.files_checked }} | Violations: ${{ steps.results.outputs.violations }}"
+          echo ""
+          if [ "${{ steps.results.outputs.location_failed }}" == "true" ]; then
+            echo "  DOCMON_ERROR: LOCATION_VALIDATION_FAILED"
+          fi
+          if [ "${{ steps.results.outputs.naming_failed }}" == "true" ]; then
+            echo "  DOCMON_ERROR: NAMING_VALIDATION_FAILED"
+          fi
+          echo ""
+          echo "────────────────────────────────────────────────────────────"
+          echo "  See docmon-report.json artifact for details"
+          echo "  Run 'npm run docmon:validate' locally to reproduce"
+          echo "════════════════════════════════════════════════════════════"
+          echo ""
           exit 1
 
   notify-on-failure:

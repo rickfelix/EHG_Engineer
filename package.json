@@ -255,6 +255,7 @@
     "docs:validate-metadata": "node scripts/validate-doc-metadata.js",
     "docs:validate-naming": "node scripts/validate-doc-naming.js",
     "docs:validate-links": "node scripts/validate-doc-links.js",
+    "docs:validate:staged": "node scripts/validate-doc-staged.js",
     "docs:detect-duplicates": "node scripts/detect-duplicate-docs.js",
     "docs:inject-metadata": "node scripts/inject-doc-metadata.js",
     "docs:health": "node scripts/doc-health-report.js",
