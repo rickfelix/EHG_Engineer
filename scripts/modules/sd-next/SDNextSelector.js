@@ -34,8 +34,14 @@ import {
   displaySessionContext,
   displayParallelOpportunities,
   showFallbackQueue,
-  showExhaustedBaselineMessage
+  showExhaustedBaselineMessage,
+  displayBlockedStateBanner,
+  isOrchestratorBlocked
 } from './display/index.js';
+import {
+  detectAllBlockedState,
+  persistAllBlockedState
+} from './blocked-state-detector.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -98,6 +104,9 @@ export class SDNextSelector {
     const hierarchyData = await loadSDHierarchy(this.supabase);
     this.allSDs = hierarchyData.allSDs;
     this.sdHierarchy = hierarchyData.sdHierarchy;
+
+    // Check for blocked orchestrators (SD-LEO-ENH-AUTO-PROCEED-001-12)
+    await this.checkBlockedOrchestrators();
 
     // Load data
     const baselineData = await loadActiveBaseline(this.supabase);
@@ -201,6 +210,48 @@ export class SDNextSelector {
       this.multiRepoStatus = checkUncommittedChanges(true, { minAgeDays: 5 });
     } catch {
       this.multiRepoStatus = null;
+    }
+  }
+
+  /**
+   * Check for blocked orchestrators (SD-LEO-ENH-AUTO-PROCEED-001-12)
+   * Detects ALL_BLOCKED state for orchestrator SDs and displays warning
+   */
+  async checkBlockedOrchestrators() {
+    // Find active orchestrator SDs
+    const orchestrators = [];
+    for (const [, sd] of this.allSDs) {
+      if (sd.sd_type === 'orchestrator' && sd.status !== 'completed' && sd.status !== 'cancelled') {
+        orchestrators.push(sd);
+      }
+    }
+
+    if (orchestrators.length === 0) return;
+
+    // Check each orchestrator for blocked state
+    for (const orch of orchestrators) {
+      // First check if already marked as blocked in metadata
+      if (isOrchestratorBlocked(orch)) {
+        const blockedState = orch.metadata?.all_blocked_state;
+        if (blockedState?.is_blocked) {
+          displayBlockedStateBanner({
+            ...blockedState,
+            orchestratorId: orch.id
+          });
+          continue;
+        }
+      }
+
+      // Detect blocked state
+      const blockedState = await detectAllBlockedState(orch.id, this.supabase);
+
+      if (blockedState.isAllBlocked) {
+        // Persist the blocked state
+        await persistAllBlockedState(orch.id, blockedState, this.supabase);
+
+        // Display the banner
+        displayBlockedStateBanner(blockedState);
+      }
     }
   }
 

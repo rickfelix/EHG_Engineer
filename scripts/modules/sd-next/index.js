@@ -44,5 +44,15 @@ export {
   displaySessionContext,
   displayParallelOpportunities,
   showFallbackQueue,
-  showExhaustedBaselineMessage
+  showExhaustedBaselineMessage,
+  displayBlockedStateBanner,
+  getBlockedStateIndicator,
+  isOrchestratorBlocked
 } from './display/index.js';
+
+// Blocked state detection (SD-LEO-ENH-AUTO-PROCEED-001-12)
+export {
+  detectAllBlockedState,
+  persistAllBlockedState,
+  recordUserDecision
+} from './blocked-state-detector.js';
