@@ -63,11 +63,39 @@ export class OrchestratorCompletionGuardian {
       .single();
 
     if (parentError || !parent) {
-      return this.fail('PARENT_NOT_FOUND', `SD ${this.sdId} not found in database`);
+      const errorMsg = `SD ${this.sdId} not found in database`;
+      console.error(`❌ PARENT_NOT_FOUND: ${errorMsg}`);
+      return this.fail('PARENT_NOT_FOUND', errorMsg);
     }
 
-    if (parent.sd_type !== 'orchestrator') {
-      return this.fail('NOT_ORCHESTRATOR', `SD type is '${parent.sd_type}', not 'orchestrator'`);
+    // SD-LEO-FIX-PARENT-BLOCK-001: Robust parent detection
+    // Check multiple indicators of parent/orchestrator status:
+    // 1. sd_type === 'orchestrator'
+    // 2. metadata.is_parent === true
+    // 3. Has children in database (dynamic check)
+    const isOrchestratorType = parent.sd_type === 'orchestrator';
+    const hasIsParentFlag = parent.metadata?.is_parent === true;
+
+    // Check for actual children in database
+    const { data: children, error: childError } = await supabase
+      .from('strategic_directives_v2')
+      .select('id')
+      .eq('parent_sd_id', this.sdId)
+      .limit(1);
+
+    if (childError) {
+      console.error(`⚠️ Warning: Could not check for children: ${childError.message}`);
+    }
+
+    const hasChildren = children && children.length > 0;
+    const isParentOrOrchestrator = isOrchestratorType || hasIsParentFlag || hasChildren;
+
+    console.log(`   Detection: sd_type=${parent.sd_type}, is_parent=${hasIsParentFlag}, has_children=${hasChildren}`);
+
+    if (!isParentOrOrchestrator) {
+      const errorMsg = `SD is not a parent/orchestrator (sd_type='${parent.sd_type}', is_parent=${hasIsParentFlag}, has_children=${hasChildren})`;
+      console.error(`❌ NOT_ORCHESTRATOR: ${errorMsg}`);
+      return this.fail('NOT_ORCHESTRATOR', errorMsg);
     }
 
     this.parentData = parent;
