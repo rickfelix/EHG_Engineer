@@ -1,8 +1,8 @@
-# /escalate - Progressive Failure Escalation with 5-Whys
+# /rca - Root Cause Analysis with 5-Whys
 
-When a handoff, validation, or sub-agent fails, use this progressive escalation pattern instead of simple retry-then-skip.
+When a handoff, validation, or sub-agent fails, use this root cause analysis pattern instead of simple retry-then-skip.
 
-## Escalation Levels
+## RCA Levels
 
 ### Level 1: Initial Failure
 Standard attempt failed. Log the failure and proceed to Level 2.
@@ -90,7 +90,7 @@ If still failing after Level 4:
 This command is part of the **Command Ecosystem**. For full workflow context, see:
 - **[Command Ecosystem Reference](../../docs/reference/command-ecosystem.md)** - Complete inter-command flow diagram and relationships
 
-**Note**: `/escalate` is typically invoked when handoffs or sub-agents fail, requiring progressive diagnosis and remediation.
+**Note**: `/rca` is typically invoked when handoffs or sub-agents fail, requiring progressive diagnosis and remediation.
 
 ---
 
@@ -101,11 +101,11 @@ This command is part of the **Command Ecosystem**. For full workflow context, se
 | 2 (First 5-Whys) | 3 min | Proceed with partial findings |
 | 3 (Targeted Fix) | 10 min | Skip fix, go to Level 4 |
 | 4 (Second 5-Whys) | 3 min | Skip with available findings |
-| Total Escalation | 20 min | Force skip, log timeout |
+| Total RCA | 20 min | Force skip, log timeout |
 
 ## Integration with Continuous Mode
 
-When in continuous mode (`npm run leo:prompt`), failures automatically trigger this escalation:
+When in continuous mode (`npm run leo:prompt`), failures automatically trigger this RCA:
 
 ```javascript
 // Pseudo-code for continuous mode
@@ -167,7 +167,7 @@ Retrying handoff...
 {
   "sd_id": "SD-XXX",
   "failure_type": "HANDOFF_BLOCKED",
-  "escalation_level_reached": 4,
+  "rca_level_reached": 4,
   "first_5_whys": { ... },
   "second_5_whys": { ... },
   "fixes_attempted": [ ... ],

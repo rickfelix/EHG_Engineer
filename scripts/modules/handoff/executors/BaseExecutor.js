@@ -314,7 +314,7 @@ export class BaseExecutor {
         console.log('');
         console.log('   Options:');
         console.log('   1. Run: node scripts/execute-manual-migrations.js');
-        console.log('   2. Use /escalate to perform RCA on the failure');
+        console.log('   2. Use /rca to perform root cause analysis on the failure');
         console.log('   3. Execute the SQL manually via psql or Supabase dashboard');
         console.log('');
       }
@@ -657,7 +657,7 @@ export class BaseExecutor {
       lines.forEach(line => console.log(`      ${line.trim()}`));
     }
 
-    console.log('\n   💡 Use /escalate to invoke the formal 5-Whys analysis process');
+    console.log('\n   💡 Use /rca to invoke the formal 5-Whys root cause analysis process');
     console.log('   ─'.repeat(30));
   }
 }

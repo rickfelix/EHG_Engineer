@@ -129,7 +129,7 @@ export async function checkPendingMigrations(supabase, sd, options = {}) {
         console.log('   🚨 REQUIRED ACTION:');
         console.log('   1. Review the error message above');
         console.log('   2. Check database/manual-updates/ for the pending SQL files');
-        console.log('   3. Execute migrations manually or use /escalate for RCA');
+        console.log('   3. Execute migrations manually or use /rca for root cause analysis');
         console.log('');
       }
     } else if (result.hasPendingMigrations) {
@@ -251,7 +251,7 @@ async function consultIssuePatterns(supabase, errorMessage) {
     const { data, error } = await supabase
       .from('issue_patterns')
       .select('pattern_name, resolution_summary, resolution_steps, root_cause')
-      .or(`pattern_name.ilike.%migration%,pattern_name.ilike.%database%,pattern_name.ilike.%sql%`)
+      .or('pattern_name.ilike.%migration%,pattern_name.ilike.%database%,pattern_name.ilike.%sql%')
       .eq('status', 'ACTIVE')
       .limit(5);
 
@@ -279,7 +279,7 @@ async function consultRetrospectives(supabase, errorMessage) {
       .from('retrospectives')
       .select('key_learnings, what_went_well, what_needs_improvement, action_items')
       .eq('status', 'PUBLISHED')
-      .or(`key_learnings.ilike.%migration%,key_learnings.ilike.%database%,key_learnings.ilike.%sql%`)
+      .or('key_learnings.ilike.%migration%,key_learnings.ilike.%database%,key_learnings.ilike.%sql%')
       .order('conducted_date', { ascending: false })
       .limit(5);
 

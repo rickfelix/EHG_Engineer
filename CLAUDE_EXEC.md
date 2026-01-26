@@ -1,6 +1,6 @@
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-01-26 8:30:26 PM
+**Generated**: 2026-01-26 9:35:02 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: EXEC agent implementation requirements and testing (20-25k chars)
 
@@ -28,7 +28,7 @@ At each handoff point, familiarize yourself with and read the LEO protocol docum
 **Trigger**: When encountering errors, blockers, or failures during execution.
 
 **1. 5-Whys Root Cause Analysis**
-When encountering issues or blockers, determine the root cause by asking five whys before attempting fixes. Use /escalate to invoke the formal 5-Whys analysis process.
+When encountering issues or blockers, determine the root cause by asking five whys before attempting fixes. Use /rca to invoke the formal 5-Whys analysis process.
 
 **2. Sustainable Resolution**
 Resolve root causes so they do not happen again in the future. Update processes, documentation, or automation to prevent recurrence.
