@@ -1,7 +1,7 @@
 # Stage 2: AI Multi-Model Critique
 
 ## Metadata
-- **Category**: Workflow
+- **Category**: Protocol
 - **Status**: Approved
 - **Version**: 2.0.0
 - **Author**: Documentation Sub-Agent (DOCMON)

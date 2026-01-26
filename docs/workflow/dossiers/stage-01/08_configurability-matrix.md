@@ -1,5 +1,14 @@
 # Stage 1: Configurability Matrix
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, migration, schema, supabase
+
 ## Configuration Surfaces
 
 | Parameter | Type | Default | Range/Options | Impact | Source |

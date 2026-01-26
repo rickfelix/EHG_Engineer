@@ -3,8 +3,8 @@
 This directory contains deployment strategies, operational procedures, and infrastructure documentation for the EHG Engineer project.
 
 ## Metadata
-- **Category**: deployment
-- **Status**: active
+- **Category**: Deployment
+- **Status**: Approved
 - **Last Updated**: 2025-10-24
 
 ---
@@ -265,8 +265,8 @@ npm run migrate:rollback
 
 ## Navigation
 
-- **Parent**: [Documentation Home](/docs/README.md)
-- **Previous**: [05 Testing](/docs/05_testing/README.md)
+- **Parent**: [Documentation Home](../01_architecture/README.md)
+- **Previous**: [05 Testing](../05_testing/README.md)
 
 ---
 

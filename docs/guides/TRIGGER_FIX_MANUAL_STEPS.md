@@ -1,5 +1,14 @@
 # Manual Trigger Fix Instructions
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, migration, guide, sd
+
 **Issue**: `auto_populate_retrospective_fields()` trigger is blocking embedding generation
 
 **Root Causes**:

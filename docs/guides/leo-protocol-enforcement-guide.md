@@ -1,5 +1,14 @@
 # LEO Protocol Enforcement System Guide
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, guide, protocol, leo
+
 ## 🛡️ Overview
 
 The LEO Protocol Enforcement System ensures 100% compliance with all protocol requirements, preventing any skipped steps or violations.

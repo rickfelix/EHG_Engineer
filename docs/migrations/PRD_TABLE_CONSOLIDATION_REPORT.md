@@ -1,5 +1,14 @@
 # PRD Table Consolidation Analysis & Migration Plan
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 **Date**: 2025-10-16
 **Status**: Ready for Execution
 **Priority**: Medium (Technical Debt Cleanup)

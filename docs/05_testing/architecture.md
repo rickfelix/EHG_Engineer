@@ -1,5 +1,14 @@
 # Multi-Application Testing Architecture
 
+
+## Metadata
+- **Category**: Architecture
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, testing, e2e
+
 > **ARCHITECTURE UPDATE (SD-ARCH-EHG-007)**: EHG is now the **unified frontend** (user + admin via `/admin` routes). EHG_Engineer is **backend API only**. Both share the consolidated database (`dedlbzhpgkmetvhbkyzq`).
 
 ## Overview

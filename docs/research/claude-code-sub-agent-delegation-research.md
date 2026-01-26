@@ -1,5 +1,14 @@
 # 🔍 Deep Research Prompt: Claude Code Sub-Agent Automatic Delegation
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-04
+- **Tags**: database, testing, unit, migration
+
 Copy the prompt below into your browser search or use it to research Claude Code documentation, GitHub issues, and community forums:
 
 ---

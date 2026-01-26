@@ -1,5 +1,14 @@
 # User Story E2E Test Mapping (MANDATORY)
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: testing, e2e, unit, protocol
+
 ## User Story E2E Test Mapping (MANDATORY)
 
 **Evidence**: SD-EVA-MEETING-001 - "Initial testing focused on E2E without explicit user story mapping" and "E2E tests without user stories miss the acceptance criteria linkage"

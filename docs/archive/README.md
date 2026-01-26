@@ -87,7 +87,7 @@ cat /mnt/c/_EHG/EHG_Engineer/docs/archive/protocols/leo_protocol_v3.1.5.md
 
 ## Navigation
 
-- **Parent**: [Documentation Home](/docs/README.md)
+- **Parent**: [Documentation Home](../01_architecture/README.md)
 - **Protocols Archive**: [protocols/README.md](protocols/README.md)
 
 ---

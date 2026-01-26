@@ -1,5 +1,14 @@
 # LEO Hook Feedback System Documentation
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, migration, schema
+
 ## Overview
 
 The LEO Hook Feedback System is an intelligent git hook integration that automatically resolves common commit-time issues through sub-agent delegation. It ensures LEO Protocol compliance while providing a seamless developer experience.

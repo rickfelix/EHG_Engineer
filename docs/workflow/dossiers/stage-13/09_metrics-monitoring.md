@@ -1,5 +1,14 @@
 # Metrics & Monitoring: Stage 13 Exit-Oriented Design
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, sd, workflow, automation
+
 ## Overview
 Comprehensive monitoring framework for tracking Stage 13 execution health, exit strategy quality, and value optimization progress.
 

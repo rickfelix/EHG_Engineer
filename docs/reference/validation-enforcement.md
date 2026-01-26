@@ -2,7 +2,7 @@
 
 ## Metadata
 - **Category**: Reference
-- **Status**: Active
+- **Status**: Approved
 - **Version**: 1.3.0
 - **Author**: DOCMON Sub-Agent
 - **Last Updated**: 2026-01-26

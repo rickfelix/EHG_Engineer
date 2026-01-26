@@ -1,5 +1,14 @@
 # Stage 14 Configurability Matrix
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, schema, feature, validation
+
 ## Tunable Parameters
 
 ### 1. Metrics Thresholds

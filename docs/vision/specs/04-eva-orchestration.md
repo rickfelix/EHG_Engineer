@@ -1,5 +1,14 @@
 # EVA Orchestration Specification
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-12
+- **Tags**: database, api, testing, unit
+
 **Vision v2 Chairman's OS - Chief of Staff Architecture**
 
 > "EVA thinks so you don't have to."

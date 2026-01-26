@@ -1,5 +1,14 @@
 # Stage 11 Research Brief: Strategic Naming & Brand Foundation
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, workflow, automation
+
 ## Focus Area
 Develop strategic brand identity and naming conventions.
 

@@ -1,5 +1,14 @@
 # Stage 5: Stage Map & Workflow Position
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: validation, workflow, ci
+
 **Status**: Ideation phase (Stages 1-10)
 
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:183-227 "id: 5, title: Profitability Forecasting"

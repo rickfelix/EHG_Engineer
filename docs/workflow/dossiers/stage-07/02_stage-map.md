@@ -1,5 +1,14 @@
 # Stage 7: Stage Map & Dependencies
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: validation, architecture, workflow, ci
+
 **Position**: Stage 7 of 40 (18% through venture creation workflow)
 **Phase**: Ideation (Stages 1-10)
 

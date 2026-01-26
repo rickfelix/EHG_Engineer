@@ -1,5 +1,14 @@
 # Phase 6 Batch Generation: Delta Log
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, testing, unit, protocol
+
 **Date**: 2025-11-05
 **Batch**: Stages 11, 12, 13
 **Protocol**: Stage Operating Dossier System v1.0

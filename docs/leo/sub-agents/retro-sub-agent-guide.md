@@ -1,5 +1,14 @@
 # Retrospective Sub-Agent Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-24
+- **Tags**: database, testing, migration, schema
+
 **SD-REFACTOR-RETRO-001: Retrospective Sub-Agent Modularization**
 **Updated: SD-LEO-INFRA-ENHANCE-RETRO-SUB-001 (2026-01-24): Enhanced quality and specificity**
 
@@ -746,8 +755,8 @@ const RETRO_CONFIG = {
 
 ## Related Documentation
 
-- [Sub-Agent Patterns Guide](./sub-agent-patterns-guide.md) - Base patterns
-- [Governance Library Guide](./governance-library-guide.md) - Exception handling
+- [Sub-Agent Patterns Guide](../../reference/agent-patterns-guide.md) - Base patterns
+- [Governance Library Guide](../../reference/governance-library-guide.md) - Exception handling
 - [Design Sub-Agent Guide](./design-sub-agent-guide.md) - DESIGN patterns
 
 ---

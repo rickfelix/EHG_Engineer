@@ -1,5 +1,14 @@
 # LEO Protocol v4.3.3 - Quick Reference Guide
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, testing, e2e, schema
+
 > **Note**: This guide updated for LEO Protocol v4.3.3. See CLAUDE.md for full protocol details.
 
 ## 🚀 Quick Start Commands

@@ -1,5 +1,14 @@
 # Stage 7: Acceptance Checklist
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, feature, protocol, validation
+
 **Purpose**: Verify Stage 7 Operating Dossier meets quality standards for production use
 
 **Target Score**: ≥85/100 (passing grade)

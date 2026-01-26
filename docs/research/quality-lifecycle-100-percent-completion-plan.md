@@ -1,5 +1,14 @@
 # Quality Lifecycle System - Path to 100% Completion
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-18
+- **Tags**: database, api, e2e, migration
+
 **Date**: 2026-01-18
 **Parent SD**: SD-QUALITY-LIFECYCLE-001
 **Status**: Planning

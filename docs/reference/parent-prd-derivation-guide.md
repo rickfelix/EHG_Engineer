@@ -1,5 +1,14 @@
 # Parent PRD Derivation Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-26
+- **Tags**: database, api, e2e, migration
+
 **Purpose**: Template and rules for creating parent PRDs from child SD scopes in orchestrator workflows.
 
 **Related SD**: SD-LEO-INFRA-FORMALIZE-ORCHESTRATOR-WORKFLOW-001

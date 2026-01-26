@@ -1,5 +1,14 @@
 # Stage 8 Configurability Matrix
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, unit, schema, security
+
 ## Overview
 
 This document defines tunable parameters for Stage 8 (Problem Decomposition Engine) that can be adjusted to optimize performance, quality, and resource utilization across different venture contexts.

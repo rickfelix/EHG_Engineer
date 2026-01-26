@@ -1,5 +1,14 @@
 # Stage 17: Configurability Matrix
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 ## Overview
 
 Stage 17 (GTM Strategist Agent Development) requires extensive configurability to support diverse ventures (B2B vs B2C, different industries, varying budgets, multiple market segments). This document defines all tunable parameters and their valid ranges.

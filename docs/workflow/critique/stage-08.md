@@ -1,5 +1,14 @@
 # Stage 8 Critique: Problem Decomposition Engine
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, unit, schema, security
+
 ## Rubric Scoring (0-5 scale)
 
 | Criteria | Score | Notes |

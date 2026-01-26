@@ -1,5 +1,14 @@
 # EHG Application - User Acceptance Testing (UAT) Script
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, security
+
 ## Document Information
 - **Application**: EHG (Enterprise Holdings Group)
 - **Version**: _________________

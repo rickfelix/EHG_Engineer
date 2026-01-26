@@ -1,5 +1,14 @@
 # CrewAI Compliance Policy - Formal Governance Document
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, unit, schema
+
 **Version**: 1.0
 **Effective Date**: 2025-11-07
 **Authority**: Chairman
@@ -454,9 +463,9 @@ Stage 38 involves legal compliance audits requiring human judgment per regulator
 ## References
 
 ### Core Documentation
-- [Stage Review Process](/docs/workflow/review_process.md) - Step 2.5 (CrewAI Compliance Check)
-- [Stage Review Template](/docs/workflow/review_templates/stage_review_template.md) - Section 2.6, 3.2, 5.2
-- [Best Practices Index](/docs/workflow/best_practices.md) - CrewAI patterns and standards
+- [Stage Review Process](review_process.md) - Step 2.5 (CrewAI Compliance Check)
+- [Stage Review Template](review_templates/stage_review_template.md) - Section 2.6, 3.2, 5.2
+- [Best Practices Index](best_practices.md) - CrewAI patterns and standards
 
 ### Technical References
 - [CrewAI 1.3.0+ Documentation](https://docs.crewai.com/) - Official parameter specifications

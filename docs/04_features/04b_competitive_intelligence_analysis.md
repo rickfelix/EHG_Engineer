@@ -1,4 +1,13 @@
 # Stage 4: Competitive Intelligence Agent - Enhanced with Automated Analysis
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, unit, schema
+
 ## Executive Summary
 
 This document specifies the enhanced Stage 4 Competitive Intelligence Agent with automated competitor discovery, feature extraction, sentiment analysis, and real-time market monitoring. The agent now provides 95% faster competitive analysis with deeper insights than manual research.

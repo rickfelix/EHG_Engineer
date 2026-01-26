@@ -1,5 +1,14 @@
 # Stage 18: Professional Standard Operating Procedure
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, e2e
+
 ## Purpose
 
 This SOP provides step-by-step instructions for executing Stage 18: Documentation Sync to GitHub. Follow this procedure to ensure consistent, repeatable, high-quality synchronization of all venture documentation and code to version control.

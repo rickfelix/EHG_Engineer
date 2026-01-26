@@ -1,5 +1,14 @@
 # Enhanced Testing and Debugging Sub-Agents API Reference
 
+
+## Metadata
+- **Category**: API
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, security
+
 ## Table of Contents
 
 1. [TestCollaborationCoordinator](#testcollaborationcoordinator)

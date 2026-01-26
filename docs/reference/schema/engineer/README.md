@@ -16,7 +16,7 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 ## Quick Start
 
 - **[Database Schema Overview](database-schema-overview.md)** - Quick reference for all tables (15-20KB)
-- **[Detailed Table Docs](tables/)** - Individual files for each table (2-5KB each)
+- **[Detailed Table Docs](tables/activity_logs.md)** - Individual files for each table (2-5KB each)
 
 ## Constraint References
 

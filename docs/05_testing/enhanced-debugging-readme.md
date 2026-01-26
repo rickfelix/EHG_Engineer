@@ -1,5 +1,14 @@
 # Enhanced Testing and Debugging Sub-Agents
 
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 ## Overview
 
 The Enhanced Testing and Debugging Sub-Agents Collaboration system represents a revolutionary approach to test automation, implementing Pareto-optimized improvements that deliver 80% better results with 20% effort. This system features self-healing selectors, structured handoffs, actionable remediation, intelligent retry logic, and real-time collaboration between testing and debugging agents.
@@ -205,10 +214,10 @@ Structured data format for passing failure context between agents.
 
 ## Getting Help
 
-- Review the [Integration Guide](./ENHANCED_TESTING_INTEGRATION_GUIDE.md) for detailed setup
+- Review the [Integration Guide](../guides/enhanced-testing-integration.md) for detailed setup
 - Check [API Reference](./ENHANCED_TESTING_API_REFERENCE.md) for class documentation
-- Consult [Troubleshooting Guide](./ENHANCED_TESTING_TROUBLESHOOTING.md) for common issues
-- Study the [Collaboration Playbook](./TESTING_DEBUGGING_COLLABORATION_PLAYBOOK.md) for patterns
+- Consult [Troubleshooting Guide](../guides/enhanced-testing-troubleshooting.md) for common issues
+- Study the [Collaboration Playbook](../guides/testing-debugging-collaboration-playbook.md) for patterns
 
 ## Contributing
 

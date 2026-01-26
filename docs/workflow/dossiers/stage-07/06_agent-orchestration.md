@@ -1,5 +1,14 @@
 # Stage 7: Agent Orchestration
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, feature, handoff, validation
+
 **Status**: ⚠️ **Not Implemented** (PLAN agent referenced, planning automation agents not mapped)
 
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/critique/stage-07.md:18 "Clear ownership (PLAN)"

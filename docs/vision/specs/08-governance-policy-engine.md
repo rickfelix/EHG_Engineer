@@ -1,5 +1,14 @@
 # Governance Policy Engine Specification
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-12
+- **Tags**: database, schema, security, protocol
+
 **Vision v2 Chairman's OS - Enforceable Authority & Escalation Control**
 
 > "Trust, but verify - and enforce automatically."

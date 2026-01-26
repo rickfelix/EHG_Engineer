@@ -1,5 +1,14 @@
 # Claude Code Session Continuation Best Practices
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, testing, e2e, unit
+
 **Status**: ACTIVE
 **Last Updated**: 2025-10-12
 **Evidence**: Proven effective in SD-SETTINGS-2025-10-12 continuation

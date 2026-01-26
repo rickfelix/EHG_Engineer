@@ -1,5 +1,14 @@
 # Strategic Directive Parent-Child Hierarchy Schema Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, testing, e2e, unit
+
 **Generated**: 2025-12-20
 **Purpose**: Reference guide for creating E2E test orchestrator parent SD with child SDs
 **Database**: dedlbzhpgkmetvhbkyzq (EHG_Engineer - CONSOLIDATED)

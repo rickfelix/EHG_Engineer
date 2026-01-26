@@ -1,5 +1,14 @@
 # EHG_Engineer - LEO Protocol Builder Tool
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, migration, schema
+
 ## ⚠️ CRITICAL DISTINCTION - READ THIS FIRST!
 
 ### Two Separate Systems:

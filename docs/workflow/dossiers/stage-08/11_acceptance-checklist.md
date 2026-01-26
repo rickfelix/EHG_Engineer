@@ -1,5 +1,14 @@
 # Stage 8 Acceptance Checklist
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, unit, schema
+
 ## Purpose
 
 This checklist provides an objective quality gate for the Stage 8 Operating Dossier, ensuring it meets Phase 5 contract specifications and achieves target quality score ≥85/100.

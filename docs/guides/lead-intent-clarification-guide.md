@@ -1,5 +1,14 @@
 # LEAD Agent Intent Clarification Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, schema, feature
+
 ## Overview
 
 This guide provides practical examples of how LEAD agents should use the intent clarification features when evaluating Strategic Directives (SDs) with borderline over-engineering scores.

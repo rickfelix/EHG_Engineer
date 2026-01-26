@@ -1,5 +1,14 @@
 # Route Assessment Strategic Directive Structure
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, api, testing, unit
+
 > **Document Version: ROUTE-AUDIT-V1.0**
 > **Vision Version: 3.1**
 > **Status: LEO PROTOCOL COMPLIANT**

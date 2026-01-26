@@ -1,5 +1,14 @@
 # MVP Stage-1 Data Contract
 
+
+## Metadata
+- **Category**: API
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: api, unit, migration, schema
+
 ## Storage Decision
 - **Primary Storage**: `ventures.metadata` JSON field
 - **Deprecated**: `ideas` table (exists but unused for MVP)

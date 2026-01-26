@@ -1,4 +1,13 @@
 # Stage 1: Draft Idea Agent - Enhanced with Market Intelligence Integration
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, unit, schema
+
 ## Executive Summary
 
 This document specifies the enhanced Stage 1 Draft Idea Agent with deep integration to the SaaS Intelligence System. The agent now generates venture ideas directly from market opportunities, competitive gaps, and validated customer needs, increasing idea quality by 3x while reducing validation failures by 80%.

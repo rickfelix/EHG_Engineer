@@ -1,5 +1,14 @@
 # RED TEAM AUDIT: EHG Vision v2 - The Chairman's Operating System
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, schema, security
+
 **Documentation Adversarial Audit Prompt**
 
 This specification defines the prompt for conducting a Red Team adversarial audit of the Vision v2 documentation suite. Use this prompt with OpenAI Codex, Claude, or any capable LLM to systematically identify logical flaws, undefined data structures, and workflow gaps.

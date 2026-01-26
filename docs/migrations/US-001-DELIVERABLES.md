@@ -1,4 +1,13 @@
 # US-001 Deliverables Checklist
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, migration, guide
+
 ## Database Migration for Validation Modes
 
 **Status**: COMPLETE AND READY FOR DEPLOYMENT

@@ -1,5 +1,14 @@
 # Stage 18: Acceptance Checklist
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, unit, migration
+
 ## Purpose
 
 This checklist provides objective, quantifiable criteria for validating Stage 18 (Documentation Sync to GitHub) completion. All 8 criteria must score ≥85/100 for Stage 18 to be considered complete and Stage 19 to begin.

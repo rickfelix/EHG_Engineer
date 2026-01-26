@@ -1,5 +1,14 @@
 # Database Migration Checklist - CRITICAL
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, migration, schema
+
 **Created**: 2025-10-04
 **Context**: SD-RECONNECT-009 lesson learned
 **Priority**: CRITICAL - Add to CLAUDE.md via database update

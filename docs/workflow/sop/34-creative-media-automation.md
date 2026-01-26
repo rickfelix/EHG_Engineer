@@ -1,5 +1,14 @@
 # 34. Creative Media Automation
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, security, guide, workflow
+
 - **Owner**: EVA
 - **Depends on**: 33
 - **Purpose**: Automate content creation and creative asset generation.

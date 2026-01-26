@@ -1,5 +1,14 @@
 # strategic_directives_v2 Table Schema Documentation
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, api, testing, unit
+
 **Generated**: 2025-10-16
 **Database**: EHG_Engineer (dedlbzhpgkmetvhbkyzq)
 **Table**: `strategic_directives_v2`

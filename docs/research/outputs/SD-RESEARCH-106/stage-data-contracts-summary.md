@@ -1,5 +1,14 @@
 # Research Summary: Stage Data Contract System
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-04
+- **Tags**: migration, schema, protocol, leo
+
 **SD Reference**: SD-RESEARCH-106 (LEO Protocol Evolution to v5.x)
 **Document**: Stage Data Contract System (JSON Schema + TypeScript).pdf
 **Pages**: 16

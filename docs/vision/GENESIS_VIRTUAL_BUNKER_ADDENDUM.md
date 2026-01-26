@@ -1,5 +1,14 @@
 # Genesis Virtual Bunker Addendum
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, e2e, migration
+
 > **Document Version: GENESIS-VB-1.0**
 > **Status: RATIFIED**
 > **Date: 2025-12-30**

@@ -1,5 +1,14 @@
 # Knowledge Architecture Specification
 
+
+## Metadata
+- **Category**: Architecture
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-12
+- **Tags**: database, api, schema, rls
+
 **Vision v2 Chairman's OS - Scoped Knowledge & Data Isolation**
 
 > "Knowledge shared wisely, data protected fiercely."

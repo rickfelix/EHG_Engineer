@@ -1,5 +1,14 @@
 # Database Query Best Practices
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, migration, sd, directive
+
 ## Database Query Best Practices (Context Efficiency)
 
 **Critical Lesson**: Large database query results consume massive context. Smart querying saves 5K-10K tokens per SD.

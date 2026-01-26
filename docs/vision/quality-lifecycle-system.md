@@ -1,5 +1,14 @@
 # EHG Quality Lifecycle System
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-18
+- **Tags**: database, api, testing, unit
+
 **Purpose**: Define the complete vision for EHG's quality and feedback management capabilities across EHG and all ventures.
 **Created**: 2026-01-17
 **Updated**: 2026-01-17 (enhancement-request-integration)

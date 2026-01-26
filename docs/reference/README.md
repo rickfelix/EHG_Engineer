@@ -11,7 +11,7 @@ This directory contains quick reference guides, patterns, and technical specific
 
 **Many LEO Protocol-specific documents have been moved to the centralized LEO hub.**
 
-See **[/docs/leo/README.md](/docs/leo/README.md)** for:
+See **[/docs/leo/README.md](../leo/README.md)** for:
 - Handoff documentation → `/docs/leo/handoffs/`
 - Sub-agent documentation → `/docs/leo/sub-agents/`
 - Command documentation → `/docs/leo/commands/`
@@ -27,11 +27,11 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 
 | Category | Files | Description |
 |----------|-------|-------------|
-| [Database & Schema](#database--schema) | 12 | Database patterns, schemas, migrations |
+| [Database & Schema](#database-schema) | 12 | Database patterns, schemas, migrations |
 | [Sub-Agents](#sub-agents) | 14 | Sub-agent patterns and guides |
-| [Validation & Testing](#validation--testing) | 9 | Validation patterns, testing reference |
+| [Validation & Testing](#validation-testing) | 9 | Validation patterns, testing reference |
 | [LEO Protocol](#leo-protocol) | 14 | Protocol reference, context management, hooks |
-| [Patterns & Best Practices](#patterns--best-practices) | 12 | Development patterns |
+| [Patterns & Best Practices](#patterns-best-practices) | 12 | Development patterns |
 | [Quick References](#quick-references) | 12 | Cheat sheets and quick guides |
 | [Other](#other-references) | 7 | Miscellaneous references |
 
@@ -62,9 +62,9 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 
 | Reference | Description |
 |-----------|-------------|
-| [sub-agent-system.md](sub-agent-system.md) | Complete sub-agent system reference |
-| [sub-agents.md](sub-agents.md) | Sub-agent overview |
-| [sub-agent-patterns-guide.md](sub-agent-patterns-guide.md) | Sub-agent patterns |
+| [sub-agent-system.md](../leo/sub-agents/sub-agent-system.md) | Complete sub-agent system reference |
+| [sub-agents.md](../leo/sub-agents/sub-agents.md) | Sub-agent overview |
+| [sub-agent-patterns-guide.md](agent-patterns-guide.md) | Sub-agent patterns |
 | [sub-agent-compression.md](sub-agent-compression.md) | Context compression |
 | [agent-subagent-backstory-system.md](agent-subagent-backstory-system.md) | Backstory system |
 | [agent-patterns-guide.md](agent-patterns-guide.md) | Agent patterns guide |
@@ -72,9 +72,9 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 | [generic-sub-agent-executor-framework.md](generic-sub-agent-executor-framework.md) | Executor framework |
 | [preventing-missed-subagents.md](preventing-missed-subagents.md) | Prevent missing sub-agents |
 | [qa-director-guide.md](qa-director-guide.md) | QA Director guide |
-| [design-sub-agent-guide.md](design-sub-agent-guide.md) | Design sub-agent |
+| [design-sub-agent-guide.md](../leo/sub-agents/design-sub-agent-guide.md) | Design sub-agent |
 | [design-subagent-application-expertise.md](design-subagent-application-expertise.md) | Design expertise |
-| [retro-sub-agent-guide.md](retro-sub-agent-guide.md) | Retrospective agent |
+| [retro-sub-agent-guide.md](../leo/sub-agents/retro-sub-agent-guide.md) | Retrospective agent |
 | [root-cause-agent.md](root-cause-agent.md) | Root cause agent |
 
 ---
@@ -107,7 +107,7 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 | [agentic-context-engineering-v3.md](agentic-context-engineering-v3.md) | Context engineering |
 | [claude-code-session-continuation.md](claude-code-session-continuation.md) | Session continuation |
 | [exec-context.md](exec-context.md) | EXEC phase context |
-| [handoff-system-guide.md](handoff-system-guide.md) | Handoff system reference |
+| [handoff-system-guide.md](../leo/handoffs/handoff-system-guide.md) | Handoff system reference |
 | [leo-hook-feedback-system.md](leo-hook-feedback-system.md) | Hook feedback system |
 | [protocol-self-improvement.md](protocol-self-improvement.md) | Protocol self-improvement |
 | [session-start-gate-implementation.md](session-start-gate-implementation.md) | SESSION_START gate implementation + state structure mismatch fix |
@@ -179,8 +179,8 @@ See **[/docs/leo/README.md](/docs/leo/README.md)** for:
 2. [database-agent-patterns.md](database-agent-patterns.md) - Agent patterns
 
 **Sub-agent development?**
-1. [sub-agent-system.md](sub-agent-system.md) - Complete reference
-2. [sub-agent-patterns-guide.md](sub-agent-patterns-guide.md) - Patterns
+1. [sub-agent-system.md](../leo/sub-agents/sub-agent-system.md) - Complete reference
+2. [sub-agent-patterns-guide.md](agent-patterns-guide.md) - Patterns
 
 **Creating SDs or PRDs?**
 1. [script-creation-guidelines.md](script-creation-guidelines.md) - **CRITICAL**: Script creation policy

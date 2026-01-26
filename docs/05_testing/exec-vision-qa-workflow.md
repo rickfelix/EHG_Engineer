@@ -1,4 +1,13 @@
 # EXEC Agent Workflow with Vision QA Integration
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, feature
+
 ## LEO Protocol v3.1.5.9
 
 ### Step 1: Receive Task with Vision QA Requirements

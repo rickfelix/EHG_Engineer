@@ -1,4 +1,13 @@
 # Strategic Directive Proposal: SD-E2E-COVERAGE-90-001
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, testing, e2e
+
 **Achieve 90% E2E Test Coverage for EHG_Engineer Backend API**
 
 ---

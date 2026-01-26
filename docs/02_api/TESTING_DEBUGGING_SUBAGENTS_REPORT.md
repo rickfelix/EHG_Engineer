@@ -1,5 +1,14 @@
 # Testing & Debugging Sub-Agents E2E Report
 
+
+## Metadata
+- **Category**: API
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 ## Executive Summary
 The Testing and Debugging sub-agents have been successfully implemented and tested with Playwright for end-to-end DirectiveLab workflow validation. Both sub-agents now feature SaaS-focused backstories and collaborate effectively.
 

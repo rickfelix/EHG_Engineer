@@ -1,5 +1,14 @@
 # Stage 11: Metrics & Monitoring
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 **KPIs Defined**: 3 metrics from stages.yaml
 **Monitoring State**: ⚠️ Not Implemented (no automated tracking)
 

@@ -1,5 +1,14 @@
 # EHG Engineer - Architectural Guidelines
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, api, testing, migration
+
 ## Date: 2025-09-11
 
 ## Purpose

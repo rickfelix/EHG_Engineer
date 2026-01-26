@@ -1,5 +1,14 @@
 # Stage 20: Metrics Monitoring
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: workflow, ci, monitoring, performance
+
 ## KPI Dashboard
 
 ### Metric 1: Context completeness

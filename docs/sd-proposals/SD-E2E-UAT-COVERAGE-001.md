@@ -1,5 +1,14 @@
 # Strategic Directive Proposal: SD-E2E-UAT-COVERAGE-001
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, testing, e2e
+
 ## Comprehensive E2E & UAT Testing Coverage Enhancement
 
 **Proposed ID:** SD-E2E-UAT-COVERAGE-001

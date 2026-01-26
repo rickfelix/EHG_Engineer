@@ -1,7 +1,7 @@
 # Stage 7: Pricing Strategy
 
 ## Metadata
-- **Category**: Workflow
+- **Category**: Protocol
 - **Status**: Approved
 - **Version**: 2.0.0
 - **Author**: Documentation Sub-Agent (DOCMON)

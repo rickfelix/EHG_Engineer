@@ -1,5 +1,14 @@
 # Stage 24 Critique: MVP Engine: Automated Feedback Iteration
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, schema, security, validation
+
 ## Rubric Scoring (0-5 scale)
 
 | Criteria | Score | Notes |

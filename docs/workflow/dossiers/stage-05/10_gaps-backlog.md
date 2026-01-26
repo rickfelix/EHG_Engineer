@@ -1,5 +1,14 @@
 # Stage 5: Gaps & Implementation Backlog
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, unit, schema
+
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/critique/stage-05.md:139-182
 
 ---

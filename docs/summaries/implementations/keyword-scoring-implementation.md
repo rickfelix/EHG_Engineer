@@ -1,8 +1,8 @@
 # Weighted Keyword Scoring Implementation - Summary
 
 ## Metadata
-- **Category**: Implementation
-- **Status**: Complete
+- **Category**: Feature
+- **Status**: Approved
 - **Version**: 1.1.0
 - **Author**: Claude Code (Sonnet 4.5)
 - **Last Updated**: 2026-01-24

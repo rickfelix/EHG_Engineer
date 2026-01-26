@@ -1,5 +1,14 @@
 # Stage 10: Gaps & Backlog
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, e2e, unit, schema
+
 **Purpose**: Identify implementation gaps and propose artifacts for Stage 10
 **Status**: Not yet implemented (specification only)
 **Priority**: HIGH (critical technical quality gate)

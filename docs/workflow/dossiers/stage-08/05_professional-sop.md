@@ -1,5 +1,14 @@
 # Stage 8 Professional Standard Operating Procedure
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, authentication, guide, validation
+
 ## Purpose
 This SOP defines the step-by-step execution procedure for Stage 8 (Problem Decomposition Engine), transforming approved comprehensive plans from Stage 7 into structured Work Breakdown Structures (WBS) with clear task hierarchies, dependencies, and execution sequences.
 

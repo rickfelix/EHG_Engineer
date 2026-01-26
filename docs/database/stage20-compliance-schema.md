@@ -1,5 +1,14 @@
 # Stage 20 Compliance Gate - Database Schema
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-19
+- **Tags**: database, migration, schema, rls
+
 **SD-LIFECYCLE-GAP-002: Security & Compliance Certification Gate**
 
 ## Overview

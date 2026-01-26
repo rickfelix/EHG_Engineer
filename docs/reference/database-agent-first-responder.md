@@ -1,5 +1,14 @@
 # Database Agent First-Responder Quick Reference
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-23
+- **Tags**: database, migration, schema, rls
+
 **Status**: ACTIVE
 **Last Updated**: 2026-01-23
 **Purpose**: Quick reference for proactive database agent invocation

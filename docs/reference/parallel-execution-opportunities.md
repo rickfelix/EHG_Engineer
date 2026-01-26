@@ -1,5 +1,14 @@
 # Parallel Execution Opportunities for Claude Code
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, e2e, unit, schema
+
 **Status**: ACTIVE
 **Last Updated**: 2025-10-12
 **Evidence**: Identified from SD-SETTINGS-2025-10-12 analysis

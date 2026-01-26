@@ -1,5 +1,14 @@
 # EXEC_CONTEXT.md - Lean Implementation Guide for EXEC Agents
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, testing, e2e, unit
+
 **BMAD Enhancement**: Reduced context guide focusing exclusively on EXEC implementation phase
 
 **Purpose**: Provide EXEC agents with essential implementation guidance while minimizing context consumption (~500 lines vs 5000+ in full CLAUDE.md)

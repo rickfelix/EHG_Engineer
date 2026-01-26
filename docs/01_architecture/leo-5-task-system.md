@@ -692,7 +692,7 @@ GROUP BY w.sd_id, w.track;
 
 - [LEO Protocol Testing Improvements](../reference/leo-protocol-testing-improvements-2025-10-12.md) - Testing patterns
 - [LEO 5.0 Operational Guide](../06_deployment/leo-5-operations.md) - Operations and runbook
-- [Command Ecosystem](../reference/command-ecosystem.md) - Inter-command workflows
+- [Command Ecosystem](../leo/commands/command-ecosystem.md) - Inter-command workflows
 
 ## Version History
 

@@ -1,5 +1,14 @@
 # Model Allocation Strategy - Haiku-First (LEO Protocol v4.3.3)
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 **Status**: ACTIVE
 **Date**: 2025-12-06
 **Version**: 1.0

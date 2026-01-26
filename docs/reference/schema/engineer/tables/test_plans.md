@@ -1,5 +1,14 @@
 # test_plans Table
 
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-26
+- **Tags**: database, testing, e2e, unit
+
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard - CONSOLIDATED DB
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)

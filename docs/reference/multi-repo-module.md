@@ -1,5 +1,14 @@
 # Multi-Repository Manager Module
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-18
+- **Tags**: database, api, testing, migration
+
 **Module**: `lib/multi-repo/index.js`
 **Version**: 1.0.0
 **Purpose**: Centralized management of multi-repository operations across the EHG ecosystem
@@ -635,4 +644,4 @@ C:/_EHG/
 **See Also:**
 - [Multi-Repo Architecture](../01_architecture/multi-repo-architecture.md)
 - [Ship Command Documentation](../.claude/commands/ship.md)
-- [LEO Protocol Documentation](../03_protocols_and_standards/leo-protocol.md)
+- [LEO Protocol Documentation](schema/engineer/tables/leo_protocols.md)

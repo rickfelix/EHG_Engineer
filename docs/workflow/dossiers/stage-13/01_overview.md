@@ -1,5 +1,14 @@
 # Stage 13 Operating Dossier: Exit-Oriented Design
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: security, validation, workflow, automation
+
 ## Regeneration Note
 This dossier is a living document tied to specific commits. If stages.yaml or critique/stage-13.md change, regenerate using:
 ```bash

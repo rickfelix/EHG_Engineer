@@ -1,5 +1,14 @@
 # Stage 1: Recursion Blueprint
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: sd, architecture, workflow, ci
+
 **Recursion Status**: ❌ **No Recursion Support**
 
 ## Findings from Consistency Scan

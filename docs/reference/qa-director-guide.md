@@ -1,5 +1,14 @@
 # Enhanced QA Engineering Director v2.2.0 - MCP-First Edition
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, api, testing, e2e
+
 ## Overview
 **Mission-Critical Testing Automation** - Comprehensive E2E validation with MCP browser automation as the PREFERRED method.
 

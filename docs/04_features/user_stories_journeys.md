@@ -1,5 +1,14 @@
 # Stage 57 – User Stories & Journeys Enhanced PRD
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, unit, schema
+
 ## 1. Enhanced Executive Summary
 The User Stories & Journeys system defines comprehensive behavioral flows and usage patterns for all EHG platform stakeholders, ensuring optimal user experiences through intelligent journey mapping, adaptive workflows, and continuous user experience optimization based on real-world usage patterns.
 

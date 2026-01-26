@@ -1,7 +1,7 @@
 # Implementation Summary: Intelligent Retrospective Triggers with Keyword Signal Detection
 
 ## Metadata
-- **Category**: Implementation
+- **Category**: Feature
 - **Status**: Approved
 - **Version**: 1.0.0
 - **Author**: Claude Opus 4.5
@@ -401,7 +401,7 @@ it('captures and aggregates signals for retrospective', async () => {
 - Retrospective quality gate - Boost score for authentic signals
 
 ## Related Documentation
-- [Retrospectives Guide](../../05_testing/retrospectives-guide.md)
+- [Retrospectives Guide](../../reference/schema/engineer/tables/retrospectives.md)
 - [LEO Protocol v4.3.3](../../03_protocols_and_standards/LEO_v4.3.3.md)
 - [Sub-Agent: RETRO](../../leo/sub-agents/RETRO.md)
 

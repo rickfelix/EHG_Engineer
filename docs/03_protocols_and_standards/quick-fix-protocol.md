@@ -1,5 +1,14 @@
 # Quick-Fix Protocol Documentation
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: database, api, testing, e2e
+
 **Version:** 2.1.1
 **Status:** ACTIVE
 **Last Updated:** 2026-01-21

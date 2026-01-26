@@ -1,5 +1,14 @@
 # 25. Quality Assurance
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, testing, e2e, unit
+
 - **Owner**: EXEC
 - **Depends on**: 24
 - **Purpose**: Comprehensive quality assurance and testing processes.

@@ -1,5 +1,14 @@
 # UAT Campaign Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-18
+- **Tags**: database, api, testing, schema
+
 **Created**: 2026-01-18
 **Campaign**: SD-UAT-CAMPAIGN-001
 

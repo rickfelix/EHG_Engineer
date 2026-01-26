@@ -1,5 +1,14 @@
 # AI_GUIDE.md - EHG_Engineer Development Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, feature
+
 ## ⚠️ DYNAMICALLY GENERATED FROM DATABASE
 **Last Generated**: 09/04/2025, 08:42:06 AM
 **Source**: Supabase Database (not static files)

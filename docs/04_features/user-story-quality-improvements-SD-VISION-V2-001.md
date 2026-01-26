@@ -1,5 +1,14 @@
 # User Story Quality Improvements - SD-VISION-V2-001
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: database, testing, migration, schema
+
 **Date**: 2025-12-14
 **SD**: SD-VISION-V2-001 (Vision Architecture v2 - EVA Integration)
 **Issue**: PLAN-TO-EXEC handoff quality gate failing (67% average score, threshold 70%)

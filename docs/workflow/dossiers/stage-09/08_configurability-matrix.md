@@ -1,5 +1,14 @@
 # Stage 9: Configurability Matrix
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, unit, feature, sd
+
 **Purpose**: Document tunable parameters, thresholds, and Chairman controls for Stage 9.
 
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:365-409 "Stage 9 metrics, gates, notes"

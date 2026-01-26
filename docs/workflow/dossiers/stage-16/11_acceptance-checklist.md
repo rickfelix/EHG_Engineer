@@ -1,5 +1,14 @@
 # Stage 16 Acceptance Checklist
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: feature, protocol, leo, sd
+
 ## Purpose
 
 This checklist provides a comprehensive quality gate for Stage 16 Operating Dossier. It evaluates completeness, accuracy, evidence quality, and alignment with Phase 7 contract specifications.

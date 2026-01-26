@@ -1,5 +1,14 @@
 # UI Components Specification
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-12
+- **Tags**: database, api, e2e, unit
+
 **Vision v2 Chairman's OS - Glass Cockpit Architecture**
 
 > "One glance tells the whole story."

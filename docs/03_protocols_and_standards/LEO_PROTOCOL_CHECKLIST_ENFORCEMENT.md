@@ -1,4 +1,13 @@
 # LEO Protocol Checklist Enforcement Amendment
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, unit, migration
+
 ## Version 4.1.3 - Dashboard Checklist Integration
 
 ### Critical Change: Mandatory Checklist Updates

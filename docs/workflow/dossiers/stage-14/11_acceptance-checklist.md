@@ -1,5 +1,14 @@
 # Stage 14 Acceptance Checklist
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, schema, sd, directive
+
 ## Quality Gate Scoring (8 Criteria)
 
 ### Criterion 1: Evidence Completeness

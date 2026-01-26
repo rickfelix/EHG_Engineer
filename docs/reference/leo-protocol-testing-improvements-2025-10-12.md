@@ -1,5 +1,14 @@
 # LEO Protocol Testing & Agent Usage Improvements
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, e2e, unit
+
 **Version**: 1.0.0
 **Date**: 2025-10-12
 **Source**: Lessons learned from SD-SETTINGS-2025-10-12 execution

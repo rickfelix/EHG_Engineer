@@ -1,5 +1,14 @@
 # Source Stage Metadata Field Documentation
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, migration, schema, protocol
+
 **Created**: 2025-11-07
 **Purpose**: Track which workflow stage (1-40) spawned a Strategic Directive
 **Table**: `strategic_directives_v2`

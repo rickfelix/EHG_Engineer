@@ -1,5 +1,14 @@
 # Stage 19: Agent Orchestration
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 ## Purpose
 
 This document defines the IntegrationVerificationCrew architecture for automating Stage 19 (Tri-Party Integration Verification), including agent specifications, task assignments, and CrewAI integration patterns.

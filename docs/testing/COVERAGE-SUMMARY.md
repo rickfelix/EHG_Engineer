@@ -1,4 +1,13 @@
 # E2E Testing Coverage - Executive Summary
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: api, testing, e2e, feature
+
 **Date**: 2026-01-05  
 **Analyst**: QA Engineering Director (testing-agent)
 

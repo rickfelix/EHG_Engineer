@@ -1,5 +1,14 @@
 # Design/UI Review: SD-VISION-V2-006 Chairman Dashboard UI
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: testing, e2e, unit, feature
+
 **Review Date:** 2025-12-15
 **Reviewer:** Design Agent (Sonnet 4.5)
 **PRD Reference:** Vision V2 Specs - 03-ui-components.md, 05-user-stories.md

@@ -1,5 +1,14 @@
 # Stage 3: Professional SOP
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: validation, workflow, ci, context
+
 **Purpose**: Validate problem-solution fit, willingness to pay, and make Kill/Revise/Proceed decision
 
 ---

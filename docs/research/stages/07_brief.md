@@ -1,5 +1,14 @@
 # Stage 7 Research Brief: Comprehensive Planning Suite
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, workflow, automation
+
 ## Focus Area
 Develop comprehensive business and technical plans for venture execution.
 

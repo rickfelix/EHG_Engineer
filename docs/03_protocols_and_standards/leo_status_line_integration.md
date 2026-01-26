@@ -1,5 +1,14 @@
 # LEO Protocol Status Line Integration
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-26
+- **Tags**: database, testing, feature, protocol
+
 ## Overview
 
 The LEO Protocol Status Line provides real-time context awareness in the Claude interface, displaying current agent role, Strategic Directive, task, and other relevant information without impacting performance.

@@ -1,5 +1,14 @@
 # Pre-Commit Hook Documentation
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: database, testing, schema, protocol
+
 **Location:** `.husky/pre-commit`
 **Purpose:** Automated quality checks before every git commit
 

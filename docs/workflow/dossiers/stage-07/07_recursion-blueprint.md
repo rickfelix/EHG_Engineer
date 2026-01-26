@@ -1,5 +1,14 @@
 # Stage 7: Recursion Blueprint
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, e2e
+
 **Status**: ⚠️ **INBOUND ONLY** (receives recursion from Stages 8, 10; no outbound triggers defined)
 
 **Consistency Scan Result**: N/Y/N (No detailed recursion in Stage 7 critique, but referenced in Stage 8 and Stage 10 critiques as inbound target)

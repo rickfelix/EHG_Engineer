@@ -1,5 +1,14 @@
 # Stage 12: Gaps & Backlog
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, schema
+
 ## Overview
 
 This file documents identified gaps in Stage 12 specification and proposes Strategic Directives (SDs) to address them. Gaps are cross-referenced with relevant dossier files and critique recommendations.

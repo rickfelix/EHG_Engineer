@@ -1,5 +1,14 @@
 # Stage 12: Configurability Matrix
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, feature
+
 ## Overview
 
 This file documents all tunable parameters for **Stage 12: Adaptive Naming Module**, enabling operational flexibility without requiring code changes. Parameters are categorized by substage and decision authority.

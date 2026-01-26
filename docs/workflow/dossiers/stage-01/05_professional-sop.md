@@ -1,5 +1,14 @@
 # Stage 1: Professional Standard Operating Procedure
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, validation, frontend
+
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:24-40 (substages)
 
 ## Entry Gate Checklist

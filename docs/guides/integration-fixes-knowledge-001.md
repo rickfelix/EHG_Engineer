@@ -1,4 +1,13 @@
 # Integration Fixes: SD-KNOWLEDGE-001
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, e2e, migration
+
 **Following Root Cause + Prevention Methodology**
 
 Generated: 2025-10-15

@@ -1,5 +1,14 @@
 # Canonical Definition: Stage 13
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, schema, validation, workflow
+
 ## Source of Truth
 **File**: `docs/workflow/stages.yaml`
 **Lines**: 551-596

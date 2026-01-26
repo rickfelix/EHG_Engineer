@@ -1,5 +1,14 @@
 # 2. AI Review
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, security, validation
+
 - **Depends on**: 1
 - **Purpose**: Multi-agent AI system reviews and critiques the idea from multiple perspectives.
 

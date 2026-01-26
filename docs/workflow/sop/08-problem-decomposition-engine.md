@@ -1,5 +1,14 @@
 # 8. Problem Decomposition Engine
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, security, reference, workflow
+
 - **Depends on**: 7
 - **Purpose**: Break down complex problems into manageable, actionable components.
 

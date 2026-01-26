@@ -1,4 +1,13 @@
 # AI Agents Page Investigation Report
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, unit, migration
+
 **Date**: 2025-10-10
 **Investigation Scope**: Why AI Agents page shows limited/no data
 **Database**: EHG Application (liapbndqlqxdcgpwntbv)

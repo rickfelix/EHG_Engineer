@@ -1,5 +1,14 @@
 # Research Summary: Cross-Schema Governance Architecture
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-04
+- **Tags**: database, migration, schema, rls
+
 **SD Reference**: SD-RESEARCH-108 (Security, Compliance & AI Auditability)
 **Document**: Cross-Schema Governance Architecture for EHG.pdf
 **Pages**: 22

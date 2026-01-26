@@ -1,5 +1,14 @@
 # Research Summary: EVA Intent-vs-Reality Analysis Model
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-04
+- **Tags**: database, schema, leo, sd
+
 **SD Reference**: SD-RESEARCH-107 (EVA Intent-vs-Reality Analysis Model)
 **Document**: EVA Intent-vs-Reality Analysis Model.pdf
 **Pages**: 16

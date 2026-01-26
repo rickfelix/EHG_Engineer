@@ -1,5 +1,14 @@
 # Risk Re-calibration Protocol
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-19
+- **Tags**: database, unit, migration, schema
+
 **SD**: SD-LIFECYCLE-GAP-005 - Strategic Risk Forecasting (Phase Boundary Gates)
 **Created**: 2026-01-19
 **Status**: Active

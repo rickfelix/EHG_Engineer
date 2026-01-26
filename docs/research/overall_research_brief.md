@@ -1,5 +1,14 @@
 # EHG Venture Workflow Research Brief
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, testing, unit, validation
+
 ## Objective
 Comprehensive analysis and optimization of the 40-stage venture workflow for maximum efficiency, automation, and success rate.
 

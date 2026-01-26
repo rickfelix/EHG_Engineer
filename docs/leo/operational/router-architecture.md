@@ -1,5 +1,14 @@
 # CLAUDE.md Router Architecture
 
+
+## Metadata
+- **Category**: Architecture
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, testing, e2e, unit
+
 **Last Updated**: 2025-10-30
 **Version**: V3 (Router Architecture)
 **Status**: ✅ IMPLEMENTED

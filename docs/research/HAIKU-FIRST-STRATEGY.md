@@ -1,5 +1,14 @@
 # Haiku-First Model Allocation Strategy
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-04
+- **Tags**: database, api, testing, e2e
+
 **Date**: 2025-12-06
 **Status**: PROPOSED (Research Complete)
 **Priority**: P0 (Implement Week 1)

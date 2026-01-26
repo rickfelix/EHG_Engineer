@@ -1,5 +1,14 @@
 # Critical SD Completion Fields Documentation
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, leo, sd
+
 ## Problem Statement
 When Strategic Directives (SDs) complete through the LEO orchestrator, three critical database fields MUST be updated correctly for the dashboard to accurately reflect completion status. Failure to update these fields causes completed SDs to appear as "still working on" in the UI.
 

@@ -1,5 +1,14 @@
 # Design UI/UX Collaboration Workflow
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, migration
+
 **LEO Protocol v4.2.0 - Enhanced Design Sub-Agent**
 
 ## 🎯 Purpose

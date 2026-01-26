@@ -1,5 +1,14 @@
 # Stage 18 Research Brief: Documentation Sync to GitHub
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, documentation, workflow
+
 ## Focus Area
 Synchronize all documentation and code to version control.
 

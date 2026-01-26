@@ -1,5 +1,14 @@
 # Stage 24 Research Brief: MVP Engine: Automated Feedback Iteration
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, unit, guide, workflow
+
 ## Focus Area
 Automated iteration engine for rapid MVP improvements.
 

@@ -1,5 +1,14 @@
 # Supabase Connectivity Guide - Complete Reference
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, migration, schema
+
 ## 🚨 CRITICAL: Read This First
 
 ### The IPv6 Problem (Why Direct Connection Fails)

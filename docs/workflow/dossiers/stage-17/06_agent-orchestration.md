@@ -1,5 +1,14 @@
 # Stage 17: Agent Orchestration Architecture
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 ## Overview
 
 Stage 17 requires deployment of a GTM (Go-To-Market) Strategist Agent to automate marketing campaign development, content generation, and workflow orchestration. This document defines the agent architecture using CrewAI framework.

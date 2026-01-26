@@ -1,5 +1,14 @@
 # Database Loader Consolidation - Architecture Decision Record
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, unit
+
 ## Date: 2025-09-11
 
 ## Problem

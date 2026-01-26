@@ -1,5 +1,14 @@
 # Risk Re-calibration UI Components - Visual Guide
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-19
+- **Tags**: api, security, feature, guide
+
 **SD**: SD-LIFECYCLE-GAP-005
 **Created**: 2026-01-19
 

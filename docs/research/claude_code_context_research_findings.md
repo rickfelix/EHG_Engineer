@@ -1,5 +1,14 @@
 # Claude Code Context Management Research Findings for LEO Protocol
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-04
+- **Tags**: unit, feature, protocol, leo
+
 **Research Date**: 2025-08-30
 **Purpose**: Optimize LEO Protocol for Claude Code's context management system
 

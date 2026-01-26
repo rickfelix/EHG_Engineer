@@ -1,5 +1,14 @@
 # Stage 11: Canonical Definition (from stages.yaml)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, testing, unit, guide
+
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:461-505
 
 **Full YAML Definition**:

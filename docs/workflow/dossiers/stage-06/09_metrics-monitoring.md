@@ -1,5 +1,14 @@
 # Stage 6: Metrics & Monitoring
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: sd, reference, typescript, workflow
+
 **Purpose**: Document KPIs, measurement queries, dashboard visualizations, and alerting for Stage 6 (Risk Evaluation).
 
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:241-244 "metrics: Risk coverage"

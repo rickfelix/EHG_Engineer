@@ -1,5 +1,14 @@
 # Testing & Debugging Sub-Agents Collaboration Playbook
 
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, migration
+
 ## 🎯 Executive Summary
 
 This playbook documents the enhanced collaboration pattern between Testing and Debugging sub-agents using Playwright, implementing Pareto-optimized improvements that deliver 80% better results with 20% effort.

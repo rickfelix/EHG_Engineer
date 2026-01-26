@@ -1,5 +1,14 @@
 # 36. Parallel Exploration
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, unit, security, workflow
+
 - **Owner**: PLAN
 - **Depends on**: 35
 - **Purpose**: Explore multiple growth opportunities in parallel.

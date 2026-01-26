@@ -1,5 +1,14 @@
 # Stage 1: Draft Idea — Operating Dossier
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, e2e, migration
+
 **Generated**: 2025-11-05
 **Version**: 1.0
 **Protocol**: Stage Operating Dossier v1.0

@@ -1,5 +1,14 @@
 # Stage 16 Canonical Definition
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, testing, e2e, unit
+
 ## Source Reference
 
 **File**: `docs/workflow/stages.yaml`

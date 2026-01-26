@@ -1,4 +1,13 @@
 # Sub-Agent Enhancements Testing Plan
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, testing, e2e
+
 **Phases 1-3 Implementation**
 **Created:** 2025-10-17
 **Status:** Testing in Progress

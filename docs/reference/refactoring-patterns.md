@@ -1,5 +1,14 @@
 # Multi-File Refactoring Patterns Guide
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, feature, guide
+
 ## Overview
 
 Phase 5 of the Claude 4.5 Sonnet integration provides intelligent multi-file refactoring capabilities that leverage all previous phases for context-aware, validated code transformations.

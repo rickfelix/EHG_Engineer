@@ -1,5 +1,14 @@
 # Stage 60 – Onboarding & Quick Start Enhanced PRD
 
+
+## Metadata
+- **Category**: API
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 ## 1. Enhanced Executive Summary
 The Onboarding & Quick Start system provides intelligent, adaptive, and personalized user onboarding experiences that rapidly enable user productivity across the EHG platform through AI-driven guidance, contextual assistance, and progressive disclosure of platform capabilities.
 

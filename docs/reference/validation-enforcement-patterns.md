@@ -1,5 +1,14 @@
 # Validation Enforcement Patterns Guide
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, testing, e2e, schema
+
 **Status**: ACTIVE
 **Last Updated**: 2025-10-12
 **Evidence**: 74 retrospectives analyzed, 12 SDs with validation agent lessons

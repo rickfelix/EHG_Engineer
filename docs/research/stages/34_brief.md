@@ -1,5 +1,14 @@
 # Stage 34 Research Brief: Creative Media Automation
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, workflow, automation
+
 ## Focus Area
 Automate content creation and creative asset generation.
 

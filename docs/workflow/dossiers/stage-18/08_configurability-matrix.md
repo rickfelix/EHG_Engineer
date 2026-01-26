@@ -1,5 +1,14 @@
 # Stage 18: Configurability Matrix
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, e2e
+
 ## Purpose
 
 This document defines all tunable parameters for Stage 18 (Documentation Sync to GitHub), enabling ventures to customize synchronization behavior based on their specific requirements (tech stack, team size, compliance needs, etc.).

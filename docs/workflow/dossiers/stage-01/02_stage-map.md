@@ -1,5 +1,14 @@
 # Stage 1: Dependency & Recursion Map
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: validation, workflow, ci, agent
+
 ## Workflow Position
 
 ```mermaid

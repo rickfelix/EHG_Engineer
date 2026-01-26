@@ -1,5 +1,14 @@
 # One-Week Tuning Plan for Agentic Review System
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, migration
+
 ## Goal
 Achieve <15% false positive rate while maintaining comprehensive security and quality coverage.
 

@@ -1,5 +1,14 @@
 # Verification Report Template
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, e2e, unit
+
 **Generated**: 2025-10-19
 **Source**: SD-PROOF-DRIVEN-1758340937844
 **Context Tier**: REFERENCE

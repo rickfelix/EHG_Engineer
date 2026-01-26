@@ -1,5 +1,14 @@
 # UI Validation Tables Setup Instructions
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-24
+- **Tags**: database, api, migration, schema
+
 ## Current Status
 - Database password configured: ✅
 - Direct PostgreSQL connection blocked by IPv6: ❌

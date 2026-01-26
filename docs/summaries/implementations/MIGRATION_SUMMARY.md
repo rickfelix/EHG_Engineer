@@ -1,5 +1,14 @@
 # PRD Table Cleanup - Ready for Execution
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 **Date**: 2025-10-16
 **Status**: ✅ Ready (Dry-run successful)
 **Estimated Time**: ~5 minutes

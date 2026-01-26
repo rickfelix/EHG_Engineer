@@ -1,5 +1,14 @@
 # Stage Review Best Practices - Index
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 **Version**: 1.0
 **Last Updated**: 2025-11-07
 **Authority**: Chairman
@@ -263,7 +272,7 @@ pattern: "src/lib/supabase/**/*.ts"
 - [Source Stage Metadata Field](./source_stage_metadata_field.md) - Database metadata specification
 
 ### Governance
-- [Exception Documentation](/docs/governance/exceptions/) - Chairman-approved exceptions directory
+- [Exception Documentation](../governance/exceptions) - Chairman-approved exceptions directory
 - Strategic Directives: Query `strategic_directives_v2` table with filters
 
 ### Protocol Reference

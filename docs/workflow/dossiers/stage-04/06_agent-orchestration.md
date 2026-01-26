@@ -1,5 +1,14 @@
 # Stage 4: Agent Orchestration
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, schema, feature, handoff
+
 **Status**: ⚠️ **Partially Defined** (LEAD agent referenced, competitive intelligence tools not mapped)
 
 ---

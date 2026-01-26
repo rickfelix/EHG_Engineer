@@ -1,5 +1,14 @@
 # Database Migration Validation Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, migration, schema, rls
+
 ## Overview
 
 **Problem Addressed**: SD-AGENT-PLATFORM-001 taught us that migration files can exist and be applied successfully, but seed data can fail silently, leaving empty tables.

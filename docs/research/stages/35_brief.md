@@ -1,5 +1,14 @@
 # Stage 35 Research Brief: GTM Timing Intelligence
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, workflow, automation
+
 ## Focus Area
 Optimize go-to-market timing using market intelligence.
 

@@ -1,5 +1,14 @@
 # EHG Platform Route Audit Report
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, testing, unit
+
 > **Report Date**: December 29, 2025
 > **Audit Version**: 3.0
 > **Protocol**: LEO v4.3.3

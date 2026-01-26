@@ -1,5 +1,14 @@
 # PRD Schema Validation - Automation Overview
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, schema, authentication, feature
+
 **Quick Answer**: It's **partially automated** with full automation available via CI/CD.
 
 ---

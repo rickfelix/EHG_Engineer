@@ -1,5 +1,14 @@
 # User Story Quality Improvements - SD-HARDENING-V2-001A
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: database, e2e, migration, rls
+
 **Date**: 2025-12-18
 **SD**: SD-HARDENING-V2-001A
 **Issue**: PLAN-TO-EXEC handoff failing due to user story quality (66% vs 68% threshold)

@@ -1,5 +1,14 @@
 # Sub-Agent Report Compression System
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, guide, protocol, leo
+
 **Generated**: 2025-10-28T21:47:56.042Z
 **Source**: Database (leo_protocol_sections)
 **Context Tier**: REFERENCE

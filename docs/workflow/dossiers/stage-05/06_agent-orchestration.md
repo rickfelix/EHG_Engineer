@@ -1,5 +1,14 @@
 # Stage 5: Agent Orchestration
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, handoff, validation, reference
+
 **Status**: ⚠️ **Not Implemented** (PLAN agent referenced, financial modeling agents not mapped)
 
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/critique/stage-05.md:19 "Clear ownership (PLAN)"

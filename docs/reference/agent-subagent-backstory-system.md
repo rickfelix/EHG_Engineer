@@ -1,5 +1,14 @@
 # LEO Protocol Agent & Sub-Agent Backstory System
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 ## Overview
 
 The LEO Protocol implements a sophisticated multi-agent architecture where both primary agents (LEAD, PLAN, EXEC) and specialized sub-agents operate with rich behavioral contexts defined by their backstories. This document explains how the backstory system works and how it shapes agent behavior.

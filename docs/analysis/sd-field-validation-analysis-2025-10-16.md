@@ -1,5 +1,14 @@
 # Strategic Directive Field Validation Analysis
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, schema, protocol
+
 **Date**: 2025-10-16
 **Issue**: Column name mismatch in handoff validation
 **Status**: ✅ RESOLVED (but cleanup needed)

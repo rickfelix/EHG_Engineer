@@ -1,5 +1,14 @@
 # Stage 22 Research Brief: Iterative Development Loop
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, workflow, automation
+
 ## Focus Area
 Execute agile development cycles with continuous feedback.
 

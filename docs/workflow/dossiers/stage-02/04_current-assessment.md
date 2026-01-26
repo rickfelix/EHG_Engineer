@@ -1,5 +1,14 @@
 # Stage 2: Current Assessment
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: security, validation, workflow, automation
+
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/critique/stage-02.md
 
 ## Rubric Scores (0-5 scale)

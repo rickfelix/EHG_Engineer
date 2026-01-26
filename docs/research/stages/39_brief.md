@@ -1,5 +1,14 @@
 # Stage 39 Research Brief: Multi-Venture Coordination
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, workflow, automation
+
 ## Focus Area
 Coordinate multiple ventures within the portfolio for synergies.
 

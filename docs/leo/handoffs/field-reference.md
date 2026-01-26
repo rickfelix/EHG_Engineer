@@ -1,5 +1,14 @@
 # Handoff Field Reference Guide
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, testing, schema, feature
+
 **Purpose**: Quick reference for JSONB field paths in `sd_phase_handoffs` table.
 **Last Updated**: 2026-01-11
 **Source**: SD-LEO-STREAMS-001 retrospective (16 handoff attempts root cause)
@@ -186,9 +195,9 @@ await supabase
 
 ## Related Documentation
 
-- [sd_phase_handoffs Table Schema](engineer/tables/sd_phase_handoffs.md)
-- [sd_scope_deliverables Table Schema](engineer/tables/sd_scope_deliverables.md)
-- [Handoff Validation Architecture](../../architecture/handoff-validation.md)
+- [sd_phase_handoffs Table Schema](../../reference/schema/engineer/tables/sd_phase_handoffs.md)
+- [sd_scope_deliverables Table Schema](../../reference/schema/engineer/tables/sd_scope_deliverables.md)
+- [Handoff Validation Architecture](../../reference/schema/engineer/tables/leo_handoff_validations.md)
 
 ---
 

@@ -1,5 +1,14 @@
 # Vision v2 API Contracts Specification
 
+
+## Metadata
+- **Category**: API
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-12
+- **Tags**: database, api, unit, schema
+
 **Version:** 1.0
 **Status:** APPROVED
 **Last Updated:** December 2025

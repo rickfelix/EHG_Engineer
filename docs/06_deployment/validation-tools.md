@@ -1,5 +1,14 @@
 # LEO Protocol Validation Tools
 
+
+## Metadata
+- **Category**: Deployment
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, testing, e2e, migration
+
 **Last Updated**: 2026-01-19
 **Related SD**: SD-LEARN-011
 **Status**: Active
@@ -329,8 +338,8 @@ If database rejects an SD type:
 ## Related Documentation
 
 - [LEO Protocol Documentation](../../CLAUDE.md)
-- [Handoff System](../reference/handoff-system.md)
-- [Database Migrations](../database/migrations/)
+- [Handoff System](../leo/handoffs/handoff-system-guide.md)
+- [Database Migrations](../database/migrations/MIGRATION_SUCCESS_REPORT.md)
 - [CI/CD Workflows](../../.github/workflows/)
 
 ---

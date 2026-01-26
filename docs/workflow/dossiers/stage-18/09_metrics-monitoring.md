@@ -1,5 +1,14 @@
 # Stage 18: Metrics and Monitoring
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, authentication, sd
+
 ## Purpose
 
 This document provides SQL queries, monitoring dashboards, and alerting thresholds for tracking Stage 18 (Documentation Sync to GitHub) health and performance.

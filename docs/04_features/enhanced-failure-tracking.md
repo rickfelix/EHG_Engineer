@@ -1,5 +1,14 @@
 # Enhanced Failure Tracking - Detailed Test Results
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 ## Overview
 
 The real testing campaign now captures **detailed failure information** for every failing test, providing actionable guidance for fixing issues.

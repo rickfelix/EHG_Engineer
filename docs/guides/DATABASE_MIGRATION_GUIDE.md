@@ -1,4 +1,13 @@
 # 🎯 Database Migration Execution Guide
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, testing, e2e, migration
+
 ## SD-VIDEO-VARIANT-001 - LEAD→PLAN Handoff Unblock
 
 **Date**: 2025-10-10  

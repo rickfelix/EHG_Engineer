@@ -1,8 +1,8 @@
 # Documentation Structure & Information Architecture Assessment
 
 ## Metadata
-- **Category**: Analysis
-- **Status**: Active
+- **Category**: Report
+- **Status**: Approved
 - **Version**: 1.0.0
 - **Author**: DOCMON Sub-Agent
 - **Last Updated**: 2025-12-29
@@ -181,7 +181,7 @@ docs/
 - [Topic A](../01_architecture/topic-a.md)
 
 ### Related Guides
-- [Guide B](../guides/guide-b.md)
+- [Guide B](../reference/guide.md)
 
 ### Advanced Topics
 - [Pattern C](../reference/pattern-c.md)
@@ -299,7 +299,7 @@ Step 5: Try /docs/01_architecture/
 
 **Add Breadcrumbs** to all documentation:
 ```markdown
-[Home](/) > [Docs](/docs) > [Guides](/docs/guides) > This Document
+[Home](/) > [Docs](../01_architecture) > [Guides](../guides) > This Document
 ```
 
 ---
@@ -338,8 +338,8 @@ Step 5: Try /docs/01_architecture/
 
    Welcome! Start here:
    1. [Project Overview](../README.md)
-   2. [Quick Setup](guides/SIMPLE_PROJECT_SETUP.md)
-   3. [Architecture Basics](01_architecture/README.md)
+   2. [Quick Setup](../guides/SIMPLE_PROJECT_SETUP.md)
+   3. [Architecture Basics](../01_architecture/README.md)
    4. [Your First SD](guides/DEVELOPER_ONBOARDING.md)
    ```
 
@@ -353,8 +353,8 @@ Step 5: Try /docs/01_architecture/
    - [EXEC Phase](../CLAUDE_EXEC.md)
 
    Quick references:
-   - [LEO Commands](guides/LEO_COMMANDS.md)
-   - [Sub-Agent Patterns](reference/sub-agent-patterns-guide.md)
+   - [LEO Commands](../leo/commands/leo-commands.md)
+   - [Sub-Agent Patterns](../reference/agent-patterns-guide.md)
    ```
 
 3. `/docs/FOR_OPERATIONS.md`
@@ -362,11 +362,11 @@ Step 5: Try /docs/01_architecture/
    # Operations Guide
 
    Deployment:
-   - [Production Go-Live](operations/PRODUCTION_GO_LIVE.md)
-   - [Troubleshooting](troubleshooting/)
+   - [Production Go-Live](../operations/PRODUCTION_GO_LIVE.md)
+   - [Troubleshooting](../genesis/TROUBLESHOOTING.md)
 
    Monitoring:
-   - [Database Health](guides/database-connection.md)
+   - [Database Health](../guides/database-connection.md)
    ```
 
 ---
@@ -410,7 +410,7 @@ Step 5: Try /docs/01_architecture/
 1. **Create Quick Start Link in Root README** (5 min)
    ```markdown
    ## Quick Start
-   → **[Get Started in 5 Minutes](docs/guides/SIMPLE_PROJECT_SETUP.md)**
+   → **[Get Started in 5 Minutes](../04_features/SIMPLE_PROJECT_SETUP.md)**
    ```
 
 2. **Add Breadcrumbs to Top 10 Most-Visited Docs** (30 min)
@@ -487,32 +487,32 @@ Create `/docs/guides/README.md`:
 # Documentation Guides
 
 ## Getting Started (New Developers)
-- [Simple Project Setup](SIMPLE_PROJECT_SETUP.md)
+- [Simple Project Setup](../guides/SIMPLE_PROJECT_SETUP.md)
 - [Developer Onboarding](DEVELOPER_ONBOARDING.md) (create)
-- [LEO Protocol Quick Reference](leo-protocol-quick-reference.md)
+- [LEO Protocol Quick Reference](../guides/leo-protocol-quick-reference.md)
 
 ## LEO Protocol Workflows
-- [Hybrid Sub-Agent Workflow](hybrid-sub-agent-workflow.md)
-- [Lead Intent Clarification](lead-intent-clarification-guide.md)
-- [PRD Creation Process](prd-creation-process.md)
+- [Hybrid Sub-Agent Workflow](../guides/hybrid-sub-agent-workflow.md)
+- [Lead Intent Clarification](../guides/lead-intent-clarification-guide.md)
+- [PRD Creation Process](../guides/prd-creation-process.md)
 
 ## Database & Architecture
-- [Database Connection](database-connection.md)
-- [Database Migration Checklist](database-migration-checklist.md)
-- [Database Architecture](database-architecture.md)
+- [Database Connection](../guides/database-connection.md)
+- [Database Migration Checklist](../guides/database-migration-checklist.md)
+- [Database Architecture](../guides/database-architecture.md)
 
 ## Testing & Quality
-- [Enhanced Testing Integration](enhanced-testing-integration.md)
-- [Real Testing Campaign](real-testing-campaign.md)
-- [QA Director Usage](qa-director-usage.md)
+- [Enhanced Testing Integration](../guides/enhanced-testing-integration.md)
+- [Real Testing Campaign](../guides/real-testing-campaign.md)
+- [QA Director Usage](../guides/qa-director-usage.md)
 
 ## Sub-Agents & Automation
-- [Sub-Agent Activation](sub-agent-activation.md)
-- [Invisible Subagent System](INVISIBLE_SUBAGENT_SYSTEM_GUIDE.md)
+- [Sub-Agent Activation](../guides/sub-agent-activation.md)
+- [Invisible Subagent System](../guides/INVISIBLE_SUBAGENT_SYSTEM_GUIDE.md)
 
 ## Operations & Deployment
-- [CI/CD Integration](leo-ci-cd-integration-setup.md)
-- [Semantic Search Deployment](semantic-search-deployment.md)
+- [CI/CD Integration](../guides/leo-ci-cd-integration-setup.md)
+- [Semantic Search Deployment](../guides/semantic-search-deployment.md)
 
 ... (categorize all 60+ guides)
 ```
@@ -524,18 +524,18 @@ Create `/docs/reference/README.md`:
 # Reference Documentation
 
 ## Patterns & Best Practices
-- [Sub-Agent Patterns Guide](sub-agent-patterns-guide.md)
-- [Database Agent Patterns](database-agent-patterns.md)
-- [Validation Enforcement](validation-enforcement.md)
+- [Sub-Agent Patterns Guide](../reference/agent-patterns-guide.md)
+- [Database Agent Patterns](../reference/database-agent-patterns.md)
+- [Validation Enforcement](../reference/validation-enforcement.md)
 
 ## Quick References
-- [Quick Reference](quick-reference.md)
-- [Validation Failure Patterns](quick-reference.md) (current file)
+- [Quick Reference](../reference/quick-reference.md)
+- [Validation Failure Patterns](../reference/quick-reference.md) (current file)
 
 ## System Guides
-- [QA Director Guide](qa-director-guide.md)
-- [Handoff System Guide](handoff-system-guide.md)
-- [Context Tracking System](context-tracking-system.md)
+- [QA Director Guide](../reference/qa-director-guide.md)
+- [Handoff System Guide](../leo/handoffs/handoff-system-guide.md)
+- [Context Tracking System](../reference/context-tracking-system.md)
 
 ... (categorize all 70+ references)
 ```
@@ -548,20 +548,20 @@ Create `/docs/DOCUMENTATION_MAP.md`:
 
 ## I'm new to the project
 → Start: [README.md](../README.md)
-→ Then: [Quick Setup](guides/SIMPLE_PROJECT_SETUP.md)
-→ Next: [Architecture Overview](01_architecture/README.md)
+→ Then: [Quick Setup](../guides/SIMPLE_PROJECT_SETUP.md)
+→ Next: [Architecture Overview](../01_architecture/README.md)
 
 ## I'm implementing a feature
 → Phase guides: [CLAUDE_LEAD.md](../CLAUDE_LEAD.md), [CLAUDE_PLAN.md](../CLAUDE_PLAN.md), [CLAUDE_EXEC.md](../CLAUDE_EXEC.md)
-→ Database work: [Database Patterns](reference/database-agent-patterns.md)
-→ Testing: [Testing Guide](05_testing/README.md)
+→ Database work: [Database Patterns](../reference/database-agent-patterns.md)
+→ Testing: [Testing Guide](../01_architecture/README.md)
 
 ## I'm troubleshooting an issue
-→ Common issues: [Troubleshooting](troubleshooting/)
-→ Database: [Database Best Practices](reference/database-best-practices.md)
+→ Common issues: [Troubleshooting](../genesis/TROUBLESHOOTING.md)
+→ Database: [Database Best Practices](../reference/database-best-practices.md)
 
 ## I'm deploying to production
-→ Operations: [Production Go-Live](operations/PRODUCTION_GO_LIVE.md)
+→ Operations: [Production Go-Live](../operations/PRODUCTION_GO_LIVE.md)
 → Deployment: [06_deployment/](06_deployment/)
 
 ... (complete map for all use cases)

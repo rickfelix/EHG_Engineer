@@ -1,5 +1,14 @@
 # Supabase Database Migration Instructions
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, migration, schema
+
 ## UI Validation Schema Setup
 
 To create the UI validation tables in your Supabase database, follow these steps:

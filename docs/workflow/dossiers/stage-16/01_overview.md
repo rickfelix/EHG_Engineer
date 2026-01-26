@@ -1,5 +1,14 @@
 # Stage 16 Operating Dossier: AI CEO Agent Development
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: validation, workflow, automation, ci
+
 ## Regeneration Note
 
 **This dossier is DYNAMICALLY GENERATED** from the canonical source files:

@@ -1,4 +1,13 @@
 # E2E Testing Coverage - Visual Summary
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: api, testing, e2e, unit
+
 **Generated**: 2026-01-05
 
 ## Coverage at a Glance

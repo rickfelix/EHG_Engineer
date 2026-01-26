@@ -1,5 +1,14 @@
 # Stage 9: Agent Orchestration & Governance
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, unit, schema, protocol
+
 **Purpose**: Define how LEO Protocol agents execute Stage 9, with CrewAI implementation patterns.
 
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/critique/stage-09.md:18 "Clear ownership (LEAD)"

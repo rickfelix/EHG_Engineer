@@ -1,5 +1,14 @@
 # Stage 3 Research Brief: Comprehensive Validation
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, validation, workflow
+
 ## Focus Area
 Validate problem-solution fit, user willingness to pay, and technical feasibility.
 

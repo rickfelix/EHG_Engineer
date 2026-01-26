@@ -1,7 +1,7 @@
 # Stage 21: QA & UAT
 
 ## Metadata
-- **Category**: Workflow
+- **Category**: Protocol
 - **Status**: Approved
 - **Version**: 2.0.0
 - **Author**: Documentation Sub-Agent (DOCMON)
@@ -118,7 +118,7 @@ No specific exit gates defined.
 ## Related Documentation
 
 - [stages_v2.yaml](../stages_v2.yaml#L919) - Stage 21 definition
-- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-6-launch-and-learn) - Phase context
+- [25-Stage Overview](../25-stage-venture-lifecycle-overview.md#phase-6-launch-learn) - Phase context
 - [Stage 20: Security & Performance](stage-20-security-and-performance.md) - Previous stage
 - [Stage 22: Deployment & Infrastructure](stage-22-deployment-and-infrastructure.md) - Next stage
 

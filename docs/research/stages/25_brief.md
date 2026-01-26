@@ -1,5 +1,14 @@
 # Stage 25 Research Brief: Quality Assurance
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: testing, unit, guide, workflow
+
 ## Focus Area
 Comprehensive quality assurance and testing processes.
 

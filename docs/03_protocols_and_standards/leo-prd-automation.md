@@ -1,5 +1,14 @@
 # LEO Protocol - Automatic PRD Generation
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-23
+- **Tags**: database, api, schema, security
+
 **Integration Date**: 2025-10-19
 **Last Updated**: 2026-01-23
 **Status**: **PRODUCTION READY**

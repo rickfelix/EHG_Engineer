@@ -1,5 +1,14 @@
 # Stage 32 Research Brief: Customer Success & Retention Engineering
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, workflow, automation
+
 ## Focus Area
 Establish customer success systems and retention mechanisms.
 

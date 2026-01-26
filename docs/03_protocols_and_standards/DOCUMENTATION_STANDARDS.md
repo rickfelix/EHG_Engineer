@@ -113,8 +113,8 @@ Every markdown file MUST start with:
 # Document Title
 
 ## Metadata
-- **Category**: [Architecture|API|Guide|Protocol|Report]
-- **Status**: [Draft|Review|Approved|Deprecated]
+- **Category**: Protocol
+- **Status**: Deprecated
 - **Version**: [1.0.0]
 - **Author**: [Name or Sub-Agent]
 - **Last Updated**: [YYYY-MM-DD]
@@ -155,7 +155,7 @@ Use relative paths for internal links:
 
 ```markdown
 ✅ CORRECT:
-- See [Architecture Overview](../01_architecture/system-overview.md)
+- See [Architecture Overview](../01_architecture/aegis-system-overview.md)
 - Details in [Testing Guide](../05_testing/testing_qa.md)
 - Reference [Database Patterns](../reference/database-agent-patterns.md)
 
@@ -339,13 +339,159 @@ The Documentation sub-agent should:
 4. Track documentation debt
 5. Prioritize documentation needs
 
+## 7. File Placement Rubric (Decision Tree)
+
+Use this decision tree to determine where any documentation file belongs:
+
+```
+WHERE DOES THIS FILE GO?
+
+1. Is it an SD completion/status report?
+   → YES: docs/summaries/sd-sessions/[SD-TYPE]/[SD-KEY]-[STATUS].md
+   Examples:
+   - LEAD_APPROVAL_COMPLETE.md → docs/summaries/sd-sessions/feature/SD-XXX-lead-approved.md
+   RATIONALE: Status reports are session artifacts, not permanent documentation.
+
+2. Is it a retrospective/lessons learned?
+   → YES: docs/retrospectives/[SD-KEY]-retro.md
+   RATIONALE: Standardized location for all retrospectives.
+
+3. Is it database-related (schema, migration, RLS)?
+   → YES: Apply secondary decision:
+      - Schema documentation → docs/database/schema/
+      - Migration notes → docs/database/migrations/
+      - RLS policies → docs/database/rls/
+      - Patterns/best practices → docs/reference/database/
+      - Architecture overview → docs/01_architecture/database-architecture.md
+   RATIONALE: Database docs consolidated by sub-type.
+
+4. Is it testing-related?
+   → YES: Apply secondary decision:
+      - Testing protocols/standards → docs/03_protocols_and_standards/testing-governance.md
+      - How to write tests (guide) → docs/guides/testing/
+      - Test strategy/coverage → docs/05_testing/strategy/
+      - E2E test documentation → docs/05_testing/e2e/
+      - Unit test documentation → docs/05_testing/unit/
+      - QA campaigns → docs/05_testing/campaigns/
+   RATIONALE: Testing docs sub-categorized by purpose.
+
+5. Is it a protocol/standard (LEO, governance, workflow)?
+   → YES: docs/03_protocols_and_standards/[PROTOCOL-NAME]_v[VERSION].md
+   RATIONALE: Versioned protocols in standards directory.
+
+6. Is it API documentation?
+   → YES: docs/02_api/[kebab-case-name].md
+   RATIONALE: Flat API docs structure.
+
+7. Is it feature documentation?
+   → YES: Apply sub-categorization if >50 files total:
+      - User-facing features → docs/04_features/user-features/
+      - Backend features → docs/04_features/backend/
+      - Integrations → docs/04_features/integrations/
+      - AEGIS-specific → docs/04_features/aegis/
+   RATIONALE: Large folders need sub-categorization.
+
+8. Is it a guide/how-to?
+   → YES: Apply secondary decision:
+      - Database guides → docs/guides/database/
+      - Testing guides → docs/guides/testing/
+      - Development guides → docs/guides/development/
+      - Deployment guides → docs/guides/deployment/
+      - LEO Protocol guides → docs/guides/leo-protocol/
+   RATIONALE: Guides sub-categorized by topic.
+
+9. Is it a quick reference/cheatsheet/pattern?
+   → YES: Apply secondary decision:
+      - Database patterns → docs/reference/database/
+      - Validation patterns → docs/reference/validation/
+      - Schema references → docs/reference/schema/
+      - Command references → docs/reference/commands/
+      - Sub-agent patterns → docs/reference/sub-agents/
+   RATIONALE: References sub-categorized by domain.
+
+10. Is it architecture documentation?
+    → YES: docs/01_architecture/[component-name].md
+    RATIONALE: High-level architecture overviews.
+
+11. Is it deployment/operations?
+    → YES: docs/06_deployment/[deployment-topic].md
+    RATIONALE: Deployment docs kept flat.
+
+12. Is it archived/deprecated?
+    → YES: docs/archive/[year]/[category]/[filename].md
+    RATIONALE: Archive organized by year and category.
+```
+
+### Ambiguity Resolution Rules
+- If a file fits multiple categories, choose based on PRIMARY purpose
+- If still unclear, default to most specific category (e.g., database guide → guides/database/ not database/)
+- Cross-reference from other relevant locations using README links
+
+## 8. Automated Enforcement
+
+The following validations MUST pass before documentation changes are committed:
+
+| Rule | Validation | Tool |
+|------|-----------|------|
+| Location Compliance | No .md files in src/, lib/, scripts/, tests/, public/ | `npm run docs:validate-location` |
+| Root Directory Limit | Max 10 .md files at root (CLAUDE*.md, README.md, CHANGELOG.md only) | `npm run docs:validate-location` |
+| Metadata Completeness | 100% of docs have required metadata header | `npm run docs:validate-metadata` |
+| Naming Convention | All files use kebab-case (except UPPERCASE standards) | `npm run docs:validate-naming` |
+| Link Integrity | 0 broken internal cross-references | `npm run docs:validate-links` |
+| Duplicate Detection | No files with >70% content similarity | `npm run docs:detect-duplicates` |
+
+**Pre-commit Hook**: Install with `npm run install-doc-hooks`
+
+**CI/CD Integration**: Documentation validation runs on all PRs touching .md files
+
+### NPM Script Commands
+```bash
+npm run docs:validate          # Run all validations
+npm run docs:validate-location # Check file locations
+npm run docs:validate-metadata # Check metadata headers
+npm run docs:validate-naming   # Check naming conventions
+npm run docs:validate-links    # Check cross-references
+npm run docs:detect-duplicates # Find duplicate content
+npm run docs:health-report     # Generate health report
+```
+
+## 9. Documentation Lifecycle & Cleanup
+
+### Obsolescence Policy
+- **Draft** docs not updated in 90 days → Auto-archive or prompt for review
+- **Review** docs not updated in 60 days → Auto-change to Draft or Deprecated
+- **Approved** docs not updated in 180 days → Flag for freshness review
+- **Deprecated** docs older than 1 year → Auto-archive
+
+### Archive Rules
+- Archive path: `docs/archive/{YEAR}/{CATEGORY}/`
+- Archive metadata: Add `Archived-Date` and `Archived-Reason` fields
+- Archive index: Maintain `docs/archive/README.md` with archive catalog
+
+### Duplicate Resolution Process
+When duplicate detected (>70% similarity):
+1. Identify canonical version (newest, most complete, approved status)
+2. Merge unique content from duplicates into canonical
+3. Archive duplicates with cross-reference to canonical
+4. Update all cross-references to point to canonical
+
+### Deletion Policy
+- NEVER delete documentation without archiving first
+- Exception: Generated artifacts (CI reports, temporary status files) can be deleted after 30 days
+
 ---
 
-*Documentation Standards Version: 1.1.0*
-*Last Updated: 2025-10-24*
+*Documentation Standards Version: 1.2.0*
+*Last Updated: 2026-01-26*
 *Maintained by: Documentation Sub-Agent (DOCMON)*
 
 **Changelog**:
+- **v1.2.0** (2026-01-26): Added comprehensive file placement rubric and enforcement
+  - Added: Section 7 - File Placement Rubric (Decision Tree)
+  - Added: Section 8 - Automated Enforcement with npm scripts
+  - Added: Section 9 - Documentation Lifecycle & Cleanup policies
+  - Added: Validation scripts (validate-doc-location, validate-doc-metadata, validate-doc-naming, detect-duplicate-docs)
+  - Part of SD-LEO-DOC-CLEANUP-001-A
 - **v1.1.0** (2025-10-24): Updated directory structure to match actual implementation
   - Changed numbering: 04_features, 05_testing, 06_deployment (was 04_guides, 05_sub_agents, 06_features, 07_testing, 08_deployment)
   - Added: archive/, database/, guides/, reference/ directories

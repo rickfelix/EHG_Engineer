@@ -1,5 +1,14 @@
 # Stage 4 Dossier Summary
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, unit, feature
+
 **Stage**: 4 - Competitive Intelligence & Market Defense
 **Review Date**: 2025-11-07
 **Reviewer**: Chairman

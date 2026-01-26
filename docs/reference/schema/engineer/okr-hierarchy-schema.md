@@ -1,5 +1,14 @@
 # OKR Strategic Hierarchy Schema Documentation
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, unit, migration, schema
+
 **Generated**: 2026-01-04T18:04:20.217Z
 **Database**: EHG_Engineer (dedlbzhpgkmetvhbkyzq)
 **Migration**: 20260104_okr_strategic_hierarchy.sql

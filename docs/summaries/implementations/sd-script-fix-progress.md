@@ -1,5 +1,14 @@
 # SD Script Fix Progress Report
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, e2e, unit
+
 **Date**: 2025-10-19
 **Status**: In Progress - 1 of 16 critical scripts fixed
 

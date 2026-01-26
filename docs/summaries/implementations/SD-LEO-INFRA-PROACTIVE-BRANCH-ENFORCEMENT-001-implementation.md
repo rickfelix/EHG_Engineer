@@ -1,7 +1,7 @@
 # Implementation Summary: Proactive Branch Enforcement at PLAN-TO-EXEC Gate
 
 ## Metadata
-- **Category**: Implementation
+- **Category**: Feature
 - **Status**: Approved
 - **Version**: 1.0.0
 - **Author**: Claude Opus 4.5

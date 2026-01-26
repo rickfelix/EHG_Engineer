@@ -1,5 +1,14 @@
 # Stage 25: Recursion Blueprint
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, e2e
+
 ## Overview
 
 **Purpose**: Define recursive triggers for Stage 25 (Quality Assurance) when quality gates fail or regressions detected.

@@ -1,5 +1,14 @@
 # Stage 13 Research Brief: Exit-Oriented Design
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, workflow, automation
+
 ## Focus Area
 Design venture with exit strategy and value maximization in mind.
 

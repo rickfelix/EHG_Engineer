@@ -1,5 +1,14 @@
 # Stage 9 Research Brief: Gap Analysis & Market Opportunity Modeling
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, workflow, automation
+
 ## Focus Area
 Identify capability gaps and model market opportunities.
 

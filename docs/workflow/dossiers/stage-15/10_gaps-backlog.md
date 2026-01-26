@@ -1,5 +1,14 @@
 # Stage 15: Gaps, Backlog & Strategic Directive Cross-References
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 **Purpose**: Document identified gaps from critique and propose improvement backlog with SD references
 **Source**: `/mnt/c/_EHG/EHG_Engineer/docs/workflow/critique/stage-15.md`
 **Overall Score**: 3.0/5.0 (Functional but needs optimization)

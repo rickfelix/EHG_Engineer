@@ -1,5 +1,14 @@
 # Research Summary: LEO Protocol v5.x — Next-Generation Governance Engine
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-04
+- **Tags**: migration, schema, authorization, protocol
+
 **SD Reference**: SD-RESEARCH-106 (LEO Protocol Evolution to v5.x)
 **Document**: LEO Protocol v5.x — Next-Generation Governance Engine.pdf
 **Pages**: 18

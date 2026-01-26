@@ -1,5 +1,14 @@
 # 26. Security & Compliance Certification
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, testing, security, validation
+
 - **Owner**: EXEC
 - **Depends on**: 25
 - **Purpose**: Security validation and compliance certification processes.

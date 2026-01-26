@@ -1,5 +1,14 @@
 # Stage 6: Canonical Definition (from stages.yaml)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: schema, guide, validation, architecture
+
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:228-273
 
 **Purpose**: This file contains the complete, authoritative YAML definition for Stage 6 as extracted from the governance repository.

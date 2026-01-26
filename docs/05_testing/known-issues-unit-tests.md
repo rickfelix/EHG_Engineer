@@ -1,5 +1,14 @@
 # Known Issues - Unit Test Failures
 
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: testing, e2e, unit, feature
+
 **Status**: 🔴 ACTIVE
 **Last Updated**: 2025-11-04
 **CI/CD Impact**: BLOCKING deployment

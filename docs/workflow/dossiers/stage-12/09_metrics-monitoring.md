@@ -1,5 +1,14 @@
 # Stage 12: Metrics & Monitoring
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, schema
+
 ## Overview
 
 This file defines KPIs, measurement queries, and monitoring dashboards for **Stage 12: Adaptive Naming Module**. All metrics align with stages.yaml specification and critique recommendations.

@@ -33,4 +33,4 @@ This directory contains Mermaid diagrams visualizing the EHG 40-stage venture wo
 ## Navigation
 - [Back to Workflow Docs](../workflow/)
 - [View SOPs](../workflow/SOP_INDEX.md)
-- [View Critiques](../workflow/critique/)
+- [View Critiques](../workflow/critique/overview.md)

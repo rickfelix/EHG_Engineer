@@ -1,5 +1,14 @@
 # Migration Drift Resolution - October 27, 2025
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, migration, schema, feature
+
 ## Problem Summary
 
 **Issue**: Migration history mismatch between local repository and remote Supabase database.

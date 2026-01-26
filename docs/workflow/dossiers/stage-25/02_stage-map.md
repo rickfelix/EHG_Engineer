@@ -1,5 +1,14 @@
 # Stage 25: Dependency Graph & Workflow Position
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, testing, e2e, unit
+
 ## Workflow Position
 
 **Phase**: Execution (Stages 21-31)

@@ -1,5 +1,14 @@
 # 🗄️ Supabase Database Operations
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-24
+- **Tags**: database, protocol, leo, documentation
+
 **Generated**: 2025-10-28T21:47:56.048Z
 **Source**: Database (leo_protocol_sections)
 **Context Tier**: REFERENCE

@@ -1,5 +1,14 @@
 # Stage 15: Professional Standard Operating Procedure
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 **Purpose**: Step-by-step execution guide for Pricing Strategy & Revenue Architecture
 **Owner**: LEAD agent
 **Execution Mode**: Manual → Assisted → Auto (suggested progression)

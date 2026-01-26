@@ -1,5 +1,14 @@
 # Preventing Missed Sub-Agents: Comprehensive Guide
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, migration, schema
+
 **Created**: 2025-10-01
 **Purpose**: Prevent critical sub-agent activations from being missed during LEO Protocol execution
 **Triggered by**: SD-UAT-021 retrospective feedback

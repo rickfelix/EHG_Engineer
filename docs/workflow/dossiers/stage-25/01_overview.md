@@ -1,5 +1,14 @@
 # Stage 25: Quality Assurance — Operating Dossier
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: testing, e2e, security, protocol
+
 **Generated**: 2025-11-06
 **Version**: 1.0
 **Protocol**: Stage Operating Dossier v1.0

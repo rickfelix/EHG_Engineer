@@ -1,5 +1,14 @@
 # Stage 6: Dependency Graph & Workflow Position
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: validation, reference, workflow, ci
+
 **Purpose**: Visualize Stage 6's position in the unified venture creation system and its dependency relationships.
 
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:228-273 "id: 6, depends_on: [5]"

@@ -1,5 +1,14 @@
 # Genesis Oath: The Simulation Chamber
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, testing, migration
+
 > **Document Version: GENESIS-V3.1**
 > **Vision Version: 3.1**
 > **Status: RATIFIED**

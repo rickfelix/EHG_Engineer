@@ -1,4 +1,13 @@
 # Multi-Application Management Protocol
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, migration, schema, security
+
 ## LEO Protocol v3.1.5 Extension for Multi-App Support
 
 ### Version: 1.0.0

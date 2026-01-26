@@ -1,5 +1,14 @@
 # Stage 6: Current Assessment (from Critique)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, schema, security, validation
+
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/critique/stage-06.md:1-71
 
 **Purpose**: Document the current state assessment from the critique rubric, including scores, strengths, weaknesses, and improvement recommendations.

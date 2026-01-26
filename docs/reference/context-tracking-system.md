@@ -1,5 +1,14 @@
 # Context Tracking System
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-24
+- **Tags**: database, api, testing, unit
+
 **Version**: 1.0
 **Created**: 2025-12-26
 **Based on**: Token Accounting & Memory Utilization Research (Dec 2025)

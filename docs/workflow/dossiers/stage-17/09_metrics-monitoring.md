@@ -1,5 +1,14 @@
 # Stage 17: Metrics and Monitoring
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, sd, validation
+
 ## Overview
 
 Stage 17 (GTM Strategist Agent Development) defines three primary metrics for tracking marketing automation performance. This document provides SQL queries, dashboard specifications, and monitoring procedures for each metric.

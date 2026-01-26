@@ -1,5 +1,14 @@
 # Stage 16 Current Assessment
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: testing, unit, schema, security
+
 ## Critique Rubric Scores
 
 **Source**: `docs/workflow/critique/stage-16.md`

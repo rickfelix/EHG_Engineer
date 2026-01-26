@@ -1,5 +1,14 @@
 # Database Agent Workaround Anti-Patterns Guide
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, migration, schema, rls
+
 **Status**: ACTIVE
 **Last Updated**: 2025-10-12
 **Evidence**: 74 retrospectives analyzed, 13 SDs with database agent lessons

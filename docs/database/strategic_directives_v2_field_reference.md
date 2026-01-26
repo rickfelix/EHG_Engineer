@@ -1,5 +1,14 @@
 # Strategic Directives v2 - Field Reference Guide
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-26
+- **Tags**: database, api, e2e, migration
+
 **Last Updated**: 2026-01-24
 **Database**: EHG_Engineer (dedlbzhpgkmetvhbkyzq)
 **Table**: `strategic_directives_v2`
@@ -134,6 +143,32 @@ const sdType = sd.sd_type || sd.category || 'feature';
 | `risks` | JSONB | `[{ risk: "Description", severity: "high/medium/low", mitigation: "Strategy" }]` |
 | `success_metrics` | JSONB | `[{ metric: "Name", target: "Target", actual: "Current" }]` |
 | `stakeholders` | JSONB | `[{ name: "Person/Team", role: "Role", contact: "Email/Slack" }]` |
+
+### ⚠️ Handoff Validation Requirement (success_criteria / success_metrics)
+
+**CRITICAL**: At least one of `success_criteria` OR `success_metrics` must be populated with valid entries for the LEAD-TO-PLAN handoff to pass.
+
+**Valid Structures**:
+```json
+// success_criteria format (preferred)
+[
+  { "criterion": "Health score above threshold", "measure": ">90/100" },
+  { "criterion": "All tests passing", "measure": "100% pass rate" }
+]
+
+// success_metrics format (alternative)
+[
+  { "metric": "Health Score", "target": ">90/100", "actual": "45/100" },
+  { "metric": "Test Coverage", "target": "80%", "actual": "65%" }
+]
+
+// Legacy format (also accepted)
+["Simple string criterion 1", "Simple string criterion 2"]
+```
+
+**Gate Reference**: `GATE_SD_TRANSITION_READINESS` in `scripts/modules/handoff/executors/lead-to-plan/gates/transition-readiness.js`
+
+**If validation fails, you'll see**: `success_metrics AND success_criteria are both empty or have invalid structure`
 
 ---
 

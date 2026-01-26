@@ -1,5 +1,14 @@
 # Stage 19: Stage Map and Workflow Position
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, testing, unit, sd
+
 ## Dependency Graph
 
 ### Upstream Dependencies

@@ -1,5 +1,14 @@
 # Native Sub-Agent Invocation Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-20
+- **Tags**: database, testing, migration, schema
+
 **Created**: 2025-10-12
 **Version**: 1.0.0
 **Status**: Tested & Verified
@@ -329,7 +338,7 @@ cd EHG_Engineer  # navigate to project root
 
 ## Related Documentation
 
-- [Hybrid Sub-Agent Workflow Guide](./hybrid-sub-agent-workflow.md)
+- [Hybrid Sub-Agent Workflow Guide](../../guides/hybrid-sub-agent-workflow.md)
 - [Sub-Agent System Overview](./sub-agent-system.md)
 - [LEO Protocol CLAUDE.md](../../CLAUDE.md)
 

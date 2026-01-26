@@ -1,5 +1,14 @@
 # SD Validation Profiles Reference
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-19
+- **Tags**: database, testing, e2e, migration
+
 This document defines the validation requirements for Strategic Directives (SDs) based on their `sd_type`. It was created as part of SD-UAT-WORKFLOW-001 to eliminate trial-and-error during SD creation.
 
 ---

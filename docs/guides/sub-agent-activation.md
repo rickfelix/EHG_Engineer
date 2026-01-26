@@ -1,5 +1,14 @@
 # Sub-Agent Activation Guide for LEO Protocol v4.1.2_database_first
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 ## Executive Summary
 This guide documents when and how to activate sub-agents during LEO Protocol execution. Sub-agents are MANDATORY when specific triggers are detected. Failure to activate required sub-agents is a protocol violation.
 

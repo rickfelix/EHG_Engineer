@@ -1,5 +1,14 @@
 # Quality Lifecycle System - Workflow Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-18
+- **Tags**: database, api, e2e, schema
+
 **Status**: Completed
 **Version**: 1.0.0
 **Orchestrator SD**: SD-QUALITY-LIFECYCLE-001

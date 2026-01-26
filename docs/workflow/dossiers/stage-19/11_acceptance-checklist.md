@@ -1,5 +1,14 @@
 # Stage 19: Acceptance Checklist
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, e2e
+
 ## Purpose
 
 This document provides a comprehensive quality checklist for validating Stage 19 Operating Dossier completeness, accuracy, and production-readiness.

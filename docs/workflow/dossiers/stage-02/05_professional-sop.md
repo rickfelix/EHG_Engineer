@@ -1,5 +1,14 @@
 # Stage 2: Professional SOP
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: validation, workflow, ci, agent
+
 **Purpose**: Execute multi-agent AI review with contrarian perspectives and risk prioritization
 
 ---

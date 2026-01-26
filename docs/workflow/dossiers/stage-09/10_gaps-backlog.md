@@ -1,5 +1,14 @@
 # Stage 9: Gaps & Backlog
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, unit, schema
+
 **Purpose**: Document identified gaps from critique and map to Strategic Directives where applicable.
 
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/critique/stage-09.md:22-71 "Weaknesses, Specific Improvements, Recommendations"

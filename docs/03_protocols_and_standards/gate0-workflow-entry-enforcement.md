@@ -1,5 +1,14 @@
 # Gate 0: Workflow Entry Enforcement
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, feature
+
 **Version**: 1.0.0
 **Date**: 2026-01-21
 **Status**: Active
@@ -579,7 +588,7 @@ supabase.from('sd_phase_handoffs')
 - [LEO Protocol Git Commit Guidelines](./leo_git_commit_guidelines_v4.2.0.md)
 - [LEO Protocol v4.3.3 Overview](./LEO_v4.3.3_overview.md)
 - [Strategic Directive Workflow](../workflow/strategic-directive-workflow.md)
-- [Handoff System Documentation](../workflow/handoff-system.md)
+- [Handoff System Documentation](../leo/handoffs/handoff-system-guide.md)
 - [Pre-Commit Hook Reference](../../.husky/pre-commit)
 
 ---

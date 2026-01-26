@@ -1,5 +1,14 @@
 # SOP Index - 40-Stage Venture Workflow
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, security, validation, deployment
+
 ## Overview
 This index provides navigation to all 40 Standard Operating Procedures (SOPs) for the EHG venture workflow.
 

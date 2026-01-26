@@ -1,5 +1,14 @@
 # Stage 06 – Risk Evaluation PRD (Enhanced Technical Specification)
 
+
+## Metadata
+- **Category**: API
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, unit
+
 **Status:** Enhanced for Lovable.dev • **Owner:** EVA Core • **Scope:** AI-powered risk assessment with heat mapping  
 **Stack:** React + Vite + Tailwind • TypeScript/Zod • Supabase • Risk Analysis Engine
 **Enhancement Level:** Technical Architecture Specification (Not Implementation)

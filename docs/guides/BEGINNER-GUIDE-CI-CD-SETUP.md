@@ -1,5 +1,14 @@
 # Beginner's Guide: Fix CI/CD Secrets (Step-by-Step)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: database, api, testing, e2e
+
 **Time Required**: 15 minutes
 **Difficulty**: Beginner-friendly
 **What You'll Fix**: 8+ failing workflows will start working

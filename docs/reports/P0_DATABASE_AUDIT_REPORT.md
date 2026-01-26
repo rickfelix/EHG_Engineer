@@ -1,5 +1,14 @@
 # P0 Database & File System Audit Report
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, testing, schema, sd
+
 **SD**: SD-STAGE-ARCH-001-P0
 **Date**: 2025-12-30
 **Status**: COMPLETE

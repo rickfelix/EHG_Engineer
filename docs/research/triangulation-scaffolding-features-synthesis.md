@@ -1,5 +1,14 @@
 # Triangulation Synthesis: Scaffolding Feature Decisions
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: api, unit, feature, sd
+
 **Date**: 2026-01-04
 **Topics**: Legal Infrastructure, Marketing Distribution, Trademark Guidance
 **Sources**: Google/Gemini, OpenAI/ChatGPT, Anthropic/Claude

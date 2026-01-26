@@ -1,5 +1,14 @@
 # ⚠️ LEAD MANDATORY APPROVAL CHECKLIST
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: guide, protocol, sd, directive
+
 **CRITICAL**: This checklist is MANDATORY for all SD approvals.
 **Failure to follow = Protocol violation**
 

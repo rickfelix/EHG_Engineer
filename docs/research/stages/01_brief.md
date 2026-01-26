@@ -1,5 +1,14 @@
 # Stage 1 Research Brief: Draft Idea
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: unit, guide, workflow, automation
+
 ## Focus Area
 Capture and validate initial venture ideas with AI assistance and Chairman feedback.
 

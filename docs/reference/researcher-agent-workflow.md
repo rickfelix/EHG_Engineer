@@ -1,5 +1,14 @@
 # Researcher Agent Workflow
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, migration, schema
+
 **Version**: 1.0
 **Date**: 2025-12-28
 **Status**: Active

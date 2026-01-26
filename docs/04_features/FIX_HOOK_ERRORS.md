@@ -1,5 +1,14 @@
 # Fix for Claude Code Hook Errors
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: api, feature, ci, logging
+
 ## Issue
 The Claude Code hooks are failing with:
 ```

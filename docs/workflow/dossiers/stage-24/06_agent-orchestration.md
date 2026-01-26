@@ -1,5 +1,14 @@
 # Stage 24: Agent Orchestration
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, validation, documentation
+
 ## CrewAI Crew Specification
 
 **Crew Name**: Stage24Crew  

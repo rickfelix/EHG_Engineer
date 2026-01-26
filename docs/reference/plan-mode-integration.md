@@ -1,5 +1,14 @@
 # Plan Mode Integration Reference
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-19
+- **Tags**: api, protocol, leo, sd
+
 **SD-PLAN-MODE-001** - Claude Code Plan Mode Integration with LEO Protocol
 
 ## Overview
@@ -214,5 +223,5 @@ rm ~/.claude-session-state.json
 ## Related Documentation
 
 - [LEO Protocol Overview](../../CLAUDE_CORE.md)
-- [Handoff System](./handoff-system.md)
-- [Command Ecosystem](./command-ecosystem.md)
+- [Handoff System](../leo/handoffs/handoff-system-guide.md)
+- [Command Ecosystem](../leo/commands/command-ecosystem.md)

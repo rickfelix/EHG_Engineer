@@ -1,5 +1,14 @@
 # RLS Policy Catalog
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, testing, unit, migration
+
 Row Level Security (RLS) policy reference for EHG_Engineer database.
 
 ---

@@ -1,5 +1,14 @@
 # Recursion Blueprint: Stage 13 Exit-Oriented Design
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, unit, schema, validation
+
 ## Current Recursion Status
 
 **Critique Assessment**: NO recursion section present in stage-13.md

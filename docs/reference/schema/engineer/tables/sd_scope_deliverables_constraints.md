@@ -1,5 +1,14 @@
 # sd_scope_deliverables Constraint Reference
 
+
+## Metadata
+- **Category**: Reference
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-26
+- **Tags**: database, api, testing, e2e
+
 **Application**: EHG_Engineer - LEO Protocol Management Dashboard
 **Database**: dedlbzhpgkmetvhbkyzq
 **Generated**: 2026-01-26

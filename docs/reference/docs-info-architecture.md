@@ -205,7 +205,7 @@ Always use relative paths for internal documentation links:
 
 ```markdown
 ✅ CORRECT:
-- See [Architecture Overview](../01_architecture/system-overview.md)
+- See [Architecture Overview](../01_architecture/aegis-system-overview.md)
 - Details in [Testing Guide](../05_testing/testing_qa.md)
 - Reference [Database Patterns](../reference/database-agent-patterns.md)
 - Related: [Parent SD](../../sds/SD-PARENT-001.md)
@@ -246,8 +246,8 @@ Every document MUST include a "Related Documentation" section at the end:
 - [LEO Protocol Overview](../03_protocols_and_standards/LEO_v4.3.3.md) - Core protocol understanding
 
 ### Related Guides
-- [Documentation Standards](./DOCUMENTATION_STANDARDS.md) - Writing guidelines
-- [Directory Structure](./DIRECTORY_STRUCTURE.md) - Folder organization
+- [Documentation Standards](../03_protocols_and_standards/DOCUMENTATION_STANDARDS.md) - Writing guidelines
+- [Directory Structure](../01_architecture/DIRECTORY_STRUCTURE.md) - Folder organization
 
 ### Reference Materials
 - [Database Patterns](../reference/database-agent-patterns.md) - Database best practices
@@ -366,8 +366,8 @@ Documents over 200 lines MUST include a Table of Contents:
 1. [Section 1](#section-1)
    - [Subsection 1.1](#subsection-11)
    - [Subsection 1.2](#subsection-12)
-2. [Section 2](#section-2)
-3. [Section 3](#section-3)
+2. [Section 2](#section-1)
+3. [Section 3](#section-1)
 
 ---
 
@@ -538,8 +538,8 @@ grep -L "^## Metadata" docs/**/*.md
 - [LEO Protocol v4.3.3](../03_protocols_and_standards/LEO_v4.3.3.md) - Core protocol context
 
 ### Related Standards
-- [Documentation Standards](./DOCUMENTATION_STANDARDS.md) - Writing quality guidelines
-- [Directory Structure](./DIRECTORY_STRUCTURE.md) - Current folder organization
+- [Documentation Standards](../03_protocols_and_standards/DOCUMENTATION_STANDARDS.md) - Writing quality guidelines
+- [Directory Structure](../01_architecture/DIRECTORY_STRUCTURE.md) - Current folder organization
 
 ### Implementation Guides
 - [DOCMON Sub-Agent Guide](../agents/DOCMON-guide.md) - Documentation automation

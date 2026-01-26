@@ -1,5 +1,14 @@
 # LEO Protocol v4.2 - Dynamic Checklist Amendment
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, schema, security
+
 ## Overview
 This amendment introduces dynamic, context-aware checklists that are automatically generated based on Strategic Directive content, replacing generic static checklists.
 

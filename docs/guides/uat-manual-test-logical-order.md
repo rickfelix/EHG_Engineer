@@ -1,5 +1,14 @@
 # UAT Manual Test Logical Order
 
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, security, feature, guide
+
 ## Overview
 This document defines the logical assessment order for the 20 manual UAT test cases based on typical user journey through the EHG application.
 

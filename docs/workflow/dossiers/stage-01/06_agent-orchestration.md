@@ -1,5 +1,14 @@
 # Stage 1: Agent Orchestration
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: handoff, validation, documentation, workflow
+
 ## Python CrewAI Agents (EHG App)
 
 **Status**: ⚠️ No agents explicitly mapped to Stage 1 in available documentation

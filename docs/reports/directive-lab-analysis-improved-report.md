@@ -1,5 +1,14 @@
 # Improved Design Analysis Report
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: directive, ci
+
 **Generated:** 9/4/2025, 9:07:43 AM  
 **URL:** http://localhost:3000/directive-lab  
 **Status:** ✅ Success

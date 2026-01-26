@@ -1,5 +1,14 @@
 # Windows Development Setup Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-13
+- **Tags**: database, api, e2e, unit
+
 This guide covers setting up EHG_Engineer for native Windows development without WSL.
 
 ## Prerequisites

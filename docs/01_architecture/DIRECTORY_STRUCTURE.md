@@ -1,5 +1,14 @@
 # Documentation Directory Structure
 
+
+## Metadata
+- **Category**: Architecture
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-22
+- **Tags**: database, api, testing, migration
+
 This document explains the organization and naming conventions for the `/docs` directory.
 
 ## Directory Naming Convention

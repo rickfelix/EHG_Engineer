@@ -1,5 +1,14 @@
 # Venture Engine Golden Nuggets Plan
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, unit, migration
+
 **Version**: 1.0
 **Date**: 2025-12-09
 **Author**: Lead Systems Architect (Claude)

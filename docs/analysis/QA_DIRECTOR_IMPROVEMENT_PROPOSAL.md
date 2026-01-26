@@ -1,5 +1,14 @@
 # QA Engineering Director v2.1 - Improvement Proposal
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, testing, e2e, unit
+
 ## Current Issues (from E2E Authentication Fix Retrospective)
 
 ### Problem 1: Execution Error When Running E2E Tests

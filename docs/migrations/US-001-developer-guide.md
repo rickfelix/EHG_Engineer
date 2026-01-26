@@ -1,4 +1,13 @@
 # US-001 Developer Guide
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, e2e
+
 ## Using Validation Modes in Sub-Agent Results
 
 **Quick Reference for Implementation**

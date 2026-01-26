@@ -1,4 +1,13 @@
 # LEO Protocol Helper Tools
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, migration
+
 ## Extracted from ehg-replit hooks, reimplemented as explicit tools
 
 ### Overview

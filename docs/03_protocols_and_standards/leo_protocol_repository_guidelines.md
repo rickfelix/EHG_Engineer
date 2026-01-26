@@ -1,5 +1,14 @@
 # LEO Protocol Repository Guidelines
 
+
+## Metadata
+- **Category**: Protocol
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: security, guide, protocol, leo
+
 **CRITICAL**: Understanding Repository Boundaries
 
 ---

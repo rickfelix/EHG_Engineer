@@ -1,5 +1,14 @@
 # Stage 18: Canonical Definition
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, migration, security, sd
+
 ## Source of Truth
 
 This document contains the complete canonical definition of Stage 18 from the `stages.yaml` file.

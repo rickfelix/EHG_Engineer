@@ -1,5 +1,14 @@
 # P0 Strategic Directive Dependency Analysis
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, schema, feature, guide
+
 **Generated**: 2025-11-06
 **Purpose**: Evaluate each proposed P0 SD for true necessity, dependencies, and deferral risk
 **For**: Chairman decision-making on Wave 1 vs. defer

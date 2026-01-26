@@ -3,8 +3,8 @@
 This directory contains all LEO protocol versions, development standards, and workflow guidelines for the EHG Engineer project.
 
 ## Metadata
-- **Category**: protocols
-- **Status**: active
+- **Category**: Protocol
+- **Status**: Approved
 - **Last Updated**: 2026-01-05
 
 ---
@@ -56,7 +56,7 @@ Legacy protocol versions (v3.x, v4.0, v4.1.x) have been archived as of 2025-10-2
 | v4.1.x | 3 files | v4.1, v4.1.1, v4.1.2 |
 
 **Total Archived**: 7 protocol files
-**See**: [/docs/archive/protocols/README.md](/docs/archive/protocols/README.md)
+**See**: [/docs/archive/protocols/README.md](../archive/protocols/README.md)
 
 ### Protocol Extensions
 
@@ -169,9 +169,9 @@ node scripts/handoff.js execute EXEC-TO-PLAN <SD-ID>  # Retry handoff
 
 ## Navigation
 
-- **Parent**: [Documentation Home](/docs/README.md)
-- **Next**: [04 Features](/docs/04_features/README.md)
-- **Previous**: [02 API](/docs/02_api/README.md)
+- **Parent**: [Documentation Home](../01_architecture/README.md)
+- **Next**: [04 Features](../04_features/README.md)
+- **Previous**: [02 API](../02_api/README.md)
 
 ---
 

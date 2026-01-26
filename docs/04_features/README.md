@@ -3,8 +3,8 @@
 This directory contains feature documentation organized by development stages and functional areas for the EHG (Entrepreneur's Holding Group) platform.
 
 ## Metadata
-- **Category**: features
-- **Status**: active
+- **Category**: Feature
+- **Status**: Approved
 - **Last Updated**: 2025-10-24
 
 ---
@@ -18,7 +18,7 @@ This directory contains feature documentation organized by development stages an
 - **Letter variants**: Multiple approaches to same stage (e.g., 34a/34b/34c = three creative media approaches)
 - **Gaps are intentional**: Represent stages not yet implemented or deliberately skipped
 
-**See**: [FILE_NUMBERING_AUDIT.md](/docs/FILE_NUMBERING_AUDIT.md) for complete numbering explanation
+**See**: [FILE_NUMBERING_AUDIT.md](../01_architecture/FILE_NUMBERING_AUDIT.md) for complete numbering explanation
 
 Features organized by development stage number:
 
@@ -165,7 +165,7 @@ The numbered files (01b, 04b, 08, etc.) follow a **40-stage gate development mod
 - Stages implemented in other directories (e.g., stage 22 in `05_testing/`)
 - Future implementations
 
-**See**: [FILE_NUMBERING_AUDIT.md](/docs/FILE_NUMBERING_AUDIT.md) for complete analysis and explanation.
+**See**: [FILE_NUMBERING_AUDIT.md](../01_architecture/FILE_NUMBERING_AUDIT.md) for complete analysis and explanation.
 
 ### Large Files
 Files over 50KB should be considered for splitting:
@@ -211,9 +211,9 @@ Features are organized into logical groups:
 
 ## Navigation
 
-- **Parent**: [Documentation Home](/docs/README.md)
-- **Next**: [05 Testing](/docs/05_testing/README.md)
-- **Previous**: [03 Protocols & Standards](/docs/03_protocols_and_standards/README.md)
+- **Parent**: [Documentation Home](../01_architecture/README.md)
+- **Next**: [05 Testing](../05_testing/README.md)
+- **Previous**: [03 Protocols & Standards](../03_protocols_and_standards/README.md)
 
 ---
 

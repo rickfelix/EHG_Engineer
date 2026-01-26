@@ -1,5 +1,14 @@
 # Stage 2: Canonical Definition
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: validation, workflow, automation, ci
+
 **Source**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:43-86
 
 ## YAML Definition

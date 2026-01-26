@@ -1,5 +1,14 @@
 # Hybrid Sub-Agent Workflow Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, testing, migration, schema
+
 **Created**: 2025-10-12
 **Version**: 1.0.0
 **Tested**: Comprehensive testing completed ✅
@@ -496,7 +505,7 @@ node -e "const { createClient } = require('@supabase/supabase-js'); require('dot
 ## Related Documentation
 
 - [Native Sub-Agent Invocation Guide](../reference/native-sub-agent-invocation.md)
-- [Sub-Agent System Overview](../reference/sub-agent-system.md)
+- [Sub-Agent System Overview](../leo/sub-agents/sub-agent-system.md)
 - [LEO Protocol CLAUDE.md](../../CLAUDE.md)
 - [Database-First Architecture](../reference/database-first.md)
 

@@ -1,5 +1,14 @@
 # Stage 6: Agent Orchestration & Governance Mapping
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, e2e
+
 **Purpose**: Document Python CrewAI agent mappings, governance sub-agent invocations, and automation boundaries for Stage 6.
 
 **Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:228-273 "id: 6, Risk Evaluation"

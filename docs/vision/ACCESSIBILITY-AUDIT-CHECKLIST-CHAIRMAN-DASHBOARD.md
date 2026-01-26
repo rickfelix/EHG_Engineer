@@ -1,5 +1,14 @@
 # Accessibility Audit Checklist: Chairman Dashboard UI
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: testing, e2e, guide, sd
+
 **Target:** SD-VISION-V2-006 (Vision V2: Chairman Dashboard UI)
 **Standard:** WCAG 2.1 Level AA
 **Created:** 2025-12-15

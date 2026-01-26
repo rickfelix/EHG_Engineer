@@ -1,5 +1,14 @@
 # Legal Document Generator Analysis
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: api, guide, sd, validation
+
 **Source**: OpenAI/ChatGPT Deep Research
 **Date**: 2026-01-04
 **Topic**: Legal Document Generator - Build, Buy, or Skip

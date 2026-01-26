@@ -1,5 +1,14 @@
 # LEO Protocol Command Center - Dashboard Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: api, testing, security, feature
+
 ## Overview
 
 The LEO Protocol Command Center is a web-based dashboard that provides a visual interface for managing the EHG_Engineer development workflow while maintaining full terminal access for Claude Code.

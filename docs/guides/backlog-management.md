@@ -1,5 +1,14 @@
 # Backlog Management Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, guide, sd
+
 ## Overview
 
 This guide explains how to properly add and manage backlog items for Strategic Directives in the EHG_Engineer system.

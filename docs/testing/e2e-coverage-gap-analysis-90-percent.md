@@ -1,4 +1,13 @@
 # E2E Testing Coverage Gap Analysis - 90% Target
+
+## Metadata
+- **Category**: Testing
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, testing, e2e
+
 **Generated**: 2026-01-05
 **Application**: EHG_Engineer (Backend API - Port 3000)
 **Testing Agent**: QA Engineering Director

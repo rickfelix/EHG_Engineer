@@ -1,5 +1,14 @@
 # EVA Scaling Specification
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-12
+- **Tags**: database, schema, rls, protocol
+
 **Vision v2 Chairman's OS - Multi-Instance EVA Architecture**
 
 > "One EVA for ten ventures. Ten EVAs for one hundred."

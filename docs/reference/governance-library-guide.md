@@ -1,5 +1,14 @@
 # Governance Library Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, unit, migration, feature
+
 **SD-REFACTOR-GOVERNANCE-001: Governance Library Unification**
 
 This document provides the canonical reference for the governance subsystem in the EHG_Engineer codebase.

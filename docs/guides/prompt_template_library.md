@@ -1,5 +1,14 @@
 # Comprehensive Prompt Template Library
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, testing, schema, authentication
+
 ## Overview
 
 This library contains sophisticated, production-ready prompt templates for generating high-quality marketing assets across all channels and use cases. Each template is optimized for specific AI models and includes detailed parameters for customization.

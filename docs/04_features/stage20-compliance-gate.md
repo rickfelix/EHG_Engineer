@@ -1,5 +1,14 @@
 # Stage 20 Compliance Gate
 
+
+## Metadata
+- **Category**: Feature
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-19
+- **Tags**: database, testing, e2e, unit
+
 **SD-LIFECYCLE-GAP-002: Security & Compliance Certification Gate**
 
 ## Overview
@@ -250,7 +259,7 @@ GROUP BY archetype;
 - **Parent Initiative**: [Venture Lifecycle Gap Remediation Overview](./venture-lifecycle-gap-remediation-overview.md)
 - **Database Schema**: [stage20-compliance-schema.md](../database/stage20-compliance-schema.md)
 - **RLS Policies**: [database-agent-patterns.md](../reference/database-agent-patterns.md)
-- **Stage 20 Overview**: [stages/stage-20-security-performance.md](../stages/stage-20-security-performance.md)
+- **Stage 20 Overview**: [stages/stage-20-security-performance.md](../workflow/stages/stage-20-security-and-performance.md)
 
 ## Change History
 

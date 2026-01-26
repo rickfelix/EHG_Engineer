@@ -1,5 +1,14 @@
 # Stage 8 Operating Dossier: Problem Decomposition Engine
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: schema, guide, sd, validation
+
 ## Executive Summary
 
 **Stage ID**: 8

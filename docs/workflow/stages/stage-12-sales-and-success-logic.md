@@ -1,7 +1,7 @@
 # Stage 12: Sales & Success Logic
 
 ## Metadata
-- **Category**: Workflow
+- **Category**: Protocol
 - **Status**: Approved
 - **Version**: 2.0.0
 - **Author**: Documentation Sub-Agent (DOCMON)
