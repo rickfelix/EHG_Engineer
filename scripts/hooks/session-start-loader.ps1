@@ -74,6 +74,44 @@ if ($hasRecentState -and $state) {
     # No recent state - just show tip
     Write-Host ""
     Write-Host "[SESSION] New session - no recent state to restore"
+
+    # SD-LEO-ENH-AUTO-PROCEED-001-14: Clear stale autoProceed data on fresh session
+    $leoStatusFile = Join-Path $ProjectDir ".leo-status.json"
+    if (Test-Path $leoStatusFile) {
+        try {
+            $leoStatus = Get-Content $leoStatusFile -Raw | ConvertFrom-Json
+            if ($leoStatus.autoProceed) {
+                $leoStatus.autoProceed.isActive = $false
+                $leoStatus.autoProceed.sdKey = $null
+                $leoStatus.autoProceed.phase = $null
+                $leoStatus.autoProceed.progress = 0
+                $leoStatus.autoProceed.childProgress = @{ current = $null; total = $null }
+                $leoStatus.currentSD = $null
+                $leoStatus | ConvertTo-Json -Depth 10 | Set-Content $leoStatusFile -Force
+                Write-Host "[SESSION] Cleared stale AUTO-PROCEED status"
+            }
+        } catch { }
+    }
+}
+
+# Also clear autoProceed if restored state has no active SD
+if ($hasRecentState -and $state -and (-not $state.sd -or -not $state.sd.id)) {
+    $leoStatusFile = Join-Path $ProjectDir ".leo-status.json"
+    if (Test-Path $leoStatusFile) {
+        try {
+            $leoStatus = Get-Content $leoStatusFile -Raw | ConvertFrom-Json
+            if ($leoStatus.autoProceed -and $leoStatus.autoProceed.isActive) {
+                $leoStatus.autoProceed.isActive = $false
+                $leoStatus.autoProceed.sdKey = $null
+                $leoStatus.autoProceed.phase = $null
+                $leoStatus.autoProceed.progress = 0
+                $leoStatus.autoProceed.childProgress = @{ current = $null; total = $null }
+                $leoStatus.currentSD = $null
+                $leoStatus | ConvertTo-Json -Depth 10 | Set-Content $leoStatusFile -Force
+                Write-Host "[SESSION] Cleared stale AUTO-PROCEED status (no active SD in restored state)"
+            }
+        } catch { }
+    }
 }
 
 # Always show SD hint

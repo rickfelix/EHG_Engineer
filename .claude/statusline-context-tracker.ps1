@@ -206,7 +206,7 @@ if ($gitBranch) {
     $projectInfo = $projectName
 }
 
-# Read AUTO-PROCEED status from leo-status-line cache (SD-LEO-ENH-AUTO-PROCEED-001-13)
+# Read AUTO-PROCEED status from leo-status-line cache (SD-LEO-ENH-AUTO-PROCEED-001-13/14)
 $autoProceedInfo = ""
 $leoStatusFile = Join-Path $cwd ".leo-status.json"
 if (Test-Path $leoStatusFile) {
@@ -216,7 +216,22 @@ if (Test-Path $leoStatusFile) {
             $apStatus = if ($leoStatus.autoProceed.isActive) { "ON" } else { "OFF" }
             $apPhase = if ($leoStatus.autoProceed.phase) { $leoStatus.autoProceed.phase } else { "?" }
             $apProgress = if ($null -ne $leoStatus.autoProceed.progress) { $leoStatus.autoProceed.progress } else { "?" }
-            $autoProceedInfo = " | AP:${apStatus}/${apPhase}/${apProgress}%"
+
+            # SD-LEO-ENH-AUTO-PROCEED-001-14: Add child progress if available
+            $childInfo = ""
+            if ($leoStatus.autoProceed.childProgress) {
+                $childCurrent = $leoStatus.autoProceed.childProgress.current
+                $childTotal = $leoStatus.autoProceed.childProgress.total
+                if ($null -ne $childCurrent) {
+                    if ($null -ne $childTotal) {
+                        $childInfo = " C${childCurrent}/${childTotal}"
+                    } else {
+                        $childInfo = " C${childCurrent}/?"
+                    }
+                }
+            }
+
+            $autoProceedInfo = " | AP:${apStatus}/${apPhase}/${apProgress}%${childInfo}"
         }
     } catch { }
 }
