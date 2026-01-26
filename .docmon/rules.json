@@ -1,0 +1,148 @@
+{
+  "$schema": "./rules.schema.json",
+  "version": "1.0.0",
+  "description": "DOCMON location validation rules",
+  "prohibited_locations": [
+    {
+      "id": "RULE-PROHIB-001",
+      "path": "src",
+      "reason": "Source code directory - documentation belongs in docs/",
+      "suggestion": "docs/"
+    },
+    {
+      "id": "RULE-PROHIB-002",
+      "path": "lib",
+      "reason": "Library directory - documentation belongs in docs/",
+      "suggestion": "docs/"
+    },
+    {
+      "id": "RULE-PROHIB-003",
+      "path": "scripts",
+      "reason": "Scripts directory - documentation belongs in docs/",
+      "suggestion": "docs/guides/"
+    },
+    {
+      "id": "RULE-PROHIB-004",
+      "path": "tests",
+      "reason": "Tests directory - test documentation belongs in docs/testing/",
+      "suggestion": "docs/05_testing/"
+    },
+    {
+      "id": "RULE-PROHIB-005",
+      "path": "public",
+      "reason": "Public assets directory - documentation belongs in docs/",
+      "suggestion": "docs/"
+    },
+    {
+      "id": "RULE-PROHIB-006",
+      "path": "node_modules",
+      "reason": "Node modules directory - never contains project documentation",
+      "suggestion": null
+    },
+    {
+      "id": "RULE-PROHIB-007",
+      "path": "dist",
+      "reason": "Build output directory - documentation belongs in docs/",
+      "suggestion": "docs/"
+    },
+    {
+      "id": "RULE-PROHIB-008",
+      "path": ".next",
+      "reason": "Next.js build directory - documentation belongs in docs/",
+      "suggestion": "docs/"
+    },
+    {
+      "id": "RULE-PROHIB-009",
+      "path": "vendor",
+      "reason": "Vendor directory - documentation belongs in docs/",
+      "suggestion": "docs/"
+    }
+  ],
+  "root_allowlist": [
+    "CLAUDE.md",
+    "CLAUDE_CORE.md",
+    "CLAUDE_LEAD.md",
+    "CLAUDE_PLAN.md",
+    "CLAUDE_EXEC.md",
+    "README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "LICENSE.md",
+    "CODE_OF_CONDUCT.md"
+  ],
+  "max_root_files": 10,
+  "rubric": [
+    {
+      "id": "RULE-RUBRIC-001",
+      "pattern": "^docs/summaries/sd-sessions/",
+      "description": "SD completion/status reports",
+      "priority": 1
+    },
+    {
+      "id": "RULE-RUBRIC-002",
+      "pattern": "^docs/retrospectives/",
+      "description": "Retrospective and lessons learned documents",
+      "priority": 2
+    },
+    {
+      "id": "RULE-RUBRIC-003",
+      "pattern": "^docs/database/",
+      "description": "Database-related documentation (schema, migrations, RLS)",
+      "priority": 3
+    },
+    {
+      "id": "RULE-RUBRIC-004",
+      "pattern": "^docs/05_testing/",
+      "description": "Testing-related documentation",
+      "priority": 4
+    },
+    {
+      "id": "RULE-RUBRIC-005",
+      "pattern": "^docs/03_protocols_and_standards/",
+      "description": "Protocol and standards documentation",
+      "priority": 5
+    },
+    {
+      "id": "RULE-RUBRIC-006",
+      "pattern": "^docs/02_api/",
+      "description": "API documentation",
+      "priority": 6
+    },
+    {
+      "id": "RULE-RUBRIC-007",
+      "pattern": "^docs/04_features/",
+      "description": "Feature documentation",
+      "priority": 7
+    },
+    {
+      "id": "RULE-RUBRIC-008",
+      "pattern": "^docs/guides/",
+      "description": "How-to guides",
+      "priority": 8
+    },
+    {
+      "id": "RULE-RUBRIC-009",
+      "pattern": "^docs/reference/",
+      "description": "Quick reference and pattern documentation",
+      "priority": 9
+    },
+    {
+      "id": "RULE-RUBRIC-010",
+      "pattern": "^docs/01_architecture/",
+      "description": "Architecture documentation",
+      "priority": 10
+    },
+    {
+      "id": "RULE-RUBRIC-011",
+      "pattern": "^docs/06_deployment/",
+      "description": "Deployment and operations documentation",
+      "priority": 11
+    },
+    {
+      "id": "RULE-RUBRIC-012",
+      "pattern": "^docs/archive/",
+      "description": "Archived/deprecated documentation",
+      "priority": 12
+    }
+  ]
+}

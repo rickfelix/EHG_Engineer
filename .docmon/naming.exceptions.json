@@ -1,0 +1,97 @@
+{
+  "$schema": "./naming.schema.json",
+  "version": "1.0.0",
+  "description": "DOCMON naming convention exceptions",
+  "exceptions": [
+    {
+      "pattern": "^CLAUDE.*\\.md$",
+      "reason": "Claude Code configuration files",
+      "example": "CLAUDE.md, CLAUDE_CORE.md"
+    },
+    {
+      "pattern": "^README\\.md$",
+      "reason": "Standard README file",
+      "example": "README.md"
+    },
+    {
+      "pattern": "^CHANGELOG\\.md$",
+      "reason": "Standard changelog file",
+      "example": "CHANGELOG.md"
+    },
+    {
+      "pattern": "^LICENSE\\.md$",
+      "reason": "Standard license file",
+      "example": "LICENSE.md"
+    },
+    {
+      "pattern": "^CONTRIBUTING\\.md$",
+      "reason": "Standard contributing guide",
+      "example": "CONTRIBUTING.md"
+    },
+    {
+      "pattern": "^CODE_OF_CONDUCT\\.md$",
+      "reason": "Standard code of conduct",
+      "example": "CODE_OF_CONDUCT.md"
+    },
+    {
+      "pattern": "^[A-Z][A-Z0-9_]*\\.md$",
+      "reason": "All-caps standard files",
+      "example": "SECURITY.md, GOVERNANCE.md"
+    },
+    {
+      "pattern": "^SD-.*\\.md$",
+      "reason": "Strategic Directive files (legacy support)",
+      "example": "SD-FEATURE-001.md"
+    },
+    {
+      "pattern": "^PRD-.*\\.md$",
+      "reason": "Product Requirements Document files (legacy support)",
+      "example": "PRD-FEATURE-001.md"
+    },
+    {
+      "pattern": "^QF-.*\\.md$",
+      "reason": "Quick-Fix files",
+      "example": "QF-20260126-001.md"
+    },
+    {
+      "pattern": "^LEO_.*\\.md$",
+      "reason": "LEO Protocol version files",
+      "example": "LEO_v4.3.3.md"
+    }
+  ],
+  "valid_pattern": {
+    "regex": "^[a-z0-9]+(-[a-z0-9]+)*\\.md$",
+    "description": "kebab-case with .md extension",
+    "examples": [
+      "deployment-runbook.md",
+      "api-reference.md",
+      "database-migration-guide.md"
+    ]
+  },
+  "invalid_patterns": [
+    {
+      "regex": "^\\d+[a-z]?_",
+      "type": "numeric_prefix",
+      "description": "Numeric prefix (e.g., 01a_file.md)",
+      "fix": "Remove numeric prefix, convert underscores to hyphens"
+    },
+    {
+      "regex": "_",
+      "type": "underscore",
+      "description": "Underscores in filename",
+      "fix": "Replace underscores with hyphens"
+    },
+    {
+      "regex": "[A-Z]",
+      "type": "uppercase",
+      "description": "Uppercase letters (except exceptions)",
+      "fix": "Convert to lowercase"
+    },
+    {
+      "regex": "\\s",
+      "type": "spaces",
+      "description": "Spaces in filename",
+      "fix": "Replace spaces with hyphens"
+    }
+  ]
+}
