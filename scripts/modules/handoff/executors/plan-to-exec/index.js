@@ -85,7 +85,10 @@ export class PlanToExecExecutor extends BaseExecutor {
     return null; // Continue execution
   }
 
-  getRequiredGates(sd, options) {
+  async getRequiredGates(sd, options) {
+    // Ensure validators are loaded (SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-003)
+    await this._loadValidators();
+
     const gates = [];
     const appPath = options._appPath;
     const parentOrchestrator = options._isParentOrchestrator;

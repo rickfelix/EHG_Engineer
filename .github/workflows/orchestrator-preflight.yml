@@ -1,0 +1,149 @@
+# Orchestrator Preflight CI Enforcement
+#
+# SD: SD-LEO-INFRA-FORMALIZE-ORCHESTRATOR-WORKFLOW-001
+# Purpose: Enforce orchestrator preflight validation on PRs that modify SD/protocol artifacts
+#
+# Triggers on pull_request when changes include:
+# - SD-related protocol docs (CLAUDE*.md)
+# - Orchestrator preflight script
+# - SD definition files
+#
+# Fails the check when preflight exits non-zero and surfaces issues in job logs.
+
+name: Orchestrator Preflight
+
+on:
+  pull_request:
+    paths:
+      - 'CLAUDE.md'
+      - 'CLAUDE_CORE.md'
+      - 'CLAUDE_LEAD.md'
+      - 'CLAUDE_PLAN.md'
+      - 'CLAUDE_EXEC.md'
+      - 'scripts/orchestrator-preflight.js'
+      - 'scripts/child-sd-preflight.js'
+      - 'docs/reference/sd-hierarchy-schema-guide.md'
+      - 'docs/plans/PLAN-PARENT-CHILD-*.md'
+
+concurrency:
+  group: orchestrator-preflight-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  preflight-check:
+    name: Orchestrator Preflight Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Extract SD ID from branch
+        id: extract-sd
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          # Extract SD ID from branch name (e.g., feat/SD-XXX-001-description)
+          SD_ID=$(echo "$BRANCH_NAME" | grep -oP 'SD-[A-Z0-9-]+(?=-|$)' | head -1 || echo "")
+          echo "sd_id=$SD_ID" >> "$GITHUB_OUTPUT"
+          echo "Extracted SD ID: $SD_ID"
+
+      - name: Check if orchestrator SD
+        id: check-orchestrator
+        if: steps.extract-sd.outputs.sd_id != ''
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          SD_ID="${{ steps.extract-sd.outputs.sd_id }}"
+          echo "Checking if $SD_ID is an orchestrator..."
+
+          # Run preflight in JSON mode to check orchestrator status
+          OUTPUT=$(node scripts/orchestrator-preflight.js "$SD_ID" --json 2>&1 || true)
+
+          # Check if it's an orchestrator
+          IS_ORCHESTRATOR=$(echo "$OUTPUT" | jq -r '.detection.isOrchestrator // false' 2>/dev/null || echo "false")
+          echo "is_orchestrator=$IS_ORCHESTRATOR" >> "$GITHUB_OUTPUT"
+
+          if [ "$IS_ORCHESTRATOR" = "true" ]; then
+            echo "✅ SD $SD_ID is an orchestrator"
+            echo "Detection: $(echo "$OUTPUT" | jq -r '.detection.method' 2>/dev/null)"
+          else
+            echo "ℹ️ SD $SD_ID is not an orchestrator - standard workflow applies"
+          fi
+
+      - name: Run orchestrator preflight validation
+        if: steps.check-orchestrator.outputs.is_orchestrator == 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          SD_ID="${{ steps.extract-sd.outputs.sd_id }}"
+          echo "Running orchestrator preflight for $SD_ID..."
+          echo ""
+
+          # Run preflight with validation mode (exits non-zero on issues)
+          if ! node scripts/orchestrator-preflight.js "$SD_ID" --validate; then
+            echo ""
+            echo "❌ ORCHESTRATOR PREFLIGHT FAILED"
+            echo ""
+            echo "Please address the issues above before merging."
+            echo ""
+            echo "For help, see:"
+            echo "  - CLAUDE.md 'Orchestrator SD Decision Guide' section"
+            echo "  - CLAUDE_CORE.md 'Orchestrator SD Workflow Pattern' section"
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ Orchestrator preflight passed"
+
+      - name: Report status
+        if: always()
+        run: |
+          SD_ID="${{ steps.extract-sd.outputs.sd_id }}"
+          IS_ORCHESTRATOR="${{ steps.check-orchestrator.outputs.is_orchestrator }}"
+
+          if [ -z "$SD_ID" ]; then
+            echo "ℹ️ No SD ID found in branch name - skipping orchestrator validation"
+          elif [ "$IS_ORCHESTRATOR" != "true" ]; then
+            echo "ℹ️ SD $SD_ID is not an orchestrator - standard workflow applies"
+          else
+            echo "✅ Orchestrator preflight completed for SD $SD_ID"
+          fi
+
+  # Syntax validation for the preflight script itself
+  script-validation:
+    name: Preflight Script Syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    if: contains(github.event.pull_request.changed_files, 'orchestrator-preflight.js')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Validate script syntax
+        run: |
+          echo "Validating orchestrator-preflight.js syntax..."
+          node --check scripts/orchestrator-preflight.js
+          echo "✅ Syntax valid"
