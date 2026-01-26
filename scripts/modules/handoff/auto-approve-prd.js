@@ -231,8 +231,9 @@ export async function autoApproveChildPRDs(parentSdId) {
   return { results, summary };
 }
 
-// CLI execution
-if (process.argv[1].includes('auto-approve-prd.js')) {
+// CLI execution (only runs when called directly from command line)
+const isDirectExecution = process.argv[1] && process.argv[1].includes('auto-approve-prd.js');
+if (isDirectExecution) {
   const sdId = process.argv[2];
 
   if (!sdId) {

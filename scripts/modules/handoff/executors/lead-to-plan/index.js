@@ -28,6 +28,7 @@ import { transitionSdToPlan } from './state-transitions.js';
 import { displayPreHandoffWarnings } from './pre-handoff-warnings.js';
 import { createHandoffRetrospective } from './retrospective.js';
 import { autoGeneratePRDScript } from './prd-generation.js';
+import { autoApprovePRD } from '../../auto-approve-prd.js';
 
 // External verifier (will be lazy loaded)
 let LeadToPlanVerifier;
@@ -105,6 +106,20 @@ export class LeadToPlanExecutor extends BaseExecutor {
 
     // Auto-generate PRD script on successful LEAD→PLAN handoff
     await autoGeneratePRDScript(sdId, sd);
+
+    // Auto-approve PRD if it meets quality thresholds (SD-LEO-FIX-PRD-STATUS-001)
+    // This enables full automation - PRDs that pass validation are auto-approved
+    try {
+      const approvalResult = await autoApprovePRD(sdId);
+      if (approvalResult.approved) {
+        console.log(`   ✅ PRD auto-approved with score: ${approvalResult.score}%`);
+      } else {
+        console.log(`   ℹ️  PRD not auto-approved: ${approvalResult.reason}`);
+      }
+    } catch (err) {
+      // Non-blocking - log error but don't fail the handoff
+      console.log(`   ⚠️  Auto-approve error: ${err.message}`);
+    }
 
     // Create handoff retrospective after successful handoff
     await createHandoffRetrospective(sdId, sd, result, 'LEAD_TO_PLAN', this.supabase);
