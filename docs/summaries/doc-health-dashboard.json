@@ -1,0 +1,108 @@
+{
+  "version": "1.0.0",
+  "generated": "2026-01-26T18:33:02.676Z",
+  "commitSha": "d720b1a26a9fdf426f6921bac8e9459b246f7e11",
+  "overallScore": 74,
+  "grade": "C",
+  "status": "Fair",
+  "metrics": {
+    "organization": {
+      "score": 100,
+      "target": 95,
+      "weight": 0.2,
+      "details": {
+        "prohibitedLocations": 0,
+        "rootExcess": 0,
+        "totalFiles": 2843
+      }
+    },
+    "completeness": {
+      "score": 0,
+      "target": 100,
+      "weight": 0.2,
+      "details": {
+        "error": "Could not run metadata validation"
+      }
+    },
+    "freshness": {
+      "score": 100,
+      "target": 80,
+      "weight": 0.15,
+      "details": {
+        "fresh": 2562,
+        "stale": 0,
+        "totalFiles": 2562
+      }
+    },
+    "linkHealth": {
+      "score": 95,
+      "target": 100,
+      "weight": 0.2,
+      "details": {
+        "totalLinks": 3384,
+        "brokenLinks": 183,
+        "filesWithBroken": 87
+      }
+    },
+    "duplication": {
+      "score": 100,
+      "target": 95,
+      "weight": 0.1,
+      "details": {
+        "error": "Could not run duplicate detection"
+      }
+    },
+    "subCategorization": {
+      "score": 67,
+      "target": 80,
+      "weight": 0.15,
+      "details": {
+        "largeFolders": 3,
+        "properlyOrganized": 2,
+        "needsOrganization": 1,
+        "folders": [
+          {
+            "folder": "reference",
+            "files": 93,
+            "hasSubfolders": true
+          },
+          {
+            "folder": "guides",
+            "files": 61,
+            "hasSubfolders": true
+          },
+          {
+            "folder": "04_features",
+            "files": 71,
+            "hasSubfolders": false
+          }
+        ]
+      }
+    }
+  },
+  "topRisks": [
+    {
+      "metric": "completeness",
+      "score": 0,
+      "threshold": 100,
+      "gap": 100,
+      "label": "Completeness (metadata present)"
+    },
+    {
+      "metric": "subCategorization",
+      "score": 67,
+      "threshold": 80,
+      "gap": 13,
+      "label": "Sub-Categorization (large folders organized)"
+    },
+    {
+      "metric": "linkHealth",
+      "score": 95,
+      "threshold": 100,
+      "gap": 5,
+      "label": "Link Health (working refs)"
+    }
+  ],
+  "checksumAlgorithm": "sha256",
+  "checksum": "eaa3e32838a7cc5a46bad265f58265602fd85e52eca8a5fb41039259315e36a4"
+}
