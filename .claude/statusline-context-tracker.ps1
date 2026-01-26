@@ -206,8 +206,23 @@ if ($gitBranch) {
     $projectInfo = $projectName
 }
 
+# Read AUTO-PROCEED status from leo-status-line cache (SD-LEO-ENH-AUTO-PROCEED-001-13)
+$autoProceedInfo = ""
+$leoStatusFile = Join-Path $cwd ".leo-status.json"
+if (Test-Path $leoStatusFile) {
+    try {
+        $leoStatus = Get-Content $leoStatusFile -Raw | ConvertFrom-Json
+        if ($leoStatus.autoProceed -and $leoStatus.autoProceed.isActive) {
+            $apStatus = if ($leoStatus.autoProceed.isActive) { "ON" } else { "OFF" }
+            $apPhase = if ($leoStatus.autoProceed.phase) { $leoStatus.autoProceed.phase } else { "?" }
+            $apProgress = if ($null -ne $leoStatus.autoProceed.progress) { $leoStatus.autoProceed.progress } else { "?" }
+            $autoProceedInfo = " | AP:${apStatus}/${apPhase}/${apProgress}%"
+        }
+    } catch { }
+}
+
 # Build output
-$output = "${activitySignal} ${projectInfo} ${barColor}[${bar}]${reset} ${percentUsed}% (${modelShort})${icon}"
+$output = "${activitySignal} ${projectInfo}${autoProceedInfo} ${barColor}[${bar}]${reset} ${percentUsed}% (${modelShort})${icon}"
 
 # Update state file
 $totalInput = if ($data.context_window.total_input_tokens) { [int]$data.context_window.total_input_tokens } else { 0 }
