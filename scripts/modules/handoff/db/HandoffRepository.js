@@ -15,6 +15,12 @@ export class HandoffRepository {
   }
 
   /**
+   * Terminal handoff types that don't use the standard FROM-TO-TARGET template pattern.
+   * These handoffs have their own executors and don't require database templates.
+   */
+  static TERMINAL_HANDOFFS = ['LEAD-FINAL-APPROVAL'];
+
+  /**
    * Load handoff template from database
    * @param {string} handoffType - Handoff type (e.g., 'PLAN-TO-EXEC')
    * @returns {Promise<object|null>} Template record or null
@@ -23,6 +29,14 @@ export class HandoffRepository {
     const cacheKey = `template:${handoffType}`;
     if (this.templateCache.has(cacheKey)) {
       return this.templateCache.get(cacheKey);
+    }
+
+    // Terminal handoffs (e.g., LEAD-FINAL-APPROVAL) don't follow the FROM-TO-TARGET pattern
+    // and have dedicated executors that don't require database templates
+    if (HandoffRepository.TERMINAL_HANDOFFS.includes(handoffType)) {
+      console.log(`📋 ${handoffType}: Terminal handoff - no template required`);
+      this.templateCache.set(cacheKey, null);
+      return null;
     }
 
     const [fromAgent, , toAgent] = handoffType.split('-');
