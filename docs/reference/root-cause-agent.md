@@ -1,12 +1,22 @@
 # Root Cause Agent (RCA) - Operator Guide
 
 **Strategic Directive**: SD-RCA-001
-**Version**: 1.0
-**Last Updated**: 2025-10-28
+**Version**: 2.0
+**Last Updated**: 2026-01-25
+
+## Metadata
+- **Category**: Reference
+- **Status**: Approved
+- **Version**: 2.0.0
+- **Author**: LEO Protocol Team
+- **Last Updated**: 2026-01-25
+- **Tags**: rca, root-cause-analysis, quality-gates, forensics, sub-agent
 
 ## Overview
 
 The Root Cause Agent (RCA) is LEO Protocol's corrective intelligence system that automatically detects failures, performs forensic analysis, and ensures proper remediation before allowing work to proceed. RCA operates as a quality gate enforcer and learning capture mechanism.
+
+**🆕 NEW in v2.0**: Proactive learning integration, error-triggered invocation patterns, workaround refusal protocols
 
 ### Core Responsibilities
 
@@ -15,6 +25,8 @@ The Root Cause Agent (RCA) is LEO Protocol's corrective intelligence system that
 3. **Gate Enforcement**: Blocks EXEC→PLAN handoffs when P0/P1 RCRs exist without verified CAPAs
 4. **Learning Capture**: Feeds resolved RCRs into EVA preference model for continuous improvement
 5. **CAPA Management**: Tracks Corrective and Preventive Actions through verification lifecycle
+6. **🆕 Proactive Pattern Consultation**: Queries issue_patterns BEFORE investigation to leverage prior solutions
+7. **🆕 Error-Triggered Auto-Invocation**: Automatically invoked on recurring issues, test regressions, and pattern detection
 
 ### Key Principles
 
@@ -23,6 +35,102 @@ The Root Cause Agent (RCA) is LEO Protocol's corrective intelligence system that
 - **Database-first**: All state in Supabase (root_cause_reports, remediation_manifests, rca_learning_records)
 - **4-tier trigger system**: T1 (Critical) → T4 (Manual) with automatic priority assignment
 - **Non-blocking on error**: RCA failures never block legitimate handoffs
+- **🆕 RCA is a FIRST RESPONDER, not a LAST RESORT**: Invoke on FIRST occurrence, not after multiple failures
+- **🆕 Refuse workarounds**: No quick fixes without root cause understanding
+
+---
+
+## 🔍 Proactive Learning Integration (NEW in v2.0)
+
+### Before Starting ANY RCA Work
+
+**MANDATORY**: Query issue_patterns table for proven solutions BEFORE deep investigation:
+
+```bash
+# Check for known issue patterns matching this symptom
+node scripts/search-prior-issues.js "<symptom description>"
+
+# Query issue_patterns table for proven solutions
+node -e "
+import { createDatabaseClient } from './lib/supabase-connection.js';
+(async () => {
+  const client = await createDatabaseClient('engineer', { verify: false });
+  const result = await client.query(\`
+    SELECT pattern_id, issue_summary, proven_solutions, prevention_checklist, category
+    FROM issue_patterns
+    WHERE status = 'active'
+    ORDER BY occurrence_count DESC
+    LIMIT 10
+  \`);
+  console.log('Known Issue Patterns:');
+  result.rows.forEach(p => {
+    console.log(\`\n\${p.pattern_id} [\${p.category}]: \${p.issue_summary}\`);
+    if (p.proven_solutions) console.log('Solutions:', JSON.stringify(p.proven_solutions, null, 2));
+    if (p.prevention_checklist) console.log('Prevention:', JSON.stringify(p.prevention_checklist, null, 2));
+  });
+  await client.end();
+})();
+"
+```
+
+**Why**: Consulting lessons BEFORE investigation prevents duplicate analysis of known issues and saves 2-4 hours of rework.
+
+---
+
+## ⚡ Error-Triggered Auto-Invocation (NEW in v2.0)
+
+**When ANY of these patterns occur**, the RCA agent MUST be invoked immediately:
+
+### Auto-Trigger Patterns
+
+| Pattern | Action |
+|---------|--------|
+| `recurring issue` detected (same error 2+ times) | STOP, invoke RCA agent |
+| `pattern detected` in logs | STOP, invoke RCA agent |
+| `test failure after fix` (regression) | STOP, invoke RCA agent |
+| `sub_agent_blocked` status | STOP, invoke RCA agent |
+| `quality_gate_critical` failure | STOP, invoke RCA agent |
+| `handoff_rejection` event | STOP, invoke RCA agent |
+| CI/CD pipeline failures | STOP, invoke RCA agent |
+| ANY issue that "keeps happening" | STOP, invoke RCA agent |
+
+### Invocation Protocol
+
+1. Detect recurring or complex issue
+2. STOP current approach (no trial-and-error fixes)
+3. Invoke: `node scripts/execute-subagent.js --code RCA --sd-id <SD-ID>`
+4. Wait for RCA diagnosis
+5. Implement solution from RCA agent CAPA
+
+---
+
+## 🚫 Workaround Anti-Patterns (NEW in v2.0)
+
+**If you see these patterns, REFUSE and perform proper RCA instead**:
+
+| Anti-Pattern | Why It's Wrong |
+|--------------|----------------|
+| **Quick fixes without understanding cause** | Masks symptoms, doesn't prevent recurrence |
+| **Suppressing errors** instead of fixing | Hides root causes, leads to larger failures |
+| **Adding try/catch** without understanding failures | Creates technical debt, prevents learning |
+| **Disabling validation** to make tests pass | Removes safety nets, introduces vulnerabilities |
+| **Blaming external factors** without evidence | Stops investigation, prevents real fixes |
+| **Proceeding despite recurring failures** | Wastes time on repeated rework |
+| **Adding workarounds** instead of fixing root cause | Accumulates complexity, degrades maintainability |
+
+### Response Template for Workaround Requests
+
+```
+I've detected a recurring issue that requires root cause analysis.
+
+Symptom: [exact error/behavior]
+Occurrences: [how many times this has happened]
+
+I'm performing 5-Whys analysis to identify the true root cause:
+[5-Whys analysis]
+
+[Wait for complete diagnosis before proposing fix]
+```
 
 ---
 
@@ -778,6 +886,9 @@ This is expected behavior (auto_stale_rca trigger function)
 4. **Write specific verification plans**: "Run test 10 times" is better than "test it"
 5. **Use defect_taxonomy consistently**: Enables pattern detection and prevention analysis
 6. **Review STALE RCRs weekly**: Either resolve or mark WONT_FIX to keep queue clean
+7. **🆕 Consult issue_patterns FIRST**: Query known patterns before deep investigation (saves 2-4 hours)
+8. **🆕 Invoke on FIRST occurrence**: Don't wait for recurring failures to trigger RCA
+9. **🆕 Refuse workarounds**: No quick fixes without understanding root cause
 
 ### For Developers
 
@@ -916,7 +1027,25 @@ PENDING → UNDER_REVIEW → APPROVED → IN_PROGRESS → IMPLEMENTED → VERIFI
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2025-10-28
+**Document Version**: 2.0
+**Last Updated**: 2026-01-25
 **Maintained By**: LEO Protocol Team
 **Feedback**: Report issues to RCA sub-agent or create SD for improvements
+
+---
+
+## Changelog
+
+### v2.0.0 (2026-01-25)
+- Added "Proactive Learning Integration" section - query issue_patterns before investigation
+- Added "Error-Triggered Auto-Invocation" section - automatic RCA invocation patterns
+- Added "Workaround Anti-Patterns" section - explicit workaround refusal protocol
+- Updated "Key Principles" to include "FIRST RESPONDER" philosophy
+- Updated "Best Practices for Operators" with 3 new proactive patterns
+- Updated metadata header to include category, status, version, tags
+
+### v1.0.0 (2025-10-28)
+- Initial RCA operator guide
+- T1-T4 trigger system documentation
+- CAPA generation and verification workflows
+- CLI command reference

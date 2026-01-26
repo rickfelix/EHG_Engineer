@@ -1,6 +1,6 @@
 # CLAUDE_PLAN.md - PLAN Phase Operations
 
-**Generated**: 2026-01-25 5:23:18 PM
+**Generated**: 2026-01-26 8:30:26 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: PLAN agent operations, PRD creation, validation gates (30-35k chars)
 
@@ -2156,24 +2156,6 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
   - Criteria: allow_empty: true; description: "Risks array is defined (can be empty for low-risk SDs)"
 
 
-- **hasESLintPass** (Gate 0)
-  - Weight: 0.4
-  - Required: Yes
-  - Criteria: 5 criteria defined (command, timeout_ms, description...)
-
-
-- **hasTypeScriptPass** (Gate 0)
-  - Weight: 0.4
-  - Required: Yes
-  - Criteria: 5 criteria defined (command, timeout_ms, description...)
-
-
-- **hasImportsPass** (Gate 0)
-  - Weight: 0.2
-  - Required: No
-  - Criteria: 5 criteria defined (command, blocking, timeout_ms...)
-
-
 - **prdQualityValidation** (Gate 1)
   - Weight: 0.15
   - Required: Yes
@@ -2476,6 +2458,6 @@ Test scenarios only cover happy path ('user logs in successfully'). Missing:
 
 ---
 
-*Generated from database: 2026-01-25*
+*Generated from database: 2026-01-26*
 *Protocol Version: 4.3.3*
 *Load when: User mentions PLAN, PRD, validation, or testing strategy*

@@ -1,7 +1,22 @@
 /**
  * Section Formatters for CLAUDE.md Generator
  * Handles formatting of various sections into markdown
+ *
+ * ARCHITECTURE (2026-01-25):
+ * Keywords are sourced from lib/keyword-intent-scorer.js (single source of truth).
+ * This ensures CLAUDE.md and CLAUDE_CORE.md have consistent trigger keywords.
  */
+
+import { extractKeywordsFromScorer, flattenKeywords } from './keyword-extractor.js';
+
+// Cache the scorer keywords (loaded once per generation)
+let _scorerKeywordsCache = null;
+function getScorerKeywords() {
+  if (!_scorerKeywordsCache) {
+    _scorerKeywordsCache = extractKeywordsFromScorer();
+  }
+  return _scorerKeywordsCache;
+}
 
 /**
  * Format a protocol section
@@ -55,6 +70,7 @@ function generateAgentSection(agents) {
 
 /**
  * Generate sub-agent section
+ * Uses scorer file as single source of truth for keywords (not database triggers table)
  * @param {Array} subAgents - List of sub-agents
  * @returns {string} Formatted markdown
  */
@@ -63,6 +79,9 @@ function generateSubAgentSection(subAgents) {
     return '';
   }
 
+  // Get keywords from scorer file (single source of truth)
+  const scorerKeywords = getScorerKeywords();
+
   let section = `## Available Sub-Agents
 
 **Usage**: Invoke sub-agents using the Task tool with matching subagent_type.
@@ -70,12 +89,13 @@ function generateSubAgentSection(subAgents) {
 
 `;
 
-  const withTriggers = subAgents.filter(sa => sa.triggers && sa.triggers.length > 0);
-  const withoutTriggers = subAgents.filter(sa => !sa.triggers || sa.triggers.length === 0);
+  // Categorize agents based on scorer keywords (not database triggers)
+  const withKeywords = subAgents.filter(sa => scorerKeywords[sa.code]);
+  const withoutKeywords = subAgents.filter(sa => !scorerKeywords[sa.code]);
 
-  if (withoutTriggers.length > 0) {
+  if (withoutKeywords.length > 0) {
     section += '### Sub-Agents Without Keyword Triggers\n\n';
-    withoutTriggers.forEach(sa => {
+    withoutKeywords.forEach(sa => {
       section += `- **${sa.name}** (\`${sa.code || 'N/A'}\`): ${sa.description?.substring(0, 80) || 'N/A'}\n`;
     });
     section += '\n';
@@ -83,15 +103,20 @@ function generateSubAgentSection(subAgents) {
 
   section += '### Keyword-Triggered Sub-Agents\n\n';
 
-  withTriggers.forEach(sa => {
-    const triggers = sa.triggers?.map(t => t.trigger_phrase).filter(Boolean) || [];
+  withKeywords.forEach(sa => {
+    // Get keywords from scorer file
+    const agentKw = scorerKeywords[sa.code] || {};
+    const allKeywords = [
+      ...(agentKw.primary || []),
+      ...(agentKw.secondary || [])
+    ];
     const desc = sa.description?.substring(0, 100) || 'N/A';
 
     section += `#### ${sa.name} (\`${sa.code || 'N/A'}\`)\n`;
     section += `${desc}\n\n`;
 
-    if (triggers.length > 0) {
-      section += `**Trigger Keywords**: \`${triggers.join('\`, \`')}\`\n\n`;
+    if (allKeywords.length > 0) {
+      section += `**Trigger Keywords**: \`${allKeywords.join('\`, \`')}\`\n\n`;
     }
   });
 
@@ -104,34 +129,17 @@ function generateSubAgentSection(subAgents) {
 
 /**
  * Generate trigger quick reference for router
- * @param {Array} subAgents - List of sub-agents
+ * Uses scorer file as single source of truth (not database triggers)
+ * @param {Array} _subAgents - List of sub-agents (unused - kept for API compatibility)
  * @returns {string} Formatted markdown
  */
-function generateTriggerQuickReference(subAgents) {
-  if (!subAgents || subAgents.length === 0) {
-    return '';
+function generateTriggerQuickReference(_subAgents) {
+  // Get keywords from scorer file (single source of truth)
+  const scorerKeywords = getScorerKeywords();
+
+  if (Object.keys(scorerKeywords).length === 0) {
+    return '## Sub-Agent Trigger Keywords (Quick Reference)\n\n*Keywords not available*\n';
   }
-
-  const keywordMap = {};
-  subAgents.forEach(sa => {
-    if (!sa.triggers || sa.triggers.length === 0) return;
-    sa.triggers.forEach(t => {
-      if (t.trigger_phrase) {
-        const keyword = t.trigger_phrase.toLowerCase();
-        if (!keywordMap[keyword]) {
-          keywordMap[keyword] = { agent: sa.code, priority: t.priority || sa.priority || 50 };
-        }
-      }
-    });
-  });
-
-  const agentKeywords = {};
-  Object.entries(keywordMap).forEach(([keyword, info]) => {
-    if (!agentKeywords[info.agent]) {
-      agentKeywords[info.agent] = [];
-    }
-    agentKeywords[info.agent].push(keyword);
-  });
 
   let section = `## Sub-Agent Trigger Keywords (Quick Reference)
 
@@ -141,10 +149,16 @@ function generateTriggerQuickReference(subAgents) {
 |-----------|------------------|
 `;
 
-  Object.keys(agentKeywords).sort().forEach(agent => {
-    const keywords = agentKeywords[agent].slice(0, 10);
-    const moreCount = agentKeywords[agent].length - 10;
-    let keywordStr = keywords.join(', ');
+  // Sort agents alphabetically and generate rows
+  Object.keys(scorerKeywords).sort().forEach(agent => {
+    const agentKw = scorerKeywords[agent];
+    const flat = flattenKeywords(agentKw, 10);
+    const totalCount = (agentKw.primary?.length || 0) +
+                       (agentKw.secondary?.length || 0) +
+                       (agentKw.tertiary?.length || 0);
+    const moreCount = totalCount - flat.length;
+
+    let keywordStr = flat.join(', ');
     if (moreCount > 0) {
       keywordStr += ` (+${moreCount} more)`;
     }
@@ -152,7 +166,7 @@ function generateTriggerQuickReference(subAgents) {
   });
 
   section += `
-*Full trigger list in CLAUDE_CORE.md. Use Task tool with \`subagent_type="${'<agent-code>'}"\`*
+*Full trigger list in CLAUDE_CORE.md. Use Task tool with \`subagent_type="<agent-code>"\`*
 `;
 
   return section;
