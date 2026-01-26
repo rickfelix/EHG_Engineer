@@ -1,6 +1,6 @@
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-01-25 5:23:18 PM
+**Generated**: 2026-01-26 8:07:43 PM
 **Protocol**: LEO 4.3.3
 **Purpose**: Essential workflow context for all sessions (15-20k chars)
 
@@ -1263,18 +1263,7 @@ Multi-criterion weighted scoring evaluates deliverable quality. Each rubric scor
 
 **From Published Retrospectives** - Apply these learnings proactively.
 
-### 1. Mock Infrastructure: Config, Registry, and Utilities - Retrospective [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 12/28/2025 | **Score**: 100
-
-**Key Improvements**:
-- Root Cause: jsdom test environment does not properly mock localStorage between test cases, causing 2...
-- Root Cause: Handoff validation system requires multiple sub-agent validations that may not be applic...
-
-**Action Items**:
-- [ ] Document mock system usage in docs/mock-data-system.md (in SD-MOCK-POLISH)
-- [ ] Complete missing handoff documentation
-
-### 2. Mock Polish: UI Indicator, Developer Toggle, Documentation - Retrospective [QUALITY]
+### 1. Mock Polish: UI Indicator, Developer Toggle, Documentation - Retrospective [QUALITY]
 **Category**: PROCESS_IMPROVEMENT | **Date**: 12/28/2025 | **Score**: 100
 
 **Key Improvements**:
@@ -1285,15 +1274,26 @@ Multi-criterion weighted scoring evaluates deliverable quality. Each rubric scor
 - [ ] Owner: LEO Protocol Maintainer | Deadline: 2025-01-15 | Action: Auto-populate ex...
 - [ ] Owner: CI/CD Team | Deadline: 2025-01-10 | Action: Modify stubbed code detection...
 
-### 3. Settings Tab Clarity + Feature Catalog Copy (NAV-48 + NAV-49) - Retrospective [QUALITY]
-**Category**: APPLICATION_ISSUE | **Date**: 12/26/2025 | **Score**: 100
+### 2. Implement Adaptive Design & Architecture Streams for PLAN Phase - Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 1/10/2026 | **Score**: 100
 
 **Key Improvements**:
-- PLAN-TO-EXEC handoff timed out on OpenAI API calls
-- Had to manually advance phase due to API timeouts
+- Schema field documentation: validation_details vs metadata.gate2_validation caused 2 failures
+- Column naming inconsistency: category vs deliverable_type, title vs deliverable_name
 
 **Action Items**:
-- [ ] Add timeout fallback for AI quality assessment in handoffs
+- [ ] Create schema field reference document mapping validation field names to actual ...
+- [ ] Add pre-handoff checklist to PLAN phase that validates exploration_summary, PRD ...
+
+### 3. Mock Infrastructure: Config, Registry, and Utilities - Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 12/28/2025 | **Score**: 100
+
+**Key Improvements**:
+- Root Cause: jsdom test environment does not properly mock localStorage between test cases, causing 2...
+- Root Cause: Handoff validation system requires multiple sub-agent validations that may not be applic...
+
+**Action Items**:
+- [ ] Document mock system usage in docs/mock-data-system.md (in SD-MOCK-POLISH)
 - [ ] Complete missing handoff documentation
 
 ### 4. Sovereign Industrial Expansion - Stages 7-25 Materialization (Orchestrator) [QUALITY]
@@ -1307,16 +1307,16 @@ Multi-criterion weighted scoring evaluates deliverable quality. Each rubric scor
 - [ ] Create orchestrator SD template with built-in child tracking
 - [ ] Enforce LEO Protocol compliance for all SDs from LEAD phase
 
-### 5. Implement Adaptive Design & Architecture Streams for PLAN Phase - Retrospective [QUALITY]
-**Category**: PROCESS_IMPROVEMENT | **Date**: 1/10/2026 | **Score**: 100
+### 5. LEO-001 Comprehensive Retrospective [QUALITY]
+**Category**: PROCESS_IMPROVEMENT | **Date**: 1/17/2026 | **Score**: 100
 
 **Key Improvements**:
-- Schema field documentation: validation_details vs metadata.gate2_validation caused 2 failures
-- Column naming inconsistency: category vs deliverable_type, title vs deliverable_name
+- {"text":"SD type validation was missing from LEAD-TO-PLAN handoff - discovered through triangulation...
+- {"text":"Schema dependency validation for validators was reactive (discovered during US-007) rather ...
 
 **Action Items**:
-- [ ] Create schema field reference document mapping validation field names to actual ...
-- [ ] Add pre-handoff checklist to PLAN phase that validates exploration_summary, PRD ...
+- [ ] Document plugin discovery protocol - add 'Check for official Claude Code plugins...
+- [ ] Create systematic quality gate gap analysis tool to audit all handoff validators...
 
 
 *Lessons auto-generated from `retrospectives` table. Query for full details.*
@@ -1350,11 +1350,6 @@ Total = EXEC: 30% + LEAD: 35% + PLAN: 35% = 100%
 
 ### Keyword-Triggered Sub-Agents
 
-#### Regression Validator Sub-Agent (`REGRESSION`)
-Validates that refactoring changes maintain backward compatibility. Captures baseline test results, 
-
-**Trigger Keywords**: `refactor`, `refactoring`, `backward compatibility`, `backwards compatible`, `breaking change`, `regression`, `restructure`, `no behavior change`, `no functional change`, `api signature`, `extract method`, `extract function`, `extract component`, `reorganize`, `regression test`, `public api`, `deprecate`, `consolidate`, `move file`, `rename`, `cleanup`, `split file`, `interface change`, `migration`, `code smell`, `technical debt`, `DRY violation`
-
 #### Information Architecture Lead (`DOCMON`)
 ## Information Architecture Lead v3.0.0 - Database-First Enforcement Edition
 
@@ -1362,15 +1357,15 @@ Validates that refactoring changes maintain backward compatibility. Captures bas
 
 **Trigger Keywords**: `LEAD_SD_CREATION`, `LEAD_HANDOFF_CREATION`, `LEAD_APPROVAL`, `PLAN_PRD_GENERATION`, `PLAN_VERIFICATION`, `EXEC_IMPLEMENTATION`, `EXEC_COMPLETION`, `HANDOFF_CREATED`, `HANDOFF_ACCEPTED`, `PHASE_TRANSITION`, `RETRO_GENERATED`, `FILE_CREATED`, `VIOLATION_DETECTED`, `DAILY_DOCMON_CHECK`
 
+#### Regression Validator Sub-Agent (`REGRESSION`)
+Validates that refactoring changes maintain backward compatibility. Captures baseline test results, 
+
+**Trigger Keywords**: `refactor`, `refactoring`, `backward compatibility`, `backwards compatible`, `breaking change`, `regression`, `restructure`, `no behavior change`, `no functional change`, `api signature`, `extract method`, `extract function`, `extract component`, `reorganize`, `regression test`, `public api`, `deprecate`, `consolidate`, `move file`, `rename`, `cleanup`, `split file`, `interface change`, `migration`, `code smell`, `technical debt`, `DRY violation`
+
 #### Root Cause Analysis Agent (`RCA`)
-Forensic intelligence agent for defect triage, root cause determination, and CAPA generation. Invest
+MUST BE USED PROACTIVELY for all root cause analysis tasks. Handles defect triage, root cause determ
 
 **Trigger Keywords**: `sub_agent_blocked`, `ci_pipeline_failure`, `quality_gate_critical`, `test_regression`, `handoff_rejection`, `sub_agent_fail`, `quality_degradation`, `pattern_recurrence`, `performance_regression`, `diagnose defect`, `rca`, `root cause`
-
-#### Chief Security Architect (`SECURITY`)
-Former NSA security architect with 25 years experience securing systems from startup to enterprise s
-
-**Trigger Keywords**: `authentication`, `security`, `security auth pattern`
 
 #### DevOps Platform Architect (`GITHUB`)
 # DevOps Platform Architect Sub-Agent
@@ -1379,6 +1374,11 @@ Former NSA security architect with 25 years experience securing systems from sta
 
 **Trigger Keywords**: `EXEC_IMPLEMENTATION_COMPLETE`, `create pull request`, `gh pr create`, `LEAD_APPROVAL_COMPLETE`, `create release`, `PLAN_VERIFICATION_PASS`, `github deploy`, `github status`, `deployment ci pattern`
 
+#### Chief Security Architect (`SECURITY`)
+Former NSA security architect with 25 years experience securing systems from startup to enterprise s
+
+**Trigger Keywords**: `authentication`, `security`, `security auth pattern`
+
 #### UAT Test Executor (`UAT`)
 Interactive UAT test execution guide for manual testing workflows.
 
@@ -1386,17 +1386,12 @@ Interactive UAT test execution guide for manual testing workflows.
 
 **Trigger Keywords**: `uat test`, `execute test`, `run uat`, `test execution`, `manual test`, `uat testing`, `start testing`, `TEST-AUTH`, `TEST-DASH`, `TEST-VENT`
 
-#### Launch Orchestration Sub-Agent (`LAUNCH`)
-Handles production launch orchestration, go-live checklists, launch readiness, and rollback procedur
+#### Performance Engineering Lead (`PERFORMANCE`)
+Performance engineering lead with 20+ years optimizing high-scale systems.
 
-**Trigger Keywords**: `launch`, `go-live`, `production launch`, `deployment`, `release`, `rollout`, `cutover`, `launch checklist`, `beta release`, `GA release`
+**Mission**: Identify pe
 
-#### QA Engineering Director (`TESTING`)
-## Enhanced QA Engineering Director v2.4.0 - Retrospective-Informed Edition
-
-**🆕 NEW in v2.4.0**: 7
-
-**Trigger Keywords**: `coverage`, `protected route`, `build error`, `dev server`, `test infrastructure`, `testing evidence`, `redirect to login`, `playwright build`, `EXEC_IMPLEMENTATION_COMPLETE`, `unit tests`, `vitest`, `npm run test:unit`, `test results`, `testing test pattern`
+**Trigger Keywords**: `optimization`
 
 #### Continuous Improvement Coach (`RETRO`)
 ## Continuous Improvement Coach v4.0.0 - Quality-First Edition
@@ -1405,6 +1400,13 @@ Handles production launch orchestration, go-live checklists, launch readiness, a
 
 **Trigger Keywords**: `LEAD_APPROVAL_COMPLETE`, `LEAD_REJECTION`, `PLAN_VERIFICATION_COMPLETE`, `PLAN_COMPLEXITY_HIGH`, `EXEC_SPRINT_COMPLETE`, `EXEC_QUALITY_ISSUE`, `HANDOFF_REJECTED`, `HANDOFF_DELAY`, `PHASE_COMPLETE`, `SD_STATUS_COMPLETED`, `SD_STATUS_BLOCKED`, `PATTERN_DETECTED`, `SUBAGENT_MULTIPLE_FAILURES`, `WEEKLY_LEO_REVIEW`, `LEAD_PRE_APPROVAL_REVIEW`, `capture this lesson`, `capture this insight`, `remember this`, `learning`, `lesson learned`, `insight`, `plan mode`, `plan mode integration`, `permission bundling`, `plan file generation`, `intelligent plan`, `sd type profile`, `workflow intensity`, `phase transition`
 
+#### QA Engineering Director (`TESTING`)
+## Enhanced QA Engineering Director v2.4.0 - Retrospective-Informed Edition
+
+**🆕 NEW in v2.4.0**: 7
+
+**Trigger Keywords**: `coverage`, `protected route`, `build error`, `dev server`, `test infrastructure`, `testing evidence`, `redirect to login`, `playwright build`, `EXEC_IMPLEMENTATION_COMPLETE`, `unit tests`, `vitest`, `npm run test:unit`, `test results`, `testing test pattern`
+
 #### Principal Database Architect (`DATABASE`)
 ## Principal Database Architect v2.0.0 - Lessons Learned Edition
 
@@ -1412,12 +1414,10 @@ Handles production launch orchestration, go-live checklists, launch readiness, a
 
 **Trigger Keywords**: `schema`, `migration`, `EXEC_IMPLEMENTATION_COMPLETE`, `database`, `query`, `select from`, `insert into`, `supabase`, `table`, `rls`, `postgres`, `sql`, `fetch from database`, `database query`, `run this sql`, `execute this sql`, `run the query`, `execute the query`, `run this migration`, `execute the migration`, `run that migration`, `execute the following`, `run the following`, `please run`, `please execute`, `can you run`, `can you execute`, `apply this migration`, `apply the migration`, `insert this into`, `update the database`, `update the table`, `delete from the table`, `create the table`, `alter the table`, `drop the table`, `add this column`, `make this change in the database`, `update this in supabase`, `fix this in the database`, `modify the schema`, `add this to the database`, `use the database sub-agent`, `use database sub-agent`, `database agent should run`, `have the database agent`, `run it`, `execute it`, `go ahead and run`, `yes, run it`, `yes, execute`
 
-#### Performance Engineering Lead (`PERFORMANCE`)
-Performance engineering lead with 20+ years optimizing high-scale systems.
+#### Launch Orchestration Sub-Agent (`LAUNCH`)
+Handles production launch orchestration, go-live checklists, launch readiness, and rollback procedur
 
-**Mission**: Identify pe
-
-**Trigger Keywords**: `optimization`
+**Trigger Keywords**: `launch`, `go-live`, `production launch`, `deployment`, `release`, `rollout`, `cutover`, `launch checklist`, `beta release`, `GA release`
 
 #### Monitoring Sub-Agent (`MONITORING`)
 Handles monitoring setup, alerting, SLA definition, health checks, and incident response.
@@ -1507,7 +1507,7 @@ Handles customer relationship management, lead tracking, customer success metric
 
 ---
 
-*Generated from database: 2026-01-25*
+*Generated from database: 2026-01-26*
 *Protocol Version: 4.3.3*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

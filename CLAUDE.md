@@ -309,7 +309,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-25 5:23:18 PM
+**Last Generated**: 2026-01-26 8:07:43 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
@@ -392,6 +392,6 @@ Skipping CLAUDE_CORE.md causes: unknown SD type requirements, missed gate thresh
 
 ---
 
-*Router generated from database: 2026-01-25*
+*Router generated from database: 2026-01-26*
 *Protocol Version: 4.3.3*
 *Part of LEO Protocol router architecture*
