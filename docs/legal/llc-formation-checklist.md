@@ -1,5 +1,14 @@
 # Delaware Series LLC Formation Checklist
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, guide, sd, ci
+
 **Status:** DRAFT (Requires professional legal review before use)
 **SD:** SD-LEGAL-STRUCTURE-001
 **Created:** 2026-01-02

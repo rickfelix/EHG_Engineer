@@ -1,5 +1,14 @@
 # User Stories for SD-NAV-STABILITY
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, testing, e2e
+
 **Strategic Directive**: SD-NAV-STABILITY - P1: Navigation Stability - Critical Errors
 **PRD**: PRD-SD-NAV-STABILITY
 **Generated**: 2025-12-28

@@ -1,4 +1,13 @@
 # Database Migration Status Report
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-25
+- **Tags**: database, testing, migration, schema
+
 **Date**: 2026-01-25
 **Issue**: PAT-LEGACYID-001 - Migration from legacy_id to sd_key
 

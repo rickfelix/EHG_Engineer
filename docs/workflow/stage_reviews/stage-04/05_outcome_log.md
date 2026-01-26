@@ -57,7 +57,7 @@ Stage 4 has **substantial implementation** (70-80% complete) with 3,629+ LOC acr
 **Priority**: high
 **Category**: integration
 
-**Rationale**: Chairman directive (2025-11-07) mandates CrewAI as baseline infrastructure for all 40 stages. Stage 4 dossier (06_agent-orchestration.md) prescribes LEAD agent for substages 4.1-4.4. Current implementation bypasses CrewAI entirely. This SD brings Stage 4 into mandatory compliance.
+**Rationale**: Chairman directive (2025-11-07) mandates CrewAI as baseline infrastructure for all 40 stages. Stage 4 dossier (../../dossiers/stage-25/06_agent-orchestration.md) prescribes LEAD agent for substages 4.1-4.4. Current implementation bypasses CrewAI entirely. This SD brings Stage 4 into mandatory compliance.
 
 **Scope**: Hybrid approach - Stage 2 baseline (competitive_mapper) + Stage 4 deep analysis (Marketing Department Crew with 4 agents: pain_point, competitive, positioning, segmentation).
 

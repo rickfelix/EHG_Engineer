@@ -1,5 +1,14 @@
 # AntiGravity Phase 1 Audit Prompt
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, testing, migration, sd
+
 ## Mission
 You are auditing the SD-VISION-TRANSITION-001 migration (40-stage to 25-stage lifecycle system) for EHG. This is a **LIMITED SCOPE** audit focusing on database state verification only.
 

@@ -1,7 +1,7 @@
 # Protocol Constitution Guide
 
 ## Metadata
-- **Category**: Governance
+- **Category**: Protocol
 - **Status**: Approved
 - **Version**: 1.0.0
 - **Author**: DOCMON Sub-Agent

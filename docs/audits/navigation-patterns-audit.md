@@ -1,5 +1,14 @@
 # Navigation Patterns Audit
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, e2e, unit
+
 **SD-UX-DISCOVERY** | Settings Navigation Discovery Spike
 **Date**: 2025-12-28
 **Status**: Complete

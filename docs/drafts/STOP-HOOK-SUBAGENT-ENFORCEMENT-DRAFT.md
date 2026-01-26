@@ -1,5 +1,14 @@
 # Stop Hook: Sub-Agent Enforcement Draft v2
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, schema
+
 **Status**: DRAFT v2 (Post-Triangulation)
 **Created**: 2026-01-21
 **Updated**: 2026-01-21

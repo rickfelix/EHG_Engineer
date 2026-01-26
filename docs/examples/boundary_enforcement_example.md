@@ -1,5 +1,14 @@
 # Boundary Enforcement Example: SD-002 Analysis
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: protocol, leo, sd, directive
+
 ## What Actually Happened vs. What Should Have Happened
 
 ### Original SD-002 Scope (LEAD)

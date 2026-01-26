@@ -130,7 +130,7 @@
 #### Stage 1: Draft Idea
 **CrewAI References**: ❌ **NONE**
 
-**Evidence**: `/docs/workflow/dossiers/stage-01/06_agent-orchestration.md` (lines 1-26)
+**Evidence**: `/../../dossiers/stage-25/06_agent-orchestration.md` (lines 1-26)
 - States "No agents explicitly mapped to Stage 1"
 - Acknowledges agent-platform directory exists but NO agents assigned
 - Gap identification, not architectural specification
@@ -142,14 +142,14 @@
 #### Stage 2: AI Review
 **CrewAI References**: ❌ **NONE** (generic "multi-agent" concept only)
 
-**Evidence**: `/docs/workflow/dossiers/stage-02/03_canonical-definition.md` (line 10)
+**Evidence**: `/../../dossiers/stage-25/03_canonical-definition.md` (line 10)
 ```yaml
 description: Multi-agent AI system reviews and critiques the idea from multiple perspectives.
 ```
 
 **Context**: Stage 2 references **"multi-agent AI system"** as a concept, NOT CrewAI framework specifically. The term describes architecture (EVA + specialist agents) rather than an implementation framework.
 
-**Evidence**: `/docs/workflow/dossiers/stage-02/06_agent-orchestration.md` (lines 1-17)
+**Evidence**: `/../../dossiers/stage-25/06_agent-orchestration.md` (lines 1-17)
 - References EVA (multi-model) and specialist agents (TBD)
 - References LEAD agent (LEO Protocol agent, not CrewAI)
 - No CrewAI crews, tasks, or framework mentioned
@@ -161,7 +161,7 @@ description: Multi-agent AI system reviews and critiques the idea from multiple 
 #### Stage 3: Comprehensive Validation
 **CrewAI References**: ❌ **NONE**
 
-**Evidence**: `/docs/workflow/dossiers/stage-03/06_agent-orchestration.md` (lines 1-15)
+**Evidence**: `/../../dossiers/stage-25/06_agent-orchestration.md` (lines 1-15)
 - References PLAN agent (LEO Protocol agent, not CrewAI)
 - References Chairman governance
 - No CrewAI crews or framework mentioned

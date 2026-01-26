@@ -1,4 +1,13 @@
 # INVEST Criteria Validation: SD-FOUNDATION-V3-005
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, testing, e2e
+
 ## EVA Directive Execution Engine
 
 **Strategic Directive**: SD-FOUNDATION-V3-005

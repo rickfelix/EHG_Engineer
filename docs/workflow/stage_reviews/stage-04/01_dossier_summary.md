@@ -149,7 +149,7 @@ The stage aims to create a **living competitive intelligence system** that evolv
 
 **Historical Timeline**:
 1. **Stages 1-3 (Phase 3, Nov 5, 2025)**: Dossiers generated with NO CrewAI references
-   - Stage 1: "No agents explicitly mapped to Stage 1" (06_agent-orchestration.md)
+   - Stage 1: "No agents explicitly mapped to Stage 1" (../../dossiers/stage-25/06_agent-orchestration.md)
    - Stage 2: Generic "multi-agent AI system" concept only (not framework-specific)
    - Stage 3: References PLAN agent (LEO Protocol), NOT CrewAI
 2. **SD-CREWAI-ARCHITECTURE-001 (Phase 0, pre-dossier)**: External architectural decision
@@ -161,10 +161,10 @@ The stage aims to create a **living competitive intelligence system** that evolv
    - Git commit feb69c8: "docs(SD-CREWAI-ARCHITECTURE-001): Update workflow critique stages"
 
 **Evidence Sources**:
-- `/docs/workflow/dossiers/stage-01/06_agent-orchestration.md` (lines 1-26)
-- `/docs/workflow/dossiers/stage-02/03_canonical-definition.md` (line 10)
-- `/docs/workflow/dossiers/stage-02/06_agent-orchestration.md` (lines 1-17)
-- `/docs/workflow/dossiers/stage-03/06_agent-orchestration.md` (lines 1-15)
+- `/../../dossiers/stage-25/06_agent-orchestration.md` (lines 1-26)
+- `/../../dossiers/stage-25/03_canonical-definition.md` (line 10)
+- `/../../dossiers/stage-25/06_agent-orchestration.md` (lines 1-17)
+- `/../../dossiers/stage-25/06_agent-orchestration.md` (lines 1-15)
 - `/docs/workflow/dossiers/DELTA_LOG_PHASE4.md` (line 245)
 - `/docs/workflow/dossiers/DELTA_LOG_PHASE5.md` (line 347)
 

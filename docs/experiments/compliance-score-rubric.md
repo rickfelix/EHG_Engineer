@@ -1,5 +1,14 @@
 # LEO Protocol Compliance Score Rubric
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-24
+- **Tags**: protocol, leo, sd, directive
+
 **Experiment**: SD-LEO-REFAC-COMPLIANCE-EXP-001
 **Date**: 2026-01-24
 **Version**: 1.0

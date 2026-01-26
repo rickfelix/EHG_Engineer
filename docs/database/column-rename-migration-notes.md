@@ -527,7 +527,7 @@ WHERE contype = 'f' AND conrelid = 'sd_phase_handoffs'::regclass;
 After migration, update these docs:
 
 - [ ] `docs/reference/schema/engineer/tables/strategic_directives_v2.md`
-- [ ] `docs/reference/database-schema-overview.md`
+- [ ] `../reference/schema/engineer/database-schema-overview.md`
 - [ ] API documentation (if SD codes exposed in API)
 - [ ] Developer guides mentioning `strategic_directives_v2`
 

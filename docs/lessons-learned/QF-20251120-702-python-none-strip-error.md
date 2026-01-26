@@ -1,5 +1,14 @@
 # Lessons Learned: Python None Values Causing .strip() Failures
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, testing, schema
+
 **Quick-Fix ID:** QF-20251120-702
 **Date:** 2025-11-20
 **Severity:** High

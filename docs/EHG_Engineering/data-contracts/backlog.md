@@ -1,5 +1,14 @@
 # Backlog (eng)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: rls, feature, sd, directive
+
 ## Table: `eng_backlog`
 - **Primary Key:** `id UUID` (generated).
 - **Foreign Keys:**

@@ -1,5 +1,14 @@
 # SD-ARTIFACT-INTEGRATION-001: Proposed File Tree Changes
 
+
+## Metadata
+- **Category**: Architecture
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: api, schema, protocol, leo
+
 **SD**: SD-ARTIFACT-INTEGRATION-001
 **Title**: 25-Stage Artifact Integration + Stage-Gated Runtime Consumption
 **Created**: 2025-12-14

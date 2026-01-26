@@ -1,5 +1,14 @@
 # Triangulation: Stop Hook Sub-Agent Enforcement Design Review
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: database, api, testing, unit
+
 **Date**: 2026-01-21
 **Type**: Design Review (Pros/Cons Analysis)
 **Target AIs**: OpenAI, Gemini

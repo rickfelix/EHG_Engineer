@@ -1,5 +1,14 @@
 # Product Requirements (eng)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: migration, schema, rls, sd
+
 ## Table: `product_requirements_v2`
 - **Primary Key:** `prd_uuid` (generated UUID v5 from `sd_id`, `id`, `version`).
 - **Foreign Keys:**

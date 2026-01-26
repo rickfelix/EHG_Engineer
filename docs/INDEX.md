@@ -1,5 +1,14 @@
 # EHG_Engineer Documentation Index
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-11
+- **Tags**: database, api, testing, e2e
+
 Master index for navigating the documentation library.
 
 ---
@@ -75,7 +84,7 @@ If you're reading this as part of codebase ingestion:
 | Document | Purpose |
 |----------|---------|
 | [README.md](../README.md) | Project overview and setup |
-| [DEVELOPMENT_WORKFLOW.md](../DEVELOPMENT_WORKFLOW.md) | Development workflow guide |
+| [DEVELOPMENT_WORKFLOW.md](summaries/DEVELOPMENT_WORKFLOW.md) | Development workflow guide |
 | [CLAUDE.md](../CLAUDE.md) | LEO Protocol context router |
 
 ---
@@ -106,7 +115,7 @@ If you're reading this as part of codebase ingestion:
 | Document | Purpose |
 |----------|---------|
 | [API Overview](02_api/api-documentation-overview.md) | Complete API reference (59 endpoints) |
-| [LEO API](leo/api.md) | LEO Protocol API |
+| [LEO API](leo/api/api.md) | LEO Protocol API |
 | [Enhanced API Reference](05_testing/enhanced-api-reference.md) | Testing API |
 
 ---
@@ -174,7 +183,7 @@ If you're reading this as part of codebase ingestion:
 |----------|---------|
 | [NPM Scripts Guide](reference/npm-scripts-guide.md) | Script documentation |
 | [Database Agent Patterns](reference/database-agent-patterns.md) | Database patterns |
-| [Sub-Agent System](reference/sub-agent-system.md) | Agent catalog |
+| [Sub-Agent System](leo/sub-agents/sub-agent-system.md) | Agent catalog |
 | [RLS Policy Catalog](reference/rls-policy-catalog.md) | Security policies |
 | [Validation Enforcement](reference/validation-enforcement.md) | Validation rules |
 | [QA Director Guide](reference/qa-director-guide.md) | QA workflows |
@@ -184,7 +193,7 @@ If you're reading this as part of codebase ingestion:
 
 Auto-generated documentation for 312+ database tables:
 - [Schema Overview](reference/schema/engineer/database-schema-overview.md)
-- [Individual Tables](reference/schema/engineer/tables/)
+- [Individual Tables](reference/schema/engineer/tables/activity_logs.md)
 
 ---
 
@@ -227,7 +236,7 @@ Auto-generated documentation for 312+ database tables:
 
 | Document | Purpose |
 |----------|---------|
-| [planning/](planning/) | Planning documentation |
+| [planning/](planning/documentation-cleanup-master-plan.md) | Planning documentation |
 
 ---
 
@@ -244,7 +253,7 @@ Auto-generated documentation for 312+ database tables:
 ### Getting Started
 
 1. [README.md](../README.md) - Project overview
-2. [DEVELOPMENT_WORKFLOW.md](../DEVELOPMENT_WORKFLOW.md) - Workflow
+2. [DEVELOPMENT_WORKFLOW.md](summaries/DEVELOPMENT_WORKFLOW.md) - Workflow
 3. [NPM Scripts Guide](reference/npm-scripts-guide.md) - Commands
 
 ### LEO Protocol
@@ -263,7 +272,7 @@ Auto-generated documentation for 312+ database tables:
 ### API Development
 
 1. [API Overview](02_api/api-documentation-overview.md) - All endpoints
-2. [LEO API](leo/api.md) - Protocol API
+2. [LEO API](leo/api/api.md) - Protocol API
 
 ### Testing
 

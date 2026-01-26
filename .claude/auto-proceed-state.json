@@ -1,12 +1,13 @@
 {
-  "isActive": false,
+  "isActive": true,
   "wasInterrupted": false,
-  "currentSd": null,
-  "currentPhase": null,
-  "currentTask": null,
+  "currentSd": "SD-LEO-INFRA-DOCMON-SUB-AGENT-001-D",
+  "currentPhase": "EXEC",
+  "currentTask": "Implementing DOCMON Git Integration",
   "lastInterruptedAt": null,
   "lastResumedAt": null,
   "resumeCount": 2,
   "version": "1.0.0",
-  "clearedAt": "2026-01-26T03:30:47.349Z"
+  "clearedAt": "2026-01-26T03:30:47.349Z",
+  "lastUpdatedAt": "2026-01-26T18:44:39.045Z"
 }

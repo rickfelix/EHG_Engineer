@@ -2,9 +2,9 @@
   "project": "EHG_Engineer",
   "leoVersion": "3.1.5.9",
   "activeRole": "EXEC",
-  "currentSD": "SD-LEO-ENH-AUTO-PROCEED-001-14",
+  "currentSD": "SD-LEO-INFRA-DOCMON-SUB-AGENT-001",
   "currentTask": null,
-  "phase": "PLAN",
+  "phase": "LEAD",
   "lastHandoff": {
     "from": "PLAN",
     "to": "EXEC",
@@ -18,8 +18,12 @@
   },
   "autoProceed": {
     "isActive": true,
-    "sdKey": "SD-LEO-ENH-AUTO-PROCEED-001-14",
-    "phase": "PLAN",
-    "progress": 0
+    "sdKey": "SD-LEO-INFRA-DOCMON-SUB-AGENT-001",
+    "phase": "LEAD",
+    "progress": 0,
+    "childProgress": {
+      "current": null,
+      "total": null
+    }
   }
 }

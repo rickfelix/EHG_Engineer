@@ -1,5 +1,14 @@
 # VentureCreationPage Accessibility Patterns
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: testing, e2e, unit, feature
+
 **SD**: SD-VWC-A11Y-002
 **Component**: VentureCreationPage
 **Standard**: WCAG 2.1 Level AA
@@ -9,16 +18,16 @@
 
 ## 📚 Table of Contents
 
-1. [Color System](#color-system)
-2. [Focus Indicators](#focus-indicators)
+1. [Color System](#-color-system)
+2. [Focus Indicators](#-focus-indicators)
 3. [Keyboard Navigation](#keyboard-navigation)
-4. [Screen Reader Support](#screen-reader-support)
-5. [Motion Accessibility](#motion-accessibility)
-6. [High Contrast Mode](#high-contrast-mode)
-7. [Responsive Accessibility](#responsive-accessibility)
-8. [ARIA Patterns](#aria-patterns)
-9. [Testing Checklist](#testing-checklist)
-10. [Maintenance Guidelines](#maintenance-guidelines)
+4. [Screen Reader Support](#-screen-reader-support)
+5. [Motion Accessibility](#-motion-accessibility)
+6. [High Contrast Mode](#-high-contrast-mode)
+7. [Responsive Accessibility](#-responsive-accessibility)
+8. [ARIA Patterns](#-aria-patterns)
+9. [Testing Checklist](#-testing-checklist)
+10. [Maintenance Guidelines](#-maintenance-guidelines)
 
 ---
 

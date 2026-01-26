@@ -28,7 +28,7 @@ The Quality Lifecycle System is EHG's unified approach to quality and feedback m
 
 | Document | Location | Purpose |
 |----------|----------|---------|
-| **User Guide** | `docs/04_features/quality-lifecycle-system.md` | Complete user guide covering all features, components, usage, and troubleshooting |
+| **User Guide** | `../vision/quality-lifecycle-system.md` | Complete user guide covering all features, components, usage, and troubleshooting |
 | **Workflow Guide** | `docs/workflow/quality-lifecycle-workflow.md` | Operational workflows showing how feedback flows through the system |
 | **Vision Document** | `docs/vision/quality-lifecycle-system.md` | Original vision and architecture decisions |
 
@@ -368,7 +368,7 @@ Not included in this orchestrator (separate future SDs):
 ## Getting Help
 
 ### Documentation
-- **User Guide**: `docs/04_features/quality-lifecycle-system.md`
+- **User Guide**: `../vision/quality-lifecycle-system.md`
 - **Workflow Guide**: `docs/workflow/quality-lifecycle-workflow.md`
 - **Vision Document**: `docs/vision/quality-lifecycle-system.md`
 

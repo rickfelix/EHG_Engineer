@@ -1,5 +1,14 @@
 # KOCHEL INTEGRATION ASSESSMENT RUBRIC
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, migration, schema, protocol
+
 **Purpose**: Shared scoring framework for cross-validation between Claude (Anthropic) and Anti-Gravity (Gemini). Both AI systems will use this identical rubric to enable direct comparison of scores and findings.
 
 **Version**: 1.0

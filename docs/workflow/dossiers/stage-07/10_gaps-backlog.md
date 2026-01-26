@@ -328,7 +328,7 @@
 
 **Issue**: No historical data analysis to inform benchmarks (average team size, timeline, budget for similar ventures)
 
-**Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/dossiers/stage-07/07_recursion-blueprint.md:273-282 "Historical Data (similar ventures)"
+**Evidence**: EHG_Engineer@6ef8cf4:../stage-25/07_recursion-blueprint.md:273-282 "Historical Data (similar ventures)"
 
 **Impact**: Cannot show "Your estimate is 30% below average" warning; no data-driven guidance
 

@@ -1,5 +1,14 @@
 # Database Validation: SD-FOUNDATION-V3-006 User Stories
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, testing, e2e, unit
+
 **Validation Date**: 2025-12-17
 **Validator**: STORIES (Sub-Agent)
 **Total Stories Expected**: 8

@@ -1,5 +1,14 @@
 # INVEST Criteria Validation: SD-FOUNDATION-V3-006
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: testing, e2e, unit, sd
+
 **Strategic Directive**: 25-Stage Crew Mapping Completion
 **Validation Date**: 2025-12-17
 **Total Stories**: 8

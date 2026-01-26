@@ -1,5 +1,14 @@
 # Vision Brief & Visualization Runbook
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, feature, protocol
+
 **Version:** 1.0.0
 **Last Updated:** 2025-12-14
 **Owner:** EHG_Engineering Governance

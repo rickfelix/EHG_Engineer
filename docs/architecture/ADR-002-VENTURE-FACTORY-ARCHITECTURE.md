@@ -1,5 +1,14 @@
 # ADR-002: Venture Factory Architecture
 
+
+## Metadata
+- **Category**: Architecture
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, testing, unit
+
 **Status**: APPROVED
 **Date**: 2025-12-06
 **Author**: Lead Systems Architect (Claude)

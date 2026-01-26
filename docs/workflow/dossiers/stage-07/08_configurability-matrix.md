@@ -127,7 +127,7 @@
 | `show_comparison_warning` | true | N/A | true, false | Show yellow/red warnings when estimates deviate from benchmarks | Chairman |
 | `comparison_warning_threshold` | 20 | 10-50 | % deviation | Show warning when estimate deviates from benchmark by this % | Chairman |
 
-**Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/dossiers/stage-07/07_recursion-blueprint.md:273-282 "Historical Data (similar ventures)"
+**Evidence**: EHG_Engineer@6ef8cf4:../stage-25/07_recursion-blueprint.md:273-282 "Historical Data (similar ventures)"
 
 **Use Cases**:
 - **Historical data ON**: Use for standard ventures following known patterns

@@ -1,4 +1,13 @@
 # Triangulation Research: Venture Selection Framework
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: database, api, unit, migration
+
 ## Unified Prompt for All Three AIs (OpenAI, Gemini, Claude Code)
 
 **Created**: 2026-01-01

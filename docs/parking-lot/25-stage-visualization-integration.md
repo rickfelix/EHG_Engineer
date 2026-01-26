@@ -1,5 +1,14 @@
 # Parking Lot: 25-Stage Visualization Integration
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: api, schema, rls, feature
+
 **Status:** Parked for future discussion
 **Created:** 2025-12-14
 **Owner:** EHG_Engineering

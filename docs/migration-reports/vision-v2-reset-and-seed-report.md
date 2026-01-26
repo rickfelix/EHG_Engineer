@@ -1,5 +1,14 @@
 # Vision V2 Reset and Seed Migration Report
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, api, migration, schema
+
 **Date**: 2025-12-12
 **Migration File**: `database/migrations/20251213_vision_v2_reset_and_seed.sql`
 **Status**: ✅ **SUCCESS**

@@ -1,5 +1,14 @@
 # Series LLC Operating Agreement Template
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-05
+- **Tags**: api, sd, ci, service
+
 **Status:** DRAFT - REQUIRES PROFESSIONAL LEGAL REVIEW
 **SD:** SD-LEGAL-STRUCTURE-001
 **Created:** 2026-01-02

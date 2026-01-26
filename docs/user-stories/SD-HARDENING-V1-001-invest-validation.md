@@ -1,5 +1,14 @@
 # SD-HARDENING-V1-001: INVEST Criteria Validation
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, testing, e2e, migration
+
 **Purpose**: Validate that all user stories for SD-HARDENING-V1-001 meet INVEST criteria (Independent, Negotiable, Valuable, Estimable, Small, Testable)
 
 **Date**: 2025-12-17

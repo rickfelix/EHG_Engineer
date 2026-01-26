@@ -1,5 +1,14 @@
 # LEO Protocol Sections - Deprecated UUID Pattern Audit
 
+
+## Metadata
+- **Category**: Report
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: database, schema, protocol, leo
+
 **Generated**: 2025-12-12
 **Database**: dedlbzhpgkmetvhbkyzq (EHG_Engineer - Consolidated)
 **Query**: Sections containing `sd_uuid` or `uuid_id` patterns

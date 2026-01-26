@@ -1,5 +1,14 @@
 # LEO Protocol Terminology Rules
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: migration, schema, protocol, leo
+
 **Version:** 1.0
 **Effective Date:** 2025-12-14
 **Status:** ACTIVE

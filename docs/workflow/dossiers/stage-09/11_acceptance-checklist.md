@@ -113,7 +113,7 @@
 
 **Score**: **15/15** - Honest gap documentation with proper scan evidence
 
-**Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/dossiers/stage-09/07_recursion-blueprint.md:1-10 "Status: NO RECURSION TRIGGERS DEFINED, Scan Results"
+**Evidence**: EHG_Engineer@6ef8cf4:../stage-25/07_recursion-blueprint.md:1-10 "Status: NO RECURSION TRIGGERS DEFINED, Scan Results"
 
 ---
 
@@ -133,7 +133,7 @@
 
 **Score**: **5/5** - Regeneration Note present
 
-**Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/dossiers/stage-09/01_overview.md:48-60 "Regeneration Note section"
+**Evidence**: EHG_Engineer@6ef8cf4:../stage-25/01_overview.md:48-60 "Regeneration Note section"
 
 ---
 
@@ -160,7 +160,7 @@
 
 **Score**: **10/10** - All 8 gaps have SD cross-references
 
-**Evidence**: EHG_Engineer@6ef8cf4:docs/workflow/dossiers/stage-09/10_gaps-backlog.md (each gap has SD cross-reference)
+**Evidence**: EHG_Engineer@6ef8cf4:../stage-07/10_gaps-backlog.md (each gap has SD cross-reference)
 
 ---
 

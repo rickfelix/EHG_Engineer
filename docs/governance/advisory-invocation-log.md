@@ -1,5 +1,14 @@
 # Advisory Invocation Log
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-22
+- **Tags**: protocol, sd, ci
+
 **Purpose:** Track when External Strategic Advisor was invoked (metadata only — no content stored)
 
 **Non-Precedent Rule:** Advisory outputs are ephemeral and not stored as artifacts. This log records only the invocation metadata for audit purposes.

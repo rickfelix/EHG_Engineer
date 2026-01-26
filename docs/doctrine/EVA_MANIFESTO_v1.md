@@ -1,5 +1,14 @@
 # EVA Manifesto v1.0
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-27
+- **Tags**: database, security, protocol, leo
+
 **The Canonical Internal Doctrine of the EHG Agent System**
 
 ---

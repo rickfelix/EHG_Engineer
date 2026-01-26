@@ -25,7 +25,7 @@ Completed comprehensive documentation reorganization addressing all critical and
 - **Issue**: Root README.md contained Supabase CLI documentation
 - **Action**:
   - Moved Supabase docs to `SUPABASE_CLI_README.md`
-  - Installed proper EHG_Engineer README from `docs/04_features/EHG_ENGINEER_README.md`
+  - Installed proper EHG_Engineer README from `../../guides/EHG_ENGINEER_README.md`
 - **Impact**: New developers now see correct project information
 
 #### 2. Resolved Duplicate Guide Directories

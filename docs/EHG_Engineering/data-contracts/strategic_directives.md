@@ -1,5 +1,14 @@
 # Strategic Directives (eng)
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: rls, sd, directive, ci
+
 ## Table: `strategic_directives_v2`
 - **Primary Key:** `sd_uuid` (generated UUID v5 from `sd_key`).
 - **Natural Key:** `sd_key` (`SD-YYYY-MM-DD-<slug>`), generated from approval/create date + slug.

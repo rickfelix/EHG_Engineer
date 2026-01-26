@@ -1,5 +1,14 @@
 # Migration Phase A Runbook: Kochel Integration
 
+
+## Metadata
+- **Category**: Database
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, migration, schema, authorization
+
 **Version**: 1.0
 **Date**: 2025-12-09
 **Author**: Lead Systems Architect (Claude)

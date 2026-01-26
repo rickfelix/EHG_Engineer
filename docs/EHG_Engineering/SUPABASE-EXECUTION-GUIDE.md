@@ -1,5 +1,14 @@
 # Supabase SQL Editor Execution Guide
 
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2025-12-18
+- **Tags**: database, api, testing, migration
+
 ## How to Run User Story Migration in Supabase
 
 ### Prerequisites
