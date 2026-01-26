@@ -44,6 +44,21 @@ The LEO Protocol Status Line provides real-time context awareness in the Claude 
 👁️ Vision QA | APP-001 | Test checkout flow
 ```
 
+### AUTO-PROCEED Mode (SD-LEO-ENH-AUTO-PROCEED-001-13)
+```
+🤖 AUTO-PROCEED: ON | EXEC | 30% | SD-XXX-001
+```
+
+Display format when AUTO-PROCEED mode is active and SD work begins:
+- **Status**: ON/OFF (from `claude_sessions.metadata.auto_proceed`)
+- **Phase**: Current LEO phase (LEAD/PLAN/EXEC)
+- **Progress**: SD completion percentage (0-100%)
+- **SD Key**: Optional SD identifier
+
+**When displayed**: Automatically shown when handoff execution begins and AUTO-PROCEED mode is active.
+
+**Implementation**: SD-LEO-ENH-AUTO-PROCEED-001-13 (2026-01-26)
+
 ## Quick Usage
 
 ### For Agents
@@ -61,6 +76,9 @@ leo-status handoff LEAD PLAN "Strategic Directive SD-001"
 
 # During Vision QA
 leo-status vq APP-001 "Testing user registration"
+
+# Update for AUTO-PROCEED mode
+leo-status autoproceed on EXEC 30 SD-XXX-001
 
 # Show current status
 leo-status show
@@ -144,6 +162,14 @@ const statusLine = new LEOStatusLine();
 
 // Update when starting Vision QA
 statusLine.updateForVisionQA(appId, testGoal);
+
+// Update for AUTO-PROCEED mode
+statusLine.updateForAutoProceed({
+  isActive: true,
+  sdKey: 'SD-XXX-001',
+  phase: 'EXEC',
+  progress: 30
+});
 
 // Clear when done
 statusLine.refresh();
