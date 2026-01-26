@@ -1,0 +1,111 @@
+<!-- ARCHIVED: 2026-01-26T16:26:34.208Z
+     Reason: Duplicate of canonical file
+     Original location: docs\workflow\dossiers\stage-19\01_overview.md
+     See: docs/fixes/duplicate-consolidation-manifest.json for details
+-->
+
+# Stage 19 Operating Dossier: Tri-Party Integration Verification
+
+
+## Metadata
+- **Category**: Guide
+- **Status**: Draft
+- **Version**: 1.0.0
+- **Author**: DOCMON
+- **Last Updated**: 2026-01-21
+- **Tags**: api, testing, authentication, sd
+
+## Executive Summary
+
+**Stage ID**: 19
+**Title**: Tri-Party Integration Verification
+**Owner**: EXEC
+**Overall Critique Score**: 3.0/5
+**Status**: Documentation Complete
+
+### Purpose
+Verify all third-party integrations and external dependencies, ensuring integration success rates ≥90%, API reliability ≥99%, and latency metrics <1000ms for production readiness.
+
+### Key Characteristics
+- **Dependencies**: Stage 18 (Documentation and GitHub Synchronization)
+- **Enables**: Stage 20 (Enhanced Context Loading)
+- **Substages**: 3 (Integration Testing, Performance Validation, Fallback Configuration)
+- **Primary Metrics**: Integration success rate, API reliability, Latency metrics
+- **Automation Level**: 3/5 (partial automation possible, target 80%)
+- **Risk Level**: 2/5 (moderate)
+
+### Critical Gaps Identified
+1. Limited automation for manual processes (currently manual→80% target)
+2. Unclear metrics thresholds (no target values defined)
+3. Missing specific tool integrations (API testing frameworks)
+4. No explicit error handling (integration failures, circuit breaker logic)
+5. No rollback procedures documented (API version rollback)
+
+### Strategic Context
+This stage represents the venture's integration verification capability, validating all third-party APIs, external services, and dependencies (from Stages 14-18) work correctly in production-like environments. Success requires integration with CrewAI framework for automated API testing and SD-RECURSION-ENGINE-001 for adaptive feedback loops when integrations fail.
+
+## Regeneration Instructions
+
+This dossier was generated from canonical sources in the EHG_Engineer repository at commit `6ef8cf4`. To reproduce:
+
+```bash
+# Navigate to repository root
+cd /mnt/c/_EHG/EHG_Engineer
+
+# Verify commit hash
+git log -1 --oneline
+
+# Read source materials
+cat docs/workflow/stages.yaml | sed -n '827,873p'  # Stage 19 definition
+cat docs/workflow/critique/stage-19.md              # Critique (72 lines)
+
+# Regenerate dossier (if automation exists)
+# node scripts/generate-stage-dossier.js --stage=19 --output=docs/workflow/dossiers/stage-19/
+```
+
+**Source Evidence**:
+- Stage Definition: EHG_Engineer@6ef8cf4:docs/workflow/stages.yaml:827-873 "id: 19, title: Tri-Party Integration Verification"
+- Critique Analysis: EHG_Engineer@6ef8cf4:docs/workflow/critique/stage-19.md:1-72 "Overall: 3.0, Functional but needs optimization"
+
+## Venture Selection Context
+
+**Applicable Ventures**: All ventures with third-party integrations (payment gateways, authentication providers, data APIs)
+**Customization Required**: API credentials, integration endpoints, performance SLAs, fallback strategies
+**Shared Infrastructure**: IntegrationVerificationCrew (CrewAI-based), API testing suite (Jest, k6), monitoring dashboards
+
+**Venture-Specific Inputs**:
+- Integration requirements (from Stage 14 technical documentation)
+- API documentation (OpenAPI specs, SDK references)
+- Test accounts (sandbox credentials for third-party services)
+
+**Cross-Stage Integration**:
+- Receives integration requirements from Stage 18 (documentation sync)
+- Provides integration test results to Stage 20 (context loading)
+- May recurse to Stage 10 (technical review) or Stage 14 (development prep) if integrations fail
+
+## Document Structure
+
+This dossier consists of 11 files:
+
+1. **01_overview.md** (this file) - Executive summary and regeneration instructions
+2. **02_stage-map.md** - Dependency graph and workflow positioning
+3. **03_canonical-definition.md** - Full YAML specification with evidence
+4. **04_current-assessment.md** - Critique rubric scores and analysis
+5. **05_professional-sop.md** - Step-by-step execution procedures
+6. **06_agent-orchestration.md** - IntegrationVerificationCrew architecture
+7. **07_recursion-blueprint.md** - Recursive triggers and feedback loops
+8. **08_configurability-matrix.md** - Tunable parameters and customization
+9. **09_metrics-monitoring.md** - KPIs with SQL queries and dashboards
+10. **10_gaps-backlog.md** - Improvement areas mapped to Strategic Directives
+11. **11_acceptance-checklist.md** - Quality scoring criteria (target: 100/100)
+
+---
+
+**Next Steps**:
+1. Review 04_current-assessment.md for critique details
+2. Use 05_professional-sop.md for execution guidance
+3. Reference 06_agent-orchestration.md for CrewAI integration
+4. Consult 07_recursion-blueprint.md for adaptive triggers
+5. Track improvements via 10_gaps-backlog.md
+
+<!-- Generated by Claude Code Phase 8 | EHG_Engineer@6ef8cf4 | 2025-11-05 -->
