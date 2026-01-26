@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-01-26T04:26:11.529Z
+**Generated**: 2026-01-26T05:02:04.577Z
 **Tables**: 375
 
 This directory contains comprehensive, auto-generated documentation for all tables in the **EHG_Engineer** Supabase database.
@@ -17,12 +17,6 @@ This directory contains comprehensive, auto-generated documentation for all tabl
 
 - **[Database Schema Overview](database-schema-overview.md)** - Quick reference for all tables (15-20KB)
 - **[Detailed Table Docs](tables/)** - Individual files for each table (2-5KB each)
-
-## Constraint References
-
-Quick reference for valid CHECK constraint values:
-
-- **[sd_scope_deliverables Constraints](tables/sd_scope_deliverables_constraints.md)** - Valid values for deliverable_type, priority, completion_status, verified_by
 
 ---
 
