@@ -1,0 +1,245 @@
+name: Documentation Validation
+
+on:
+  pull_request:
+    paths:
+      - '**.md'
+      - 'docs/**'
+      - '.docmon/**'
+  push:
+    branches:
+      - main
+    paths:
+      - '**.md'
+      - 'docs/**'
+      - '.docmon/**'
+  schedule:
+    # Run weekly on Sunday at midnight UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      full_report:
+        description: 'Generate full health report'
+        required: false
+        default: 'false'
+        type: boolean
+      changed_only:
+        description: 'Only validate changed files'
+        required: false
+        default: 'true'
+        type: boolean
+
+jobs:
+  validate-docs:
+    runs-on: ubuntu-latest
+    name: Validate Documentation
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git diff
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run DOCMON Validation (PR mode - changed files)
+        id: docmon_pr
+        if: github.event_name == 'pull_request'
+        run: |
+          npm run docmon:validate -- \
+            --changed-only \
+            --base-ref=origin/${{ github.base_ref }} \
+            --format=json \
+            --output=docmon-report.json
+        continue-on-error: true
+
+      - name: Run DOCMON Validation (Full scan)
+        id: docmon_full
+        if: github.event_name != 'pull_request' && (github.event_name == 'schedule' || github.event.inputs.full_report == 'true' || github.event.inputs.changed_only == 'false')
+        run: |
+          npm run docmon:validate -- \
+            --format=json \
+            --output=docmon-report.json
+        continue-on-error: true
+
+      - name: Run DOCMON Validation (Push mode - changed files)
+        id: docmon_push
+        if: github.event_name == 'push'
+        run: |
+          npm run docmon:validate -- \
+            --changed-only \
+            --base-ref=origin/main~1 \
+            --format=json \
+            --output=docmon-report.json
+        continue-on-error: true
+
+      - name: Upload DOCMON Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: docmon-report
+          path: docmon-report.json
+          retention-days: 30
+
+      - name: Parse DOCMON Results
+        id: results
+        run: |
+          if [ -f docmon-report.json ]; then
+            VIOLATIONS=$(jq -r '.summary.total_violations' docmon-report.json)
+            FILES=$(jq -r '.summary.total_files_checked' docmon-report.json)
+            echo "violations=$VIOLATIONS" >> $GITHUB_OUTPUT
+            echo "files_checked=$FILES" >> $GITHUB_OUTPUT
+
+            # Get top violations
+            TOP_VIOLATIONS=$(jq -r '.summary.top_violations | map("\(.type): \(.count)") | join(", ")' docmon-report.json)
+            echo "top_violations=$TOP_VIOLATIONS" >> $GITHUB_OUTPUT
+
+            # Check individual validators
+            LOCATION_FAIL=$(jq -r 'if .validators.location.invalid > 0 then "true" else "false" end' docmon-report.json)
+            METADATA_FAIL=$(jq -r 'if .validators.metadata.invalid > 0 then "true" else "false" end' docmon-report.json)
+            NAMING_FAIL=$(jq -r 'if .validators.naming.invalid > 0 then "true" else "false" end' docmon-report.json)
+
+            echo "location_failed=$LOCATION_FAIL" >> $GITHUB_OUTPUT
+            echo "metadata_failed=$METADATA_FAIL" >> $GITHUB_OUTPUT
+            echo "naming_failed=$NAMING_FAIL" >> $GITHUB_OUTPUT
+          else
+            echo "violations=0" >> $GITHUB_OUTPUT
+            echo "files_checked=0" >> $GITHUB_OUTPUT
+            echo "top_violations=" >> $GITHUB_OUTPUT
+            echo "location_failed=false" >> $GITHUB_OUTPUT
+            echo "metadata_failed=false" >> $GITHUB_OUTPUT
+            echo "naming_failed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate cross-references
+        id: links
+        run: |
+          npm run docs:validate-links || echo "links_failed=true" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Check for duplicates
+        id: duplicates
+        if: github.event_name == 'schedule' || github.event.inputs.full_report == 'true'
+        run: |
+          npm run docs:detect-duplicates || echo "duplicates_failed=true" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Generate health report
+        if: github.event_name == 'schedule' || github.event.inputs.full_report == 'true'
+        run: |
+          npm run docs:health -- --save
+
+      - name: Upload health report
+        if: github.event_name == 'schedule' || github.event.inputs.full_report == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-health-report
+          path: docs/summaries/doc-health-reports/*.md
+          retention-days: 30
+
+      - name: Summary
+        run: |
+          echo "## Documentation Validation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Files checked:** ${{ steps.results.outputs.files_checked }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Total violations:** ${{ steps.results.outputs.violations }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.results.outputs.top_violations }}" != "" ]; then
+            echo "**Top violations:** ${{ steps.results.outputs.top_violations }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "### Validator Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.results.outputs.location_failed }}" == "true" ]; then
+            echo "- :x: **Location validation failed** - Files in prohibited locations" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- :white_check_mark: Location validation passed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ steps.results.outputs.metadata_failed }}" == "true" ]; then
+            echo "- :warning: **Metadata validation has warnings** - Some files missing headers" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- :white_check_mark: Metadata validation passed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ steps.results.outputs.naming_failed }}" == "true" ]; then
+            echo "- :x: **Naming validation failed** - Some files use non-standard names" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- :white_check_mark: Naming validation passed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ steps.links.outputs.links_failed }}" == "true" ]; then
+            echo "- :warning: **Link validation has warnings** - Some broken references" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- :white_check_mark: Link validation passed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ steps.duplicates.outputs.duplicates_failed }}" == "true" ]; then
+            echo "- :warning: **Duplicate detection has warnings** - Potential duplicates found" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ github.event_name }}" == "schedule" ] || [ "${{ github.event.inputs.full_report }}" == "true" ]; then
+            echo "- :white_check_mark: No duplicates detected" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Fail on critical issues (PRs only)
+        if: github.event_name == 'pull_request' && (steps.results.outputs.location_failed == 'true' || steps.results.outputs.naming_failed == 'true')
+        run: |
+          echo "Critical documentation validation issues found in PR"
+          echo "See docmon-report.json artifact for details"
+          exit 1
+
+  notify-on-failure:
+    runs-on: ubuntu-latest
+    needs: validate-docs
+    if: failure() && github.event_name == 'schedule'
+
+    steps:
+      - name: Create issue for validation failures
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `Documentation Validation Failed - ${new Date().toISOString().split('T')[0]}`;
+            const body = `
+            ## Weekly Documentation Validation Failed
+
+            The scheduled documentation validation workflow found issues that need attention.
+
+            **Run**: [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+
+            ### Next Steps
+            1. Review the workflow run for specific failures
+            2. Download the docmon-report.json artifact for detailed violations
+            3. Run \`npm run docmon:validate\` locally to see details
+            4. Fix issues and create a PR
+
+            ---
+            *This issue was automatically created by the doc-validation workflow*
+            `;
+
+            // Check if an issue already exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'documentation,automated'
+            });
+
+            const existingIssue = issues.data.find(i => i.title.startsWith('Documentation Validation Failed'));
+
+            if (!existingIssue) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['documentation', 'automated']
+              });
+            }

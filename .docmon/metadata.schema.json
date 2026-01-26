@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "version": "1.0.0",
+  "title": "DOCMON Metadata Schema",
+  "description": "Schema for validating documentation metadata fields",
+  "type": "object",
+  "required": ["Category", "Status", "Version", "Author", "Last Updated", "Tags"],
+  "properties": {
+    "Category": {
+      "type": "string",
+      "description": "The category of the documentation",
+      "enum": [
+        "Architecture",
+        "API",
+        "Guide",
+        "Protocol",
+        "Report",
+        "Reference",
+        "Database",
+        "Testing",
+        "Feature",
+        "Deployment"
+      ]
+    },
+    "Status": {
+      "type": "string",
+      "description": "The current status of the document",
+      "enum": ["Draft", "Review", "Approved", "Deprecated"]
+    },
+    "Version": {
+      "type": "string",
+      "description": "Semantic version of the document (X.Y.Z)",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "Author": {
+      "type": "string",
+      "description": "The author of the document",
+      "minLength": 1
+    },
+    "Last Updated": {
+      "type": "string",
+      "description": "Date of last update in ISO-8601 format (YYYY-MM-DD)",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "Tags": {
+      "oneOf": [
+        {
+          "type": "array",
+          "description": "Array of tags",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        {
+          "type": "string",
+          "description": "Comma-separated list of tags",
+          "minLength": 1
+        }
+      ]
+    }
+  },
+  "additionalProperties": true,
+  "defaults": {
+    "Version": "0.1.0",
+    "Status": "Draft"
+  },
+  "category_mapping": {
+    "architecture": "Architecture",
+    "api": "API",
+    "guide": "Guide",
+    "how-to": "Guide",
+    "protocol": "Protocol",
+    "standard": "Protocol",
+    "report": "Report",
+    "summary": "Report",
+    "reference": "Reference",
+    "cheatsheet": "Reference",
+    "database": "Database",
+    "schema": "Database",
+    "migration": "Database",
+    "testing": "Testing",
+    "qa": "Testing",
+    "feature": "Feature",
+    "deployment": "Deployment",
+    "ops": "Deployment"
+  }
+}
