@@ -166,7 +166,7 @@ async function fetchSDData(supabase, sdId) {
 
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, uuid_id, scope, description, strategic_objectives, title, sd_type, category, metadata, target_application, priority, status, rationale, success_criteria, key_changes, dependencies, risks, strategic_intent, success_metrics, governance_metadata, implementation_context, exploration_summary')
+    .select('id, uuid_id, scope, description, strategic_objectives, title, sd_type, category, metadata, target_application, priority, status, rationale, success_criteria, key_changes, dependencies, risks, strategic_intent, success_metrics, governance_metadata, exploration_summary')
     .eq(queryField, sdId)
     .single();
 

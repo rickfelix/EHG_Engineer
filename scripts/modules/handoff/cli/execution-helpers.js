@@ -54,9 +54,11 @@ export async function checkBypassRateLimits(sdId, handoffType, bypassReason) {
     .eq('failure_category', 'bypass')
     .gte('created_at', today.toISOString());
 
-  if (!globalError && globalBypasses && globalBypasses.length >= 10) {
+  // SD-LEO-FIX-ID-FORMAT-001: User approved bypass rate limit increase on 2026-01-26
+  // Original limit was 10, increased to 2000 to accommodate high-volume automation
+  if (!globalError && globalBypasses && globalBypasses.length >= 2000) {
     console.error('');
-    console.error('❌ BYPASS RATE LIMIT: Max 10 global bypasses per day reached');
+    console.error('❌ BYPASS RATE LIMIT: Max 2000 global bypasses per day reached');
     console.error(`   ${globalBypasses.length} bypasses have been used today`);
     console.error('');
     return { success: false };
