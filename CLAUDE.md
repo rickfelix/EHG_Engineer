@@ -55,6 +55,37 @@ AUTO-PROCEED runs continuously EXCEPT at these boundaries:
 4. **Merge conflicts** - Require human resolution
 5. **All children blocked** - Shows blockers and waits for decision
 
+### Error Resolution with RCA Sub-Agent
+
+**CRITICAL**: When AUTO-PROCEED encounters issues that cannot be immediately resolved, leverage the **RCA (Root Cause Analysis) sub-agent** to systematically diagnose and prevent recurrence.
+
+**When to invoke RCA sub-agent:**
+- After 2+ retry attempts fail on the same issue
+- When the same error pattern appears across multiple SDs
+- Database errors, migration failures, or schema conflicts
+- Test failures that aren't obvious code bugs
+- Any blocking error before pausing for human intervention
+
+**RCA Workflow in AUTO-PROCEED:**
+1. **Detect persistent issue** → Invoke RCA sub-agent via Task tool
+2. **RCA performs 5-Whys analysis** → Identifies true root cause
+3. **Generate CAPA** → Corrective and Preventive Actions
+4. **Auto-create fix SD if needed** → For systemic issues requiring code changes
+5. **Document pattern** → Add to issue_patterns table for future prevention
+
+**Example invocation:**
+```
+Task tool with subagent_type="rca-agent":
+"Analyze why [error description] keeps occurring.
+Perform 5-whys analysis and recommend systematic fix."
+```
+
+**Benefits:**
+- Prevents repeated failures on the same issue type
+- Creates institutional knowledge through issue patterns
+- Enables truly autonomous operation by learning from failures
+- Reduces human intervention over time
+
 ### How to Stop
 
 - **User interrupt**: Type in terminal at any time (auto-resumes after handling)
@@ -77,7 +108,7 @@ AUTO-PROCEED runs continuously EXCEPT at these boundaries:
 | # | Area | Decision |
 |---|------|----------|
 | D01 | Pause points | Never within session, only at orchestrator completion |
-| D02 | Error handling | Auto-retry with exponential backoff |
+| D02 | Error handling | Auto-retry with exponential backoff, then RCA for persistent issues |
 | D03 | Visibility | Full streaming (show all activity) |
 | D04 | Limits | None - run until complete or interrupted |
 | D05 | UAT | Auto-pass with flag for later human review |
@@ -103,11 +134,10 @@ AUTO-PROCEED runs continuously EXCEPT at these boundaries:
 | D25 | Status line | Add mode + phase + progress (keep existing content) |
 | D26 | Completion cue | No acknowledgment between SDs - smooth continuation |
 | D27 | Compaction notice | Brief inline notice when context compacted |
-| D28 | Error retries | Log inline with "Retrying... (attempt X/Y)" |
+| D28 | Error retries | Log inline with "Retrying... (attempt X/Y)", RCA after failures |
 | D29 | Resume reminder | Show what was happening before resuming |
 
 *Full discovery details: docs/discovery/auto-proceed-enhancement-discovery.md*
-
 
 ## Session Initialization - SD Selection
 
@@ -283,7 +313,7 @@ LEAD-FINAL-APPROVAL → /restart → Visual Review → /document → /ship → /
 ```
 
 ## DYNAMICALLY GENERATED FROM DATABASE
-**Last Generated**: 2026-01-26 9:35:02 PM
+**Last Generated**: 2026-01-26 10:47:48 PM
 **Source**: Supabase Database (not files)
 **Auto-Update**: Run `node scripts/generate-claude-md-from-db.js` anytime
 
